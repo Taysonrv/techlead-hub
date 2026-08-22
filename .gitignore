@@ -24,3 +24,9 @@ build
 
 # Prisma local gerado
 backend/node_modules/.prisma
+
+# Electron
+desktop/node_modules
+desktop/dist
+desktop/release
+desktop/out
