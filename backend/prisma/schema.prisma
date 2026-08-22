@@ -1,0 +1,73 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Ticket {
+  id                    Int       @id @default(autoincrement())
+
+  // Identificação Movidesk
+  movideskId            Int       @unique
+  protocol              String?
+
+  // Atendimento
+  subject               String
+  category              String?
+  cause                 String?
+  urgency               String?
+  status                String
+  baseStatus            String?
+  justification         String?
+
+  // Cliente
+  client                String?
+  contact               String?
+
+  // Responsável
+  owner                 String?
+  ownerTeam             String?
+
+  // Produto / Serviço
+  service               String?
+  department            String?
+
+  // Datas
+  createdDate           DateTime
+  dueDate               DateTime?
+
+  firstResponseDueDate  DateTime?
+  firstResponseDate     DateTime?
+
+  resolvedDate          DateTime?
+  closedDate            DateTime?
+
+  // Tempos
+  lifetimeMinutes       Int?
+  stoppedMinutes        Int?
+
+  // Desenvolvimento / Task
+  taskNumber            Int?
+  taskStatus            String?
+  deliveredVersion      String?
+
+  // Controle da importação
+  importSource          String?
+  importedAt            DateTime?
+  importBatch           String?
+
+  // Auditoria
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([client])
+  @@index([contact])
+  @@index([owner])
+  @@index([status])
+  @@index([category])
+  @@index([urgency])
+  @@index([createdDate])
+}

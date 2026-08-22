@@ -1,0 +1,279 @@
+/* =========================================================
+   RESET GLOBAL
+========================================================= */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  min-width: 100%;
+  min-height: 100vh;
+
+  margin: 0;
+  padding: 0;
+}
+
+/* =========================================================
+   ESCALA GLOBAL
+
+   15px deixa a aplicação mais compacta em notebooks.
+   Em monitores grandes voltamos gradualmente para 16px.
+========================================================= */
+
+html {
+  font-size: 15px;
+
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/* Monitores maiores */
+
+@media (min-width: 1600px) {
+  html {
+    font-size: 16px;
+  }
+}
+
+/* Notebooks menores */
+
+@media (max-width: 1366px) {
+  html {
+    font-size: 14.5px;
+  }
+}
+
+/* =========================================================
+   BODY
+========================================================= */
+
+body {
+  min-width: 320px;
+  min-height: 100vh;
+
+  overflow-x: hidden;
+
+  background: #f5f7fa;
+
+  font-family:
+    Inter,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    Helvetica,
+    Arial,
+    sans-serif;
+
+  font-synthesis: none;
+
+  text-rendering: optimizeLegibility;
+
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* =========================================================
+   ROOT
+========================================================= */
+
+#root {
+  width: 100%;
+  min-height: 100vh;
+
+  overflow-x: hidden;
+}
+
+/* =========================================================
+   SCROLLBAR
+========================================================= */
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 10px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* =========================================================
+   MATERIAL UI - TABELAS
+
+   Reduz a altura das linhas para permitir visualizar
+   mais tickets sem deixar a tabela apertada demais.
+========================================================= */
+
+.MuiTableCell-root {
+  padding-top: 10px !important;
+  padding-bottom: 10px !important;
+  padding-left: 14px !important;
+  padding-right: 14px !important;
+
+  font-size: 0.9rem !important;
+}
+
+/* Cabeçalho das tabelas */
+
+.MuiTableHead-root .MuiTableCell-root {
+  padding-top: 11px !important;
+  padding-bottom: 11px !important;
+
+  white-space: nowrap;
+}
+
+/* =========================================================
+   MATERIAL UI - INPUTS
+========================================================= */
+
+.MuiInputBase-root {
+  font-size: 0.93rem !important;
+}
+
+.MuiInputLabel-root {
+  font-size: 0.93rem !important;
+}
+
+.MuiMenuItem-root {
+  font-size: 0.93rem !important;
+}
+
+/* =========================================================
+   MATERIAL UI - BOTÕES
+========================================================= */
+
+.MuiButton-root {
+  min-height: 36px;
+
+  font-size: 0.88rem !important;
+  font-weight: 600 !important;
+
+  text-transform: none !important;
+}
+
+/* =========================================================
+   MATERIAL UI - CHIPS
+========================================================= */
+
+.MuiChip-root {
+  font-size: 0.82rem !important;
+}
+
+.MuiChip-sizeSmall {
+  height: 25px !important;
+}
+
+/* =========================================================
+   MATERIAL UI - CARDS
+========================================================= */
+
+.MuiCard-root {
+  background-image: none !important;
+}
+
+/* =========================================================
+   MATERIAL UI - DRAWER
+
+   Evita pequenos problemas de overflow lateral.
+========================================================= */
+
+.MuiDrawer-paper {
+  overflow-x: hidden;
+}
+
+/* =========================================================
+   LINKS
+========================================================= */
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* =========================================================
+   ELEMENTOS NATIVOS
+========================================================= */
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+/* =========================================================
+   IMAGENS
+========================================================= */
+
+img,
+svg {
+  max-width: 100%;
+}
+
+/* =========================================================
+   NOTEBOOKS
+
+   Maior densidade de informação em telas menores.
+========================================================= */
+
+@media (max-width: 1366px) {
+  .MuiTableCell-root {
+    padding-top: 8px !important;
+    padding-bottom: 8px !important;
+
+    padding-left: 10px !important;
+    padding-right: 10px !important;
+  }
+
+  .MuiCardContent-root {
+    padding: 16px !important;
+  }
+
+  .MuiCardContent-root:last-child {
+    padding-bottom: 16px !important;
+  }
+
+  .MuiButton-root {
+    min-height: 34px;
+  }
+
+  .MuiChip-sizeSmall {
+    height: 23px !important;
+  }
+}
+
+/* =========================================================
+   TELAS PEQUENAS / MOBILE
+========================================================= */
+
+@media (max-width: 600px) {
+  html {
+    font-size: 14px;
+  }
+
+  .MuiTableCell-root {
+    padding-left: 8px !important;
+    padding-right: 8px !important;
+  }
+}

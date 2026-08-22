@@ -1,0 +1,26 @@
+node_modules
+dist
+.env
+.env.*
+coverage
+logs
+*.log
+.vscode/settings.json
+.prisma
+generated
+
+# Sistema operacional
+.DS_Store
+Thumbs.db
+
+# Build desktop / Electron
+release
+out
+build
+
+# Arquivos temporários
+*.tmp
+*.temp
+
+# Prisma local gerado
+backend/node_modules/.prisma
