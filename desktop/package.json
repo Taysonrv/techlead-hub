@@ -1,29 +1,45 @@
 {
   "name": "techlead-hub-desktop",
-  "version": "0.1.0-beta",
+  "version": "0.1.3-beta.1",
   "description": "TechLead Hub - Support Intelligence",
   "main": "dist/main.js",
-  "author": "TechLead Hub",
+  "author": "Aliare - Suporte e Sustentação - SIMER",
   "license": "UNLICENSED",
   "private": true,
   "scripts": {
-    "build": "tsc",
-    "start": "npm run build && electron .",
-    "dev": "npm run build && electron .",
-    "dist": "npm run build && electron-builder"
+    "build:desktop": "tsc",
+    "build:backend": "npm --prefix ../backend run prisma:generate && npm --prefix ../backend run build",
+    "build:frontend": "npm --prefix ../frontend run build",
+    "build": "npm run build:desktop",
+    "build:all": "npm run build:backend && npm run build:frontend && npm run build:desktop",
+    "dev": "npm run build:desktop && electron .",
+    "start": "npm run dev",
+    "clean:release": "node -e \"require('fs').rmSync('release',{recursive:true,force:true})\"",
+    "pack": "npm run build:all && electron-builder --dir",
+    "dist": "npm run build:all && electron-builder",
+    "dist:win": "npm run build:all && electron-builder --win nsis",
+    "version:beta": "npm version prerelease --preid=beta --no-git-tag-version",
+    "release:beta:build": "npm run clean:release && npm run build:all && electron-builder --win nsis",
+    "release:beta": "npm run version:beta && npm run release:beta:build",
+    "publish:beta": "npm run clean:release && npm run build:all && electron-builder --win nsis --publish always",
+    "release:beta:publish": "npm run version:beta && npm run publish:beta"
   },
   "dependencies": {
-    "electron": "^39.0.0"
+    "electron-updater": "^6.6.2"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
+    "electron": "^39.0.0",
     "electron-builder": "^26.0.0",
     "tsx": "^4.0.0",
     "typescript": "^5.0.0"
   },
   "build": {
-    "appId": "com.techleadhub.app",
+    "appId": "com.aliare.techleadhub",
     "productName": "TechLead Hub",
+    "asar": true,
+    "compression": "maximum",
+    "generateUpdatesFilesForAllChannels": true,
     "directories": {
       "output": "release"
     },
@@ -31,15 +47,64 @@
       "dist/**/*",
       "package.json"
     ],
+    "extraResources": [
+      {
+        "from": "../backend/dist",
+        "to": "backend/dist",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "../backend/node_modules",
+        "to": "backend/node_modules",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "../backend/package.json",
+        "to": "backend/package.json"
+      },
+      {
+        "from": "../frontend/dist",
+        "to": "frontend/dist",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "Taysonrv",
+        "repo": "techlead-hub-releases",
+        "private": false,
+        "channel": "beta",
+        "releaseType": "prerelease"
+      }
+    ],
     "win": {
-      "target": "nsis"
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "TechLead-Hub-Setup-${version}.${ext}"
     },
     "nsis": {
       "oneClick": false,
+      "perMachine": false,
+      "allowElevation": true,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "TechLead Hub"
+      "shortcutName": "TechLead Hub",
+      "runAfterFinish": true,
+      "deleteAppDataOnUninstall": false
     }
   }
 }

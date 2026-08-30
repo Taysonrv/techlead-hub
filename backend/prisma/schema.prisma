@@ -7,67 +7,275 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model Ticket {
-  id                    Int       @id @default(autoincrement())
+/**
+ * =========================================================
+ * ENUMS
+ * =========================================================
+ */
 
-  // Identificação Movidesk
-  movideskId            Int       @unique
-  protocol              String?
+enum UserRole {
+  ADMIN
+  COORDENADOR
+  ANALISTA
+}
 
-  // Atendimento
-  subject               String
-  category              String?
-  cause                 String?
-  urgency               String?
-  status                String
-  baseStatus            String?
-  justification         String?
+enum ImportStatus {
+  PROCESSING
+  SUCCESS
+  PARTIAL
+  ERROR
+}
 
-  // Cliente
-  client                String?
-  contact               String?
+/**
+ * =========================================================
+ * USUÁRIO
+ * =========================================================
+ */
 
-  // Responsável
-  owner                 String?
-  ownerTeam             String?
+model User {
+  id Int @id @default(autoincrement())
 
-  // Produto / Serviço
-  service               String?
-  department            String?
+  // Identificação
+  name     String
+  username String  @unique
+  email    String? @unique
 
-  // Datas
-  createdDate           DateTime
-  dueDate               DateTime?
+  // Autenticação
+  passwordHash String
+  role         UserRole @default(ANALISTA)
 
-  firstResponseDueDate  DateTime?
-  firstResponseDate     DateTime?
+  // Controle de acesso
+  active             Boolean @default(true)
+  mustChangePassword Boolean @default(false)
 
-  resolvedDate          DateTime?
-  closedDate            DateTime?
-
-  // Tempos
-  lifetimeMinutes       Int?
-  stoppedMinutes        Int?
-
-  // Desenvolvimento / Task
-  taskNumber            Int?
-  taskStatus            String?
-  deliveredVersion      String?
-
-  // Controle da importação
-  importSource          String?
-  importedAt            DateTime?
-  importBatch           String?
+  // Último acesso
+  lastLoginAt DateTime?
 
   // Auditoria
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relacionamentos
+  sessions            UserSession[]
+  passwordResetTokens PasswordResetToken[]
+  importRuns          ImportRun[]
+
+  @@index([name])
+  @@index([role])
+  @@index([active])
+}
+
+/**
+ * =========================================================
+ * RECUPERAÇÃO DE SENHA
+ * Armazena tokens temporários utilizados no processo de
+ * recuperação de acesso.
+ * O token original nunca deve ser persistido.
+ * Apenas o hash SHA-256 do token será armazenado.
+ * =========================================================
+ */
+
+model PasswordResetToken {
+  id Int @id @default(autoincrement())
+
+  // Usuário proprietário do token
+  userId Int
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Hash do token de recuperação
+  tokenHash String @unique
+
+  // Controle do token
+  expiresAt DateTime
+  usedAt    DateTime?
+
+  // Auditoria
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@index([usedAt])
+}
+
+/**
+ * =========================================================
+ * SESSÕES
+ * Permite controlar login, logout e revogação de acesso.
+ * O token em si não deve ser armazenado em texto puro.
+ * =========================================================
+ */
+
+model UserSession {
+  id Int @id @default(autoincrement())
+
+  // Usuário proprietário da sessão
+  userId Int
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Hash do identificador da sessão
+  tokenHash String @unique
+
+  // Controle da sessão
+  expiresAt DateTime
+  revokedAt DateTime?
+
+  // Informações opcionais do dispositivo
+  deviceName String?
+  userAgent  String?
+  ipAddress  String?
+
+  // Auditoria
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@index([revokedAt])
+}
+
+/**
+ * =========================================================
+ * EXECUÇÃO DE IMPORTAÇÃO
+ * Representa uma atualização dos dados do TechLead Hub.
+ * Exemplo:
+ * 23/08/2026 18:42
+ * Tayson Araujo
+ * 799 registros processados
+ * =========================================================
+ */
+
+model ImportRun {
+  id Int @id @default(autoincrement())
+
+  // Identificador externo/lote
+  batch String @unique
+
+  // Origem
+  source   String?
+  fileName String?
+
+  // Situação
+  status ImportStatus @default(PROCESSING)
+
+  // Métricas
+  totalRows    Int @default(0)
+  insertedRows Int @default(0)
+  updatedRows  Int @default(0)
+  skippedRows  Int @default(0)
+  errorRows    Int @default(0)
+
+  // Mensagem ou erro geral da importação
+  message String?
+
+  // Execução
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+
+  // Usuário responsável
+  userId Int?
+  user   User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  // Tickets vinculados ao lote
+  tickets Ticket[]
+
+  // Auditoria
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([userId])
+  @@index([startedAt])
+  @@index([finishedAt])
+}
+
+/**
+ * =========================================================
+ * TICKET
+ * =========================================================
+ */
+
+model Ticket {
+  id Int @id @default(autoincrement())
+
+  // Identificação Movidesk
+  movideskId Int     @unique
+  protocol   String?
+
+  // Atendimento
+  subject       String
+  category      String?
+  cause         String?
+  urgency       String?
+  status        String
+  baseStatus    String?
+  justification String?
+
+  // Cliente
+  client  String?
+  contact String?
+
+  // Responsável
+  owner     String?
+  ownerTeam String?
+
+  // Produto / Serviço
+  service    String?
+  department String?
+
+  // Datas
+  createdDate DateTime
+  dueDate     DateTime?
+
+  firstResponseDueDate DateTime?
+  firstResponseDate    DateTime?
+
+  resolvedDate DateTime?
+  closedDate   DateTime?
+
+  // Tempos
+  lifetimeMinutes Int?
+  stoppedMinutes  Int?
+
+  // Desenvolvimento / Task
+  taskNumber       Int?
+  taskStatus       String?
+  deliveredVersion String?
+
+  /**
+   * =======================================================
+   * CONTROLE DA IMPORTAÇÃO
+   * Estes campos antigos são preservados por compatibilidade
+   * com as importações atuais.
+   * =======================================================
+   */
+
+  importSource String?
+  importedAt   DateTime?
+  importBatch  String?
+
+  /**
+   * =======================================================
+   * CONTROLE ESTRUTURADO DA IMPORTAÇÃO
+   * =======================================================
+   */
+
+  importRunId Int?
+  importRun   ImportRun? @relation(fields: [importRunId], references: [id], onDelete: SetNull)
+
+  // Auditoria
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([client])
   @@index([contact])
   @@index([owner])
+  @@index([ownerTeam])
   @@index([status])
+  @@index([baseStatus])
   @@index([category])
   @@index([urgency])
   @@index([createdDate])
+  @@index([importedAt])
+  @@index([importBatch])
+  @@index([importRunId])
 }

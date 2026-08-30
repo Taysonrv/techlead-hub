@@ -4,11 +4,15 @@ import { HealthController } from "../controllers/HealthController";
 import { DashboardController } from "../controllers/DashboardController";
 
 import importRoutes from "./import.routes";
+import authRoutes from "./auth.routes";
 
 const routes = Router();
 
-const health = new HealthController();
-const dashboard = new DashboardController();
+const health =
+  new HealthController();
+
+const dashboard =
+  new DashboardController();
 
 /* =========================================================
    HEALTH CHECK
@@ -17,6 +21,15 @@ const dashboard = new DashboardController();
 routes.get(
   "/health",
   health.index
+);
+
+/* =========================================================
+   AUTENTICAÇÃO
+========================================================= */
+
+routes.use(
+  "/api/auth",
+  authRoutes
 );
 
 /* =========================================================
@@ -62,21 +75,6 @@ routes.get(
    IMPORTAÇÃO DE DADOS
 ========================================================= */
 
-/*
- * O arquivo import.routes.ts já deve possuir:
- *
- * router.post(
- *   "/import/tickets",
- *   ...
- * )
- *
- * Por isso adicionamos apenas o prefixo /api aqui.
- *
- * Endpoint final:
- *
- * POST /api/import/tickets
- */
-
 routes.use(
   "/api",
   importRoutes
@@ -87,4 +85,3 @@ routes.use(
 ========================================================= */
 
 export default routes;
-

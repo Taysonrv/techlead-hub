@@ -1,9 +1,12 @@
 import {
   createContext,
-  ReactNode,
   useContext,
   useMemo,
   useState,
+} from "react";
+
+import type {
+  ReactNode,
 } from "react";
 
 type PeriodOption =
@@ -14,89 +17,148 @@ type PeriodOption =
 
 type FiltersContextData = {
   period: PeriodOption;
-  setPeriod: (period: PeriodOption) => void;
+  setPeriod: (
+    period: PeriodOption
+  ) => void;
 
   startDate: string;
-  setStartDate: (date: string) => void;
+  setStartDate: (
+    date: string
+  ) => void;
 
   endDate: string;
-  setEndDate: (date: string) => void;
+  setEndDate: (
+    date: string
+  ) => void;
 
   effectiveStartDate: Date;
   effectiveEndDate: Date;
 };
 
-const FiltersContext =
-  createContext<FiltersContextData | undefined>(
-    undefined
-  );
-
-type Props = {
+type FiltersProviderProps = {
   children: ReactNode;
 };
 
+const FiltersContext =
+  createContext<
+    FiltersContextData | undefined
+  >(undefined);
+
 export function FiltersProvider({
   children,
-}: Props) {
-  const [period, setPeriod] =
-    useState<PeriodOption>("30d");
+}: FiltersProviderProps) {
+  const [
+    period,
+    setPeriod,
+  ] =
+    useState<PeriodOption>(
+      "30d"
+    );
 
-  const [startDate, setStartDate] =
+  const [
+    startDate,
+    setStartDate,
+  ] =
     useState("");
 
-  const [endDate, setEndDate] =
+  const [
+    endDate,
+    setEndDate,
+  ] =
     useState("");
 
   const {
     effectiveStartDate,
     effectiveEndDate,
   } = useMemo(() => {
-    const now = new Date();
+    const now =
+      new Date();
 
-    const end = new Date(now);
+    const end =
+      endOfDay(now);
 
-    let start = new Date(now);
+    let start =
+      startOfDay(now);
 
-    if (period === "7d") {
+    if (
+      period === "7d"
+    ) {
       start.setDate(
         start.getDate() - 7
       );
     }
 
-    if (period === "30d") {
+    if (
+      period === "30d"
+    ) {
       start.setDate(
         start.getDate() - 30
       );
     }
 
-    if (period === "month") {
-      start = new Date(
-        now.getFullYear(),
-        now.getMonth(),
-        1
-      );
+    if (
+      period === "month"
+    ) {
+      start =
+        new Date(
+          now.getFullYear(),
+          now.getMonth(),
+          1,
+          0,
+          0,
+          0,
+          0
+        );
     }
 
     if (
-      period === "custom" &&
-      startDate &&
-      endDate
+      period === "custom"
     ) {
-      start = new Date(
-        `${startDate}T00:00:00`
-      );
+      const customStart =
+        parseLocalDate(
+          startDate,
+          false
+        );
 
-      return {
-        effectiveStartDate: start,
-        effectiveEndDate: new Date(
-          `${endDate}T23:59:59`
-        ),
-      };
+      const customEnd =
+        parseLocalDate(
+          endDate,
+          true
+        );
+
+      if (
+        customStart &&
+        customEnd
+      ) {
+        if (
+          customStart <=
+          customEnd
+        ) {
+          return {
+            effectiveStartDate:
+              customStart,
+
+            effectiveEndDate:
+              customEnd,
+          };
+        }
+
+        return {
+          effectiveStartDate:
+            customEnd,
+
+          effectiveEndDate:
+            customStart,
+        };
+      }
     }
 
     return {
-      effectiveStartDate: start,
-      effectiveEndDate: end,
+      effectiveStartDate:
+        start,
+
+      effectiveEndDate:
+        end,
     };
   }, [
     period,
@@ -104,9 +166,11 @@ export function FiltersProvider({
     endDate,
   ]);
 
-  return (
-    <FiltersContext.Provider
-      value={{
+  const value =
+    useMemo<
+      FiltersContextData
+    >(
+      () => ({
         period,
         setPeriod,
 
@@ -118,7 +182,19 @@ export function FiltersProvider({
 
         effectiveStartDate,
         effectiveEndDate,
-      }}
+      }),
+      [
+        period,
+        startDate,
+        endDate,
+        effectiveStartDate,
+        effectiveEndDate,
+      ]
+    );
+
+  return (
+    <FiltersContext.Provider
+      value={value}
     >
       {children}
     </FiltersContext.Provider>
@@ -127,7 +203,9 @@ export function FiltersProvider({
 
 export function useFilters() {
   const context =
-    useContext(FiltersContext);
+    useContext(
+      FiltersContext
+    );
 
   if (!context) {
     throw new Error(
@@ -136,4 +214,101 @@ export function useFilters() {
   }
 
   return context;
+}
+
+/* =========================================================
+   UTILITÁRIOS DE DATA
+========================================================= */
+
+function startOfDay(
+  date: Date
+) {
+  const result =
+    new Date(date);
+
+  result.setHours(
+    0,
+    0,
+    0,
+    0
+  );
+
+  return result;
+}
+
+function endOfDay(
+  date: Date
+) {
+  const result =
+    new Date(date);
+
+  result.setHours(
+    23,
+    59,
+    59,
+    999
+  );
+
+  return result;
+}
+
+function parseLocalDate(
+  value: string,
+  endOfSelectedDay: boolean
+) {
+  if (!value) {
+    return null;
+  }
+
+  const [
+    year,
+    month,
+    day,
+  ] =
+    value
+      .split("-")
+      .map(Number);
+
+  if (
+    !year ||
+    !month ||
+    !day
+  ) {
+    return null;
+  }
+
+  const result =
+    new Date(
+      year,
+      month - 1,
+      day
+    );
+
+  if (
+    Number.isNaN(
+      result.getTime()
+    )
+  ) {
+    return null;
+  }
+
+  if (
+    endOfSelectedDay
+  ) {
+    result.setHours(
+      23,
+      59,
+      59,
+      999
+    );
+  } else {
+    result.setHours(
+      0,
+      0,
+      0,
+      0
+    );
+  }
+
+  return result;
 }

@@ -27,9 +27,30 @@ import {
   Typography,
 } from "@mui/material";
 
+import {
+  ContentCopyOutlined,
+  OpenInNewOutlined,
+  PriorityHighOutlined,
+  ReportProblemOutlined,
+  WarningAmberOutlined,
+} from "@mui/icons-material";
+
+
+
 import { api } from "../services/api";
 import { useFilters } from "../context/FiltersContext";
 import { PeriodFilter } from "../components/PeriodFilter";
+import { aliareColors } from "../theme/theme";
+import {
+  semanticChartColors,
+} from "../theme/chartPalette";
+
+import {
+  calculateServiceLevel,
+  formatServiceMinutes,
+  type DeadlineLevel,
+  type ServiceLevelResult,
+} from "../utils/serviceLevel";
 
 type Ticket = {
   id: number;
@@ -74,14 +95,15 @@ type Ticket = {
 };
 
 type AttentionLevel =
+  | "vencido"
   | "critico"
-  | "alto"
-  | "medio";
+  | "atencao";
 
 type AttentionTicket = Ticket & {
   ageHours: number;
   level: AttentionLevel;
   reasons: string[];
+  serviceLevel: ServiceLevelResult;
 };
 
 export function Attention() {
@@ -124,9 +146,12 @@ export function Attention() {
         setLoading(true);
         setError(null);
 
-        const response = await api.get(
-          "/dashboard/tickets"
-        );
+        const response =
+          await api.get<
+            Ticket[]
+          >(
+            "/dashboard/tickets"
+          );
 
         setTickets(response.data);
       } catch (err) {
@@ -178,176 +203,235 @@ export function Attention() {
 
   const attentionTickets =
     useMemo<AttentionTicket[]>(() => {
-      const now = new Date();
+      const now =
+        new Date();
 
       return periodTickets
-        .filter(isOpen)
-        .map((ticket) => {
-          const created =
-            new Date(ticket.createdDate);
-
-          const ageHours =
-            Math.max(
-              0,
-              Math.floor(
-                (now.getTime() -
-                  created.getTime()) /
-                  (1000 * 60 * 60)
-              )
-            );
-
-          const reasons: string[] = [];
-
-          const critical =
-            normalize(
-              ticket.urgency
-            ) === "critica";
-
-          if (critical) {
-            reasons.push(
-              "Urgência crítica"
-            );
-          }
-
-          if (
-            ticket.baseStatus ===
-            "Stopped"
-          ) {
-            reasons.push(
-              "Ticket parado"
-            );
-          }
-
-          if (ageHours >= 48) {
-            reasons.push(
-              "Aberto há mais de 48 horas"
-            );
-          }
-
-          if (
-            ticket.stoppedMinutes !== null &&
-            ticket.stoppedMinutes >= 1440
-          ) {
-            reasons.push(
-              "Mais de 24 horas parado"
-            );
-          }
-
-          if (!ticket.owner) {
-            reasons.push(
-              "Sem responsável"
-            );
-          }
-
-          if (
-            ticket.dueDate &&
-            new Date(ticket.dueDate) < now
-          ) {
-            reasons.push(
-              "Prazo vencido"
-            );
-          }
-
-          if (
-            ticket.firstResponseDueDate &&
-            !ticket.firstResponseDate &&
-            new Date(
-              ticket.firstResponseDueDate
-            ) < now
-          ) {
-            reasons.push(
-              "Primeira resposta vencida"
-            );
-          }
-
-          let attentionLevel:
-            AttentionLevel =
-            "medio";
-
-          if (
-            critical ||
-            reasons.includes(
-              "Primeira resposta vencida"
-            )
-          ) {
-            attentionLevel =
-              "critico";
-          } else if (
-            ticket.baseStatus ===
-              "Stopped" ||
-            ageHours >= 72 ||
-            !ticket.owner ||
-            reasons.includes(
-              "Prazo vencido"
-            )
-          ) {
-            attentionLevel =
-              "alto";
-          }
-
-          return {
-            ...ticket,
-            ageHours,
-            reasons,
-            level:
-              attentionLevel,
-          };
-        })
         .filter(
-          (ticket) =>
-            ticket.reasons.length > 0
+          isOpen
         )
-        .sort((a, b) => {
-          const priority =
-            priorityWeight(
-              b.level
-            ) -
-            priorityWeight(
-              a.level
-            );
+        .map(
+          (ticket) => {
+            const created =
+              new Date(
+                ticket.createdDate
+              );
 
-          if (priority !== 0) {
-            return priority;
+            const ageHours =
+              Math.max(
+                0,
+                Math.floor(
+                  (
+                    now.getTime() -
+                    created.getTime()
+                  ) /
+                    (
+                      1000 *
+                      60 *
+                      60
+                    )
+                )
+              );
+
+            const serviceLevel =
+              getOfficialServiceLevel(
+                ticket
+              );
+
+            if (
+              !serviceLevel.applicable ||
+              !isOfficialMeasuredCategory(
+                ticket
+              )
+            ) {
+              return null;
+            }
+
+            const reasons:
+              string[] = [];
+
+            const firstResponse =
+              serviceLevel
+                .firstResponse;
+
+            const resolution =
+              serviceLevel
+                .resolution;
+
+            if (
+              !firstResponse
+                .completed
+            ) {
+              if (
+                firstResponse.level ===
+                "OVERDUE"
+              ) {
+                reasons.push(
+                  "Primeira resposta vencida"
+                );
+              } else if (
+                firstResponse.level ===
+                "CRITICAL"
+              ) {
+                reasons.push(
+                  "Primeira resposta em nível crítico"
+                );
+              } else if (
+                firstResponse.level ===
+                "ATTENTION"
+              ) {
+                reasons.push(
+                  "Primeira resposta entrou na faixa de atenção"
+                );
+              }
+            }
+
+            if (
+              resolution.level ===
+              "OVERDUE"
+            ) {
+              reasons.push(
+                "Prazo de solução vencido"
+              );
+            } else if (
+              resolution.level ===
+              "CRITICAL"
+            ) {
+              reasons.push(
+                "Prazo de solução em nível crítico"
+              );
+            } else if (
+              resolution.level ===
+              "ATTENTION"
+            ) {
+              reasons.push(
+                "Prazo de solução entrou na faixa de atenção"
+              );
+            }
+
+            if (
+              ticket.baseStatus ===
+              "Stopped"
+            ) {
+              reasons.push(
+                "Ticket em status de espera/parada"
+              );
+            }
+
+            if (
+              !ticket.owner
+            ) {
+              reasons.push(
+                "Sem responsável"
+              );
+            }
+
+            if (
+              reasons.length ===
+              0
+            ) {
+              return null;
+            }
+
+            const level =
+              resolveAttentionLevel(
+                serviceLevel
+              );
+
+            return {
+              ...ticket,
+
+              ageHours,
+
+              reasons,
+
+              level,
+
+              serviceLevel,
+            };
           }
+        )
+        .filter(
+          (
+            ticket
+          ): ticket is
+            AttentionTicket =>
+            Boolean(
+              ticket
+            )
+        )
+        .sort(
+          (
+            a,
+            b
+          ) => {
+            const priority =
+              priorityWeight(
+                b.level
+              ) -
+              priorityWeight(
+                a.level
+              );
 
-          return (
-            b.ageHours -
-            a.ageHours
-          );
-        });
-    }, [periodTickets]);
+            if (
+              priority !==
+              0
+            ) {
+              return priority;
+            }
+
+            return (
+              a.serviceLevel
+                .resolution
+                .remainingMinutes ??
+              Number.MAX_SAFE_INTEGER
+            ) -
+              (
+                b.serviceLevel
+                  .resolution
+                  .remainingMinutes ??
+                Number.MAX_SAFE_INTEGER
+              );
+          }
+        );
+    }, [
+      periodTickets,
+    ]);
 
   /* =====================================================
      RESUMO
   ===================================================== */
 
-  const summary = useMemo(() => {
-    return {
-      total:
-        attentionTickets.length,
+  const summary =
+    useMemo(() => {
+      return {
+        total:
+          attentionTickets.length,
 
-      criticos:
-        attentionTickets.filter(
-          (ticket) =>
-            ticket.level ===
-            "critico"
-        ).length,
+        vencidos:
+          attentionTickets.filter(
+            (ticket) =>
+              ticket.level ===
+              "vencido"
+          ).length,
 
-      altos:
-        attentionTickets.filter(
-          (ticket) =>
-            ticket.level ===
-            "alto"
-        ).length,
+        criticos:
+          attentionTickets.filter(
+            (ticket) =>
+              ticket.level ===
+              "critico"
+          ).length,
 
-      medios:
-        attentionTickets.filter(
-          (ticket) =>
-            ticket.level ===
-            "medio"
-        ).length,
-    };
-  }, [attentionTickets]);
+        atencao:
+          attentionTickets.filter(
+            (ticket) =>
+              ticket.level ===
+              "atencao"
+          ).length,
+      };
+    }, [
+      attentionTickets,
+    ]);
 
   /* =====================================================
      OPÇÕES DE FILTRO
@@ -446,6 +530,30 @@ export function Attention() {
       `Urgência: ${ticket.urgency ?? "—"}`,
       `Status: ${ticket.status}`,
       `Nível: ${attentionLabel(ticket.level)}`,
+      `1ª resposta vence em: ${formatDateTime(
+        ticket.firstResponseDueDate
+      )}`,
+      `1ª resposta dada em: ${formatDateTime(
+        ticket.firstResponseDate
+      )}`,
+      `Resultado 1ª resposta: ${
+        ticket.serviceLevel.firstResponse.completed
+          ? ticket.serviceLevel.firstResponse.withinDeadline
+            ? "Dentro do prazo"
+            : "Fora do prazo"
+          : ticket.serviceLevel.firstResponse.level === "OVERDUE"
+          ? "Vencida e ainda sem resposta"
+          : "Pendente"
+      }`,
+      `Meta 1ª resposta: ${formatServiceMinutes(
+        ticket.serviceLevel.firstResponse.targetMinutes
+      )}`,
+      `Meta solução: ${formatServiceMinutes(
+        ticket.serviceLevel.resolution.targetMinutes
+      )}`,
+      `Restante solução: ${formatServiceMinutes(
+        ticket.serviceLevel.resolution.remainingMinutes
+      )}`,
       `Motivos: ${ticket.reasons.join(" | ")}`,
     ].join("\n");
 
@@ -491,7 +599,12 @@ export function Attention() {
           mt: 8,
         }}
       >
-        <CircularProgress />
+        <CircularProgress
+          sx={{
+            color:
+              aliareColors.green,
+          }}
+        />
       </Box>
     );
   }
@@ -535,13 +648,68 @@ export function Attention() {
         }}
       >
         <Box>
-          <Typography
-            fontWeight={800}
+          <Stack
+            direction="row"
+            spacing={1}
             sx={{
+              alignItems:
+                "center",
+            }}
+          >
+            <Box
+              sx={{
+                width:
+                  30,
+
+                height:
+                  3,
+
+                borderRadius:
+                  99,
+
+                backgroundColor:
+                  aliareColors.green,
+              }}
+            />
+
+            <Typography
+              variant="caption"
+              sx={{
+                fontWeight:
+                  800,
+
+                letterSpacing:
+                  "0.08em",
+
+                textTransform:
+                  "uppercase",
+
+                color:
+                  aliareColors.greenDark,
+              }}
+            >
+              Gestão de risco
+            </Typography>
+          </Stack>
+
+          <Typography
+            sx={{
+              mt:
+                0.8,
+
+              fontWeight:
+                800,
+
+              letterSpacing:
+                "-0.03em",
+
               fontSize: {
-                xs: "1.7rem",
-                md: "1.9rem",
-                xl: "2.1rem",
+                xs:
+                  "1.7rem",
+                md:
+                  "1.9rem",
+                xl:
+                  "2.1rem",
               },
             }}
           >
@@ -552,7 +720,8 @@ export function Attention() {
             variant="body2"
             color="text.secondary"
             sx={{
-              mt: 0.25,
+              mt:
+                0.25,
             }}
           >
             Situações que exigem acompanhamento da liderança
@@ -562,17 +731,33 @@ export function Attention() {
             variant="caption"
             color="text.secondary"
             sx={{
-              display: "block",
-              mt: 0.5,
+              display:
+                "block",
+
+              mt:
+                0.5,
             }}
           >
-            {periodTickets.length} ticket(s)
-            analisado(s) no período
+            {periodTickets.length} ticket(s) analisado(s) no período
           </Typography>
         </Box>
 
         <PeriodFilter />
       </Box>
+
+      <Alert
+        severity="info"
+        variant="outlined"
+        sx={{
+          mb: 1.5,
+          borderRadius: 2,
+        }}
+      >
+        <strong>Regra oficial aplicada:</strong>{" "}
+        esta tela considera somente atendimentos medidos pelo prazo oficial,
+        em horas úteis, com base em urgência, categoria e pausas registradas.
+        Adequação e Solicitação de Serviço ficam fora da medição.
+      </Alert>
 
       {/* INDICADORES */}
 
@@ -598,44 +783,50 @@ export function Attention() {
         <IndicatorCard
           title="Requerem atenção"
           value={summary.total}
-          description="Total identificado"
+          description="Total identificado pela regra"
           onClick={() =>
             setLevel("")
           }
         />
 
         <IndicatorCard
-          title="Críticos"
-          value={summary.criticos}
-          description="Prioridade imediata"
+          title="Vencidos"
+          value={summary.vencidos}
+          description="Prazo já ultrapassado"
           severity="error"
           onClick={() =>
-            setLevel("critico")
+            setLevel(
+              "vencido"
+            )
           }
         />
 
         <IndicatorCard
-          title="Alta atenção"
-          value={summary.altos}
-          description="Exigem acompanhamento"
+          title="Críticos"
+          value={summary.criticos}
+          description="Próximos do limite"
           severity="warning"
           onClick={() =>
-            setLevel("alto")
+            setLevel(
+              "critico"
+            )
           }
         />
 
         <IndicatorCard
-          title="Média atenção"
-          value={summary.medios}
-          description="Monitoramento"
+          title="Em atenção"
+          value={summary.atencao}
+          description="Gatilho oficial de acompanhamento"
           severity="info"
           onClick={() =>
-            setLevel("medio")
+            setLevel(
+              "atencao"
+            )
           }
         />
       </Box>
 
-      {summary.criticos > 0 && (
+      {summary.vencidos > 0 && (
         <Alert
           severity="error"
           sx={{
@@ -650,9 +841,9 @@ export function Attention() {
         >
           Existem{" "}
           <strong>
-            {summary.criticos}
+            {summary.vencidos}
           </strong>{" "}
-          ticket(s) críticos que devem ser priorizados.
+          ticket(s) com prazo vencido que devem ser priorizados.
         </Alert>
       )}
 
@@ -661,10 +852,23 @@ export function Attention() {
       <Card
         elevation={0}
         sx={{
-          border: "1px solid",
-          borderColor: "divider",
-          borderRadius: 2.5,
-          mb: 2,
+          border:
+            "1px solid",
+
+          borderColor:
+            "divider",
+
+          borderRadius:
+            2.25,
+
+          mb:
+            2,
+
+          backgroundColor:
+            "background.paper",
+
+          boxShadow:
+            "0 1px 2px rgba(16,24,40,0.035)",
         }}
       >
         <CardContent
@@ -691,16 +895,23 @@ export function Attention() {
             }}
           >
             <FormControl
-              fullWidth
               size="small"
+              sx={{
+                minWidth: {
+                  xs:
+                    "100%",
+                  md:
+                    180,
+                },
+              }}
             >
               <InputLabel>
-                Nível de atenção
+                Situação do prazo
               </InputLabel>
 
               <Select
                 value={level}
-                label="Nível de atenção"
+                label="Situação do prazo"
                 onChange={(event) =>
                   setLevel(
                     event.target.value
@@ -711,23 +922,30 @@ export function Attention() {
                   Todos
                 </MenuItem>
 
+                <MenuItem value="vencido">
+                  Vencido
+                </MenuItem>
+
                 <MenuItem value="critico">
                   Crítico
                 </MenuItem>
 
-                <MenuItem value="alto">
-                  Alto
-                </MenuItem>
-
-                <MenuItem value="medio">
-                  Médio
+                <MenuItem value="atencao">
+                  Atenção
                 </MenuItem>
               </Select>
             </FormControl>
 
             <FormControl
-              fullWidth
               size="small"
+              sx={{
+                minWidth: {
+                  xs:
+                    "100%",
+                  md:
+                    220,
+                },
+              }}
             >
               <InputLabel>
                 Responsável
@@ -760,8 +978,15 @@ export function Attention() {
             </FormControl>
 
             <FormControl
-              fullWidth
               size="small"
+              sx={{
+                minWidth: {
+                  xs:
+                    "100%",
+                  md:
+                    220,
+                },
+              }}
             >
               <InputLabel>
                 Cliente
@@ -816,10 +1041,23 @@ export function Attention() {
       <Card
         elevation={0}
         sx={{
-          border: "1px solid",
-          borderColor: "divider",
-          borderRadius: 2.5,
-          overflow: "hidden",
+          border:
+            "1px solid",
+
+          borderColor:
+            "divider",
+
+          borderRadius:
+            2.25,
+
+          overflow:
+            "hidden",
+
+          backgroundColor:
+            "background.paper",
+
+          boxShadow:
+            "0 1px 2px rgba(16,24,40,0.035)",
         }}
       >
         <CardContent
@@ -850,20 +1088,17 @@ export function Attention() {
           >
             <Box>
               <Typography
-                fontWeight={800}
-                sx={{
-                  fontSize:
-                    "1.05rem",
-                }}
+                sx={{ fontWeight: 800, fontSize:
+                    "1.05rem", }}
               >
-                Tickets que exigem atenção
+                Atendimentos com risco de prazo
               </Typography>
 
               <Typography
                 variant="caption"
                 color="text.secondary"
               >
-                Clique em uma linha para abrir os detalhes
+                Priorizados pela mesma regra oficial usada em Desempenho e Tickets
               </Typography>
             </Box>
 
@@ -877,11 +1112,34 @@ export function Attention() {
 
         <TableContainer>
           <Table size="small">
-            <TableHead>
+            <TableHead
+              sx={{
+                backgroundColor:
+                  "#F8FAF9",
+
+                "& .MuiTableCell-root":
+                  {
+                    color:
+                      "text.secondary",
+
+                    fontSize:
+                      "0.72rem",
+
+                    fontWeight:
+                      800,
+
+                    letterSpacing:
+                      "0.02em",
+
+                    borderBottomColor:
+                      "divider",
+                  },
+              }}
+            >
               <TableRow>
                 <TableCell>
                   <strong>
-                    Nível
+                    Situação
                   </strong>
                 </TableCell>
 
@@ -941,7 +1199,20 @@ export function Attention() {
                       )
                     }
                     sx={{
-                      cursor: "pointer",
+                      cursor:
+                        "pointer",
+
+                      "& > td:first-of-type":
+                        {
+                          borderLeft:
+                            `3px solid ${attentionColor(ticket.level)}`,
+                        },
+
+                      "&:hover":
+                        {
+                          backgroundColor:
+                            "#FAFBFA",
+                        },
                     }}
                   >
                     <TableCell>
@@ -962,9 +1233,8 @@ export function Attention() {
                         }}
                       >
                         <Typography
-                          fontWeight={700}
                           variant="body2"
-                        >
+                         sx={{ fontWeight: 700 }}>
                           #{ticket.movideskId}
                         </Typography>
 
@@ -987,7 +1257,12 @@ export function Attention() {
                                 "0.75rem",
                             }}
                           >
-                            ⧉
+                            <ContentCopyOutlined
+                              sx={{
+                                fontSize:
+                                  14,
+                              }}
+                            />
                           </IconButton>
                         </Tooltip>
 
@@ -1011,7 +1286,12 @@ export function Attention() {
                                 "0.8rem",
                             }}
                           >
-                            ↗
+                            <OpenInNewOutlined
+                              sx={{
+                                fontSize:
+                                  15,
+                              }}
+                            />
                           </IconButton>
                         </Tooltip>
                       </Stack>
@@ -1039,8 +1319,7 @@ export function Attention() {
                         <Typography
                           variant="caption"
                           color="text.secondary"
-                          display="block"
-                        >
+                         sx={{ display: "block" }}>
                           {ticket.category}
                         </Typography>
                       )}
@@ -1063,10 +1342,7 @@ export function Attention() {
                         <Typography
                           variant="caption"
                           color="text.secondary"
-                          display="block"
-                          sx={{
-                            mt: 0.25,
-                          }}
+                          sx={{ display: "block", mt: 0.25, }}
                         >
                           {ticket.team}
                         </Typography>
@@ -1104,8 +1380,7 @@ export function Attention() {
                     <TableCell align="right">
                       <Typography
                         variant="body2"
-                        fontWeight={700}
-                      >
+                       sx={{ fontWeight: 700 }}>
                         {formatAge(
                           ticket.ageHours
                         )}
@@ -1128,8 +1403,7 @@ export function Attention() {
                       }}
                     >
                       <Typography
-                        fontWeight={700}
-                      >
+                       sx={{ fontWeight: 700 }}>
                         Nenhum ponto de atenção encontrado
                       </Typography>
 
@@ -1190,8 +1464,7 @@ export function Attention() {
                 <Box>
                   <Typography
                     variant="h6"
-                    fontWeight={800}
-                  >
+                   sx={{ fontWeight: 800 }}>
                     Ticket #
                     {
                       selectedTicket.movideskId
@@ -1209,6 +1482,8 @@ export function Attention() {
 
                 <IconButton
                   size="small"
+                  aria-label="Fechar detalhes"
+                  title="Fechar"
                   onClick={() =>
                     setSelectedTicket(
                       null
@@ -1275,6 +1550,9 @@ export function Attention() {
                 <Button
                   size="small"
                   variant="outlined"
+                  startIcon={
+                    <ContentCopyOutlined />
+                  }
                   onClick={() =>
                     void copyTicketNumber(
                       selectedTicket
@@ -1299,13 +1577,16 @@ export function Attention() {
                 <Button
                   size="small"
                   variant="contained"
+                  endIcon={
+                    <OpenInNewOutlined />
+                  }
                   onClick={() =>
                     openMovideskTicket(
                       selectedTicket
                     )
                   }
                 >
-                  Abrir no Movidesk ↗
+                  Abrir no Movidesk
                 </Button>
               </Stack>
 
@@ -1323,22 +1604,16 @@ export function Attention() {
               </Typography>
 
               <Typography
-                fontWeight={700}
-                sx={{
-                  mb: 2,
-                }}
+                sx={{ fontWeight: 700, mb: 2, }}
               >
                 {selectedTicket.subject}
               </Typography>
 
               <Typography
                 variant="subtitle2"
-                fontWeight={800}
-                sx={{
-                  mb: 1,
-                }}
+                sx={{ fontWeight: 800, mb: 1, }}
               >
-                Motivos de atenção
+                Motivos de priorização
               </Typography>
 
               <Stack
@@ -1369,7 +1644,11 @@ export function Attention() {
                           : "info"
                       }
                       sx={{
-                        py: 0,
+                        py:
+                          0,
+
+                        borderRadius:
+                          1.5,
                       }}
                     >
                       {reason}
@@ -1386,10 +1665,7 @@ export function Attention() {
 
               <Typography
                 variant="subtitle2"
-                fontWeight={800}
-                sx={{
-                  mb: 1.5,
-                }}
+                sx={{ fontWeight: 800, mb: 1.5, }}
               >
                 Atendimento
               </Typography>
@@ -1471,10 +1747,7 @@ export function Attention() {
 
               <Typography
                 variant="subtitle2"
-                fontWeight={800}
-                sx={{
-                  mb: 1.5,
-                }}
+                sx={{ fontWeight: 800, mb: 1.5, }}
               >
                 Prazos e tempos
               </Typography>
@@ -1491,6 +1764,68 @@ export function Attention() {
                   gap: 1.5,
                 }}
               >
+                <TicketField
+                  label="Regra"
+                  value={
+                    getOfficialRuleLabel(
+                      selectedTicket
+                    )
+                  }
+                />
+
+                <TicketField
+                  label="Perfil"
+                  value="Padrão"
+                />
+
+                <TicketField
+                  label="Meta 1ª resposta"
+                  value={
+                    formatServiceMinutes(
+                      selectedTicket
+                        .serviceLevel
+                        .firstResponse
+                        .targetMinutes
+                    )
+                  }
+                />
+
+                <TicketField
+                  label="Consumido 1ª resposta"
+                  value={
+                    formatServiceMinutes(
+                      selectedTicket
+                        .serviceLevel
+                        .firstResponse
+                        .consumedMinutes
+                    )
+                  }
+                />
+
+                <TicketField
+                  label="Meta solução"
+                  value={
+                    formatServiceMinutes(
+                      selectedTicket
+                        .serviceLevel
+                        .resolution
+                        .targetMinutes
+                    )
+                  }
+                />
+
+                <TicketField
+                  label="Restante solução"
+                  value={
+                    formatServiceMinutes(
+                      selectedTicket
+                        .serviceLevel
+                        .resolution
+                        .remainingMinutes
+                    )
+                  }
+                />
+
                 <TicketField
                   label="Abertura"
                   value={formatDateTime(
@@ -1553,10 +1888,7 @@ export function Attention() {
 
                   <Typography
                     variant="subtitle2"
-                    fontWeight={800}
-                    sx={{
-                      mb: 1.5,
-                    }}
+                    sx={{ fontWeight: 800, mb: 1.5, }}
                   >
                     Desenvolvimento
                   </Typography>
@@ -1638,14 +1970,14 @@ function IndicatorCard({
 
   onClick?: () => void;
 }) {
-  const borderColor =
+  const accentColor =
     severity === "error"
-      ? "error.main"
+      ? semanticChartColors.overdue
       : severity === "warning"
-      ? "warning.main"
+      ? semanticChartColors.attention
       : severity === "info"
-      ? "info.main"
-      : "divider";
+      ? semanticChartColors.normal
+      : aliareColors.green;
 
   return (
     <Card
@@ -1662,10 +1994,49 @@ function IndicatorCard({
       }
       onClick={onClick}
       sx={{
-        border: "1px solid",
-        borderColor,
-        borderRadius: 2.5,
-        height: "100%",
+        position:
+          "relative",
+
+        overflow:
+          "hidden",
+
+        border:
+          "1px solid",
+
+        borderColor:
+          "divider",
+
+        borderRadius:
+          2.15,
+
+        height:
+          "100%",
+
+        backgroundColor:
+          "background.paper",
+
+        "&::before": {
+          content:
+            '""',
+
+          position:
+            "absolute",
+
+          top:
+            0,
+
+          left:
+            0,
+
+          width:
+            "100%",
+
+          height:
+            3,
+
+          backgroundColor:
+            accentColor,
+        },
         cursor:
           onClick
             ? "pointer"
@@ -1678,7 +2049,12 @@ function IndicatorCard({
           "&:hover": {
             transform:
               "translateY(-2px)",
-            boxShadow: 2,
+
+            borderColor:
+              accentColor,
+
+            boxShadow:
+              "0 8px 24px rgba(16,24,40,0.08)",
           },
         }),
       }}
@@ -1701,15 +2077,12 @@ function IndicatorCard({
         <Typography
           variant="body2"
           color="text.secondary"
-          fontWeight={600}
-        >
+         sx={{ fontWeight: 600 }}>
           {title}
         </Typography>
 
         <Typography
-          fontWeight={800}
-          sx={{
-            mt: 0.5,
+          sx={{ fontWeight: 800, mt: 0.5,
 
             fontSize: {
               xs: "1.7rem",
@@ -1717,8 +2090,7 @@ function IndicatorCard({
               xl: "2.05rem",
             },
 
-            lineHeight: 1.1,
-          }}
+            lineHeight: 1.1, }}
         >
           {value}
         </Typography>
@@ -1737,11 +2109,18 @@ function IndicatorCard({
         {onClick && (
           <Typography
             variant="caption"
-            color="primary.main"
             sx={{
-              display: "block",
-              mt: 0.5,
-              fontWeight: 600,
+              display:
+                "block",
+
+              mt:
+                0.6,
+
+              fontWeight:
+                700,
+
+              color:
+                aliareColors.greenDark,
             }}
           >
             Filtrar →
@@ -1759,24 +2138,46 @@ function IndicatorCard({
 function LevelChip({
   level,
 }: {
-  level: AttentionLevel;
+  level:
+    AttentionLevel;
 }) {
-  if (level === "critico") {
+  if (
+    level ===
+    "vencido"
+  ) {
     return (
       <Chip
         size="small"
+        icon={
+          <PriorityHighOutlined />
+        }
         color="error"
-        label="Crítico"
+        label="Vencido"
       />
     );
   }
 
-  if (level === "alto") {
+  if (
+    level ===
+    "critico"
+  ) {
     return (
       <Chip
         size="small"
-        color="warning"
-        label="Alto"
+        icon={
+          <ReportProblemOutlined />
+        }
+        label="Crítico"
+        sx={{
+          color:
+            "#B54708",
+
+          backgroundColor:
+            "rgba(249,115,22,0.10)",
+
+          border:
+            "1px solid rgba(249,115,22,0.35)",
+        }}
       />
     );
   }
@@ -1784,10 +2185,44 @@ function LevelChip({
   return (
     <Chip
       size="small"
-      color="info"
-      label="Médio"
+      icon={
+        <WarningAmberOutlined />
+      }
+      label="Atenção"
+      variant="outlined"
+      sx={{
+        color:
+          "#9A6500",
+
+        borderColor:
+          "rgba(245,179,1,0.40)",
+
+        backgroundColor:
+          "rgba(245,179,1,0.05)",
+      }}
     />
   );
+}
+
+function attentionColor(
+  level:
+    AttentionLevel
+) {
+  if (
+    level ===
+    "vencido"
+  ) {
+    return semanticChartColors.overdue;
+  }
+
+  if (
+    level ===
+    "critico"
+  ) {
+    return "#F97316";
+  }
+
+  return semanticChartColors.attention;
 }
 
 /* =====================================================
@@ -1817,11 +2252,8 @@ function TicketField({
 
       <Typography
         variant="body2"
-        fontWeight={600}
-        sx={{
-          wordBreak:
-            "break-word",
-        }}
+        sx={{ fontWeight: 600, wordBreak:
+            "break-word", }}
       >
         {value ?? "—"}
       </Typography>
@@ -1900,6 +2332,7 @@ function normalize(
       /[\u0300-\u036f]/g,
       ""
     )
+    .trim()
     .toLowerCase();
 }
 
@@ -1908,13 +2341,20 @@ function normalize(
 ===================================================== */
 
 function priorityWeight(
-  level: AttentionLevel
+  level:
+    AttentionLevel
 ) {
-  if (level === "critico") {
+  if (
+    level ===
+    "vencido"
+  ) {
     return 3;
   }
 
-  if (level === "alto") {
+  if (
+    level ===
+    "critico"
+  ) {
     return 2;
   }
 
@@ -1922,17 +2362,182 @@ function priorityWeight(
 }
 
 function attentionLabel(
-  level: AttentionLevel
+  level:
+    AttentionLevel
 ) {
-  if (level === "critico") {
+  if (
+    level ===
+    "vencido"
+  ) {
+    return "Vencido";
+  }
+
+  if (
+    level ===
+    "critico"
+  ) {
     return "Crítico";
   }
 
-  if (level === "alto") {
-    return "Alto";
+  return "Atenção";
+}
+
+/* =====================================================
+   REGRA OFICIAL DE PRAZO
+===================================================== */
+
+function getOfficialServiceLevel(
+  ticket:
+    Ticket
+):
+  ServiceLevelResult {
+  return calculateServiceLevel({
+    urgency:
+      ticket.urgency,
+
+    category:
+      ticket.category,
+
+    cause:
+      ticket.cause,
+
+    subject:
+      ticket.subject,
+
+    createdDate:
+      ticket.createdDate,
+    dueDate: ticket.dueDate,
+    baseStatus: ticket.baseStatus,
+
+    firstResponseDate:
+      ticket.firstResponseDate,
+
+    firstResponseDueDate:
+      ticket.firstResponseDueDate,
+
+    resolvedDate:
+      ticket.resolvedDate,
+
+    closedDate:
+      ticket.closedDate,
+
+    stoppedMinutes:
+      ticket.stoppedMinutes,
+
+    profile:
+      "STANDARD",
+  });
+}
+
+function isOfficialMeasuredCategory(
+  ticket:
+    Ticket
+) {
+  const result =
+    getOfficialServiceLevel(
+      ticket
+    );
+
+  if (
+    !result.applicable
+  ) {
+    return false;
   }
 
-  return "Médio";
+  const classification =
+    normalize(
+      [
+        ticket.category,
+        ticket.cause,
+      ]
+        .filter(
+          Boolean
+        )
+        .join(
+          " "
+        )
+    );
+
+  return (
+    classification.includes(
+      "duvida"
+    ) ||
+    classification.includes(
+      "problema"
+    ) ||
+    classification.includes(
+      "contorno"
+    ) ||
+    classification.includes(
+      "bug"
+    )
+  );
+}
+
+function resolveAttentionLevel(
+  serviceLevel:
+    ServiceLevelResult
+):
+  AttentionLevel {
+  const levels:
+    DeadlineLevel[] = [
+      serviceLevel
+        .resolution
+        .level,
+    ];
+
+  if (
+    !serviceLevel
+      .firstResponse
+      .completed
+  ) {
+    levels.push(
+      serviceLevel
+        .firstResponse
+        .level
+    );
+  }
+
+  if (
+    levels.includes(
+      "OVERDUE"
+    )
+  ) {
+    return "vencido";
+  }
+
+  if (
+    levels.includes(
+      "CRITICAL"
+    )
+  ) {
+    return "critico";
+  }
+
+  return "atencao";
+}
+
+function getOfficialRuleLabel(
+  ticket:
+    Ticket
+) {
+  if (
+    !isOfficialMeasuredCategory(
+      ticket
+    )
+  ) {
+    return "Fora da medição";
+  }
+
+  const result =
+    getOfficialServiceLevel(
+      ticket
+    );
+
+  return result.kind ===
+    "BUG"
+    ? "Bug · Suporte + Fábrica"
+    : "Dúvida / Problema / Contorno";
 }
 
 /* =====================================================
@@ -2042,13 +2647,22 @@ function formatDateTime(
     return "—";
   }
 
+  const parsed =
+    new Date(date);
+
+  if (
+    Number.isNaN(
+      parsed.getTime()
+    )
+  ) {
+    return "—";
+  }
+
   return new Intl.DateTimeFormat(
     "pt-BR",
     {
       dateStyle: "short",
       timeStyle: "short",
     }
-  ).format(
-    new Date(date)
-  );
+  ).format(parsed);
 }

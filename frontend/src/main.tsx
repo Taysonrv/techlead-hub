@@ -1,12 +1,55 @@
-import React from "react";
-import ReactDOM from "react-dom/client";
+import {
+  StrictMode,
+} from "react";
+
+import {
+  createRoot,
+} from "react-dom/client";
+
+import {
+  CssBaseline,
+  ThemeProvider,
+} from "@mui/material";
+
 import App from "./App";
+
+import {
+  theme,
+} from "./theme/theme";
+
 import "./index.css";
 
-ReactDOM.createRoot(
-  document.getElementById("root")!
+/* =========================================================
+   ROOT
+========================================================= */
+
+const rootElement =
+  document.getElementById(
+    "root"
+  );
+
+if (!rootElement) {
+  throw new Error(
+    "Elemento root não encontrado."
+  );
+}
+
+/* =========================================================
+   RENDER
+========================================================= */
+
+createRoot(
+  rootElement
 ).render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>
+  <StrictMode>
+    <ThemeProvider
+      theme={
+        theme
+      }
+    >
+      <CssBaseline />
+
+      <App />
+    </ThemeProvider>
+  </StrictMode>
 );

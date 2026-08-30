@@ -1,5 +1,3 @@
-import { useEffect, useMemo, useState } from "react";
-
 import {
   Alert,
   Box,
@@ -12,6 +10,7 @@ import {
   Drawer,
   FormControl,
   IconButton,
+  InputAdornment,
   InputLabel,
   MenuItem,
   Select,
@@ -27,9 +26,43 @@ import {
   Typography,
 } from "@mui/material";
 
+import {
+  ContentCopyOutlined,
+  ExpandLessOutlined,
+  ExpandMoreOutlined,
+  OpenInNewOutlined,
+  SearchOutlined,
+  TuneOutlined,
+} from "@mui/icons-material";
+
+import {
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+
 import { api } from "../services/api";
 import { useFilters } from "../context/FiltersContext";
 import { PeriodFilter } from "../components/PeriodFilter";
+
+import {
+  aliareColors,
+} from "../theme/theme";
+
+import {
+  semanticChartColors,
+} from "../theme/chartPalette";
+
+import {
+  calculateServiceLevel,
+  formatServiceMinutes,
+  type DeadlineLevel,
+  type ServiceLevelResult,
+} from "../utils/serviceLevel";
+
+/* =========================================================
+   TIPOS
+========================================================= */
 
 type Ticket = {
   id: number;
@@ -77,278 +110,566 @@ type Ticket = {
   importBatch?: string | null;
 };
 
+type AttentionLevel =
+  | "normal"
+  | "attention"
+  | "high"
+  | "critical"
+  | "excluded";
+
+type SortMode =
+  | "priority"
+  | "newest"
+  | "oldest"
+  | "urgency"
+  | "stopped"
+  | "deadline";
+
+type QuickFilter =
+  | "all"
+  | "open"
+  | "stopped"
+  | "attention"
+  | "unassigned"
+  | null;
+
+type FilterSelectProps = {
+  label: string;
+  value: string;
+  options: string[];
+  onChange: (
+    value: string
+  ) => void;
+};
+
+type KpiCardProps = {
+  title: string;
+  value: number;
+  description: string;
+  accent?: string;
+  active?: boolean;
+  onClick: () => void;
+};
+
+/* =========================================================
+   COMPONENTE
+========================================================= */
+
 export function Tickets() {
-  const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [
+    tickets,
+    setTickets,
+  ] =
+    useState<Ticket[]>([]);
 
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [
+    loading,
+    setLoading,
+  ] =
+    useState(true);
 
-  const [selectedTicket, setSelectedTicket] =
-    useState<Ticket | null>(null);
+  const [
+    error,
+    setError,
+  ] =
+    useState<
+      string | null
+    >(null);
 
-  const [search, setSearch] = useState("");
-  const [status, setStatus] = useState("");
-  const [urgency, setUrgency] = useState("");
-  const [category, setCategory] = useState("");
-  const [owner, setOwner] = useState("");
-  const [client, setClient] = useState("");
-  const [team, setTeam] = useState("");
-  const [service, setService] = useState("");
+  const [
+    selectedTicket,
+    setSelectedTicket,
+  ] =
+    useState<
+      Ticket | null
+    >(null);
 
-  const [copyMessage, setCopyMessage] =
+  const [
+    search,
+    setSearch,
+  ] =
+    useState("");
+
+  const [
+    status,
+    setStatus,
+  ] =
+    useState("");
+
+  const [
+    urgency,
+    setUrgency,
+  ] =
+    useState("");
+
+  const [
+    category,
+    setCategory,
+  ] =
+    useState("");
+
+  const [
+    owner,
+    setOwner,
+  ] =
+    useState("");
+
+  const [
+    client,
+    setClient,
+  ] =
+    useState("");
+
+  const [
+    team,
+    setTeam,
+  ] =
+    useState("");
+
+  const [
+    service,
+    setService,
+  ] =
+    useState("");
+
+  const [
+    showMoreFilters,
+    setShowMoreFilters,
+  ] =
+    useState(false);
+
+  const [
+    sortMode,
+    setSortMode,
+  ] =
+    useState<SortMode>(
+      "priority"
+    );
+
+  const [
+    quickFilter,
+    setQuickFilter,
+  ] =
+    useState<QuickFilter>(
+      null
+    );
+
+  const [
+    copyMessage,
+    setCopyMessage,
+  ] =
     useState("");
 
   const {
     effectiveStartDate,
     effectiveEndDate,
-  } = useFilters();
+  } =
+    useFilters();
 
-  /* =====================================================
-     CARREGAMENTO DOS TICKETS
-  ===================================================== */
+  /* =======================================================
+     CARREGAMENTO
+  ======================================================= */
 
   useEffect(() => {
     async function loadTickets() {
       try {
-        setLoading(true);
-        setError(null);
-
-        const response = await api.get(
-          "/dashboard/tickets"
+        setLoading(
+          true
         );
 
-        setTickets(response.data);
-      } catch (err) {
+        setError(
+          null
+        );
+
+        const response =
+          await api.get<
+            Ticket[]
+          >(
+            "/dashboard/tickets"
+          );
+
+        setTickets(
+          response.data
+        );
+      } catch (
+        requestError
+      ) {
         console.error(
           "Erro ao carregar tickets:",
-          err
+          requestError
         );
 
         setError(
           "Não foi possível carregar os tickets. Verifique se o backend está rodando."
         );
       } finally {
-        setLoading(false);
+        setLoading(
+          false
+        );
       }
     }
 
-    loadTickets();
+    void loadTickets();
   }, []);
 
-  /* =====================================================
+  /* =======================================================
      PERÍODO GLOBAL
+  ======================================================= */
 
-     Primeiro restringimos a massa inteira ao período.
-     Depois os filtros locais trabalham somente nessa massa.
-  ===================================================== */
-
-  const periodTickets = useMemo(() => {
-    const start =
-      startOfDay(effectiveStartDate);
-
-    const end =
-      endOfDay(effectiveEndDate);
-
-    return tickets.filter((ticket) => {
-      const created =
-        new Date(ticket.createdDate);
-
-      return (
-        created >= start &&
-        created <= end
-      );
-    });
-  }, [
-    tickets,
-    effectiveStartDate,
-    effectiveEndDate,
-  ]);
-
-  /* =====================================================
-     OPÇÕES DOS FILTROS
-
-     Agora os combos exibem somente valores existentes
-     dentro do período selecionado.
-  ===================================================== */
-
-  const statuses = useMemo(
-    () =>
-      uniqueValues(
-        periodTickets,
-        "status"
-      ),
-    [periodTickets]
-  );
-
-  const urgencies = useMemo(
-    () =>
-      uniqueValues(
-        periodTickets,
-        "urgency"
-      ),
-    [periodTickets]
-  );
-
-  const categories = useMemo(
-    () =>
-      uniqueValues(
-        periodTickets,
-        "category"
-      ),
-    [periodTickets]
-  );
-
-  const owners = useMemo(
-    () =>
-      uniqueValues(
-        periodTickets,
-        "owner"
-      ),
-    [periodTickets]
-  );
-
-  const clients = useMemo(
-    () =>
-      uniqueValues(
-        periodTickets,
-        "client"
-      ),
-    [periodTickets]
-  );
-
-  const teams = useMemo(
-    () =>
-      uniqueValues(
-        periodTickets,
-        "team"
-      ),
-    [periodTickets]
-  );
-
-  const services = useMemo(
-    () =>
-      uniqueValues(
-        periodTickets,
-        "service"
-      ),
-    [periodTickets]
-  );
-
-  /* =====================================================
-     FILTROS LOCAIS
-  ===================================================== */
-
-  const filteredTickets = useMemo(() => {
-    const normalizedSearch =
-      normalize(search.trim());
-
-    return periodTickets.filter(
-      (ticket) => {
-        const matchesSearch =
-          normalizedSearch === "" ||
-          normalize(
-            String(ticket.movideskId)
-          ).includes(normalizedSearch) ||
-          normalize(
-            String(ticket.id)
-          ).includes(normalizedSearch) ||
-          normalize(
-            ticket.protocol
-          ).includes(normalizedSearch) ||
-          normalize(
-            ticket.subject
-          ).includes(normalizedSearch) ||
-          normalize(
-            ticket.client
-          ).includes(normalizedSearch) ||
-          normalize(
-            ticket.contact
-          ).includes(normalizedSearch) ||
-          normalize(
-            ticket.owner
-          ).includes(normalizedSearch) ||
-          normalize(
-            ticket.team
-          ).includes(normalizedSearch) ||
-          normalize(
-            ticket.category
-          ).includes(normalizedSearch) ||
-          normalize(
-            ticket.cause
-          ).includes(normalizedSearch) ||
-          normalize(
-            ticket.service
-          ).includes(normalizedSearch) ||
-          normalize(
-            ticket.department
-          ).includes(normalizedSearch) ||
-          normalize(
-            ticket.taskNumber !== null
-              ? String(ticket.taskNumber)
-              : null
-          ).includes(normalizedSearch) ||
-          normalize(
-            ticket.taskStatus
-          ).includes(normalizedSearch) ||
-          normalize(
-            ticket.deliveredVersion
-          ).includes(normalizedSearch);
-
-        const matchesStatus =
-          status === "" ||
-          ticket.status === status;
-
-        const matchesUrgency =
-          urgency === "" ||
-          ticket.urgency === urgency;
-
-        const matchesCategory =
-          category === "" ||
-          ticket.category === category;
-
-        const matchesOwner =
-          owner === "" ||
-          ticket.owner === owner;
-
-        const matchesClient =
-          client === "" ||
-          ticket.client === client;
-
-        const matchesTeam =
-          team === "" ||
-          ticket.team === team;
-
-        const matchesService =
-          service === "" ||
-          ticket.service === service;
-
-        return (
-          matchesSearch &&
-          matchesStatus &&
-          matchesUrgency &&
-          matchesCategory &&
-          matchesOwner &&
-          matchesClient &&
-          matchesTeam &&
-          matchesService
+  const periodTickets =
+    useMemo(() => {
+      const start =
+        startOfDay(
+          effectiveStartDate
         );
-      }
-    );
-  }, [
-    periodTickets,
-    search,
-    status,
-    urgency,
-    category,
-    owner,
-    client,
-    team,
-    service,
-  ]);
 
-  /* =====================================================
-     QUANTIDADE DE FILTROS LOCAIS ATIVOS
-  ===================================================== */
+      const end =
+        endOfDay(
+          effectiveEndDate
+        );
+
+      return tickets.filter(
+        (ticket) => {
+          const created =
+            new Date(
+              ticket.createdDate
+            );
+
+          return (
+            created >=
+              start &&
+            created <=
+              end
+          );
+        }
+      );
+    }, [
+      tickets,
+      effectiveStartDate,
+      effectiveEndDate,
+    ]);
+
+  /* =======================================================
+     OPÇÕES DOS FILTROS
+  ======================================================= */
+
+  const statuses =
+    useMemo(
+      () =>
+        uniqueValues(
+          periodTickets,
+          "status"
+        ),
+      [
+        periodTickets,
+      ]
+    );
+
+  const urgencies =
+    useMemo(
+      () =>
+        uniqueValues(
+          periodTickets,
+          "urgency"
+        ),
+      [
+        periodTickets,
+      ]
+    );
+
+  const categories =
+    useMemo(
+      () =>
+        uniqueValues(
+          periodTickets,
+          "category"
+        ),
+      [
+        periodTickets,
+      ]
+    );
+
+  const owners =
+    useMemo(
+      () =>
+        uniqueValues(
+          periodTickets,
+          "owner"
+        ),
+      [
+        periodTickets,
+      ]
+    );
+
+  const clients =
+    useMemo(
+      () =>
+        uniqueValues(
+          periodTickets,
+          "client"
+        ),
+      [
+        periodTickets,
+      ]
+    );
+
+  const teams =
+    useMemo(
+      () =>
+        uniqueValues(
+          periodTickets,
+          "team"
+        ),
+      [
+        periodTickets,
+      ]
+    );
+
+  const services =
+    useMemo(
+      () =>
+        uniqueValues(
+          periodTickets,
+          "service"
+        ),
+      [
+        periodTickets,
+      ]
+    );
+
+  /* =======================================================
+     FILTROS LOCAIS
+  ======================================================= */
+
+  const filteredTickets =
+    useMemo(() => {
+      const normalizedSearch =
+        normalize(
+          search.trim()
+        );
+
+      return periodTickets.filter(
+        (ticket) => {
+          const matchesSearch =
+            normalizedSearch ===
+              "" ||
+            normalize(
+              String(
+                ticket.movideskId
+              )
+            ).includes(
+              normalizedSearch
+            ) ||
+            normalize(
+              String(
+                ticket.id
+              )
+            ).includes(
+              normalizedSearch
+            ) ||
+            normalize(
+              ticket.protocol
+            ).includes(
+              normalizedSearch
+            ) ||
+            normalize(
+              ticket.subject
+            ).includes(
+              normalizedSearch
+            ) ||
+            normalize(
+              ticket.client
+            ).includes(
+              normalizedSearch
+            ) ||
+            normalize(
+              ticket.contact
+            ).includes(
+              normalizedSearch
+            ) ||
+            normalize(
+              ticket.owner
+            ).includes(
+              normalizedSearch
+            ) ||
+            normalize(
+              ticket.team
+            ).includes(
+              normalizedSearch
+            ) ||
+            normalize(
+              ticket.category
+            ).includes(
+              normalizedSearch
+            ) ||
+            normalize(
+              ticket.cause
+            ).includes(
+              normalizedSearch
+            ) ||
+            normalize(
+              ticket.service
+            ).includes(
+              normalizedSearch
+            ) ||
+            normalize(
+              ticket.department
+            ).includes(
+              normalizedSearch
+            ) ||
+            normalize(
+              ticket.taskNumber !==
+                null
+                ? String(
+                    ticket.taskNumber
+                  )
+                : null
+            ).includes(
+              normalizedSearch
+            ) ||
+            normalize(
+              ticket.taskStatus
+            ).includes(
+              normalizedSearch
+            ) ||
+            normalize(
+              ticket.deliveredVersion
+            ).includes(
+              normalizedSearch
+            );
+
+          const matchesStatus =
+            status === "" ||
+            ticket.status ===
+              status;
+
+          const matchesUrgency =
+            urgency === "" ||
+            ticket.urgency ===
+              urgency;
+
+          const matchesCategory =
+            category === "" ||
+            ticket.category ===
+              category;
+
+          const matchesOwner =
+            owner === "" ||
+            ticket.owner ===
+              owner;
+
+          const matchesClient =
+            client === "" ||
+            ticket.client ===
+              client;
+
+          const matchesTeam =
+            team === "" ||
+            ticket.team ===
+              team;
+
+          const matchesService =
+            service === "" ||
+            ticket.service ===
+              service;
+
+          const attention =
+            getAttentionLevel(
+              ticket
+            );
+
+          const matchesQuickFilter =
+            quickFilter ===
+              null ||
+            quickFilter ===
+              "all" ||
+            (
+              quickFilter ===
+                "open" &&
+              isOpen(
+                ticket
+              )
+            ) ||
+            (
+              quickFilter ===
+                "stopped" &&
+              ticket.baseStatus ===
+                "Stopped"
+            ) ||
+            (
+              quickFilter ===
+                "attention" &&
+              (
+                attention ===
+                  "high" ||
+                attention ===
+                  "critical"
+              )
+            ) ||
+            (
+              quickFilter ===
+                "unassigned" &&
+              isOpen(
+                ticket
+              ) &&
+              !ticket.owner
+            );
+
+          return (
+            matchesSearch &&
+            matchesStatus &&
+            matchesUrgency &&
+            matchesCategory &&
+            matchesOwner &&
+            matchesClient &&
+            matchesTeam &&
+            matchesService &&
+            matchesQuickFilter
+          );
+        }
+      );
+    }, [
+      periodTickets,
+      search,
+      status,
+      urgency,
+      category,
+      owner,
+      client,
+      team,
+      service,
+      quickFilter,
+    ]);
+
+  /* =======================================================
+     ORDENAÇÃO OPERACIONAL
+  ======================================================= */
+
+  const sortedTickets =
+    useMemo(() => {
+      const result =
+        [
+          ...filteredTickets,
+        ];
+
+      result.sort(
+        (a, b) =>
+          compareTickets(
+            a,
+            b,
+            sortMode
+          )
+      );
+
+      return result;
+    }, [
+      filteredTickets,
+      sortMode,
+    ]);
+
+  /* =======================================================
+     FILTROS ATIVOS
+  ======================================================= */
 
   const activeFilterCount =
     [
@@ -360,7 +681,10 @@ export function Tickets() {
       client,
       team,
       service,
-    ].filter(Boolean).length;
+      quickFilter,
+    ].filter(
+      Boolean
+    ).length;
 
   function clearFilters() {
     setSearch("");
@@ -371,15 +695,116 @@ export function Tickets() {
     setClient("");
     setTeam("");
     setService("");
+    setQuickFilter(
+      null
+    );
   }
 
+  function activateQuickFilter(
+    filter:
+      Exclude<
+        QuickFilter,
+        null
+      >
+  ) {
+    /*
+     * Os KPIs representam a massa inteira do período.
+     * Ao acioná-los, limpamos os filtros locais para que
+     * a quantidade exibida no card seja exatamente igual
+     * à quantidade apresentada na tabela.
+     */
+    setSearch("");
+    setStatus("");
+    setUrgency("");
+    setCategory("");
+    setOwner("");
+    setClient("");
+    setTeam("");
+    setService("");
+
+    setQuickFilter(
+      filter
+    );
+  }
+
+  /* =======================================================
+     GRUPOS EXECUTIVOS
+
+     O número exibido no card é sempre exatamente a
+     quantidade que será aberta ao clicar.
+  ======================================================= */
+
+  const executiveGroups =
+    useMemo(() => {
+      const open =
+        periodTickets.filter(
+          isOpen
+        );
+
+      const stopped =
+        periodTickets.filter(
+          (ticket) =>
+            ticket.baseStatus ===
+            "Stopped"
+        );
+
+      const highAttention =
+        periodTickets.filter(
+          (ticket) => {
+            const level =
+              getAttentionLevel(
+                ticket
+              );
+
+            return (
+              level ===
+                "high" ||
+              level ===
+                "critical"
+            );
+          }
+        );
+
+      const withoutOwner =
+        periodTickets.filter(
+          (ticket) =>
+            isOpen(
+              ticket
+            ) &&
+            !ticket.owner
+        );
+
+      return {
+        all:
+          periodTickets,
+
+        open,
+
+        stopped,
+
+        highAttention,
+
+        withoutOwner,
+      };
+    }, [
+      periodTickets,
+    ]);
+
+  /* =======================================================
+     AÇÕES
+  ======================================================= */
+
   async function copyTicketNumber(
-    ticket: Ticket
+    ticket:
+      Ticket
   ) {
     try {
-      await navigator.clipboard.writeText(
-        String(ticket.movideskId)
-      );
+      await navigator.clipboard
+        .writeText(
+          String(
+            ticket.movideskId
+          )
+        );
 
       setCopyMessage(
         `Ticket #${ticket.movideskId} copiado.`
@@ -392,26 +817,69 @@ export function Tickets() {
   }
 
   async function copyTicketSummary(
-    ticket: Ticket
+    ticket:
+      Ticket
   ) {
-    const summaryText = [
-      `Ticket #${ticket.movideskId}`,
-      ticket.subject,
-      `Cliente: ${ticket.client ?? "—"}`,
-      `Solicitante: ${ticket.contact ?? "—"}`,
-      `Responsável: ${ticket.owner ?? "—"}`,
-      `Squad: ${ticket.team ?? "—"}`,
-      `Categoria: ${ticket.category ?? "—"}`,
-      `Causa: ${ticket.cause ?? "—"}`,
-      `Serviço: ${ticket.service ?? "—"}`,
-      `Urgência: ${ticket.urgency ?? "—"}`,
-      `Status: ${ticket.status}`,
-    ].join("\n");
+    const attention =
+      getAttentionInfo(
+        ticket
+      );
+
+    const serviceLevel =
+      getOfficialServiceLevel(
+        ticket
+      );
+
+    const summaryText =
+      [
+        `Ticket #${ticket.movideskId}`,
+        ticket.subject,
+        `Cliente: ${ticket.client ?? "—"}`,
+        `Solicitante: ${ticket.contact ?? "—"}`,
+        `Responsável: ${ticket.owner ?? "—"}`,
+        `Squad: ${ticket.team ?? "—"}`,
+        `Categoria: ${ticket.category ?? "—"}`,
+        `Causa: ${ticket.cause ?? "—"}`,
+        `Serviço: ${ticket.service ?? "—"}`,
+        `Urgência: ${ticket.urgency ?? "—"}`,
+        `Status: ${ticket.status}`,
+        `Prazo operacional: ${attention.label}`,
+        `1ª resposta vence em: ${formatDate(
+          ticket.firstResponseDueDate
+        )}`,
+        `1ª resposta dada em: ${formatDate(
+          ticket.firstResponseDate
+        )}`,
+        `Resultado 1ª resposta: ${
+          getFirstResponseDeadlineStatus(
+            ticket
+          ).label
+        }`,
+        `Meta 1ª resposta: ${
+          serviceLevel.applicable &&
+          isOfficialMeasuredCategory(ticket)
+            ? formatServiceMinutes(
+                serviceLevel.firstResponse.targetMinutes
+              )
+            : "Fora da medição"
+        }`,
+        `Meta solução: ${
+          serviceLevel.applicable &&
+          isOfficialMeasuredCategory(ticket)
+            ? formatServiceMinutes(
+                serviceLevel.resolution.targetMinutes
+              )
+            : "Fora da medição"
+        }`,
+      ].join(
+        "\n"
+      );
 
     try {
-      await navigator.clipboard.writeText(
-        summaryText
-      );
+      await navigator.clipboard
+        .writeText(
+          summaryText
+        );
 
       setCopyMessage(
         "Resumo do atendimento copiado."
@@ -424,7 +892,8 @@ export function Tickets() {
   }
 
   function openMovideskTicket(
-    ticket: Ticket
+    ticket:
+      Ticket
   ) {
     const url =
       `https://suporte.aliare.co/Ticket/Edit/${ticket.movideskId}`;
@@ -436,25 +905,39 @@ export function Tickets() {
     );
   }
 
-  /* =====================================================
+  /* =======================================================
      LOADING / ERROR
-  ===================================================== */
+  ======================================================= */
 
-  if (loading) {
+  if (
+    loading
+  ) {
     return (
       <Box
         sx={{
-          display: "flex",
-          justifyContent: "center",
-          mt: 10,
+          display:
+            "flex",
+
+          justifyContent:
+            "center",
+
+          mt:
+            10,
         }}
       >
-        <CircularProgress />
+        <CircularProgress
+          sx={{
+            color:
+              aliareColors.green,
+          }}
+        />
       </Box>
     );
   }
 
-  if (error) {
+  if (
+    error
+  ) {
     return (
       <Alert severity="error">
         {error}
@@ -462,46 +945,108 @@ export function Tickets() {
     );
   }
 
-  /* =====================================================
+  /* =======================================================
      RENDER
-  ===================================================== */
+  ======================================================= */
 
   return (
     <>
-      {/* ===============================================
+      {/* ===================================================
           CABEÇALHO
-      ================================================ */}
+      =================================================== */}
 
       <Box
         sx={{
-          mb: 2.5,
+          mb:
+            2.25,
 
-          display: "flex",
+          display:
+            "flex",
 
           flexDirection: {
-            xs: "column",
-            lg: "row",
+            xs:
+              "column",
+            lg:
+              "row",
           },
 
           justifyContent:
             "space-between",
 
           alignItems: {
-            xs: "stretch",
-            lg: "center",
+            xs:
+              "stretch",
+            lg:
+              "center",
           },
 
-          gap: 2,
+          gap:
+            2,
         }}
       >
         <Box>
-          <Typography
-            fontWeight={800}
+          <Stack
+            direction="row"
+            spacing={1}
             sx={{
+              alignItems:
+                "center",
+            }}
+          >
+            <Box
+              sx={{
+                width:
+                  30,
+
+                height:
+                  3,
+
+                borderRadius:
+                  99,
+
+                backgroundColor:
+                  aliareColors.green,
+              }}
+            />
+
+            <Typography
+              variant="caption"
+              sx={{
+                fontWeight:
+                  800,
+
+                letterSpacing:
+                  "0.08em",
+
+                textTransform:
+                  "uppercase",
+
+                color:
+                  aliareColors.greenDark,
+              }}
+            >
+              Operação
+            </Typography>
+          </Stack>
+
+          <Typography
+            sx={{
+              mt:
+                0.8,
+
+              fontWeight:
+                800,
+
+              letterSpacing:
+                "-0.03em",
+
               fontSize: {
-                xs: "1.7rem",
-                md: "1.9rem",
-                xl: "2.1rem",
+                xs:
+                  "1.7rem",
+                md:
+                  "1.9rem",
+                xl:
+                  "2.1rem",
               },
             }}
           >
@@ -509,455 +1054,1216 @@ export function Tickets() {
           </Typography>
 
           <Typography
-            sx={{
-              color:
-                "text.secondary",
-              mt: 0.5,
-            }}
-          >
-            Consulte e investigue os chamados da operação
-          </Typography>
-
-          <Typography
-            variant="caption"
+            variant="body2"
             color="text.secondary"
             sx={{
-              display: "block",
-              mt: 0.75,
+              mt:
+                0.25,
             }}
           >
-            {periodTickets.length} ticket(s)
-            no período selecionado
+            Consulte, priorize e investigue os chamados da operação
           </Typography>
         </Box>
 
         <PeriodFilter />
       </Box>
 
-      {/* ===============================================
-          SEM TICKETS NO PERÍODO
-      ================================================ */}
+      <Alert
+        severity="info"
+        variant="outlined"
+        sx={{
+          mb:
+            1.5,
 
-      {periodTickets.length === 0 && (
-        <Alert
-          severity="info"
-          sx={{
-            mb: 3,
-            borderRadius: 2,
+          borderRadius:
+            2,
+        }}
+      >
+        <strong>
+          Prazo oficial:
+        </strong>{" "}
+        esta fila usa horas úteis, urgência, categoria e tempo parado para calcular
+        primeira resposta e solução. Adequação e Solicitação de Serviço ficam fora
+        da medição. Até a identificação de clientes VIP ser incorporada ao banco,
+        o perfil utilizado é Padrão.
+      </Alert>
+
+      {/* ===================================================
+          KPIs OPERACIONAIS
+      =================================================== */}
+
+      <Box
+        sx={{
+          display:
+            "grid",
+
+          gridTemplateColumns: {
+            xs:
+              "1fr",
+            sm:
+              "repeat(2, minmax(0, 1fr))",
+            lg:
+              "repeat(5, minmax(0, 1fr))",
+          },
+
+          gap:
+            1.25,
+
+          mb:
+            1.75,
+        }}
+      >
+        <KpiCard
+          title="No período"
+          value={
+            executiveGroups
+              .all.length
+          }
+          description="Todos os atendimentos"
+          active={
+            quickFilter ===
+            "all"
+          }
+          onClick={() =>
+            activateQuickFilter(
+              "all"
+            )
+          }
+        />
+
+        <KpiCard
+          title="Abertos"
+          value={
+            executiveGroups
+              .open.length
+          }
+          description="Ainda em andamento"
+          accent={
+            semanticChartColors.normal
+          }
+          active={
+            quickFilter ===
+            "open"
+          }
+          onClick={() =>
+            activateQuickFilter(
+              "open"
+            )
+          }
+        />
+
+        <KpiCard
+          title="Parados"
+          value={
+            executiveGroups
+              .stopped.length
+          }
+          description="Dependem de atuação"
+          accent={
+            semanticChartColors.attention
+          }
+          active={
+            quickFilter ===
+            "stopped"
+          }
+          onClick={() =>
+            activateQuickFilter(
+              "stopped"
+            )
+          }
+        />
+
+        <KpiCard
+          title="Alta atenção"
+          value={
+            executiveGroups
+              .highAttention.length
+          }
+          description="Prazo crítico ou vencido"
+          accent={
+            semanticChartColors.overdue
+          }
+          active={
+            quickFilter ===
+            "attention"
+          }
+          onClick={() => {
+            activateQuickFilter(
+              "attention"
+            );
+
+            setSortMode(
+              "priority"
+            );
           }}
-        >
-          Nenhum ticket foi encontrado no período
-          selecionado. Escolha outro período para
-          continuar a análise.
-        </Alert>
-      )}
+        />
 
-      {/* ===============================================
-          FILTROS LOCAIS
-      ================================================ */}
+        <KpiCard
+          title="Sem responsável"
+          value={
+            executiveGroups
+              .withoutOwner.length
+          }
+          description="Abertos sem analista"
+          accent={
+            executiveGroups
+              .withoutOwner
+              .length >
+            0
+              ? semanticChartColors.attention
+              : aliareColors.green
+          }
+          active={
+            quickFilter ===
+            "unassigned"
+          }
+          onClick={() => {
+            activateQuickFilter(
+              "unassigned"
+            );
+
+            setSortMode(
+              "priority"
+            );
+          }}
+        />
+      </Box>
+
+      {/* ===================================================
+          FILTROS COMPACTOS
+      =================================================== */}
 
       <Card
         elevation={0}
         sx={{
-          border: "1px solid",
-          borderColor: "divider",
-          borderRadius: 3,
-          mb: 3,
+          border:
+            "1px solid",
+
+          borderColor:
+            "divider",
+
+          borderRadius:
+            2.25,
+
+          mb:
+            2,
+
+          backgroundColor:
+            "background.paper",
+
+          boxShadow:
+            "0 1px 2px rgba(16,24,40,0.035)",
         }}
       >
-        <CardContent>
+        <CardContent
+          sx={{
+            p: {
+              xs:
+                1.5,
+              md:
+                1.75,
+            },
+
+            "&:last-child":
+              {
+                pb: {
+                  xs:
+                    1.5,
+                  md:
+                    1.75,
+                },
+              },
+          }}
+        >
           <Stack
             direction={{
-              xs: "column",
-              sm: "row",
+              xs:
+                "column",
+              md:
+                "row",
             }}
-            spacing={2}
+            spacing={1}
             sx={{
-              mb: 2,
-
               alignItems: {
-                xs: "flex-start",
-                sm: "center",
+                xs:
+                  "stretch",
+                md:
+                  "center",
               },
 
-              justifyContent:
-                "space-between",
-            }}
-          >
-            <Box>
-              <Typography
-                fontWeight={700}
-              >
-                Filtros
-              </Typography>
-
-              <Typography
-                variant="body2"
-                color="text.secondary"
-              >
-                Refine os tickets do período selecionado
-              </Typography>
-            </Box>
-
-            {activeFilterCount > 0 && (
-              <Chip
-                size="small"
-                color="primary"
-                variant="outlined"
-                label={`${activeFilterCount} filtro(s) ativo(s)`}
-              />
-            )}
-          </Stack>
-
-          <Box
-            sx={{
-              display: "grid",
-
-              gridTemplateColumns: {
-                xs: "1fr",
-                md: "repeat(2, 1fr)",
-                xl: "repeat(4, 1fr)",
-              },
-
-              gap: 2,
+              mb:
+                1.25,
             }}
           >
             <TextField
-              label="Pesquisar"
-              placeholder="Ticket, protocolo, assunto, cliente, responsável..."
-              value={search}
-              onChange={(event) =>
+              size="small"
+              placeholder="Pesquisar ticket, assunto, cliente, analista, task ou versão..."
+              value={
+                search
+              }
+              onChange={(
+                event
+              ) =>
                 setSearch(
-                  event.target.value
+                  event.target
+                    .value
                 )
               }
-              fullWidth
+              sx={{
+                flex:
+                  1,
+
+                minWidth: {
+                  md:
+                    300,
+                },
+              }}
+              slotProps={{
+                input: {
+                  startAdornment:
+                    (
+                      <InputAdornment position="start">
+                        <SearchOutlined
+                          sx={{
+                            fontSize:
+                              19,
+
+                            color:
+                              "text.secondary",
+                          }}
+                        />
+                      </InputAdornment>
+                    ),
+                },
+              }}
             />
 
+            <FormControl
+              size="small"
+              sx={{
+                minWidth: {
+                  xs:
+                    "100%",
+                  md:
+                    190,
+                },
+              }}
+            >
+              <InputLabel>
+                Ordenar
+              </InputLabel>
+
+              <Select
+                value={
+                  sortMode
+                }
+                label="Ordenar"
+                onChange={(
+                  event
+                ) =>
+                  setSortMode(
+                    event.target
+                      .value as
+                      SortMode
+                  )
+                }
+              >
+                <MenuItem value="priority">
+                  Prioridade operacional
+                </MenuItem>
+
+                <MenuItem value="newest">
+                  Mais recentes
+                </MenuItem>
+
+                <MenuItem value="oldest">
+                  Mais antigos
+                </MenuItem>
+
+                <MenuItem value="urgency">
+                  Maior urgência
+                </MenuItem>
+
+                <MenuItem value="stopped">
+                  Mais tempo parado
+                </MenuItem>
+
+                <MenuItem value="deadline">
+                  Próximos do vencimento
+                </MenuItem>
+              </Select>
+            </FormControl>
+
+            <Button
+              variant="outlined"
+              startIcon={
+                <TuneOutlined />
+              }
+              endIcon={
+                showMoreFilters
+                  ? (
+                      <ExpandLessOutlined />
+                    )
+                  : (
+                      <ExpandMoreOutlined />
+                    )
+              }
+              onClick={() =>
+                setShowMoreFilters(
+                  (current) =>
+                    !current
+                )
+              }
+              sx={{
+                minWidth:
+                  150,
+
+                whiteSpace:
+                  "nowrap",
+              }}
+            >
+              Mais filtros
+              {activeFilterCount >
+              0
+                ? ` (${activeFilterCount})`
+                : ""}
+            </Button>
+
+            <Button
+              variant="text"
+              disabled={
+                activeFilterCount ===
+                0
+              }
+              onClick={
+                clearFilters
+              }
+              sx={{
+                whiteSpace:
+                  "nowrap",
+
+                color:
+                  "text.secondary",
+              }}
+            >
+              Limpar
+            </Button>
+          </Stack>
+
+          {/* FILTROS PRINCIPAIS */}
+
+          <Box
+            sx={{
+              display:
+                "grid",
+
+              gridTemplateColumns: {
+                xs:
+                  "1fr",
+                sm:
+                  "repeat(2, minmax(0, 1fr))",
+                lg:
+                  "repeat(4, minmax(0, 1fr))",
+              },
+
+              gap:
+                1,
+            }}
+          >
             <FilterSelect
               label="Status"
-              value={status}
-              options={statuses}
-              onChange={setStatus}
+              value={
+                status
+              }
+              options={
+                statuses
+              }
+              onChange={
+                setStatus
+              }
             />
 
             <FilterSelect
               label="Urgência"
-              value={urgency}
-              options={urgencies}
-              onChange={setUrgency}
-            />
-
-            <FilterSelect
-              label="Categoria"
-              value={category}
-              options={categories}
-              onChange={setCategory}
-            />
-
-            <FilterSelect
-              label="Responsável"
-              value={owner}
-              options={owners}
-              onChange={setOwner}
+              value={
+                urgency
+              }
+              options={
+                urgencies
+              }
+              onChange={
+                setUrgency
+              }
             />
 
             <FilterSelect
               label="Cliente"
-              value={client}
-              options={clients}
-              onChange={setClient}
+              value={
+                client
+              }
+              options={
+                clients
+              }
+              onChange={
+                setClient
+              }
             />
 
             <FilterSelect
-              label="Squad"
-              value={team}
-              options={teams}
-              onChange={setTeam}
-            />
-
-            <FilterSelect
-              label="Serviço"
-              value={service}
-              options={services}
-              onChange={setService}
+              label="Responsável"
+              value={
+                owner
+              }
+              options={
+                owners
+              }
+              onChange={
+                setOwner
+              }
             />
           </Box>
 
+          {/* FILTROS AVANÇADOS */}
+
+          {showMoreFilters && (
+            <Box
+              sx={{
+                display:
+                  "grid",
+
+                gridTemplateColumns: {
+                  xs:
+                    "1fr",
+                  sm:
+                    "repeat(2, minmax(0, 1fr))",
+                  lg:
+                    "repeat(3, minmax(0, 1fr))",
+                },
+
+                gap:
+                  1,
+
+                mt:
+                  1,
+              }}
+            >
+              <FilterSelect
+                label="Categoria"
+                value={
+                  category
+                }
+                options={
+                  categories
+                }
+                onChange={
+                  setCategory
+                }
+              />
+
+              <FilterSelect
+                label="Squad"
+                value={
+                  team
+                }
+                options={
+                  teams
+                }
+                onChange={
+                  setTeam
+                }
+              />
+
+              <FilterSelect
+                label="Serviço"
+                value={
+                  service
+                }
+                options={
+                  services
+                }
+                onChange={
+                  setService
+                }
+              />
+            </Box>
+          )}
+
           <Stack
             direction={{
-              xs: "column",
-              sm: "row",
+              xs:
+                "column",
+              sm:
+                "row",
             }}
-            spacing={2}
+            spacing={1}
             sx={{
-              mt: 3,
+              mt:
+                1.25,
 
               alignItems: {
-                xs: "stretch",
-                sm: "center",
+                xs:
+                  "flex-start",
+                sm:
+                  "center",
               },
 
               justifyContent:
                 "space-between",
             }}
           >
-            <Typography color="text.secondary">
+            <Typography
+              variant="body2"
+              color="text.secondary"
+            >
               Exibindo{" "}
-              <strong>
-                {filteredTickets.length}
-              </strong>{" "}
+              <Box
+                component="span"
+                sx={{
+                  color:
+                    "text.primary",
+
+                  fontWeight:
+                    800,
+                }}
+              >
+                {
+                  sortedTickets.length
+                }
+              </Box>{" "}
               de{" "}
-              <strong>
-                {periodTickets.length}
-              </strong>{" "}
-              ticket(s) do período
+              <Box
+                component="span"
+                sx={{
+                  color:
+                    "text.primary",
+
+                  fontWeight:
+                    800,
+                }}
+              >
+                {
+                  periodTickets.length
+                }
+              </Box>{" "}
+              ticket(s)
             </Typography>
 
-            <Button
-              variant="outlined"
-              disabled={
-                activeFilterCount === 0
-              }
-              onClick={clearFilters}
+            <Stack
+              direction="row"
+              spacing={0.75}
+              sx={{
+                flexWrap:
+                  "wrap",
+
+                gap:
+                  0.75,
+              }}
             >
-              Limpar filtros
-            </Button>
+              {quickFilter && (
+                <Chip
+                  size="small"
+                  label={
+                    getQuickFilterLabel(
+                      quickFilter
+                    )
+                  }
+                  onDelete={() =>
+                    setQuickFilter(
+                      null
+                    )
+                  }
+                  sx={{
+                    color:
+                      aliareColors.greenDark,
+
+                    border:
+                      "1px solid rgba(24,199,122,0.30)",
+
+                    backgroundColor:
+                      "rgba(24,199,122,0.06)",
+                  }}
+                />
+              )}
+
+              {activeFilterCount >
+                0 && (
+                <Chip
+                  size="small"
+                  variant="outlined"
+                  label={`${activeFilterCount} filtro(s) ativo(s)`}
+                  sx={{
+                    color:
+                      aliareColors.greenDark,
+
+                    borderColor:
+                      "rgba(24,199,122,0.30)",
+
+                    backgroundColor:
+                      "rgba(24,199,122,0.05)",
+                  }}
+                />
+              )}
+            </Stack>
           </Stack>
         </CardContent>
       </Card>
 
-      {/* ===============================================
-          TABELA
-      ================================================ */}
+      {/* ===================================================
+          SEM TICKETS
+      =================================================== */}
+
+      {periodTickets.length ===
+        0 && (
+        <Alert
+          severity="info"
+          sx={{
+            mb:
+              2,
+
+            borderRadius:
+              2,
+          }}
+        >
+          Nenhum ticket foi encontrado no período selecionado.
+        </Alert>
+      )}
+
+      {/* ===================================================
+          TABELA OPERACIONAL
+      =================================================== */}
 
       <Card
         elevation={0}
         sx={{
-          border: "1px solid",
-          borderColor: "divider",
-          borderRadius: 3,
-          overflow: "hidden",
+          border:
+            "1px solid",
+
+          borderColor:
+            "divider",
+
+          borderRadius:
+            2.25,
+
+          overflow:
+            "hidden",
+
+          backgroundColor:
+            "background.paper",
+
+          boxShadow:
+            "0 1px 2px rgba(16,24,40,0.035)",
         }}
       >
+        <Box
+          sx={{
+            px:
+              2,
+
+            py:
+              1.35,
+
+            borderBottom:
+              "1px solid",
+
+            borderColor:
+              "divider",
+          }}
+        >
+          <Stack
+            direction={{
+              xs:
+                "column",
+              sm:
+                "row",
+            }}
+            sx={{
+              justifyContent:
+                "space-between",
+
+              alignItems: {
+                xs:
+                  "flex-start",
+                sm:
+                  "center",
+              },
+
+              gap:
+                1,
+            }}
+          >
+            <Box>
+              <Typography
+                sx={{
+                  fontWeight:
+                    800,
+
+                  fontSize:
+                    "1rem",
+                }}
+              >
+                Fila operacional
+              </Typography>
+
+              <Typography
+                variant="caption"
+                color="text.secondary"
+              >
+                Priorização baseada no prazo oficial, urgência e contexto operacional
+              </Typography>
+            </Box>
+
+            <Typography
+              variant="caption"
+              sx={{
+                color:
+                  aliareColors.greenDark,
+
+                fontWeight:
+                  700,
+              }}
+            >
+              Clique em um atendimento para investigar
+            </Typography>
+          </Stack>
+        </Box>
+
         <TableContainer>
-          <Table>
-            <TableHead>
+          <Table
+            size="small"
+            sx={{
+              tableLayout:
+                "fixed",
+            }}
+          >
+            <TableHead
+              sx={{
+                backgroundColor:
+                  "#F8FAF9",
+
+                "& .MuiTableCell-root":
+                  {
+                    color:
+                      "text.secondary",
+
+                    fontSize:
+                      "0.72rem",
+
+                    fontWeight:
+                      800,
+
+                    letterSpacing:
+                      "0.02em",
+
+                    borderBottomColor:
+                      "divider",
+                  },
+              }}
+            >
               <TableRow>
-                <TableCell>
-                  <strong>
-                    Ticket
-                  </strong>
+                <TableCell
+                  sx={{
+                    width:
+                      140,
+                  }}
+                >
+                  Ticket
                 </TableCell>
 
                 <TableCell>
-                  <strong>
-                    Assunto
-                  </strong>
+                  Assunto / Cliente
                 </TableCell>
 
-                <TableCell>
-                  <strong>
-                    Cliente
-                  </strong>
+                <TableCell
+                  sx={{
+                    width:
+                      190,
+                  }}
+                >
+                  Responsável / Squad
                 </TableCell>
 
-                <TableCell>
-                  <strong>
-                    Responsável
-                  </strong>
+                <TableCell
+                  sx={{
+                    width:
+                      130,
+                  }}
+                >
+                  Status
                 </TableCell>
 
-                <TableCell>
-                  <strong>
-                    Categoria
-                  </strong>
+                <TableCell
+                  sx={{
+                    width:
+                      105,
+                  }}
+                >
+                  Urgência
                 </TableCell>
 
-                <TableCell>
-                  <strong>
-                    Status
-                  </strong>
+                <TableCell
+                  sx={{
+                    width:
+                      125,
+                  }}
+                >
+                  Prazo
                 </TableCell>
 
-                <TableCell>
-                  <strong>
-                    Urgência
-                  </strong>
-                </TableCell>
-
-                <TableCell align="right">
-                  <strong>
-                    Idade
-                  </strong>
+                <TableCell
+                  align="right"
+                  sx={{
+                    width:
+                      90,
+                  }}
+                >
+                  Idade
                 </TableCell>
               </TableRow>
             </TableHead>
 
             <TableBody>
-              {filteredTickets.map(
-                (ticket) => (
-                  <TableRow
-                    key={ticket.id}
-                    hover
-                    onClick={() =>
-                      setSelectedTicket(
-                        ticket
-                      )
-                    }
-                    sx={{
-                      cursor:
-                        "pointer",
+              {sortedTickets.map(
+                (ticket) => {
+                  const attention =
+                    getAttentionInfo(
+                      ticket
+                    );
 
-                      "&:hover": {
-                        backgroundColor:
-                          "action.hover",
-                      },
-                    }}
-                  >
-                    <TableCell>
-                      <Stack
-                        direction="row"
-                        spacing={0.5}
-                        sx={{
-                          alignItems:
-                            "center",
-                        }}
-                      >
-                        <Typography
-                          fontWeight={700}
+                  return (
+                    <TableRow
+                      key={
+                        ticket.id
+                      }
+                      hover
+                      onClick={() =>
+                        setSelectedTicket(
+                          ticket
+                        )
+                      }
+                      sx={{
+                        cursor:
+                          "pointer",
+
+                        "& > td:first-of-type":
+                          {
+                            borderLeft:
+                              `3px solid ${attention.color}`,
+                          },
+
+                        "&:hover":
+                          {
+                            backgroundColor:
+                              "#FAFBFA",
+                          },
+                      }}
+                    >
+                      <TableCell>
+                        <Stack
+                          direction="row"
+                          spacing={0.35}
+                          sx={{
+                            alignItems:
+                              "center",
+                          }}
                         >
-                          #{ticket.movideskId}
+                          <Typography
+                            sx={{
+                              fontWeight:
+                                800,
+
+                              fontSize:
+                                "0.82rem",
+                            }}
+                          >
+                            #
+                            {
+                              ticket.movideskId
+                            }
+                          </Typography>
+
+                          <IconButton
+                            size="small"
+                            title="Copiar número"
+                            onClick={(
+                              event
+                            ) => {
+                              event.stopPropagation();
+
+                              void copyTicketNumber(
+                                ticket
+                              );
+                            }}
+                            sx={{
+                              width:
+                                25,
+
+                              height:
+                                25,
+
+                              color:
+                                "text.secondary",
+                            }}
+                          >
+                            <ContentCopyOutlined
+                              sx={{
+                                fontSize:
+                                  14,
+                              }}
+                            />
+                          </IconButton>
+
+                          <IconButton
+                            size="small"
+                            title="Abrir no Movidesk"
+                            onClick={(
+                              event
+                            ) => {
+                              event.stopPropagation();
+
+                              openMovideskTicket(
+                                ticket
+                              );
+                            }}
+                            sx={{
+                              width:
+                                25,
+
+                              height:
+                                25,
+
+                              color:
+                                "text.secondary",
+                            }}
+                          >
+                            <OpenInNewOutlined
+                              sx={{
+                                fontSize:
+                                  15,
+                              }}
+                            />
+                          </IconButton>
+                        </Stack>
+
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          sx={{
+                            display:
+                              "block",
+
+                            mt:
+                              0.1,
+
+                            overflow:
+                              "hidden",
+
+                            textOverflow:
+                              "ellipsis",
+
+                            whiteSpace:
+                              "nowrap",
+                          }}
+                        >
+                          {ticket.protocol ??
+                            "Sem protocolo"}
+                        </Typography>
+                      </TableCell>
+
+                      <TableCell>
+                        <Typography
+                          title={
+                            ticket.subject
+                          }
+                          sx={{
+                            fontWeight:
+                              650,
+
+                            fontSize:
+                              "0.83rem",
+
+                            overflow:
+                              "hidden",
+
+                            textOverflow:
+                              "ellipsis",
+
+                            display:
+                              "-webkit-box",
+
+                            WebkitLineClamp:
+                              2,
+
+                            WebkitBoxOrient:
+                              "vertical",
+                          }}
+                        >
+                          {ticket.subject}
                         </Typography>
 
-                        <IconButton
-                          size="small"
-                          title="Copiar número do ticket"
-                          onClick={(
-                            event
-                          ) => {
-                            event.stopPropagation();
-
-                            void copyTicketNumber(
-                              ticket
-                            );
-                          }}
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          title={
+                            ticket.client ??
+                            undefined
+                          }
                           sx={{
-                            width: 24,
-                            height: 24,
-                            fontSize:
-                              "0.75rem",
+                            display:
+                              "block",
+
+                            mt:
+                              0.25,
+
+                            overflow:
+                              "hidden",
+
+                            textOverflow:
+                              "ellipsis",
+
+                            whiteSpace:
+                              "nowrap",
                           }}
                         >
-                          ⧉
-                        </IconButton>
+                          {ticket.client ??
+                            "Sem cliente"}
+                          {ticket.category
+                            ? ` · ${ticket.category}`
+                            : ""}
+                        </Typography>
+                      </TableCell>
 
-                        <IconButton
-                          size="small"
-                          title="Abrir no Movidesk"
-                          aria-label={`Abrir ticket ${ticket.movideskId} no Movidesk`}
-                          onClick={(
-                            event
-                          ) => {
-                            event.stopPropagation();
-
-                            openMovideskTicket(
-                              ticket
-                            );
-                          }}
+                      <TableCell>
+                        <Typography
                           sx={{
-                            width: 24,
-                            height: 24,
+                            fontWeight:
+                              650,
+
                             fontSize:
                               "0.8rem",
+
+                            overflow:
+                              "hidden",
+
+                            textOverflow:
+                              "ellipsis",
+
+                            whiteSpace:
+                              "nowrap",
+                          }}
+                          title={
+                            ticket.owner ??
+                            undefined
+                          }
+                        >
+                          {ticket.owner ??
+                            "Sem responsável"}
+                        </Typography>
+
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          sx={{
+                            display:
+                              "block",
+
+                            mt:
+                              0.15,
+
+                            overflow:
+                              "hidden",
+
+                            textOverflow:
+                              "ellipsis",
+
+                            whiteSpace:
+                              "nowrap",
                           }}
                         >
-                          ↗
-                        </IconButton>
-                      </Stack>
+                          {ticket.team ??
+                            "Sem squad"}
+                        </Typography>
+                      </TableCell>
 
-                      <Typography
-                        variant="caption"
-                        color="text.secondary"
-                      >
-                        {ticket.protocol ??
-                          "Sem protocolo"}
-                      </Typography>
-                    </TableCell>
-
-                    <TableCell>
-                      <Typography
-                        sx={{
-                          maxWidth: 340,
-                        }}
-                      >
-                        {ticket.subject}
-                      </Typography>
-                    </TableCell>
-
-                    <TableCell>
-                      {ticket.client ??
-                        "—"}
-                    </TableCell>
-
-                    <TableCell>
-                      {ticket.owner ?? (
-                        <Chip
-                          size="small"
-                          label="Sem responsável"
+                      <TableCell>
+                        <StatusChip
+                          status={
+                            ticket.status
+                          }
+                          baseStatus={
+                            ticket.baseStatus
+                          }
                         />
-                      )}
-                    </TableCell>
+                      </TableCell>
 
-                    <TableCell>
-                      {ticket.category ??
-                        "—"}
-                    </TableCell>
+                      <TableCell>
+                        <UrgencyChip
+                          urgency={
+                            ticket.urgency
+                          }
+                        />
+                      </TableCell>
 
-                    <TableCell>
-                      <StatusChip
-                        status={
-                          ticket.status
-                        }
-                        baseStatus={
-                          ticket.baseStatus
-                        }
-                      />
-                    </TableCell>
+                      <TableCell>
+                        <AttentionChip
+                          ticket={
+                            ticket
+                          }
+                        />
+                      </TableCell>
 
-                    <TableCell>
-                      <UrgencyChip
-                        urgency={
-                          ticket.urgency
-                        }
-                      />
-                    </TableCell>
+                      <TableCell
+                        align="right"
+                      >
+                        <Typography
+                          variant="body2"
+                          sx={{
+                            fontWeight:
+                              attention.level ===
+                                "critical" ||
+                              attention.level ===
+                                "high"
+                                ? 800
+                                : 600,
 
-                    <TableCell
-                      align="right"
-                    >
-                      {getTicketAge(
-                        ticket
-                      )}
-                    </TableCell>
-                  </TableRow>
-                )
+                            color:
+                              attention.level ===
+                                "critical"
+                                ? semanticChartColors.overdue
+                                : "text.primary",
+                          }}
+                        >
+                          {
+                            getTicketAge(
+                              ticket
+                            )
+                          }
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  );
+                }
               )}
 
-              {filteredTickets.length ===
+              {sortedTickets.length ===
                 0 && (
                 <TableRow>
                   <TableCell
-                    colSpan={8}
+                    colSpan={
+                      7
+                    }
                     align="center"
                   >
                     <Box
                       sx={{
-                        py: 5,
+                        py:
+                          5,
                       }}
                     >
                       <Typography
-                        fontWeight={700}
+                        sx={{
+                          fontWeight:
+                            700,
+                        }}
                       >
                         Nenhum ticket encontrado
                       </Typography>
@@ -966,7 +2272,8 @@ export function Tickets() {
                         variant="body2"
                         color="text.secondary"
                         sx={{
-                          mt: 0.5,
+                          mt:
+                            0.5,
                         }}
                       >
                         Altere o período ou remova algum filtro.
@@ -980,146 +2287,61 @@ export function Tickets() {
         </TableContainer>
       </Card>
 
-      {/* ===============================================
-          DETALHE DO TICKET
-      ================================================ */}
+      {/* ===================================================
+          DRAWER GERENCIAL
+      =================================================== */}
 
       <Drawer
         anchor="right"
-        open={Boolean(
-          selectedTicket
-        )}
+        open={
+          Boolean(
+            selectedTicket
+          )
+        }
         onClose={() =>
-          setSelectedTicket(null)
+          setSelectedTicket(
+            null
+          )
         }
       >
         <Box
           sx={{
             width: {
-              xs: 320,
-              sm: 500,
+              xs:
+                330,
+              sm:
+                540,
             },
 
-            p: 3,
+            p:
+              2.5,
           }}
         >
           {selectedTicket && (
             <>
-              <Box
-                sx={{
-                  display: "flex",
-
-                  justifyContent:
-                    "space-between",
-
-                  alignItems:
-                    "flex-start",
-
-                  gap: 2,
-                  mb: 2,
-                }}
-              >
-                <Box>
-                  <Typography
-                    variant="h5"
-                    fontWeight={800}
-                  >
-                    Ticket #{selectedTicket.movideskId}
-                  </Typography>
-
-                  <Typography
-                    variant="body2"
-                    color="text.secondary"
-                    sx={{ mt: 0.5 }}
-                  >
-                    {selectedTicket.protocol ??
-                      "Sem protocolo"}
-                  </Typography>
-                </Box>
-
-                <IconButton
-                  aria-label="Fechar detalhes"
-                  onClick={() =>
-                    setSelectedTicket(
-                      null
-                    )
-                  }
-                >
-                  ✕
-                </IconButton>
-              </Box>
-
-              <Stack
-                direction="row"
-                spacing={1}
-                sx={{
-                  mb: 2,
-                  flexWrap: "wrap",
-                  gap: 0.75,
-                }}
-              >
-                <Button
-                  size="small"
-                  variant="outlined"
-                  onClick={() =>
-                    void copyTicketNumber(
-                      selectedTicket
-                    )
-                  }
-                >
-                  Copiar número
-                </Button>
-
-                <Button
-                  size="small"
-                  variant="outlined"
-                  onClick={() =>
-                    void copyTicketSummary(
-                      selectedTicket
-                    )
-                  }
-                >
-                  Copiar resumo
-                </Button>
-
-                <Button
-                  size="small"
-                  variant="contained"
-                  onClick={() =>
-                    openMovideskTicket(
-                      selectedTicket
-                    )
-                  }
-                >
-                  Abrir no Movidesk ↗
-                </Button>
-              </Stack>
-
-              <Divider
-                sx={{ mb: 3 }}
+              <TicketDrawerHeader
+                ticket={
+                  selectedTicket
+                }
+                onClose={() =>
+                  setSelectedTicket(
+                    null
+                  )
+                }
               />
 
-              <Typography
-                variant="overline"
-                color="text.secondary"
-              >
-                Assunto
-              </Typography>
-
-              <Typography
-                fontWeight={700}
-                sx={{ mb: 3 }}
-              >
-                {selectedTicket.subject}
-              </Typography>
-
               <Stack
                 direction="row"
-                spacing={1}
+                spacing={0.75}
                 sx={{
-                  mb: 3,
-                  flexWrap: "wrap",
-                  gap: 1,
+                  mt:
+                    1.75,
+
+                  flexWrap:
+                    "wrap",
+
+                  gap:
+                    0.75,
                 }}
               >
                 <StatusChip
@@ -1136,44 +2358,139 @@ export function Tickets() {
                     selectedTicket.urgency
                   }
                 />
+
+                <AttentionChip
+                  ticket={
+                    selectedTicket
+                  }
+                />
+              </Stack>
+
+              <Typography
+                sx={{
+                  mt:
+                    2,
+
+                  fontWeight:
+                    750,
+
+                  fontSize:
+                    "1rem",
+
+                  lineHeight:
+                    1.5,
+                }}
+              >
+                {
+                  selectedTicket.subject
+                }
+              </Typography>
+
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{
+                  mt:
+                    0.4,
+                }}
+              >
+                {selectedTicket.client ??
+                  "Sem cliente"}
+              </Typography>
+
+              <Stack
+                direction="row"
+                spacing={0.75}
+                sx={{
+                  mt:
+                    2,
+
+                  flexWrap:
+                    "wrap",
+
+                  gap:
+                    0.75,
+                }}
+              >
+                <Button
+                  size="small"
+                  variant="outlined"
+                  startIcon={
+                    <ContentCopyOutlined />
+                  }
+                  onClick={() =>
+                    void copyTicketSummary(
+                      selectedTicket
+                    )
+                  }
+                >
+                  Copiar resumo
+                </Button>
+
+                <Button
+                  size="small"
+                  variant="contained"
+                  endIcon={
+                    <OpenInNewOutlined />
+                  }
+                  onClick={() =>
+                    openMovideskTicket(
+                      selectedTicket
+                    )
+                  }
+                >
+                  Abrir no Movidesk
+                </Button>
               </Stack>
 
               <Divider
-                sx={{ mb: 3 }}
+                sx={{
+                  my:
+                    2.25,
+                }}
               />
 
-              <Typography
-                variant="subtitle2"
-                fontWeight={800}
-                sx={{ mb: 2 }}
-              >
-                Informações do chamado
-              </Typography>
+              {/* VISÃO OPERACIONAL */}
+
+              <SectionTitle>
+                Visão operacional
+              </SectionTitle>
 
               <Box
                 sx={{
-                  display: "grid",
+                  display:
+                    "grid",
 
-                  gridTemplateColumns: {
-                    xs: "1fr",
-                    sm: "1fr 1fr",
-                  },
+                  gridTemplateColumns:
+                    {
+                      xs:
+                        "1fr",
+                      sm:
+                        "1fr 1fr",
+                    },
 
-                  gap: 2,
-                  mb: 3,
+                  gap:
+                    1.5,
+
+                  mb:
+                    2.25,
                 }}
               >
                 <TicketField
-                  label="Cliente"
+                  label="Idade"
                   value={
-                    selectedTicket.client
+                    getTicketAge(
+                      selectedTicket
+                    )
                   }
                 />
 
                 <TicketField
-                  label="Solicitante"
+                  label="Tempo parado"
                   value={
-                    selectedTicket.contact
+                    formatMinutes(
+                      selectedTicket.stoppedMinutes
+                    )
                   }
                 />
 
@@ -1191,6 +2508,113 @@ export function Tickets() {
                   }
                 />
 
+                <TicketField
+                  label="Perfil de prazo"
+                  value="Padrão"
+                />
+
+                <TicketField
+                  label="Regra aplicada"
+                  value={
+                    getOfficialRuleLabel(
+                      selectedTicket
+                    )
+                  }
+                />
+
+                <TicketField
+                  label="Meta 1ª resposta"
+                  value={
+                    getOfficialTargetLabel(
+                      selectedTicket,
+                      "firstResponse"
+                    )
+                  }
+                />
+
+                <TicketField
+                  label="Meta solução"
+                  value={
+                    getOfficialTargetLabel(
+                      selectedTicket,
+                      "resolution"
+                    )
+                  }
+                />
+              </Box>
+
+              <Divider
+                sx={{
+                  mb:
+                    2.25,
+                }}
+              />
+
+              {/* PRAZOS OFICIAIS */}
+
+              <SectionTitle>
+                Prazos do atendimento
+              </SectionTitle>
+
+              <Stack
+                spacing={1}
+                sx={{
+                  mb:
+                    2.25,
+                }}
+              >
+                <DeadlineStatusRow
+                  label="Primeira resposta"
+                  status={
+                    getFirstResponseDeadlineStatus(
+                      selectedTicket
+                    )
+                  }
+                />
+
+                <DeadlineStatusRow
+                  label="Conclusão"
+                  status={
+                    getResolutionDeadlineStatus(
+                      selectedTicket
+                    )
+                  }
+                />
+              </Stack>
+
+              <Divider
+                sx={{
+                  mb:
+                    2.25,
+                }}
+              />
+
+              {/* CLASSIFICAÇÃO */}
+
+              <SectionTitle>
+                Classificação
+              </SectionTitle>
+
+              <Box
+                sx={{
+                  display:
+                    "grid",
+
+                  gridTemplateColumns:
+                    {
+                      xs:
+                        "1fr",
+                      sm:
+                        "1fr 1fr",
+                    },
+
+                  gap:
+                    1.5,
+
+                  mb:
+                    2.25,
+                }}
+              >
                 <TicketField
                   label="Categoria"
                   value={
@@ -1218,167 +2642,144 @@ export function Tickets() {
                     selectedTicket.department
                   }
                 />
+
+                <TicketField
+                  label="Solicitante"
+                  value={
+                    selectedTicket.contact
+                  }
+                />
+
+                <TicketField
+                  label="Protocolo"
+                  value={
+                    selectedTicket.protocol
+                  }
+                />
               </Box>
 
               <Divider
-                sx={{ mb: 3 }}
+                sx={{
+                  mb:
+                    2.25,
+                }}
               />
 
-              <Typography
-                variant="subtitle2"
-                fontWeight={800}
-                sx={{ mb: 2 }}
-              >
+              {/* DATAS */}
+
+              <SectionTitle>
                 Datas
-              </Typography>
+              </SectionTitle>
 
               <Box
                 sx={{
-                  display: "grid",
-                  gap: 2,
-                  mb: 3,
+                  display:
+                    "grid",
+
+                  gridTemplateColumns:
+                    {
+                      xs:
+                        "1fr",
+                      sm:
+                        "1fr 1fr",
+                    },
+
+                  gap:
+                    1.5,
+
+                  mb:
+                    2.25,
                 }}
               >
                 <TicketField
-                  label="Data de abertura"
-                  value={formatDate(
-                    selectedTicket.createdDate
-                  )}
+                  label="Abertura"
+                  value={
+                    formatDate(
+                      selectedTicket.createdDate
+                    )
+                  }
                 />
 
                 <TicketField
                   label="Vencimento"
-                  value={formatDate(
-                    selectedTicket.dueDate
-                  )}
+                  value={
+                    formatDate(
+                      selectedTicket.dueDate
+                    )
+                  }
                 />
 
                 <TicketField
                   label="Primeira resposta"
-                  value={formatDate(
-                    selectedTicket.firstResponseDate
-                  )}
+                  value={
+                    formatDate(
+                      selectedTicket.firstResponseDate
+                    )
+                  }
                 />
 
                 <TicketField
-                  label="Venc. primeira resposta"
-                  value={formatDate(
-                    selectedTicket.firstResponseDueDate
-                  )}
+                  label="Prazo da 1ª resposta"
+                  value={
+                    formatDate(
+                      selectedTicket.firstResponseDueDate
+                    )
+                  }
                 />
 
                 <TicketField
-                  label="Data de resolução"
-                  value={formatDate(
-                    selectedTicket.resolvedDate
-                  )}
+                  label="Resolução"
+                  value={
+                    formatDate(
+                      selectedTicket.resolvedDate
+                    )
+                  }
                 />
 
                 <TicketField
-                  label="Data de fechamento"
-                  value={formatDate(
-                    selectedTicket.closedDate
-                  )}
+                  label="Fechamento"
+                  value={
+                    formatDate(
+                      selectedTicket.closedDate
+                    )
+                  }
                 />
               </Box>
 
-              <Divider
-                sx={{ mb: 3 }}
-              />
-
-              <Typography
-                variant="subtitle2"
-                fontWeight={800}
-                sx={{ mb: 2 }}
-              >
-                Tempos
-              </Typography>
-
-              <Box
-                sx={{
-                  display: "grid",
-
-                  gridTemplateColumns: {
-                    xs: "1fr",
-                    sm: "1fr 1fr",
-                  },
-
-                  gap: 2,
-                }}
-              >
-                <TicketField
-                  label="Tempo de vida"
-                  value={formatMinutes(
-                    selectedTicket.lifetimeMinutes
-                  )}
-                />
-
-                <TicketField
-                  label="Tempo parado"
-                  value={formatMinutes(
-                    selectedTicket.stoppedMinutes
-                  )}
-                />
-              </Box>
-
-              <Box
-                sx={{
-                  mt: 3,
-                  p: 2,
-
-                  borderRadius: 2,
-
-                  backgroundColor:
-                    "background.default",
-                }}
-              >
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                >
-                  Idade atual
-                </Typography>
-
-                <Typography
-                  variant="h6"
-                  fontWeight={800}
-                >
-                  {getTicketAge(
-                    selectedTicket
-                  )}
-                </Typography>
-              </Box>
+              {/* JUSTIFICATIVA */}
 
               {selectedTicket.justification && (
                 <>
                   <Divider
                     sx={{
-                      my: 3,
+                      mb:
+                        2.25,
                     }}
                   />
 
-                  <Typography
-                    variant="subtitle2"
-                    fontWeight={800}
-                    sx={{
-                      mb: 1,
-                    }}
-                  >
+                  <SectionTitle>
                     Justificativa
-                  </Typography>
+                  </SectionTitle>
 
                   <Typography
                     variant="body2"
                     color="text.secondary"
                     sx={{
+                      mb:
+                        2.25,
+
                       whiteSpace:
                         "pre-wrap",
                     }}
                   >
-                    {selectedTicket.justification}
+                    {
+                      selectedTicket.justification
+                    }
                   </Typography>
                 </>
               )}
+
+              {/* DESENVOLVIMENTO */}
 
               {(selectedTicket.taskNumber ||
                 selectedTicket.taskStatus ||
@@ -1386,19 +2787,14 @@ export function Tickets() {
                 <>
                   <Divider
                     sx={{
-                      my: 3,
+                      mb:
+                        2.25,
                     }}
                   />
 
-                  <Typography
-                    variant="subtitle2"
-                    fontWeight={800}
-                    sx={{
-                      mb: 2,
-                    }}
-                  >
+                  <SectionTitle>
                     Desenvolvimento
-                  </Typography>
+                  </SectionTitle>
 
                   <Box
                     sx={{
@@ -1407,11 +2803,14 @@ export function Tickets() {
 
                       gridTemplateColumns:
                         {
-                          xs: "1fr",
-                          sm: "1fr 1fr",
+                          xs:
+                            "1fr",
+                          sm:
+                            "1fr 1fr",
                         },
 
-                      gap: 2,
+                      gap:
+                        1.5,
                     }}
                   >
                     <TicketField
@@ -1445,27 +2844,201 @@ export function Tickets() {
       </Drawer>
 
       <Snackbar
-        open={Boolean(copyMessage)}
-        autoHideDuration={2200}
-        onClose={() =>
-          setCopyMessage("")
+        open={
+          Boolean(
+            copyMessage
+          )
         }
-        message={copyMessage}
+        autoHideDuration={
+          2600
+        }
+        onClose={() =>
+          setCopyMessage(
+            ""
+          )
+        }
+        message={
+          copyMessage
+        }
       />
     </>
   );
 }
 
-/* =====================================================
-   SELECT GENÉRICO
-===================================================== */
+/* =========================================================
+   KPI
+========================================================= */
 
-type FilterSelectProps = {
-  label: string;
-  value: string;
-  options: string[];
-  onChange: (value: string) => void;
-};
+function KpiCard({
+  title,
+  value,
+  description,
+  accent =
+    aliareColors.green,
+  active =
+    false,
+  onClick,
+}: KpiCardProps) {
+  return (
+    <Card
+      elevation={0}
+      role="button"
+      tabIndex={0}
+      onClick={
+        onClick
+      }
+      onKeyDown={(
+        event
+      ) => {
+        if (
+          event.key ===
+            "Enter" ||
+          event.key ===
+            " "
+        ) {
+          onClick();
+        }
+      }}
+      sx={{
+        position:
+          "relative",
+
+        overflow:
+          "hidden",
+
+        border:
+          "1px solid",
+
+        borderColor:
+          active
+            ? accent
+            : "divider",
+
+        borderRadius:
+          2.1,
+
+        cursor:
+          "pointer",
+
+        backgroundColor:
+          active
+            ? "rgba(24,199,122,0.035)"
+            : "background.paper",
+
+        transition:
+          "transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease",
+
+        "&::before":
+          {
+            content:
+              '""',
+
+            position:
+              "absolute",
+
+            top:
+              0,
+
+            left:
+              0,
+
+            width:
+              "100%",
+
+            height:
+              3,
+
+            backgroundColor:
+              accent,
+          },
+
+        "&:hover":
+          {
+            transform:
+              "translateY(-2px)",
+
+            borderColor:
+              accent,
+
+            boxShadow:
+              "0 8px 22px rgba(16,24,40,0.07)",
+          },
+      }}
+    >
+      <CardContent
+        sx={{
+          p:
+            1.45,
+
+          "&:last-child":
+            {
+              pb:
+                1.45,
+            },
+        }}
+      >
+        <Typography
+          variant="caption"
+          color="text.secondary"
+          sx={{
+            fontWeight:
+              700,
+          }}
+        >
+          {title}
+        </Typography>
+
+        <Typography
+          sx={{
+            mt:
+              0.35,
+
+            fontSize:
+              "1.65rem",
+
+            lineHeight:
+              1,
+
+            fontWeight:
+              800,
+
+            letterSpacing:
+              "-0.03em",
+          }}
+        >
+          {value}
+        </Typography>
+
+        <Typography
+          variant="caption"
+          color="text.secondary"
+          sx={{
+            display:
+              "block",
+
+            mt:
+              0.55,
+
+            overflow:
+              "hidden",
+
+            textOverflow:
+              "ellipsis",
+
+            whiteSpace:
+              "nowrap",
+          }}
+        >
+          {description}
+        </Typography>
+      </CardContent>
+    </Card>
+  );
+}
+
+/* =========================================================
+   SELECT
+========================================================= */
 
 function FilterSelect({
   label,
@@ -1474,17 +3047,27 @@ function FilterSelect({
   onChange,
 }: FilterSelectProps) {
   return (
-    <FormControl fullWidth>
+    <FormControl
+      fullWidth
+      size="small"
+    >
       <InputLabel>
         {label}
       </InputLabel>
 
       <Select
-        value={value}
-        label={label}
-        onChange={(event) =>
+        value={
+          value
+        }
+        label={
+          label
+        }
+        onChange={(
+          event
+        ) =>
           onChange(
-            event.target.value
+            event.target
+              .value
           )
         }
       >
@@ -1493,10 +3076,16 @@ function FilterSelect({
         </MenuItem>
 
         {options.map(
-          (option) => (
+          (
+            option
+          ) => (
             <MenuItem
-              key={option}
-              value={option}
+              key={
+                option
+              }
+              value={
+                option
+              }
             >
               {option}
             </MenuItem>
@@ -1507,109 +3096,598 @@ function FilterSelect({
   );
 }
 
-/* =====================================================
+/* =========================================================
    STATUS
-===================================================== */
+========================================================= */
 
 function StatusChip({
   status,
   baseStatus,
 }: {
-  status: string;
-  baseStatus: string | null;
+  status:
+    string;
+
+  baseStatus:
+    string | null;
 }) {
-  let color:
-    | "default"
-    | "primary"
-    | "warning"
-    | "success"
-    | "error" = "default";
-
   if (
-    baseStatus === "New" ||
-    baseStatus === "InAttendance"
+    baseStatus ===
+    "Stopped"
   ) {
-    color = "primary";
+    return (
+      <Chip
+        size="small"
+        label={
+          status
+        }
+        variant="outlined"
+        sx={{
+          color:
+            "#B26A00",
+
+          borderColor:
+            "rgba(245,158,11,0.45)",
+
+          backgroundColor:
+            "rgba(245,158,11,0.06)",
+        }}
+      />
+    );
   }
 
   if (
-    baseStatus === "Stopped"
+    baseStatus ===
+      "Resolved" ||
+    baseStatus ===
+      "Closed"
   ) {
-    color = "warning";
+    return (
+      <Chip
+        size="small"
+        label={
+          status
+        }
+        variant="outlined"
+        sx={{
+          color:
+            aliareColors.greenDark,
+
+          borderColor:
+            "rgba(24,199,122,0.34)",
+
+          backgroundColor:
+            "rgba(24,199,122,0.05)",
+        }}
+      />
+    );
   }
 
   if (
-    baseStatus === "Resolved" ||
-    baseStatus === "Closed"
+    baseStatus ===
+    "Canceled"
   ) {
-    color = "success";
-  }
-
-  if (
-    baseStatus === "Canceled"
-  ) {
-    color = "error";
+    return (
+      <Chip
+        size="small"
+        label={
+          status
+        }
+        variant="outlined"
+        color="error"
+      />
+    );
   }
 
   return (
     <Chip
       size="small"
-      label={status}
-      color={color}
+      label={
+        status
+      }
+      variant="outlined"
+      sx={{
+        color:
+          aliareColors.greenDark,
+
+        borderColor:
+          "rgba(24,199,122,0.34)",
+
+        backgroundColor:
+          "rgba(24,199,122,0.05)",
+      }}
+    />
+  );
+}
+
+/* =========================================================
+   URGÊNCIA
+========================================================= */
+
+function UrgencyChip({
+  urgency,
+}: {
+  urgency:
+    string | null;
+}) {
+  if (
+    !urgency
+  ) {
+    return (
+      <Typography
+        variant="caption"
+        color="text.secondary"
+      >
+        —
+      </Typography>
+    );
+  }
+
+  const normalized =
+    normalize(
+      urgency
+    );
+
+  if (
+    normalized ===
+    "critica"
+  ) {
+    return (
+      <Chip
+        size="small"
+        label={
+          urgency
+        }
+        color="error"
+      />
+    );
+  }
+
+  if (
+    normalized ===
+    "alta"
+  ) {
+    return (
+      <Chip
+        size="small"
+        label={
+          urgency
+        }
+        sx={{
+          backgroundColor:
+            "#F59E0B",
+
+          color:
+            "#171717",
+
+          fontWeight:
+            750,
+        }}
+      />
+    );
+  }
+
+  return (
+    <Chip
+      size="small"
+      label={
+        urgency
+      }
       variant="outlined"
     />
   );
 }
 
-/* =====================================================
-   URGÊNCIA
-===================================================== */
+/* =========================================================
+   ATENÇÃO OPERACIONAL
+========================================================= */
 
-function UrgencyChip({
-  urgency,
+function AttentionChip({
+  ticket,
 }: {
-  urgency: string | null;
+  ticket:
+    Ticket;
 }) {
-  if (!urgency) {
-    return <span>—</span>;
-  }
-
-  const normalized =
-    normalize(urgency);
-
-  let color:
-    | "default"
-    | "warning"
-    | "error" = "default";
-
-  if (
-    normalized === "critica"
-  ) {
-    color = "error";
-  } else if (
-    normalized === "alta"
-  ) {
-    color = "warning";
-  }
+  const info =
+    getAttentionInfo(
+      ticket
+    );
 
   return (
     <Chip
       size="small"
-      label={urgency}
-      color={color}
+      label={
+        info.label
+      }
+      variant="outlined"
+      sx={{
+        color:
+          info.textColor,
+
+        borderColor:
+          info.color,
+
+        backgroundColor:
+          info.backgroundColor,
+
+        fontWeight:
+          700,
+      }}
     />
   );
 }
 
-/* =====================================================
-   CAMPO DO DRAWER
-===================================================== */
+function getAttentionInfo(
+  ticket:
+    Ticket
+) {
+  const level =
+    getAttentionLevel(
+      ticket
+    );
+
+  if (
+    level ===
+    "excluded"
+  ) {
+    return {
+      level,
+      label:
+        "Fora da medição",
+      color:
+        semanticChartColors.neutral,
+      textColor:
+        "#667085",
+      backgroundColor:
+        "rgba(102,112,133,0.05)",
+    };
+  }
+
+  if (
+    level ===
+    "critical"
+  ) {
+    return {
+      level,
+      label:
+        "Vencido",
+      color:
+        semanticChartColors.overdue,
+      textColor:
+        semanticChartColors.overdue,
+      backgroundColor:
+        "rgba(229,57,53,0.06)",
+    };
+  }
+
+  if (
+    level ===
+    "high"
+  ) {
+    return {
+      level,
+      label:
+        "Crítico",
+      color:
+        "#F97316",
+      textColor:
+        "#C25100",
+      backgroundColor:
+        "rgba(249,115,22,0.06)",
+    };
+  }
+
+  if (
+    level ===
+    "attention"
+  ) {
+    return {
+      level,
+      label:
+        "Atenção",
+      color:
+        semanticChartColors.attention,
+      textColor:
+        "#9A6500",
+      backgroundColor:
+        "rgba(245,179,1,0.06)",
+    };
+  }
+
+  return {
+    level,
+    label:
+      "Normal",
+    color:
+      aliareColors.green,
+    textColor:
+      aliareColors.greenDark,
+    backgroundColor:
+      "rgba(24,199,122,0.05)",
+  };
+}
+
+/*
+ * A fila usa a mesma regra central aplicada na tela
+ * Desempenho. Os limiares de atenção são derivados do
+ * serviceLevel.ts:
+ *
+ * NORMAL    -> Normal
+ * ATTENTION -> Atenção (gatilho oficial: 40% restante)
+ * CRITICAL  -> Crítico
+ * OVERDUE   -> Vencido
+ */
+function getAttentionLevel(
+  ticket:
+    Ticket
+):
+  AttentionLevel {
+  if (
+    !isOfficialMeasuredCategory(
+      ticket
+    )
+  ) {
+    return "excluded";
+  }
+
+  if (
+    !isOpen(
+      ticket
+    )
+  ) {
+    return "normal";
+  }
+
+  const result =
+    getOfficialServiceLevel(
+      ticket
+    );
+
+  if (
+    !result.applicable
+  ) {
+    return "excluded";
+  }
+
+  const levels:
+    DeadlineLevel[] = [
+      result.resolution.level,
+    ];
+
+  if (
+    !result.firstResponse
+      .completed
+  ) {
+    levels.push(
+      result.firstResponse.level
+    );
+  }
+
+  if (
+    levels.includes(
+      "OVERDUE"
+    )
+  ) {
+    return "critical";
+  }
+
+  if (
+    levels.includes(
+      "CRITICAL"
+    )
+  ) {
+    return "high";
+  }
+
+  if (
+    levels.includes(
+      "ATTENTION"
+    )
+  ) {
+    return "attention";
+  }
+
+  return "normal";
+}
+
+/* =========================================================
+   DRAWER
+========================================================= */
+
+function TicketDrawerHeader({
+  ticket,
+  onClose,
+}: {
+  ticket:
+    Ticket;
+
+  onClose:
+    () => void;
+}) {
+  return (
+    <Stack
+      direction="row"
+      sx={{
+        justifyContent:
+          "space-between",
+
+        alignItems:
+          "flex-start",
+
+        gap:
+          2,
+      }}
+    >
+      <Box>
+        <Typography
+          sx={{
+            fontSize:
+              "1.25rem",
+
+            fontWeight:
+              800,
+
+            letterSpacing:
+              "-0.025em",
+          }}
+        >
+          Ticket #
+          {
+            ticket.movideskId
+          }
+        </Typography>
+
+        <Typography
+          variant="caption"
+          color="text.secondary"
+        >
+          {ticket.protocol ??
+            "Sem protocolo"}
+        </Typography>
+      </Box>
+
+      <IconButton
+        size="small"
+        aria-label="Fechar detalhes"
+        onClick={
+          onClose
+        }
+      >
+        ✕
+      </IconButton>
+    </Stack>
+  );
+}
+
+function SectionTitle({
+  children,
+}: {
+  children:
+    string;
+}) {
+  return (
+    <Typography
+      variant="subtitle2"
+      sx={{
+        mb:
+          1.3,
+
+        fontWeight:
+          800,
+
+        letterSpacing:
+          "-0.01em",
+      }}
+    >
+      {children}
+    </Typography>
+  );
+}
+
+function DeadlineStatusRow({
+  label,
+  status,
+}: {
+  label:
+    string;
+
+  status: {
+    label:
+      string;
+    color:
+      string;
+    detail:
+      string;
+  };
+}) {
+  return (
+    <Box
+      sx={{
+        p:
+          1.25,
+
+        border:
+          "1px solid",
+
+        borderColor:
+          "divider",
+
+        borderRadius:
+          1.5,
+
+        backgroundColor:
+          "#FAFBFA",
+      }}
+    >
+      <Stack
+        direction="row"
+        sx={{
+          justifyContent:
+            "space-between",
+
+          alignItems:
+            "center",
+
+          gap:
+            1.5,
+        }}
+      >
+        <Box
+          sx={{
+            minWidth:
+              0,
+          }}
+        >
+          <Typography
+            variant="body2"
+            sx={{
+              fontWeight:
+                700,
+            }}
+          >
+            {label}
+          </Typography>
+
+          <Typography
+            variant="caption"
+            color="text.secondary"
+          >
+            {
+              status.detail
+            }
+          </Typography>
+        </Box>
+
+        <Chip
+          size="small"
+          label={
+            status.label
+          }
+          variant="outlined"
+          sx={{
+            flexShrink:
+              0,
+
+            color:
+              status.color,
+
+            borderColor:
+              status.color,
+
+            fontWeight:
+              700,
+          }}
+        />
+      </Stack>
+    </Box>
+  );
+}
 
 function TicketField({
   label,
   value,
 }: {
-  label: string;
+  label:
+    string;
 
   value:
     | string
@@ -1622,29 +3700,740 @@ function TicketField({
       <Typography
         variant="caption"
         color="text.secondary"
+        sx={{
+          display:
+            "block",
+
+          mb:
+            0.2,
+        }}
       >
         {label}
       </Typography>
 
       <Typography
-        fontWeight={600}
+        variant="body2"
         sx={{
+          fontWeight:
+            650,
+
           wordBreak:
             "break-word",
         }}
       >
-        {value ?? "—"}
+        {value ??
+          "—"}
       </Typography>
     </Box>
   );
 }
 
-/* =====================================================
-   VALORES ÚNICOS
-===================================================== */
+/* =========================================================
+   PRAZOS
+========================================================= */
+
+function getFirstResponseDeadlineStatus(
+  ticket:
+    Ticket
+) {
+  if (
+    !isOfficialMeasuredCategory(
+      ticket
+    )
+  ) {
+    return notMeasuredDeadlineStatus();
+  }
+
+  const result =
+    getOfficialServiceLevel(
+      ticket
+    );
+
+  if (
+    !result.applicable
+  ) {
+    return notMeasuredDeadlineStatus();
+  }
+
+  const deadline =
+    result.firstResponse;
+
+  if (
+    deadline.completed
+  ) {
+    const within =
+      deadline.targetMinutes !==
+        null &&
+      deadline.consumedMinutes <=
+        deadline.targetMinutes;
+
+    return {
+      label:
+        within
+          ? "Dentro do prazo"
+          : "Fora do prazo",
+
+      color:
+        within
+          ? aliareColors.greenDark
+          : semanticChartColors.overdue,
+
+      detail:
+        `${formatServiceMinutes(
+          deadline.consumedMinutes
+        )} consumido(s) de ${formatServiceMinutes(
+          deadline.targetMinutes
+        )} · resposta em ${formatDate(
+          ticket.firstResponseDate
+        )}`,
+    };
+  }
+
+  return {
+    label:
+      deadlineLevelLabel(
+        deadline.level
+      ),
+
+    color:
+      deadlineLevelColor(
+        deadline.level
+      ),
+
+    detail:
+      `${formatServiceMinutes(
+        deadline.consumedMinutes
+      )} consumido(s) de ${formatServiceMinutes(
+        deadline.targetMinutes
+      )} · restante ${formatServiceMinutes(
+        deadline.remainingMinutes
+      )}`,
+  };
+}
+
+function getResolutionDeadlineStatus(
+  ticket:
+    Ticket
+) {
+  if (
+    !isOfficialMeasuredCategory(
+      ticket
+    )
+  ) {
+    return notMeasuredDeadlineStatus();
+  }
+
+  const result =
+    getOfficialServiceLevel(
+      ticket
+    );
+
+  if (
+    !result.applicable
+  ) {
+    return notMeasuredDeadlineStatus();
+  }
+
+  const deadline =
+    result.resolution;
+
+  if (
+    deadline.completed
+  ) {
+    const within =
+      deadline.targetMinutes !==
+        null &&
+      deadline.consumedMinutes <=
+        deadline.targetMinutes;
+
+    return {
+      label:
+        within
+          ? "Dentro do prazo"
+          : "Fora do prazo",
+
+      color:
+        within
+          ? aliareColors.greenDark
+          : semanticChartColors.overdue,
+
+      detail:
+        `${formatServiceMinutes(
+          deadline.consumedMinutes
+        )} consumido(s) de ${formatServiceMinutes(
+          deadline.targetMinutes
+        )} · conclusão em ${formatDate(
+          ticket.resolvedDate ??
+            ticket.closedDate
+        )}`,
+    };
+  }
+
+  return {
+    label:
+      deadlineLevelLabel(
+        deadline.level
+      ),
+
+    color:
+      deadlineLevelColor(
+        deadline.level
+      ),
+
+    detail:
+      `${formatServiceMinutes(
+        deadline.consumedMinutes
+      )} consumido(s) de ${formatServiceMinutes(
+        deadline.targetMinutes
+      )} · restante ${formatServiceMinutes(
+        deadline.remainingMinutes
+      )}`,
+  };
+}
+
+function notMeasuredDeadlineStatus() {
+  return {
+    label:
+      "Fora da medição",
+
+    color:
+      "#667085",
+
+    detail:
+      "Categoria sem medição de prazo nesta regra.",
+  };
+}
+
+function deadlineLevelLabel(
+  level:
+    DeadlineLevel
+) {
+  if (
+    level ===
+    "OVERDUE"
+  ) {
+    return "Vencido";
+  }
+
+  if (
+    level ===
+    "CRITICAL"
+  ) {
+    return "Crítico";
+  }
+
+  if (
+    level ===
+    "ATTENTION"
+  ) {
+    return "Atenção";
+  }
+
+  if (
+    level ===
+    "NOT_APPLICABLE"
+  ) {
+    return "Fora da medição";
+  }
+
+  return "Dentro do prazo";
+}
+
+function deadlineLevelColor(
+  level:
+    DeadlineLevel
+) {
+  if (
+    level ===
+    "OVERDUE"
+  ) {
+    return semanticChartColors.overdue;
+  }
+
+  if (
+    level ===
+    "CRITICAL"
+  ) {
+    return "#F97316";
+  }
+
+  if (
+    level ===
+    "ATTENTION"
+  ) {
+    return semanticChartColors.attention;
+  }
+
+  if (
+    level ===
+    "NOT_APPLICABLE"
+  ) {
+    return "#667085";
+  }
+
+  return aliareColors.greenDark;
+}
+
+/* =========================================================
+   ORDENAÇÃO
+========================================================= */
+
+function compareTickets(
+  a:
+    Ticket,
+  b:
+    Ticket,
+  mode:
+    SortMode
+) {
+  if (
+    mode ===
+    "newest"
+  ) {
+    return (
+      new Date(
+        b.createdDate
+      ).getTime() -
+      new Date(
+        a.createdDate
+      ).getTime()
+    );
+  }
+
+  if (
+    mode ===
+    "oldest"
+  ) {
+    return (
+      new Date(
+        a.createdDate
+      ).getTime() -
+      new Date(
+        b.createdDate
+      ).getTime()
+    );
+  }
+
+  if (
+    mode ===
+    "urgency"
+  ) {
+    return (
+      urgencyWeight(
+        b.urgency
+      ) -
+      urgencyWeight(
+        a.urgency
+      )
+    );
+  }
+
+  if (
+    mode ===
+    "stopped"
+  ) {
+    return (
+      (
+        b.stoppedMinutes ??
+        0
+      ) -
+      (
+        a.stoppedMinutes ??
+        0
+      )
+    );
+  }
+
+  if (
+    mode ===
+    "deadline"
+  ) {
+    return (
+      deadlineTimestamp(
+        a
+      ) -
+      deadlineTimestamp(
+        b
+      )
+    );
+  }
+
+  const attentionDifference =
+    attentionWeight(
+      getAttentionLevel(
+        b
+      )
+    ) -
+    attentionWeight(
+      getAttentionLevel(
+        a
+      )
+    );
+
+  if (
+    attentionDifference !==
+    0
+  ) {
+    return attentionDifference;
+  }
+
+  const urgencyDifference =
+    urgencyWeight(
+      b.urgency
+    ) -
+    urgencyWeight(
+      a.urgency
+    );
+
+  if (
+    urgencyDifference !==
+    0
+  ) {
+    return urgencyDifference;
+  }
+
+  return (
+    getTicketAgeHours(
+      b
+    ) -
+    getTicketAgeHours(
+      a
+    )
+  );
+}
+
+function attentionWeight(
+  level:
+    AttentionLevel
+) {
+  if (
+    level ===
+    "critical"
+  ) {
+    return 4;
+  }
+
+  if (
+    level ===
+    "high"
+  ) {
+    return 3;
+  }
+
+  if (
+    level ===
+    "attention"
+  ) {
+    return 2;
+  }
+
+  if (
+    level ===
+    "excluded"
+  ) {
+    return 0;
+  }
+
+  return 1;
+}
+
+function urgencyWeight(
+  urgency:
+    string | null
+) {
+  const value =
+    normalize(
+      urgency
+    );
+
+  if (
+    value ===
+    "critica"
+  ) {
+    return 4;
+  }
+
+  if (
+    value ===
+    "alta"
+  ) {
+    return 3;
+  }
+
+  if (
+    value ===
+      "media" ||
+    value ===
+      "média"
+  ) {
+    return 2;
+  }
+
+  return 1;
+}
+
+function deadlineTimestamp(
+  ticket:
+    Ticket
+) {
+  if (
+    !isOfficialMeasuredCategory(
+      ticket
+    ) ||
+    !isOpen(
+      ticket
+    )
+  ) {
+    return Number.MAX_SAFE_INTEGER;
+  }
+
+  const result =
+    getOfficialServiceLevel(
+      ticket
+    );
+
+  if (
+    !result.applicable
+  ) {
+    return Number.MAX_SAFE_INTEGER;
+  }
+
+  const remaining:
+    number[] = [
+      result.resolution
+        .remainingMinutes ??
+        Number.MAX_SAFE_INTEGER,
+    ];
+
+  if (
+    !result.firstResponse
+      .completed
+  ) {
+    remaining.push(
+      result.firstResponse
+        .remainingMinutes ??
+        Number.MAX_SAFE_INTEGER
+    );
+  }
+
+  /*
+   * Quanto menor (inclusive negativo), maior a urgência
+   * para a ordenação "Próximos do vencimento".
+   */
+  return Math.min(
+    ...remaining
+  );
+}
+
+/* =========================================================
+   REGRA OFICIAL DE PRAZO
+========================================================= */
+
+function getOfficialServiceLevel(
+  ticket:
+    Ticket
+):
+  ServiceLevelResult {
+  return calculateServiceLevel({
+    urgency:
+      ticket.urgency,
+
+    category:
+      ticket.category,
+
+    cause:
+      ticket.cause,
+
+    subject:
+      ticket.subject,
+
+    createdDate:
+      ticket.createdDate,
+    dueDate: ticket.dueDate,
+    baseStatus: ticket.baseStatus,
+
+    firstResponseDate:
+      ticket.firstResponseDate,
+
+    firstResponseDueDate:
+      ticket.firstResponseDueDate,
+
+    resolvedDate:
+      ticket.resolvedDate,
+
+    closedDate:
+      ticket.closedDate,
+
+    stoppedMinutes:
+      ticket.stoppedMinutes,
+
+    /*
+     * Temporário: ainda não temos o perfil VIP/Padrão
+     * persistido no Ticket.
+     */
+    profile:
+      "STANDARD",
+  });
+}
+
+function isOfficialMeasuredCategory(
+  ticket:
+    Ticket
+) {
+  const result =
+    getOfficialServiceLevel(
+      ticket
+    );
+
+  if (
+    !result.applicable
+  ) {
+    return false;
+  }
+
+  const classification =
+    normalize(
+      [
+        ticket.category,
+        ticket.cause,
+      ]
+        .filter(
+          Boolean
+        )
+        .join(
+          " "
+        )
+    );
+
+  return (
+    classification.includes(
+      "duvida"
+    ) ||
+    classification.includes(
+      "problema"
+    ) ||
+    classification.includes(
+      "contorno"
+    ) ||
+    classification.includes(
+      "bug"
+    )
+  );
+}
+
+function getOfficialRuleLabel(
+  ticket:
+    Ticket
+) {
+  if (
+    !isOfficialMeasuredCategory(
+      ticket
+    )
+  ) {
+    return "Fora da medição";
+  }
+
+  const result =
+    getOfficialServiceLevel(
+      ticket
+    );
+
+  return result.kind ===
+    "BUG"
+    ? "Bug · Suporte + Fábrica"
+    : "Dúvida / Problema / Contorno";
+}
+
+function getOfficialTargetLabel(
+  ticket:
+    Ticket,
+
+  target:
+    | "firstResponse"
+    | "resolution"
+) {
+  if (
+    !isOfficialMeasuredCategory(
+      ticket
+    )
+  ) {
+    return "—";
+  }
+
+  const result =
+    getOfficialServiceLevel(
+      ticket
+    );
+
+  return formatServiceMinutes(
+    target ===
+      "firstResponse"
+      ? result.firstResponse
+          .targetMinutes
+      : result.resolution
+          .targetMinutes
+  );
+}
+
+/* =========================================================
+   UTILITÁRIOS
+========================================================= */
+
+function getQuickFilterLabel(
+  quickFilter:
+    Exclude<
+      QuickFilter,
+      null
+    >
+) {
+  if (
+    quickFilter ===
+    "all"
+  ) {
+    return "Todos do período";
+  }
+
+  if (
+    quickFilter ===
+    "open"
+  ) {
+    return "Abertos";
+  }
+
+  if (
+    quickFilter ===
+    "stopped"
+  ) {
+    return "Parados";
+  }
+
+  if (
+    quickFilter ===
+    "attention"
+  ) {
+    return "Alta atenção";
+  }
+
+  return "Sem responsável";
+}
+
+function isOpen(
+  ticket:
+    Ticket
+) {
+  return ![
+    "Resolved",
+    "Closed",
+    "Canceled",
+  ].includes(
+    ticket.baseStatus ??
+      ""
+  );
+}
 
 function uniqueValues(
-  tickets: Ticket[],
+  tickets:
+    Ticket[],
 
   field:
     | "status"
@@ -1660,7 +4449,9 @@ function uniqueValues(
       tickets
         .map(
           (ticket) =>
-            ticket[field]
+            ticket[
+              field
+            ]
         )
         .filter(
           (
@@ -1668,20 +4459,21 @@ function uniqueValues(
           ): value is string =>
             typeof value ===
               "string" &&
-            value.trim() !== ""
+            value.trim() !==
+              ""
         )
     )
-  ).sort((a, b) =>
-    a.localeCompare(
-      b,
-      "pt-BR"
-    )
+  ).sort(
+    (
+      a,
+      b
+    ) =>
+      a.localeCompare(
+        b,
+        "pt-BR"
+      )
   );
 }
-
-/* =====================================================
-   NORMALIZAÇÃO DE TEXTO
-===================================================== */
 
 function normalize(
   value:
@@ -1689,28 +4481,32 @@ function normalize(
     | null
     | undefined
 ) {
-  if (!value) {
+  if (
+    !value
+  ) {
     return "";
   }
 
   return value
-    .normalize("NFD")
+    .normalize(
+      "NFD"
+    )
     .replace(
       /[\u0300-\u036f]/g,
       ""
     )
+    .trim()
     .toLowerCase();
 }
 
-/* =====================================================
-   LIMITES DO DIA
-===================================================== */
-
 function startOfDay(
-  date: Date
+  date:
+    Date
 ) {
   const result =
-    new Date(date);
+    new Date(
+      date
+    );
 
   result.setHours(
     0,
@@ -1723,10 +4519,13 @@ function startOfDay(
 }
 
 function endOfDay(
-  date: Date
+  date:
+    Date
 ) {
   const result =
-    new Date(date);
+    new Date(
+      date
+    );
 
   result.setHours(
     23,
@@ -1738,12 +4537,45 @@ function endOfDay(
   return result;
 }
 
-/* =====================================================
-   IDADE DO TICKET
-===================================================== */
+function getTicketAgeHours(
+  ticket:
+    Ticket
+) {
+  const created =
+    new Date(
+      ticket.createdDate
+    );
+
+  const end =
+    ticket.closedDate
+      ? new Date(
+          ticket.closedDate
+        )
+      : ticket.resolvedDate
+      ? new Date(
+          ticket.resolvedDate
+        )
+      : new Date();
+
+  return Math.max(
+    0,
+    Math.floor(
+      (
+        end.getTime() -
+        created.getTime()
+      ) /
+        (
+          1000 *
+          60 *
+          60
+        )
+    )
+  );
+}
 
 function getTicketAge(
-  ticket: Ticket
+  ticket:
+    Ticket
 ) {
   if (
     ticket.baseStatus ===
@@ -1761,102 +4593,114 @@ function getTicketAge(
     return "Resolvido";
   }
 
-  const created =
-    new Date(
-      ticket.createdDate
+  const hours =
+    getTicketAgeHours(
+      ticket
     );
 
-  const now =
-    new Date();
-
-  const hours = Math.max(
-    0,
-
-    Math.floor(
-      (now.getTime() -
-        created.getTime()) /
-        (1000 * 60 * 60)
-    )
-  );
-
-  if (hours < 24) {
+  if (
+    hours <
+    24
+  ) {
     return `${hours}h`;
   }
 
   const days =
     Math.floor(
-      hours / 24
+      hours /
+        24
     );
 
   const remainingHours =
-    hours % 24;
+    hours %
+    24;
 
   return `${days}d ${remainingHours}h`;
 }
 
-/* =====================================================
-   DATAS
-===================================================== */
-
 function formatDate(
-  date: string | null
+  date:
+    string | null
 ) {
-  if (!date) {
+  if (
+    !date
+  ) {
+    return "—";
+  }
+
+  const value =
+    new Date(
+      date
+    );
+
+  if (
+    Number.isNaN(
+      value.getTime()
+    )
+  ) {
     return "—";
   }
 
   return new Intl.DateTimeFormat(
     "pt-BR",
     {
-      dateStyle: "short",
-      timeStyle: "short",
+      dateStyle:
+        "short",
+
+      timeStyle:
+        "short",
     }
   ).format(
-    new Date(date)
+    value
   );
 }
 
-/* =====================================================
-   MINUTOS
-===================================================== */
-
 function formatMinutes(
-  minutes: number | null
+  minutes:
+    number | null
 ) {
   if (
-    minutes === null ||
-    minutes === undefined
+    minutes ===
+      null ||
+    minutes ===
+      undefined
   ) {
     return "—";
   }
 
   if (
-    minutes < 60
+    minutes <
+    60
   ) {
     return `${minutes} min`;
   }
 
   const hours =
     Math.floor(
-      minutes / 60
+      minutes /
+        60
     );
 
   const remainingMinutes =
-    minutes % 60;
+    minutes %
+    60;
 
   if (
-    hours < 24
+    hours <
+    24
   ) {
     return `${hours}h ${remainingMinutes}min`;
   }
 
   const days =
     Math.floor(
-      hours / 24
+      hours /
+        24
     );
 
   const remainingHours =
-    hours % 24;
+    hours %
+    24;
 
   return `${days}d ${remainingHours}h ${remainingMinutes}min`;
 }

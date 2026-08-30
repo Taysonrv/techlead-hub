@@ -1,7 +1,10 @@
 import {
   Box,
-  CssBaseline,
 } from "@mui/material";
+
+import type {
+  ReactNode,
+} from "react";
 
 import {
   BrowserRouter,
@@ -9,31 +12,88 @@ import {
   Routes,
 } from "react-router-dom";
 
-import { Sidebar } from "./components/Sidebar";
+import {
+  Sidebar,
+} from "./components/Sidebar";
 
-import { FiltersProvider } from "./context/FiltersContext";
+import {
+  ProtectedRoute,
+} from "./components/ProtectedRoute";
 
-import { Dashboard } from "./pages/Dashboard";
-import { Tickets } from "./pages/Tickets";
-import { Analysts } from "./pages/Analysts";
-import { Clients } from "./pages/Clients";
-import { Attention } from "./pages/Attention";
-import { Import } from "./pages/Import";
+import {
+  AuthProvider,
+} from "./context/AuthContext";
 
-function App() {
+import {
+  FiltersProvider,
+} from "./context/FiltersContext";
+
+import {
+  Dashboard,
+} from "./pages/Dashboard";
+
+import {
+  Tickets,
+} from "./pages/Tickets";
+
+import {
+  Analysts,
+} from "./pages/Analysts";
+
+import {
+  Clients,
+} from "./pages/Clients";
+
+import {
+  Attention,
+} from "./pages/Attention";
+
+import {
+  Performance,
+} from "./pages/Performance";
+
+import {
+  Import,
+} from "./pages/Import";
+
+import {
+  About,
+} from "./pages/About";
+
+import {
+  Profile,
+} from "./pages/Profile";
+
+import {
+  Login,
+} from "./pages/Login";
+
+/* =========================================================
+   LAYOUT AUTENTICADO
+========================================================= */
+
+function AuthenticatedLayout({
+  children,
+}: {
+  children:
+    ReactNode;
+}) {
   return (
-    <BrowserRouter>
+    <ProtectedRoute>
       <FiltersProvider>
-        <CssBaseline />
-
         <Box
           sx={{
-            display: "flex",
+            display:
+              "flex",
 
-            width: "100%",
-            minHeight: "100vh",
+            width:
+              "100%",
 
-            backgroundColor: "#f5f7fa",
+            minHeight:
+              "100vh",
+
+            backgroundColor:
+              "background.default",
           }}
         >
           <Sidebar />
@@ -41,14 +101,20 @@ function App() {
           <Box
             component="main"
             sx={{
-              flexGrow: 1,
+              flexGrow:
+                1,
 
-              minWidth: 0,
-              minHeight: "100vh",
+              minWidth:
+                0,
 
-              backgroundColor: "#f5f7fa",
+              minHeight:
+                "100vh",
 
-              overflowX: "hidden",
+              backgroundColor:
+                "background.default",
+
+              overflowX:
+                "hidden",
 
               px: {
                 xs: 1.5,
@@ -69,45 +135,128 @@ function App() {
           >
             <Box
               sx={{
-                width: "100%",
-                maxWidth: "100%",
+                width:
+                  "100%",
+
+                maxWidth:
+                  "100%",
               }}
             >
-              <Routes>
-                <Route
-                  path="/"
-                  element={<Dashboard />}
-                />
-
-                <Route
-                  path="/tickets"
-                  element={<Tickets />}
-                />
-
-                <Route
-                  path="/analistas"
-                  element={<Analysts />}
-                />
-
-                <Route
-                  path="/clientes"
-                  element={<Clients />}
-                />
-
-                <Route
-                  path="/atencao"
-                  element={<Attention />}
-                />
-
-                <Route
-                  path="/importar"
-                  element={<Import />}
-                />
-              </Routes>
+              {children}
             </Box>
           </Box>
         </Box>
       </FiltersProvider>
+    </ProtectedRoute>
+  );
+}
+
+/* =========================================================
+   APP
+========================================================= */
+
+function App() {
+  return (
+    <BrowserRouter>
+      <AuthProvider>
+        <Routes>
+          {/* =================================================
+              ROTA PÚBLICA
+          ================================================= */}
+
+          <Route
+            path="/login"
+            element={
+              <Login />
+            }
+          />
+
+          {/* =================================================
+              ROTAS PROTEGIDAS
+          ================================================= */}
+
+          <Route
+            path="/"
+            element={
+              <AuthenticatedLayout>
+                <Dashboard />
+              </AuthenticatedLayout>
+            }
+          />
+
+          <Route
+            path="/tickets"
+            element={
+              <AuthenticatedLayout>
+                <Tickets />
+              </AuthenticatedLayout>
+            }
+          />
+
+          <Route
+            path="/analistas"
+            element={
+              <AuthenticatedLayout>
+                <Analysts />
+              </AuthenticatedLayout>
+            }
+          />
+
+          <Route
+            path="/clientes"
+            element={
+              <AuthenticatedLayout>
+                <Clients />
+              </AuthenticatedLayout>
+            }
+          />
+
+          <Route
+            path="/desempenho"
+            element={
+              <AuthenticatedLayout>
+                <Performance />
+              </AuthenticatedLayout>
+            }
+          />
+
+          <Route
+            path="/atencao"
+            element={
+              <AuthenticatedLayout>
+                <Attention />
+              </AuthenticatedLayout>
+            }
+          />
+
+          <Route
+            path="/importar"
+            element={
+              <AuthenticatedLayout>
+                <Import />
+              </AuthenticatedLayout>
+            }
+          />
+
+          <Route
+            path="/sobre"
+            element={
+              <AuthenticatedLayout>
+                <About />
+              </AuthenticatedLayout>
+            }
+          />
+
+          <Route
+            path="/perfil"
+            element={
+              <AuthenticatedLayout>
+                <Profile />
+              </AuthenticatedLayout>
+            }
+          />
+        </Routes>
+      </AuthProvider>
     </BrowserRouter>
   );
 }

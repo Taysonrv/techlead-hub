@@ -30,3 +30,12 @@ desktop/node_modules
 desktop/dist
 desktop/release
 desktop/out
+
+# Artefatos indevidos do Prisma Config
+backend/prisma.config.js
+backend/prisma.config.js.map
+backend/prisma.config.d.ts
+backend/prisma.config.d.ts.map
+
+# TypeScript incremental
+*.tsbuildinfo

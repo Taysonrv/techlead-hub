@@ -1,9 +1,7 @@
 import ExcelJS from "exceljs";
 import crypto from "node:crypto";
 
-import { PrismaClient } from "@prisma/client";
-
-const prisma = new PrismaClient();
+import { prisma } from "../database/prisma";
 
 type ExcelRow = Record<string, unknown>;
 
@@ -32,29 +30,50 @@ export class MovideskExcelImportService {
   async execute(
     fileBuffer: Buffer
   ): Promise<ImportResult> {
-    const workbook =
-      new ExcelJS.Workbook();
-
-    await workbook.xlsx.load(
-      fileBuffer as any
-    );
-
-    const worksheet =
-      workbook.worksheets[0];
-
-    if (!worksheet) {
+    if (
+      !fileBuffer ||
+      fileBuffer.length === 0
+    ) {
       throw new Error(
-        "O arquivo Excel não possui nenhuma planilha."
+        "O arquivo enviado está vazio."
       );
     }
 
-    const headerRow =
-      worksheet.getRow(1);
+    const workbook =
+      new ExcelJS.Workbook();
 
-    const headers =
-      this.readHeaders(
-        headerRow
+    try {
+      await workbook.xlsx.load(
+        fileBuffer as any
       );
+    } catch (error) {
+      console.error(
+        "[import] Falha ao abrir o Excel:",
+        error
+      );
+
+      throw new Error(
+        "Não foi possível abrir o arquivo Excel. Salve novamente o relatório como .xlsx e tente importar outra vez."
+      );
+    }
+
+    const worksheetInfo =
+      this.findWorksheetAndHeader(
+        workbook
+      );
+
+    if (!worksheetInfo) {
+      throw new Error(
+        "Não foi encontrada uma planilha válida. O relatório precisa conter as colunas Número, Assunto e Aberto em."
+      );
+    }
+
+    const {
+      worksheet,
+      headerRowNumber,
+      headers,
+    } =
+      worksheetInfo;
 
     this.validateRequiredColumns(
       headers
@@ -85,63 +104,31 @@ export class MovideskExcelImportService {
       message: string;
     }[] = [];
 
-    const rows: {
-      rowNumber: number;
-      data: ExcelRow;
-    }[] = [];
+    /*
+     * Lê todo o arquivo antes de gravar qualquer ticket.
+     * Isso evita alterar a base quando a planilha estiver
+     * estruturalmente inválida.
+     */
+    const rows =
+      this.readRows(
+        worksheet,
+        headers,
+        headerRowNumber
+      );
 
-    worksheet.eachRow(
-      (
-        row,
-        rowNumber
-      ) => {
-        if (
-          rowNumber === 1
-        ) {
-          return;
-        }
+    if (
+      rows.length === 0
+    ) {
+      throw new Error(
+        "A planilha foi localizada, mas não possui linhas de atendimento para importar."
+      );
+    }
 
-        const data: ExcelRow =
-          {};
-
-        headers.forEach(
-          (
-            header,
-            index
-          ) => {
-            if (!header) {
-              return;
-            }
-
-            data[header] =
-              row.getCell(
-                index + 1
-              ).value;
-          }
-        );
-
-        const hasContent =
-          Object.values(
-            data
-          ).some(
-            (value) =>
-              value !== null &&
-              value !==
-                undefined &&
-              String(value).trim() !==
-                ""
-          );
-
-        if (!hasContent) {
-          return;
-        }
-
-        rows.push({
-          rowNumber,
-          data,
-        });
-      }
-    );
+    /*
+     * Detecta duplicidades dentro do próprio Excel.
+     */
+    const seenTicketIds =
+      new Set<number>();
 
     for (const row of rows) {
       try {
@@ -155,6 +142,28 @@ export class MovideskExcelImportService {
 
           continue;
         }
+
+        if (
+          seenTicketIds.has(
+            ticket.movideskId
+          )
+        ) {
+          ignored++;
+
+          errorDetails.push({
+            row:
+              row.rowNumber,
+
+            message:
+              `Ticket ${ticket.movideskId} duplicado no próprio arquivo. A ocorrência adicional foi ignorada.`,
+          });
+
+          continue;
+        }
+
+        seenTicketIds.add(
+          ticket.movideskId
+        );
 
         if (ticket.owner) {
           analysts.add(
@@ -294,6 +303,141 @@ export class MovideskExcelImportService {
   }
 
   /* =====================================================
+     LOCALIZAÇÃO DA PLANILHA / CABEÇALHO
+  ===================================================== */
+
+  private findWorksheetAndHeader(
+    workbook: ExcelJS.Workbook
+  ) {
+    if (
+      !workbook.worksheets ||
+      workbook.worksheets.length === 0
+    ) {
+      return null;
+    }
+
+    /*
+     * O Movidesk pode gerar arquivos com linhas vazias,
+     * títulos ou filtros acima do cabeçalho real. Por isso
+     * procuramos a estrutura válida nas primeiras 20 linhas
+     * de cada planilha.
+     */
+    for (
+      const worksheet
+      of workbook.worksheets
+    ) {
+      const maxRow =
+        Math.min(
+          Math.max(
+            worksheet.rowCount,
+            1
+          ),
+          20
+        );
+
+      for (
+        let rowNumber = 1;
+        rowNumber <= maxRow;
+        rowNumber++
+      ) {
+        const headers =
+          this.readHeaders(
+            worksheet.getRow(
+              rowNumber
+            )
+          );
+
+        if (
+          this.hasRequiredColumns(
+            headers
+          )
+        ) {
+          return {
+            worksheet,
+            headerRowNumber:
+              rowNumber,
+            headers,
+          };
+        }
+      }
+    }
+
+    return null;
+  }
+
+  private readRows(
+    worksheet: ExcelJS.Worksheet,
+    headers: string[],
+    headerRowNumber: number
+  ) {
+    const rows: {
+      rowNumber: number;
+      data: ExcelRow;
+    }[] = [];
+
+    worksheet.eachRow(
+      {
+        includeEmpty:
+          false,
+      },
+      (
+        row,
+        rowNumber
+      ) => {
+        if (
+          rowNumber <=
+          headerRowNumber
+        ) {
+          return;
+        }
+
+        const data:
+          ExcelRow = {};
+
+        headers.forEach(
+          (
+            header,
+            index
+          ) => {
+            if (!header) {
+              return;
+            }
+
+            data[header] =
+              row.getCell(
+                index + 1
+              ).value;
+          }
+        );
+
+        const hasContent =
+          Object.values(
+            data
+          ).some(
+            (value) =>
+              value !== null &&
+              value !== undefined &&
+              this.cellToString(
+                value
+              ).trim() !==
+                ""
+          );
+
+        if (!hasContent) {
+          return;
+        }
+
+        rows.push({
+          rowNumber,
+          data,
+        });
+      }
+    );
+
+    return rows;
+  }
+
+  /* =====================================================
      HEADERS
   ===================================================== */
 
@@ -303,21 +447,28 @@ export class MovideskExcelImportService {
     const headers:
       string[] = [];
 
-    headerRow.eachCell(
-      (
-        cell,
-        colNumber
-      ) => {
-        headers[
-          colNumber - 1
-        ] =
-          this.normalizeHeader(
-            this.cellToString(
-              cell.value
-            )
-          );
-      }
-    );
+    const cellCount =
+      Math.max(
+        headerRow.cellCount,
+        headerRow.actualCellCount
+      );
+
+    for (
+      let colNumber = 1;
+      colNumber <= cellCount;
+      colNumber++
+    ) {
+      headers[
+        colNumber - 1
+      ] =
+        this.normalizeHeader(
+          this.cellToString(
+            headerRow.getCell(
+              colNumber
+            ).value
+          )
+        );
+    }
 
     return headers;
   }
@@ -326,15 +477,46 @@ export class MovideskExcelImportService {
     value: string
   ) {
     return value
+      .replace(
+        /[\u200B-\u200D\uFEFF]/g,
+        ""
+      )
+      .replace(
+        /\u00A0/g,
+        " "
+      )
+      .replace(
+        /[\r\n\t]+/g,
+        " "
+      )
       .trim()
       .normalize("NFD")
       .replace(
         /[\u0300-\u036f]/g,
         ""
       )
+      /*
+       * Normaliza indicadores ordinais usados pelo Excel/
+       * Movidesk ("1º", "1°", "1ª") para "1".
+       *
+       * Assim, cabeçalhos como:
+       * - 1º resposta vence em
+       * - 1° resposta vence em
+       * - 1ª resposta vence em
+       *
+       * passam a ser equivalentes.
+       */
+      .replace(
+        /[º°ª]/g,
+        ""
+      )
       .replace(
         /\s+/g,
         " "
+      )
+      .replace(
+        /\s*:\s*$/,
+        ""
       )
       .toLowerCase();
   }
@@ -343,32 +525,35 @@ export class MovideskExcelImportService {
      VALIDAÇÃO
   ===================================================== */
 
-  private validateRequiredColumns(
+  private requiredColumnGroups() {
+    return [
+      [
+        "numero",
+        "número",
+        "ticket",
+      ],
+
+      [
+        "assunto",
+        "subject",
+      ],
+
+      [
+        "aberto em",
+        "data de abertura",
+        "criado em",
+      ],
+    ];
+  }
+
+  private hasRequiredColumns(
     headers: string[]
   ) {
-    const requiredGroups =
-      [
-        [
-          "numero",
-          "número",
-        ],
-
-        [
-          "assunto",
-          "subject",
-        ],
-
-        [
-          "aberto em",
-          "data de abertura",
-          "criado em",
-        ],
-      ];
-
-    const missing =
-      requiredGroups.filter(
+    return this
+      .requiredColumnGroups()
+      .every(
         (group) =>
-          !group.some(
+          group.some(
             (column) =>
               headers.includes(
                 this.normalizeHeader(
@@ -377,12 +562,37 @@ export class MovideskExcelImportService {
               )
           )
       );
+  }
+
+  private validateRequiredColumns(
+    headers: string[]
+  ) {
+    const missing =
+      this
+        .requiredColumnGroups()
+        .filter(
+          (group) =>
+            !group.some(
+              (column) =>
+                headers.includes(
+                  this.normalizeHeader(
+                    column
+                  )
+                )
+            )
+        )
+        .map(
+          (group) =>
+            group[0]
+        );
 
     if (
       missing.length > 0
     ) {
       throw new Error(
-        "O Excel não possui todas as colunas obrigatórias do relatório do Movidesk. São necessárias pelo menos: Número, Assunto e Aberto em."
+        `O Excel não possui todas as colunas obrigatórias do relatório do Movidesk. Coluna(s) não localizada(s): ${missing.join(
+          ", "
+        )}.`
       );
     }
   }
@@ -550,6 +760,19 @@ export class MovideskExcelImportService {
         this.value(
           row,
           [
+            /*
+             * Cabeçalho utilizado no relatório atual.
+             */
+            "serviço (2º nível)",
+            "servico (2º nivel)",
+            "serviço 2º nível",
+            "servico 2º nivel",
+            "serviço segundo nível",
+            "servico segundo nivel",
+
+            /*
+             * Aliases legados / genéricos.
+             */
             "servico",
             "serviço",
             "produto",
@@ -569,22 +792,59 @@ export class MovideskExcelImportService {
         )
       );
 
-    const dueDate =
-      this.toDate(
-        this.value(
-          row,
-          [
-            "vencimento",
-            "data de vencimento",
-          ]
-        )
+    const rawDueDate =
+      this.value(
+        row,
+        [
+          "vencimento em",
+          "vencimento",
+          "data de vencimento",
+          "prazo de vencimento",
+          "prazo",
+        ]
       );
+
+    /*
+     * O Movidesk pode retornar literalmente "Em pausa"
+     * no campo Vencimento em. Isso não é uma data inválida:
+     * representa um prazo operacional temporariamente pausado.
+     *
+     * Não persistimos um campo novo no Prisma nesta etapa.
+     * A informação é usada para classificar o baseStatus como
+     * Stopped, evitando que as telas tratem esse ticket como
+     * prazo correndo normalmente.
+     */
+    const dueDateIsPaused =
+      this.isPausedDeadline(
+        rawDueDate
+      );
+
+    const dueDate =
+      dueDateIsPaused
+        ? null
+        : this.toDate(
+            rawDueDate
+          );
 
     const firstResponseDueDate =
       this.toDate(
         this.value(
           row,
           [
+            /*
+             * Cabeçalhos observados nos relatórios do Movidesk.
+             *
+             * O normalizador remove acentos, espaços extras e
+             * caracteres invisíveis, mas mantém símbolos como
+             * º, ° e ª. Por isso listamos explicitamente as
+             * variações mais comuns.
+             */
+            "1º resposta vence em",
+            "1° resposta vence em",
+            "1ª resposta vence em",
+            "1 resposta vence em",
+            "1a resposta vence em",
+            "primeira resposta vence em",
             "vencimento da primeira resposta",
             "vencimento primeira resposta",
           ]
@@ -596,6 +856,15 @@ export class MovideskExcelImportService {
         this.value(
           row,
           [
+            /*
+             * Cabeçalhos observados nos relatórios do Movidesk.
+             */
+            "1º resposta dada em",
+            "1° resposta dada em",
+            "1ª resposta dada em",
+            "1 resposta dada em",
+            "1a resposta dada em",
+            "primeira resposta dada em",
             "data da primeira resposta",
             "primeira resposta",
           ]
@@ -631,6 +900,10 @@ export class MovideskExcelImportService {
         this.value(
           row,
           [
+            "tempo de vida (horas úteis)",
+            "tempo de vida (horas uteis)",
+            "tempo de vida horas úteis",
+            "tempo de vida horas uteis",
             "tempo de vida",
             "tempo vida",
           ]
@@ -653,9 +926,11 @@ export class MovideskExcelImportService {
         this.value(
           row,
           [
-            "task",
-            "numero task",
             "número task",
+            "numero task",
+            "task",
+            "número da task",
+            "numero da task",
             "tarefa",
           ]
         )
@@ -679,6 +954,10 @@ export class MovideskExcelImportService {
         this.value(
           row,
           [
+            "versão entregue task",
+            "versao entregue task",
+            "versão entregue da task",
+            "versao entregue da task",
             "versao entregue",
             "versão entregue",
             "versao",
@@ -700,9 +979,11 @@ export class MovideskExcelImportService {
       status,
 
       baseStatus:
-        this.mapBaseStatus(
-          status
-        ),
+        dueDateIsPaused
+          ? "Stopped"
+          : this.mapBaseStatus(
+              status
+            ),
 
       category,
       cause,
@@ -720,6 +1001,11 @@ export class MovideskExcelImportService {
       department,
 
       createdDate,
+
+      /*
+       * Se "Vencimento em" estiver como "Em pausa",
+       * dueDate permanece null e baseStatus será Stopped.
+       */
       dueDate,
 
       firstResponseDueDate,
@@ -765,7 +1051,81 @@ export class MovideskExcelImportService {
       }
     }
 
+    /*
+     * Fallback tolerante:
+     *
+     * Alguns arquivos exportados podem trazer pequenas
+     * diferenças de pontuação/espaçamento nos cabeçalhos.
+     * Nesses casos comparamos uma versão compactada.
+     */
+    const rowEntries =
+      Object.entries(
+        row
+      );
+
+    for (
+      const alias of aliases
+    ) {
+      const compactAlias =
+        this.compactHeader(
+          alias
+        );
+
+      const match =
+        rowEntries.find(
+          ([header]) =>
+            this.compactHeader(
+              header
+            ) ===
+            compactAlias
+        );
+
+      if (match) {
+        return match[1];
+      }
+    }
+
     return null;
+  }
+
+  private compactHeader(
+    value: string
+  ) {
+    return this
+      .normalizeHeader(
+        value
+      )
+      .replace(
+        /[^a-z0-9]/g,
+        ""
+      );
+  }
+
+  /* =====================================================
+     PRAZO EM PAUSA
+  ===================================================== */
+
+  private isPausedDeadline(
+    value: unknown
+  ) {
+    const normalized =
+      this.normalizeHeader(
+        this.cellToString(
+          value
+        )
+      );
+
+    return (
+      normalized ===
+        "em pausa" ||
+      normalized ===
+        "pausado" ||
+      normalized ===
+        "pausa" ||
+      normalized.includes(
+        "prazo em pausa"
+      )
+    );
   }
 
   /* =====================================================
@@ -985,7 +1345,16 @@ export class MovideskExcelImportService {
     const result =
       this.cellToString(
         value
-      ).trim();
+      )
+        .replace(
+          /\u00A0/g,
+          " "
+        )
+        .replace(
+          /[ \t]+/g,
+          " "
+        )
+        .trim();
 
     if (!result) {
       return null;
@@ -1140,7 +1509,7 @@ export class MovideskExcelImportService {
 
   private toMinutes(
     value: unknown
-  ) {
+  ): number | null {
     if (
       value === null ||
       value ===
@@ -1149,29 +1518,92 @@ export class MovideskExcelImportService {
       return null;
     }
 
+    /*
+     * ExcelJS pode devolver células de duração como Date
+     * dependendo do formato da coluna ([h]:mm:ss).
+     *
+     * Nesse caso calculamos o total de minutos a partir do
+     * serial Excel (epoch 30/12/1899), preservando durações
+     * maiores que 24 horas.
+     */
+    if (
+      value instanceof
+      Date
+    ) {
+      const excelEpoch =
+        Date.UTC(
+          1899,
+          11,
+          30
+        );
+
+      const totalMinutes =
+        Math.round(
+          (
+            value.getTime() -
+            excelEpoch
+          ) /
+            60000
+        );
+
+      return totalMinutes >=
+        0
+        ? totalMinutes
+        : null;
+    }
+
     if (
       typeof value ===
       "number"
     ) {
       /*
-       * Caso venha como fração de dia do Excel.
+       * Em células formatadas como duração do Excel,
+       * o valor numérico representa fração de dia.
        *
-       * Valores muito pequenos normalmente representam
-       * horas/dias no formato de tempo.
+       * Ex.:
+       * 0,5 = 12 horas
+       * 1,5 = 36 horas
+       *
+       * O relatório do Movidesk usa esse padrão para
+       * "Tempo de vida (Horas úteis)".
        */
-
       if (
         value >= 0 &&
         value < 1000
       ) {
         return Math.round(
-          value * 1440
+          value *
+            1440
         );
       }
 
       return Math.round(
         value
       );
+    }
+
+    /*
+     * Alguns tipos do ExcelJS usam objetos com propriedade
+     * result. Tentamos reaproveitar o valor real antes da
+     * conversão textual.
+     */
+    if (
+      typeof value ===
+      "object"
+    ) {
+      const objectValue =
+        value as any;
+
+      if (
+        objectValue.result !==
+          undefined &&
+        objectValue.result !==
+          value
+      ) {
+        return this.toMinutes(
+          objectValue.result
+        );
+      }
     }
 
     const raw =
@@ -1186,9 +1618,10 @@ export class MovideskExcelImportService {
     }
 
     /*
-     * HH:mm
+     * HH:mm / HHH:mm / HH:mm:ss
+     *
+     * Permite durações acima de 24h.
      */
-
     const clock =
       raw.match(
         /^(\d+):(\d{2})(?::(\d{2}))?$/
@@ -1205,9 +1638,18 @@ export class MovideskExcelImportService {
           clock[2]
         );
 
-      return (
-        hours * 60 +
-        minutes
+      const seconds =
+        Number(
+          clock[3] ??
+            "0"
+        );
+
+      return Math.round(
+        hours *
+          60 +
+          minutes +
+          seconds /
+            60
       );
     }
 
@@ -1241,7 +1683,8 @@ export class MovideskExcelImportService {
       total +=
         this.decimal(
           hours[1]
-        ) * 60;
+        ) *
+        60;
     }
 
     if (minutes) {

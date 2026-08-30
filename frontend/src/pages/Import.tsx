@@ -1,9 +1,12 @@
 import {
-  ChangeEvent,
-  DragEvent,
   useMemo,
   useRef,
   useState,
+} from "react";
+
+import type {
+  ChangeEvent,
+  DragEvent,
 } from "react";
 
 import {
@@ -235,15 +238,38 @@ export function Import() {
       setResult(
         response.data
       );
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(
         "Erro ao importar dados:",
         err
       );
 
-      const message =
-        err?.response?.data?.error ??
+      let message =
         "Não foi possível importar o arquivo.";
+
+      if (
+        typeof err === "object" &&
+        err !== null &&
+        "response" in err
+      ) {
+        const response =
+          (
+            err as {
+              response?: {
+                data?: {
+                  error?: string;
+                };
+              };
+            }
+          ).response;
+
+        if (
+          response?.data?.error
+        ) {
+          message =
+            response.data.error;
+        }
+      }
 
       setError(message);
     } finally {
@@ -263,8 +289,8 @@ export function Import() {
         }}
       >
         <Typography
-          fontWeight={800}
-          sx={{
+        sx={{
+          fontWeight: 800,
             fontSize: {
               xs: "1.7rem",
               md: "1.9rem",
@@ -423,8 +449,8 @@ export function Import() {
                 }}
               >
                 <Typography
-                  fontWeight={800}
-                  sx={{
+        sx={{
+          fontWeight: 800,
                     fontSize:
                       "1.05rem",
                   }}
@@ -469,7 +495,7 @@ export function Import() {
                 />
 
                 <Typography
-                  fontWeight={800}
+                sx={{ fontWeight: 800 }}
                 >
                   {file.name}
                 </Typography>
@@ -702,8 +728,8 @@ export function Import() {
           >
             <CardContent>
               <Typography
-                fontWeight={800}
-                sx={{
+        sx={{
+          fontWeight: 800,
                   mb: 0.5,
                 }}
               >
@@ -786,8 +812,8 @@ export function Import() {
 
               <Typography
                 variant="body2"
-                fontWeight={600}
-                sx={{
+        sx={{
+          fontWeight: 600,
                   wordBreak:
                     "break-word",
                 }}
@@ -820,7 +846,7 @@ export function Import() {
             >
               <CardContent>
                 <Typography
-                  fontWeight={800}
+                sx={{ fontWeight: 800 }}
                 >
                   Ocorrências da importação
                 </Typography>
@@ -925,14 +951,14 @@ function ResultCard({
         <Typography
           variant="body2"
           color="text.secondary"
-          fontWeight={600}
+        sx={{ fontWeight: 600 }}
         >
           {title}
         </Typography>
 
         <Typography
-          fontWeight={800}
-          sx={{
+        sx={{
+          fontWeight: 800,
             mt: 0.5,
             fontSize:
               "1.9rem",
@@ -967,8 +993,8 @@ function InfoMetric({
       </Typography>
 
       <Typography
-        fontWeight={800}
         sx={{
+          fontWeight: 800,
           fontSize:
             "1.35rem",
         }}

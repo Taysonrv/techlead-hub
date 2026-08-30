@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import type { ReactNode } from "react";
 
 import {
   Alert,
@@ -28,7 +29,6 @@ import {
 
 import {
   Cell,
-  Legend,
   Pie,
   PieChart,
   ResponsiveContainer,
@@ -40,6 +40,11 @@ import { useNavigate } from "react-router-dom";
 import { api } from "../services/api";
 import { useFilters } from "../context/FiltersContext";
 import { PeriodFilter } from "../components/PeriodFilter";
+import { aliareColors } from "../theme/theme";
+import {
+  chartPalette,
+  semanticChartColors,
+} from "../theme/chartPalette";
 
 /* =====================================================
    TIPOS
@@ -149,15 +154,25 @@ const KNOWN_SQUADS = [
 ===================================================== */
 
 const PIE_COLORS = [
-  "#2563eb",
-  "#16a34a",
-  "#f59e0b",
-  "#dc2626",
-  "#7c3aed",
-  "#0891b2",
-  "#64748b",
-  "#db2777",
+  ...chartPalette,
 ];
+
+const STATUS_COLORS: Record<
+  string,
+  string
+> = {
+  Novos:
+    semanticChartColors.normal,
+
+  "Em Atendimento":
+    aliareColors.green,
+
+  Parados:
+    semanticChartColors.attention,
+
+  Resolvidos:
+    semanticChartColors.positive,
+};
 
 /* =====================================================
    COMPONENTE
@@ -640,19 +655,60 @@ export function Analysts() {
 
   const analystPieData =
     useMemo<PieDataItem[]>(() => {
-      return analysts
-        .filter(
-          (analyst) =>
-            analyst.total > 0
-        )
-        .map(
-          (analyst) => ({
-            name:
-              analyst.owner,
-            value:
-              analyst.total,
-          })
+      const sorted =
+        analysts
+          .filter(
+            (analyst) =>
+              analyst.total > 0
+          )
+          .map(
+            (analyst) => ({
+              name:
+                analyst.owner,
+
+              value:
+                analyst.total,
+            })
+          )
+          .sort(
+            (a, b) =>
+              b.value -
+              a.value
+          );
+
+      const visible =
+        sorted.slice(
+          0,
+          6
         );
+
+      const remainingTotal =
+        sorted
+          .slice(6)
+          .reduce(
+            (
+              total,
+              item
+            ) =>
+              total +
+              item.value,
+            0
+          );
+
+      if (
+        remainingTotal >
+        0
+      ) {
+        visible.push({
+          name:
+            "Outros",
+
+          value:
+            remainingTotal,
+        });
+      }
+
+      return visible;
     }, [analysts]);
 
   /* =====================================================
@@ -941,7 +997,12 @@ export function Analysts() {
           mt: 8,
         }}
       >
-        <CircularProgress />
+        <CircularProgress
+          sx={{
+            color:
+              aliareColors.green,
+          }}
+        />
       </Box>
     );
   }
@@ -987,9 +1048,61 @@ export function Analysts() {
         }}
       >
         <Box>
-          <Typography
-            fontWeight={800}
+          <Stack
+            direction="row"
+            spacing={1}
             sx={{
+              alignItems:
+                "center",
+            }}
+          >
+            <Box
+              sx={{
+                width:
+                  30,
+
+                height:
+                  3,
+
+                borderRadius:
+                  99,
+
+                backgroundColor:
+                  aliareColors.green,
+              }}
+            />
+
+            <Typography
+              variant="caption"
+              sx={{
+                fontWeight:
+                  800,
+
+                letterSpacing:
+                  "0.08em",
+
+                textTransform:
+                  "uppercase",
+
+                color:
+                  aliareColors.greenDark,
+              }}
+            >
+              Equipe
+            </Typography>
+          </Stack>
+
+          <Typography
+            sx={{
+              mt:
+                0.8,
+
+              fontWeight:
+                800,
+
+              letterSpacing:
+                "-0.025em",
+
               fontSize: {
                 xs: "1.7rem",
                 md: "1.9rem",
@@ -1039,11 +1152,21 @@ export function Analysts() {
         sx={{
           border:
             "1px solid",
+
           borderColor:
             "divider",
+
           borderRadius:
-            2.5,
-          mb: 2,
+            2.25,
+
+          mb:
+            2,
+
+          backgroundColor:
+            "background.paper",
+
+          boxShadow:
+            "0 1px 2px rgba(16,24,40,0.035)",
         }}
       >
         <CardContent
@@ -1077,10 +1200,15 @@ export function Analysts() {
               }}
             >
               <Typography
-                fontWeight={800}
                 sx={{
+                  fontWeight:
+                    800,
+
                   fontSize:
                     "1rem",
+
+                  letterSpacing:
+                    "-0.01em",
                 }}
               >
                 Visão da equipe
@@ -1363,71 +1491,127 @@ export function Analysts() {
           0 ? (
             <Box
               sx={{
-                height: 270,
+                display:
+                  "grid",
+
+                gridTemplateColumns:
+                  {
+                    xs: "1fr",
+                    sm: "minmax(220px, 0.9fr) minmax(0, 1.1fr)",
+                  },
+
+                gap: 1.5,
+
+                alignItems:
+                  "center",
               }}
             >
-              <ResponsiveContainer
-                width="100%"
-                height="100%"
+              <Box
+                sx={{
+                  height: 235,
+                  minWidth: 0,
+                }}
               >
-                <PieChart>
-                  <Pie
-                    data={
-                      analystPieData
-                    }
-                    dataKey="value"
-                    nameKey="name"
-                    cx="50%"
-                    cy="45%"
-                    outerRadius={85}
-                    innerRadius={45}
-                    paddingAngle={2}
-                    onClick={(
-                      data
-                    ) => {
-                      if (
-                        data?.name
-                      ) {
-                        showAnalystTickets(
-                          String(
-                            data.name
-                          )
-                        );
+                <ResponsiveContainer
+                  width="100%"
+                  height="100%"
+                >
+                  <PieChart>
+                    <Pie
+                      data={
+                        analystPieData
                       }
-                    }}
-                    style={{
-                      cursor:
-                        "pointer",
-                    }}
-                  >
-                    {analystPieData.map(
-                      (
-                        _,
-                        index
-                      ) => (
-                        <Cell
-                          key={
-                            index
-                          }
-                          fill={
-                            PIE_COLORS[
-                              index %
-                                PIE_COLORS.length
-                            ]
-                          }
+                      dataKey="value"
+                      nameKey="name"
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={78}
+                      innerRadius={46}
+                      paddingAngle={2}
+                      onClick={(data) => {
+                        const name =
+                          (
+                            data as {
+                              payload?: {
+                                name?: unknown;
+                              };
+                            }
+                          ).payload?.name;
+
+                        if (
+                          typeof name ===
+                            "string" &&
+                          name &&
+                          name !==
+                            "Outros"
+                        ) {
+                          showAnalystTickets(
+                            name
+                          );
+                        }
+                      }}
+                      style={{
+                        cursor:
+                          "pointer",
+                      }}
+                    >
+                      {analystPieData.map(
+                        (
+                          _,
+                          index
+                        ) => (
+                          <Cell
+                            key={`${analystPieData[index]?.name ?? "analyst"}-${index}`}
+                            fill={
+                              PIE_COLORS[
+                                index %
+                                  PIE_COLORS.length
+                              ]
+                            }
+                          />
+                        )
+                      )}
+                    </Pie>
+
+                    <Tooltip
+                      content={
+                        <CompactPieTooltip
+                          valueLabel="ticket(s)"
                         />
-                      )
-                    )}
-                  </Pie>
+                      }
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </Box>
 
-                  <Tooltip />
-
-                  <Legend
-                    verticalAlign="bottom"
-                    height={40}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
+              <CompactPieLegend
+                data={
+                  analystPieData
+                }
+                total={
+                  analystPieData.reduce(
+                    (
+                      sum,
+                      item
+                    ) =>
+                      sum +
+                      item.value,
+                    0
+                  )
+                }
+                onItemClick={(
+                  name
+                ) => {
+                  if (
+                    name !==
+                    "Outros"
+                  ) {
+                    showAnalystTickets(
+                      name
+                    );
+                  }
+                }}
+              />
             </Box>
           ) : (
             <EmptyChart />
@@ -1444,103 +1628,179 @@ export function Analysts() {
           0 ? (
             <Box
               sx={{
-                height: 270,
+                display:
+                  "grid",
+
+                gridTemplateColumns:
+                  {
+                    xs: "1fr",
+                    sm: "minmax(220px, 0.9fr) minmax(0, 1.1fr)",
+                  },
+
+                gap: 1.5,
+
+                alignItems:
+                  "center",
               }}
             >
-              <ResponsiveContainer
-                width="100%"
-                height="100%"
+              <Box
+                sx={{
+                  height: 235,
+                  minWidth: 0,
+                }}
               >
-                <PieChart>
-                  <Pie
-                    data={
-                      statusPieData
-                    }
-                    dataKey="value"
-                    nameKey="name"
-                    cx="50%"
-                    cy="45%"
-                    outerRadius={85}
-                    innerRadius={45}
-                    paddingAngle={2}
-                    style={{
-                      cursor:
-                        "pointer",
-                    }}
-                    onClick={(
-                      data
-                    ) => {
-                      const name =
-                        String(
-                          data?.name ??
-                            ""
-                        );
-
-                      if (
-                        name ===
-                        "Novos"
-                      ) {
-                        showMetricTickets(
-                          "new"
-                        );
+                <ResponsiveContainer
+                  width="100%"
+                  height="100%"
+                >
+                  <PieChart>
+                    <Pie
+                      data={
+                        statusPieData
                       }
+                      dataKey="value"
+                      nameKey="name"
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={78}
+                      innerRadius={46}
+                      paddingAngle={2}
+                      style={{
+                        cursor:
+                          "pointer",
+                      }}
+                      onClick={(data) => {
+                        const name =
+                          String(
+                            (
+                              data as {
+                                payload?: {
+                                  name?: unknown;
+                                };
+                              }
+                            ).payload?.name ??
+                              ""
+                          );
 
-                      if (
-                        name ===
-                        "Em Atendimento"
-                      ) {
-                        showMetricTickets(
-                          "attendance"
-                        );
-                      }
+                        if (
+                          name ===
+                          "Novos"
+                        ) {
+                          showMetricTickets(
+                            "new"
+                          );
+                        }
 
-                      if (
-                        name ===
-                        "Parados"
-                      ) {
-                        showMetricTickets(
-                          "stopped"
-                        );
-                      }
+                        if (
+                          name ===
+                          "Em Atendimento"
+                        ) {
+                          showMetricTickets(
+                            "attendance"
+                          );
+                        }
 
-                      if (
-                        name ===
-                        "Resolvidos"
-                      ) {
-                        showMetricTickets(
-                          "resolved"
-                        );
-                      }
-                    }}
-                  >
-                    {statusPieData.map(
-                      (
-                        _,
-                        index
-                      ) => (
-                        <Cell
-                          key={
-                            index
-                          }
-                          fill={
-                            PIE_COLORS[
-                              index %
-                                PIE_COLORS.length
-                            ]
-                          }
+                        if (
+                          name ===
+                          "Parados"
+                        ) {
+                          showMetricTickets(
+                            "stopped"
+                          );
+                        }
+
+                        if (
+                          name ===
+                          "Resolvidos"
+                        ) {
+                          showMetricTickets(
+                            "resolved"
+                          );
+                        }
+                      }}
+                    >
+                      {statusPieData.map(
+                        (
+                          _,
+                          index
+                        ) => (
+                          <Cell
+                            key={`${statusPieData[index]?.name ?? "status"}-${index}`}
+                            fill={
+                              STATUS_COLORS[
+                                statusPieData[
+                                  index
+                                ]?.name ??
+                                  ""
+                              ] ??
+                              PIE_COLORS[
+                                index %
+                                  PIE_COLORS.length
+                              ]
+                            }
+                          />
+                        )
+                      )}
+                    </Pie>
+
+                    <Tooltip
+                      content={
+                        <CompactPieTooltip
+                          valueLabel="ticket(s)"
                         />
-                      )
-                    )}
-                  </Pie>
+                      }
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </Box>
 
-                  <Tooltip />
+              <CompactPieLegend
+                data={
+                  statusPieData
+                }
+                total={
+                  scopedTickets.length
+                }
+                onItemClick={(
+                  name
+                ) => {
+                  if (
+                    name ===
+                    "Novos"
+                  ) {
+                    showMetricTickets(
+                      "new"
+                    );
+                  }
 
-                  <Legend
-                    verticalAlign="bottom"
-                    height={40}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
+                  if (
+                    name ===
+                    "Em Atendimento"
+                  ) {
+                    showMetricTickets(
+                      "attendance"
+                    );
+                  }
+
+                  if (
+                    name ===
+                    "Parados"
+                  ) {
+                    showMetricTickets(
+                      "stopped"
+                    );
+                  }
+
+                  if (
+                    name ===
+                    "Resolvidos"
+                  ) {
+                    showMetricTickets(
+                      "resolved"
+                    );
+                  }
+                }}
+              />
             </Box>
           ) : (
             <EmptyChart />
@@ -1562,10 +1822,16 @@ export function Analysts() {
             "divider",
 
           borderRadius:
-            2.5,
+            2.25,
 
           overflow:
             "hidden",
+
+          backgroundColor:
+            "background.paper",
+
+          boxShadow:
+            "0 1px 2px rgba(16,24,40,0.035)",
         }}
       >
         <CardContent
@@ -1596,8 +1862,8 @@ export function Analysts() {
           >
             <Box>
               <Typography
-                fontWeight={800}
                 sx={{
+          fontWeight: 800,
                   fontSize:
                     "1.05rem",
                 }}
@@ -1623,7 +1889,27 @@ export function Analysts() {
 
         <TableContainer>
           <Table size="small">
-            <TableHead>
+            <TableHead
+              sx={{
+                backgroundColor:
+                  "#F8FAF9",
+
+                "& .MuiTableCell-root":
+                  {
+                    color:
+                      "text.secondary",
+
+                    fontSize:
+                      "0.72rem",
+
+                    letterSpacing:
+                      "0.02em",
+
+                    borderBottomColor:
+                      "divider",
+                  },
+              }}
+            >
               <TableRow>
                 <TableCell>
                   <strong>
@@ -1711,6 +1997,9 @@ export function Analysts() {
                         <Button
                           size="small"
                           variant="text"
+                          title={
+                            analyst.owner
+                          }
                           onClick={() =>
                             showAnalystTickets(
                               analyst.owner
@@ -1718,12 +2007,44 @@ export function Analysts() {
                           }
                           sx={{
                             p: 0,
+
                             minWidth:
-                              "auto",
+                              0,
+
+                            maxWidth:
+                              190,
+
                             fontWeight:
                               700,
+
                             justifyContent:
                               "flex-start",
+
+                            textTransform:
+                              "none",
+
+                            overflow:
+                              "hidden",
+
+                            whiteSpace:
+                              "nowrap",
+
+                            textOverflow:
+                              "ellipsis",
+
+                            display:
+                              "block",
+
+                            color:
+                              aliareColors.greenDark,
+
+                            "&:hover": {
+                              backgroundColor:
+                                "transparent",
+
+                              color:
+                                aliareColors.green,
+                            },
                           }}
                         >
                           {
@@ -1930,7 +2251,7 @@ export function Analysts() {
                       }}
                     >
                       <Typography
-                        fontWeight={700}
+                       sx={{ fontWeight: 700 }}
                       >
                         Nenhum analista encontrado
                       </Typography>
@@ -1969,10 +2290,10 @@ export function Analysts() {
         }}
       >
         A classificação atual considera quantidade de
-        tickets abertos, críticos e parados. Com os dados
-        completos do Movidesk incluiremos SLA, horas
-        apontadas, resoluções, reaberturas e produtividade
-        por período.
+        tickets abertos, críticos e parados. Nas próximas
+        evoluções incluiremos indicadores de prazo de primeira
+        resposta e resolução, CSAT, horas apontadas, reaberturas
+        e produtividade por período.
       </Alert>
 
       {/* ===============================================
@@ -2017,7 +2338,7 @@ export function Analysts() {
                 <Box>
                   <Typography
                     variant="h6"
-                    fontWeight={800}
+                   sx={{ fontWeight: 800 }}
                   >
                     {
                       drilldown.title
@@ -2145,7 +2466,7 @@ export function Analysts() {
                     >
                       <Typography
                         variant="body2"
-                        fontWeight={800}
+                       sx={{ fontWeight: 800 }}
                       >
                         #{ticket.movideskId}
                       </Typography>
@@ -2198,7 +2519,7 @@ export function Analysts() {
 
                     <Typography
                       variant="body2"
-                      fontWeight={600}
+                     sx={{ fontWeight: 600 }}
                     >
                       {
                         ticket.subject
@@ -2271,7 +2592,7 @@ export function Analysts() {
                 <Box>
                   <Typography
                     variant="h6"
-                    fontWeight={800}
+                   sx={{ fontWeight: 800 }}
                   >
                     Ticket #
                     {
@@ -2360,8 +2681,8 @@ export function Analysts() {
               </Typography>
 
               <Typography
-                fontWeight={700}
                 sx={{
+          fontWeight: 700,
                   mb: 2,
                 }}
               >
@@ -2506,8 +2827,8 @@ export function Analysts() {
 
                   <Typography
                     variant="subtitle2"
-                    fontWeight={800}
                     sx={{
+          fontWeight: 800,
                       mb: 1,
                     }}
                   >
@@ -2559,6 +2880,325 @@ export function Analysts() {
 }
 
 /* =====================================================
+   LEGENDA COMPACTA DOS GRÁFICOS
+===================================================== */
+
+function CompactPieLegend({
+  data,
+  total,
+  onItemClick,
+}: {
+  data:
+    PieDataItem[];
+
+  total:
+    number;
+
+  onItemClick?:
+    (
+      name:
+        string
+    ) => void;
+}) {
+  return (
+    <Stack
+      spacing={0.5}
+      sx={{
+        minWidth: 0,
+      }}
+    >
+      {data.map(
+        (
+          item,
+          index
+        ) => {
+          const percent =
+            total > 0
+              ? Math.round(
+                  (item.value /
+                    total) *
+                    100
+                )
+              : 0;
+
+          const clickable =
+            Boolean(
+              onItemClick
+            ) &&
+            item.name !==
+              "Outros";
+
+          return (
+            <Box
+              key={`${item.name}-${index}`}
+              role={
+                clickable
+                  ? "button"
+                  : undefined
+              }
+              tabIndex={
+                clickable
+                  ? 0
+                  : undefined
+              }
+              title={
+                item.name
+              }
+              onClick={() => {
+                if (
+                  clickable
+                ) {
+                  onItemClick?.(
+                    item.name
+                  );
+                }
+              }}
+              onKeyDown={(
+                event
+              ) => {
+                if (
+                  clickable &&
+                  (
+                    event.key ===
+                      "Enter" ||
+                    event.key ===
+                      " "
+                  )
+                ) {
+                  onItemClick?.(
+                    item.name
+                  );
+                }
+              }}
+              sx={{
+                display:
+                  "grid",
+
+                gridTemplateColumns:
+                  "10px minmax(0, 1fr) auto",
+
+                alignItems:
+                  "center",
+
+                gap: 0.8,
+
+                px: 0.75,
+                py: 0.6,
+
+                borderRadius:
+                  1.25,
+
+                cursor:
+                  clickable
+                    ? "pointer"
+                    : "default",
+
+                "&:hover":
+                  clickable
+                    ? {
+                        backgroundColor:
+                          "action.hover",
+                      }
+                    : undefined,
+              }}
+            >
+              <Box
+                sx={{
+                  width: 9,
+                  height: 9,
+
+                  borderRadius:
+                    "50%",
+
+                  backgroundColor:
+                    PIE_COLORS[
+                      index %
+                        PIE_COLORS.length
+                    ],
+                }}
+              />
+
+              <Typography
+                variant="body2"
+                sx={{
+                  minWidth: 0,
+
+                  fontWeight:
+                    600,
+
+                  fontSize:
+                    "0.78rem",
+
+                  lineHeight:
+                    1.25,
+
+                  overflow:
+                    "hidden",
+
+                  textOverflow:
+                    "ellipsis",
+
+                  whiteSpace:
+                    "nowrap",
+                }}
+              >
+                {item.name}
+              </Typography>
+
+              <Stack
+                direction="row"
+                spacing={0.5}
+                sx={{
+                  alignItems:
+                    "center",
+
+                  flexShrink:
+                    0,
+                }}
+              >
+                <Typography
+                  variant="caption"
+                  sx={{
+                    fontWeight:
+                      800,
+
+                    fontVariantNumeric:
+                      "tabular-nums",
+                  }}
+                >
+                  {item.value}
+                </Typography>
+
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{
+                    minWidth:
+                      30,
+
+                    textAlign:
+                      "right",
+
+                    fontVariantNumeric:
+                      "tabular-nums",
+                  }}
+                >
+                  {percent}%
+                </Typography>
+              </Stack>
+            </Box>
+          );
+        }
+      )}
+    </Stack>
+  );
+}
+
+/* =====================================================
+   TOOLTIP COMPACTO DOS GRÁFICOS
+===================================================== */
+
+function CompactPieTooltip({
+  active,
+  payload,
+  valueLabel,
+}: {
+  active?:
+    boolean;
+
+  payload?:
+    Array<{
+      name?:
+        string;
+
+      value?:
+        number;
+
+      payload?:
+        PieDataItem;
+    }>;
+
+  valueLabel:
+    string;
+}) {
+  if (
+    !active ||
+    !payload ||
+    payload.length ===
+      0
+  ) {
+    return null;
+  }
+
+  const entry =
+    payload[0];
+
+  const item =
+    entry?.payload;
+
+  const name =
+    item?.name ??
+    entry?.name ??
+    "Item";
+
+  const value =
+    item?.value ??
+    entry?.value ??
+    0;
+
+  return (
+    <Box
+      sx={{
+        maxWidth:
+          260,
+
+        px: 1.25,
+        py: 1,
+
+        border:
+          "1px solid",
+
+        borderColor:
+          "divider",
+
+        borderRadius:
+          1.5,
+
+        backgroundColor:
+          "background.paper",
+
+        boxShadow:
+          3,
+      }}
+    >
+      <Typography
+        variant="body2"
+        title={
+          name
+        }
+        sx={{
+          fontWeight:
+            700,
+
+          lineHeight:
+            1.35,
+        }}
+      >
+        {name}
+      </Typography>
+
+      <Typography
+        variant="caption"
+        color="text.secondary"
+      >
+        {value}{" "}
+        {valueLabel}
+      </Typography>
+    </Box>
+  );
+}
+
+/* =====================================================
    CARD DE MÉTRICA
 ===================================================== */
 
@@ -2580,12 +3220,12 @@ function MetricCard({
 
   onClick?: () => void;
 }) {
-  const borderColor =
+  const accentColor =
     severity === "error"
-      ? "error.main"
+      ? semanticChartColors.overdue
       : severity === "warning"
-      ? "warning.main"
-      : "divider";
+      ? semanticChartColors.attention
+      : aliareColors.green;
 
   return (
     <Card
@@ -2606,23 +3246,37 @@ function MetricCard({
       ) => {
         if (
           onClick &&
-          (event.key ===
-            "Enter" ||
-            event.key === " ")
+          (
+            event.key ===
+              "Enter" ||
+            event.key ===
+              " "
+          )
         ) {
           onClick();
         }
       }}
       sx={{
+        position:
+          "relative",
+
+        overflow:
+          "hidden",
+
         border:
           "1px solid",
 
-        borderColor,
+        borderColor:
+          "divider",
 
         borderRadius:
-          2.5,
+          2.25,
 
-        height: "100%",
+        height:
+          "100%",
+
+        backgroundColor:
+          "background.paper",
 
         cursor:
           onClick
@@ -2630,13 +3284,49 @@ function MetricCard({
             : "default",
 
         transition:
-          "transform 0.15s ease, box-shadow 0.15s ease",
+          "transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease",
+
+        "&::before": {
+          content:
+            '""',
+
+          position:
+            "absolute",
+
+          top:
+            0,
+
+          left:
+            0,
+
+          width:
+            "100%",
+
+          height:
+            3,
+
+          backgroundColor:
+            accentColor,
+        },
 
         ...(onClick && {
           "&:hover": {
             transform:
               "translateY(-2px)",
-            boxShadow: 2,
+
+            borderColor:
+              accentColor,
+
+            boxShadow:
+              "0 8px 24px rgba(16,24,40,0.08)",
+          },
+
+          "&:focus-visible": {
+            outline:
+              `2px solid ${accentColor}`,
+
+            outlineOffset:
+              "2px",
           },
         }),
       }}
@@ -2644,38 +3334,92 @@ function MetricCard({
       <CardContent
         sx={{
           p: {
-            xs: 1.5,
-            md: 1.75,
+            xs:
+              1.5,
+
+            md:
+              1.75,
           },
 
           "&:last-child": {
             pb: {
-              xs: 1.5,
-              md: 1.75,
+              xs:
+                1.5,
+
+              md:
+                1.75,
             },
           },
         }}
       >
-        <Typography
-          variant="body2"
-          color="text.secondary"
-          fontWeight={600}
+        <Stack
+          direction="row"
+          sx={{
+            alignItems:
+              "center",
+
+            justifyContent:
+              "space-between",
+
+            gap:
+              1,
+          }}
         >
-          {title}
-        </Typography>
+          <Typography
+            variant="body2"
+            color="text.secondary"
+            sx={{
+              fontWeight:
+                650,
+            }}
+          >
+            {title}
+          </Typography>
+
+          <Box
+            sx={{
+              width:
+                8,
+
+              height:
+                8,
+
+              borderRadius:
+                "50%",
+
+              flexShrink:
+                0,
+
+              backgroundColor:
+                accentColor,
+            }}
+          />
+        </Stack>
 
         <Typography
-          fontWeight={800}
           sx={{
-            mt: 0.5,
+            mt:
+              0.5,
+
+            fontWeight:
+              800,
+
+            letterSpacing:
+              "-0.025em",
 
             fontSize: {
-              xs: "1.7rem",
-              md: "1.9rem",
-              xl: "2.05rem",
+              xs:
+                "1.7rem",
+
+              md:
+                "1.9rem",
+
+              xl:
+                "2.05rem",
             },
 
-            lineHeight: 1.1,
+            lineHeight:
+              1.1,
           }}
         >
           {value}
@@ -2687,7 +3431,9 @@ function MetricCard({
           sx={{
             display:
               "block",
-            mt: 0.75,
+
+            mt:
+              0.75,
           }}
         >
           {description}
@@ -2696,13 +3442,18 @@ function MetricCard({
         {onClick && (
           <Typography
             variant="caption"
-            color="primary.main"
             sx={{
               display:
                 "block",
-              mt: 0.5,
+
+              mt:
+                0.6,
+
               fontWeight:
-                600,
+                700,
+
+              color:
+                aliareColors.greenDark,
             }}
           >
             Ver tickets →
@@ -2724,7 +3475,7 @@ function ChartCard({
 }: {
   title: string;
   subtitle: string;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
     <Card
@@ -2737,7 +3488,13 @@ function ChartCard({
           "divider",
 
         borderRadius:
-          2.5,
+          2.25,
+
+        backgroundColor:
+          "background.paper",
+
+        boxShadow:
+          "0 1px 2px rgba(16,24,40,0.035)",
       }}
     >
       <CardContent
@@ -2750,8 +3507,8 @@ function ChartCard({
         }}
       >
         <Typography
-          fontWeight={800}
           sx={{
+          fontWeight: 800,
             fontSize:
               "1.05rem",
           }}
@@ -2922,7 +3679,7 @@ function TicketField({
 
       <Typography
         variant="body2"
-        fontWeight={600}
+       sx={{ fontWeight: 600 }}
       >
         {value ?? "—"}
       </Typography>
@@ -2967,6 +3724,7 @@ function normalize(
       /[\u0300-\u036f]/g,
       ""
     )
+    .trim()
     .toLowerCase();
 }
 

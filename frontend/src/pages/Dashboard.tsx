@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import type { ReactNode } from "react";
 
 import {
   Alert,
@@ -33,6 +34,10 @@ import { useNavigate } from "react-router-dom";
 import { api } from "../services/api";
 import { PeriodFilter } from "../components/PeriodFilter";
 import { useFilters } from "../context/FiltersContext";
+import { aliareColors } from "../theme/theme";
+import {
+  semanticChartColors,
+} from "../theme/chartPalette";
 
 /* =========================================================
    TIPOS
@@ -100,11 +105,6 @@ type AttentionLevel =
   | "alto"
   | "medio";
 
-type AttentionTicket = Ticket & {
-  ageHours: number;
-  level: AttentionLevel;
-  reasons: string[];
-};
 
 type Severity =
   | "default"
@@ -389,6 +389,14 @@ export function Dashboard() {
               ticket.createdDate
             );
 
+          if (
+            Number.isNaN(
+              date.getTime()
+            )
+          ) {
+            return;
+          }
+
           const key =
             formatIsoDate(date);
 
@@ -400,28 +408,104 @@ export function Dashboard() {
         }
       );
 
+      /*
+       * Mantemos todos os dias do período no gráfico,
+       * inclusive dias sem abertura de tickets.
+       *
+       * Isso evita que a linha "pule" datas e deixa a
+       * evolução operacional mais fiel.
+       */
       const result:
-        TrendItem[] =
-        Array.from(
-          grouped.entries()
-        ).map(
-          ([sortDate, total]) => ({
-            sortDate,
-            date:
-              formatShortDate(
-                sortDate
-              ),
-            total,
-          })
+        TrendItem[] = [];
+
+      const cursor =
+        startOfDay(
+          effectiveStartDate
         );
 
-      return result.sort(
-        (a, b) =>
-          a.sortDate.localeCompare(
-            b.sortDate
+      const lastDay =
+        endOfDay(
+          effectiveEndDate
+        );
+
+      while (
+        cursor <= lastDay
+      ) {
+        const sortDate =
+          formatIsoDate(
+            cursor
+          );
+
+        result.push({
+          sortDate,
+
+          date:
+            formatShortDate(
+              sortDate
+            ),
+
+          total:
+            grouped.get(
+              sortDate
+            ) ?? 0,
+        });
+
+        cursor.setDate(
+          cursor.getDate() + 1
+        );
+      }
+
+      return result;
+    }, [
+      filteredTickets,
+      effectiveStartDate,
+      effectiveEndDate,
+    ]);
+
+  /* =======================================================
+     ÚLTIMA ATUALIZAÇÃO DOS DADOS
+  ======================================================= */
+
+const latestImportedAt =
+  useMemo<Date | null>(() => {
+    let latest:
+      Date | null =
+      null;
+
+    tickets.forEach(
+      (ticket) => {
+        if (
+          !ticket.importedAt
+        ) {
+          return;
+        }
+
+        const importedAt =
+          new Date(
+            ticket.importedAt
+          );
+
+        if (
+          Number.isNaN(
+            importedAt.getTime()
           )
-      );
-    }, [filteredTickets]);
+        ) {
+          return;
+        }
+
+        if (
+          !latest ||
+          importedAt.getTime() >
+            latest.getTime()
+        ) {
+          latest =
+            importedAt;
+        }
+      }
+    );
+
+    return latest;
+  }, [tickets]);
 
   /* =======================================================
      PONTOS DE ATENÇÃO
@@ -877,7 +961,12 @@ export function Dashboard() {
           mt: 8,
         }}
       >
-        <CircularProgress />
+        <CircularProgress
+          sx={{
+            color:
+              aliareColors.green,
+          }}
+        />
       </Box>
     );
   }
@@ -923,9 +1012,61 @@ export function Dashboard() {
         }}
       >
         <Box>
-          <Typography
-            fontWeight={800}
+          <Stack
+            direction="row"
+            spacing={1}
             sx={{
+              alignItems:
+                "center",
+            }}
+          >
+            <Box
+              sx={{
+                width:
+                  30,
+
+                height:
+                  3,
+
+                borderRadius:
+                  99,
+
+                backgroundColor:
+                  aliareColors.green,
+              }}
+            />
+
+            <Typography
+              variant="caption"
+              sx={{
+                fontWeight:
+                  800,
+
+                letterSpacing:
+                  "0.08em",
+
+                textTransform:
+                  "uppercase",
+
+                color:
+                  aliareColors.greenDark,
+              }}
+            >
+              Operação
+            </Typography>
+          </Stack>
+
+          <Typography
+            sx={{
+              mt:
+                0.8,
+
+              fontWeight:
+                800,
+
+              letterSpacing:
+                "-0.025em",
+
               fontSize: {
                 xs: "1.7rem",
                 md: "1.9rem",
@@ -958,6 +1099,22 @@ export function Dashboard() {
             {" • "}
             {filteredTickets.length}
             {" ticket(s) analisado(s)"}
+          </Typography>
+
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            sx={{
+              display: "block",
+              mt: 0.25,
+            }}
+          >
+            Última atualização dos dados:{" "}
+            {latestImportedAt
+              ? formatDateTime(
+                  latestImportedAt.toISOString()
+                )
+              : "informação de importação indisponível"}
           </Typography>
         </Box>
 
@@ -1052,8 +1209,8 @@ export function Dashboard() {
           >
             <CardBase>
               <Typography
-                fontWeight={800}
                 sx={{
+                  fontWeight: 800,
                   fontSize:
                     "1.05rem",
                 }}
@@ -1080,9 +1237,17 @@ export function Dashboard() {
                 >
                   <LineChart
                     data={trends}
+                    margin={{
+                      top: 8,
+                      right: 12,
+                      left: -8,
+                      bottom: 4,
+                    }}
                   >
                     <CartesianGrid
                       strokeDasharray="3 3"
+                      vertical={false}
+                      stroke="#EAECF0"
                     />
 
                     <XAxis
@@ -1090,6 +1255,9 @@ export function Dashboard() {
                       tick={{
                         fontSize: 11,
                       }}
+                      minTickGap={22}
+                      interval="preserveStartEnd"
+                      tickMargin={8}
                     />
 
                     <YAxis
@@ -1099,17 +1267,36 @@ export function Dashboard() {
                       tick={{
                         fontSize: 11,
                       }}
+                      width={34}
                     />
 
-                    <Tooltip />
+                    <Tooltip
+                      content={
+                        <TrendTooltip />
+                      }
+                    />
 
                     <Line
                       type="monotone"
                       dataKey="total"
-                      stroke="#2563eb"
+                      name="Tickets"
+                      stroke={aliareColors.green}
                       strokeWidth={2.5}
+                      dot={{
+                        r: 3,
+                        strokeWidth: 2,
+                        fill: "#FFFFFF",
+                        stroke:
+                          aliareColors.green,
+                      }}
                       activeDot={{
                         r: 5,
+                        fill:
+                          aliareColors.green,
+                        stroke:
+                          "#FFFFFF",
+                        strokeWidth:
+                          2,
                       }}
                     />
                   </LineChart>
@@ -1119,8 +1306,8 @@ export function Dashboard() {
 
             <CardBase>
               <Typography
-                fontWeight={800}
                 sx={{
+                  fontWeight: 800,
                   fontSize:
                     "1.05rem",
                 }}
@@ -1158,6 +1345,7 @@ export function Dashboard() {
                   >
                     <CartesianGrid
                       strokeDasharray="3 3"
+                      stroke="#EAECF0"
                     />
 
                     <XAxis
@@ -1180,7 +1368,7 @@ export function Dashboard() {
 
                     <Bar
                       dataKey="total"
-                      fill="#2563eb"
+                      fill={aliareColors.green}
                       radius={[
                         0,
                         5,
@@ -1188,16 +1376,22 @@ export function Dashboard() {
                         0,
                       ]}
                       cursor="pointer"
-                      onClick={(
-                        data
-                      ) => {
+                      onClick={(data) => {
+                        const label =
+                          (
+                            data as {
+                              payload?: {
+                                label?: unknown;
+                              };
+                            }
+                          ).payload?.label;
+
                         if (
-                          data &&
-                          typeof data.label ===
-                            "string"
+                          typeof label ===
+                          "string"
                         ) {
                           showCategory(
-                            data.label
+                            label
                           );
                         }
                       }}
@@ -1296,10 +1490,8 @@ export function Dashboard() {
               >
                 <Box>
                   <Typography
-                    fontWeight={
-                      800
-                    }
                     sx={{
+                      fontWeight: 800,
                       fontSize:
                         "1.05rem",
                     }}
@@ -1482,9 +1674,7 @@ export function Dashboard() {
                           >
                             <Typography
                               variant="body2"
-                              fontWeight={
-                                700
-                              }
+                            sx={{ fontWeight: 700 }}
                             >
                               #
                               {
@@ -1664,7 +1854,7 @@ export function Dashboard() {
                 <Box>
                   <Typography
                     variant="h6"
-                    fontWeight={800}
+                  sx={{ fontWeight: 800 }}
                   >
                     {
                       drilldown.title
@@ -1808,9 +1998,7 @@ export function Dashboard() {
                         >
                           <Typography
                             variant="body2"
-                            fontWeight={
-                              800
-                            }
+                          sx={{ fontWeight: 800 }}
                           >
                             #
                             {
@@ -1866,9 +2054,7 @@ export function Dashboard() {
 
                         <Typography
                           variant="body2"
-                          fontWeight={
-                            600
-                          }
+                        sx={{ fontWeight: 600 }}
                         >
                           {
                             ticket.subject
@@ -1941,7 +2127,7 @@ export function Dashboard() {
                 <Box>
                   <Typography
                     variant="h6"
-                    fontWeight={800}
+                  sx={{ fontWeight: 800 }}
                   >
                     Ticket #
                     {
@@ -2030,8 +2216,8 @@ export function Dashboard() {
               </Typography>
 
               <Typography
-                fontWeight={700}
                 sx={{
+                  fontWeight: 700,
                   mb: 2,
                 }}
               >
@@ -2192,8 +2378,8 @@ export function Dashboard() {
 
                   <Typography
                     variant="subtitle2"
-                    fontWeight={800}
-                    sx={{
+        sx={{
+          fontWeight: 800,
                       mb: 1,
                     }}
                   >
@@ -2225,8 +2411,8 @@ export function Dashboard() {
 
                   <Typography
                     variant="subtitle2"
-                    fontWeight={800}
-                    sx={{
+        sx={{
+          fontWeight: 800,
                       mb: 1.5,
                     }}
                   >
@@ -2305,6 +2491,97 @@ export function Dashboard() {
 }
 
 /* =========================================================
+   TOOLTIP - EVOLUÇÃO DOS TICKETS
+========================================================= */
+
+function TrendTooltip({
+  active,
+  payload,
+}: {
+  active?:
+    boolean;
+
+  payload?:
+    Array<{
+      payload?:
+        TrendItem;
+    }>;
+}) {
+  if (
+    !active ||
+    !payload ||
+    payload.length === 0
+  ) {
+    return null;
+  }
+
+  const item =
+    payload[0]
+      ?.payload;
+
+  if (!item) {
+    return null;
+  }
+
+  return (
+    <Box
+      sx={{
+        minWidth: 150,
+
+        px: 1.5,
+        py: 1.25,
+
+        border:
+          "1px solid",
+
+        borderColor:
+          "divider",
+
+        borderRadius:
+          1.5,
+
+        backgroundColor:
+          "background.paper",
+
+        boxShadow:
+          "0 10px 28px rgba(16,24,40,0.12)",
+
+        borderTop:
+          `3px solid ${aliareColors.green}`,
+      }}
+    >
+      <Typography
+        variant="caption"
+        color="text.secondary"
+        sx={{
+          display:
+            "block",
+
+          mb: 0.35,
+        }}
+      >
+        {formatFullIsoDate(
+          item.sortDate
+        )}
+      </Typography>
+
+      <Typography
+        variant="body2"
+        sx={{
+          fontWeight:
+            800,
+        }}
+      >
+        {item.total}{" "}
+        {item.total === 1
+          ? "ticket aberto"
+          : "tickets abertos"}
+      </Typography>
+    </Box>
+  );
+}
+
+/* =========================================================
    KPI
 ========================================================= */
 
@@ -2321,16 +2598,14 @@ function KpiCard({
   severity: Severity;
   onClick: () => void;
 }) {
-  const borderColor =
+  const accentColor =
     severity === "error"
-      ? "error.main"
-      : severity ===
-        "warning"
-      ? "warning.main"
-      : severity ===
-        "success"
-      ? "success.main"
-      : "divider";
+      ? semanticChartColors.overdue
+      : severity === "warning"
+      ? semanticChartColors.attention
+      : severity === "success"
+      ? semanticChartColors.positive
+      : aliareColors.green;
 
   return (
     <Card
@@ -2338,83 +2613,160 @@ function KpiCard({
       role="button"
       tabIndex={0}
       onClick={onClick}
-      onKeyDown={(
-        event
-      ) => {
+      onKeyDown={(event) => {
         if (
-          event.key ===
-            "Enter" ||
-          event.key ===
-            " "
+          event.key === "Enter" ||
+          event.key === " "
         ) {
           onClick();
         }
       }}
       sx={{
-        border: "1px solid",
-        borderColor,
-        borderRadius: 2.5,
-        height: "100%",
-        cursor: "pointer",
+        position:
+          "relative",
+
+        overflow:
+          "hidden",
+
+        border:
+          "1px solid",
+
+        borderColor:
+          "divider",
+
+        borderRadius:
+          2.25,
+
+        height:
+          "100%",
+
+        cursor:
+          "pointer",
+
+        backgroundColor:
+          "background.paper",
 
         transition:
-          "transform 0.15s ease, box-shadow 0.15s ease",
+          "transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease",
+
+        "&::before": {
+          content:
+            '""',
+
+          position:
+            "absolute",
+
+          top: 0,
+          left: 0,
+
+          width:
+            "100%",
+
+          height:
+            3,
+
+          backgroundColor:
+            accentColor,
+        },
 
         "&:hover": {
           transform:
             "translateY(-2px)",
 
-          boxShadow: 2,
+          borderColor:
+            accentColor,
+
+          boxShadow:
+            "0 8px 24px rgba(16,24,40,0.08)",
         },
 
-        "&:focus-visible":
-          {
-            outline:
-              "2px solid",
+        "&:focus-visible": {
+          outline:
+            `2px solid ${accentColor}`,
 
-            outlineColor:
-              "primary.main",
-
-            outlineOffset:
-              "2px",
-          },
+          outlineOffset:
+            "2px",
+        },
       }}
     >
       <CardContent
         sx={{
           p: {
-            xs: 1.5,
-            md: 1.75,
+            xs: 1.6,
+            md: 1.8,
           },
 
           "&:last-child": {
             pb: {
-              xs: 1.5,
-              md: 1.75,
+              xs: 1.6,
+              md: 1.8,
             },
           },
         }}
       >
-        <Typography
-          variant="body2"
-          color="text.secondary"
-          fontWeight={600}
+        <Stack
+          direction="row"
+          sx={{
+            alignItems:
+              "center",
+
+            justifyContent:
+              "space-between",
+
+            gap:
+              1,
+          }}
         >
-          {title}
-        </Typography>
+          <Typography
+            variant="body2"
+            color="text.secondary"
+            sx={{
+              fontWeight:
+                650,
+            }}
+          >
+            {title}
+          </Typography>
+
+          <Box
+            sx={{
+              width:
+                8,
+
+              height:
+                8,
+
+              borderRadius:
+                "50%",
+
+              backgroundColor:
+                accentColor,
+
+              flexShrink:
+                0,
+            }}
+          />
+        </Stack>
 
         <Typography
-          fontWeight={800}
           sx={{
-            mt: 0.5,
+            fontWeight:
+              800,
+
+            mt:
+              0.6,
+
+            letterSpacing:
+              "-0.025em",
 
             fontSize: {
-              xs: "1.7rem",
-              md: "1.9rem",
-              xl: "2.05rem",
+              xs: "1.75rem",
+              md: "1.95rem",
+              xl: "2.1rem",
             },
 
-            lineHeight: 1.1,
+            lineHeight:
+              1.05,
           }}
         >
           {value}
@@ -2424,8 +2776,14 @@ function KpiCard({
           variant="caption"
           color="text.secondary"
           sx={{
-            display: "block",
-            mt: 0.75,
+            display:
+              "block",
+
+            mt:
+              0.75,
+
+            minHeight:
+              18,
           }}
         >
           {description}
@@ -2433,11 +2791,18 @@ function KpiCard({
 
         <Typography
           variant="caption"
-          color="primary.main"
           sx={{
-            display: "block",
-            mt: 0.75,
-            fontWeight: 600,
+            display:
+              "inline-block",
+
+            mt:
+              0.85,
+
+            fontWeight:
+              700,
+
+            color:
+              aliareColors.greenDark,
           }}
         >
           Ver tickets →
@@ -2455,15 +2820,26 @@ function CardBase({
   children,
 }: {
   children:
-    React.ReactNode;
+    ReactNode;
 }) {
   return (
     <Card
       elevation={0}
       sx={{
-        border: "1px solid",
-        borderColor: "divider",
-        borderRadius: 2.5,
+        border:
+          "1px solid",
+
+        borderColor:
+          "divider",
+
+        borderRadius:
+          2.25,
+
+        backgroundColor:
+          "background.paper",
+
+        boxShadow:
+          "0 1px 2px rgba(16,24,40,0.035)",
       }}
     >
       <CardContent
@@ -2501,8 +2877,8 @@ function RankingCard({
   return (
     <CardBase>
       <Typography
-        fontWeight={800}
         sx={{
+          fontWeight: 800,
           fontSize:
             "1.05rem",
         }}
@@ -2584,7 +2960,7 @@ function RankingCard({
             >
               <Typography
                 variant="body2"
-                fontWeight={600}
+              sx={{ fontWeight: 600 }}
               >
                 {item.label}
               </Typography>
@@ -2594,8 +2970,23 @@ function RankingCard({
                 label={
                   item.total
                 }
-                color="primary"
                 variant="outlined"
+                sx={{
+                  minWidth:
+                    38,
+
+                  fontWeight:
+                    750,
+
+                  color:
+                    aliareColors.greenDark,
+
+                  borderColor:
+                    "rgba(24,199,122,0.32)",
+
+                  backgroundColor:
+                    "rgba(24,199,122,0.05)",
+                }}
               />
             </Box>
           )
@@ -2788,8 +3179,8 @@ function TicketField({
 
       <Typography
         variant="body2"
-        fontWeight={600}
         sx={{
+          fontWeight: 600,
           wordBreak:
             "break-word",
         }}
@@ -2989,7 +3380,7 @@ function formatShortDate(
   isoDate: string
 ) {
   const [
-    year,
+    ,
     month,
     day,
   ] =
@@ -3008,6 +3399,39 @@ function formatShortDate(
     2,
     "0"
   )}`;
+}
+
+function formatFullIsoDate(
+  isoDate: string
+) {
+  const [
+    year,
+    month,
+    day,
+  ] =
+    isoDate
+      .split("-")
+      .map(Number);
+
+  if (
+    !year ||
+    !month ||
+    !day
+  ) {
+    return isoDate;
+  }
+
+  return `${String(
+    day
+  ).padStart(
+    2,
+    "0"
+  )}/${String(
+    month
+  ).padStart(
+    2,
+    "0"
+  )}/${year}`;
 }
 
 function formatDateTime(

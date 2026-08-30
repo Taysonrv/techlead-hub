@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import type { ReactNode } from "react";
 
 import {
   Alert,
@@ -28,7 +29,6 @@ import {
 
 import {
   Cell,
-  Legend,
   Pie,
   PieChart,
   ResponsiveContainer,
@@ -40,6 +40,11 @@ import { useNavigate } from "react-router-dom";
 import { api } from "../services/api";
 import { useFilters } from "../context/FiltersContext";
 import { PeriodFilter } from "../components/PeriodFilter";
+import { aliareColors } from "../theme/theme";
+import {
+  chartPalette,
+  semanticChartColors,
+} from "../theme/chartPalette";
 
 /* =========================================================
    TIPOS
@@ -126,26 +131,30 @@ type DrilldownState = {
   tickets: Ticket[];
 } | null;
 
-type MetricSeverity =
-  | "default"
-  | "error"
-  | "warning"
-  | "success";
-
 /* =========================================================
    CORES DOS GRÁFICOS
 ========================================================= */
 
 const PIE_COLORS = [
-  "#2563eb",
-  "#16a34a",
-  "#f59e0b",
-  "#dc2626",
-  "#7c3aed",
-  "#0891b2",
-  "#64748b",
-  "#db2777",
+  ...chartPalette,
 ];
+
+const STATUS_COLORS: Record<
+  string,
+  string
+> = {
+  Novos:
+    semanticChartColors.normal,
+
+  "Em Atendimento":
+    aliareColors.green,
+
+  Parados:
+    semanticChartColors.attention,
+
+  Resolvidos:
+    semanticChartColors.positive,
+};
 
 /* =========================================================
    COMPONENTE PRINCIPAL
@@ -628,28 +637,91 @@ export function Clients() {
             item.client !==
             "Sem cliente"
         ).length,
-
-      highAttention:
-        clients.filter(
-          (item) =>
-            item.attentionLevel ===
-            "alto"
-        ).length,
-
-      attention:
-        clients.filter(
-          (item) =>
-            item.attentionLevel ===
-            "atencao"
-        ).length,
-
-      withCritical:
-        clients.filter(
-          (item) =>
-            item.critical > 0
-        ).length,
     };
   }, [clients]);
+
+  /*
+   * IMPORTANTE:
+   *
+   * Os cards executivos abaixo trabalham com tickets,
+   * não com quantidade de clientes.
+   *
+   * Assim, quando o card informa "3", o drill-down abre
+   * exatamente os mesmos 3 atendimentos.
+   */
+
+  const executiveTicketGroups =
+    useMemo(() => {
+      const highAttentionClients =
+        new Set(
+          clients
+            .filter(
+              (item) =>
+                item.attentionLevel ===
+                "alto"
+            )
+            .map(
+              (item) =>
+                item.client
+            )
+        );
+
+      const attentionClients =
+        new Set(
+          clients
+            .filter(
+              (item) =>
+                item.attentionLevel ===
+                "atencao"
+            )
+            .map(
+              (item) =>
+                item.client
+            )
+        );
+
+      const highAttention =
+        scopedTickets.filter(
+          (ticket) =>
+            highAttentionClients.has(
+              ticket.client ??
+                "Sem cliente"
+            )
+        );
+
+      const attention =
+        scopedTickets.filter(
+          (ticket) =>
+            attentionClients.has(
+              ticket.client ??
+                "Sem cliente"
+            )
+        );
+
+      const critical =
+        scopedTickets.filter(
+          (ticket) =>
+            isOpen(ticket) &&
+            normalize(
+              ticket.urgency
+            ) ===
+              "critica"
+        );
+
+      return {
+        all:
+          scopedTickets,
+
+        highAttention,
+
+        attention,
+
+        critical,
+      };
+    }, [
+      clients,
+      scopedTickets,
+    ]);
 
   /* =======================================================
      INDICADORES DA CARTEIRA
@@ -758,25 +830,19 @@ export function Clients() {
           );
 
       /*
-       * Para os dados reais teremos muitos clientes.
-       * Mostramos Top 7 e agrupamos o restante.
+       * Para preservar a leitura executiva do gráfico,
+       * exibimos os seis principais clientes e agrupamos
+       * o restante em "Outros".
        */
-
-      if (
-        ordered.length <= 7
-      ) {
-        return ordered;
-      }
-
       const top =
         ordered.slice(
           0,
-          7
+          6
         );
 
       const otherValue =
         ordered
-          .slice(7)
+          .slice(6)
           .reduce(
             (
               total,
@@ -787,14 +853,20 @@ export function Clients() {
             0
           );
 
-      return [
-        ...top,
-        {
-          name: "Outros",
+      if (
+        otherValue >
+        0
+      ) {
+        top.push({
+          name:
+            "Outros",
+
           value:
             otherValue,
-        },
-      ];
+        });
+      }
+
+      return top;
     }, [
       periodTickets,
       category,
@@ -1087,7 +1159,12 @@ export function Clients() {
           mt: 8,
         }}
       >
-        <CircularProgress />
+        <CircularProgress
+          sx={{
+            color:
+              aliareColors.green,
+          }}
+        />
       </Box>
     );
   }
@@ -1133,9 +1210,61 @@ export function Clients() {
         }}
       >
         <Box>
-          <Typography
-            fontWeight={800}
+          <Stack
+            direction="row"
+            spacing={1}
             sx={{
+              alignItems:
+                "center",
+            }}
+          >
+            <Box
+              sx={{
+                width:
+                  30,
+
+                height:
+                  3,
+
+                borderRadius:
+                  99,
+
+                backgroundColor:
+                  aliareColors.green,
+              }}
+            />
+
+            <Typography
+              variant="caption"
+              sx={{
+                fontWeight:
+                  800,
+
+                letterSpacing:
+                  "0.08em",
+
+                textTransform:
+                  "uppercase",
+
+                color:
+                  aliareColors.greenDark,
+              }}
+            >
+              Carteira
+            </Typography>
+          </Stack>
+
+          <Typography
+            sx={{
+              mt:
+                0.8,
+
+              fontWeight:
+                800,
+
+              letterSpacing:
+                "-0.025em",
+
               fontSize: {
                 xs: "1.7rem",
                 md: "1.9rem",
@@ -1185,11 +1314,21 @@ export function Clients() {
         sx={{
           border:
             "1px solid",
+
           borderColor:
             "divider",
+
           borderRadius:
-            2.5,
-          mb: 2,
+            2.25,
+
+          mb:
+            2,
+
+          backgroundColor:
+            "background.paper",
+
+          boxShadow:
+            "0 1px 2px rgba(16,24,40,0.035)",
         }}
       >
         <CardContent
@@ -1223,8 +1362,8 @@ export function Clients() {
               }}
             >
               <Typography
-                fontWeight={800}
-                sx={{
+        sx={{
+          fontWeight: 800,
                   fontSize:
                     "1rem",
                 }}
@@ -1381,15 +1520,20 @@ export function Clients() {
         }}
       >
         <MetricCard
-          title="Clientes ativos"
+          title="Tickets no período"
           value={
-            summary.totalClients
+            executiveTicketGroups
+              .all.length
           }
-          description="Clientes com tickets"
+          description={`${summary.totalClients} cliente(s) com tickets`}
           onClick={() =>
             showTickets(
-              "Clientes ativos",
-              scopedTickets
+              "Tickets no período",
+
+              executiveTicketGroups
+                .all,
+
+              "Atendimentos que compõem este indicador"
             )
           }
         />
@@ -1397,30 +1541,19 @@ export function Clients() {
         <MetricCard
           title="Alta atenção"
           value={
-            summary.highAttention
+            executiveTicketGroups
+              .highAttention.length
           }
-          description="Concentração crítica"
+          description="Atendimentos de clientes em situação crítica"
           severity="error"
           onClick={() =>
             showTickets(
-              "Clientes em alta atenção",
+              "Atendimentos em alta atenção",
 
-              scopedTickets.filter(
-                (ticket) => {
-                  const metric =
-                    clients.find(
-                      (client) =>
-                        client.client ===
-                        (ticket.client ??
-                          "Sem cliente")
-                    );
+              executiveTicketGroups
+                .highAttention,
 
-                  return (
-                    metric?.attentionLevel ===
-                    "alto"
-                  );
-                }
-              )
+              "A quantidade exibida no card corresponde exatamente aos atendimentos desta lista"
             )
           }
         />
@@ -1428,49 +1561,45 @@ export function Clients() {
         <MetricCard
           title="Em atenção"
           value={
-            summary.attention
+            executiveTicketGroups
+              .attention.length
           }
-          description="Exigem acompanhamento"
+          description="Atendimentos que exigem acompanhamento"
           severity="warning"
           onClick={() =>
             showTickets(
-              "Clientes em atenção",
+              "Atendimentos em atenção",
 
-              scopedTickets.filter(
-                (ticket) => {
-                  const metric =
-                    clients.find(
-                      (client) =>
-                        client.client ===
-                        (ticket.client ??
-                          "Sem cliente")
-                    );
+              executiveTicketGroups
+                .attention,
 
-                  return (
-                    metric?.attentionLevel ===
-                    "atencao"
-                  );
-                }
-              )
+              "A quantidade exibida no card corresponde exatamente aos atendimentos desta lista"
             )
           }
         />
 
         <MetricCard
-          title="Com críticos"
+          title="Críticos abertos"
           value={
-            summary.withCritical
+            executiveTicketGroups
+              .critical.length
           }
-          description="Clientes com críticos abertos"
+          description="Atendimentos críticos ainda em aberto"
           severity={
-            summary.withCritical >
+            executiveTicketGroups
+              .critical.length >
             0
               ? "error"
               : "default"
           }
           onClick={() =>
-            showStatusTickets(
-              "critical"
+            showTickets(
+              "Atendimentos críticos abertos",
+
+              executiveTicketGroups
+                .critical,
+
+              "A quantidade exibida no card corresponde exatamente aos atendimentos desta lista"
             )
           }
         />
@@ -1503,8 +1632,17 @@ export function Clients() {
         <Chip
           size="small"
           label={`${portfolioSummary.open} abertos`}
-          color="primary"
           variant="outlined"
+          sx={{
+            color:
+              aliareColors.greenDark,
+
+            borderColor:
+              "rgba(24,199,122,0.32)",
+
+            backgroundColor:
+              "rgba(24,199,122,0.05)",
+          }}
           onClick={() =>
             showStatusTickets(
               "open"
@@ -1574,87 +1712,155 @@ export function Clients() {
           0 ? (
             <Box
               sx={{
-                height: 280,
+                display:
+                  "grid",
+
+                gridTemplateColumns:
+                  {
+                    xs: "1fr",
+                    sm: "minmax(220px, 0.9fr) minmax(0, 1.1fr)",
+                  },
+
+                gap: 1.5,
+
+                alignItems:
+                  "center",
               }}
             >
-              <ResponsiveContainer
-                width="100%"
-                height="100%"
+              <Box
+                sx={{
+                  height: 235,
+                  minWidth: 0,
+                }}
               >
-                <PieChart>
-                  <Pie
-                    data={
-                      clientPieData
-                    }
-                    dataKey="value"
-                    nameKey="name"
-                    cx="50%"
-                    cy="44%"
-                    outerRadius={88}
-                    innerRadius={48}
-                    paddingAngle={2}
-                    cursor="pointer"
-                    onClick={(
-                      data
-                    ) => {
-                      const name =
-                        String(
-                          data?.name ??
-                            ""
-                        );
-
-                      if (
-                        !name ||
-                        name ===
-                          "Outros"
-                      ) {
-                        return;
+                <ResponsiveContainer
+                  width="100%"
+                  height="100%"
+                >
+                  <PieChart>
+                    <Pie
+                      data={
+                        clientPieData
                       }
+                      dataKey="value"
+                      nameKey="name"
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={78}
+                      innerRadius={46}
+                      paddingAngle={2}
+                      cursor="pointer"
+                      onClick={(data) => {
+                        const name =
+                          String(
+                            (
+                              data as {
+                                payload?: {
+                                  name?: unknown;
+                                };
+                              }
+                            ).payload?.name ??
+                              ""
+                          );
 
-                      const list =
-                        periodTickets.filter(
-                          (ticket) =>
-                            (ticket.client ??
-                              "Sem cliente") ===
-                              name &&
-                            (!category ||
-                              ticket.category ===
-                                category)
+                        if (
+                          !name ||
+                          name ===
+                            "Outros"
+                        ) {
+                          return;
+                        }
+
+                        const list =
+                          periodTickets.filter(
+                            (ticket) =>
+                              (ticket.client ??
+                                "Sem cliente") ===
+                                name &&
+                              (!category ||
+                                ticket.category ===
+                                  category)
+                          );
+
+                        showTickets(
+                          `Cliente: ${name}`,
+                          list,
+                          "Tickets que compõem esta participação"
                         );
+                      }}
+                    >
+                      {clientPieData.map(
+                        (
+                          _,
+                          index
+                        ) => (
+                          <Cell
+                            key={`${clientPieData[index]?.name ?? "client"}-${index}`}
+                            fill={
+                              PIE_COLORS[
+                                index %
+                                  PIE_COLORS.length
+                              ]
+                            }
+                          />
+                        )
+                      )}
+                    </Pie>
 
-                      showTickets(
-                        `Cliente: ${name}`,
-                        list,
-                        "Tickets que compõem esta participação"
-                      );
-                    }}
-                  >
-                    {clientPieData.map(
-                      (
-                        _,
-                        index
-                      ) => (
-                        <Cell
-                          key={`client-${index}`}
-                          fill={
-                            PIE_COLORS[
-                              index %
-                                PIE_COLORS.length
-                            ]
-                          }
+                    <Tooltip
+                      content={
+                        <CompactPieTooltip
+                          valueLabel="ticket(s)"
                         />
-                      )
-                    )}
-                  </Pie>
+                      }
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </Box>
 
-                  <Tooltip />
+              <CompactPieLegend
+                data={
+                  clientPieData
+                }
+                total={
+                  clientPieData.reduce(
+                    (
+                      sum,
+                      item
+                    ) =>
+                      sum +
+                      item.value,
+                    0
+                  )
+                }
+                onItemClick={(
+                  name
+                ) => {
+                  if (
+                    name ===
+                    "Outros"
+                  ) {
+                    return;
+                  }
 
-                  <Legend
-                    verticalAlign="bottom"
-                    height={45}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
+                  const list =
+                    periodTickets.filter(
+                      (ticket) =>
+                        (ticket.client ??
+                          "Sem cliente") ===
+                          name &&
+                        (!category ||
+                          ticket.category ===
+                            category)
+                    );
+
+                  showTickets(
+                    `Cliente: ${name}`,
+                    list,
+                    "Tickets que compõem esta participação"
+                  );
+                }}
+              />
             </Box>
           ) : (
             <EmptyChart />
@@ -1671,98 +1877,176 @@ export function Clients() {
           0 ? (
             <Box
               sx={{
-                height: 280,
+                display:
+                  "grid",
+
+                gridTemplateColumns:
+                  {
+                    xs: "1fr",
+                    sm: "minmax(220px, 0.9fr) minmax(0, 1.1fr)",
+                  },
+
+                gap: 1.5,
+
+                alignItems:
+                  "center",
               }}
             >
-              <ResponsiveContainer
-                width="100%"
-                height="100%"
+              <Box
+                sx={{
+                  height: 235,
+                  minWidth: 0,
+                }}
               >
-                <PieChart>
-                  <Pie
-                    data={
-                      statusPieData
-                    }
-                    dataKey="value"
-                    nameKey="name"
-                    cx="50%"
-                    cy="44%"
-                    outerRadius={88}
-                    innerRadius={48}
-                    paddingAngle={2}
-                    cursor="pointer"
-                    onClick={(
-                      data
-                    ) => {
-                      const name =
-                        String(
-                          data?.name ??
-                            ""
-                        );
-
-                      if (
-                        name ===
-                        "Novos"
-                      ) {
-                        showStatusTickets(
-                          "new"
-                        );
+                <ResponsiveContainer
+                  width="100%"
+                  height="100%"
+                >
+                  <PieChart>
+                    <Pie
+                      data={
+                        statusPieData
                       }
+                      dataKey="value"
+                      nameKey="name"
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={78}
+                      innerRadius={46}
+                      paddingAngle={2}
+                      cursor="pointer"
+                      onClick={(data) => {
+                        const name =
+                          String(
+                            (
+                              data as {
+                                payload?: {
+                                  name?: unknown;
+                                };
+                              }
+                            ).payload?.name ??
+                              ""
+                          );
 
-                      if (
-                        name ===
-                        "Em Atendimento"
-                      ) {
-                        showStatusTickets(
-                          "attendance"
-                        );
-                      }
+                        if (
+                          name ===
+                          "Novos"
+                        ) {
+                          showStatusTickets(
+                            "new"
+                          );
+                        }
 
-                      if (
-                        name ===
-                        "Parados"
-                      ) {
-                        showStatusTickets(
-                          "stopped"
-                        );
-                      }
+                        if (
+                          name ===
+                          "Em Atendimento"
+                        ) {
+                          showStatusTickets(
+                            "attendance"
+                          );
+                        }
 
-                      if (
-                        name ===
-                        "Resolvidos"
-                      ) {
-                        showStatusTickets(
-                          "resolved"
-                        );
-                      }
-                    }}
-                  >
-                    {statusPieData.map(
-                      (
-                        _,
-                        index
-                      ) => (
-                        <Cell
-                          key={`status-${index}`}
-                          fill={
-                            PIE_COLORS[
-                              index %
-                                PIE_COLORS.length
-                            ]
-                          }
+                        if (
+                          name ===
+                          "Parados"
+                        ) {
+                          showStatusTickets(
+                            "stopped"
+                          );
+                        }
+
+                        if (
+                          name ===
+                          "Resolvidos"
+                        ) {
+                          showStatusTickets(
+                            "resolved"
+                          );
+                        }
+                      }}
+                    >
+                      {statusPieData.map(
+                        (
+                          _,
+                          index
+                        ) => (
+                          <Cell
+                            key={`${statusPieData[index]?.name ?? "status"}-${index}`}
+                            fill={
+                              STATUS_COLORS[
+                                statusPieData[
+                                  index
+                                ]?.name ??
+                                  ""
+                              ] ??
+                              PIE_COLORS[
+                                index %
+                                  PIE_COLORS.length
+                              ]
+                            }
+                          />
+                        )
+                      )}
+                    </Pie>
+
+                    <Tooltip
+                      content={
+                        <CompactPieTooltip
+                          valueLabel="ticket(s)"
                         />
-                      )
-                    )}
-                  </Pie>
+                      }
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </Box>
 
-                  <Tooltip />
+              <CompactPieLegend
+                data={
+                  statusPieData
+                }
+                total={
+                  scopedTickets.length
+                }
+                onItemClick={(
+                  name
+                ) => {
+                  if (
+                    name ===
+                    "Novos"
+                  ) {
+                    showStatusTickets(
+                      "new"
+                    );
+                  }
 
-                  <Legend
-                    verticalAlign="bottom"
-                    height={45}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
+                  if (
+                    name ===
+                    "Em Atendimento"
+                  ) {
+                    showStatusTickets(
+                      "attendance"
+                    );
+                  }
+
+                  if (
+                    name ===
+                    "Parados"
+                  ) {
+                    showStatusTickets(
+                      "stopped"
+                    );
+                  }
+
+                  if (
+                    name ===
+                    "Resolvidos"
+                  ) {
+                    showStatusTickets(
+                      "resolved"
+                    );
+                  }
+                }}
+              />
             </Box>
           ) : (
             <EmptyChart />
@@ -1796,12 +2080,21 @@ export function Clients() {
         sx={{
           border:
             "1px solid",
+
           borderColor:
             "divider",
+
           borderRadius:
-            2.5,
+            2.25,
+
           overflow:
             "hidden",
+
+          backgroundColor:
+            "background.paper",
+
+          boxShadow:
+            "0 1px 2px rgba(16,24,40,0.035)",
         }}
       >
         <CardContent
@@ -1832,8 +2125,8 @@ export function Clients() {
           >
             <Box>
               <Typography
-                fontWeight={800}
-                sx={{
+        sx={{
+          fontWeight: 800,
                   fontSize:
                     "1.05rem",
                 }}
@@ -1859,7 +2152,27 @@ export function Clients() {
 
         <TableContainer>
           <Table size="small">
-            <TableHead>
+            <TableHead
+              sx={{
+                backgroundColor:
+                  "#F8FAF9",
+
+                "& .MuiTableCell-root":
+                  {
+                    color:
+                      "text.secondary",
+
+                    fontSize:
+                      "0.72rem",
+
+                    letterSpacing:
+                      "0.02em",
+
+                    borderBottomColor:
+                      "divider",
+                  },
+              }}
+            >
               <TableRow>
                 <TableCell>
                   <strong>
@@ -1951,6 +2264,9 @@ export function Clients() {
                         <Button
                           size="small"
                           variant="text"
+                          title={
+                            client.client
+                          }
                           onClick={() =>
                             showClientTickets(
                               client.client
@@ -1958,14 +2274,44 @@ export function Clients() {
                           }
                           sx={{
                             p: 0,
+
                             minWidth:
-                              "auto",
+                              0,
+
+                            maxWidth:
+                              220,
+
                             fontWeight:
                               700,
+
                             textTransform:
                               "none",
+
                             justifyContent:
                               "flex-start",
+
+                            overflow:
+                              "hidden",
+
+                            whiteSpace:
+                              "nowrap",
+
+                            textOverflow:
+                              "ellipsis",
+
+                            display:
+                              "block",
+
+                            color:
+                              aliareColors.greenDark,
+
+                            "&:hover": {
+                              backgroundColor:
+                                "transparent",
+
+                              color:
+                                aliareColors.green,
+                            },
                           }}
                         >
                           {
@@ -2097,7 +2443,26 @@ export function Clients() {
                           label={
                             client.topCategory
                           }
+                          title={
+                            client.topCategory
+                          }
                           variant="outlined"
+                          sx={{
+                            maxWidth:
+                              180,
+
+                            "& .MuiChip-label":
+                              {
+                                overflow:
+                                  "hidden",
+
+                                textOverflow:
+                                  "ellipsis",
+
+                                whiteSpace:
+                                  "nowrap",
+                              },
+                          }}
                         />
                       </TableCell>
 
@@ -2124,7 +2489,7 @@ export function Clients() {
                       }}
                     >
                       <Typography
-                        fontWeight={700}
+                      sx={{ fontWeight: 700 }}
                       >
                         Nenhum cliente encontrado
                       </Typography>
@@ -2163,9 +2528,9 @@ export function Clients() {
         }}
       >
         A análise atual considera volume, criticidade, tickets
-        parados e resolvidos. Com os dados completos do Movidesk
-        adicionaremos SLA, recorrência, satisfação, evolução
-        mensal e comparação entre clientes.
+        parados e resolvidos. Nas próximas evoluções incluiremos
+        prazos de primeira resposta e resolução, recorrência,
+        CSAT, evolução mensal e comparação entre clientes.
       </Alert>
 
       {/* =================================================
@@ -2210,7 +2575,7 @@ export function Clients() {
                 <Box>
                   <Typography
                     variant="h6"
-                    fontWeight={800}
+                  sx={{ fontWeight: 800 }}
                   >
                     {
                       drilldown.title
@@ -2231,6 +2596,8 @@ export function Clients() {
 
                 <IconButton
                   size="small"
+                  aria-label="Fechar lista de tickets"
+                  title="Fechar"
                   onClick={() =>
                     setDrilldown(
                       null
@@ -2338,7 +2705,7 @@ export function Clients() {
                     >
                       <Typography
                         variant="body2"
-                        fontWeight={800}
+                      sx={{ fontWeight: 800 }}
                       >
                         #{ticket.movideskId}
                       </Typography>
@@ -2368,7 +2735,7 @@ export function Clients() {
 
                     <Typography
                       variant="body2"
-                      fontWeight={600}
+                    sx={{ fontWeight: 600 }}
                     >
                       {
                         ticket.subject
@@ -2441,7 +2808,7 @@ export function Clients() {
                 <Box>
                   <Typography
                     variant="h6"
-                    fontWeight={800}
+                  sx={{ fontWeight: 800 }}
                   >
                     Ticket #
                     {
@@ -2460,6 +2827,8 @@ export function Clients() {
 
                 <IconButton
                   size="small"
+                  aria-label="Fechar detalhes do ticket"
+                  title="Fechar"
                   onClick={() =>
                     setSelectedTicket(
                       null
@@ -2530,8 +2899,8 @@ export function Clients() {
               </Typography>
 
               <Typography
-                fontWeight={700}
-                sx={{
+        sx={{
+          fontWeight: 700,
                   mb: 2,
                 }}
               >
@@ -2677,8 +3046,8 @@ export function Clients() {
 
                   <Typography
                     variant="subtitle2"
-                    fontWeight={800}
-                    sx={{
+        sx={{
+          fontWeight: 800,
                       mb: 1,
                     }}
                   >
@@ -2710,8 +3079,8 @@ export function Clients() {
 
                   <Typography
                     variant="subtitle2"
-                    fontWeight={800}
-                    sx={{
+        sx={{
+          fontWeight: 800,
                       mb: 1.5,
                     }}
                   >
@@ -2793,6 +3162,332 @@ export function Clients() {
    KPI
 ========================================================= */
 
+/* =========================================================
+   LEGENDA COMPACTA DOS GRÁFICOS
+========================================================= */
+
+function CompactPieLegend({
+  data,
+  total,
+  onItemClick,
+}: {
+  data:
+    PieDataItem[];
+
+  total:
+    number;
+
+  onItemClick?:
+    (
+      name:
+        string
+    ) => void;
+}) {
+  return (
+    <Stack
+      spacing={0.5}
+      sx={{
+        minWidth: 0,
+      }}
+    >
+      {data.map(
+        (
+          item,
+          index
+        ) => {
+          const percent =
+            total > 0
+              ? Math.round(
+                  (item.value /
+                    total) *
+                    100
+                )
+              : 0;
+
+          const clickable =
+            Boolean(
+              onItemClick
+            ) &&
+            item.name !==
+              "Outros";
+
+          return (
+            <Box
+              key={`${item.name}-${index}`}
+              role={
+                clickable
+                  ? "button"
+                  : undefined
+              }
+              tabIndex={
+                clickable
+                  ? 0
+                  : undefined
+              }
+              title={
+                item.name
+              }
+              onClick={() => {
+                if (
+                  clickable
+                ) {
+                  onItemClick?.(
+                    item.name
+                  );
+                }
+              }}
+              onKeyDown={(
+                event
+              ) => {
+                if (
+                  clickable &&
+                  (
+                    event.key ===
+                      "Enter" ||
+                    event.key ===
+                      " "
+                  )
+                ) {
+                  onItemClick?.(
+                    item.name
+                  );
+                }
+              }}
+              sx={{
+                display:
+                  "grid",
+
+                gridTemplateColumns:
+                  "10px minmax(0, 1fr) auto",
+
+                alignItems:
+                  "center",
+
+                gap: 0.8,
+
+                px: 0.75,
+                py: 0.6,
+
+                borderRadius:
+                  1.25,
+
+                cursor:
+                  clickable
+                    ? "pointer"
+                    : "default",
+
+                "&:hover":
+                  clickable
+                    ? {
+                        backgroundColor:
+                          "action.hover",
+                      }
+                    : undefined,
+              }}
+            >
+              <Box
+                sx={{
+                  width: 9,
+                  height: 9,
+
+                  borderRadius:
+                    "50%",
+
+                  backgroundColor:
+                    PIE_COLORS[
+                      index %
+                        PIE_COLORS.length
+                    ],
+                }}
+              />
+
+              <Typography
+                variant="body2"
+                sx={{
+                  minWidth: 0,
+
+                  fontWeight:
+                    600,
+
+                  fontSize:
+                    "0.78rem",
+
+                  lineHeight:
+                    1.25,
+
+                  overflow:
+                    "hidden",
+
+                  textOverflow:
+                    "ellipsis",
+
+                  whiteSpace:
+                    "nowrap",
+                }}
+              >
+                {item.name}
+              </Typography>
+
+              <Stack
+                direction="row"
+                spacing={0.5}
+                sx={{
+                  alignItems:
+                    "center",
+
+                  flexShrink:
+                    0,
+                }}
+              >
+                <Typography
+                  variant="caption"
+                  sx={{
+                    fontWeight:
+                      800,
+
+                    fontVariantNumeric:
+                      "tabular-nums",
+                  }}
+                >
+                  {item.value}
+                </Typography>
+
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{
+                    minWidth:
+                      30,
+
+                    textAlign:
+                      "right",
+
+                    fontVariantNumeric:
+                      "tabular-nums",
+                  }}
+                >
+                  {percent}%
+                </Typography>
+              </Stack>
+            </Box>
+          );
+        }
+      )}
+    </Stack>
+  );
+}
+
+/* =========================================================
+   TOOLTIP COMPACTO DOS GRÁFICOS
+========================================================= */
+
+function CompactPieTooltip({
+  active,
+  payload,
+  valueLabel,
+}: {
+  active?:
+    boolean;
+
+  payload?:
+    Array<{
+      name?:
+        string;
+
+      value?:
+        number;
+
+      payload?:
+        PieDataItem;
+    }>;
+
+  valueLabel:
+    string;
+}) {
+  if (
+    !active ||
+    !payload ||
+    payload.length ===
+      0
+  ) {
+    return null;
+  }
+
+  const entry =
+    payload[0];
+
+  const item =
+    entry?.payload;
+
+  const name =
+    item?.name ??
+    entry?.name ??
+    "Item";
+
+  const value =
+    item?.value ??
+    entry?.value ??
+    0;
+
+  return (
+    <Box
+      sx={{
+        maxWidth:
+          280,
+
+        px: 1.25,
+        py: 1,
+
+        border:
+          "1px solid",
+
+        borderColor:
+          "divider",
+
+        borderRadius:
+          1.5,
+
+        backgroundColor:
+          "background.paper",
+
+        boxShadow:
+          "0 10px 28px rgba(16,24,40,0.12)",
+
+        borderTop:
+          `3px solid ${aliareColors.green}`,
+      }}
+    >
+      <Typography
+        variant="body2"
+        title={
+          name
+        }
+        sx={{
+          fontWeight:
+            700,
+
+          lineHeight:
+            1.35,
+        }}
+      >
+        {name}
+      </Typography>
+
+      <Typography
+        variant="caption"
+        color="text.secondary"
+      >
+        {value}{" "}
+        {valueLabel}
+      </Typography>
+    </Box>
+  );
+}
+
+/* =========================================================
+   CARD DE MÉTRICA
+========================================================= */
+
 function MetricCard({
   title,
   value,
@@ -2811,13 +3506,13 @@ function MetricCard({
 
   onClick?: () => void;
 }) {
-  const borderColor =
+  const accentColor =
     severity === "error"
-      ? "error.main"
+      ? semanticChartColors.overdue
       : severity ===
         "warning"
-      ? "warning.main"
-      : "divider";
+      ? semanticChartColors.attention
+      : aliareColors.green;
 
   return (
     <Card
@@ -2847,16 +3542,49 @@ function MetricCard({
         }
       }}
       sx={{
+        position:
+          "relative",
+
+        overflow:
+          "hidden",
+
         border:
           "1px solid",
 
-        borderColor,
+        borderColor:
+          "divider",
 
         borderRadius:
-          2.5,
+          2.25,
 
         height:
           "100%",
+
+        backgroundColor:
+          "background.paper",
+
+        "&::before": {
+          content:
+            '""',
+
+          position:
+            "absolute",
+
+          top:
+            0,
+
+          left:
+            0,
+
+          width:
+            "100%",
+
+          height:
+            3,
+
+          backgroundColor:
+            accentColor,
+        },
 
         cursor:
           onClick
@@ -2871,7 +3599,11 @@ function MetricCard({
             transform:
               "translateY(-2px)",
 
-            boxShadow: 2,
+            borderColor:
+              accentColor,
+
+            boxShadow:
+              "0 8px 24px rgba(16,24,40,0.08)",
           },
         }),
       }}
@@ -2894,14 +3626,14 @@ function MetricCard({
         <Typography
           variant="body2"
           color="text.secondary"
-          fontWeight={600}
+        sx={{ fontWeight: 600 }}
         >
           {title}
         </Typography>
 
         <Typography
-          fontWeight={800}
-          sx={{
+        sx={{
+          fontWeight: 800,
             mt: 0.5,
 
             fontSize: {
@@ -2932,13 +3664,18 @@ function MetricCard({
         {onClick && (
           <Typography
             variant="caption"
-            color="primary.main"
             sx={{
               display:
                 "block",
-              mt: 0.5,
+
+              mt:
+                0.65,
+
               fontWeight:
-                600,
+                700,
+
+              color:
+                aliareColors.greenDark,
             }}
           >
             Ver tickets →
@@ -2961,7 +3698,7 @@ function ChartCard({
   title: string;
   subtitle: string;
   children:
-    React.ReactNode;
+    ReactNode;
 }) {
   return (
     <Card
@@ -2972,7 +3709,13 @@ function ChartCard({
         borderColor:
           "divider",
         borderRadius:
-          2.5,
+          2.25,
+
+        backgroundColor:
+          "background.paper",
+
+        boxShadow:
+          "0 1px 2px rgba(16,24,40,0.035)",
       }}
     >
       <CardContent
@@ -2985,8 +3728,8 @@ function ChartCard({
         }}
       >
         <Typography
-          fontWeight={800}
-          sx={{
+        sx={{
+          fontWeight: 800,
             fontSize:
               "1.05rem",
           }}
@@ -3157,8 +3900,8 @@ function TicketField({
 
       <Typography
         variant="body2"
-        fontWeight={600}
         sx={{
+          fontWeight: 600,
           wordBreak:
             "break-word",
         }}
@@ -3206,6 +3949,7 @@ function normalize(
       /[\u0300-\u036f]/g,
       ""
     )
+    .trim()
     .toLowerCase();
 }
 
@@ -3306,6 +4050,17 @@ function formatDateTime(
     return "—";
   }
 
+  const parsed =
+    new Date(date);
+
+  if (
+    Number.isNaN(
+      parsed.getTime()
+    )
+  ) {
+    return "—";
+  }
+
   return new Intl.DateTimeFormat(
     "pt-BR",
     {
@@ -3315,7 +4070,5 @@ function formatDateTime(
       timeStyle:
         "short",
     }
-  ).format(
-    new Date(date)
-  );
+  ).format(parsed);
 }

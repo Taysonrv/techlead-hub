@@ -1,4 +1,4 @@
-import {
+import type {
   Request,
   Response,
 } from "express";
@@ -263,6 +263,33 @@ export class DashboardController {
               );
             }
 
+            const dueDateExpired =
+              Boolean(
+                ticket.dueDate &&
+                ticket.dueDate.getTime() <
+                  now.getTime()
+              );
+
+            if (dueDateExpired) {
+              reasons.push(
+                "Prazo vencido"
+              );
+            }
+
+            const firstResponseExpired =
+              Boolean(
+                ticket.firstResponseDueDate &&
+                !ticket.firstResponseDate &&
+                ticket.firstResponseDueDate.getTime() <
+                  now.getTime()
+              );
+
+            if (firstResponseExpired) {
+              reasons.push(
+                "Primeira resposta vencida"
+              );
+            }
+
             let level:
               | "baixo"
               | "medio"
@@ -272,7 +299,8 @@ export class DashboardController {
 
             if (
               urgency ===
-              "critica"
+                "critica" ||
+              firstResponseExpired
             ) {
               level =
                 "critico";
@@ -280,7 +308,8 @@ export class DashboardController {
               ticket.baseStatus ===
                 "Stopped" ||
               ageHours >= 72 ||
-              !ticket.owner
+              !ticket.owner ||
+              dueDateExpired
             ) {
               level =
                 "alto";
@@ -331,6 +360,9 @@ export class DashboardController {
               baseStatus:
                 ticket.baseStatus,
 
+              justification:
+                ticket.justification,
+
               service:
                 ticket.service,
 
@@ -370,6 +402,15 @@ export class DashboardController {
               deliveredVersion:
                 ticket.deliveredVersion,
 
+              importSource:
+                ticket.importSource,
+
+              importedAt:
+                ticket.importedAt,
+
+              importBatch:
+                ticket.importBatch,
+
               ageHours,
 
               level,
@@ -400,12 +441,12 @@ export class DashboardController {
               };
 
               const levelDiff =
-                priority[
+                (priority[
                   b.level
-                ] -
-                priority[
+                ] ?? 0) -
+                (priority[
                   a.level
-                ];
+                ] ?? 0);
 
               if (
                 levelDiff !==
@@ -622,9 +663,7 @@ export class DashboardController {
             const date =
               ticket.createdDate
                 .toISOString()
-                .split(
-                  "T"
-                )[0];
+                .slice(0, 10);
 
             acc[date] =
               (acc[date] ??
