@@ -57,9 +57,6 @@ export class AuthController {
      CONFIGURAÇÃO DO PRIMEIRO ADMINISTRADOR
 
      POST /auth/setup
-
-     Esta operação somente funcionará quando não existir
-     nenhum usuário cadastrado.
   ======================================================= */
 
   async setup(
@@ -125,13 +122,84 @@ export class AuthController {
   }
 
   /* =======================================================
+     CADASTRO DE USUÁRIO
+
+     POST /auth/register
+
+     O cadastro é público, porém o usuário permanece
+     aguardando aprovação administrativa.
+  ======================================================= */
+
+  async register(
+    request:
+      Request,
+
+    response:
+      Response
+  ) {
+    try {
+      const {
+        name,
+        username,
+        email,
+        password,
+        confirmPassword,
+      } =
+        request.body ?? {};
+
+      const user =
+        await authService
+          .register({
+            name:
+              toStringValue(
+                name
+              ),
+
+            username:
+              toStringValue(
+                username
+              ),
+
+            email:
+              toStringValue(
+                email
+              ),
+
+            password:
+              toStringValue(
+                password
+              ),
+
+            confirmPassword:
+              toStringValue(
+                confirmPassword
+              ),
+          });
+
+      return response
+        .status(201)
+        .json({
+          message:
+            "Cadastro realizado com sucesso. Aguarde a aprovação de um administrador para acessar o TechLead Hub.",
+
+          user,
+        });
+    } catch (error) {
+      return handleAuthError(
+        error,
+        response
+      );
+    }
+  }
+
+  /* =======================================================
      LOGIN
 
      POST /auth/login
 
-     O campo "username" pode receber:
+     O campo username pode receber:
      - nome de usuário
-     - e-mail corporativo
+     - e-mail
   ======================================================= */
 
   async login(
@@ -238,9 +306,6 @@ export class AuthController {
      ALTERAÇÃO DE SENHA
 
      POST /auth/change-password
-
-     Utilizada pelo usuário autenticado que conhece
-     a senha atual.
   ======================================================= */
 
   async changePassword(
@@ -312,14 +377,6 @@ export class AuthController {
      SOLICITAÇÃO DE RECUPERAÇÃO DE SENHA
 
      POST /auth/forgot-password
-
-     IMPORTANTE:
-     A resposta é sempre genérica.
-
-     Isso impede que alguém descubra se determinado
-     endereço possui ou não uma conta no TechLead Hub.
-
-     O token nunca é devolvido pela API.
   ======================================================= */
 
   async forgotPassword(
@@ -344,30 +401,9 @@ export class AuthController {
               ),
           });
 
-      /*
-       * ATENÇÃO:
-       *
-       * result.delivery contém internamente:
-       *
-       * - nome
-       * - e-mail
-       * - token
-       * - expiração
-       *
-       * Esses dados NÃO podem ser enviados ao frontend.
-       *
-       * Na próxima etapa, o MailService utilizará
-       * result.delivery para enviar o link ao usuário.
-       */
-
       if (
         result.delivery
       ) {
-        /*
-         * Nenhum token é exibido em log.
-         *
-         * O envio será conectado ao MailService.
-         */
         console.info(
           `[auth] Solicitação de recuperação criada para o usuário ${result.delivery.userId}.`
         );
@@ -390,7 +426,7 @@ export class AuthController {
   /* =======================================================
      VALIDA TOKEN DE RECUPERAÇÃO
 
-     GET /auth/reset-password/validate?token=...
+     GET /auth/reset-password/validate
   ======================================================= */
 
   async validateResetPasswordToken(
@@ -412,12 +448,6 @@ export class AuthController {
             token,
           });
 
-      /*
-       * Este endpoint pode informar somente se o token
-       * recebido é válido.
-
-       * Nenhuma informação do usuário é retornada.
-       */
       return response
         .status(200)
         .json(result);
@@ -468,13 +498,6 @@ export class AuthController {
             ),
         });
 
-      /*
-       * Não devolvemos o usuário porque a recuperação
-       * encerra todas as sessões existentes.
-       *
-       * Depois da redefinição, o usuário deve autenticar
-       * novamente.
-       */
       return response
         .status(200)
         .json({
@@ -516,12 +539,6 @@ export class AuthController {
           );
       }
 
-      /*
-       * Logout é idempotente.
-       *
-       * Mesmo que a sessão já tenha sido encerrada,
-       * a API responde com sucesso.
-       */
       return response
         .status(200)
         .json({

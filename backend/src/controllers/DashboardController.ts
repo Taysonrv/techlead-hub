@@ -3,7 +3,7 @@ import type {
   Response,
 } from "express";
 
-import { prisma } from "../config/prisma";
+import { prisma } from "../database/prisma";
 
 export class DashboardController {
   /* =========================================================
@@ -15,8 +15,67 @@ export class DashboardController {
     res: Response
   ) {
     try {
+      const period =
+        getPeriod(req);
+
+      const snapshotWhere =
+        await getLatestSnapshotWhere();
+
+      const createdDateWhere =
+        period
+          ? {
+              createdDate: {
+                gte: period.start,
+                lt: period.end,
+              },
+            }
+          : {};
+
+      const resolvedDateWhere =
+        period
+          ? {
+              resolvedDate: {
+                gte: period.start,
+                lt: period.end,
+              },
+            }
+          : {
+              resolvedDate: {
+                not: null,
+              },
+            };
+
+      const closedDateWhere =
+        period
+          ? {
+              closedDate: {
+                gte: period.start,
+                lt: period.end,
+              },
+            }
+          : {
+              closedDate: {
+                not: null,
+              },
+            };
+
+      /*
+       * IMPORTANTE:
+       *
+       * "Abertos", "Resolvidos" e "Fechados" são indicadores
+       * de fluxo e possuem datas de referência diferentes:
+       *
+       * Abertos    -> createdDate
+       * Resolvidos -> resolvedDate
+       * Fechados   -> closedDate
+       *
+       * "Pendentes" é estoque operacional atual e não deve ser
+       * confundido com "Abertos no período".
+       */
       const [
         totalTickets,
+        abertos,
+        pendentes,
         novos,
         emAtendimento,
         parados,
@@ -24,16 +83,40 @@ export class DashboardController {
         fechados,
         criticos,
       ] = await Promise.all([
-        prisma.ticket.count(),
+        prisma.ticket.count({
+          where: snapshotWhere,
+        }),
 
         prisma.ticket.count({
           where: {
+            ...snapshotWhere,
+            ...createdDateWhere,
+          },
+        }),
+
+        prisma.ticket.count({
+          where: {
+            ...snapshotWhere,
+            baseStatus: {
+              in: [
+                "New",
+                "InAttendance",
+                "Stopped",
+              ],
+            },
+          },
+        }),
+
+        prisma.ticket.count({
+          where: {
+            ...snapshotWhere,
             baseStatus: "New",
           },
         }),
 
         prisma.ticket.count({
           where: {
+            ...snapshotWhere,
             baseStatus:
               "InAttendance",
           },
@@ -41,6 +124,7 @@ export class DashboardController {
 
         prisma.ticket.count({
           where: {
+            ...snapshotWhere,
             baseStatus:
               "Stopped",
           },
@@ -48,20 +132,21 @@ export class DashboardController {
 
         prisma.ticket.count({
           where: {
-            baseStatus:
-              "Resolved",
+            ...snapshotWhere,
+            ...resolvedDateWhere,
           },
         }),
 
         prisma.ticket.count({
           where: {
-            baseStatus:
-              "Closed",
+            ...snapshotWhere,
+            ...closedDateWhere,
           },
         }),
 
         prisma.ticket.count({
           where: {
+            ...snapshotWhere,
             urgency: "Crítica",
 
             baseStatus: {
@@ -75,20 +160,34 @@ export class DashboardController {
         }),
       ]);
 
-      const abertos =
-        novos +
-        emAtendimento +
-        parados;
-
       return res.json({
         totalTickets,
+
+        /*
+         * Fluxo do período selecionado.
+         */
         abertos,
+        resolvidos,
+        fechados,
+
+        /*
+         * Backlog atual.
+         */
+        pendentes,
         novos,
         emAtendimento,
         parados,
-        resolvidos,
-        fechados,
         criticos,
+
+        period:
+          period
+            ? {
+                start:
+                  period.start,
+                endExclusive:
+                  period.end,
+              }
+            : null,
       });
     } catch (error) {
       console.error(
@@ -114,12 +213,17 @@ export class DashboardController {
     res: Response
   ) {
     try {
+      const snapshotWhere =
+        await getLatestSnapshotWhere();
+
       const categories =
         await prisma.ticket.groupBy(
           {
             by: [
               "category",
             ],
+
+            where: snapshotWhere,
 
             _count: {
               id: true,
@@ -172,10 +276,14 @@ export class DashboardController {
     res: Response
   ) {
     try {
+      const snapshotWhere =
+        await getLatestSnapshotWhere();
+
       const tickets =
         await prisma.ticket.findMany(
           {
             where: {
+              ...snapshotWhere,
               baseStatus: {
                 in: [
                   "New",
@@ -387,6 +495,12 @@ export class DashboardController {
               closedDate:
                 ticket.closedDate,
 
+              solutionSlaIndicator:
+                ticket.solutionSlaIndicator,
+
+              responseSlaIndicator:
+                ticket.responseSlaIndicator,
+
               lifetimeMinutes:
                 ticket.lifetimeMinutes,
 
@@ -518,12 +632,17 @@ export class DashboardController {
     res: Response
   ) {
     try {
+      const snapshotWhere =
+        await getLatestSnapshotWhere();
+
       const owners =
         await prisma.ticket.groupBy(
           {
             by: [
               "owner",
             ],
+
+            where: snapshotWhere,
 
             _count: {
               id: true,
@@ -576,12 +695,17 @@ export class DashboardController {
     res: Response
   ) {
     try {
+      const snapshotWhere =
+        await getLatestSnapshotWhere();
+
       const clients =
         await prisma.ticket.groupBy(
           {
             by: [
               "client",
             ],
+
+            where: snapshotWhere,
 
             _count: {
               id: true,
@@ -634,9 +758,14 @@ export class DashboardController {
     res: Response
   ) {
     try {
+      const snapshotWhere =
+        await getLatestSnapshotWhere();
+
       const tickets =
         await prisma.ticket.findMany(
           {
+            where: snapshotWhere,
+
             select: {
               createdDate:
                 true,
@@ -717,9 +846,14 @@ export class DashboardController {
     res: Response
   ) {
     try {
+      const snapshotWhere =
+        await getLatestSnapshotWhere();
+
       const tickets =
         await prisma.ticket.findMany(
           {
+            where: snapshotWhere,
+
             orderBy: {
               createdDate:
                 "desc",
@@ -811,6 +945,14 @@ export class DashboardController {
             closedDate:
               ticket.closedDate,
 
+            /* SLA oficial Movidesk */
+
+            solutionSlaIndicator:
+              ticket.solutionSlaIndicator,
+
+            responseSlaIndicator:
+              ticket.responseSlaIndicator,
+
             /* Tempos */
 
             lifetimeMinutes:
@@ -860,6 +1002,232 @@ export class DashboardController {
         });
     }
   }
+}
+
+type SnapshotWhere = {
+  importRunId?: number;
+};
+
+/**
+ * Snapshot operacional = tickets vistos na última importação completa
+ * e bem-sucedida do Movidesk. O histórico permanece preservado.
+ */
+async function getLatestSnapshotWhere(): Promise<SnapshotWhere> {
+  const latestImportRun =
+    await prisma.importRun.findFirst({
+      where: {
+        status: "SUCCESS",
+        source: "MOVÍDESK_EXCEL",
+        finishedAt: {
+          not: null,
+        },
+      },
+      orderBy: [
+        { finishedAt: "desc" },
+        { id: "desc" },
+      ],
+      select: {
+        id: true,
+      },
+    });
+
+  return latestImportRun
+    ? { importRunId: latestImportRun.id }
+    : {};
+}
+
+type DashboardPeriod = {
+  start: Date;
+  end: Date;
+};
+
+/**
+ * Obtém o período solicitado pelo frontend.
+ *
+ * Formatos aceitos:
+ * - ?month=2026-08
+ * - ?startDate=2026-08-01&endDate=2026-08-31
+ *
+ * O limite final é sempre exclusivo para evitar problemas
+ * com horários no último dia do período.
+ */
+function getPeriod(
+  req: Request
+): DashboardPeriod | null {
+  const month =
+    queryString(
+      req.query.month
+    );
+
+  if (
+    month &&
+    /^\d{4}-\d{2}$/.test(
+      month
+    )
+  ) {
+    const [
+      yearText,
+      monthText,
+    ] =
+      month.split("-");
+
+    const year =
+      Number(yearText);
+
+    const monthIndex =
+      Number(monthText) - 1;
+
+    if (
+      Number.isInteger(year) &&
+      monthIndex >= 0 &&
+      monthIndex <= 11
+    ) {
+      return {
+        start:
+          new Date(
+            year,
+            monthIndex,
+            1,
+            0,
+            0,
+            0,
+            0
+          ),
+
+        end:
+          new Date(
+            year,
+            monthIndex + 1,
+            1,
+            0,
+            0,
+            0,
+            0
+          ),
+      };
+    }
+  }
+
+  const startDate =
+    queryString(
+      req.query.startDate
+    );
+
+  const endDate =
+    queryString(
+      req.query.endDate
+    );
+
+  if (
+    !startDate ||
+    !endDate
+  ) {
+    return null;
+  }
+
+  const start =
+    parseDateOnly(
+      startDate
+    );
+
+  const endInclusive =
+    parseDateOnly(
+      endDate
+    );
+
+  if (
+    !start ||
+    !endInclusive
+  ) {
+    return null;
+  }
+
+  const end =
+    new Date(
+      endInclusive
+    );
+
+  end.setDate(
+    end.getDate() + 1
+  );
+
+  if (
+    start.getTime() >=
+    end.getTime()
+  ) {
+    return null;
+  }
+
+  return {
+    start,
+    end,
+  };
+}
+
+function queryString(
+  value: unknown
+) {
+  if (
+    typeof value === "string"
+  ) {
+    return value.trim();
+  }
+
+  if (
+    Array.isArray(value) &&
+    typeof value[0] ===
+      "string"
+  ) {
+    return value[0].trim();
+  }
+
+  return null;
+}
+
+function parseDateOnly(
+  value: string
+) {
+  const match =
+    value.match(
+      /^(\d{4})-(\d{2})-(\d{2})$/
+    );
+
+  if (!match) {
+    return null;
+  }
+
+  const year =
+    Number(match[1]);
+
+  const month =
+    Number(match[2]);
+
+  const day =
+    Number(match[3]);
+
+  const date =
+    new Date(
+      year,
+      month - 1,
+      day,
+      0,
+      0,
+      0,
+      0
+    );
+
+  if (
+    date.getFullYear() !==
+      year ||
+    date.getMonth() !==
+      month - 1 ||
+    date.getDate() !==
+      day
+  ) {
+    return null;
+  }
+
+  return date;
 }
 
 /* =========================================================

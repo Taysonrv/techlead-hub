@@ -24,113 +24,113 @@ export type UserRole =
   | "COORDENADOR"
   | "ANALISTA";
 
+export type UserApprovalStatus =
+  | "PENDING"
+  | "APPROVED"
+  | "REJECTED";
+
 export type AuthUser = {
-  id:
-    number;
+  id: number;
 
-  name:
-    string;
+  name: string;
 
-  username:
-    string;
+  username: string;
 
-  email:
-    string | null;
+  email: string | null;
 
-  role:
-    UserRole;
+  role: UserRole;
 
-  active:
-    boolean;
+  active: boolean;
 
-  mustChangePassword:
-    boolean;
+  approvalStatus: UserApprovalStatus;
 
-  lastLoginAt?:
-    string | null;
+  approvedAt?: string | null;
 
-  createdAt?:
-    string;
+  approvedById?: number | null;
 
-  updatedAt?:
-    string;
+  mustChangePassword: boolean;
+
+  lastLoginAt?: string | null;
+
+  createdAt?: string;
+
+  updatedAt?: string;
+};
+
+export type RegisterInput = {
+  name: string;
+
+  username: string;
+
+  email: string;
+
+  password: string;
+
+  confirmPassword: string;
 };
 
 type LoginInput = {
-  username:
-    string;
+  username: string;
 
-  password:
-    string;
+  password: string;
 
-  deviceName?:
-    string;
+  deviceName?: string;
 };
 
 type ChangePasswordInput = {
-  currentPassword:
-    string;
+  currentPassword: string;
 
-  newPassword:
-    string;
+  newPassword: string;
 
-  confirmPassword:
-    string;
+  confirmPassword: string;
 };
 
 type LoginResponse = {
-  accessToken:
-    string;
+  accessToken: string;
 
-  tokenType:
-    string;
+  tokenType: string;
 
-  expiresAt:
-    string;
+  expiresAt: string;
 
-  user:
-    AuthUser;
+  user: AuthUser;
+};
+
+type RegisterResponse = {
+  message: string;
+
+  user: AuthUser;
 };
 
 type ChangePasswordResponse = {
-  message:
-    string;
+  message: string;
 
-  user:
-    AuthUser;
+  user: AuthUser;
 };
 
 type AuthContextData = {
-  user:
-    AuthUser | null;
+  user: AuthUser | null;
 
-  loading:
-    boolean;
+  loading: boolean;
 
-  authenticated:
-    boolean;
+  authenticated: boolean;
 
-  login:
-    (
-      input:
-        LoginInput
-    ) =>
-      Promise<AuthUser>;
+  isAdmin: boolean;
 
-  logout:
-    () =>
-      Promise<void>;
+  login: (
+    input: LoginInput
+  ) => Promise<AuthUser>;
 
-  refreshUser:
-    () =>
-      Promise<AuthUser | null>;
+  register: (
+    input: RegisterInput
+  ) => Promise<RegisterResponse>;
 
-  changePassword:
-    (
-      input:
-        ChangePasswordInput
-    ) =>
-      Promise<AuthUser>;
+  logout: () => Promise<void>;
+
+  refreshUser: () => Promise<AuthUser | null>;
+
+  changePassword: (
+    input: ChangePasswordInput
+  ) => Promise<AuthUser>;
 };
 
 /* =========================================================
@@ -139,19 +139,15 @@ type AuthContextData = {
 
 const AuthContext =
   createContext<
-    AuthContextData |
-    undefined
-  >(
-    undefined
-  );
+    AuthContextData | undefined
+  >(undefined);
 
 /* =========================================================
    PROVIDER
 ========================================================= */
 
 type Props = {
-  children:
-    ReactNode;
+  children: ReactNode;
 };
 
 export function AuthProvider({
@@ -161,9 +157,7 @@ export function AuthProvider({
     user,
     setUser,
   ] =
-    useState<
-      AuthUser | null
-    >(
+    useState<AuthUser | null>(
       null
     );
 
@@ -171,9 +165,7 @@ export function AuthProvider({
     loading,
     setLoading,
   ] =
-    useState(
-      true
-    );
+    useState(true);
 
   /* =======================================================
      LIMPAR SESSÃO LOCAL
@@ -183,9 +175,7 @@ export function AuthProvider({
     useCallback(() => {
       removeAccessToken();
 
-      setUser(
-        null
-      );
+      setUser(null);
     }, []);
 
   /* =======================================================
@@ -199,9 +189,7 @@ export function AuthProvider({
           getAccessToken();
 
         if (!token) {
-          setUser(
-            null
-          );
+          setUser(null);
 
           return null;
         }
@@ -209,15 +197,13 @@ export function AuthProvider({
         try {
           const response =
             await api.get<{
-              user:
-                AuthUser;
+              user: AuthUser;
             }>(
               "/auth/me"
             );
 
           const currentUser =
-            response.data
-              .user;
+            response.data.user;
 
           setUser(
             currentUser
@@ -236,20 +222,17 @@ export function AuthProvider({
     );
 
   /* =======================================================
-     RESTAURAR SESSÃO AO INICIAR
+     RESTAURAR SESSÃO
   ======================================================= */
 
   useEffect(() => {
-    let mounted =
-      true;
+    let mounted = true;
 
     async function restoreSession() {
       try {
         await refreshUser();
       } finally {
-        if (
-          mounted
-        ) {
+        if (mounted) {
           setLoading(
             false
           );
@@ -260,15 +243,14 @@ export function AuthProvider({
     void restoreSession();
 
     return () => {
-      mounted =
-        false;
+      mounted = false;
     };
   }, [
     refreshUser,
   ]);
 
   /* =======================================================
-     EVENTO GLOBAL DE 401
+     EVENTO GLOBAL 401
   ======================================================= */
 
   useEffect(() => {
@@ -303,9 +285,7 @@ export function AuthProvider({
         deviceName,
       }: LoginInput) => {
         const response =
-          await api.post<
-            LoginResponse
-          >(
+          await api.post<LoginResponse>(
             "/auth/login",
             {
               username,
@@ -338,6 +318,36 @@ export function AuthProvider({
     );
 
   /* =======================================================
+     CADASTRO
+  ======================================================= */
+
+  const register =
+    useCallback(
+      async ({
+        name,
+        username,
+        email,
+        password,
+        confirmPassword,
+      }: RegisterInput) => {
+        const response =
+          await api.post<RegisterResponse>(
+            "/auth/register",
+            {
+              name,
+              username,
+              email,
+              password,
+              confirmPassword,
+            }
+          );
+
+        return response.data;
+      },
+      []
+    );
+
+  /* =======================================================
      ALTERAR SENHA
   ======================================================= */
 
@@ -349,9 +359,7 @@ export function AuthProvider({
         confirmPassword,
       }: ChangePasswordInput) => {
         const response =
-          await api.post<
-            ChangePasswordResponse
-          >(
+          await api.post<ChangePasswordResponse>(
             "/auth/change-password",
             {
               currentPassword,
@@ -361,17 +369,8 @@ export function AuthProvider({
           );
 
         const updatedUser =
-          response.data
-            .user;
+          response.data.user;
 
-        /*
-         * Mantém o contexto sincronizado imediatamente.
-         *
-         * Exemplo:
-         * mustChangePassword: true
-         *               ↓
-         * mustChangePassword: false
-         */
         setUser(
           updatedUser
         );
@@ -417,20 +416,22 @@ export function AuthProvider({
   ======================================================= */
 
   const value =
-    useMemo<
-      AuthContextData
-    >(
+    useMemo<AuthContextData>(
       () => ({
         user,
 
         loading,
 
         authenticated:
-          Boolean(
-            user
-          ),
+          Boolean(user),
+
+        isAdmin:
+          user?.role ===
+          "ADMIN",
 
         login,
+
+        register,
 
         logout,
 
@@ -442,6 +443,7 @@ export function AuthProvider({
         user,
         loading,
         login,
+        register,
         logout,
         refreshUser,
         changePassword,
@@ -450,9 +452,7 @@ export function AuthProvider({
 
   return (
     <AuthContext.Provider
-      value={
-        value
-      }
+      value={value}
     >
       {children}
     </AuthContext.Provider>

@@ -1,5 +1,7 @@
 import {
   Box,
+  CircularProgress,
+  Typography,
 } from "@mui/material";
 
 import type {
@@ -8,6 +10,7 @@ import type {
 
 import {
   BrowserRouter,
+  Navigate,
   Route,
   Routes,
 } from "react-router-dom";
@@ -22,6 +25,7 @@ import {
 
 import {
   AuthProvider,
+  useAuth,
 } from "./context/AuthContext";
 
 import {
@@ -68,6 +72,14 @@ import {
   Login,
 } from "./pages/Login";
 
+import {
+  Users,
+} from "./pages/Users";
+
+import {
+  aliareColors,
+} from "./theme/theme";
+
 /* =========================================================
    LAYOUT AUTENTICADO
 ========================================================= */
@@ -75,8 +87,7 @@ import {
 function AuthenticatedLayout({
   children,
 }: {
-  children:
-    ReactNode;
+  children: ReactNode;
 }) {
   return (
     <ProtectedRoute>
@@ -101,11 +112,9 @@ function AuthenticatedLayout({
           <Box
             component="main"
             sx={{
-              flexGrow:
-                1,
+              flexGrow: 1,
 
-              minWidth:
-                0,
+              minWidth: 0,
 
               minHeight:
                 "100vh",
@@ -149,6 +158,77 @@ function AuthenticatedLayout({
       </FiltersProvider>
     </ProtectedRoute>
   );
+}
+
+/* =========================================================
+   ROTA EXCLUSIVA ADMIN
+========================================================= */
+
+function AdminOnly({
+  children,
+}: {
+  children: ReactNode;
+}) {
+  const {
+    user,
+    loading,
+  } =
+    useAuth();
+
+  if (loading) {
+    return (
+      <Box
+        sx={{
+          minHeight:
+            "100vh",
+
+          display:
+            "flex",
+
+          flexDirection:
+            "column",
+
+          alignItems:
+            "center",
+
+          justifyContent:
+            "center",
+
+          gap: 2,
+        }}
+      >
+        <CircularProgress
+          size={30}
+          sx={{
+            color:
+              aliareColors.green,
+          }}
+        />
+
+        <Typography
+          variant="body2"
+          color="text.secondary"
+        >
+          Validando acesso...
+        </Typography>
+      </Box>
+    );
+  }
+
+  if (
+    !user ||
+    user.role !==
+      "ADMIN"
+  ) {
+    return (
+      <Navigate
+        to="/"
+        replace
+      />
+    );
+  }
+
+  return children;
 }
 
 /* =========================================================
@@ -238,6 +318,21 @@ function App() {
             }
           />
 
+          {/* =================================================
+              ADMINISTRAÇÃO
+          ================================================= */}
+
+          <Route
+            path="/usuarios"
+            element={
+              <AdminOnly>
+                <AuthenticatedLayout>
+                  <Users />
+                </AuthenticatedLayout>
+              </AdminOnly>
+            }
+          />
+
           <Route
             path="/sobre"
             element={
@@ -253,6 +348,20 @@ function App() {
               <AuthenticatedLayout>
                 <Profile />
               </AuthenticatedLayout>
+            }
+          />
+
+          {/* =================================================
+              FALLBACK
+          ================================================= */}
+
+          <Route
+            path="*"
+            element={
+              <Navigate
+                to="/"
+                replace
+              />
             }
           />
         </Routes>

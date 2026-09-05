@@ -125,6 +125,21 @@ export class MovideskExcelImportService {
     }
 
     /*
+     * Cada importação recebe um lote próprio. Além de auditoria,
+     * isso permite identificar tickets que não apareceram na
+     * importação mais recente sem apagar dados automaticamente.
+     */
+    const importRun =
+      await prisma.importRun.create({
+        data: {
+          batch: batchId,
+          source: "MOVÍDESK_EXCEL",
+          status: "PROCESSING",
+          totalRows: rows.length,
+        },
+      });
+
+    /*
      * Detecta duplicidades dentro do próprio Excel.
      */
     const seenTicketIds =
@@ -225,6 +240,9 @@ export class MovideskExcelImportService {
 
               importedAt:
                 new Date(),
+
+              importRunId:
+                importRun.id,
             },
 
             update: {
@@ -238,6 +256,9 @@ export class MovideskExcelImportService {
 
               importedAt:
                 new Date(),
+
+              importRunId:
+                importRun.id,
             },
           }
         );
@@ -262,6 +283,38 @@ export class MovideskExcelImportService {
         });
       }
     }
+
+    /*
+     * O snapshot operacional só pode ser baseado em uma importação
+     * concluída sem erros de processamento. Linhas ignoradas/duplicadas
+     * permanecem registradas na auditoria, mas não invalidam o snapshot
+     * quando todos os tickets válidos foram processados.
+     */
+    const importStatus =
+      errors > 0
+        ? "PARTIAL"
+        : "SUCCESS";
+
+    await prisma.importRun.update({
+      where: {
+        id: importRun.id,
+      },
+      data: {
+        status: importStatus,
+        totalRows: rows.length,
+        insertedRows: created,
+        updatedRows: updated,
+        skippedRows: ignored,
+        errorRows: errors,
+        finishedAt: new Date(),
+        message:
+          errors > 0
+            ? `Importação concluída com ${errors} erro(s).`
+            : ignored > 0
+              ? `Importação concluída com ${ignored} linha(s) ignorada(s).`
+              : "Importação concluída com sucesso.",
+      },
+    });
 
     return {
       batchId,
@@ -699,19 +752,26 @@ export class MovideskExcelImportService {
         )
       );
 
+    const ownerTeamAliases = [
+      "equipe do responsavel",
+      "equipe do responsável",
+      "equipe",
+      "time",
+      "squad",
+    ];
+
     const ownerTeam =
-      this.toString(
-        this.value(
-          row,
-          [
-            "equipe do responsavel",
-            "equipe do responsável",
-            "equipe",
-            "time",
-            "squad",
-          ]
-        )
-      );
+      this.hasAnyColumn(
+        row,
+        ownerTeamAliases
+      )
+        ? this.toString(
+            this.value(
+              row,
+              ownerTeamAliases
+            )
+          )
+        : undefined;
 
     const category =
       this.toString(
@@ -745,15 +805,22 @@ export class MovideskExcelImportService {
         )
       );
 
+    const justificationAliases = [
+      "justificativa",
+    ];
+
     const justification =
-      this.toString(
-        this.value(
-          row,
-          [
-            "justificativa",
-          ]
-        )
-      );
+      this.hasAnyColumn(
+        row,
+        justificationAliases
+      )
+        ? this.toString(
+            this.value(
+              row,
+              justificationAliases
+            )
+          )
+        : undefined;
 
     const service =
       this.toString(
@@ -895,31 +962,45 @@ export class MovideskExcelImportService {
         )
       );
 
+    const lifetimeAliases = [
+      "tempo de vida (horas úteis)",
+      "tempo de vida (horas uteis)",
+      "tempo de vida horas úteis",
+      "tempo de vida horas uteis",
+      "tempo de vida",
+      "tempo vida",
+    ];
+
     const lifetimeMinutes =
-      this.toMinutes(
-        this.value(
-          row,
-          [
-            "tempo de vida (horas úteis)",
-            "tempo de vida (horas uteis)",
-            "tempo de vida horas úteis",
-            "tempo de vida horas uteis",
-            "tempo de vida",
-            "tempo vida",
-          ]
-        )
-      );
+      this.hasAnyColumn(
+        row,
+        lifetimeAliases
+      )
+        ? this.toMinutes(
+            this.value(
+              row,
+              lifetimeAliases
+            )
+          )
+        : undefined;
+
+    const stoppedAliases = [
+      "tempo parado",
+      "tempo em parada",
+    ];
 
     const stoppedMinutes =
-      this.toMinutes(
-        this.value(
-          row,
-          [
-            "tempo parado",
-            "tempo em parada",
-          ]
-        )
-      );
+      this.hasAnyColumn(
+        row,
+        stoppedAliases
+      )
+        ? this.toMinutes(
+            this.value(
+              row,
+              stoppedAliases
+            )
+          )
+        : undefined;
 
     const taskNumber =
       this.toInteger(
@@ -949,22 +1030,72 @@ export class MovideskExcelImportService {
         )
       );
 
+    const deliveredVersionAliases = [
+      "versão entregue task",
+      "versao entregue task",
+      "versão entregue da task",
+      "versao entregue da task",
+      "versao entregue",
+      "versão entregue",
+      "versao",
+      "versão",
+    ];
+
     const deliveredVersion =
-      this.toString(
-        this.value(
-          row,
-          [
-            "versão entregue task",
-            "versao entregue task",
-            "versão entregue da task",
-            "versao entregue da task",
-            "versao entregue",
-            "versão entregue",
-            "versao",
-            "versão",
-          ]
-        )
-      );
+      this.hasAnyColumn(
+        row,
+        deliveredVersionAliases
+      )
+        ? this.toString(
+            this.value(
+              row,
+              deliveredVersionAliases
+            )
+          )
+        : undefined;
+
+    /*
+     * Resultado oficial calculado pelo Movidesk.
+     * Esses campos devem ser usados como fonte primária para
+     * o SLA histórico de tickets já respondidos/resolvidos.
+     */
+    const solutionSlaAliases = [
+      "indicador do sla de solução",
+      "indicador do sla de solucao",
+      "sla de solução",
+      "sla de solucao",
+    ];
+
+    const solutionSlaIndicator =
+      this.hasAnyColumn(
+        row,
+        solutionSlaAliases
+      )
+        ? this.toString(
+            this.value(
+              row,
+              solutionSlaAliases
+            )
+          )
+        : undefined;
+
+    const responseSlaAliases = [
+      "indicador do sla de resposta",
+      "sla de resposta",
+    ];
+
+    const responseSlaIndicator =
+      this.hasAnyColumn(
+        row,
+        responseSlaAliases
+      )
+        ? this.toString(
+            this.value(
+              row,
+              responseSlaAliases
+            )
+          )
+        : undefined;
 
     return {
       movideskId,
@@ -1013,6 +1144,9 @@ export class MovideskExcelImportService {
 
       resolvedDate,
       closedDate,
+
+      solutionSlaIndicator,
+      responseSlaIndicator,
 
       lifetimeMinutes,
       stoppedMinutes,
@@ -1086,6 +1220,43 @@ export class MovideskExcelImportService {
     }
 
     return null;
+  }
+
+  private hasAnyColumn(
+    row: ExcelRow,
+    aliases: string[]
+  ) {
+    const rowHeaders =
+      Object.keys(row);
+
+    return aliases.some(
+      (alias) => {
+        const normalizedAlias =
+          this.normalizeHeader(
+            alias
+          );
+
+        if (
+          rowHeaders.includes(
+            normalizedAlias
+          )
+        ) {
+          return true;
+        }
+
+        const compactAlias =
+          this.compactHeader(
+            alias
+          );
+
+        return rowHeaders.some(
+          (header) =>
+            this.compactHeader(
+              header
+            ) === compactAlias
+        );
+      }
+    );
   }
 
   private compactHeader(
@@ -1232,6 +1403,9 @@ export class MovideskExcelImportService {
     if (
       normalized.includes(
         "parado"
+      ) ||
+      normalized.includes(
+        "paus"
       ) ||
       normalized.includes(
         "aguard"

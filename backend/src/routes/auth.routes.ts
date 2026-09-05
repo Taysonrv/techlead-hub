@@ -24,9 +24,6 @@ const auth =
    CONFIGURAÇÃO INICIAL
 
    Rotas públicas.
-
-   O próprio AuthService impede que /setup seja utilizado
-   depois que o primeiro usuário já tiver sido criado.
 ========================================================= */
 
 authRoutes.get(
@@ -39,6 +36,24 @@ authRoutes.get(
 authRoutes.post(
   "/setup",
   auth.setup.bind(
+    auth
+  )
+);
+
+/* =========================================================
+   CADASTRO DE USUÁRIO
+
+   Rota pública.
+
+   Todo novo usuário é criado:
+   - como ANALISTA
+   - inativo
+   - aguardando aprovação administrativa
+========================================================= */
+
+authRoutes.post(
+  "/register",
+  auth.register.bind(
     auth
   )
 );
@@ -58,11 +73,6 @@ authRoutes.post(
 
 /* =========================================================
    RECUPERAÇÃO DE SENHA
-
-   Rotas públicas.
-
-   A segurança é baseada em token temporário aleatório
-   cujo valor original não é armazenado no banco.
 ========================================================= */
 
 authRoutes.post(
@@ -88,8 +98,6 @@ authRoutes.post(
 
 /* =========================================================
    USUÁRIO AUTENTICADO
-
-   Rotas abaixo exigem JWT + sessão válida.
 ========================================================= */
 
 authRoutes.get(

@@ -21,97 +21,57 @@ import {
 ========================================================= */
 
 type LoginInput = {
-  /**
-   * Mantemos o nome "username" por compatibilidade com
-   * o frontend atual.
-   *
-   * O valor poderá ser:
-   * - username
-   * - e-mail corporativo
-   */
-  username:
-    string;
+  username: string;
+  password: string;
 
-  password:
-    string;
-
-  deviceName?:
-    string | null;
-
-  userAgent?:
-    string | null;
-
-  ipAddress?:
-    string | null;
+  deviceName?: string | null;
+  userAgent?: string | null;
+  ipAddress?: string | null;
 };
 
 type ChangePasswordInput = {
-  userId:
-    number;
-
-  currentPassword:
-    string;
-
-  newPassword:
-    string;
-
-  confirmPassword:
-    string;
+  userId: number;
+  currentPassword: string;
+  newPassword: string;
+  confirmPassword: string;
 };
 
 type SetupInput = {
-  name:
-    string;
+  name: string;
+  username: string;
+  email: string;
+  password: string;
+  confirmPassword: string;
+};
 
-  username:
-    string;
-
-  email:
-    string;
-
-  password:
-    string;
-
-  confirmPassword:
-    string;
+type RegisterInput = {
+  name: string;
+  username: string;
+  email: string;
+  password: string;
+  confirmPassword: string;
 };
 
 type RequestPasswordResetInput = {
-  email:
-    string;
+  email: string;
 };
 
 type ValidatePasswordResetTokenInput = {
-  token:
-    string;
+  token: string;
 };
 
 type ResetPasswordInput = {
-  token:
-    string;
-
-  newPassword:
-    string;
-
-  confirmPassword:
-    string;
+  token: string;
+  newPassword: string;
+  confirmPassword: string;
 };
 
 type PasswordResetDelivery = {
-  userId:
-    number;
-
-  name:
-    string;
-
-  email:
-    string;
-
-  token:
-    string;
-
-  expiresAt:
-    Date;
+  userId: number;
+  name: string;
+  email: string;
+  token: string;
+  expiresAt: Date;
 };
 
 /* =========================================================
@@ -138,6 +98,11 @@ const USER_PUBLIC_SELECT = {
   email: true,
   role: true,
   active: true,
+
+  approvalStatus: true,
+  approvedAt: true,
+  approvedById: true,
+
   mustChangePassword: true,
   lastLoginAt: true,
   createdAt: true,
@@ -175,19 +140,13 @@ export class AuthService {
     confirmPassword,
   }: SetupInput) {
     const normalizedName =
-      normalizeName(
-        name
-      );
+      normalizeName(name);
 
     const normalizedUsername =
-      normalizeUsername(
-        username
-      );
+      normalizeUsername(username);
 
     const normalizedEmail =
-      normalizeEmail(
-        email
-      );
+      normalizeEmail(email);
 
     if (!normalizedName) {
       throw new AuthError(
@@ -264,6 +223,12 @@ export class AuthService {
                   active:
                     true,
 
+                  approvalStatus:
+                    "APPROVED",
+
+                  approvedAt:
+                    new Date(),
+
                   mustChangePassword:
                     false,
                 },
@@ -299,11 +264,157 @@ export class AuthService {
   }
 
   /* =======================================================
+     CADASTRO PÚBLICO
+
+     Todo novo cadastro:
+     - ANALISTA
+     - inativo
+     - aguardando aprovação
+
+     O cliente não controla role, active ou approvalStatus.
+  ======================================================= */
+
+  async register({
+    name,
+    username,
+    email,
+    password,
+    confirmPassword,
+  }: RegisterInput) {
+    const normalizedName =
+      normalizeName(name);
+
+    const normalizedUsername =
+      normalizeUsername(
+        username
+      );
+
+    const normalizedEmail =
+      normalizeEmail(
+        email
+      );
+
+    if (!normalizedName) {
+      throw new AuthError(
+        "Informe seu nome completo.",
+        400
+      );
+    }
+
+    if (!normalizedUsername) {
+      throw new AuthError(
+        "Informe o usuário.",
+        400
+      );
+    }
+
+    validateUsername(
+      normalizedUsername
+    );
+
+    validateCorporateEmail(
+      normalizedEmail
+    );
+
+    validatePassword({
+      password,
+      confirmPassword,
+    });
+
+    const existingUser =
+      await prisma.user.findFirst({
+        where: {
+          OR: [
+            {
+              username: {
+                equals:
+                  normalizedUsername,
+
+                mode:
+                  "insensitive",
+              },
+            },
+            {
+              email: {
+                equals:
+                  normalizedEmail,
+
+                mode:
+                  "insensitive",
+              },
+            },
+          ],
+        },
+      });
+
+    if (existingUser) {
+      throw new AuthError(
+        "O usuário ou e-mail informado já está cadastrado.",
+        409
+      );
+    }
+
+    const passwordHash =
+      await bcrypt.hash(
+        password,
+        PASSWORD_SALT_ROUNDS
+      );
+
+    try {
+      const user =
+        await prisma.user.create({
+          data: {
+            name:
+              normalizedName,
+
+            username:
+              normalizedUsername,
+
+            email:
+              normalizedEmail,
+
+            passwordHash,
+
+            role:
+              "ANALISTA",
+
+            active:
+              false,
+
+            approvalStatus:
+              "PENDING",
+
+            mustChangePassword:
+              false,
+          },
+
+          select:
+            USER_PUBLIC_SELECT,
+        });
+
+      return user;
+    } catch (error) {
+      if (
+        isPrismaUniqueConstraintError(
+          error
+        )
+      ) {
+        throw new AuthError(
+          "O usuário ou e-mail informado já está cadastrado.",
+          409
+        );
+      }
+
+      throw error;
+    }
+  }
+
+  /* =======================================================
      LOGIN
 
-     O campo username aceita:
-     - nome de usuário
-     - e-mail corporativo
+     Aceita:
+     - username
+     - e-mail
   ======================================================= */
 
   async login({
@@ -328,13 +439,6 @@ export class AuthService {
       );
     }
 
-    /*
-     * Busca case-insensitive.
-     *
-     * Isso evita problemas em registros antigos onde o
-     * e-mail ou username possa ter sido salvo com letras
-     * maiúsculas.
-     */
     const user =
       await prisma.user.findFirst({
         where: {
@@ -368,27 +472,53 @@ export class AuthService {
       );
     }
 
-    if (
-      !user.active
-    ) {
-      throw new AuthError(
-        "Este usuário está inativo.",
-        403
-      );
-    }
-
+    /*
+     * Primeiro validamos a senha.
+     *
+     * Assim não revelamos o estado de uma conta para alguém
+     * que não conhece suas credenciais.
+     */
     const passwordMatches =
       await bcrypt.compare(
         password,
         user.passwordHash
       );
 
-    if (
-      !passwordMatches
-    ) {
+    if (!passwordMatches) {
       throw new AuthError(
         "Usuário ou senha inválidos.",
         401
+      );
+    }
+
+    /* =====================================================
+       APROVAÇÃO ADMINISTRATIVA
+    ===================================================== */
+
+    if (
+      user.approvalStatus ===
+      "PENDING"
+    ) {
+      throw new AuthError(
+        "Seu cadastro está aguardando aprovação de um administrador.",
+        403
+      );
+    }
+
+    if (
+      user.approvalStatus ===
+      "REJECTED"
+    ) {
+      throw new AuthError(
+        "Seu cadastro não foi autorizado. Entre em contato com um administrador.",
+        403
+      );
+    }
+
+    if (!user.active) {
+      throw new AuthError(
+        "Seu acesso está desativado. Entre em contato com um administrador.",
+        403
       );
     }
 
@@ -458,10 +588,6 @@ export class AuthService {
             user.role,
         });
     } catch (error) {
-      /*
-       * Se houver falha ao gerar o JWT, removemos a sessão
-       * recém-criada para não manter uma sessão órfã.
-       */
       await prisma.userSession
         .updateMany({
           where: {
@@ -546,10 +672,12 @@ export class AuthService {
 
     if (
       !user ||
-      !user.active
+      !user.active ||
+      user.approvalStatus !==
+        "APPROVED"
     ) {
       throw new AuthError(
-        "Usuário não encontrado ou inativo.",
+        "Usuário não encontrado, inativo ou não autorizado.",
         401
       );
     }
@@ -559,9 +687,6 @@ export class AuthService {
 
   /* =======================================================
      ALTERAÇÃO DE SENHA
-
-     Utilizada por usuário autenticado que conhece a
-     senha atual.
   ======================================================= */
 
   async changePassword({
@@ -570,9 +695,7 @@ export class AuthService {
     newPassword,
     confirmPassword,
   }: ChangePasswordInput) {
-    if (
-      !currentPassword
-    ) {
+    if (!currentPassword) {
       throw new AuthError(
         "Informe a senha atual.",
         400
@@ -606,17 +729,15 @@ export class AuthService {
 
     if (
       !user ||
-      !user.active
+      !user.active ||
+      user.approvalStatus !==
+        "APPROVED"
     ) {
       throw new AuthError(
-        "Usuário não encontrado ou inativo.",
+        "Usuário não encontrado, inativo ou não autorizado.",
         401
       );
     }
-
-    /* =====================================================
-       VALIDA SENHA ATUAL
-    ===================================================== */
 
     const currentPasswordMatches =
       await bcrypt.compare(
@@ -632,10 +753,6 @@ export class AuthService {
         400
       );
     }
-
-    /* =====================================================
-       EVITA REUTILIZAÇÃO
-    ===================================================== */
 
     const newPasswordMatchesCurrentHash =
       await bcrypt.compare(
@@ -682,10 +799,6 @@ export class AuthService {
 
   /* =======================================================
      SOLICITAÇÃO DE RECUPERAÇÃO DE SENHA
-
-     IMPORTANTE:
-     O retorno "delivery" é exclusivamente interno.
-     O Controller NÃO deverá enviar token ao frontend.
   ======================================================= */
 
   async requestPasswordReset({
@@ -696,12 +809,6 @@ export class AuthService {
         email
       );
 
-    /*
-     * Mesmo para e-mail inválido, evitamos revelar
-     * informações sobre contas existentes.
-     *
-     * Porém ainda validamos que algum valor foi informado.
-     */
     if (!normalizedEmail) {
       throw new AuthError(
         "Informe o e-mail corporativo.",
@@ -738,13 +845,11 @@ export class AuthService {
         },
       });
 
-    /*
-     * Resposta genérica para evitar enumeração
-     * de usuários.
-     */
     if (
       !user ||
       !user.active ||
+      user.approvalStatus !==
+        "APPROVED" ||
       !user.email
     ) {
       return {
@@ -772,9 +877,6 @@ export class AuthService {
     const now =
       new Date();
 
-    /*
-     * Invalida tokens anteriores ainda não utilizados.
-     */
     await prisma.$transaction([
       prisma.passwordResetToken.updateMany({
         where: {
@@ -866,7 +968,10 @@ export class AuthService {
       resetToken.usedAt ||
       resetToken.expiresAt <=
         new Date() ||
-      !resetToken.user.active
+      !resetToken.user.active ||
+      resetToken.user
+        .approvalStatus !==
+        "APPROVED"
     ) {
       return {
         valid:
@@ -941,17 +1046,16 @@ export class AuthService {
     }
 
     if (
-      !resetToken.user.active
+      !resetToken.user.active ||
+      resetToken.user
+        .approvalStatus !==
+        "APPROVED"
     ) {
       throw new AuthError(
         "Não foi possível redefinir a senha desta conta.",
         403
       );
     }
-
-    /* =====================================================
-       NÃO PERMITE REUTILIZAR A SENHA ATUAL
-    ===================================================== */
 
     const matchesCurrentPassword =
       await bcrypt.compare(
@@ -987,12 +1091,6 @@ export class AuthService {
         async (
           transaction
         ) => {
-          /*
-           * Marca o token utilizado.
-           *
-           * O updateMany também ajuda a evitar que duas
-           * requisições reutilizem um token já consumido.
-           */
           const consumed =
             await transaction
               .passwordResetToken
@@ -1026,9 +1124,6 @@ export class AuthService {
             );
           }
 
-          /*
-           * Atualiza a senha.
-           */
           const user =
             await transaction
               .user
@@ -1050,10 +1145,6 @@ export class AuthService {
                   USER_PUBLIC_SELECT,
               });
 
-          /*
-           * Invalida quaisquer outros tokens de recuperação
-           * ainda pendentes do mesmo usuário.
-           */
           await transaction
             .passwordResetToken
             .updateMany({
@@ -1070,12 +1161,6 @@ export class AuthService {
               },
             });
 
-          /*
-           * Revoga todas as sessões existentes.
-           *
-           * Após recuperar a senha, o usuário deverá
-           * autenticar novamente.
-           */
           await transaction
             .userSession
             .updateMany({
@@ -1143,22 +1228,19 @@ function validatePassword({
   password,
   confirmPassword,
 }: {
-  password:
-    string;
-
-  confirmPassword:
-    string;
+  password: string;
+  confirmPassword: string;
 }) {
   if (!password) {
     throw new AuthError(
-      "Informe a nova senha.",
+      "Informe a senha.",
       400
     );
   }
 
   if (!confirmPassword) {
     throw new AuthError(
-      "Confirme a nova senha.",
+      "Confirme a senha.",
       400
     );
   }
@@ -1198,14 +1280,6 @@ function validateUsername(
     );
   }
 
-  /*
-   * Permitimos:
-   * letras
-   * números
-   * ponto
-   * hífen
-   * underscore
-   */
   if (
     !/^[a-z0-9._-]+$/i.test(
       username
@@ -1243,14 +1317,6 @@ function validateCorporateEmail(
   const allowedDomains =
     getAllowedEmailDomains();
 
-  /*
-   * Se nenhum domínio foi configurado,
-   * aceitamos qualquer e-mail válido.
-   *
-   * Em produção recomendamos configurar:
-   *
-   * ALLOWED_EMAIL_DOMAINS=aliare.co
-   */
   if (
     allowedDomains.length ===
     0
@@ -1355,11 +1421,6 @@ function isValidEmail(
   email:
     string
 ) {
-  /*
-   * Validação deliberadamente simples.
-   * A confirmação real da identidade ocorrerá pelo
-   * recebimento do e-mail de recuperação/verificação.
-   */
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
     email
   );
@@ -1395,9 +1456,6 @@ function getAllowedEmailDomains() {
 ========================================================= */
 
 function createPasswordResetToken() {
-  /*
-   * 32 bytes = 256 bits de entropia.
-   */
   return randomBytes(
     32
   ).toString(
@@ -1425,7 +1483,7 @@ function getPasswordResetExpiration() {
     Number(
       process.env
         .PASSWORD_RESET_EXPIRES_MINUTES ??
-        DEFAULT_PASSWORD_RESET_EXPIRES_MINUTES
+      DEFAULT_PASSWORD_RESET_EXPIRES_MINUTES
     );
 
   const minutes =

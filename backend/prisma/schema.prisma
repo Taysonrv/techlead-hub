@@ -19,6 +19,12 @@ enum UserRole {
   ANALISTA
 }
 
+enum UserApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 enum ImportStatus {
   PROCESSING
   SUCCESS
@@ -45,8 +51,13 @@ model User {
   role         UserRole @default(ANALISTA)
 
   // Controle de acesso
-  active             Boolean @default(true)
+  active             Boolean @default(false)
   mustChangePassword Boolean @default(false)
+
+  // Aprovação administrativa
+  approvalStatus UserApprovalStatus @default(PENDING)
+  approvedAt     DateTime?
+  approvedById   Int?
 
   // Último acesso
   lastLoginAt DateTime?
@@ -63,33 +74,27 @@ model User {
   @@index([name])
   @@index([role])
   @@index([active])
+  @@index([approvalStatus])
+  @@index([approvedById])
 }
 
 /**
  * =========================================================
  * RECUPERAÇÃO DE SENHA
- * Armazena tokens temporários utilizados no processo de
- * recuperação de acesso.
- * O token original nunca deve ser persistido.
- * Apenas o hash SHA-256 do token será armazenado.
  * =========================================================
  */
 
 model PasswordResetToken {
   id Int @id @default(autoincrement())
 
-  // Usuário proprietário do token
   userId Int
   user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  // Hash do token de recuperação
   tokenHash String @unique
 
-  // Controle do token
   expiresAt DateTime
   usedAt    DateTime?
 
-  // Auditoria
   createdAt DateTime @default(now())
 
   @@index([userId])
@@ -100,31 +105,24 @@ model PasswordResetToken {
 /**
  * =========================================================
  * SESSÕES
- * Permite controlar login, logout e revogação de acesso.
- * O token em si não deve ser armazenado em texto puro.
  * =========================================================
  */
 
 model UserSession {
   id Int @id @default(autoincrement())
 
-  // Usuário proprietário da sessão
   userId Int
   user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  // Hash do identificador da sessão
   tokenHash String @unique
 
-  // Controle da sessão
   expiresAt DateTime
   revokedAt DateTime?
 
-  // Informações opcionais do dispositivo
   deviceName String?
   userAgent  String?
   ipAddress  String?
 
-  // Auditoria
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -136,49 +134,35 @@ model UserSession {
 /**
  * =========================================================
  * EXECUÇÃO DE IMPORTAÇÃO
- * Representa uma atualização dos dados do TechLead Hub.
- * Exemplo:
- * 23/08/2026 18:42
- * Tayson Araujo
- * 799 registros processados
  * =========================================================
  */
 
 model ImportRun {
   id Int @id @default(autoincrement())
 
-  // Identificador externo/lote
   batch String @unique
 
-  // Origem
   source   String?
   fileName String?
 
-  // Situação
   status ImportStatus @default(PROCESSING)
 
-  // Métricas
   totalRows    Int @default(0)
   insertedRows Int @default(0)
   updatedRows  Int @default(0)
   skippedRows  Int @default(0)
   errorRows    Int @default(0)
 
-  // Mensagem ou erro geral da importação
   message String?
 
-  // Execução
   startedAt  DateTime  @default(now())
   finishedAt DateTime?
 
-  // Usuário responsável
   userId Int?
   user   User? @relation(fields: [userId], references: [id], onDelete: SetNull)
 
-  // Tickets vinculados ao lote
   tickets Ticket[]
 
-  // Auditoria
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -232,6 +216,12 @@ model Ticket {
   resolvedDate DateTime?
   closedDate   DateTime?
 
+  /**
+   * Resultado oficial de SLA importado do Movidesk.
+   */
+  solutionSlaIndicator String?
+  responseSlaIndicator String?
+
   // Tempos
   lifetimeMinutes Int?
   stoppedMinutes  Int?
@@ -241,23 +231,10 @@ model Ticket {
   taskStatus       String?
   deliveredVersion String?
 
-  /**
-   * =======================================================
-   * CONTROLE DA IMPORTAÇÃO
-   * Estes campos antigos são preservados por compatibilidade
-   * com as importações atuais.
-   * =======================================================
-   */
-
+  // Controle da importação
   importSource String?
   importedAt   DateTime?
   importBatch  String?
-
-  /**
-   * =======================================================
-   * CONTROLE ESTRUTURADO DA IMPORTAÇÃO
-   * =======================================================
-   */
 
   importRunId Int?
   importRun   ImportRun? @relation(fields: [importRunId], references: [id], onDelete: SetNull)
@@ -274,7 +251,19 @@ model Ticket {
   @@index([baseStatus])
   @@index([category])
   @@index([urgency])
+
   @@index([createdDate])
+  @@index([dueDate])
+  @@index([firstResponseDate])
+  @@index([resolvedDate])
+  @@index([closedDate])
+
+  @@index([solutionSlaIndicator])
+  @@index([responseSlaIndicator])
+
+  @@index([taskNumber])
+  @@index([taskStatus])
+
   @@index([importedAt])
   @@index([importBatch])
   @@index([importRunId])

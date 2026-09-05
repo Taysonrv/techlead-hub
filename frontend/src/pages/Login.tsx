@@ -14,7 +14,11 @@ import {
 } from "@mui/material";
 
 import {
+  ArrowBackOutlined,
+  CheckCircleOutlined,
+  EmailOutlined,
   LockOutlined,
+  PersonAddOutlined,
   PersonOutlined,
   VisibilityOffOutlined,
   VisibilityOutlined,
@@ -50,13 +54,19 @@ type LocationState = {
   from?: string;
 };
 
+type ScreenMode =
+  | "LOGIN"
+  | "REGISTER"
+  | "REGISTER_SUCCESS";
+
 /* =========================================================
-   LOGIN
+   COMPONENT
 ========================================================= */
 
 export function Login() {
   const {
     login,
+    register,
     authenticated,
     loading:
       authLoading,
@@ -70,6 +80,18 @@ export function Login() {
     useLocation();
 
   const [
+    mode,
+    setMode,
+  ] =
+    useState<ScreenMode>(
+      "LOGIN"
+    );
+
+  /* =======================================================
+     LOGIN
+  ======================================================= */
+
+  const [
     username,
     setUsername,
   ] =
@@ -81,9 +103,53 @@ export function Login() {
   ] =
     useState("");
 
+  /* =======================================================
+     CADASTRO
+  ======================================================= */
+
+  const [
+    registerName,
+    setRegisterName,
+  ] =
+    useState("");
+
+  const [
+    registerUsername,
+    setRegisterUsername,
+  ] =
+    useState("");
+
+  const [
+    registerEmail,
+    setRegisterEmail,
+  ] =
+    useState("");
+
+  const [
+    registerPassword,
+    setRegisterPassword,
+  ] =
+    useState("");
+
+  const [
+    registerConfirmPassword,
+    setRegisterConfirmPassword,
+  ] =
+    useState("");
+
+  /* =======================================================
+     UI
+  ======================================================= */
+
   const [
     showPassword,
     setShowPassword,
+  ] =
+    useState(false);
+
+  const [
+    showConfirmPassword,
+    setShowConfirmPassword,
   ] =
     useState(false);
 
@@ -97,12 +163,12 @@ export function Login() {
     error,
     setError,
   ] =
-    useState<
-      string | null
-    >(null);
+    useState<string | null>(
+      null
+    );
 
   /* =======================================================
-     DESTINO APÓS LOGIN
+     REDIRECIONAMENTO
   ======================================================= */
 
   const state =
@@ -118,53 +184,48 @@ export function Login() {
       : "/";
 
   /* =======================================================
-     LIMPA ERRO AO ALTERAR OS CAMPOS
+     LIMPAR ERRO
   ======================================================= */
 
   useEffect(() => {
-    if (error) {
-      setError(
-        null
-      );
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    setError(null);
   }, [
+    mode,
     username,
     password,
+    registerName,
+    registerUsername,
+    registerEmail,
+    registerPassword,
+    registerConfirmPassword,
   ]);
 
   /* =======================================================
      LOGIN
   ======================================================= */
 
-  async function handleSubmit(
+  async function handleLogin(
     event:
       FormEvent<HTMLFormElement>
   ) {
     event.preventDefault();
 
-    if (
-      submitting
-    ) {
+    if (submitting) {
       return;
     }
 
     const normalizedUsername =
       username.trim();
 
-    if (
-      !normalizedUsername
-    ) {
+    if (!normalizedUsername) {
       setError(
-        "Informe o usuário."
+        "Informe o usuário ou e-mail."
       );
 
       return;
     }
 
-    if (
-      !password
-    ) {
+    if (!password) {
       setError(
         "Informe a senha."
       );
@@ -172,13 +233,8 @@ export function Login() {
       return;
     }
 
-    setSubmitting(
-      true
-    );
-
-    setError(
-      null
-    );
+    setSubmitting(true);
+    setError(null);
 
     try {
       await login({
@@ -191,22 +247,123 @@ export function Login() {
       navigate(
         redirectTo,
         {
-          replace:
-            true,
+          replace: true,
         }
       );
     } catch (
       requestError
     ) {
       setError(
-        getLoginErrorMessage(
-          requestError
+        getErrorMessage(
+          requestError,
+          "Não foi possível realizar o login."
         )
       );
     } finally {
-      setSubmitting(
-        false
+      setSubmitting(false);
+    }
+  }
+
+  /* =======================================================
+     CADASTRO
+  ======================================================= */
+
+  async function handleRegister(
+    event:
+      FormEvent<HTMLFormElement>
+  ) {
+    event.preventDefault();
+
+    if (submitting) {
+      return;
+    }
+
+    const name =
+      registerName
+        .trim();
+
+    const username =
+      registerUsername
+        .trim();
+
+    const email =
+      registerEmail
+        .trim();
+
+    if (!name) {
+      setError(
+        "Informe seu nome completo."
       );
+
+      return;
+    }
+
+    if (!username) {
+      setError(
+        "Informe o usuário."
+      );
+
+      return;
+    }
+
+    if (!email) {
+      setError(
+        "Informe o e-mail corporativo."
+      );
+
+      return;
+    }
+
+    if (
+      registerPassword.length <
+      10
+    ) {
+      setError(
+        "A senha deve possuir pelo menos 10 caracteres."
+      );
+
+      return;
+    }
+
+    if (
+      registerPassword !==
+      registerConfirmPassword
+    ) {
+      setError(
+        "A confirmação da senha não confere."
+      );
+
+      return;
+    }
+
+    setSubmitting(true);
+    setError(null);
+
+    try {
+      await register({
+        name,
+        username,
+        email,
+        password:
+          registerPassword,
+        confirmPassword:
+          registerConfirmPassword,
+      });
+
+      setMode(
+        "REGISTER_SUCCESS"
+      );
+    } catch (
+      requestError
+    ) {
+      setError(
+        getErrorMessage(
+          requestError,
+          "Não foi possível realizar o cadastro."
+        )
+      );
+    } finally {
+      setSubmitting(false);
     }
   }
 
@@ -227,12 +384,10 @@ export function Login() {
   }
 
   /* =======================================================
-     RESTAURAÇÃO INICIAL DA SESSÃO
+     RESTAURAÇÃO
   ======================================================= */
 
-  if (
-    authLoading
-  ) {
+  if (authLoading) {
     return (
       <Box
         sx={{
@@ -345,7 +500,7 @@ export function Login() {
               "36% 64% 58% 42% / 48% 45% 55% 52%",
 
             border:
-              `1px solid rgba(24,199,122,0.28)`,
+              "1px solid rgba(24,199,122,0.28)",
 
             transform:
               "rotate(-16deg)",
@@ -484,11 +639,8 @@ export function Login() {
         >
           <Box
             sx={{
-              width:
-                38,
-
-              height:
-                3,
+              width: 38,
+              height: 3,
 
               borderRadius:
                 99,
@@ -496,8 +648,7 @@ export function Login() {
               backgroundColor:
                 aliareColors.green,
 
-              mb:
-                2.2,
+              mb: 2.2,
             }}
           />
 
@@ -546,14 +697,12 @@ export function Login() {
             direction="row"
             spacing={1}
             sx={{
-              mt:
-                3,
+              mt: 3,
 
               flexWrap:
                 "wrap",
 
-              gap:
-                1,
+              gap: 1,
             }}
           >
             {[
@@ -563,15 +712,10 @@ export function Login() {
             ].map(
               (label) => (
                 <Box
-                  key={
-                    label
-                  }
+                  key={label}
                   sx={{
-                    px:
-                      1.1,
-
-                    py:
-                      0.55,
+                    px: 1.1,
+                    py: 0.55,
 
                     borderRadius:
                       99,
@@ -619,59 +763,25 @@ export function Login() {
             }}
           />
 
-          <Stack
-            direction="row"
+          <Typography
+            variant="caption"
             sx={{
-              alignItems:
-                "center",
-
-              justifyContent:
-                "space-between",
-
-              gap:
-                2,
+              color:
+                "rgba(255,255,255,0.38)",
             }}
           >
-            <Typography
-              variant="caption"
-              sx={{
-                color:
-                  "rgba(255,255,255,0.38)",
-              }}
-            >
-              Aliare · Suporte e Sustentação · SIMER
-            </Typography>
-
-            <Box
-              sx={{
-                width:
-                  7,
-
-                height:
-                  7,
-
-                borderRadius:
-                  "50%",
-
-                backgroundColor:
-                  aliareColors.green,
-
-                boxShadow:
-                  "0 0 0 4px rgba(24,199,122,0.10)",
-              }}
-            />
-          </Stack>
+            Aliare · Suporte e Sustentação · SIMER
+          </Typography>
         </Box>
       </Box>
 
       {/* ===================================================
-          LOGIN
+          CONTEÚDO
       =================================================== */}
 
       <Box
         sx={{
-          flex:
-            1,
+          flex: 1,
 
           display:
             "flex",
@@ -689,8 +799,7 @@ export function Login() {
             lg: 8,
           },
 
-          py:
-            4,
+          py: 4,
         }}
       >
         <Box
@@ -699,10 +808,13 @@ export function Login() {
               "100%",
 
             maxWidth:
-              430,
+              mode ===
+              "REGISTER"
+                ? 500
+                : 430,
           }}
         >
-          {/* IDENTIDADE MOBILE */}
+          {/* MOBILE */}
 
           <Box
             sx={{
@@ -711,70 +823,14 @@ export function Login() {
                 md: "none",
               },
 
-              mb:
-                3,
+              mb: 3,
             }}
           >
-            <Stack
-              direction="row"
-              spacing={0.8}
-              sx={{
-                alignItems:
-                  "center",
-              }}
-            >
-              <Box
-                sx={{
-                  width:
-                    9,
-
-                  height:
-                    9,
-
-                  borderRadius:
-                    "2px",
-
-                  backgroundColor:
-                    aliareColors.green,
-
-                  transform:
-                    "rotate(-6deg)",
-                }}
-              />
-
-              <Typography
-                sx={{
-                  fontSize:
-                    "0.7rem",
-
-                  fontWeight:
-                    800,
-
-                  letterSpacing:
-                    "0.12em",
-
-                  textTransform:
-                    "uppercase",
-
-                  color:
-                    "text.secondary",
-                }}
-              >
-                aliare
-              </Typography>
-            </Stack>
-
             <Typography
               variant="h5"
               sx={{
-                mt:
-                  1,
-
                 fontWeight:
                   800,
-
-                letterSpacing:
-                  "-0.025em",
               }}
             >
               TechLead Hub
@@ -809,8 +865,7 @@ export function Login() {
           >
             <Box
               sx={{
-                height:
-                  4,
+                height: 4,
 
                 backgroundColor:
                   aliareColors.green,
@@ -824,268 +879,128 @@ export function Login() {
                   sm: 4,
                 },
 
-                "&:last-child":
-                  {
-                    pb: {
-                      xs: 3,
-                      sm: 4,
-                    },
+                "&:last-child": {
+                  pb: {
+                    xs: 3,
+                    sm: 4,
                   },
+                },
               }}
             >
-              <Typography
-                variant="h5"
-                sx={{
-                  fontWeight:
-                    800,
-
-                  letterSpacing:
-                    "-0.025em",
-                }}
-              >
-                Bem-vindo
-              </Typography>
-
-              <Typography
-                variant="body2"
-                color="text.secondary"
-                sx={{
-                  mt:
-                    0.7,
-
-                  mb:
-                    3,
-
-                  lineHeight:
-                    1.65,
-                }}
-              >
-                Entre com suas credenciais para acessar
-                o TechLead Hub.
-              </Typography>
-
-              {error && (
-                <Alert
-                  severity="error"
-                  sx={{
-                    mb:
-                      2.5,
-
-                    borderRadius:
-                      1.5,
-                  }}
-                >
-                  {error}
-                </Alert>
-              )}
-
-              <Box
-                component="form"
-                onSubmit={
-                  handleSubmit
-                }
-                noValidate
-              >
-                <TextField
-                  label="Usuário"
-                  value={
+              {mode ===
+                "LOGIN" && (
+                <LoginForm
+                  username={
                     username
                   }
-                  onChange={(
-                    event
-                  ) =>
-                    setUsername(
-                      event.target
-                        .value
-                    )
+                  setUsername={
+                    setUsername
                   }
-                  autoComplete="username"
-                  autoFocus
-                  fullWidth
-                  disabled={
-                    submitting
-                  }
-                  slotProps={{
-                    input: {
-                      startAdornment:
-                        (
-                          <InputAdornment position="start">
-                            <PersonOutlined
-                              sx={{
-                                fontSize:
-                                  19,
-
-                                color:
-                                  "text.secondary",
-                              }}
-                            />
-                          </InputAdornment>
-                        ),
-                    },
-                  }}
-                />
-
-                <TextField
-                  label="Senha"
-                  type={
-                    showPassword
-                      ? "text"
-                      : "password"
-                  }
-                  value={
+                  password={
                     password
                   }
-                  onChange={(
-                    event
-                  ) =>
-                    setPassword(
-                      event.target
-                        .value
+                  setPassword={
+                    setPassword
+                  }
+                  showPassword={
+                    showPassword
+                  }
+                  setShowPassword={
+                    setShowPassword
+                  }
+                  submitting={
+                    submitting
+                  }
+                  error={error}
+                  onSubmit={
+                    handleLogin
+                  }
+                  onRegister={() =>
+                    setMode(
+                      "REGISTER"
                     )
                   }
-                  autoComplete="current-password"
-                  fullWidth
-                  disabled={
+                />
+              )}
+
+              {mode ===
+                "REGISTER" && (
+                <RegisterForm
+                  name={
+                    registerName
+                  }
+                  setName={
+                    setRegisterName
+                  }
+                  username={
+                    registerUsername
+                  }
+                  setUsername={
+                    setRegisterUsername
+                  }
+                  email={
+                    registerEmail
+                  }
+                  setEmail={
+                    setRegisterEmail
+                  }
+                  password={
+                    registerPassword
+                  }
+                  setPassword={
+                    setRegisterPassword
+                  }
+                  confirmPassword={
+                    registerConfirmPassword
+                  }
+                  setConfirmPassword={
+                    setRegisterConfirmPassword
+                  }
+                  showPassword={
+                    showPassword
+                  }
+                  setShowPassword={
+                    setShowPassword
+                  }
+                  showConfirmPassword={
+                    showConfirmPassword
+                  }
+                  setShowConfirmPassword={
+                    setShowConfirmPassword
+                  }
+                  submitting={
                     submitting
                   }
-                  sx={{
-                    mt:
-                      2,
-                  }}
-                  slotProps={{
-                    input: {
-                      startAdornment:
-                        (
-                          <InputAdornment position="start">
-                            <LockOutlined
-                              sx={{
-                                fontSize:
-                                  19,
+                  error={error}
+                  onSubmit={
+                    handleRegister
+                  }
+                  onBack={() =>
+                    setMode(
+                      "LOGIN"
+                    )
+                  }
+                />
+              )}
 
-                                color:
-                                  "text.secondary",
-                              }}
-                            />
-                          </InputAdornment>
-                        ),
+              {mode ===
+                "REGISTER_SUCCESS" && (
+                <RegisterSuccess
+                  onBack={() => {
+                    setMode(
+                      "LOGIN"
+                    );
 
-                      endAdornment:
-                        (
-                          <InputAdornment position="end">
-                            <IconButton
-                              edge="end"
-                              size="small"
-                              aria-label={
-                                showPassword
-                                  ? "Ocultar senha"
-                                  : "Exibir senha"
-                              }
-                              onClick={() =>
-                                setShowPassword(
-                                  (current) =>
-                                    !current
-                                )
-                              }
-                              disabled={
-                                submitting
-                              }
-                            >
-                              {showPassword ? (
-                                <VisibilityOffOutlined fontSize="small" />
-                              ) : (
-                                <VisibilityOutlined fontSize="small" />
-                              )}
-                            </IconButton>
-                          </InputAdornment>
-                        ),
-                    },
+                    setUsername(
+                      registerUsername
+                    );
+
+                    setPassword(
+                      ""
+                    );
                   }}
                 />
-
-                <Button
-                  type="submit"
-                  variant="contained"
-                  fullWidth
-                  size="large"
-                  disabled={
-                    submitting
-                  }
-                  sx={{
-                    mt:
-                      3,
-
-                    minHeight:
-                      46,
-
-                    borderRadius:
-                      1.5,
-
-                    fontWeight:
-                      750,
-
-                    backgroundColor:
-                      aliareColors.black,
-
-                    color:
-                      "#FFFFFF",
-
-                    "&:hover": {
-                      backgroundColor:
-                        aliareColors.graphiteSoft,
-                    },
-                  }}
-                >
-                  {submitting ? (
-                    <CircularProgress
-                      size={21}
-                      color="inherit"
-                    />
-                  ) : (
-                    "Entrar"
-                  )}
-                </Button>
-              </Box>
-
-              <Divider
-                sx={{
-                  my:
-                    2.75,
-                }}
-              />
-
-              <Stack
-                direction="row"
-                sx={{
-                  justifyContent:
-                    "space-between",
-
-                  alignItems:
-                    "center",
-
-                  gap:
-                    1,
-                }}
-              >
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                >
-                  Acesso corporativo restrito
-                </Typography>
-
-                <Typography
-                  variant="caption"
-                  sx={{
-                    fontWeight:
-                      700,
-
-                    color:
-                      aliareColors.greenDark,
-                  }}
-                >
-                  SIMER
-                </Typography>
-              </Stack>
+              )}
             </CardContent>
           </Card>
 
@@ -1096,11 +1011,9 @@ export function Login() {
               display:
                 "block",
 
-              mt:
-                2,
+              mt: 2,
 
-              px:
-                1,
+              px: 1,
 
               textAlign:
                 "center",
@@ -1119,12 +1032,760 @@ export function Login() {
 }
 
 /* =========================================================
+   LOGIN FORM
+========================================================= */
+
+function LoginForm({
+  username,
+  setUsername,
+  password,
+  setPassword,
+  showPassword,
+  setShowPassword,
+  submitting,
+  error,
+  onSubmit,
+  onRegister,
+}: {
+  username: string;
+  setUsername: (value: string) => void;
+  password: string;
+  setPassword: (value: string) => void;
+  showPassword: boolean;
+  setShowPassword: (value: boolean) => void;
+  submitting: boolean;
+  error: string | null;
+  onSubmit: (
+    event:
+      FormEvent<HTMLFormElement>
+  ) => void;
+  onRegister: () => void;
+}) {
+  return (
+    <>
+      <Typography
+        variant="h5"
+        sx={{
+          fontWeight:
+            800,
+
+          letterSpacing:
+            "-0.025em",
+        }}
+      >
+        Bem-vindo
+      </Typography>
+
+      <Typography
+        variant="body2"
+        color="text.secondary"
+        sx={{
+          mt: 0.7,
+          mb: 3,
+
+          lineHeight:
+            1.65,
+        }}
+      >
+        Entre com suas credenciais para acessar
+        o TechLead Hub.
+      </Typography>
+
+      {error && (
+        <Alert
+          severity="error"
+          sx={{
+            mb: 2.5,
+            borderRadius: 1.5,
+          }}
+        >
+          {error}
+        </Alert>
+      )}
+
+      <Box
+        component="form"
+        onSubmit={onSubmit}
+        noValidate
+      >
+        <TextField
+          label="Usuário ou e-mail"
+          value={username}
+          onChange={(
+            event
+          ) =>
+            setUsername(
+              event.target.value
+            )
+          }
+          autoComplete="username"
+          autoFocus
+          fullWidth
+          disabled={
+            submitting
+          }
+          slotProps={{
+            input: {
+              startAdornment:
+                (
+                  <InputAdornment position="start">
+                    <PersonOutlined
+                      sx={{
+                        fontSize:
+                          19,
+
+                        color:
+                          "text.secondary",
+                      }}
+                    />
+                  </InputAdornment>
+                ),
+            },
+          }}
+        />
+
+        <PasswordField
+          label="Senha"
+          value={password}
+          setValue={
+            setPassword
+          }
+          visible={
+            showPassword
+          }
+          setVisible={
+            setShowPassword
+          }
+          disabled={
+            submitting
+          }
+          autoComplete="current-password"
+          sx={{
+            mt: 2,
+          }}
+        />
+
+        <Button
+          type="submit"
+          variant="contained"
+          fullWidth
+          size="large"
+          disabled={
+            submitting
+          }
+          sx={primaryButtonSx}
+        >
+          {submitting ? (
+            <CircularProgress
+              size={21}
+              color="inherit"
+            />
+          ) : (
+            "Entrar"
+          )}
+        </Button>
+      </Box>
+
+      <Divider
+        sx={{
+          my: 2.75,
+        }}
+      >
+        <Typography
+          variant="caption"
+          color="text.secondary"
+        >
+          ou
+        </Typography>
+      </Divider>
+
+      <Button
+        variant="outlined"
+        fullWidth
+        startIcon={
+          <PersonAddOutlined />
+        }
+        onClick={
+          onRegister
+        }
+        disabled={
+          submitting
+        }
+        sx={{
+          minHeight: 44,
+          borderRadius: 1.5,
+
+          borderColor:
+            "divider",
+
+          color:
+            "text.primary",
+
+          fontWeight: 700,
+
+          "&:hover": {
+            borderColor:
+              aliareColors.green,
+
+            backgroundColor:
+              "rgba(24,199,122,0.04)",
+          },
+        }}
+      >
+        Criar conta
+      </Button>
+
+      <Typography
+        variant="caption"
+        color="text.secondary"
+        sx={{
+          display:
+            "block",
+
+          mt: 2,
+
+          textAlign:
+            "center",
+        }}
+      >
+        Novos acessos precisam ser aprovados por um administrador.
+      </Typography>
+    </>
+  );
+}
+
+/* =========================================================
+   REGISTER FORM
+========================================================= */
+
+function RegisterForm({
+  name,
+  setName,
+  username,
+  setUsername,
+  email,
+  setEmail,
+  password,
+  setPassword,
+  confirmPassword,
+  setConfirmPassword,
+  showPassword,
+  setShowPassword,
+  showConfirmPassword,
+  setShowConfirmPassword,
+  submitting,
+  error,
+  onSubmit,
+  onBack,
+}: {
+  name: string;
+  setName: (value: string) => void;
+  username: string;
+  setUsername: (value: string) => void;
+  email: string;
+  setEmail: (value: string) => void;
+  password: string;
+  setPassword: (value: string) => void;
+  confirmPassword: string;
+  setConfirmPassword: (value: string) => void;
+  showPassword: boolean;
+  setShowPassword: (value: boolean) => void;
+  showConfirmPassword: boolean;
+  setShowConfirmPassword: (value: boolean) => void;
+  submitting: boolean;
+  error: string | null;
+  onSubmit: (
+    event:
+      FormEvent<HTMLFormElement>
+  ) => void;
+  onBack: () => void;
+}) {
+  return (
+    <>
+      <Button
+        size="small"
+        startIcon={
+          <ArrowBackOutlined />
+        }
+        onClick={
+          onBack
+        }
+        disabled={
+          submitting
+        }
+        sx={{
+          mb: 2,
+
+          color:
+            "text.secondary",
+        }}
+      >
+        Voltar para o login
+      </Button>
+
+      <Typography
+        variant="h5"
+        sx={{
+          fontWeight: 800,
+
+          letterSpacing:
+            "-0.025em",
+        }}
+      >
+        Criar conta
+      </Typography>
+
+      <Typography
+        variant="body2"
+        color="text.secondary"
+        sx={{
+          mt: 0.7,
+          mb: 3,
+          lineHeight: 1.65,
+        }}
+      >
+        Preencha seus dados. O acesso será liberado após
+        aprovação de um administrador.
+      </Typography>
+
+      {error && (
+        <Alert
+          severity="error"
+          sx={{
+            mb: 2.5,
+            borderRadius: 1.5,
+          }}
+        >
+          {error}
+        </Alert>
+      )}
+
+      <Box
+        component="form"
+        onSubmit={onSubmit}
+        noValidate
+      >
+        <TextField
+          label="Nome completo"
+          value={name}
+          onChange={(
+            event
+          ) =>
+            setName(
+              event.target.value
+            )
+          }
+          autoComplete="name"
+          autoFocus
+          fullWidth
+          disabled={
+            submitting
+          }
+          slotProps={{
+            input: {
+              startAdornment:
+                (
+                  <InputAdornment position="start">
+                    <PersonOutlined
+                      sx={{
+                        fontSize:
+                          19,
+
+                        color:
+                          "text.secondary",
+                      }}
+                    />
+                  </InputAdornment>
+                ),
+            },
+          }}
+        />
+
+        <TextField
+          label="Usuário"
+          value={username}
+          onChange={(
+            event
+          ) =>
+            setUsername(
+              event.target.value
+            )
+          }
+          autoComplete="username"
+          fullWidth
+          disabled={
+            submitting
+          }
+          sx={{
+            mt: 2,
+          }}
+        />
+
+        <TextField
+          label="E-mail corporativo"
+          type="email"
+          value={email}
+          onChange={(
+            event
+          ) =>
+            setEmail(
+              event.target.value
+            )
+          }
+          autoComplete="email"
+          fullWidth
+          disabled={
+            submitting
+          }
+          sx={{
+            mt: 2,
+          }}
+          slotProps={{
+            input: {
+              startAdornment:
+                (
+                  <InputAdornment position="start">
+                    <EmailOutlined
+                      sx={{
+                        fontSize:
+                          19,
+
+                        color:
+                          "text.secondary",
+                      }}
+                    />
+                  </InputAdornment>
+                ),
+            },
+          }}
+        />
+
+        <PasswordField
+          label="Senha"
+          value={password}
+          setValue={
+            setPassword
+          }
+          visible={
+            showPassword
+          }
+          setVisible={
+            setShowPassword
+          }
+          disabled={
+            submitting
+          }
+          autoComplete="new-password"
+          sx={{
+            mt: 2,
+          }}
+        />
+
+        <PasswordField
+          label="Confirmar senha"
+          value={
+            confirmPassword
+          }
+          setValue={
+            setConfirmPassword
+          }
+          visible={
+            showConfirmPassword
+          }
+          setVisible={
+            setShowConfirmPassword
+          }
+          disabled={
+            submitting
+          }
+          autoComplete="new-password"
+          sx={{
+            mt: 2,
+          }}
+        />
+
+        <Typography
+          variant="caption"
+          color="text.secondary"
+          sx={{
+            display:
+              "block",
+
+            mt: 1.2,
+          }}
+        >
+          A senha deve possuir pelo menos 10 caracteres.
+        </Typography>
+
+        <Button
+          type="submit"
+          variant="contained"
+          fullWidth
+          size="large"
+          disabled={
+            submitting
+          }
+          sx={primaryButtonSx}
+        >
+          {submitting ? (
+            <CircularProgress
+              size={21}
+              color="inherit"
+            />
+          ) : (
+            "Solicitar acesso"
+          )}
+        </Button>
+      </Box>
+    </>
+  );
+}
+
+/* =========================================================
+   SUCCESS
+========================================================= */
+
+function RegisterSuccess({
+  onBack,
+}: {
+  onBack: () => void;
+}) {
+  return (
+    <Stack
+      spacing={2.5}
+      sx={{
+        textAlign:
+          "center",
+
+        alignItems:
+          "center",
+
+        py: 2,
+      }}
+    >
+      <Box
+        sx={{
+          width: 64,
+          height: 64,
+
+          borderRadius:
+            "50%",
+
+          display:
+            "flex",
+
+          alignItems:
+            "center",
+
+          justifyContent:
+            "center",
+
+          backgroundColor:
+            "rgba(24,199,122,0.10)",
+        }}
+      >
+        <CheckCircleOutlined
+          sx={{
+            fontSize: 38,
+
+            color:
+              aliareColors.green,
+          }}
+        />
+      </Box>
+
+      <Box>
+        <Typography
+          variant="h5"
+          sx={{
+            fontWeight:
+              800,
+          }}
+        >
+          Cadastro realizado
+        </Typography>
+
+        <Typography
+          variant="body2"
+          color="text.secondary"
+          sx={{
+            mt: 1,
+
+            lineHeight:
+              1.7,
+          }}
+        >
+          Sua solicitação foi registrada com sucesso.
+          Aguarde a aprovação de um administrador para
+          acessar o TechLead Hub.
+        </Typography>
+      </Box>
+
+      <Alert
+        severity="info"
+        sx={{
+          width: "100%",
+
+          textAlign:
+            "left",
+
+          borderRadius:
+            1.5,
+        }}
+      >
+        Depois da aprovação, utilize o usuário e a senha
+        cadastrados para entrar.
+      </Alert>
+
+      <Button
+        variant="contained"
+        fullWidth
+        onClick={
+          onBack
+        }
+        sx={{
+          ...primaryButtonSx,
+
+          mt:
+            "4px !important",
+        }}
+      >
+        Voltar para o login
+      </Button>
+    </Stack>
+  );
+}
+
+/* =========================================================
+   PASSWORD
+========================================================= */
+
+function PasswordField({
+  label,
+  value,
+  setValue,
+  visible,
+  setVisible,
+  disabled,
+  autoComplete,
+  sx,
+}: {
+  label: string;
+  value: string;
+  setValue: (value: string) => void;
+  visible: boolean;
+  setVisible: (value: boolean) => void;
+  disabled: boolean;
+  autoComplete: string;
+  sx?: object;
+}) {
+  return (
+    <TextField
+      label={label}
+      type={
+        visible
+          ? "text"
+          : "password"
+      }
+      value={value}
+      onChange={(
+        event
+      ) =>
+        setValue(
+          event.target.value
+        )
+      }
+      autoComplete={
+        autoComplete
+      }
+      fullWidth
+      disabled={
+        disabled
+      }
+      sx={sx}
+      slotProps={{
+        input: {
+          startAdornment:
+            (
+              <InputAdornment position="start">
+                <LockOutlined
+                  sx={{
+                    fontSize:
+                      19,
+
+                    color:
+                      "text.secondary",
+                  }}
+                />
+              </InputAdornment>
+            ),
+
+          endAdornment:
+            (
+              <InputAdornment position="end">
+                <IconButton
+                  edge="end"
+                  size="small"
+                  onClick={() =>
+                    setVisible(
+                      !visible
+                    )
+                  }
+                  disabled={
+                    disabled
+                  }
+                  aria-label={
+                    visible
+                      ? "Ocultar senha"
+                      : "Exibir senha"
+                  }
+                >
+                  {visible ? (
+                    <VisibilityOffOutlined fontSize="small" />
+                  ) : (
+                    <VisibilityOutlined fontSize="small" />
+                  )}
+                </IconButton>
+              </InputAdornment>
+            ),
+        },
+      }}
+    />
+  );
+}
+
+/* =========================================================
+   STYLE
+========================================================= */
+
+const primaryButtonSx = {
+  mt: 3,
+
+  minHeight: 46,
+
+  borderRadius: 1.5,
+
+  fontWeight: 750,
+
+  backgroundColor:
+    aliareColors.black,
+
+  color:
+    "#FFFFFF",
+
+  "&:hover": {
+    backgroundColor:
+      aliareColors.graphiteSoft,
+  },
+};
+
+/* =========================================================
    ERROS
 ========================================================= */
 
-function getLoginErrorMessage(
-  error:
-    unknown
+function getErrorMessage(
+  error: unknown,
+  fallback: string
 ) {
   if (
     axios.isAxiosError(
@@ -1143,26 +1804,10 @@ function getLoginErrorMessage(
       return message;
     }
 
-    if (
-      !error.response
-    ) {
+    if (!error.response) {
       return "Não foi possível conectar ao servidor do TechLead Hub.";
-    }
-
-    if (
-      error.response
-        .status === 401
-    ) {
-      return "Usuário ou senha inválidos.";
-    }
-
-    if (
-      error.response
-        .status === 403
-    ) {
-      return "Este usuário não possui acesso ao TechLead Hub.";
     }
   }
 
-  return "Não foi possível realizar o login. Tente novamente.";
+  return fallback;
 }

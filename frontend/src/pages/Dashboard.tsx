@@ -35,6 +35,7 @@ import { api } from "../services/api";
 import { PeriodFilter } from "../components/PeriodFilter";
 import { useFilters } from "../context/FiltersContext";
 import { aliareColors } from "../theme/theme";
+import { calculateServiceLevel } from "../utils/serviceLevel";
 import {
   semanticChartColors,
 } from "../theme/chartPalette";
@@ -83,6 +84,9 @@ type Ticket = {
   taskNumber: number | null;
   taskStatus: string | null;
   deliveredVersion: string | null;
+
+  responseSlaIndicator?: string | null;
+  solutionSlaIndicator?: string | null;
 
   importSource?: string | null;
   importedAt?: string | null;
@@ -182,148 +186,59 @@ export function Dashboard() {
   }, []);
 
   /* =======================================================
-     FILTRO GLOBAL DE PERÍODO
+     PERÍODO + CONJUNTOS EXECUTIVOS
   ======================================================= */
 
-  const filteredTickets =
-    useMemo(() => {
-      const start =
-        startOfDay(
-          effectiveStartDate
-        );
+  const periodBounds = useMemo(() => ({
+    start: startOfDay(effectiveStartDate),
+    end: endOfDay(effectiveEndDate),
+  }), [effectiveStartDate, effectiveEndDate]);
 
-      const end =
-        endOfDay(
-          effectiveEndDate
-        );
+  const openedInPeriod = useMemo(() => tickets.filter((ticket) =>
+    isDateInPeriod(ticket.createdDate, periodBounds.start, periodBounds.end)
+  ), [tickets, periodBounds]);
 
-      return tickets.filter(
-        (ticket) => {
-          const created =
-            new Date(
-              ticket.createdDate
-            );
+  // Backlog atual não é limitado pela data de abertura.
+  const pendingTickets = useMemo(() => tickets.filter(isOpen), [tickets]);
 
-          return (
-            created >= start &&
-            created <= end
-          );
-        }
-      );
-    }, [
-      tickets,
-      effectiveStartDate,
-      effectiveEndDate,
-    ]);
+  const resolvedInPeriod = useMemo(() => tickets.filter((ticket) =>
+    isDateInPeriod(ticket.resolvedDate, periodBounds.start, periodBounds.end)
+  ), [tickets, periodBounds]);
 
-  /* =======================================================
-     CONJUNTOS DOS KPIs
-  ======================================================= */
+  const closedInPeriod = useMemo(() => tickets.filter((ticket) =>
+    isDateInPeriod(ticket.closedDate, periodBounds.start, periodBounds.end)
+  ), [tickets, periodBounds]);
 
-  const newTickets = useMemo(
-    () =>
-      filteredTickets.filter(
-        (ticket) =>
-          ticket.baseStatus ===
-          "New"
-      ),
-    [filteredTickets]
-  );
+  const completedInPeriod = useMemo(() => {
+    const ids = new Set<number>();
+    return [...resolvedInPeriod, ...closedInPeriod].filter((ticket) => {
+      if (ids.has(ticket.id)) return false;
+      ids.add(ticket.id);
+      return true;
+    });
+  }, [resolvedInPeriod, closedInPeriod]);
 
-  const attendanceTickets =
-    useMemo(
-      () =>
-        filteredTickets.filter(
-          (ticket) =>
-            ticket.baseStatus ===
-            "InAttendance"
-        ),
-      [filteredTickets]
-    );
+  // Rankings e gráficos de entrada continuam baseados na abertura do período.
+  const filteredTickets = openedInPeriod;
 
-  const stoppedTickets =
-    useMemo(
-      () =>
-        filteredTickets.filter(
-          (ticket) =>
-            ticket.baseStatus ===
-            "Stopped"
-        ),
-      [filteredTickets]
-    );
+  const newTickets = useMemo(() => pendingTickets.filter((ticket) => ticket.baseStatus === "New"), [pendingTickets]);
+  const attendanceTickets = useMemo(() => pendingTickets.filter((ticket) => ticket.baseStatus === "InAttendance"), [pendingTickets]);
+  const stoppedTickets = useMemo(() => pendingTickets.filter((ticket) => ticket.baseStatus === "Stopped"), [pendingTickets]);
+  const criticalTickets = useMemo(() => pendingTickets.filter((ticket) => normalize(ticket.urgency) === "critica"), [pendingTickets]);
 
-  const resolvedTickets =
-    useMemo(
-      () =>
-        filteredTickets.filter(
-          (ticket) =>
-            ticket.baseStatus ===
-              "Resolved" ||
-            ticket.baseStatus ===
-              "Closed"
-        ),
-      [filteredTickets]
-    );
+  const responseSla = useMemo(() => calculateHistoricalSla(openedInPeriod, "response"), [openedInPeriod]);
+  const solutionSla = useMemo(() => calculateHistoricalSla(completedInPeriod, "solution"), [completedInPeriod]);
 
-  const openTickets =
-    useMemo(
-      () =>
-        filteredTickets.filter(
-          isOpen
-        ),
-      [filteredTickets]
-    );
-
-  const criticalTickets =
-    useMemo(
-      () =>
-        filteredTickets.filter(
-          (ticket) =>
-            isOpen(ticket) &&
-            normalize(
-              ticket.urgency
-            ) === "critica"
-        ),
-      [filteredTickets]
-    );
-
-  /* =======================================================
-     KPIs
-  ======================================================= */
-
-  const summary = useMemo(
-    () => ({
-      totalTickets:
-        filteredTickets.length,
-
-      abertos:
-        openTickets.length,
-
-      novos:
-        newTickets.length,
-
-      emAtendimento:
-        attendanceTickets.length,
-
-      parados:
-        stoppedTickets.length,
-
-      resolvidos:
-        resolvedTickets.length,
-
-      criticos:
-        criticalTickets.length,
-    }),
-    [
-      filteredTickets,
-      openTickets,
-      newTickets,
-      attendanceTickets,
-      stoppedTickets,
-      resolvedTickets,
-      criticalTickets,
-    ]
-  );
+  const summary = useMemo(() => ({
+    abertosNoPeriodo: openedInPeriod.length,
+    pendentes: pendingTickets.length,
+    resolvidosNoPeriodo: resolvedInPeriod.length,
+    fechadosNoPeriodo: closedInPeriod.length,
+    novos: newTickets.length,
+    emAtendimento: attendanceTickets.length,
+    parados: stoppedTickets.length,
+    criticos: criticalTickets.length,
+  }), [openedInPeriod, pendingTickets, resolvedInPeriod, closedInPeriod, newTickets, attendanceTickets, stoppedTickets, criticalTickets]);
 
   /* =======================================================
      CATEGORIAS
@@ -824,127 +739,14 @@ const latestImportedAt =
   ======================================================= */
 
   const cards = [
-    {
-      title:
-        "Total de Tickets",
-
-      value:
-        summary.totalTickets,
-
-      description:
-        "No período selecionado",
-
-      severity:
-        "default" as Severity,
-
-      onClick: () =>
-        showTickets(
-          "Todos os tickets",
-          filteredTickets,
-          "Tickets do período selecionado"
-        ),
-    },
-
-    {
-      title: "Abertos",
-
-      value:
-        summary.abertos,
-
-      description:
-        "Novo + atendimento + parado",
-
-      severity:
-        "default" as Severity,
-
-      onClick: () =>
-        showTickets(
-          "Tickets abertos",
-          openTickets,
-          "Chamados ainda ativos"
-        ),
-    },
-
-    {
-      title:
-        "Em Atendimento",
-
-      value:
-        summary.emAtendimento,
-
-      description:
-        "Em atuação pelo time",
-
-      severity:
-        "default" as Severity,
-
-      onClick: () =>
-        showTickets(
-          "Em Atendimento",
-          attendanceTickets,
-          "Tickets atualmente em atendimento"
-        ),
-    },
-
-    {
-      title: "Críticos",
-
-      value:
-        summary.criticos,
-
-      description:
-        "Abertos com urgência crítica",
-
-      severity:
-        "error" as Severity,
-
-      onClick: () =>
-        showTickets(
-          "Tickets críticos",
-          criticalTickets,
-          "Prioridade imediata"
-        ),
-    },
-
-    {
-      title: "Parados",
-
-      value:
-        summary.parados,
-
-      description:
-        "Aguardando alguma condição",
-
-      severity:
-        "warning" as Severity,
-
-      onClick: () =>
-        showTickets(
-          "Tickets parados",
-          stoppedTickets,
-          "Chamados atualmente parados"
-        ),
-    },
-
-    {
-      title: "Resolvidos",
-
-      value:
-        summary.resolvidos,
-
-      description:
-        "Resolvidos ou fechados",
-
-      severity:
-        "success" as Severity,
-
-      onClick: () =>
-        showTickets(
-          "Tickets resolvidos",
-          resolvedTickets,
-          "Chamados resolvidos ou fechados"
-        ),
-    },
+    { title: "Abertos", value: summary.abertosNoPeriodo, description: "Abertos no período selecionado", severity: "default" as Severity, onClick: () => showTickets("Tickets abertos no período", openedInPeriod, "Data de abertura dentro do período selecionado") },
+    { title: "Pendentes", value: summary.pendentes, description: "Backlog atual, independentemente da abertura", severity: "warning" as Severity, onClick: () => showTickets("Backlog atual", pendingTickets, "Tickets que permanecem ativos neste momento") },
+    { title: "Resolvidos", value: summary.resolvidosNoPeriodo, description: "Resolvidos no período selecionado", severity: "success" as Severity, onClick: () => showTickets("Tickets resolvidos no período", resolvedInPeriod, "Data de resolução dentro do período selecionado") },
+    { title: "Fechados", value: summary.fechadosNoPeriodo, description: "Fechados no período selecionado", severity: "success" as Severity, onClick: () => showTickets("Tickets fechados no período", closedInPeriod, "Data de fechamento dentro do período selecionado") },
+    { title: "SLA 1ª Resposta", value: formatSlaPercentage(responseSla), description: formatSlaDescription(responseSla), severity: slaSeverity(responseSla), onClick: () => showTickets("SLA de primeira resposta", responseSla.measuredTickets, `${responseSla.within} dentro • ${responseSla.outside} fora • ${responseSla.unmeasured} sem medição`) },
+    { title: "SLA Solução", value: formatSlaPercentage(solutionSla), description: formatSlaDescription(solutionSla), severity: slaSeverity(solutionSla), onClick: () => showTickets("SLA de solução", solutionSla.measuredTickets, `${solutionSla.within} dentro • ${solutionSla.outside} fora • ${solutionSla.unmeasured} sem medição`) },
+    { title: "Críticos", value: summary.criticos, description: "Pendentes com urgência crítica", severity: "error" as Severity, onClick: () => showTickets("Tickets críticos", criticalTickets, "Prioridade imediata no backlog atual") },
+    { title: "Parados", value: summary.parados, description: "Pendentes em situação de parada", severity: "warning" as Severity, onClick: () => showTickets("Tickets parados", stoppedTickets, "Chamados atualmente parados") },
   ];
 
   /* =======================================================
@@ -2593,7 +2395,7 @@ function KpiCard({
   onClick,
 }: {
   title: string;
-  value: number;
+  value: ReactNode;
   description: string;
   severity: Severity;
   onClick: () => void;
@@ -3244,6 +3046,68 @@ function groupByField(
         b.total -
         a.total
     );
+}
+
+type HistoricalSlaSummary = {
+  within: number; outside: number; unmeasured: number;
+  percentage: number | null; measuredTickets: Ticket[];
+};
+
+function isDateInPeriod(value: string | null | undefined, start: Date, end: Date) {
+  if (!value) return false;
+  const date = new Date(value);
+  return !Number.isNaN(date.getTime()) && date >= start && date <= end;
+}
+
+function normalizeSlaIndicator(value: string | null | undefined): boolean | null {
+  const normalized = normalize(value);
+  if (!normalized) return null;
+  if (["fora", "violado", "vencido", "estourado", "nao cumprido"].some((term) => normalized.includes(term))) return false;
+  if (["dentro", "cumprido", "no prazo"].some((term) => normalized.includes(term))) return true;
+  return null;
+}
+
+function calculateHistoricalSla(tickets: Ticket[], kind: "response" | "solution"): HistoricalSlaSummary {
+  let within = 0; let outside = 0; let unmeasured = 0;
+  const measuredTickets: Ticket[] = [];
+
+  tickets.forEach((ticket) => {
+    let result = normalizeSlaIndicator(kind === "response" ? ticket.responseSlaIndicator : ticket.solutionSlaIndicator);
+
+    // Fallback para importações antigas sem os indicadores oficiais do Movidesk.
+    if (result === null) {
+      const serviceLevel = calculateServiceLevel({
+        urgency: ticket.urgency, category: ticket.category, cause: ticket.cause, subject: ticket.subject,
+        createdDate: ticket.createdDate, dueDate: ticket.dueDate, baseStatus: ticket.baseStatus,
+        firstResponseDueDate: ticket.firstResponseDueDate, firstResponseDate: ticket.firstResponseDate,
+        resolvedDate: ticket.resolvedDate, closedDate: ticket.closedDate, stoppedMinutes: ticket.stoppedMinutes,
+      });
+      const deadline = kind === "response" ? serviceLevel.firstResponse : serviceLevel.resolution;
+      if (deadline.completed) result = deadline.withinDeadline;
+    }
+
+    if (result === true) { within += 1; measuredTickets.push(ticket); }
+    else if (result === false) { outside += 1; measuredTickets.push(ticket); }
+    else unmeasured += 1;
+  });
+
+  const measured = within + outside;
+  return { within, outside, unmeasured, measuredTickets, percentage: measured ? Math.round((within / measured) * 1000) / 10 : null };
+}
+
+function formatSlaPercentage(summary: HistoricalSlaSummary) {
+  return summary.percentage === null ? "—" : `${summary.percentage.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
+}
+
+function formatSlaDescription(summary: HistoricalSlaSummary) {
+  return `${summary.within + summary.outside} medidos • ${summary.unmeasured} sem medição`;
+}
+
+function slaSeverity(summary: HistoricalSlaSummary): Severity {
+  if (summary.percentage === null) return "default";
+  if (summary.percentage >= 90) return "success";
+  if (summary.percentage >= 80) return "warning";
+  return "error";
 }
 
 /* =========================================================

@@ -14,30 +14,46 @@ import {
 } from "../utils/auth";
 
 /* =========================================================
-   REQUEST AUTENTICADA
+   TIPOS
 ========================================================= */
+
+export type AuthenticatedUserRole =
+  | "ADMIN"
+  | "COORDENADOR"
+  | "ANALISTA";
 
 export type AuthenticatedRequest =
   Request & {
     auth?: {
-      userId:
-        number;
+      userId: number;
 
-      sessionToken:
-        string;
+      sessionToken: string;
 
-      username:
-        string;
+      username: string;
 
       role:
-        | "ADMIN"
-        | "COORDENADOR"
-        | "ANALISTA";
+        AuthenticatedUserRole;
     };
   };
 
 /* =========================================================
-   MIDDLEWARE
+   RESPOSTAS
+========================================================= */
+
+function unauthorized(
+  response: Response,
+  message =
+    "Sessão expirada ou inválida."
+) {
+  return response
+    .status(401)
+    .json({
+      message,
+    });
+}
+
+/* =========================================================
+   MIDDLEWARE DE AUTENTICAÇÃO
 ========================================================= */
 
 export async function authMiddleware(
@@ -51,40 +67,40 @@ export async function authMiddleware(
     NextFunction
 ) {
   try {
+    /* =====================================================
+       AUTHORIZATION HEADER
+    ===================================================== */
+
     const authorization =
       request.headers
         .authorization;
 
-    if (
-      !authorization
-    ) {
-      return response
-        .status(401)
-        .json({
-          message:
-            "Autenticação necessária.",
-        });
+    if (!authorization) {
+      return unauthorized(
+        response,
+        "Autenticação necessária."
+      );
     }
 
-    const [
-      scheme,
-      token,
-    ] =
-      authorization.split(
-        " "
+    /*
+     * Aceita somente:
+     *
+     * Authorization: Bearer <token>
+     */
+
+    const match =
+      authorization.match(
+        /^Bearer\s+(.+)$/i
       );
 
-    if (
-      scheme !==
-        "Bearer" ||
-      !token
-    ) {
-      return response
-        .status(401)
-        .json({
-          message:
-            "Token de autenticação inválido.",
-        });
+    const token =
+      match?.[1]?.trim();
+
+    if (!token) {
+      return unauthorized(
+        response,
+        "Token de autenticação inválido."
+      );
     }
 
     /* =====================================================
@@ -102,20 +118,37 @@ export async function authMiddleware(
       );
 
     if (
-      !Number.isInteger(
+      !Number.isSafeInteger(
         userId
-      )
+      ) ||
+      userId <= 0
     ) {
-      return response
-        .status(401)
-        .json({
-          message:
-            "Token de autenticação inválido.",
-        });
+      return unauthorized(
+        response,
+        "Token de autenticação inválido."
+      );
+    }
+
+    /*
+     * sid representa a sessão persistida no banco.
+     *
+     * Não basta possuir um JWT válido. A sessão também
+     * precisa continuar válida no PostgreSQL.
+     */
+
+    if (
+      typeof payload.sid !==
+        "string" ||
+      !payload.sid.trim()
+    ) {
+      return unauthorized(
+        response,
+        "Token de autenticação inválido."
+      );
     }
 
     /* =====================================================
-       SESSÃO
+       SESSÃO + ESTADO ATUAL DO USUÁRIO
     ===================================================== */
 
     const tokenHash =
@@ -129,27 +162,113 @@ export async function authMiddleware(
           tokenHash,
         },
 
-        include: {
-          user: true,
+        select: {
+          userId: true,
+
+          revokedAt: true,
+
+          expiresAt: true,
+
+          user: {
+            select: {
+              id: true,
+
+              username: true,
+
+              role: true,
+
+              active: true,
+
+              approvalStatus:
+                true,
+            },
+          },
         },
       });
 
+    if (!session) {
+      return unauthorized(
+        response
+      );
+    }
+
+    /* =====================================================
+       CONSISTÊNCIA JWT x SESSÃO
+    ===================================================== */
+
     if (
-      !session ||
       session.userId !==
         userId ||
-      session.revokedAt ||
+      session.user.id !==
+        userId
+    ) {
+      return unauthorized(
+        response
+      );
+    }
+
+    /* =====================================================
+       SESSÃO REVOGADA
+    ===================================================== */
+
+    if (
+      session.revokedAt
+    ) {
+      return unauthorized(
+        response
+      );
+    }
+
+    /* =====================================================
+       EXPIRAÇÃO
+    ===================================================== */
+
+    const now =
+      new Date();
+
+    if (
       session.expiresAt <=
-        new Date() ||
+      now
+    ) {
+      return unauthorized(
+        response
+      );
+    }
+
+    /* =====================================================
+       USUÁRIO ATIVO
+    ===================================================== */
+
+    if (
       !session.user.active
     ) {
-      return response
-        .status(401)
-        .json({
-          message:
-            "Sessão expirada ou inválida.",
-        });
+      return unauthorized(
+        response
+      );
     }
+
+    /* =====================================================
+       APROVAÇÃO ADMINISTRATIVA
+    ===================================================== */
+
+    if (
+      session.user
+        .approvalStatus !==
+      "APPROVED"
+    ) {
+      return unauthorized(
+        response
+      );
+    }
+
+    /* =====================================================
+       REQUEST AUTENTICADA
+
+       O perfil é obtido do banco e não do JWT.
+
+       Assim, uma eventual mudança de perfil passa a valer
+       imediatamente para a sessão existente.
+    ===================================================== */
 
     request.auth = {
       userId,
@@ -167,11 +286,13 @@ export async function authMiddleware(
 
     return next();
   } catch {
-    return response
-      .status(401)
-      .json({
-        message:
-          "Sessão expirada ou inválida.",
-      });
+    /*
+     * Não expomos detalhes de JWT, sessão ou banco para
+     * o cliente.
+     */
+
+    return unauthorized(
+      response
+    );
   }
 }

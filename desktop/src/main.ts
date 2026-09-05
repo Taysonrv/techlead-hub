@@ -3,6 +3,7 @@ import {
   BrowserWindow,
   dialog,
   ipcMain,
+  safeStorage,
   screen,
   shell,
 } from "electron";
@@ -50,12 +51,17 @@ const HEALTH_URL =
   `${APP_URL}/health`;
 
 /*
- * Usamos um endpoint real do dashboard como readiness check.
- * Diferente do /health, ele confirma que o Prisma consegue
- * executar consultas no PostgreSQL.
+ * Endpoint público e mínimo de readiness.
+ *
+ * O /health confirma que o processo HTTP está online.
+ * O /health/ready confirma, adicionalmente, que o Prisma
+ * consegue executar uma consulta no PostgreSQL.
+ *
+ * Não usamos endpoints do dashboard aqui porque toda a área
+ * /api é autenticada.
  */
 const READY_URL =
-  `${APP_URL}/api/dashboard/summary`;
+  `${APP_URL}/health/ready`;
 
 const BACKEND_START_TIMEOUT =
   30_000;
@@ -69,8 +75,24 @@ const HEALTH_CHECK_INTERVAL =
 const HTTP_REQUEST_TIMEOUT =
   1_500;
 
+/*
+ * Arquivo legado das versões anteriores.
+ *
+ * Ele permanece somente para migração automática.
+ * DATABASE_URL e JWT_SECRET não são mais persistidos aqui.
+ */
 const CONFIG_FILENAME =
   "config.env";
+
+/*
+ * Arquivo persistente com os valores criptografados pelo
+ * safeStorage do Electron.
+ *
+ * No Windows, o Electron usa a proteção nativa do sistema
+ * operacional para manter os segredos vinculados ao usuário.
+ */
+const SECURE_CONFIG_FILENAME =
+  "secure-config.json";
 
 const UPDATE_CHANNEL =
   "beta";
@@ -685,6 +707,13 @@ function getUserConfigPath() {
   );
 }
 
+function getSecureConfigPath() {
+  return path.join(
+    getUserConfigDirectory(),
+    SECURE_CONFIG_FILENAME
+  );
+}
+
 function getDevelopmentEnvPath() {
   return path.join(
     getBackendRoot(),
@@ -693,8 +722,20 @@ function getDevelopmentEnvPath() {
 }
 
 /* =========================================================
-   CONFIGURAÇÃO DO BANCO
+   CONFIGURAÇÃO SEGURA
 ========================================================= */
+
+type SecureConfig = {
+  version: 1;
+
+  databaseUrl?: string;
+
+  jwtSecret?: string;
+};
+
+type SecureConfigKey =
+  | "databaseUrl"
+  | "jwtSecret";
 
 function parseEnvValue(
   content: string,
@@ -781,88 +822,488 @@ function parseEnvValue(
   return null;
 }
 
-function readEnvValueFromFile(filePath: string, key: string) {
+function readEnvValueFromFile(
+  filePath: string,
+  key: string
+) {
   try {
-    if (!fs.existsSync(filePath)) return null;
-    const content = fs.readFileSync(filePath, "utf8");
-    return parseEnvValue(content, key) || null;
+    if (
+      !fs.existsSync(
+        filePath
+      )
+    ) {
+      return null;
+    }
+
+    const content =
+      fs.readFileSync(
+        filePath,
+        "utf8"
+      );
+
+    return (
+      parseEnvValue(
+        content,
+        key
+      ) ||
+      null
+    );
   } catch (error) {
-    console.error(`[desktop] Não foi possível ler ${key} da configuração:`, error);
+    console.error(
+      `[desktop] Não foi possível ler ${key} da configuração:`,
+      error
+    );
+
     return null;
   }
 }
 
-function upsertEnvValueInFile(filePath: string, key: string, value: string) {
-  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+function removeEnvValueFromFile(
+  filePath: string,
+  key: string
+) {
+  try {
+    if (
+      !fs.existsSync(
+        filePath
+      )
+    ) {
+      return;
+    }
 
-  const content = fs.existsSync(filePath)
-    ? fs.readFileSync(filePath, "utf8")
-    : "";
+    const content =
+      fs.readFileSync(
+        filePath,
+        "utf8"
+      );
 
-  const lines = content ? content.split(/\r?\n/) : [];
-  const newLine = `${key}=${JSON.stringify(value)}`;
-  let replaced = false;
+    const lines =
+      content.split(
+        /\r?\n/
+      );
 
-  const updated = lines.map((originalLine) => {
-    const trimmed = originalLine.trim();
-    const normalized = trimmed.startsWith("export ")
-      ? trimmed.slice("export ".length)
-      : trimmed;
-    const separatorIndex = normalized.indexOf("=");
+    const filtered =
+      lines.filter(
+        (
+          originalLine
+        ) => {
+          const trimmed =
+            originalLine.trim();
 
-    if (separatorIndex < 1) return originalLine;
+          if (
+            !trimmed ||
+            trimmed.startsWith("#")
+          ) {
+            return true;
+          }
 
-    const currentKey = normalized.slice(0, separatorIndex).trim();
-    if (currentKey !== key) return originalLine;
+          const normalized =
+            trimmed.startsWith(
+              "export "
+            )
+              ? trimmed.slice(
+                  "export ".length
+                )
+              : trimmed;
 
-    replaced = true;
-    return newLine;
-  });
+          const separatorIndex =
+            normalized.indexOf(
+              "="
+            );
 
-  while (updated.length > 0 && updated[updated.length - 1] === "") {
-    updated.pop();
+          if (
+            separatorIndex < 1
+          ) {
+            return true;
+          }
+
+          const currentKey =
+            normalized
+              .slice(
+                0,
+                separatorIndex
+              )
+              .trim();
+
+          return (
+            currentKey !==
+            key
+          );
+        }
+      );
+
+    const meaningfulLines =
+      filtered.filter(
+        (line) =>
+          line.trim()
+      );
+
+    if (
+      meaningfulLines.length ===
+      0
+    ) {
+      fs.rmSync(
+        filePath,
+        {
+          force: true,
+        }
+      );
+
+      return;
+    }
+
+    fs.writeFileSync(
+      filePath,
+      `${filtered
+        .join("\n")
+        .replace(
+          /\n+$/,
+          ""
+        )}\n`,
+      {
+        encoding:
+          "utf8",
+
+        mode:
+          0o600,
+      }
+    );
+  } catch (error) {
+    /*
+     * A remoção do legado é uma etapa de limpeza.
+     * Se falhar, não interrompemos a inicialização.
+     */
+    console.warn(
+      `[desktop] Não foi possível remover ${key} da configuração legada:`,
+      error
+    );
+  }
+}
+
+function ensureSecureStorageAvailable() {
+  if (
+    safeStorage
+      .isEncryptionAvailable()
+  ) {
+    return;
   }
 
-  if (!replaced) updated.push(newLine);
+  throw new Error(
+    "A proteção segura de credenciais do Windows não está disponível nesta sessão."
+  );
+}
 
-  fs.writeFileSync(filePath, `${updated.join("\n")}\n`, {
-    encoding: "utf8",
-    mode: 0o600,
-  });
+function readSecureConfig():
+  SecureConfig {
+  const secureConfigPath =
+    getSecureConfigPath();
+
+  if (
+    !fs.existsSync(
+      secureConfigPath
+    )
+  ) {
+    return {
+      version:
+        1,
+    };
+  }
+
+  try {
+    const content =
+      fs.readFileSync(
+        secureConfigPath,
+        "utf8"
+      );
+
+    const parsed =
+      JSON.parse(
+        content
+      ) as
+        Partial<SecureConfig>;
+
+    return {
+      version:
+        1,
+
+      databaseUrl:
+        typeof parsed.databaseUrl ===
+        "string"
+          ? parsed.databaseUrl
+          : undefined,
+
+      jwtSecret:
+        typeof parsed.jwtSecret ===
+        "string"
+          ? parsed.jwtSecret
+          : undefined,
+    };
+  } catch (error) {
+    console.error(
+      "[desktop] Não foi possível ler a configuração segura:",
+      error
+    );
+
+    return {
+      version:
+        1,
+    };
+  }
+}
+
+function writeSecureConfig(
+  config:
+    SecureConfig
+) {
+  ensureSecureStorageAvailable();
+
+  const secureConfigPath =
+    getSecureConfigPath();
+
+  fs.mkdirSync(
+    path.dirname(
+      secureConfigPath
+    ),
+    {
+      recursive:
+        true,
+    }
+  );
+
+  fs.writeFileSync(
+    secureConfigPath,
+    `${JSON.stringify(
+      config,
+      null,
+      2
+    )}\n`,
+    {
+      encoding:
+        "utf8",
+
+      mode:
+        0o600,
+    }
+  );
+}
+
+function encryptSecret(
+  value: string
+) {
+  ensureSecureStorageAvailable();
+
+  return safeStorage
+    .encryptString(
+      value
+    )
+    .toString(
+      "base64"
+    );
+}
+
+function decryptSecret(
+  encryptedValue: string
+) {
+  ensureSecureStorageAvailable();
+
+  return safeStorage
+    .decryptString(
+      Buffer.from(
+        encryptedValue,
+        "base64"
+      )
+    );
+}
+
+function readSecureValue(
+  key:
+    SecureConfigKey
+) {
+  const config =
+    readSecureConfig();
+
+  const encryptedValue =
+    config[key];
+
+  if (
+    !encryptedValue
+  ) {
+    return null;
+  }
+
+  try {
+    return decryptSecret(
+      encryptedValue
+    );
+  } catch (error) {
+    console.error(
+      `[desktop] Não foi possível descriptografar ${key}:`,
+      error
+    );
+
+    return null;
+  }
+}
+
+function saveSecureValue(
+  key:
+    SecureConfigKey,
+  value: string
+) {
+  const config =
+    readSecureConfig();
+
+  config[key] =
+    encryptSecret(
+      value
+    );
+
+  writeSecureConfig(
+    config
+  );
+}
+
+function migrateLegacyEnvValue(
+  envKey: string,
+  secureKey:
+    SecureConfigKey
+) {
+  const legacyConfigPath =
+    getUserConfigPath();
+
+  const legacyValue =
+    readEnvValueFromFile(
+      legacyConfigPath,
+      envKey
+    );
+
+  if (
+    !legacyValue
+  ) {
+    return null;
+  }
+
+  saveSecureValue(
+    secureKey,
+    legacyValue
+  );
+
+  /*
+   * Só removemos o valor em texto puro depois que a cópia
+   * criptografada foi persistida com sucesso.
+   */
+  removeEnvValueFromFile(
+    legacyConfigPath,
+    envKey
+  );
+
+  console.log(
+    `[desktop] ${envKey} migrada para o armazenamento seguro.`
+  );
+
+  return legacyValue;
 }
 
 function resolveJwtSecret() {
-  const fromEnvironment = process.env.JWT_SECRET?.trim();
-  if (fromEnvironment) {
-    console.log("[desktop] JWT_SECRET recebida pelo ambiente.");
+  /*
+   * 1. Ambiente explícito.
+   *
+   * Útil para desenvolvimento e automação. Não persistimos
+   * automaticamente valores recebidos pelo processo.
+   */
+  const fromEnvironment =
+    process.env.JWT_SECRET
+      ?.trim();
+
+  if (
+    fromEnvironment
+  ) {
+    console.log(
+      "[desktop] JWT_SECRET recebida pelo ambiente."
+    );
+
     return fromEnvironment;
   }
 
-  const configPath = getUserConfigPath();
-  const saved = readEnvValueFromFile(configPath, "JWT_SECRET");
-
-  if (saved) {
-    console.log("[desktop] JWT_SECRET local carregada.");
-    return saved;
-  }
-
-  if (!app.isPackaged) {
-    const development = readEnvValueFromFile(
-      getDevelopmentEnvPath(),
-      "JWT_SECRET"
+  /*
+   * 2. Armazenamento seguro.
+   */
+  const secureSecret =
+    readSecureValue(
+      "jwtSecret"
     );
 
-    if (development) {
-      console.log("[desktop] JWT_SECRET de desenvolvimento carregada.");
-      return development;
+  if (
+    secureSecret
+  ) {
+    console.log(
+      "[desktop] JWT_SECRET segura carregada."
+    );
+
+    return secureSecret;
+  }
+
+  /*
+   * 3. Migração automática de versões anteriores.
+   */
+  const migratedSecret =
+    migrateLegacyEnvValue(
+      "JWT_SECRET",
+      "jwtSecret"
+    );
+
+  if (
+    migratedSecret
+  ) {
+    return migratedSecret;
+  }
+
+  /*
+   * 4. Desenvolvimento.
+   */
+  if (
+    !app.isPackaged
+  ) {
+    const developmentSecret =
+      readEnvValueFromFile(
+        getDevelopmentEnvPath(),
+        "JWT_SECRET"
+      );
+
+    if (
+      developmentSecret
+    ) {
+      console.log(
+        "[desktop] JWT_SECRET de desenvolvimento carregada."
+      );
+
+      return developmentSecret;
     }
   }
 
-  const generated = crypto.randomBytes(48).toString("base64url");
-  upsertEnvValueInFile(configPath, "JWT_SECRET", generated);
+  /*
+   * 5. Nova instalação.
+   *
+   * Cada instalação mantém um segredo local próprio.
+   * Os JWTs emitidos por essa máquina são validados pelo
+   * backend local dessa mesma instalação.
+   */
+  const generated =
+    crypto
+      .randomBytes(
+        48
+      )
+      .toString(
+        "base64url"
+      );
+
+  saveSecureValue(
+    "jwtSecret",
+    generated
+  );
 
   console.log(
-    "[desktop] JWT_SECRET local gerada e persistida com segurança."
+    "[desktop] JWT_SECRET local gerada e protegida pelo sistema operacional."
   );
 
   return generated;
@@ -892,10 +1333,13 @@ function readDatabaseUrlFromFile(
         "DATABASE_URL"
       );
 
-    return value || null;
+    return (
+      value ||
+      null
+    );
   } catch (error) {
     console.error(
-      "[desktop] Não foi possível ler a configuração:",
+      "[desktop] Não foi possível ler a configuração de banco:",
       error
     );
 
@@ -906,32 +1350,13 @@ function readDatabaseUrlFromFile(
 function saveDatabaseUrl(
   databaseUrl: string
 ) {
-  const configDirectory =
-    getUserConfigDirectory();
-
-  const configPath =
-    getUserConfigPath();
-
-  fs.mkdirSync(
-    configDirectory,
-    {
-      recursive: true,
-    }
-  );
-
-  /*
-   * Não registramos a URL no console.
-   * O arquivo fica fora do instalador e fora do Git,
-   * dentro do diretório de dados do usuário.
-   */
-  upsertEnvValueInFile(
-    configPath,
-    "DATABASE_URL",
+  saveSecureValue(
+    "databaseUrl",
     databaseUrl
   );
 
   console.log(
-    `[desktop] Configuração salva em: ${configPath}`
+    "[desktop] Conexão com o banco armazenada de forma protegida."
   );
 }
 
@@ -949,7 +1374,7 @@ async function askUserForDatabaseConfiguration() {
           "Configuração inicial necessária",
 
         detail:
-          "O TechLead Hub precisa da configuração de conexão com o banco de dados. Selecione um arquivo .env que contenha a variável DATABASE_URL. A configuração será armazenada somente nesta máquina.",
+          "Selecione o arquivo de provisionamento .env fornecido para o TechLead Hub. A conexão com o banco será importada e armazenada de forma criptografada pelo Windows nesta conta de usuário.",
 
         buttons: [
           "Selecionar arquivo .env",
@@ -968,7 +1393,8 @@ async function askUserForDatabaseConfiguration() {
     );
 
   if (
-    response.response !== 0
+    response.response !==
+      0
   ) {
     return null;
   }
@@ -1016,7 +1442,9 @@ async function askUserForDatabaseConfiguration() {
   const selectedFile =
     selection.filePaths[0];
 
-  if (!selectedFile) {
+  if (
+    !selectedFile
+  ) {
     return null;
   }
 
@@ -1025,7 +1453,9 @@ async function askUserForDatabaseConfiguration() {
       selectedFile
     );
 
-  if (!databaseUrl) {
+  if (
+    !databaseUrl
+  ) {
     await dialog.showMessageBox(
       {
         type:
@@ -1038,7 +1468,7 @@ async function askUserForDatabaseConfiguration() {
           "DATABASE_URL não encontrada",
 
         detail:
-          "O arquivo selecionado não possui uma variável DATABASE_URL válida.",
+          "O arquivo selecionado não possui uma configuração DATABASE_URL válida.",
 
         buttons: [
           "Fechar",
@@ -1054,10 +1484,30 @@ async function askUserForDatabaseConfiguration() {
       databaseUrl
     );
 
+    await dialog.showMessageBox(
+      {
+        type:
+          "info",
+
+        title:
+          APP_NAME,
+
+        message:
+          "Configuração importada com sucesso",
+
+        detail:
+          "A conexão foi armazenada de forma protegida nesta conta do Windows. O arquivo de provisionamento pode ser removido da máquina após esta configuração.",
+
+        buttons: [
+          "Continuar",
+        ],
+      }
+    );
+
     return databaseUrl;
   } catch (error) {
     console.error(
-      "[desktop] Falha ao salvar configuração:",
+      "[desktop] Falha ao proteger a configuração:",
       error
     );
 
@@ -1070,10 +1520,10 @@ async function askUserForDatabaseConfiguration() {
           APP_NAME,
 
         message:
-          "Não foi possível salvar a configuração.",
+          "Não foi possível proteger a configuração.",
 
         detail:
-          "Verifique as permissões da sua conta do Windows e tente novamente.",
+          "A proteção segura de credenciais do Windows não está disponível ou não pôde ser utilizada. Nenhuma credencial será gravada em texto puro pelo aplicativo.",
 
         buttons: [
           "Fechar",
@@ -1087,11 +1537,11 @@ async function askUserForDatabaseConfiguration() {
 
 async function resolveDatabaseUrl() {
   /*
-   * 1. Variável já definida no processo.
-   * Útil para testes, automação e ambientes corporativos.
+   * 1. Variável recebida pelo processo.
    */
   const environmentDatabaseUrl =
-    process.env.DATABASE_URL?.trim();
+    process.env.DATABASE_URL
+      ?.trim();
 
   if (
     environmentDatabaseUrl
@@ -1104,24 +1554,43 @@ async function resolveDatabaseUrl() {
   }
 
   /*
-   * 2. Configuração persistida pelo aplicativo.
+   * 2. Armazenamento seguro.
    */
-  const savedDatabaseUrl =
-    readDatabaseUrlFromFile(
-      getUserConfigPath()
+  const secureDatabaseUrl =
+    readSecureValue(
+      "databaseUrl"
     );
 
-  if (savedDatabaseUrl) {
+  if (
+    secureDatabaseUrl
+  ) {
     console.log(
-      "[desktop] Configuração local carregada."
+      "[desktop] Configuração segura do banco carregada."
     );
 
-    return savedDatabaseUrl;
+    return secureDatabaseUrl;
   }
 
   /*
-   * 3. Em desenvolvimento, aproveitamos backend/.env.
-   * Esse arquivo continua fora do Git e do instalador.
+   * 3. Migração automática das versões antigas que
+   * mantinham DATABASE_URL em config.env.
+   */
+  const migratedDatabaseUrl =
+    migrateLegacyEnvValue(
+      "DATABASE_URL",
+      "databaseUrl"
+    );
+
+  if (
+    migratedDatabaseUrl
+  ) {
+    return migratedDatabaseUrl;
+  }
+
+  /*
+   * 4. Desenvolvimento: backend/.env continua permitido.
+   *
+   * O arquivo não é empacotado e permanece fora do Git.
    */
   if (
     !app.isPackaged
@@ -1143,7 +1612,7 @@ async function resolveDatabaseUrl() {
   }
 
   /*
-   * 4. Primeira execução do aplicativo empacotado.
+   * 5. Primeira execução da versão instalada.
    */
   return askUserForDatabaseConfiguration();
 }
