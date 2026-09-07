@@ -9,9 +9,35 @@ export type ReleaseNote = {
   items: readonly ReleaseNoteItem[];
 };
 
-export const FALLBACK_APP_VERSION = "0.1.4-beta.1";
+export const FALLBACK_APP_VERSION = "0.2.0-beta.3";
 
 export const releaseNotes: Record<string, ReleaseNote> = {
+  "0.2.0-beta.3": {
+    version: "0.2.0-beta.3",
+    items: [
+      {
+        title: "Configuração integrada",
+        description:
+          "A primeira instalação permite informar a conexão PostgreSQL diretamente no aplicativo, sem exigir um arquivo .env.",
+      },
+      {
+        title: "Importação opcional do .env",
+        description:
+          "O provisionamento por arquivo continua disponível e importa banco e Azure DevOps para o armazenamento seguro do Windows.",
+      },
+      {
+        title: "Azure DevOps protegido",
+        description:
+          "Organização, projeto, Wiki e PAT são armazenados de forma criptografada e repassados somente ao backend local.",
+      },
+      {
+        title: "Inicialização resiliente",
+        description:
+          "A ausência de configuração do Azure não impede mais o TechLead Hub de iniciar.",
+      },
+    ],
+  },
+
   "0.1.4-beta.1": {
     version: "0.1.4-beta.1",
     items: [

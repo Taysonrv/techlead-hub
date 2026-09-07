@@ -46,6 +46,35 @@ declare global {
       getVersion: () =>
         Promise<string>;
 
+      configuration: {
+        get: () => Promise<{
+          databaseConfigured: boolean;
+          organization: string;
+          project: string;
+          wiki: string;
+          patConfigured: boolean;
+        }>;
+
+        importEnv: () => Promise<{
+          databaseUrl: string;
+          organization: string;
+          project: string;
+          wiki: string;
+          pat: string;
+        } | null>;
+
+        save: (input: {
+          databaseUrl: string;
+          organization: string;
+          project: string;
+          wiki: string;
+          pat: string;
+        }) => Promise<{
+          success: boolean;
+          restartRequired: boolean;
+        }>;
+      };
+
       updates: {
         getState: () =>
           Promise<UpdateState>;

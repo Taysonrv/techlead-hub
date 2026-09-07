@@ -144,6 +144,10 @@ let mainWindow:
   | BrowserWindow
   | null = null;
 
+let setupWindow:
+  | BrowserWindow
+  | null = null;
+
 let backendProcess:
   | ChildProcess
   | null = null;
@@ -632,6 +636,10 @@ function registerIpcHandlers() {
     "updater:install"
   );
 
+  ipcMain.removeHandler("configuration:get");
+  ipcMain.removeHandler("configuration:import-env");
+  ipcMain.removeHandler("configuration:save");
+
   ipcMain.handle(
     "app:get-version",
     () => {
@@ -666,6 +674,37 @@ function registerIpcHandlers() {
       return installDownloadedUpdate();
     }
   );
+
+  ipcMain.handle("configuration:get", () => {
+    const azure = resolveAzureConfiguration();
+
+    return {
+      databaseConfigured: Boolean(readSecureValue("databaseUrl") || process.env.DATABASE_URL),
+      organization: azure.organization,
+      project: azure.project,
+      wiki: azure.wiki,
+      patConfigured: Boolean(azure.pat),
+    };
+  });
+
+  ipcMain.handle("configuration:import-env", async () => {
+    return selectConfigurationFile();
+  });
+
+  ipcMain.handle("configuration:save", async (_event, input: unknown) => {
+    const result = saveApplicationConfiguration(input);
+
+    if (mainWindow) {
+      setTimeout(() => {
+        isQuitting = true;
+        stopBackend();
+        app.relaunch();
+        app.exit(0);
+      }, 500);
+    }
+
+    return result;
+  });
 }
 
 /* =========================================================
@@ -731,11 +770,20 @@ type SecureConfig = {
   databaseUrl?: string;
 
   jwtSecret?: string;
+
+  azureOrganization?: string;
+  azureProject?: string;
+  azureWiki?: string;
+  azurePat?: string;
 };
 
 type SecureConfigKey =
   | "databaseUrl"
-  | "jwtSecret";
+  | "jwtSecret"
+  | "azureOrganization"
+  | "azureProject"
+  | "azureWiki"
+  | "azurePat";
 
 function parseEnvValue(
   content: string,
@@ -1036,6 +1084,23 @@ function readSecureConfig():
         typeof parsed.jwtSecret ===
         "string"
           ? parsed.jwtSecret
+          : undefined,
+
+      azureOrganization:
+        typeof parsed.azureOrganization === "string"
+          ? parsed.azureOrganization
+          : undefined,
+      azureProject:
+        typeof parsed.azureProject === "string"
+          ? parsed.azureProject
+          : undefined,
+      azureWiki:
+        typeof parsed.azureWiki === "string"
+          ? parsed.azureWiki
+          : undefined,
+      azurePat:
+        typeof parsed.azurePat === "string"
+          ? parsed.azurePat
           : undefined,
     };
   } catch (error) {
@@ -1360,6 +1425,169 @@ function saveDatabaseUrl(
   );
 }
 
+type AzureConfiguration = {
+  organization: string;
+  project: string;
+  wiki: string;
+  pat: string;
+};
+
+function resolveAzureConfiguration(): AzureConfiguration {
+  const read = (
+    envName: string,
+    secureKey: SecureConfigKey,
+  ) =>
+    process.env[envName]?.trim() ||
+    readSecureValue(secureKey) ||
+    migrateLegacyEnvValue(envName, secureKey) ||
+    (!app.isPackaged
+      ? readEnvValueFromFile(getDevelopmentEnvPath(), envName)
+      : null) ||
+    "";
+
+  return {
+    organization: read("AZURE_DEVOPS_ORGANIZATION", "azureOrganization"),
+    project: read("AZURE_DEVOPS_PROJECT", "azureProject"),
+    wiki: read("AZURE_DEVOPS_WIKI", "azureWiki"),
+    pat: read("AZURE_DEVOPS_PAT", "azurePat"),
+  };
+}
+
+type ConfigurationInput = {
+  databaseUrl?: unknown;
+  organization?: unknown;
+  project?: unknown;
+  wiki?: unknown;
+  pat?: unknown;
+};
+
+type ConfigurationValues = {
+  databaseUrl: string;
+  organization: string;
+  project: string;
+  wiki: string;
+  pat: string;
+};
+
+function normalizeConfigurationInput(input: unknown): ConfigurationValues {
+  if (!input || typeof input !== "object") {
+    throw new Error("Configuração inválida.");
+  }
+
+  const value = input as ConfigurationInput;
+  const text = (candidate: unknown) =>
+    typeof candidate === "string" ? candidate.trim() : "";
+
+  return {
+    databaseUrl: text(value.databaseUrl),
+    organization: text(value.organization),
+    project: text(value.project),
+    wiki: text(value.wiki),
+    pat: text(value.pat),
+  };
+}
+
+function saveApplicationConfiguration(input: unknown) {
+  const value = normalizeConfigurationInput(input);
+
+  const databaseUrl =
+    value.databaseUrl ||
+    readSecureValue("databaseUrl") ||
+    process.env.DATABASE_URL?.trim() ||
+    "";
+
+  const existingAzure = resolveAzureConfiguration();
+  const pat = value.pat || existingAzure.pat;
+
+  if (
+    !databaseUrl ||
+    !/^postgres(?:ql)?:\/\//i.test(databaseUrl)
+  ) {
+    throw new Error("Informe uma DATABASE_URL PostgreSQL válida.");
+  }
+
+  const azureFields = [value.organization, value.project, value.wiki, pat];
+  const hasSomeAzure = azureFields.some(Boolean);
+  const hasAllAzure = azureFields.every(Boolean);
+
+  if (hasSomeAzure && !hasAllAzure) {
+    throw new Error("Preencha Organização, Projeto, Wiki e PAT, ou deixe todos os campos do Azure vazios.");
+  }
+
+  saveSecureValue("databaseUrl", databaseUrl);
+
+  if (hasAllAzure) {
+    saveSecureValue("azureOrganization", value.organization);
+    saveSecureValue("azureProject", value.project);
+    saveSecureValue("azureWiki", value.wiki);
+    saveSecureValue("azurePat", pat);
+  }
+
+  return { success: true, restartRequired: Boolean(mainWindow) };
+}
+
+async function selectConfigurationFile() {
+  const selection = await dialog.showOpenDialog({
+    title: "Importar configuração do TechLead Hub",
+    properties: ["openFile"],
+    filters: [
+      { name: "Arquivo de ambiente", extensions: ["env"] },
+      { name: "Todos os arquivos", extensions: ["*"] },
+    ],
+  });
+
+  const selectedFile = selection.filePaths[0];
+
+  if (selection.canceled || !selectedFile) {
+    return null;
+  }
+
+  const content = fs.readFileSync(selectedFile, "utf8");
+
+  return {
+    databaseUrl: parseEnvValue(content, "DATABASE_URL") || "",
+    organization: parseEnvValue(content, "AZURE_DEVOPS_ORGANIZATION") || "",
+    project: parseEnvValue(content, "AZURE_DEVOPS_PROJECT") || "",
+    wiki: parseEnvValue(content, "AZURE_DEVOPS_WIKI") || "",
+    pat: parseEnvValue(content, "AZURE_DEVOPS_PAT") || "",
+  };
+}
+
+async function showIntegratedSetup(): Promise<string | null> {
+  return new Promise((resolve) => {
+    setupWindow = new BrowserWindow({
+      width: 760,
+      height: 720,
+      minWidth: 680,
+      minHeight: 620,
+      show: false,
+      autoHideMenuBar: true,
+      title: `${APP_NAME} - Configuração inicial`,
+      webPreferences: {
+        preload: path.join(__dirname, "preload.js"),
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: true,
+      },
+    });
+
+    const html = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Configuração inicial</title><style>
+      *{box-sizing:border-box}body{margin:0;font-family:Segoe UI,Arial,sans-serif;background:#f4f6f8;color:#101828}.page{max-width:720px;margin:auto;padding:32px}.card{background:white;border:1px solid #e4e7ec;border-radius:18px;padding:28px;box-shadow:0 8px 28px rgba(16,24,40,.08)}h1{margin:0 0 6px;font-size:25px}.lead{color:#667085;margin:0 0 24px}.section{border-top:1px solid #eaecf0;padding-top:20px;margin-top:20px}label{display:block;font-size:13px;font-weight:700;margin:12px 0 6px}input{width:100%;padding:11px 12px;border:1px solid #d0d5dd;border-radius:9px;font-size:14px}small{color:#667085}.actions{display:flex;gap:10px;margin-top:24px}.button{border:0;border-radius:9px;padding:11px 16px;font-weight:700;cursor:pointer}.primary{background:#18c77a;color:#071a12}.secondary{background:#fff;border:1px solid #18c77a;color:#087443}.error{display:none;margin-top:16px;padding:11px;border-radius:8px;background:#fef3f2;color:#b42318}.optional{font-weight:400;color:#667085}
+    </style></head><body><main class="page"><section class="card"><h1>Configurar TechLead Hub</h1><p class="lead">Informe os dados manualmente ou importe um arquivo .env. As credenciais serão protegidas pelo Windows.</p><button class="button secondary" id="import">Importar arquivo .env</button><div class="section"><h3>Banco de dados</h3><label>DATABASE_URL</label><input id="databaseUrl" type="password" autocomplete="off" placeholder="postgresql://usuario:senha@servidor:5432/banco"><small>Obrigatório para iniciar o login.</small></div><div class="section"><h3>Azure DevOps <span class="optional">(opcional)</span></h3><label>Organização</label><input id="organization"><label>Projeto</label><input id="project"><label>Wiki</label><input id="wiki"><label>PAT</label><input id="pat" type="password" autocomplete="off"></div><div id="error" class="error"></div><div class="actions"><button class="button primary" id="save">Salvar e iniciar</button></div></section></main><script>
+      const ids=['databaseUrl','organization','project','wiki','pat'];const error=document.getElementById('error');
+      document.getElementById('import').onclick=async()=>{const data=await window.techLeadHub.configuration.importEnv();if(data){ids.forEach(id=>document.getElementById(id).value=data[id]||'')}};
+      document.getElementById('save').onclick=async()=>{error.style.display='none';try{const data={};ids.forEach(id=>data[id]=document.getElementById(id).value);await window.techLeadHub.configuration.save(data);window.close()}catch(e){error.textContent=e?.message||String(e);error.style.display='block'}};
+    </script></body></html>`;
+
+    setupWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
+    setupWindow.once("ready-to-show", () => setupWindow?.show());
+    setupWindow.on("closed", () => {
+      setupWindow = null;
+      resolve(readSecureValue("databaseUrl"));
+    });
+  });
+}
+
 async function askUserForDatabaseConfiguration() {
   const response =
     await dialog.showMessageBox(
@@ -1614,7 +1842,7 @@ async function resolveDatabaseUrl() {
   /*
    * 5. Primeira execução da versão instalada.
    */
-  return askUserForDatabaseConfiguration();
+  return showIntegratedSetup();
 }
 
 /* =========================================================
@@ -1623,7 +1851,8 @@ async function resolveDatabaseUrl() {
 
 function startBackend(
   databaseUrl: string,
-  jwtSecret: string
+  jwtSecret: string,
+  azure: AzureConfiguration,
 ) {
   if (backendProcess) {
     return;
@@ -1671,6 +1900,18 @@ function startBackend(
 
           JWT_SECRET:
             jwtSecret,
+
+          AZURE_DEVOPS_ORGANIZATION:
+            azure.organization,
+
+          AZURE_DEVOPS_PROJECT:
+            azure.project,
+
+          AZURE_DEVOPS_WIKI:
+            azure.wiki,
+
+          AZURE_DEVOPS_PAT:
+            azure.pat,
 
           ELECTRON_RUN_AS_NODE:
             "1",
@@ -2279,7 +2520,8 @@ async function bootstrap() {
 
   startBackend(
     databaseUrl,
-    jwtSecret
+    jwtSecret,
+    resolveAzureConfiguration(),
   );
 
   const backendOnline =
