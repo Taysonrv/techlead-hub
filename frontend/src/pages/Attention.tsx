@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import type { MouseEvent } from "react";
 
 import {
   Alert,
@@ -14,6 +15,7 @@ import {
   IconButton,
   InputLabel,
   MenuItem,
+  Popover,
   Select,
   Snackbar,
   Stack,
@@ -29,6 +31,7 @@ import {
 
 import {
   ContentCopyOutlined,
+  InfoOutlined,
   OpenInNewOutlined,
   PriorityHighOutlined,
   ReportProblemOutlined,
@@ -36,6 +39,8 @@ import {
 } from "@mui/icons-material";
 
 
+
+import { useNavigate } from "react-router-dom";
 
 import { api } from "../services/api";
 import { useFilters } from "../context/FiltersContext";
@@ -51,6 +56,25 @@ import {
   type DeadlineLevel,
   type ServiceLevelResult,
 } from "../utils/serviceLevel";
+
+type AzureTaskSummary = {
+  id: number;
+  workItemType: string;
+  title: string;
+  state: string;
+  assignedToName: string | null;
+  client: string | null;
+  criticality: string | null;
+  module: string | null;
+  process: string | null;
+  movideskTicket: number | null;
+  deliveredVersion: string | null;
+  prioritized: boolean | null;
+  blockedProcess: boolean | null;
+  azureChangedAt: string | null;
+  stateChangedAt?: string | null;
+  syncedAt?: string | null;
+};
 
 type Ticket = {
   id: number;
@@ -92,6 +116,8 @@ type Ticket = {
   taskNumber: number | null;
   taskStatus: string | null;
   deliveredVersion: string | null;
+
+  azureWorkItem?: AzureTaskSummary | null;
 };
 
 type AttentionLevel =
@@ -106,7 +132,20 @@ type AttentionTicket = Ticket & {
   serviceLevel: ServiceLevelResult;
 };
 
+type CardInfoDefinition = {
+  title: string;
+  summary: string;
+  calculation: string;
+  source: string;
+  reference: string;
+  periodRule: string;
+  notes?: string;
+};
+
 export function Attention() {
+  const navigate =
+    useNavigate();
+
   const [tickets, setTickets] =
     useState<Ticket[]>([]);
 
@@ -124,6 +163,9 @@ export function Attention() {
 
   const [client, setClient] =
     useState("");
+
+  const [riskFilter, setRiskFilter] =
+    useState<"" | "azure">("");
 
   const [selectedTicket, setSelectedTicket] =
     useState<AttentionTicket | null>(null);
@@ -207,49 +249,51 @@ export function Attention() {
         new Date();
 
       return periodTickets
-        .filter(
-          isOpen
-        )
-        .map(
-          (ticket) => {
-            const created =
-              new Date(
-                ticket.createdDate
-              );
+        .filter(isOpen)
+        .map((ticket) => {
+          const created =
+            new Date(
+              ticket.createdDate
+            );
 
-            const ageHours =
-              Math.max(
-                0,
-                Math.floor(
+          const ageHours =
+            Math.max(
+              0,
+              Math.floor(
+                (
+                  now.getTime() -
+                  created.getTime()
+                ) /
                   (
-                    now.getTime() -
-                    created.getTime()
-                  ) /
-                    (
-                      1000 *
-                      60 *
-                      60
-                    )
-                )
-              );
-
-            const serviceLevel =
-              getOfficialServiceLevel(
-                ticket
-              );
-
-            if (
-              !serviceLevel.applicable ||
-              !isOfficialMeasuredCategory(
-                ticket
+                    1000 *
+                    60 *
+                    60
+                  )
               )
-            ) {
-              return null;
-            }
+            );
 
-            const reasons:
-              string[] = [];
+          const serviceLevel =
+            getOfficialServiceLevel(
+              ticket
+            );
 
+          const reasons:
+            string[] = [];
+
+          const slaMeasured =
+            serviceLevel.applicable &&
+            isOfficialMeasuredCategory(
+              ticket
+            );
+
+          /*
+           * SLA / Movidesk.
+           *
+           * Continuamos usando a mesma regra operacional já
+           * utilizada pela tela, porém um ticket fora da medição
+           * também pode aparecer quando existir risco no Azure.
+           */
+          if (slaMeasured) {
             const firstResponse =
               serviceLevel
                 .firstResponse;
@@ -259,8 +303,7 @@ export function Attention() {
                 .resolution;
 
             if (
-              !firstResponse
-                .completed
+              !firstResponse.completed
             ) {
               if (
                 firstResponse.level ===
@@ -308,129 +351,262 @@ export function Attention() {
                 "Prazo de solução entrou na faixa de atenção"
               );
             }
-
-            if (
-              ticket.baseStatus ===
-              "Stopped"
-            ) {
-              reasons.push(
-                "Ticket em status de espera/parada"
-              );
-            }
-
-            if (
-              !ticket.owner
-            ) {
-              reasons.push(
-                "Sem responsável"
-              );
-            }
-
-            if (
-              reasons.length ===
-              0
-            ) {
-              return null;
-            }
-
-            const level =
-              resolveAttentionLevel(
-                serviceLevel
-              );
-
-            return {
-              ...ticket,
-
-              ageHours,
-
-              reasons,
-
-              level,
-
-              serviceLevel,
-            };
           }
-        )
+
+          if (
+            ticket.baseStatus ===
+            "Stopped"
+          ) {
+            reasons.push(
+              "Ticket em status de espera/parada"
+            );
+          }
+
+          if (
+            !ticket.owner
+          ) {
+            reasons.push(
+              "Sem responsável no atendimento"
+            );
+          }
+
+          /*
+           * Azure DevOps.
+           */
+          const azure =
+            ticket.azureWorkItem;
+
+          if (
+            ticket.taskNumber &&
+            !azure
+          ) {
+            reasons.push(
+              "Task ainda não sincronizada com o Azure"
+            );
+          }
+
+          if (azure) {
+            const azureState =
+              normalize(
+                azure.state
+              );
+
+            const azureCriticality =
+              normalize(
+                azure.criticality
+              );
+
+            if (
+              azure.blockedProcess ===
+              true
+            ) {
+              reasons.push(
+                "Task Azure com processo bloqueado"
+              );
+            }
+
+            if (
+              !azure.assignedToName?.trim() &&
+              azureState !==
+                "concluido" &&
+              azureState !==
+                "cancelado"
+            ) {
+              reasons.push(
+                "Task Azure sem responsável"
+              );
+            }
+
+            if (
+              azureCriticality ===
+                "critica" ||
+              azureCriticality ===
+                "alta"
+            ) {
+              reasons.push(
+                `Task Azure com criticidade ${azure.criticality}`
+              );
+            }
+
+            if (
+              azureState ===
+              "concluido"
+            ) {
+              reasons.push(
+                "Task Azure concluída com atendimento ainda aberto"
+              );
+            }
+
+            if (
+              azure.prioritized ===
+                true &&
+              azureState !==
+                "concluido" &&
+              azureState !==
+                "cancelado"
+            ) {
+              const movementDate =
+                toValidDate(
+                  azure.stateChangedAt ??
+                    azure.azureChangedAt
+                );
+
+              if (movementDate) {
+                const daysWithoutMovement =
+                  Math.floor(
+                    (
+                      now.getTime() -
+                      movementDate.getTime()
+                    ) /
+                      (
+                        1000 *
+                        60 *
+                        60 *
+                        24
+                      )
+                  );
+
+                if (
+                  daysWithoutMovement >=
+                  7
+                ) {
+                  reasons.push(
+                    `Task priorizada sem movimentação há ${daysWithoutMovement} dias`
+                  );
+                }
+              }
+            }
+          }
+
+          if (
+            reasons.length === 0
+          ) {
+            return null;
+          }
+
+          const level =
+            resolveCombinedAttentionLevel(
+              serviceLevel,
+              slaMeasured,
+              reasons
+            );
+
+          return {
+            ...ticket,
+            ageHours,
+            reasons,
+            level,
+            serviceLevel,
+          };
+        })
         .filter(
           (
             ticket
           ): ticket is
             AttentionTicket =>
-            Boolean(
-              ticket
-            )
+            Boolean(ticket)
         )
-        .sort(
-          (
-            a,
-            b
-          ) => {
-            const priority =
-              priorityWeight(
-                b.level
-              ) -
-              priorityWeight(
-                a.level
-              );
+        .sort((a, b) => {
+          const priority =
+            priorityWeight(
+              b.level
+            ) -
+            priorityWeight(
+              a.level
+            );
 
-            if (
-              priority !==
-              0
-            ) {
-              return priority;
-            }
+          if (
+            priority !== 0
+          ) {
+            return priority;
+          }
 
-            return (
-              a.serviceLevel
+          return (
+            a.serviceLevel
+              .resolution
+              .remainingMinutes ??
+            Number.MAX_SAFE_INTEGER
+          ) -
+            (
+              b.serviceLevel
                 .resolution
                 .remainingMinutes ??
               Number.MAX_SAFE_INTEGER
-            ) -
-              (
-                b.serviceLevel
-                  .resolution
-                  .remainingMinutes ??
-                Number.MAX_SAFE_INTEGER
-              );
-          }
-        );
+            );
+        });
     }, [
       periodTickets,
     ]);
 
   /* =====================================================
-     RESUMO
+     RESUMO DOS CARDS
+
+     Os cards respeitam período + responsável + cliente.
+     O próprio filtro de nível/risco não altera o valor dos
+     cards, evitando que um card mude depois de ser clicado.
   ===================================================== */
+
+  const cardScopeTickets =
+    useMemo(() => {
+      return attentionTickets.filter(
+        (ticket) => {
+          const matchesOwner =
+            owner === "" ||
+            ticket.owner === owner;
+
+          const matchesClient =
+            client === "" ||
+            ticket.client === client;
+
+          return (
+            matchesOwner &&
+            matchesClient
+          );
+        }
+      );
+    }, [
+      attentionTickets,
+      owner,
+      client,
+    ]);
 
   const summary =
     useMemo(() => {
       return {
         total:
-          attentionTickets.length,
+          cardScopeTickets.length,
 
         vencidos:
-          attentionTickets.filter(
+          cardScopeTickets.filter(
             (ticket) =>
               ticket.level ===
               "vencido"
           ).length,
 
         criticos:
-          attentionTickets.filter(
+          cardScopeTickets.filter(
             (ticket) =>
               ticket.level ===
               "critico"
           ).length,
 
         atencao:
-          attentionTickets.filter(
+          cardScopeTickets.filter(
             (ticket) =>
               ticket.level ===
               "atencao"
           ).length,
+
+        azure:
+          cardScopeTickets.filter(
+            (ticket) =>
+              ticket.reasons.some(
+                isAzureAttentionReason
+              )
+          ).length,
       };
     }, [
-      attentionTickets,
+      cardScopeTickets,
     ]);
 
   /* =====================================================
@@ -472,10 +648,20 @@ export function Attention() {
             ticket.client ===
               client;
 
+          const matchesRisk =
+            riskFilter === "" ||
+            (
+              riskFilter === "azure" &&
+              ticket.reasons.some(
+                isAzureAttentionReason
+              )
+            );
+
           return (
             matchesLevel &&
             matchesOwner &&
-            matchesClient
+            matchesClient &&
+            matchesRisk
           );
         }
       );
@@ -484,6 +670,7 @@ export function Attention() {
       level,
       owner,
       client,
+      riskFilter,
     ]);
 
   const activeFilterCount =
@@ -491,12 +678,31 @@ export function Attention() {
       level,
       owner,
       client,
+      riskFilter,
     ].filter(Boolean).length;
 
   function clearFilters() {
     setLevel("");
     setOwner("");
     setClient("");
+    setRiskFilter("");
+  }
+
+  function filterByCard(
+    nextLevel:
+      | ""
+      | AttentionLevel,
+    nextRisk:
+      | ""
+      | "azure" = ""
+  ) {
+    setLevel(
+      nextLevel
+    );
+
+    setRiskFilter(
+      nextRisk
+    );
   }
 
   async function copyTicketNumber(
@@ -530,21 +736,6 @@ export function Attention() {
       `Urgência: ${ticket.urgency ?? "—"}`,
       `Status: ${ticket.status}`,
       `Nível: ${attentionLabel(ticket.level)}`,
-      `1ª resposta vence em: ${formatDateTime(
-        ticket.firstResponseDueDate
-      )}`,
-      `1ª resposta dada em: ${formatDateTime(
-        ticket.firstResponseDate
-      )}`,
-      `Resultado 1ª resposta: ${
-        ticket.serviceLevel.firstResponse.completed
-          ? ticket.serviceLevel.firstResponse.withinDeadline
-            ? "Dentro do prazo"
-            : "Fora do prazo"
-          : ticket.serviceLevel.firstResponse.level === "OVERDUE"
-          ? "Vencida e ainda sem resposta"
-          : "Pendente"
-      }`,
       `Meta 1ª resposta: ${formatServiceMinutes(
         ticket.serviceLevel.firstResponse.targetMinutes
       )}`,
@@ -753,10 +944,12 @@ export function Attention() {
           borderRadius: 2,
         }}
       >
-        <strong>Regra oficial aplicada:</strong>{" "}
-        esta tela considera somente atendimentos medidos pelo prazo oficial,
-        em horas úteis, com base em urgência, categoria e pausas registradas.
-        Adequação e Solicitação de Serviço ficam fora da medição.
+        <strong>Regra de priorização:</strong>{" "}
+        a tela combina o prazo operacional em horas úteis com sinais de risco
+        do atendimento e do Azure DevOps. Adequação e Solicitação de Serviço
+        ficam fora da medição de prazo, mas ainda podem aparecer quando houver
+        outro risco relevante, como parada, ausência de responsável ou risco
+        de desenvolvimento.
       </Alert>
 
       {/* INDICADORES */}
@@ -767,8 +960,8 @@ export function Attention() {
 
           gridTemplateColumns: {
             xs: "1fr",
-            sm: "repeat(2, 1fr)",
-            lg: "repeat(4, 1fr)",
+            sm: "repeat(2, minmax(0, 1fr))",
+            lg: "repeat(5, minmax(0, 1fr))",
           },
 
           gap: {
@@ -783,20 +976,54 @@ export function Attention() {
         <IndicatorCard
           title="Requerem atenção"
           value={summary.total}
-          description="Total identificado pela regra"
+          description="Todos os riscos identificados"
+          info={{
+            title: "Requerem atenção",
+            summary:
+              "Total de atendimentos abertos que possuem pelo menos um motivo de acompanhamento operacional ou de desenvolvimento.",
+            calculation:
+              "Contagem dos tickets abertos com ao menos um gatilho de prazo, parada, ausência de responsável ou risco Azure.",
+            source:
+              "Movidesk + Azure DevOps",
+            reference:
+              "Status, prazo operacional, responsável e dados da Task vinculada",
+            periodRule:
+              "Respeita o período global e os filtros de Responsável e Cliente.",
+            notes:
+              "Clique no card para remover os filtros de nível e origem do risco e exibir exatamente este conjunto.",
+          }}
           onClick={() =>
-            setLevel("")
+            filterByCard(
+              "",
+              ""
+            )
           }
         />
 
         <IndicatorCard
           title="Vencidos"
           value={summary.vencidos}
-          description="Prazo já ultrapassado"
+          description="Prazo operacional ultrapassado"
           severity="error"
+          info={{
+            title: "Vencidos",
+            summary:
+              "Atendimentos em que a primeira resposta ou a solução já ultrapassou o limite operacional aplicável.",
+            calculation:
+              "Nível combinado = Vencido quando existe prazo de primeira resposta ou solução classificado como OVERDUE.",
+            source:
+              "Movidesk + regra operacional do TechLead Hub",
+            reference:
+              "Urgência, categoria, abertura, pausas e conclusão",
+            periodRule:
+              "Respeita o período global e os filtros de Responsável e Cliente.",
+            notes:
+              "Clique no card para listar exatamente os atendimentos vencidos deste recorte.",
+          }}
           onClick={() =>
-            setLevel(
-              "vencido"
+            filterByCard(
+              "vencido",
+              ""
             )
           }
         />
@@ -804,11 +1031,27 @@ export function Attention() {
         <IndicatorCard
           title="Críticos"
           value={summary.criticos}
-          description="Próximos do limite"
+          description="Próximos do limite ou com risco alto"
           severity="warning"
+          info={{
+            title: "Críticos",
+            summary:
+              "Atendimentos em situação crítica de prazo ou com um risco de desenvolvimento tratado como crítico.",
+            calculation:
+              "Inclui nível CRITICAL da regra operacional e riscos Azure como processo bloqueado, criticidade Alta/Crítica, Task priorizada sem movimentação e Task concluída com atendimento ainda aberto.",
+            source:
+              "Movidesk + Azure DevOps",
+            reference:
+              "Prazo operacional + criticidade/estado da Task",
+            periodRule:
+              "Respeita o período global e os filtros de Responsável e Cliente.",
+            notes:
+              "Clique para exibir exatamente os atendimentos classificados como críticos.",
+          }}
           onClick={() =>
-            setLevel(
-              "critico"
+            filterByCard(
+              "critico",
+              ""
             )
           }
         />
@@ -816,11 +1059,59 @@ export function Attention() {
         <IndicatorCard
           title="Em atenção"
           value={summary.atencao}
-          description="Gatilho oficial de acompanhamento"
+          description="Acompanhamento preventivo"
           severity="info"
+          info={{
+            title: "Em atenção",
+            summary:
+              "Atendimentos que já possuem um gatilho de acompanhamento, mas ainda não atingiram os níveis Vencido ou Crítico.",
+            calculation:
+              "Nível final = Atenção após avaliar prazo operacional e demais motivos de risco.",
+            source:
+              "Movidesk + Azure DevOps",
+            reference:
+              "Prazo, status, responsável e vínculo com desenvolvimento",
+            periodRule:
+              "Respeita o período global e os filtros de Responsável e Cliente.",
+            notes:
+              "Clique para listar somente os atendimentos atualmente classificados em atenção.",
+          }}
           onClick={() =>
-            setLevel(
-              "atencao"
+            filterByCard(
+              "atencao",
+              ""
+            )
+          }
+        />
+
+        <IndicatorCard
+          title="Risco Azure"
+          value={summary.azure}
+          description="Risco ou inconsistência no desenvolvimento"
+          severity={
+            summary.azure > 0
+              ? "warning"
+              : "default"
+          }
+          info={{
+            title: "Risco Azure",
+            summary:
+              "Atendimentos com algum risco relacionado à Task vinculada ou à sincronização com o Azure DevOps.",
+            calculation:
+              "Conta tickets com motivos como Task não sincronizada, processo bloqueado, ausência de responsável, criticidade Alta/Crítica, Task concluída com ticket aberto ou priorizada sem movimentação.",
+            source:
+              "Azure DevOps + vínculo Movidesk",
+            reference:
+              "azureWorkItem + taskNumber",
+            periodRule:
+              "Respeita o período global e os filtros de Responsável e Cliente. Pode sobrepor Vencidos, Críticos e Em atenção.",
+            notes:
+              "Clique no card para filtrar exatamente os atendimentos que possuem algum motivo de risco Azure.",
+          }}
+          onClick={() =>
+            filterByCard(
+              "",
+              "azure"
             )
           }
         />
@@ -1018,6 +1309,42 @@ export function Attention() {
               </Select>
             </FormControl>
 
+            <FormControl
+              size="small"
+              sx={{
+                minWidth: {
+                  xs:
+                    "100%",
+                  md:
+                    190,
+                },
+              }}
+            >
+              <InputLabel>
+                Origem do risco
+              </InputLabel>
+
+              <Select
+                value={riskFilter}
+                label="Origem do risco"
+                onChange={(event) =>
+                  setRiskFilter(
+                    event.target.value as
+                      | ""
+                      | "azure"
+                  )
+                }
+              >
+                <MenuItem value="">
+                  Todos
+                </MenuItem>
+
+                <MenuItem value="azure">
+                  Risco Azure
+                </MenuItem>
+              </Select>
+            </FormControl>
+
             {activeFilterCount > 0 && (
               <Button
                 size="small"
@@ -1098,7 +1425,7 @@ export function Attention() {
                 variant="caption"
                 color="text.secondary"
               >
-                Priorizados pela mesma regra oficial usada em Desempenho e Tickets
+                Clique em uma linha para abrir os detalhes do atendimento e do desenvolvimento
               </Typography>
             </Box>
 
@@ -1170,6 +1497,12 @@ export function Attention() {
                 <TableCell>
                   <strong>
                     Status
+                  </strong>
+                </TableCell>
+
+                <TableCell>
+                  <strong>
+                    Desenvolvimento
                   </strong>
                 </TableCell>
 
@@ -1360,6 +1693,12 @@ export function Attention() {
                     </TableCell>
 
                     <TableCell>
+                      <AzureAttentionSummary
+                        ticket={ticket}
+                      />
+                    </TableCell>
+
+                    <TableCell>
                       <Stack
                         spacing={0.25}
                       >
@@ -1394,7 +1733,7 @@ export function Attention() {
                 0 && (
                 <TableRow>
                   <TableCell
-                    colSpan={8}
+                    colSpan={9}
                     align="center"
                   >
                     <Box
@@ -1878,7 +2217,8 @@ export function Attention() {
 
               {(selectedTicket.taskNumber ||
                 selectedTicket.taskStatus ||
-                selectedTicket.deliveredVersion) && (
+                selectedTicket.deliveredVersion ||
+                selectedTicket.azureWorkItem) && (
                 <>
                   <Divider
                     sx={{
@@ -1888,46 +2228,170 @@ export function Attention() {
 
                   <Typography
                     variant="subtitle2"
-                    sx={{ fontWeight: 800, mb: 1.5, }}
+                    sx={{
+                      fontWeight: 800,
+                      mb: 1.5,
+                    }}
                   >
                     Desenvolvimento
                   </Typography>
 
-                  <Box
-                    sx={{
-                      display: "grid",
+                  {selectedTicket.azureWorkItem ? (
+                    <>
+                      <Box
+                        sx={{
+                          display: "grid",
+                          gridTemplateColumns: {
+                            xs: "1fr",
+                            sm: "1fr 1fr",
+                          },
+                          gap: 1.5,
+                        }}
+                      >
+                        <TicketField
+                          label="Task"
+                          value={`#${selectedTicket.azureWorkItem.id}`}
+                        />
 
-                      gridTemplateColumns: {
-                        xs: "1fr",
-                        sm: "1fr 1fr",
-                      },
+                        <TicketField
+                          label="Tipo"
+                          value={
+                            selectedTicket.azureWorkItem.workItemType
+                          }
+                        />
 
-                      gap: 1.5,
-                    }}
-                  >
-                    <TicketField
-                      label="Task"
-                      value={
-                        selectedTicket.taskNumber
-                          ? `#${selectedTicket.taskNumber}`
-                          : null
-                      }
-                    />
+                        <TicketField
+                          label="Estado Azure"
+                          value={
+                            selectedTicket.azureWorkItem.state
+                          }
+                        />
 
-                    <TicketField
-                      label="Status da Task"
-                      value={
-                        selectedTicket.taskStatus
-                      }
-                    />
+                        <TicketField
+                          label="Responsável Azure"
+                          value={
+                            selectedTicket.azureWorkItem.assignedToName
+                          }
+                        />
 
-                    <TicketField
-                      label="Versão entregue"
-                      value={
-                        selectedTicket.deliveredVersion
-                      }
-                    />
-                  </Box>
+                        <TicketField
+                          label="Criticidade"
+                          value={
+                            selectedTicket.azureWorkItem.criticality
+                          }
+                        />
+
+                        <TicketField
+                          label="Versão"
+                          value={
+                            selectedTicket.azureWorkItem.deliveredVersion ??
+                            selectedTicket.deliveredVersion
+                          }
+                        />
+
+                        <TicketField
+                          label="Módulo"
+                          value={
+                            selectedTicket.azureWorkItem.module
+                          }
+                        />
+
+                        <TicketField
+                          label="Processo"
+                          value={
+                            selectedTicket.azureWorkItem.process
+                          }
+                        />
+
+                        <TicketField
+                          label="Última movimentação"
+                          value={formatDateTime(
+                            selectedTicket.azureWorkItem.stateChangedAt ??
+                            selectedTicket.azureWorkItem.azureChangedAt
+                          )}
+                        />
+
+                        <TicketField
+                          label="Movidesk informado na Task"
+                          value={
+                            selectedTicket.azureWorkItem.movideskTicket
+                              ? `#${selectedTicket.azureWorkItem.movideskTicket}`
+                              : null
+                          }
+                        />
+                      </Box>
+
+                      <Stack
+                        direction="row"
+                        spacing={1}
+                        useFlexGap
+                        sx={{
+                          mt: 1.5,
+                          flexWrap: "wrap",
+                        }}
+                      >
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          onClick={() =>
+                            navigate(
+                              `${
+                                selectedTicket.azureWorkItem?.workItemType ===
+                                "Evolução"
+                                  ? "/evolucoes"
+                                  : "/correcoes"
+                              }?task=${selectedTicket.azureWorkItem?.id}`
+                            )
+                          }
+                        >
+                          Ver no TechLead Hub
+                        </Button>
+                      </Stack>
+                    </>
+                  ) : (
+                    <Box
+                      sx={{
+                        display: "grid",
+                        gridTemplateColumns: {
+                          xs: "1fr",
+                          sm: "1fr 1fr",
+                        },
+                        gap: 1.5,
+                      }}
+                    >
+                      <TicketField
+                        label="Task"
+                        value={
+                          selectedTicket.taskNumber
+                            ? `#${selectedTicket.taskNumber}`
+                            : null
+                        }
+                      />
+
+                      <TicketField
+                        label="Status da Task"
+                        value={
+                          selectedTicket.taskStatus
+                        }
+                      />
+
+                      <TicketField
+                        label="Versão entregue"
+                        value={
+                          selectedTicket.deliveredVersion
+                        }
+                      />
+
+                      <TicketField
+                        label="Integração Azure"
+                        value={
+                          selectedTicket.taskNumber
+                            ? "Task ainda não sincronizada"
+                            : null
+                        }
+                      />
+                    </Box>
+                  )}
                 </>
               )}
             </>
@@ -1948,6 +2412,140 @@ export function Attention() {
 }
 
 /* =====================================================
+   RESUMO AZURE NA LISTAGEM
+===================================================== */
+
+function AzureAttentionSummary({
+  ticket,
+}: {
+  ticket: AttentionTicket;
+}) {
+  const azure =
+    ticket.azureWorkItem;
+
+  if (azure) {
+    return (
+      <Box
+        sx={{
+          minWidth: 130,
+          maxWidth: 210,
+        }}
+      >
+        <Stack
+          direction="row"
+          spacing={0.5}
+          useFlexGap
+          sx={{
+            alignItems: "center",
+            flexWrap: "wrap",
+          }}
+        >
+          <Typography
+            variant="caption"
+            sx={{
+              fontWeight: 800,
+            }}
+          >
+            #{azure.id}
+          </Typography>
+
+          {azure.blockedProcess && (
+            <Chip
+              size="small"
+              label="Bloqueada"
+              color="error"
+              variant="outlined"
+              sx={{
+                height: 20,
+                fontSize: "0.65rem",
+              }}
+            />
+          )}
+
+          {azure.prioritized && (
+            <Chip
+              size="small"
+              label="Priorizada"
+              variant="outlined"
+              sx={{
+                height: 20,
+                fontSize: "0.65rem",
+              }}
+            />
+          )}
+        </Stack>
+
+        <Typography
+          variant="caption"
+          sx={{
+            display: "block",
+            mt: 0.2,
+            fontWeight: 700,
+            color: aliareColors.greenDark,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+          title={azure.state}
+        >
+          {azure.state}
+        </Typography>
+
+        {(azure.assignedToName ||
+          azure.criticality) && (
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            sx={{
+              display: "block",
+              mt: 0.1,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+            title={[
+              azure.assignedToName,
+              azure.criticality,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+          >
+            {[
+              azure.assignedToName,
+              azure.criticality,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+          </Typography>
+        )}
+      </Box>
+    );
+  }
+
+  if (ticket.taskNumber) {
+    return (
+      <Typography
+        variant="caption"
+        color="text.secondary"
+      >
+        #{ticket.taskNumber}
+        <br />
+        Não sincronizada
+      </Typography>
+    );
+  }
+
+  return (
+    <Typography
+      variant="caption"
+      color="text.secondary"
+    >
+      —
+    </Typography>
+  );
+}
+
+/* =====================================================
    CARD DE INDICADOR
 ===================================================== */
 
@@ -1955,12 +2553,14 @@ function IndicatorCard({
   title,
   value,
   description,
+  info,
   severity = "default",
   onClick,
 }: {
   title: string;
   value: number;
   description: string;
+  info: CardInfoDefinition;
 
   severity?:
     | "default"
@@ -1993,6 +2593,19 @@ function IndicatorCard({
           : undefined
       }
       onClick={onClick}
+      onKeyDown={(event) => {
+        if (
+          onClick &&
+          (
+            event.key ===
+              "Enter" ||
+            event.key ===
+              " "
+          )
+        ) {
+          onClick();
+        }
+      }}
       sx={{
         position:
           "relative",
@@ -2007,13 +2620,21 @@ function IndicatorCard({
           "divider",
 
         borderRadius:
-          2.15,
+          2.25,
 
         height:
           "100%",
 
         backgroundColor:
           "background.paper",
+
+        cursor:
+          onClick
+            ? "pointer"
+            : "default",
+
+        transition:
+          "transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease",
 
         "&::before": {
           content:
@@ -2037,13 +2658,6 @@ function IndicatorCard({
           backgroundColor:
             accentColor,
         },
-        cursor:
-          onClick
-            ? "pointer"
-            : "default",
-
-        transition:
-          "transform 0.15s ease, box-shadow 0.15s ease",
 
         ...(onClick && {
           "&:hover": {
@@ -2056,41 +2670,91 @@ function IndicatorCard({
             boxShadow:
               "0 8px 24px rgba(16,24,40,0.08)",
           },
+
+          "&:focus-visible": {
+            outline:
+              `2px solid ${accentColor}`,
+
+            outlineOffset:
+              "2px",
+          },
         }),
       }}
     >
       <CardContent
         sx={{
           p: {
-            xs: 1.5,
-            md: 1.75,
+            xs:
+              1.6,
+            md:
+              1.8,
           },
 
           "&:last-child": {
             pb: {
-              xs: 1.5,
-              md: 1.75,
+              xs:
+                1.6,
+              md:
+                1.8,
             },
           },
         }}
       >
-        <Typography
-          variant="body2"
-          color="text.secondary"
-         sx={{ fontWeight: 600 }}>
-          {title}
-        </Typography>
+        <Stack
+          direction="row"
+          spacing={1}
+          sx={{
+            alignItems:
+              "center",
+
+            justifyContent:
+              "space-between",
+
+            gap:
+              1,
+          }}
+        >
+          <Typography
+            variant="body2"
+            sx={{
+              fontWeight:
+                800,
+
+              color:
+                "text.primary",
+            }}
+          >
+            {title}
+          </Typography>
+
+          <CardInfo
+            definition={info}
+          />
+        </Stack>
 
         <Typography
-          sx={{ fontWeight: 800, mt: 0.5,
+          sx={{
+            fontWeight:
+              800,
+
+            mt:
+              0.6,
+
+            letterSpacing:
+              "-0.025em",
 
             fontSize: {
-              xs: "1.7rem",
-              md: "1.9rem",
-              xl: "2.05rem",
+              xs:
+                "1.75rem",
+              md:
+                "1.95rem",
+              xl:
+                "2.1rem",
             },
 
-            lineHeight: 1.1, }}
+            lineHeight:
+              1.05,
+          }}
         >
           {value}
         </Typography>
@@ -2099,8 +2763,14 @@ function IndicatorCard({
           variant="caption"
           color="text.secondary"
           sx={{
-            display: "block",
-            mt: 0.75,
+            display:
+              "block",
+
+            mt:
+              0.75,
+
+            minHeight:
+              18,
           }}
         >
           {description}
@@ -2111,10 +2781,10 @@ function IndicatorCard({
             variant="caption"
             sx={{
               display:
-                "block",
+                "inline-block",
 
               mt:
-                0.6,
+                0.85,
 
               fontWeight:
                 700,
@@ -2123,11 +2793,282 @@ function IndicatorCard({
                 aliareColors.greenDark,
             }}
           >
-            Filtrar →
+            Ver tickets →
           </Typography>
         )}
       </CardContent>
     </Card>
+  );
+}
+
+/* =====================================================
+   INFORMAÇÃO DO CARD
+===================================================== */
+
+function CardInfo({
+  definition,
+}: {
+  definition:
+    CardInfoDefinition;
+}) {
+  const [
+    anchorEl,
+    setAnchorEl,
+  ] =
+    useState<HTMLElement | null>(
+      null
+    );
+
+  const open =
+    Boolean(anchorEl);
+
+  return (
+    <>
+      <IconButton
+        size="small"
+        aria-label={`Informações sobre ${definition.title}`}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        title={`Como é calculado: ${definition.title}`}
+        onClick={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+
+          setAnchorEl(
+            event.currentTarget
+          );
+        }}
+        onKeyDown={(event) =>
+          event.stopPropagation()
+        }
+        sx={{
+          p:
+            0.3,
+
+          color:
+            "text.secondary",
+
+          "&:hover": {
+            color:
+              aliareColors.greenDark,
+
+            backgroundColor:
+              "rgba(24,199,122,0.08)",
+          },
+        }}
+      >
+        <InfoOutlined
+          sx={{
+            fontSize:
+              16,
+          }}
+        />
+      </IconButton>
+
+      <Popover
+        open={open}
+        anchorEl={anchorEl}
+        onClose={() =>
+          setAnchorEl(null)
+        }
+        anchorOrigin={{
+          vertical:
+            "bottom",
+          horizontal:
+            "left",
+        }}
+        transformOrigin={{
+          vertical:
+            "top",
+          horizontal:
+            "left",
+        }}
+        slotProps={{
+          paper: {
+            onClick: (
+              event:
+                MouseEvent<HTMLElement>
+            ) =>
+              event.stopPropagation(),
+
+            sx: {
+              width: {
+                xs:
+                  320,
+                sm:
+                  390,
+              },
+
+              maxWidth:
+                "calc(100vw - 32px)",
+
+              mt:
+                0.75,
+
+              p:
+                2,
+
+              borderRadius:
+                2,
+
+              border:
+                "1px solid",
+
+              borderColor:
+                "divider",
+
+              boxShadow:
+                "0 14px 40px rgba(16,24,40,0.14)",
+            },
+          },
+        }}
+      >
+        <Stack
+          spacing={
+            1.2
+          }
+        >
+          <Box>
+            <Typography
+              sx={{
+                fontWeight:
+                  850,
+              }}
+            >
+              {definition.title}
+            </Typography>
+
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              sx={{
+                mt:
+                  0.4,
+
+                lineHeight:
+                  1.55,
+              }}
+            >
+              {definition.summary}
+            </Typography>
+          </Box>
+
+          <Divider />
+
+          <CardInfoLine
+            label="Como é calculado"
+            value={
+              definition.calculation
+            }
+          />
+
+          <CardInfoLine
+            label="Fonte"
+            value={
+              definition.source
+            }
+          />
+
+          <CardInfoLine
+            label="Campo de referência"
+            value={
+              definition.reference
+            }
+          />
+
+          <CardInfoLine
+            label="Regra de período"
+            value={
+              definition.periodRule
+            }
+          />
+
+          {definition.notes && (
+            <Box
+              sx={{
+                p:
+                  1.1,
+
+                borderRadius:
+                  1.5,
+
+                backgroundColor:
+                  "rgba(24,199,122,0.055)",
+
+                border:
+                  "1px solid rgba(24,199,122,0.16)",
+              }}
+            >
+              <Typography
+                variant="caption"
+                sx={{
+                  fontWeight:
+                    800,
+
+                  color:
+                    aliareColors.greenDark,
+                }}
+              >
+                Observação
+              </Typography>
+
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{
+                  display:
+                    "block",
+
+                  mt:
+                    0.25,
+
+                  lineHeight:
+                    1.5,
+                }}
+              >
+                {definition.notes}
+              </Typography>
+            </Box>
+          )}
+        </Stack>
+      </Popover>
+    </>
+  );
+}
+
+function CardInfoLine({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
+  return (
+    <Box>
+      <Typography
+        variant="caption"
+        color="text.secondary"
+        sx={{
+          fontWeight:
+            700,
+        }}
+      >
+        {label}
+      </Typography>
+
+      <Typography
+        variant="body2"
+        sx={{
+          mt:
+            0.15,
+
+          lineHeight:
+            1.5,
+        }}
+      >
+        {value}
+      </Typography>
+    </Box>
   );
 }
 
@@ -2406,14 +3347,9 @@ function getOfficialServiceLevel(
 
     createdDate:
       ticket.createdDate,
-    dueDate: ticket.dueDate,
-    baseStatus: ticket.baseStatus,
 
     firstResponseDate:
       ticket.firstResponseDate,
-
-    firstResponseDueDate:
-      ticket.firstResponseDueDate,
 
     resolvedDate:
       ticket.resolvedDate,
@@ -2472,6 +3408,58 @@ function isOfficialMeasuredCategory(
       "bug"
     )
   );
+}
+
+function isAzureAttentionReason(
+  reason: string
+) {
+  return (
+    reason.includes("Task Azure") ||
+    reason.includes("Task priorizada") ||
+    reason.includes("Task ainda não sincronizada")
+  );
+}
+
+function resolveCombinedAttentionLevel(
+  serviceLevel: ServiceLevelResult,
+  slaMeasured: boolean,
+  reasons: string[]
+): AttentionLevel {
+  const normalizedReasons =
+    reasons.map(normalize);
+
+  const hasOverdue =
+    normalizedReasons.some(
+      (reason) =>
+        reason.includes("vencida") ||
+        reason.includes("vencido")
+    );
+
+  if (hasOverdue) {
+    return "vencido";
+  }
+
+  const hasCriticalAzureRisk =
+    normalizedReasons.some(
+      (reason) =>
+        reason.includes("processo bloqueado") ||
+        reason.includes("criticidade critica") ||
+        reason.includes("criticidade alta") ||
+        reason.includes("concluida com atendimento ainda aberto") ||
+        reason.includes("priorizada sem movimentacao")
+    );
+
+  if (hasCriticalAzureRisk) {
+    return "critico";
+  }
+
+  if (slaMeasured) {
+    return resolveAttentionLevel(
+      serviceLevel
+    );
+  }
+
+  return "atencao";
 }
 
 function resolveAttentionLevel(
@@ -2538,6 +3526,29 @@ function getOfficialRuleLabel(
     "BUG"
     ? "Bug · Suporte + Fábrica"
     : "Dúvida / Problema / Contorno";
+}
+
+function toValidDate(
+  value:
+    | string
+    | Date
+    | null
+    | undefined
+) {
+  if (!value) {
+    return null;
+  }
+
+  const date =
+    value instanceof Date
+      ? value
+      : new Date(value);
+
+  return Number.isNaN(
+    date.getTime()
+  )
+    ? null
+    : date;
 }
 
 /* =====================================================

@@ -10,16 +10,22 @@ import {
   ListItemButton,
   ListItemIcon,
   ListItemText,
+  Menu,
+  MenuItem as MuiMenuItem,
   Stack,
   Typography,
 } from "@mui/material";
 
 import {
+  AutoFixHighOutlined,
+  BugReportOutlined,
   BusinessOutlined,
   ConfirmationNumberOutlined,
   DashboardOutlined,
+  ExpandMoreRounded,
   GroupsOutlined,
   InfoOutlined,
+  Inventory2Outlined,
   LogoutOutlined,
   ManageAccountsOutlined,
   PersonOutlined,
@@ -36,6 +42,7 @@ import {
 } from "react";
 
 import type {
+  MouseEvent,
   ReactNode,
 } from "react";
 
@@ -62,8 +69,7 @@ import {
    CONFIGURAÇÃO
 ========================================================= */
 
-export const drawerWidth =
-  248;
+export const drawerWidth = 248;
 
 /* =========================================================
    TIPOS
@@ -71,11 +77,8 @@ export const drawerWidth =
 
 type MenuItemData = {
   label: string;
-
   path: string;
-
   icon: ReactNode;
-
   badge?: number;
 };
 
@@ -107,23 +110,28 @@ export function Sidebar() {
     appVersion,
     setAppVersion,
   ] =
-    useState(
-      "Beta"
-    );
+    useState("Beta");
 
   const [
     loggingOut,
     setLoggingOut,
   ] =
-    useState(
-      false
-    );
+    useState(false);
 
   const [
     pendingUsers,
     setPendingUsers,
   ] =
     useState(0);
+
+  const [
+    profileAnchor,
+    setProfileAnchor,
+  ] =
+    useState<HTMLElement | null>(null);
+
+  const profileMenuOpen =
+    Boolean(profileAnchor);
 
   /* =======================================================
      VERSÃO DO APLICATIVO
@@ -146,7 +154,7 @@ export function Sidebar() {
 
         if (mounted) {
           setAppVersion(
-            `v${version}`
+            `v${version}`,
           );
         }
       } catch (
@@ -154,7 +162,7 @@ export function Sidebar() {
       ) {
         console.error(
           "Erro ao carregar versão do aplicativo:",
-          error
+          error,
         );
       }
     }
@@ -168,47 +176,38 @@ export function Sidebar() {
   }, []);
 
   /* =======================================================
-     PENDÊNCIAS DE USUÁRIOS
-
-     Executado somente para administradores.
+     USUÁRIOS PENDENTES
   ======================================================= */
 
   const loadPendingUsers =
     useCallback(
       async () => {
         if (!isAdmin) {
-          setPendingUsers(
-            0
-          );
-
+          setPendingUsers(0);
           return;
         }
 
         try {
           const response =
             await api.get<PendingUsersResponse>(
-              "/users/pending"
+              "/users/pending",
             );
 
           setPendingUsers(
-            response.data.users.length
+            response.data.users.length,
           );
         } catch (
           error
         ) {
-          /*
-           * Falha no contador não deve impedir
-           * o uso normal da aplicação.
-           */
           console.warn(
             "[sidebar] Não foi possível carregar usuários pendentes:",
-            error
+            error,
           );
         }
       },
       [
         isAdmin,
-      ]
+      ],
     );
 
   useEffect(() => {
@@ -217,13 +216,6 @@ export function Sidebar() {
     loadPendingUsers,
   ]);
 
-  /*
-   * Ao navegar para a administração de usuários,
-   * atualiza novamente o contador.
-   *
-   * Isso permite refletir aprovações/rejeições
-   * sem implementar polling periódico.
-   */
   useEffect(() => {
     if (
       isAdmin &&
@@ -239,7 +231,7 @@ export function Sidebar() {
   ]);
 
   /* =======================================================
-     MENU PRINCIPAL
+     OPERAÇÃO
   ======================================================= */
 
   const mainMenu =
@@ -248,98 +240,109 @@ export function Sidebar() {
         {
           label:
             "Dashboard",
-
           path:
             "/",
-
           icon:
             <DashboardOutlined fontSize="small" />,
         },
-
         {
           label:
             "Tickets",
-
           path:
             "/tickets",
-
           icon:
             <ConfirmationNumberOutlined fontSize="small" />,
         },
-
         {
           label:
             "Analistas",
-
           path:
             "/analistas",
-
           icon:
             <GroupsOutlined fontSize="small" />,
         },
-
         {
           label:
             "Clientes",
-
           path:
             "/clientes",
-
           icon:
             <BusinessOutlined fontSize="small" />,
         },
-
         {
           label:
             "Desempenho",
-
           path:
             "/desempenho",
-
           icon:
             <TrendingUpOutlined fontSize="small" />,
         },
-
         {
           label:
             "Pontos de Atenção",
-
           path:
             "/atencao",
-
           icon:
             <WarningAmberOutlined fontSize="small" />,
         },
       ],
-      []
+      [],
     );
 
   /* =======================================================
-     ADMINISTRAÇÃO
+     DESENVOLVIMENTO
   ======================================================= */
 
-  const administrationMenu =
+  const developmentMenu =
+    useMemo<MenuItemData[]>(
+      () => [
+        {
+          label:
+            "Correções",
+          path:
+            "/correcoes",
+          icon:
+            <BugReportOutlined fontSize="small" />,
+        },
+        {
+          label:
+            "Evoluções",
+          path:
+            "/evolucoes",
+          icon:
+            <AutoFixHighOutlined fontSize="small" />,
+        },
+        {
+          label:
+            "Versões",
+          path:
+            "/versoes",
+          icon:
+            <Inventory2Outlined fontSize="small" />,
+        },
+      ],
+      [],
+    );
+
+  /* =======================================================
+     SISTEMA
+  ======================================================= */
+
+  const systemMenu =
     useMemo<MenuItemData[]>(
       () => {
         const items:
           MenuItemData[] =
           [];
 
-        /*
-         * Administração de usuários é exclusiva
-         * para perfil ADMIN.
-         */
         if (isAdmin) {
           items.push({
             label:
               "Usuários",
-
             path:
               "/usuarios",
-
             icon:
               <ManageAccountsOutlined fontSize="small" />,
-
             badge:
               pendingUsers,
           });
@@ -349,24 +352,19 @@ export function Sidebar() {
           {
             label:
               "Importar Dados",
-
             path:
               "/importar",
-
             icon:
               <UploadFileOutlined fontSize="small" />,
           },
-
           {
             label:
               "Sobre e Atualizações",
-
             path:
               "/sobre",
-
             icon:
               <InfoOutlined fontSize="small" />,
-          }
+          },
         );
 
         return items;
@@ -374,7 +372,7 @@ export function Sidebar() {
       [
         isAdmin,
         pendingUsers,
-      ]
+      ],
     );
 
   /* =======================================================
@@ -387,17 +385,17 @@ export function Sidebar() {
         getInitials(
           user?.name ??
             user?.username ??
-            "Usuário"
+            "Usuário",
         ),
       [
         user?.name,
         user?.username,
-      ]
+      ],
     );
 
   const userRole =
     getRoleLabel(
-      user?.role
+      user?.role,
     );
 
   /* =======================================================
@@ -410,9 +408,8 @@ export function Sidebar() {
     }
 
     try {
-      setLoggingOut(
-        true
-      );
+      setLoggingOut(true);
+      setProfileAnchor(null);
 
       await logout();
 
@@ -421,13 +418,28 @@ export function Sidebar() {
         {
           replace:
             true,
-        }
+        },
       );
     } finally {
-      setLoggingOut(
-        false
-      );
+      setLoggingOut(false);
     }
+  }
+
+  function handleOpenProfileMenu(
+    event: MouseEvent<HTMLElement>,
+  ) {
+    setProfileAnchor(
+      event.currentTarget,
+    );
+  }
+
+  function handleCloseProfileMenu() {
+    setProfileAnchor(null);
+  }
+
+  function handleNavigateToProfile() {
+    setProfileAnchor(null);
+    navigate("/perfil");
   }
 
   /* =======================================================
@@ -435,7 +447,8 @@ export function Sidebar() {
   ======================================================= */
 
   return (
-    <Drawer
+    <>
+      <Drawer
       variant="permanent"
       sx={{
         width:
@@ -467,606 +480,308 @@ export function Sidebar() {
             borderRight:
               `1px solid ${aliareColors.graphiteSoft}`,
 
-            overflowX:
+            overflow:
               "hidden",
           },
       }}
     >
       {/* ===================================================
-          IDENTIDADE
+          CONTEÚDO ROLÁVEL
       =================================================== */}
 
       <Box
         sx={{
-          px: 2.25,
-          pt: 2.25,
-          pb: 1.75,
-        }}
-      >
-        <Stack
-          direction="row"
-          spacing={1}
-          sx={{
-            alignItems:
-              "center",
-          }}
-        >
-          <Box
-            aria-hidden
-            sx={{
-              width: 10,
-              height: 10,
+          flex:
+            1,
+
+          minHeight:
+            0,
+
+          overflowY:
+            "auto",
+
+          overflowX:
+            "hidden",
+
+          scrollbarWidth:
+            "thin",
+
+          scrollbarColor:
+            "rgba(255,255,255,0.16) transparent",
+
+          "&::-webkit-scrollbar":
+            {
+              width:
+                6,
+            },
+
+          "&::-webkit-scrollbar-track":
+            {
+              background:
+                "transparent",
+            },
+
+          "&::-webkit-scrollbar-thumb":
+            {
+              backgroundColor:
+                "rgba(255,255,255,0.14)",
 
               borderRadius:
-                "2px",
+                99,
+            },
 
+          "&::-webkit-scrollbar-thumb:hover":
+            {
               backgroundColor:
-                aliareColors.green,
-
-              transform:
-                "rotate(-6deg)",
-
-              flexShrink:
-                0,
-            }}
-          />
-
-          <Typography
-            sx={{
-              fontSize:
-                "0.76rem",
-
-              fontWeight:
-                800,
-
-              letterSpacing:
-                "0.12em",
-
-              textTransform:
-                "uppercase",
-
-              color:
-                "rgba(255,255,255,0.72)",
-            }}
-          >
-            aliare
-          </Typography>
-        </Stack>
-
-        <Typography
-          sx={{
-            mt: 1.4,
-
-            fontSize:
-              "1.28rem",
-
-            fontWeight:
-              800,
-
-            lineHeight:
-              1.15,
-
-            letterSpacing:
-              "-0.025em",
-
-            color:
-              "#FFFFFF",
-          }}
-        >
-          TechLead Hub
-        </Typography>
-
-        <Typography
-          variant="caption"
-          sx={{
-            display:
-              "block",
-
-            mt: 0.4,
-
-            color:
-              "rgba(255,255,255,0.50)",
-          }}
-        >
-          Support Intelligence
-        </Typography>
-
-        {/* CONTEXTO */}
+                "rgba(255,255,255,0.24)",
+            },
+        }}
+      >
+        {/* =================================================
+            IDENTIDADE
+        ================================================= */}
 
         <Box
           sx={{
-            mt: 2,
+            px:
+              2.25,
 
-            p: 1.35,
+            pt:
+              2.25,
 
-            borderRadius:
-              1.6,
+            pb:
+              1.75,
+          }}
+        >
+          <Stack
+            direction="row"
+            spacing={1}
+            sx={{
+              alignItems:
+                "center",
+            }}
+          >
+            <Box
+              aria-hidden
+              sx={{
+                width:
+                  10,
 
-            backgroundColor:
-              aliareColors.graphite,
+                height:
+                  10,
 
-            border:
-              "1px solid rgba(255,255,255,0.07)",
+                borderRadius:
+                  "2px",
 
-            position:
-              "relative",
+                backgroundColor:
+                  aliareColors.green,
 
-            overflow:
-              "hidden",
+                transform:
+                  "rotate(-6deg)",
 
-            "&::before": {
-              content:
-                '""',
+                flexShrink:
+                  0,
+              }}
+            />
 
-              position:
-                "absolute",
+            <Typography
+              sx={{
+                fontSize:
+                  "0.76rem",
 
-              top: 0,
-              left: 0,
+                fontWeight:
+                  800,
 
-              width: 3,
+                letterSpacing:
+                  "0.12em",
 
-              height:
-                "100%",
+                textTransform:
+                  "uppercase",
+
+                color:
+                  "rgba(255,255,255,0.72)",
+              }}
+            >
+              aliare
+            </Typography>
+          </Stack>
+
+          <Box
+            sx={{
+              mt:
+                1.4,
+
+              p:
+                1.35,
+
+              borderRadius:
+                1.6,
 
               backgroundColor:
-                aliareColors.green,
-            },
-          }}
-        >
-          <Typography
-            sx={{
-              fontSize:
-                "0.67rem",
+                aliareColors.graphite,
 
-              fontWeight:
-                800,
+              border:
+                "1px solid rgba(255,255,255,0.07)",
 
-              letterSpacing:
-                "0.08em",
+              position:
+                "relative",
 
-              textTransform:
-                "uppercase",
+              overflow:
+                "hidden",
 
-              color:
-                aliareColors.green,
+              "&::before":
+                {
+                  content:
+                    '""',
+
+                  position:
+                    "absolute",
+
+                  top:
+                    0,
+
+                  left:
+                    0,
+
+                  width:
+                    3,
+
+                  height:
+                    "100%",
+
+                  backgroundColor:
+                    aliareColors.green,
+                },
             }}
           >
-            Suporte e Sustentação
-          </Typography>
+            <Typography
+              sx={{
+                fontSize:
+                  "0.67rem",
 
-          <Typography
-            sx={{
-              mt: 0.65,
+                fontWeight:
+                  800,
 
-              fontSize:
-                "0.78rem",
+                letterSpacing:
+                  "0.08em",
 
-              fontWeight:
-                650,
+                textTransform:
+                  "uppercase",
 
-              color:
-                "rgba(255,255,255,0.90)",
-            }}
-          >
-            Produto · SIMER
-          </Typography>
+                color:
+                  aliareColors.green,
+              }}
+            >
+              Suporte e Sustentação
+            </Typography>
 
-          <Typography
-            variant="caption"
-            sx={{
-              display:
-                "block",
+            <Typography
+              sx={{
+                mt:
+                  0.65,
 
-              mt: 0.25,
+                fontSize:
+                  "0.78rem",
 
-              color:
-                "rgba(255,255,255,0.42)",
+                fontWeight:
+                  650,
 
-              fontSize:
-                "0.66rem",
-            }}
-          >
-            Inteligência da operação
-          </Typography>
+                color:
+                  "rgba(255,255,255,0.90)",
+              }}
+            >
+              Produto · SIMER
+            </Typography>
+
+            <Typography
+              variant="caption"
+              sx={{
+                display:
+                  "block",
+
+                mt:
+                  0.25,
+
+                color:
+                  "rgba(255,255,255,0.42)",
+
+                fontSize:
+                  "0.66rem",
+              }}
+            >
+              Inteligência da operação
+            </Typography>
+          </Box>
         </Box>
-      </Box>
 
-      {/* ===================================================
-          OPERAÇÃO
-      =================================================== */}
+        {/* =================================================
+            OPERAÇÃO
+        ================================================= */}
 
-      <Box
-        component="nav"
-        aria-label="Navegação principal"
-        sx={{
-          px: 1.1,
-        }}
-      >
-        <MenuSectionTitle>
-          Operação
-        </MenuSectionTitle>
+        <MenuSection
+          title="Operação"
+          ariaLabel="Navegação da operação"
+          items={mainMenu}
+        />
 
-        <List
-          disablePadding
+        <MenuDivider />
+
+        {/* =================================================
+            DESENVOLVIMENTO
+        ================================================= */}
+
+        <MenuSection
+          title="Desenvolvimento"
+          ariaLabel="Navegação de desenvolvimento"
+          items={developmentMenu}
+        />
+
+        <MenuDivider />
+
+        {/* =================================================
+            SISTEMA
+        ================================================= */}
+
+        <MenuSection
+          title="Sistema"
+          ariaLabel="Navegação do sistema"
+          items={systemMenu}
+        />
+
+        <Box
           sx={{
-            display:
-              "flex",
-
-            flexDirection:
-              "column",
-
-            gap: 0.35,
+            height:
+              20,
           }}
-        >
-          {mainMenu.map(
-            (item) => (
-              <MenuItem
-                key={
-                  item.path
-                }
-                label={
-                  item.label
-                }
-                path={
-                  item.path
-                }
-                icon={
-                  item.icon
-                }
-                badge={
-                  item.badge
-                }
-              />
-            )
-          )}
-        </List>
-      </Box>
-
-      <Divider
-        sx={{
-          my: 1.7,
-          mx: 2,
-
-          borderColor:
-            "rgba(255,255,255,0.08)",
-        }}
-      />
-
-      {/* ===================================================
-          ADMINISTRAÇÃO
-      =================================================== */}
-
-      <Box
-        component="nav"
-        aria-label="Administração"
-        sx={{
-          px: 1.1,
-        }}
-      >
-        <MenuSectionTitle>
-          Administração
-        </MenuSectionTitle>
-
-        <List
-          disablePadding
-          sx={{
-            display:
-              "flex",
-
-            flexDirection:
-              "column",
-
-            gap: 0.35,
-          }}
-        >
-          {administrationMenu.map(
-            (item) => (
-              <MenuItem
-                key={
-                  item.path
-                }
-                label={
-                  item.label
-                }
-                path={
-                  item.path
-                }
-                icon={
-                  item.icon
-                }
-                badge={
-                  item.badge
-                }
-              />
-            )
-          )}
-        </List>
+        />
       </Box>
 
       {/* ===================================================
-          USUÁRIO / RODAPÉ
+          RODAPÉ FIXO
       =================================================== */}
 
       <Box
         sx={{
-          mt:
-            "auto",
+          flexShrink:
+            0,
+
+          backgroundColor:
+            aliareColors.black,
 
           borderTop:
             "1px solid rgba(255,255,255,0.08)",
         }}
       >
-        {user && (
-          <Box
-            sx={{
-              px: 1.25,
-              pt: 1.25,
-              pb: 0.85,
-            }}
-          >
-            <Box
-              sx={{
-                p: 1.15,
-
-                borderRadius:
-                  1.6,
-
-                backgroundColor:
-                  aliareColors.graphite,
-
-                border:
-                  "1px solid rgba(255,255,255,0.07)",
-              }}
-            >
-              <Stack
-                direction="row"
-                spacing={1}
-                sx={{
-                  alignItems:
-                    "center",
-
-                  minWidth:
-                    0,
-                }}
-              >
-                <Avatar
-                  sx={{
-                    width: 34,
-                    height: 34,
-
-                    fontSize:
-                      "0.74rem",
-
-                    fontWeight:
-                      800,
-
-                    flexShrink:
-                      0,
-
-                    backgroundColor:
-                      aliareColors.green,
-
-                    color:
-                      aliareColors.black,
-                  }}
-                >
-                  {userInitials}
-                </Avatar>
-
-                <Box
-                  sx={{
-                    minWidth:
-                      0,
-
-                    flex:
-                      1,
-                  }}
-                >
-                  <Typography
-                    title={
-                      user.name
-                    }
-                    sx={{
-                      fontSize:
-                        "0.78rem",
-
-                      fontWeight:
-                        700,
-
-                      color:
-                        "#FFFFFF",
-
-                      overflow:
-                        "hidden",
-
-                      whiteSpace:
-                        "nowrap",
-
-                      textOverflow:
-                        "ellipsis",
-                    }}
-                  >
-                    {user.name}
-                  </Typography>
-
-                  <Typography
-                    variant="caption"
-                    sx={{
-                      display:
-                        "block",
-
-                      mt: 0.05,
-
-                      color:
-                        "rgba(255,255,255,0.46)",
-
-                      fontSize:
-                        "0.65rem",
-                    }}
-                  >
-                    {userRole}
-                  </Typography>
-                </Box>
-              </Stack>
-
-              {/* PERFIL */}
-
-              <ListItemButton
-                component={
-                  NavLink
-                }
-                to="/perfil"
-                sx={{
-                  mt: 0.9,
-
-                  minHeight:
-                    34,
-
-                  px: 0.9,
-                  py: 0.35,
-
-                  borderRadius:
-                    1.2,
-
-                  color:
-                    "rgba(255,255,255,0.64)",
-
-                  "&:hover": {
-                    backgroundColor:
-                      "rgba(255,255,255,0.055)",
-
-                    color:
-                      "#FFFFFF",
-                  },
-
-                  "&.active": {
-                    backgroundColor:
-                      "rgba(24,199,122,0.12)",
-
-                    color:
-                      aliareColors.green,
-                  },
-                }}
-              >
-                <ListItemIcon
-                  sx={{
-                    minWidth:
-                      28,
-
-                    color:
-                      "inherit",
-                  }}
-                >
-                  <PersonOutlined
-                    sx={{
-                      fontSize:
-                        17,
-                    }}
-                  />
-                </ListItemIcon>
-
-                <ListItemText
-                  primary="Meu Perfil"
-                  slotProps={{
-                    primary: {
-                      sx: {
-                        fontSize:
-                          "0.74rem",
-
-                        fontWeight:
-                          600,
-                      },
-                    },
-                  }}
-                />
-              </ListItemButton>
-
-              {/* LOGOUT */}
-
-              <Button
-                fullWidth
-                size="small"
-                disabled={
-                  loggingOut
-                }
-                onClick={() =>
-                  void handleLogout()
-                }
-                startIcon={
-                  loggingOut ? (
-                    <CircularProgress
-                      size={13}
-                      sx={{
-                        color:
-                          "inherit",
-                      }}
-                    />
-                  ) : (
-                    <LogoutOutlined
-                      sx={{
-                        fontSize:
-                          17,
-                      }}
-                    />
-                  )
-                }
-                sx={{
-                  mt: 0.35,
-
-                  minHeight:
-                    32,
-
-                  justifyContent:
-                    "flex-start",
-
-                  px: 0.9,
-
-                  borderRadius:
-                    1.2,
-
-                  textTransform:
-                    "none",
-
-                  fontSize:
-                    "0.74rem",
-
-                  fontWeight:
-                    600,
-
-                  color:
-                    "rgba(255,255,255,0.52)",
-
-                  "&:hover": {
-                    backgroundColor:
-                      "rgba(255,255,255,0.055)",
-
-                    color:
-                      "#FFFFFF",
-                  },
-
-                  "&.Mui-disabled":
-                    {
-                      color:
-                        "rgba(255,255,255,0.30)",
-                    },
-                }}
-              >
-                {loggingOut
-                  ? "Saindo..."
-                  : "Sair"}
-              </Button>
-            </Box>
-          </Box>
-        )}
-
-        {/* VERSÃO */}
-
         <Box
           sx={{
-            px: 2.25,
-            pt: 0.6,
-            pb: 1.45,
+            px:
+              2.25,
+
+            pt:
+              0.6,
+
+            pb:
+              1.45,
           }}
         >
           <Stack
@@ -1078,7 +793,8 @@ export function Sidebar() {
               justifyContent:
                 "space-between",
 
-              gap: 1,
+              gap:
+                1,
             }}
           >
             <Typography
@@ -1115,7 +831,312 @@ export function Sidebar() {
           </Stack>
         </Box>
       </Box>
-    </Drawer>
+      </Drawer>
+
+      {user && (
+        <Box
+          sx={{
+            position: "fixed",
+            top: 14,
+            right: 20,
+            zIndex: (theme) =>
+              theme.zIndex.drawer + 1,
+          }}
+        >
+          <Button
+            id="profile-menu-button"
+            aria-controls={
+              profileMenuOpen
+                ? "profile-menu"
+                : undefined
+            }
+            aria-haspopup="true"
+            aria-expanded={
+              profileMenuOpen
+                ? "true"
+                : undefined
+            }
+            onClick={handleOpenProfileMenu}
+            endIcon={
+              <ExpandMoreRounded
+                sx={{
+                  transform: profileMenuOpen
+                    ? "rotate(180deg)"
+                    : "rotate(0deg)",
+                  transition: "transform 0.18s ease",
+                }}
+              />
+            }
+            sx={{
+              minHeight: 46,
+              px: 1,
+              py: 0.55,
+              borderRadius: 2,
+              border: "1px solid",
+              borderColor: profileMenuOpen
+                ? "rgba(24,199,122,0.38)"
+                : "divider",
+              backgroundColor: "background.paper",
+              boxShadow: profileMenuOpen
+                ? "0 8px 28px rgba(0,0,0,0.12)"
+                : "0 2px 10px rgba(0,0,0,0.06)",
+              color: "text.primary",
+              textTransform: "none",
+              "&:hover": {
+                backgroundColor: "background.paper",
+                borderColor: "rgba(24,199,122,0.38)",
+                boxShadow: "0 8px 28px rgba(0,0,0,0.10)",
+              },
+              "& .MuiButton-endIcon": {
+                ml: 0.5,
+              },
+            }}
+          >
+            <Stack
+              direction="row"
+              spacing={1}
+              sx={{ alignItems: "center" }}
+            >
+              <Avatar
+                sx={{
+                  width: 32,
+                  height: 32,
+                  fontSize: "0.72rem",
+                  fontWeight: 800,
+                  backgroundColor: aliareColors.green,
+                  color: aliareColors.black,
+                }}
+              >
+                {userInitials}
+              </Avatar>
+
+              <Box
+                sx={{
+                  minWidth: 0,
+                  maxWidth: 160,
+                  textAlign: "left",
+                  display: {
+                    xs: "none",
+                    sm: "block",
+                  },
+                }}
+              >
+                <Typography
+                  title={user.name}
+                  sx={{
+                    fontSize: "0.78rem",
+                    fontWeight: 750,
+                    lineHeight: 1.2,
+                    overflow: "hidden",
+                    whiteSpace: "nowrap",
+                    textOverflow: "ellipsis",
+                  }}
+                >
+                  {user.name}
+                </Typography>
+
+                <Typography
+                  variant="caption"
+                  sx={{
+                    display: "block",
+                    mt: 0.15,
+                    color: "text.secondary",
+                    fontSize: "0.64rem",
+                    lineHeight: 1.2,
+                  }}
+                >
+                  {userRole}
+                </Typography>
+              </Box>
+            </Stack>
+          </Button>
+
+          <Menu
+            id="profile-menu"
+            anchorEl={profileAnchor}
+            open={profileMenuOpen}
+            onClose={handleCloseProfileMenu}
+            anchorOrigin={{
+              vertical: "bottom",
+              horizontal: "right",
+            }}
+            transformOrigin={{
+              vertical: "top",
+              horizontal: "right",
+            }}
+            slotProps={{
+              list: {
+                "aria-labelledby": "profile-menu-button",
+                sx: { py: 0.75 },
+              },
+              paper: {
+                elevation: 0,
+                sx: {
+                  mt: 0.8,
+                  minWidth: 210,
+                  borderRadius: 2,
+                  border: "1px solid",
+                  borderColor: "divider",
+                  boxShadow: "0 12px 34px rgba(0,0,0,0.14)",
+                },
+              },
+            }}
+          >
+            <Box sx={{ px: 1.5, py: 0.9 }}>
+              <Typography
+                sx={{
+                  fontSize: "0.76rem",
+                  fontWeight: 750,
+                }}
+              >
+                {user.name}
+              </Typography>
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ fontSize: "0.65rem" }}
+              >
+                {userRole}
+              </Typography>
+            </Box>
+
+            <Divider />
+
+            <MuiMenuItem
+              onClick={handleNavigateToProfile}
+              sx={{
+                mx: 0.75,
+                mt: 0.65,
+                minHeight: 38,
+                borderRadius: 1.2,
+                fontSize: "0.78rem",
+                fontWeight: 600,
+                gap: 1.1,
+              }}
+            >
+              <PersonOutlined sx={{ fontSize: 18 }} />
+              Meu Perfil
+            </MuiMenuItem>
+
+            <MuiMenuItem
+              disabled={loggingOut}
+              onClick={() => void handleLogout()}
+              sx={{
+                mx: 0.75,
+                mb: 0.15,
+                minHeight: 38,
+                borderRadius: 1.2,
+                fontSize: "0.78rem",
+                fontWeight: 600,
+                gap: 1.1,
+                color: "text.secondary",
+              }}
+            >
+              {loggingOut ? (
+                <CircularProgress size={16} color="inherit" />
+              ) : (
+                <LogoutOutlined sx={{ fontSize: 18 }} />
+              )}
+              {loggingOut ? "Saindo..." : "Sair"}
+            </MuiMenuItem>
+          </Menu>
+        </Box>
+      )}
+    </>
+  );
+}
+
+/* =========================================================
+   SEÇÃO DE MENU
+========================================================= */
+
+function MenuSection({
+  title,
+  ariaLabel,
+  items,
+}: {
+  title: string;
+  ariaLabel: string;
+  items: MenuItemData[];
+}) {
+  if (
+    items.length === 0
+  ) {
+    return null;
+  }
+
+  return (
+    <Box
+      component="nav"
+      aria-label={
+        ariaLabel
+      }
+      sx={{
+        px:
+          1.1,
+      }}
+    >
+      <MenuSectionTitle>
+        {title}
+      </MenuSectionTitle>
+
+      <List
+        disablePadding
+        sx={{
+          display:
+            "flex",
+
+          flexDirection:
+            "column",
+
+          gap:
+            0.35,
+        }}
+      >
+        {items.map(
+          (item) => (
+            <MenuItem
+              key={
+                item.path
+              }
+              label={
+                item.label
+              }
+              path={
+                item.path
+              }
+              icon={
+                item.icon
+              }
+              badge={
+                item.badge
+              }
+            />
+          ),
+        )}
+      </List>
+    </Box>
+  );
+}
+
+/* =========================================================
+   DIVISOR
+========================================================= */
+
+function MenuDivider() {
+  return (
+    <Divider
+      sx={{
+        my:
+          1.45,
+
+        mx:
+          2,
+
+        borderColor:
+          "rgba(255,255,255,0.08)",
+      }}
+    />
   );
 }
 
@@ -1135,8 +1156,11 @@ function MenuSectionTitle({
         display:
           "block",
 
-        px: 1.3,
-        pb: 0.65,
+        px:
+          1.3,
+
+        pb:
+          0.65,
 
         color:
           "rgba(255,255,255,0.32)",
@@ -1170,13 +1194,15 @@ function MenuItem({
   badge,
 }: {
   label: string;
-
   path: string;
-
   icon: ReactNode;
-
   badge?: number;
 }) {
+  const hasBadge =
+    typeof badge ===
+      "number" &&
+    badge > 0;
+
   return (
     <ListItemButton
       component={
@@ -1193,8 +1219,11 @@ function MenuItem({
         minHeight:
           40,
 
-        px: 1.3,
-        py: 0.65,
+        px:
+          1.3,
+
+        py:
+          0.65,
 
         borderRadius:
           1.2,
@@ -1205,57 +1234,62 @@ function MenuItem({
         transition:
           "background-color 0.15s ease, color 0.15s ease",
 
-        "&::before": {
-          content:
-            '""',
+        "&::before":
+          {
+            content:
+              '""',
 
-          position:
-            "absolute",
+            position:
+              "absolute",
 
-          left: 0,
+            left:
+              0,
 
-          top:
-            "50%",
+            top:
+              "50%",
 
-          width:
-            3,
+            width:
+              3,
 
-          height:
-            0,
+            height:
+              0,
 
-          borderRadius:
-            "0 3px 3px 0",
+            borderRadius:
+              "0 3px 3px 0",
 
-          backgroundColor:
-            aliareColors.green,
+            backgroundColor:
+              aliareColors.green,
 
-          transform:
-            "translateY(-50%)",
+            transform:
+              "translateY(-50%)",
 
-          transition:
-            "height 0.16s ease",
-        },
+            transition:
+              "height 0.16s ease",
+          },
 
-        "&:hover": {
-          backgroundColor:
-            "rgba(255,255,255,0.045)",
+        "&:hover":
+          {
+            backgroundColor:
+              "rgba(255,255,255,0.045)",
 
-          color:
-            "#FFFFFF",
-        },
+            color:
+              "#FFFFFF",
+          },
 
-        "&.active": {
-          backgroundColor:
-            "rgba(24,199,122,0.085)",
+        "&.active":
+          {
+            backgroundColor:
+              "rgba(24,199,122,0.085)",
 
-          color:
-            "#FFFFFF",
-        },
+            color:
+              "#FFFFFF",
+          },
 
-        "&.active::before": {
-          height:
-            22,
-        },
+        "&.active::before":
+          {
+            height:
+              22,
+          },
 
         "&.active .MuiListItemIcon-root":
           {
@@ -1263,13 +1297,14 @@ function MenuItem({
               aliareColors.green,
           },
 
-        "&:focus-visible": {
-          outline:
-            `2px solid ${aliareColors.green}`,
+        "&:focus-visible":
+          {
+            outline:
+              `2px solid ${aliareColors.green}`,
 
-          outlineOffset:
-            "1px",
-        },
+            outlineOffset:
+              "1px",
+          },
       }}
     >
       <ListItemIcon
@@ -1284,8 +1319,7 @@ function MenuItem({
             "color 0.15s ease",
         }}
       >
-        {badge &&
-        badge > 0 ? (
+        {hasBadge ? (
           <Badge
             badgeContent={
               badge
@@ -1332,23 +1366,24 @@ function MenuItem({
           label
         }
         slotProps={{
-          primary: {
-            sx: {
-              fontSize:
-                "0.82rem",
+          primary:
+            {
+              sx:
+                {
+                  fontSize:
+                    "0.82rem",
 
-              fontWeight:
-                600,
+                  fontWeight:
+                    600,
 
-              lineHeight:
-                1.3,
+                  lineHeight:
+                    1.3,
+                },
             },
-          },
         }}
       />
 
-      {badge &&
-      badge > 0 ? (
+      {hasBadge && (
         <Box
           sx={{
             minWidth:
@@ -1398,12 +1433,13 @@ function MenuItem({
                 "tabular-nums",
             }}
           >
-            {badge > 99
+            {badge !== undefined &&
+            badge > 99
               ? "99+"
               : badge}
           </Typography>
         </Box>
-      ) : null}
+      )}
     </ListItemButton>
   );
 }
@@ -1414,10 +1450,12 @@ function MenuItem({
 
 function getRoleLabel(
   role:
-    UserRole | undefined
+    UserRole |
+    undefined,
 ) {
   if (
-    role === "ADMIN"
+    role ===
+    "ADMIN"
   ) {
     return "Administrador";
   }
@@ -1444,7 +1482,7 @@ function getRoleLabel(
 ========================================================= */
 
 function getInitials(
-  name: string
+  name: string,
 ) {
   const parts =
     name
@@ -1462,7 +1500,10 @@ function getInitials(
     parts.length === 1
   ) {
     return parts[0]
-      .slice(0, 2)
+      .slice(
+        0,
+        2,
+      )
       .toUpperCase();
   }
 

@@ -15,6 +15,7 @@ import {
   IconButton,
   InputLabel,
   MenuItem,
+  Popover,
   Select,
   Snackbar,
   Stack,
@@ -26,6 +27,10 @@ import {
   TableRow,
   Typography,
 } from "@mui/material";
+
+import {
+  InfoOutlined,
+} from "@mui/icons-material";
 
 import {
   Cell,
@@ -49,6 +54,13 @@ import {
 /* =========================================================
    TIPOS
 ========================================================= */
+
+type AzureTaskSummary = {
+  id: number; workItemType: string; title: string; state: string;
+  assignedToName: string | null; criticality: string | null;
+  deliveredVersion: string | null; prioritized: boolean | null; blockedProcess: boolean | null;
+  stateChangedAt?: string | null; azureChangedAt: string | null;
+};
 
 type Ticket = {
   id: number;
@@ -90,6 +102,9 @@ type Ticket = {
   taskNumber: number | null;
   taskStatus: string | null;
   deliveredVersion: string | null;
+  responseSlaIndicator?: string | null;
+  solutionSlaIndicator?: string | null;
+  azureWorkItem?: AzureTaskSummary | null;
 
   importSource?: string | null;
   importedAt?: string | null;
@@ -130,6 +145,16 @@ type DrilldownState = {
   subtitle?: string;
   tickets: Ticket[];
 } | null;
+
+type MetricInfoDefinition = {
+  title: string;
+  summary: string;
+  calculation: string;
+  source: string;
+  reference: string;
+  periodRule: string;
+  notes?: string;
+};
 
 /* =========================================================
    CORES DOS GRÁFICOS
@@ -760,13 +785,25 @@ export function Clients() {
               "Closed"
         ).length;
 
+      const responseSla = calculateOfficialSla(scopedTickets, "response");
+      const solutionSla = calculateOfficialSla(scopedTickets, "solution");
+      const azureItems = Array.from(new Map(
+        scopedTickets.map((ticket) => ticket.azureWorkItem)
+          .filter((item): item is AzureTaskSummary => Boolean(item))
+          .map((item) => [item.id, item])
+      ).values());
+
       return {
-        total:
-          scopedTickets.length,
-        open,
-        critical,
-        stopped,
-        resolved,
+        total: scopedTickets.length, open, critical, stopped, resolved,
+        resolutionRate: scopedTickets.length > 0
+          ? Math.round((resolved / scopedTickets.length) * 1000) / 10 : 0,
+        responseSla, solutionSla,
+        azureTasks: azureItems.length,
+        azureCorrections: azureItems.filter((item) => item.workItemType === "Correção Clientes").length,
+        azureEvolutions: azureItems.filter((item) => item.workItemType === "Evolução").length,
+        azurePrioritized: azureItems.filter((item) => item.prioritized === true).length,
+        azureBlocked: azureItems.filter((item) => item.blockedProcess === true).length,
+        azureWithVersion: azureItems.filter((item) => Boolean(item.deliveredVersion?.trim())).length,
       };
     }, [scopedTickets]);
 
@@ -1282,7 +1319,7 @@ export function Clients() {
               mt: 0.25,
             }}
           >
-            Volume, recorrência e pontos de atenção por cliente
+            Resultados da carteira, qualidade do atendimento e acompanhamento do desenvolvimento
           </Typography>
 
           <Typography
@@ -1526,6 +1563,15 @@ export function Clients() {
               .all.length
           }
           description={`${summary.totalClients} cliente(s) com tickets`}
+          info={{
+            title: "Tickets no período",
+            summary: "Total de atendimentos que permanecem após aplicar período, cliente e categoria.",
+            calculation: "Contagem dos tickets do recorte atual.",
+            source: "Movidesk",
+            reference: "Ticket.createdDate + filtros da tela",
+            periodRule: "Respeita o período global e os filtros locais.",
+            notes: "Clique para abrir exatamente os tickets que formam o indicador.",
+          }}
           onClick={() =>
             showTickets(
               "Tickets no período",
@@ -1545,6 +1591,14 @@ export function Clients() {
               .highAttention.length
           }
           description="Atendimentos de clientes em situação crítica"
+          info={{
+            title: "Alta atenção",
+            summary: "Atendimentos pertencentes a clientes classificados no nível mais alto de atenção.",
+            calculation: "Clientes com pelo menos 2 tickets críticos abertos ou 5 tickets abertos; o card conta os atendimentos desses clientes.",
+            source: "Movidesk / regra local do TechLead Hub",
+            reference: "Urgência, baseStatus e concentração por cliente",
+            periodRule: "Respeita o recorte atual da tela.",
+          }}
           severity="error"
           onClick={() =>
             showTickets(
@@ -1565,6 +1619,14 @@ export function Clients() {
               .attention.length
           }
           description="Atendimentos que exigem acompanhamento"
+          info={{
+            title: "Em atenção",
+            summary: "Atendimentos de clientes com sinais moderados de risco operacional.",
+            calculation: "Cliente com crítico, ticket parado ou ao menos 3 tickets abertos, sem atingir Alta atenção.",
+            source: "Movidesk / regra local do TechLead Hub",
+            reference: "Urgência + baseStatus + concentração por cliente",
+            periodRule: "Respeita o recorte atual da tela.",
+          }}
           severity="warning"
           onClick={() =>
             showTickets(
@@ -1585,6 +1647,14 @@ export function Clients() {
               .critical.length
           }
           description="Atendimentos críticos ainda em aberto"
+          info={{
+            title: "Críticos abertos",
+            summary: "Tickets ainda ativos cuja urgência está classificada como Crítica.",
+            calculation: "Ticket aberto e urgência normalizada igual a Crítica.",
+            source: "Movidesk",
+            reference: "Ticket.urgency + Ticket.baseStatus",
+            periodRule: "Respeita o período e os filtros locais.",
+          }}
           severity={
             executiveTicketGroups
               .critical.length >
@@ -1606,84 +1676,95 @@ export function Clients() {
       </Box>
 
       {/* =================================================
-          RESUMO DA CARTEIRA
+          RESUMO EXECUTIVO / CLIENTE
       ================================================= */}
 
-      <Box
-        sx={{
-          display: "flex",
-          gap: 1,
-          mb: 2,
-          flexWrap: "wrap",
-        }}
-      >
-        <Chip
-          size="small"
-          label={`${portfolioSummary.total} tickets`}
-          variant="outlined"
-          onClick={() =>
-            showTickets(
-              "Todos os tickets",
-              scopedTickets
-            )
-          }
-        />
+      <Card elevation={0} sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2.25, mb: 2 }}>
+        <CardContent>
+          <Stack direction={{ xs: "column", lg: "row" }} spacing={1.5}
+            sx={{ justifyContent: "space-between", alignItems: { xs: "stretch", lg: "center" }, mb: 1.5 }}>
+            <Box>
+              <Typography sx={{ fontWeight: 800, fontSize: "1.05rem" }}>Resumo Executivo</Typography>
+              <Typography variant="caption" color="text.secondary">
+                Indicadores para análise interna e apresentação de resultados ao cliente
+              </Typography>
+            </Box>
+            <Chip size="small" variant="outlined" label={selectedClient || `${summary.totalClients} cliente(s) na carteira`} />
+          </Stack>
 
-        <Chip
-          size="small"
-          label={`${portfolioSummary.open} abertos`}
-          variant="outlined"
-          sx={{
-            color:
-              aliareColors.greenDark,
+          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2, 1fr)", lg: "repeat(4, 1fr)" }, gap: 1.25 }}>
+            <ExecutiveMetric
+              title="Taxa de resolução"
+              value={`${portfolioSummary.resolutionRate}%`}
+              description={`${portfolioSummary.resolved} de ${portfolioSummary.total} atendimento(s) do recorte`}
+              info={{
+                title: "Taxa de resolução",
+                summary: "Percentual dos atendimentos do recorte atual que estão Resolvidos ou Fechados.",
+                calculation: "Resolvidos/Fechados ÷ total de tickets do recorte × 100.",
+                source: "Movidesk",
+                reference: "Ticket.baseStatus",
+                periodRule: "Respeita período, cliente e categoria selecionados.",
+              }}
+              onClick={() => showStatusTickets("resolved")}
+            />
+            <ExecutiveMetric
+              title="SLA 1ª resposta"
+              value={formatSlaPercent(portfolioSummary.responseSla.percent)}
+              description={portfolioSummary.responseSla.measured ? `${portfolioSummary.responseSla.onTime} de ${portfolioSummary.responseSla.measured} medidos no prazo` : "Sem medição oficial no recorte"}
+              info={{
+                title: "SLA 1ª resposta",
+                summary: "Percentual de tickets com medição oficial de primeira resposta atendidos dentro do prazo.",
+                calculation: "Medições no prazo ÷ medições válidas × 100.",
+                source: "Movidesk",
+                reference: "responseSlaIndicator",
+                periodRule: "Respeita o recorte atual; itens sem medição ficam fora do denominador.",
+              }}
+              onClick={() => showTickets("SLA 1ª resposta - tickets medidos", scopedTickets.filter((ticket) => Boolean(normalize(ticket.responseSlaIndicator))), "Tickets com indicador oficial disponível")}
+            />
+            <ExecutiveMetric
+              title="SLA solução"
+              value={formatSlaPercent(portfolioSummary.solutionSla.percent)}
+              description={portfolioSummary.solutionSla.measured ? `${portfolioSummary.solutionSla.onTime} de ${portfolioSummary.solutionSla.measured} medidos no prazo` : "Sem medição oficial no recorte"}
+              info={{
+                title: "SLA solução",
+                summary: "Percentual de tickets com medição oficial de solução atendidos dentro do prazo.",
+                calculation: "Medições no prazo ÷ medições válidas × 100.",
+                source: "Movidesk",
+                reference: "solutionSlaIndicator",
+                periodRule: "Respeita o recorte atual; itens sem medição ficam fora do denominador.",
+              }}
+              onClick={() => showTickets("SLA solução - tickets medidos", scopedTickets.filter((ticket) => Boolean(normalize(ticket.solutionSlaIndicator))), "Tickets com indicador oficial disponível")}
+            />
+            <ExecutiveMetric
+              title="Desenvolvimento"
+              value={portfolioSummary.azureTasks}
+              description={`${portfolioSummary.azureCorrections} correção(ões) • ${portfolioSummary.azureEvolutions} evolução(ões)`}
+              info={{
+                title: "Desenvolvimento",
+                summary: "Work Items únicos do Azure vinculados aos atendimentos do recorte atual.",
+                calculation: "Contagem distinta por azureWorkItem.id.",
+                source: "Movidesk + Azure DevOps",
+                reference: "Ticket.azureWorkItem.id",
+                periodRule: "A Task entra quando está vinculada a um ticket pertencente ao recorte atual.",
+              }}
+              onClick={() => showTickets("Tickets com desenvolvimento vinculado", scopedTickets.filter((ticket) => Boolean(ticket.azureWorkItem)), "Atendimentos com Work Item do Azure vinculado")}
+            />
+          </Box>
 
-            borderColor:
-              "rgba(24,199,122,0.32)",
-
-            backgroundColor:
-              "rgba(24,199,122,0.05)",
-          }}
-          onClick={() =>
-            showStatusTickets(
-              "open"
-            )
-          }
-        />
-
-        <Chip
-          size="small"
-          label={`${portfolioSummary.critical} críticos`}
-          color="error"
-          onClick={() =>
-            showStatusTickets(
-              "critical"
-            )
-          }
-        />
-
-        <Chip
-          size="small"
-          label={`${portfolioSummary.stopped} parados`}
-          color="warning"
-          onClick={() =>
-            showStatusTickets(
-              "stopped"
-            )
-          }
-        />
-
-        <Chip
-          size="small"
-          label={`${portfolioSummary.resolved} resolvidos`}
-          color="success"
-          variant="outlined"
-          onClick={() =>
-            showStatusTickets(
-              "resolved"
-            )
-          }
-        />
-      </Box>
+          <Divider sx={{ my: 1.5 }} />
+          <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap", alignItems: "center" }}>
+            <Chip size="small" variant="outlined" label={`${portfolioSummary.azurePrioritized} priorizada(s)`} />
+            <Chip size="small" variant="outlined" color={portfolioSummary.azureBlocked ? "error" : "default"} label={`${portfolioSummary.azureBlocked} bloqueada(s)`} />
+            <Chip size="small" variant="outlined" label={`${portfolioSummary.azureWithVersion} com versão`} />
+            <Box sx={{ flexGrow: 1 }} />
+            <Button size="small" variant="outlined" onClick={() => navigate("/correcoes")}>Correções</Button>
+            <Button size="small" variant="outlined" onClick={() => navigate("/evolucoes")}>Evoluções</Button>
+          </Stack>
+          <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1.25 }}>
+            SLA considera somente o indicador oficial disponível no Movidesk. Registros sem medição não são tratados como descumprimento.
+          </Typography>
+        </CardContent>
+      </Card>
 
       {/* =================================================
           GRÁFICOS
@@ -2527,10 +2608,8 @@ export function Clients() {
             },
         }}
       >
-        A análise atual considera volume, criticidade, tickets
-        parados e resolvidos. Nas próximas evoluções incluiremos
-        prazos de primeira resposta e resolução, recorrência,
-        CSAT, evolução mensal e comparação entre clientes.
+        Esta visão combina resultados operacionais do Movidesk com Correções e Evoluções do Azure DevOps.
+        Os sinais de desenvolvimento apoiam o acompanhamento da carteira e não representam, por si só, uma medição contratual de SLA.
       </Alert>
 
       {/* =================================================
@@ -3488,201 +3567,192 @@ function CompactPieTooltip({
    CARD DE MÉTRICA
 ========================================================= */
 
+function ExecutiveMetric({
+  title,
+  value,
+  description,
+  info,
+  onClick,
+}: {
+  title: string;
+  value: string | number;
+  description: string;
+  info: MetricInfoDefinition;
+  onClick: () => void;
+}) {
+  return (
+    <StandardMetricCard
+      title={title}
+      value={value}
+      description={description}
+      info={info}
+      accentColor={aliareColors.green}
+      onClick={onClick}
+    />
+  );
+}
+
 function MetricCard({
   title,
   value,
   description,
+  info,
   severity = "default",
   onClick,
 }: {
   title: string;
   value: number;
   description: string;
-
-  severity?:
-    | "default"
-    | "error"
-    | "warning";
-
+  info: MetricInfoDefinition;
+  severity?: "default" | "error" | "warning";
   onClick?: () => void;
 }) {
   const accentColor =
     severity === "error"
       ? semanticChartColors.overdue
-      : severity ===
-        "warning"
+      : severity === "warning"
       ? semanticChartColors.attention
       : aliareColors.green;
 
   return (
+    <StandardMetricCard
+      title={title}
+      value={value}
+      description={description}
+      info={info}
+      accentColor={accentColor}
+      onClick={onClick}
+    />
+  );
+}
+
+function StandardMetricCard({
+  title,
+  value,
+  description,
+  info,
+  accentColor,
+  onClick,
+}: {
+  title: string;
+  value: ReactNode;
+  description: string;
+  info: MetricInfoDefinition;
+  accentColor: string;
+  onClick?: () => void;
+}) {
+  return (
     <Card
       elevation={0}
-      role={
-        onClick
-          ? "button"
-          : undefined
-      }
-      tabIndex={
-        onClick
-          ? 0
-          : undefined
-      }
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
       onClick={onClick}
-      onKeyDown={(
-        event
-      ) => {
-        if (
-          onClick &&
-          (event.key ===
-            "Enter" ||
-            event.key ===
-              " ")
-        ) {
-          onClick();
-        }
+      onKeyDown={(event) => {
+        if (onClick && (event.key === "Enter" || event.key === " ")) onClick();
       }}
       sx={{
-        position:
-          "relative",
-
-        overflow:
-          "hidden",
-
-        border:
-          "1px solid",
-
-        borderColor:
-          "divider",
-
-        borderRadius:
-          2.25,
-
-        height:
-          "100%",
-
-        backgroundColor:
-          "background.paper",
-
+        position: "relative",
+        overflow: "hidden",
+        border: "1px solid",
+        borderColor: "divider",
+        borderRadius: 2.25,
+        height: "100%",
+        backgroundColor: "background.paper",
+        cursor: onClick ? "pointer" : "default",
+        transition: "transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease",
         "&::before": {
-          content:
-            '""',
-
-          position:
-            "absolute",
-
-          top:
-            0,
-
-          left:
-            0,
-
-          width:
-            "100%",
-
-          height:
-            3,
-
-          backgroundColor:
-            accentColor,
+          content: '\"\"', position: "absolute", top: 0, left: 0,
+          width: "100%", height: 3, backgroundColor: accentColor,
         },
-
-        cursor:
-          onClick
-            ? "pointer"
-            : "default",
-
-        transition:
-          "transform 0.15s ease, box-shadow 0.15s ease",
-
         ...(onClick && {
           "&:hover": {
-            transform:
-              "translateY(-2px)",
-
-            borderColor:
-              accentColor,
-
-            boxShadow:
-              "0 8px 24px rgba(16,24,40,0.08)",
+            transform: "translateY(-2px)", borderColor: accentColor,
+            boxShadow: "0 8px 24px rgba(16,24,40,0.08)",
           },
+          "&:focus-visible": { outline: `2px solid ${accentColor}`, outlineOffset: "2px" },
         }),
       }}
     >
-      <CardContent
-        sx={{
-          p: {
-            xs: 1.5,
-            md: 1.75,
-          },
+      <CardContent sx={{ p: { xs: 1.6, md: 1.8 }, "&:last-child": { pb: { xs: 1.6, md: 1.8 } } }}>
+        <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between", gap: 1 }}>
+          <Typography variant="body2" sx={{ fontWeight: 700, color: "text.primary", minWidth: 0 }}>
+            {title}
+          </Typography>
+          <MetricInfo definition={info} />
+        </Stack>
 
-          "&:last-child": {
-            pb: {
-              xs: 1.5,
-              md: 1.75,
-            },
+        <Typography sx={{ mt: 0.6, fontWeight: 800, letterSpacing: "-0.025em", fontSize: { xs: "1.75rem", md: "1.95rem", xl: "2.1rem" }, lineHeight: 1.05 }}>
+          {value}
+        </Typography>
+        <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.75, minHeight: 18 }}>
+          {description}
+        </Typography>
+      </CardContent>
+    </Card>
+  );
+}
+
+function MetricInfo({ definition }: { definition: MetricInfoDefinition }) {
+  const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
+  const open = Boolean(anchorEl);
+
+  return (
+    <>
+      <IconButton
+        size="small"
+        aria-label={`Informações sobre ${definition.title}`}
+        title={`Informações sobre ${definition.title}`}
+        onClick={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          setAnchorEl(event.currentTarget);
+        }}
+        onKeyDown={(event) => event.stopPropagation()}
+        sx={{ p: 0.3, color: "text.secondary", flexShrink: 0, "&:hover": { color: aliareColors.greenDark, backgroundColor: "rgba(24,199,122,0.08)" } }}
+      >
+        <InfoOutlined sx={{ fontSize: 16 }} />
+      </IconButton>
+      <Popover
+        open={open}
+        anchorEl={anchorEl}
+        onClose={() => setAnchorEl(null)}
+        anchorOrigin={{ vertical: "bottom", horizontal: "left" }}
+        transformOrigin={{ vertical: "top", horizontal: "left" }}
+        slotProps={{
+          paper: {
+            onClick: (event: React.MouseEvent<HTMLElement>) => event.stopPropagation(),
+            sx: { width: { xs: 320, sm: 390 }, maxWidth: "calc(100vw - 32px)", mt: 0.75, p: 2, borderRadius: 2, border: "1px solid", borderColor: "divider", boxShadow: "0 14px 40px rgba(16,24,40,0.14)" },
           },
         }}
       >
-        <Typography
-          variant="body2"
-          color="text.secondary"
-        sx={{ fontWeight: 600 }}
-        >
-          {title}
-        </Typography>
+        <Stack spacing={1.2}>
+          <Box>
+            <Typography sx={{ fontWeight: 850 }}>{definition.title}</Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.4, lineHeight: 1.55 }}>{definition.summary}</Typography>
+          </Box>
+          <Divider />
+          <MetricInfoLine label="Como é calculado" value={definition.calculation} />
+          <MetricInfoLine label="Fonte" value={definition.source} />
+          <MetricInfoLine label="Campo de referência" value={definition.reference} />
+          <MetricInfoLine label="Regra de período" value={definition.periodRule} />
+          {definition.notes && (
+            <Box sx={{ p: 1.1, borderRadius: 1.5, backgroundColor: "rgba(24,199,122,0.055)", border: "1px solid rgba(24,199,122,0.16)" }}>
+              <Typography variant="caption" sx={{ fontWeight: 800, color: aliareColors.greenDark }}>Observação</Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.25, lineHeight: 1.5 }}>{definition.notes}</Typography>
+            </Box>
+          )}
+        </Stack>
+      </Popover>
+    </>
+  );
+}
 
-        <Typography
-        sx={{
-          fontWeight: 800,
-            mt: 0.5,
-
-            fontSize: {
-              xs: "1.7rem",
-              md: "1.9rem",
-              xl: "2.05rem",
-            },
-
-            lineHeight:
-              1.1,
-          }}
-        >
-          {value}
-        </Typography>
-
-        <Typography
-          variant="caption"
-          color="text.secondary"
-          sx={{
-            display:
-              "block",
-            mt: 0.75,
-          }}
-        >
-          {description}
-        </Typography>
-
-        {onClick && (
-          <Typography
-            variant="caption"
-            sx={{
-              display:
-                "block",
-
-              mt:
-                0.65,
-
-              fontWeight:
-                700,
-
-              color:
-                aliareColors.greenDark,
-            }}
-          >
-            Ver tickets →
-          </Typography>
-        )}
-      </CardContent>
-    </Card>
+function MetricInfoLine({ label, value }: { label: string; value: string }) {
+  return (
+    <Box>
+      <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>{label}</Typography>
+      <Typography variant="body2" sx={{ mt: 0.15, lineHeight: 1.5 }}>{value}</Typography>
+    </Box>
   );
 }
 
@@ -3915,6 +3985,22 @@ function TicketField({
 /* =========================================================
    TICKET ABERTO
 ========================================================= */
+
+function calculateOfficialSla(tickets: Ticket[], type: "response" | "solution") {
+  let measured = 0; let onTime = 0;
+  tickets.forEach((ticket) => {
+    const raw = type === "response" ? ticket.responseSlaIndicator : ticket.solutionSlaIndicator;
+    const value = normalize(raw);
+    if (!value) return;
+    if (value.includes("no prazo") || value.includes("dentro do prazo") || value.includes("cumprido") || value.includes("atingido")) { measured += 1; onTime += 1; return; }
+    if (value.includes("fora do prazo") || value.includes("vencido") || value.includes("nao cumprido") || value.includes("nao atingido")) { measured += 1; }
+  });
+  return { measured, onTime, percent: measured ? Math.round((onTime / measured) * 1000) / 10 : null };
+}
+
+function formatSlaPercent(value: number | null) {
+  return value === null ? "Sem medição" : `${value.toFixed(1)}%`;
+}
 
 function isOpen(
   ticket: Ticket

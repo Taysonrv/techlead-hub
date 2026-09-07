@@ -22,6 +22,10 @@ import {
 } from "@mui/icons-material";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { aliareColors } from "../theme/theme";
+import {
+  FALLBACK_APP_VERSION,
+  getReleaseNote,
+} from "../config/releaseNotes";
 
 type UpdateStatus =
   | "idle"
@@ -58,17 +62,6 @@ type DesktopBridge = {
   };
 };
 
-const RELEASE_VERSION = "0.1.2-beta.1";
-
-const RELEASE_ITEMS = [
-  ["Prazos oficiais do Movidesk", "Primeira resposta e solução passam a priorizar os vencimentos oficiais importados do Movidesk."],
-  ["Tickets em pausa", 'Casos com "Vencimento em = Em pausa" deixam de gerar alertas incorretos de prazo vencido.'],
-  ["Importação aprimorada", "Reconhecimento de Serviço (2º Nível), Vencimento em, Tempo de vida (Horas úteis), Versão Entregue Task e Número Task."],
-  ["Indicadores de desempenho", "Ajustes nos indicadores históricos de primeira resposta, resolução e desempenho por analista."],
-  ["Motor central de prazo", "Performance, Tickets e Pontos de Atenção passam a consumir a mesma regra centralizada."],
-  ["Sobre e Atualizações", "Nova experiência para consultar versão, verificar, baixar e instalar atualizações."],
-] as const;
-
 const EMPTY_STATE: UpdateState = {
   status: "idle",
   currentVersion: "",
@@ -81,7 +74,7 @@ const EMPTY_STATE: UpdateState = {
 };
 
 export function About() {
-  const [appVersion, setAppVersion] = useState("Beta");
+  const [appVersion, setAppVersion] = useState(FALLBACK_APP_VERSION);
   const [updateState, setUpdateState] = useState<UpdateState>(EMPTY_STATE);
   const [actionRunning, setActionRunning] = useState(false);
 
@@ -91,6 +84,8 @@ export function About() {
   );
 
   const updaterApi = desktopApi?.updates ?? null;
+
+  const currentRelease = useMemo(() => getReleaseNote(appVersion), [appVersion]);
 
   const getState = updaterApi?.getState;
   const checkAction = updaterApi?.check;
@@ -497,7 +492,7 @@ export function About() {
             </Box>
             <Chip
               size="small"
-              label={`v${RELEASE_VERSION}`}
+              label={`v${appVersion}`}
               sx={{
                 fontWeight: 800,
                 backgroundColor: "rgba(24,199,122,0.08)",
@@ -513,7 +508,14 @@ export function About() {
               gap: 1.25,
             }}
           >
-            {RELEASE_ITEMS.map(([title, description], index) => (
+            {!currentRelease && (
+              <Alert severity="info" variant="outlined" sx={{ gridColumn: "1 / -1" }}>
+                Esta versão ainda não possui notas de publicação cadastradas.
+              </Alert>
+            )}
+
+            {(currentRelease?.items ?? []).map(({ title, description }, index) => (
+
               <Box
                 key={title}
                 sx={{

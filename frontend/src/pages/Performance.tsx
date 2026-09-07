@@ -7,6 +7,8 @@ import {
   CircularProgress,
   Divider,
   Drawer,
+  IconButton,
+  Popover,
   Stack,
   Table,
   TableBody,
@@ -16,6 +18,10 @@ import {
   TableRow,
   Typography,
 } from "@mui/material";
+
+import {
+  InfoOutlined,
+} from "@mui/icons-material";
 
 import {
   CartesianGrid,
@@ -106,6 +112,16 @@ type DrilldownState = {
   tickets: Ticket[];
 };
 
+type CardInfo = {
+  title: string;
+  summary: string;
+  calculation: string;
+  source: string;
+  reference?: string;
+  periodRule: string;
+  notes?: string;
+};
+
 type AnalystPerformance = {
   owner: string;
   total: number;
@@ -118,6 +134,12 @@ type AnalystPerformance = {
   open: number;
   atRisk: number;
   score: number;
+
+  tickets: Ticket[];
+  measuredTickets: Ticket[];
+  firstResponseTickets: Ticket[];
+  resolutionTickets: Ticket[];
+  riskTickets: Ticket[];
 };
 
 export function Performance() {
@@ -202,16 +224,47 @@ export function Performance() {
 
   const firstResponse = useMemo(() => {
     const eligible = measuredTickets;
-    const completed = eligible.filter((item) => item.serviceLevel.firstResponse.completed);
-    const within = completed.filter((item) => item.serviceLevel.firstResponse.withinDeadline === true);
-    const overdue = eligible.filter((item) =>
-      (item.serviceLevel.firstResponse.completed && item.serviceLevel.firstResponse.withinDeadline === false) ||
-      (!item.serviceLevel.firstResponse.completed && item.serviceLevel.firstResponse.level === "OVERDUE")
+
+    const completed = eligible.filter(
+      (item) =>
+        item.serviceLevel.firstResponse.completed
     );
-    const pending = eligible.filter((item) =>
-      !item.serviceLevel.firstResponse.completed &&
-      item.serviceLevel.firstResponse.level !== "OVERDUE"
+
+    const within = eligible.filter(
+      (item) =>
+        item.serviceLevel.firstResponse.completed &&
+        item.serviceLevel.firstResponse.withinDeadline === true
     );
+
+    /*
+     * "Fora do prazo" inclui:
+     * 1. primeira resposta concluída fora do prazo;
+     * 2. primeira resposta ainda não concluída, mas já vencida.
+     *
+     * Assim, o percentual central representa exatamente as
+     * fatias verde/vermelha exibidas no gráfico.
+     */
+    const overdue = eligible.filter(
+      (item) =>
+        (
+          item.serviceLevel.firstResponse.completed &&
+          item.serviceLevel.firstResponse.withinDeadline === false
+        ) ||
+        (
+          !item.serviceLevel.firstResponse.completed &&
+          item.serviceLevel.firstResponse.level === "OVERDUE"
+        )
+    );
+
+    const pending = eligible.filter(
+      (item) =>
+        !item.serviceLevel.firstResponse.completed &&
+        item.serviceLevel.firstResponse.level !== "OVERDUE"
+    );
+
+    const evaluated =
+      within.length +
+      overdue.length;
 
     return {
       eligible,
@@ -219,25 +272,71 @@ export function Performance() {
       within,
       overdue,
       pending,
-      rate: percentage(within.length, completed.length),
+      evaluated,
+      rate:
+        percentage(
+          within.length,
+          evaluated,
+        ),
     };
   }, [measuredTickets]);
 
   const resolution = useMemo(() => {
     const eligible = measuredTickets;
-    const completed = eligible.filter((item) => item.serviceLevel.resolution.completed);
-    const within = completed.filter((item) => item.serviceLevel.resolution.withinDeadline === true);
-    const overdue = eligible.filter((item) =>
-      (item.serviceLevel.resolution.completed && item.serviceLevel.resolution.withinDeadline === false) ||
-      (!item.serviceLevel.resolution.completed && item.serviceLevel.resolution.level === "OVERDUE")
+
+    const completed = eligible.filter(
+      (item) =>
+        item.serviceLevel.resolution.completed
     );
+
+    const within = eligible.filter(
+      (item) =>
+        item.serviceLevel.resolution.completed &&
+        item.serviceLevel.resolution.withinDeadline === true
+    );
+
+    /*
+     * "Fora do prazo" inclui:
+     * 1. atendimento concluído fora do prazo;
+     * 2. atendimento ainda aberto cujo prazo de solução já venceu.
+     *
+     * Isso evita situações como exibir 100% no centro enquanto
+     * o mesmo gráfico apresenta tickets vermelhos.
+     */
+    const overdue = eligible.filter(
+      (item) =>
+        (
+          item.serviceLevel.resolution.completed &&
+          item.serviceLevel.resolution.withinDeadline === false
+        ) ||
+        (
+          !item.serviceLevel.resolution.completed &&
+          item.serviceLevel.resolution.level === "OVERDUE"
+        )
+    );
+
+    const pending = eligible.filter(
+      (item) =>
+        !item.serviceLevel.resolution.completed &&
+        item.serviceLevel.resolution.level !== "OVERDUE"
+    );
+
+    const evaluated =
+      within.length +
+      overdue.length;
 
     return {
       eligible,
       completed,
       within,
       overdue,
-      rate: percentage(within.length, completed.length),
+      pending,
+      evaluated,
+      rate:
+        percentage(
+          within.length,
+          evaluated,
+        ),
     };
   }, [measuredTickets]);
 
@@ -260,6 +359,38 @@ export function Performance() {
     return { open, ...groups };
   }, [measuredTickets]);
 
+  const excludedOpenTickets =
+    useMemo(
+      () =>
+        excludedTickets.filter(
+          (item) =>
+            isOpen(
+              item.ticket,
+            ),
+        ),
+      [
+        excludedTickets,
+      ],
+    );
+
+  const allOpenTickets =
+    useMemo(
+      () => [
+        ...riskGroups.open.map(
+          (item) =>
+            item.ticket,
+        ),
+        ...excludedOpenTickets.map(
+          (item) =>
+            item.ticket,
+        ),
+      ],
+      [
+        riskGroups.open,
+        excludedOpenTickets,
+      ],
+    );
+
   const operationHealth = useMemo(() => {
     const riskRate = percentage(
       riskGroups.overdue.length + riskGroups.critical.length,
@@ -267,10 +398,14 @@ export function Performance() {
     );
 
     const firstScore =
-      firstResponse.eligible.length > 0 ? firstResponse.rate : 100;
+      firstResponse.evaluated > 0
+        ? firstResponse.rate
+        : 100;
 
     const resolutionScore =
-      resolution.completed.length > 0 ? resolution.rate : 100;
+      resolution.evaluated > 0
+        ? resolution.rate
+        : 100;
 
     const riskScore = Math.max(0, 100 - riskRate);
 
@@ -301,38 +436,141 @@ export function Performance() {
           isSupportedServiceCategory(item.ticket.category, item.ticket.cause)
         );
 
-        const firstCompleted = measured.filter((item) => item.serviceLevel.firstResponse.completed);
-        const firstWithin = firstCompleted.filter((item) => item.serviceLevel.firstResponse.withinDeadline === true);
-        const resolutionCompleted = measured.filter((item) => item.serviceLevel.resolution.completed);
-        const resolutionWithin = resolutionCompleted.filter((item) => item.serviceLevel.resolution.withinDeadline === true);
-        const open = measured.filter((item) => isOpen(item.ticket));
-        const atRisk = open.filter((item) => {
-          const bucket = getDeadlineBucket(item);
-          return bucket === "critical" || bucket === "overdue";
-        });
+        const firstWithin =
+          measured.filter(
+            (item) =>
+              item.serviceLevel.firstResponse.completed &&
+              item.serviceLevel.firstResponse.withinDeadline === true,
+          );
 
-        const firstRate = percentage(firstWithin.length, firstCompleted.length);
-        const resolutionRate = percentage(resolutionWithin.length, resolutionCompleted.length);
-        const riskPenalty = percentage(atRisk.length, open.length);
+        const firstOverdue =
+          measured.filter(
+            (item) =>
+              (
+                item.serviceLevel.firstResponse.completed &&
+                item.serviceLevel.firstResponse.withinDeadline === false
+              ) ||
+              (
+                !item.serviceLevel.firstResponse.completed &&
+                item.serviceLevel.firstResponse.level === "OVERDUE"
+              ),
+          );
 
-        const score = Math.round(
-          (firstCompleted.length > 0 ? firstRate : 100) * 0.35 +
-          (resolutionCompleted.length > 0 ? resolutionRate : 100) * 0.45 +
-          Math.max(0, 100 - riskPenalty) * 0.2
-        );
+        const resolutionWithin =
+          measured.filter(
+            (item) =>
+              item.serviceLevel.resolution.completed &&
+              item.serviceLevel.resolution.withinDeadline === true,
+          );
+
+        const resolutionOverdue =
+          measured.filter(
+            (item) =>
+              (
+                item.serviceLevel.resolution.completed &&
+                item.serviceLevel.resolution.withinDeadline === false
+              ) ||
+              (
+                !item.serviceLevel.resolution.completed &&
+                item.serviceLevel.resolution.level === "OVERDUE"
+              ),
+          );
+
+        const open =
+          measured.filter(
+            (item) =>
+              isOpen(
+                item.ticket,
+              ),
+          );
+
+        const atRisk =
+          open.filter(
+            (item) => {
+              const bucket =
+                getDeadlineBucket(
+                  item,
+                );
+
+              return (
+                bucket === "critical" ||
+                bucket === "overdue"
+              );
+            },
+          );
+
+        const firstEvaluated =
+          firstWithin.length +
+          firstOverdue.length;
+
+        const resolutionEvaluated =
+          resolutionWithin.length +
+          resolutionOverdue.length;
+
+        const firstRate =
+          percentage(
+            firstWithin.length,
+            firstEvaluated,
+          );
+
+        const resolutionRate =
+          percentage(
+            resolutionWithin.length,
+            resolutionEvaluated,
+          );
+
+        const riskPenalty =
+          percentage(
+            atRisk.length,
+            open.length,
+          );
+
+        const score =
+          Math.round(
+            (
+              firstEvaluated > 0
+                ? firstRate
+                : 100
+            ) *
+              0.35 +
+            (
+              resolutionEvaluated > 0
+                ? resolutionRate
+                : 100
+            ) *
+              0.45 +
+            Math.max(
+              0,
+              100 -
+                riskPenalty,
+            ) *
+              0.2,
+          );
 
         return {
           owner,
           total: ownerItems.length,
           measured: measured.length,
           excluded: ownerItems.length - measured.length,
-          firstResponseEligible: firstCompleted.length,
+          firstResponseEligible: firstEvaluated,
           firstResponseRate: firstRate,
-          resolutionEligible: resolutionCompleted.length,
+          resolutionEligible: resolutionEvaluated,
           resolutionRate,
           open: open.length,
           atRisk: atRisk.length,
           score,
+
+          tickets: ownerItems.map((item) => item.ticket),
+          measuredTickets: measured.map((item) => item.ticket),
+          firstResponseTickets: [
+            ...firstWithin,
+            ...firstOverdue,
+          ].map((item) => item.ticket),
+          resolutionTickets: [
+            ...resolutionWithin,
+            ...resolutionOverdue,
+          ].map((item) => item.ticket),
+          riskTickets: atRisk.map((item) => item.ticket),
         };
       })
       .sort((a, b) => b.score - a.score);
@@ -357,17 +595,61 @@ export function Performance() {
         resolutionWithin: 0,
       };
 
-      if (item.serviceLevel.firstResponse.completed) {
-        current.firstEligible += 1;
-        if (item.serviceLevel.firstResponse.withinDeadline === true) {
-          current.firstWithin += 1;
+      const firstIsWithin =
+        item.serviceLevel.firstResponse.completed &&
+        item.serviceLevel.firstResponse.withinDeadline === true;
+
+      const firstIsOverdue =
+        (
+          item.serviceLevel.firstResponse.completed &&
+          item.serviceLevel.firstResponse.withinDeadline === false
+        ) ||
+        (
+          !item.serviceLevel.firstResponse.completed &&
+          item.serviceLevel.firstResponse.level === "OVERDUE"
+        );
+
+      if (
+        firstIsWithin ||
+        firstIsOverdue
+      ) {
+        current.firstEligible +=
+          1;
+
+        if (
+          firstIsWithin
+        ) {
+          current.firstWithin +=
+            1;
         }
       }
 
-      if (item.serviceLevel.resolution.completed) {
-        current.resolutionEligible += 1;
-        if (item.serviceLevel.resolution.withinDeadline === true) {
-          current.resolutionWithin += 1;
+      const resolutionIsWithin =
+        item.serviceLevel.resolution.completed &&
+        item.serviceLevel.resolution.withinDeadline === true;
+
+      const resolutionIsOverdue =
+        (
+          item.serviceLevel.resolution.completed &&
+          item.serviceLevel.resolution.withinDeadline === false
+        ) ||
+        (
+          !item.serviceLevel.resolution.completed &&
+          item.serviceLevel.resolution.level === "OVERDUE"
+        );
+
+      if (
+        resolutionIsWithin ||
+        resolutionIsOverdue
+      ) {
+        current.resolutionEligible +=
+          1;
+
+        if (
+          resolutionIsWithin
+        ) {
+          current.resolutionWithin +=
+            1;
         }
       }
 
@@ -412,6 +694,11 @@ export function Performance() {
       value: resolution.overdue.length,
       color: deadlineColors.overdue,
     },
+    {
+      name: "Em andamento",
+      value: resolution.pending.length,
+      color: deadlineColors.attention,
+    },
   ].filter((item) => item.value > 0);
 
   const riskPie = [
@@ -437,7 +724,7 @@ export function Performance() {
     },
     {
       name: "Fora da medição",
-      value: excludedTickets.length,
+      value: excludedOpenTickets.length,
       color: semanticChartColors.neutral,
     },
   ].filter((item) => item.value > 0);
@@ -535,12 +822,26 @@ export function Performance() {
         <PerformanceKpi
           title="Primeira resposta"
           value={`${firstResponse.rate}%`}
-          description={`${firstResponse.within.length} de ${firstResponse.eligible.length} dentro do prazo`}
+          description={`${firstResponse.within.length} dentro • ${firstResponse.overdue.length} fora • ${firstResponse.pending.length} pendente(s)`}
           accent={rateColor(firstResponse.rate)}
+          info={{
+            title: "Primeira resposta",
+            summary:
+              "Percentual de primeiras respostas concluídas dentro do prazo entre os atendimentos medidos.",
+            calculation:
+              "Dentro do prazo ÷ (dentro do prazo + fora do prazo) × 100. Pendentes ainda dentro do prazo ficam fora do denominador.",
+            source: "Movidesk + regra operacional do TechLead Hub",
+            reference:
+              "firstResponseDate + urgência + categoria + pausas",
+            periodRule:
+              "Considera os tickets abertos dentro do período selecionado e elegíveis para medição.",
+            notes:
+              "Uma primeira resposta ainda não concluída passa a contar como fora do prazo quando o prazo já venceu. Pendentes ainda dentro do prazo não penalizam a taxa.",
+          }}
           onClick={() =>
             setDrilldown({
               title: "Prazo de primeira resposta",
-              subtitle: "Atendimentos com prazo de primeira resposta informado",
+              subtitle: "Atendimentos elegíveis para primeira resposta",
               tickets: firstResponse.eligible.map((item) => item.ticket),
             })
           }
@@ -549,8 +850,22 @@ export function Performance() {
         <PerformanceKpi
           title="Resolução"
           value={`${resolution.rate}%`}
-          description={`${resolution.within.length} de ${resolution.completed.length} concluídos no prazo`}
+          description={`${resolution.within.length} dentro • ${resolution.overdue.length} fora • ${resolution.pending.length} em andamento`}
           accent={rateColor(resolution.rate)}
+          info={{
+            title: "Resolução",
+            summary:
+              "Percentual de atendimentos concluídos dentro do prazo de solução.",
+            calculation:
+              "Dentro do prazo ÷ (dentro do prazo + fora do prazo) × 100. Atendimentos ainda em andamento e dentro do prazo ficam fora do denominador.",
+            source: "Movidesk + regra operacional do TechLead Hub",
+            reference:
+              "resolvedDate/closedDate + urgência + categoria + pausas",
+            periodRule:
+              "A população vem dos tickets abertos no período selecionado e elegíveis para medição.",
+            notes:
+              "Atendimentos ainda abertos passam a contar como fora do prazo somente quando o prazo de solução já venceu.",
+          }}
           onClick={() =>
             setDrilldown({
               title: "Prazo de resolução",
@@ -569,6 +884,20 @@ export function Performance() {
               ? deadlineColors.overdue
               : deadlineColors.critical
           }
+          info={{
+            title: "Em risco",
+            summary:
+              "Quantidade de atendimentos abertos classificados como críticos ou vencidos.",
+            calculation:
+              "Críticos + vencidos dentro da carteira aberta e medida.",
+            source: "Movidesk + regra operacional do TechLead Hub",
+            reference:
+              "Prazo restante de primeira resposta e resolução",
+            periodRule:
+              "Considera a carteira medida no período selecionado.",
+            notes:
+              "É um indicador preditivo e operacional para priorização da coordenação.",
+          }}
           onClick={() =>
             setDrilldown({
               title: "Atendimentos em risco",
@@ -583,10 +912,24 @@ export function Performance() {
           value={`${operationHealth.score}/100`}
           description={operationHealth.label}
           accent={rateColor(operationHealth.score)}
+          info={{
+            title: "Saúde da operação",
+            summary:
+              "Índice composto que resume primeira resposta, resolução e risco atual da carteira.",
+            calculation:
+              "35% primeira resposta + 40% resolução + 25% componente de risco.",
+            source: "TechLead Hub",
+            reference:
+              "Indicadores de primeira resposta, resolução e carteira crítica/vencida",
+            periodRule:
+              "Calculado sobre os atendimentos medidos no período selecionado.",
+            notes:
+              "É um índice gerencial de apoio à coordenação e não substitui o SLA oficial do Movidesk.",
+          }}
           onClick={() =>
             setDrilldown({
               title: "Carteira operacional",
-              subtitle: "Todos os atendimentos do período selecionado",
+              subtitle: "Todos os atendimentos medidos do período selecionado",
               tickets: measuredTickets.map((item) => item.ticket),
             })
           }
@@ -619,6 +962,36 @@ export function Performance() {
           centerValue={`${firstResponse.rate}%`}
           centerLabel="cumprimento"
           data={firstResponsePie}
+          info={{
+            title: "Prazo de primeira resposta",
+            summary:
+              "Distribuição dos atendimentos elegíveis entre dentro do prazo, fora do prazo e pendentes.",
+            calculation:
+              "Cada fatia representa a quantidade de tickets na respectiva situação da primeira resposta.",
+            source: "Movidesk + regra operacional do TechLead Hub",
+            periodRule:
+              "Considera os atendimentos elegíveis no período selecionado.",
+            notes:
+              "Clique em qualquer fatia ou item da legenda para abrir os tickets que compõem aquela cor.",
+          }}
+          onSliceClick={(name) => {
+            if (name === "Dentro do prazo") {
+              setDrilldown({
+                title: "Primeira resposta dentro do prazo",
+                tickets: firstResponse.within.map((item) => item.ticket),
+              });
+            } else if (name === "Fora do prazo") {
+              setDrilldown({
+                title: "Primeira resposta fora do prazo",
+                tickets: firstResponse.overdue.map((item) => item.ticket),
+              });
+            } else {
+              setDrilldown({
+                title: "Primeira resposta pendente",
+                tickets: firstResponse.pending.map((item) => item.ticket),
+              });
+            }
+          }}
         />
 
         <DonutCard
@@ -627,14 +1000,75 @@ export function Performance() {
           centerValue={`${resolution.rate}%`}
           centerLabel="cumprimento"
           data={resolutionPie}
+          info={{
+            title: "Prazo de resolução",
+            summary:
+              "Distribuição dos atendimentos concluídos entre dentro e fora do prazo.",
+            calculation:
+              "Cada fatia representa a quantidade de tickets concluídos naquela condição.",
+            source: "Movidesk + regra operacional do TechLead Hub",
+            periodRule:
+              "Considera os atendimentos concluídos e medidos no período selecionado.",
+            notes:
+              "Clique em uma fatia ou item da legenda para abrir os tickets correspondentes.",
+          }}
+          onSliceClick={(name) => {
+            if (name === "Dentro do prazo") {
+              setDrilldown({
+                title: "Resoluções dentro do prazo",
+                tickets: resolution.within.map((item) => item.ticket),
+              });
+              return;
+            }
+
+            if (name === "Fora do prazo") {
+              setDrilldown({
+                title: "Resoluções fora do prazo",
+                tickets: resolution.overdue.map((item) => item.ticket),
+              });
+              return;
+            }
+
+            setDrilldown({
+              title: "Resoluções em andamento",
+              subtitle: "Atendimentos ainda abertos e dentro do prazo",
+              tickets: resolution.pending.map((item) => item.ticket),
+            });
+          }}
         />
 
         <DonutCard
           title="Risco da carteira"
           subtitle="Situação atual dos atendimentos abertos"
-          centerValue={riskGroups.open.length}
+          centerValue={allOpenTickets.length}
           centerLabel="abertos"
           data={riskPie}
+          info={{
+            title: "Risco da carteira",
+            summary:
+              "Distribuição de todos os atendimentos abertos por nível de risco de prazo, incluindo os que estão fora da medição.",
+            calculation:
+              "Classificação pela condição mais severa entre primeira resposta e resolução.",
+            source: "Movidesk + regra operacional do TechLead Hub",
+            periodRule:
+              "Considera todos os atendimentos abertos do período selecionado; os fora da medição aparecem separadamente.",
+            notes:
+              "Clique nas cores para investigar exatamente os tickets classificados em cada situação.",
+          }}
+          onSliceClick={(name) => {
+            const groups: Record<string, Ticket[]> = {
+              Normal: riskGroups.within.map((item) => item.ticket),
+              Atenção: riskGroups.attention.map((item) => item.ticket),
+              Crítico: riskGroups.critical.map((item) => item.ticket),
+              Vencido: riskGroups.overdue.map((item) => item.ticket),
+              "Fora da medição": excludedOpenTickets.map((item) => item.ticket),
+            };
+
+            setDrilldown({
+              title: `Risco da carteira: ${name}`,
+              tickets: groups[name] ?? [],
+            });
+          }}
         />
       </Box>
 
@@ -650,13 +1084,22 @@ export function Performance() {
         }}
       >
         <CardContent>
-          <Typography sx={{ fontWeight: 800, fontSize: "1rem" }}>
-            Evolução do cumprimento de prazo
-          </Typography>
-
-          <Typography variant="caption" color="text.secondary">
-            Tendência diária da primeira resposta e resolução
-          </Typography>
+          <CardSectionHeader
+            title="Evolução do cumprimento de prazo"
+            subtitle="Tendência diária da primeira resposta e resolução"
+            info={{
+              title: "Evolução do cumprimento de prazo",
+              summary:
+                "Mostra a variação diária das taxas de primeira resposta e resolução.",
+              calculation:
+                "Percentual diário de tickets concluídos dentro do prazo entre os tickets concluídos medidos naquele dia.",
+              source: "Movidesk + regra operacional do TechLead Hub",
+              periodRule:
+                "Agrupa os atendimentos medidos pela data de abertura dentro do período selecionado.",
+              notes:
+                "Use a tendência para identificar deterioração ou recuperação operacional ao longo do período.",
+            }}
+          />
 
           <Box sx={{ height: 300, mt: 2 }}>
             {trends.length > 0 ? (
@@ -729,13 +1172,22 @@ export function Performance() {
         }}
       >
         <CardContent>
-          <Typography sx={{ fontWeight: 800, fontSize: "1rem" }}>
-            Radar de vencimento
-          </Typography>
-
-          <Typography variant="caption" color="text.secondary">
-            Visão preditiva da carteira aberta
-          </Typography>
+          <CardSectionHeader
+            title="Radar de vencimento"
+            subtitle="Visão preditiva da carteira aberta"
+            info={{
+              title: "Radar de vencimento",
+              summary:
+                "Distribui a carteira atual entre normal, atenção, crítico, vencido e fora da medição.",
+              calculation:
+                "Cada ticket é classificado pelo prazo mais severo entre primeira resposta e resolução.",
+              source: "Movidesk + regra operacional do TechLead Hub",
+              periodRule:
+                "Considera a carteira aberta vinculada ao período selecionado.",
+              notes:
+                "Todos os blocos são clicáveis e abrem os tickets que formam o respectivo indicador.",
+            }}
+          />
 
           <Box
             sx={{
@@ -838,15 +1290,22 @@ export function Performance() {
               gap: 1,
             }}
           >
-            <Box>
-              <Typography sx={{ fontWeight: 800, fontSize: "1rem" }}>
-                Desempenho por analista
-              </Typography>
-
-              <Typography variant="caption" color="text.secondary">
-                Cumprimento de prazo, risco da carteira e índice operacional
-              </Typography>
-            </Box>
+            <CardSectionHeader
+              title="Desempenho por analista"
+              subtitle="Cumprimento de prazo, risco da carteira e índice operacional"
+              info={{
+                title: "Desempenho por analista",
+                summary:
+                  "Compara a carteira dos analistas por volume, medição de prazo, risco e índice de saúde.",
+                calculation:
+                  "Saúde = 35% primeira resposta + 45% resolução + 20% componente de risco por analista.",
+                source: "Movidesk + regra operacional do TechLead Hub",
+                periodRule:
+                  "Considera os tickets abertos no período e atribuídos ao responsável.",
+                notes:
+                  "Os números e taxas são clicáveis para facilitar a análise da coordenação por analista.",
+              }}
+            />
 
             <Chip
               size="small"
@@ -894,23 +1353,62 @@ export function Performance() {
                   sx={{ "&:hover": { backgroundColor: "#FAFBFA" } }}
                 >
                   <TableCell>
-                    <Typography sx={{ fontWeight: 700, fontSize: "0.82rem" }}>
-                      {analyst.owner}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {analyst.open} aberto(s)
-                    </Typography>
+                    <Box
+                      role="button"
+                      tabIndex={0}
+                      onClick={() =>
+                        setDrilldown({
+                          title: `Analista: ${analyst.owner}`,
+                          subtitle: "Todos os tickets do analista no período",
+                          tickets: analyst.tickets,
+                        })
+                      }
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          setDrilldown({
+                            title: `Analista: ${analyst.owner}`,
+                            subtitle: "Todos os tickets do analista no período",
+                            tickets: analyst.tickets,
+                          });
+                        }
+                      }}
+                      sx={{ cursor: "pointer" }}
+                    >
+                      <Typography sx={{ fontWeight: 700, fontSize: "0.82rem", color: aliareColors.greenDark }}>
+                        {analyst.owner}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {analyst.open} aberto(s)
+                      </Typography>
+                    </Box>
                   </TableCell>
 
-                  <TableCell align="right">{analyst.total}</TableCell>
+                  <TableCell align="right">
+                    <ClickableTableMetric
+                      value={analyst.total}
+                      onClick={() =>
+                        setDrilldown({
+                          title: `${analyst.owner} - Tickets`,
+                          tickets: analyst.tickets,
+                        })
+                      }
+                    />
+                  </TableCell>
 
                   <TableCell align="right">
                     <Chip
                       size="small"
                       label={analyst.measured}
                       variant="outlined"
+                      onClick={() =>
+                        setDrilldown({
+                          title: `${analyst.owner} - Tickets medidos`,
+                          tickets: analyst.measuredTickets,
+                        })
+                      }
                       sx={{
                         minWidth: 38,
+                        cursor: "pointer",
                         color: aliareColors.greenDark,
                         borderColor: "rgba(24,199,122,0.30)",
                       }}
@@ -921,6 +1419,12 @@ export function Performance() {
                     <RateChip
                       value={analyst.firstResponseRate}
                       empty={analyst.firstResponseEligible === 0}
+                      onClick={() =>
+                        setDrilldown({
+                          title: `${analyst.owner} - Primeira resposta`,
+                          tickets: analyst.firstResponseTickets,
+                        })
+                      }
                     />
                   </TableCell>
 
@@ -928,6 +1432,12 @@ export function Performance() {
                     <RateChip
                       value={analyst.resolutionRate}
                       empty={analyst.resolutionEligible === 0}
+                      onClick={() =>
+                        setDrilldown({
+                          title: `${analyst.owner} - Resolução`,
+                          tickets: analyst.resolutionTickets,
+                        })
+                      }
                     />
                   </TableCell>
 
@@ -936,8 +1446,15 @@ export function Performance() {
                       size="small"
                       label={analyst.atRisk}
                       variant="outlined"
+                      onClick={() =>
+                        setDrilldown({
+                          title: `${analyst.owner} - Em risco`,
+                          tickets: analyst.riskTickets,
+                        })
+                      }
                       sx={{
                         minWidth: 38,
+                        cursor: "pointer",
                         color:
                           analyst.atRisk > 0
                             ? semanticChartColors.overdue
@@ -951,7 +1468,16 @@ export function Performance() {
                   </TableCell>
 
                   <TableCell align="right">
-                    <RateChip value={analyst.score} />
+                    <RateChip
+                      value={analyst.score}
+                      onClick={() =>
+                        setDrilldown({
+                          title: `${analyst.owner} - Carteira operacional`,
+                          subtitle: `Saúde ${analyst.score}/100`,
+                          tickets: analyst.measuredTickets,
+                        })
+                      }
+                    />
                   </TableCell>
                 </TableRow>
               ))}
@@ -1097,12 +1623,14 @@ function PerformanceKpi({
   value,
   description,
   accent,
+  info,
   onClick,
 }: {
   title: string;
   value: string | number;
   description: string;
   accent: string;
+  info: CardInfo;
   onClick: () => void;
 }) {
   return (
@@ -1121,7 +1649,7 @@ function PerformanceKpi({
         overflow: "hidden",
         border: "1px solid",
         borderColor: "divider",
-        borderRadius: 2.15,
+        borderRadius: 2.25,
         cursor: "pointer",
         backgroundColor: "background.paper",
         transition:
@@ -1138,22 +1666,46 @@ function PerformanceKpi({
         "&:hover": {
           transform: "translateY(-2px)",
           borderColor: accent,
-          boxShadow: "0 8px 22px rgba(16,24,40,0.07)",
+          boxShadow: "0 8px 24px rgba(16,24,40,0.08)",
+        },
+        "&:focus-visible": {
+          outline: `2px solid ${accent}`,
+          outlineOffset: "2px",
         },
       }}
     >
-      <CardContent sx={{ p: 1.5, "&:last-child": { pb: 1.5 } }}>
-        <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
-          {title}
-        </Typography>
+      <CardContent
+        sx={{
+          p: { xs: 1.6, md: 1.8 },
+          "&:last-child": { pb: { xs: 1.6, md: 1.8 } },
+        }}
+      >
+        <Stack
+          direction="row"
+          sx={{
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 1,
+          }}
+        >
+          <Typography
+            variant="body2"
+            color="text.secondary"
+            sx={{ fontWeight: 650 }}
+          >
+            {title}
+          </Typography>
+
+          <CardInfoButton info={info} />
+        </Stack>
 
         <Typography
           sx={{
-            mt: 0.35,
-            fontSize: "1.75rem",
-            lineHeight: 1,
+            mt: 0.6,
+            fontSize: { xs: "1.75rem", md: "1.95rem", xl: "2.1rem" },
+            lineHeight: 1.05,
             fontWeight: 800,
-            letterSpacing: "-0.03em",
+            letterSpacing: "-0.025em",
           }}
         >
           {value}
@@ -1162,7 +1714,7 @@ function PerformanceKpi({
         <Typography
           variant="caption"
           color="text.secondary"
-          sx={{ display: "block", mt: 0.55 }}
+          sx={{ display: "block", mt: 0.75, minHeight: 18 }}
         >
           {description}
         </Typography>
@@ -1171,7 +1723,7 @@ function PerformanceKpi({
           variant="caption"
           sx={{
             display: "inline-block",
-            mt: 0.7,
+            mt: 0.85,
             fontWeight: 700,
             color: aliareColors.greenDark,
           }}
@@ -1189,6 +1741,8 @@ function DonutCard({
   centerValue,
   centerLabel,
   data,
+  info,
+  onSliceClick,
 }: {
   title: string;
   subtitle: string;
@@ -1199,6 +1753,8 @@ function DonutCard({
     value: number;
     color: string;
   }>;
+  info: CardInfo;
+  onSliceClick?: (name: string) => void;
 }) {
   return (
     <Card
@@ -1212,15 +1768,28 @@ function DonutCard({
       }}
     >
       <CardContent>
-        <Typography sx={{ fontWeight: 800, fontSize: "1rem" }}>
-          {title}
-        </Typography>
+        <Stack
+          direction="row"
+          sx={{
+            alignItems: "flex-start",
+            justifyContent: "space-between",
+            gap: 1,
+          }}
+        >
+          <Box>
+            <Typography sx={{ fontWeight: 800, fontSize: "1rem" }}>
+              {title}
+            </Typography>
 
-        <Typography variant="caption" color="text.secondary">
-          {subtitle}
-        </Typography>
+            <Typography variant="caption" color="text.secondary">
+              {subtitle}
+            </Typography>
+          </Box>
 
-        <Box sx={{ height: 245, mt: 1 }}>
+          <CardInfoButton info={info} />
+        </Stack>
+
+        <Box sx={{ height: 205, mt: 1 }}>
           {data.length > 0 ? (
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
@@ -1232,6 +1801,24 @@ function DonutCard({
                   outerRadius={88}
                   paddingAngle={2}
                   stroke="none"
+                  cursor={onSliceClick ? "pointer" : "default"}
+                  onClick={(entry) => {
+                    const candidate = entry as {
+                      name?: unknown;
+                      payload?: { name?: unknown };
+                    };
+
+                    const name =
+                      typeof candidate.name === "string"
+                        ? candidate.name
+                        : typeof candidate.payload?.name === "string"
+                        ? candidate.payload.name
+                        : null;
+
+                    if (name) {
+                      onSliceClick?.(name);
+                    }
+                  }}
                 >
                   {data.map((item) => (
                     <Cell key={item.name} fill={item.color} />
@@ -1239,15 +1826,10 @@ function DonutCard({
                 </Pie>
 
                 <Tooltip />
-                <Legend
-                  verticalAlign="bottom"
-                  iconType="circle"
-                  wrapperStyle={{ fontSize: 11 }}
-                />
 
                 <text
                   x="50%"
-                  y="46%"
+                  y="47%"
                   textAnchor="middle"
                   dominantBaseline="middle"
                   style={{
@@ -1261,7 +1843,7 @@ function DonutCard({
 
                 <text
                   x="50%"
-                  y="57%"
+                  y="59%"
                   textAnchor="middle"
                   dominantBaseline="middle"
                   style={{
@@ -1277,6 +1859,13 @@ function DonutCard({
             <EmptyState text="Sem dados para este indicador." />
           )}
         </Box>
+
+        {data.length > 0 && (
+          <DonutLegend
+            data={data}
+            onItemClick={onSliceClick}
+          />
+        )}
       </CardContent>
     </Card>
   );
@@ -1331,12 +1920,22 @@ function RiskBucket({
 function RateChip({
   value,
   empty = false,
+  onClick,
 }: {
   value: number;
   empty?: boolean;
+  onClick?: () => void;
 }) {
   if (empty) {
-    return <Chip size="small" label="—" variant="outlined" />;
+    return (
+      <Chip
+        size="small"
+        label="—"
+        variant="outlined"
+        onClick={onClick}
+        sx={{ cursor: onClick ? "pointer" : "default" }}
+      />
+    );
   }
 
   const color = rateColor(value);
@@ -1346,8 +1945,10 @@ function RateChip({
       size="small"
       label={`${value}%`}
       variant="outlined"
+      onClick={onClick}
       sx={{
         minWidth: 56,
+        cursor: onClick ? "pointer" : "default",
         color,
         borderColor: color,
         fontWeight: 700,
@@ -1557,6 +2158,283 @@ function formatDayKey(value: string) {
 function formatShortDate(value: string) {
   const [, month, day] = value.split("-");
   return `${day}/${month}`;
+}
+
+function CardInfoButton({
+  info,
+}: {
+  info: CardInfo;
+}) {
+  const [anchorEl, setAnchorEl] =
+    useState<HTMLElement | null>(null);
+
+  const open =
+    Boolean(anchorEl);
+
+  return (
+    <>
+      <IconButton
+        size="small"
+        aria-label={`Informações sobre ${info.title}`}
+        title={`Informações sobre ${info.title}`}
+        onClick={(event) => {
+          event.stopPropagation();
+          setAnchorEl(event.currentTarget);
+        }}
+        onKeyDown={(event) => {
+          event.stopPropagation();
+        }}
+        sx={{
+          width: 28,
+          height: 28,
+          color: "text.secondary",
+          flexShrink: 0,
+        }}
+      >
+        <InfoOutlined sx={{ fontSize: 17 }} />
+      </IconButton>
+
+      <Popover
+        open={open}
+        anchorEl={anchorEl}
+        onClose={() => setAnchorEl(null)}
+        anchorOrigin={{
+          vertical: "bottom",
+          horizontal: "right",
+        }}
+        transformOrigin={{
+          vertical: "top",
+          horizontal: "right",
+        }}
+        onClick={(event) => event.stopPropagation()}
+        slotProps={{
+          paper: {
+            sx: {
+              width: 340,
+              maxWidth: "calc(100vw - 32px)",
+              p: 2,
+              borderRadius: 2,
+            },
+          },
+        }}
+      >
+        <Typography sx={{ fontWeight: 800 }}>
+          {info.title}
+        </Typography>
+
+        <Typography
+          variant="body2"
+          color="text.secondary"
+          sx={{ mt: 0.75 }}
+        >
+          {info.summary}
+        </Typography>
+
+        <Divider sx={{ my: 1.5 }} />
+
+        <InfoLine
+          label="Cálculo"
+          value={info.calculation}
+        />
+
+        <InfoLine
+          label="Fonte"
+          value={info.source}
+        />
+
+        {info.reference && (
+          <InfoLine
+            label="Referência"
+            value={info.reference}
+          />
+        )}
+
+        <InfoLine
+          label="Período"
+          value={info.periodRule}
+        />
+
+        {info.notes && (
+          <InfoLine
+            label="Observação"
+            value={info.notes}
+          />
+        )}
+      </Popover>
+    </>
+  );
+}
+
+function InfoLine({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
+  return (
+    <Box sx={{ mt: 1 }}>
+      <Typography
+        variant="caption"
+        color="text.secondary"
+        sx={{ fontWeight: 700 }}
+      >
+        {label}
+      </Typography>
+
+      <Typography
+        variant="body2"
+        sx={{ mt: 0.15, lineHeight: 1.45 }}
+      >
+        {value}
+      </Typography>
+    </Box>
+  );
+}
+
+function CardSectionHeader({
+  title,
+  subtitle,
+  info,
+}: {
+  title: string;
+  subtitle: string;
+  info: CardInfo;
+}) {
+  return (
+    <Stack
+      direction="row"
+      sx={{
+        justifyContent: "space-between",
+        alignItems: "flex-start",
+        gap: 1,
+      }}
+    >
+      <Box>
+        <Typography sx={{ fontWeight: 800, fontSize: "1rem" }}>
+          {title}
+        </Typography>
+
+        <Typography variant="caption" color="text.secondary">
+          {subtitle}
+        </Typography>
+      </Box>
+
+      <CardInfoButton info={info} />
+    </Stack>
+  );
+}
+
+function DonutLegend({
+  data,
+  onItemClick,
+}: {
+  data: Array<{
+    name: string;
+    value: number;
+    color: string;
+  }>;
+  onItemClick?: (name: string) => void;
+}) {
+  return (
+    <Stack
+      direction="row"
+      spacing={1}
+      useFlexGap
+      sx={{
+        justifyContent: "center",
+        alignItems: "center",
+        flexWrap: "wrap",
+        mt: 0.5,
+      }}
+    >
+      {data.map((item) => (
+        <Box
+          key={item.name}
+          role={onItemClick ? "button" : undefined}
+          tabIndex={onItemClick ? 0 : undefined}
+          onClick={() => onItemClick?.(item.name)}
+          onKeyDown={(event) => {
+            if (
+              onItemClick &&
+              (event.key === "Enter" || event.key === " ")
+            ) {
+              onItemClick(item.name);
+            }
+          }}
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            gap: 0.55,
+            cursor: onItemClick ? "pointer" : "default",
+            borderRadius: 1,
+            px: 0.4,
+            py: 0.2,
+            "&:hover": onItemClick
+              ? { backgroundColor: "action.hover" }
+              : undefined,
+          }}
+        >
+          <Box
+            sx={{
+              width: 10,
+              height: 10,
+              borderRadius: "50%",
+              backgroundColor: item.color,
+              flexShrink: 0,
+            }}
+          />
+
+          <Typography
+            variant="caption"
+            sx={{ color: item.color, fontWeight: 600 }}
+          >
+            {item.name}
+          </Typography>
+
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            sx={{ fontWeight: 700 }}
+          >
+            {item.value}
+          </Typography>
+        </Box>
+      ))}
+    </Stack>
+  );
+}
+
+function ClickableTableMetric({
+  value,
+  onClick,
+}: {
+  value: number;
+  onClick: () => void;
+}) {
+  return (
+    <Box
+      component="button"
+      type="button"
+      onClick={onClick}
+      sx={{
+        p: 0,
+        m: 0,
+        border: 0,
+        background: "transparent",
+        color: "inherit",
+        font: "inherit",
+        fontWeight: 700,
+        cursor: "pointer",
+        "&:hover": {
+          color: aliareColors.greenDark,
+          textDecoration: "underline",
+        },
+      }}
+    >
+      {value}
+    </Box>
+  );
 }
 
 function EmptyState({

@@ -861,6 +861,93 @@ export class DashboardController {
           }
         );
 
+      /*
+       * A relação canônica entre atendimento e Azure é:
+       * Ticket.taskNumber === AzureWorkItem.id
+       *
+       * Carregamos todos os Work Items relacionados em uma única
+       * consulta para evitar N+1 no frontend e no backend.
+       */
+      const taskNumbers =
+        Array.from(
+          new Set(
+            tickets
+              .map(
+                (ticket) =>
+                  ticket.taskNumber
+              )
+              .filter(
+                (
+                  taskNumber
+                ): taskNumber is number =>
+                  typeof taskNumber ===
+                    "number" &&
+                  Number.isInteger(
+                    taskNumber
+                  ) &&
+                  taskNumber >
+                    0
+              )
+          )
+        );
+
+      const azureWorkItems =
+        taskNumbers.length >
+        0
+          ? await prisma.azureWorkItem.findMany({
+              where: {
+                id: {
+                  in:
+                    taskNumbers,
+                },
+              },
+              select: {
+                id:
+                  true,
+                workItemType:
+                  true,
+                title:
+                  true,
+                state:
+                  true,
+                assignedToName:
+                  true,
+                client:
+                  true,
+                criticality:
+                  true,
+                module:
+                  true,
+                process:
+                  true,
+                movideskTicket:
+                  true,
+                deliveredVersion:
+                  true,
+                prioritized:
+                  true,
+                blockedProcess:
+                  true,
+                azureChangedAt:
+                  true,
+                stateChangedAt:
+                  true,
+                syncedAt:
+                  true,
+              },
+            })
+          : [];
+
+      const azureById =
+        new Map(
+          azureWorkItems.map(
+            (workItem) => [
+              workItem.id,
+              workItem,
+            ]
+          )
+        );
+
       const result =
         tickets.map(
           (ticket) => ({
@@ -971,6 +1058,20 @@ export class DashboardController {
 
             deliveredVersion:
               ticket.deliveredVersion,
+
+            /*
+             * Resumo atual da Task no Azure DevOps.
+             * null = sem Task vinculada ou Task ainda não sincronizada.
+             */
+            azureWorkItem:
+              ticket.taskNumber
+                ? (
+                    azureById.get(
+                      ticket.taskNumber
+                    ) ??
+                    null
+                  )
+                : null,
 
             /* Importação */
 

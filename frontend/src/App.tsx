@@ -77,6 +77,14 @@ import {
 } from "./pages/Users";
 
 import {
+  AzureWorkItems,
+} from "./pages/AzureWorkItems";
+
+import {
+  Versions,
+} from "./pages/Versions";
+
+import {
   aliareColors,
 } from "./theme/theme";
 
@@ -94,17 +102,10 @@ function AuthenticatedLayout({
       <FiltersProvider>
         <Box
           sx={{
-            display:
-              "flex",
-
-            width:
-              "100%",
-
-            minHeight:
-              "100vh",
-
-            backgroundColor:
-              "background.default",
+            display: "flex",
+            width: "100%",
+            minHeight: "100vh",
+            backgroundColor: "background.default",
           }}
         >
           <Sidebar />
@@ -113,17 +114,10 @@ function AuthenticatedLayout({
             component="main"
             sx={{
               flexGrow: 1,
-
               minWidth: 0,
-
-              minHeight:
-                "100vh",
-
-              backgroundColor:
-                "background.default",
-
-              overflowX:
-                "hidden",
+              minHeight: "100vh",
+              backgroundColor: "background.default",
+              overflowX: "hidden",
 
               px: {
                 xs: 1.5,
@@ -144,11 +138,8 @@ function AuthenticatedLayout({
           >
             <Box
               sx={{
-                width:
-                  "100%",
-
-                maxWidth:
-                  "100%",
+                width: "100%",
+                maxWidth: "100%",
               }}
             >
               {children}
@@ -179,29 +170,18 @@ function AdminOnly({
     return (
       <Box
         sx={{
-          minHeight:
-            "100vh",
-
-          display:
-            "flex",
-
-          flexDirection:
-            "column",
-
-          alignItems:
-            "center",
-
-          justifyContent:
-            "center",
-
+          minHeight: "100vh",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
           gap: 2,
         }}
       >
         <CircularProgress
           size={30}
           sx={{
-            color:
-              aliareColors.green,
+            color: aliareColors.green,
           }}
         />
 
@@ -217,8 +197,7 @@ function AdminOnly({
 
   if (
     !user ||
-    user.role !==
-      "ADMIN"
+    user.role !== "ADMIN"
   ) {
     return (
       <Navigate
@@ -240,20 +219,12 @@ function App() {
     <BrowserRouter>
       <AuthProvider>
         <Routes>
-          {/* =================================================
-              ROTA PÚBLICA
-          ================================================= */}
-
           <Route
             path="/login"
             element={
               <Login />
             }
           />
-
-          {/* =================================================
-              ROTAS PROTEGIDAS
-          ================================================= */}
 
           <Route
             path="/"
@@ -309,6 +280,41 @@ function App() {
             }
           />
 
+          {/* =================================================
+              DESENVOLVIMENTO
+          ================================================= */}
+
+          <Route
+            path="/correcoes"
+            element={
+              <AuthenticatedLayout>
+                <AzureWorkItems
+                  type="Correção Clientes"
+                />
+              </AuthenticatedLayout>
+            }
+          />
+
+          <Route
+            path="/evolucoes"
+            element={
+              <AuthenticatedLayout>
+                <AzureWorkItems
+                  type="Evolução"
+                />
+              </AuthenticatedLayout>
+            }
+          />
+
+          <Route
+            path="/versoes"
+            element={
+              <AuthenticatedLayout>
+                <Versions />
+              </AuthenticatedLayout>
+            }
+          />
+
           <Route
             path="/importar"
             element={
@@ -350,10 +356,6 @@ function App() {
               </AuthenticatedLayout>
             }
           />
-
-          {/* =================================================
-              FALLBACK
-          ================================================= */}
 
           <Route
             path="*"

@@ -1,4 +1,6 @@
 import {
+  useCallback,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -25,13 +27,15 @@ import {
 
 import { api } from "../services/api";
 
+/* =========================================================
+   TIPOS - MOVIDESK
+========================================================= */
+
 type ImportResult = {
   message: string;
-
   batchId: string;
 
   totalRows: number;
-
   created: number;
   updated: number;
   ignored: number;
@@ -48,55 +52,242 @@ type ImportResult = {
   }[];
 };
 
+/* =========================================================
+   TIPOS - AZURE
+========================================================= */
+
+type AzureSyncStatus =
+  | "PROCESSING"
+  | "SUCCESS"
+  | "PARTIAL"
+  | "ERROR";
+
+type AzureSyncRun = {
+  id: number;
+  batch: string;
+  status: AzureSyncStatus;
+  source: string | null;
+
+  totalItems: number;
+  insertedItems: number;
+  updatedItems: number;
+  skippedItems: number;
+  errorItems: number;
+
+  message: string | null;
+
+  startedAt: string;
+  finishedAt: string | null;
+};
+
+type AzureSyncDashboardStatus = {
+  scheduler: {
+    enabled: boolean;
+    intervalMinutes: number;
+    overlapMinutes: number;
+  };
+
+  latestRun:
+    | AzureSyncRun
+    | null;
+
+  lastSuccessfulRun:
+    | AzureSyncRun
+    | null;
+
+  nextEstimatedAt:
+    | string
+    | null;
+
+  recentRuns:
+    AzureSyncRun[];
+};
+
 const MAX_FILE_SIZE =
   25 * 1024 * 1024;
+
+const AZURE_STATUS_REFRESH_MS =
+  30_000;
 
 export function Import() {
   const inputRef =
     useRef<HTMLInputElement | null>(
-      null
+      null,
     );
 
+  /* =======================================================
+     MOVIDESK
+  ======================================================= */
+
   const [file, setFile] =
-    useState<File | null>(null);
+    useState<File | null>(
+      null,
+    );
 
   const [dragging, setDragging] =
-    useState(false);
+    useState(
+      false,
+    );
 
   const [loading, setLoading] =
-    useState(false);
+    useState(
+      false,
+    );
 
   const [error, setError] =
-    useState<string | null>(null);
+    useState<string | null>(
+      null,
+    );
 
   const [result, setResult] =
     useState<ImportResult | null>(
-      null
+      null,
     );
 
-  const fileSize = useMemo(() => {
-    if (!file) {
-      return "";
-    }
+  /* =======================================================
+     AZURE
+  ======================================================= */
 
-    return formatFileSize(
-      file.size
+  const [
+    azureStatus,
+    setAzureStatus,
+  ] =
+    useState<AzureSyncDashboardStatus | null>(
+      null,
     );
-  }, [file]);
+
+  const [
+    azureLoading,
+    setAzureLoading,
+  ] =
+    useState(
+      true,
+    );
+
+  const [
+    azureError,
+    setAzureError,
+  ] =
+    useState<string | null>(
+      null,
+    );
+
+  const fileSize =
+    useMemo(
+      () => {
+        if (!file) {
+          return "";
+        }
+
+        return formatFileSize(
+          file.size,
+        );
+      },
+      [
+        file,
+      ],
+    );
+
+  /* =======================================================
+     STATUS AZURE
+  ======================================================= */
+
+  const loadAzureStatus =
+    useCallback(
+      async (
+        showLoading =
+          false,
+      ) => {
+        try {
+          if (
+            showLoading
+          ) {
+            setAzureLoading(
+              true,
+            );
+          }
+
+          setAzureError(
+            null,
+          );
+
+          const response =
+            await api.get<AzureSyncDashboardStatus>(
+              "/azure-sync/status",
+            );
+
+          setAzureStatus(
+            response.data,
+          );
+        } catch (
+          err: unknown
+        ) {
+          console.error(
+            "Erro ao consultar status da sincronização Azure:",
+            err,
+          );
+
+          setAzureError(
+            getApiErrorMessage(
+              err,
+              "Não foi possível consultar o status da sincronização do Azure DevOps.",
+            ),
+          );
+        } finally {
+          setAzureLoading(
+            false,
+          );
+        }
+      },
+      [],
+    );
+
+  useEffect(
+    () => {
+      void loadAzureStatus(
+        true,
+      );
+
+      const timer =
+        window.setInterval(
+          () => {
+            void loadAzureStatus(
+              false,
+            );
+          },
+          AZURE_STATUS_REFRESH_MS,
+        );
+
+      return () => {
+        window.clearInterval(
+          timer,
+        );
+      };
+    },
+    [
+      loadAzureStatus,
+    ],
+  );
+
+  /* =======================================================
+     MOVIDESK - ARQUIVO
+  ======================================================= */
 
   function validateFile(
-    selectedFile: File
+    selectedFile:
+      File,
   ) {
     const fileName =
-      selectedFile.name.toLowerCase();
+      selectedFile.name
+        .toLowerCase();
 
     if (
       !fileName.endsWith(
-        ".xlsx"
+        ".xlsx",
       )
     ) {
       setError(
-        "Formato inválido. Selecione um arquivo Excel no formato .xlsx."
+        "Formato inválido. Selecione um arquivo Excel no formato .xlsx.",
       );
 
       return false;
@@ -107,7 +298,7 @@ export function Import() {
       MAX_FILE_SIZE
     ) {
       setError(
-        "O arquivo excede o limite de 25 MB."
+        "O arquivo excede o limite de 25 MB.",
       );
 
       return false;
@@ -119,161 +310,187 @@ export function Import() {
   function selectFile(
     selectedFile:
       | File
-      | undefined
+      | undefined,
   ) {
-    if (!selectedFile) {
+    if (
+      !selectedFile
+    ) {
       return;
     }
 
-    setError(null);
-    setResult(null);
+    setError(
+      null,
+    );
+
+    setResult(
+      null,
+    );
 
     if (
       !validateFile(
-        selectedFile
+        selectedFile,
       )
     ) {
-      setFile(null);
+      setFile(
+        null,
+      );
 
       return;
     }
 
-    setFile(selectedFile);
+    setFile(
+      selectedFile,
+    );
   }
 
   function handleFileChange(
-    event: ChangeEvent<HTMLInputElement>
+    event:
+      ChangeEvent<HTMLInputElement>,
   ) {
     selectFile(
-      event.target.files?.[0]
+      event.target
+        .files?.[0],
     );
 
-    /*
-     * Permite selecionar novamente
-     * o mesmo arquivo depois.
-     */
-    event.target.value = "";
+    event.target.value =
+      "";
   }
 
   function handleDragOver(
-    event: DragEvent<HTMLDivElement>
+    event:
+      DragEvent<HTMLDivElement>,
   ) {
     event.preventDefault();
 
-    if (!loading) {
-      setDragging(true);
+    if (
+      !loading
+    ) {
+      setDragging(
+        true,
+      );
     }
   }
 
   function handleDragLeave(
-    event: DragEvent<HTMLDivElement>
+    event:
+      DragEvent<HTMLDivElement>,
   ) {
     event.preventDefault();
 
-    setDragging(false);
+    setDragging(
+      false,
+    );
   }
 
   function handleDrop(
-    event: DragEvent<HTMLDivElement>
+    event:
+      DragEvent<HTMLDivElement>,
   ) {
     event.preventDefault();
 
-    setDragging(false);
+    setDragging(
+      false,
+    );
 
-    if (loading) {
+    if (
+      loading
+    ) {
       return;
     }
 
     selectFile(
-      event.dataTransfer.files?.[0]
+      event.dataTransfer
+        .files?.[0],
     );
   }
 
   function removeFile() {
-    if (loading) {
+    if (
+      loading
+    ) {
       return;
     }
 
-    setFile(null);
-    setError(null);
-    setResult(null);
+    setFile(
+      null,
+    );
+
+    setError(
+      null,
+    );
+
+    setResult(
+      null,
+    );
   }
 
   async function importFile() {
-    if (!file) {
+    if (
+      !file
+    ) {
       setError(
-        "Selecione um arquivo antes de iniciar a importação."
+        "Selecione um arquivo antes de iniciar a importação.",
       );
 
       return;
     }
 
     try {
-      setLoading(true);
-      setError(null);
-      setResult(null);
+      setLoading(
+        true,
+      );
+
+      setError(
+        null,
+      );
+
+      setResult(
+        null,
+      );
 
       const formData =
         new FormData();
 
       formData.append(
         "file",
-        file
+        file,
       );
 
       const response =
-  await api.post(
-    "/import/tickets",
-    formData,
-    {
-      headers: {
-        "Content-Type":
-          "multipart/form-data",
-      },
-
-      timeout: 0,
-    }
-  );
+        await api.post(
+          "/import/tickets",
+          formData,
+          {
+            headers: {
+              "Content-Type":
+                "multipart/form-data",
+            },
+            timeout:
+              0,
+          },
+        );
 
       setResult(
-        response.data
+        response.data,
       );
-    } catch (err: unknown) {
+    } catch (
+      err: unknown
+    ) {
       console.error(
         "Erro ao importar dados:",
-        err
+        err,
       );
 
-      let message =
-        "Não foi possível importar o arquivo.";
-
-      if (
-        typeof err === "object" &&
-        err !== null &&
-        "response" in err
-      ) {
-        const response =
-          (
-            err as {
-              response?: {
-                data?: {
-                  error?: string;
-                };
-              };
-            }
-          ).response;
-
-        if (
-          response?.data?.error
-        ) {
-          message =
-            response.data.error;
-        }
-      }
-
-      setError(message);
+      setError(
+        getApiErrorMessage(
+          err,
+          "Não foi possível importar o arquivo.",
+        ),
+      );
     } finally {
-      setLoading(false);
+      setLoading(
+        false,
+      );
     }
   }
 
@@ -285,54 +502,581 @@ export function Import() {
 
       <Box
         sx={{
-          mb: 2.5,
+          mb:
+            2.5,
         }}
       >
         <Typography
-        sx={{
-          fontWeight: 800,
+          sx={{
+            fontWeight:
+              800,
             fontSize: {
-              xs: "1.7rem",
-              md: "1.9rem",
-              xl: "2.1rem",
+              xs:
+                "1.7rem",
+              md:
+                "1.9rem",
+              xl:
+                "2.1rem",
             },
           }}
         >
-          Importar Dados
+          Importar e Sincronizar Dados
         </Typography>
 
         <Typography
           variant="body2"
           color="text.secondary"
           sx={{
-            mt: 0.25,
+            mt:
+              0.25,
           }}
         >
-          Atualize a base do TechLead Hub utilizando uma exportação
-          Excel do Movidesk.
-        </Typography>
-
-        <Typography
-          variant="caption"
-          color="text.secondary"
-          sx={{
-            display: "block",
-            mt: 0.5,
-          }}
-        >
-          Formato aceito: .xlsx • Limite máximo: 25 MB
+          Importe os dados do Movidesk e acompanhe a
+          sincronização automática do Azure DevOps.
         </Typography>
       </Box>
 
       {/* =====================================================
-          INFORMAÇÃO
+          AZURE DEVOPS
       ===================================================== */}
+
+      <SectionHeader
+        title="Azure DevOps"
+        description="Acompanhamento da sincronização automática de Correções, Evoluções e APOIOs."
+      />
+
+      <Card
+        elevation={0}
+        sx={{
+          border:
+            "1px solid",
+          borderColor:
+            "divider",
+          borderRadius:
+            2.5,
+          overflow:
+            "hidden",
+          mb:
+            3,
+        }}
+      >
+        {azureLoading &&
+          !azureStatus && (
+            <LinearProgress />
+          )}
+
+        <CardContent
+          sx={{
+            p: {
+              xs:
+                2,
+              md:
+                2.5,
+            },
+          }}
+        >
+          <Stack
+            direction={{
+              xs:
+                "column",
+              md:
+                "row",
+            }}
+            spacing={
+              2
+            }
+            sx={{
+              justifyContent:
+                "space-between",
+              alignItems: {
+                xs:
+                  "stretch",
+                md:
+                  "center",
+              },
+            }}
+          >
+            <Box>
+              <Stack
+                direction="row"
+                spacing={
+                  1
+                }
+                useFlexGap
+                sx={{
+                  alignItems:
+                    "center",
+                  flexWrap:
+                    "wrap",
+                }}
+              >
+                <Typography
+                  sx={{
+                    fontWeight:
+                      800,
+                    fontSize:
+                      "1.05rem",
+                  }}
+                >
+                  Sincronização automática
+                </Typography>
+
+                {azureStatus && (
+                  <Chip
+                    size="small"
+                    label={
+                      azureStatus
+                        .scheduler
+                        .enabled
+                        ? "Scheduler ativo"
+                        : "Scheduler desativado"
+                    }
+                    color={
+                      azureStatus
+                        .scheduler
+                        .enabled
+                        ? "success"
+                        : "default"
+                    }
+                  />
+                )}
+
+                {azureStatus?.latestRun && (
+                  <StatusChip
+                    status={
+                      azureStatus
+                        .latestRun
+                        .status
+                    }
+                  />
+                )}
+              </Stack>
+
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{
+                  mt:
+                    0.75,
+                }}
+              >
+                {azureStatus
+                  ? `Incremental a cada ${azureStatus.scheduler.intervalMinutes} minuto(s) • overlap de ${azureStatus.scheduler.overlapMinutes} minuto(s)`
+                  : "Carregando configuração do sincronizador..."}
+              </Typography>
+            </Box>
+
+            <Button
+              variant="outlined"
+              disabled={
+                azureLoading
+              }
+              onClick={() => {
+                void loadAzureStatus(
+                  true,
+                );
+              }}
+              sx={{
+                minWidth:
+                  150,
+              }}
+            >
+              {azureLoading
+                ? "Atualizando..."
+                : "Atualizar status"}
+            </Button>
+          </Stack>
+
+          {azureError && (
+            <Alert
+              severity="error"
+              sx={{
+                mt:
+                  2,
+              }}
+            >
+              {azureError}
+            </Alert>
+          )}
+
+          {azureStatus && (
+            <>
+              <Divider
+                sx={{
+                  my:
+                    2,
+                }}
+              />
+
+              <Box
+                sx={{
+                  display:
+                    "grid",
+                  gridTemplateColumns: {
+                    xs:
+                      "1fr",
+                    sm:
+                      "repeat(2, 1fr)",
+                    lg:
+                      "repeat(4, 1fr)",
+                  },
+                  gap:
+                    1.5,
+                }}
+              >
+                <InfoCard
+                  label="Última tentativa"
+                  value={
+                    formatDateTime(
+                      azureStatus
+                        .latestRun
+                        ?.startedAt,
+                    )
+                  }
+                />
+
+                <InfoCard
+                  label="Último sucesso"
+                  value={
+                    formatDateTime(
+                      azureStatus
+                        .lastSuccessfulRun
+                        ?.finishedAt,
+                    )
+                  }
+                />
+
+                <InfoCard
+                  label="Próxima execução estimada"
+                  value={
+                    formatDateTime(
+                      azureStatus
+                        .nextEstimatedAt,
+                    )
+                  }
+                />
+
+                <InfoCard
+                  label="Origem da última execução"
+                  value={
+                    formatSource(
+                      azureStatus
+                        .latestRun
+                        ?.source,
+                    )
+                  }
+                />
+              </Box>
+
+              {azureStatus.latestRun ? (
+                <>
+                  <Divider
+                    sx={{
+                      my:
+                        2,
+                    }}
+                  />
+
+                  <Typography
+                    sx={{
+                      fontWeight:
+                        800,
+                      mb:
+                        0.5,
+                    }}
+                  >
+                    Resultado da última execução
+                  </Typography>
+
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                  >
+                    Lote{" "}
+                    {
+                      azureStatus
+                        .latestRun
+                        .batch
+                    }
+                  </Typography>
+
+                  <Box
+                    sx={{
+                      display:
+                        "grid",
+                      gridTemplateColumns: {
+                        xs:
+                          "1fr",
+                        sm:
+                          "repeat(2, 1fr)",
+                        lg:
+                          "repeat(5, 1fr)",
+                      },
+                      gap:
+                        1.5,
+                      mt:
+                        2,
+                    }}
+                  >
+                    <ResultCard
+                      title="Work Items"
+                      value={
+                        azureStatus
+                          .latestRun
+                          .totalItems
+                      }
+                    />
+
+                    <ResultCard
+                      title="Inseridos"
+                      value={
+                        azureStatus
+                          .latestRun
+                          .insertedItems
+                      }
+                      severity="success"
+                    />
+
+                    <ResultCard
+                      title="Atualizados"
+                      value={
+                        azureStatus
+                          .latestRun
+                          .updatedItems
+                      }
+                    />
+
+                    <ResultCard
+                      title="Ignorados"
+                      value={
+                        azureStatus
+                          .latestRun
+                          .skippedItems
+                      }
+                      severity="warning"
+                    />
+
+                    <ResultCard
+                      title="Erros"
+                      value={
+                        azureStatus
+                          .latestRun
+                          .errorItems
+                      }
+                      severity={
+                        azureStatus
+                          .latestRun
+                          .errorItems >
+                        0
+                          ? "error"
+                          : "success"
+                      }
+                    />
+                  </Box>
+
+                  {azureStatus
+                    .latestRun
+                    .status ===
+                    "ERROR" && (
+                    <Alert
+                      severity="error"
+                      sx={{
+                        mt:
+                          2,
+                      }}
+                    >
+                      <Typography
+                        sx={{
+                          fontWeight:
+                            700,
+                        }}
+                      >
+                        Falha na última sincronização
+                      </Typography>
+
+                      <Typography
+                        variant="body2"
+                        sx={{
+                          mt:
+                            0.5,
+                          wordBreak:
+                            "break-word",
+                        }}
+                      >
+                        {azureStatus
+                          .latestRun
+                          .message ??
+                          "A sincronização foi encerrada com erro."}
+                      </Typography>
+                    </Alert>
+                  )}
+
+                  {azureStatus
+                    .latestRun
+                    .status ===
+                    "PARTIAL" && (
+                    <Alert
+                      severity="warning"
+                      sx={{
+                        mt:
+                          2,
+                      }}
+                    >
+                      A sincronização foi concluída parcialmente.
+                      Consulte os indicadores de erro da execução.
+                    </Alert>
+                  )}
+                </>
+              ) : (
+                <Alert
+                  severity="info"
+                  sx={{
+                    mt:
+                      2,
+                  }}
+                >
+                  Ainda não existem execuções de sincronização registradas.
+                </Alert>
+              )}
+
+              {azureStatus
+                .recentRuns
+                .length >
+                0 && (
+                <>
+                  <Divider
+                    sx={{
+                      my:
+                        2,
+                    }}
+                  />
+
+                  <Typography
+                    sx={{
+                      fontWeight:
+                        800,
+                    }}
+                  >
+                    Histórico recente
+                  </Typography>
+
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{
+                      mt:
+                        0.5,
+                      mb:
+                        1.5,
+                    }}
+                  >
+                    Últimas 10 execuções registradas.
+                  </Typography>
+
+                  <Stack
+                    spacing={
+                      1
+                    }
+                  >
+                    {azureStatus
+                      .recentRuns
+                      .map(
+                        (
+                          run,
+                        ) => (
+                          <Box
+                            key={
+                              run.id
+                            }
+                            sx={{
+                              display:
+                                "grid",
+                              gridTemplateColumns: {
+                                xs:
+                                  "1fr",
+                                md:
+                                  "180px 130px 1fr auto",
+                              },
+                              gap:
+                                1,
+                              alignItems:
+                                "center",
+                              p:
+                                1.25,
+                              border:
+                                "1px solid",
+                              borderColor:
+                                "divider",
+                              borderRadius:
+                                2,
+                            }}
+                          >
+                            <Typography
+                              variant="body2"
+                              sx={{
+                                fontWeight:
+                                  700,
+                              }}
+                            >
+                              {formatDateTime(
+                                run.startedAt,
+                              )}
+                            </Typography>
+
+                            <Box>
+                              <StatusChip
+                                status={
+                                  run.status
+                                }
+                              />
+                            </Box>
+
+                            <Typography
+                              variant="body2"
+                              color="text.secondary"
+                            >
+                              {formatSource(
+                                run.source,
+                              )}
+                              {" • "}
+                              {run.totalItems} item(ns)
+                              {" • "}
+                              {run.updatedItems} atualizado(s)
+                            </Typography>
+
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                            >
+                              #{run.id}
+                            </Typography>
+                          </Box>
+                        ),
+                      )}
+                  </Stack>
+                </>
+              )}
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* =====================================================
+          MOVIDESK
+      ===================================================== */}
+
+      <SectionHeader
+        title="Movidesk"
+        description="Importação manual da exportação Excel utilizada pela base do TechLead Hub."
+      />
 
       <Alert
         severity="info"
         sx={{
-          mb: 2,
-          borderRadius: 2,
+          mb:
+            2,
+          borderRadius:
+            2,
         }}
       >
         A importação cria tickets novos e atualiza os já existentes
@@ -340,30 +1084,33 @@ export function Import() {
         não são duplicados.
       </Alert>
 
-      {/* =====================================================
-          ÁREA DE UPLOAD
-      ===================================================== */}
-
       <Card
         elevation={0}
         sx={{
-          border: "1px solid",
-          borderColor: "divider",
-          borderRadius: 2.5,
-          overflow: "hidden",
+          border:
+            "1px solid",
+          borderColor:
+            "divider",
+          borderRadius:
+            2.5,
+          overflow:
+            "hidden",
         }}
       >
         <CardContent
           sx={{
             p: {
-              xs: 2,
-              md: 2.5,
+              xs:
+                2,
+              md:
+                2.5,
             },
-
             "&:last-child": {
               pb: {
-                xs: 2,
-                md: 2.5,
+                xs:
+                  2,
+                md:
+                  2.5,
               },
             },
           }}
@@ -379,61 +1126,68 @@ export function Import() {
               handleDrop
             }
             onClick={() => {
-              if (!loading) {
+              if (
+                !loading
+              ) {
                 inputRef.current?.click();
               }
             }}
             role="button"
-            tabIndex={0}
+            tabIndex={
+              0
+            }
             onKeyDown={(event) => {
               if (
                 !loading &&
-                (event.key ===
-                  "Enter" ||
-                  event.key === " ")
+                (
+                  event.key ===
+                    "Enter" ||
+                  event.key ===
+                    " "
+                )
               ) {
                 inputRef.current?.click();
               }
             }}
             sx={{
-              minHeight: 220,
-
-              display: "flex",
-              alignItems: "center",
+              minHeight:
+                220,
+              display:
+                "flex",
+              alignItems:
+                "center",
               justifyContent:
                 "center",
-
-              textAlign: "center",
-
-              border: "2px dashed",
-
+              textAlign:
+                "center",
+              border:
+                "2px dashed",
               borderColor:
                 dragging
                   ? "primary.main"
                   : file
                   ? "success.main"
                   : "divider",
-
               backgroundColor:
                 dragging
                   ? "action.hover"
                   : file
                   ? "rgba(46, 125, 50, 0.03)"
                   : "background.default",
-
-              borderRadius: 2.5,
-
+              borderRadius:
+                2.5,
               cursor:
                 loading
                   ? "default"
                   : "pointer",
-
               transition:
                 "border-color 0.15s ease, background-color 0.15s ease",
             }}
           >
             <input
-              ref={inputRef}
+              ref={
+                inputRef
+              }
               type="file"
               accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
               hidden
@@ -445,12 +1199,14 @@ export function Import() {
             {!file ? (
               <Box
                 sx={{
-                  px: 2,
+                  px:
+                    2,
                 }}
               >
                 <Typography
-        sx={{
-          fontWeight: 800,
+                  sx={{
+                    fontWeight:
+                      800,
                     fontSize:
                       "1.05rem",
                   }}
@@ -462,18 +1218,35 @@ export function Import() {
                   variant="body2"
                   color="text.secondary"
                   sx={{
-                    mt: 0.75,
+                    mt:
+                      0.75,
                   }}
                 >
                   ou clique para selecionar o arquivo
                 </Typography>
 
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{
+                    display:
+                      "block",
+                    mt:
+                      0.75,
+                  }}
+                >
+                  Formato .xlsx • Máximo 25 MB
+                </Typography>
+
                 <Button
                   variant="outlined"
                   size="small"
-                  disabled={loading}
+                  disabled={
+                    loading
+                  }
                   sx={{
-                    mt: 2,
+                    mt:
+                      2,
                   }}
                 >
                   Selecionar arquivo
@@ -482,7 +1255,8 @@ export function Import() {
             ) : (
               <Box
                 sx={{
-                  px: 2,
+                  px:
+                    2,
                 }}
               >
                 <Chip
@@ -490,12 +1264,16 @@ export function Import() {
                   color="success"
                   size="small"
                   sx={{
-                    mb: 1.5,
+                    mb:
+                      1.5,
                   }}
                 />
 
                 <Typography
-                sx={{ fontWeight: 800 }}
+                  sx={{
+                    fontWeight:
+                      800,
+                  }}
                 >
                   {file.name}
                 </Typography>
@@ -504,7 +1282,8 @@ export function Import() {
                   variant="body2"
                   color="text.secondary"
                   sx={{
-                    mt: 0.5,
+                    mt:
+                      0.5,
                   }}
                 >
                   {fileSize}
@@ -516,7 +1295,8 @@ export function Import() {
                   sx={{
                     display:
                       "block",
-                    mt: 1,
+                    mt:
+                      1,
                   }}
                 >
                   Clique na área para selecionar outro arquivo
@@ -525,29 +1305,31 @@ export function Import() {
             )}
           </Box>
 
-          {/* =================================================
-              PROGRESSO
-          ================================================= */}
-
           {loading && (
             <Box
               sx={{
-                mt: 2,
+                mt:
+                  2,
               }}
             >
               <LinearProgress />
 
               <Stack
                 direction="row"
-                spacing={1}
+                spacing={
+                  1
+                }
                 sx={{
-                  mt: 1,
+                  mt:
+                    1,
                   alignItems:
                     "center",
                 }}
               >
                 <CircularProgress
-                  size={16}
+                  size={
+                    16
+                  }
                 />
 
                 <Typography
@@ -560,34 +1342,31 @@ export function Import() {
             </Box>
           )}
 
-          {/* =================================================
-              ERRO
-          ================================================= */}
-
           {error && (
             <Alert
               severity="error"
               sx={{
-                mt: 2,
+                mt:
+                  2,
               }}
             >
               {error}
             </Alert>
           )}
 
-          {/* =================================================
-              AÇÕES
-          ================================================= */}
-
           <Stack
             direction={{
-              xs: "column",
-              sm: "row",
+              xs:
+                "column",
+              sm:
+                "row",
             }}
-            spacing={1}
+            spacing={
+              1
+            }
             sx={{
-              mt: 2,
-
+              mt:
+                2,
               justifyContent:
                 "flex-end",
             }}
@@ -595,7 +1374,9 @@ export function Import() {
             {file && (
               <Button
                 variant="text"
-                disabled={loading}
+                disabled={
+                  loading
+                }
                 onClick={(event) => {
                   event.stopPropagation();
 
@@ -616,7 +1397,8 @@ export function Import() {
                 importFile
               }
               sx={{
-                minWidth: 160,
+                minWidth:
+                  160,
               }}
             >
               {loading
@@ -627,41 +1409,44 @@ export function Import() {
         </CardContent>
       </Card>
 
-      {/* =====================================================
-          RESULTADO
-      ===================================================== */}
-
       {result && (
         <>
           <Alert
             severity={
-              result.errors > 0
+              result.errors >
+              0
                 ? "warning"
                 : "success"
             }
             sx={{
-              mt: 2,
-              borderRadius: 2,
+              mt:
+                2,
+              borderRadius:
+                2,
             }}
           >
-            {result.errors > 0
+            {result.errors >
+            0
               ? "Importação concluída com algumas ocorrências."
               : "Importação concluída com sucesso."}
           </Alert>
 
           <Box
             sx={{
-              display: "grid",
-
+              display:
+                "grid",
               gridTemplateColumns: {
-                xs: "1fr",
-                sm: "repeat(2, 1fr)",
-                lg: "repeat(5, 1fr)",
+                xs:
+                  "1fr",
+                sm:
+                  "repeat(2, 1fr)",
+                lg:
+                  "repeat(5, 1fr)",
               },
-
-              gap: 1.5,
-
-              mt: 2,
+              gap:
+                1.5,
+              mt:
+                2,
             }}
           >
             <ResultCard
@@ -700,37 +1485,34 @@ export function Import() {
                 result.errors
               }
               severity={
-                result.errors > 0
+                result.errors >
+                0
                   ? "error"
                   : "success"
               }
             />
           </Box>
 
-          {/* =================================================
-              DADOS IDENTIFICADOS
-          ================================================= */}
-
           <Card
             elevation={0}
             sx={{
-              mt: 2,
-
+              mt:
+                2,
               border:
                 "1px solid",
-
               borderColor:
                 "divider",
-
               borderRadius:
                 2.5,
             }}
           >
             <CardContent>
               <Typography
-        sx={{
-          fontWeight: 800,
-                  mb: 0.5,
+                sx={{
+                  fontWeight:
+                    800,
+                  mb:
+                    0.5,
                 }}
               >
                 Dados identificados
@@ -745,7 +1527,8 @@ export function Import() {
 
               <Divider
                 sx={{
-                  my: 2,
+                  my:
+                    2,
                 }}
               />
 
@@ -753,21 +1536,23 @@ export function Import() {
                 sx={{
                   display:
                     "grid",
-
-                  gridTemplateColumns:
-                    {
-                      xs: "1fr",
-                      sm: "repeat(2, 1fr)",
-                      lg: "repeat(4, 1fr)",
-                    },
-
-                  gap: 2,
+                  gridTemplateColumns: {
+                    xs:
+                      "1fr",
+                    sm:
+                      "repeat(2, 1fr)",
+                    lg:
+                      "repeat(4, 1fr)",
+                  },
+                  gap:
+                    2,
                 }}
               >
                 <InfoMetric
                   label="Analistas"
                   value={
-                    result.analysts
+                    result
+                      .analysts
                       .length
                   }
                 />
@@ -775,7 +1560,8 @@ export function Import() {
                 <InfoMetric
                   label="Clientes"
                   value={
-                    result.clients
+                    result
+                      .clients
                       .length
                   }
                 />
@@ -783,7 +1569,8 @@ export function Import() {
                 <InfoMetric
                   label="Categorias"
                   value={
-                    result.categories
+                    result
+                      .categories
                       .length
                   }
                 />
@@ -791,7 +1578,8 @@ export function Import() {
                 <InfoMetric
                   label="Serviços"
                   value={
-                    result.services
+                    result
+                      .services
                       .length
                   }
                 />
@@ -799,7 +1587,8 @@ export function Import() {
 
               <Divider
                 sx={{
-                  my: 2,
+                  my:
+                    2,
                 }}
               />
 
@@ -812,8 +1601,9 @@ export function Import() {
 
               <Typography
                 variant="body2"
-        sx={{
-          fontWeight: 600,
+                sx={{
+                  fontWeight:
+                    600,
                   wordBreak:
                     "break-word",
                 }}
@@ -823,30 +1613,29 @@ export function Import() {
             </CardContent>
           </Card>
 
-          {/* =================================================
-              OCORRÊNCIAS
-          ================================================= */}
-
-          {result.errorDetails.length >
+          {result
+            .errorDetails
+            .length >
             0 && (
             <Card
               elevation={0}
               sx={{
-                mt: 2,
-
+                mt:
+                  2,
                 border:
                   "1px solid",
-
                 borderColor:
                   "warning.light",
-
                 borderRadius:
                   2.5,
               }}
             >
               <CardContent>
                 <Typography
-                sx={{ fontWeight: 800 }}
+                  sx={{
+                    fontWeight:
+                      800,
+                  }}
                 >
                   Ocorrências da importação
                 </Typography>
@@ -855,38 +1644,44 @@ export function Import() {
                   variant="body2"
                   color="text.secondary"
                   sx={{
-                    mt: 0.5,
-                    mb: 2,
+                    mt:
+                      0.5,
+                    mb:
+                      2,
                   }}
                 >
                   Até 100 ocorrências são exibidas nesta tela.
                 </Typography>
 
                 <Stack
-                  spacing={1}
+                  spacing={
+                    1
+                  }
                 >
-                  {result.errorDetails.map(
-                    (
-                      detail,
-                      index
-                    ) => (
-                      <Alert
-                        key={`${detail.row}-${index}`}
-                        severity="warning"
-                      >
-                        Linha{" "}
-                        <strong>
+                  {result
+                    .errorDetails
+                    .map(
+                      (
+                        detail,
+                        index,
+                      ) => (
+                        <Alert
+                          key={`${detail.row}-${index}`}
+                          severity="warning"
+                        >
+                          Linha{" "}
+                          <strong>
+                            {
+                              detail.row
+                            }
+                          </strong>
+                          :{" "}
                           {
-                            detail.row
+                            detail.message
                           }
-                        </strong>
-                        :{" "}
-                        {
-                          detail.message
-                        }
-                      </Alert>
-                    )
-                  )}
+                        </Alert>
+                      ),
+                    )}
                 </Stack>
               </CardContent>
             </Card>
@@ -898,8 +1693,140 @@ export function Import() {
 }
 
 /* =========================================================
-   CARD DE RESULTADO
+   COMPONENTES
 ========================================================= */
+
+function SectionHeader({
+  title,
+  description,
+}: {
+  title: string;
+  description: string;
+}) {
+  return (
+    <Box
+      sx={{
+        mb:
+          1.25,
+      }}
+    >
+      <Typography
+        sx={{
+          fontWeight:
+            800,
+          fontSize:
+            "1.15rem",
+        }}
+      >
+        {title}
+      </Typography>
+
+      <Typography
+        variant="body2"
+        color="text.secondary"
+        sx={{
+          mt:
+            0.25,
+        }}
+      >
+        {description}
+      </Typography>
+    </Box>
+  );
+}
+
+function StatusChip({
+  status,
+}: {
+  status:
+    AzureSyncStatus;
+}) {
+  const config =
+    status ===
+    "SUCCESS"
+      ? {
+          label:
+            "Sucesso",
+          color:
+            "success" as const,
+        }
+      : status ===
+        "PARTIAL"
+      ? {
+          label:
+            "Parcial",
+          color:
+            "warning" as const,
+        }
+      : status ===
+        "ERROR"
+      ? {
+          label:
+            "Erro",
+          color:
+            "error" as const,
+        }
+      : {
+          label:
+            "Processando",
+          color:
+            "info" as const,
+        };
+
+  return (
+    <Chip
+      size="small"
+      label={
+        config.label
+      }
+      color={
+        config.color
+      }
+    />
+  );
+}
+
+function InfoCard({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
+  return (
+    <Box
+      sx={{
+        p:
+          1.5,
+        border:
+          "1px solid",
+        borderColor:
+          "divider",
+        borderRadius:
+          2,
+      }}
+    >
+      <Typography
+        variant="caption"
+        color="text.secondary"
+      >
+        {label}
+      </Typography>
+
+      <Typography
+        variant="body2"
+        sx={{
+          fontWeight:
+            700,
+          mt:
+            0.25,
+        }}
+      >
+        {value}
+      </Typography>
+    </Box>
+  );
+}
 
 function ResultCard({
   title,
@@ -908,7 +1835,6 @@ function ResultCard({
 }: {
   title: string;
   value: number;
-
   severity?:
     | "default"
     | "success"
@@ -916,11 +1842,14 @@ function ResultCard({
     | "error";
 }) {
   const borderColor =
-    severity === "success"
+    severity ===
+    "success"
       ? "success.main"
-      : severity === "warning"
+      : severity ===
+        "warning"
       ? "warning.main"
-      : severity === "error"
+      : severity ===
+        "error"
       ? "error.main"
       : "divider";
 
@@ -930,39 +1859,44 @@ function ResultCard({
       sx={{
         border:
           "1px solid",
-
         borderColor,
-
         borderRadius:
           2.5,
-
-        height: "100%",
+        height:
+          "100%",
       }}
     >
       <CardContent
         sx={{
-          p: 1.75,
-
+          p:
+            1.75,
           "&:last-child": {
-            pb: 1.75,
+            pb:
+              1.75,
           },
         }}
       >
         <Typography
           variant="body2"
           color="text.secondary"
-        sx={{ fontWeight: 600 }}
+          sx={{
+            fontWeight:
+              600,
+          }}
         >
           {title}
         </Typography>
 
         <Typography
-        sx={{
-          fontWeight: 800,
-            mt: 0.5,
+          sx={{
+            fontWeight:
+              800,
+            mt:
+              0.5,
             fontSize:
               "1.9rem",
-            lineHeight: 1.1,
+            lineHeight:
+              1.1,
           }}
         >
           {value}
@@ -971,10 +1905,6 @@ function ResultCard({
     </Card>
   );
 }
-
-/* =========================================================
-   MÉTRICA
-========================================================= */
 
 function InfoMetric({
   label,
@@ -994,7 +1924,8 @@ function InfoMetric({
 
       <Typography
         sx={{
-          fontWeight: 800,
+          fontWeight:
+            800,
           fontSize:
             "1.35rem",
         }}
@@ -1006,13 +1937,17 @@ function InfoMetric({
 }
 
 /* =========================================================
-   TAMANHO DO ARQUIVO
+   HELPERS
 ========================================================= */
 
 function formatFileSize(
-  bytes: number
+  bytes:
+    number,
 ) {
-  if (bytes === 0) {
+  if (
+    bytes ===
+    0
+  ) {
     return "0 B";
   }
 
@@ -1024,21 +1959,130 @@ function formatFileSize(
   ];
 
   const index =
-    Math.floor(
-      Math.log(bytes) /
-        Math.log(1024)
+    Math.min(
+      Math.floor(
+        Math.log(
+          bytes,
+        ) /
+          Math.log(
+            1024,
+          ),
+      ),
+      units.length -
+        1,
     );
 
   const value =
     bytes /
     Math.pow(
       1024,
-      index
+      index,
     );
 
   return `${value.toFixed(
-    index === 0
+    index ===
+      0
       ? 0
-      : 1
+      : 1,
   )} ${units[index]}`;
+}
+
+function formatDateTime(
+  value:
+    | string
+    | null
+    | undefined,
+): string {
+  if (!value) {
+    return "—";
+  }
+
+  const date =
+    new Date(
+      value,
+    );
+
+  if (
+    Number.isNaN(
+      date.getTime(),
+    )
+  ) {
+    return "—";
+  }
+
+  return date.toLocaleString(
+    "pt-BR",
+    {
+      dateStyle:
+        "short",
+      timeStyle:
+        "medium",
+    },
+  );
+}
+
+function formatSource(
+  value:
+    | string
+    | null
+    | undefined,
+): string {
+  switch (
+    value
+  ) {
+    case "SCHEDULED":
+      return "Automática";
+
+    case "INCREMENTAL":
+      return "Incremental";
+
+    case "FULL":
+      return "Carga completa";
+
+    case "CONTROLLED":
+      return "Carga controlada";
+
+    case "MANUAL":
+      return "Manual";
+
+    default:
+      return value ??
+        "—";
+  }
+}
+
+function getApiErrorMessage(
+  error:
+    unknown,
+  fallback:
+    string,
+): string {
+  if (
+    typeof error ===
+      "object" &&
+    error !==
+      null &&
+    "response" in
+      error
+  ) {
+    const response =
+      (
+        error as {
+          response?: {
+            data?: {
+              error?: string;
+              message?: string;
+            };
+          };
+        }
+      ).response;
+
+    return (
+      response?.data?.error ??
+      response?.data?.message ??
+      fallback
+    );
+  }
+
+  return fallback;
 }

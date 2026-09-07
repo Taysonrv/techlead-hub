@@ -13,6 +13,7 @@ import {
   InputAdornment,
   InputLabel,
   MenuItem,
+  Popover,
   Select,
   Snackbar,
   Stack,
@@ -30,6 +31,7 @@ import {
   ContentCopyOutlined,
   ExpandLessOutlined,
   ExpandMoreOutlined,
+  InfoOutlined,
   OpenInNewOutlined,
   SearchOutlined,
   TuneOutlined,
@@ -44,6 +46,7 @@ import {
 import { api } from "../services/api";
 import { useFilters } from "../context/FiltersContext";
 import { PeriodFilter } from "../components/PeriodFilter";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
 import {
   aliareColors,
@@ -105,10 +108,36 @@ type Ticket = {
   taskStatus: string | null;
   deliveredVersion: string | null;
 
+  azureWorkItem?: AzureTaskSummary | null;
+
   importSource?: string | null;
   importedAt?: string | null;
   importBatch?: string | null;
 };
+
+type AzureTaskSummary = {
+  id: number;
+  workItemType: string;
+  title: string;
+  state: string;
+  assignedToName: string | null;
+  client: string | null;
+  criticality: string | null;
+  module: string | null;
+  process: string | null;
+  movideskTicket: number | null;
+  deliveredVersion: string | null;
+  prioritized: boolean | null;
+  blockedProcess: boolean | null;
+  azureChangedAt: string | null;
+  stateChangedAt?: string | null;
+  syncedAt?: string | null;
+};
+
+type AzureTaskDetail =
+  AzureTaskSummary & {
+    azureWebUrl?: string | null;
+  };
 
 type AttentionLevel =
   | "normal"
@@ -146,6 +175,7 @@ type KpiCardProps = {
   title: string;
   value: number;
   description: string;
+  info?: string;
   accent?: string;
   active?: boolean;
   onClick: () => void;
@@ -156,6 +186,9 @@ type KpiCardProps = {
 ========================================================= */
 
 export function Tickets() {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+
   const [
     tickets,
     setTickets,
@@ -183,6 +216,21 @@ export function Tickets() {
     useState<
       Ticket | null
     >(null);
+
+  const [
+    azureTask,
+    setAzureTask,
+  ] = useState<AzureTaskDetail | null>(null);
+
+  const [
+    azureTaskLoading,
+    setAzureTaskLoading,
+  ] = useState(false);
+
+  const [
+    azureTaskError,
+    setAzureTaskError,
+  ] = useState<string | null>(null);
 
   const [
     search,
@@ -311,6 +359,65 @@ export function Tickets() {
 
     void loadTickets();
   }, []);
+
+  /* =======================================================
+     NAVEGAÇÃO CRUZADA / AZURE
+  ======================================================= */
+
+  useEffect(() => {
+    if (tickets.length === 0) return;
+
+    const movideskParam = Number(searchParams.get("movidesk"));
+    const taskParam = Number(searchParams.get("task"));
+
+    const linkedTicket = tickets.find((ticket) =>
+      (Number.isInteger(movideskParam) && movideskParam > 0 && ticket.movideskId === movideskParam) ||
+      (Number.isInteger(taskParam) && taskParam > 0 && ticket.taskNumber === taskParam)
+    );
+
+    if (linkedTicket) {
+      setSelectedTicket(linkedTicket);
+    }
+  }, [tickets, searchParams]);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadAzureTask() {
+      if (!selectedTicket?.taskNumber) {
+        setAzureTask(null);
+        setAzureTaskError(null);
+        return;
+      }
+
+      try {
+        setAzureTaskLoading(true);
+        setAzureTaskError(null);
+
+        const response = await api.get<AzureTaskDetail>(
+          `/azure-work-items/${selectedTicket.taskNumber}`
+        );
+
+        if (active) setAzureTask(response.data);
+      } catch (requestError) {
+        console.error("Erro ao carregar Task do Azure:", requestError);
+        if (active) {
+          setAzureTask(null);
+          setAzureTaskError("A Task vinculada não foi localizada na base sincronizada do Azure DevOps.");
+        }
+      } finally {
+        if (active) setAzureTaskLoading(false);
+      }
+    }
+
+    void loadAzureTask();
+    return () => { active = false; };
+  }, [selectedTicket?.taskNumber]);
+
+  function openTaskInHub(task: AzureTaskDetail) {
+    const route = task.workItemType === "Evolução" ? "/evolucoes" : "/correcoes";
+    navigate(`${route}?task=${task.id}`);
+  }
 
   /* =======================================================
      PERÍODO GLOBAL
@@ -534,6 +641,41 @@ export function Tickets() {
             ) ||
             normalize(
               ticket.deliveredVersion
+            ).includes(
+              normalizedSearch
+            ) ||
+            normalize(
+              ticket.azureWorkItem?.title
+            ).includes(
+              normalizedSearch
+            ) ||
+            normalize(
+              ticket.azureWorkItem?.state
+            ).includes(
+              normalizedSearch
+            ) ||
+            normalize(
+              ticket.azureWorkItem?.assignedToName
+            ).includes(
+              normalizedSearch
+            ) ||
+            normalize(
+              ticket.azureWorkItem?.criticality
+            ).includes(
+              normalizedSearch
+            ) ||
+            normalize(
+              ticket.azureWorkItem?.module
+            ).includes(
+              normalizedSearch
+            ) ||
+            normalize(
+              ticket.azureWorkItem?.process
+            ).includes(
+              normalizedSearch
+            ) ||
+            normalize(
+              ticket.azureWorkItem?.deliveredVersion
             ).includes(
               normalizedSearch
             );
@@ -1080,12 +1222,12 @@ export function Tickets() {
         }}
       >
         <strong>
-          Prazo oficial:
+          Prazo operacional:
         </strong>{" "}
-        esta fila usa horas úteis, urgência, categoria e tempo parado para calcular
-        primeira resposta e solução. Adequação e Solicitação de Serviço ficam fora
-        da medição. Até a identificação de clientes VIP ser incorporada ao banco,
-        o perfil utilizado é Padrão.
+        esta fila usa a regra local de horas úteis, urgência, categoria e tempo parado
+        para apoiar a priorização dos atendimentos ativos. Os indicadores históricos
+        oficiais de SLA do Movidesk devem ser tratados separadamente. Até a identificação
+        de clientes VIP ser incorporada ao banco, o perfil local utilizado é Padrão.
       </Alert>
 
       {/* ===================================================
@@ -1120,6 +1262,7 @@ export function Tickets() {
               .all.length
           }
           description="Todos os atendimentos"
+          info="Atendimentos abertos no período global selecionado, independentemente do status atual."
           active={
             quickFilter ===
             "all"
@@ -1138,6 +1281,7 @@ export function Tickets() {
               .open.length
           }
           description="Ainda em andamento"
+          info="Atendimentos do período que ainda não estão Resolvidos, Fechados ou Cancelados."
           accent={
             semanticChartColors.normal
           }
@@ -1159,6 +1303,7 @@ export function Tickets() {
               .stopped.length
           }
           description="Dependem de atuação"
+          info="Atendimentos cujo status-base está parado. Normalmente aguardam alguma condição antes de retomar o fluxo."
           accent={
             semanticChartColors.attention
           }
@@ -1180,6 +1325,7 @@ export function Tickets() {
               .highAttention.length
           }
           description="Prazo crítico ou vencido"
+          info="Atendimentos em nível crítico ou vencido conforme o cálculo operacional de prazo usado nesta fila."
           accent={
             semanticChartColors.overdue
           }
@@ -1205,6 +1351,7 @@ export function Tickets() {
               .withoutOwner.length
           }
           description="Abertos sem analista"
+          info="Atendimentos ainda abertos que não possuem responsável informado no snapshot atual."
           accent={
             executiveGroups
               .withoutOwner
@@ -1903,6 +2050,15 @@ export function Tickets() {
                 <TableCell
                   sx={{
                     width:
+                      190,
+                  }}
+                >
+                  Desenvolvimento
+                </TableCell>
+
+                <TableCell
+                  sx={{
+                    width:
                       125,
                   }}
                 >
@@ -2204,6 +2360,14 @@ export function Tickets() {
                       </TableCell>
 
                       <TableCell>
+                        <DevelopmentSummary
+                          ticket={
+                            ticket
+                          }
+                        />
+                      </TableCell>
+
+                      <TableCell>
                         <AttentionChip
                           ticket={
                             ticket
@@ -2249,7 +2413,7 @@ export function Tickets() {
                 <TableRow>
                   <TableCell
                     colSpan={
-                      7
+                      8
                     }
                     align="center"
                   >
@@ -2779,63 +2943,97 @@ export function Tickets() {
                 </>
               )}
 
-              {/* DESENVOLVIMENTO */}
+              {/* DESENVOLVIMENTO / AZURE DEVOPS */}
 
               {(selectedTicket.taskNumber ||
                 selectedTicket.taskStatus ||
                 selectedTicket.deliveredVersion) && (
                 <>
-                  <Divider
-                    sx={{
-                      mb:
-                        2.25,
-                    }}
-                  />
+                  <Divider sx={{ mb: 2.25 }} />
 
                   <SectionTitle>
                     Desenvolvimento
                   </SectionTitle>
 
-                  <Box
-                    sx={{
-                      display:
-                        "grid",
+                  {azureTaskLoading && (
+                    <Alert severity="info" sx={{ mb: 1.5 }}>
+                      Carregando dados atuais da Task no Azure DevOps...
+                    </Alert>
+                  )}
 
-                      gridTemplateColumns:
-                        {
-                          xs:
-                            "1fr",
-                          sm:
-                            "1fr 1fr",
-                        },
+                  {azureTaskError && (
+                    <Alert severity="warning" sx={{ mb: 1.5 }}>
+                      {azureTaskError}
+                    </Alert>
+                  )}
 
-                      gap:
-                        1.5,
-                    }}
-                  >
-                    <TicketField
-                      label="Task"
-                      value={
-                        selectedTicket.taskNumber
-                          ? `#${selectedTicket.taskNumber}`
-                          : null
-                      }
-                    />
+                  {azureTask ? (
+                    <Card
+                      variant="outlined"
+                      sx={{
+                        borderRadius: 2,
+                        borderColor: azureTask.blockedProcess
+                          ? semanticChartColors.overdue
+                          : "divider",
+                        backgroundColor: "#FAFBFA",
+                      }}
+                    >
+                      <CardContent sx={{ "&:last-child": { pb: 2 } }}>
+                        <Stack direction="row" spacing={1} sx={{ justifyContent: "space-between", alignItems: "flex-start", gap: 1 }}>
+                          <Box sx={{ minWidth: 0 }}>
+                            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
+                              {azureTask.workItemType}
+                            </Typography>
+                            <Typography sx={{ fontWeight: 800, mt: 0.2 }}>
+                              Task #{azureTask.id}
+                            </Typography>
+                            <Typography variant="body2" sx={{ mt: 0.35, fontWeight: 650 }}>
+                              {azureTask.title}
+                            </Typography>
+                          </Box>
+                          <Chip size="small" variant="outlined" label={azureTask.state} />
+                        </Stack>
 
-                    <TicketField
-                      label="Status da Task"
-                      value={
-                        selectedTicket.taskStatus
-                      }
-                    />
+                        <Stack direction="row" spacing={0.65} sx={{ mt: 1.25, flexWrap: "wrap", gap: 0.65 }}>
+                          {azureTask.criticality && <Chip size="small" label={azureTask.criticality} variant="outlined" />}
+                          {azureTask.prioritized && <Chip size="small" label="Priorizada" variant="outlined" />}
+                          {azureTask.blockedProcess && <Chip size="small" label="Processo bloqueado" color="error" variant="outlined" />}
+                          {azureTask.deliveredVersion && <Chip size="small" label={`Versão ${azureTask.deliveredVersion}`} variant="outlined" />}
+                        </Stack>
 
-                    <TicketField
-                      label="Versão entregue"
-                      value={
-                        selectedTicket.deliveredVersion
-                      }
-                    />
-                  </Box>
+                        <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" }, gap: 1.5, mt: 1.5 }}>
+                          <TicketField label="Responsável Azure" value={azureTask.assignedToName} />
+                          <TicketField label="Cliente Azure" value={azureTask.client} />
+                          <TicketField label="Módulo" value={azureTask.module} />
+                          <TicketField label="Processo" value={azureTask.process} />
+                          <TicketField label="Último movimento" value={formatDate(azureTask.stateChangedAt ?? azureTask.azureChangedAt)} />
+                          <TicketField label="Movidesk informado na Task" value={azureTask.movideskTicket ? `#${azureTask.movideskTicket}` : null} />
+                        </Box>
+
+                        <Stack direction="row" spacing={0.75} sx={{ mt: 1.6, flexWrap: "wrap", gap: 0.75 }}>
+                          <Button size="small" variant="contained" onClick={() => openTaskInHub(azureTask)}>
+                            {azureTask.workItemType === "Evolução" ? "Ver Evolução" : "Ver Correção"}
+                          </Button>
+                          {azureTask.azureWebUrl && (
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              endIcon={<OpenInNewOutlined />}
+                              onClick={() => window.open(azureTask.azureWebUrl ?? "", "_blank", "noopener,noreferrer")}
+                            >
+                              Abrir no Azure
+                            </Button>
+                          )}
+                        </Stack>
+                      </CardContent>
+                    </Card>
+                  ) : !azureTaskLoading && (
+                    <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" }, gap: 1.5 }}>
+                      <TicketField label="Task" value={selectedTicket.taskNumber ? `#${selectedTicket.taskNumber}` : null} />
+                      <TicketField label="Status da Task (Movidesk)" value={selectedTicket.taskStatus} />
+                      <TicketField label="Versão entregue (Movidesk)" value={selectedTicket.deliveredVersion} />
+                    </Box>
+                  )}
                 </>
               )}
             </>
@@ -2873,12 +3071,20 @@ function KpiCard({
   title,
   value,
   description,
+  info,
   accent =
     aliareColors.green,
   active =
     false,
   onClick,
 }: KpiCardProps) {
+  const [
+    infoAnchor,
+    setInfoAnchor,
+  ] = useState<HTMLElement | null>(null);
+
+  const infoOpen = Boolean(infoAnchor);
+
   return (
     <Card
       elevation={0}
@@ -2977,16 +3183,96 @@ function KpiCard({
             },
         }}
       >
-        <Typography
-          variant="caption"
-          color="text.secondary"
-          sx={{
-            fontWeight:
-              700,
-          }}
+        <Stack
+          direction="row"
+          spacing={0.45}
+          sx={{ alignItems: "center", justifyContent: "space-between" }}
         >
-          {title}
-        </Typography>
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            sx={{ fontWeight: 700 }}
+          >
+            {title}
+          </Typography>
+
+          {info && (
+            <>
+              <IconButton
+                size="small"
+                aria-label={`Informações sobre ${title}`}
+                aria-describedby={
+                  infoOpen
+                    ? `kpi-info-${title}`
+                    : undefined
+                }
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setInfoAnchor(event.currentTarget);
+                }}
+                sx={{
+                  width: 24,
+                  height: 24,
+                  color: "text.secondary",
+                }}
+              >
+                <InfoOutlined sx={{ fontSize: 15 }} />
+              </IconButton>
+
+              <Popover
+                id={`kpi-info-${title}`}
+                open={infoOpen}
+                anchorEl={infoAnchor}
+                onClose={() => setInfoAnchor(null)}
+                anchorOrigin={{
+                  vertical: "bottom",
+                  horizontal: "right",
+                }}
+                transformOrigin={{
+                  vertical: "top",
+                  horizontal: "right",
+                }}
+                slotProps={{
+                  paper: {
+                    onClick: (
+                      event: React.MouseEvent<HTMLElement>,
+                    ) => event.stopPropagation(),
+                    sx: {
+                      mt: 0.75,
+                      p: 1.5,
+                      width: 300,
+                      maxWidth: "calc(100vw - 32px)",
+                      borderRadius: 2,
+                      border: "1px solid",
+                      borderColor: "divider",
+                      boxShadow: "0 10px 30px rgba(16,24,40,0.12)",
+                    },
+                  },
+                }}
+              >
+                <Typography
+                  variant="subtitle2"
+                  sx={{
+                    fontWeight: 800,
+                    mb: 0.5,
+                  }}
+                >
+                  {title}
+                </Typography>
+
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{
+                    lineHeight: 1.55,
+                  }}
+                >
+                  {info}
+                </Typography>
+              </Popover>
+            </>
+          )}
+        </Stack>
 
         <Typography
           sx={{
@@ -3093,6 +3379,173 @@ function FilterSelect({
         )}
       </Select>
     </FormControl>
+  );
+}
+
+/* =========================================================
+   DESENVOLVIMENTO / AZURE
+========================================================= */
+
+function DevelopmentSummary({
+  ticket,
+}: {
+  ticket:
+    Ticket;
+}) {
+  const azure =
+    ticket.azureWorkItem;
+
+  if (azure) {
+    const shortType =
+      azure.workItemType ===
+        "Evolução"
+        ? "Evolução"
+        : "Correção";
+
+    return (
+      <Box
+        sx={{
+          minWidth:
+            0,
+        }}
+      >
+        <Stack
+          direction="row"
+          spacing={0.5}
+          sx={{
+            alignItems:
+              "center",
+            flexWrap:
+              "wrap",
+            gap:
+              0.5,
+          }}
+        >
+          <Typography
+            variant="caption"
+            sx={{
+              fontWeight:
+                800,
+              color:
+                "text.primary",
+            }}
+          >
+            #{azure.id}
+          </Typography>
+
+          <Chip
+            size="small"
+            variant="outlined"
+            label={
+              shortType
+            }
+            sx={{
+              height:
+                21,
+              fontSize:
+                "0.68rem",
+            }}
+          />
+        </Stack>
+
+        <Typography
+          variant="caption"
+          title={
+            azure.state
+          }
+          sx={{
+            display:
+              "block",
+            mt:
+              0.25,
+            color:
+              aliareColors.greenDark,
+            fontWeight:
+              700,
+            overflow:
+              "hidden",
+            textOverflow:
+              "ellipsis",
+            whiteSpace:
+              "nowrap",
+          }}
+        >
+          {azure.state}
+        </Typography>
+
+        {(azure.deliveredVersion ||
+          azure.criticality) && (
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            title={[
+              azure.deliveredVersion,
+              azure.criticality,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+            sx={{
+              display:
+                "block",
+              mt:
+                0.1,
+              overflow:
+                "hidden",
+              textOverflow:
+                "ellipsis",
+              whiteSpace:
+                "nowrap",
+            }}
+          >
+            {[
+              azure.deliveredVersion,
+              azure.criticality,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+          </Typography>
+        )}
+      </Box>
+    );
+  }
+
+  if (ticket.taskNumber) {
+    return (
+      <Box>
+        <Typography
+          variant="caption"
+          sx={{
+            fontWeight:
+              750,
+          }}
+        >
+          #{ticket.taskNumber}
+        </Typography>
+
+        <Typography
+          variant="caption"
+          color="text.secondary"
+          sx={{
+            display:
+              "block",
+            mt:
+              0.15,
+          }}
+        >
+          {ticket.taskStatus ??
+            "Task ainda não sincronizada"}
+        </Typography>
+      </Box>
+    );
+  }
+
+  return (
+    <Typography
+      variant="caption"
+      color="text.secondary"
+    >
+      —
+    </Typography>
   );
 }
 

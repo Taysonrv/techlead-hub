@@ -12,10 +12,15 @@ import {
   Divider,
   Drawer,
   IconButton,
+  Popover,
   Snackbar,
   Stack,
   Typography,
 } from "@mui/material";
+
+import {
+  InfoOutlined,
+} from "@mui/icons-material";
 
 import {
   Bar,
@@ -43,6 +48,25 @@ import {
 /* =========================================================
    TIPOS
 ========================================================= */
+
+type AzureTaskSummary = {
+  id: number;
+  workItemType: string;
+  title: string;
+  state: string;
+  assignedToName: string | null;
+  client: string | null;
+  criticality: string | null;
+  module: string | null;
+  process: string | null;
+  movideskTicket: number | null;
+  deliveredVersion: string | null;
+  prioritized: boolean | null;
+  blockedProcess: boolean | null;
+  azureChangedAt: string | null;
+  stateChangedAt?: string | null;
+  syncedAt?: string | null;
+};
 
 type Ticket = {
   id: number;
@@ -85,6 +109,8 @@ type Ticket = {
   taskStatus: string | null;
   deliveredVersion: string | null;
 
+  azureWorkItem?: AzureTaskSummary | null;
+
   responseSlaIndicator?: string | null;
   solutionSlaIndicator?: string | null;
 
@@ -121,6 +147,16 @@ type DrilldownState = {
   subtitle?: string;
   tickets: Ticket[];
 } | null;
+
+type MetricInfoDefinition = {
+  title: string;
+  summary: string;
+  calculation: string;
+  source: string;
+  reference: string;
+  periodRule: string;
+  notes?: string;
+};
 
 /* =========================================================
    DASHBOARD
@@ -239,6 +275,93 @@ export function Dashboard() {
     parados: stoppedTickets.length,
     criticos: criticalTickets.length,
   }), [openedInPeriod, pendingTickets, resolvedInPeriod, closedInPeriod, newTickets, attendanceTickets, stoppedTickets, criticalTickets]);
+
+  /* =======================================================
+     DESENVOLVIMENTO / AZURE DEVOPS
+
+     A mesma Task pode estar vinculada a mais de um atendimento.
+     Por isso os indicadores abaixo contam Work Items únicos,
+     e não linhas de Ticket.
+  ======================================================= */
+
+  const azureWorkItems = useMemo(() => {
+    const byId = new Map<number, AzureTaskSummary>();
+
+    tickets.forEach((ticket) => {
+      if (ticket.azureWorkItem) {
+        byId.set(
+          ticket.azureWorkItem.id,
+          ticket.azureWorkItem
+        );
+      }
+    });
+
+    return Array.from(byId.values());
+  }, [tickets]);
+
+  const azureDevelopment = useMemo(() => {
+    const corrections = azureWorkItems.filter(
+      (item) => item.workItemType === "Correção Clientes"
+    );
+
+    const evolutions = azureWorkItems.filter(
+      (item) => item.workItemType === "Evolução"
+    );
+
+    const prioritized = azureWorkItems.filter(
+      (item) => item.prioritized === true
+    );
+
+    const blocked = azureWorkItems.filter(
+      (item) => item.blockedProcess === true
+    );
+
+    const unassigned = azureWorkItems.filter(
+      (item) => !item.assignedToName?.trim()
+    );
+
+    const highOrCritical = azureWorkItems.filter((item) => {
+      const criticality = normalize(item.criticality);
+      return criticality === "alta" || criticality === "critica";
+    });
+
+    const quality = azureWorkItems.filter((item) => {
+      const state = normalize(item.state);
+      return state === "fila qualidade" || state === "qualidade";
+    });
+
+    const development = azureWorkItems.filter((item) => {
+      const state = normalize(item.state);
+      return [
+        "fila desenvolvimento",
+        "desenvolvimento",
+        "bloqueado correcao",
+        "bloqueado retrabalho",
+      ].includes(state);
+    });
+
+    const latestSync = azureWorkItems.reduce<Date | null>(
+      (latest, item) => {
+        if (!item.syncedAt) return latest;
+        const date = new Date(item.syncedAt);
+        if (Number.isNaN(date.getTime())) return latest;
+        return !latest || date > latest ? date : latest;
+      },
+      null
+    );
+
+    return {
+      corrections,
+      evolutions,
+      prioritized,
+      blocked,
+      unassigned,
+      highOrCritical,
+      quality,
+      development,
+      latestSync,
+    };
+  }, [azureWorkItems]);
 
   /* =======================================================
      CATEGORIAS
@@ -739,14 +862,131 @@ const latestImportedAt =
   ======================================================= */
 
   const cards = [
-    { title: "Abertos", value: summary.abertosNoPeriodo, description: "Abertos no período selecionado", severity: "default" as Severity, onClick: () => showTickets("Tickets abertos no período", openedInPeriod, "Data de abertura dentro do período selecionado") },
-    { title: "Pendentes", value: summary.pendentes, description: "Backlog atual, independentemente da abertura", severity: "warning" as Severity, onClick: () => showTickets("Backlog atual", pendingTickets, "Tickets que permanecem ativos neste momento") },
-    { title: "Resolvidos", value: summary.resolvidosNoPeriodo, description: "Resolvidos no período selecionado", severity: "success" as Severity, onClick: () => showTickets("Tickets resolvidos no período", resolvedInPeriod, "Data de resolução dentro do período selecionado") },
-    { title: "Fechados", value: summary.fechadosNoPeriodo, description: "Fechados no período selecionado", severity: "success" as Severity, onClick: () => showTickets("Tickets fechados no período", closedInPeriod, "Data de fechamento dentro do período selecionado") },
-    { title: "SLA 1ª Resposta", value: formatSlaPercentage(responseSla), description: formatSlaDescription(responseSla), severity: slaSeverity(responseSla), onClick: () => showTickets("SLA de primeira resposta", responseSla.measuredTickets, `${responseSla.within} dentro • ${responseSla.outside} fora • ${responseSla.unmeasured} sem medição`) },
-    { title: "SLA Solução", value: formatSlaPercentage(solutionSla), description: formatSlaDescription(solutionSla), severity: slaSeverity(solutionSla), onClick: () => showTickets("SLA de solução", solutionSla.measuredTickets, `${solutionSla.within} dentro • ${solutionSla.outside} fora • ${solutionSla.unmeasured} sem medição`) },
-    { title: "Críticos", value: summary.criticos, description: "Pendentes com urgência crítica", severity: "error" as Severity, onClick: () => showTickets("Tickets críticos", criticalTickets, "Prioridade imediata no backlog atual") },
-    { title: "Parados", value: summary.parados, description: "Pendentes em situação de parada", severity: "warning" as Severity, onClick: () => showTickets("Tickets parados", stoppedTickets, "Chamados atualmente parados") },
+    {
+      title: "Abertos",
+      value: summary.abertosNoPeriodo,
+      description: "Abertos no período selecionado",
+      severity: "default" as Severity,
+      info: {
+        title: "Abertos",
+        summary: "Tickets cuja data de abertura está dentro do período selecionado.",
+        calculation: "Contagem dos tickets com createdDate entre o início e o fim do período.",
+        source: "Movidesk",
+        reference: "Ticket.createdDate",
+        periodRule: "Respeita integralmente o período global selecionado.",
+        notes: "Clique no card para abrir exatamente os tickets que compõem o indicador.",
+      },
+      onClick: () => showTickets("Tickets abertos no período", openedInPeriod, "Data de abertura dentro do período selecionado"),
+    },
+    {
+      title: "Pendentes",
+      value: summary.pendentes,
+      description: "Backlog atual em andamento",
+      severity: "warning" as Severity,
+      info: {
+        title: "Pendentes",
+        summary: "Backlog atual de tickets ainda ativos, independentemente da data de abertura.",
+        calculation: "Contagem de tickets com baseStatus New, InAttendance ou Stopped.",
+        source: "Movidesk",
+        reference: "Ticket.baseStatus",
+        periodRule: "Não é limitado pela data de abertura, pois representa o backlog atual.",
+        notes: "Clique para visualizar todos os tickets que permanecem ativos.",
+      },
+      onClick: () => showTickets("Backlog atual", pendingTickets, "Tickets que permanecem ativos neste momento"),
+    },
+    {
+      title: "Resolvidos",
+      value: summary.resolvidosNoPeriodo,
+      description: "Resolvidos no período selecionado",
+      severity: "success" as Severity,
+      info: {
+        title: "Resolvidos",
+        summary: "Tickets cuja resolução ocorreu dentro do período selecionado.",
+        calculation: "Contagem dos tickets com resolvedDate dentro do período.",
+        source: "Movidesk",
+        reference: "Ticket.resolvedDate",
+        periodRule: "Usa a data de resolução, e não a data de abertura.",
+        notes: "Clique para abrir os tickets resolvidos no período.",
+      },
+      onClick: () => showTickets("Tickets resolvidos no período", resolvedInPeriod, "Data de resolução dentro do período selecionado"),
+    },
+    {
+      title: "Fechados",
+      value: summary.fechadosNoPeriodo,
+      description: "Fechados no período selecionado",
+      severity: "success" as Severity,
+      info: {
+        title: "Fechados",
+        summary: "Tickets cuja data de fechamento está dentro do período selecionado.",
+        calculation: "Contagem dos tickets com closedDate dentro do período.",
+        source: "Movidesk",
+        reference: "Ticket.closedDate",
+        periodRule: "Usa a data de fechamento, e não a data de abertura.",
+      },
+      onClick: () => showTickets("Tickets fechados no período", closedInPeriod, "Data de fechamento dentro do período selecionado"),
+    },
+    {
+      title: "SLA 1ª Resposta",
+      value: formatSlaPercentage(responseSla),
+      description: formatSlaDescription(responseSla),
+      severity: slaSeverity(responseSla),
+      info: {
+        title: "SLA 1ª Resposta",
+        summary: "Percentual de tickets medidos que receberam a primeira resposta dentro do prazo.",
+        calculation: "Tickets dentro do prazo ÷ tickets com medição válida × 100.",
+        source: "Movidesk / regra histórica do TechLead Hub",
+        reference: "responseSlaIndicator e prazos de primeira resposta",
+        periodRule: "Considera tickets abertos no período selecionado.",
+        notes: "Registros sem medição ficam fora do denominador.",
+      },
+      onClick: () => showTickets("SLA de primeira resposta", responseSla.measuredTickets, `${responseSla.within} dentro • ${responseSla.outside} fora • ${responseSla.unmeasured} sem medição`),
+    },
+    {
+      title: "SLA Solução",
+      value: formatSlaPercentage(solutionSla),
+      description: formatSlaDescription(solutionSla),
+      severity: slaSeverity(solutionSla),
+      info: {
+        title: "SLA Solução",
+        summary: "Percentual de tickets concluídos com solução dentro do prazo.",
+        calculation: "Tickets dentro do prazo ÷ tickets concluídos com medição válida × 100.",
+        source: "Movidesk / regra histórica do TechLead Hub",
+        reference: "solutionSlaIndicator e prazo de solução",
+        periodRule: "Considera tickets resolvidos ou fechados no período selecionado.",
+        notes: "Registros sem medição ficam fora do denominador.",
+      },
+      onClick: () => showTickets("SLA de solução", solutionSla.measuredTickets, `${solutionSla.within} dentro • ${solutionSla.outside} fora • ${solutionSla.unmeasured} sem medição`),
+    },
+    {
+      title: "Críticos",
+      value: summary.criticos,
+      description: "Pendentes com urgência crítica",
+      severity: "error" as Severity,
+      info: {
+        title: "Críticos",
+        summary: "Tickets atualmente pendentes classificados com urgência crítica.",
+        calculation: "Ticket aberto e urgência normalizada igual a Crítica.",
+        source: "Movidesk",
+        reference: "Ticket.urgency + Ticket.baseStatus",
+        periodRule: "Representa o backlog atual, independentemente da abertura.",
+      },
+      onClick: () => showTickets("Tickets críticos", criticalTickets, "Prioridade imediata no backlog atual"),
+    },
+    {
+      title: "Parados",
+      value: summary.parados,
+      description: "Pendentes em situação de parada",
+      severity: "warning" as Severity,
+      info: {
+        title: "Parados",
+        summary: "Tickets atualmente em status de espera ou parada.",
+        calculation: "Contagem de tickets com baseStatus = Stopped.",
+        source: "Movidesk",
+        reference: "Ticket.baseStatus",
+        periodRule: "Representa o backlog atual.",
+      },
+      onClick: () => showTickets("Tickets parados", stoppedTickets, "Chamados atualmente parados"),
+    },
   ];
 
   /* =======================================================
@@ -962,6 +1202,9 @@ const latestImportedAt =
               severity={
                 card.severity
               }
+              info={
+                card.info
+              }
               onClick={
                 card.onClick
               }
@@ -969,6 +1212,205 @@ const latestImportedAt =
           )
         )}
       </Box>
+
+      {/* =================================================
+          DESENVOLVIMENTO / AZURE DEVOPS
+      ================================================= */}
+
+      <Card
+        elevation={0}
+        sx={{
+          mb: 2.5,
+          border: "1px solid",
+          borderColor: "divider",
+          borderRadius: 2,
+        }}
+      >
+        <CardContent>
+          <Stack
+            direction={{
+              xs: "column",
+              md: "row",
+            }}
+            spacing={1.5}
+            sx={{
+              justifyContent: "space-between",
+              alignItems: {
+                xs: "stretch",
+                md: "center",
+              },
+              mb: 2,
+            }}
+          >
+            <Box>
+              <Typography
+                sx={{
+                  fontWeight: 800,
+                  fontSize: "1.05rem",
+                }}
+              >
+                Desenvolvimento
+              </Typography>
+
+              <Typography
+                variant="body2"
+                color="text.secondary"
+              >
+                Work Items do Azure vinculados aos atendimentos do snapshot atual
+              </Typography>
+
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{
+                  display: "block",
+                  mt: 0.35,
+                }}
+              >
+                {azureWorkItems.length} Task(s) única(s)
+                {" • "}
+                última sincronização:{" "}
+                {azureDevelopment.latestSync
+                  ? formatDateTime(
+                      azureDevelopment.latestSync.toISOString()
+                    )
+                  : "indisponível"}
+              </Typography>
+            </Box>
+
+            <Stack
+              direction="row"
+              spacing={1}
+              useFlexGap
+              sx={{
+                flexWrap: "wrap",
+              }}
+            >
+              <Button
+                size="small"
+                variant="outlined"
+                onClick={() => navigate("/correcoes")}
+              >
+                Ver Correções
+              </Button>
+
+              <Button
+                size="small"
+                variant="outlined"
+                onClick={() => navigate("/evolucoes")}
+              >
+                Ver Evoluções
+              </Button>
+            </Stack>
+          </Stack>
+
+          {azureWorkItems.length === 0 ? (
+            <Alert severity="info">
+              Nenhum Work Item do Azure foi localizado nos atendimentos do snapshot atual.
+            </Alert>
+          ) : (
+            <Box
+              sx={{
+                display: "grid",
+                gridTemplateColumns: {
+                  xs: "1fr",
+                  sm: "repeat(2, minmax(0, 1fr))",
+                  lg: "repeat(3, minmax(0, 1fr))",
+                  xl: "repeat(6, minmax(0, 1fr))",
+                },
+                gap: 1.25,
+              }}
+            >
+              <DevelopmentMetric
+                title="Correções"
+                value={azureDevelopment.corrections.length}
+                description="Tasks de correção vinculadas"
+                info={{
+                  title: "Correções",
+                  summary: "Correções do Azure vinculadas aos tickets presentes no snapshot atual.",
+                  calculation: "Contagem distinta de Work Items do tipo Correção Clientes.",
+                  source: "Azure DevOps",
+                  reference: "System.WorkItemType",
+                  periodRule: "Usa os Work Items vinculados ao snapshot atual de tickets.",
+                }}
+                onClick={() => navigate("/correcoes")}
+              />
+
+              <DevelopmentMetric
+                title="Evoluções"
+                value={azureDevelopment.evolutions.length}
+                description="Tasks de evolução vinculadas"
+                info={{
+                  title: "Evoluções",
+                  summary: "Evoluções do Azure vinculadas aos tickets presentes no snapshot atual.",
+                  calculation: "Contagem distinta de Work Items do tipo Evolução.",
+                  source: "Azure DevOps",
+                  reference: "System.WorkItemType",
+                  periodRule: "Usa os Work Items vinculados ao snapshot atual de tickets.",
+                }}
+                onClick={() => navigate("/evolucoes")}
+              />
+
+              <DevelopmentMetric
+                title="Priorizadas"
+                value={azureDevelopment.prioritized.length}
+                description="Work Items priorizados"
+                severity="warning"
+                info={{
+                  title: "Priorizadas", summary: "Work Items sinalizados como priorizados no Azure DevOps.",
+                  calculation: "Contagem distinta de Work Items com prioritized = true.", source: "Azure DevOps",
+                  reference: "Campo de priorização", periodRule: "Snapshot atual de Work Items vinculados.",
+                }}
+                onClick={() => showTickets("Tasks priorizadas", tickets.filter((ticket) => ticket.azureWorkItem?.prioritized === true), "Tickets vinculados a Work Items priorizados")}
+              />
+
+              <DevelopmentMetric
+                title="Bloqueadas"
+                value={azureDevelopment.blocked.length}
+                description="Processo sinalizado como bloqueado"
+                severity="error"
+                info={{
+                  title: "Bloqueadas", summary: "Work Items com processo sinalizado como bloqueado no Azure DevOps.",
+                  calculation: "Contagem distinta de Work Items com blockedProcess = true.", source: "Azure DevOps",
+                  reference: "Campo de processo bloqueado", periodRule: "Snapshot atual de Work Items vinculados.",
+                }}
+                onClick={() => showTickets("Tasks bloqueadas", tickets.filter((ticket) => ticket.azureWorkItem?.blockedProcess === true), "Tickets vinculados a Work Items bloqueados")}
+              />
+
+              <DevelopmentMetric
+                title="Sem responsável"
+                value={azureDevelopment.unassigned.length}
+                description="Sem responsável no Azure"
+                severity="warning"
+                info={{
+                  title: "Sem responsável", summary: "Work Items vinculados sem responsável definido no Azure DevOps.",
+                  calculation: "assignedToName vazio.", source: "Azure DevOps", reference: "System.AssignedTo",
+                  periodRule: "Snapshot atual de Work Items vinculados.",
+                }}
+                onClick={() => showTickets("Tasks sem responsável", tickets.filter((ticket) => ticket.azureWorkItem && !ticket.azureWorkItem.assignedToName?.trim()), "Tickets vinculados a Work Items sem responsável")}
+              />
+
+              <DevelopmentMetric
+                title="Alta / Crítica"
+                value={azureDevelopment.highOrCritical.length}
+                description={`${azureDevelopment.development.length} em desenvolvimento • ${azureDevelopment.quality.length} em qualidade`}
+                severity={
+                  azureDevelopment.highOrCritical.length > 0
+                    ? "error"
+                    : "default"
+                }
+                info={{
+                  title: "Alta / Crítica", summary: "Work Items com criticidade Alta ou Crítica.",
+                  calculation: "Contagem distinta por criticality normalizada em Alta ou Crítica.", source: "Azure DevOps",
+                  reference: "Campo de criticidade", periodRule: "Snapshot atual de Work Items vinculados.",
+                  notes: "O subtítulo mostra quantos itens estão em desenvolvimento e qualidade.",
+                }}
+                onClick={() => showTickets("Tasks de alta criticidade", tickets.filter((ticket) => { const value = normalize(ticket.azureWorkItem?.criticality); return value === "alta" || value === "critica"; }), "Tickets vinculados a Work Items de criticidade Alta ou Crítica")}
+              />
+            </Box>
+          )}
+        </CardContent>
+      </Card>
 
       {/* =================================================
           SEM DADOS
@@ -2387,16 +2829,54 @@ function TrendTooltip({
    KPI
 ========================================================= */
 
+function DevelopmentMetric({
+  title,
+  value,
+  description,
+  info,
+  severity = "default",
+  onClick,
+}: {
+  title: string;
+  value: number;
+  description: string;
+  info: MetricInfoDefinition;
+  severity?: Severity;
+  onClick?: () => void;
+}) {
+
+  const accentColor =
+    severity === "error"
+      ? semanticChartColors.overdue
+      : severity === "warning"
+      ? semanticChartColors.attention
+      : severity === "success"
+      ? semanticChartColors.positive
+      : aliareColors.green;
+
+  return (
+    <StandardMetricCard
+      title={title}
+      value={value}
+      description={description}
+      info={info}
+      accentColor={accentColor}
+      onClick={onClick}
+    />
+  );
+}
 function KpiCard({
   title,
   value,
   description,
+  info,
   severity,
   onClick,
 }: {
   title: string;
   value: ReactNode;
   description: string;
+  info: MetricInfoDefinition;
   severity: Severity;
   onClick: () => void;
 }) {
@@ -2410,165 +2890,102 @@ function KpiCard({
       : aliareColors.green;
 
   return (
+    <StandardMetricCard
+      title={title}
+      value={value}
+      description={description}
+      info={info}
+      accentColor={accentColor}
+      onClick={onClick}
+    />
+  );
+}
+
+function StandardMetricCard({
+  title,
+  value,
+  description,
+  info,
+  accentColor,
+  onClick,
+}: {
+  title: string;
+  value: ReactNode;
+  description: string;
+  info: MetricInfoDefinition;
+  accentColor: string;
+  onClick?: () => void;
+}) {
+  return (
     <Card
       elevation={0}
-      role="button"
-      tabIndex={0}
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
       onClick={onClick}
       onKeyDown={(event) => {
-        if (
-          event.key === "Enter" ||
-          event.key === " "
-        ) {
+        if (onClick && (event.key === "Enter" || event.key === " ")) {
           onClick();
         }
       }}
       sx={{
-        position:
-          "relative",
-
-        overflow:
-          "hidden",
-
-        border:
-          "1px solid",
-
-        borderColor:
-          "divider",
-
-        borderRadius:
-          2.25,
-
-        height:
-          "100%",
-
-        cursor:
-          "pointer",
-
-        backgroundColor:
-          "background.paper",
-
-        transition:
-          "transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease",
-
+        position: "relative",
+        overflow: "hidden",
+        border: "1px solid",
+        borderColor: "divider",
+        borderRadius: 2.25,
+        height: "100%",
+        backgroundColor: "background.paper",
+        cursor: onClick ? "pointer" : "default",
+        transition: "transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease",
         "&::before": {
-          content:
-            '""',
-
-          position:
-            "absolute",
-
+          content: '""',
+          position: "absolute",
           top: 0,
           left: 0,
-
-          width:
-            "100%",
-
-          height:
-            3,
-
-          backgroundColor:
-            accentColor,
+          width: "100%",
+          height: 3,
+          backgroundColor: accentColor,
         },
-
-        "&:hover": {
-          transform:
-            "translateY(-2px)",
-
-          borderColor:
-            accentColor,
-
-          boxShadow:
-            "0 8px 24px rgba(16,24,40,0.08)",
-        },
-
-        "&:focus-visible": {
-          outline:
-            `2px solid ${accentColor}`,
-
-          outlineOffset:
-            "2px",
-        },
+        ...(onClick && {
+          "&:hover": {
+            transform: "translateY(-2px)",
+            borderColor: accentColor,
+            boxShadow: "0 8px 24px rgba(16,24,40,0.08)",
+          },
+          "&:focus-visible": {
+            outline: `2px solid ${accentColor}`,
+            outlineOffset: "2px",
+          },
+        }),
       }}
     >
       <CardContent
         sx={{
-          p: {
-            xs: 1.6,
-            md: 1.8,
-          },
-
-          "&:last-child": {
-            pb: {
-              xs: 1.6,
-              md: 1.8,
-            },
-          },
+          p: { xs: 1.6, md: 1.8 },
+          "&:last-child": { pb: { xs: 1.6, md: 1.8 } },
         }}
       >
         <Stack
           direction="row"
-          sx={{
-            alignItems:
-              "center",
-
-            justifyContent:
-              "space-between",
-
-            gap:
-              1,
-          }}
+          sx={{ alignItems: "center", justifyContent: "space-between", gap: 1 }}
         >
           <Typography
             variant="body2"
-            color="text.secondary"
-            sx={{
-              fontWeight:
-                650,
-            }}
+            sx={{ fontWeight: 700, color: "text.primary", minWidth: 0 }}
           >
             {title}
           </Typography>
 
-          <Box
-            sx={{
-              width:
-                8,
-
-              height:
-                8,
-
-              borderRadius:
-                "50%",
-
-              backgroundColor:
-                accentColor,
-
-              flexShrink:
-                0,
-            }}
-          />
+          <MetricInfo definition={info} />
         </Stack>
 
         <Typography
           sx={{
-            fontWeight:
-              800,
-
-            mt:
-              0.6,
-
-            letterSpacing:
-              "-0.025em",
-
-            fontSize: {
-              xs: "1.75rem",
-              md: "1.95rem",
-              xl: "2.1rem",
-            },
-
-            lineHeight:
-              1.05,
+            fontWeight: 800,
+            mt: 0.6,
+            letterSpacing: "-0.025em",
+            fontSize: { xs: "1.75rem", md: "1.95rem", xl: "2.1rem" },
+            lineHeight: 1.05,
           }}
         >
           {value}
@@ -2577,40 +2994,98 @@ function KpiCard({
         <Typography
           variant="caption"
           color="text.secondary"
-          sx={{
-            display:
-              "block",
-
-            mt:
-              0.75,
-
-            minHeight:
-              18,
-          }}
+          sx={{ display: "block", mt: 0.75, minHeight: 18 }}
         >
           {description}
         </Typography>
-
-        <Typography
-          variant="caption"
-          sx={{
-            display:
-              "inline-block",
-
-            mt:
-              0.85,
-
-            fontWeight:
-              700,
-
-            color:
-              aliareColors.greenDark,
-          }}
-        >
-          Ver tickets →
-        </Typography>
       </CardContent>
     </Card>
+  );
+}
+
+function MetricInfo({ definition }: { definition: MetricInfoDefinition }) {
+  const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
+  const open = Boolean(anchorEl);
+
+  return (
+    <>
+      <IconButton
+        size="small"
+        aria-label={`Informações sobre ${definition.title}`}
+        title={`Informações sobre ${definition.title}`}
+        onClick={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          setAnchorEl(event.currentTarget);
+        }}
+        onKeyDown={(event) => event.stopPropagation()}
+        sx={{
+          p: 0.3,
+          color: "text.secondary",
+          flexShrink: 0,
+          "&:hover": {
+            color: aliareColors.greenDark,
+            backgroundColor: "rgba(24,199,122,0.08)",
+          },
+        }}
+      >
+        <InfoOutlined sx={{ fontSize: 16 }} />
+      </IconButton>
+
+      <Popover
+        open={open}
+        anchorEl={anchorEl}
+        onClose={() => setAnchorEl(null)}
+        anchorOrigin={{ vertical: "bottom", horizontal: "left" }}
+        transformOrigin={{ vertical: "top", horizontal: "left" }}
+        slotProps={{
+          paper: {
+            onClick: (event: React.MouseEvent<HTMLElement>) => event.stopPropagation(),
+            sx: {
+              width: { xs: 320, sm: 390 },
+              maxWidth: "calc(100vw - 32px)",
+              mt: 0.75,
+              p: 2,
+              borderRadius: 2,
+              border: "1px solid",
+              borderColor: "divider",
+              boxShadow: "0 14px 40px rgba(16,24,40,0.14)",
+            },
+          },
+        }}
+      >
+        <Stack spacing={1.2}>
+          <Box>
+            <Typography sx={{ fontWeight: 850 }}>{definition.title}</Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.4, lineHeight: 1.55 }}>
+              {definition.summary}
+            </Typography>
+          </Box>
+          <Divider />
+          <MetricInfoLine label="Como é calculado" value={definition.calculation} />
+          <MetricInfoLine label="Fonte" value={definition.source} />
+          <MetricInfoLine label="Campo de referência" value={definition.reference} />
+          <MetricInfoLine label="Regra de período" value={definition.periodRule} />
+          {definition.notes && (
+            <Box sx={{ p: 1.1, borderRadius: 1.5, backgroundColor: "rgba(24,199,122,0.055)", border: "1px solid rgba(24,199,122,0.16)" }}>
+              <Typography variant="caption" sx={{ fontWeight: 800, color: aliareColors.greenDark }}>Observação</Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.25, lineHeight: 1.5 }}>
+                {definition.notes}
+              </Typography>
+            </Box>
+          )}
+        </Stack>
+      </Popover>
+    </>
+  );
+}
+
+function MetricInfoLine({ label, value }: { label: string; value: string }) {
+  return (
+    <Box>
+      <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>{label}</Typography>
+      <Typography variant="body2" sx={{ mt: 0.15, lineHeight: 1.5 }}>{value}</Typography>
+    </Box>
   );
 }
 

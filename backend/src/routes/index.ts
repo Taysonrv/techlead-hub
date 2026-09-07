@@ -24,6 +24,18 @@ import authRoutes from "./auth.routes";
 
 import userRoutes from "./user.routes";
 
+import {
+  azureDevOpsRoutes,
+} from "./azure-devops.routes";
+
+import {
+  azureWorkItemRoutes,
+} from "./azure-work-items.routes";
+
+import {
+  azureSyncRoutes,
+} from "./azure-sync.routes";
+
 /* =========================================================
    ROUTER
 ========================================================= */
@@ -44,51 +56,31 @@ const dashboard =
    ROTAS PÚBLICAS
 ========================================================= */
 
-/*
- * Health check do processo HTTP.
- */
 routes.get(
   "/health",
-  health.index
+  health.index,
 );
 
-/*
- * Readiness check do PostgreSQL.
- *
- * Permanece público porque o Electron precisa validar o banco
- * antes de existir uma sessão autenticada.
- *
- * O endpoint não retorna dados da aplicação.
- */
 routes.get(
   "/health/ready",
-  readiness.index
+  readiness.index,
 );
 
-/*
- * O auth.routes define internamente quais operações de
- * autenticação são públicas e quais exigem sessão.
- */
 routes.use(
   "/api/auth",
-  authRoutes
+  authRoutes,
 );
 
 /* =========================================================
    ÁREA AUTENTICADA
+
+   Todas as rotas registradas abaixo deste ponto passam pelo
+   authMiddleware.
 ========================================================= */
 
-/*
- * Toda rota /api registrada abaixo desta linha exige:
- * - JWT válido;
- * - sessão persistida e não revogada;
- * - sessão não expirada;
- * - usuário ativo;
- * - approvalStatus APPROVED.
- */
 routes.use(
   "/api",
-  authMiddleware
+  authMiddleware,
 );
 
 /* =========================================================
@@ -97,7 +89,7 @@ routes.use(
 
 routes.use(
   "/api/users",
-  userRoutes
+  userRoutes,
 );
 
 /* =========================================================
@@ -106,37 +98,37 @@ routes.use(
 
 routes.get(
   "/api/dashboard/summary",
-  dashboard.summary
+  dashboard.summary,
 );
 
 routes.get(
   "/api/dashboard/categories",
-  dashboard.categories
+  dashboard.categories,
 );
 
 routes.get(
   "/api/dashboard/attention",
-  dashboard.attention
+  dashboard.attention,
 );
 
 routes.get(
   "/api/dashboard/owners",
-  dashboard.owners
+  dashboard.owners,
 );
 
 routes.get(
   "/api/dashboard/clients",
-  dashboard.clients
+  dashboard.clients,
 );
 
 routes.get(
   "/api/dashboard/trends",
-  dashboard.trends
+  dashboard.trends,
 );
 
 routes.get(
   "/api/dashboard/tickets",
-  dashboard.tickets
+  dashboard.tickets,
 );
 
 /* =========================================================
@@ -145,7 +137,49 @@ routes.get(
 
 routes.use(
   "/api",
-  importRoutes
+  importRoutes,
+);
+
+/* =========================================================
+   AZURE DEVOPS - INTEGRAÇÃO / SINCRONIZAÇÃO
+
+   Rotas existentes responsáveis pelas operações de
+   integração com o Azure DevOps.
+========================================================= */
+
+routes.use(
+  "/api/azure-devops",
+  azureDevOpsRoutes,
+);
+
+/* =========================================================
+   AZURE DEVOPS - MONITORAMENTO DA SINCRONIZAÇÃO
+
+   Consulta configuração e histórico persistido em
+   AzureSyncRun.
+
+   Não dispara sincronização.
+
+   Endpoint:
+   GET /api/azure-sync/status
+========================================================= */
+
+routes.use(
+  "/api/azure-sync",
+  azureSyncRoutes,
+);
+
+/* =========================================================
+   AZURE DEVOPS - CONSULTA LOCAL
+
+   Consulta os Work Items previamente sincronizados no
+   PostgreSQL. Nenhuma chamada ao Azure é realizada por
+   estas rotas.
+========================================================= */
+
+routes.use(
+  "/api/azure-work-items",
+  azureWorkItemRoutes,
 );
 
 /* =========================================================

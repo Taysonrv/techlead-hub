@@ -7,11 +7,9 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-/**
- * =========================================================
- * ENUMS
- * =========================================================
- */
+// =========================================================
+// ENUMS
+// =========================================================
 
 enum UserRole {
   ADMIN
@@ -32,11 +30,16 @@ enum ImportStatus {
   ERROR
 }
 
-/**
- * =========================================================
- * USUÁRIO
- * =========================================================
- */
+enum AzureSyncStatus {
+  PROCESSING
+  SUCCESS
+  PARTIAL
+  ERROR
+}
+
+// =========================================================
+// USUÁRIO
+// =========================================================
 
 model User {
   id Int @id @default(autoincrement())
@@ -70,6 +73,7 @@ model User {
   sessions            UserSession[]
   passwordResetTokens PasswordResetToken[]
   importRuns          ImportRun[]
+  azureSyncRuns       AzureSyncRun[]
 
   @@index([name])
   @@index([role])
@@ -78,11 +82,9 @@ model User {
   @@index([approvedById])
 }
 
-/**
- * =========================================================
- * RECUPERAÇÃO DE SENHA
- * =========================================================
- */
+// =========================================================
+// RECUPERAÇÃO DE SENHA
+// =========================================================
 
 model PasswordResetToken {
   id Int @id @default(autoincrement())
@@ -102,11 +104,9 @@ model PasswordResetToken {
   @@index([usedAt])
 }
 
-/**
- * =========================================================
- * SESSÕES
- * =========================================================
- */
+// =========================================================
+// SESSÕES
+// =========================================================
 
 model UserSession {
   id Int @id @default(autoincrement())
@@ -131,11 +131,9 @@ model UserSession {
   @@index([revokedAt])
 }
 
-/**
- * =========================================================
- * EXECUÇÃO DE IMPORTAÇÃO
- * =========================================================
- */
+// =========================================================
+// EXECUÇÃO DE IMPORTAÇÃO MOVÍDESK
+// =========================================================
 
 model ImportRun {
   id Int @id @default(autoincrement())
@@ -172,11 +170,9 @@ model ImportRun {
   @@index([finishedAt])
 }
 
-/**
- * =========================================================
- * TICKET
- * =========================================================
- */
+// =========================================================
+// TICKET MOVÍDESK
+// =========================================================
 
 model Ticket {
   id Int @id @default(autoincrement())
@@ -216,9 +212,7 @@ model Ticket {
   resolvedDate DateTime?
   closedDate   DateTime?
 
-  /**
-   * Resultado oficial de SLA importado do Movidesk.
-   */
+  // Resultado oficial de SLA importado do Movidesk
   solutionSlaIndicator String?
   responseSlaIndicator String?
 
@@ -226,7 +220,16 @@ model Ticket {
   lifetimeMinutes Int?
   stoppedMinutes  Int?
 
-  // Desenvolvimento / Task
+  // Desenvolvimento / Azure DevOps
+  //
+  // taskNumber corresponde ao ID do Work Item no Azure.
+  //
+  // Não existe FK física neste primeiro momento porque um
+  // Ticket pode apontar para uma Task que ainda não tenha sido
+  // sincronizada no banco do TechLead Hub.
+  //
+  // Correlação lógica:
+  // Ticket.taskNumber == AzureWorkItem.id
   taskNumber       Int?
   taskStatus       String?
   deliveredVersion String?
@@ -251,20 +254,223 @@ model Ticket {
   @@index([baseStatus])
   @@index([category])
   @@index([urgency])
-
   @@index([createdDate])
   @@index([dueDate])
   @@index([firstResponseDate])
   @@index([resolvedDate])
   @@index([closedDate])
-
   @@index([solutionSlaIndicator])
   @@index([responseSlaIndicator])
-
   @@index([taskNumber])
   @@index([taskStatus])
-
+  @@index([deliveredVersion])
   @@index([importedAt])
   @@index([importBatch])
   @@index([importRunId])
+}
+
+// =========================================================
+// SINCRONIZAÇÃO AZURE DEVOPS
+// =========================================================
+
+model AzureSyncRun {
+  id Int @id @default(autoincrement())
+
+  batch  String          @unique
+  status AzureSyncStatus @default(PROCESSING)
+
+  // Origem / estratégia da execução.
+  //
+  // Exemplos:
+  // MANUAL
+  // SCHEDULED
+  // FULL
+  // INCREMENTAL
+  source String?
+
+  totalItems    Int @default(0)
+  insertedItems Int @default(0)
+  updatedItems  Int @default(0)
+  skippedItems  Int @default(0)
+  errorItems    Int @default(0)
+
+  message String?
+
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+
+  // Usuário que iniciou a sincronização, quando aplicável
+  userId Int?
+  user   User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  // Work Items atualizados nesta execução
+  workItems AzureWorkItem[]
+
+  // Auditoria
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([source])
+  @@index([userId])
+  @@index([startedAt])
+  @@index([finishedAt])
+}
+
+// =========================================================
+// AZURE DEVOPS - WORK ITEM
+// =========================================================
+
+model AzureWorkItem {
+  // System.Id do Azure DevOps.
+  //
+  // O próprio ID do Azure é utilizado como chave primária.
+  // Isso simplifica os upserts e a correlação com
+  // Ticket.taskNumber.
+  id Int @id
+
+  // Revisão atual do Work Item
+  revision Int?
+
+  // Identificação principal
+  workItemType String
+  title        String
+  state        String
+  reason       String?
+
+  // Responsável atual
+  assignedToName  String?
+  assignedToEmail String?
+  assignedToId    String?
+
+  // Criador
+  createdByName  String?
+  createdByEmail String?
+
+  // Última alteração
+  changedByName  String?
+  changedByEmail String?
+
+  // Organização interna no Azure DevOps
+  areaPath      String?
+  iterationPath String?
+  nodeName      String?
+  boardColumn   String?
+
+  // Dados funcionais SIMER
+  client      String?
+  criticality String?
+  origin      String?
+  detectedIn  String?
+  module      String?
+  process     String?
+
+  // Atendimento Movidesk informado dentro do Work Item.
+  //
+  // Não é uma FK com Ticket neste primeiro momento.
+  // Representa o número do atendimento armazenado no Azure.
+  movideskTicket Int?
+
+  // Versão relacionada ao Work Item
+  deliveredVersion String?
+
+  // Priorização / impacto
+  prioritized    Boolean?
+  blockedProcess Boolean?
+  impactScale    String?
+
+  // Informações específicas de Correções
+  defectType     String?
+  branchType     String?
+  correctionType String?
+  rdmNumber      String?
+
+  // Limite de SLA da Task/Correção quando informado
+  slaLimit DateTime?
+
+  // Work Item pai, quando existente.
+  //
+  // Inicialmente mantemos somente o ID.
+  // Não criamos autorrelacionamento Prisma nesta fase.
+  parentId Int?
+
+  // Conteúdo funcional.
+  //
+  // O Azure pode retornar HTML nesses campos.
+  description       String? @db.Text
+  workaround        String? @db.Text
+  technicalSolution String? @db.Text
+
+  // Tags originais do Azure
+  tags String? @db.Text
+
+  // Datas oficiais Azure DevOps
+  azureCreatedAt DateTime?
+  azureChangedAt DateTime?
+  azureClosedAt  DateTime?
+  stateChangedAt DateTime?
+  activatedAt    DateTime?
+
+  // URL navegável do Work Item
+  remoteUrl String? @db.Text
+
+  // Dados brutos retornados pelo Azure.
+  //
+  // rawFields preserva campos ainda não explicitamente
+  // modelados pelo TechLead Hub.
+  //
+  // rawRelations preserva relações retornadas pelo
+  // $expand=All.
+  rawFields    Json?
+  rawRelations Json?
+
+  // Execução responsável pela última sincronização
+  syncRunId Int?
+  syncRun   AzureSyncRun? @relation(fields: [syncRunId], references: [id], onDelete: SetNull)
+
+  // Data da última sincronização
+  syncedAt DateTime @default(now())
+
+  // Auditoria local
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Identificação / situação
+  @@index([workItemType])
+  @@index([state])
+  @@index([reason])
+  // Responsável
+  @@index([assignedToName])
+  @@index([assignedToEmail])
+  // Organização Azure
+  @@index([areaPath])
+  @@index([iterationPath])
+  @@index([boardColumn])
+  // Dados funcionais
+  @@index([client])
+  @@index([criticality])
+  @@index([origin])
+  @@index([detectedIn])
+  @@index([module])
+  @@index([process])
+  // Integrações / versão
+  @@index([movideskTicket])
+  @@index([deliveredVersion])
+  // Priorização
+  @@index([prioritized])
+  @@index([blockedProcess])
+  // Correções
+  @@index([defectType])
+  @@index([branchType])
+  @@index([correctionType])
+  // Relacionamentos Azure
+  @@index([parentId])
+  // Datas
+  @@index([azureCreatedAt])
+  @@index([azureChangedAt])
+  @@index([azureClosedAt])
+  @@index([stateChangedAt])
+  // Sincronização
+  @@index([syncRunId])
+  @@index([syncedAt])
 }
