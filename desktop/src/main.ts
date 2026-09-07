@@ -2565,7 +2565,7 @@ async function bootstrap() {
   if (
     !databaseReady
   ) {
-    await dialog.showMessageBox(
+    const response = await dialog.showMessageBox(
       {
         type:
           "error",
@@ -2579,11 +2579,24 @@ async function bootstrap() {
         detail:
           "O backend foi iniciado, mas o PostgreSQL não respondeu corretamente. Verifique a DATABASE_URL, a rede/VPN e a disponibilidade do banco.",
 
-        buttons: [
-          "Fechar",
-        ],
+        buttons: ["Reconfigurar", "Fechar"],
+        defaultId: 0,
+        cancelId: 1,
       }
     );
+
+    stopBackend();
+
+    if (response.response === 0) {
+      const correctedDatabaseUrl = await showIntegratedSetup();
+
+      if (correctedDatabaseUrl) {
+        isQuitting = true;
+        app.relaunch();
+        app.exit(0);
+        return;
+      }
+    }
 
     app.quit();
 
