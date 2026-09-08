@@ -9,6 +9,7 @@ import {
   Divider,
   LinearProgress,
   Stack,
+  TextField,
   Typography,
 } from "@mui/material";
 import {
@@ -22,6 +23,8 @@ import {
 } from "@mui/icons-material";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { aliareColors } from "../theme/theme";
+import { useAuth } from "../context/AuthContext";
+import { api } from "../services/api";
 import {
   FALLBACK_APP_VERSION,
   getReleaseNote,
@@ -51,6 +54,9 @@ type UpdateState = {
 type DesktopBridge = {
   desktop?: boolean;
   getVersion?: () => Promise<string>;
+  configuration?: Window["techLeadHub"] extends infer _T
+    ? NonNullable<Window["techLeadHub"]>["configuration"]
+    : never;
   updates?: {
     getState?: () => Promise<UpdateState>;
     check?: () => Promise<UpdateState>;
@@ -74,9 +80,19 @@ const EMPTY_STATE: UpdateState = {
 };
 
 export function About() {
+  const { isAdmin } = useAuth();
   const [appVersion, setAppVersion] = useState(FALLBACK_APP_VERSION);
   const [updateState, setUpdateState] = useState<UpdateState>(EMPTY_STATE);
   const [actionRunning, setActionRunning] = useState(false);
+  const [configurationLoading, setConfigurationLoading] = useState(false);
+  const [configurationMessage, setConfigurationMessage] = useState<string | null>(null);
+  const [databaseUrl, setDatabaseUrl] = useState("");
+  const [organization, setOrganization] = useState("");
+  const [project, setProject] = useState("");
+  const [wiki, setWiki] = useState("");
+  const [pat, setPat] = useState("");
+  const [databaseConfigured, setDatabaseConfigured] = useState(false);
+  const [patConfigured, setPatConfigured] = useState(false);
 
   const desktopApi = useMemo(
     () => (window.techLeadHub ?? null) as DesktopBridge | null,
@@ -84,6 +100,7 @@ export function About() {
   );
 
   const updaterApi = desktopApi?.updates ?? null;
+  const configurationApi = desktopApi?.configuration ?? null;
 
   const currentRelease = useMemo(() => getReleaseNote(appVersion), [appVersion]);
 
@@ -146,6 +163,60 @@ export function About() {
       }
     };
   }, [desktopApi, updaterApi, refreshState]);
+
+  useEffect(() => {
+    void configurationApi?.get().then((value) => {
+      setDatabaseConfigured(value.databaseConfigured);
+      setOrganization(value.organization);
+      setProject(value.project);
+      setWiki(value.wiki);
+      setPatConfigured(value.patConfigured);
+    });
+  }, [configurationApi]);
+
+  async function importEnvironment() {
+    if (!configurationApi) return;
+    const value = await configurationApi.importEnv();
+    if (!value) return;
+    setDatabaseUrl(value.databaseUrl);
+    setOrganization(value.organization);
+    setProject(value.project);
+    setWiki(value.wiki);
+    setPat(value.pat);
+    setConfigurationMessage("Arquivo carregado. Revise os dados e clique em Salvar.");
+  }
+
+  async function saveConfiguration() {
+    if (!configurationApi || configurationLoading) return;
+    try {
+      setConfigurationLoading(true);
+      setConfigurationMessage(null);
+      await configurationApi.save({ databaseUrl, organization, project, wiki, pat });
+      setConfigurationMessage("Configuração salva. O aplicativo será reiniciado.");
+    } catch (error) {
+      setConfigurationMessage(error instanceof Error ? error.message : "Não foi possível salvar a configuração.");
+    } finally {
+      setConfigurationLoading(false);
+    }
+  }
+
+  async function synchronizeAzure() {
+    if (configurationLoading) return;
+    try {
+      setConfigurationLoading(true);
+      setConfigurationMessage("Iniciando sincronização incremental do Azure DevOps...");
+      await api.post("/azure-devops/sync/incremental");
+      setConfigurationMessage("Sincronização do Azure DevOps concluída.");
+    } catch (error) {
+      setConfigurationMessage(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível sincronizar o Azure DevOps.",
+      );
+    } finally {
+      setConfigurationLoading(false);
+    }
+  }
 
   async function runAction(action?: () => Promise<unknown>) {
     if (!action || actionRunning) return;
@@ -259,6 +330,35 @@ export function About() {
           </Stack>
         </CardContent>
       </Card>
+
+      {isAdmin && configurationApi && (
+        <Card elevation={0} sx={{ mt: 2, border: "1px solid", borderColor: "divider", borderRadius: 2.5 }}>
+          <CardContent sx={{ p: 2.25, "&:last-child": { pb: 2.25 } }}>
+            <Typography sx={{ fontWeight: 800 }}>Configuração da aplicação</Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, mb: 2 }}>
+              Banco e Azure DevOps são protegidos pelo Windows. Os segredos já gravados não são exibidos.
+            </Typography>
+            <Stack spacing={1.5}>
+              <TextField label="DATABASE_URL" type="password" value={databaseUrl} onChange={(event) => setDatabaseUrl(event.target.value)} placeholder={databaseConfigured ? "Banco já configurado — preencha somente para alterar" : "postgresql://usuario:senha@servidor:5432/banco"} fullWidth />
+              <Divider />
+              <TextField label="Organização Azure DevOps" value={organization} onChange={(event) => setOrganization(event.target.value)} fullWidth />
+              <TextField label="Projeto" value={project} onChange={(event) => setProject(event.target.value)} fullWidth />
+              <TextField label="Wiki" value={wiki} onChange={(event) => setWiki(event.target.value)} fullWidth />
+              <TextField label="PAT" type="password" value={pat} onChange={(event) => setPat(event.target.value)} placeholder={patConfigured ? "PAT já configurado — preencha somente para alterar" : "Token de leitura"} fullWidth />
+              {configurationMessage && <Alert severity="info">{configurationMessage}</Alert>}
+              <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
+                <Button variant="outlined" onClick={() => void importEnvironment()} disabled={configurationLoading}>Importar .env</Button>
+                <Button variant="contained" onClick={() => void saveConfiguration()} disabled={configurationLoading} sx={{ textTransform: "none", fontWeight: 750 }}>
+                  {configurationLoading ? "Salvando..." : "Salvar e reiniciar"}
+                </Button>
+                <Button variant="text" onClick={() => void synchronizeAzure()} disabled={configurationLoading || !patConfigured} sx={{ textTransform: "none", fontWeight: 750 }}>
+                  Sincronizar Azure agora
+                </Button>
+              </Stack>
+            </Stack>
+          </CardContent>
+        </Card>
+      )}
 
       <Box
         sx={{

@@ -88,31 +88,33 @@ export class AzureDevOpsService {
 
   constructor() {
     this.organization =
-      this.getRequiredEnv(
+      this.getOptionalEnv(
         "AZURE_DEVOPS_ORGANIZATION",
       );
 
     this.project =
-      this.getRequiredEnv(
+      this.getOptionalEnv(
         "AZURE_DEVOPS_PROJECT",
       );
 
     this.wiki =
-      this.getRequiredEnv(
+      this.getOptionalEnv(
         "AZURE_DEVOPS_WIKI",
       );
 
     this.pat =
-      this.getRequiredEnv(
+      this.getOptionalEnv(
         "AZURE_DEVOPS_PAT",
       );
 
     const baseURL =
-      `https://dev.azure.com/${encodeURIComponent(
-        this.organization,
-      )}/${encodeURIComponent(
-        this.project,
-      )}`;
+      this.isConfigured()
+        ? `https://dev.azure.com/${encodeURIComponent(
+            this.organization,
+          )}/${encodeURIComponent(
+            this.project,
+          )}`
+        : "https://dev.azure.com";
 
     const basicToken =
       Buffer
@@ -144,6 +146,28 @@ export class AzureDevOpsService {
 
   public async getStatus():
     Promise<AzureDevOpsStatus> {
+    if (
+      !this.isConfigured()
+    ) {
+      return {
+        configured:
+          false,
+        organization:
+          this.organization ||
+          null,
+        project:
+          this.project ||
+          null,
+        wiki:
+          this.wiki ||
+          null,
+        workItemsAvailable:
+          false,
+        wikiAvailable:
+          false,
+      };
+    }
+
     let workItemsAvailable =
       false;
 
@@ -222,6 +246,8 @@ export class AzureDevOpsService {
         400,
       );
     }
+
+    this.ensureConfigured();
 
     try {
       const response =
@@ -352,6 +378,8 @@ export class AzureDevOpsService {
       return [];
     }
 
+    this.ensureConfigured();
+
     const result:
       AzureDevOpsWorkItemResponse[] =
         [];
@@ -426,6 +454,8 @@ export class AzureDevOpsService {
       );
     }
 
+    this.ensureConfigured();
+
     try {
       const response =
         await this.client.get(
@@ -463,6 +493,8 @@ export class AzureDevOpsService {
     timePrecision:
       boolean,
   ): Promise<AzureWorkItemDiscoveryResult> {
+    this.ensureConfigured();
+
     try {
       const response =
         await this.client.post<AzureWiqlResponse>(
@@ -564,28 +596,43 @@ export class AzureDevOpsService {
      CONFIGURAÇÃO
   ======================================================= */
 
-  private getRequiredEnv(
+  private getOptionalEnv(
     name: string,
   ): string {
-    const value =
+    return (
       process.env[
         name
-      ]?.trim();
+      ]?.trim() ??
+      ""
+    );
+  }
 
-    if (!value) {
+  private isConfigured():
+    boolean {
+    return Boolean(
+      this.organization &&
+      this.project &&
+      this.wiki &&
+      this.pat,
+    );
+  }
+
+  private ensureConfigured():
+    void {
+    if (
+      !this.isConfigured()
+    ) {
       throw new AzureDevOpsServiceError(
-        `A variável de ambiente ${name} não está configurada.`,
-        500,
+        "A integração com o Azure DevOps ainda não está configurada.",
+        503,
         {
           status:
-            500,
+            503,
           message:
-            "Configuração do Azure DevOps incompleta.",
+            "Configure AZURE_DEVOPS_ORGANIZATION, AZURE_DEVOPS_PROJECT, AZURE_DEVOPS_WIKI e AZURE_DEVOPS_PAT para utilizar a integração.",
         },
       );
     }
-
-    return value;
   }
 
   /* =======================================================

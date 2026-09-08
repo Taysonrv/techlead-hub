@@ -43,6 +43,14 @@ type UpdateStateListener = (
   state: UpdateState
 ) => void;
 
+type ConfigurationInput = {
+  databaseUrl: string;
+  organization: string;
+  project: string;
+  wiki: string;
+  pat: string;
+};
+
 /* =========================================================
    API SEGURA EXPOSTA AO REACT
 ========================================================= */
@@ -68,6 +76,17 @@ const techLeadHubApi = {
         "app:get-version"
       );
     },
+
+  configuration: {
+    get: async () =>
+      ipcRenderer.invoke("configuration:get"),
+
+    importEnv: async (): Promise<ConfigurationInput | null> =>
+      ipcRenderer.invoke("configuration:import-env"),
+
+    save: async (input: ConfigurationInput) =>
+      ipcRenderer.invoke("configuration:save", input),
+  },
 
   /* =======================================================
      ATUALIZAÇÕES
