@@ -6,12 +6,6 @@ import {
   prisma,
 } from "../database/prisma";
 
-import {
-  azureOperationalScope,
-  isSimerClient,
-  isSupportAnalyst,
-  ticketOperationalScope,
-} from "../domain/OperationalScope";
 
 export type AzureWorkItemListParams = {
   page?: number;
@@ -210,10 +204,7 @@ export class AzureWorkItemService {
     const relatedTickets =
       await prisma.ticket.findMany({
         where: {
-          AND: [
-            ticketOperationalScope(),
-            {
-              OR: [
+          OR: [
                 {
                   taskNumber:
                     workItem.id,
@@ -229,8 +220,6 @@ export class AzureWorkItemService {
                     : []
                 ),
               ],
-            },
-          ],
         },
         orderBy: [
           {
@@ -245,19 +234,6 @@ export class AzureWorkItemService {
         select:
           this.relatedTicketSelect(),
       });
-
-    if (
-      !isSimerClient(
-        workItem.client,
-      ) &&
-      !isSupportAnalyst(
-        workItem.createdByName,
-      ) &&
-      relatedTickets.length ===
-        0
-    ) {
-      return null;
-    }
 
     const tickets =
       relatedTickets.map(
@@ -387,7 +363,6 @@ export class AzureWorkItemService {
       Prisma.AzureWorkItemWhereInput =
       {
         AND: [
-          azureOperationalScope(),
           ...(typeFilter
             ? [
                 {
@@ -1180,7 +1155,6 @@ export class AzureWorkItemService {
   ) {
     const and:
       Prisma.AzureWorkItemWhereInput[] = [
-        azureOperationalScope(),
         {
           workItemType: {
             in: [
@@ -1957,7 +1931,6 @@ export class AzureWorkItemService {
       Prisma.AzureWorkItemWhereInput =
       {
         AND: [
-          azureOperationalScope(),
           ...(normalizedType
             ? [
                 {
@@ -2278,9 +2251,7 @@ export class AzureWorkItemService {
   ): Prisma.AzureWorkItemWhereInput {
     const and:
       Prisma.AzureWorkItemWhereInput[] =
-      [
-        azureOperationalScope(),
-      ];
+      [];
 
     const type =
       this.normalizeString(
