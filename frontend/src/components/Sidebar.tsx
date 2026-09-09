@@ -27,6 +27,7 @@ import {
   GroupsOutlined,
   InfoOutlined,
   Inventory2Outlined,
+  FactCheckOutlined,
   LogoutOutlined,
   ManageAccountsOutlined,
   PersonOutlined,
@@ -35,6 +36,7 @@ import {
   TrendingUpOutlined,
   UploadFileOutlined,
   WarningAmberOutlined,
+  WorkspacesOutlined,
 } from "@mui/icons-material";
 
 import {
@@ -253,6 +255,11 @@ export function Sidebar() {
             <DashboardOutlined fontSize="small" />,
         },
         {
+          label: "Minha Operação",
+          path: "/minha-operacao",
+          icon: <WorkspacesOutlined fontSize="small" />,
+        },
+        {
           label:
             "Tickets",
           path:
@@ -389,6 +396,11 @@ export function Sidebar() {
               "/relatorios",
             icon:
               <AssessmentOutlined fontSize="small" />,
+          },
+          {
+            label: "Qualidade dos Dados",
+            path: "/qualidade-dados",
+            icon: <FactCheckOutlined fontSize="small" />,
           },
           {
             label:
