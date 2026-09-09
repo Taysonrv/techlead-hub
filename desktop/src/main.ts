@@ -677,6 +677,7 @@ function registerIpcHandlers() {
 
   ipcMain.handle("configuration:get", () => {
     const azure = resolveAzureConfiguration();
+    const email = resolveEmailConfiguration();
 
     return {
       databaseConfigured: Boolean(readSecureValue("databaseUrl") || process.env.DATABASE_URL),
@@ -684,6 +685,19 @@ function registerIpcHandlers() {
       project: azure.project,
       wiki: azure.wiki,
       patConfigured: Boolean(azure.pat),
+      smtpHost: email.host,
+      smtpPort: email.port,
+      smtpSecure: email.secure === "true",
+      smtpUser: email.user,
+      smtpFrom: email.from,
+      smtpPasswordConfigured: Boolean(email.password),
+      emailConfigured: Boolean(
+        email.host &&
+        email.port &&
+        email.user &&
+        email.password &&
+        email.from
+      ),
     };
   });
 
@@ -775,6 +789,13 @@ type SecureConfig = {
   azureProject?: string;
   azureWiki?: string;
   azurePat?: string;
+
+  smtpHost?: string;
+  smtpPort?: string;
+  smtpSecure?: string;
+  smtpUser?: string;
+  smtpPassword?: string;
+  smtpFrom?: string;
 };
 
 type SecureConfigKey =
@@ -783,7 +804,13 @@ type SecureConfigKey =
   | "azureOrganization"
   | "azureProject"
   | "azureWiki"
-  | "azurePat";
+  | "azurePat"
+  | "smtpHost"
+  | "smtpPort"
+  | "smtpSecure"
+  | "smtpUser"
+  | "smtpPassword"
+  | "smtpFrom";
 
 function parseEnvValue(
   content: string,
@@ -1101,6 +1128,31 @@ function readSecureConfig():
       azurePat:
         typeof parsed.azurePat === "string"
           ? parsed.azurePat
+          : undefined,
+
+      smtpHost:
+        typeof parsed.smtpHost === "string"
+          ? parsed.smtpHost
+          : undefined,
+      smtpPort:
+        typeof parsed.smtpPort === "string"
+          ? parsed.smtpPort
+          : undefined,
+      smtpSecure:
+        typeof parsed.smtpSecure === "string"
+          ? parsed.smtpSecure
+          : undefined,
+      smtpUser:
+        typeof parsed.smtpUser === "string"
+          ? parsed.smtpUser
+          : undefined,
+      smtpPassword:
+        typeof parsed.smtpPassword === "string"
+          ? parsed.smtpPassword
+          : undefined,
+      smtpFrom:
+        typeof parsed.smtpFrom === "string"
+          ? parsed.smtpFrom
           : undefined,
     };
   } catch (error) {
@@ -1430,6 +1482,12 @@ type AzureConfiguration = {
   project: string;
   wiki: string;
   pat: string;
+  smtpHost: string;
+  smtpPort: string;
+  smtpSecure: string;
+  smtpUser: string;
+  smtpPassword: string;
+  smtpFrom: string;
 };
 
 function resolveAzureConfiguration(): AzureConfiguration {
@@ -1453,12 +1511,50 @@ function resolveAzureConfiguration(): AzureConfiguration {
   };
 }
 
+type EmailConfiguration = {
+  host: string;
+  port: string;
+  secure: string;
+  user: string;
+  password: string;
+  from: string;
+};
+
+function resolveEmailConfiguration(): EmailConfiguration {
+  const read = (
+    envName: string,
+    secureKey: SecureConfigKey,
+  ) =>
+    process.env[envName]?.trim() ||
+    readSecureValue(secureKey) ||
+    migrateLegacyEnvValue(envName, secureKey) ||
+    (!app.isPackaged
+      ? readEnvValueFromFile(getDevelopmentEnvPath(), envName)
+      : null) ||
+    "";
+
+  return {
+    host: read("SMTP_HOST", "smtpHost"),
+    port: read("SMTP_PORT", "smtpPort") || "587",
+    secure: read("SMTP_SECURE", "smtpSecure") || "false",
+    user: read("SMTP_USER", "smtpUser"),
+    password: read("SMTP_PASSWORD", "smtpPassword"),
+    from: read("SMTP_FROM", "smtpFrom"),
+  };
+}
+
 type ConfigurationInput = {
   databaseUrl?: unknown;
   organization?: unknown;
   project?: unknown;
   wiki?: unknown;
   pat?: unknown;
+  smtpHost?: unknown;
+  smtpPort?: unknown;
+  smtpSecure?: unknown;
+  smtpUser?: unknown;
+  smtpPassword?: unknown;
+  smtpFrom?: unknown;
 };
 
 type ConfigurationValues = {
@@ -1484,6 +1580,12 @@ function normalizeConfigurationInput(input: unknown): ConfigurationValues {
     project: text(value.project),
     wiki: text(value.wiki),
     pat: text(value.pat),
+    smtpHost: text(value.smtpHost),
+    smtpPort: text(value.smtpPort) || "587",
+    smtpSecure: text(value.smtpSecure) || "false",
+    smtpUser: text(value.smtpUser),
+    smtpPassword: text(value.smtpPassword),
+    smtpFrom: text(value.smtpFrom),
   };
 }
 
@@ -1498,6 +1600,11 @@ function saveApplicationConfiguration(input: unknown) {
 
   const existingAzure = resolveAzureConfiguration();
   const pat = value.pat || existingAzure.pat;
+
+  const existingEmail = resolveEmailConfiguration();
+  const smtpPassword =
+    value.smtpPassword ||
+    existingEmail.password;
 
   if (
     !databaseUrl ||
@@ -1514,6 +1621,29 @@ function saveApplicationConfiguration(input: unknown) {
     throw new Error("Preencha Organização, Projeto, Wiki e PAT, ou deixe todos os campos do Azure vazios.");
   }
 
+  const emailFields = [
+    value.smtpHost,
+    value.smtpPort,
+    value.smtpUser,
+    smtpPassword,
+    value.smtpFrom,
+  ];
+  const hasSomeEmail = emailFields.some(Boolean);
+  const hasAllEmail = emailFields.every(Boolean);
+  const smtpPort = Number(value.smtpPort);
+
+  if (
+    hasSomeEmail &&
+    (
+      !hasAllEmail ||
+      !Number.isInteger(smtpPort) ||
+      smtpPort < 1 ||
+      smtpPort > 65535
+    )
+  ) {
+    throw new Error("Preencha servidor, porta, usuário, senha e remetente do e-mail com valores válidos.");
+  }
+
   saveSecureValue("databaseUrl", databaseUrl);
 
   if (hasAllAzure) {
@@ -1521,6 +1651,15 @@ function saveApplicationConfiguration(input: unknown) {
     saveSecureValue("azureProject", value.project);
     saveSecureValue("azureWiki", value.wiki);
     saveSecureValue("azurePat", pat);
+  }
+
+  if (hasAllEmail) {
+    saveSecureValue("smtpHost", value.smtpHost);
+    saveSecureValue("smtpPort", value.smtpPort);
+    saveSecureValue("smtpSecure", value.smtpSecure);
+    saveSecureValue("smtpUser", value.smtpUser);
+    saveSecureValue("smtpPassword", smtpPassword);
+    saveSecureValue("smtpFrom", value.smtpFrom);
   }
 
   return { success: true, restartRequired: Boolean(mainWindow) };
@@ -1853,6 +1992,7 @@ function startBackend(
   databaseUrl: string,
   jwtSecret: string,
   azure: AzureConfiguration,
+  email: EmailConfiguration,
 ) {
   if (backendProcess) {
     return;
@@ -1912,6 +2052,21 @@ function startBackend(
 
           AZURE_DEVOPS_PAT:
             azure.pat,
+
+          SMTP_HOST:
+            email.host,
+          SMTP_PORT:
+            email.port,
+          SMTP_SECURE:
+            email.secure,
+          SMTP_USER:
+            email.user,
+          SMTP_PASSWORD:
+            email.password,
+          SMTP_FROM:
+            email.from,
+          PASSWORD_RESET_URL:
+            `http://localhost:${BACKEND_PORT}/login`,
 
           ELECTRON_RUN_AS_NODE:
             "1",
@@ -2522,6 +2677,7 @@ async function bootstrap() {
     databaseUrl,
     jwtSecret,
     resolveAzureConfiguration(),
+    resolveEmailConfiguration(),
   );
 
   const backendOnline =
