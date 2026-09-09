@@ -62,7 +62,8 @@ type ScreenMode =
   | "LOGIN"
   | "REGISTER"
   | "REGISTER_SUCCESS"
-  | "FORGOT_PASSWORD";
+  | "FORGOT_PASSWORD"
+  | "RESET_PASSWORD";
 
 /* =========================================================
    COMPONENT
@@ -111,6 +112,18 @@ export function Login() {
   const [
     recoveryEmail,
     setRecoveryEmail,
+  ] =
+    useState("");
+
+  const [
+    resetPassword,
+    setResetPassword,
+  ] =
+    useState("");
+
+  const [
+    resetConfirmPassword,
+    setResetConfirmPassword,
   ] =
     useState("");
 
@@ -168,6 +181,81 @@ export function Login() {
         getErrorMessage(
           requestError,
           "Não foi possível solicitar a recuperação da senha."
+        )
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleResetPassword(
+    event:
+      FormEvent<HTMLFormElement>
+  ) {
+    event.preventDefault();
+
+    if (!resetToken) {
+      setError(
+        "O link de recuperação é inválido."
+      );
+      return;
+    }
+
+    if (
+      resetPassword.length <
+      10
+    ) {
+      setError(
+        "A nova senha deve possuir pelo menos 10 caracteres."
+      );
+      return;
+    }
+
+    if (
+      resetPassword !==
+      resetConfirmPassword
+    ) {
+      setError(
+        "A confirmação da senha não confere."
+      );
+      return;
+    }
+
+    setSubmitting(true);
+    setError(null);
+
+    try {
+      const response =
+        await api.post<{
+          message: string;
+        }>(
+          "/auth/reset-password",
+          {
+            token:
+              resetToken,
+            newPassword:
+              resetPassword,
+            confirmPassword:
+              resetConfirmPassword,
+          }
+        );
+
+      setRecoverySuccess(
+        response.data.message
+      );
+      setResetPassword(
+        ""
+      );
+      setResetConfirmPassword(
+        ""
+      );
+    } catch (
+      requestError
+    ) {
+      setError(
+        getErrorMessage(
+          requestError,
+          "Não foi possível redefinir a senha."
         )
       );
     } finally {
@@ -254,6 +342,26 @@ export function Login() {
       "/login"
       ? state.from
       : "/";
+
+  const resetToken =
+    new URLSearchParams(
+      location.search
+    ).get(
+      "resetToken"
+    ) ?? "";
+
+  useEffect(
+    () => {
+      if (resetToken) {
+        setMode(
+          "RESET_PASSWORD"
+        );
+      }
+    },
+    [
+      resetToken,
+    ]
+  );
 
   /* =======================================================
      LIMPAR ERRO
@@ -1069,6 +1177,55 @@ export function Login() {
               )}
 
               {mode ===
+                "RESET_PASSWORD" && (
+                <ResetPasswordForm
+                  password={
+                    resetPassword
+                  }
+                  setPassword={
+                    setResetPassword
+                  }
+                  confirmPassword={
+                    resetConfirmPassword
+                  }
+                  setConfirmPassword={
+                    setResetConfirmPassword
+                  }
+                  showPassword={
+                    showPassword
+                  }
+                  setShowPassword={
+                    setShowPassword
+                  }
+                  submitting={
+                    submitting
+                  }
+                  error={error}
+                  success={
+                    recoverySuccess
+                  }
+                  onSubmit={
+                    handleResetPassword
+                  }
+                  onBack={() => {
+                    navigate(
+                      "/login",
+                      {
+                        replace:
+                          true,
+                      }
+                    );
+                    setRecoverySuccess(
+                      null
+                    );
+                    setMode(
+                      "LOGIN"
+                    );
+                  }}
+                />
+              )}
+
+              {mode ===
                 "FORGOT_PASSWORD" && (
                 <ForgotPasswordForm
                   email={
@@ -1392,6 +1549,161 @@ function LoginForm({
       >
         Novos acessos precisam ser aprovados por um administrador.
       </Typography>
+    </>
+  );
+}
+
+/* =========================================================
+   REDEFINIÇÃO DE SENHA
+========================================================= */
+
+function ResetPasswordForm({
+  password,
+  setPassword,
+  confirmPassword,
+  setConfirmPassword,
+  showPassword,
+  setShowPassword,
+  submitting,
+  error,
+  success,
+  onSubmit,
+  onBack,
+}: {
+  password: string;
+  setPassword: (value: string) => void;
+  confirmPassword: string;
+  setConfirmPassword: (value: string) => void;
+  showPassword: boolean;
+  setShowPassword: (value: boolean) => void;
+  submitting: boolean;
+  error: string | null;
+  success: string | null;
+  onSubmit: (
+    event:
+      FormEvent<HTMLFormElement>
+  ) => void;
+  onBack: () => void;
+}) {
+  return (
+    <>
+      <Typography
+        variant="h5"
+        sx={{
+          fontWeight: 800,
+        }}
+      >
+        Criar nova senha
+      </Typography>
+
+      <Typography
+        variant="body2"
+        color="text.secondary"
+        sx={{
+          mt: 0.75,
+          mb: 3,
+        }}
+      >
+        Defina uma senha com pelo menos 10 caracteres.
+      </Typography>
+
+      {error && (
+        <Alert
+          severity="error"
+          sx={{
+            mb: 2,
+          }}
+        >
+          {error}
+        </Alert>
+      )}
+
+      {success ? (
+        <Stack
+          spacing={2}
+        >
+          <Alert severity="success">
+            {success}
+          </Alert>
+
+          <Button
+            variant="contained"
+            onClick={onBack}
+            sx={primaryButtonSx}
+          >
+            Voltar ao login
+          </Button>
+        </Stack>
+      ) : (
+        <Box
+          component="form"
+          onSubmit={onSubmit}
+        >
+          <PasswordField
+            label="Nova senha"
+            value={password}
+            setValue={
+              setPassword
+            }
+            visible={
+              showPassword
+            }
+            setVisible={
+              setShowPassword
+            }
+            disabled={
+              submitting
+            }
+            autoComplete="new-password"
+          />
+
+          <PasswordField
+            label="Confirmar nova senha"
+            value={
+              confirmPassword
+            }
+            setValue={
+              setConfirmPassword
+            }
+            visible={
+              showPassword
+            }
+            setVisible={
+              setShowPassword
+            }
+            disabled={
+              submitting
+            }
+            autoComplete="new-password"
+            sx={{
+              mt: 2,
+            }}
+          />
+
+          <Button
+            type="submit"
+            variant="contained"
+            fullWidth
+            size="large"
+            disabled={
+              submitting
+            }
+            sx={{
+              ...primaryButtonSx,
+              mt: 2,
+            }}
+          >
+            {submitting
+              ? (
+                <CircularProgress
+                  size={21}
+                  color="inherit"
+                />
+              )
+              : "Redefinir senha"}
+          </Button>
+        </Box>
+      )}
     </>
   );
 }
