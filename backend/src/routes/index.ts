@@ -48,6 +48,10 @@ import {
   notificationRoutes,
 } from "./notification.routes";
 
+import {
+  workspaceRoutes,
+} from "./workspace.routes";
+
 /* =========================================================
    ROUTER
 ========================================================= */
@@ -202,6 +206,11 @@ routes.use(
 routes.use(
   "/api/notifications",
   notificationRoutes,
+);
+
+routes.use(
+  "/api/workspace",
+  workspaceRoutes,
 );
 
 /* =========================================================
