@@ -101,7 +101,8 @@ function Stack(
 
 type AzureWorkItemType =
   | "Correção Clientes"
-  | "Evolução";
+  | "Evolução"
+  | "APOIO";
 
 type NullableBoolean =
   | boolean
@@ -1384,15 +1385,30 @@ export function AzureWorkItems({
     type ===
     "Correção Clientes";
 
+  const isSupport =
+    type ===
+    "APOIO";
+
   const title =
     isCorrection
       ? "Correções"
-      : "Evoluções";
+      : isSupport
+        ? "Apoios"
+        : "Evoluções";
+
+  const itemLabel =
+    isCorrection
+      ? "correções"
+      : isSupport
+        ? "apoios"
+        : "evoluções";
 
   const subtitle =
     isCorrection
       ? "Visão operacional e gerencial das correções do SIMER sincronizadas com o Azure DevOps."
-      : "Visão operacional e gerencial das evoluções do SIMER sincronizadas com o Azure DevOps.";
+      : isSupport
+        ? "Visão operacional e gerencial dos APOIOs vinculados aos atendimentos do Movidesk."
+        : "Visão operacional e gerencial das evoluções do SIMER sincronizadas com o Azure DevOps.";
 
   /* =======================================================
      CARREGAMENTO
@@ -1705,9 +1721,7 @@ export function AzureWorkItems({
           key:
             "all",
           label:
-            isCorrection
-              ? "Correções"
-              : "Evoluções",
+            title,
           value:
             summary?.total ??
             0,
@@ -1719,7 +1733,7 @@ export function AzureWorkItems({
                 ? "Correções"
                 : "Evoluções",
             summary:
-              `Quantidade total de ${isCorrection ? "correções" : "evoluções"} disponíveis no banco local para o recorte atual.`,
+              `Quantidade total de ${itemLabel} disponíveis no banco local para o recorte atual.`,
             calculation:
               "Contagem dos Work Items sincronizados do tipo selecionado.",
             source:
@@ -1734,7 +1748,9 @@ export function AzureWorkItems({
           icon:
             isCorrection
               ? <BugReportOutlined />
-              : <TimelineOutlined />,
+              : isSupport
+                ? <AssignmentOutlined />
+                : <TimelineOutlined />,
           severity:
             "default",
         },
@@ -1873,7 +1889,10 @@ export function AzureWorkItems({
       ],
       [
         isCorrection,
+        isSupport,
+        itemLabel,
         summary,
+        title,
       ],
     );
 
