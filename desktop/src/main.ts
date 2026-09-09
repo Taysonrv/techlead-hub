@@ -1599,7 +1599,18 @@ function saveApplicationConfiguration(input: unknown) {
     "";
 
   const existingAzure = resolveAzureConfiguration();
-  const pat = value.pat || existingAzure.pat;
+  const organization =
+    value.organization ||
+    existingAzure.organization;
+  const project =
+    value.project ||
+    existingAzure.project;
+  const wiki =
+    value.wiki ||
+    existingAzure.wiki;
+  const pat =
+    value.pat ||
+    existingAzure.pat;
 
   const existingEmail = resolveEmailConfiguration();
   const smtpPassword =
@@ -1613,7 +1624,7 @@ function saveApplicationConfiguration(input: unknown) {
     throw new Error("Informe uma DATABASE_URL PostgreSQL válida.");
   }
 
-  const azureFields = [value.organization, value.project, value.wiki, pat];
+  const azureFields = [organization, project, wiki, pat];
   const hasSomeAzure = azureFields.some(Boolean);
   const hasAllAzure = azureFields.every(Boolean);
 
@@ -1647,9 +1658,9 @@ function saveApplicationConfiguration(input: unknown) {
   saveSecureValue("databaseUrl", databaseUrl);
 
   if (hasAllAzure) {
-    saveSecureValue("azureOrganization", value.organization);
-    saveSecureValue("azureProject", value.project);
-    saveSecureValue("azureWiki", value.wiki);
+    saveSecureValue("azureOrganization", organization);
+    saveSecureValue("azureProject", project);
+    saveSecureValue("azureWiki", wiki);
     saveSecureValue("azurePat", pat);
   }
 
