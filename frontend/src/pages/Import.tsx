@@ -27,6 +27,10 @@ import {
 
 import { api } from "../services/api";
 
+import {
+  SyncHistory,
+} from "../components/SyncHistory";
+
 /* =========================================================
    TIPOS - MOVIDESK
 ========================================================= */
@@ -535,6 +539,12 @@ export function Import() {
           sincronização automática do Azure DevOps.
         </Typography>
       </Box>
+
+      {/* =====================================================
+          HISTÓRICO CONSOLIDADO
+      ===================================================== */}
+
+      <SyncHistory />
 
       {/* =====================================================
           AZURE DEVOPS
