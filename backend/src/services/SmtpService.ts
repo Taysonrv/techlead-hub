@@ -223,6 +223,11 @@ async function sendMail(
       [354]
     );
 
+    const dataResponse =
+      reader.expect(
+        [250]
+      );
+
     socket.write(
       `${buildMimeMessage(
         configuration.from,
@@ -230,9 +235,7 @@ async function sendMail(
       )}\r\n.\r\n`
     );
 
-    await reader.expect(
-      [250]
-    );
+    await dataResponse;
 
     await command(
       socket,
@@ -481,12 +484,16 @@ async function command(
   expected:
     number[]
 ) {
+  const response =
+    reader.expect(
+      expected
+    );
+
   socket.write(
     `${value}\r\n`
   );
-  return reader.expect(
-    expected
-  );
+
+  return response;
 }
 
 function buildMimeMessage(
