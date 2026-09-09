@@ -281,6 +281,20 @@ export class AzureWorkItemService {
           this.relationWorkItemSelect(),
       });
 
+    const history = await prisma.$queryRaw<Array<{
+      id: number;
+      field: string;
+      oldValue: string | null;
+      newValue: string | null;
+      changedAt: Date;
+    }>>`
+      SELECT "id", "field", "oldValue", "newValue", "changedAt"
+      FROM "AzureWorkItemHistory"
+      WHERE "workItemId" = ${workItem.id}
+      ORDER BY "changedAt" DESC, "id" DESC
+      LIMIT 100
+    `;
+
     return {
       ...workItem,
 
@@ -340,6 +354,7 @@ export class AzureWorkItemService {
         parent,
         children,
       },
+      history,
     };
   }
 
