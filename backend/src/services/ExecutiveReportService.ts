@@ -971,9 +971,11 @@ export class ExecutiveReportService {
 
     const pie =
       workbook.addImage({
-        buffer:
+        base64:
           createPieChartPng(
             values,
+          ).toString(
+            "base64",
           ),
         extension:
           "png",
@@ -981,9 +983,11 @@ export class ExecutiveReportService {
 
     const bars =
       workbook.addImage({
-        buffer:
+        base64:
           createBarChartPng(
             values,
+          ).toString(
+            "base64",
           ),
         extension:
           "png",
