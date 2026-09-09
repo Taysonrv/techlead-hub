@@ -307,6 +307,17 @@ function App() {
           />
 
           <Route
+            path="/apoios"
+            element={
+              <AuthenticatedLayout>
+                <AzureWorkItems
+                  type="APOIO"
+                />
+              </AuthenticatedLayout>
+            }
+          />
+
+          <Route
             path="/versoes"
             element={
               <AuthenticatedLayout>
