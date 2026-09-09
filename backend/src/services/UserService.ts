@@ -375,6 +375,100 @@ export class UserService {
   }
 
   /* =======================================================
+     ALTERAR PERFIL DE ACESSO
+  ======================================================= */
+
+  async updateUserRole(
+    adminUserId: number,
+    targetUserId: number,
+    role: string
+  ) {
+    await this.ensureAdmin(adminUserId);
+
+    const allowedRoles = [
+      "ADMIN",
+      "COORDENADOR",
+      "ANALISTA",
+    ] as const;
+
+    if (
+      !allowedRoles.includes(
+        role as typeof allowedRoles[number]
+      )
+    ) {
+      throw new AuthError(
+        "Perfil de acesso inválido.",
+        400
+      );
+    }
+
+    const targetUser =
+      await this.getTargetUser(targetUserId);
+
+    if (
+      targetUser.approvalStatus !== "APPROVED" ||
+      !targetUser.active
+    ) {
+      throw new AuthError(
+        "Somente usuários aprovados e ativos podem ter o perfil alterado.",
+        409
+      );
+    }
+
+    if (
+      targetUser.id === adminUserId &&
+      role !== "ADMIN"
+    ) {
+      throw new AuthError(
+        "Você não pode remover o próprio acesso administrativo.",
+        400
+      );
+    }
+
+    if (
+      targetUser.role === "ADMIN" &&
+      role !== "ADMIN"
+    ) {
+      const activeAdminCount =
+        await prisma.user.count({
+          where: {
+            role: "ADMIN",
+            active: true,
+            approvalStatus: "APPROVED",
+          },
+        });
+
+      if (activeAdminCount <= 1) {
+        throw new AuthError(
+          "O sistema deve manter pelo menos um administrador ativo.",
+          409
+        );
+      }
+    }
+
+    if (targetUser.role === role) {
+      throw new AuthError(
+        "O usuário já possui este perfil de acesso.",
+        409
+      );
+    }
+
+    return prisma.user.update({
+      where: {
+        id: targetUserId,
+      },
+      data: {
+        role:
+          role as
+            | "ADMIN"
+            | "COORDENADOR"
+            | "ANALISTA",
+      },
+      select: USER_ADMIN_SELECT,
+    });
+  }
+
+  /* =======================================================
      BUSCA USUÁRIO ALVO
   ======================================================= */
 
