@@ -57,20 +57,48 @@ export function ticketOperationalScope():
 }
 
 /**
- * No Azure o Assigned To pode ser um desenvolvedor. Por isso o
- * escopo global limita o cliente, sem limitar o responsável técnico.
+ * No Azure, Cliente Principal pode representar o cliente final da
+ * ocorrência, e Assigned To normalmente é um desenvolvedor.
+ * O campo confiável para delimitar a origem da demanda é Created By.
  */
 export function azureOperationalScope():
   Prisma.AzureWorkItemWhereInput {
   return {
-    client: {
+    createdByName: {
       in: [
-        ...SIMER_CLIENTS,
+        ...SUPPORT_ANALYSTS,
       ],
       mode:
         "insensitive",
     },
   };
+}
+
+export function isSupportAnalyst(
+  value:
+    string |
+    null |
+    undefined,
+) {
+  const normalized =
+    value
+      ?.trim()
+      .toLocaleUpperCase(
+        "pt-BR",
+      );
+
+  return Boolean(
+    normalized &&
+    SUPPORT_ANALYSTS.some(
+      (
+        analyst,
+      ) =>
+        analyst.toLocaleUpperCase(
+          "pt-BR",
+        ) ===
+        normalized,
+    ),
+  );
 }
 
 export function isSimerClient(
