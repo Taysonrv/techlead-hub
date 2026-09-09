@@ -13,8 +13,13 @@ const controller =
   new ReportController();
 
 reportRoutes.get(
-  "/executive.xlsx",
-  controller.executiveExcel,
+  "/:scope.xlsx",
+  controller.excelFile,
+);
+
+reportRoutes.get(
+  "/:scope.pdf",
+  controller.pdfFile,
 );
 
 export {
