@@ -1729,9 +1729,7 @@ export function AzureWorkItems({
             "Total sincronizado no recorte",
           info: {
             title:
-              isCorrection
-                ? "Correções"
-                : "Evoluções",
+              title,
             summary:
               `Quantidade total de ${itemLabel} disponíveis no banco local para o recorte atual.`,
             calculation:
