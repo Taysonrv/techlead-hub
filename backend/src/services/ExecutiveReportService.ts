@@ -906,7 +906,9 @@ export class ExecutiveReportService {
     };
 
     cell.worksheet.getRow(
-      cell.row,
+      Number(
+        cell.row,
+      ),
     ).height =
       30;
   }
