@@ -610,9 +610,12 @@ function escapeHtml(
           "&#039;",
       };
 
-      return entities[
+      return (
+        entities[
+          character
+        ] ??
         character
-      ];
+      );
     }
   );
 }
