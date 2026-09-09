@@ -68,6 +68,10 @@ import {
   aliareColors,
 } from "../theme/theme";
 
+import {
+  NotificationCenter,
+} from "./NotificationCenter";
+
 /* =========================================================
    CONFIGURAÇÃO
 ========================================================= */
@@ -870,8 +874,13 @@ export function Sidebar() {
             right: 20,
             zIndex: (theme) =>
               theme.zIndex.drawer + 1,
+            display: "flex",
+            alignItems: "center",
+            gap: 1,
           }}
         >
+          <NotificationCenter />
+
           <Button
             id="profile-menu-button"
             aria-controls={
