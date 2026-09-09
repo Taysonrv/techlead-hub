@@ -29,6 +29,7 @@ import {
   LogoutOutlined,
   ManageAccountsOutlined,
   PersonOutlined,
+  SupportAgentOutlined,
   TrendingUpOutlined,
   UploadFileOutlined,
   WarningAmberOutlined,
@@ -314,6 +315,14 @@ export function Sidebar() {
         },
         {
           label:
+            "Apoios",
+          path:
+            "/apoios",
+          icon:
+            <SupportAgentOutlined fontSize="small" />,
+        },
+        {
+          label:
             "Versões",
           path:
             "/versoes",
@@ -351,7 +360,7 @@ export function Sidebar() {
         items.push(
           {
             label:
-              "Importar Dados",
+              "Dados e Sincronizações",
             path:
               "/importar",
             icon:
