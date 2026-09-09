@@ -6,7 +6,6 @@ import {
   CardContent,
   Chip,
   CircularProgress,
-  Divider,
   Stack,
   TextField,
   Typography,
@@ -14,9 +13,14 @@ import {
 
 import {
   AssessmentOutlined,
+  BarChartOutlined,
+  BugReportOutlined,
+  BusinessOutlined,
   DownloadOutlined,
+  GroupsOutlined,
   PictureAsPdfOutlined,
-  TableViewOutlined,
+  QueryStatsOutlined,
+  SellOutlined,
 } from "@mui/icons-material";
 
 import {
@@ -24,207 +28,296 @@ import {
   useState,
 } from "react";
 
+import axios from "axios";
+
 import {
   api,
 } from "../services/api";
 
+import {
+  aliareColors,
+} from "../theme/theme";
+
+type ReportScope =
+  | "executive"
+  | "analysts"
+  | "sla"
+  | "clients"
+  | "development"
+  | "versions";
+
+type ReportFormat =
+  | "xlsx"
+  | "pdf";
+
+type ReportDefinition = {
+  scope: ReportScope;
+  title: string;
+  description: string;
+  contents: string;
+  icon:
+    typeof AssessmentOutlined;
+};
+
+const REPORTS:
+  ReportDefinition[] = [
+  {
+    scope:
+      "executive",
+    title:
+      "Relatório Executivo",
+    description:
+      "Visão consolidada da operação para apresentação à coordenação e clientes.",
+    contents:
+      "Atendimentos, SLA, analistas, clientes, categorias, desenvolvimento, estados Azure e versões.",
+    icon:
+      AssessmentOutlined,
+  },
+  {
+    scope:
+      "analysts",
+    title:
+      "Analistas e Produtividade",
+    description:
+      "Distribuição do volume de atendimento entre os responsáveis.",
+    contents:
+      "Ranking de analistas, participação no volume e situação dos atendimentos.",
+    icon:
+      GroupsOutlined,
+  },
+  {
+    scope:
+      "sla",
+    title:
+      "SLA e Atendimento",
+    description:
+      "Cumprimento de prazo e composição da carteira de atendimentos.",
+    contents:
+      "Dentro e fora do prazo, não medidos, situação e categorias.",
+    icon:
+      QueryStatsOutlined,
+  },
+  {
+    scope:
+      "clients",
+    title:
+      "Clientes",
+    description:
+      "Concentração, volume e composição dos atendimentos por cliente.",
+    contents:
+      "Ranking de clientes, categorias relacionadas e situação dos tickets.",
+    icon:
+      BusinessOutlined,
+  },
+  {
+    scope:
+      "development",
+    title:
+      "Correções, Evoluções e Apoios",
+    description:
+      "Visão gerencial das demandas encaminhadas ao desenvolvimento.",
+    contents:
+      "Correções, evoluções, apoios, priorizações, bloqueios, estados e versões.",
+    icon:
+      BugReportOutlined,
+  },
+  {
+    scope:
+      "versions",
+    title:
+      "Versões",
+    description:
+      "Distribuição das entregas e Work Items associados às versões.",
+    contents:
+      "Ranking de versões, estados Azure e composição das demandas.",
+    icon:
+      SellOutlined,
+  },
+];
+
 export function Reports() {
-  const initialPeriod =
+  const today =
     useMemo(
-      () => ({
-        from:
-          dateInput(
-            addDays(
-              new Date(),
-              -29,
-            ),
-          ),
-        to:
-          dateInput(
-            new Date(),
-          ),
-      }),
-      [],
+      () =>
+        formatInputDate(
+          new Date()
+        ),
+      []
     );
 
-  const [from, setFrom] =
+  const initialFrom =
+    useMemo(
+      () => {
+        const date =
+          new Date();
+        date.setDate(
+          date.getDate() -
+            29
+        );
+        return formatInputDate(
+          date
+        );
+      },
+      []
+    );
+
+  const [
+    from,
+    setFrom,
+  ] =
     useState(
-      initialPeriod.from,
+      initialFrom
     );
-  const [to, setTo] =
+
+  const [
+    to,
+    setTo,
+  ] =
     useState(
-      initialPeriod.to,
+      today
     );
-  const [downloading, setDownloading] =
-    useState(false);
-  const [error, setError] =
-    useState<string | null>(null);
-  const [success, setSuccess] =
-    useState<string | null>(null);
 
-  const invalidPeriod =
-    !from ||
-    !to ||
-    from >
-      to;
+  const [
+    downloading,
+    setDownloading,
+  ] =
+    useState<string | null>(
+      null
+    );
 
-  async function downloadExecutiveExcel() {
+  const [
+    error,
+    setError,
+  ] =
+    useState<string | null>(
+      null
+    );
+
+  async function download(
+    report:
+      ReportDefinition,
+    format:
+      ReportFormat,
+  ) {
+    const key =
+      `${report.scope}-${format}`;
+
     if (
-      invalidPeriod ||
       downloading
     ) {
       return;
     }
 
-    try {
-      setDownloading(true);
-      setError(null);
-      setSuccess(null);
+    if (
+      !from ||
+      !to ||
+      from >
+        to
+    ) {
+      setError(
+        "Informe um período válido."
+      );
+      return;
+    }
 
+    setDownloading(
+      key
+    );
+    setError(
+      null
+    );
+
+    try {
       const response =
-        await api.get<ArrayBuffer>(
-          "/reports/executive.xlsx",
+        await api.get<Blob>(
+          `/reports/${report.scope}.${format}`,
           {
             params: {
               from,
               to,
             },
             responseType:
-              "arraybuffer",
-            timeout:
-              0,
-          },
+              "blob",
+          }
         );
 
-      const blob =
-        new Blob(
-          [
-            response.data,
-          ],
-          {
-            type:
-              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-          },
-        );
-
-      const fileName =
+      const disposition =
         response.headers[
           "content-disposition"
-        ]
-          ?.match(
-            /filename="?([^"]+)"?/i,
-          )
-          ?.[1] ??
-        `techlead-hub-executivo-${from}-${to}.xlsx`;
+        ] as
+          | string
+          | undefined;
+
+      const fileName =
+        extractFileName(
+          disposition
+        ) ||
+        `techlead-hub-${report.scope}-${from}-${to}.${format}`;
 
       const url =
         URL.createObjectURL(
-          blob,
+          response.data
         );
 
       const anchor =
         document.createElement(
-          "a",
+          "a"
         );
 
       anchor.href =
         url;
       anchor.download =
         fileName;
-
       document.body.appendChild(
-        anchor,
+        anchor
       );
-
       anchor.click();
       anchor.remove();
 
       URL.revokeObjectURL(
-        url,
-      );
-
-      setSuccess(
-        "Relatório Executivo gerado com sucesso.",
+        url
       );
     } catch (
-      downloadError:
-        unknown
+      downloadError
     ) {
-      console.error(
-        "[reports]",
-        downloadError,
-      );
-
       setError(
-        await apiErrorMessage(
-          downloadError,
-        ),
+        await reportErrorMessage(
+          downloadError
+        )
       );
     } finally {
-      setDownloading(false);
+      setDownloading(
+        null
+      );
     }
   }
 
   return (
-    <Box>
-      <Box
-        sx={{
-          mb:
-            2.5,
-        }}
-      >
+    <Stack
+      spacing={3}
+    >
+      <Box>
         <Typography
+          variant="h4"
           sx={{
             fontWeight:
-              800,
-            fontSize: {
-              xs:
-                "1.7rem",
-              md:
-                "1.9rem",
-              xl:
-                "2.1rem",
-            },
+              850,
+            letterSpacing:
+              "-0.035em",
           }}
         >
           Relatórios Gerenciais
         </Typography>
 
         <Typography
-          variant="body2"
           color="text.secondary"
           sx={{
-            mt:
-              0.25,
+            mt: 0.75,
           }}
         >
-          Gere análises executivas a partir dos dados sincronizados do Movidesk e Azure DevOps.
+          Gere análises executivas em Excel e PDF a partir dos dados sincronizados do Movidesk e Azure DevOps.
         </Typography>
       </Box>
-
-      {error && (
-        <Alert
-          severity="error"
-          sx={{
-            mb:
-              2,
-          }}
-        >
-          {error}
-        </Alert>
-      )}
-
-      {success && (
-        <Alert
-          severity="success"
-          sx={{
-            mb:
-              2,
-          }}
-        >
-          {success}
-        </Alert>
-      )}
 
       <Card
         elevation={0}
@@ -235,40 +328,28 @@ export function Reports() {
             "divider",
           borderRadius:
             2.5,
-          mb:
-            2.5,
         }}
       >
-        <CardContent
-          sx={{
-            p: {
-              xs:
-                2,
-              md:
-                2.5,
-            },
-          }}
-        >
+        <CardContent>
           <Typography
+            variant="h6"
             sx={{
               fontWeight:
                 800,
-              mb:
-                0.5,
             }}
           >
-            Período do relatório
+            Período dos relatórios
           </Typography>
 
           <Typography
             variant="body2"
             color="text.secondary"
             sx={{
-              mb:
-                2,
+              mt: 0.5,
+              mb: 2,
             }}
           >
-            O período utiliza a data de abertura dos tickets e a data de criação dos Work Items.
+            Tickets usam a data de abertura; Work Items usam a data de criação no Azure.
           </Typography>
 
           <Stack
@@ -281,17 +362,14 @@ export function Reports() {
             spacing={2}
           >
             <TextField
-              type="date"
               label="Data inicial"
+              type="date"
               value={
                 from
               }
-              onChange={(
-                event,
-              ) =>
+              onChange={(event) =>
                 setFrom(
-                  event.target
-                    .value,
+                  event.target.value
                 )
               }
               slotProps={{
@@ -299,44 +377,55 @@ export function Reports() {
                   shrink:
                     true,
                 },
+                htmlInput: {
+                  max:
+                    to ||
+                    today,
+                },
               }}
-              error={
-                invalidPeriod
-              }
             />
 
             <TextField
-              type="date"
               label="Data final"
+              type="date"
               value={
                 to
               }
-              onChange={(
-                event,
-              ) =>
+              onChange={(event) =>
                 setTo(
-                  event.target
-                    .value,
+                  event.target.value
                 )
               }
+              helperText="Máximo de 366 dias."
               slotProps={{
                 inputLabel: {
                   shrink:
                     true,
                 },
+                htmlInput: {
+                  min:
+                    from,
+                  max:
+                    today,
+                },
               }}
-              error={
-                invalidPeriod
-              }
-              helperText={
-                invalidPeriod
-                  ? "Informe um período válido."
-                  : "Máximo de 366 dias."
-              }
             />
           </Stack>
         </CardContent>
       </Card>
+
+      {error && (
+        <Alert
+          severity="error"
+          onClose={() =>
+            setError(
+              null
+            )
+          }
+        >
+          {error}
+        </Alert>
+      )}
 
       <Box
         sx={{
@@ -346,329 +435,367 @@ export function Reports() {
             xs:
               "1fr",
             lg:
-              "minmax(0, 1.4fr) minmax(280px, 0.6fr)",
+              "repeat(2, minmax(0, 1fr))",
           },
           gap:
             2.5,
         }}
       >
-        <Card
-          elevation={0}
-          sx={{
-            border:
-              "1px solid",
-            borderColor:
-              "divider",
-            borderRadius:
-              2.5,
-          }}
-        >
-          <CardContent
-            sx={{
-              p: {
-                xs:
-                  2,
-                md:
-                  2.5,
-              },
-            }}
-          >
-            <Stack
-              direction="row"
-              spacing={1.5}
-              sx={{
-                alignItems:
-                  "center",
-              }}
-            >
-              <Box
-                sx={{
-                  width:
-                    44,
-                  height:
-                    44,
-                  borderRadius:
-                    2,
-                  display:
-                    "grid",
-                  placeItems:
-                    "center",
-                  backgroundColor:
-                    "rgba(24,199,122,0.12)",
-                  color:
-                    "success.main",
-                }}
-              >
-                <AssessmentOutlined />
-              </Box>
-
-              <Box
-                sx={{
-                  flex:
-                    1,
-                }}
-              >
-                <Typography
-                  sx={{
-                    fontWeight:
-                      800,
-                    fontSize:
-                      "1.08rem",
-                  }}
-                >
-                  Relatório Executivo
-                </Typography>
-
-                <Typography
-                  variant="body2"
-                  color="text.secondary"
-                >
-                  Visão consolidada de atendimento, SLA, clientes, analistas e desenvolvimento.
-                </Typography>
-              </Box>
-
-              <Chip
-                size="small"
-                color="success"
-                variant="outlined"
-                label="Disponível"
-              />
-            </Stack>
-
-            <Divider
-              sx={{
-                my:
-                  2,
-              }}
+        {REPORTS.map(
+          (
+            report,
+          ) => (
+            <ReportCard
+              key={
+                report.scope
+              }
+              report={
+                report
+              }
+              downloading={
+                downloading
+              }
+              onDownload={
+                download
+              }
             />
-
-            <Typography
-              variant="body2"
-              color="text.secondary"
-            >
-              O arquivo contém Resumo Executivo, Analistas, Clientes, Categorias, Estados Azure e Versões.
-            </Typography>
-
-            <Stack
-              direction={{
-                xs:
-                  "column",
-                sm:
-                  "row",
-              }}
-              spacing={1.5}
-              sx={{
-                mt:
-                  2,
-              }}
-            >
-              <Button
-                variant="contained"
-                startIcon={
-                  downloading
-                    ? <CircularProgress size={16} color="inherit" />
-                    : <DownloadOutlined />
-                }
-                disabled={
-                  invalidPeriod ||
-                  downloading
-                }
-                onClick={() =>
-                  void downloadExecutiveExcel()
-                }
-              >
-                {downloading
-                  ? "Gerando..."
-                  : "Baixar Excel"}
-              </Button>
-            </Stack>
-          </CardContent>
-        </Card>
-
-        <Card
-          elevation={0}
-          sx={{
-            border:
-              "1px solid",
-            borderColor:
-              "divider",
-            borderRadius:
-              2.5,
-          }}
-        >
-          <CardContent
-            sx={{
-              p: {
-                xs:
-                  2,
-                md:
-                  2.5,
-              },
-            }}
-          >
-            <Typography
-              sx={{
-                fontWeight:
-                  800,
-                mb:
-                  1.5,
-              }}
-            >
-              Próximos relatórios
-            </Typography>
-
-            <Stack
-              spacing={1.25}
-            >
-              <Upcoming
-                icon={<TableViewOutlined />}
-                label="Analistas e Produtividade"
-              />
-              <Upcoming
-                icon={<TableViewOutlined />}
-                label="SLA e Atendimento"
-              />
-              <Upcoming
-                icon={<TableViewOutlined />}
-                label="Clientes"
-              />
-              <Upcoming
-                icon={<TableViewOutlined />}
-                label="Correções, Evoluções e Apoios"
-              />
-              <Upcoming
-                icon={<PictureAsPdfOutlined />}
-                label="Exportação em PDF"
-              />
-            </Stack>
-          </CardContent>
-        </Card>
+          )
+        )}
       </Box>
-    </Box>
-  );
-}
 
-function Upcoming({
-  icon,
-  label,
-}: {
-  icon:
-    React.ReactNode;
-  label:
-    string;
-}) {
-  return (
-    <Stack
-      direction="row"
-      spacing={1}
-      sx={{
-        alignItems:
-          "center",
-        color:
-          "text.secondary",
-      }}
-    >
-      {icon}
-
-      <Typography
-        variant="body2"
+      <Alert
+        severity="info"
+        icon={
+          <BarChartOutlined />
+        }
       >
-        {label}
-      </Typography>
+        Os arquivos incluem dados tabulares, indicadores, percentuais, gráficos de barras e gráficos de pizza. O Excel mantém cada eixo em uma aba própria; o PDF utiliza páginas prontas para apresentação.
+      </Alert>
     </Stack>
   );
 }
 
-function dateInput(
-  date: Date,
+function ReportCard({
+  report,
+  downloading,
+  onDownload,
+}: {
+  report:
+    ReportDefinition;
+  downloading:
+    string |
+    null;
+  onDownload: (
+    report:
+      ReportDefinition,
+    format:
+      ReportFormat,
+  ) =>
+    Promise<void>;
+}) {
+  const Icon =
+    report.icon;
+
+  const excelLoading =
+    downloading ===
+    `${report.scope}-xlsx`;
+
+  const pdfLoading =
+    downloading ===
+    `${report.scope}-pdf`;
+
+  return (
+    <Card
+      elevation={0}
+      sx={{
+        height:
+          "100%",
+        border:
+          "1px solid",
+        borderColor:
+          "divider",
+        borderRadius:
+          2.5,
+        transition:
+          "border-color 160ms ease, box-shadow 160ms ease",
+        "&:hover": {
+          borderColor:
+            aliareColors.green,
+          boxShadow:
+            "0 12px 30px rgba(16,24,40,0.07)",
+        },
+      }}
+    >
+      <CardContent
+        sx={{
+          height:
+            "100%",
+          display:
+            "flex",
+          flexDirection:
+            "column",
+        }}
+      >
+        <Stack
+          direction="row"
+          spacing={2}
+          sx={{
+            alignItems:
+              "flex-start",
+          }}
+        >
+          <Box
+            sx={{
+              width:
+                48,
+              height:
+                48,
+              borderRadius:
+                2,
+              display:
+                "grid",
+              placeItems:
+                "center",
+              flexShrink:
+                0,
+              backgroundColor:
+                "rgba(24,199,122,0.12)",
+              color:
+                aliareColors.greenDark,
+            }}
+          >
+            <Icon />
+          </Box>
+
+          <Box
+            sx={{
+              minWidth:
+                0,
+              flex:
+                1,
+            }}
+          >
+            <Stack
+              direction="row"
+              spacing={1}
+              sx={{
+                justifyContent:
+                  "space-between",
+                alignItems:
+                  "flex-start",
+              }}
+            >
+              <Typography
+                variant="h6"
+                sx={{
+                  fontWeight:
+                    800,
+                }}
+              >
+                {report.title}
+              </Typography>
+
+              <Chip
+                size="small"
+                label="Disponível"
+                color="success"
+                variant="outlined"
+              />
+            </Stack>
+
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              sx={{
+                mt: 0.5,
+                lineHeight:
+                  1.55,
+              }}
+            >
+              {report.description}
+            </Typography>
+          </Box>
+        </Stack>
+
+        <Typography
+          variant="body2"
+          sx={{
+            mt: 2.25,
+            pt: 2,
+            borderTop:
+              "1px solid",
+            borderColor:
+              "divider",
+            lineHeight:
+              1.6,
+            flex:
+              1,
+          }}
+        >
+          {report.contents}
+        </Typography>
+
+        <Stack
+          direction={{
+            xs:
+              "column",
+            sm:
+              "row",
+          }}
+          spacing={1.25}
+          sx={{
+            mt: 2.25,
+          }}
+        >
+          <Button
+            variant="contained"
+            startIcon={
+              excelLoading
+                ? (
+                    <CircularProgress
+                      size={18}
+                      color="inherit"
+                    />
+                  )
+                : (
+                    <DownloadOutlined />
+                  )
+            }
+            disabled={
+              Boolean(
+                downloading
+              )
+            }
+            onClick={() =>
+              void onDownload(
+                report,
+                "xlsx"
+              )
+            }
+            sx={{
+              fontWeight:
+                750,
+            }}
+          >
+            {excelLoading
+              ? "Gerando..."
+              : "Baixar Excel"}
+          </Button>
+
+          <Button
+            variant="outlined"
+            startIcon={
+              pdfLoading
+                ? (
+                    <CircularProgress
+                      size={18}
+                    />
+                  )
+                : (
+                    <PictureAsPdfOutlined />
+                  )
+            }
+            disabled={
+              Boolean(
+                downloading
+              )
+            }
+            onClick={() =>
+              void onDownload(
+                report,
+                "pdf"
+              )
+            }
+            sx={{
+              fontWeight:
+                750,
+            }}
+          >
+            {pdfLoading
+              ? "Gerando..."
+              : "Baixar PDF"}
+          </Button>
+        </Stack>
+      </CardContent>
+    </Card>
+  );
+}
+
+function formatInputDate(
+  value:
+    Date
 ) {
   const year =
-    date.getFullYear();
+    value.getFullYear();
   const month =
     String(
-      date.getMonth() +
-      1,
+      value.getMonth() +
+        1
     ).padStart(
       2,
-      "0",
+      "0"
     );
   const day =
     String(
-      date.getDate(),
+      value.getDate()
     ).padStart(
       2,
-      "0",
+      "0"
     );
 
   return `${year}-${month}-${day}`;
 }
 
-function addDays(
-  date: Date,
-  days: number,
+function extractFileName(
+  disposition:
+    string |
+    undefined
 ) {
-  const result =
-    new Date(
-      date,
+  const match =
+    disposition?.match(
+      /filename="?([^";]+)"?/i
     );
 
-  result.setDate(
-    result.getDate() +
-    days,
-  );
-
-  return result;
+  return match?.[1];
 }
 
-async function apiErrorMessage(
-  error: unknown,
+async function reportErrorMessage(
+  error:
+    unknown
 ) {
   if (
-    typeof error !==
-      "object" ||
-    error ===
-      null ||
-    !(
-      "response" in
+    axios.isAxiosError(
       error
-    )
-  ) {
-    return "Não foi possível gerar o relatório Executivo.";
-  }
-
-  const response =
-    (
-      error as {
-        response?: {
-          data?: unknown;
-        };
-      }
-    ).response;
-
-  if (
-    response?.data instanceof
-      ArrayBuffer
+    ) &&
+    error.response?.data instanceof
+      Blob
   ) {
     try {
-      const text =
-        new TextDecoder()
-          .decode(
-            response.data,
-          );
-
-      const parsed =
+      const content =
         JSON.parse(
-          text,
+          await error.response.data.text()
         ) as {
-          message?: string;
+          message?:
+            string;
         };
 
-      return parsed.message ??
-        "Não foi possível gerar o relatório Executivo.";
+      if (
+        content.message
+      ) {
+        return content.message;
+      }
     } catch {
-      return "Não foi possível gerar o relatório Executivo.";
+      // Mantém a mensagem padrão.
     }
   }
 
-  return "Não foi possível gerar o relatório Executivo.";
+  return axios.isAxiosError(
+    error
+  ) &&
+    typeof error.response?.data
+      ?.message ===
+      "string"
+    ? error.response.data
+        .message
+    : "Não foi possível gerar o relatório. Tente novamente.";
 }
