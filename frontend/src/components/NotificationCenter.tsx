@@ -4,10 +4,12 @@ import {
   Button,
   CircularProgress,
   Divider,
+  FormControlLabel,
   IconButton,
   Menu,
   MenuItem,
   Stack,
+  Switch,
   Typography,
 } from "@mui/material";
 
@@ -23,6 +25,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type MouseEvent,
 } from "react";
@@ -56,10 +59,28 @@ type HubNotification = {
   message: string;
   occurredAt: string;
   path: string;
+  read?: boolean;
 };
 
 type NotificationResponse = {
   notifications: HubNotification[];
+  preferences: NotificationPreferences;
+};
+
+type NotificationPreferences = {
+  appVersion: boolean;
+  simerVersion: boolean;
+  azureCompleted: boolean;
+  azureUpdated: boolean;
+  desktopAlerts: boolean;
+};
+
+const DEFAULT_PREFERENCES: NotificationPreferences = {
+  appVersion: true,
+  simerVersion: true,
+  azureCompleted: true,
+  azureUpdated: true,
+  desktopAlerts: true,
 };
 
 type DesktopUpdateState = {
@@ -75,6 +96,9 @@ export function NotificationCenter() {
   const [loading, setLoading] = useState(false);
   const [items, setItems] = useState<HubNotification[]>([]);
   const [readKeys, setReadKeys] = useState<string[]>([]);
+  const [preferences, setPreferences] = useState(DEFAULT_PREFERENCES);
+  const [showPreferences, setShowPreferences] = useState(false);
+  const alertedKeys = useRef(new Set<string>());
 
   const storageKey = `techlead-hub:notifications:read:${user?.id ?? "anonymous"}`;
 
@@ -94,6 +118,7 @@ export function NotificationCenter() {
   }, [storageKey]);
 
   const addDesktopUpdate = useCallback((state: DesktopUpdateState) => {
+    if (!preferences.appVersion) return;
     if (
       state.status !== "available" &&
       state.status !== "downloaded"
@@ -117,13 +142,15 @@ export function NotificationCenter() {
       notification,
       ...current.filter((item) => item.key !== notification.key),
     ]);
-  }, []);
+  }, [preferences.appVersion]);
 
   const load = useCallback(async () => {
     if (!user) return;
     try {
       setLoading(true);
       const response = await api.get<NotificationResponse>("/notifications");
+      setPreferences(response.data.preferences);
+      setReadKeys(response.data.notifications.filter((item) => item.read).map((item) => item.key));
       setItems((current) => {
         const appItems = current.filter((item) => item.kind === "APP_VERSION");
         return [...appItems, ...response.data.notifications];
@@ -156,14 +183,16 @@ export function NotificationCenter() {
 
   useEffect(() => {
     const newest = unread[0];
-    if (!newest || Notification.permission !== "granted") return;
+    if (!newest || !preferences.desktopAlerts || Notification.permission !== "granted") return;
+    if (alertedKeys.current.has(newest.key)) return;
 
     const age = Date.now() - new Date(newest.occurredAt).getTime();
     if (age < 10 * 60_000) {
+      alertedKeys.current.add(newest.key);
       const alert = new Notification(newest.title, { body: newest.message });
       alert.onclick = () => navigate(newest.path);
     }
-  }, [unread, navigate]);
+  }, [unread, navigate, preferences.desktopAlerts]);
 
   async function openMenu(event: MouseEvent<HTMLElement>) {
     setAnchor(event.currentTarget);
@@ -176,6 +205,7 @@ export function NotificationCenter() {
   function openNotification(item: HubNotification) {
     if (!readKeys.includes(item.key)) {
       persistReadKeys([...readKeys, item.key]);
+      void api.post("/notifications/read", { keys: [item.key] });
     }
     setAnchor(null);
     navigate(item.path);
@@ -183,6 +213,13 @@ export function NotificationCenter() {
 
   function markAllRead() {
     persistReadKeys([...readKeys, ...items.map((item) => item.key)]);
+    void api.post("/notifications/read", { keys: items.map((item) => item.key) });
+  }
+
+  function changePreference(key: keyof NotificationPreferences, checked: boolean) {
+    const next = { ...preferences, [key]: checked };
+    setPreferences(next);
+    void api.put("/notifications/preferences", next);
   }
 
   return (
@@ -291,6 +328,40 @@ export function NotificationCenter() {
             </MenuItem>
           );
         })}
+
+        <Divider />
+        <Button
+          fullWidth
+          size="small"
+          onClick={() => setShowPreferences((current) => !current)}
+          sx={{ py: 1 }}
+        >
+          {showPreferences ? "Ocultar preferências" : "Preferências de notificações"}
+        </Button>
+        {showPreferences && (
+          <Stack sx={{ px: 2, pb: 1.5 }}>
+            {([
+              ["appVersion", "Versões do TechLead Hub"],
+              ["simerVersion", "Versões do SIMER"],
+              ["azureCompleted", "Tarefas concluídas"],
+              ["azureUpdated", "Alterações em tarefas"],
+              ["desktopAlerts", "Avisos do Windows"],
+            ] as Array<[keyof NotificationPreferences, string]>).map(([key, label]) => (
+              <FormControlLabel
+                key={key}
+                control={
+                  <Switch
+                    size="small"
+                    checked={preferences[key]}
+                    onChange={(_, checked) => changePreference(key, checked)}
+                  />
+                }
+                label={label}
+                sx={{ "& .MuiFormControlLabel-label": { fontSize: "0.76rem" } }}
+              />
+            ))}
+          </Stack>
+        )}
       </Menu>
     </>
   );
