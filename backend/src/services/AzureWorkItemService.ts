@@ -6,6 +6,12 @@ import {
   prisma,
 } from "../database/prisma";
 
+import {
+  azureOperationalScope,
+  isSimerClient,
+  ticketOperationalScope,
+} from "../domain/OperationalScope";
+
 export type AzureWorkItemListParams = {
   page?: number;
   pageSize?: number;
@@ -203,21 +209,26 @@ export class AzureWorkItemService {
     const relatedTickets =
       await prisma.ticket.findMany({
         where: {
-          OR: [
+          AND: [
+            ticketOperationalScope(),
             {
-              taskNumber:
-                workItem.id,
+              OR: [
+                {
+                  taskNumber:
+                    workItem.id,
+                },
+                ...(
+                  workItem.movideskTicket
+                    ? [
+                        {
+                          movideskId:
+                            workItem.movideskTicket,
+                        },
+                      ]
+                    : []
+                ),
+              ],
             },
-            ...(
-              workItem.movideskTicket
-                ? [
-                    {
-                      movideskId:
-                        workItem.movideskTicket,
-                    },
-                  ]
-                : []
-            ),
           ],
         },
         orderBy: [
@@ -233,6 +244,16 @@ export class AzureWorkItemService {
         select:
           this.relatedTicketSelect(),
       });
+
+    if (
+      !isSimerClient(
+        workItem.client,
+      ) &&
+      relatedTickets.length ===
+        0
+    ) {
+      return null;
+    }
 
     const tickets =
       relatedTickets.map(
@@ -360,16 +381,23 @@ export class AzureWorkItemService {
 
     const baseWhere:
       Prisma.AzureWorkItemWhereInput =
-      typeFilter
-        ? {
-            workItemType: {
-              equals:
-                typeFilter,
-              mode:
-                "insensitive",
-            },
-          }
-        : {};
+      {
+        AND: [
+          azureOperationalScope(),
+          ...(typeFilter
+            ? [
+                {
+                  workItemType: {
+                    equals:
+                      typeFilter,
+                    mode:
+                      "insensitive" as const,
+                  },
+                },
+              ]
+            : []),
+        ],
+      };
 
     const correctionWhere:
       Prisma.AzureWorkItemWhereInput = {
@@ -1148,6 +1176,7 @@ export class AzureWorkItemService {
   ) {
     const and:
       Prisma.AzureWorkItemWhereInput[] = [
+        azureOperationalScope(),
         {
           workItemType: {
             in: [
@@ -1922,12 +1951,19 @@ export class AzureWorkItemService {
 
     const where:
       Prisma.AzureWorkItemWhereInput =
-      normalizedType
-        ? {
-            workItemType:
-              normalizedType,
-          }
-        : {};
+      {
+        AND: [
+          azureOperationalScope(),
+          ...(normalizedType
+            ? [
+                {
+                  workItemType:
+                    normalizedType,
+                },
+              ]
+            : []),
+        ],
+      };
 
     const [
       types,
@@ -2238,7 +2274,9 @@ export class AzureWorkItemService {
   ): Prisma.AzureWorkItemWhereInput {
     const and:
       Prisma.AzureWorkItemWhereInput[] =
-      [];
+      [
+        azureOperationalScope(),
+      ];
 
     const type =
       this.normalizeString(
