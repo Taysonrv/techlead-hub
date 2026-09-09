@@ -5,6 +5,10 @@ import {
 
 import { MovideskExcelImportService } from "../services/MovideskExcelImportService";
 
+import type {
+  AuthenticatedRequest,
+} from "../middlewares/authMiddleware";
+
 const service =
   new MovideskExcelImportService();
 
@@ -50,9 +54,20 @@ export class ImportController {
           });
       }
 
+      const authenticatedRequest =
+        req as AuthenticatedRequest;
+
       const result =
         await service.execute(
-          req.file.buffer
+          req.file.buffer,
+          {
+            fileName:
+              req.file.originalname,
+            userId:
+              authenticatedRequest.auth
+                ?.userId ??
+              null,
+          },
         );
 
       return res.json({
