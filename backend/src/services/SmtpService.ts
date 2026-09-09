@@ -257,6 +257,9 @@ function connect(
       resolve,
       reject
     ) => {
+      let socket:
+        MailSocket;
+
       const onError = (
         error:
           Error
@@ -264,42 +267,44 @@ function connect(
         reject(error);
       };
 
-      const socket =
+      const onConnect =
+        () => {
+          socket.removeListener(
+            "error",
+            onError
+          );
+          resolve(socket);
+        };
+
+      if (
         configuration.secure
-          ? tls.connect(
-              {
-                host:
-                  configuration.host,
-                port:
-                  configuration.port,
-                servername:
-                  configuration.host,
-                rejectUnauthorized:
-                  true,
-              },
-              () => {
-                socket.removeListener(
-                  "error",
-                  onError
-                );
-                resolve(socket);
-              }
-            )
-          : net.connect(
-              {
-                host:
-                  configuration.host,
-                port:
-                  configuration.port,
-              },
-              () => {
-                socket.removeListener(
-                  "error",
-                  onError
-                );
-                resolve(socket);
-              }
-            );
+      ) {
+        socket =
+          tls.connect(
+            {
+              host:
+                configuration.host,
+              port:
+                configuration.port,
+              servername:
+                configuration.host,
+              rejectUnauthorized:
+                true,
+            },
+            onConnect
+          );
+      } else {
+        socket =
+          net.connect(
+            {
+              host:
+                configuration.host,
+              port:
+                configuration.port,
+            },
+            onConnect
+          );
+      }
 
       socket.setTimeout(
         20_000,
