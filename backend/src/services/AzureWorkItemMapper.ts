@@ -258,11 +258,28 @@ export function mapAzureWorkItem(
   const createdBy = identityValue(fields["System.CreatedBy"]);
   const changedBy = identityValue(fields["System.ChangedBy"]);
 
-  const workItemType = requiredString(
+  const rawWorkItemType = requiredString(
     fields,
     "System.WorkItemType",
     "Não informado",
   );
+
+  /*
+   * O nome do tipo pode chegar do Azure com diferenças de
+   * capitalização. Mantemos um valor canônico para que a
+   * navegação e os indicadores usem a mesma semântica.
+   */
+  const workItemType =
+    rawWorkItemType.localeCompare(
+      "APOIO",
+      "pt-BR",
+      {
+        sensitivity:
+          "accent",
+      },
+    ) === 0
+      ? "APOIO"
+      : rawWorkItemType;
 
   const title = requiredString(
     fields,
