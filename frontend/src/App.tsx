@@ -93,6 +93,14 @@ import {
 } from "./pages/Reports";
 
 import {
+  MyOperation,
+} from "./pages/MyOperation";
+
+import {
+  DataQuality,
+} from "./pages/DataQuality";
+
+import {
   aliareColors,
 } from "./theme/theme";
 
@@ -350,6 +358,16 @@ function App() {
                 <Reports />
               </AuthenticatedLayout>
             }
+          />
+
+          <Route
+            path="/minha-operacao"
+            element={<AuthenticatedLayout><MyOperation /></AuthenticatedLayout>}
+          />
+
+          <Route
+            path="/qualidade-dados"
+            element={<AuthenticatedLayout><DataQuality /></AuthenticatedLayout>}
           />
 
           {/* =================================================
