@@ -29,6 +29,7 @@ import {
   LogoutOutlined,
   ManageAccountsOutlined,
   PersonOutlined,
+  SettingsOutlined,
   SupportAgentOutlined,
   TrendingUpOutlined,
   UploadFileOutlined,
@@ -345,16 +346,26 @@ export function Sidebar() {
           [];
 
         if (isAdmin) {
-          items.push({
-            label:
-              "Usuários",
-            path:
-              "/usuarios",
-            icon:
-              <ManageAccountsOutlined fontSize="small" />,
-            badge:
-              pendingUsers,
-          });
+          items.push(
+            {
+              label:
+                "Usuários",
+              path:
+                "/usuarios",
+              icon:
+                <ManageAccountsOutlined fontSize="small" />,
+              badge:
+                pendingUsers,
+            },
+            {
+              label:
+                "Configurações",
+              path:
+                "/configuracoes",
+              icon:
+                <SettingsOutlined fontSize="small" />,
+            },
+          );
         }
 
         items.push(
