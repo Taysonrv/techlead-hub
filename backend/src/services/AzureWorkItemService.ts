@@ -9,6 +9,7 @@ import {
 import {
   azureOperationalScope,
   isSimerClient,
+  isSupportAnalyst,
   ticketOperationalScope,
 } from "../domain/OperationalScope";
 
@@ -248,6 +249,9 @@ export class AzureWorkItemService {
     if (
       !isSimerClient(
         workItem.client,
+      ) &&
+      !isSupportAnalyst(
+        workItem.createdByName,
       ) &&
       relatedTickets.length ===
         0
