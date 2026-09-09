@@ -6,6 +6,11 @@ import {
   prisma,
 } from "../database/prisma";
 
+import {
+  azureOperationalScope,
+  ticketOperationalScope,
+} from "../domain/OperationalScope";
+
 import type {
   ReportScope,
 } from "./ExecutiveReportService";
@@ -46,34 +51,44 @@ export class ManagementPdfService {
   ) {
     const ticketWhere:
       Prisma.TicketWhereInput = {
-      createdDate: {
-        gte:
-          options.from,
-        lte:
-          options.to,
-      },
-    };
-
-    const azureWhere:
-      Prisma.AzureWorkItemWhereInput = {
-      OR: [
+      AND: [
+        ticketOperationalScope(),
         {
-          azureCreatedAt: {
+          createdDate: {
             gte:
               options.from,
             lte:
               options.to,
           },
         },
+      ],
+    };
+
+    const azureWhere:
+      Prisma.AzureWorkItemWhereInput = {
+      AND: [
+        azureOperationalScope(),
         {
-          azureCreatedAt:
-            null,
-          syncedAt: {
-            gte:
-              options.from,
-            lte:
-              options.to,
-          },
+          OR: [
+            {
+              azureCreatedAt: {
+                gte:
+                  options.from,
+                lte:
+                  options.to,
+              },
+            },
+            {
+              azureCreatedAt:
+                null,
+              syncedAt: {
+                gte:
+                  options.from,
+                lte:
+                  options.to,
+              },
+            },
+          ],
         },
       ],
     };
