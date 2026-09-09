@@ -85,6 +85,10 @@ import {
 } from "./pages/Versions";
 
 import {
+  Settings,
+} from "./pages/Settings";
+
+import {
   aliareColors,
 } from "./theme/theme";
 
@@ -345,6 +349,17 @@ function App() {
               <AdminOnly>
                 <AuthenticatedLayout>
                   <Users />
+                </AuthenticatedLayout>
+              </AdminOnly>
+            }
+          />
+
+          <Route
+            path="/configuracoes"
+            element={
+              <AdminOnly>
+                <AuthenticatedLayout>
+                  <Settings />
                 </AuthenticatedLayout>
               </AdminOnly>
             }
