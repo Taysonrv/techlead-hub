@@ -1482,12 +1482,6 @@ type AzureConfiguration = {
   project: string;
   wiki: string;
   pat: string;
-  smtpHost: string;
-  smtpPort: string;
-  smtpSecure: string;
-  smtpUser: string;
-  smtpPassword: string;
-  smtpFrom: string;
 };
 
 function resolveAzureConfiguration(): AzureConfiguration {
@@ -1563,6 +1557,12 @@ type ConfigurationValues = {
   project: string;
   wiki: string;
   pat: string;
+  smtpHost: string;
+  smtpPort: string;
+  smtpSecure: string;
+  smtpUser: string;
+  smtpPassword: string;
+  smtpFrom: string;
 };
 
 function normalizeConfigurationInput(input: unknown): ConfigurationValues {
