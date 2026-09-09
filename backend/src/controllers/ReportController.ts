@@ -8,17 +8,64 @@ import type {
 
 import {
   ExecutiveReportService,
+  type ReportScope,
 } from "../services/ExecutiveReportService";
 
+import {
+  ManagementPdfService,
+} from "../services/ManagementPdfService";
+
+const REPORT_SCOPES:
+  ReportScope[] = [
+  "executive",
+  "analysts",
+  "sla",
+  "clients",
+  "development",
+  "versions",
+];
+
 export class ReportController {
-  private readonly executive =
+  private readonly excel =
     new ExecutiveReportService();
 
-  public executiveExcel = async (
+  private readonly pdf =
+    new ManagementPdfService();
+
+  public excelFile = async (
     request:
       AuthenticatedRequest,
     response:
       Response,
+  ) => {
+    return this.generate(
+      request,
+      response,
+      "xlsx",
+    );
+  };
+
+  public pdfFile = async (
+    request:
+      AuthenticatedRequest,
+    response:
+      Response,
+  ) => {
+    return this.generate(
+      request,
+      response,
+      "pdf",
+    );
+  };
+
+  private generate = async (
+    request:
+      AuthenticatedRequest,
+    response:
+      Response,
+    format:
+      "xlsx" |
+      "pdf",
   ): Promise<Response> => {
     try {
       const userId =
@@ -31,6 +78,20 @@ export class ReportController {
           .json({
             message:
               "Usuário não autenticado.",
+          });
+      }
+
+      const scope =
+        this.reportScope(
+          request.params.scope,
+        );
+
+      if (!scope) {
+        return response
+          .status(404)
+          .json({
+            message:
+              "Relatório não encontrado.",
           });
       }
 
@@ -83,23 +144,33 @@ export class ReportController {
           .status(400)
           .json({
             message:
-              "O relatório Executivo aceita períodos de até 366 dias.",
+              "Os relatórios aceitam períodos de até 366 dias.",
           });
       }
 
       const file =
-        await this.executive.generate({
-          from,
-          to,
-          userId,
-        });
+        format === "xlsx"
+          ? await this.excel.generate({
+              from,
+              to,
+              userId,
+              scope,
+            })
+          : await this.pdf.generate({
+              from,
+              to,
+              userId,
+              scope,
+            });
 
       const fileName =
-        `techlead-hub-executivo-${this.fileDate(from)}-${this.fileDate(to)}.xlsx`;
+        `techlead-hub-${scope}-${this.fileDate(from)}-${this.fileDate(to)}.${format}`;
 
       response.setHeader(
         "Content-Type",
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        format === "xlsx"
+          ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+          : "application/pdf",
       );
 
       response.setHeader(
@@ -127,14 +198,40 @@ export class ReportController {
           message:
             error instanceof Error
               ? error.message
-              : "Não foi possível gerar o relatório Executivo.",
+              : "Não foi possível gerar o relatório.",
         });
     }
   };
 
+  private reportScope(
+    value:
+      unknown,
+  ):
+    ReportScope |
+    null {
+    const normalized =
+      Array.isArray(value)
+        ? value[0]
+        : value;
+
+    return (
+      typeof normalized ===
+        "string" &&
+      REPORT_SCOPES.includes(
+        normalized as
+          ReportScope,
+      )
+    )
+      ? normalized as
+          ReportScope
+      : null;
+  }
+
   private dateBoundary(
-    value: unknown,
-    endOfDay: boolean,
+    value:
+      unknown,
+    endOfDay:
+      boolean,
   ) {
     if (
       typeof value !==
@@ -161,7 +258,8 @@ export class ReportController {
   }
 
   private fileDate(
-    value: Date,
+    value:
+      Date,
   ) {
     return value
       .toISOString()
