@@ -4755,9 +4755,17 @@ export function AzureWorkItems({
                   {orderedTickets.length ===
                     0 ? (
                     <Alert
-                      severity="info"
+                      severity={
+                        selectedWorkItem.movideskTicket
+                          ? "warning"
+                          : "info"
+                      }
                     >
-                      Nenhum atendimento relacionado foi localizado no snapshot atual.
+                      {selectedWorkItem.movideskTicket
+                        ? "O ticket Movidesk " +
+                          selectedWorkItem.movideskTicket +
+                          " está informado no Azure, mas esse atendimento ainda não foi importado para a base local do TechLead Hub."
+                        : "O Azure não possui número de ticket Movidesk informado e nenhum atendimento aponta para este Work Item."}
                     </Alert>
                   ) : (
                     <Stack
