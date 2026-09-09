@@ -362,8 +362,12 @@ export class AzureWorkItemService {
       Prisma.AzureWorkItemWhereInput =
       typeFilter
         ? {
-            workItemType:
-              typeFilter,
+            workItemType: {
+              equals:
+                typeFilter,
+              mode:
+                "insensitive",
+            },
           }
         : {};
 
@@ -2278,8 +2282,12 @@ export class AzureWorkItemService {
 
     if (type) {
       and.push({
-        workItemType:
-          type,
+        workItemType: {
+          equals:
+            type,
+          mode:
+            "insensitive",
+        },
       });
     }
 
