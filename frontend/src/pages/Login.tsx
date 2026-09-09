@@ -43,6 +43,10 @@ import {
 } from "../context/AuthContext";
 
 import {
+  api,
+} from "../services/api";
+
+import {
   aliareColors,
 } from "../theme/theme";
 
@@ -57,7 +61,8 @@ type LocationState = {
 type ScreenMode =
   | "LOGIN"
   | "REGISTER"
-  | "REGISTER_SUCCESS";
+  | "REGISTER_SUCCESS"
+  | "FORGOT_PASSWORD";
 
 /* =========================================================
    COMPONENT
@@ -102,6 +107,73 @@ export function Login() {
     setPassword,
   ] =
     useState("");
+
+  const [
+    recoveryEmail,
+    setRecoveryEmail,
+  ] =
+    useState("");
+
+  const [
+    recoverySuccess,
+    setRecoverySuccess,
+  ] =
+    useState<string | null>(
+      null
+    );
+
+  /* =======================================================
+     RECUPERAÇÃO DE SENHA
+  ======================================================= */
+
+  async function handleForgotPassword(
+    event:
+      FormEvent<HTMLFormElement>
+  ) {
+    event.preventDefault();
+
+    const email =
+      recoveryEmail
+        .trim();
+
+    if (!email) {
+      setError(
+        "Informe o e-mail corporativo."
+      );
+      return;
+    }
+
+    setSubmitting(true);
+    setError(null);
+    setRecoverySuccess(null);
+
+    try {
+      const response =
+        await api.post<{
+          message: string;
+        }>(
+          "/auth/forgot-password",
+          {
+            email,
+          }
+        );
+
+      setRecoverySuccess(
+        response.data.message
+      );
+    } catch (
+      requestError
+    ) {
+      setError(
+        getErrorMessage(
+          requestError,
+          "Não foi possível solicitar a recuperação da senha."
+        )
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   /* =======================================================
      CADASTRO
@@ -920,6 +992,19 @@ export function Login() {
                       "REGISTER"
                     )
                   }
+                  onForgotPassword={() => {
+                    setRecoveryEmail(
+                      username.includes("@")
+                        ? username
+                        : ""
+                    );
+                    setRecoverySuccess(
+                      null
+                    );
+                    setMode(
+                      "FORGOT_PASSWORD"
+                    );
+                  }}
                 />
               )}
 
@@ -974,6 +1059,33 @@ export function Login() {
                   error={error}
                   onSubmit={
                     handleRegister
+                  }
+                  onBack={() =>
+                    setMode(
+                      "LOGIN"
+                    )
+                  }
+                />
+              )}
+
+              {mode ===
+                "FORGOT_PASSWORD" && (
+                <ForgotPasswordForm
+                  email={
+                    recoveryEmail
+                  }
+                  setEmail={
+                    setRecoveryEmail
+                  }
+                  submitting={
+                    submitting
+                  }
+                  error={error}
+                  success={
+                    recoverySuccess
+                  }
+                  onSubmit={
+                    handleForgotPassword
                   }
                   onBack={() =>
                     setMode(
@@ -1046,6 +1158,7 @@ function LoginForm({
   error,
   onSubmit,
   onRegister,
+  onForgotPassword,
 }: {
   username: string;
   setUsername: (value: string) => void;
@@ -1060,6 +1173,7 @@ function LoginForm({
       FormEvent<HTMLFormElement>
   ) => void;
   onRegister: () => void;
+  onForgotPassword: () => void;
 }) {
   return (
     <>
@@ -1165,6 +1279,34 @@ function LoginForm({
           }}
         />
 
+        <Box
+          sx={{
+            display: "flex",
+            justifyContent: "flex-end",
+            mt: 0.75,
+            mb: 0.5,
+          }}
+        >
+          <Button
+            type="button"
+            variant="text"
+            size="small"
+            disabled={
+              submitting
+            }
+            onClick={
+              onForgotPassword
+            }
+            sx={{
+              color:
+                aliareColors.greenDark,
+              fontWeight: 700,
+            }}
+          >
+            Esqueceu a senha?
+          </Button>
+        </Box>
+
         <Button
           type="submit"
           variant="contained"
@@ -1250,6 +1392,152 @@ function LoginForm({
       >
         Novos acessos precisam ser aprovados por um administrador.
       </Typography>
+    </>
+  );
+}
+
+/* =========================================================
+   RECUPERAÇÃO DE SENHA
+========================================================= */
+
+function ForgotPasswordForm({
+  email,
+  setEmail,
+  submitting,
+  error,
+  success,
+  onSubmit,
+  onBack,
+}: {
+  email: string;
+  setEmail: (value: string) => void;
+  submitting: boolean;
+  error: string | null;
+  success: string | null;
+  onSubmit: (
+    event:
+      FormEvent<HTMLFormElement>
+  ) => void;
+  onBack: () => void;
+}) {
+  return (
+    <>
+      <Button
+        startIcon={
+          <ArrowBackOutlined />
+        }
+        onClick={onBack}
+        disabled={
+          submitting
+        }
+        sx={{
+          mb: 2,
+          color:
+            "text.secondary",
+        }}
+      >
+        Voltar ao login
+      </Button>
+
+      <Typography
+        variant="h5"
+        sx={{
+          fontWeight: 800,
+        }}
+      >
+        Recuperar senha
+      </Typography>
+
+      <Typography
+        variant="body2"
+        color="text.secondary"
+        sx={{
+          mt: 0.75,
+          mb: 3,
+          lineHeight: 1.65,
+        }}
+      >
+        Informe o e-mail da conta. Se ela estiver ativa,
+        você receberá as instruções para criar uma nova senha.
+      </Typography>
+
+      {error && (
+        <Alert
+          severity="error"
+          sx={{
+            mb: 2,
+          }}
+        >
+          {error}
+        </Alert>
+      )}
+
+      {success && (
+        <Alert
+          severity="success"
+          sx={{
+            mb: 2,
+          }}
+        >
+          {success}
+        </Alert>
+      )}
+
+      <Box
+        component="form"
+        onSubmit={onSubmit}
+      >
+        <TextField
+          label="E-mail corporativo"
+          type="email"
+          value={email}
+          onChange={(event) =>
+            setEmail(
+              event.target.value
+            )
+          }
+          autoComplete="email"
+          autoFocus
+          fullWidth
+          disabled={
+            submitting ||
+            Boolean(success)
+          }
+          slotProps={{
+            input: {
+              startAdornment: (
+                <InputAdornment position="start">
+                  <EmailOutlined />
+                </InputAdornment>
+              ),
+            },
+          }}
+        />
+
+        <Button
+          type="submit"
+          variant="contained"
+          fullWidth
+          size="large"
+          disabled={
+            submitting ||
+            Boolean(success)
+          }
+          sx={{
+            ...primaryButtonSx,
+            mt: 2,
+          }}
+        >
+          {submitting ? (
+            <CircularProgress
+              size={21}
+              color="inherit"
+            />
+          ) : (
+            "Enviar instruções"
+          )}
+        </Button>
+      </Box>
     </>
   );
 }
