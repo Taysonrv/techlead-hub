@@ -253,6 +253,53 @@ export class UserController {
       );
     }
   }
+
+  /* =======================================================
+     ALTERAR PERFIL
+     PATCH /api/users/:id/role
+  ======================================================= */
+
+  async updateRole(
+    request: AuthenticatedRequest,
+    response: Response
+  ) {
+    try {
+      const adminUserId =
+        getAuthenticatedUserId(request);
+
+      const targetUserId =
+        getUserIdFromParams(
+          request.params.id
+        );
+
+      const role =
+        typeof request.body?.role === "string"
+          ? request.body.role
+              .trim()
+              .toUpperCase()
+          : "";
+
+      const user =
+        await userService.updateUserRole(
+          adminUserId,
+          targetUserId,
+          role
+        );
+
+      return response
+        .status(200)
+        .json({
+          message:
+            "Perfil de acesso atualizado com sucesso.",
+          user,
+        });
+    } catch (error) {
+      return handleUserError(
+        error,
+        response
+      );
+    }
+  }
 }
 
 /* =========================================================
