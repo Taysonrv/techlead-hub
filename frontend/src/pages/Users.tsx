@@ -96,7 +96,8 @@ type ActionType =
   | "APPROVE"
   | "REJECT"
   | "ACTIVATE"
-  | "DEACTIVATE";
+  | "DEACTIVATE"
+  | "SET_ADMIN";
 
 type ConfirmationState = {
   type: ActionType;
@@ -285,6 +286,11 @@ export function Users() {
           endpoint =
             `/users/${user.id}/deactivate`;
           break;
+
+        case "SET_ADMIN":
+          endpoint =
+            `/users/${user.id}/role`;
+          break;
       }
 
       const response =
@@ -292,7 +298,12 @@ export function Users() {
           message: string;
           user: ManagedUser;
         }>(
-          endpoint
+          endpoint,
+          type === "SET_ADMIN"
+            ? {
+                role: "ADMIN",
+              }
+            : undefined
         );
 
       setUsers(
@@ -990,23 +1001,47 @@ function UserActions({
   }
 
   return user.active ? (
-    <Button
-      size="small"
-      color="error"
-      startIcon={
-        <PersonOffOutlined />
-      }
-      disabled={
-        loading
-      }
-      onClick={() =>
-        onAction(
-          "DEACTIVATE"
-        )
-      }
+    <Stack
+      direction="row"
+      spacing={1}
+      sx={{
+        justifyContent:
+          "flex-end",
+      }}
     >
-      Desativar
-    </Button>
+      <Button
+        size="small"
+        variant="outlined"
+        disabled={
+          loading
+        }
+        onClick={() =>
+          onAction(
+            "SET_ADMIN"
+          )
+        }
+      >
+        Tornar administrador
+      </Button>
+
+      <Button
+        size="small"
+        color="error"
+        startIcon={
+          <PersonOffOutlined />
+        }
+        disabled={
+          loading
+        }
+        onClick={() =>
+          onAction(
+            "DEACTIVATE"
+          )
+        }
+      >
+        Desativar
+      </Button>
+    </Stack>
   ) : (
     <Button
       size="small"
@@ -1134,6 +1169,9 @@ function getActionTitle(
 
     case "DEACTIVATE":
       return "Desativar usuário";
+
+    case "SET_ADMIN":
+      return "Conceder acesso administrativo";
 
     default:
       return "Confirmar operação";
