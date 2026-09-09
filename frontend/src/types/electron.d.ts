@@ -53,6 +53,13 @@ declare global {
           project: string;
           wiki: string;
           patConfigured: boolean;
+          smtpHost: string;
+          smtpPort: string;
+          smtpSecure: boolean;
+          smtpUser: string;
+          smtpFrom: string;
+          smtpPasswordConfigured: boolean;
+          emailConfigured: boolean;
         }>;
 
         importEnv: () => Promise<{
@@ -61,6 +68,12 @@ declare global {
           project: string;
           wiki: string;
           pat: string;
+          smtpHost: string;
+          smtpPort: string;
+          smtpSecure: string;
+          smtpUser: string;
+          smtpPassword: string;
+          smtpFrom: string;
         } | null>;
 
         save: (input: {
@@ -69,6 +82,12 @@ declare global {
           project: string;
           wiki: string;
           pat: string;
+          smtpHost: string;
+          smtpPort: string;
+          smtpSecure: string;
+          smtpUser: string;
+          smtpPassword: string;
+          smtpFrom: string;
         }) => Promise<{
           success: boolean;
           restartRequired: boolean;
