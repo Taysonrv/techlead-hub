@@ -68,12 +68,12 @@ declare global {
           project: string;
           wiki: string;
           pat: string;
-          smtpHost: string;
-          smtpPort: string;
-          smtpSecure: string;
-          smtpUser: string;
-          smtpPassword: string;
-          smtpFrom: string;
+          smtpHost?: string;
+          smtpPort?: string;
+          smtpSecure?: string;
+          smtpUser?: string;
+          smtpPassword?: string;
+          smtpFrom?: string;
         } | null>;
 
         save: (input: {
@@ -82,12 +82,12 @@ declare global {
           project: string;
           wiki: string;
           pat: string;
-          smtpHost: string;
-          smtpPort: string;
-          smtpSecure: string;
-          smtpUser: string;
-          smtpPassword: string;
-          smtpFrom: string;
+          smtpHost?: string;
+          smtpPort?: string;
+          smtpSecure?: string;
+          smtpUser?: string;
+          smtpPassword?: string;
+          smtpFrom?: string;
         }) => Promise<{
           success: boolean;
           restartRequired: boolean;
