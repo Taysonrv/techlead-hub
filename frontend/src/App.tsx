@@ -89,6 +89,10 @@ import {
 } from "./pages/Settings";
 
 import {
+  Reports,
+} from "./pages/Reports";
+
+import {
   aliareColors,
 } from "./theme/theme";
 
@@ -335,6 +339,15 @@ function App() {
             element={
               <AuthenticatedLayout>
                 <Import />
+              </AuthenticatedLayout>
+            }
+          />
+
+          <Route
+            path="/relatorios"
+            element={
+              <AuthenticatedLayout>
+                <Reports />
               </AuthenticatedLayout>
             }
           />
