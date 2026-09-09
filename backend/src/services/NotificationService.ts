@@ -10,6 +10,23 @@ export type AppNotification = {
   occurredAt: Date;
   path: string;
   workItemId?: number;
+  read?: boolean;
+};
+
+export type NotificationPreferences = {
+  appVersion: boolean;
+  simerVersion: boolean;
+  azureCompleted: boolean;
+  azureUpdated: boolean;
+  desktopAlerts: boolean;
+};
+
+const DEFAULT_PREFERENCES: NotificationPreferences = {
+  appVersion: true,
+  simerVersion: true,
+  azureCompleted: true,
+  azureUpdated: true,
+  desktopAlerts: true,
 };
 
 const TERMINAL_STATES = [
@@ -23,7 +40,7 @@ const TERMINAL_STATES = [
 export class NotificationService {
   public async listForUser(
     userId: number,
-  ): Promise<AppNotification[]> {
+  ) {
     const user =
       await prisma.user.findUnique({
         where: { id: userId },
@@ -34,7 +51,10 @@ export class NotificationService {
       });
 
     if (!user) {
-      return [];
+      return {
+        notifications: [],
+        preferences: DEFAULT_PREFERENCES,
+      };
     }
 
     const since = new Date();
@@ -177,11 +197,83 @@ export class NotificationService {
         } satisfies AppNotification;
       });
 
-    return [...itemNotifications, ...versionNotifications]
+    const preferences = await this.preferences(userId);
+    const readRows = await prisma.$queryRaw<Array<{
+      notificationKey: string;
+    }>>`
+      SELECT "notificationKey"
+      FROM "AppNotificationRead"
+      WHERE "userId" = ${userId}
+    `;
+    const readKeys = new Set(readRows.map((row) => row.notificationKey));
+
+    const notifications = [...itemNotifications, ...versionNotifications]
+      .filter((item) =>
+        item.kind === "SIMER_VERSION"
+          ? preferences.simerVersion
+          : item.kind === "AZURE_COMPLETED"
+            ? preferences.azureCompleted
+            : preferences.azureUpdated,
+      )
       .sort((left, right) =>
         right.occurredAt.getTime() - left.occurredAt.getTime(),
       )
-      .slice(0, 50);
+      .slice(0, 50)
+      .map((item) => ({
+        ...item,
+        read: readKeys.has(item.key),
+      }));
+
+    return { notifications, preferences };
+  }
+
+  public async markRead(userId: number, keys: string[]) {
+    const validKeys = [...new Set(keys.map((key) => key.trim()).filter(Boolean))]
+      .slice(0, 100);
+
+    await Promise.all(validKeys.map((key) =>
+      prisma.$executeRaw`
+        INSERT INTO "AppNotificationRead" ("userId", "notificationKey", "readAt")
+        VALUES (${userId}, ${key}, CURRENT_TIMESTAMP)
+        ON CONFLICT ("userId", "notificationKey")
+        DO UPDATE SET "readAt" = CURRENT_TIMESTAMP
+      `,
+    ));
+
+    return validKeys.length;
+  }
+
+  public async preferences(userId: number): Promise<NotificationPreferences> {
+    const rows = await prisma.$queryRaw<NotificationPreferences[]>`
+      SELECT "appVersion", "simerVersion", "azureCompleted",
+             "azureUpdated", "desktopAlerts"
+      FROM "NotificationPreference"
+      WHERE "userId" = ${userId}
+    `;
+    return rows[0] ?? DEFAULT_PREFERENCES;
+  }
+
+  public async savePreferences(
+    userId: number,
+    input: NotificationPreferences,
+  ) {
+    await prisma.$executeRaw`
+      INSERT INTO "NotificationPreference"
+        ("userId", "appVersion", "simerVersion", "azureCompleted",
+         "azureUpdated", "desktopAlerts", "updatedAt")
+      VALUES
+        (${userId}, ${input.appVersion}, ${input.simerVersion},
+         ${input.azureCompleted}, ${input.azureUpdated},
+         ${input.desktopAlerts}, CURRENT_TIMESTAMP)
+      ON CONFLICT ("userId") DO UPDATE SET
+        "appVersion" = EXCLUDED."appVersion",
+        "simerVersion" = EXCLUDED."simerVersion",
+        "azureCompleted" = EXCLUDED."azureCompleted",
+        "azureUpdated" = EXCLUDED."azureUpdated",
+        "desktopAlerts" = EXCLUDED."desktopAlerts",
+        "updatedAt" = CURRENT_TIMESTAMP
+    `;
+    return input;
   }
 
   private routeForType(type: string) {
