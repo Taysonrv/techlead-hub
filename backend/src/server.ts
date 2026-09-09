@@ -8,6 +8,10 @@ import {
   AzureDevOpsSyncScheduler,
 } from "./jobs/AzureDevOpsSyncScheduler";
 
+import {
+  ensureApplicationSchema,
+} from "./database/applicationSchema";
+
 /* =========================================================
    CONFIGURAÇÃO
 ========================================================= */
@@ -44,8 +48,13 @@ const PORT =
 const azureSyncScheduler =
   new AzureDevOpsSyncScheduler();
 
-const server =
-  app.listen(
+let server:
+  ReturnType<typeof app.listen>;
+
+async function start() {
+  await ensureApplicationSchema();
+
+  server = app.listen(
     PORT,
     () => {
       console.log(
@@ -59,6 +68,12 @@ const server =
       azureSyncScheduler.start();
     },
   );
+}
+
+void start().catch((error) => {
+  console.error("[server] Não foi possível preparar o banco:", error);
+  process.exit(1);
+});
 
 /* =========================================================
    ENCERRAMENTO SEGURO
@@ -92,7 +107,7 @@ async function shutdown(
         resolve,
         reject,
       ) => {
-        server.close(
+        server?.close(
           (error) => {
             if (
               error
