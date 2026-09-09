@@ -17,6 +17,7 @@ import {
 } from "@mui/material";
 
 import {
+  AssessmentOutlined,
   AutoFixHighOutlined,
   BugReportOutlined,
   BusinessOutlined,
@@ -376,6 +377,14 @@ export function Sidebar() {
               "/importar",
             icon:
               <UploadFileOutlined fontSize="small" />,
+          },
+          {
+            label:
+              "Relatórios",
+            path:
+              "/relatorios",
+            icon:
+              <AssessmentOutlined fontSize="small" />,
           },
           {
             label:
