@@ -36,6 +36,10 @@ import {
   azureSyncRoutes,
 } from "./azure-sync.routes";
 
+import {
+  syncCenterRoutes,
+} from "./sync-center.routes";
+
 /* =========================================================
    ROUTER
 ========================================================= */
@@ -167,6 +171,15 @@ routes.use(
 routes.use(
   "/api/azure-sync",
   azureSyncRoutes,
+);
+
+/* =========================================================
+   CENTRAL DE SINCRONIZAÇÕES
+========================================================= */
+
+routes.use(
+  "/api/sync-center",
+  syncCenterRoutes,
 );
 
 /* =========================================================
