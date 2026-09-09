@@ -1423,6 +1423,18 @@ export function AzureWorkItems({
             {
               params: {
                 type,
+                search: appliedSearch || undefined,
+                state: state || undefined,
+                criticality: criticality || undefined,
+                assignedTo: assignedTo || undefined,
+                client: client || undefined,
+                module: module || undefined,
+                process: process || undefined,
+                deliveredVersion: deliveredVersion || undefined,
+                prioritized: prioritized || undefined,
+                blockedProcess: blockedProcess || undefined,
+                hasMovideskTicket: hasMovideskTicket || undefined,
+                hasAssignedTo: hasAssignedTo || undefined,
               },
             },
           );
@@ -1432,7 +1444,9 @@ export function AzureWorkItems({
         );
       },
       [
-        type,
+        type, appliedSearch, state, criticality, assignedTo, client,
+        module, process, deliveredVersion, prioritized, blockedProcess,
+        hasMovideskTicket, hasAssignedTo,
       ],
     );
 
@@ -2187,11 +2201,18 @@ export function AzureWorkItems({
       1,
     );
 
-    clearOperationalFilters();
+    const selectingSameCard =
+      activeCard === card;
+
+    setPrioritized("");
+    setBlockedProcess("");
+    setHasMovideskTicket("");
+    setHasAssignedTo("");
+    setActiveCard("all");
 
     if (
-      card ===
-      "all"
+      card === "all" ||
+      selectingSameCard
     ) {
       return;
     }
@@ -4025,6 +4046,7 @@ export function AzureWorkItems({
                   <TableContainer>
                     <Table
                       size="small"
+                      sx={{ minWidth: 1580 }}
                     >
                       <TableHead>
                         <TableRow>
@@ -4056,7 +4078,7 @@ export function AzureWorkItems({
                             Módulo
                           </TableCell>
 
-                          <TableCell>
+                          <TableCell sx={{ minWidth: 170 }}>
                             Versão
                           </TableCell>
 
@@ -4225,9 +4247,14 @@ export function AzureWorkItems({
 
                               <TableCell
                                 sx={{
+                                  minWidth: 170,
+                                  maxWidth: 260,
                                   whiteSpace:
                                     "nowrap",
+                                  overflow: "hidden",
+                                  textOverflow: "ellipsis",
                                 }}
+                                title={item.deliveredVersion ?? undefined}
                               >
                                 {item.deliveredVersion ??
                                   "-"}
