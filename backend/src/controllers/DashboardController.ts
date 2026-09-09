@@ -3,7 +3,15 @@ import type {
   Response,
 } from "express";
 
+import type {
+  Prisma,
+} from "@prisma/client";
+
 import { prisma } from "../database/prisma";
+
+import {
+  ticketOperationalScope,
+} from "../domain/OperationalScope";
 
 export class DashboardController {
   /* =========================================================
@@ -1105,9 +1113,8 @@ export class DashboardController {
   }
 }
 
-type SnapshotWhere = {
-  importRunId?: number;
-};
+type SnapshotWhere =
+  Prisma.TicketWhereInput;
 
 /**
  * Snapshot operacional = tickets vistos na última importação completa
@@ -1132,9 +1139,15 @@ async function getLatestSnapshotWhere(): Promise<SnapshotWhere> {
       },
     });
 
-  return latestImportRun
-    ? { importRunId: latestImportRun.id }
-    : {};
+  return {
+    ...ticketOperationalScope(),
+    ...(latestImportRun
+      ? {
+          importRunId:
+            latestImportRun.id,
+        }
+      : {}),
+  };
 }
 
 type DashboardPeriod = {
