@@ -1,4 +1,6 @@
 import {
+  AzureSyncStatus,
+  ImportStatus,
   Prisma,
 } from "@prisma/client";
 
@@ -80,7 +82,7 @@ export class SyncCenterService {
       importRuns,
       azureRuns,
     ] =
-      await prisma.$transaction([
+      await Promise.all([
         includeMovidesk
           ? prisma.importRun.count({
               where:
@@ -394,7 +396,7 @@ export class SyncCenterService {
       ...(params.status
         ? {
             status:
-              params.status as never,
+              params.status as ImportStatus,
           }
         : {}),
 
@@ -428,7 +430,7 @@ export class SyncCenterService {
       ...(params.status
         ? {
             status:
-              params.status as never,
+              params.status as AzureSyncStatus,
           }
         : {}),
 
