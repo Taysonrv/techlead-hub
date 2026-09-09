@@ -28,7 +28,11 @@ type ImportResult = {
 
 export class MovideskExcelImportService {
   async execute(
-    fileBuffer: Buffer
+    fileBuffer: Buffer,
+    options: {
+      fileName?: string | null;
+      userId?: number | null;
+    } = {},
   ): Promise<ImportResult> {
     if (
       !fileBuffer ||
@@ -134,6 +138,12 @@ export class MovideskExcelImportService {
         data: {
           batch: batchId,
           source: "MOVÍDESK_EXCEL",
+          fileName:
+            options.fileName ??
+            null,
+          userId:
+            options.userId ??
+            null,
           status: "PROCESSING",
           totalRows: rows.length,
         },
