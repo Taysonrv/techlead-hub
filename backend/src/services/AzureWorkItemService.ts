@@ -366,32 +366,19 @@ export class AzureWorkItemService {
   ======================================================= */
 
   public async summary(
-    type?:
-      string | null,
+    params: AzureWorkItemListParams = {},
   ) {
     const typeFilter =
       this.normalizeString(
-        type,
+        params.type,
       );
 
     const baseWhere:
       Prisma.AzureWorkItemWhereInput =
-      {
-        AND: [
-          ...(typeFilter
-            ? [
-                {
-                  workItemType: {
-                    equals:
-                      typeFilter,
-                    mode:
-                      "insensitive" as const,
-                  },
-                },
-              ]
-            : []),
-        ],
-      };
+      this.buildWhere({
+        ...params,
+        type: typeFilter,
+      });
 
     const correctionWhere:
       Prisma.AzureWorkItemWhereInput = {
