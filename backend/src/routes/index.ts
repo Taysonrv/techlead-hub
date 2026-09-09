@@ -44,6 +44,10 @@ import {
   reportRoutes,
 } from "./report.routes";
 
+import {
+  notificationRoutes,
+} from "./notification.routes";
+
 /* =========================================================
    ROUTER
 ========================================================= */
@@ -193,6 +197,11 @@ routes.use(
 routes.use(
   "/api/reports",
   reportRoutes,
+);
+
+routes.use(
+  "/api/notifications",
+  notificationRoutes,
 );
 
 /* =========================================================
