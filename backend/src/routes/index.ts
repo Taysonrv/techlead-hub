@@ -40,6 +40,10 @@ import {
   syncCenterRoutes,
 } from "./sync-center.routes";
 
+import {
+  reportRoutes,
+} from "./report.routes";
+
 /* =========================================================
    ROUTER
 ========================================================= */
@@ -180,6 +184,15 @@ routes.use(
 routes.use(
   "/api/sync-center",
   syncCenterRoutes,
+);
+
+/* =========================================================
+   RELATÓRIOS GERENCIAIS
+========================================================= */
+
+routes.use(
+  "/api/reports",
+  reportRoutes,
 );
 
 /* =========================================================
