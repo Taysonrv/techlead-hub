@@ -8,10 +8,24 @@ import {
   prisma,
 } from "../database/prisma";
 
+import {
+  createBarChartPng,
+  createPieChartPng,
+} from "./ReportChartService";
+
+export type ReportScope =
+  | "executive"
+  | "analysts"
+  | "sla"
+  | "clients"
+  | "development"
+  | "versions";
+
 type ExecutiveReportOptions = {
   from: Date;
   to: Date;
   userId: number;
+  scope?: ReportScope;
 };
 
 type RankingRow = {
@@ -494,6 +508,60 @@ export class ExecutiveReportService {
       7,
     );
 
+    this.addCharts(
+      workbook,
+      summary,
+      [
+        {
+          label:
+            "Em aberto",
+          value:
+            ticketsOpen,
+        },
+        {
+          label:
+            "Resolvidos",
+          value:
+            ticketsResolved,
+        },
+        {
+          label:
+            "Encerrados",
+          value:
+            ticketsClosed,
+        },
+      ],
+      4,
+      1,
+    );
+
+    this.addCharts(
+      workbook,
+      summary,
+      [
+        {
+          label:
+            "Correções",
+          value:
+            corrections,
+        },
+        {
+          label:
+            "Evoluções",
+          value:
+            evolutions,
+        },
+        {
+          label:
+            "Apoios",
+          value:
+            supports,
+        },
+      ],
+      4,
+      19,
+    );
+
     this.addRankingSheet(
       workbook,
       "Analistas",
@@ -581,6 +649,116 @@ export class ExecutiveReportService {
       ),
       options,
       generatedBy,
+    );
+
+    this.addRankingSheet(
+      workbook,
+      "SLA",
+      "Cumprimento do SLA de solução",
+      [
+        {
+          label:
+            "Dentro do prazo",
+          total:
+            slaMet,
+        },
+        {
+          label:
+            "Fora do prazo",
+          total:
+            Math.max(
+              0,
+              slaMeasured -
+                slaMet,
+            ),
+        },
+        {
+          label:
+            "Não medido",
+          total:
+            Math.max(
+              0,
+              ticketsTotal -
+                slaMeasured,
+            ),
+        },
+      ],
+      options,
+      generatedBy,
+    );
+
+    this.addRankingSheet(
+      workbook,
+      "Situação Atendimentos",
+      "Situação dos atendimentos Movidesk",
+      [
+        {
+          label:
+            "Em aberto",
+          total:
+            ticketsOpen,
+        },
+        {
+          label:
+            "Resolvidos",
+          total:
+            ticketsResolved,
+        },
+        {
+          label:
+            "Encerrados",
+          total:
+            ticketsClosed,
+        },
+      ],
+      options,
+      generatedBy,
+    );
+
+    this.addRankingSheet(
+      workbook,
+      "Desenvolvimento",
+      "Correções, evoluções e apoios",
+      [
+        {
+          label:
+            "Correções",
+          total:
+            corrections,
+        },
+        {
+          label:
+            "Evoluções",
+          total:
+            evolutions,
+        },
+        {
+          label:
+            "Apoios",
+          total:
+            supports,
+        },
+        {
+          label:
+            "Priorizados",
+          total:
+            prioritized,
+        },
+        {
+          label:
+            "Processo bloqueado",
+          total:
+            blocked,
+        },
+      ],
+      options,
+      generatedBy,
+    );
+
+    this.applyScope(
+      workbook,
+      options.scope ??
+        "executive",
     );
 
     const content =
@@ -737,6 +915,191 @@ export class ExecutiveReportService {
           4,
       },
     };
+
+    this.addCharts(
+      workbook,
+      sheet,
+      rows.map(
+        (
+          item,
+        ) => ({
+          label:
+            item.label,
+          value:
+            item.total,
+        }),
+      ),
+      4,
+      1,
+    );
+  }
+
+  private addCharts(
+    workbook:
+      ExcelJS.Workbook,
+    sheet:
+      ExcelJS.Worksheet,
+    values:
+      Array<{
+        label: string;
+        value: number;
+      }>,
+    column:
+      number,
+    row:
+      number,
+  ) {
+    if (
+      values.length ===
+      0
+    ) {
+      return;
+    }
+
+    for (
+      let current =
+        column + 1;
+      current <=
+        column + 9;
+      current += 1
+    ) {
+      sheet.getColumn(
+        current,
+      ).width =
+        12;
+    }
+
+    const pie =
+      workbook.addImage({
+        buffer:
+          createPieChartPng(
+            values,
+          ),
+        extension:
+          "png",
+      });
+
+    const bars =
+      workbook.addImage({
+        buffer:
+          createBarChartPng(
+            values,
+          ),
+        extension:
+          "png",
+      });
+
+    sheet.addImage(
+      pie,
+      {
+        tl: {
+          col:
+            column,
+          row:
+            row,
+        },
+        ext: {
+          width:
+            540,
+          height:
+            270,
+        },
+      },
+    );
+
+    sheet.addImage(
+      bars,
+      {
+        tl: {
+          col:
+            column,
+          row:
+            row +
+            15,
+        },
+        ext: {
+          width:
+            540,
+          height:
+            270,
+        },
+      },
+    );
+  }
+
+  private applyScope(
+    workbook:
+      ExcelJS.Workbook,
+    scope:
+      ReportScope,
+  ) {
+    const sheets:
+      Record<
+        ReportScope,
+        string[]
+      > = {
+      executive: [
+        "Resumo Executivo",
+        "Analistas",
+        "Clientes",
+        "Categorias",
+        "Estados Azure",
+        "Versões",
+        "SLA",
+        "Situação Atendimentos",
+        "Desenvolvimento",
+      ],
+      analysts: [
+        "Analistas",
+        "Situação Atendimentos",
+      ],
+      sla: [
+        "SLA",
+        "Situação Atendimentos",
+        "Categorias",
+      ],
+      clients: [
+        "Clientes",
+        "Categorias",
+        "Situação Atendimentos",
+      ],
+      development: [
+        "Desenvolvimento",
+        "Estados Azure",
+        "Versões",
+      ],
+      versions: [
+        "Versões",
+        "Estados Azure",
+        "Desenvolvimento",
+      ],
+    };
+
+    const allowed =
+      new Set(
+        sheets[
+          scope
+        ],
+      );
+
+    workbook.worksheets
+      .filter(
+        (
+          sheet,
+        ) =>
+          !allowed.has(
+            sheet.name,
+          ),
+      )
+      .forEach(
+        (
+          sheet,
+        ) => {
+          workbook.removeWorksheet(
+            sheet.id,
+          );
+        },
+      );
   }
 
   private addSection(
