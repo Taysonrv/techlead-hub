@@ -14,6 +14,11 @@ export async function ensureApplicationSchema() {
   `);
 
   await prisma.$executeRawUnsafe(`
+    CREATE INDEX IF NOT EXISTS "AzureWorkItem_participantClients_idx"
+    ON "AzureWorkItem" ("participantClients")
+  `);
+
+  await prisma.$executeRawUnsafe(`
     CREATE TABLE IF NOT EXISTS "AppNotificationRead" (
       "userId" INTEGER NOT NULL,
       "notificationKey" VARCHAR(500) NOT NULL,
