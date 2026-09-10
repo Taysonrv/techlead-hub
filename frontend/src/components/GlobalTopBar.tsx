@@ -57,7 +57,8 @@ export function GlobalTopBar() {
   }
 
   return (
-    <Box sx={{ position: "sticky", top: 0, zIndex: (theme) => theme.zIndex.appBar, mx: { xs: -1.5, sm: -2, md: -2.5, lg: -3, xl: -4 }, mt: { xs: -1.5, sm: -2, md: -2.5, lg: -3, xl: -3.5 }, mb: 2.5, px: { xs: 1.5, md: 2.5 }, py: 1, minHeight: 62, bgcolor: "rgba(255,255,255,.94)", backdropFilter: "blur(14px)", borderBottom: "1px solid", borderColor: "divider" }}>
+    <>
+    <Box sx={{ position: "fixed", top: 0, left: { xs: 0, md: 248 }, right: 0, zIndex: (theme) => theme.zIndex.appBar, px: { xs: 1.5, md: 2.5 }, py: 1.75, height: 74, boxSizing: "border-box", bgcolor: "rgba(255,255,255,.97)", backdropFilter: "blur(14px)", borderBottom: "1px solid", borderColor: "divider" }}>
       <Box sx={{ position: "relative", width: { xs: "calc(100% - 72px)", sm: "clamp(360px, 46vw, 760px)" }, mx: "auto", minHeight: 44 }}>
           <TextField inputRef={searchInputRef} fullWidth size="small" value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={handleSearchKeyDown} placeholder="Busque tickets, clientes, tarefas, assuntos ou versões..."
             slotProps={{ input: { startAdornment: <InputAdornment position="start"><SearchOutlined fontSize="small" /></InputAdornment>, endAdornment: searching ? <CircularProgress size={16} /> : undefined, sx: { height: 44, bgcolor: "background.paper" } } }} />
@@ -78,6 +79,8 @@ export function GlobalTopBar() {
         </Box>
       </Popover>
     </Box>
+    <Box aria-hidden sx={{ height: 90, flexShrink: 0 }} />
+    </>
   );
 }
 
