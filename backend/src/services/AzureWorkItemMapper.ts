@@ -16,6 +16,8 @@ export const AZURE_WORK_ITEM_FIELDS = {
   movideskTicket: "Custom.fc7510e1-3e57-49e4-9980-828b506c14ee",
 
   client: "Custom.ClientePrincipal",
+  participantClients: "Custom.ClientesParticipantes",
+  participantTickets: "Custom.NdoTicketclientesParticipantes",
   criticality: "Custom.Criticidade",
   origin: "Custom.Origem",
   detectedIn: "Custom.Detectadoem",
@@ -85,6 +87,30 @@ function integerValue(value: unknown): number | null {
   const parsed = Number(normalized);
 
   return Number.isSafeInteger(parsed) ? parsed : null;
+}
+
+function customFieldValue(fields: Record<string, unknown>, candidates: string[]) {
+  const normalizedCandidates = candidates.map((candidate) => candidate.toLocaleLowerCase("pt-BR"));
+  const wantsTicket = normalizedCandidates.some((candidate) => candidate.includes("ticket"));
+  const entry = Object.entries(fields).find(([key]) => {
+    const normalizedKey = key.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR");
+    if (normalizedCandidates.includes(key.toLocaleLowerCase("pt-BR"))) return true;
+    if (!normalizedKey.includes("particip")) return false;
+    return wantsTicket
+      ? normalizedKey.includes("ticket")
+      : normalizedKey.includes("client") && !normalizedKey.includes("ticket");
+  });
+  return entry?.[1];
+}
+
+function stringListValue(value: unknown): string[] {
+  const values = Array.isArray(value) ? value : typeof value === "string" ? value.split(/[;,\n|]+/) : [];
+  return [...new Set(values.map((item) => String(item).trim()).filter(Boolean))];
+}
+
+function integerListValue(value: unknown): number[] {
+  const source = Array.isArray(value) ? value : typeof value === "string" ? value.match(/\d+/g) ?? [] : [];
+  return [...new Set(source.map(integerValue).filter((item): item is number => item !== null && item > 0))];
 }
 
 function booleanValue(value: unknown): boolean | null {
@@ -331,6 +357,22 @@ export function mapAzureWorkItem(
     client: stringValue(
       fields[AZURE_WORK_ITEM_FIELDS.client],
     ),
+
+    participantClients: stringListValue(customFieldValue(fields, [
+      AZURE_WORK_ITEM_FIELDS.participantClients,
+      "Custom.ClienteParticipantes",
+      "Custom.ClientesParticipante",
+    ])).join("\n") || null,
+
+    participantMovideskTickets: (() => {
+      const ids = integerListValue(customFieldValue(fields, [
+        AZURE_WORK_ITEM_FIELDS.participantTickets,
+        "Custom.NdoTicketClientesParticipantes",
+        "Custom.NumerodoTicketClientesParticipantes",
+        "Custom.TicketsClientesParticipantes",
+      ]));
+      return ids.length ? `,${ids.join(",")},` : null;
+    })(),
 
     criticality: stringValue(
       fields[AZURE_WORK_ITEM_FIELDS.criticality],
