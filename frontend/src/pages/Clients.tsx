@@ -43,6 +43,7 @@ import {
 import { useNavigate } from "react-router-dom";
 
 import { api } from "../services/api";
+import { calculateOfficialSla } from "../utils/officialSla";
 import { useFilters } from "../context/FiltersContext";
 import { PeriodFilter } from "../components/PeriodFilter";
 import { aliareColors } from "../theme/theme";
@@ -785,8 +786,10 @@ export function Clients() {
               "Closed"
         ).length;
 
-      const responseSla = calculateOfficialSla(scopedTickets, "response");
-      const solutionSla = calculateOfficialSla(scopedTickets, "solution");
+      const responseResult = calculateOfficialSla(scopedTickets, "response");
+      const solutionResult = calculateOfficialSla(scopedTickets, "solution");
+      const responseSla = { measured: responseResult.measured, onTime: responseResult.within, percent: responseResult.percentage };
+      const solutionSla = { measured: solutionResult.measured, onTime: solutionResult.within, percent: solutionResult.percentage };
       const azureItems = Array.from(new Map(
         scopedTickets.map((ticket) => ticket.azureWorkItem)
           .filter((item): item is AzureTaskSummary => Boolean(item))
@@ -3985,18 +3988,6 @@ function TicketField({
 /* =========================================================
    TICKET ABERTO
 ========================================================= */
-
-function calculateOfficialSla(tickets: Ticket[], type: "response" | "solution") {
-  let measured = 0; let onTime = 0;
-  tickets.forEach((ticket) => {
-    const raw = type === "response" ? ticket.responseSlaIndicator : ticket.solutionSlaIndicator;
-    const value = normalize(raw);
-    if (!value) return;
-    if (value.includes("no prazo") || value.includes("dentro do prazo") || value.includes("cumprido") || value.includes("atingido")) { measured += 1; onTime += 1; return; }
-    if (value.includes("fora do prazo") || value.includes("vencido") || value.includes("nao cumprido") || value.includes("nao atingido")) { measured += 1; }
-  });
-  return { measured, onTime, percent: measured ? Math.round((onTime / measured) * 1000) / 10 : null };
-}
 
 function formatSlaPercent(value: number | null) {
   return value === null ? "Sem medição" : `${value.toFixed(1)}%`;

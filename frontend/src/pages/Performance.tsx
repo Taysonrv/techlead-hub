@@ -62,6 +62,7 @@ import {
   type DeadlineLevel,
   type ServiceLevelResult,
 } from "../utils/serviceLevel";
+import { calculateOfficialSla } from "../utils/officialSla";
 
 type Ticket = {
   id: number;
@@ -91,6 +92,8 @@ type Ticket = {
   taskNumber: number | null;
   taskStatus: string | null;
   deliveredVersion: string | null;
+  responseSlaIndicator?: string | null;
+  solutionSlaIndicator?: string | null;
 };
 
 type DeadlineBucket =
@@ -182,8 +185,21 @@ export function Performance() {
     });
   }, [tickets, effectiveStartDate, effectiveEndDate]);
 
+  const officialResponseSla = useMemo(
+    () => calculateOfficialSla(periodTickets, "response"),
+    [periodTickets],
+  );
+
+  const officialSolutionSla = useMemo(
+    () => calculateOfficialSla(periodTickets, "solution"),
+    [periodTickets],
+  );
+
   /* =======================================================
-     MOTOR OFICIAL DE PRAZOS
+     MOTOR OPERACIONAL DE PRAZOS
+
+     Usado para risco e priorização do backlog. O realizado
+     oficial de SLA vem dos indicadores importados acima.
   ======================================================= */
 
   const evaluatedTickets = useMemo<EvaluatedTicket[]>(() => {
@@ -221,124 +237,6 @@ export function Performance() {
       !isSupportedServiceCategory(item.ticket.category, item.ticket.cause)
     );
   }, [evaluatedTickets]);
-
-  const firstResponse = useMemo(() => {
-    const eligible = measuredTickets;
-
-    const completed = eligible.filter(
-      (item) =>
-        item.serviceLevel.firstResponse.completed
-    );
-
-    const within = eligible.filter(
-      (item) =>
-        item.serviceLevel.firstResponse.completed &&
-        item.serviceLevel.firstResponse.withinDeadline === true
-    );
-
-    /*
-     * "Fora do prazo" inclui:
-     * 1. primeira resposta concluída fora do prazo;
-     * 2. primeira resposta ainda não concluída, mas já vencida.
-     *
-     * Assim, o percentual central representa exatamente as
-     * fatias verde/vermelha exibidas no gráfico.
-     */
-    const overdue = eligible.filter(
-      (item) =>
-        (
-          item.serviceLevel.firstResponse.completed &&
-          item.serviceLevel.firstResponse.withinDeadline === false
-        ) ||
-        (
-          !item.serviceLevel.firstResponse.completed &&
-          item.serviceLevel.firstResponse.level === "OVERDUE"
-        )
-    );
-
-    const pending = eligible.filter(
-      (item) =>
-        !item.serviceLevel.firstResponse.completed &&
-        item.serviceLevel.firstResponse.level !== "OVERDUE"
-    );
-
-    const evaluated =
-      within.length +
-      overdue.length;
-
-    return {
-      eligible,
-      completed,
-      within,
-      overdue,
-      pending,
-      evaluated,
-      rate:
-        percentage(
-          within.length,
-          evaluated,
-        ),
-    };
-  }, [measuredTickets]);
-
-  const resolution = useMemo(() => {
-    const eligible = measuredTickets;
-
-    const completed = eligible.filter(
-      (item) =>
-        item.serviceLevel.resolution.completed
-    );
-
-    const within = eligible.filter(
-      (item) =>
-        item.serviceLevel.resolution.completed &&
-        item.serviceLevel.resolution.withinDeadline === true
-    );
-
-    /*
-     * "Fora do prazo" inclui:
-     * 1. atendimento concluído fora do prazo;
-     * 2. atendimento ainda aberto cujo prazo de solução já venceu.
-     *
-     * Isso evita situações como exibir 100% no centro enquanto
-     * o mesmo gráfico apresenta tickets vermelhos.
-     */
-    const overdue = eligible.filter(
-      (item) =>
-        (
-          item.serviceLevel.resolution.completed &&
-          item.serviceLevel.resolution.withinDeadline === false
-        ) ||
-        (
-          !item.serviceLevel.resolution.completed &&
-          item.serviceLevel.resolution.level === "OVERDUE"
-        )
-    );
-
-    const pending = eligible.filter(
-      (item) =>
-        !item.serviceLevel.resolution.completed &&
-        item.serviceLevel.resolution.level !== "OVERDUE"
-    );
-
-    const evaluated =
-      within.length +
-      overdue.length;
-
-    return {
-      eligible,
-      completed,
-      within,
-      overdue,
-      pending,
-      evaluated,
-      rate:
-        percentage(
-          within.length,
-          evaluated,
-        ),
-    };
-  }, [measuredTickets]);
 
   const riskGroups = useMemo(() => {
     const open = measuredTickets.filter((item) => isOpen(item.ticket));
@@ -398,13 +296,13 @@ export function Performance() {
     );
 
     const firstScore =
-      firstResponse.evaluated > 0
-        ? firstResponse.rate
+      officialResponseSla.measured > 0
+        ? officialResponseSla.percentage ?? 0
         : 100;
 
     const resolutionScore =
-      resolution.evaluated > 0
-        ? resolution.rate
+      officialSolutionSla.measured > 0
+        ? officialSolutionSla.percentage ?? 0
         : 100;
 
     const riskScore = Math.max(0, 100 - riskRate);
@@ -417,7 +315,7 @@ export function Performance() {
       score,
       label: healthLabel(score),
     };
-  }, [firstResponse, resolution, riskGroups]);
+  }, [officialResponseSla, officialSolutionSla, riskGroups]);
 
   const analysts = useMemo<AnalystPerformance[]>(() => {
     const map = new Map<string, EvaluatedTicket[]>();
@@ -431,53 +329,21 @@ export function Performance() {
 
     return Array.from(map.entries())
       .map(([owner, ownerItems]) => {
-        const measured = ownerItems.filter((item) =>
+        const operationallyMeasured = ownerItems.filter((item) =>
           item.serviceLevel.applicable &&
           isSupportedServiceCategory(item.ticket.category, item.ticket.cause)
         );
 
-        const firstWithin =
-          measured.filter(
-            (item) =>
-              item.serviceLevel.firstResponse.completed &&
-              item.serviceLevel.firstResponse.withinDeadline === true,
-          );
-
-        const firstOverdue =
-          measured.filter(
-            (item) =>
-              (
-                item.serviceLevel.firstResponse.completed &&
-                item.serviceLevel.firstResponse.withinDeadline === false
-              ) ||
-              (
-                !item.serviceLevel.firstResponse.completed &&
-                item.serviceLevel.firstResponse.level === "OVERDUE"
-              ),
-          );
-
-        const resolutionWithin =
-          measured.filter(
-            (item) =>
-              item.serviceLevel.resolution.completed &&
-              item.serviceLevel.resolution.withinDeadline === true,
-          );
-
-        const resolutionOverdue =
-          measured.filter(
-            (item) =>
-              (
-                item.serviceLevel.resolution.completed &&
-                item.serviceLevel.resolution.withinDeadline === false
-              ) ||
-              (
-                !item.serviceLevel.resolution.completed &&
-                item.serviceLevel.resolution.level === "OVERDUE"
-              ),
-          );
+        const ownerTickets = ownerItems.map((item) => item.ticket);
+        const responseOfficial = calculateOfficialSla(ownerTickets, "response");
+        const solutionOfficial = calculateOfficialSla(ownerTickets, "solution");
+        const officialMeasuredIds = new Set([
+          ...responseOfficial.measuredTickets,
+          ...solutionOfficial.measuredTickets,
+        ].map((ticket) => ticket.id));
 
         const open =
-          measured.filter(
+          operationallyMeasured.filter(
             (item) =>
               isOpen(
                 item.ticket,
@@ -499,25 +365,10 @@ export function Performance() {
             },
           );
 
-        const firstEvaluated =
-          firstWithin.length +
-          firstOverdue.length;
-
-        const resolutionEvaluated =
-          resolutionWithin.length +
-          resolutionOverdue.length;
-
-        const firstRate =
-          percentage(
-            firstWithin.length,
-            firstEvaluated,
-          );
-
-        const resolutionRate =
-          percentage(
-            resolutionWithin.length,
-            resolutionEvaluated,
-          );
+        const firstEvaluated = responseOfficial.measured;
+        const resolutionEvaluated = solutionOfficial.measured;
+        const firstRate = responseOfficial.percentage ?? 0;
+        const resolutionRate = solutionOfficial.percentage ?? 0;
 
         const riskPenalty =
           percentage(
@@ -550,8 +401,8 @@ export function Performance() {
         return {
           owner,
           total: ownerItems.length,
-          measured: measured.length,
-          excluded: ownerItems.length - measured.length,
+          measured: officialMeasuredIds.size,
+          excluded: ownerItems.length - officialMeasuredIds.size,
           firstResponseEligible: firstEvaluated,
           firstResponseRate: firstRate,
           resolutionEligible: resolutionEvaluated,
@@ -561,15 +412,9 @@ export function Performance() {
           score,
 
           tickets: ownerItems.map((item) => item.ticket),
-          measuredTickets: measured.map((item) => item.ticket),
-          firstResponseTickets: [
-            ...firstWithin,
-            ...firstOverdue,
-          ].map((item) => item.ticket),
-          resolutionTickets: [
-            ...resolutionWithin,
-            ...resolutionOverdue,
-          ].map((item) => item.ticket),
+          measuredTickets: ownerTickets.filter((ticket) => officialMeasuredIds.has(ticket.id)),
+          firstResponseTickets: responseOfficial.measuredTickets,
+          resolutionTickets: solutionOfficial.measuredTickets,
           riskTickets: atRisk.map((item) => item.ticket),
         };
       })
@@ -577,108 +422,35 @@ export function Performance() {
   }, [evaluatedTickets]);
 
   const trends = useMemo(() => {
-    const groups = new Map<string, {
-      date: string;
-      firstEligible: number;
-      firstWithin: number;
-      resolutionEligible: number;
-      resolutionWithin: number;
-    }>();
-
-    measuredTickets.forEach((item) => {
-      const date = formatDayKey(item.ticket.createdDate);
-      const current = groups.get(date) ?? {
-        date,
-        firstEligible: 0,
-        firstWithin: 0,
-        resolutionEligible: 0,
-        resolutionWithin: 0,
-      };
-
-      const firstIsWithin =
-        item.serviceLevel.firstResponse.completed &&
-        item.serviceLevel.firstResponse.withinDeadline === true;
-
-      const firstIsOverdue =
-        (
-          item.serviceLevel.firstResponse.completed &&
-          item.serviceLevel.firstResponse.withinDeadline === false
-        ) ||
-        (
-          !item.serviceLevel.firstResponse.completed &&
-          item.serviceLevel.firstResponse.level === "OVERDUE"
-        );
-
-      if (
-        firstIsWithin ||
-        firstIsOverdue
-      ) {
-        current.firstEligible +=
-          1;
-
-        if (
-          firstIsWithin
-        ) {
-          current.firstWithin +=
-            1;
-        }
-      }
-
-      const resolutionIsWithin =
-        item.serviceLevel.resolution.completed &&
-        item.serviceLevel.resolution.withinDeadline === true;
-
-      const resolutionIsOverdue =
-        (
-          item.serviceLevel.resolution.completed &&
-          item.serviceLevel.resolution.withinDeadline === false
-        ) ||
-        (
-          !item.serviceLevel.resolution.completed &&
-          item.serviceLevel.resolution.level === "OVERDUE"
-        );
-
-      if (
-        resolutionIsWithin ||
-        resolutionIsOverdue
-      ) {
-        current.resolutionEligible +=
-          1;
-
-        if (
-          resolutionIsWithin
-        ) {
-          current.resolutionWithin +=
-            1;
-        }
-      }
-
-      groups.set(date, current);
+    const groups = new Map<string, Ticket[]>();
+    periodTickets.forEach((ticket) => {
+      const date = formatDayKey(ticket.createdDate);
+      groups.set(date, [...(groups.get(date) ?? []), ticket]);
     });
 
-    return Array.from(groups.values())
-      .sort((a, b) => a.date.localeCompare(b.date))
-      .map((item) => ({
-        date: formatShortDate(item.date),
-        firstResponse: percentage(item.firstWithin, item.firstEligible),
-        resolution: percentage(item.resolutionWithin, item.resolutionEligible),
+    return Array.from(groups.entries())
+      .sort(([dateA], [dateB]) => dateA.localeCompare(dateB))
+      .map(([date, dayTickets]) => ({
+        date: formatShortDate(date),
+        firstResponse: calculateOfficialSla(dayTickets, "response").percentage ?? 0,
+        resolution: calculateOfficialSla(dayTickets, "solution").percentage ?? 0,
       }));
-  }, [measuredTickets]);
+  }, [periodTickets]);
 
   const firstResponsePie = [
     {
       name: "Dentro do prazo",
-      value: firstResponse.within.length,
+      value: officialResponseSla.within,
       color: deadlineColors.within,
     },
     {
       name: "Fora do prazo",
-      value: firstResponse.overdue.length,
+      value: officialResponseSla.outside,
       color: deadlineColors.overdue,
     },
     {
-      name: "Pendente",
-      value: firstResponse.pending.length,
+      name: "Sem medição",
+      value: officialResponseSla.unmeasured,
       color: deadlineColors.attention,
     },
   ].filter((item) => item.value > 0);
@@ -686,17 +458,17 @@ export function Performance() {
   const resolutionPie = [
     {
       name: "Dentro do prazo",
-      value: resolution.within.length,
+      value: officialSolutionSla.within,
       color: deadlineColors.within,
     },
     {
       name: "Fora do prazo",
-      value: resolution.overdue.length,
+      value: officialSolutionSla.outside,
       color: deadlineColors.overdue,
     },
     {
-      name: "Em andamento",
-      value: resolution.pending.length,
+      name: "Sem medição",
+      value: officialSolutionSla.unmeasured,
       color: deadlineColors.attention,
     },
   ].filter((item) => item.value > 0);
@@ -801,10 +573,10 @@ export function Performance() {
         variant="outlined"
         sx={{ mb: 1.5, borderRadius: 2 }}
       >
-        <strong>Regra oficial aplicada:</strong> {measuredTickets.length} atendimento(s) estão
-        sendo medidos neste período e {excludedTickets.length} ficaram fora da medição.
-        O cálculo considera horas úteis, urgência e pausas registradas. Até a classificação
-        VIP existir no banco, os atendimentos são tratados como perfil Padrão.
+        <strong>SLA do suporte:</strong> utiliza exclusivamente os indicadores oficiais
+        importados do Movidesk e os tickets abertos no período selecionado. Atendimentos
+        sem medição e as categorias Adequação e Solicitação de Serviço não entram no denominador.
+        Os prazos calculados em horas úteis são exibidos separadamente como risco operacional.
       </Alert>
 
       <Box
@@ -820,57 +592,57 @@ export function Performance() {
         }}
       >
         <PerformanceKpi
-          title="Primeira resposta"
-          value={`${firstResponse.rate}%`}
-          description={`${firstResponse.within.length} dentro • ${firstResponse.overdue.length} fora • ${firstResponse.pending.length} pendente(s)`}
-          accent={rateColor(firstResponse.rate)}
+          title="SLA suporte · 1ª resposta"
+          value={formatOfficialRate(officialResponseSla.percentage)}
+          description={`${officialResponseSla.within} dentro • ${officialResponseSla.outside} fora • ${officialResponseSla.unmeasured} sem medição`}
+          accent={rateColor(officialResponseSla.percentage ?? 0)}
           info={{
             title: "Primeira resposta",
             summary:
-              "Percentual de primeiras respostas concluídas dentro do prazo entre os atendimentos medidos.",
+              "Percentual oficial de primeiras respostas dentro do prazo entre os atendimentos medidos pelo Movidesk.",
             calculation:
-              "Dentro do prazo ÷ (dentro do prazo + fora do prazo) × 100. Pendentes ainda dentro do prazo ficam fora do denominador.",
-            source: "Movidesk + regra operacional do TechLead Hub",
+              "Dentro do prazo ÷ (dentro do prazo + fora do prazo) × 100.",
+            source: "Indicador oficial do Movidesk",
             reference:
-              "firstResponseDate + urgência + categoria + pausas",
+              "responseSlaIndicator",
             periodRule:
               "Considera os tickets abertos dentro do período selecionado e elegíveis para medição.",
             notes:
-              "Uma primeira resposta ainda não concluída passa a contar como fora do prazo quando o prazo já venceu. Pendentes ainda dentro do prazo não penalizam a taxa.",
+              "Registros sem indicador oficial não entram no denominador.",
           }}
           onClick={() =>
             setDrilldown({
               title: "Prazo de primeira resposta",
               subtitle: "Atendimentos elegíveis para primeira resposta",
-              tickets: firstResponse.eligible.map((item) => item.ticket),
+              tickets: officialResponseSla.measuredTickets,
             })
           }
         />
 
         <PerformanceKpi
-          title="Resolução"
-          value={`${resolution.rate}%`}
-          description={`${resolution.within.length} dentro • ${resolution.overdue.length} fora • ${resolution.pending.length} em andamento`}
-          accent={rateColor(resolution.rate)}
+          title="SLA suporte · solução"
+          value={formatOfficialRate(officialSolutionSla.percentage)}
+          description={`${officialSolutionSla.within} dentro • ${officialSolutionSla.outside} fora • ${officialSolutionSla.unmeasured} sem medição`}
+          accent={rateColor(officialSolutionSla.percentage ?? 0)}
           info={{
             title: "Resolução",
             summary:
-              "Percentual de atendimentos concluídos dentro do prazo de solução.",
+              "Percentual oficial de soluções dentro do prazo entre os atendimentos medidos pelo Movidesk.",
             calculation:
-              "Dentro do prazo ÷ (dentro do prazo + fora do prazo) × 100. Atendimentos ainda em andamento e dentro do prazo ficam fora do denominador.",
-            source: "Movidesk + regra operacional do TechLead Hub",
+              "Dentro do prazo ÷ (dentro do prazo + fora do prazo) × 100.",
+            source: "Indicador oficial do Movidesk",
             reference:
-              "resolvedDate/closedDate + urgência + categoria + pausas",
+              "solutionSlaIndicator",
             periodRule:
               "A população vem dos tickets abertos no período selecionado e elegíveis para medição.",
             notes:
-              "Atendimentos ainda abertos passam a contar como fora do prazo somente quando o prazo de solução já venceu.",
+              "Registros sem indicador oficial não entram no denominador.",
           }}
           onClick={() =>
             setDrilldown({
               title: "Prazo de resolução",
               subtitle: "Atendimentos concluídos com prazo informado",
-              tickets: resolution.completed.map((item) => item.ticket),
+              tickets: officialSolutionSla.measuredTickets,
             })
           }
         />
@@ -959,7 +731,7 @@ export function Performance() {
         <DonutCard
           title="Prazo de primeira resposta"
           subtitle="Distribuição dos atendimentos elegíveis"
-          centerValue={`${firstResponse.rate}%`}
+          centerValue={formatOfficialRate(officialResponseSla.percentage)}
           centerLabel="cumprimento"
           data={firstResponsePie}
           info={{
@@ -978,17 +750,17 @@ export function Performance() {
             if (name === "Dentro do prazo") {
               setDrilldown({
                 title: "Primeira resposta dentro do prazo",
-                tickets: firstResponse.within.map((item) => item.ticket),
+                tickets: officialResponseSla.withinTickets,
               });
             } else if (name === "Fora do prazo") {
               setDrilldown({
                 title: "Primeira resposta fora do prazo",
-                tickets: firstResponse.overdue.map((item) => item.ticket),
+                tickets: officialResponseSla.outsideTickets,
               });
             } else {
               setDrilldown({
                 title: "Primeira resposta pendente",
-                tickets: firstResponse.pending.map((item) => item.ticket),
+                tickets: officialResponseSla.unmeasuredTickets,
               });
             }
           }}
@@ -997,7 +769,7 @@ export function Performance() {
         <DonutCard
           title="Prazo de resolução"
           subtitle="Atendimentos concluídos com prazo"
-          centerValue={`${resolution.rate}%`}
+          centerValue={formatOfficialRate(officialSolutionSla.percentage)}
           centerLabel="cumprimento"
           data={resolutionPie}
           info={{
@@ -1016,7 +788,7 @@ export function Performance() {
             if (name === "Dentro do prazo") {
               setDrilldown({
                 title: "Resoluções dentro do prazo",
-                tickets: resolution.within.map((item) => item.ticket),
+                tickets: officialSolutionSla.withinTickets,
               });
               return;
             }
@@ -1024,7 +796,7 @@ export function Performance() {
             if (name === "Fora do prazo") {
               setDrilldown({
                 title: "Resoluções fora do prazo",
-                tickets: resolution.overdue.map((item) => item.ticket),
+                tickets: officialSolutionSla.outsideTickets,
               });
               return;
             }
@@ -1032,7 +804,7 @@ export function Performance() {
             setDrilldown({
               title: "Resoluções em andamento",
               subtitle: "Atendimentos ainda abertos e dentro do prazo",
-              tickets: resolution.pending.map((item) => item.ticket),
+              tickets: officialSolutionSla.unmeasuredTickets,
             });
           }}
         />
@@ -2103,6 +1875,15 @@ function rateColor(rate: number) {
   }
 
   return deadlineColors.overdue;
+}
+
+function formatOfficialRate(rate: number | null) {
+  return rate === null
+    ? "Sem medição"
+    : `${rate.toLocaleString("pt-BR", {
+        minimumFractionDigits: 1,
+        maximumFractionDigits: 1,
+      })}%`;
 }
 
 function healthLabel(score: number) {
