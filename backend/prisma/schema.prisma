@@ -359,6 +359,7 @@ model AzureWorkItem {
 
   // Dados funcionais SIMER
   client      String?
+  participantClients String? @db.Text
   criticality String?
   origin      String?
   detectedIn  String?
@@ -370,6 +371,7 @@ model AzureWorkItem {
   // Não é uma FK com Ticket neste primeiro momento.
   // Representa o número do atendimento armazenado no Azure.
   movideskTicket Int?
+  participantMovideskTickets String? @db.Text
 
   // Versão relacionada ao Work Item
   deliveredVersion String?
@@ -448,6 +450,7 @@ model AzureWorkItem {
   @@index([boardColumn])
   // Dados funcionais
   @@index([client])
+  @@index([participantClients])
   @@index([criticality])
   @@index([origin])
   @@index([detectedIn])
