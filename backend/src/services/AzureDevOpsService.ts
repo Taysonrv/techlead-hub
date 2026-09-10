@@ -4,6 +4,27 @@ import type {
   AzureDevOpsWorkItemResponse,
 } from "./AzureWorkItemMapper";
 
+const WIKI_STOP_WORDS = new Set([
+  "para", "com", "sem", "uma", "que", "dos", "das", "por", "deve",
+  "esta", "esse", "essa", "ticket", "atendimento", "problema", "erro",
+]);
+
+function wikiExcerpt(content: string, terms: string[]) {
+  const plain = content
+    .replace(/```[\s\S]*?```/g, " ")
+    .replace(/[#>*_`\[\]()!-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!plain) return "Conteúdo disponível na Wiki.";
+  const normalized = plain.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR");
+  const position = terms.reduce((best, term) => {
+    const found = normalized.indexOf(term);
+    return found >= 0 && (best < 0 || found < best) ? found : best;
+  }, -1);
+  const start = Math.max(0, position - 80);
+  return `${start > 0 ? "…" : ""}${plain.slice(start, start + 260)}${plain.length > start + 260 ? "…" : ""}`;
+}
+
 /* =========================================================
    TIPOS
 ========================================================= */
@@ -480,6 +501,74 @@ export class AzureDevOpsService {
         error,
         `Não foi possível consultar a página Wiki ${pageId}.`,
       );
+    }
+  }
+
+  public async searchWikiPages(
+    query: string,
+    limit = 8,
+  ) {
+    const normalizedQuery = query.trim();
+    if (!normalizedQuery) return [];
+    this.ensureConfigured();
+
+    try {
+      const response = await this.client.get<{
+        subPages?: Array<Record<string, unknown>>;
+      }>(
+        `/_apis/wiki/wikis/${encodeURIComponent(this.wiki)}/pages`,
+        {
+          params: {
+            path: "/",
+            recursionLevel: "Full",
+            includeContent: true,
+            "api-version": "7.1",
+          },
+        },
+      );
+
+      const pages: Array<Record<string, unknown>> = [];
+      const visit = (page: Record<string, unknown>) => {
+        pages.push(page);
+        const children = Array.isArray(page.subPages) ? page.subPages : [];
+        children.forEach((child) => {
+          if (child && typeof child === "object") visit(child as Record<string, unknown>);
+        });
+      };
+      (response.data.subPages ?? []).forEach(visit);
+
+      const terms = normalizedQuery
+        .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+        .toLocaleLowerCase("pt-BR")
+        .split(/[^a-z0-9]+/)
+        .filter((term) => term.length >= 3 && !WIKI_STOP_WORDS.has(term));
+
+      return pages.map((page) => {
+        const path = typeof page.path === "string" ? page.path : "";
+        const content = typeof page.content === "string" ? page.content : "";
+        const searchable = `${path} ${content}`
+          .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+          .toLocaleLowerCase("pt-BR");
+        const score = terms.reduce((total, term) => total +
+          (searchable.includes(term) ? (path.toLocaleLowerCase("pt-BR").includes(term) ? 4 : 1) : 0), 0);
+        const id = typeof page.id === "number" ? page.id : null;
+        return {
+          id,
+          title: path.split("/").filter(Boolean).pop() || "Página inicial",
+          path,
+          excerpt: wikiExcerpt(content, terms),
+          webUrl: typeof page.remoteUrl === "string"
+            ? page.remoteUrl
+            : id
+              ? `https://dev.azure.com/${encodeURIComponent(this.organization)}/${encodeURIComponent(this.project)}/_wiki/wikis/${encodeURIComponent(this.wiki)}/${id}`
+              : null,
+          score,
+        };
+      }).filter((page) => page.score > 0)
+        .sort((left, right) => right.score - left.score || left.path.localeCompare(right.path, "pt-BR"))
+        .slice(0, Math.min(Math.max(limit, 1), 20));
+    } catch (error) {
+      throw this.mapAxiosError(error, "Não foi possível pesquisar a Wiki do Azure DevOps.");
     }
   }
 
