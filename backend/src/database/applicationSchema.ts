@@ -8,6 +8,12 @@ import {
  */
 export async function ensureApplicationSchema() {
   await prisma.$executeRawUnsafe(`
+    ALTER TABLE "AzureWorkItem"
+      ADD COLUMN IF NOT EXISTS "participantClients" TEXT,
+      ADD COLUMN IF NOT EXISTS "participantMovideskTickets" TEXT
+  `);
+
+  await prisma.$executeRawUnsafe(`
     CREATE TABLE IF NOT EXISTS "AppNotificationRead" (
       "userId" INTEGER NOT NULL,
       "notificationKey" VARCHAR(500) NOT NULL,
