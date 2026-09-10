@@ -51,6 +51,7 @@ import {
 import {
   workspaceRoutes,
 } from "./workspace.routes";
+import { globalRoutes } from "./global.routes";
 
 /* =========================================================
    ROUTER
@@ -98,6 +99,8 @@ routes.use(
   "/api",
   authMiddleware,
 );
+
+routes.use("/api/global", globalRoutes);
 
 /* =========================================================
    ADMINISTRAÇÃO DE USUÁRIOS
