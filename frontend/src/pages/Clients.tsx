@@ -3664,7 +3664,7 @@ function StandardMetricCard({
         cursor: onClick ? "pointer" : "default",
         transition: "transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease",
         "&::before": {
-          content: '\"\"', position: "absolute", top: 0, left: 0,
+          content: '""', position: "absolute", top: 0, left: 0,
           width: "100%", height: 3, backgroundColor: accentColor,
         },
         ...(onClick && {
