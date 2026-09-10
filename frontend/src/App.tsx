@@ -18,6 +18,7 @@ import {
 import {
   Sidebar,
 } from "./components/Sidebar";
+import { GlobalTopBar } from "./components/GlobalTopBar";
 
 import {
   ProtectedRoute,
@@ -152,6 +153,7 @@ function AuthenticatedLayout({
               },
             }}
           >
+            <GlobalTopBar />
             <Box
               sx={{
                 width: "100%",
