@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 import {
@@ -195,6 +195,7 @@ const STATUS_COLORS: Record<
 
 export function Clients() {
   const navigate = useNavigate();
+  const presentationRef = useRef<HTMLDivElement>(null);
 
   const [tickets, setTickets] =
     useState<Ticket[]>([]);
@@ -964,8 +965,8 @@ export function Clients() {
       taskItems,
       taskStatuses: groupChartData(taskItems, (ticket) => taskStatusGroup(ticket), 6),
       pendingStatuses: groupChartData(pending, (ticket) => ticket.justification?.trim() || ticket.status || "Sem motivo informado", 6),
-      areas: groupChartData(scopedTickets, classifyExecutiveArea, 8),
-      bugAreas: groupChartData(bugs, classifyExecutiveArea, 8),
+      areas: groupChartData(scopedTickets, classifyExecutiveProcess, 8),
+      bugAreas: groupChartData(bugs, classifyExecutiveProcess, 8),
     };
   }, [scopedTickets]);
 
@@ -1454,12 +1455,17 @@ export function Clients() {
           }}
         >
           <Stack
-            direction={{
-              xs: "column",
-              md: "row",
-            }}
-            spacing={1.5}
+            spacing={0}
             sx={{
+              width: "100%",
+              display: "grid",
+              gridTemplateColumns: {
+                xs: "minmax(0, 1fr)",
+                md: "repeat(2, minmax(0, 1fr))",
+                lg: "repeat(3, minmax(0, 1fr))",
+                xl: "190px minmax(245px, 1.35fr) repeat(4, minmax(175px, 1fr))",
+              },
+              gap: 1.5,
               alignItems: {
                 xs: "stretch",
                 md: "center",
@@ -1496,10 +1502,7 @@ export function Clients() {
             <FormControl
               size="small"
               sx={{
-                minWidth: {
-                  xs: "100%",
-                  md: 260,
-                },
+                minWidth: 0,
               }}
             >
               <InputLabel>
@@ -1548,10 +1551,7 @@ export function Clients() {
             <FormControl
               size="small"
               sx={{
-                minWidth: {
-                  xs: "100%",
-                  md: 230,
-                },
+                minWidth: 0,
               }}
             >
               <InputLabel>
@@ -1589,7 +1589,7 @@ export function Clients() {
               </Select>
             </FormControl>
 
-            <FormControl size="small" sx={{ minWidth: { xs: "100%", md: 190 } }}>
+            <FormControl size="small" sx={{ minWidth: 0 }}>
               <InputLabel>Status</InputLabel>
               <Select value={status} label="Status" onChange={(event) => setStatus(event.target.value)}>
                 <MenuItem value="">Todos os status</MenuItem>
@@ -1597,7 +1597,7 @@ export function Clients() {
               </Select>
             </FormControl>
 
-            <FormControl size="small" sx={{ minWidth: { xs: "100%", md: 210 } }}>
+            <FormControl size="small" sx={{ minWidth: 0 }}>
               <InputLabel>Responsável</InputLabel>
               <Select value={owner} label="Responsável" onChange={(event) => setOwner(event.target.value)}>
                 <MenuItem value="">Todos os responsáveis</MenuItem>
@@ -1605,10 +1605,10 @@ export function Clients() {
               </Select>
             </FormControl>
 
-            <FormControl size="small" sx={{ minWidth: { xs: "100%", md: 220 } }}>
-              <InputLabel>Área executiva</InputLabel>
-              <Select value={executiveArea} label="Área executiva" onChange={(event) => setExecutiveArea(event.target.value)}>
-                <MenuItem value="">Todas as áreas</MenuItem>
+            <FormControl size="small" sx={{ minWidth: 0 }}>
+              <InputLabel>Frente de atendimento</InputLabel>
+              <Select value={executiveArea} label="Frente de atendimento" onChange={(event) => setExecutiveArea(event.target.value)}>
+                <MenuItem value="">Todas as frentes</MenuItem>
                 {executiveAreas.map((item) => <MenuItem key={item} value={item}>{item}</MenuItem>)}
               </Select>
             </FormControl>
@@ -1622,7 +1622,8 @@ export function Clients() {
                   clearFilters
                 }
                 sx={{
-                  flexShrink: 0,
+                  minHeight: 40,
+                  whiteSpace: "nowrap",
                 }}
               >
                 Limpar filtros
@@ -1866,17 +1867,17 @@ export function Clients() {
 
       {/* PAINEL PARA APRESENTAÇÃO AO CLIENTE */}
       {selectedClient && (
-        <Card elevation={0} sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2.25, mb: 2, overflow: "hidden" }}>
+        <Card ref={presentationRef} elevation={0} sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2.25, mb: 2, overflow: "hidden", bgcolor: "background.default", "&:fullscreen": { position: "fixed", inset: 0, width: "100vw", height: "100vh", maxWidth: "none", overflowY: "auto", borderRadius: 0, m: 0, p: { xs: 0, md: 1.5 }, zIndex: 99999 } }}>
           <Box sx={{ px: { xs: 2, md: 2.5 }, py: 2, color: "white", background: `linear-gradient(110deg, ${aliareColors.greenDark}, ${aliareColors.green})` }}>
             <Stack direction={{ xs: "column", md: "row" }} spacing={1.5} sx={{ alignItems: { md: "center" }, justifyContent: "space-between" }}>
               <Box>
                 <Typography variant="overline" sx={{ opacity: .85, fontWeight: 800 }}>Suporte e Sustentação</Typography>
                 <Typography sx={{ fontSize: { xs: "1.35rem", md: "1.7rem" }, fontWeight: 900, lineHeight: 1.15 }}>{selectedClient}</Typography>
                 <Typography variant="body2" sx={{ opacity: .9, mt: .5 }}>
-                  {executiveArea || "Todas as áreas"} · {effectiveStartDate.toLocaleDateString("pt-BR")} a {effectiveEndDate.toLocaleDateString("pt-BR")}
+                  {executiveArea || "Todas as frentes"} · {effectiveStartDate.toLocaleDateString("pt-BR")} a {effectiveEndDate.toLocaleDateString("pt-BR")}
                 </Typography>
               </Box>
-              <Button variant="contained" color="inherit" onClick={() => document.documentElement.requestFullscreen?.()} sx={{ color: aliareColors.greenDark, fontWeight: 800 }}>
+              <Button variant="contained" color="inherit" onClick={() => presentationRef.current?.requestFullscreen?.()} sx={{ color: aliareColors.greenDark, fontWeight: 800 }}>
                 Apresentar em tela cheia
               </Button>
             </Stack>
@@ -1892,10 +1893,10 @@ export function Clients() {
             </Box>
 
             <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "repeat(3,minmax(0,1fr))" }, gap: 1.5 }}>
-              <ExecutiveBarPanel title="Atendimentos por área" data={presentationSummary.areas} onClick={(name) => showTickets(`Área: ${name}`, scopedTickets.filter((ticket) => classifyExecutiveArea(ticket) === name))} />
+              <ExecutiveBarPanel title="Atendimentos por processo" data={presentationSummary.areas} onClick={(name) => showTickets(`Processo: ${name}`, scopedTickets.filter((ticket) => classifyExecutiveProcess(ticket) === name))} />
               <ExecutiveDonutPanel title="Status das Tasks" data={presentationSummary.taskStatuses} total={presentationSummary.taskItems.length} />
               <ExecutiveDonutPanel title="Status das pendências" data={presentationSummary.pendingStatuses} total={presentationSummary.pending.length} />
-              <ExecutiveBarPanel title="Bugs por área" data={presentationSummary.bugAreas} onClick={(name) => showTickets(`Bugs · ${name}`, presentationSummary.bugs.filter((ticket) => classifyExecutiveArea(ticket) === name))} />
+              <ExecutiveBarPanel title="Bugs por processo" data={presentationSummary.bugAreas} onClick={(name) => showTickets(`Bugs · ${name}`, presentationSummary.bugs.filter((ticket) => classifyExecutiveProcess(ticket) === name))} />
 
               <Box sx={{ p: 1.75, border: "1px solid", borderColor: "divider", borderRadius: 2 }}>
                 <Typography sx={{ fontWeight: 850 }}>Principais insights</Typography>
@@ -4351,22 +4352,45 @@ function taskStatusGroup(ticket: Ticket) {
 }
 
 function classifyExecutiveArea(ticket: Ticket) {
-  const text = normalize([
+  const text = executiveClassificationText(ticket);
+  const matches = (terms: string[]) => terms.some((term) => text.includes(term));
+
+  if (matches(["insumo", "defensivo", "agrotoxico", "fertilizante", "receituario", "agriq", "sisdev", "indea"])) return "Insumos";
+  if (matches(["legislacao", "legal", "tribut", "ibs", "cbs", "sped", "efd", "obrigacao fiscal"])) return "Legislação";
+  if (matches(["vertical", "sementes", "beneficiamento de sementes", "armazenagem", "armazem"])) return "Verticais";
+  if (matches(["financeiro", "titulo", "boleto", "bordero", "bancario", "contas a pagar", "contas a receber", "acerto", "pedido de compra", "cotacao", "solicitacao de compra", "ordem de compra", "compras", "faturamento de entrada", "importacao nf", "importador de nota", "nota de entrada", "nfe de terceiro", "contrato", "fixacao", "graos", "ato cooperado", "saldo agricola", "estoque", "romaneio", "pesagem", "lote", "classificacao"])) return "Backoffice";
+  return "Outras frentes";
+}
+
+function classifyExecutiveProcess(ticket: Ticket) {
+  const area = classifyExecutiveArea(ticket);
+  const text = executiveClassificationText(ticket);
+  const matches = (terms: string[]) => terms.some((term) => text.includes(term));
+
+  if (area === "Insumos") return "Insumos";
+  if (area === "Legislação") return "Legislação";
+  if (area === "Verticais" && matches(["semente", "beneficiamento"])) return "Vertical - Sementes";
+  if (area === "Verticais" && matches(["armazenagem", "armazem", "silo"])) return "Vertical - Armazém";
+  if (area === "Verticais" && matches(["romaneio", "pesagem", "classificacao"])) return "Vertical - Romaneios";
+  if (area === "Verticais" && matches(["contrato", "fixacao", "graos"])) return "Vertical - Contratos";
+  if (matches(["financeiro", "titulo", "boleto", "bordero", "bancario", "contas a pagar", "contas a receber", "acerto"])) return "Financeiro";
+  if (matches(["pedido de compra", "cotacao", "solicitacao de compra", "ordem de compra", "compras"])) return "Compras";
+  if (matches(["faturamento de entrada", "importacao nf", "importador de nota", "nota de entrada", "nfe de terceiro"])) return "Faturamento de Entrada";
+  if (matches(["contrato", "fixacao", "graos", "ato cooperado", "saldo agricola"])) return "Contratos";
+  if (matches(["estoque", "lote"])) return "Estoque";
+  if (matches(["fiscal", "nf-e", "nfe", "mdf-e", "mdfe", "ct-e", "cte", "sefaz", "tribut"] )) return "Fiscal/Faturamento";
+  return "Outros temas";
+}
+
+function executiveClassificationText(ticket: Ticket) {
+  return normalize([
     ticket.subject,
     ticket.category,
     ticket.service,
     ticket.department,
+    ticket.team,
     ticket.cause,
   ].filter(Boolean).join(" "));
-
-  const matches = (terms: string[]) => terms.some((term) => text.includes(term));
-  if (matches(["financeiro", "titulo", "boleto", "bordero", "bancario", "contas a pagar", "contas a receber", "acerto"])) return "Financeiro";
-  if (matches(["pedido de compra", "cotacao", "solicitacao de compra", "ordem de compra", "compras"])) return "Backoffice - Compras";
-  if (matches(["faturamento de entrada", "importacao nf", "importador de nota", "nota de entrada", "nfe de terceiro"])) return "Backoffice - Faturamento de Entrada";
-  if (matches(["contrato", "fixacao", "graos", "ato cooperado", "saldo agricola"])) return "Backoffice - Contratos/Grãos";
-  if (matches(["estoque", "romaneio", "pesagem", "lote", "classificacao"])) return "Backoffice - Estoque/Romaneio";
-  if (matches(["fiscal", "nf-e", "nfe", "mdf-e", "mdfe", "ct-e", "cte", "sefaz", "tribut"] )) return "Fiscal/Faturamento";
-  return "Outros temas";
 }
 
 function groupChartData(
