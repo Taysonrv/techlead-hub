@@ -231,7 +231,9 @@ export class NotificationService {
   }
 
   public async markRead(userId: number, keys: string[]) {
-    const validKeys = [...new Set(keys.map((key) => key.trim()).filter(Boolean))]
+    const validKeys = [...new Set(keys
+      .map((key) => key.trim())
+      .filter((key) => key.length > 0 && key.length <= 500))]
       .slice(0, 100);
 
     await Promise.all(validKeys.map((key) =>
