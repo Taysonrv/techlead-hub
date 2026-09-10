@@ -59,8 +59,7 @@ export function ticketOperationalScope():
 /**
  * No Azure, Cliente Principal pode representar o cliente final da
  * ocorrência, e Assigned To normalmente é um desenvolvedor.
- * Consideramos pertencente ao produto o item criado pelo suporte,
- * associado a cliente SIMER ou com atendimento Movidesk informado.
+ * O campo confiável para delimitar a origem da demanda é Created By.
  */
 export function azureOperationalScope():
   Prisma.AzureWorkItemWhereInput {
@@ -88,6 +87,11 @@ export function azureOperationalScope():
         movideskTicket: {
           not:
             null,
+        },
+      },
+      {
+        participantMovideskTickets: {
+          not: null,
         },
       },
     ],
