@@ -19,6 +19,10 @@ import {
 const DEFAULT_PORT =
   3333;
 
+const HOST =
+  process.env.HOST?.trim() ||
+  "127.0.0.1";
+
 const rawPort =
   process.env.PORT?.trim();
 
@@ -56,9 +60,10 @@ async function start() {
 
   server = app.listen(
     PORT,
+    HOST,
     () => {
       console.log(
-        `🚀 TechLead Hub rodando na porta ${PORT}`,
+        `🚀 TechLead Hub rodando em http://${HOST}:${PORT}`,
       );
 
       /*
@@ -102,12 +107,13 @@ async function shutdown(
   azureSyncScheduler.stop();
 
   try {
-    await new Promise<void>(
-      (
-        resolve,
-        reject,
-      ) => {
-        server?.close(
+    if (server) {
+      await new Promise<void>(
+        (
+          resolve,
+          reject,
+        ) => {
+          server.close(
           (error) => {
             if (
               error
@@ -121,9 +127,10 @@ async function shutdown(
 
             resolve();
           },
-        );
-      },
-    );
+          );
+        },
+      );
+    }
   } catch (
     error
   ) {
