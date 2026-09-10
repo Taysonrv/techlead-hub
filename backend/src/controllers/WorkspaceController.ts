@@ -23,4 +23,37 @@ export class WorkspaceController {
       issue: typeof request.query.issue === "string" ? request.query.issue.trim() : null,
       search: typeof request.query.search === "string" ? request.query.search.trim() : null,
     }));
+
+  public ticketDetail = async (request: AuthenticatedRequest, response: Response) => {
+    const userId = request.auth?.userId;
+    const ticketId = Number(request.params.id);
+    if (!userId) return response.status(401).json({ message: "Autenticação necessária." });
+    if (!Number.isSafeInteger(ticketId) || ticketId <= 0) {
+      return response.status(400).json({ message: "Atendimento inválido." });
+    }
+    try {
+      return response.json(await this.service.ticketDetail(userId, ticketId));
+    } catch (error) {
+      return response.status(404).json({ message: error instanceof Error ? error.message : "Atendimento não encontrado." });
+    }
+  };
+
+  public updateTicketStatus = async (request: AuthenticatedRequest, response: Response) => {
+    const userId = request.auth?.userId;
+    const ticketId = Number(request.params.id);
+    const status = typeof request.body?.status === "string" ? request.body.status.trim() : "";
+    const justification = typeof request.body?.justification === "string"
+      ? request.body.justification.trim()
+      : null;
+    if (!userId) return response.status(401).json({ message: "Autenticação necessária." });
+    if (!Number.isSafeInteger(ticketId) || ticketId <= 0 || !status) {
+      return response.status(400).json({ message: "Atendimento e status são obrigatórios." });
+    }
+    try {
+      return response.json(await this.service.updateTicketStatus(userId, ticketId, status, justification));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Não foi possível atualizar o atendimento.";
+      return response.status(message.includes("configurada") ? 503 : 400).json({ message });
+    }
+  };
 }
