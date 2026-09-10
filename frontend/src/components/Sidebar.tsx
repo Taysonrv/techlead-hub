@@ -141,12 +141,19 @@ export function Sidebar() {
   ] =
     useState<HTMLElement | null>(null);
 
-  const [openSection, setOpenSection] = useState<"operation" | "development" | "management" | null>(() => sectionForPath(location.pathname));
+  const [openSections, setOpenSections] = useState<Record<"operation" | "development" | "management", boolean>>(() => ({
+    operation: true,
+    development: true,
+    management: true,
+  }));
 
   const profileMenuOpen =
     Boolean(profileAnchor);
 
-  useEffect(() => setOpenSection(sectionForPath(location.pathname)), [location.pathname]);
+  useEffect(() => {
+    const section = sectionForPath(location.pathname);
+    setOpenSections((current) => ({ ...current, [section]: true }));
+  }, [location.pathname]);
 
   /* =======================================================
      VERSÃO DO APLICATIVO
@@ -739,8 +746,8 @@ export function Sidebar() {
           title="Operação"
           ariaLabel="Navegação da operação"
           items={mainMenu}
-          open={openSection === "operation"}
-          onToggle={() => setOpenSection((current) => current === "operation" ? null : "operation")}
+          open={openSections.operation}
+          onToggle={() => setOpenSections((current) => ({ ...current, operation: !current.operation }))}
         />
 
         {/* =================================================
@@ -751,8 +758,8 @@ export function Sidebar() {
           title="Desenvolvimento"
           ariaLabel="Navegação de desenvolvimento"
           items={developmentMenu}
-          open={openSection === "development"}
-          onToggle={() => setOpenSection((current) => current === "development" ? null : "development")}
+          open={openSections.development}
+          onToggle={() => setOpenSections((current) => ({ ...current, development: !current.development }))}
         />
 
         {/* =================================================
@@ -763,8 +770,8 @@ export function Sidebar() {
           title="Gestão"
           ariaLabel="Navegação do sistema"
           items={systemMenu}
-          open={openSection === "management"}
-          onToggle={() => setOpenSection((current) => current === "management" ? null : "management")}
+          open={openSections.management}
+          onToggle={() => setOpenSections((current) => ({ ...current, management: !current.management }))}
         />
 
         <Box
@@ -1116,7 +1123,7 @@ function MenuSection({
           1.1,
       }}
     >
-      <ListItemButton onClick={onToggle} sx={{ minHeight: 42, px: 1.3, borderRadius: 1.2, color: open ? "white" : "rgba(255,255,255,.66)", bgcolor: open ? "rgba(255,255,255,.07)" : "transparent" }}>
+      <ListItemButton aria-expanded={open} onClick={onToggle} sx={{ minHeight: 38, px: 1.3, borderRadius: 1.2, color: open ? "white" : "rgba(255,255,255,.66)", bgcolor: open ? "rgba(255,255,255,.07)" : "transparent" }}>
         <ListItemText primary={title} slotProps={{ primary: { sx: { fontSize: ".72rem", fontWeight: 850, letterSpacing: ".08em", textTransform: "uppercase" } } }} />
         {open ? <ExpandLessRounded fontSize="small" /> : <ExpandMoreRounded fontSize="small" />}
       </ListItemButton>
