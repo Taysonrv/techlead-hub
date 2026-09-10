@@ -3,8 +3,12 @@ import {
 } from "../database/prisma";
 import type { Prisma } from "@prisma/client";
 import { SIMER_CLIENTS, SUPPORT_ANALYSTS, ticketOperationalScope } from "../domain/OperationalScope";
+import { MovideskService } from "./MovideskService";
 
 const TERMINAL = ["Concluído", "Concluido", "Closed", "Done", "Resolved", "Cancelado", "Canceled"];
+const normalizedWords = (value: string) => value
+  .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+  .toLocaleUpperCase("pt-BR").split(/\s+/).filter((word) => word.length > 2);
 
 export class WorkspaceService {
   public async myOperation(userId: number, params: {
@@ -15,10 +19,15 @@ export class WorkspaceService {
       select: { name: true, email: true },
     });
     if (!user) throw new Error("Usuário não encontrado.");
+    const userWords = normalizedWords(user.name);
+    const operationName = SUPPORT_ANALYSTS.find((analyst) => {
+      const analystWords = normalizedWords(analyst);
+      return userWords.every((word) => analystWords.includes(word));
+    }) ?? user.name;
 
     const tickets = await prisma.ticket.findMany({
       where: { AND: [
-        { owner: { equals: user.name, mode: "insensitive" } },
+        { owner: { equals: operationName, mode: "insensitive" } },
         ...(params.client ? [{ client: { equals: params.client, mode: "insensitive" as const } }] : []),
         ...(params.search ? [{ OR: [
           { subject: { contains: params.search, mode: "insensitive" as const } },
@@ -42,8 +51,8 @@ export class WorkspaceService {
       .filter((value): value is number => value !== null);
     const identity = {
       OR: [
-        { createdByName: { equals: user.name, mode: "insensitive" as const } },
-        { assignedToName: { equals: user.name, mode: "insensitive" as const } },
+        { createdByName: { equals: operationName, mode: "insensitive" as const } },
+        { assignedToName: { equals: operationName, mode: "insensitive" as const } },
         ...(user.email ? [
           { createdByEmail: { equals: user.email, mode: "insensitive" as const } },
           { assignedToEmail: { equals: user.email, mode: "insensitive" as const } },
@@ -81,6 +90,27 @@ export class WorkspaceService {
     const prioritized = workItems.filter((item) => item.prioritized && !isTerminal(item.state)).length;
     const blocked = workItems.filter((item) => item.blockedProcess && !isTerminal(item.state)).length;
 
+    const versionItems = await prisma.azureWorkItem.findMany({
+      where: {
+        deliveredVersion: { not: null },
+        workItemType: { in: ["Correção Clientes", "Evolução", "APOIO"], mode: "insensitive" },
+      },
+      orderBy: [{ azureChangedAt: "desc" }, { id: "desc" }],
+      take: 1000,
+      select: { id: true, workItemType: true, title: true, state: true, deliveredVersion: true },
+    });
+    const latestVersions = ["LTS", "LTE", "RC"].flatMap((channel) => {
+      const matches = versionItems.filter((item) =>
+        new RegExp(`(?:^|[._\\s-])${channel}(?:$|[._\\s-])`, "i").test(item.deliveredVersion ?? ""),
+      ).sort((left, right) => compareVersions(right.deliveredVersion ?? "", left.deliveredVersion ?? ""));
+      const version = matches[0]?.deliveredVersion;
+      return version ? [{
+        channel,
+        version,
+        tasks: matches.filter((item) => item.deliveredVersion === version).slice(0, 12),
+      }] : [];
+    });
+
     return {
       user,
       summary: {
@@ -92,11 +122,67 @@ export class WorkspaceService {
       },
       tickets,
       workItems,
+      latestVersions,
       filters: {
         clients: [...new Set([...tickets.map((item) => item.client).filter((value): value is string => Boolean(value)), ...workItems.map((item) => item.client).filter((value): value is string => Boolean(value))])].sort(),
         types: ["Correção Clientes", "Evolução", "APOIO"],
       },
     };
+  }
+
+  public async ticketDetail(userId: number, ticketId: number) {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { name: true },
+    });
+    if (!user) throw new Error("Usuário não encontrado.");
+    const userWords = normalizedWords(user.name);
+    const operationName = SUPPORT_ANALYSTS.find((analyst) => {
+      const analystWords = normalizedWords(analyst);
+      return userWords.every((word) => analystWords.includes(word));
+    }) ?? user.name;
+
+    const ticket = await prisma.ticket.findFirst({
+      where: {
+        id: ticketId,
+        owner: { equals: operationName, mode: "insensitive" },
+      },
+    });
+    if (!ticket) throw new Error("Atendimento não encontrado na operação deste usuário.");
+
+    const relatedWorkItems = await prisma.azureWorkItem.findMany({
+      where: { OR: [
+        ...(ticket.taskNumber ? [{ id: ticket.taskNumber }] : []),
+        { movideskTicket: ticket.movideskId },
+      ] },
+      orderBy: [{ azureChangedAt: "desc" }, { id: "desc" }],
+      select: {
+        id: true, workItemType: true, title: true, state: true,
+        client: true, assignedToName: true, deliveredVersion: true,
+        movideskTicket: true, azureChangedAt: true,
+      },
+    });
+
+    return { ticket, relatedWorkItems };
+  }
+
+  public async updateTicketStatus(
+    userId: number,
+    ticketId: number,
+    status: string,
+    justification?: string | null,
+  ) {
+    const detail = await this.ticketDetail(userId, ticketId);
+    await new MovideskService().updateTicketStatus(
+      detail.ticket.movideskId,
+      status,
+      justification ?? detail.ticket.justification,
+    );
+    const ticket = await prisma.ticket.update({
+      where: { id: detail.ticket.id },
+      data: { status, justification: justification ?? detail.ticket.justification },
+    });
+    return { ticket };
   }
 
   public async dataQuality(params: {
@@ -147,8 +233,26 @@ export class WorkspaceService {
       ],
     };
 
+    /*
+     * O vínculo pode ter sido preenchido em qualquer lado da integração:
+     * AzureWorkItem.movideskTicket ou Ticket.taskNumber. Para qualidade dos
+     * dados, ambos são vínculos válidos, inclusive para Correção, Evolução e APOIO.
+     */
+    const allTicketLinks = await prisma.ticket.findMany({
+      where: { taskNumber: { not: null } },
+      select: { taskNumber: true },
+    });
+    const linkedTaskIds = [...new Set(allTicketLinks
+      .map((item) => item.taskNumber)
+      .filter((value): value is number => value !== null))];
+
     const issueWhere = (issue: string): Prisma.AzureWorkItemWhereInput => {
-      if (issue === "withoutTicket") return { movideskTicket: null };
+      if (issue === "withoutTicket") return {
+        AND: [
+          { movideskTicket: null },
+          ...(linkedTaskIds.length ? [{ id: { notIn: linkedTaskIds } }] : []),
+        ],
+      };
       if (issue === "withoutClient") return { client: null };
       if (issue === "withoutModule") return { module: null };
       if (issue === "withoutOwner") return { assignedToName: null };
@@ -190,7 +294,7 @@ export class WorkspaceService {
         ? { movideskTicket: { in: duplicatedIds } }
         : params.issue ? issueWhere(params.issue) : {
         OR: [
-          { movideskTicket: null }, { client: null }, { module: null },
+          issueWhere("withoutTicket"), { client: null }, { module: null },
           { assignedToName: null },
           { state: { in: TERMINAL }, deliveredVersion: null },
         ],
@@ -235,4 +339,14 @@ export class WorkspaceService {
       },
     };
   }
+}
+
+function compareVersions(left: string, right: string) {
+  const leftParts = left.match(/\d+/g)?.map(Number) ?? [];
+  const rightParts = right.match(/\d+/g)?.map(Number) ?? [];
+  for (let index = 0; index < Math.max(leftParts.length, rightParts.length); index += 1) {
+    const difference = (leftParts[index] ?? 0) - (rightParts[index] ?? 0);
+    if (difference !== 0) return difference;
+  }
+  return left.localeCompare(right, "pt-BR", { numeric: true });
 }
