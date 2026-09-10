@@ -1367,7 +1367,6 @@ export function AzureWorkItems({
     [
       module,
       process,
-      deliveredVersion,
       prioritized,
       blockedProcess,
       hasMovideskTicket,
@@ -3534,7 +3533,7 @@ export function AzureWorkItems({
                   gridTemplateColumns: {
                     xs: "1fr",
                     sm: "repeat(2, minmax(0, 1fr))",
-                    lg: "repeat(4, minmax(0, 1fr))",
+                    lg: "repeat(5, minmax(0, 1fr))",
                   },
                   gap: 1.25,
                 }}
@@ -3701,6 +3700,19 @@ export function AzureWorkItems({
                   )}
                 />
 
+                <Autocomplete
+                  size="small"
+                  options={filters?.versions ?? []}
+                  value={deliveredVersion || null}
+                  onChange={(_event, value) => {
+                    setPage(1);
+                    setDeliveredVersion(value ?? "");
+                  }}
+                  renderInput={(params) => (
+                    <TextField {...params} label="Versão" />
+                  )}
+                />
+
               </Box>
 
               <Collapse
@@ -3782,39 +3794,6 @@ export function AzureWorkItems({
                       <TextField
                         {...params}
                         label="Processo"
-                      />
-                    )}
-                  />
-
-                  <Autocomplete
-                    size="small"
-                    options={
-                      filters?.versions ??
-                      []
-                    }
-                    value={
-                      deliveredVersion ||
-                      null
-                    }
-                    onChange={(
-                      _event,
-                      value,
-                    ) => {
-                      setPage(
-                        1,
-                      );
-
-                      setDeliveredVersion(
-                        value ??
-                        "",
-                      );
-                    }}
-                    renderInput={(
-                      params,
-                    ) => (
-                      <TextField
-                        {...params}
-                        label="Versão"
                       />
                     )}
                   />
@@ -4043,10 +4022,10 @@ export function AzureWorkItems({
 
                   </Stack>
 
-                  <TableContainer>
+                  <TableContainer sx={{ maxWidth: "100%", overflowX: "auto" }}>
                     <Table
                       size="small"
-                      sx={{ minWidth: 1580 }}
+                      sx={{ minWidth: 1740, tableLayout: "fixed" }}
                     >
                       <TableHead>
                         <TableRow>
@@ -4078,7 +4057,7 @@ export function AzureWorkItems({
                             Módulo
                           </TableCell>
 
-                          <TableCell sx={{ minWidth: 170 }}>
+                          <TableCell sx={{ width: 230, minWidth: 230 }}>
                             Versão
                           </TableCell>
 
@@ -4247,8 +4226,9 @@ export function AzureWorkItems({
 
                               <TableCell
                                 sx={{
-                                  minWidth: 170,
-                                  maxWidth: 260,
+                                  width: 230,
+                                  minWidth: 230,
+                                  maxWidth: 230,
                                   whiteSpace:
                                     "nowrap",
                                   overflow: "hidden",
