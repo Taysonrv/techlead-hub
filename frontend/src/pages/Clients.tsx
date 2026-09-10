@@ -219,6 +219,7 @@ export function Clients() {
 
   const [status, setStatus] = useState("");
   const [owner, setOwner] = useState("");
+  const [executiveArea, setExecutiveArea] = useState("");
 
   /* Drill-down */
 
@@ -392,6 +393,10 @@ export function Clients() {
     clientScopedTickets.map((ticket) => ticket.status?.trim()).filter(Boolean)
   )).sort((a, b) => a.localeCompare(b, "pt-BR")), [clientScopedTickets]);
 
+  const executiveAreas = useMemo(() => Array.from(new Set(
+    clientScopedTickets.map(classifyExecutiveArea)
+  )).sort((a, b) => a.localeCompare(b, "pt-BR")), [clientScopedTickets]);
+
   /*
    * Caso mude de cliente e a categoria atual
    * não exista para ele, limpamos automaticamente.
@@ -425,13 +430,15 @@ export function Clients() {
       return clientScopedTickets.filter(
         (ticket) => (!category || ticket.category === category) &&
           (!status || ticket.status === status) &&
-          (!owner || ticket.owner === owner)
+          (!owner || ticket.owner === owner) &&
+          (!executiveArea || classifyExecutiveArea(ticket) === executiveArea)
       );
     }, [
       clientScopedTickets,
       category,
       status,
       owner,
+      executiveArea,
     ]);
 
   /* =======================================================
@@ -942,6 +949,26 @@ export function Clients() {
     ];
   }, [categoryPieData, portfolioSummary, scopedTickets]);
 
+  const presentationSummary = useMemo(() => {
+    const bugs = scopedTickets.filter(isBug);
+    const withTask = scopedTickets.filter((ticket) => Boolean(ticket.azureWorkItem || ticket.taskNumber));
+    const pending = scopedTickets.filter(isOpen);
+    const taskItems = Array.from(new Map(
+      withTask.map((ticket) => [ticket.azureWorkItem?.id ?? ticket.taskNumber, ticket])
+    ).values());
+
+    return {
+      bugs,
+      withTask,
+      pending,
+      taskItems,
+      taskStatuses: groupChartData(taskItems, (ticket) => taskStatusGroup(ticket), 6),
+      pendingStatuses: groupChartData(pending, (ticket) => ticket.justification?.trim() || ticket.status || "Sem motivo informado", 6),
+      areas: groupChartData(scopedTickets, classifyExecutiveArea, 8),
+      bugAreas: groupChartData(bugs, classifyExecutiveArea, 8),
+    };
+  }, [scopedTickets]);
+
   /* =======================================================
      PIZZA 2 - SITUAÇÃO DOS TICKETS
   ======================================================= */
@@ -1152,6 +1179,7 @@ export function Clients() {
     setCategory("");
     setStatus("");
     setOwner("");
+    setExecutiveArea("");
   }
 
   async function copyTicketNumber(
@@ -1577,8 +1605,16 @@ export function Clients() {
               </Select>
             </FormControl>
 
+            <FormControl size="small" sx={{ minWidth: { xs: "100%", md: 220 } }}>
+              <InputLabel>Área executiva</InputLabel>
+              <Select value={executiveArea} label="Área executiva" onChange={(event) => setExecutiveArea(event.target.value)}>
+                <MenuItem value="">Todas as áreas</MenuItem>
+                {executiveAreas.map((item) => <MenuItem key={item} value={item}>{item}</MenuItem>)}
+              </Select>
+            </FormControl>
+
             {(selectedClient ||
-              category || status || owner) && (
+              category || status || owner || executiveArea) && (
               <Button
                 size="small"
                 variant="outlined"
@@ -1827,6 +1863,59 @@ export function Clients() {
           </Typography>
         </CardContent>
       </Card>
+
+      {/* PAINEL PARA APRESENTAÇÃO AO CLIENTE */}
+      {selectedClient && (
+        <Card elevation={0} sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2.25, mb: 2, overflow: "hidden" }}>
+          <Box sx={{ px: { xs: 2, md: 2.5 }, py: 2, color: "white", background: `linear-gradient(110deg, ${aliareColors.greenDark}, ${aliareColors.green})` }}>
+            <Stack direction={{ xs: "column", md: "row" }} spacing={1.5} sx={{ alignItems: { md: "center" }, justifyContent: "space-between" }}>
+              <Box>
+                <Typography variant="overline" sx={{ opacity: .85, fontWeight: 800 }}>Suporte e Sustentação</Typography>
+                <Typography sx={{ fontSize: { xs: "1.35rem", md: "1.7rem" }, fontWeight: 900, lineHeight: 1.15 }}>{selectedClient}</Typography>
+                <Typography variant="body2" sx={{ opacity: .9, mt: .5 }}>
+                  {executiveArea || "Todas as áreas"} · {effectiveStartDate.toLocaleDateString("pt-BR")} a {effectiveEndDate.toLocaleDateString("pt-BR")}
+                </Typography>
+              </Box>
+              <Button variant="contained" color="inherit" onClick={() => document.documentElement.requestFullscreen?.()} sx={{ color: aliareColors.greenDark, fontWeight: 800 }}>
+                Apresentar em tela cheia
+              </Button>
+            </Stack>
+          </Box>
+
+          <CardContent sx={{ p: { xs: 1.5, md: 2 } }}>
+            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2,1fr)", lg: "repeat(5,minmax(0,1fr))" }, gap: 1.25, mb: 2 }}>
+              <PresentationKpi title="Atendimentos" value={scopedTickets.length} detail="no período" color="#075985" onClick={() => showTickets("Atendimentos no foco", scopedTickets)} />
+              <PresentationKpi title="Bugs" value={presentationSummary.bugs.length} detail={`${presentationSummary.bugs.filter((ticket) => ticket.azureWorkItem || ticket.taskNumber).length} com Task`} color="#008A68" onClick={() => showTickets("Bugs identificados", presentationSummary.bugs)} />
+              <PresentationKpi title="Com Task" value={presentationSummary.withTask.length} detail="correção, evolução ou apoio" color="#2676B9" onClick={() => showTickets("Atendimentos com Task", presentationSummary.withTask)} />
+              <PresentationKpi title="Pendências" value={presentationSummary.pending.length} detail="em acompanhamento" color="#B7791F" onClick={() => showTickets("Pendências ativas", presentationSummary.pending)} />
+              <PresentationKpi title="SLA solução" value={formatSlaPercent(portfolioSummary.solutionSla.percent)} detail={`${portfolioSummary.solutionSla.onTime} de ${portfolioSummary.solutionSla.measured} medidos`} color="#159A68" onClick={() => showTickets("SLA solução", scopedTickets.filter((ticket) => Boolean(normalize(ticket.solutionSlaIndicator))))} />
+            </Box>
+
+            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "repeat(3,minmax(0,1fr))" }, gap: 1.5 }}>
+              <ExecutiveBarPanel title="Atendimentos por área" data={presentationSummary.areas} onClick={(name) => showTickets(`Área: ${name}`, scopedTickets.filter((ticket) => classifyExecutiveArea(ticket) === name))} />
+              <ExecutiveDonutPanel title="Status das Tasks" data={presentationSummary.taskStatuses} total={presentationSummary.taskItems.length} />
+              <ExecutiveDonutPanel title="Status das pendências" data={presentationSummary.pendingStatuses} total={presentationSummary.pending.length} />
+              <ExecutiveBarPanel title="Bugs por área" data={presentationSummary.bugAreas} onClick={(name) => showTickets(`Bugs · ${name}`, presentationSummary.bugs.filter((ticket) => classifyExecutiveArea(ticket) === name))} />
+
+              <Box sx={{ p: 1.75, border: "1px solid", borderColor: "divider", borderRadius: 2 }}>
+                <Typography sx={{ fontWeight: 850 }}>Principais insights</Typography>
+                <Stack spacing={1} sx={{ mt: 1.25 }}>
+                  {executiveInsights.slice(0, 4).map((item) => <Typography key={item} variant="body2" sx={{ lineHeight: 1.45 }}>• {item}</Typography>)}
+                </Stack>
+              </Box>
+
+              <Box sx={{ p: 1.75, borderRadius: 2, bgcolor: presentationSummary.pending.length ? "rgba(245,158,11,.10)" : "rgba(22,163,74,.08)", border: "1px solid", borderColor: presentationSummary.pending.length ? "rgba(245,158,11,.28)" : "rgba(22,163,74,.22)" }}>
+                <Typography sx={{ fontWeight: 850 }}>Pontos de atenção</Typography>
+                <Typography variant="body2" sx={{ mt: 1, lineHeight: 1.5 }}>
+                  {presentationSummary.pending.length
+                    ? `${presentationSummary.pending.length} pendência(s) permanecem ativas. ${presentationSummary.bugs.filter(isOpen).length} delas são bugs e ${presentationSummary.pending.filter((ticket) => normalize(ticket.justification).includes("cliente")).length} aguardam ação ou retorno do cliente.`
+                    : "Não há pendências ativas no recorte selecionado."}
+                </Typography>
+              </Box>
+            </Box>
+          </CardContent>
+        </Card>
+      )}
 
       {/* =================================================
           GRÁFICOS
@@ -3877,6 +3966,46 @@ function MetricInfoLine({ label, value }: { label: string; value: string }) {
   );
 }
 
+function PresentationKpi({ title, value, detail, color, onClick }: {
+  title: string; value: ReactNode; detail: string; color: string; onClick: () => void;
+}) {
+  return (
+    <Card elevation={0} role="button" tabIndex={0} onClick={onClick}
+      onKeyDown={(event) => (event.key === "Enter" || event.key === " ") && onClick()}
+      sx={{ border: "1px solid", borderColor: "divider", borderTop: `4px solid ${color}`, cursor: "pointer", height: "100%", "&:hover": { boxShadow: "0 8px 22px rgba(16,24,40,.09)", transform: "translateY(-2px)" }, transition: ".15s" }}>
+      <CardContent sx={{ p: 1.5, "&:last-child": { pb: 1.5 } }}>
+        <Typography variant="body2" sx={{ fontWeight: 800 }}>{title}</Typography>
+        <Typography sx={{ mt: .4, fontSize: "1.8rem", lineHeight: 1, fontWeight: 900, color }}>{value}</Typography>
+        <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: .7 }}>{detail}</Typography>
+      </CardContent>
+    </Card>
+  );
+}
+
+function ExecutiveDonutPanel({ title, data, total }: { title: string; data: PieDataItem[]; total: number }) {
+  return (
+    <Box sx={{ p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: 2, minWidth: 0 }}>
+      <Typography sx={{ fontWeight: 850 }}>{title}</Typography>
+      {data.length ? <>
+        <Box sx={{ height: 175, position: "relative" }}>
+          <ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={data} dataKey="value" nameKey="name" innerRadius={42} outerRadius={67} paddingAngle={2}>{data.map((item, index) => <Cell key={item.name} fill={PIE_COLORS[index % PIE_COLORS.length]} />)}</Pie><Tooltip content={<CompactPieTooltip valueLabel="item(ns)" />} /></PieChart></ResponsiveContainer>
+          <Box sx={{ position: "absolute", inset: 0, display: "grid", placeContent: "center", textAlign: "center", pointerEvents: "none" }}><Typography sx={{ fontWeight: 900, fontSize: "1.25rem" }}>{total}</Typography><Typography variant="caption">total</Typography></Box>
+        </Box>
+        <CompactPieLegend data={data} total={total} />
+      </> : <Typography variant="body2" color="text.secondary" sx={{ py: 8, textAlign: "center" }}>Sem dados no recorte.</Typography>}
+    </Box>
+  );
+}
+
+function ExecutiveBarPanel({ title, data, onClick }: { title: string; data: PieDataItem[]; onClick: (name: string) => void }) {
+  return (
+    <Box sx={{ p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: 2, minWidth: 0 }}>
+      <Typography sx={{ fontWeight: 850 }}>{title}</Typography>
+      {data.length ? <Box sx={{ height: 255, mt: 1 }}><ResponsiveContainer width="100%" height="100%"><BarChart data={data} layout="vertical" margin={{ left: 8, right: 18 }}><CartesianGrid strokeDasharray="3 3" horizontal={false} /><XAxis type="number" allowDecimals={false} /><YAxis dataKey="name" type="category" width={115} tick={{ fontSize: 10 }} tickFormatter={(value) => abbreviate(String(value), 17)} /><Tooltip /><Bar dataKey="value" name="Tickets" fill={aliareColors.green} radius={[0, 5, 5, 0]} cursor="pointer" onClick={(data) => { const name = String((data as { name?: unknown }).name ?? ""); if (name && name !== "Outros") onClick(name); }} /></BarChart></ResponsiveContainer></Box> : <Typography variant="body2" color="text.secondary" sx={{ py: 8, textAlign: "center" }}>Sem dados no recorte.</Typography>}
+    </Box>
+  );
+}
+
 /* =========================================================
    CARD DE GRÁFICO
 ========================================================= */
@@ -4203,6 +4332,41 @@ function ticketResolutionMinutes(ticket: Ticket): number | null {
   const elapsed = Math.round((endedAt - createdAt) / 60000);
   const stopped = Math.max(ticket.stoppedMinutes ?? 0, 0);
   return Math.max(elapsed - stopped, 1);
+}
+
+function isBug(ticket: Ticket) {
+  const category = normalize(ticket.category);
+  const type = normalize(ticket.azureWorkItem?.workItemType);
+  return category === "bug" || category.includes("erro de sistema") || type.includes("correcao");
+}
+
+function taskStatusGroup(ticket: Ticket) {
+  const value = normalize(ticket.azureWorkItem?.state || ticket.taskStatus);
+  if (!value) return "Sem status";
+  if (["concluido", "closed", "done", "resolved"].some((item) => value.includes(item))) return "Concluída";
+  if (["desenvolvimento", "development", "doing", "andamento"].some((item) => value.includes(item))) return "Em desenvolvimento";
+  if (["analise", "analysis", "new", "novo", "qualificacao"].some((item) => value.includes(item))) return "Em análise";
+  if (["cancelado", "canceled", "cancelled"].some((item) => value.includes(item))) return "Cancelada";
+  return ticket.azureWorkItem?.state || ticket.taskStatus || "Outro";
+}
+
+function classifyExecutiveArea(ticket: Ticket) {
+  const text = normalize([
+    ticket.subject,
+    ticket.category,
+    ticket.service,
+    ticket.department,
+    ticket.cause,
+  ].filter(Boolean).join(" "));
+
+  const matches = (terms: string[]) => terms.some((term) => text.includes(term));
+  if (matches(["financeiro", "titulo", "boleto", "bordero", "bancario", "contas a pagar", "contas a receber", "acerto"])) return "Financeiro";
+  if (matches(["pedido de compra", "cotacao", "solicitacao de compra", "ordem de compra", "compras"])) return "Backoffice - Compras";
+  if (matches(["faturamento de entrada", "importacao nf", "importador de nota", "nota de entrada", "nfe de terceiro"])) return "Backoffice - Faturamento de Entrada";
+  if (matches(["contrato", "fixacao", "graos", "ato cooperado", "saldo agricola"])) return "Backoffice - Contratos/Grãos";
+  if (matches(["estoque", "romaneio", "pesagem", "lote", "classificacao"])) return "Backoffice - Estoque/Romaneio";
+  if (matches(["fiscal", "nf-e", "nfe", "mdf-e", "mdfe", "ct-e", "cte", "sefaz", "tribut"] )) return "Fiscal/Faturamento";
+  return "Outros temas";
 }
 
 function groupChartData(
