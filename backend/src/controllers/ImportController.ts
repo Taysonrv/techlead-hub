@@ -31,6 +31,7 @@ export class ImportController {
         [
           "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
           "application/vnd.ms-excel",
+          "application/octet-stream",
         ];
 
       const hasValidExtension =
@@ -41,10 +42,10 @@ export class ImportController {
           );
 
       if (
+        !hasValidExtension ||
         !allowedMimeTypes.includes(
           req.file.mimetype
-        ) &&
-        !hasValidExtension
+        )
       ) {
         return res
           .status(400)
