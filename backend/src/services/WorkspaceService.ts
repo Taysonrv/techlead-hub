@@ -49,6 +49,7 @@ export class WorkspaceService {
 
     const taskIds = tickets.map((item) => item.taskNumber)
       .filter((value): value is number => value !== null);
+    const ownedMovideskIds = tickets.map((item) => item.movideskId);
     const identity = {
       OR: [
         { createdByName: { equals: operationName, mode: "insensitive" as const } },
@@ -58,6 +59,7 @@ export class WorkspaceService {
           { assignedToEmail: { equals: user.email, mode: "insensitive" as const } },
         ] : []),
         ...(taskIds.length ? [{ id: { in: taskIds } }] : []),
+        ...ownedMovideskIds.map((id) => ({ participantMovideskTickets: { contains: `,${id},` } })),
       ],
     };
 
@@ -66,6 +68,7 @@ export class WorkspaceService {
           identity,
           ...(params.client ? [{ OR: [
             { client: { equals: params.client, mode: "insensitive" as const } },
+            { participantClients: { contains: params.client, mode: "insensitive" as const } },
             ...(taskIds.length ? [{ id: { in: taskIds } }] : []),
           ] }] : []),
           ...(params.type ? [{ workItemType: { equals: params.type, mode: "insensitive" as const } }] : []),
@@ -79,8 +82,10 @@ export class WorkspaceService {
         select: {
           id: true, workItemType: true, title: true, state: true,
           client: true, assignedToName: true, prioritized: true,
+          participantClients: true,
           blockedProcess: true, deliveredVersion: true,
           movideskTicket: true, azureChangedAt: true,
+          participantMovideskTickets: true,
         },
       });
 
@@ -154,12 +159,15 @@ export class WorkspaceService {
       where: { OR: [
         ...(ticket.taskNumber ? [{ id: ticket.taskNumber }] : []),
         { movideskTicket: ticket.movideskId },
+        { participantMovideskTickets: { contains: `,${ticket.movideskId},` } },
       ] },
       orderBy: [{ azureChangedAt: "desc" }, { id: "desc" }],
       select: {
         id: true, workItemType: true, title: true, state: true,
         client: true, assignedToName: true, deliveredVersion: true,
+        participantClients: true,
         movideskTicket: true, azureChangedAt: true,
+        participantMovideskTickets: true,
       },
     });
 
@@ -212,13 +220,16 @@ export class WorkspaceService {
             { createdByName: { in: [...SUPPORT_ANALYSTS], mode: "insensitive" } },
             { assignedToName: { in: [...SUPPORT_ANALYSTS], mode: "insensitive" } },
             { client: { in: [...SIMER_CLIENTS], mode: "insensitive" } },
+            ...SIMER_CLIENTS.map((client) => ({ participantClients: { contains: client, mode: "insensitive" as const } })),
             ...(taskIds.length ? [{ id: { in: taskIds } }] : []),
             ...(movideskIds.length ? [{ movideskTicket: { in: movideskIds } }] : []),
+            ...movideskIds.map((id) => ({ participantMovideskTickets: { contains: `,${id},` } })),
           ],
         },
         ...(params.type ? [{ workItemType: { equals: params.type, mode: "insensitive" as const } }] : []),
         ...(params.client ? [{ OR: [
           { client: { equals: params.client, mode: "insensitive" as const } },
+          { participantClients: { contains: params.client, mode: "insensitive" as const } },
           ...(taskIds.length ? [{ id: { in: taskIds } }] : []),
         ] }] : []),
         ...(params.user ? [{ OR: [
@@ -250,10 +261,11 @@ export class WorkspaceService {
       if (issue === "withoutTicket") return {
         AND: [
           { movideskTicket: null },
+          { participantMovideskTickets: null },
           ...(linkedTaskIds.length ? [{ id: { notIn: linkedTaskIds } }] : []),
         ],
       };
-      if (issue === "withoutClient") return { client: null };
+      if (issue === "withoutClient") return { AND: [{ client: null }, { participantClients: null }] };
       if (issue === "withoutModule") return { module: null };
       if (issue === "withoutOwner") return { assignedToName: null };
       if (issue === "completedWithoutVersion") return { state: { in: TERMINAL }, deliveredVersion: null };
@@ -304,7 +316,9 @@ export class WorkspaceService {
       select: {
         id: true, workItemType: true, title: true, state: true,
         client: true, module: true, assignedToName: true,
+        participantClients: true,
         movideskTicket: true, deliveredVersion: true,
+        participantMovideskTickets: true,
       },
     });
 
