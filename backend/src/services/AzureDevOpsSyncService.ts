@@ -126,6 +126,8 @@ type ExistingWorkItem = {
   deliveredVersion: string | null;
   movideskTicket: number | null;
   client: string | null;
+  participantClients: string | null;
+  participantMovideskTickets: string | null;
 };
 
 type BatchSyncOptions = {
@@ -866,6 +868,8 @@ export class AzureDevOpsSyncService {
                   deliveredVersion: true,
                   movideskTicket: true,
                   client: true,
+                  participantClients: true,
+                  participantMovideskTickets: true,
                 },
               });
         } catch (error) {
@@ -1018,6 +1022,8 @@ export class AzureDevOpsSyncService {
             deliveredVersion: true,
             movideskTicket: true,
             client: true,
+            participantClients: true,
+            participantMovideskTickets: true,
           },
         });
 
@@ -1085,6 +1091,8 @@ export class AzureDevOpsSyncService {
       ["deliveredVersion", existing.deliveredVersion, mapped.deliveredVersion],
       ["movideskTicket", existing.movideskTicket, mapped.movideskTicket],
       ["client", existing.client, mapped.client],
+      ["participantClients", existing.participantClients, mapped.participantClients],
+      ["participantMovideskTickets", existing.participantMovideskTickets, mapped.participantMovideskTickets],
     ];
 
     const changes = tracked.filter(([, oldValue, newValue]) =>
@@ -1463,6 +1471,8 @@ export class AzureDevOpsSyncService {
 
       client:
         mapped.client,
+      participantClients:
+        mapped.participantClients,
       criticality:
         mapped.criticality,
       origin:
@@ -1477,6 +1487,8 @@ export class AzureDevOpsSyncService {
 
       movideskTicket:
         mapped.movideskTicket,
+      participantMovideskTickets:
+        mapped.participantMovideskTickets,
       deliveredVersion:
         mapped.deliveredVersion,
 
