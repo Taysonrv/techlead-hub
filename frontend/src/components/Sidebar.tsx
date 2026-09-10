@@ -141,7 +141,7 @@ export function Sidebar() {
   ] =
     useState<HTMLElement | null>(null);
 
-  const [openSection, setOpenSection] = useState<"operation" | "development" | "management">(() => sectionForPath(location.pathname));
+  const [openSection, setOpenSection] = useState<"operation" | "development" | "management" | null>(() => sectionForPath(location.pathname));
 
   const profileMenuOpen =
     Boolean(profileAnchor);
@@ -740,7 +740,7 @@ export function Sidebar() {
           ariaLabel="Navegação da operação"
           items={mainMenu}
           open={openSection === "operation"}
-          onToggle={() => setOpenSection("operation")}
+          onToggle={() => setOpenSection((current) => current === "operation" ? null : "operation")}
         />
 
         {/* =================================================
@@ -752,7 +752,7 @@ export function Sidebar() {
           ariaLabel="Navegação de desenvolvimento"
           items={developmentMenu}
           open={openSection === "development"}
-          onToggle={() => setOpenSection("development")}
+          onToggle={() => setOpenSection((current) => current === "development" ? null : "development")}
         />
 
         {/* =================================================
@@ -764,7 +764,7 @@ export function Sidebar() {
           ariaLabel="Navegação do sistema"
           items={systemMenu}
           open={openSection === "management"}
-          onToggle={() => setOpenSection("management")}
+          onToggle={() => setOpenSection((current) => current === "management" ? null : "management")}
         />
 
         <Box
