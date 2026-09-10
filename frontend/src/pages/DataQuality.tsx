@@ -12,6 +12,8 @@ import { aliareColors } from "../theme/theme";
 type Sample = {
   id: number; workItemType: string; title: string; state: string; client: string | null;
   module: string | null; assignedToName: string | null; movideskTicket: number | null;
+  participantClients?: string | string[] | null;
+  participantMovideskTickets?: string | number[] | null;
   deliveredVersion: string | null; taskNumber: number | null; source: "AZURE" | "MOVIDESK";
 };
 type Data = {
@@ -98,7 +100,7 @@ export function DataQuality() {
     <Drawer anchor="right" open={Boolean(selected)} onClose={() => setSelected(null)} slotProps={{ paper: { sx: { width: { xs: "100%", sm: 560 }, p: 3 } } }}>
       <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "flex-start" }}><Box><Typography variant="overline" color="text.secondary">{selected?.workItemType}</Typography><Typography variant="h5" sx={{ fontWeight: 850 }}>#{selected?.source === "MOVIDESK" ? selected.movideskTicket : selected?.id}</Typography></Box><IconButton onClick={() => setSelected(null)}><CloseOutlined /></IconButton></Stack>
       <Typography variant="h6" sx={{ mt: 2, fontWeight: 750 }}>{selected?.title}</Typography>
-      <Stack spacing={1} sx={{ mt: 2 }}>{selected && Object.entries({ Estado: selected.state, Cliente: selected.client, Módulo: selected.module, Responsável: selected.assignedToName, Movidesk: selected.movideskTicket, Versão: selected.deliveredVersion }).map(([label, value]) => <Box key={label}><Typography variant="caption" color="text.secondary">{label}</Typography><Typography>{String(value ?? "Não informado")}</Typography></Box>)}</Stack>
+      <Stack spacing={1} sx={{ mt: 2 }}>{selected && Object.entries({ Estado: selected.state, "Cliente principal": selected.client, "Clientes participantes": formatList(selected.participantClients), Módulo: selected.module, Responsável: selected.assignedToName, "Ticket principal": selected.movideskTicket, "Tickets participantes": formatList(selected.participantMovideskTickets), Versão: selected.deliveredVersion }).map(([label, value]) => <Box key={label}><Typography variant="caption" color="text.secondary">{label}</Typography><Typography>{String(value ?? "Não informado")}</Typography></Box>)}</Stack>
       {detail && <Alert severity="info" sx={{ mt: 2 }}>Detalhes completos e histórico carregados do Azure.</Alert>}
       <Button variant="contained" sx={{ mt: 3 }} onClick={() => selected && navigate(selected.source === "MOVIDESK" ? `/tickets?movidesk=${selected.movideskTicket}` : `${route(selected.workItemType)}?task=${selected.id}`)}>Abrir registro completo</Button>
     </Drawer>
@@ -106,3 +108,4 @@ export function DataQuality() {
 }
 
 function route(type: string) { const value = type.toLocaleLowerCase("pt-BR"); return value.includes("apoio") ? "/apoios" : value.includes("evolu") ? "/evolucoes" : "/correcoes"; }
+function formatList(value: string | string[] | number[] | null | undefined) { if (Array.isArray(value)) return value.join(", ") || "Não informado"; return value?.replace(/^,|,$/g, "").replace(/\r?\n/g, ", ") || "Não informado"; }
