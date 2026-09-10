@@ -94,8 +94,13 @@ const CONFIG_FILENAME =
 const SECURE_CONFIG_FILENAME =
   "secure-config.json";
 
+const IS_PRERELEASE =
+  app.getVersion().includes("-");
+
 const UPDATE_CHANNEL =
-  "beta";
+  IS_PRERELEASE
+    ? "beta"
+    : "latest";
 
 const UPDATE_CHECK_DELAY =
   5_000;
@@ -269,7 +274,7 @@ function configureAutoUpdater() {
     false;
 
   updater.allowPrerelease =
-    true;
+    IS_PRERELEASE;
 
   updater.channel =
     UPDATE_CHANNEL;
