@@ -10,6 +10,10 @@ import {
   authMiddleware,
 } from "../middlewares/authMiddleware";
 
+import {
+  createRateLimitMiddleware,
+} from "../middlewares/rateLimitMiddleware";
+
 /* =========================================================
    ROUTER
 ========================================================= */
@@ -19,6 +23,22 @@ const authRoutes =
 
 const auth =
   new AuthController();
+
+const loginRateLimit =
+  createRateLimitMiddleware({
+    windowMs: 15 * 60 * 1_000,
+    maxAttempts: 10,
+    message:
+      "Muitas tentativas de login. Aguarde alguns minutos e tente novamente.",
+  });
+
+const accountRateLimit =
+  createRateLimitMiddleware({
+    windowMs: 15 * 60 * 1_000,
+    maxAttempts: 5,
+    message:
+      "Muitas solicitações. Aguarde alguns minutos e tente novamente.",
+  });
 
 /* =========================================================
    CONFIGURAÇÃO INICIAL
@@ -35,6 +55,7 @@ authRoutes.get(
 
 authRoutes.post(
   "/setup",
+  accountRateLimit,
   auth.setup.bind(
     auth
   )
@@ -53,6 +74,7 @@ authRoutes.post(
 
 authRoutes.post(
   "/register",
+  accountRateLimit,
   auth.register.bind(
     auth
   )
@@ -66,6 +88,7 @@ authRoutes.post(
 
 authRoutes.post(
   "/login",
+  loginRateLimit,
   auth.login.bind(
     auth
   )
@@ -77,6 +100,7 @@ authRoutes.post(
 
 authRoutes.post(
   "/forgot-password",
+  accountRateLimit,
   auth.forgotPassword.bind(
     auth
   )
@@ -91,6 +115,7 @@ authRoutes.get(
 
 authRoutes.post(
   "/reset-password",
+  accountRateLimit,
   auth.resetPassword.bind(
     auth
   )
