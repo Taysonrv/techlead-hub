@@ -117,10 +117,12 @@ type AzureWorkItem = {
   reason?: string | null;
   assignedToName: string | null;
   client: string | null;
+  participantClients?: string | string[] | null;
   criticality: string | null;
   module: string | null;
   process: string | null;
   movideskTicket: number | null;
+  participantMovideskTickets?: string | number[] | null;
   deliveredVersion: string | null;
   prioritized: NullableBoolean;
   blockedProcess: NullableBoolean;
@@ -453,6 +455,13 @@ function normalizeText(
     value?.trim() ||
     EMPTY_TEXT
   );
+}
+
+function formatParticipants(value: string | string[] | number[] | null | undefined) {
+  if (Array.isArray(value)) return value.length ? value.join(", ") : "-";
+  if (!value) return "-";
+  const normalized = value.replace(/^,|,$/g, "").replace(/\r?\n/g, ", ").trim();
+  return normalized || "-";
 }
 
 function criticalityTone(
@@ -4205,8 +4214,14 @@ export function AzureWorkItems({
                                     190,
                                 }}
                               >
-                                {item.client ??
-                                  "-"}
+                                <Stack spacing={0.25}>
+                                  <Typography variant="body2">{item.client ?? "-"}</Typography>
+                                  {formatParticipants(item.participantClients) !== "-" && (
+                                    <Typography variant="caption" color="text.secondary">
+                                      Participantes: {formatParticipants(item.participantClients)}
+                                    </Typography>
+                                  )}
+                                </Stack>
                               </TableCell>
 
                               <TableCell
@@ -4241,8 +4256,14 @@ export function AzureWorkItems({
                               </TableCell>
 
                               <TableCell>
-                                {item.movideskTicket ??
-                                  "-"}
+                                <Stack spacing={0.25}>
+                                  <Typography variant="body2">{item.movideskTicket ?? "-"}</Typography>
+                                  {formatParticipants(item.participantMovideskTickets) !== "-" && (
+                                    <Typography variant="caption" color="text.secondary">
+                                      Participantes: {formatParticipants(item.participantMovideskTickets)}
+                                    </Typography>
+                                  )}
+                                </Stack>
                               </TableCell>
 
                               <TableCell
@@ -4623,6 +4644,16 @@ export function AzureWorkItems({
                     />
 
                     <DetailField
+                      label="Clientes participantes"
+                      value={formatParticipants(selectedWorkItem.participantClients)}
+                    />
+
+                    <DetailField
+                      label="Tickets dos clientes participantes"
+                      value={formatParticipants(selectedWorkItem.participantMovideskTickets)}
+                    />
+
+                    <DetailField
                       label="Módulo"
                       value={
                         normalizeText(
@@ -4746,7 +4777,7 @@ export function AzureWorkItems({
 
                       <InfoHint
                         title="Atendimentos relacionados"
-                        text="O atendimento de origem é identificado pelo número Movidesk informado na própria Task. Outros atendimentos podem estar relacionados pelo campo Número da Task."
+                        text="A associação considera o Nº do Ticket principal, o Nº do Ticket dos Clientes Participantes e atendimentos cujo Número da Task aponta para este Work Item."
                       />
                     </Stack>
 
@@ -4763,7 +4794,7 @@ export function AzureWorkItems({
                     0 ? (
                     <Alert
                       severity={
-                        selectedWorkItem.movideskTicket
+                        selectedWorkItem.movideskTicket || formatParticipants(selectedWorkItem.participantMovideskTickets) !== "-"
                           ? "warning"
                           : "info"
                       }
@@ -4772,6 +4803,8 @@ export function AzureWorkItems({
                         ? "O ticket Movidesk " +
                           selectedWorkItem.movideskTicket +
                           " está informado no Azure, mas esse atendimento ainda não foi importado para a base local do TechLead Hub."
+                        : formatParticipants(selectedWorkItem.participantMovideskTickets) !== "-"
+                          ? "Há tickets de clientes participantes informados no Azure, mas eles ainda não foram importados para a base local."
                         : "O Azure não possui número de ticket Movidesk informado e nenhum atendimento aponta para este Work Item."}
                     </Alert>
                   ) : (
