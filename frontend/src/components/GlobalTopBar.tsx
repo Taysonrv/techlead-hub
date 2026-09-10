@@ -1,6 +1,7 @@
 import { CalendarMonthOutlined, ChevronLeft, ChevronRight, SearchOutlined } from "@mui/icons-material";
 import { Badge, Box, CircularProgress, IconButton, InputAdornment, List, ListItemButton, ListItemText, Paper, Popover, Stack, TextField, Typography } from "@mui/material";
-import { useEffect, useMemo, useState, type MouseEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { api } from "../services/api";
 import { aliareColors } from "../theme/theme";
@@ -20,6 +21,7 @@ export function GlobalTopBar() {
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [holidays, setHolidays] = useState<Holiday[]>([]);
   const [selectedDate, setSelectedDate] = useState(() => dateKey(new Date()));
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     if (query.trim().length < 2) { setResults([]); setSearching(false); setSearchError(""); return; }
@@ -49,21 +51,24 @@ export function GlobalTopBar() {
 
   function go(path: string) { setQuery(""); setResults([]); setCalendarAnchor(null); navigate(path); }
 
+  function handleSearchKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    if (event.key === "Enter" && results[0]) go(results[0].path);
+    if (event.key === "Escape") { setQuery(""); setResults([]); searchInputRef.current?.blur(); }
+  }
+
   return (
     <Box sx={{ position: "sticky", top: 0, zIndex: (theme) => theme.zIndex.appBar, mx: { xs: -1.5, sm: -2, md: -2.5, lg: -3, xl: -4 }, mt: { xs: -1.5, sm: -2, md: -2.5, lg: -3, xl: -3.5 }, mb: 2.5, px: { xs: 1.5, md: 2.5 }, py: 1, minHeight: 62, bgcolor: "rgba(255,255,255,.94)", backdropFilter: "blur(14px)", borderBottom: "1px solid", borderColor: "divider" }}>
-      <Stack direction="row" sx={{ alignItems: "center", justifyContent: "center", minHeight: 44, pr: { xs: 0, sm: 310 }, pl: { xs: 0, sm: 16 } }}>
-        <Box sx={{ position: "relative", width: { xs: "100%", sm: "min(720px, 100%)" } }}>
-          <TextField fullWidth size="small" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Busque tickets, clientes, tarefas, assuntos ou versões..."
-            slotProps={{ input: { startAdornment: <InputAdornment position="start"><SearchOutlined fontSize="small" /></InputAdornment>, endAdornment: searching ? <CircularProgress size={16} /> : undefined } }} />
+      <Box sx={{ position: "relative", width: { xs: "calc(100% - 72px)", sm: "clamp(360px, 46vw, 760px)" }, mx: "auto", minHeight: 44 }}>
+          <TextField inputRef={searchInputRef} fullWidth size="small" value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={handleSearchKeyDown} placeholder="Busque tickets, clientes, tarefas, assuntos ou versões..."
+            slotProps={{ input: { startAdornment: <InputAdornment position="start"><SearchOutlined fontSize="small" /></InputAdornment>, endAdornment: searching ? <CircularProgress size={16} /> : undefined, sx: { height: 44, bgcolor: "background.paper" } } }} />
           {query.trim().length >= 2 && (
             <Paper elevation={8} sx={{ position: "absolute", top: 46, left: 0, right: 0, maxHeight: 430, overflowY: "auto", border: "1px solid", borderColor: "divider", zIndex: 20 }}>
               {results.length ? <List dense disablePadding>{results.map((item) => <ListItemButton key={item.id} onClick={() => go(item.path)} sx={{ py: .9 }}><Box sx={{ minWidth: 88 }}><Typography variant="caption" sx={{ color: aliareColors.greenDark, fontWeight: 800 }}>{item.type}</Typography></Box><ListItemText primary={item.title} secondary={item.subtitle} slotProps={{ primary: { noWrap: true, sx: { fontSize: ".82rem", fontWeight: 700 } }, secondary: { noWrap: true, sx: { fontSize: ".7rem" } } }} /></ListItemButton>)}</List> : !searching && <Typography variant="body2" color={searchError ? "error" : "text.secondary"} sx={{ p: 2 }}>{searchError || "Nenhum resultado encontrado."}</Typography>}
             </Paper>
           )}
-        </Box>
-      </Stack>
+      </Box>
 
-      <IconButton title="Calendário operacional" onClick={(event: MouseEvent<HTMLElement>) => setCalendarAnchor(event.currentTarget)} sx={{ position: "fixed", top: 14, right: { xs: 76, sm: 276 }, zIndex: (theme) => theme.zIndex.drawer + 2, width: 46, height: 46, bgcolor: "background.paper", border: "1px solid", borderColor: "divider", borderRadius: 2, boxShadow: "0 2px 10px rgba(0,0,0,.06)", "&:hover": { bgcolor: "background.paper", borderColor: "rgba(24,199,122,.38)" } }}><Badge color="success" variant={events.length ? "dot" : "standard"}><CalendarMonthOutlined /></Badge></IconButton>
+      {createPortal(<IconButton title="Calendário operacional" onClick={(event: MouseEvent<HTMLElement>) => setCalendarAnchor(event.currentTarget)} sx={{ position: "fixed", top: 14, right: { xs: 76, sm: 300 }, zIndex: (theme) => theme.zIndex.drawer + 2, width: 46, height: 46, bgcolor: "background.paper", border: "1px solid", borderColor: "divider", borderRadius: 2, boxShadow: "0 2px 10px rgba(0,0,0,.06)", "&:hover": { bgcolor: "background.paper", borderColor: "rgba(24,199,122,.38)" } }}><Badge color="success" variant={events.length ? "dot" : "standard"}><CalendarMonthOutlined /></Badge></IconButton>, document.body)}
 
       <Popover open={Boolean(calendarAnchor)} anchorEl={calendarAnchor} onClose={() => setCalendarAnchor(null)} anchorOrigin={{ vertical: "bottom", horizontal: "right" }} transformOrigin={{ vertical: "top", horizontal: "right" }} slotProps={{ paper: { sx: { mt: 1, width: { xs: 350, sm: 520 }, maxWidth: "calc(100vw - 24px)", borderRadius: 2 } } }}>
         <Box sx={{ p: 2 }}>
