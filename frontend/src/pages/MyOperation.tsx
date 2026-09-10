@@ -10,6 +10,7 @@ type WorkItem = { id: number; workItemType: string; title: string; state: string
 type VersionGroup = { channel: string; version: string; tasks: Array<Pick<WorkItem, "id" | "workItemType" | "title" | "state" | "deliveredVersion">> };
 type Data = { summary: { tickets: number; openWorkItems: number; concludedRecently: number; prioritized: number; blocked: number }; tickets: Ticket[]; workItems: WorkItem[]; latestVersions: VersionGroup[]; filters: { clients: string[]; types: string[] } };
 type TicketDetail = { ticket: Ticket & Record<string, unknown>; relatedWorkItems: WorkItem[] };
+type KnowledgeItem = { id: number | null; title: string; path: string; excerpt: string; webUrl: string | null; score: number };
 type Unified = { key: string; source: "MOVIDESK" | "AZURE"; id: number; title: string; status: string; client: string | null; type: string; ticket?: Ticket; workItem?: WorkItem };
 type SourceView = "tickets" | "tasks" | "both";
 
@@ -21,6 +22,7 @@ const metrics = [
   ["blocked", "Bloqueadas", "Tarefas abertas com bloqueio de processo.", "blocked"],
 ] as const;
 const lanes = ["Aguardando atendimento", "Em andamento", "Pausado", "Aguardando retorno", "Interno", "Concluído"];
+const SHAREPOINT_SITE = "https://siagri365.sharepoint.com/sites/cooperativas-agroindustrias-simer";
 
 export function MyOperation() {
   const navigate = useNavigate();
@@ -38,6 +40,9 @@ export function MyOperation() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [dragged, setDragged] = useState<Ticket | null>(null);
   const [savingStatus, setSavingStatus] = useState(false);
+  const [knowledgeQuery, setKnowledgeQuery] = useState("");
+  const [knowledge, setKnowledge] = useState<KnowledgeItem[]>([]);
+  const [knowledgeLoading, setKnowledgeLoading] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -63,8 +68,21 @@ export function MyOperation() {
     });
   }, [data, metric, sourceView]);
 
+  const searchKnowledge = async (query: string) => {
+    const normalized = query.trim();
+    setKnowledgeQuery(normalized);
+    if (normalized.length < 3) { setKnowledge([]); return; }
+    try {
+      setKnowledgeLoading(true);
+      const response = await api.get<{ items: KnowledgeItem[] }>("/azure-devops/wiki/search", { params: { q: normalized, limit: 8 } });
+      setKnowledge(response.data.items);
+    } catch { setKnowledge([]); } finally { setKnowledgeLoading(false); }
+  };
+
   const openItem = async (item: Unified) => {
     setSelected(item); setDetail(null);
+    setKnowledge([]);
+    void searchKnowledge(item.title);
     if (!item.ticket) return;
     try {
       setDetailLoading(true);
@@ -119,6 +137,12 @@ export function MyOperation() {
       <Typography variant="h6" sx={{ mt: 2, fontWeight: 750 }}>{selected?.title}</Typography>{detailLoading && <CircularProgress size={24} sx={{ mt: 2 }} />}
       <Stack spacing={1.2} sx={{ mt: 2 }}>{selected && Object.entries({ Estado: selected.status, Cliente: detail?.ticket.client ?? selected.client, Contato: detail?.ticket.contact, Categoria: detail?.ticket.category, Urgência: detail?.ticket.urgency, Serviço: detail?.ticket.service, Equipe: detail?.ticket.ownerTeam, Responsável: detail?.ticket.owner ?? selected.workItem?.assignedToName, "Prazo de solução": detail?.ticket.dueDate, Versão: selected.workItem?.deliveredVersion, "Ticket relacionado": selected.workItem?.movideskTicket, "Task relacionada": selected.ticket?.taskNumber }).map(([label, value]) => <Box key={label}><Typography variant="caption" color="text.secondary">{label}</Typography><Typography>{String(value ?? "Não informado")}</Typography></Box>)}</Stack>
       {detail?.relatedWorkItems.length ? <Box sx={{ mt: 3 }}><Typography sx={{ fontWeight: 850 }}>Tarefas vinculadas</Typography><Stack spacing={1} sx={{ mt: 1 }}>{detail.relatedWorkItems.map((task) => <Button key={task.id} variant="outlined" endIcon={<OpenInNewOutlined />} onClick={() => navigate(`${route(task.workItemType)}?task=${task.id}`)} sx={{ justifyContent: "space-between", textTransform: "none" }}>#{task.id} · {task.workItemType}</Button>)}</Stack></Box> : null}
+      <Card variant="outlined" sx={{ mt: 3 }}><CardContent>
+        <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "center" }}><Box><Typography sx={{ fontWeight: 850 }}>Base de conhecimento</Typography><Typography variant="caption" color="text.secondary">Sugestões da Wiki e pesquisa contextual no SharePoint SIMER.</Typography></Box><Tooltip title="A pesquisa usa palavras do assunto do atendimento. Você pode refinar por rotina, módulo ou mensagem de erro."><InfoOutlined color="action" fontSize="small" /></Tooltip></Stack>
+        <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ mt: 1.5 }}><TextField fullWidth size="small" label="Pesquisar procedimento, rotina ou erro" value={knowledgeQuery} onChange={(event) => setKnowledgeQuery(event.target.value)} onKeyDown={(event) => event.key === "Enter" && void searchKnowledge(knowledgeQuery)} /><Button variant="contained" onClick={() => void searchKnowledge(knowledgeQuery)}>Buscar Wiki</Button></Stack>
+        {knowledgeLoading ? <CircularProgress size={22} sx={{ mt: 2 }} /> : knowledge.length ? <Stack spacing={1} sx={{ mt: 1.5 }}>{knowledge.map((item) => <Card key={`${item.id}-${item.path}`} variant="outlined"><CardContent sx={{ p: 1.4, "&:last-child": { pb: 1.4 } }}><Typography sx={{ fontWeight: 800 }}>{item.title}</Typography><Typography variant="caption" color="text.secondary">{item.path}</Typography><Typography variant="body2" sx={{ mt: .5 }}>{item.excerpt}</Typography>{item.webUrl && <Button size="small" component="a" href={item.webUrl} target="_blank" rel="noopener noreferrer" endIcon={<OpenInNewOutlined />} sx={{ mt: .5, px: 0 }}>Abrir na Wiki</Button>}</CardContent></Card>)}</Stack> : <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5 }}>Nenhum artigo correspondente foi localizado na Wiki. Tente informar o nome da rotina ou módulo.</Typography>}
+        <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ mt: 1.5 }}><Button variant="outlined" component="a" href={`${SHAREPOINT_SITE}/_layouts/15/search.aspx/siteall?q=${encodeURIComponent(knowledgeQuery)}`} target="_blank" rel="noopener noreferrer" endIcon={<OpenInNewOutlined />}>Pesquisar no SharePoint</Button><Button component="a" href={SHAREPOINT_SITE} target="_blank" rel="noopener noreferrer">Abrir portal SIMER</Button></Stack>
+      </CardContent></Card>
       <Stack direction="row" spacing={1} sx={{ mt: 3, flexWrap: "wrap" }}><Button variant="contained" onClick={() => selected && navigate(selected.source === "MOVIDESK" ? `/tickets?movidesk=${selected.id}` : `${route(selected.type)}?task=${selected.id}`)}>Abrir registro completo</Button>{selected?.workItem?.movideskTicket && <Button onClick={() => navigate(`/tickets?movidesk=${selected?.workItem?.movideskTicket}`)}>Abrir atendimento</Button>}</Stack>
     </Drawer>
   </Box>;
