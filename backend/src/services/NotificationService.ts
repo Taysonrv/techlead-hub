@@ -117,6 +117,9 @@ export class NotificationService {
       ...(movideskIds.length > 0
         ? [{ movideskTicket: { in: movideskIds } }]
         : []),
+      ...movideskIds.map((id) => ({
+        participantMovideskTickets: { contains: `,${id},` },
+      })),
     ];
 
     const [workItems, versions] =
