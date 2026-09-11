@@ -45,9 +45,9 @@ export function Knowledge() {
     if (query.trim().length < 3) { setMessage("Informe ao menos 3 caracteres para pesquisar."); return; }
     try {
       setLoading(true); setMessage(null);
-      const response = await api.get("/knowledge/search", { params: { q: query.trim(), source } });
+      const response = await api.get("/knowledge/search", { params: { q: query.trim(), source }, timeout: 60_000 });
       setItems(response.data.items ?? []); setWarnings(response.data.warnings ?? []);
-    } catch (error: any) { setMessage(error?.response?.data?.message || "Não foi possível pesquisar."); }
+    } catch (error: any) { setMessage(error?.code === "ECONNABORTED" ? "A primeira indexação da Wiki excedeu o tempo esperado. Tente novamente; as próximas consultas usam cache." : error?.response?.data?.message || error?.message || "Não foi possível pesquisar."); }
     finally { setLoading(false); }
   }
 

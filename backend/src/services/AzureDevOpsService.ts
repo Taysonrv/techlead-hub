@@ -102,6 +102,8 @@ export class AzureDevOpsService {
   private readonly pat: string;
   private readonly client: AxiosInstance;
   private resolvedWikiId: string | null = null;
+  private static readonly wikiPageCache = new Map<string, { expiresAt: number; pages: Array<Record<string, unknown>> }>();
+  private static readonly wikiPageLoads = new Map<string, Promise<Array<Record<string, unknown>>>>();
 
   private static readonly BATCH_SIZE = 200;
 
@@ -531,58 +533,28 @@ export class AzureDevOpsService {
     const wikiId = await this.resolveWikiIdentifier();
 
     try {
-      const response = await this.client.get<{
-        subPages?: Array<Record<string, unknown>>;
-      }>(
-        `/_apis/wiki/wikis/${encodeURIComponent(wikiId)}/pages`,
-        {
-          params: {
-            path: "/",
-            recursionLevel: "Full",
-            includeContent: true,
-            "api-version": "7.1",
-          },
-        },
-      );
-
-      const pages: Array<Record<string, unknown>> = [];
-      const visit = (page: Record<string, unknown>) => {
-        pages.push(page);
-        const children = Array.isArray(page.subPages) ? page.subPages : [];
-        children.forEach((child) => {
-          if (child && typeof child === "object") visit(child as Record<string, unknown>);
-        });
-      };
-      (response.data.subPages ?? []).forEach(visit);
+      const cacheKey = `${this.organization}/${this.project}/${wikiId}`;
+      const cached = AzureDevOpsService.wikiPageCache.get(cacheKey);
+      let hydrated = cached && cached.expiresAt > Date.now() ? cached.pages : null;
+      if (!hydrated) {
+        let load = AzureDevOpsService.wikiPageLoads.get(cacheKey);
+        if (!load) {
+          load = this.loadWikiPages(wikiId);
+          AzureDevOpsService.wikiPageLoads.set(cacheKey, load);
+        }
+        try {
+          hydrated = await load;
+          AzureDevOpsService.wikiPageCache.set(cacheKey, { expiresAt: Date.now() + 10 * 60_000, pages: hydrated });
+        } finally {
+          AzureDevOpsService.wikiPageLoads.delete(cacheKey);
+        }
+      }
 
       const terms = normalizedQuery
         .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
         .toLocaleLowerCase("pt-BR")
         .split(/[^a-z0-9]+/)
         .filter((term) => term.length >= 3 && !WIKI_STOP_WORDS.has(term));
-
-      /* A resposta recursiva contém a árvore, mas o Azure nem sempre inclui o
-       * conteúdo dos filhos. Carregamos cada página por path para que a busca
-       * encontre termos no texto e não apenas no título. */
-      const hydrated: Array<Record<string, unknown>> = [];
-      for (let offset = 0; offset < pages.length; offset += 8) {
-        const batch = pages.slice(offset, offset + 8);
-        const values = await Promise.all(batch.map(async (page) => {
-          if (typeof page.content === "string" && page.content) return page;
-          const path = typeof page.path === "string" ? page.path : "";
-          if (!path) return page;
-          try {
-            const detail = await this.client.get(
-              `/_apis/wiki/wikis/${encodeURIComponent(wikiId)}/pages`,
-              { params: { path, includeContent: true, "api-version": "7.1" } },
-            );
-            return { ...page, ...detail.data };
-          } catch {
-            return page;
-          }
-        }));
-        hydrated.push(...values);
-      }
 
       return hydrated.map((page) => {
         const path = typeof page.path === "string" ? page.path : "";
@@ -611,6 +583,56 @@ export class AzureDevOpsService {
     } catch (error) {
       throw this.mapAxiosError(error, "Não foi possível pesquisar a Wiki do Azure DevOps.");
     }
+  }
+
+  private async loadWikiPages(wikiId: string): Promise<Array<Record<string, unknown>>> {
+      const response = await this.client.get<{
+        subPages?: Array<Record<string, unknown>>;
+      }>(
+        `/_apis/wiki/wikis/${encodeURIComponent(wikiId)}/pages`,
+        {
+          params: {
+            path: "/",
+            recursionLevel: "Full",
+            includeContent: true,
+            "api-version": "7.1",
+          },
+        },
+      );
+
+      const pages: Array<Record<string, unknown>> = [];
+      const visit = (page: Record<string, unknown>) => {
+        pages.push(page);
+        const children = Array.isArray(page.subPages) ? page.subPages : [];
+        children.forEach((child) => {
+          if (child && typeof child === "object") visit(child as Record<string, unknown>);
+        });
+      };
+      (response.data.subPages ?? []).forEach(visit);
+
+      /* A resposta recursiva contém a árvore, mas o Azure nem sempre inclui o
+       * conteúdo dos filhos. Carregamos cada página por path para que a busca
+       * encontre termos no texto e não apenas no título. */
+      const hydrated: Array<Record<string, unknown>> = [];
+      for (let offset = 0; offset < pages.length; offset += 24) {
+        const batch = pages.slice(offset, offset + 24);
+        const values = await Promise.all(batch.map(async (page) => {
+          if (typeof page.content === "string" && page.content) return page;
+          const path = typeof page.path === "string" ? page.path : "";
+          if (!path) return page;
+          try {
+            const detail = await this.client.get(
+              `/_apis/wiki/wikis/${encodeURIComponent(wikiId)}/pages`,
+              { params: { path, includeContent: true, "api-version": "7.1" } },
+            );
+            return { ...page, ...detail.data };
+          } catch {
+            return page;
+          }
+        }));
+        hydrated.push(...values);
+      }
+      return hydrated;
   }
 
   /* =======================================================
