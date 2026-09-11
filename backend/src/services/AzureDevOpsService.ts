@@ -533,6 +533,11 @@ export class AzureDevOpsService {
     const wikiId = await this.resolveWikiIdentifier();
 
     try {
+      const indexed = await this.searchIndexedWiki(normalizedQuery, wikiId, limit);
+      if (Array.isArray(indexed)) return indexed;
+      /* Fallback mantido abaixo para ambientes nos quais o serviço Azure
+       * Search ainda esteja em processo de indexação. */
+      /* istanbul ignore next */
       const cacheKey = `${this.organization}/${this.project}/${wikiId}`;
       const cached = AzureDevOpsService.wikiPageCache.get(cacheKey);
       let hydrated = cached && cached.expiresAt > Date.now() ? cached.pages : null;
@@ -583,6 +588,67 @@ export class AzureDevOpsService {
     } catch (error) {
       throw this.mapAxiosError(error, "Não foi possível pesquisar a Wiki do Azure DevOps.");
     }
+  }
+
+  private async searchIndexedWiki(query: string, wikiId: string, limit: number) {
+    const basicToken = Buffer.from(`:${this.pat}`, "utf8").toString("base64");
+    const response = await axios.post<{
+      count?: number;
+      infoCode?: number;
+      results?: Array<{
+        fileName?: string;
+        path?: string;
+        wiki?: { id?: string; name?: string };
+        hits?: Array<{ fieldReferenceName?: string; highlights?: string[] }>;
+      }>;
+    }>(
+      `https://almsearch.dev.azure.com/${encodeURIComponent(this.organization)}/${encodeURIComponent(this.project)}/_apis/search/wikisearchresults`,
+      {
+        searchText: query,
+        $skip: 0,
+        $top: Math.min(Math.max(limit, 1), 50),
+        filters: { Project: [this.project] },
+        $orderBy: null,
+        includeFacets: false,
+      },
+      {
+        params: { "api-version": "7.1" },
+        headers: { Accept: "application/json", Authorization: `Basic ${basicToken}` },
+        timeout: AzureDevOpsService.REQUEST_TIMEOUT_MS,
+      },
+    );
+    if (response.data.infoCode && response.data.infoCode !== 0 && response.data.infoCode !== 8) {
+      throw new AzureDevOpsServiceError(
+        `A pesquisa da Wiki respondeu com o código de indexação ${response.data.infoCode}.`,
+        503,
+      );
+    }
+    const clean = (value: string) => value
+      .replace(/<\/?highlighthit>/gi, "")
+      .replace(/<[^>]+>/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    const results = response.data.results ?? [];
+    const selected = results.filter((item) => {
+      const resultWikiId = item.wiki?.id?.toLocaleLowerCase("pt-BR");
+      return !resultWikiId || resultWikiId === wikiId.toLocaleLowerCase("pt-BR");
+    });
+    return selected.map((item, index) => {
+      const path = item.path?.replace(/\.md$/i, "") || `/${item.fileName?.replace(/\.md$/i, "") || "Página"}`;
+      const highlights = (item.hits ?? [])
+        .flatMap((hit) => hit.highlights ?? [])
+        .map(clean)
+        .filter(Boolean);
+      const wikiName = item.wiki?.name || this.wiki;
+      return {
+        id: null,
+        title: (item.fileName || path.split("/").filter(Boolean).pop() || "Página Wiki").replace(/\.md$/i, ""),
+        path,
+        excerpt: highlights.join(" · ").slice(0, 500) || "Conteúdo localizado no índice da Wiki Azure.",
+        webUrl: `https://dev.azure.com/${encodeURIComponent(this.organization)}/${encodeURIComponent(this.project)}/_wiki/wikis/${encodeURIComponent(wikiName)}?pagePath=${encodeURIComponent(path)}`,
+        score: Math.max(selected.length - index, 1),
+      };
+    });
   }
 
   private async loadWikiPages(wikiId: string): Promise<Array<Record<string, unknown>>> {
