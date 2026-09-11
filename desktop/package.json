@@ -22,7 +22,9 @@
     "release:beta:build": "npm run clean:release && npm run build:all && electron-builder --win nsis",
     "release:beta": "npm run version:beta && npm run release:beta:build",
     "publish:beta": "npm run clean:release && npm run build:all && electron-builder --win nsis --publish always",
-    "release:beta:publish": "npm run version:beta && npm run publish:beta"
+    "release:beta:publish": "npm run version:beta && npm run publish:beta",
+    "validate:release": "node scripts/validate-release.mjs",
+    "publish:stable": "npm run clean:release && npm run build:all && electron-builder --win nsis --config.publish.0.channel=latest --config.publish.0.releaseType=release --publish always"
   },
   "dependencies": {
     "electron-updater": "^6.6.2"

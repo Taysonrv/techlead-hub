@@ -4,6 +4,10 @@ import type {
 } from "express";
 
 import {
+  sendPasswordResetEmail,
+} from "../services/SmtpService";
+
+import {
   AuthError,
   AuthService,
 } from "../services/AuthService";
@@ -404,9 +408,29 @@ export class AuthController {
       if (
         result.delivery
       ) {
-        console.info(
-          `[auth] Solicitação de recuperação criada para o usuário ${result.delivery.userId}.`
-        );
+        try {
+          await sendPasswordResetEmail({
+            name:
+              result.delivery.name,
+            email:
+              result.delivery.email,
+            token:
+              result.delivery.token,
+            expiresAt:
+              result.delivery.expiresAt,
+          });
+
+          console.info(
+            `[auth] Recuperação enviada para o usuário ${result.delivery.userId}.`
+          );
+        } catch (
+          deliveryError
+        ) {
+          console.error(
+            "[auth] Não foi possível enviar a recuperação de senha:",
+            deliveryError
+          );
+        }
       }
 
       return response

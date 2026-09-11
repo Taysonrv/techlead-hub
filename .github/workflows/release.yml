@@ -1,0 +1,67 @@
+name: Publicar TechLead Hub
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Versão sem prefixo v (ex.: 0.3.0-beta.1)"
+        required: true
+      channel:
+        description: "Canal de atualização"
+        required: true
+        type: choice
+        options: [beta, stable]
+
+jobs:
+  build-and-publish:
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend/package-lock.json
+            desktop/package-lock.json
+
+      - name: Instalar dependências
+        shell: pwsh
+        run: |
+          npm ci --prefix backend
+          npm ci --prefix frontend
+          npm ci --prefix desktop
+
+      - name: Definir versão e canal
+        shell: pwsh
+        run: |
+          npm version "${{ inputs.version }}" --prefix desktop --no-git-tag-version
+          node -e "const fs=require('fs');const p='desktop/package.json';const j=require('./'+p);j.build.publish[0].channel='${{ inputs.channel == 'stable' && 'latest' || 'beta' }}';j.build.publish[0].releaseType='${{ inputs.channel == 'stable' && 'release' || 'prerelease' }}';fs.writeFileSync(p,JSON.stringify(j,null,2)+'\n')"
+
+      - name: Compilar e testar
+        shell: pwsh
+        run: |
+          npm run prisma:generate --prefix backend
+          npm run build --prefix backend
+          npm run build --prefix frontend
+          npm run build:desktop --prefix desktop
+
+      - name: Gerar instalador
+        shell: pwsh
+        working-directory: desktop
+        env:
+          GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
+        run: npx electron-builder --win nsis --publish always
+
+      - name: Validar artefatos
+        shell: pwsh
+        working-directory: desktop
+        run: node scripts/validate-release.mjs
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: techlead-hub-${{ inputs.version }}
+          path: desktop/release/*

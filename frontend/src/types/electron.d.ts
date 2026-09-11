@@ -53,6 +53,18 @@ declare global {
           project: string;
           wiki: string;
           patConfigured: boolean;
+          smtpHost: string;
+          smtpPort: string;
+          smtpSecure: boolean;
+          smtpUser: string;
+          smtpFrom: string;
+          smtpPasswordConfigured: boolean;
+          emailConfigured: boolean;
+          tenantId: string;
+          clientId: string;
+          sharePointSiteUrl: string;
+          bpmnSiteUrl: string;
+          microsoftConfigured: boolean;
         }>;
 
         importEnv: () => Promise<{
@@ -61,6 +73,16 @@ declare global {
           project: string;
           wiki: string;
           pat: string;
+          smtpHost?: string;
+          smtpPort?: string;
+          smtpSecure?: string;
+          smtpUser?: string;
+          smtpPassword?: string;
+          smtpFrom?: string;
+          tenantId?: string;
+          clientId?: string;
+          sharePointSiteUrl?: string;
+          bpmnSiteUrl?: string;
         } | null>;
 
         save: (input: {
@@ -69,6 +91,16 @@ declare global {
           project: string;
           wiki: string;
           pat: string;
+          smtpHost?: string;
+          smtpPort?: string;
+          smtpSecure?: string;
+          smtpUser?: string;
+          smtpPassword?: string;
+          smtpFrom?: string;
+          tenantId?: string;
+          clientId?: string;
+          sharePointSiteUrl?: string;
+          bpmnSiteUrl?: string;
         }) => Promise<{
           success: boolean;
           restartRequired: boolean;

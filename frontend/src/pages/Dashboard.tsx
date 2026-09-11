@@ -40,7 +40,7 @@ import { api } from "../services/api";
 import { PeriodFilter } from "../components/PeriodFilter";
 import { useFilters } from "../context/FiltersContext";
 import { aliareColors } from "../theme/theme";
-import { calculateServiceLevel } from "../utils/serviceLevel";
+import { calculateOfficialSla } from "../utils/officialSla";
 import {
   semanticChartColors,
 } from "../theme/chartPalette";
@@ -245,15 +245,6 @@ export function Dashboard() {
     isDateInPeriod(ticket.closedDate, periodBounds.start, periodBounds.end)
   ), [tickets, periodBounds]);
 
-  const completedInPeriod = useMemo(() => {
-    const ids = new Set<number>();
-    return [...resolvedInPeriod, ...closedInPeriod].filter((ticket) => {
-      if (ids.has(ticket.id)) return false;
-      ids.add(ticket.id);
-      return true;
-    });
-  }, [resolvedInPeriod, closedInPeriod]);
-
   // Rankings e gráficos de entrada continuam baseados na abertura do período.
   const filteredTickets = openedInPeriod;
 
@@ -262,8 +253,8 @@ export function Dashboard() {
   const stoppedTickets = useMemo(() => pendingTickets.filter((ticket) => ticket.baseStatus === "Stopped"), [pendingTickets]);
   const criticalTickets = useMemo(() => pendingTickets.filter((ticket) => normalize(ticket.urgency) === "critica"), [pendingTickets]);
 
-  const responseSla = useMemo(() => calculateHistoricalSla(openedInPeriod, "response"), [openedInPeriod]);
-  const solutionSla = useMemo(() => calculateHistoricalSla(completedInPeriod, "solution"), [completedInPeriod]);
+  const responseSla = useMemo(() => calculateOfficialSla(openedInPeriod, "response"), [openedInPeriod]);
+  const solutionSla = useMemo(() => calculateOfficialSla(openedInPeriod, "solution"), [openedInPeriod]);
 
   const summary = useMemo(() => ({
     abertosNoPeriodo: openedInPeriod.length,
@@ -934,8 +925,8 @@ const latestImportedAt =
         title: "SLA 1ª Resposta",
         summary: "Percentual de tickets medidos que receberam a primeira resposta dentro do prazo.",
         calculation: "Tickets dentro do prazo ÷ tickets com medição válida × 100.",
-        source: "Movidesk / regra histórica do TechLead Hub",
-        reference: "responseSlaIndicator e prazos de primeira resposta",
+        source: "Indicador oficial do Movidesk",
+        reference: "responseSlaIndicator",
         periodRule: "Considera tickets abertos no período selecionado.",
         notes: "Registros sem medição ficam fora do denominador.",
       },
@@ -948,11 +939,11 @@ const latestImportedAt =
       severity: slaSeverity(solutionSla),
       info: {
         title: "SLA Solução",
-        summary: "Percentual de tickets concluídos com solução dentro do prazo.",
-        calculation: "Tickets dentro do prazo ÷ tickets concluídos com medição válida × 100.",
-        source: "Movidesk / regra histórica do TechLead Hub",
-        reference: "solutionSlaIndicator e prazo de solução",
-        periodRule: "Considera tickets resolvidos ou fechados no período selecionado.",
+        summary: "Percentual oficial de solução dentro do prazo no recorte de atendimentos.",
+        calculation: "Tickets com indicador dentro do prazo ÷ tickets com indicador oficial válido × 100.",
+        source: "Indicador oficial do Movidesk",
+        reference: "solutionSlaIndicator",
+        periodRule: "Considera tickets abertos no período selecionado, igual às telas Clientes e Desempenho.",
         notes: "Registros sem medição ficam fora do denominador.",
       },
       onClick: () => showTickets("SLA de solução", solutionSla.measuredTickets, `${solutionSla.within} dentro • ${solutionSla.outside} fora • ${solutionSla.unmeasured} sem medição`),
@@ -3523,62 +3514,21 @@ function groupByField(
     );
 }
 
-type HistoricalSlaSummary = {
-  within: number; outside: number; unmeasured: number;
-  percentage: number | null; measuredTickets: Ticket[];
-};
-
 function isDateInPeriod(value: string | null | undefined, start: Date, end: Date) {
   if (!value) return false;
   const date = new Date(value);
   return !Number.isNaN(date.getTime()) && date >= start && date <= end;
 }
 
-function normalizeSlaIndicator(value: string | null | undefined): boolean | null {
-  const normalized = normalize(value);
-  if (!normalized) return null;
-  if (["fora", "violado", "vencido", "estourado", "nao cumprido"].some((term) => normalized.includes(term))) return false;
-  if (["dentro", "cumprido", "no prazo"].some((term) => normalized.includes(term))) return true;
-  return null;
-}
-
-function calculateHistoricalSla(tickets: Ticket[], kind: "response" | "solution"): HistoricalSlaSummary {
-  let within = 0; let outside = 0; let unmeasured = 0;
-  const measuredTickets: Ticket[] = [];
-
-  tickets.forEach((ticket) => {
-    let result = normalizeSlaIndicator(kind === "response" ? ticket.responseSlaIndicator : ticket.solutionSlaIndicator);
-
-    // Fallback para importações antigas sem os indicadores oficiais do Movidesk.
-    if (result === null) {
-      const serviceLevel = calculateServiceLevel({
-        urgency: ticket.urgency, category: ticket.category, cause: ticket.cause, subject: ticket.subject,
-        createdDate: ticket.createdDate, dueDate: ticket.dueDate, baseStatus: ticket.baseStatus,
-        firstResponseDueDate: ticket.firstResponseDueDate, firstResponseDate: ticket.firstResponseDate,
-        resolvedDate: ticket.resolvedDate, closedDate: ticket.closedDate, stoppedMinutes: ticket.stoppedMinutes,
-      });
-      const deadline = kind === "response" ? serviceLevel.firstResponse : serviceLevel.resolution;
-      if (deadline.completed) result = deadline.withinDeadline;
-    }
-
-    if (result === true) { within += 1; measuredTickets.push(ticket); }
-    else if (result === false) { outside += 1; measuredTickets.push(ticket); }
-    else unmeasured += 1;
-  });
-
-  const measured = within + outside;
-  return { within, outside, unmeasured, measuredTickets, percentage: measured ? Math.round((within / measured) * 1000) / 10 : null };
-}
-
-function formatSlaPercentage(summary: HistoricalSlaSummary) {
+function formatSlaPercentage(summary: { percentage: number | null }) {
   return summary.percentage === null ? "—" : `${summary.percentage.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
 }
 
-function formatSlaDescription(summary: HistoricalSlaSummary) {
+function formatSlaDescription(summary: { within: number; outside: number; unmeasured: number }) {
   return `${summary.within + summary.outside} medidos • ${summary.unmeasured} sem medição`;
 }
 
-function slaSeverity(summary: HistoricalSlaSummary): Severity {
+function slaSeverity(summary: { percentage: number | null }): Severity {
   if (summary.percentage === null) return "default";
   if (summary.percentage >= 90) return "success";
   if (summary.percentage >= 80) return "warning";

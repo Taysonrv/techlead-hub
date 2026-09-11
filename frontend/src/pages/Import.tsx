@@ -20,12 +20,24 @@ import {
   Chip,
   CircularProgress,
   Divider,
+  FormControlLabel,
   LinearProgress,
   Stack,
+  Switch,
+  TextField,
   Typography,
 } from "@mui/material";
 
 import { api } from "../services/api";
+
+import {
+  useAuth,
+} from "../context/AuthContext";
+
+import {
+  SyncHistory,
+} from "../components/SyncHistory";
+import { PageHeader } from "../components/PageHeader";
 
 /* =========================================================
    TIPOS - MOVIDESK
@@ -500,41 +512,15 @@ export function Import() {
           CABEÇALHO
       ===================================================== */}
 
-      <Box
-        sx={{
-          mb:
-            2.5,
-        }}
-      >
-        <Typography
-          sx={{
-            fontWeight:
-              800,
-            fontSize: {
-              xs:
-                "1.7rem",
-              md:
-                "1.9rem",
-              xl:
-                "2.1rem",
-            },
-          }}
-        >
-          Importar e Sincronizar Dados
-        </Typography>
+      <PageHeader eyebrow="Gestão" title="Importar e Sincronizar Dados" description="Importe os dados do Movidesk e acompanhe a sincronização automática do Azure DevOps." />
 
-        <Typography
-          variant="body2"
-          color="text.secondary"
-          sx={{
-            mt:
-              0.25,
-          }}
-        >
-          Importe os dados do Movidesk e acompanhe a
-          sincronização automática do Azure DevOps.
-        </Typography>
-      </Box>
+      {/* =====================================================
+          HISTÓRICO CONSOLIDADO
+      ===================================================== */}
+
+      <SyncHistory />
+
+      <EmailRecoveryConfiguration />
 
       {/* =====================================================
           AZURE DEVOPS
@@ -1933,6 +1919,473 @@ function InfoMetric({
         {value}
       </Typography>
     </Box>
+  );
+}
+
+/* =========================================================
+   CONFIGURAÇÃO DE E-MAIL PARA RECUPERAÇÃO
+========================================================= */
+
+type EmailConfigurationForm = {
+  smtpHost: string;
+  smtpPort: string;
+  smtpSecure: boolean;
+  smtpUser: string;
+  smtpPassword: string;
+  smtpFrom: string;
+};
+
+const EMPTY_EMAIL_CONFIGURATION:
+  EmailConfigurationForm = {
+  smtpHost: "",
+  smtpPort: "587",
+  smtpSecure: false,
+  smtpUser: "",
+  smtpPassword: "",
+  smtpFrom: "",
+};
+
+function EmailRecoveryConfiguration() {
+  const {
+    user,
+  } =
+    useAuth();
+
+  const [
+    form,
+    setForm,
+  ] =
+    useState<EmailConfigurationForm>(
+      EMPTY_EMAIL_CONFIGURATION
+    );
+
+  const [
+    configured,
+    setConfigured,
+  ] =
+    useState(false);
+
+  const [
+    loading,
+    setLoading,
+  ] =
+    useState(true);
+
+  const [
+    saving,
+    setSaving,
+  ] =
+    useState(false);
+
+  const [
+    message,
+    setMessage,
+  ] =
+    useState<string | null>(
+      null
+    );
+
+  const [
+    error,
+    setError,
+  ] =
+    useState<string | null>(
+      null
+    );
+
+  useEffect(
+    () => {
+      if (
+        user?.role !== "ADMIN" ||
+        !window.techLeadHub
+      ) {
+        setLoading(false);
+        return;
+      }
+
+      void (async () => {
+        try {
+          const current =
+            await window.techLeadHub!
+              .configuration
+              .get();
+
+          setConfigured(
+            current.emailConfigured
+          );
+
+          setForm({
+            smtpHost:
+              current.smtpHost,
+            smtpPort:
+              current.smtpPort ||
+              "587",
+            smtpSecure:
+              current.smtpSecure,
+            smtpUser:
+              current.smtpUser,
+            smtpPassword:
+              "",
+            smtpFrom:
+              current.smtpFrom,
+          });
+        } catch (
+          loadError
+        ) {
+          setError(
+            loadError instanceof Error
+              ? loadError.message
+              : "Não foi possível carregar a configuração de e-mail."
+          );
+        } finally {
+          setLoading(false);
+        }
+      })();
+    },
+    [
+      user?.role,
+    ]
+  );
+
+  if (
+    user?.role !== "ADMIN"
+  ) {
+    return null;
+  }
+
+  if (
+    !window.techLeadHub
+  ) {
+    return (
+      <Alert severity="info">
+        A configuração segura de e-mail está disponível no aplicativo instalado.
+      </Alert>
+    );
+  }
+
+  function change(
+    field:
+      keyof EmailConfigurationForm,
+    value:
+      string |
+      boolean
+  ) {
+    setForm(
+      (
+        current
+      ) => ({
+        ...current,
+        [field]:
+          value,
+      })
+    );
+    setMessage(null);
+    setError(null);
+  }
+
+  async function save() {
+    if (saving) {
+      return;
+    }
+
+    if (
+      !form.smtpHost.trim() ||
+      !form.smtpPort.trim() ||
+      !form.smtpUser.trim() ||
+      (
+        !configured &&
+        !form.smtpPassword
+      ) ||
+      !form.smtpFrom.trim()
+    ) {
+      setError(
+        "Preencha servidor, porta, usuário, senha e remetente."
+      );
+      return;
+    }
+
+    setSaving(true);
+    setError(null);
+    setMessage(null);
+
+    try {
+      await window.techLeadHub!
+        .configuration
+        .save({
+          databaseUrl: "",
+          organization: "",
+          project: "",
+          wiki: "",
+          pat: "",
+          smtpHost:
+            form.smtpHost,
+          smtpPort:
+            form.smtpPort,
+          smtpSecure:
+            String(
+              form.smtpSecure
+            ),
+          smtpUser:
+            form.smtpUser,
+          smtpPassword:
+            form.smtpPassword,
+          smtpFrom:
+            form.smtpFrom,
+        });
+
+      setMessage(
+        "Configuração salva. O aplicativo será reiniciado para ativar o envio de recuperação de senha."
+      );
+    } catch (
+      saveError
+    ) {
+      setError(
+        saveError instanceof Error
+          ? saveError.message
+          : "Não foi possível salvar a configuração de e-mail."
+      );
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Card
+      elevation={0}
+      sx={{
+        border:
+          "1px solid",
+        borderColor:
+          "divider",
+        borderRadius:
+          2.5,
+      }}
+    >
+      <CardContent>
+        <Stack
+          direction={{
+            xs:
+              "column",
+            md:
+              "row",
+          }}
+          spacing={2}
+          sx={{
+            justifyContent:
+              "space-between",
+            alignItems: {
+              xs:
+                "flex-start",
+              md:
+                "center",
+            },
+          }}
+        >
+          <Box>
+            <Typography
+              variant="h6"
+              sx={{
+                fontWeight:
+                  800,
+              }}
+            >
+              E-mail para recuperação de senha
+            </Typography>
+
+            <Typography
+              variant="body2"
+              color="text.secondary"
+            >
+              Configuração exclusiva para administradores. A senha é protegida pelo Windows.
+            </Typography>
+          </Box>
+
+          <Chip
+            label={
+              configured
+                ? "Configurado"
+                : "Não configurado"
+            }
+            color={
+              configured
+                ? "success"
+                : "default"
+            }
+            variant="outlined"
+          />
+        </Stack>
+
+        <Divider
+          sx={{
+            my: 2.5,
+          }}
+        />
+
+        {loading ? (
+          <CircularProgress
+            size={24}
+          />
+        ) : (
+          <Stack
+            spacing={2}
+          >
+            {error && (
+              <Alert severity="error">
+                {error}
+              </Alert>
+            )}
+
+            {message && (
+              <Alert severity="success">
+                {message}
+              </Alert>
+            )}
+
+            <Stack
+              direction={{
+                xs:
+                  "column",
+                md:
+                  "row",
+              }}
+              spacing={2}
+            >
+              <TextField
+                label="Servidor SMTP"
+                value={
+                  form.smtpHost
+                }
+                onChange={(event) =>
+                  change(
+                    "smtpHost",
+                    event.target.value
+                  )
+                }
+                placeholder="smtp.office365.com"
+                fullWidth
+              />
+
+              <TextField
+                label="Porta"
+                value={
+                  form.smtpPort
+                }
+                onChange={(event) =>
+                  change(
+                    "smtpPort",
+                    event.target.value
+                  )
+                }
+                sx={{
+                  width: {
+                    xs:
+                      "100%",
+                    md:
+                      150,
+                  },
+                }}
+              />
+            </Stack>
+
+            <Stack
+              direction={{
+                xs:
+                  "column",
+                md:
+                  "row",
+              }}
+              spacing={2}
+            >
+              <TextField
+                label="Usuário do e-mail"
+                value={
+                  form.smtpUser
+                }
+                onChange={(event) =>
+                  change(
+                    "smtpUser",
+                    event.target.value
+                  )
+                }
+                autoComplete="username"
+                fullWidth
+              />
+
+              <TextField
+                label={
+                  configured
+                    ? "Nova senha ou senha de aplicativo (opcional)"
+                    : "Senha ou senha de aplicativo"
+                }
+                type="password"
+                value={
+                  form.smtpPassword
+                }
+                onChange={(event) =>
+                  change(
+                    "smtpPassword",
+                    event.target.value
+                  )
+                }
+                autoComplete="new-password"
+                fullWidth
+              />
+            </Stack>
+
+            <TextField
+              label="Remetente"
+              value={
+                form.smtpFrom
+              }
+              onChange={(event) =>
+                change(
+                  "smtpFrom",
+                  event.target.value
+                )
+              }
+              placeholder="TechLead Hub <techlead@empresa.com.br>"
+              fullWidth
+            />
+
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={
+                    form.smtpSecure
+                  }
+                  onChange={(event) =>
+                    change(
+                      "smtpSecure",
+                      event.target.checked
+                    )
+                  }
+                />
+              }
+              label="Usar TLS direto (normalmente porta 465). Para Microsoft 365 na porta 587, deixe desmarcado."
+            />
+
+            <Box>
+              <Button
+                variant="contained"
+                disabled={
+                  saving
+                }
+                onClick={() =>
+                  void save()
+                }
+                sx={{
+                  fontWeight:
+                    750,
+                }}
+              >
+                {saving
+                  ? "Salvando..."
+                  : "Salvar e ativar e-mail"}
+              </Button>
+            </Box>
+          </Stack>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 

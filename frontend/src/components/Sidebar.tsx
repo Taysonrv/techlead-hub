@@ -4,6 +4,7 @@ import {
   Box,
   Button,
   CircularProgress,
+  Collapse,
   Divider,
   Drawer,
   List,
@@ -17,21 +18,28 @@ import {
 } from "@mui/material";
 
 import {
+  AssessmentOutlined,
   AutoFixHighOutlined,
   BugReportOutlined,
   BusinessOutlined,
   ConfirmationNumberOutlined,
   DashboardOutlined,
   ExpandMoreRounded,
+  ExpandLessRounded,
   GroupsOutlined,
   InfoOutlined,
   Inventory2Outlined,
+  FactCheckOutlined,
   LogoutOutlined,
   ManageAccountsOutlined,
+  MenuBookOutlined,
   PersonOutlined,
+  SettingsOutlined,
+  SupportAgentOutlined,
   TrendingUpOutlined,
   UploadFileOutlined,
   WarningAmberOutlined,
+  WorkspacesOutlined,
 } from "@mui/icons-material";
 
 import {
@@ -64,6 +72,10 @@ import {
 import {
   aliareColors,
 } from "../theme/theme";
+
+import {
+  NotificationCenter,
+} from "./NotificationCenter";
 
 /* =========================================================
    CONFIGURAÇÃO
@@ -130,8 +142,19 @@ export function Sidebar() {
   ] =
     useState<HTMLElement | null>(null);
 
+  const [openSections, setOpenSections] = useState<Record<"operation" | "development" | "management", boolean>>(() => ({
+    operation: true,
+    development: true,
+    management: true,
+  }));
+
   const profileMenuOpen =
     Boolean(profileAnchor);
+
+  useEffect(() => {
+    const section = sectionForPath(location.pathname);
+    setOpenSections((current) => ({ ...current, [section]: true }));
+  }, [location.pathname]);
 
   /* =======================================================
      VERSÃO DO APLICATIVO
@@ -246,6 +269,11 @@ export function Sidebar() {
             <DashboardOutlined fontSize="small" />,
         },
         {
+          label: "Minha Operação",
+          path: "/minha-operacao",
+          icon: <WorkspacesOutlined fontSize="small" />,
+        },
+        {
           label:
             "Tickets",
           path:
@@ -314,6 +342,14 @@ export function Sidebar() {
         },
         {
           label:
+            "Apoios",
+          path:
+            "/apoios",
+          icon:
+            <SupportAgentOutlined fontSize="small" />,
+        },
+        {
+          label:
             "Versões",
           path:
             "/versoes",
@@ -335,23 +371,15 @@ export function Sidebar() {
           MenuItemData[] =
           [];
 
-        if (isAdmin) {
-          items.push({
-            label:
-              "Usuários",
-            path:
-              "/usuarios",
-            icon:
-              <ManageAccountsOutlined fontSize="small" />,
-            badge:
-              pendingUsers,
-          });
-        }
-
         items.push(
           {
+            label: "Base de Conhecimento",
+            path: "/conhecimento",
+            icon: <MenuBookOutlined fontSize="small" />,
+          },
+          {
             label:
-              "Importar Dados",
+              "Dados e Sincronizações",
             path:
               "/importar",
             icon:
@@ -359,20 +387,22 @@ export function Sidebar() {
           },
           {
             label:
-              "Sobre e Atualizações",
+              "Relatórios",
             path:
-              "/sobre",
+              "/relatorios",
             icon:
-              <InfoOutlined fontSize="small" />,
+              <AssessmentOutlined fontSize="small" />,
+          },
+          {
+            label: "Qualidade dos Dados",
+            path: "/qualidade-dados",
+            icon: <FactCheckOutlined fontSize="small" />,
           },
         );
 
         return items;
       },
-      [
-        isAdmin,
-        pendingUsers,
-      ],
+      [],
     );
 
   /* =======================================================
@@ -498,7 +528,7 @@ export function Sidebar() {
             0,
 
           overflowY:
-            "auto",
+            "hidden",
 
           overflowX:
             "hidden",
@@ -722,9 +752,9 @@ export function Sidebar() {
           title="Operação"
           ariaLabel="Navegação da operação"
           items={mainMenu}
+          open={openSections.operation}
+          onToggle={() => setOpenSections((current) => ({ ...current, operation: !current.operation }))}
         />
-
-        <MenuDivider />
 
         {/* =================================================
             DESENVOLVIMENTO
@@ -734,18 +764,20 @@ export function Sidebar() {
           title="Desenvolvimento"
           ariaLabel="Navegação de desenvolvimento"
           items={developmentMenu}
+          open={openSections.development}
+          onToggle={() => setOpenSections((current) => ({ ...current, development: !current.development }))}
         />
-
-        <MenuDivider />
 
         {/* =================================================
             SISTEMA
         ================================================= */}
 
         <MenuSection
-          title="Sistema"
+          title="Gestão"
           ariaLabel="Navegação do sistema"
           items={systemMenu}
+          open={openSections.management}
+          onToggle={() => setOpenSections((current) => ({ ...current, management: !current.management }))}
         />
 
         <Box
@@ -841,8 +873,15 @@ export function Sidebar() {
             right: 20,
             zIndex: (theme) =>
               theme.zIndex.drawer + 1,
+            display: "flex",
+            alignItems: "center",
+            gap: 1,
           }}
         >
+          <Box id="global-calendar-slot" sx={{ display: "flex", alignItems: "center" }} />
+
+          <NotificationCenter />
+
           <Button
             id="profile-menu-button"
             aria-controls={
@@ -1018,6 +1057,18 @@ export function Sidebar() {
               Meu Perfil
             </MuiMenuItem>
 
+            {isAdmin && <MuiMenuItem onClick={() => { handleCloseProfileMenu(); navigate("/usuarios"); }} sx={{ mx: .75, minHeight: 38, borderRadius: 1.2, fontSize: ".78rem", fontWeight: 600, gap: 1.1 }}>
+              <Badge color="error" badgeContent={pendingUsers}><ManageAccountsOutlined sx={{ fontSize: 18 }} /></Badge> Usuários
+            </MuiMenuItem>}
+
+            {isAdmin && <MuiMenuItem onClick={() => { handleCloseProfileMenu(); navigate("/configuracoes"); }} sx={{ mx: .75, minHeight: 38, borderRadius: 1.2, fontSize: ".78rem", fontWeight: 600, gap: 1.1 }}>
+              <SettingsOutlined sx={{ fontSize: 18 }} /> Configurações
+            </MuiMenuItem>}
+
+            <MuiMenuItem onClick={() => { handleCloseProfileMenu(); navigate("/sobre"); }} sx={{ mx: .75, minHeight: 38, borderRadius: 1.2, fontSize: ".78rem", fontWeight: 600, gap: 1.1 }}>
+              <InfoOutlined sx={{ fontSize: 18 }} /> Sobre e atualizações
+            </MuiMenuItem>
+
             <MuiMenuItem
               disabled={loggingOut}
               onClick={() => void handleLogout()}
@@ -1054,10 +1105,14 @@ function MenuSection({
   title,
   ariaLabel,
   items,
+  open,
+  onToggle,
 }: {
   title: string;
   ariaLabel: string;
   items: MenuItemData[];
+  open: boolean;
+  onToggle: () => void;
 }) {
   if (
     items.length === 0
@@ -1076,10 +1131,12 @@ function MenuSection({
           1.1,
       }}
     >
-      <MenuSectionTitle>
-        {title}
-      </MenuSectionTitle>
+      <ListItemButton aria-expanded={open} onClick={onToggle} sx={{ minHeight: 38, px: 1.3, borderRadius: 1.2, color: open ? "white" : "rgba(255,255,255,.66)", bgcolor: open ? "rgba(255,255,255,.07)" : "transparent" }}>
+        <ListItemText primary={title} slotProps={{ primary: { sx: { fontSize: ".72rem", fontWeight: 850, letterSpacing: ".08em", textTransform: "uppercase" } } }} />
+        {open ? <ExpandLessRounded fontSize="small" /> : <ExpandMoreRounded fontSize="small" />}
+      </ListItemButton>
 
+      <Collapse in={open} timeout="auto" unmountOnExit>
       <List
         disablePadding
         sx={{
@@ -1089,8 +1146,8 @@ function MenuSection({
           flexDirection:
             "column",
 
-          gap:
-            0.35,
+          gap: 0.2,
+          mt: .4,
         }}
       >
         {items.map(
@@ -1115,71 +1172,8 @@ function MenuSection({
           ),
         )}
       </List>
+      </Collapse>
     </Box>
-  );
-}
-
-/* =========================================================
-   DIVISOR
-========================================================= */
-
-function MenuDivider() {
-  return (
-    <Divider
-      sx={{
-        my:
-          1.45,
-
-        mx:
-          2,
-
-        borderColor:
-          "rgba(255,255,255,0.08)",
-      }}
-    />
-  );
-}
-
-/* =========================================================
-   TÍTULO DE SEÇÃO
-========================================================= */
-
-function MenuSectionTitle({
-  children,
-}: {
-  children: ReactNode;
-}) {
-  return (
-    <Typography
-      variant="caption"
-      sx={{
-        display:
-          "block",
-
-        px:
-          1.3,
-
-        pb:
-          0.65,
-
-        color:
-          "rgba(255,255,255,0.32)",
-
-        fontSize:
-          "0.64rem",
-
-        fontWeight:
-          800,
-
-        textTransform:
-          "uppercase",
-
-        letterSpacing:
-          "0.10em",
-      }}
-    >
-      {children}
-    </Typography>
   );
 }
 
@@ -1447,6 +1441,12 @@ function MenuItem({
 /* =========================================================
    PERFIL
 ========================================================= */
+
+function sectionForPath(path: string): "operation" | "development" | "management" {
+  if (["/correcoes", "/evolucoes", "/apoios", "/versoes"].some((item) => path.startsWith(item))) return "development";
+  if (["/importar", "/relatorios", "/qualidade-dados", "/conhecimento"].some((item) => path.startsWith(item))) return "management";
+  return "operation";
+}
 
 function getRoleLabel(
   role:

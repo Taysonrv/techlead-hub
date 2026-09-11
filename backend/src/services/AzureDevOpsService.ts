@@ -4,6 +4,27 @@ import type {
   AzureDevOpsWorkItemResponse,
 } from "./AzureWorkItemMapper";
 
+const WIKI_STOP_WORDS = new Set([
+  "para", "com", "sem", "uma", "que", "dos", "das", "por", "deve",
+  "esta", "esse", "essa", "ticket", "atendimento", "problema", "erro",
+]);
+
+function wikiExcerpt(content: string, terms: string[]) {
+  const plain = content
+    .replace(/```[\s\S]*?```/g, " ")
+    .replace(/[#>*_`\[\]()!-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!plain) return "Conteúdo disponível na Wiki.";
+  const normalized = plain.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR");
+  const position = terms.reduce((best, term) => {
+    const found = normalized.indexOf(term);
+    return found >= 0 && (best < 0 || found < best) ? found : best;
+  }, -1);
+  const start = Math.max(0, position - 80);
+  return `${start > 0 ? "…" : ""}${plain.slice(start, start + 260)}${plain.length > start + 260 ? "…" : ""}`;
+}
+
 /* =========================================================
    TIPOS
 ========================================================= */
@@ -80,6 +101,9 @@ export class AzureDevOpsService {
   private readonly wiki: string;
   private readonly pat: string;
   private readonly client: AxiosInstance;
+  private resolvedWikiId: string | null = null;
+  private static readonly wikiPageCache = new Map<string, { expiresAt: number; pages: Array<Record<string, unknown>> }>();
+  private static readonly wikiPageLoads = new Map<string, Promise<Array<Record<string, unknown>>>>();
 
   private static readonly BATCH_SIZE = 200;
 
@@ -195,10 +219,9 @@ export class AzureDevOpsService {
     }
 
     try {
+      const wikiId = await this.resolveWikiIdentifier();
       await this.client.get(
-        `/_apis/wiki/wikis/${encodeURIComponent(
-          this.wiki,
-        )}`,
+        `/_apis/wiki/wikis/${encodeURIComponent(wikiId)}`,
         {
           params: {
             "api-version":
@@ -455,12 +478,13 @@ export class AzureDevOpsService {
     }
 
     this.ensureConfigured();
+    const wikiId = await this.resolveWikiIdentifier();
 
     try {
       const response =
         await this.client.get(
           `/_apis/wiki/wikis/${encodeURIComponent(
-            this.wiki,
+            wikiId,
           )}/pages/${pageId}`,
           {
             params: {
@@ -481,6 +505,200 @@ export class AzureDevOpsService {
         `Não foi possível consultar a página Wiki ${pageId}.`,
       );
     }
+  }
+
+  public async listWikis() {
+    this.ensureAzureCoreConfigured();
+    try {
+      const response = await this.client.get("/_apis/wiki/wikis", { params: { "api-version": "7.1" } });
+      return (response.data?.value ?? []).map((wiki: Record<string, unknown>) => ({
+        id: wiki.id,
+        name: wiki.name,
+        type: wiki.type,
+        mappedPath: wiki.mappedPath,
+        remoteUrl: wiki.remoteUrl,
+      }));
+    } catch (error) {
+      throw this.mapAxiosError(error, "Não foi possível listar as Wikis disponíveis no projeto.");
+    }
+  }
+
+  public async searchWikiPages(
+    query: string,
+    limit = 8,
+  ) {
+    const normalizedQuery = query.trim();
+    if (!normalizedQuery) return [];
+    this.ensureConfigured();
+    const wikiId = await this.resolveWikiIdentifier();
+
+    try {
+      const indexed = await this.searchIndexedWiki(normalizedQuery, wikiId, limit);
+      if (Array.isArray(indexed)) return indexed;
+      /* Fallback mantido abaixo para ambientes nos quais o serviço Azure
+       * Search ainda esteja em processo de indexação. */
+      /* istanbul ignore next */
+      const cacheKey = `${this.organization}/${this.project}/${wikiId}`;
+      const cached = AzureDevOpsService.wikiPageCache.get(cacheKey);
+      let hydrated = cached && cached.expiresAt > Date.now() ? cached.pages : null;
+      if (!hydrated) {
+        let load = AzureDevOpsService.wikiPageLoads.get(cacheKey);
+        if (!load) {
+          load = this.loadWikiPages(wikiId);
+          AzureDevOpsService.wikiPageLoads.set(cacheKey, load);
+        }
+        try {
+          hydrated = await load;
+          AzureDevOpsService.wikiPageCache.set(cacheKey, { expiresAt: Date.now() + 10 * 60_000, pages: hydrated });
+        } finally {
+          AzureDevOpsService.wikiPageLoads.delete(cacheKey);
+        }
+      }
+
+      const terms = normalizedQuery
+        .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+        .toLocaleLowerCase("pt-BR")
+        .split(/[^a-z0-9]+/)
+        .filter((term) => term.length >= 3 && !WIKI_STOP_WORDS.has(term));
+
+      return hydrated.map((page) => {
+        const path = typeof page.path === "string" ? page.path : "";
+        const content = typeof page.content === "string" ? page.content : "";
+        const searchable = `${path} ${content}`
+          .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+          .toLocaleLowerCase("pt-BR");
+        const score = terms.reduce((total, term) => total +
+          (searchable.includes(term) ? (path.toLocaleLowerCase("pt-BR").includes(term) ? 4 : 1) : 0), 0);
+        const id = typeof page.id === "number" ? page.id : null;
+        return {
+          id,
+          title: path.split("/").filter(Boolean).pop() || "Página inicial",
+          path,
+          excerpt: wikiExcerpt(content, terms),
+          webUrl: typeof page.remoteUrl === "string"
+            ? page.remoteUrl
+            : id
+              ? `https://dev.azure.com/${encodeURIComponent(this.organization)}/${encodeURIComponent(this.project)}/_wiki/wikis/${encodeURIComponent(wikiId)}/${id}`
+              : null,
+          score,
+        };
+      }).filter((page) => page.score > 0)
+        .sort((left, right) => right.score - left.score || left.path.localeCompare(right.path, "pt-BR"))
+        .slice(0, Math.min(Math.max(limit, 1), 20));
+    } catch (error) {
+      throw this.mapAxiosError(error, "Não foi possível pesquisar a Wiki do Azure DevOps.");
+    }
+  }
+
+  private async searchIndexedWiki(query: string, wikiId: string, limit: number) {
+    const basicToken = Buffer.from(`:${this.pat}`, "utf8").toString("base64");
+    const response = await axios.post<{
+      count?: number;
+      infoCode?: number;
+      results?: Array<{
+        fileName?: string;
+        path?: string;
+        wiki?: { id?: string; name?: string };
+        hits?: Array<{ fieldReferenceName?: string; highlights?: string[] }>;
+      }>;
+    }>(
+      `https://almsearch.dev.azure.com/${encodeURIComponent(this.organization)}/${encodeURIComponent(this.project)}/_apis/search/wikisearchresults`,
+      {
+        searchText: query,
+        $skip: 0,
+        $top: Math.min(Math.max(limit, 1), 50),
+        filters: { Project: [this.project] },
+        $orderBy: null,
+        includeFacets: false,
+      },
+      {
+        params: { "api-version": "7.1" },
+        headers: { Accept: "application/json", Authorization: `Basic ${basicToken}` },
+        timeout: AzureDevOpsService.REQUEST_TIMEOUT_MS,
+      },
+    );
+    if (response.data.infoCode && response.data.infoCode !== 0 && response.data.infoCode !== 8) {
+      throw new AzureDevOpsServiceError(
+        `A pesquisa da Wiki respondeu com o código de indexação ${response.data.infoCode}.`,
+        503,
+      );
+    }
+    const clean = (value: string) => value
+      .replace(/<\/?highlighthit>/gi, "")
+      .replace(/<[^>]+>/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    const results = response.data.results ?? [];
+    const selected = results.filter((item) => {
+      const resultWikiId = item.wiki?.id?.toLocaleLowerCase("pt-BR");
+      return !resultWikiId || resultWikiId === wikiId.toLocaleLowerCase("pt-BR");
+    });
+    return selected.map((item, index) => {
+      const path = item.path?.replace(/\.md$/i, "") || `/${item.fileName?.replace(/\.md$/i, "") || "Página"}`;
+      const highlights = (item.hits ?? [])
+        .flatMap((hit) => hit.highlights ?? [])
+        .map(clean)
+        .filter(Boolean);
+      const wikiName = item.wiki?.name || this.wiki;
+      return {
+        id: null,
+        title: (item.fileName || path.split("/").filter(Boolean).pop() || "Página Wiki").replace(/\.md$/i, ""),
+        path,
+        excerpt: highlights.join(" · ").slice(0, 500) || "Conteúdo localizado no índice da Wiki Azure.",
+        webUrl: `https://dev.azure.com/${encodeURIComponent(this.organization)}/${encodeURIComponent(this.project)}/_wiki/wikis/${encodeURIComponent(wikiName)}?pagePath=${encodeURIComponent(path)}`,
+        score: Math.max(selected.length - index, 1),
+      };
+    });
+  }
+
+  private async loadWikiPages(wikiId: string): Promise<Array<Record<string, unknown>>> {
+      const response = await this.client.get<{
+        subPages?: Array<Record<string, unknown>>;
+      }>(
+        `/_apis/wiki/wikis/${encodeURIComponent(wikiId)}/pages`,
+        {
+          params: {
+            path: "/",
+            recursionLevel: "Full",
+            includeContent: true,
+            "api-version": "7.1",
+          },
+        },
+      );
+
+      const pages: Array<Record<string, unknown>> = [];
+      const visit = (page: Record<string, unknown>) => {
+        pages.push(page);
+        const children = Array.isArray(page.subPages) ? page.subPages : [];
+        children.forEach((child) => {
+          if (child && typeof child === "object") visit(child as Record<string, unknown>);
+        });
+      };
+      (response.data.subPages ?? []).forEach(visit);
+
+      /* A resposta recursiva contém a árvore, mas o Azure nem sempre inclui o
+       * conteúdo dos filhos. Carregamos cada página por path para que a busca
+       * encontre termos no texto e não apenas no título. */
+      const hydrated: Array<Record<string, unknown>> = [];
+      for (let offset = 0; offset < pages.length; offset += 24) {
+        const batch = pages.slice(offset, offset + 24);
+        const values = await Promise.all(batch.map(async (page) => {
+          if (typeof page.content === "string" && page.content) return page;
+          const path = typeof page.path === "string" ? page.path : "";
+          if (!path) return page;
+          try {
+            const detail = await this.client.get(
+              `/_apis/wiki/wikis/${encodeURIComponent(wikiId)}/pages`,
+              { params: { path, includeContent: true, "api-version": "7.1" } },
+            );
+            return { ...page, ...detail.data };
+          } catch {
+            return page;
+          }
+        }));
+        hydrated.push(...values);
+      }
+      return hydrated;
   }
 
   /* =======================================================
@@ -615,6 +833,43 @@ export class AzureDevOpsService {
       this.wiki &&
       this.pat,
     );
+  }
+
+  private ensureAzureCoreConfigured(): void {
+    if (!this.organization || !this.project || !this.pat) {
+      throw new AzureDevOpsServiceError(
+        "A integração principal com o Azure DevOps ainda não está configurada.",
+        503,
+      );
+    }
+  }
+
+  private async resolveWikiIdentifier(): Promise<string> {
+    if (this.resolvedWikiId) return this.resolvedWikiId;
+    this.ensureAzureCoreConfigured();
+    const wikis = await this.listWikis() as Array<{ id?: unknown; name?: unknown; remoteUrl?: unknown }>;
+    if (!wikis.length) {
+      throw new AzureDevOpsServiceError("Nenhuma Wiki foi encontrada no projeto Azure DevOps configurado.", 404);
+    }
+    const configured = decodeURIComponent(this.wiki.trim())
+      .replace(/\/+$/, "")
+      .toLocaleLowerCase("pt-BR");
+    const normalizedTail = configured.split(/[\\/]/).filter(Boolean).pop() ?? configured;
+    const selected = wikis.find((item) => {
+      const id = String(item.id ?? "").toLocaleLowerCase("pt-BR");
+      const name = String(item.name ?? "").toLocaleLowerCase("pt-BR");
+      const url = String(item.remoteUrl ?? "").replace(/\/+$/, "").toLocaleLowerCase("pt-BR");
+      return configured === id || configured === name || configured === url || normalizedTail === id || normalizedTail === name;
+    }) ?? (wikis.length === 1 ? wikis[0] : null);
+    if (!selected?.id) {
+      const available = wikis.map((item) => String(item.name ?? item.id)).join(", ");
+      throw new AzureDevOpsServiceError(
+        `A Wiki configurada \"${this.wiki}\" não foi localizada. Wikis disponíveis: ${available}.`,
+        404,
+      );
+    }
+    this.resolvedWikiId = String(selected.id);
+    return this.resolvedWikiId;
   }
 
   private ensureConfigured():

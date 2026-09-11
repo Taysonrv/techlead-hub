@@ -94,8 +94,13 @@ const CONFIG_FILENAME =
 const SECURE_CONFIG_FILENAME =
   "secure-config.json";
 
+const IS_PRERELEASE =
+  app.getVersion().includes("-");
+
 const UPDATE_CHANNEL =
-  "beta";
+  IS_PRERELEASE
+    ? "beta"
+    : "latest";
 
 const UPDATE_CHECK_DELAY =
   5_000;
@@ -269,7 +274,7 @@ function configureAutoUpdater() {
     false;
 
   updater.allowPrerelease =
-    true;
+    IS_PRERELEASE;
 
   updater.channel =
     UPDATE_CHANNEL;
@@ -677,6 +682,8 @@ function registerIpcHandlers() {
 
   ipcMain.handle("configuration:get", () => {
     const azure = resolveAzureConfiguration();
+    const email = resolveEmailConfiguration();
+    const microsoft = resolveMicrosoftConfiguration();
 
     return {
       databaseConfigured: Boolean(readSecureValue("databaseUrl") || process.env.DATABASE_URL),
@@ -684,6 +691,24 @@ function registerIpcHandlers() {
       project: azure.project,
       wiki: azure.wiki,
       patConfigured: Boolean(azure.pat),
+      tenantId: microsoft.tenantId,
+      clientId: microsoft.clientId,
+      sharePointSiteUrl: microsoft.sharePointSiteUrl,
+      bpmnSiteUrl: microsoft.bpmnSiteUrl,
+      microsoftConfigured: Boolean(microsoft.tenantId && microsoft.clientId),
+      smtpHost: email.host,
+      smtpPort: email.port,
+      smtpSecure: email.secure === "true",
+      smtpUser: email.user,
+      smtpFrom: email.from,
+      smtpPasswordConfigured: Boolean(email.password),
+      emailConfigured: Boolean(
+        email.host &&
+        email.port &&
+        email.user &&
+        email.password &&
+        email.from
+      ),
     };
   });
 
@@ -775,6 +800,18 @@ type SecureConfig = {
   azureProject?: string;
   azureWiki?: string;
   azurePat?: string;
+
+  microsoftTenantId?: string;
+  microsoftClientId?: string;
+  sharePointSiteUrl?: string;
+  bpmnSiteUrl?: string;
+
+  smtpHost?: string;
+  smtpPort?: string;
+  smtpSecure?: string;
+  smtpUser?: string;
+  smtpPassword?: string;
+  smtpFrom?: string;
 };
 
 type SecureConfigKey =
@@ -783,7 +820,17 @@ type SecureConfigKey =
   | "azureOrganization"
   | "azureProject"
   | "azureWiki"
-  | "azurePat";
+  | "azurePat"
+  | "microsoftTenantId"
+  | "microsoftClientId"
+  | "sharePointSiteUrl"
+  | "bpmnSiteUrl"
+  | "smtpHost"
+  | "smtpPort"
+  | "smtpSecure"
+  | "smtpUser"
+  | "smtpPassword"
+  | "smtpFrom";
 
 function parseEnvValue(
   content: string,
@@ -1101,6 +1148,36 @@ function readSecureConfig():
       azurePat:
         typeof parsed.azurePat === "string"
           ? parsed.azurePat
+          : undefined,
+
+      microsoftTenantId: typeof parsed.microsoftTenantId === "string" ? parsed.microsoftTenantId : undefined,
+      microsoftClientId: typeof parsed.microsoftClientId === "string" ? parsed.microsoftClientId : undefined,
+      sharePointSiteUrl: typeof parsed.sharePointSiteUrl === "string" ? parsed.sharePointSiteUrl : undefined,
+      bpmnSiteUrl: typeof parsed.bpmnSiteUrl === "string" ? parsed.bpmnSiteUrl : undefined,
+
+      smtpHost:
+        typeof parsed.smtpHost === "string"
+          ? parsed.smtpHost
+          : undefined,
+      smtpPort:
+        typeof parsed.smtpPort === "string"
+          ? parsed.smtpPort
+          : undefined,
+      smtpSecure:
+        typeof parsed.smtpSecure === "string"
+          ? parsed.smtpSecure
+          : undefined,
+      smtpUser:
+        typeof parsed.smtpUser === "string"
+          ? parsed.smtpUser
+          : undefined,
+      smtpPassword:
+        typeof parsed.smtpPassword === "string"
+          ? parsed.smtpPassword
+          : undefined,
+      smtpFrom:
+        typeof parsed.smtpFrom === "string"
+          ? parsed.smtpFrom
           : undefined,
     };
   } catch (error) {
@@ -1453,12 +1530,77 @@ function resolveAzureConfiguration(): AzureConfiguration {
   };
 }
 
+type EmailConfiguration = {
+  host: string;
+  port: string;
+  secure: string;
+  user: string;
+  password: string;
+  from: string;
+};
+
+function resolveEmailConfiguration(): EmailConfiguration {
+  const read = (
+    envName: string,
+    secureKey: SecureConfigKey,
+  ) =>
+    process.env[envName]?.trim() ||
+    readSecureValue(secureKey) ||
+    migrateLegacyEnvValue(envName, secureKey) ||
+    (!app.isPackaged
+      ? readEnvValueFromFile(getDevelopmentEnvPath(), envName)
+      : null) ||
+    "";
+
+  return {
+    host: read("SMTP_HOST", "smtpHost"),
+    port: read("SMTP_PORT", "smtpPort") || "587",
+    secure: read("SMTP_SECURE", "smtpSecure") || "false",
+    user: read("SMTP_USER", "smtpUser"),
+    password: read("SMTP_PASSWORD", "smtpPassword"),
+    from: read("SMTP_FROM", "smtpFrom"),
+  };
+}
+
+type MicrosoftConfiguration = {
+  tenantId: string;
+  clientId: string;
+  sharePointSiteUrl: string;
+  bpmnSiteUrl: string;
+};
+
+function resolveMicrosoftConfiguration(): MicrosoftConfiguration {
+  const read = (envName: string, secureKey: SecureConfigKey) =>
+    process.env[envName]?.trim() || readSecureValue(secureKey) ||
+    migrateLegacyEnvValue(envName, secureKey) ||
+    (!app.isPackaged ? readEnvValueFromFile(getDevelopmentEnvPath(), envName) : null) || "";
+
+  return {
+    tenantId: read("MICROSOFT_TENANT_ID", "microsoftTenantId"),
+    clientId: read("MICROSOFT_CLIENT_ID", "microsoftClientId"),
+    sharePointSiteUrl: read("SHAREPOINT_SITE_URL", "sharePointSiteUrl") ||
+      "https://siagri365.sharepoint.com/sites/cooperativas-agroindustrias-simer",
+    bpmnSiteUrl: read("SHAREPOINT_BPMN_SITE_URL", "bpmnSiteUrl") ||
+      "https://siagri365.sharepoint.com/sites/FluxoBPMNSimer",
+  };
+}
+
 type ConfigurationInput = {
   databaseUrl?: unknown;
   organization?: unknown;
   project?: unknown;
   wiki?: unknown;
   pat?: unknown;
+  smtpHost?: unknown;
+  smtpPort?: unknown;
+  smtpSecure?: unknown;
+  smtpUser?: unknown;
+  smtpPassword?: unknown;
+  smtpFrom?: unknown;
+  tenantId?: unknown;
+  clientId?: unknown;
+  sharePointSiteUrl?: unknown;
+  bpmnSiteUrl?: unknown;
 };
 
 type ConfigurationValues = {
@@ -1467,6 +1609,16 @@ type ConfigurationValues = {
   project: string;
   wiki: string;
   pat: string;
+  smtpHost: string;
+  smtpPort: string;
+  smtpSecure: string;
+  smtpUser: string;
+  smtpPassword: string;
+  smtpFrom: string;
+  tenantId: string;
+  clientId: string;
+  sharePointSiteUrl: string;
+  bpmnSiteUrl: string;
 };
 
 function normalizeConfigurationInput(input: unknown): ConfigurationValues {
@@ -1484,6 +1636,16 @@ function normalizeConfigurationInput(input: unknown): ConfigurationValues {
     project: text(value.project),
     wiki: text(value.wiki),
     pat: text(value.pat),
+    smtpHost: text(value.smtpHost),
+    smtpPort: text(value.smtpPort) || "587",
+    smtpSecure: text(value.smtpSecure) || "false",
+    smtpUser: text(value.smtpUser),
+    smtpPassword: text(value.smtpPassword),
+    smtpFrom: text(value.smtpFrom),
+    tenantId: text(value.tenantId),
+    clientId: text(value.clientId),
+    sharePointSiteUrl: text(value.sharePointSiteUrl),
+    bpmnSiteUrl: text(value.bpmnSiteUrl),
   };
 }
 
@@ -1497,7 +1659,24 @@ function saveApplicationConfiguration(input: unknown) {
     "";
 
   const existingAzure = resolveAzureConfiguration();
-  const pat = value.pat || existingAzure.pat;
+  const organization =
+    value.organization ||
+    existingAzure.organization;
+  const project =
+    value.project ||
+    existingAzure.project;
+  const wiki =
+    value.wiki ||
+    existingAzure.wiki;
+  const pat =
+    value.pat ||
+    existingAzure.pat;
+
+  const existingEmail = resolveEmailConfiguration();
+  const existingMicrosoft = resolveMicrosoftConfiguration();
+  const smtpPassword =
+    value.smtpPassword ||
+    existingEmail.password;
 
   if (
     !databaseUrl ||
@@ -1506,7 +1685,7 @@ function saveApplicationConfiguration(input: unknown) {
     throw new Error("Informe uma DATABASE_URL PostgreSQL válida.");
   }
 
-  const azureFields = [value.organization, value.project, value.wiki, pat];
+  const azureFields = [organization, project, wiki, pat];
   const hasSomeAzure = azureFields.some(Boolean);
   const hasAllAzure = azureFields.every(Boolean);
 
@@ -1514,13 +1693,63 @@ function saveApplicationConfiguration(input: unknown) {
     throw new Error("Preencha Organização, Projeto, Wiki e PAT, ou deixe todos os campos do Azure vazios.");
   }
 
+  const emailFields = [
+    value.smtpHost,
+    value.smtpPort,
+    value.smtpUser,
+    smtpPassword,
+    value.smtpFrom,
+  ];
+  const hasSomeEmail = emailFields.some(Boolean);
+  const hasAllEmail = emailFields.every(Boolean);
+  const smtpPort = Number(value.smtpPort);
+
+  if (
+    hasSomeEmail &&
+    (
+      !hasAllEmail ||
+      !Number.isInteger(smtpPort) ||
+      smtpPort < 1 ||
+      smtpPort > 65535
+    )
+  ) {
+    throw new Error("Preencha servidor, porta, usuário, senha e remetente do e-mail com valores válidos.");
+  }
+
   saveSecureValue("databaseUrl", databaseUrl);
 
   if (hasAllAzure) {
-    saveSecureValue("azureOrganization", value.organization);
-    saveSecureValue("azureProject", value.project);
-    saveSecureValue("azureWiki", value.wiki);
+    saveSecureValue("azureOrganization", organization);
+    saveSecureValue("azureProject", project);
+    saveSecureValue("azureWiki", wiki);
     saveSecureValue("azurePat", pat);
+  }
+
+  if (hasAllEmail) {
+    saveSecureValue("smtpHost", value.smtpHost);
+    saveSecureValue("smtpPort", value.smtpPort);
+    saveSecureValue("smtpSecure", value.smtpSecure);
+    saveSecureValue("smtpUser", value.smtpUser);
+    saveSecureValue("smtpPassword", smtpPassword);
+    saveSecureValue("smtpFrom", value.smtpFrom);
+  }
+
+  const tenantId = value.tenantId || existingMicrosoft.tenantId;
+  const clientId = value.clientId || existingMicrosoft.clientId;
+  if (Boolean(tenantId) !== Boolean(clientId)) {
+    throw new Error("Informe Tenant ID e Client ID juntos para ativar o Microsoft 365.");
+  }
+  if (tenantId && !/^[0-9a-f-]{36}$/i.test(tenantId)) {
+    throw new Error("O Tenant ID informado não é um GUID válido.");
+  }
+  if (clientId && !/^[0-9a-f-]{36}$/i.test(clientId)) {
+    throw new Error("O Client ID informado não é um GUID válido.");
+  }
+  if (tenantId && clientId) {
+    saveSecureValue("microsoftTenantId", tenantId);
+    saveSecureValue("microsoftClientId", clientId);
+    saveSecureValue("sharePointSiteUrl", value.sharePointSiteUrl || existingMicrosoft.sharePointSiteUrl);
+    saveSecureValue("bpmnSiteUrl", value.bpmnSiteUrl || existingMicrosoft.bpmnSiteUrl);
   }
 
   return { success: true, restartRequired: Boolean(mainWindow) };
@@ -1550,6 +1779,10 @@ async function selectConfigurationFile() {
     project: parseEnvValue(content, "AZURE_DEVOPS_PROJECT") || "",
     wiki: parseEnvValue(content, "AZURE_DEVOPS_WIKI") || "",
     pat: parseEnvValue(content, "AZURE_DEVOPS_PAT") || "",
+    tenantId: parseEnvValue(content, "MICROSOFT_TENANT_ID") || "",
+    clientId: parseEnvValue(content, "MICROSOFT_CLIENT_ID") || "",
+    sharePointSiteUrl: parseEnvValue(content, "SHAREPOINT_SITE_URL") || "",
+    bpmnSiteUrl: parseEnvValue(content, "SHAREPOINT_BPMN_SITE_URL") || "",
   };
 }
 
@@ -1573,8 +1806,8 @@ async function showIntegratedSetup(): Promise<string | null> {
 
     const html = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Configuração inicial</title><style>
       *{box-sizing:border-box}body{margin:0;font-family:Segoe UI,Arial,sans-serif;background:#f4f6f8;color:#101828}.page{max-width:720px;margin:auto;padding:32px}.card{background:white;border:1px solid #e4e7ec;border-radius:18px;padding:28px;box-shadow:0 8px 28px rgba(16,24,40,.08)}h1{margin:0 0 6px;font-size:25px}.lead{color:#667085;margin:0 0 24px}.section{border-top:1px solid #eaecf0;padding-top:20px;margin-top:20px}label{display:block;font-size:13px;font-weight:700;margin:12px 0 6px}input{width:100%;padding:11px 12px;border:1px solid #d0d5dd;border-radius:9px;font-size:14px}small{color:#667085}.actions{display:flex;gap:10px;margin-top:24px}.button{border:0;border-radius:9px;padding:11px 16px;font-weight:700;cursor:pointer}.primary{background:#18c77a;color:#071a12}.secondary{background:#fff;border:1px solid #18c77a;color:#087443}.error{display:none;margin-top:16px;padding:11px;border-radius:8px;background:#fef3f2;color:#b42318}.optional{font-weight:400;color:#667085}
-    </style></head><body><main class="page"><section class="card"><h1>Configurar TechLead Hub</h1><p class="lead">Informe os dados manualmente ou importe um arquivo .env. As credenciais serão protegidas pelo Windows.</p><button class="button secondary" id="import">Importar arquivo .env</button><div class="section"><h3>Banco de dados</h3><label>DATABASE_URL</label><input id="databaseUrl" type="password" autocomplete="off" placeholder="postgresql://usuario:senha@servidor:5432/banco"><small>Obrigatório para iniciar o login.</small></div><div class="section"><h3>Azure DevOps <span class="optional">(opcional)</span></h3><label>Organização</label><input id="organization"><label>Projeto</label><input id="project"><label>Wiki</label><input id="wiki"><label>PAT</label><input id="pat" type="password" autocomplete="off"></div><div id="error" class="error"></div><div class="actions"><button class="button primary" id="save">Salvar e iniciar</button></div></section></main><script>
-      const ids=['databaseUrl','organization','project','wiki','pat'];const error=document.getElementById('error');
+    </style></head><body><main class="page"><section class="card"><h1>Bem-vindo ao TechLead Hub</h1><p class="lead">Para concluir a primeira instalação, conecte o aplicativo ao banco de dados. Essa informação será solicitada somente uma vez e ficará protegida pelo Windows.</p><button class="button secondary" id="import">Importar arquivo .env</button><div class="section"><h3>Conexão principal</h3><label>DATABASE_URL</label><input id="databaseUrl" type="password" autocomplete="off" placeholder="postgresql://usuario:senha@servidor:5432/banco"><small>Depois do primeiro acesso, configure o Azure DevOps em Administração &gt; Configurações.</small></div><div id="error" class="error"></div><div class="actions"><button class="button primary" id="save">Conectar e abrir o aplicativo</button></div></section></main><script>
+      const ids=['databaseUrl'];const error=document.getElementById('error');
       document.getElementById('import').onclick=async()=>{const data=await window.techLeadHub.configuration.importEnv();if(data){ids.forEach(id=>document.getElementById(id).value=data[id]||'')}};
       document.getElementById('save').onclick=async()=>{error.style.display='none';try{const data={};ids.forEach(id=>data[id]=document.getElementById(id).value);await window.techLeadHub.configuration.save(data);window.close()}catch(e){error.textContent=e?.message||String(e);error.style.display='block'}};
     </script></body></html>`;
@@ -1853,6 +2086,8 @@ function startBackend(
   databaseUrl: string,
   jwtSecret: string,
   azure: AzureConfiguration,
+  email: EmailConfiguration,
+  microsoft: MicrosoftConfiguration,
 ) {
   if (backendProcess) {
     return;
@@ -1912,6 +2147,26 @@ function startBackend(
 
           AZURE_DEVOPS_PAT:
             azure.pat,
+
+          MICROSOFT_TENANT_ID: microsoft.tenantId,
+          MICROSOFT_CLIENT_ID: microsoft.clientId,
+          SHAREPOINT_SITE_URL: microsoft.sharePointSiteUrl,
+          SHAREPOINT_BPMN_SITE_URL: microsoft.bpmnSiteUrl,
+
+          SMTP_HOST:
+            email.host,
+          SMTP_PORT:
+            email.port,
+          SMTP_SECURE:
+            email.secure,
+          SMTP_USER:
+            email.user,
+          SMTP_PASSWORD:
+            email.password,
+          SMTP_FROM:
+            email.from,
+          PASSWORD_RESET_URL:
+            `http://localhost:${BACKEND_PORT}/login`,
 
           ELECTRON_RUN_AS_NODE:
             "1",
@@ -2522,6 +2777,8 @@ async function bootstrap() {
     databaseUrl,
     jwtSecret,
     resolveAzureConfiguration(),
+    resolveEmailConfiguration(),
+    resolveMicrosoftConfiguration(),
   );
 
   const backendOnline =

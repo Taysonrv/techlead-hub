@@ -8,12 +8,20 @@ import {
   AzureDevOpsSyncScheduler,
 } from "./jobs/AzureDevOpsSyncScheduler";
 
+import {
+  ensureApplicationSchema,
+} from "./database/applicationSchema";
+
 /* =========================================================
    CONFIGURAÇÃO
 ========================================================= */
 
 const DEFAULT_PORT =
   3333;
+
+const HOST =
+  process.env.HOST?.trim() ||
+  "127.0.0.1";
 
 const rawPort =
   process.env.PORT?.trim();
@@ -44,12 +52,18 @@ const PORT =
 const azureSyncScheduler =
   new AzureDevOpsSyncScheduler();
 
-const server =
-  app.listen(
+let server:
+  ReturnType<typeof app.listen>;
+
+async function start() {
+  await ensureApplicationSchema();
+
+  server = app.listen(
     PORT,
+    HOST,
     () => {
       console.log(
-        `🚀 TechLead Hub rodando na porta ${PORT}`,
+        `🚀 TechLead Hub rodando em http://${HOST}:${PORT}`,
       );
 
       /*
@@ -59,6 +73,12 @@ const server =
       azureSyncScheduler.start();
     },
   );
+}
+
+void start().catch((error) => {
+  console.error("[server] Não foi possível preparar o banco:", error);
+  process.exit(1);
+});
 
 /* =========================================================
    ENCERRAMENTO SEGURO
@@ -87,12 +107,13 @@ async function shutdown(
   azureSyncScheduler.stop();
 
   try {
-    await new Promise<void>(
-      (
-        resolve,
-        reject,
-      ) => {
-        server.close(
+    if (server) {
+      await new Promise<void>(
+        (
+          resolve,
+          reject,
+        ) => {
+          server.close(
           (error) => {
             if (
               error
@@ -106,9 +127,10 @@ async function shutdown(
 
             resolve();
           },
-        );
-      },
-    );
+          );
+        },
+      );
+    }
   } catch (
     error
   ) {

@@ -622,6 +622,32 @@ export class AzureDevOpsController {
      WIKI
   ======================================================= */
 
+  public wikiSearch = async (
+    req: Request,
+    res: Response,
+  ): Promise<Response> => {
+    try {
+      const query = typeof req.query.q === "string" ? req.query.q.trim() : "";
+      const limit = this.parsePositiveInteger(req.query.limit) ?? 8;
+      if (query.length < 3) {
+        return res.status(400).json({ message: "Informe ao menos 3 caracteres para pesquisar a Wiki." });
+      }
+      return res.json({
+        items: await this.azureDevOpsService.searchWikiPages(query, limit),
+      });
+    } catch (error) {
+      return this.handleError(res, error);
+    }
+  };
+
+  public wikiList = async (_req: Request, res: Response): Promise<Response> => {
+    try {
+      return res.json({ items: await this.azureDevOpsService.listWikis() });
+    } catch (error) {
+      return this.handleError(res, error);
+    }
+  };
+
   public wikiPage = async (
     req: Request,
     res: Response,

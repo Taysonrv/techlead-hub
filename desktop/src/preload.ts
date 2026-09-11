@@ -49,6 +49,16 @@ type ConfigurationInput = {
   project: string;
   wiki: string;
   pat: string;
+  smtpHost?: string;
+  smtpPort?: string;
+  smtpSecure?: string;
+  smtpUser?: string;
+  smtpPassword?: string;
+  smtpFrom?: string;
+  tenantId?: string;
+  clientId?: string;
+  sharePointSiteUrl?: string;
+  bpmnSiteUrl?: string;
 };
 
 /* =========================================================

@@ -435,7 +435,21 @@ export class AzureWorkItemController {
 
       const result =
         await this.service.summary(
-          type,
+          {
+            type,
+            search: this.parseString(req.query.search),
+            state: this.parseString(req.query.state),
+            criticality: this.parseString(req.query.criticality),
+            assignedTo: this.parseString(req.query.assignedTo),
+            client: this.parseString(req.query.client),
+            module: this.parseString(req.query.module),
+            process: this.parseString(req.query.process),
+            deliveredVersion: this.parseString(req.query.deliveredVersion),
+            prioritized: this.parseOptionalBoolean(req.query.prioritized).value,
+            blockedProcess: this.parseOptionalBoolean(req.query.blockedProcess).value,
+            hasMovideskTicket: this.parseOptionalBoolean(req.query.hasMovideskTicket).value,
+            hasAssignedTo: this.parseOptionalBoolean(req.query.hasAssignedTo).value,
+          },
         );
 
       return res

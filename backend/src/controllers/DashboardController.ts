@@ -3,7 +3,15 @@ import type {
   Response,
 } from "express";
 
+import type {
+  Prisma,
+} from "@prisma/client";
+
 import { prisma } from "../database/prisma";
+
+import {
+  ticketOperationalScope,
+} from "../domain/OperationalScope";
 
 export class DashboardController {
   /* =========================================================
@@ -891,15 +899,16 @@ export class DashboardController {
           )
         );
 
+      const ticketMovideskIds = tickets.map((ticket) => ticket.movideskId);
       const azureWorkItems =
-        taskNumbers.length >
-        0
+        taskNumbers.length > 0 || ticketMovideskIds.length > 0
           ? await prisma.azureWorkItem.findMany({
               where: {
-                id: {
-                  in:
-                    taskNumbers,
-                },
+                OR: [
+                  ...(taskNumbers.length ? [{ id: { in: taskNumbers } }] : []),
+                  ...(ticketMovideskIds.length ? [{ movideskTicket: { in: ticketMovideskIds } }] : []),
+                  ...ticketMovideskIds.map((id) => ({ participantMovideskTickets: { contains: `,${id},` } })),
+                ],
               },
               select: {
                 id:
@@ -914,6 +923,8 @@ export class DashboardController {
                   true,
                 client:
                   true,
+                participantClients:
+                  true,
                 criticality:
                   true,
                 module:
@@ -921,6 +932,8 @@ export class DashboardController {
                 process:
                   true,
                 movideskTicket:
+                  true,
+                participantMovideskTickets:
                   true,
                 deliveredVersion:
                   true,
@@ -947,6 +960,12 @@ export class DashboardController {
             ]
           )
         );
+      const azureByMovideskId = new Map<number, (typeof azureWorkItems)[number]>();
+      azureWorkItems.forEach((workItem) => {
+        if (workItem.movideskTicket) azureByMovideskId.set(workItem.movideskTicket, workItem);
+        (workItem.participantMovideskTickets?.match(/\d+/g) ?? []).map(Number)
+          .forEach((id) => azureByMovideskId.set(id, workItem));
+      });
 
       const result =
         tickets.map(
@@ -1064,14 +1083,9 @@ export class DashboardController {
              * null = sem Task vinculada ou Task ainda não sincronizada.
              */
             azureWorkItem:
-              ticket.taskNumber
-                ? (
-                    azureById.get(
-                      ticket.taskNumber
-                    ) ??
-                    null
-                  )
-                : null,
+              (ticket.taskNumber ? azureById.get(ticket.taskNumber) : null) ??
+              azureByMovideskId.get(ticket.movideskId) ??
+              null,
 
             /* Importação */
 
@@ -1105,9 +1119,8 @@ export class DashboardController {
   }
 }
 
-type SnapshotWhere = {
-  importRunId?: number;
-};
+type SnapshotWhere =
+  Prisma.TicketWhereInput;
 
 /**
  * Snapshot operacional = tickets vistos na última importação completa
@@ -1132,9 +1145,15 @@ async function getLatestSnapshotWhere(): Promise<SnapshotWhere> {
       },
     });
 
-  return latestImportRun
-    ? { importRunId: latestImportRun.id }
-    : {};
+  return {
+    ...ticketOperationalScope(),
+    ...(latestImportRun
+      ? {
+          importRunId:
+            latestImportRun.id,
+        }
+      : {}),
+  };
 }
 
 type DashboardPeriod = {

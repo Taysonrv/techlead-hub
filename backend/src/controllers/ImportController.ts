@@ -5,6 +5,10 @@ import {
 
 import { MovideskExcelImportService } from "../services/MovideskExcelImportService";
 
+import type {
+  AuthenticatedRequest,
+} from "../middlewares/authMiddleware";
+
 const service =
   new MovideskExcelImportService();
 
@@ -27,6 +31,7 @@ export class ImportController {
         [
           "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
           "application/vnd.ms-excel",
+          "application/octet-stream",
         ];
 
       const hasValidExtension =
@@ -37,10 +42,10 @@ export class ImportController {
           );
 
       if (
+        !hasValidExtension ||
         !allowedMimeTypes.includes(
           req.file.mimetype
-        ) &&
-        !hasValidExtension
+        )
       ) {
         return res
           .status(400)
@@ -50,9 +55,20 @@ export class ImportController {
           });
       }
 
+      const authenticatedRequest =
+        req as AuthenticatedRequest;
+
       const result =
         await service.execute(
-          req.file.buffer
+          req.file.buffer,
+          {
+            fileName:
+              req.file.originalname,
+            userId:
+              authenticatedRequest.auth
+                ?.userId ??
+              null,
+          },
         );
 
       return res.json({

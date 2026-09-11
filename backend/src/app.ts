@@ -15,8 +15,24 @@ app.disable("x-powered-by");
 
 app.use(
   cors({
-    origin: true,
-    credentials: true,
+    origin(origin, callback) {
+      if (!origin) {
+        callback(null, true);
+        return;
+      }
+
+      try {
+        const url = new URL(origin);
+        const localHost =
+          url.hostname === "127.0.0.1" ||
+          url.hostname === "localhost";
+
+        callback(null, localHost);
+      } catch {
+        callback(null, false);
+      }
+    },
+    credentials: false,
   })
 );
 

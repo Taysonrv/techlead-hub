@@ -1,0 +1,54 @@
+name: Validar TechLead Hub
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches:
+      - main
+      - feature/**
+
+concurrency:
+  group: validate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: windows-latest
+    env:
+      DATABASE_URL: postgresql://validation:validation@127.0.0.1:5432/techlead_validation
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend/package-lock.json
+            desktop/package-lock.json
+
+      - name: Instalar dependências
+        shell: pwsh
+        run: |
+          npm ci --prefix backend
+          npm ci --prefix frontend
+          npm ci --prefix desktop
+
+      - name: Validar backend e Prisma
+        shell: pwsh
+        run: |
+          npm run prisma:generate --prefix backend
+          npm exec --prefix backend -- prisma validate
+          npm run build --prefix backend
+
+      - name: Validar frontend
+        shell: pwsh
+        run: |
+          npm run lint --prefix frontend
+          npm run build --prefix frontend
+
+      - name: Validar desktop
+        shell: pwsh
+        run: npm run build:desktop --prefix desktop

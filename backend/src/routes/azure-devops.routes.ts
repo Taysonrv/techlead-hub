@@ -5,6 +5,7 @@ import {
 import {
   AzureDevOpsController,
 } from "../controllers/AzureDevOpsController";
+import { requireRoles } from "../middlewares/roleMiddleware";
 
 const azureDevOpsRoutes =
   Router();
@@ -32,6 +33,7 @@ azureDevOpsRoutes.get(
 
 azureDevOpsRoutes.post(
   "/work-items/batch",
+  requireRoles("ADMIN", "COORDENADOR"),
   azureDevOpsController.batchWorkItems,
 );
 
@@ -46,22 +48,35 @@ azureDevOpsRoutes.get(
 
 azureDevOpsRoutes.post(
   "/sync/work-items",
+  requireRoles("ADMIN", "COORDENADOR"),
   azureDevOpsController.syncWorkItems,
 );
 
 azureDevOpsRoutes.post(
   "/sync/full",
+  requireRoles("ADMIN", "COORDENADOR"),
   azureDevOpsController.syncFull,
 );
 
 azureDevOpsRoutes.post(
   "/sync/incremental",
+  requireRoles("ADMIN", "COORDENADOR"),
   azureDevOpsController.syncIncremental,
 );
 
 /* =========================================================
    WIKI
 ========================================================= */
+
+azureDevOpsRoutes.get(
+  "/wiki",
+  azureDevOpsController.wikiList,
+);
+
+azureDevOpsRoutes.get(
+  "/wiki/search",
+  azureDevOpsController.wikiSearch,
+);
 
 azureDevOpsRoutes.get(
   "/wiki/pages/:pageId",

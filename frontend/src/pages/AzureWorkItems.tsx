@@ -101,7 +101,8 @@ function Stack(
 
 type AzureWorkItemType =
   | "Correção Clientes"
-  | "Evolução";
+  | "Evolução"
+  | "APOIO";
 
 type NullableBoolean =
   | boolean
@@ -116,10 +117,12 @@ type AzureWorkItem = {
   reason?: string | null;
   assignedToName: string | null;
   client: string | null;
+  participantClients?: string | string[] | null;
   criticality: string | null;
   module: string | null;
   process: string | null;
   movideskTicket: number | null;
+  participantMovideskTickets?: string | number[] | null;
   deliveredVersion: string | null;
   prioritized: NullableBoolean;
   blockedProcess: NullableBoolean;
@@ -452,6 +455,13 @@ function normalizeText(
     value?.trim() ||
     EMPTY_TEXT
   );
+}
+
+function formatParticipants(value: string | string[] | number[] | null | undefined) {
+  if (Array.isArray(value)) return value.length ? value.join(", ") : "-";
+  if (!value) return "-";
+  const normalized = value.replace(/^,|,$/g, "").replace(/\r?\n/g, ", ").trim();
+  return normalized || "-";
 }
 
 function criticalityTone(
@@ -1366,7 +1376,6 @@ export function AzureWorkItems({
     [
       module,
       process,
-      deliveredVersion,
       prioritized,
       blockedProcess,
       hasMovideskTicket,
@@ -1384,15 +1393,30 @@ export function AzureWorkItems({
     type ===
     "Correção Clientes";
 
+  const isSupport =
+    type ===
+    "APOIO";
+
   const title =
     isCorrection
       ? "Correções"
-      : "Evoluções";
+      : isSupport
+        ? "Apoios"
+        : "Evoluções";
+
+  const itemLabel =
+    isCorrection
+      ? "correções"
+      : isSupport
+        ? "apoios"
+        : "evoluções";
 
   const subtitle =
     isCorrection
       ? "Visão operacional e gerencial das correções do SIMER sincronizadas com o Azure DevOps."
-      : "Visão operacional e gerencial das evoluções do SIMER sincronizadas com o Azure DevOps.";
+      : isSupport
+        ? "Visão operacional e gerencial dos APOIOs vinculados aos atendimentos do Movidesk."
+        : "Visão operacional e gerencial das evoluções do SIMER sincronizadas com o Azure DevOps.";
 
   /* =======================================================
      CARREGAMENTO
@@ -1407,6 +1431,18 @@ export function AzureWorkItems({
             {
               params: {
                 type,
+                search: appliedSearch || undefined,
+                state: state || undefined,
+                criticality: criticality || undefined,
+                assignedTo: assignedTo || undefined,
+                client: client || undefined,
+                module: module || undefined,
+                process: process || undefined,
+                deliveredVersion: deliveredVersion || undefined,
+                prioritized: prioritized || undefined,
+                blockedProcess: blockedProcess || undefined,
+                hasMovideskTicket: hasMovideskTicket || undefined,
+                hasAssignedTo: hasAssignedTo || undefined,
               },
             },
           );
@@ -1416,7 +1452,9 @@ export function AzureWorkItems({
         );
       },
       [
-        type,
+        type, appliedSearch, state, criticality, assignedTo, client,
+        module, process, deliveredVersion, prioritized, blockedProcess,
+        hasMovideskTicket, hasAssignedTo,
       ],
     );
 
@@ -1705,9 +1743,7 @@ export function AzureWorkItems({
           key:
             "all",
           label:
-            isCorrection
-              ? "Correções"
-              : "Evoluções",
+            title,
           value:
             summary?.total ??
             0,
@@ -1715,11 +1751,9 @@ export function AzureWorkItems({
             "Total sincronizado no recorte",
           info: {
             title:
-              isCorrection
-                ? "Correções"
-                : "Evoluções",
+              title,
             summary:
-              `Quantidade total de ${isCorrection ? "correções" : "evoluções"} disponíveis no banco local para o recorte atual.`,
+              `Quantidade total de ${itemLabel} disponíveis no banco local para o recorte atual.`,
             calculation:
               "Contagem dos Work Items sincronizados do tipo selecionado.",
             source:
@@ -1734,7 +1768,9 @@ export function AzureWorkItems({
           icon:
             isCorrection
               ? <BugReportOutlined />
-              : <TimelineOutlined />,
+              : isSupport
+                ? <AssignmentOutlined />
+                : <TimelineOutlined />,
           severity:
             "default",
         },
@@ -1873,7 +1909,10 @@ export function AzureWorkItems({
       ],
       [
         isCorrection,
+        isSupport,
+        itemLabel,
         summary,
+        title,
       ],
     );
 
@@ -2170,11 +2209,18 @@ export function AzureWorkItems({
       1,
     );
 
-    clearOperationalFilters();
+    const selectingSameCard =
+      activeCard === card;
+
+    setPrioritized("");
+    setBlockedProcess("");
+    setHasMovideskTicket("");
+    setHasAssignedTo("");
+    setActiveCard("all");
 
     if (
-      card ===
-      "all"
+      card === "all" ||
+      selectingSameCard
     ) {
       return;
     }
@@ -3496,7 +3542,7 @@ export function AzureWorkItems({
                   gridTemplateColumns: {
                     xs: "1fr",
                     sm: "repeat(2, minmax(0, 1fr))",
-                    lg: "repeat(4, minmax(0, 1fr))",
+                    lg: "repeat(5, minmax(0, 1fr))",
                   },
                   gap: 1.25,
                 }}
@@ -3663,6 +3709,19 @@ export function AzureWorkItems({
                   )}
                 />
 
+                <Autocomplete
+                  size="small"
+                  options={filters?.versions ?? []}
+                  value={deliveredVersion || null}
+                  onChange={(_event, value) => {
+                    setPage(1);
+                    setDeliveredVersion(value ?? "");
+                  }}
+                  renderInput={(params) => (
+                    <TextField {...params} label="Versão" />
+                  )}
+                />
+
               </Box>
 
               <Collapse
@@ -3744,39 +3803,6 @@ export function AzureWorkItems({
                       <TextField
                         {...params}
                         label="Processo"
-                      />
-                    )}
-                  />
-
-                  <Autocomplete
-                    size="small"
-                    options={
-                      filters?.versions ??
-                      []
-                    }
-                    value={
-                      deliveredVersion ||
-                      null
-                    }
-                    onChange={(
-                      _event,
-                      value,
-                    ) => {
-                      setPage(
-                        1,
-                      );
-
-                      setDeliveredVersion(
-                        value ??
-                        "",
-                      );
-                    }}
-                    renderInput={(
-                      params,
-                    ) => (
-                      <TextField
-                        {...params}
-                        label="Versão"
                       />
                     )}
                   />
@@ -4005,9 +4031,10 @@ export function AzureWorkItems({
 
                   </Stack>
 
-                  <TableContainer>
+                  <TableContainer sx={{ maxWidth: "100%", overflowX: "auto" }}>
                     <Table
                       size="small"
+                      sx={{ minWidth: 1740, tableLayout: "fixed" }}
                     >
                       <TableHead>
                         <TableRow>
@@ -4039,7 +4066,7 @@ export function AzureWorkItems({
                             Módulo
                           </TableCell>
 
-                          <TableCell>
+                          <TableCell sx={{ width: 230, minWidth: 230 }}>
                             Versão
                           </TableCell>
 
@@ -4187,8 +4214,14 @@ export function AzureWorkItems({
                                     190,
                                 }}
                               >
-                                {item.client ??
-                                  "-"}
+                                <Stack spacing={0.25}>
+                                  <Typography variant="body2">{item.client ?? "-"}</Typography>
+                                  {formatParticipants(item.participantClients) !== "-" && (
+                                    <Typography variant="caption" color="text.secondary">
+                                      Participantes: {formatParticipants(item.participantClients)}
+                                    </Typography>
+                                  )}
+                                </Stack>
                               </TableCell>
 
                               <TableCell
@@ -4208,17 +4241,29 @@ export function AzureWorkItems({
 
                               <TableCell
                                 sx={{
+                                  width: 230,
+                                  minWidth: 230,
+                                  maxWidth: 230,
                                   whiteSpace:
                                     "nowrap",
+                                  overflow: "hidden",
+                                  textOverflow: "ellipsis",
                                 }}
+                                title={item.deliveredVersion ?? undefined}
                               >
                                 {item.deliveredVersion ??
                                   "-"}
                               </TableCell>
 
                               <TableCell>
-                                {item.movideskTicket ??
-                                  "-"}
+                                <Stack spacing={0.25}>
+                                  <Typography variant="body2">{item.movideskTicket ?? "-"}</Typography>
+                                  {formatParticipants(item.participantMovideskTickets) !== "-" && (
+                                    <Typography variant="caption" color="text.secondary">
+                                      Participantes: {formatParticipants(item.participantMovideskTickets)}
+                                    </Typography>
+                                  )}
+                                </Stack>
                               </TableCell>
 
                               <TableCell
@@ -4599,6 +4644,16 @@ export function AzureWorkItems({
                     />
 
                     <DetailField
+                      label="Clientes participantes"
+                      value={formatParticipants(selectedWorkItem.participantClients)}
+                    />
+
+                    <DetailField
+                      label="Tickets dos clientes participantes"
+                      value={formatParticipants(selectedWorkItem.participantMovideskTickets)}
+                    />
+
+                    <DetailField
                       label="Módulo"
                       value={
                         normalizeText(
@@ -4722,7 +4777,7 @@ export function AzureWorkItems({
 
                       <InfoHint
                         title="Atendimentos relacionados"
-                        text="O atendimento de origem é identificado pelo número Movidesk informado na própria Task. Outros atendimentos podem estar relacionados pelo campo Número da Task."
+                        text="A associação considera o Nº do Ticket principal, o Nº do Ticket dos Clientes Participantes e atendimentos cujo Número da Task aponta para este Work Item."
                       />
                     </Stack>
 
@@ -4738,9 +4793,19 @@ export function AzureWorkItems({
                   {orderedTickets.length ===
                     0 ? (
                     <Alert
-                      severity="info"
+                      severity={
+                        selectedWorkItem.movideskTicket || formatParticipants(selectedWorkItem.participantMovideskTickets) !== "-"
+                          ? "warning"
+                          : "info"
+                      }
                     >
-                      Nenhum atendimento relacionado foi localizado no snapshot atual.
+                      {selectedWorkItem.movideskTicket
+                        ? "O ticket Movidesk " +
+                          selectedWorkItem.movideskTicket +
+                          " está informado no Azure, mas esse atendimento ainda não foi importado para a base local do TechLead Hub."
+                        : formatParticipants(selectedWorkItem.participantMovideskTickets) !== "-"
+                          ? "Há tickets de clientes participantes informados no Azure, mas eles ainda não foram importados para a base local."
+                        : "O Azure não possui número de ticket Movidesk informado e nenhum atendimento aponta para este Work Item."}
                     </Alert>
                   ) : (
                     <Stack

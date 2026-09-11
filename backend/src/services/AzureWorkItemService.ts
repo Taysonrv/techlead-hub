@@ -6,6 +6,7 @@ import {
   prisma,
 } from "../database/prisma";
 
+
 export type AzureWorkItemListParams = {
   page?: number;
   pageSize?: number;
@@ -204,21 +205,22 @@ export class AzureWorkItemService {
       await prisma.ticket.findMany({
         where: {
           OR: [
-            {
-              taskNumber:
-                workItem.id,
-            },
-            ...(
-              workItem.movideskTicket
-                ? [
-                    {
-                      movideskId:
-                        workItem.movideskTicket,
-                    },
-                  ]
-                : []
-            ),
-          ],
+                {
+                  taskNumber:
+                    workItem.id,
+                },
+                ...(
+                  workItem.movideskTicket
+                    ? [
+                        {
+                          movideskId:
+                            workItem.movideskTicket,
+                        },
+                      ]
+                    : []
+                ),
+                ...this.participantTicketIds(workItem.participantMovideskTickets).map((movideskId) => ({ movideskId })),
+              ],
         },
         orderBy: [
           {
@@ -244,6 +246,7 @@ export class AzureWorkItemService {
               workItem.movideskTicket,
               ticket.taskNumber,
               ticket.movideskId,
+              this.participantTicketIds(workItem.participantMovideskTickets),
             ),
         }),
       );
@@ -279,6 +282,20 @@ export class AzureWorkItemService {
         select:
           this.relationWorkItemSelect(),
       });
+
+    const history = await prisma.$queryRaw<Array<{
+      id: number;
+      field: string;
+      oldValue: string | null;
+      newValue: string | null;
+      changedAt: Date;
+    }>>`
+      SELECT "id", "field", "oldValue", "newValue", "changedAt"
+      FROM "AzureWorkItemHistory"
+      WHERE "workItemId" = ${workItem.id}
+      ORDER BY "changedAt" DESC, "id" DESC
+      LIMIT 100
+    `;
 
     return {
       ...workItem,
@@ -331,6 +348,9 @@ export class AzureWorkItemService {
             null
           : null,
 
+      participantClients: this.stringLines(workItem.participantClients),
+      participantMovideskTickets: this.participantTicketIds(workItem.participantMovideskTickets),
+
       relatedTicket:
         tickets[0] ??
         null,
@@ -339,6 +359,7 @@ export class AzureWorkItemService {
         parent,
         children,
       },
+      history,
     };
   }
 
@@ -350,22 +371,19 @@ export class AzureWorkItemService {
   ======================================================= */
 
   public async summary(
-    type?:
-      string | null,
+    params: AzureWorkItemListParams = {},
   ) {
     const typeFilter =
       this.normalizeString(
-        type,
+        params.type,
       );
 
     const baseWhere:
       Prisma.AzureWorkItemWhereInput =
-      typeFilter
-        ? {
-            workItemType:
-              typeFilter,
-          }
-        : {};
+      this.buildWhere({
+        ...params,
+        type: typeFilter,
+      });
 
     const correctionWhere:
       Prisma.AzureWorkItemWhereInput = {
@@ -462,12 +480,10 @@ export class AzureWorkItemService {
           where: {
             AND: [
               baseWhere,
-              {
-                movideskTicket: {
-                  not:
-                    null,
-                },
-              },
+              { OR: [
+                { movideskTicket: { not: null } },
+                { participantMovideskTickets: { not: null } },
+              ] },
             ],
           },
         }),
@@ -476,10 +492,10 @@ export class AzureWorkItemService {
           where: {
             AND: [
               baseWhere,
-              {
-                movideskTicket:
-                  null,
-              },
+              { AND: [
+                { movideskTicket: null },
+                { participantMovideskTickets: null },
+              ] },
             ],
           },
         }),
@@ -515,10 +531,10 @@ export class AzureWorkItemService {
           where: {
             AND: [
               baseWhere,
-              {
-                client:
-                  null,
-              },
+              { AND: [
+                { client: null },
+                { participantClients: null },
+              ] },
             ],
           },
         }),
@@ -1918,17 +1934,24 @@ export class AzureWorkItemService {
 
     const where:
       Prisma.AzureWorkItemWhereInput =
-      normalizedType
-        ? {
-            workItemType:
-              normalizedType,
-          }
-        : {};
+      {
+        AND: [
+          ...(normalizedType
+            ? [
+                {
+                  workItemType:
+                    normalizedType,
+                },
+              ]
+            : []),
+        ],
+      };
 
     const [
       types,
       states,
       assignedTo,
+      participantClientRows,
       clients,
       criticalities,
       modules,
@@ -1989,6 +2012,12 @@ export class AzureWorkItemService {
             assignedToName:
               "asc",
           },
+        }),
+
+        prisma.azureWorkItem.findMany({
+          where: { AND: [where, { participantClients: { not: null } }] },
+          distinct: ["participantClients"],
+          select: { participantClients: true },
         }),
 
         prisma.azureWorkItem.findMany({
@@ -2148,17 +2177,10 @@ export class AzureWorkItemService {
           ),
 
       clients:
-        clients
-          .map(
-            (item) =>
-              item.client,
-          )
-          .filter(
-            (
-              value,
-            ): value is string =>
-              Boolean(value),
-          ),
+        [...new Set([
+          ...clients.map((item) => item.client).filter((value): value is string => Boolean(value)),
+          ...participantClientRows.flatMap((item) => this.stringLines(item.participantClients)),
+        ])].sort((left, right) => left.localeCompare(right, "pt-BR")),
 
       criticalities:
         criticalities
@@ -2278,8 +2300,12 @@ export class AzureWorkItemService {
 
     if (type) {
       and.push({
-        workItemType:
-          type,
+        workItemType: {
+          equals:
+            type,
+          mode:
+            "insensitive",
+        },
       });
     }
 
@@ -2298,7 +2324,10 @@ export class AzureWorkItemService {
 
     if (client) {
       and.push({
-        client,
+        OR: [
+          { client },
+          { participantClients: { contains: client, mode: "insensitive" } },
+        ],
       });
     }
 
@@ -2356,15 +2385,9 @@ export class AzureWorkItemService {
       params.hasMovideskTicket !==
         null
     ) {
-      and.push({
-        movideskTicket:
-          params.hasMovideskTicket
-            ? {
-                not:
-                  null,
-              }
-            : null,
-      });
+      and.push(params.hasMovideskTicket
+        ? { OR: [{ movideskTicket: { not: null } }, { participantMovideskTickets: { not: null } }] }
+        : { AND: [{ movideskTicket: null }, { participantMovideskTickets: null }] });
     }
 
     if (
@@ -2428,8 +2451,10 @@ export class AzureWorkItemService {
         null
     ) {
       and.push({
-        movideskTicket:
-          params.movideskTicket,
+        OR: [
+          { movideskTicket: params.movideskTicket },
+          { participantMovideskTickets: { contains: `,${params.movideskTicket},` } },
+        ],
       });
     }
 
@@ -2494,6 +2519,12 @@ export class AzureWorkItemService {
             },
           },
           {
+            participantClients: {
+              contains: search,
+              mode: "insensitive",
+            },
+          },
+          {
             assignedToName: {
               contains:
                 search,
@@ -2538,6 +2569,11 @@ export class AzureWorkItemService {
                   {
                     movideskTicket:
                       numericSearch,
+                  },
+                  {
+                    participantMovideskTickets: {
+                      contains: `,${numericSearch},`,
+                    },
                   },
                 ]
               : []
@@ -2634,6 +2670,8 @@ export class AzureWorkItemService {
         true,
       client:
         true,
+      participantClients:
+        true,
       criticality:
         true,
       module:
@@ -2641,6 +2679,8 @@ export class AzureWorkItemService {
       process:
         true,
       movideskTicket:
+        true,
+      participantMovideskTickets:
         true,
       deliveredVersion:
         true,
@@ -2704,6 +2744,8 @@ export class AzureWorkItemService {
         true,
       client:
         true,
+      participantClients:
+        true,
       criticality:
         true,
       origin:
@@ -2715,6 +2757,8 @@ export class AzureWorkItemService {
       process:
         true,
       movideskTicket:
+        true,
+      participantMovideskTickets:
         true,
       deliveredVersion:
         true,
@@ -2858,6 +2902,8 @@ export class AzureWorkItemService {
         true,
       movideskTicket:
         true,
+      participantMovideskTickets:
+        true,
       deliveredVersion:
         true,
       prioritized:
@@ -2874,6 +2920,16 @@ export class AzureWorkItemService {
   /* =======================================================
      HELPERS
   ======================================================= */
+
+  private stringLines(value: string | null | undefined) {
+    return [...new Set((value ?? "").split(/\r?\n/).map((item) => item.trim()).filter(Boolean))];
+  }
+
+  private participantTicketIds(value: string | null | undefined) {
+    return [...new Set((value?.match(/\d+/g) ?? [])
+      .map(Number)
+      .filter((item) => Number.isSafeInteger(item) && item > 0))];
+  }
 
   private normalizeVersion(
     value:
@@ -3071,9 +3127,12 @@ export class AzureWorkItemService {
       number | null,
     ticketMovideskId:
       number,
+    participantTicketIds:
+      number[] = [],
   ):
     "TASK_NUMBER" |
     "MOVIDESK_ID" |
+    "PARTICIPANT" |
     "BOTH" {
     const byTask =
       ticketTaskNumber ===
@@ -3094,6 +3153,10 @@ export class AzureWorkItemService {
 
     if (byTask) {
       return "TASK_NUMBER";
+    }
+
+    if (participantTicketIds.includes(ticketMovideskId)) {
+      return "PARTICIPANT";
     }
 
     return "MOVIDESK_ID";

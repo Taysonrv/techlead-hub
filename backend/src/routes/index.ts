@@ -36,6 +36,24 @@ import {
   azureSyncRoutes,
 } from "./azure-sync.routes";
 
+import {
+  syncCenterRoutes,
+} from "./sync-center.routes";
+
+import {
+  reportRoutes,
+} from "./report.routes";
+
+import {
+  notificationRoutes,
+} from "./notification.routes";
+
+import {
+  workspaceRoutes,
+} from "./workspace.routes";
+import { globalRoutes } from "./global.routes";
+import { knowledgeRoutes } from "./knowledge.routes";
+
 /* =========================================================
    ROUTER
 ========================================================= */
@@ -82,6 +100,9 @@ routes.use(
   "/api",
   authMiddleware,
 );
+
+routes.use("/api/global", globalRoutes);
+routes.use("/api/knowledge", knowledgeRoutes);
 
 /* =========================================================
    ADMINISTRAÇÃO DE USUÁRIOS
@@ -167,6 +188,34 @@ routes.use(
 routes.use(
   "/api/azure-sync",
   azureSyncRoutes,
+);
+
+/* =========================================================
+   CENTRAL DE SINCRONIZAÇÕES
+========================================================= */
+
+routes.use(
+  "/api/sync-center",
+  syncCenterRoutes,
+);
+
+/* =========================================================
+   RELATÓRIOS GERENCIAIS
+========================================================= */
+
+routes.use(
+  "/api/reports",
+  reportRoutes,
+);
+
+routes.use(
+  "/api/notifications",
+  notificationRoutes,
+);
+
+routes.use(
+  "/api/workspace",
+  workspaceRoutes,
 );
 
 /* =========================================================

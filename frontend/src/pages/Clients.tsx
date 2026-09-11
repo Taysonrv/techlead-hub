@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 import {
   Alert,
+  Avatar,
   Box,
   Button,
   Card,
@@ -33,16 +34,22 @@ import {
 } from "@mui/icons-material";
 
 import {
+  Bar,
+  BarChart,
+  CartesianGrid,
   Cell,
   Pie,
   PieChart,
   ResponsiveContainer,
   Tooltip,
+  XAxis,
+  YAxis,
 } from "recharts";
 
 import { useNavigate } from "react-router-dom";
 
 import { api } from "../services/api";
+import { calculateOfficialSla } from "../utils/officialSla";
 import { useFilters } from "../context/FiltersContext";
 import { PeriodFilter } from "../components/PeriodFilter";
 import { aliareColors } from "../theme/theme";
@@ -130,7 +137,8 @@ type ClientMetric = {
 
   topCategory: string;
 
-  averageLifetimeMinutes: number;
+  averageResolutionMinutes: number | null;
+  measuredResolutionTimes: number;
 
   attentionLevel: AttentionLevel;
 };
@@ -187,6 +195,7 @@ const STATUS_COLORS: Record<
 
 export function Clients() {
   const navigate = useNavigate();
+  const presentationRef = useRef<HTMLDivElement>(null);
 
   const [tickets, setTickets] =
     useState<Ticket[]>([]);
@@ -208,6 +217,10 @@ export function Clients() {
     category,
     setCategory,
   ] = useState("");
+
+  const [status, setStatus] = useState("");
+  const [owner, setOwner] = useState("");
+  const [executiveArea, setExecutiveArea] = useState("");
 
   /* Drill-down */
 
@@ -373,6 +386,18 @@ export function Clients() {
     );
   }, [clientScopedTickets]);
 
+  const owners = useMemo(() => Array.from(new Set(
+    clientScopedTickets.map((ticket) => ticket.owner?.trim()).filter((value): value is string => Boolean(value))
+  )).sort((a, b) => a.localeCompare(b, "pt-BR")), [clientScopedTickets]);
+
+  const statuses = useMemo(() => Array.from(new Set(
+    clientScopedTickets.map((ticket) => ticket.status?.trim()).filter(Boolean)
+  )).sort((a, b) => a.localeCompare(b, "pt-BR")), [clientScopedTickets]);
+
+  const executiveAreas = useMemo(() => Array.from(new Set(
+    clientScopedTickets.map(classifyExecutiveArea)
+  )).sort((a, b) => a.localeCompare(b, "pt-BR")), [clientScopedTickets]);
+
   /*
    * Caso mude de cliente e a categoria atual
    * não exista para ele, limpamos automaticamente.
@@ -392,24 +417,29 @@ export function Clients() {
     categories,
   ]);
 
+  useEffect(() => {
+    if (owner && !owners.includes(owner)) setOwner("");
+    if (status && !statuses.includes(status)) setStatus("");
+  }, [owner, owners, status, statuses]);
+
   /* =======================================================
      ESCOPO FINAL
   ======================================================= */
 
   const scopedTickets =
     useMemo(() => {
-      if (!category) {
-        return clientScopedTickets;
-      }
-
       return clientScopedTickets.filter(
-        (ticket) =>
-          ticket.category ===
-          category
+        (ticket) => (!category || ticket.category === category) &&
+          (!status || ticket.status === status) &&
+          (!owner || ticket.owner === owner) &&
+          (!executiveArea || classifyExecutiveArea(ticket) === executiveArea)
       );
     }, [
       clientScopedTickets,
       category,
+      status,
+      owner,
+      executiveArea,
     ]);
 
   /* =======================================================
@@ -536,24 +566,14 @@ export function Clients() {
                 b[1] - a[1]
             )[0]?.[0] ?? "—";
 
-          const lifetimes =
-            clientTickets
-              .map(
-                (ticket) =>
-                  ticket.lifetimeMinutes
-              )
-              .filter(
-                (
-                  value
-                ): value is number =>
-                  value !== null &&
-                  value !== undefined
-              );
+          const resolutionTimes = clientTickets
+            .map(ticketResolutionMinutes)
+            .filter((value): value is number => value !== null);
 
-          const averageLifetimeMinutes =
-            lifetimes.length > 0
+          const averageResolutionMinutes =
+            resolutionTimes.length > 0
               ? Math.round(
-                  lifetimes.reduce(
+                  resolutionTimes.reduce(
                     (
                       total,
                       value
@@ -562,9 +582,9 @@ export function Clients() {
                       value,
                     0
                   ) /
-                    lifetimes.length
+                    resolutionTimes.length
                 )
-              : 0;
+              : null;
 
           let attentionLevel:
             AttentionLevel =
@@ -613,7 +633,8 @@ export function Clients() {
 
             topCategory,
 
-            averageLifetimeMinutes,
+            averageResolutionMinutes,
+            measuredResolutionTimes: resolutionTimes.length,
 
             attentionLevel,
           };
@@ -785,8 +806,10 @@ export function Clients() {
               "Closed"
         ).length;
 
-      const responseSla = calculateOfficialSla(scopedTickets, "response");
-      const solutionSla = calculateOfficialSla(scopedTickets, "solution");
+      const responseResult = calculateOfficialSla(scopedTickets, "response");
+      const solutionResult = calculateOfficialSla(scopedTickets, "solution");
+      const responseSla = { measured: responseResult.measured, onTime: responseResult.within, percent: responseResult.percentage };
+      const solutionSla = { measured: solutionResult.measured, onTime: solutionResult.within, percent: solutionResult.percentage };
       const azureItems = Array.from(new Map(
         scopedTickets.map((ticket) => ticket.azureWorkItem)
           .filter((item): item is AzureTaskSummary => Boolean(item))
@@ -809,30 +832,17 @@ export function Clients() {
 
   /* =======================================================
      PIZZA 1 - DISTRIBUIÇÃO POR CLIENTE
-
-     Usa período + categoria.
-     Não restringimos ao selectedClient aqui para continuar
-     permitindo comparação entre os clientes.
   ======================================================= */
 
   const clientPieData =
     useMemo<PieDataItem[]>(() => {
-      const chartScope =
-        category
-          ? periodTickets.filter(
-              (ticket) =>
-                ticket.category ===
-                category
-            )
-          : periodTickets;
-
       const grouped =
         new Map<
           string,
           number
         >();
 
-      chartScope.forEach(
+      scopedTickets.forEach(
         (ticket) => {
           const client =
             ticket.client ??
@@ -905,9 +915,60 @@ export function Clients() {
 
       return top;
     }, [
-      periodTickets,
-      category,
+      scopedTickets,
     ]);
+
+  const categoryPieData = useMemo<PieDataItem[]>(() => groupChartData(
+    scopedTickets,
+    (ticket) => ticket.category?.trim() || "Sem categoria",
+    7,
+  ), [scopedTickets]);
+
+  const ownerChartData = useMemo<PieDataItem[]>(() => groupChartData(
+    scopedTickets,
+    (ticket) => ticket.owner?.trim() || "Sem responsável",
+    8,
+  ), [scopedTickets]);
+
+  const executiveInsights = useMemo(() => {
+    const topCategory = categoryPieData[0];
+    const openRate = portfolioSummary.total
+      ? Math.round((portfolioSummary.open / portfolioSummary.total) * 1000) / 10
+      : 0;
+    const unassigned = scopedTickets.filter((ticket) => !ticket.owner?.trim()).length;
+    return [
+      topCategory
+        ? `${topCategory.name} concentra ${Math.round((topCategory.value / Math.max(scopedTickets.length, 1)) * 100)}% dos atendimentos do recorte.`
+        : "Ainda não há categorias disponíveis para o recorte.",
+      `${portfolioSummary.open} atendimento(s) permanecem abertos (${openRate}% do volume analisado).`,
+      portfolioSummary.critical
+        ? `${portfolioSummary.critical} atendimento(s) crítico(s) aberto(s) exigem acompanhamento.`
+        : "Não há atendimentos críticos abertos neste recorte.",
+      unassigned
+        ? `${unassigned} atendimento(s) estão sem responsável informado.`
+        : "Todos os atendimentos do recorte possuem responsável informado.",
+    ];
+  }, [categoryPieData, portfolioSummary, scopedTickets]);
+
+  const presentationSummary = useMemo(() => {
+    const bugs = scopedTickets.filter(isBug);
+    const withTask = scopedTickets.filter((ticket) => Boolean(ticket.azureWorkItem || ticket.taskNumber));
+    const pending = scopedTickets.filter(isOpen);
+    const taskItems = Array.from(new Map(
+      withTask.map((ticket) => [ticket.azureWorkItem?.id ?? ticket.taskNumber, ticket])
+    ).values());
+
+    return {
+      bugs,
+      withTask,
+      pending,
+      taskItems,
+      taskStatuses: groupChartData(taskItems, (ticket) => taskStatusGroup(ticket), 6),
+      pendingStatuses: groupChartData(pending, (ticket) => ticket.justification?.trim() || ticket.status || "Sem motivo informado", 6),
+      areas: groupChartData(scopedTickets, classifyExecutiveProcess, 8),
+      bugAreas: groupChartData(bugs, classifyExecutiveProcess, 8),
+    };
+  }, [scopedTickets]);
 
   /* =======================================================
      PIZZA 2 - SITUAÇÃO DOS TICKETS
@@ -1117,6 +1178,9 @@ export function Clients() {
   function clearFilters() {
     setSelectedClient("");
     setCategory("");
+    setStatus("");
+    setOwner("");
+    setExecutiveArea("");
   }
 
   async function copyTicketNumber(
@@ -1246,7 +1310,16 @@ export function Clients() {
           gap: 2,
         }}
       >
-        <Box>
+        <Stack direction="row" spacing={2} sx={{ alignItems: "center", minWidth: 0 }}>
+          {selectedClient && (
+            <Avatar
+              variant="rounded"
+              sx={{ width: 72, height: 72, bgcolor: aliareColors.greenDark, color: "white", fontSize: "1.15rem", fontWeight: 900, boxShadow: "0 8px 22px rgba(0,91,73,.18)" }}
+            >
+              {clientInitials(selectedClient)}
+            </Avatar>
+          )}
+        <Box sx={{ minWidth: 0 }}>
           <Stack
             direction="row"
             spacing={1}
@@ -1309,7 +1382,7 @@ export function Clients() {
               },
             }}
           >
-            Clientes
+            {selectedClient || "Clientes"}
           </Typography>
 
           <Typography
@@ -1319,7 +1392,9 @@ export function Clients() {
               mt: 0.25,
             }}
           >
-            Resultados da carteira, qualidade do atendimento e acompanhamento do desenvolvimento
+            {selectedClient
+              ? "Painel executivo do cliente: atendimento, SLA, demanda e desenvolvimento"
+              : "Resultados da carteira, qualidade do atendimento e acompanhamento do desenvolvimento"}
           </Typography>
 
           <Typography
@@ -1338,6 +1413,7 @@ export function Clients() {
             no filtro atual
           </Typography>
         </Box>
+        </Stack>
 
         <PeriodFilter />
       </Box>
@@ -1379,12 +1455,17 @@ export function Clients() {
           }}
         >
           <Stack
-            direction={{
-              xs: "column",
-              md: "row",
-            }}
-            spacing={1.5}
+            spacing={0}
             sx={{
+              width: "100%",
+              display: "grid",
+              gridTemplateColumns: {
+                xs: "minmax(0, 1fr)",
+                md: "repeat(2, minmax(0, 1fr))",
+                lg: "repeat(3, minmax(0, 1fr))",
+                xl: "190px minmax(245px, 1.35fr) repeat(4, minmax(175px, 1fr))",
+              },
+              gap: 1.5,
               alignItems: {
                 xs: "stretch",
                 md: "center",
@@ -1421,10 +1502,7 @@ export function Clients() {
             <FormControl
               size="small"
               sx={{
-                minWidth: {
-                  xs: "100%",
-                  md: 260,
-                },
+                minWidth: 0,
               }}
             >
               <InputLabel>
@@ -1473,10 +1551,7 @@ export function Clients() {
             <FormControl
               size="small"
               sx={{
-                minWidth: {
-                  xs: "100%",
-                  md: 230,
-                },
+                minWidth: 0,
               }}
             >
               <InputLabel>
@@ -1514,8 +1589,32 @@ export function Clients() {
               </Select>
             </FormControl>
 
+            <FormControl size="small" sx={{ minWidth: 0 }}>
+              <InputLabel>Status</InputLabel>
+              <Select value={status} label="Status" onChange={(event) => setStatus(event.target.value)}>
+                <MenuItem value="">Todos os status</MenuItem>
+                {statuses.map((item) => <MenuItem key={item} value={item}>{item}</MenuItem>)}
+              </Select>
+            </FormControl>
+
+            <FormControl size="small" sx={{ minWidth: 0 }}>
+              <InputLabel>Responsável</InputLabel>
+              <Select value={owner} label="Responsável" onChange={(event) => setOwner(event.target.value)}>
+                <MenuItem value="">Todos os responsáveis</MenuItem>
+                {owners.map((item) => <MenuItem key={item} value={item}>{item}</MenuItem>)}
+              </Select>
+            </FormControl>
+
+            <FormControl size="small" sx={{ minWidth: 0 }}>
+              <InputLabel>Frente de atendimento</InputLabel>
+              <Select value={executiveArea} label="Frente de atendimento" onChange={(event) => setExecutiveArea(event.target.value)}>
+                <MenuItem value="">Todas as frentes</MenuItem>
+                {executiveAreas.map((item) => <MenuItem key={item} value={item}>{item}</MenuItem>)}
+              </Select>
+            </FormControl>
+
             {(selectedClient ||
-              category) && (
+              category || status || owner || executiveArea) && (
               <Button
                 size="small"
                 variant="outlined"
@@ -1523,7 +1622,8 @@ export function Clients() {
                   clearFilters
                 }
                 sx={{
-                  flexShrink: 0,
+                  minHeight: 40,
+                  whiteSpace: "nowrap",
                 }}
               >
                 Limpar filtros
@@ -1754,7 +1854,6 @@ export function Clients() {
           <Divider sx={{ my: 1.5 }} />
           <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap", alignItems: "center" }}>
             <Chip size="small" variant="outlined" label={`${portfolioSummary.azurePrioritized} priorizada(s)`} />
-            <Chip size="small" variant="outlined" color={portfolioSummary.azureBlocked ? "error" : "default"} label={`${portfolioSummary.azureBlocked} bloqueada(s)`} />
             <Chip size="small" variant="outlined" label={`${portfolioSummary.azureWithVersion} com versão`} />
             <Box sx={{ flexGrow: 1 }} />
             <Button size="small" variant="outlined" onClick={() => navigate("/correcoes")}>Correções</Button>
@@ -1766,6 +1865,59 @@ export function Clients() {
         </CardContent>
       </Card>
 
+      {/* PAINEL PARA APRESENTAÇÃO AO CLIENTE */}
+      {selectedClient && (
+        <Card ref={presentationRef} elevation={0} sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2.25, mb: 2, overflow: "hidden", bgcolor: "background.default", "&:fullscreen": { position: "fixed", inset: 0, width: "100vw", height: "100vh", maxWidth: "none", overflowY: "auto", borderRadius: 0, m: 0, p: { xs: 0, md: 1.5 }, zIndex: 99999 } }}>
+          <Box sx={{ px: { xs: 2, md: 2.5 }, py: 2, color: "white", background: `linear-gradient(110deg, ${aliareColors.greenDark}, ${aliareColors.green})` }}>
+            <Stack direction={{ xs: "column", md: "row" }} spacing={1.5} sx={{ alignItems: { md: "center" }, justifyContent: "space-between" }}>
+              <Box>
+                <Typography variant="overline" sx={{ opacity: .85, fontWeight: 800 }}>Suporte e Sustentação</Typography>
+                <Typography sx={{ fontSize: { xs: "1.35rem", md: "1.7rem" }, fontWeight: 900, lineHeight: 1.15 }}>{selectedClient}</Typography>
+                <Typography variant="body2" sx={{ opacity: .9, mt: .5 }}>
+                  {executiveArea || "Todas as frentes"} · {effectiveStartDate.toLocaleDateString("pt-BR")} a {effectiveEndDate.toLocaleDateString("pt-BR")}
+                </Typography>
+              </Box>
+              <Button variant="contained" color="inherit" onClick={() => presentationRef.current?.requestFullscreen?.()} sx={{ color: aliareColors.greenDark, fontWeight: 800 }}>
+                Apresentar em tela cheia
+              </Button>
+            </Stack>
+          </Box>
+
+          <CardContent sx={{ p: { xs: 1.5, md: 2 } }}>
+            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2,1fr)", lg: "repeat(5,minmax(0,1fr))" }, gap: 1.25, mb: 2 }}>
+              <PresentationKpi title="Atendimentos" value={scopedTickets.length} detail="no período" color="#075985" onClick={() => showTickets("Atendimentos no foco", scopedTickets)} />
+              <PresentationKpi title="Bugs" value={presentationSummary.bugs.length} detail={`${presentationSummary.bugs.filter((ticket) => ticket.azureWorkItem || ticket.taskNumber).length} com Task`} color="#008A68" onClick={() => showTickets("Bugs identificados", presentationSummary.bugs)} />
+              <PresentationKpi title="Com Task" value={presentationSummary.withTask.length} detail="correção, evolução ou apoio" color="#2676B9" onClick={() => showTickets("Atendimentos com Task", presentationSummary.withTask)} />
+              <PresentationKpi title="Pendências" value={presentationSummary.pending.length} detail="em acompanhamento" color="#B7791F" onClick={() => showTickets("Pendências ativas", presentationSummary.pending)} />
+              <PresentationKpi title="SLA solução" value={formatSlaPercent(portfolioSummary.solutionSla.percent)} detail={`${portfolioSummary.solutionSla.onTime} de ${portfolioSummary.solutionSla.measured} medidos`} color="#159A68" onClick={() => showTickets("SLA solução", scopedTickets.filter((ticket) => Boolean(normalize(ticket.solutionSlaIndicator))))} />
+            </Box>
+
+            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "repeat(3,minmax(0,1fr))" }, gap: 1.5 }}>
+              <ExecutiveBarPanel title="Atendimentos por processo" data={presentationSummary.areas} onClick={(name) => showTickets(`Processo: ${name}`, scopedTickets.filter((ticket) => classifyExecutiveProcess(ticket) === name))} />
+              <ExecutiveDonutPanel title="Status das Tasks" data={presentationSummary.taskStatuses} total={presentationSummary.taskItems.length} />
+              <ExecutiveDonutPanel title="Status das pendências" data={presentationSummary.pendingStatuses} total={presentationSummary.pending.length} />
+              <ExecutiveBarPanel title="Bugs por processo" data={presentationSummary.bugAreas} onClick={(name) => showTickets(`Bugs · ${name}`, presentationSummary.bugs.filter((ticket) => classifyExecutiveProcess(ticket) === name))} />
+
+              <Box sx={{ p: 1.75, border: "1px solid", borderColor: "divider", borderRadius: 2 }}>
+                <Typography sx={{ fontWeight: 850 }}>Principais insights</Typography>
+                <Stack spacing={1} sx={{ mt: 1.25 }}>
+                  {executiveInsights.slice(0, 4).map((item) => <Typography key={item} variant="body2" sx={{ lineHeight: 1.45 }}>• {item}</Typography>)}
+                </Stack>
+              </Box>
+
+              <Box sx={{ p: 1.75, borderRadius: 2, bgcolor: presentationSummary.pending.length ? "rgba(245,158,11,.10)" : "rgba(22,163,74,.08)", border: "1px solid", borderColor: presentationSummary.pending.length ? "rgba(245,158,11,.28)" : "rgba(22,163,74,.22)" }}>
+                <Typography sx={{ fontWeight: 850 }}>Pontos de atenção</Typography>
+                <Typography variant="body2" sx={{ mt: 1, lineHeight: 1.5 }}>
+                  {presentationSummary.pending.length
+                    ? `${presentationSummary.pending.length} pendência(s) permanecem ativas. ${presentationSummary.bugs.filter(isOpen).length} delas são bugs e ${presentationSummary.pending.filter((ticket) => normalize(ticket.justification).includes("cliente")).length} aguardam ação ou retorno do cliente.`
+                    : "Não há pendências ativas no recorte selecionado."}
+                </Typography>
+              </Box>
+            </Box>
+          </CardContent>
+        </Card>
+      )}
+
       {/* =================================================
           GRÁFICOS
       ================================================= */}
@@ -1776,7 +1928,7 @@ export function Clients() {
 
           gridTemplateColumns: {
             xs: "1fr",
-            lg: "1fr 1fr",
+            lg: "repeat(3, minmax(0, 1fr))",
           },
 
           gap: 2,
@@ -1946,6 +2098,32 @@ export function Clients() {
           ) : (
             <EmptyChart />
           )}
+        </ChartCard>
+
+        <ChartCard
+          title="Atendimentos por Categoria"
+          subtitle="Composição dos assuntos no recorte selecionado"
+        >
+          {categoryPieData.length ? (
+            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "minmax(170px,.85fr) minmax(0,1.15fr)" }, gap: 1, alignItems: "center" }}>
+              <Box sx={{ height: 235, minWidth: 0 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={categoryPieData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={76} innerRadius={44} paddingAngle={2} cursor="pointer"
+                      onClick={(data) => {
+                        const name = String((data as { payload?: { name?: unknown } }).payload?.name ?? "");
+                        if (name && name !== "Outros") showTickets(`Categoria: ${name}`, scopedTickets.filter((ticket) => (ticket.category?.trim() || "Sem categoria") === name));
+                      }}>
+                      {categoryPieData.map((item, index) => <Cell key={`${item.name}-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />)}
+                    </Pie>
+                    <Tooltip content={<CompactPieTooltip valueLabel="ticket(s)" />} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </Box>
+              <CompactPieLegend data={categoryPieData} total={scopedTickets.length}
+                onItemClick={(name) => name !== "Outros" && showTickets(`Categoria: ${name}`, scopedTickets.filter((ticket) => (ticket.category?.trim() || "Sem categoria") === name))} />
+            </Box>
+          ) : <EmptyChart />}
         </ChartCard>
 
         {/* SITUAÇÃO DOS TICKETS */}
@@ -2135,6 +2313,39 @@ export function Clients() {
         </ChartCard>
       </Box>
 
+      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "1.35fr .65fr" }, gap: 2, mb: 2 }}>
+        <ChartCard title="Volume por Responsável" subtitle="Distribuição da demanda entre os analistas no recorte">
+          {ownerChartData.length ? (
+            <Box sx={{ height: 290, mt: 1 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={ownerChartData} layout="vertical" margin={{ top: 8, right: 24, bottom: 8, left: 18 }}>
+                  <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                  <XAxis type="number" allowDecimals={false} />
+                  <YAxis type="category" dataKey="name" width={135} tick={{ fontSize: 11 }} tickFormatter={(value) => abbreviate(String(value), 20)} />
+                  <Tooltip />
+                  <Bar dataKey="value" name="Tickets" fill={aliareColors.green} radius={[0, 6, 6, 0]} cursor="pointer"
+                    onClick={(data) => {
+                      const name = String((data as { name?: unknown }).name ?? "");
+                      if (name && name !== "Outros") showTickets(`Responsável: ${name}`, scopedTickets.filter((ticket) => (ticket.owner?.trim() || "Sem responsável") === name));
+                    }} />
+                </BarChart>
+              </ResponsiveContainer>
+            </Box>
+          ) : <EmptyChart />}
+        </ChartCard>
+
+        <ChartCard title="Insights do Período" subtitle="Leituras automáticas para apoiar a apresentação executiva">
+          <Stack spacing={1.25} sx={{ mt: 2 }}>
+            {executiveInsights.map((insight, index) => (
+              <Box key={insight} sx={{ display: "flex", gap: 1.2, p: 1.2, borderRadius: 1.5, bgcolor: index === 2 && portfolioSummary.critical ? "rgba(211,47,47,.06)" : "rgba(0,122,96,.055)" }}>
+                <Box sx={{ width: 24, height: 24, flexShrink: 0, borderRadius: "50%", display: "grid", placeItems: "center", bgcolor: index === 2 && portfolioSummary.critical ? "error.main" : aliareColors.green, color: "white", fontSize: 12, fontWeight: 900 }}>{index + 1}</Box>
+                <Typography variant="body2" sx={{ lineHeight: 1.5 }}>{insight}</Typography>
+              </Box>
+            ))}
+          </Stack>
+        </ChartCard>
+      </Box>
+
       {/* =================================================
           SEM DADOS
       ================================================= */}
@@ -2315,9 +2526,9 @@ export function Clients() {
                   </strong>
                 </TableCell>
 
-                <TableCell align="right">
+                <TableCell align="right" sx={{ minWidth: 145, whiteSpace: "nowrap" }}>
                   <strong>
-                    Tempo médio
+                    Tempo médio de solução
                   </strong>
                 </TableCell>
               </TableRow>
@@ -2547,9 +2758,9 @@ export function Clients() {
                         />
                       </TableCell>
 
-                      <TableCell align="right">
+                      <TableCell align="right" sx={{ minWidth: 145, whiteSpace: "nowrap" }} title={`${client.measuredResolutionTimes} ticket(s) com tempo de solução mensurável`}>
                         {formatMinutes(
-                          client.averageLifetimeMinutes
+                          client.averageResolutionMinutes
                         )}
                       </TableCell>
                     </TableRow>
@@ -3661,7 +3872,7 @@ function StandardMetricCard({
         cursor: onClick ? "pointer" : "default",
         transition: "transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease",
         "&::before": {
-          content: '\"\"', position: "absolute", top: 0, left: 0,
+          content: '""', position: "absolute", top: 0, left: 0,
           width: "100%", height: 3, backgroundColor: accentColor,
         },
         ...(onClick && {
@@ -3752,6 +3963,46 @@ function MetricInfoLine({ label, value }: { label: string; value: string }) {
     <Box>
       <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>{label}</Typography>
       <Typography variant="body2" sx={{ mt: 0.15, lineHeight: 1.5 }}>{value}</Typography>
+    </Box>
+  );
+}
+
+function PresentationKpi({ title, value, detail, color, onClick }: {
+  title: string; value: ReactNode; detail: string; color: string; onClick: () => void;
+}) {
+  return (
+    <Card elevation={0} role="button" tabIndex={0} onClick={onClick}
+      onKeyDown={(event) => (event.key === "Enter" || event.key === " ") && onClick()}
+      sx={{ border: "1px solid", borderColor: "divider", borderTop: `4px solid ${color}`, cursor: "pointer", height: "100%", "&:hover": { boxShadow: "0 8px 22px rgba(16,24,40,.09)", transform: "translateY(-2px)" }, transition: ".15s" }}>
+      <CardContent sx={{ p: 1.5, "&:last-child": { pb: 1.5 } }}>
+        <Typography variant="body2" sx={{ fontWeight: 800 }}>{title}</Typography>
+        <Typography sx={{ mt: .4, fontSize: "1.8rem", lineHeight: 1, fontWeight: 900, color }}>{value}</Typography>
+        <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: .7 }}>{detail}</Typography>
+      </CardContent>
+    </Card>
+  );
+}
+
+function ExecutiveDonutPanel({ title, data, total }: { title: string; data: PieDataItem[]; total: number }) {
+  return (
+    <Box sx={{ p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: 2, minWidth: 0 }}>
+      <Typography sx={{ fontWeight: 850 }}>{title}</Typography>
+      {data.length ? <>
+        <Box sx={{ height: 175, position: "relative" }}>
+          <ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={data} dataKey="value" nameKey="name" innerRadius={42} outerRadius={67} paddingAngle={2}>{data.map((item, index) => <Cell key={item.name} fill={PIE_COLORS[index % PIE_COLORS.length]} />)}</Pie><Tooltip content={<CompactPieTooltip valueLabel="item(ns)" />} /></PieChart></ResponsiveContainer>
+          <Box sx={{ position: "absolute", inset: 0, display: "grid", placeContent: "center", textAlign: "center", pointerEvents: "none" }}><Typography sx={{ fontWeight: 900, fontSize: "1.25rem" }}>{total}</Typography><Typography variant="caption">total</Typography></Box>
+        </Box>
+        <CompactPieLegend data={data} total={total} />
+      </> : <Typography variant="body2" color="text.secondary" sx={{ py: 8, textAlign: "center" }}>Sem dados no recorte.</Typography>}
+    </Box>
+  );
+}
+
+function ExecutiveBarPanel({ title, data, onClick }: { title: string; data: PieDataItem[]; onClick: (name: string) => void }) {
+  return (
+    <Box sx={{ p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: 2, minWidth: 0 }}>
+      <Typography sx={{ fontWeight: 850 }}>{title}</Typography>
+      {data.length ? <Box sx={{ height: 255, mt: 1 }}><ResponsiveContainer width="100%" height="100%"><BarChart data={data} layout="vertical" margin={{ left: 8, right: 18 }}><CartesianGrid strokeDasharray="3 3" horizontal={false} /><XAxis type="number" allowDecimals={false} /><YAxis dataKey="name" type="category" width={115} tick={{ fontSize: 10 }} tickFormatter={(value) => abbreviate(String(value), 17)} /><Tooltip /><Bar dataKey="value" name="Tickets" fill={aliareColors.green} radius={[0, 5, 5, 0]} cursor="pointer" onClick={(data) => { const name = String((data as { name?: unknown }).name ?? ""); if (name && name !== "Outros") onClick(name); }} /></BarChart></ResponsiveContainer></Box> : <Typography variant="body2" color="text.secondary" sx={{ py: 8, textAlign: "center" }}>Sem dados no recorte.</Typography>}
     </Box>
   );
 }
@@ -3986,18 +4237,6 @@ function TicketField({
    TICKET ABERTO
 ========================================================= */
 
-function calculateOfficialSla(tickets: Ticket[], type: "response" | "solution") {
-  let measured = 0; let onTime = 0;
-  tickets.forEach((ticket) => {
-    const raw = type === "response" ? ticket.responseSlaIndicator : ticket.solutionSlaIndicator;
-    const value = normalize(raw);
-    if (!value) return;
-    if (value.includes("no prazo") || value.includes("dentro do prazo") || value.includes("cumprido") || value.includes("atingido")) { measured += 1; onTime += 1; return; }
-    if (value.includes("fora do prazo") || value.includes("vencido") || value.includes("nao cumprido") || value.includes("nao atingido")) { measured += 1; }
-  });
-  return { measured, onTime, percent: measured ? Math.round((onTime / measured) * 1000) / 10 : null };
-}
-
 function formatSlaPercent(value: number | null) {
   return value === null ? "Sem medição" : `${value.toFixed(1)}%`;
 }
@@ -4078,6 +4317,109 @@ function endOfDay(
 /* =========================================================
    TEMPO
 ========================================================= */
+
+function ticketResolutionMinutes(ticket: Ticket): number | null {
+  if (typeof ticket.lifetimeMinutes === "number" && ticket.lifetimeMinutes > 0) {
+    return ticket.lifetimeMinutes;
+  }
+
+  const endValue = ticket.closedDate || ticket.resolvedDate;
+  if (!endValue) return null;
+
+  const createdAt = new Date(ticket.createdDate).getTime();
+  const endedAt = new Date(endValue).getTime();
+  if (!Number.isFinite(createdAt) || !Number.isFinite(endedAt) || endedAt <= createdAt) return null;
+
+  const elapsed = Math.round((endedAt - createdAt) / 60000);
+  const stopped = Math.max(ticket.stoppedMinutes ?? 0, 0);
+  return Math.max(elapsed - stopped, 1);
+}
+
+function isBug(ticket: Ticket) {
+  const category = normalize(ticket.category);
+  const type = normalize(ticket.azureWorkItem?.workItemType);
+  return category === "bug" || category.includes("erro de sistema") || type.includes("correcao");
+}
+
+function taskStatusGroup(ticket: Ticket) {
+  const value = normalize(ticket.azureWorkItem?.state || ticket.taskStatus);
+  if (!value) return "Sem status";
+  if (["concluido", "closed", "done", "resolved"].some((item) => value.includes(item))) return "Concluída";
+  if (["desenvolvimento", "development", "doing", "andamento"].some((item) => value.includes(item))) return "Em desenvolvimento";
+  if (["analise", "analysis", "new", "novo", "qualificacao"].some((item) => value.includes(item))) return "Em análise";
+  if (["cancelado", "canceled", "cancelled"].some((item) => value.includes(item))) return "Cancelada";
+  return ticket.azureWorkItem?.state || ticket.taskStatus || "Outro";
+}
+
+function classifyExecutiveArea(ticket: Ticket) {
+  const text = executiveClassificationText(ticket);
+  const matches = (terms: string[]) => terms.some((term) => text.includes(term));
+
+  if (matches(["insumo", "defensivo", "agrotoxico", "fertilizante", "receituario", "agriq", "sisdev", "indea"])) return "Insumos";
+  if (matches(["legislacao", "legal", "tribut", "ibs", "cbs", "sped", "efd", "obrigacao fiscal"])) return "Legislação";
+  if (matches(["vertical", "sementes", "beneficiamento de sementes", "armazenagem", "armazem"])) return "Verticais";
+  if (matches(["financeiro", "titulo", "boleto", "bordero", "bancario", "contas a pagar", "contas a receber", "acerto", "pedido de compra", "cotacao", "solicitacao de compra", "ordem de compra", "compras", "faturamento de entrada", "importacao nf", "importador de nota", "nota de entrada", "nfe de terceiro", "contrato", "fixacao", "graos", "ato cooperado", "saldo agricola", "estoque", "romaneio", "pesagem", "lote", "classificacao"])) return "Backoffice";
+  return "Outras frentes";
+}
+
+function classifyExecutiveProcess(ticket: Ticket) {
+  const area = classifyExecutiveArea(ticket);
+  const text = executiveClassificationText(ticket);
+  const matches = (terms: string[]) => terms.some((term) => text.includes(term));
+
+  if (area === "Insumos") return "Insumos";
+  if (area === "Legislação") return "Legislação";
+  if (area === "Verticais" && matches(["semente", "beneficiamento"])) return "Vertical - Sementes";
+  if (area === "Verticais" && matches(["armazenagem", "armazem", "silo"])) return "Vertical - Armazém";
+  if (area === "Verticais" && matches(["romaneio", "pesagem", "classificacao"])) return "Vertical - Romaneios";
+  if (area === "Verticais" && matches(["contrato", "fixacao", "graos"])) return "Vertical - Contratos";
+  if (matches(["financeiro", "titulo", "boleto", "bordero", "bancario", "contas a pagar", "contas a receber", "acerto"])) return "Financeiro";
+  if (matches(["pedido de compra", "cotacao", "solicitacao de compra", "ordem de compra", "compras"])) return "Compras";
+  if (matches(["faturamento de entrada", "importacao nf", "importador de nota", "nota de entrada", "nfe de terceiro"])) return "Faturamento de Entrada";
+  if (matches(["contrato", "fixacao", "graos", "ato cooperado", "saldo agricola"])) return "Contratos";
+  if (matches(["estoque", "lote"])) return "Estoque";
+  if (matches(["fiscal", "nf-e", "nfe", "mdf-e", "mdfe", "ct-e", "cte", "sefaz", "tribut"] )) return "Fiscal/Faturamento";
+  return "Outros temas";
+}
+
+function executiveClassificationText(ticket: Ticket) {
+  return normalize([
+    ticket.subject,
+    ticket.category,
+    ticket.service,
+    ticket.department,
+    ticket.team,
+    ticket.cause,
+  ].filter(Boolean).join(" "));
+}
+
+function groupChartData(
+  tickets: Ticket[],
+  getName: (ticket: Ticket) => string,
+  limit: number,
+): PieDataItem[] {
+  const counts = new Map<string, number>();
+  tickets.forEach((ticket) => {
+    const name = getName(ticket);
+    counts.set(name, (counts.get(name) ?? 0) + 1);
+  });
+  const ordered = Array.from(counts, ([name, value]) => ({ name, value }))
+    .sort((a, b) => b.value - a.value);
+  const visible = ordered.slice(0, limit);
+  const others = ordered.slice(limit).reduce((sum, item) => sum + item.value, 0);
+  if (others) visible.push({ name: "Outros", value: others });
+  return visible;
+}
+
+function clientInitials(client: string) {
+  const ignored = new Set(["de", "da", "do", "das", "dos", "e"]);
+  const words = client.split(/\s+/).filter((word) => word && !ignored.has(normalize(word)));
+  return words.slice(0, 3).map((word) => word[0]).join("").toUpperCase();
+}
+
+function abbreviate(value: string, length: number) {
+  return value.length > length ? `${value.slice(0, length - 1)}…` : value;
+}
 
 function formatMinutes(
   minutes:

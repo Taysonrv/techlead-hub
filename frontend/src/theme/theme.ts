@@ -148,8 +148,10 @@ export const theme =
       },
 
       h3: {
-        fontWeight:
-          800,
+        fontWeight: 800,
+        fontSize: "2.1rem",
+        lineHeight: 1.12,
+        letterSpacing: "-0.025em",
       },
 
       h4: {
@@ -210,6 +212,27 @@ export const theme =
 
             boxShadow:
               "0 1px 2px rgba(16, 24, 40, 0.035)",
+
+            borderRadius: 18,
+
+            backgroundColor: aliareColors.paper,
+          },
+        },
+      },
+
+      MuiDrawer: {
+        styleOverrides: {
+          paper: {
+            "&.MuiDrawer-paperAnchorRight": {
+              width: "min(620px, 100vw) !important",
+              maxWidth: "100vw",
+              boxSizing: "border-box",
+            },
+            "&.MuiDrawer-paperAnchorRight > .MuiBox-root:first-of-type": {
+              width: "100% !important",
+              maxWidth: "100%",
+              boxSizing: "border-box",
+            },
           },
         },
       },

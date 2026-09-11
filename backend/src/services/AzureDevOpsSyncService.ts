@@ -119,6 +119,15 @@ type ExistingWorkItem = {
   id: number;
   revision: number | null;
   azureChangedAt: Date | null;
+  state: string;
+  assignedToName: string | null;
+  prioritized: boolean | null;
+  blockedProcess: boolean | null;
+  deliveredVersion: string | null;
+  movideskTicket: number | null;
+  client: string | null;
+  participantClients: string | null;
+  participantMovideskTickets: string | null;
 };
 
 type BatchSyncOptions = {
@@ -852,6 +861,15 @@ export class AzureDevOpsSyncService {
                     true,
                   azureChangedAt:
                     true,
+                  state: true,
+                  assignedToName: true,
+                  prioritized: true,
+                  blockedProcess: true,
+                  deliveredVersion: true,
+                  movideskTicket: true,
+                  client: true,
+                  participantClients: true,
+                  participantMovideskTickets: true,
                 },
               });
         } catch (error) {
@@ -997,6 +1015,15 @@ export class AzureDevOpsSyncService {
               true,
             azureChangedAt:
               true,
+            state: true,
+            assignedToName: true,
+            prioritized: true,
+            blockedProcess: true,
+            deliveredVersion: true,
+            movideskTicket: true,
+            client: true,
+            participantClients: true,
+            participantMovideskTickets: true,
           },
         });
 
@@ -1038,6 +1065,8 @@ export class AzureDevOpsSyncService {
             ),
         });
 
+      await this.recordHistory(existing, mapped);
+
       return "updated";
     }
 
@@ -1048,6 +1077,49 @@ export class AzureDevOpsSyncService {
       });
 
     return "inserted";
+  }
+
+  private async recordHistory(
+    existing: ExistingWorkItem,
+    mapped: Prisma.AzureWorkItemUncheckedCreateInput,
+  ) {
+    const tracked: Array<[string, unknown, unknown]> = [
+      ["state", existing.state, mapped.state],
+      ["assignedToName", existing.assignedToName, mapped.assignedToName],
+      ["prioritized", existing.prioritized, mapped.prioritized],
+      ["blockedProcess", existing.blockedProcess, mapped.blockedProcess],
+      ["deliveredVersion", existing.deliveredVersion, mapped.deliveredVersion],
+      ["movideskTicket", existing.movideskTicket, mapped.movideskTicket],
+      ["client", existing.client, mapped.client],
+      ["participantClients", existing.participantClients, mapped.participantClients],
+      ["participantMovideskTickets", existing.participantMovideskTickets, mapped.participantMovideskTickets],
+    ];
+
+    const changes = tracked.filter(([, oldValue, newValue]) =>
+      this.historyValue(oldValue) !== this.historyValue(newValue),
+    );
+
+    const syncRunId = typeof mapped.syncRunId === "number"
+      ? mapped.syncRunId
+      : null;
+
+    await Promise.all(changes.map(([field, oldValue, newValue]) =>
+      prisma.$executeRaw`
+        INSERT INTO "AzureWorkItemHistory"
+          ("workItemId", "syncRunId", "field", "oldValue", "newValue", "changedAt")
+        VALUES
+          (${existing.id}, ${syncRunId}, ${field},
+           ${this.historyValue(oldValue)}, ${this.historyValue(newValue)},
+           CURRENT_TIMESTAMP)
+      `,
+    ));
+  }
+
+  private historyValue(value: unknown): string | null {
+    if (value === null || value === undefined) return null;
+    if (value instanceof Date) return value.toISOString();
+    if (typeof value === "object") return JSON.stringify(value);
+    return String(value);
   }
 
   /* =======================================================
@@ -1399,6 +1471,8 @@ export class AzureDevOpsSyncService {
 
       client:
         mapped.client,
+      participantClients:
+        mapped.participantClients,
       criticality:
         mapped.criticality,
       origin:
@@ -1413,6 +1487,8 @@ export class AzureDevOpsSyncService {
 
       movideskTicket:
         mapped.movideskTicket,
+      participantMovideskTickets:
+        mapped.participantMovideskTickets,
       deliveredVersion:
         mapped.deliveredVersion,
 

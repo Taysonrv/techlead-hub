@@ -46,6 +46,7 @@ import {
 import {
   aliareColors,
 } from "../theme/theme";
+import { PageHeader } from "../components/PageHeader";
 
 import type {
   UserApprovalStatus,
@@ -96,7 +97,8 @@ type ActionType =
   | "APPROVE"
   | "REJECT"
   | "ACTIVATE"
-  | "DEACTIVATE";
+  | "DEACTIVATE"
+  | "SET_ADMIN";
 
 type ConfirmationState = {
   type: ActionType;
@@ -285,6 +287,11 @@ export function Users() {
           endpoint =
             `/users/${user.id}/deactivate`;
           break;
+
+        case "SET_ADMIN":
+          endpoint =
+            `/users/${user.id}/role`;
+          break;
       }
 
       const response =
@@ -292,7 +299,12 @@ export function Users() {
           message: string;
           user: ManagedUser;
         }>(
-          endpoint
+          endpoint,
+          type === "SET_ADMIN"
+            ? {
+                role: "ADMIN",
+              }
+            : undefined
         );
 
       setUsers(
@@ -338,48 +350,7 @@ export function Users() {
     >
       {/* HEADER */}
 
-      <Stack
-        direction={{
-          xs: "column",
-          sm: "row",
-        }}
-        spacing={2}
-        sx={{
-          justifyContent:
-            "space-between",
-
-          alignItems: {
-            xs: "stretch",
-            sm: "center",
-          },
-        }}
-      >
-        <Box>
-          <Typography
-            variant="h4"
-            sx={{
-              fontWeight:
-                800,
-
-              letterSpacing:
-                "-0.03em",
-            }}
-          >
-            Usuários
-          </Typography>
-
-          <Typography
-            variant="body2"
-            color="text.secondary"
-            sx={{
-              mt: 0.5,
-            }}
-          >
-            Aprovação e controle de acesso ao TechLead Hub.
-          </Typography>
-        </Box>
-
-        <Button
+      <PageHeader eyebrow="Sistema" title="Usuários" description="Aprovação e controle de acesso ao TechLead Hub." action={<Button
           variant="outlined"
           startIcon={
             <RefreshOutlined />
@@ -396,10 +367,7 @@ export function Users() {
               sm: "center",
             },
           }}
-        >
-          Atualizar
-        </Button>
-      </Stack>
+        >Atualizar</Button>} />
 
       {/* ALERTAS */}
 
@@ -990,23 +958,47 @@ function UserActions({
   }
 
   return user.active ? (
-    <Button
-      size="small"
-      color="error"
-      startIcon={
-        <PersonOffOutlined />
-      }
-      disabled={
-        loading
-      }
-      onClick={() =>
-        onAction(
-          "DEACTIVATE"
-        )
-      }
+    <Stack
+      direction="row"
+      spacing={1}
+      sx={{
+        justifyContent:
+          "flex-end",
+      }}
     >
-      Desativar
-    </Button>
+      <Button
+        size="small"
+        variant="outlined"
+        disabled={
+          loading
+        }
+        onClick={() =>
+          onAction(
+            "SET_ADMIN"
+          )
+        }
+      >
+        Tornar administrador
+      </Button>
+
+      <Button
+        size="small"
+        color="error"
+        startIcon={
+          <PersonOffOutlined />
+        }
+        disabled={
+          loading
+        }
+        onClick={() =>
+          onAction(
+            "DEACTIVATE"
+          )
+        }
+      >
+        Desativar
+      </Button>
+    </Stack>
   ) : (
     <Button
       size="small"
@@ -1134,6 +1126,9 @@ function getActionTitle(
 
     case "DEACTIVATE":
       return "Desativar usuário";
+
+    case "SET_ADMIN":
+      return "Conceder acesso administrativo";
 
     default:
       return "Confirmar operação";

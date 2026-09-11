@@ -18,6 +18,7 @@ import {
 import {
   Sidebar,
 } from "./components/Sidebar";
+import { GlobalTopBar } from "./components/GlobalTopBar";
 
 import {
   ProtectedRoute,
@@ -85,6 +86,23 @@ import {
 } from "./pages/Versions";
 
 import {
+  Settings,
+} from "./pages/Settings";
+
+import {
+  Reports,
+} from "./pages/Reports";
+
+import {
+  MyOperation,
+} from "./pages/MyOperation";
+
+import {
+  DataQuality,
+} from "./pages/DataQuality";
+import { Knowledge } from "./pages/Knowledge";
+
+import {
   aliareColors,
 } from "./theme/theme";
 
@@ -136,6 +154,7 @@ function AuthenticatedLayout({
               },
             }}
           >
+            <GlobalTopBar />
             <Box
               sx={{
                 width: "100%",
@@ -307,6 +326,17 @@ function App() {
           />
 
           <Route
+            path="/apoios"
+            element={
+              <AuthenticatedLayout>
+                <AzureWorkItems
+                  type="APOIO"
+                />
+              </AuthenticatedLayout>
+            }
+          />
+
+          <Route
             path="/versoes"
             element={
               <AuthenticatedLayout>
@@ -316,12 +346,36 @@ function App() {
           />
 
           <Route
+            path="/conhecimento"
+            element={<AuthenticatedLayout><Knowledge /></AuthenticatedLayout>}
+          />
+
+          <Route
             path="/importar"
             element={
               <AuthenticatedLayout>
                 <Import />
               </AuthenticatedLayout>
             }
+          />
+
+          <Route
+            path="/relatorios"
+            element={
+              <AuthenticatedLayout>
+                <Reports />
+              </AuthenticatedLayout>
+            }
+          />
+
+          <Route
+            path="/minha-operacao"
+            element={<AuthenticatedLayout><MyOperation /></AuthenticatedLayout>}
+          />
+
+          <Route
+            path="/qualidade-dados"
+            element={<AuthenticatedLayout><DataQuality /></AuthenticatedLayout>}
           />
 
           {/* =================================================
@@ -334,6 +388,17 @@ function App() {
               <AdminOnly>
                 <AuthenticatedLayout>
                   <Users />
+                </AuthenticatedLayout>
+              </AdminOnly>
+            }
+          />
+
+          <Route
+            path="/configuracoes"
+            element={
+              <AdminOnly>
+                <AuthenticatedLayout>
+                  <Settings />
                 </AuthenticatedLayout>
               </AdminOnly>
             }
