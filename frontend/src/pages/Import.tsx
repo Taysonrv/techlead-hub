@@ -37,6 +37,7 @@ import {
 import {
   SyncHistory,
 } from "../components/SyncHistory";
+import { PageHeader } from "../components/PageHeader";
 
 /* =========================================================
    TIPOS - MOVIDESK
@@ -511,41 +512,7 @@ export function Import() {
           CABEÇALHO
       ===================================================== */}
 
-      <Box
-        sx={{
-          mb:
-            2.5,
-        }}
-      >
-        <Typography
-          sx={{
-            fontWeight:
-              800,
-            fontSize: {
-              xs:
-                "1.7rem",
-              md:
-                "1.9rem",
-              xl:
-                "2.1rem",
-            },
-          }}
-        >
-          Importar e Sincronizar Dados
-        </Typography>
-
-        <Typography
-          variant="body2"
-          color="text.secondary"
-          sx={{
-            mt:
-              0.25,
-          }}
-        >
-          Importe os dados do Movidesk e acompanhe a
-          sincronização automática do Azure DevOps.
-        </Typography>
-      </Box>
+      <PageHeader eyebrow="Gestão" title="Importar e Sincronizar Dados" description="Importe os dados do Movidesk e acompanhe a sincronização automática do Azure DevOps." />
 
       {/* =====================================================
           HISTÓRICO CONSOLIDADO
