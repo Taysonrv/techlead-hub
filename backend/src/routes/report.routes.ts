@@ -13,6 +13,11 @@ const controller =
   new ReportController();
 
 reportRoutes.get(
+  "/filters",
+  controller.filters,
+);
+
+reportRoutes.get(
   "/:scope.xlsx",
   controller.excelFile,
 );
