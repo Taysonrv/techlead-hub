@@ -55,6 +55,10 @@ type ConfigurationInput = {
   smtpUser?: string;
   smtpPassword?: string;
   smtpFrom?: string;
+  tenantId?: string;
+  clientId?: string;
+  sharePointSiteUrl?: string;
+  bpmnSiteUrl?: string;
 };
 
 /* =========================================================

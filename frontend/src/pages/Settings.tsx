@@ -32,6 +32,11 @@ type ConfigurationState = {
   project: string;
   wiki: string;
   patConfigured: boolean;
+  tenantId: string;
+  clientId: string;
+  sharePointSiteUrl: string;
+  bpmnSiteUrl: string;
+  microsoftConfigured: boolean;
 };
 
 type ConfigurationForm = {
@@ -40,6 +45,10 @@ type ConfigurationForm = {
   project: string;
   wiki: string;
   pat: string;
+  tenantId: string;
+  clientId: string;
+  sharePointSiteUrl: string;
+  bpmnSiteUrl: string;
 };
 
 const EMPTY_FORM: ConfigurationForm = {
@@ -48,6 +57,10 @@ const EMPTY_FORM: ConfigurationForm = {
   project: "",
   wiki: "",
   pat: "",
+  tenantId: "",
+  clientId: "",
+  sharePointSiteUrl: "https://siagri365.sharepoint.com/sites/cooperativas-agroindustrias-simer",
+  bpmnSiteUrl: "https://siagri365.sharepoint.com/sites/FluxoBPMNSimer",
 };
 
 export function Settings() {
@@ -88,6 +101,10 @@ export function Settings() {
         organization: current.organization ?? "",
         project: current.project ?? "",
         wiki: current.wiki ?? "",
+        tenantId: current.tenantId ?? "",
+        clientId: current.clientId ?? "",
+        sharePointSiteUrl: current.sharePointSiteUrl ?? "",
+        bpmnSiteUrl: current.bpmnSiteUrl ?? "",
       }));
     } catch (loadError) {
       setError(
@@ -128,7 +145,14 @@ export function Settings() {
         return;
       }
 
-      setForm(imported);
+      setForm({
+        ...EMPTY_FORM,
+        ...imported,
+        tenantId: imported.tenantId ?? "",
+        clientId: imported.clientId ?? "",
+        sharePointSiteUrl: imported.sharePointSiteUrl ?? EMPTY_FORM.sharePointSiteUrl,
+        bpmnSiteUrl: imported.bpmnSiteUrl ?? EMPTY_FORM.bpmnSiteUrl,
+      });
       setSuccess(
         "Arquivo carregado. Revise os dados e clique em Salvar configurações.",
       );
@@ -261,6 +285,26 @@ export function Settings() {
               autoComplete="new-password"
               helperText="A conexão atual não é exibida por segurança."
             />
+          </CardContent>
+        </Card>
+
+        <Card elevation={0} sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2.5 }}>
+          <CardContent sx={{ p: { xs: 2, md: 2.5 } }}>
+            <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5} sx={{ alignItems: { sm: "center" }, justifyContent: "space-between" }}>
+              <Box>
+                <Typography sx={{ fontWeight: 800 }}>Microsoft 365, SharePoint e BPMN</Typography>
+                <Typography variant="body2" color="text.secondary">Credenciais públicas do aplicativo corporativo. A senha do usuário nunca é armazenada.</Typography>
+              </Box>
+              <Chip icon={configuration?.microsoftConfigured ? <CloudDoneOutlined /> : <CloudOffOutlined />} label={configuration?.microsoftConfigured ? "Pronto para conectar" : "Aguardando Tenant e Client ID"} color={configuration?.microsoftConfigured ? "success" : "default"} variant="outlined" />
+            </Stack>
+            <Divider sx={{ my: 2 }} />
+            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(2, minmax(0, 1fr))" }, gap: 2 }}>
+              <TextField label="Tenant ID" value={form.tenantId} onChange={(event) => updateField("tenantId", event.target.value)} helperText="Diretório Microsoft Entra da Aliare." />
+              <TextField label="Client ID" value={form.clientId} onChange={(event) => updateField("clientId", event.target.value)} helperText="Aplicativo desktop registrado pelo time de TI." />
+              <TextField label="Site SharePoint do time" value={form.sharePointSiteUrl} onChange={(event) => updateField("sharePointSiteUrl", event.target.value)} />
+              <TextField label="Site dos fluxos BPMN" value={form.bpmnSiteUrl} onChange={(event) => updateField("bpmnSiteUrl", event.target.value)} />
+            </Box>
+            <Alert severity="info" sx={{ mt: 2 }}>Depois de salvar e reiniciar, conecte sua conta Microsoft na Base de Conhecimento. Os resultados respeitarão as permissões do usuário autenticado.</Alert>
           </CardContent>
         </Card>
 

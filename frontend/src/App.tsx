@@ -100,6 +100,7 @@ import {
 import {
   DataQuality,
 } from "./pages/DataQuality";
+import { Knowledge } from "./pages/Knowledge";
 
 import {
   aliareColors,
@@ -342,6 +343,11 @@ function App() {
                 <Versions />
               </AuthenticatedLayout>
             }
+          />
+
+          <Route
+            path="/conhecimento"
+            element={<AuthenticatedLayout><Knowledge /></AuthenticatedLayout>}
           />
 
           <Route

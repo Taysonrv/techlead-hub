@@ -32,6 +32,7 @@ import {
   FactCheckOutlined,
   LogoutOutlined,
   ManageAccountsOutlined,
+  MenuBookOutlined,
   PersonOutlined,
   SettingsOutlined,
   SupportAgentOutlined,
@@ -371,6 +372,11 @@ export function Sidebar() {
           [];
 
         items.push(
+          {
+            label: "Base de Conhecimento",
+            path: "/conhecimento",
+            icon: <MenuBookOutlined fontSize="small" />,
+          },
           {
             label:
               "Dados e Sincronizações",
@@ -1438,7 +1444,7 @@ function MenuItem({
 
 function sectionForPath(path: string): "operation" | "development" | "management" {
   if (["/correcoes", "/evolucoes", "/apoios", "/versoes"].some((item) => path.startsWith(item))) return "development";
-  if (["/importar", "/relatorios", "/qualidade-dados"].some((item) => path.startsWith(item))) return "management";
+  if (["/importar", "/relatorios", "/qualidade-dados", "/conhecimento"].some((item) => path.startsWith(item))) return "management";
   return "operation";
 }
 

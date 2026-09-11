@@ -504,6 +504,22 @@ export class AzureDevOpsService {
     }
   }
 
+  public async listWikis() {
+    this.ensureConfigured();
+    try {
+      const response = await this.client.get("/_apis/wiki/wikis", { params: { "api-version": "7.1" } });
+      return (response.data?.value ?? []).map((wiki: Record<string, unknown>) => ({
+        id: wiki.id,
+        name: wiki.name,
+        type: wiki.type,
+        mappedPath: wiki.mappedPath,
+        remoteUrl: wiki.remoteUrl,
+      }));
+    } catch (error) {
+      throw this.mapAxiosError(error, "Não foi possível listar as Wikis disponíveis no projeto.");
+    }
+  }
+
   public async searchWikiPages(
     query: string,
     limit = 8,
@@ -543,7 +559,30 @@ export class AzureDevOpsService {
         .split(/[^a-z0-9]+/)
         .filter((term) => term.length >= 3 && !WIKI_STOP_WORDS.has(term));
 
-      return pages.map((page) => {
+      /* A resposta recursiva contém a árvore, mas o Azure nem sempre inclui o
+       * conteúdo dos filhos. Carregamos cada página por path para que a busca
+       * encontre termos no texto e não apenas no título. */
+      const hydrated: Array<Record<string, unknown>> = [];
+      for (let offset = 0; offset < pages.length; offset += 8) {
+        const batch = pages.slice(offset, offset + 8);
+        const values = await Promise.all(batch.map(async (page) => {
+          if (typeof page.content === "string" && page.content) return page;
+          const path = typeof page.path === "string" ? page.path : "";
+          if (!path) return page;
+          try {
+            const detail = await this.client.get(
+              `/_apis/wiki/wikis/${encodeURIComponent(this.wiki)}/pages`,
+              { params: { path, includeContent: true, "api-version": "7.1" } },
+            );
+            return { ...page, ...detail.data };
+          } catch {
+            return page;
+          }
+        }));
+        hydrated.push(...values);
+      }
+
+      return hydrated.map((page) => {
         const path = typeof page.path === "string" ? page.path : "";
         const content = typeof page.content === "string" ? page.content : "";
         const searchable = `${path} ${content}`

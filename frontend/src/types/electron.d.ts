@@ -60,6 +60,11 @@ declare global {
           smtpFrom: string;
           smtpPasswordConfigured: boolean;
           emailConfigured: boolean;
+          tenantId: string;
+          clientId: string;
+          sharePointSiteUrl: string;
+          bpmnSiteUrl: string;
+          microsoftConfigured: boolean;
         }>;
 
         importEnv: () => Promise<{
@@ -74,6 +79,10 @@ declare global {
           smtpUser?: string;
           smtpPassword?: string;
           smtpFrom?: string;
+          tenantId?: string;
+          clientId?: string;
+          sharePointSiteUrl?: string;
+          bpmnSiteUrl?: string;
         } | null>;
 
         save: (input: {
@@ -88,6 +97,10 @@ declare global {
           smtpUser?: string;
           smtpPassword?: string;
           smtpFrom?: string;
+          tenantId?: string;
+          clientId?: string;
+          sharePointSiteUrl?: string;
+          bpmnSiteUrl?: string;
         }) => Promise<{
           success: boolean;
           restartRequired: boolean;

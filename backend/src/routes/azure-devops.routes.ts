@@ -69,6 +69,11 @@ azureDevOpsRoutes.post(
 ========================================================= */
 
 azureDevOpsRoutes.get(
+  "/wiki",
+  azureDevOpsController.wikiList,
+);
+
+azureDevOpsRoutes.get(
   "/wiki/search",
   azureDevOpsController.wikiSearch,
 );

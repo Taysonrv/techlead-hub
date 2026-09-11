@@ -640,6 +640,14 @@ export class AzureDevOpsController {
     }
   };
 
+  public wikiList = async (_req: Request, res: Response): Promise<Response> => {
+    try {
+      return res.json({ items: await this.azureDevOpsService.listWikis() });
+    } catch (error) {
+      return this.handleError(res, error);
+    }
+  };
+
   public wikiPage = async (
     req: Request,
     res: Response,

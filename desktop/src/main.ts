@@ -683,6 +683,7 @@ function registerIpcHandlers() {
   ipcMain.handle("configuration:get", () => {
     const azure = resolveAzureConfiguration();
     const email = resolveEmailConfiguration();
+    const microsoft = resolveMicrosoftConfiguration();
 
     return {
       databaseConfigured: Boolean(readSecureValue("databaseUrl") || process.env.DATABASE_URL),
@@ -690,6 +691,11 @@ function registerIpcHandlers() {
       project: azure.project,
       wiki: azure.wiki,
       patConfigured: Boolean(azure.pat),
+      tenantId: microsoft.tenantId,
+      clientId: microsoft.clientId,
+      sharePointSiteUrl: microsoft.sharePointSiteUrl,
+      bpmnSiteUrl: microsoft.bpmnSiteUrl,
+      microsoftConfigured: Boolean(microsoft.tenantId && microsoft.clientId),
       smtpHost: email.host,
       smtpPort: email.port,
       smtpSecure: email.secure === "true",
@@ -795,6 +801,11 @@ type SecureConfig = {
   azureWiki?: string;
   azurePat?: string;
 
+  microsoftTenantId?: string;
+  microsoftClientId?: string;
+  sharePointSiteUrl?: string;
+  bpmnSiteUrl?: string;
+
   smtpHost?: string;
   smtpPort?: string;
   smtpSecure?: string;
@@ -810,6 +821,10 @@ type SecureConfigKey =
   | "azureProject"
   | "azureWiki"
   | "azurePat"
+  | "microsoftTenantId"
+  | "microsoftClientId"
+  | "sharePointSiteUrl"
+  | "bpmnSiteUrl"
   | "smtpHost"
   | "smtpPort"
   | "smtpSecure"
@@ -1134,6 +1149,11 @@ function readSecureConfig():
         typeof parsed.azurePat === "string"
           ? parsed.azurePat
           : undefined,
+
+      microsoftTenantId: typeof parsed.microsoftTenantId === "string" ? parsed.microsoftTenantId : undefined,
+      microsoftClientId: typeof parsed.microsoftClientId === "string" ? parsed.microsoftClientId : undefined,
+      sharePointSiteUrl: typeof parsed.sharePointSiteUrl === "string" ? parsed.sharePointSiteUrl : undefined,
+      bpmnSiteUrl: typeof parsed.bpmnSiteUrl === "string" ? parsed.bpmnSiteUrl : undefined,
 
       smtpHost:
         typeof parsed.smtpHost === "string"
@@ -1542,6 +1562,29 @@ function resolveEmailConfiguration(): EmailConfiguration {
   };
 }
 
+type MicrosoftConfiguration = {
+  tenantId: string;
+  clientId: string;
+  sharePointSiteUrl: string;
+  bpmnSiteUrl: string;
+};
+
+function resolveMicrosoftConfiguration(): MicrosoftConfiguration {
+  const read = (envName: string, secureKey: SecureConfigKey) =>
+    process.env[envName]?.trim() || readSecureValue(secureKey) ||
+    migrateLegacyEnvValue(envName, secureKey) ||
+    (!app.isPackaged ? readEnvValueFromFile(getDevelopmentEnvPath(), envName) : null) || "";
+
+  return {
+    tenantId: read("MICROSOFT_TENANT_ID", "microsoftTenantId"),
+    clientId: read("MICROSOFT_CLIENT_ID", "microsoftClientId"),
+    sharePointSiteUrl: read("SHAREPOINT_SITE_URL", "sharePointSiteUrl") ||
+      "https://siagri365.sharepoint.com/sites/cooperativas-agroindustrias-simer",
+    bpmnSiteUrl: read("SHAREPOINT_BPMN_SITE_URL", "bpmnSiteUrl") ||
+      "https://siagri365.sharepoint.com/sites/FluxoBPMNSimer",
+  };
+}
+
 type ConfigurationInput = {
   databaseUrl?: unknown;
   organization?: unknown;
@@ -1554,6 +1597,10 @@ type ConfigurationInput = {
   smtpUser?: unknown;
   smtpPassword?: unknown;
   smtpFrom?: unknown;
+  tenantId?: unknown;
+  clientId?: unknown;
+  sharePointSiteUrl?: unknown;
+  bpmnSiteUrl?: unknown;
 };
 
 type ConfigurationValues = {
@@ -1568,6 +1615,10 @@ type ConfigurationValues = {
   smtpUser: string;
   smtpPassword: string;
   smtpFrom: string;
+  tenantId: string;
+  clientId: string;
+  sharePointSiteUrl: string;
+  bpmnSiteUrl: string;
 };
 
 function normalizeConfigurationInput(input: unknown): ConfigurationValues {
@@ -1591,6 +1642,10 @@ function normalizeConfigurationInput(input: unknown): ConfigurationValues {
     smtpUser: text(value.smtpUser),
     smtpPassword: text(value.smtpPassword),
     smtpFrom: text(value.smtpFrom),
+    tenantId: text(value.tenantId),
+    clientId: text(value.clientId),
+    sharePointSiteUrl: text(value.sharePointSiteUrl),
+    bpmnSiteUrl: text(value.bpmnSiteUrl),
   };
 }
 
@@ -1618,6 +1673,7 @@ function saveApplicationConfiguration(input: unknown) {
     existingAzure.pat;
 
   const existingEmail = resolveEmailConfiguration();
+  const existingMicrosoft = resolveMicrosoftConfiguration();
   const smtpPassword =
     value.smtpPassword ||
     existingEmail.password;
@@ -1678,6 +1734,24 @@ function saveApplicationConfiguration(input: unknown) {
     saveSecureValue("smtpFrom", value.smtpFrom);
   }
 
+  const tenantId = value.tenantId || existingMicrosoft.tenantId;
+  const clientId = value.clientId || existingMicrosoft.clientId;
+  if (Boolean(tenantId) !== Boolean(clientId)) {
+    throw new Error("Informe Tenant ID e Client ID juntos para ativar o Microsoft 365.");
+  }
+  if (tenantId && !/^[0-9a-f-]{36}$/i.test(tenantId)) {
+    throw new Error("O Tenant ID informado não é um GUID válido.");
+  }
+  if (clientId && !/^[0-9a-f-]{36}$/i.test(clientId)) {
+    throw new Error("O Client ID informado não é um GUID válido.");
+  }
+  if (tenantId && clientId) {
+    saveSecureValue("microsoftTenantId", tenantId);
+    saveSecureValue("microsoftClientId", clientId);
+    saveSecureValue("sharePointSiteUrl", value.sharePointSiteUrl || existingMicrosoft.sharePointSiteUrl);
+    saveSecureValue("bpmnSiteUrl", value.bpmnSiteUrl || existingMicrosoft.bpmnSiteUrl);
+  }
+
   return { success: true, restartRequired: Boolean(mainWindow) };
 }
 
@@ -1705,6 +1779,10 @@ async function selectConfigurationFile() {
     project: parseEnvValue(content, "AZURE_DEVOPS_PROJECT") || "",
     wiki: parseEnvValue(content, "AZURE_DEVOPS_WIKI") || "",
     pat: parseEnvValue(content, "AZURE_DEVOPS_PAT") || "",
+    tenantId: parseEnvValue(content, "MICROSOFT_TENANT_ID") || "",
+    clientId: parseEnvValue(content, "MICROSOFT_CLIENT_ID") || "",
+    sharePointSiteUrl: parseEnvValue(content, "SHAREPOINT_SITE_URL") || "",
+    bpmnSiteUrl: parseEnvValue(content, "SHAREPOINT_BPMN_SITE_URL") || "",
   };
 }
 
@@ -2009,6 +2087,7 @@ function startBackend(
   jwtSecret: string,
   azure: AzureConfiguration,
   email: EmailConfiguration,
+  microsoft: MicrosoftConfiguration,
 ) {
   if (backendProcess) {
     return;
@@ -2068,6 +2147,11 @@ function startBackend(
 
           AZURE_DEVOPS_PAT:
             azure.pat,
+
+          MICROSOFT_TENANT_ID: microsoft.tenantId,
+          MICROSOFT_CLIENT_ID: microsoft.clientId,
+          SHAREPOINT_SITE_URL: microsoft.sharePointSiteUrl,
+          SHAREPOINT_BPMN_SITE_URL: microsoft.bpmnSiteUrl,
 
           SMTP_HOST:
             email.host,
@@ -2694,6 +2778,7 @@ async function bootstrap() {
     jwtSecret,
     resolveAzureConfiguration(),
     resolveEmailConfiguration(),
+    resolveMicrosoftConfiguration(),
   );
 
   const backendOnline =
