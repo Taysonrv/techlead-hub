@@ -25,6 +25,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { aliareColors } from "../theme/theme";
 import { useAuth } from "../context/AuthContext";
 import { api } from "../services/api";
+import { PageHeader } from "../components/PageHeader";
 import {
   FALLBACK_APP_VERSION,
   getReleaseNote,
@@ -247,32 +248,7 @@ export function About() {
 
   return (
     <Box sx={{ width: "100%", maxWidth: 1500, mx: "auto", pb: 4 }}>
-      <Stack
-        direction={{ xs: "column", sm: "row" }}
-        spacing={2}
-        sx={{
-          mb: 2.5,
-          alignItems: { xs: "flex-start", sm: "center" },
-          justifyContent: "space-between",
-        }}
-      >
-        <Box>
-          <Typography
-            variant="h5"
-            sx={{
-              fontWeight: 800,
-              letterSpacing: "-0.02em",
-              color: aliareColors.black,
-            }}
-          >
-            Sobre e Atualizações
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-            Informações da aplicação, versão instalada e gerenciamento de atualizações.
-          </Typography>
-        </Box>
-
-        <Chip
+      <PageHeader eyebrow="Sistema" title="Sobre e Atualizações" description="Informações da aplicação, versão instalada e gerenciamento de atualizações." action={<Chip
           icon={<RocketLaunchOutlined />}
           label={`Versão ${appVersion}`}
           variant="outlined"
@@ -282,8 +258,7 @@ export function About() {
             borderColor: "rgba(24,199,122,0.35)",
             backgroundColor: "rgba(24,199,122,0.05)",
           }}
-        />
-      </Stack>
+        />} />
 
       <Card
         elevation={0}
