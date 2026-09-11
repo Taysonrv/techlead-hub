@@ -37,6 +37,7 @@ import {
 import {
   aliareColors,
 } from "../theme/theme";
+import { PageHeader } from "../components/PageHeader";
 
 type ReportScope =
   | "executive"
@@ -296,28 +297,7 @@ export function Reports() {
     <Stack
       spacing={3}
     >
-      <Box>
-        <Typography
-          variant="h4"
-          sx={{
-            fontWeight:
-              850,
-            letterSpacing:
-              "-0.035em",
-          }}
-        >
-          Relatórios Gerenciais
-        </Typography>
-
-        <Typography
-          color="text.secondary"
-          sx={{
-            mt: 0.75,
-          }}
-        >
-          Gere análises executivas em Excel e PDF a partir dos dados sincronizados do Movidesk e Azure DevOps.
-        </Typography>
-      </Box>
+      <PageHeader eyebrow="Gestão" title="Relatórios Gerenciais" description="Gere análises executivas em Excel e PDF a partir dos dados sincronizados do Movidesk e Azure DevOps." />
 
       <Card
         elevation={0}
