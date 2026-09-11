@@ -5,8 +5,8 @@ export class HealthController {
     return res.json({
       status: "online",
       project: "TechLead Hub",
-      database: "connected",
-      version: "1.0.0"
+      version: process.env.APP_VERSION?.trim() || "development",
+      runtime: process.env.APP_RUNTIME?.trim() || "desktop",
     });
   }
 }

@@ -53,6 +53,7 @@ import {
 } from "./workspace.routes";
 import { globalRoutes } from "./global.routes";
 import { knowledgeRoutes } from "./knowledge.routes";
+import { systemSettingsRoutes } from "./system-settings.routes";
 
 /* =========================================================
    ROUTER
@@ -103,6 +104,7 @@ routes.use(
 
 routes.use("/api/global", globalRoutes);
 routes.use("/api/knowledge", knowledgeRoutes);
+routes.use("/api/system-settings", systemSettingsRoutes);
 
 /* =========================================================
    ADMINISTRAÇÃO DE USUÁRIOS

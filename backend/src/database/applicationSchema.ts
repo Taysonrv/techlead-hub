@@ -8,6 +8,19 @@ import {
  */
 export async function ensureApplicationSchema() {
   await prisma.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS "SystemSetting" (
+      "key" VARCHAR(120) PRIMARY KEY,
+      "value" TEXT NOT NULL,
+      "encrypted" BOOLEAN NOT NULL DEFAULT TRUE,
+      "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "updatedById" INTEGER,
+      CONSTRAINT "SystemSetting_updatedById_fkey"
+        FOREIGN KEY ("updatedById") REFERENCES "User"("id")
+        ON DELETE SET NULL ON UPDATE CASCADE
+    )
+  `);
+
+  await prisma.$executeRawUnsafe(`
     ALTER TABLE "AzureWorkItem"
       ADD COLUMN IF NOT EXISTS "participantClients" TEXT,
       ADD COLUMN IF NOT EXISTS "participantMovideskTickets" TEXT

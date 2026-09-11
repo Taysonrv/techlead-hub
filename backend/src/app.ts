@@ -12,6 +12,14 @@ const app = express();
 ========================================================= */
 
 app.disable("x-powered-by");
+app.set("trust proxy", process.env.TRUST_PROXY?.trim() || "loopback");
+
+const allowedOrigins = new Set(
+  (process.env.CORS_ALLOWED_ORIGINS ?? "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean),
+);
 
 app.use(
   cors({
@@ -27,7 +35,7 @@ app.use(
           url.hostname === "127.0.0.1" ||
           url.hostname === "localhost";
 
-        callback(null, localHost);
+        callback(null, localHost || allowedOrigins.has(url.origin));
       } catch {
         callback(null, false);
       }
