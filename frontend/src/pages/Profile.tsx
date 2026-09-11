@@ -22,6 +22,7 @@ import {
   useAuth,
   type UserRole,
 } from "../context/AuthContext";
+import { PageHeader } from "../components/PageHeader";
 
 /* =========================================================
    PERFIL
@@ -226,36 +227,7 @@ export function Profile() {
           CABEÇALHO
       =================================================== */}
 
-      <Box
-        sx={{
-          mb: 2.5,
-        }}
-      >
-        <Typography
-          sx={{
-            fontWeight:
-              800,
-
-            fontSize: {
-              xs: "1.7rem",
-              md: "1.9rem",
-              xl: "2.1rem",
-            },
-          }}
-        >
-          Meu Perfil
-        </Typography>
-
-        <Typography
-          variant="body2"
-          color="text.secondary"
-          sx={{
-            mt: 0.25,
-          }}
-        >
-          Informações da sua conta no TechLead Hub
-        </Typography>
-      </Box>
+      <PageHeader eyebrow="Perfil" title="Meu Perfil" description="Informações da sua conta no TechLead Hub." />
 
       {/* ===================================================
           IDENTIDADE
