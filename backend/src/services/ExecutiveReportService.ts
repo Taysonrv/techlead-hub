@@ -26,11 +26,22 @@ export type ReportScope =
   | "development"
   | "versions";
 
+export type ReportFilters = {
+  client?: string;
+  analyst?: string;
+  category?: string;
+  ticketStatus?: string;
+  workItemType?: string;
+  azureState?: string;
+  version?: string;
+};
+
 type ExecutiveReportOptions = {
   from: Date;
   to: Date;
   userId: number;
   scope?: ReportScope;
+  filters?: ReportFilters;
 };
 
 type RankingRow = {
@@ -55,6 +66,7 @@ export class ExecutiveReportService {
               options.to,
           },
         },
+        ...this.ticketFilters(options.filters),
       ],
     };
 
@@ -84,6 +96,7 @@ export class ExecutiveReportService {
             },
           ],
         },
+        ...this.azureFilters(options.filters),
       ],
     };
 
@@ -805,6 +818,27 @@ export class ExecutiveReportService {
         ],
       },
     });
+  }
+
+  private ticketFilters(filters?: ReportFilters): Prisma.TicketWhereInput[] {
+    if (!filters) return [];
+    return [
+      ...(filters.client ? [{ client: { equals: filters.client, mode: "insensitive" as const } }] : []),
+      ...(filters.analyst ? [{ owner: { equals: filters.analyst, mode: "insensitive" as const } }] : []),
+      ...(filters.category ? [{ category: { equals: filters.category, mode: "insensitive" as const } }] : []),
+      ...(filters.ticketStatus ? [{ status: { equals: filters.ticketStatus, mode: "insensitive" as const } }] : []),
+    ];
+  }
+
+  private azureFilters(filters?: ReportFilters): Prisma.AzureWorkItemWhereInput[] {
+    if (!filters) return [];
+    return [
+      ...(filters.client ? [{ OR: [{ client: { equals: filters.client, mode: "insensitive" as const } }, { participantClients: { contains: filters.client, mode: "insensitive" as const } }] }] : []),
+      ...(filters.analyst ? [{ OR: [{ assignedToName: { equals: filters.analyst, mode: "insensitive" as const } }, { createdByName: { equals: filters.analyst, mode: "insensitive" as const } }] }] : []),
+      ...(filters.workItemType ? [{ workItemType: { equals: filters.workItemType, mode: "insensitive" as const } }] : []),
+      ...(filters.azureState ? [{ state: { equals: filters.azureState, mode: "insensitive" as const } }] : []),
+      ...(filters.version ? [{ deliveredVersion: { equals: filters.version, mode: "insensitive" as const } }] : []),
+    ];
   }
 
   private addRankingSheet(
