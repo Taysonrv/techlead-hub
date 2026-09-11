@@ -33,6 +33,7 @@ import {
   ExpandMoreOutlined,
   InfoOutlined,
   Inventory2Outlined,
+  OpenInNewOutlined,
   SearchOutlined,
   TuneOutlined,
 } from "@mui/icons-material";
@@ -346,12 +347,6 @@ export function Versions() {
     useState(false);
 
   const [
-    versionSearch,
-    setVersionSearch,
-  ] =
-    useState("");
-
-  const [
     versionSort,
     setVersionSort,
   ] =
@@ -427,6 +422,15 @@ export function Versions() {
       null,
     );
 
+  const [selectedTask, setSelectedTask] = useState<(WorkItem & {
+    descriptionText?: string | null;
+    workaroundText?: string | null;
+    technicalSolutionText?: string | null;
+    azureWebUrl?: string | null;
+  }) | null>(null);
+  const [taskDetailLoading, setTaskDetailLoading] = useState(false);
+  const [azureStatus, setAzureStatus] = useState<{ organization: string | null; project: string | null; wiki: string | null } | null>(null);
+
   const advancedFilterCount =
     [
       criticality,
@@ -447,7 +451,6 @@ export function Versions() {
       criticality ||
       prioritized ||
       blockedProcess ||
-      versionSearch ||
       versionChannel ||
       activeMetricFilter !== "all",
     );
@@ -507,6 +510,7 @@ export function Versions() {
           const [
             summaryResponse,
             filtersResponse,
+            azureStatusResponse,
           ] =
             await Promise.all([
               api.get<VersionsResponse>(
@@ -519,6 +523,7 @@ export function Versions() {
               api.get<FiltersResponse>(
                 "/azure-work-items/filters",
               ),
+              api.get("/azure-devops/status"),
             ]);
 
           setData(
@@ -528,6 +533,7 @@ export function Versions() {
           setFilters(
             filtersResponse.data,
           );
+          setAzureStatus(azureStatusResponse.data);
         } catch (
           currentError
         ) {
@@ -568,29 +574,12 @@ export function Versions() {
   const visibleVersions =
     useMemo(
       () => {
-        const normalized =
-          versionSearch
-            .trim()
-            .toLocaleLowerCase(
-              "pt-BR",
-            );
-
         const source =
           (
             data?.items ??
             []
           ).filter(
             (item) => {
-              const matchesSearch =
-                !normalized ||
-                item.label
-                  .toLocaleLowerCase(
-                    "pt-BR",
-                  )
-                  .includes(
-                    normalized,
-                  );
-
               const matchesChannel =
                 !versionChannel ||
                 getVersionChannel(
@@ -604,7 +593,6 @@ export function Versions() {
                 );
 
               return (
-                matchesSearch &&
                 matchesChannel &&
                 matchesMetric
               );
@@ -618,6 +606,10 @@ export function Versions() {
             a,
             b,
           ) => {
+            if (appliedSearch) {
+              return toTimestamp(b.latestChangedAt) - toTimestamp(a.latestChangedAt);
+            }
+
             if (
               versionSort ===
               "version-desc"
@@ -690,7 +682,7 @@ export function Versions() {
       },
       [
         data?.items,
-        versionSearch,
+        appliedSearch,
         versionSort,
         versionChannel,
         activeMetricFilter,
@@ -721,7 +713,6 @@ export function Versions() {
       setVersionPage(0);
     },
     [
-      versionSearch,
       versionSort,
       versionChannel,
       activeMetricFilter,
@@ -923,7 +914,6 @@ export function Versions() {
     setCriticality("");
     setPrioritized("");
     setBlockedProcess("");
-    setVersionSearch("");
     setVersionChannel("");
     setVersionPage(0);
     setActiveMetricFilter("all");
@@ -1003,6 +993,7 @@ export function Versions() {
     setSelectedVersion(
       context.version,
     );
+    setSelectedTask(null);
 
     setDetailContext(
       context,
@@ -1270,6 +1261,7 @@ export function Versions() {
     setDetailError(
       null,
     );
+    setSelectedTask(null);
   }
 
   function openWorkItem(
@@ -1285,6 +1277,25 @@ export function Versions() {
     navigate(
       `${path}?task=${item.id}`,
     );
+  }
+
+  async function inspectWorkItem(item: WorkItem) {
+    setSelectedTask(item);
+    setTaskDetailLoading(true);
+    try {
+      const response = await api.get(`/azure-work-items/${item.id}`);
+      setSelectedTask(response.data);
+    } catch {
+      setDetailError("Não foi possível carregar todos os detalhes da Task.");
+    } finally {
+      setTaskDetailLoading(false);
+    }
+  }
+
+  function openVersionInAzure(version: string) {
+    if (!azureStatus?.organization || !azureStatus.project) return;
+    const url = `https://dev.azure.com/${encodeURIComponent(azureStatus.organization)}/${encodeURIComponent(azureStatus.project)}/_search?text=${encodeURIComponent(version)}&type=wiki`;
+    window.open(url, "_blank", "noopener,noreferrer");
   }
 
   function openTicket(
@@ -1915,6 +1926,32 @@ export function Versions() {
                   </MenuItem>
                 </Select>
               </FormControl>
+
+              <FormControl size="small">
+                <InputLabel>Canal da versão</InputLabel>
+                <Select value={versionChannel} label="Canal da versão" onChange={(event) => setVersionChannel(event.target.value as VersionChannel)}>
+                  <MenuItem value="">Todos os canais</MenuItem>
+                  <MenuItem value="lts">LTS</MenuItem>
+                  <MenuItem value="lte">LTE</MenuItem>
+                  <MenuItem value="rc">RC</MenuItem>
+                  <MenuItem value="develop">Develop</MenuItem>
+                  <MenuItem value="undefined">Sem versão</MenuItem>
+                </Select>
+              </FormControl>
+
+              <FormControl size="small">
+                <InputLabel>Ordenar versões</InputLabel>
+                <Select value={versionSort} label="Ordenar versões" onChange={(event) => setVersionSort(event.target.value as VersionSort)}>
+                  <MenuItem value="version-desc">Versão mais recente</MenuItem>
+                  <MenuItem value="latest-desc">Movimentação mais recente</MenuItem>
+                  <MenuItem value="total-desc">Maior volume</MenuItem>
+                  <MenuItem value="active-desc">Mais Tasks ativas</MenuItem>
+                  <MenuItem value="blocked-desc">Mais bloqueadas</MenuItem>
+                  <MenuItem value="critical-desc">Maior criticidade</MenuItem>
+                  <MenuItem value="prioritized-desc">Mais priorizadas</MenuItem>
+                  <MenuItem value="version-asc">Versão A → Z</MenuItem>
+                </Select>
+              </FormControl>
             </Box>
           </Collapse>
         </CardContent>
@@ -2524,157 +2561,6 @@ export function Versions() {
               </Typography>
             </Box>
 
-            <Divider />
-
-            <Box
-              sx={{
-                display:
-                  "grid",
-                gridTemplateColumns: {
-                  xs:
-                    "1fr",
-                  md:
-                    "repeat(12, minmax(0, 1fr))",
-                },
-                gap:
-                  1.25,
-                alignItems:
-                  "center",
-              }}
-            >
-              <TextField
-                size="small"
-                value={
-                  versionSearch
-                }
-                onChange={(
-                  event,
-                ) =>
-                  setVersionSearch(
-                    event.target.value,
-                  )
-                }
-                placeholder="Localizar versão na tabela"
-                slotProps={{
-                  input: {
-                    startAdornment:
-                      (
-                        <InputAdornment position="start">
-                          <SearchOutlined fontSize="small" />
-                        </InputAdornment>
-                      ),
-                  },
-                }}
-                sx={{
-                  gridColumn: {
-                    md:
-                      "1 / 7",
-                  },
-                }}
-              />
-
-              <FormControl
-                size="small"
-                sx={{
-                  gridColumn: {
-                    md:
-                      "7 / 10",
-                  },
-                }}
-              >
-                <InputLabel>
-                  Canal da versão
-                </InputLabel>
-
-                <Select
-                  value={
-                    versionChannel
-                  }
-                  label="Canal da versão"
-                  onChange={(
-                    event,
-                  ) =>
-                    setVersionChannel(
-                      event.target.value as
-                        VersionChannel,
-                    )
-                  }
-                >
-                  <MenuItem value="">
-                    Todos os canais
-                  </MenuItem>
-                  <MenuItem value="lts">
-                    LTS
-                  </MenuItem>
-                  <MenuItem value="lte">
-                    LTE
-                  </MenuItem>
-                  <MenuItem value="rc">
-                    RC
-                  </MenuItem>
-                  <MenuItem value="develop">
-                    Develop
-                  </MenuItem>
-                  <MenuItem value="undefined">
-                    Sem versão
-                  </MenuItem>
-                </Select>
-              </FormControl>
-
-              <FormControl
-                size="small"
-                sx={{
-                  gridColumn: {
-                    md:
-                      "10 / 13",
-                  },
-                }}
-              >
-                <InputLabel>
-                  Ordenar
-                </InputLabel>
-
-                <Select
-                  value={
-                    versionSort
-                  }
-                  label="Ordenar"
-                  onChange={(
-                    event,
-                  ) =>
-                    setVersionSort(
-                      event.target.value as
-                        VersionSort,
-                    )
-                  }
-                >
-                  <MenuItem value="version-desc">
-                    Versão mais recente
-                  </MenuItem>
-                  <MenuItem value="total-desc">
-                    Maior volume
-                  </MenuItem>
-                  <MenuItem value="active-desc">
-                    Mais Tasks ativas
-                  </MenuItem>
-                  <MenuItem value="blocked-desc">
-                    Mais bloqueadas
-                  </MenuItem>
-                  <MenuItem value="critical-desc">
-                    Maior criticidade
-                  </MenuItem>
-                  <MenuItem value="prioritized-desc">
-                    Mais priorizadas
-                  </MenuItem>
-                  <MenuItem value="latest-desc">
-                    Movimentação mais recente
-                  </MenuItem>
-                  <MenuItem value="version-asc">
-                    Versão A → Z
-                  </MenuItem>
-                </Select>
-              </FormControl>
-            </Box>
           </Stack>
         </CardContent>
 
@@ -3137,6 +3023,16 @@ export function Versions() {
 
             {selectedVersion && (
               <>
+            {selectedVersion.version && (
+              <Button
+                variant="outlined"
+                endIcon={<OpenInNewOutlined />}
+                onClick={() => openVersionInAzure(selectedVersion.version!)}
+                sx={{ mt: 2 }}
+              >
+                Abrir versão no Azure
+              </Button>
+            )}
             <Box
               sx={{
                 display:
@@ -3193,6 +3089,30 @@ export function Versions() {
                   2,
               }}
             />
+
+            {selectedTask && (
+              <Card elevation={0} sx={{ mb: 2, border: "1px solid", borderColor: "success.light", borderRadius: 2 }}>
+                <CardContent>
+                  <Stack direction="row" spacing={1} sx={{ justifyContent: "space-between", alignItems: "flex-start" }}>
+                    <Box>
+                      <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 800 }}>
+                        {shortType(selectedTask.workItemType)} #{selectedTask.id}
+                      </Typography>
+                      <Typography sx={{ fontWeight: 850, mt: 0.35 }}>{selectedTask.title}</Typography>
+                    </Box>
+                    {taskDetailLoading && <CircularProgress size={20} />}
+                  </Stack>
+                  <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                    {selectedTask.descriptionText || selectedTask.technicalSolutionText || "Detalhamento textual não informado no Azure."}
+                  </Typography>
+                  {selectedTask.deliveredVersion && <Chip size="small" label={`Versão ${selectedTask.deliveredVersion}`} sx={{ mt: 1 }} />}
+                  <Stack direction="row" spacing={1} useFlexGap sx={{ mt: 1.5, flexWrap: "wrap" }}>
+                    <Button size="small" variant="contained" onClick={() => openWorkItem(selectedTask)}>Abrir em {shortType(selectedTask.workItemType)}</Button>
+                    {selectedTask.azureWebUrl && <Button size="small" component="a" href={selectedTask.azureWebUrl} target="_blank" rel="noopener noreferrer" endIcon={<OpenInNewOutlined />}>Abrir Task no Azure</Button>}
+                  </Stack>
+                </CardContent>
+              </Card>
+            )}
 
             <Typography
               sx={{
@@ -3329,6 +3249,7 @@ export function Versions() {
                       item.id
                     }
                     elevation={0}
+                    onClick={() => void inspectWorkItem(item)}
                     sx={{
                       border:
                         "1px solid",
@@ -3336,6 +3257,7 @@ export function Versions() {
                         "divider",
                       borderRadius:
                         1.75,
+                      cursor: "pointer",
                     }}
                   >
                     <CardContent
@@ -3462,12 +3384,10 @@ export function Versions() {
                           size="small"
                           variant="outlined"
                           onClick={() =>
-                            openWorkItem(
-                              item,
-                            )
+                            void inspectWorkItem(item)
                           }
                         >
-                          Ver {shortType(item.workItemType)}
+                          Ver detalhes
                         </Button>
 
                         {item.movideskTicket && (
