@@ -1,13 +1,17 @@
 import {
   Alert, Autocomplete, Box, Button, Card, CardContent, Chip, CircularProgress,
-  Drawer, FormControl, IconButton, InputLabel, MenuItem, Select, Stack,
-  TextField, Tooltip, Typography,
+  Drawer, FormControl, InputLabel, MenuItem, Select, Stack,
+  TextField, Typography,
 } from "@mui/material";
-import { CloseOutlined, InfoOutlined, SearchOutlined } from "@mui/icons-material";
+import { SearchOutlined } from "@mui/icons-material";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../services/api";
 import { aliareColors } from "../theme/theme";
+import { PageHeader } from "../components/PageHeader";
+import { KpiCard } from "../components/KpiCard";
+import { DetailFieldGrid, DetailPanelHeader, DetailSection } from "../components/DetailPanel";
+import { detailDrawerPaperSx } from "../theme/layoutTokens";
 
 type Sample = {
   id: number; workItemType: string; title: string; state: string; client: string | null;
@@ -68,10 +72,8 @@ export function DataQuality() {
   const hasFilters = Boolean(type || client || user || search || issue);
   const title = useMemo(() => metrics.find(([key]) => key === issue)?.[1] ?? "Pendências encontradas", [issue]);
 
-  return <Box sx={{ pt: 5 }}>
-    <Typography variant="overline" sx={{ color: aliareColors.greenDark, fontWeight: 850 }}>Governança</Typography>
-    <Typography variant="h3" sx={{ fontWeight: 850 }}>Qualidade dos Dados</Typography>
-    <Typography color="text.secondary" sx={{ mt: 0.5 }}>Inconsistências do time de suporte e dos clientes SIMER entre Movidesk e Azure DevOps.</Typography>
+  return <Box sx={{ pb: 4 }}>
+    <PageHeader eyebrow="Governança" title="Qualidade dos Dados" description="Inconsistências do time de suporte e dos clientes SIMER entre Movidesk e Azure DevOps." meta={`${data?.samples.length ?? 0} registro(s) no recorte atual`} />
 
     <Card variant="outlined" sx={{ mt: 2 }}><CardContent>
       <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "2fr repeat(3, minmax(170px, 1fr)) auto" }, gap: 1.2 }}>
@@ -85,10 +87,7 @@ export function DataQuality() {
 
     {error && <Alert severity="error" sx={{ mt: 2 }}>Não foi possível analisar a qualidade dos dados.</Alert>}
     <Box sx={{ mt: 2, display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2,1fr)", lg: "repeat(4,1fr)" }, gap: 2 }}>
-      {metrics.map(([key, label, info]) => <Card key={key} variant="outlined" onClick={() => setIssue(issue === key ? "" : key)} sx={{ cursor: "pointer", borderTop: `3px solid ${issue === key ? aliareColors.green : "#e49b0f"}`, boxShadow: issue === key ? "0 8px 24px rgba(24,199,122,.12)" : undefined }}><CardContent>
-        <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "flex-start" }}><Typography variant="h4" sx={{ fontWeight: 850 }}>{data?.summary[key] ?? 0}</Typography><Tooltip title={info}><IconButton size="small" onClick={(event) => event.stopPropagation()}><InfoOutlined fontSize="small" /></IconButton></Tooltip></Stack>
-        <Typography sx={{ fontWeight: 750 }}>{label}</Typography><Typography variant="caption" color="text.secondary">Clique para analisar os registros</Typography>
-      </CardContent></Card>)}
+      {metrics.map(([key, label, info]) => <KpiCard key={key} title={label} value={data?.summary[key] ?? 0} subtitle="Clique para analisar os registros" info={info} accent={issue === key ? aliareColors.green : "#e49b0f"} active={issue === key} onClick={() => setIssue(issue === key ? "" : key)} />)}
     </Box>
 
     <Card variant="outlined" sx={{ mt: 2 }}><CardContent>
@@ -97,10 +96,9 @@ export function DataQuality() {
       {loading ? <Box sx={{ py: 8, textAlign: "center" }}><CircularProgress /></Box> : <Stack spacing={1} sx={{ mt: 2 }}>{data?.samples.map((item) => <Button key={`${item.source}-${item.id}`} onClick={() => void open(item)} sx={{ justifyContent: "flex-start", textTransform: "none", border: "1px solid", borderColor: "divider", p: 1.3, borderRadius: 1.5 }}><Box sx={{ textAlign: "left", minWidth: 0 }}><Stack direction="row" spacing={1} sx={{ alignItems: "center" }}><Chip size="small" label={item.workItemType} /><Typography sx={{ fontWeight: 750 }}>#{item.source === "MOVIDESK" ? item.movideskTicket ?? item.id : item.id} · {item.title}</Typography></Stack><Typography variant="caption" color="text.secondary">{[item.state, item.client ?? "Sem cliente", item.module ?? "Sem módulo", item.assignedToName ?? "Sem responsável", item.movideskTicket ? `Ticket ${item.movideskTicket}` : "Sem ticket", item.deliveredVersion ?? "Sem versão"].join(" · ")}</Typography></Box></Button>)}</Stack>}
     </CardContent></Card>
 
-    <Drawer anchor="right" open={Boolean(selected)} onClose={() => setSelected(null)} slotProps={{ paper: { sx: { width: { xs: "100%", sm: 560 }, p: 3 } } }}>
-      <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "flex-start" }}><Box><Typography variant="overline" color="text.secondary">{selected?.workItemType}</Typography><Typography variant="h5" sx={{ fontWeight: 850 }}>#{selected?.source === "MOVIDESK" ? selected.movideskTicket : selected?.id}</Typography></Box><IconButton onClick={() => setSelected(null)}><CloseOutlined /></IconButton></Stack>
-      <Typography variant="h6" sx={{ mt: 2, fontWeight: 750 }}>{selected?.title}</Typography>
-      <Stack spacing={1} sx={{ mt: 2 }}>{selected && Object.entries({ Estado: selected.state, "Cliente principal": selected.client, "Clientes participantes": formatList(selected.participantClients), Módulo: selected.module, Responsável: selected.assignedToName, "Ticket principal": selected.movideskTicket, "Tickets participantes": formatList(selected.participantMovideskTickets), Versão: selected.deliveredVersion }).map(([label, value]) => <Box key={label}><Typography variant="caption" color="text.secondary">{label}</Typography><Typography>{String(value ?? "Não informado")}</Typography></Box>)}</Stack>
+    <Drawer anchor="right" open={Boolean(selected)} onClose={() => setSelected(null)} slotProps={{ paper: { sx: detailDrawerPaperSx } }}>
+      <DetailPanelHeader eyebrow={selected?.workItemType} title={selected?.title ?? "Detalhes do registro"} identifier={`#${selected?.source === "MOVIDESK" ? selected.movideskTicket : selected?.id}`} onClose={() => setSelected(null)} />
+      <DetailSection title="Visão operacional"><DetailFieldGrid fields={selected ? Object.entries({ Estado: selected.state, "Cliente principal": selected.client, "Clientes participantes": formatList(selected.participantClients), Módulo: selected.module, Responsável: selected.assignedToName, "Ticket principal": selected.movideskTicket, "Tickets participantes": formatList(selected.participantMovideskTickets), Versão: selected.deliveredVersion }).map(([label, value]) => [label, String(value ?? "Não informado")]) : []} /></DetailSection>
       {detail && <Alert severity="info" sx={{ mt: 2 }}>Detalhes completos e histórico carregados do Azure.</Alert>}
       <Button variant="contained" sx={{ mt: 3 }} onClick={() => selected && navigate(selected.source === "MOVIDESK" ? `/tickets?movidesk=${selected.movideskTicket}` : `${route(selected.workItemType)}?task=${selected.id}`)}>Abrir registro completo</Button>
     </Drawer>
