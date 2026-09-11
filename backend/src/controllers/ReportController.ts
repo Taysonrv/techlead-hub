@@ -8,12 +8,15 @@ import type {
 
 import {
   ExecutiveReportService,
+  type ReportFilters,
   type ReportScope,
 } from "../services/ExecutiveReportService";
 
 import {
   ManagementPdfService,
 } from "../services/ManagementPdfService";
+import { prisma } from "../database/prisma";
+import { SIMER_CLIENTS, SUPPORT_ANALYSTS, azureOperationalScope, ticketOperationalScope } from "../domain/OperationalScope";
 
 const REPORT_SCOPES:
   ReportScope[] = [
@@ -31,6 +34,29 @@ export class ReportController {
 
   private readonly pdf =
     new ManagementPdfService();
+
+  public filters = async (_request: AuthenticatedRequest, response: Response) => {
+    try {
+      const [categories, ticketStatuses, workItemTypes, azureStates, versions] = await Promise.all([
+        prisma.ticket.findMany({ where: { AND: [ticketOperationalScope(), { category: { not: null } }] }, select: { category: true }, distinct: ["category"], orderBy: { category: "asc" } }),
+        prisma.ticket.findMany({ where: ticketOperationalScope(), select: { status: true }, distinct: ["status"], orderBy: { status: "asc" } }),
+        prisma.azureWorkItem.findMany({ where: azureOperationalScope(), select: { workItemType: true }, distinct: ["workItemType"], orderBy: { workItemType: "asc" } }),
+        prisma.azureWorkItem.findMany({ where: azureOperationalScope(), select: { state: true }, distinct: ["state"], orderBy: { state: "asc" } }),
+        prisma.azureWorkItem.findMany({ where: { AND: [azureOperationalScope(), { deliveredVersion: { not: null } }] }, select: { deliveredVersion: true }, distinct: ["deliveredVersion"], orderBy: { deliveredVersion: "desc" }, take: 100 }),
+      ]);
+      return response.json({
+        clients: [...SIMER_CLIENTS], analysts: [...SUPPORT_ANALYSTS],
+        categories: categories.flatMap((item) => item.category ? [item.category] : []),
+        ticketStatuses: ticketStatuses.map((item) => item.status),
+        workItemTypes: workItemTypes.map((item) => item.workItemType),
+        azureStates: azureStates.map((item) => item.state),
+        versions: versions.flatMap((item) => item.deliveredVersion ? [item.deliveredVersion] : []),
+      });
+    } catch (error) {
+      console.error("[reports:filters]", error);
+      return response.status(500).json({ message: "Não foi possível carregar os filtros dos relatórios." });
+    }
+  };
 
   public excelFile = async (
     request:
@@ -155,12 +181,14 @@ export class ReportController {
               to,
               userId,
               scope,
+              filters: this.reportFilters(request.query),
             })
           : await this.pdf.generate({
               from,
               to,
               userId,
               scope,
+              filters: this.reportFilters(request.query),
             });
 
       const fileName =
@@ -225,6 +253,18 @@ export class ReportController {
       ? normalized as
           ReportScope
       : null;
+  }
+
+  private reportFilters(query: AuthenticatedRequest["query"]): ReportFilters {
+    const value = (key: keyof ReportFilters) => {
+      const item = query[key];
+      return typeof item === "string" && item.trim() ? item.trim().slice(0, 180) : undefined;
+    };
+    return {
+      client: value("client"), analyst: value("analyst"), category: value("category"),
+      ticketStatus: value("ticketStatus"), workItemType: value("workItemType"),
+      azureState: value("azureState"), version: value("version"),
+    };
   }
 
   private dateBoundary(
