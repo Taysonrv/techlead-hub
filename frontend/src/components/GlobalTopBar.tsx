@@ -62,10 +62,10 @@ export function GlobalTopBar() {
   }
 
   return (
-    <Box sx={{ position: "sticky", top: 0, zIndex: (theme) => theme.zIndex.appBar, mb: 3, px: { xs: 1.5, md: 2.5 }, py: 1.5, minHeight: 68, boxSizing: "border-box", bgcolor: "rgba(255,255,255,.97)", backdropFilter: "blur(14px)", border: "1px solid", borderColor: "divider", borderRadius: 2 }}>
-      <Box sx={{ position: "relative", width: { xs: "calc(100% - 72px)", sm: "clamp(360px, 46vw, 760px)" }, mx: "auto", minHeight: 44 }}>
+    <Box sx={{ position: "sticky", top: 0, zIndex: (theme) => theme.zIndex.appBar, mb: 3, minHeight: 46, boxSizing: "border-box", bgcolor: "transparent", pointerEvents: "none" }}>
+      <Box sx={{ position: "relative", width: { xs: "calc(100% - 72px)", md: "calc(100% - 340px)" }, maxWidth: 620, minWidth: { md: 420 }, mr: "auto", minHeight: 44, pointerEvents: "auto" }}>
           <TextField inputRef={searchInputRef} fullWidth size="small" value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={handleSearchKeyDown} placeholder="Busque tickets, clientes, tarefas, assuntos ou versões..."
-            slotProps={{ input: { startAdornment: <InputAdornment position="start"><SearchOutlined fontSize="small" /></InputAdornment>, endAdornment: searching ? <CircularProgress size={16} /> : undefined, sx: { height: 44, bgcolor: "background.paper" } } }} />
+            slotProps={{ input: { startAdornment: <InputAdornment position="start"><SearchOutlined fontSize="small" /></InputAdornment>, endAdornment: searching ? <CircularProgress size={16} /> : undefined, sx: { height: 44, bgcolor: "background.paper", borderRadius: 2, boxShadow: "0 2px 10px rgba(0,0,0,.04)" } } }} />
           {query.trim().length >= 2 && (
             <Paper elevation={8} sx={{ position: "absolute", top: 46, left: 0, right: 0, maxHeight: 430, overflowY: "auto", border: "1px solid", borderColor: "divider", zIndex: 20 }}>
               {results.length ? <List dense disablePadding>{results.map((item) => <ListItemButton key={item.id} onClick={() => go(item.path)} sx={{ py: .9 }}><Box sx={{ minWidth: 88 }}><Typography variant="caption" sx={{ color: aliareColors.greenDark, fontWeight: 800 }}>{item.type}</Typography></Box><ListItemText primary={item.title} secondary={item.subtitle} slotProps={{ primary: { noWrap: true, sx: { fontSize: ".82rem", fontWeight: 700 } }, secondary: { noWrap: true, sx: { fontSize: ".7rem" } } }} /></ListItemButton>)}</List> : !searching && <Typography variant="body2" color={searchError ? "error" : "text.secondary"} sx={{ p: 2 }}>{searchError || "Nenhum resultado encontrado."}</Typography>}
