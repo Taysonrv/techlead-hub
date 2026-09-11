@@ -24,6 +24,7 @@ import {
   useEffect,
   useState,
 } from "react";
+import { PageHeader } from "../components/PageHeader";
 
 type ConfigurationState = {
   databaseConfigured: boolean;
@@ -181,29 +182,7 @@ export function Settings() {
 
   return (
     <Box>
-      <Box sx={{ mb: 2.5 }}>
-        <Typography
-          sx={{
-            fontWeight: 800,
-            fontSize: {
-              xs: "1.7rem",
-              md: "1.9rem",
-              xl: "2.1rem",
-            },
-          }}
-        >
-          Configurações
-        </Typography>
-
-        <Typography
-          variant="body2"
-          color="text.secondary"
-          sx={{ mt: 0.25 }}
-        >
-          Gerencie a conexão do banco e a integração com o Azure DevOps.
-          Os segredos são protegidos pelo Windows e nunca são exibidos novamente.
-        </Typography>
-      </Box>
+      <PageHeader eyebrow="Sistema" title="Configurações" description="Gerencie a conexão do banco e a integração com o Azure DevOps. Os segredos são protegidos pelo Windows e nunca são exibidos novamente." />
 
       {error && (
         <Alert severity="error" sx={{ mb: 2 }}>
