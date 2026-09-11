@@ -9,9 +9,56 @@ export type ReleaseNote = {
   items: readonly ReleaseNoteItem[];
 };
 
-export const FALLBACK_APP_VERSION = "0.2.0-beta.3";
+export const FALLBACK_APP_VERSION = "0.2.0-beta.4";
 
 export const releaseNotes: Record<string, ReleaseNote> = {
+  "0.2.0-beta.4": {
+    version: "0.2.0-beta.4",
+    title: "Inteligência operacional e conhecimento integrado",
+    items: [
+      {
+        title: "Base de Conhecimento",
+        description:
+          "Pesquisa integrada à Wiki do Azure DevOps, com resultados contextualizados, links diretos e preparação para integração com SharePoint e fluxos BPMN.",
+      },
+      {
+        title: "Versões e entregas relacionadas",
+        description:
+          "A pesquisa por assunto agora relaciona versões recentes, correções e evoluções, permitindo consultar detalhes e abrir a entrega diretamente no Azure DevOps.",
+      },
+      {
+        title: "Análise executiva de clientes",
+        description:
+          "Tela de clientes aprimorada com indicadores, categorias, insights, filtros, visão de Backoffice e apresentação em tela cheia.",
+      },
+      {
+        title: "Relatórios gerenciais",
+        description:
+          "Novos filtros específicos por relatório, incluindo cliente, analista, período, SLA, categoria, status e demais dimensões operacionais.",
+      },
+      {
+        title: "Operação e SLA",
+        description:
+          "Indicadores de prazo unificados, melhorias no Kanban da Minha Operação e movimentação operacional local dos atendimentos.",
+      },
+      {
+        title: "Experiência padronizada",
+        description:
+          "Telas, cartões, títulos, painéis laterais, cabeçalho, pesquisa global, calendário e sidebar revisados seguindo o padrão visual do Dashboard.",
+      },
+      {
+        title: "Integrações Microsoft",
+        description:
+          "Configuração administrativa preparada para Tenant ID e Client ID, permitindo ativar futuramente SharePoint e fontes Microsoft 365.",
+      },
+      {
+        title: "Segurança e estabilidade",
+        description:
+          "Correções preventivas, atualização de dependências, validações de dados e melhorias no processo automatizado de publicação.",
+      },
+    ],
+  },
+
   "0.2.0-beta.3": {
     version: "0.2.0-beta.3",
     items: [
@@ -137,7 +184,10 @@ export const releaseNotes: Record<string, ReleaseNote> = {
   },
 };
 
-export function getReleaseNote(version: string | null | undefined): ReleaseNote | null {
+export function getReleaseNote(
+  version: string | null | undefined,
+): ReleaseNote | null {
   if (!version) return null;
+
   return releaseNotes[version] ?? null;
 }
