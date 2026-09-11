@@ -872,6 +872,8 @@ export function Sidebar() {
             gap: 1,
           }}
         >
+          <Box id="global-calendar-slot" sx={{ display: "flex", alignItems: "center" }} />
+
           <NotificationCenter />
 
           <Button
