@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { PageHeader } from "../components/PageHeader";
 import { api } from "../services/api";
 
-type Status = { configured: boolean; connected: boolean; account: string | null; sharePointSite: string | null; bpmnSite: string | null };
+type Status = { configured: boolean; connected: boolean; account: string | null; sharePointSite: string | null; bpmnSite: string | null; azure: { configured: boolean; wiki: string | null; wikiAvailable: boolean } };
 type Hit = { source: "azure-wiki" | "sharepoint" | "bpmn"; title: string; excerpt: string; path?: string; webUrl: string | null; modifiedAt?: string | null };
 
 export function Knowledge() {
@@ -59,11 +59,13 @@ export function Knowledge() {
         <TextField fullWidth label="Rotina, mensagem de erro, módulo ou assunto" value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => event.key === "Enter" && void search()} />
         <TextField select label="Fonte" value={source} onChange={(event) => setSource(event.target.value)} sx={{ minWidth: 210 }}>
           <MenuItem value="all">Todas as fontes</MenuItem><MenuItem value="sharepoint">SharePoint do time</MenuItem><MenuItem value="bpmn">Fluxos BPMN</MenuItem>
+          <MenuItem value="azure-wiki">Wiki Azure</MenuItem>
         </TextField>
         <Button variant="contained" startIcon={<SearchOutlined />} onClick={() => void search()} disabled={loading} sx={{ minWidth: 130, height: 56 }}>{loading ? <CircularProgress size={20} color="inherit" /> : "Pesquisar"}</Button>
       </Stack>
       <Divider sx={{ my: 2 }} />
       <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ alignItems: { sm: "center" } }}>
+        <Chip color={status?.azure.wikiAvailable ? "success" : "warning"} variant="outlined" label={status?.azure.wikiAvailable ? `Wiki Azure conectada: ${status.azure.wiki}` : status?.azure.configured ? "Wiki Azure indisponível" : "Wiki Azure não configurada"} />
         <Chip icon={status?.connected ? <CloudDoneOutlined /> : undefined} color={status?.connected ? "success" : "default"} variant="outlined" label={status?.connected ? `Microsoft: ${status.account || "conectado"}` : status?.configured ? "Microsoft não conectado" : "Microsoft aguardando configuração"} />
         {status?.configured && !status.connected && <Button size="small" startIcon={<LoginOutlined />} onClick={() => void connect()}>Conectar conta Microsoft</Button>}
         {connection && <><Chip color="primary" label={`Código: ${connection.userCode}`} /><Button size="small" variant="outlined" onClick={() => void confirmConnection()}>Já autorizei</Button></>}

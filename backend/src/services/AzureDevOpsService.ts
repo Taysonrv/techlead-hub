@@ -101,6 +101,7 @@ export class AzureDevOpsService {
   private readonly wiki: string;
   private readonly pat: string;
   private readonly client: AxiosInstance;
+  private resolvedWikiId: string | null = null;
 
   private static readonly BATCH_SIZE = 200;
 
@@ -216,10 +217,9 @@ export class AzureDevOpsService {
     }
 
     try {
+      const wikiId = await this.resolveWikiIdentifier();
       await this.client.get(
-        `/_apis/wiki/wikis/${encodeURIComponent(
-          this.wiki,
-        )}`,
+        `/_apis/wiki/wikis/${encodeURIComponent(wikiId)}`,
         {
           params: {
             "api-version":
@@ -476,12 +476,13 @@ export class AzureDevOpsService {
     }
 
     this.ensureConfigured();
+    const wikiId = await this.resolveWikiIdentifier();
 
     try {
       const response =
         await this.client.get(
           `/_apis/wiki/wikis/${encodeURIComponent(
-            this.wiki,
+            wikiId,
           )}/pages/${pageId}`,
           {
             params: {
@@ -505,7 +506,7 @@ export class AzureDevOpsService {
   }
 
   public async listWikis() {
-    this.ensureConfigured();
+    this.ensureAzureCoreConfigured();
     try {
       const response = await this.client.get("/_apis/wiki/wikis", { params: { "api-version": "7.1" } });
       return (response.data?.value ?? []).map((wiki: Record<string, unknown>) => ({
@@ -527,12 +528,13 @@ export class AzureDevOpsService {
     const normalizedQuery = query.trim();
     if (!normalizedQuery) return [];
     this.ensureConfigured();
+    const wikiId = await this.resolveWikiIdentifier();
 
     try {
       const response = await this.client.get<{
         subPages?: Array<Record<string, unknown>>;
       }>(
-        `/_apis/wiki/wikis/${encodeURIComponent(this.wiki)}/pages`,
+        `/_apis/wiki/wikis/${encodeURIComponent(wikiId)}/pages`,
         {
           params: {
             path: "/",
@@ -571,7 +573,7 @@ export class AzureDevOpsService {
           if (!path) return page;
           try {
             const detail = await this.client.get(
-              `/_apis/wiki/wikis/${encodeURIComponent(this.wiki)}/pages`,
+              `/_apis/wiki/wikis/${encodeURIComponent(wikiId)}/pages`,
               { params: { path, includeContent: true, "api-version": "7.1" } },
             );
             return { ...page, ...detail.data };
@@ -599,7 +601,7 @@ export class AzureDevOpsService {
           webUrl: typeof page.remoteUrl === "string"
             ? page.remoteUrl
             : id
-              ? `https://dev.azure.com/${encodeURIComponent(this.organization)}/${encodeURIComponent(this.project)}/_wiki/wikis/${encodeURIComponent(this.wiki)}/${id}`
+              ? `https://dev.azure.com/${encodeURIComponent(this.organization)}/${encodeURIComponent(this.project)}/_wiki/wikis/${encodeURIComponent(wikiId)}/${id}`
               : null,
           score,
         };
@@ -743,6 +745,43 @@ export class AzureDevOpsService {
       this.wiki &&
       this.pat,
     );
+  }
+
+  private ensureAzureCoreConfigured(): void {
+    if (!this.organization || !this.project || !this.pat) {
+      throw new AzureDevOpsServiceError(
+        "A integração principal com o Azure DevOps ainda não está configurada.",
+        503,
+      );
+    }
+  }
+
+  private async resolveWikiIdentifier(): Promise<string> {
+    if (this.resolvedWikiId) return this.resolvedWikiId;
+    this.ensureAzureCoreConfigured();
+    const wikis = await this.listWikis() as Array<{ id?: unknown; name?: unknown; remoteUrl?: unknown }>;
+    if (!wikis.length) {
+      throw new AzureDevOpsServiceError("Nenhuma Wiki foi encontrada no projeto Azure DevOps configurado.", 404);
+    }
+    const configured = decodeURIComponent(this.wiki.trim())
+      .replace(/\/+$/, "")
+      .toLocaleLowerCase("pt-BR");
+    const normalizedTail = configured.split(/[\\/]/).filter(Boolean).pop() ?? configured;
+    const selected = wikis.find((item) => {
+      const id = String(item.id ?? "").toLocaleLowerCase("pt-BR");
+      const name = String(item.name ?? "").toLocaleLowerCase("pt-BR");
+      const url = String(item.remoteUrl ?? "").replace(/\/+$/, "").toLocaleLowerCase("pt-BR");
+      return configured === id || configured === name || configured === url || normalizedTail === id || normalizedTail === name;
+    }) ?? (wikis.length === 1 ? wikis[0] : null);
+    if (!selected?.id) {
+      const available = wikis.map((item) => String(item.name ?? item.id)).join(", ");
+      throw new AzureDevOpsServiceError(
+        `A Wiki configurada \"${this.wiki}\" não foi localizada. Wikis disponíveis: ${available}.`,
+        404,
+      );
+    }
+    this.resolvedWikiId = String(selected.id);
+    return this.resolvedWikiId;
   }
 
   private ensureConfigured():
