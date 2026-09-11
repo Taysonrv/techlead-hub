@@ -9,9 +9,45 @@ export type ReleaseNote = {
   items: readonly ReleaseNoteItem[];
 };
 
-export const FALLBACK_APP_VERSION = "0.2.0-beta.4";
+export const FALLBACK_APP_VERSION = "1.0.0-rc.1";
 
 export const releaseNotes: Record<string, ReleaseNote> = {
+    "1.0.0-rc.1": {
+    version: "1.0.0-rc.1",
+    title: "TechLead Hub Web e operação centralizada",
+    items: [
+      {
+        title: "Versão Web",
+        description:
+          "O TechLead Hub agora pode ser disponibilizado via Docker e acessado pelo navegador em um endereço centralizado.",
+      },
+      {
+        title: "Desktop conectado à Web",
+        description:
+          "A versão Desktop 1.x passa a utilizar o mesmo servidor, banco de dados e configurações da aplicação Web.",
+      },
+      {
+        title: "Configuração administrativa central",
+        description:
+          "Azure DevOps, Wiki, Microsoft 365, SharePoint e BPMN são configurados uma única vez pelo administrador e compartilhados com todos os usuários.",
+      },
+      {
+        title: "Segurança das integrações",
+        description:
+          "As configurações sensíveis são criptografadas no PostgreSQL e não são incluídas na imagem Docker.",
+      },
+      {
+        title: "Implantação e monitoramento",
+        description:
+          "Nova imagem Docker com health checks, documentação de implantação, atualização e rollback.",
+      },
+      {
+        title: "Publicação coordenada",
+        description:
+          "O processo de release passa a gerar versões correspondentes da aplicação Web e do instalador Desktop.",
+      },
+    ],
+  },
   "0.2.0-beta.4": {
     version: "0.2.0-beta.4",
     title: "Inteligência operacional e conhecimento integrado",
