@@ -46,6 +46,7 @@ import {
 import {
   aliareColors,
 } from "../theme/theme";
+import { PageHeader } from "../components/PageHeader";
 
 import type {
   UserApprovalStatus,
@@ -349,48 +350,7 @@ export function Users() {
     >
       {/* HEADER */}
 
-      <Stack
-        direction={{
-          xs: "column",
-          sm: "row",
-        }}
-        spacing={2}
-        sx={{
-          justifyContent:
-            "space-between",
-
-          alignItems: {
-            xs: "stretch",
-            sm: "center",
-          },
-        }}
-      >
-        <Box>
-          <Typography
-            variant="h4"
-            sx={{
-              fontWeight:
-                800,
-
-              letterSpacing:
-                "-0.03em",
-            }}
-          >
-            Usuários
-          </Typography>
-
-          <Typography
-            variant="body2"
-            color="text.secondary"
-            sx={{
-              mt: 0.5,
-            }}
-          >
-            Aprovação e controle de acesso ao TechLead Hub.
-          </Typography>
-        </Box>
-
-        <Button
+      <PageHeader eyebrow="Sistema" title="Usuários" description="Aprovação e controle de acesso ao TechLead Hub." action={<Button
           variant="outlined"
           startIcon={
             <RefreshOutlined />
@@ -407,10 +367,7 @@ export function Users() {
               sm: "center",
             },
           }}
-        >
-          Atualizar
-        </Button>
-      </Stack>
+        >Atualizar</Button>} />
 
       {/* ALERTAS */}
 
