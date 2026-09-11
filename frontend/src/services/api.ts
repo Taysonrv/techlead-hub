@@ -5,8 +5,13 @@ import type {
   InternalAxiosRequestConfig,
 } from "axios";
 
+/*
+ * Em produção Web e no Desktop empacotado, frontend e backend são
+ * servidos pela mesma origem. O endereço absoluto continua disponível
+ * via VITE_API_URL para desenvolvimento ou topologias separadas.
+ */
 const DEFAULT_API_URL =
-  "http://localhost:3333/api";
+  "/api";
 
 const API_URL =
   import.meta.env

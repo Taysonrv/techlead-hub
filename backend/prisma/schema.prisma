@@ -74,12 +74,29 @@ model User {
   passwordResetTokens PasswordResetToken[]
   importRuns          ImportRun[]
   azureSyncRuns       AzureSyncRun[]
+  systemSettings      SystemSetting[] @relation("SystemSettingUpdatedBy")
 
   @@index([name])
   @@index([role])
   @@index([active])
   @@index([approvalStatus])
   @@index([approvedById])
+}
+
+// =========================================================
+// CONFIGURAÇÃO CENTRAL DA APLICAÇÃO
+// =========================================================
+
+model SystemSetting {
+  key       String   @id @db.VarChar(120)
+  value     String
+  encrypted Boolean  @default(true)
+  updatedAt DateTime @updatedAt
+
+  updatedById Int?
+  updatedBy   User? @relation("SystemSettingUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@index([updatedById])
 }
 
 // =========================================================

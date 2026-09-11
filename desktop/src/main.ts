@@ -19,6 +19,7 @@ import type {
 import fs from "node:fs";
 import path from "node:path";
 import http from "node:http";
+import https from "node:https";
 import crypto from "node:crypto";
 
 import {
@@ -44,8 +45,12 @@ const BACKEND_HOST =
 const BACKEND_PORT =
   3333;
 
-const APP_URL =
-  `http://${BACKEND_HOST}:${BACKEND_PORT}`;
+const CONFIGURED_SERVER_URL = process.env.TECHLEAD_HUB_SERVER_URL?.trim().replace(/\/$/, "") ?? "";
+const DEFAULT_WEB_URL = "https://techlead-hub.aliare.co";
+const USE_CENTRAL_SERVER = Boolean(CONFIGURED_SERVER_URL) || (app.isPackaged && app.getVersion().startsWith("1."));
+const APP_URL = USE_CENTRAL_SERVER
+  ? CONFIGURED_SERVER_URL || DEFAULT_WEB_URL
+  : `http://${BACKEND_HOST}:${BACKEND_PORT}`;
 
 const HEALTH_URL =
   `${APP_URL}/health`;
@@ -2322,8 +2327,9 @@ function requestStatus(
         resolve(value);
       };
 
+      const transport = new URL(url).protocol === "https:" ? https : http;
       const request =
-        http.get(
+        transport.get(
           url,
           {
             headers: {
@@ -2715,6 +2721,25 @@ async function bootstrap() {
   console.log(
     `[desktop] Iniciando ${APP_NAME} ${app.getVersion()}...`
   );
+
+  if (USE_CENTRAL_SERVER) {
+    console.log(`[desktop] Usando servidor central: ${APP_URL}`);
+    const centralReady = await waitForBackendReady();
+    if (!centralReady) {
+      await dialog.showMessageBox({
+        type: "error",
+        title: APP_NAME,
+        message: "O servidor central do TechLead Hub não está disponível.",
+        detail: `Não foi possível acessar ${APP_URL}. Verifique a rede/VPN e tente novamente.`,
+        buttons: ["Fechar"],
+      });
+      app.quit();
+      return;
+    }
+    createWindow();
+    scheduleInitialUpdateCheck();
+    return;
+  }
 
   /*
    * Garante um segredo persistente para autenticação do backend.

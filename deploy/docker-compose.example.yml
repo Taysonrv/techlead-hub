@@ -1,0 +1,25 @@
+services:
+  techlead-hub:
+    image: ${TECHLEAD_HUB_IMAGE:-techlead-hub:1.0.0-rc.1}
+    container_name: techlead-hub
+    restart: unless-stopped
+    ports:
+      - "${TECHLEAD_HUB_PORT:-3333}:3333"
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      JWT_SECRET: ${JWT_SECRET}
+      SYSTEM_CONFIG_KEY: ${SYSTEM_CONFIG_KEY}
+      APP_VERSION: ${APP_VERSION:-1.0.0-rc.1}
+      APP_RUNTIME: web
+      HOST: 0.0.0.0
+      PORT: 3333
+      TRUST_PROXY: ${TRUST_PROXY:-loopback}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-https://techlead-hub.aliare.co}
+      PASSWORD_RESET_URL: ${PASSWORD_RESET_URL:-https://techlead-hub.aliare.co/login}
+      AZURE_SYNC_SCHEDULER_ENABLED: ${AZURE_SYNC_SCHEDULER_ENABLED:-true}
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3333/health/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3

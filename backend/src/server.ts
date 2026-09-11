@@ -1,5 +1,3 @@
-import app from "./app";
-
 import {
   prisma,
 } from "./database/prisma";
@@ -11,6 +9,9 @@ import {
 import {
   ensureApplicationSchema,
 } from "./database/applicationSchema";
+import { systemConfigurationService } from "./services/SystemConfigurationService";
+import type { Server } from "node:http";
+import type { Express } from "express";
 
 /* =========================================================
    CONFIGURAÇÃO
@@ -49,14 +50,23 @@ const PORT =
    SERVIDOR
 ========================================================= */
 
-const azureSyncScheduler =
-  new AzureDevOpsSyncScheduler();
+let azureSyncScheduler: AzureDevOpsSyncScheduler | undefined;
 
-let server:
-  ReturnType<typeof app.listen>;
+let server: Server | undefined;
 
 async function start() {
   await ensureApplicationSchema();
+  await systemConfigurationService.loadIntoEnvironment();
+
+  /*
+   * O app é importado somente depois da configuração central. Assim,
+   * services criados durante o carregamento das rotas recebem os valores
+   * persistidos pelo administrador no PostgreSQL.
+   */
+  const appModule = await import("./app.js");
+  const exported = appModule.default as unknown as { default?: Express };
+  const app = (exported.default ?? exported) as Express;
+  azureSyncScheduler = new AzureDevOpsSyncScheduler();
 
   server = app.listen(
     PORT,
@@ -70,7 +80,7 @@ async function start() {
        * O scheduler inicia somente depois que o servidor
        * HTTP está efetivamente ouvindo.
        */
-      azureSyncScheduler.start();
+      azureSyncScheduler?.start();
     },
   );
 }
@@ -104,16 +114,17 @@ async function shutdown(
     `[server] Encerramento solicitado (${signal}).`,
   );
 
-  azureSyncScheduler.stop();
+  azureSyncScheduler?.stop();
 
   try {
     if (server) {
+      const currentServer = server;
       await new Promise<void>(
         (
           resolve,
           reject,
         ) => {
-          server.close(
+          currentServer.close(
           (error) => {
             if (
               error

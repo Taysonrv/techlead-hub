@@ -4,19 +4,48 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Versão sem prefixo v (ex.: 0.3.0-beta.1)"
+        description: "Versão sem prefixo v (ex.: 1.0.0-rc.1)"
         required: true
       channel:
         description: "Canal de atualização"
         required: true
         type: choice
         options: [beta, stable]
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+  packages: write
 
 jobs:
-  build-and-publish:
+  metadata:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      tag: ${{ steps.meta.outputs.tag }}
+      channel: ${{ steps.meta.outputs.channel }}
+    steps:
+      - id: meta
+        shell: bash
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+          INPUT_CHANNEL: ${{ inputs.channel }}
+        run: |
+          version="${INPUT_VERSION:-${GITHUB_REF_NAME#v}}"
+          tag="v${version}"
+          channel="${INPUT_CHANNEL:-beta}"
+          if [[ -z "${INPUT_CHANNEL}" && "${version}" != *-* ]]; then channel="stable"; fi
+          if [[ ! "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
+            echo "Versão inválida: ${version}" >&2; exit 1
+          fi
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          echo "channel=${channel}" >> "$GITHUB_OUTPUT"
+
+  desktop:
+    needs: metadata
     runs-on: windows-latest
-    permissions:
-      contents: read
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -27,20 +56,20 @@ jobs:
             backend/package-lock.json
             frontend/package-lock.json
             desktop/package-lock.json
-
       - name: Instalar dependências
         shell: pwsh
         run: |
           npm ci --prefix backend
           npm ci --prefix frontend
           npm ci --prefix desktop
-
       - name: Definir versão e canal
         shell: pwsh
+        env:
+          RELEASE_VERSION: ${{ needs.metadata.outputs.version }}
+          RELEASE_CHANNEL: ${{ needs.metadata.outputs.channel }}
         run: |
-          npm version "${{ inputs.version }}" --prefix desktop --no-git-tag-version
-          node -e "const fs=require('fs');const p='desktop/package.json';const j=require('./'+p);j.build.publish[0].channel='${{ inputs.channel == 'stable' && 'latest' || 'beta' }}';j.build.publish[0].releaseType='${{ inputs.channel == 'stable' && 'release' || 'prerelease' }}';fs.writeFileSync(p,JSON.stringify(j,null,2)+'\n')"
-
+          npm version "$env:RELEASE_VERSION" --prefix desktop --no-git-tag-version --allow-same-version
+          node -e "const fs=require('fs');const p='desktop/package.json';const j=require('./'+p);j.build.publish[0].channel=process.env.RELEASE_CHANNEL==='stable'?'latest':'beta';j.build.publish[0].releaseType=process.env.RELEASE_CHANNEL==='stable'?'release':'prerelease';fs.writeFileSync(p,JSON.stringify(j,null,2)+'\n')"
       - name: Compilar e testar
         shell: pwsh
         run: |
@@ -48,20 +77,72 @@ jobs:
           npm run build --prefix backend
           npm run build --prefix frontend
           npm run build:desktop --prefix desktop
-
-      - name: Gerar instalador
+      - name: Gerar instalador sem publicar
         shell: pwsh
         working-directory: desktop
-        env:
-          GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
-        run: npx electron-builder --win nsis --publish always
-
+        run: npx electron-builder --win nsis --publish never
       - name: Validar artefatos
         shell: pwsh
         working-directory: desktop
         run: node scripts/validate-release.mjs
-
+      - name: Publicar Beta no repositório de releases
+        if: needs.metadata.outputs.channel == 'beta'
+        shell: pwsh
+        working-directory: desktop
+        env:
+          GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
+          RELEASE_TAG: ${{ needs.metadata.outputs.tag }}
+          RELEASE_VERSION: ${{ needs.metadata.outputs.version }}
+        run: |
+          $repo = "Taysonrv/techlead-hub-releases"
+          if (-not (gh release view $env:RELEASE_TAG --repo $repo 2>$null)) {
+            gh release create $env:RELEASE_TAG --repo $repo --target main --draft --title "TechLead Hub $env:RELEASE_VERSION" --notes "Versão Beta do TechLead Hub. Consulte as novidades dentro do aplicativo."
+          }
+          $assets = Get-ChildItem release -File | Where-Object { $_.Name -match '\.(exe|blockmap|yml)$' } | ForEach-Object { $_.FullName }
+          if (-not $assets) { throw "Nenhum artefato de atualização foi localizado." }
+          gh release upload $env:RELEASE_TAG $assets --repo $repo --clobber
+          gh release edit $env:RELEASE_TAG --repo $repo --draft=false --prerelease=true
+      - name: Publicar versão estável no repositório principal
+        if: needs.metadata.outputs.channel == 'stable'
+        shell: pwsh
+        working-directory: desktop
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.metadata.outputs.tag }}
+          RELEASE_VERSION: ${{ needs.metadata.outputs.version }}
+        run: |
+          $repo = "${{ github.repository }}"
+          if (-not (gh release view $env:RELEASE_TAG --repo $repo 2>$null)) {
+            gh release create $env:RELEASE_TAG --repo $repo --verify-tag --draft --title "TechLead Hub $env:RELEASE_VERSION" --generate-notes
+          }
+          $assets = Get-ChildItem release -File | Where-Object { $_.Name -match '\.(exe|blockmap|yml)$' } | ForEach-Object { $_.FullName }
+          gh release upload $env:RELEASE_TAG $assets --repo $repo --clobber
+          gh release edit $env:RELEASE_TAG --repo $repo --draft=false --prerelease=false --latest
       - uses: actions/upload-artifact@v4
         with:
-          name: techlead-hub-${{ inputs.version }}
+          name: techlead-hub-desktop-${{ needs.metadata.outputs.version }}
           path: desktop/release/*
+
+  web-image:
+    needs: metadata
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ghcr.io/taysonrv/techlead-hub:${{ needs.metadata.outputs.version }}
+            ghcr.io/taysonrv/techlead-hub:${{ needs.metadata.outputs.channel }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.version=${{ needs.metadata.outputs.version }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

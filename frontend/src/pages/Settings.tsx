@@ -25,6 +25,7 @@ import {
   useState,
 } from "react";
 import { PageHeader } from "../components/PageHeader";
+import { api } from "../services/api";
 
 type ConfigurationState = {
   databaseConfigured: boolean;
@@ -37,6 +38,7 @@ type ConfigurationState = {
   sharePointSiteUrl: string;
   bpmnSiteUrl: string;
   microsoftConfigured: boolean;
+  runtime?: string;
 };
 
 type ConfigurationForm = {
@@ -86,14 +88,8 @@ export function Settings() {
       setLoading(true);
       setError(null);
 
-      if (!window.techLeadHub) {
-        throw new Error(
-          "As configurações estão disponíveis somente no aplicativo instalado.",
-        );
-      }
-
-      const current =
-        await window.techLeadHub.configuration.get();
+      const response = await api.get<ConfigurationState>("/system-settings");
+      const current = response.data;
 
       setConfiguration(current);
       setForm((previous) => ({
@@ -171,19 +167,32 @@ export function Settings() {
       setError(null);
       setSuccess(null);
 
-      if (!window.techLeadHub) {
-        throw new Error(
-          "As configurações estão disponíveis somente no aplicativo instalado.",
-        );
-      }
+      const response = await api.put<ConfigurationState & { restartRequired: boolean }>(
+        "/system-settings",
+        {
+          organization: form.organization,
+          project: form.project,
+          wiki: form.wiki,
+          pat: form.pat,
+          tenantId: form.tenantId,
+          clientId: form.clientId,
+          sharePointSiteUrl: form.sharePointSiteUrl,
+          bpmnSiteUrl: form.bpmnSiteUrl,
+        },
+      );
 
-      const result =
-        await window.techLeadHub.configuration.save(form);
+      let result = response.data;
+      if (form.databaseUrl && window.techLeadHub) {
+        result = {
+          ...result,
+          ...(await window.techLeadHub.configuration.save(form)),
+        };
+      }
 
       setSuccess(
         result.restartRequired
-          ? "Configurações protegidas com sucesso. O aplicativo será reiniciado para aplicá-las."
-          : "Configurações protegidas com sucesso.",
+          ? "Configurações centralizadas com sucesso. Reinicie o serviço para que todos os processos apliquem as novas integrações."
+          : "Configurações centralizadas com sucesso.",
       );
     } catch (saveError) {
       setError(
@@ -206,7 +215,7 @@ export function Settings() {
 
   return (
     <Box>
-      <PageHeader eyebrow="Sistema" title="Configurações" description="Gerencie a conexão do banco e a integração com o Azure DevOps. Os segredos são protegidos pelo Windows e nunca são exibidos novamente." />
+      <PageHeader eyebrow="Sistema" title="Configurações" description="Configuração administrativa central. As integrações são protegidas no banco compartilhado e valem para todos os usuários Web e Desktop." />
 
       {error && (
         <Alert severity="error" sx={{ mb: 2 }}>
@@ -221,7 +230,7 @@ export function Settings() {
       )}
 
       <Stack spacing={2.5}>
-        <Card
+        {window.techLeadHub && configuration?.runtime !== "web" && <Card
           elevation={0}
           sx={{
             border: "1px solid",
@@ -286,7 +295,7 @@ export function Settings() {
               helperText="A conexão atual não é exibida por segurança."
             />
           </CardContent>
-        </Card>
+        </Card>}
 
         <Card elevation={0} sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2.5 }}>
           <CardContent sx={{ p: { xs: 2, md: 2.5 } }}>
@@ -414,14 +423,14 @@ export function Settings() {
           spacing={1.5}
           sx={{ justifyContent: "flex-end" }}
         >
-          <Button
+          {window.techLeadHub && configuration?.runtime !== "web" && <Button
             variant="outlined"
             startIcon={<FileUploadOutlined />}
             disabled={saving}
             onClick={() => void importEnvironment()}
           >
             Importar .env
-          </Button>
+          </Button>}
 
           <Button
             variant="contained"
