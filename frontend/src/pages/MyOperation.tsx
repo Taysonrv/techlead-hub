@@ -51,7 +51,6 @@ export function MyOperation() {
   const [sourceView, setSourceView] = useState<SourceView>("tickets");
   const [selected, setSelected] = useState<Unified | null>(null);
   const [detail, setDetail] = useState<TicketDetail | null>(null);
-  const [detailLoading, setDetailLoading] = useState(false);
   const [dragged, setDragged] = useState<Ticket | null>(null);
   const [savingStatus, setSavingStatus] = useState(false);
   const [knowledgeQuery, setKnowledgeQuery] = useState("");
@@ -95,15 +94,13 @@ export function MyOperation() {
   };
 
   const openItem = async (item: Unified) => {
+    if (item.ticket) {
+      navigate(`/tickets?movidesk=${item.id}`);
+      return;
+    }
     setSelected(item); setDetail(null);
     setKnowledge([]);
     void searchKnowledge(item.title);
-    if (!item.ticket) return;
-    try {
-      setDetailLoading(true);
-      const response = await api.get<TicketDetail>(`/workspace/my-operation/tickets/${item.ticket.id}`);
-      setDetail(response.data);
-    } catch { setError("Não foi possível carregar os detalhes completos do atendimento."); } finally { setDetailLoading(false); }
   };
 
   const changeStatus = async (targetLane: string) => {
@@ -149,7 +146,7 @@ export function MyOperation() {
               <Chip size="small" label={columnItems.length} sx={{ height: 21, fontSize: ".68rem", fontWeight: 800, flexShrink: 0 }} />
             </Stack>
             <Stack spacing={.7} sx={{ flex: 1, overflowY: "auto", overflowX: "hidden", p: .7 }}>
-              {visibleItems.length ? visibleItems.map((item) => <OperationCard key={item.key} item={item} draggable={Boolean(item.ticket)} onDragStart={() => item.ticket && setDragged(item.ticket)} onDragEnd={() => setDragged(null)} onClick={() => void openItem(item)} />) : <Typography variant="caption" color="text.secondary" sx={{ py: 3, px: 1, textAlign: "center" }}>Nenhum registro</Typography>}
+              {visibleItems.length ? visibleItems.map((item) => <OperationCard key={item.key} item={item} compact draggable={Boolean(item.ticket)} onDragStart={() => item.ticket && setDragged(item.ticket)} onDragEnd={() => setDragged(null)} onClick={() => void openItem(item)} />) : <Typography variant="caption" color="text.secondary" sx={{ py: 3, px: 1, textAlign: "center" }}>Nenhum registro</Typography>}
               {remaining > 0 && <Button size="small" onClick={() => setVisibleByLane((current) => ({ ...current, [column]: visibleLimit + LANE_INCREMENT }))} sx={{ textTransform: "none", fontSize: ".7rem" }}>Mostrar mais {Math.min(remaining, LANE_INCREMENT)} de {remaining}</Button>}
             </Stack>
           </Box>;
@@ -162,7 +159,6 @@ export function MyOperation() {
 
     <Drawer anchor="right" open={Boolean(selected)} onClose={() => { setSelected(null); setDetail(null); }} slotProps={{ paper: { sx: detailDrawerPaperSx } }}>
       <DetailPanelHeader eyebrow={`${selected?.source ?? ""} · ${selected?.type ?? ""}`} title={selected?.title ?? "Detalhes do registro"} identifier={`#${selected?.id ?? ""}`} onClose={() => { setSelected(null); setDetail(null); }} />
-      {detailLoading && <CircularProgress size={24} sx={{ mb: 2 }} />}
       <DetailSection title="Visão operacional"><DetailFieldGrid fields={selected ? Object.entries({ Estado: selected.status, "Cliente principal": detail?.ticket.client ?? selected.client, "Clientes participantes": formatList(selected.workItem?.participantClients), Contato: detail?.ticket.contact, Categoria: detail?.ticket.category, Urgência: detail?.ticket.urgency, Serviço: detail?.ticket.service, Equipe: detail?.ticket.ownerTeam, Responsável: detail?.ticket.owner ?? selected.workItem?.assignedToName, "Prazo de solução": detail?.ticket.dueDate, Versão: selected.workItem?.deliveredVersion, "Ticket principal": selected.workItem?.movideskTicket, "Tickets participantes": formatList(selected.workItem?.participantMovideskTickets), "Task relacionada": selected.ticket?.taskNumber }).map(([label, value]) => [label, String(value ?? "Não informado")]) : []} /></DetailSection>
       {detail?.relatedWorkItems.length ? <Box sx={{ mt: 3 }}><Typography sx={{ fontWeight: 850 }}>Tarefas vinculadas</Typography><Stack spacing={1} sx={{ mt: 1 }}>{detail.relatedWorkItems.map((task) => <Button key={task.id} variant="outlined" endIcon={<OpenInNewOutlined />} onClick={() => navigate(`${route(task.workItemType)}?task=${task.id}`)} sx={{ justifyContent: "space-between", textTransform: "none" }}>#{task.id} · {task.workItemType}</Button>)}</Stack></Box> : null}
       <Card variant="outlined" sx={{ mt: 3 }}><CardContent>
@@ -176,13 +172,14 @@ export function MyOperation() {
   </Box>;
 }
 
-function OperationCard({ item, draggable, onDragStart, onDragEnd, onClick }: { item: Unified; draggable: boolean; onDragStart?: () => void; onDragEnd?: () => void; onClick: () => void }) {
-  return <Card elevation={0} draggable={draggable} onDragStart={onDragStart} onDragEnd={onDragEnd} onClick={onClick} sx={{ width: "100%", minWidth: 0, minHeight: 104, cursor: draggable ? "grab" : "pointer", border: "1px solid", borderColor: item.workItem?.blockedProcess ? "error.light" : "divider", borderLeft: `3px solid ${item.source === "MOVIDESK" ? "#1f7acb" : aliareColors.green}`, borderRadius: 1.75, bgcolor: "background.paper", transition: "transform .15s ease, box-shadow .15s ease, border-color .15s ease", "&:hover": { transform: "translateY(-1px)", boxShadow: "0 4px 12px rgba(16,24,40,.07)", borderColor: "rgba(16,24,40,.2)" }, "&:active": { cursor: draggable ? "grabbing" : "pointer" } }}><CardContent sx={{ p: 1.05, "&:last-child": { pb: 1.05 } }}>
+function OperationCard({ item, compact = false, draggable, onDragStart, onDragEnd, onClick }: { item: Unified; compact?: boolean; draggable: boolean; onDragStart?: () => void; onDragEnd?: () => void; onClick: () => void }) {
+  return <Card elevation={0} draggable={draggable} onDragStart={onDragStart} onDragEnd={onDragEnd} onClick={onClick} sx={{ width: "100%", minWidth: 0, minHeight: compact ? 132 : 112, cursor: draggable ? "grab" : "pointer", border: "1px solid", borderColor: item.workItem?.blockedProcess ? "error.light" : "divider", borderLeft: `3px solid ${item.source === "MOVIDESK" ? "#1f7acb" : aliareColors.green}`, borderRadius: 1.75, bgcolor: "background.paper", transition: "transform .15s ease, box-shadow .15s ease, border-color .15s ease", "&:hover": { transform: "translateY(-1px)", boxShadow: "0 4px 12px rgba(16,24,40,.07)", borderColor: "rgba(16,24,40,.2)" }, "&:active": { cursor: draggable ? "grabbing" : "pointer" } }}><CardContent sx={{ p: compact ? 1.1 : 1.25, "&:last-child": { pb: compact ? 1.1 : 1.25 } }}>
     <Stack direction="row" spacing={.4} sx={{ justifyContent: "space-between", alignItems: "center", minWidth: 0 }}><Stack direction="row" spacing={.25} sx={{ alignItems: "center", minWidth: 0 }}>{draggable && <DragIndicatorOutlined sx={{ fontSize: 14, color: "text.disabled" }} />}<Typography sx={{ fontWeight: 850, fontSize: ".7rem", flexShrink: 0 }}>#{item.id}</Typography></Stack><Chip size="small" label={item.type} sx={{ height: 19, minWidth: 0, maxWidth: "58%", fontSize: ".58rem", "& .MuiChip-label": { px: .7, overflow: "hidden", textOverflow: "ellipsis" } }} /></Stack>
-    <Typography title={item.title} sx={{ mt: .55, fontSize: ".72rem", lineHeight: 1.28, fontWeight: 750, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", overflowWrap: "anywhere" }}>{item.title}</Typography>
+    <Typography title={item.title} sx={{ mt: .55, fontSize: compact ? ".72rem" : ".78rem", lineHeight: 1.3, fontWeight: 750, display: "-webkit-box", WebkitLineClamp: compact ? 3 : 2, WebkitBoxOrient: "vertical", overflow: "hidden", overflowWrap: "anywhere" }}>{item.title}</Typography>
     <Typography title={item.client ?? "Cliente não informado"} variant="caption" color="text.secondary" sx={{ display: "block", mt: .55, fontSize: ".62rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.client ?? "Cliente não informado"}</Typography>
     <Stack direction="row" spacing={.35} sx={{ mt: .55, alignItems: "center", flexWrap: "wrap", rowGap: .35 }}>
       {item.updatedAt && <Chip size="small" icon={<ScheduleOutlined />} label={relativeDate(item.updatedAt)} variant="outlined" sx={{ height: 19, fontSize: ".57rem", "& .MuiChip-icon": { fontSize: 12 }, "& .MuiChip-label": { px: .55 } }} />}
+      {!compact && <Chip size="small" label={item.status || "Status não informado"} color={statusColor(item.status)} variant="outlined" sx={{ height: 21, fontSize: ".64rem", fontWeight: 750, "& .MuiChip-label": { px: .7 } }} />}
       {item.ticket?.taskNumber && <Chip size="small" label={`Task #${item.ticket.taskNumber}`} color="info" variant="outlined" sx={{ height: 19, fontSize: ".57rem", "& .MuiChip-label": { px: .55 } }} />}
       {item.workItem?.prioritized && <Chip size="small" color="warning" label="Prioridade" sx={{ height: 19, fontSize: ".57rem", "& .MuiChip-label": { px: .55 } }} />}
       {item.workItem?.blockedProcess && <Chip size="small" color="error" label="Bloqueio" sx={{ height: 19, fontSize: ".57rem", "& .MuiChip-label": { px: .55 } }} />}
@@ -191,6 +188,7 @@ function OperationCard({ item, draggable, onDragStart, onDragEnd, onClick }: { i
 }
 function operationPriority(a: Unified, b: Unified) { const weight = (item: Unified) => (item.workItem?.blockedProcess ? 4 : 0) + (item.workItem?.prioritized ? 2 : 0); const difference = weight(b) - weight(a); if (difference) return difference; return new Date(b.updatedAt ?? 0).getTime() - new Date(a.updatedAt ?? 0).getTime(); }
 function relativeDate(value: string) { const timestamp = new Date(value).getTime(); if (!Number.isFinite(timestamp)) return "Atualização recente"; const days = Math.max(0, Math.floor((Date.now() - timestamp) / 86_400_000)); if (days === 0) return "Hoje"; if (days === 1) return "Ontem"; return `${days}d atrás`; }
+function statusColor(status: string): "default" | "info" | "warning" | "success" | "secondary" { const currentLane = lane(status); if (currentLane === "Concluídos/Fechados") return "success"; if (currentLane === "Pausado" || currentLane === "Aguardando retorno") return "warning"; if (currentLane === "Em andamento") return "info"; if (currentLane === "Interno") return "secondary"; return "default"; }
 function lane(status: string) { const value = status.toLocaleLowerCase("pt-BR"); if (/(conclu|closed|done|resolv|fech|cancel)/.test(value)) return "Concluídos/Fechados"; if (/(paus|suspens)/.test(value)) return "Pausado"; if (/(retorno|cliente)/.test(value)) return "Aguardando retorno"; if (/(intern|desenvolv|qualifica)/.test(value)) return "Interno"; if (/(andamento|active|doing|progress)/.test(value)) return "Em andamento"; if (/(novo|new|atribu|assigned)/.test(value)) return "Aguardando atendimento"; return "Aguardando atendimento"; }
 function statusForLane(targetLane: string) { if (targetLane === "Concluídos/Fechados") return "Fechado"; if (targetLane === "Aguardando atendimento") return "Atribuído"; return targetLane; }
 function route(type: string) { const value = type.toLocaleLowerCase("pt-BR"); return value.includes("apoio") ? "/apoios" : value.includes("evolu") ? "/evolucoes" : "/correcoes"; }
