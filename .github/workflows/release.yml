@@ -98,7 +98,10 @@ jobs:
           if (-not (gh release view $env:RELEASE_TAG --repo $repo 2>$null)) {
             gh release create $env:RELEASE_TAG --repo $repo --target main --draft --title "TechLead Hub $env:RELEASE_VERSION" --notes "Versão Beta do TechLead Hub. Consulte as novidades dentro do aplicativo."
           }
-          $assets = Get-ChildItem release -File | Where-Object { $_.Name -match '\.(exe|blockmap|yml)$' } | ForEach-Object { $_.FullName }
+          $assets = Get-ChildItem release -File | Where-Object {
+            $_.Extension -in @(".exe", ".blockmap") -or
+            $_.Name -in @("beta.yml", "latest.yml")
+          } | ForEach-Object { $_.FullName }
           if (-not $assets) { throw "Nenhum artefato de atualização foi localizado." }
           gh release upload $env:RELEASE_TAG $assets --repo $repo --clobber
           gh release edit $env:RELEASE_TAG --repo $repo --draft=false --prerelease=true
@@ -115,7 +118,10 @@ jobs:
           if (-not (gh release view $env:RELEASE_TAG --repo $repo 2>$null)) {
             gh release create $env:RELEASE_TAG --repo $repo --verify-tag --draft --title "TechLead Hub $env:RELEASE_VERSION" --generate-notes
           }
-          $assets = Get-ChildItem release -File | Where-Object { $_.Name -match '\.(exe|blockmap|yml)$' } | ForEach-Object { $_.FullName }
+          $assets = Get-ChildItem release -File | Where-Object {
+            $_.Extension -in @(".exe", ".blockmap") -or
+            $_.Name -in @("beta.yml", "latest.yml")
+          } | ForEach-Object { $_.FullName }
           gh release upload $env:RELEASE_TAG $assets --repo $repo --clobber
           gh release edit $env:RELEASE_TAG --repo $repo --draft=false --prerelease=false --latest
       - uses: actions/upload-artifact@v4

@@ -45,11 +45,16 @@ const BACKEND_HOST =
 const BACKEND_PORT =
   3333;
 
-const CONFIGURED_SERVER_URL = process.env.TECHLEAD_HUB_SERVER_URL?.trim().replace(/\/$/, "") ?? "";
-const DEFAULT_WEB_URL = "https://techlead-hub.aliare.co";
-const USE_CENTRAL_SERVER = Boolean(CONFIGURED_SERVER_URL) || (app.isPackaged && app.getVersion().startsWith("1."));
+/*
+ * O Desktop continua autossuficiente e usa o backend empacotado por padrão.
+ * O servidor Web central só é ativado quando a implantação definir
+ * TECHLEAD_HUB_SERVER_URL explicitamente.
+ */
+const CONFIGURED_SERVER_URL =
+  process.env.TECHLEAD_HUB_SERVER_URL?.trim().replace(/\/$/, "") ?? "";
+const USE_CENTRAL_SERVER = Boolean(CONFIGURED_SERVER_URL);
 const APP_URL = USE_CENTRAL_SERVER
-  ? CONFIGURED_SERVER_URL || DEFAULT_WEB_URL
+  ? CONFIGURED_SERVER_URL
   : `http://${BACKEND_HOST}:${BACKEND_PORT}`;
 
 const HEALTH_URL =
@@ -280,6 +285,9 @@ function configureAutoUpdater() {
 
   updater.allowPrerelease =
     IS_PRERELEASE;
+
+  updater.allowDowngrade =
+    false;
 
   updater.channel =
     UPDATE_CHANNEL;
