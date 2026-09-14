@@ -76,6 +76,7 @@ export class ManagementPdfService {
       Prisma.AzureWorkItemWhereInput = {
       AND: [
         azureOperationalScope(),
+        { workItemType: { equals: "Correção Clientes", mode: "insensitive" } },
         {
           OR: [
             {
@@ -119,6 +120,7 @@ export class ManagementPdfService {
       blocked,
       states,
       versions,
+      ticketTimeline,
     ] =
       await Promise.all([
         prisma.user.findUnique({
@@ -317,6 +319,11 @@ export class ManagementPdfService {
           take:
             15,
         }),
+        prisma.ticket.findMany({
+          where: ticketWhere,
+          select: { createdDate: true, resolvedDate: true, closedDate: true },
+          orderBy: { createdDate: "asc" },
+        }),
       ]);
 
     const slaResults = slaTickets.map((ticket) => classifySolutionSla(
@@ -326,6 +333,18 @@ export class ManagementPdfService {
     ));
     const slaMeasured = slaResults.filter((result) => result !== null).length;
     const slaMet = slaResults.filter((result) => result === true).length;
+    const situationByMonth = new Map<string, { open: number; resolved: number; closed: number }>();
+    for (const ticket of ticketTimeline) {
+      const month = ticket.createdDate.toISOString().slice(0, 7);
+      const current = situationByMonth.get(month) ?? { open: 0, resolved: 0, closed: 0 };
+      if (ticket.closedDate) current.closed += 1;
+      else if (ticket.resolvedDate) current.resolved += 1;
+      else current.open += 1;
+      situationByMonth.set(month, current);
+    }
+    const situationNotes = [...situationByMonth.entries()]
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([month, values]) => `${month.split("-").reverse().join("/")}: ${values.open} em aberto, ${values.resolved} resolvidos e ${values.closed} fechados.`);
 
     const managementInsights = buildManagementInsights({
       ticketsTotal: ticketTotal,
@@ -375,8 +394,6 @@ export class ManagementPdfService {
           { label: "Pendências", value: ticketOpen },
           { label: "SLA no prazo", value: slaMet },
           { label: "Correções", value: corrections },
-          { label: "Evoluções", value: evolutions },
-          { label: "Apoios", value: supports },
           { label: "Priorizados", value: prioritized },
           { label: "Bloqueados", value: blocked },
         ],
@@ -406,7 +423,7 @@ export class ManagementPdfService {
           },
           {
             label:
-              "Encerrados",
+              "Fechados",
             value:
               ticketClosed,
           },
@@ -432,16 +449,6 @@ export class ManagementPdfService {
                 0,
                 slaMeasured -
                   slaMet,
-              ),
-          },
-          {
-            label:
-              "Não medido",
-            value:
-              Math.max(
-                0,
-                ticketTotal -
-                  slaMeasured,
               ),
           },
         ],
@@ -505,27 +512,15 @@ export class ManagementPdfService {
       },
       development: {
         title:
-          "Desenvolvimento",
+          "Correções",
         subtitle:
-          "Correções, evoluções e apoios",
+          "Correções de suporte e sustentação; evoluções e apoios não compõem este relatório",
         data: [
           {
             label:
               "Correções",
             value:
               corrections,
-          },
-          {
-            label:
-              "Evoluções",
-            value:
-              evolutions,
-          },
-          {
-            label:
-              "Apoios",
-            value:
-              supports,
           },
           {
             label:
@@ -540,6 +535,12 @@ export class ManagementPdfService {
               blocked,
           },
         ],
+      },
+      situationEvolution: {
+        title: "Evolução mensal dos atendimentos",
+        subtitle: "Situação atual dos tickets agrupada pelo mês de abertura",
+        data: [],
+        notes: situationNotes.length ? situationNotes : ["Sem atendimentos no período selecionado."],
       },
       states: {
         title:
@@ -586,6 +587,7 @@ export class ManagementPdfService {
         string[]
       > = {
       executive: [
+        "situationEvolution",
         "clientHealth",
         "insights",
         "tickets",
@@ -598,17 +600,20 @@ export class ManagementPdfService {
         "versions",
       ],
       analysts: [
+        "situationEvolution",
         "insights",
         "analysts",
         "tickets",
       ],
       sla: [
+        "situationEvolution",
         "insights",
         "sla",
         "tickets",
         "categories",
       ],
       clients: [
+        "situationEvolution",
         "clientHealth",
         "insights",
         "clients",
@@ -616,12 +621,14 @@ export class ManagementPdfService {
         "tickets",
       ],
       development: [
+        "situationEvolution",
         "insights",
         "development",
         "states",
         "versions",
       ],
       versions: [
+        "situationEvolution",
         "insights",
         "versions",
         "states",
@@ -736,7 +743,7 @@ function reportTitle(
     clients:
       "Análise de Clientes",
     development:
-      "Correções, Evoluções e Apoios",
+      "Correções de Suporte",
     versions:
       "Análise por Versões",
   };
@@ -1039,19 +1046,13 @@ function pageContent(
     return commands.join("\n");
   }
 
-  drawBars(
-    commands,
-    data,
-    55,
-    255,
-    730,
-    175,
-  );
+  text(commands, sectionDefinition(section.title), 34, 448, 9, false, [0.28, 0.32, 0.36]);
   drawTable(
     commands,
     data,
+    section.title,
     34,
-    55,
+    155,
     770,
   );
 
@@ -1167,6 +1168,7 @@ function drawTable(
     string[],
   data:
     Datum[],
+  sectionTitle: string,
   x:
     number,
   y:
@@ -1180,7 +1182,7 @@ function drawTable(
       6,
     );
   const rowHeight =
-    19;
+    34;
   const top =
     y +
     (
@@ -1218,7 +1220,7 @@ function drawTable(
   text(
     commands,
     "Quantidade",
-    x + width - 82,
+    x + width - 92,
     top - 13,
     8,
     true,
@@ -1279,14 +1281,24 @@ function drawTable(
           85,
         ),
         x + 8,
-        currentY + 6,
+        currentY + 20,
         8,
+        true,
+      );
+      text(
+        commands,
+        truncate(datumDefinition(sectionTitle, item.label), 112),
+        x + 8,
+        currentY + 7,
+        7,
+        false,
+        [0.34, 0.38, 0.42],
       );
       text(
         commands,
         `${item.value}  (${total > 0 ? (item.value / total * 100).toFixed(1) : "0.0"}%)`,
-        x + width - 82,
-        currentY + 6,
+        x + width - 92,
+        currentY + 17,
         8,
       );
     },
@@ -1414,4 +1426,27 @@ function clientAliases(value: string) {
   const normalized = value.trim();
   const shortName = normalized.split(/\s+-\s+/)[0]?.trim() ?? normalized;
   return [...new Set([normalized, shortName].filter((item) => item.length >= 3))];
+}
+
+function sectionDefinition(title: string) {
+  if (title.includes("SLA")) return "Somente tickets com medição válida compõem quantidades e percentuais; registros não medidos são excluídos.";
+  if (title.includes("Evolução mensal")) return "Cada linha apresenta a situação atual dos tickets criados naquele mês.";
+  if (title.includes("Correções")) return "Somente Correções de suporte e sustentação do Azure DevOps; Evoluções e APOIOs são excluídos.";
+  return "Valores calculados com o período e os filtros indicados no cabeçalho.";
+}
+
+function datumDefinition(section: string, label: string) {
+  if (section.includes("SLA")) return label.includes("Dentro") ? "Medição oficial dentro do prazo ou conclusão anterior ao vencimento." : "Medição oficial violada ou conclusão posterior ao vencimento.";
+  if (section.includes("Atendimentos")) {
+    if (label.includes("Em aberto")) return "Sem resolução e sem fechamento.";
+    if (label.includes("Resolvidos")) return "Com resolução registrada e ainda sem fechamento.";
+    if (label.includes("Fechados")) return "Com data de fechamento registrada.";
+  }
+  if (section.includes("Analistas")) return "Tickets atribuídos ao responsável no recorte.";
+  if (section.includes("Clientes")) return "Tickets vinculados ao cliente no recorte.";
+  if (section.includes("Categorias")) return "Tickets classificados nesta categoria.";
+  if (section.includes("Estados")) return "Correções atualmente neste estado do Azure.";
+  if (section.includes("Versões")) return "Correções entregues nesta versão.";
+  if (section.includes("Correções")) return "Correções de suporte e sustentação no recorte.";
+  return "Quantidade apurada no período selecionado.";
 }
