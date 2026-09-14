@@ -1,5 +1,4 @@
 import {
-  Avatar,
   Badge,
   Box,
   Button,
@@ -64,6 +63,7 @@ import {
   useAuth,
   type UserRole,
 } from "../context/AuthContext";
+import { UserAvatar } from "./UserAvatar";
 
 import {
   api,
@@ -408,20 +408,6 @@ export function Sidebar() {
   /* =======================================================
      USUÁRIO
   ======================================================= */
-
-  const userInitials =
-    useMemo(
-      () =>
-        getInitials(
-          user?.name ??
-            user?.username ??
-            "Usuário",
-        ),
-      [
-        user?.name,
-        user?.username,
-      ],
-    );
 
   const userRole =
     getRoleLabel(
@@ -936,18 +922,7 @@ export function Sidebar() {
               spacing={1}
               sx={{ alignItems: "center" }}
             >
-              <Avatar
-                sx={{
-                  width: 32,
-                  height: 32,
-                  fontSize: "0.72rem",
-                  fontWeight: 800,
-                  backgroundColor: aliareColors.green,
-                  color: aliareColors.black,
-                }}
-              >
-                {userInitials}
-              </Avatar>
+              <UserAvatar user={user} size={32} sx={{ backgroundColor: aliareColors.green, color: aliareColors.black }} />
 
               <Box
                 sx={{
@@ -1475,38 +1450,4 @@ function getRoleLabel(
   }
 
   return "Usuário";
-}
-
-/* =========================================================
-   INICIAIS
-========================================================= */
-
-function getInitials(
-  name: string,
-) {
-  const parts =
-    name
-      .trim()
-      .split(/\s+/)
-      .filter(Boolean);
-
-  if (
-    parts.length === 0
-  ) {
-    return "U";
-  }
-
-  if (
-    parts.length === 1
-  ) {
-    return parts[0]
-      .slice(
-        0,
-        2,
-      )
-      .toUpperCase();
-  }
-
-  return `${parts[0][0]}${parts[parts.length - 1][0]}`
-    .toUpperCase();
 }

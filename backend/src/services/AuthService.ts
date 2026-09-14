@@ -111,6 +111,7 @@ const USER_PUBLIC_SELECT = {
 
   mustChangePassword: true,
   lastLoginAt: true,
+  avatarUpdatedAt: true,
   createdAt: true,
   updatedAt: true,
 } as const;
@@ -1301,6 +1302,31 @@ export class AuthService {
     await prisma.userSession.update({ where: { id: session.id }, data: { lastActivityAt: now, expiresAt } });
     const accessToken = createAccessToken({ sub: String(session.user.id), sid: sessionToken, username: session.user.username, role: session.user.role });
     return { active: true, accessToken, expiresAt: expiresAt.toISOString(), serverTime: now.toISOString() };
+  }
+
+  async getAvatar(userId: number) {
+    const user = await prisma.user.findUnique({ where: { id: userId }, select: { avatarData: true, avatarMimeType: true, avatarUpdatedAt: true } });
+    if (!user?.avatarData || !user.avatarMimeType) return null;
+    return { data: Buffer.from(user.avatarData), mimeType: user.avatarMimeType, updatedAt: user.avatarUpdatedAt };
+  }
+
+  async saveAvatar(userId: number, file: { buffer: Buffer; mimetype: string; size: number }) {
+    const allowed = new Set(["image/jpeg", "image/png", "image/webp"]);
+    if (!allowed.has(file.mimetype)) throw new AuthError("Utilize uma imagem JPG, PNG ou WebP.", 400);
+    if (!file.size || file.size > 2 * 1024 * 1024) throw new AuthError("A foto deve possuir no máximo 2 MB.", 400);
+    const updatedAt = new Date();
+    await prisma.$transaction([
+      prisma.user.update({ where: { id: userId }, data: { avatarData: file.buffer, avatarMimeType: file.mimetype, avatarUpdatedAt: updatedAt } }),
+      prisma.auditLog.create({ data: { userId, action: "PROFILE_AVATAR_UPDATED", entity: "User", entityId: String(userId), metadata: { mimeType: file.mimetype, size: file.size } } }),
+    ]);
+    return { avatarUpdatedAt: updatedAt };
+  }
+
+  async deleteAvatar(userId: number) {
+    await prisma.$transaction([
+      prisma.user.update({ where: { id: userId }, data: { avatarData: null, avatarMimeType: null, avatarUpdatedAt: null } }),
+      prisma.auditLog.create({ data: { userId, action: "PROFILE_AVATAR_REMOVED", entity: "User", entityId: String(userId) } }),
+    ]);
   }
 }
 

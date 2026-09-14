@@ -40,3 +40,11 @@ O entrypoint executa `prisma migrate deploy` antes do backend. Se a política da
 5. Testar transferência da sessão e expiração após cinco minutos.
 6. Validar `/health/ready` antes de liberar o tráfego.
 7. Promover a mesma versão para Web e Desktop.
+
+## Foto de perfil
+
+A foto é armazenada no PostgreSQL, e não no filesystem do contêiner. São aceitos JPG, PNG e WebP com até 2 MB. Assim, a foto é compartilhada entre Web e Desktop e permanece disponível após atualizações ou substituições da imagem.
+
+## Atualização da aplicação Web
+
+Cada versão gera uma nova imagem imutável no GHCR. O contêiner em execução não se modifica sozinho: a infraestrutura deve executar o pull da nova tag e recriar o serviço. Esse passo pode ser automatizado por pipeline de implantação, webhook, GitOps ou ferramenta equivalente. Os usuários recebem a versão nova no próximo carregamento do navegador após a troca do contêiner.

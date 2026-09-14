@@ -51,6 +51,7 @@ export type AuthUser = {
   mustChangePassword: boolean;
 
   lastLoginAt?: string | null;
+  avatarUpdatedAt?: string | null;
 
   createdAt?: string;
 

@@ -13,6 +13,7 @@ import {
 import {
   createRateLimitMiddleware,
 } from "../middlewares/rateLimitMiddleware";
+import multer from "multer";
 
 /* =========================================================
    ROUTER
@@ -23,6 +24,7 @@ const authRoutes =
 
 const auth =
   new AuthController();
+const avatarUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 2 * 1024 * 1024, files: 1 } });
 
 const loginRateLimit =
   createRateLimitMiddleware({
@@ -154,6 +156,10 @@ authRoutes.post(
   authMiddleware,
   auth.heartbeat.bind(auth)
 );
+
+authRoutes.get("/me/avatar", authMiddleware, auth.avatar.bind(auth));
+authRoutes.put("/me/avatar", authMiddleware, avatarUpload.single("avatar"), auth.uploadAvatar.bind(auth));
+authRoutes.delete("/me/avatar", authMiddleware, auth.deleteAvatar.bind(auth));
 
 /* =========================================================
    EXPORT

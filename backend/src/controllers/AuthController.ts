@@ -594,6 +594,43 @@ export class AuthController {
       return handleAuthError(error, response);
     }
   }
+
+  async avatar(request: AuthenticatedRequest, response: Response) {
+    try {
+      const userId = request.auth?.userId;
+      if (!userId) return response.status(401).json({ message: "Usuário não autenticado." });
+      const avatar = await authService.getAvatar(userId);
+      if (!avatar) return response.status(404).end();
+      response.setHeader("Content-Type", avatar.mimeType);
+      response.setHeader("Cache-Control", "private, max-age=3600");
+      if (avatar.updatedAt) response.setHeader("Last-Modified", avatar.updatedAt.toUTCString());
+      return response.send(avatar.data);
+    } catch (error) {
+      return handleAuthError(error, response);
+    }
+  }
+
+  async uploadAvatar(request: AuthenticatedRequest, response: Response) {
+    try {
+      const userId = request.auth?.userId;
+      if (!userId) return response.status(401).json({ message: "Usuário não autenticado." });
+      if (!request.file) throw new AuthError("Selecione uma foto de perfil.", 400);
+      return response.json(await authService.saveAvatar(userId, request.file));
+    } catch (error) {
+      return handleAuthError(error, response);
+    }
+  }
+
+  async deleteAvatar(request: AuthenticatedRequest, response: Response) {
+    try {
+      const userId = request.auth?.userId;
+      if (!userId) return response.status(401).json({ message: "Usuário não autenticado." });
+      await authService.deleteAvatar(userId);
+      return response.json({ message: "Foto removida com sucesso." });
+    } catch (error) {
+      return handleAuthError(error, response);
+    }
+  }
 }
 
 /* =========================================================

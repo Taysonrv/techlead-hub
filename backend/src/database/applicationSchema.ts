@@ -8,6 +8,12 @@ import {
  */
 export async function ensureApplicationSchema() {
   await prisma.$executeRawUnsafe(`
+    ALTER TABLE "User"
+      ADD COLUMN IF NOT EXISTS "avatarData" BYTEA,
+      ADD COLUMN IF NOT EXISTS "avatarMimeType" TEXT,
+      ADD COLUMN IF NOT EXISTS "avatarUpdatedAt" TIMESTAMP(3)
+  `);
+  await prisma.$executeRawUnsafe(`
     ALTER TABLE "UserSession"
       ADD COLUMN IF NOT EXISTS "deviceId" TEXT,
       ADD COLUMN IF NOT EXISTS "clientType" TEXT NOT NULL DEFAULT 'WEB',

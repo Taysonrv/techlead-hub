@@ -64,6 +64,9 @@ model User {
 
   // Último acesso
   lastLoginAt DateTime?
+  avatarData Bytes?
+  avatarMimeType String?
+  avatarUpdatedAt DateTime?
 
   // Auditoria
   createdAt DateTime @default(now())

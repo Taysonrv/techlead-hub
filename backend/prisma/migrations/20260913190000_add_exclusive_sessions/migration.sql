@@ -4,6 +4,11 @@ ALTER TABLE "UserSession"
   ADD COLUMN IF NOT EXISTS "appVersion" TEXT,
   ADD COLUMN IF NOT EXISTS "lastActivityAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
 
+ALTER TABLE "User"
+  ADD COLUMN IF NOT EXISTS "avatarData" BYTEA,
+  ADD COLUMN IF NOT EXISTS "avatarMimeType" TEXT,
+  ADD COLUMN IF NOT EXISTS "avatarUpdatedAt" TIMESTAMP(3);
+
 CREATE INDEX IF NOT EXISTS "UserSession_userId_clientType_revokedAt_idx"
   ON "UserSession"("userId", "clientType", "revokedAt");
 CREATE INDEX IF NOT EXISTS "UserSession_lastActivityAt_idx"
