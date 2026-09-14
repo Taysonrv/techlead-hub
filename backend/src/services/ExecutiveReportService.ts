@@ -1090,100 +1090,78 @@ export class ExecutiveReportService {
   }
 
   private addCharts(
-    workbook:
-      ExcelJS.Workbook,
-    sheet:
-      ExcelJS.Worksheet,
-    values:
-      Array<{
-        label: string;
-        value: number;
-      }>,
-    column:
-      number,
-    row:
-      number,
+    workbook: ExcelJS.Workbook,
+    sheet: ExcelJS.Worksheet,
+    values: Array<{ label: string; value: number }>,
+    column: number,
+    row: number,
   ) {
-    if (
-      values.length ===
-      0
-    ) {
+    const chartValues = values
+      .filter((item) => Number.isFinite(item.value) && item.value > 0)
+      .sort((left, right) => right.value - left.value)
+      .slice(0, 10);
+
+    const legendColumn = column + 8;
+    const total = chartValues.reduce((sum, item) => sum + item.value, 0);
+    const colors = [
+      "FF18C77A", "FF0078D4", "FFFFAA00", "FFDC3545", "FF6F42C1",
+      "FF20C997", "FFFD7E14", "FF6C757D", "FF0D6EFD", "FF198754",
+    ];
+
+    sheet.getCell(row + 1, legendColumn).value = "Legenda";
+    sheet.getCell(row + 1, legendColumn).font = { bold: true };
+    sheet.getCell(row + 1, legendColumn + 1).value = "Quantidade";
+    sheet.getCell(row + 1, legendColumn + 1).font = { bold: true };
+    sheet.getCell(row + 1, legendColumn + 2).value = "Participação";
+    sheet.getCell(row + 1, legendColumn + 2).font = { bold: true };
+
+    if (!chartValues.length) {
+      sheet.getCell(row + 2, legendColumn).value = "Sem dados para o recorte selecionado";
       return;
     }
 
-    for (
-      let current =
-        column + 1;
-      current <=
-        column + 9;
-      current += 1
-    ) {
-      sheet.getColumn(
-        current,
-      ).width =
-        12;
+    chartValues.forEach((item, index) => {
+      const currentRow = row + index + 2;
+      const labelCell = sheet.getCell(currentRow, legendColumn);
+      labelCell.value = item.label;
+      labelCell.fill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: colors[index % colors.length]! },
+      };
+      labelCell.font = { color: { argb: "FFFFFFFF" }, bold: true };
+      labelCell.alignment = { wrapText: true };
+      sheet.getCell(currentRow, legendColumn + 1).value = item.value;
+      sheet.getCell(currentRow, legendColumn + 2).value = total > 0 ? item.value / total : 0;
+      sheet.getCell(currentRow, legendColumn + 2).numFmt = "0.00%";
+    });
+    sheet.getColumn(legendColumn).width = 34;
+    sheet.getColumn(legendColumn + 1).width = 14;
+    sheet.getColumn(legendColumn + 2).width = 14;
+
+    if (chartValues.length > 1) {
+      const pie = workbook.addImage({
+        base64: createPieChartPng(chartValues).toString("base64"),
+        extension: "png",
+      });
+      sheet.addImage(pie, {
+        tl: { col: column, row },
+        ext: { width: 390, height: 250 },
+      });
+    } else {
+      sheet.getCell(row + 2, column + 1).value =
+        "Distribuição única: o gráfico de pizza foi omitido por não agregar comparação.";
+      sheet.getCell(row + 2, column + 1).alignment = { wrapText: true };
     }
 
-    const pie =
-      workbook.addImage({
-        base64:
-          createPieChartPng(
-            values,
-          ).toString(
-            "base64",
-          ),
-        extension:
-          "png",
-      });
-
-    const bars =
-      workbook.addImage({
-        base64:
-          createBarChartPng(
-            values,
-          ).toString(
-            "base64",
-          ),
-        extension:
-          "png",
-      });
-
-    sheet.addImage(
-      pie,
-      {
-        tl: {
-          col:
-            column,
-          row:
-            row,
-        },
-        ext: {
-          width:
-            540,
-          height:
-            270,
-        },
-      },
-    );
-
-    sheet.addImage(
-      bars,
-      {
-        tl: {
-          col:
-            column,
-          row:
-            row +
-            15,
-        },
-        ext: {
-          width:
-            540,
-          height:
-            270,
-        },
-      },
-    );
+    const bars = workbook.addImage({
+      base64: createBarChartPng(chartValues).toString("base64"),
+      extension: "png",
+    });
+    sheet.addImage(bars, {
+      tl: { col: column, row: row + 15 },
+      ext: { width: 430, height: 250 },
+    });
   }
 
   private applyScope(
