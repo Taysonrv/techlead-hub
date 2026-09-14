@@ -273,12 +273,13 @@ export class WorkspaceService {
       if (issue === "withoutModule") return { module: null };
       if (issue === "withoutOwner") return { assignedToName: null };
       if (issue === "completedWithoutVersion") return { state: { in: TERMINAL }, deliveredVersion: null };
+      if (issue === "activeTaskWithVersion") return { state: { notIn: TERMINAL }, deliveredVersion: { not: null } };
       return {};
     };
 
     const [
       withoutTicket, withoutClient, withoutModule, withoutOwner,
-      completedWithoutVersion, existingTasks, duplicates, finishedLinkedTasks,
+      completedWithoutVersion, existingTasks, duplicates, linkedTasks,
     ] = await Promise.all([
       prisma.azureWorkItem.count({ where: { AND: [scope, issueWhere("withoutTicket")] } }),
       prisma.azureWorkItem.count({ where: { AND: [scope, issueWhere("withoutClient")] } }),
@@ -296,10 +297,7 @@ export class WorkspaceService {
       }),
       prisma.azureWorkItem.findMany({
         where: {
-          AND: [
-            scope,
-            { state: { in: TERMINAL } },
-          ],
+          AND: [scope],
         },
         orderBy: [{ azureClosedAt: "desc" }, { azureChangedAt: "desc" }],
         select: {
@@ -328,6 +326,9 @@ export class WorkspaceService {
         /novo|desenvolvimento|andamento|aguard|paus|parad/.test(status);
     };
     const isCanceledTask = (state: string) => /cancelad|canceled/.test(normalizeStatus(state));
+    const isTerminalTask = (state: string) => TERMINAL.some((value) => normalizeStatus(value) === normalizeStatus(state));
+    const finishedLinkedTasks = linkedTasks.filter((item) => isTerminalTask(item.state));
+    const activeLinkedTasks = linkedTasks.filter((item) => !isTerminalTask(item.state));
 
     const finishedTaskById = new Map(finishedLinkedTasks.map((item) => [item.id, item]));
     const finishedTaskByTicket = new Map<number, (typeof finishedLinkedTasks)[number]>();
@@ -338,18 +339,38 @@ export class WorkspaceService {
       }
     }
 
+    const findLinkedTask = (ticket: (typeof scopedTickets)[number], items: typeof linkedTasks) =>
+      (ticket.taskNumber ? items.find((item) => item.id === ticket.taskNumber) : undefined)
+      ?? items.find((item) => item.movideskTicket === ticket.movideskId
+        || (item.participantMovideskTickets?.match(/\d+/g) ?? []).map(Number).includes(ticket.movideskId));
+
     const ticketsAwaitingClosure = scopedTickets.flatMap((ticket) => {
       if (!isTicketOpen(ticket)) return [];
-      const task = (ticket.taskNumber ? finishedTaskById.get(ticket.taskNumber) : undefined)
-        ?? finishedTaskByTicket.get(ticket.movideskId);
+      const task = findLinkedTask(ticket, finishedLinkedTasks);
       if (!task) return [];
       // A versão usada na higienização é a entrega importada do ticket Movidesk.
       // AzureWorkItem.deliveredVersion representa a versão de registro/classificação da Task.
       const hasDeliveredVersion = Boolean(ticket.deliveredVersion?.trim());
       return isCanceledTask(task.state) || hasDeliveredVersion ? [{ ticket, task }] : [];
     });
+    const ticketsFinishedWithoutDelivery = scopedTickets.flatMap((ticket) => {
+      if (!isTicketOpen(ticket) || ticket.deliveredVersion?.trim()) return [];
+      const task = findLinkedTask(ticket, finishedLinkedTasks);
+      return task && !isCanceledTask(task.state) ? [{ ticket, task }] : [];
+    });
+    const closedTicketsWithActiveTask = scopedTickets.flatMap((ticket) => {
+      if (isTicketOpen(ticket)) return [];
+      const task = findLinkedTask(ticket, activeLinkedTasks);
+      return task ? [{ ticket, task }] : [];
+    });
+    const clientMismatches = scopedTickets.flatMap((ticket) => {
+      const task = findLinkedTask(ticket, linkedTasks);
+      if (!task?.client || !ticket.client) return [];
+      return normalizeStatus(task.client) !== normalizeStatus(ticket.client) ? [{ ticket, task }] : [];
+    });
 
-    const azureSamples = params.issue === "danglingTaskTickets"
+    const derivedTicketIssues = ["danglingTaskTickets", "ticketOpenTaskFinished", "ticketOpenTaskWithoutDelivery", "ticketClosedTaskOpen", "clientMismatch"];
+    const azureSamples = params.issue && derivedTicketIssues.includes(params.issue)
       ? []
       : await prisma.azureWorkItem.findMany({
       where: { AND: [scope, params.issue === "duplicatedMovideskLinks"
@@ -372,8 +393,7 @@ export class WorkspaceService {
       },
     });
 
-    const samples = params.issue === "ticketOpenTaskFinished"
-      ? ticketsAwaitingClosure.slice(0, 100).map(({ ticket, task }) => ({
+    const toTicketSample = ({ ticket, task }: { ticket: (typeof scopedTickets)[number]; task: (typeof linkedTasks)[number] }) => ({
           id: ticket.id,
           workItemType: task.workItemType,
           title: ticket.subject,
@@ -386,8 +406,17 @@ export class WorkspaceService {
           taskNumber: task.id,
           taskState: task.state,
           taskTitle: task.title,
+          taskClient: task.client,
           source: "MOVIDESK" as const,
-        }))
+        });
+    const samples = params.issue === "ticketOpenTaskFinished"
+      ? ticketsAwaitingClosure.slice(0, 100).map(toTicketSample)
+      : params.issue === "ticketOpenTaskWithoutDelivery"
+      ? ticketsFinishedWithoutDelivery.slice(0, 100).map(toTicketSample)
+      : params.issue === "ticketClosedTaskOpen"
+      ? closedTicketsWithActiveTask.slice(0, 100).map(toTicketSample)
+      : params.issue === "clientMismatch"
+      ? clientMismatches.slice(0, 100).map(toTicketSample)
       : params.issue === "danglingTaskTickets"
       ? danglingTickets.slice(0, 50).map((ticket) => ({
           id: ticket.id,
@@ -411,6 +440,10 @@ export class WorkspaceService {
         danglingTaskTickets: danglingTickets.length,
         duplicatedMovideskLinks: duplicates.length,
         ticketOpenTaskFinished: ticketsAwaitingClosure.length,
+        ticketOpenTaskWithoutDelivery: ticketsFinishedWithoutDelivery.length,
+        ticketClosedTaskOpen: closedTicketsWithActiveTask.length,
+        clientMismatch: clientMismatches.length,
+        activeTaskWithVersion: activeLinkedTasks.filter((item) => Boolean(item.deliveredVersion?.trim())).length,
       },
       samples,
       filters: {
