@@ -1039,20 +1039,13 @@ function pageContent(
     return commands.join("\n");
   }
 
-  drawPie(
-    commands,
-    data,
-    190,
-    300,
-    115,
-  );
   drawBars(
     commands,
     data,
-    370,
+    55,
     255,
-    425,
-    185,
+    730,
+    175,
   );
   drawTable(
     commands,
@@ -1079,179 +1072,6 @@ function pageContent(
   return commands.join(
     "\n"
   );
-}
-
-function drawPie(
-  commands:
-    string[],
-  data:
-    Datum[],
-  centerX:
-    number,
-  centerY:
-    number,
-  radius:
-    number,
-) {
-  const total =
-    data.reduce(
-      (
-        sum,
-        item,
-      ) =>
-        sum +
-        Math.max(
-          0,
-          item.value,
-        ),
-      0,
-    );
-
-  if (total <= 0) {
-    return;
-  }
-
-  let start =
-    Math.PI /
-    2;
-
-  data
-    .slice(
-      0,
-      8,
-    )
-    .forEach(
-      (
-        item,
-        index,
-      ) => {
-        const angle =
-          Math.max(
-            0,
-            item.value,
-          ) /
-          total *
-          Math.PI *
-          2;
-        const points:
-          Array<
-            [
-              number,
-              number,
-            ]
-          > = [
-          [
-            centerX,
-            centerY,
-          ],
-        ];
-        const steps =
-          Math.max(
-            2,
-            Math.ceil(
-              angle /
-              (
-                Math.PI /
-                20
-              ),
-            ),
-          );
-
-        for (
-          let step =
-            0;
-          step <=
-            steps;
-          step += 1
-        ) {
-          const current =
-            start -
-            angle *
-            step /
-            steps;
-          points.push([
-            centerX +
-              Math.cos(
-                current,
-              ) *
-              radius,
-            centerY +
-              Math.sin(
-                current,
-              ) *
-              radius,
-          ]);
-        }
-
-        const color =
-          COLORS[
-            index %
-              COLORS.length
-          ]!;
-
-        commands.push(
-          `${color.join(" ")} rg`,
-          `${number(points[0]![0])} ${number(points[0]![1])} m`,
-        );
-
-        points.slice(
-          1,
-        ).forEach(
-          (
-            point,
-          ) => {
-            commands.push(
-              `${number(point[0])} ${number(point[1])} l`,
-            );
-          },
-        );
-
-        commands.push(
-          "h f"
-        );
-
-        start -=
-          angle;
-      },
-    );
-
-  data
-    .slice(
-      0,
-      8,
-    )
-    .forEach(
-      (
-        item,
-        index,
-      ) => {
-        const y =
-          420 -
-          index *
-            18;
-        const color =
-          COLORS[
-            index %
-              COLORS.length
-          ]!;
-
-        fillRect(
-          commands,
-          315,
-          y - 8,
-          9,
-          9,
-          color,
-        );
-        text(
-          commands,
-          `${truncate(item.label, 27)}: ${item.value}`,
-          330,
-          y - 6,
-          8,
-        );
-      },
-    );
 }
 
 function drawBars(
