@@ -451,6 +451,10 @@ export class ExecutiveReportService {
     ).value =
       generatedBy;
 
+    summary.getCell("A5").value = "Filtros aplicados";
+    summary.mergeCells("B5:C5");
+    summary.getCell("B5").value = this.filtersLabel(options.filters);
+
     summary.getCell(
       "A4",
     ).value =
@@ -881,6 +885,19 @@ export class ExecutiveReportService {
     ];
   }
 
+  private filtersLabel(filters?: ReportFilters) {
+    const labels = [
+      filters?.client ? `Cliente: ${filters.client}` : null,
+      filters?.analyst ? `Analista: ${filters.analyst}` : null,
+      filters?.category ? `Categoria: ${filters.category}` : null,
+      filters?.ticketStatus ? `Status ticket: ${filters.ticketStatus}` : null,
+      filters?.workItemType ? `Tipo Azure: ${filters.workItemType}` : null,
+      filters?.azureState ? `Estado Azure: ${filters.azureState}` : null,
+      filters?.version ? `Versão: ${filters.version}` : null,
+    ].filter((value): value is string => Boolean(value));
+    return labels.length ? labels.join(" | ") : "Todos os registros do escopo operacional";
+  }
+
   private addInsightSheet(
     workbook: ExcelJS.Workbook,
     insights: ManagementInsight[],
@@ -897,6 +914,8 @@ export class ExecutiveReportService {
     sheet.getCell("B2").value = this.periodLabel(options.from, options.to);
     sheet.getCell("A3").value = "Gerado por";
     sheet.getCell("B3").value = generatedBy;
+    sheet.getCell("C2").value = "Filtros";
+    sheet.getCell("D2").value = this.filtersLabel(options.filters);
     this.styleTitle(sheet.getCell("A1"));
 
     const header = sheet.addRow(["Prioridade", "Tema", "Achado", "Recomendação"]);
@@ -975,6 +994,9 @@ export class ExecutiveReportService {
       "B3",
     ).value =
       generatedBy;
+
+    sheet.getCell("C2").value = "Filtros";
+    sheet.getCell("D2").value = this.filtersLabel(options.filters);
 
     this.styleTitle(
       sheet.getCell(
