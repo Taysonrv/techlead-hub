@@ -9,9 +9,35 @@ export type ReleaseNote = {
   items: readonly ReleaseNoteItem[];
 };
 
-export const FALLBACK_APP_VERSION = "1.0.0-rc.3";
+export const FALLBACK_APP_VERSION = "1.0.0-rc.4";
 
 export const releaseNotes: Record<string, ReleaseNote> = {
+  "1.0.0-rc.4": {
+    version: "1.0.0-rc.4",
+    title: "Saúde do cliente e higienização operacional",
+    items: [
+      {
+        title: "Histórico e Saúde do Cliente",
+        description:
+          "O relatório executivo passa a considerar até dez anos de histórico e reúne atendimentos, SLA, categorias, analistas, desenvolvimento e versões para visitas e reuniões.",
+      },
+      {
+        title: "Higienização de atendimentos",
+        description:
+          "A Qualidade dos Dados identifica tickets ainda abertos quando a Correção, Evolução ou APOIO relacionado já foi concluído com versão ou cancelado.",
+      },
+      {
+        title: "Navegação para ação",
+        description:
+          "Os registros de higienização exibem Ticket, Task, situação e versão, com acesso direto aos detalhes do atendimento.",
+      },
+      {
+        title: "Atualizador corrigido",
+        description:
+          "Versões anteriores deixam de ser apresentadas como novas quando o aplicativo instalado já está em uma versão superior.",
+      },
+    ],
+  },
   "1.0.0-rc.3": {
     version: "1.0.0-rc.3",
     title: "Desktop resiliente e atualização corrigida",

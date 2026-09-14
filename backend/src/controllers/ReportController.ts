@@ -155,7 +155,7 @@ export class ReportController {
       }
 
       const maximumPeriod =
-        366 *
+        3660 *
         24 *
         60 *
         60 *
@@ -170,7 +170,7 @@ export class ReportController {
           .status(400)
           .json({
             message:
-              "Os relatórios aceitam períodos de até 366 dias.",
+              "Os relatórios aceitam históricos de até 10 anos.",
           });
       }
 
