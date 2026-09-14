@@ -1190,7 +1190,7 @@ export class ExecutiveReportService {
       labelCell.fill = {
         type: "pattern",
         pattern: "solid",
-        fgColor: { argb: colors[index % colors.length]! },
+        fgColor: { argb: semanticChartArgb(item.label, colors[index % colors.length]!) },
       };
       labelCell.font = { color: { argb: "FFFFFFFF" }, bold: true };
       labelCell.alignment = { wrapText: true };
@@ -1570,6 +1570,17 @@ export class ExecutiveReportService {
   }
 }
 
+
+function semanticChartArgb(label: string, fallback: string) {
+  const normalized = label.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR");
+  if (/dentro|conclu|encerrad|resolvid|entreg/.test(normalized)) return "FF18C77A";
+  if (/fora|venc|bloque|erro|cancel/.test(normalized)) return "FFDC3545";
+  if (/nao medido|sem |nao inform/.test(normalized)) return "FF6C757D";
+  if (/aberto|andamento|correc/.test(normalized)) return "FF0078D4";
+  if (/evolu/.test(normalized)) return "FF6F42C1";
+  if (/apoio|prioriz/.test(normalized)) return "FFFFAA00";
+  return fallback;
+}
 
 function classifySolutionSla(
   indicator: string | null,
