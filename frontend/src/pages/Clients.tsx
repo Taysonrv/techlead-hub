@@ -30,6 +30,9 @@ import {
 } from "@mui/material";
 
 import {
+  ArrowBackOutlined,
+  ArrowForwardOutlined,
+  FullscreenExitOutlined,
   InfoOutlined,
 } from "@mui/icons-material";
 
@@ -196,6 +199,8 @@ const STATUS_COLORS: Record<
 export function Clients() {
   const navigate = useNavigate();
   const presentationRef = useRef<HTMLDivElement>(null);
+  const [presentationPage, setPresentationPage] = useState(0);
+  const [isPresenting, setIsPresenting] = useState(false);
 
   const [tickets, setTickets] =
     useState<Ticket[]>([]);
@@ -243,6 +248,21 @@ export function Clients() {
     effectiveStartDate,
     effectiveEndDate,
   } = useFilters();
+
+  useEffect(() => {
+    const handleFullscreen = () => {
+      const active = document.fullscreenElement === presentationRef.current;
+      setIsPresenting(active);
+      if (!active) setPresentationPage(0);
+    };
+    document.addEventListener("fullscreenchange", handleFullscreen);
+    return () => document.removeEventListener("fullscreenchange", handleFullscreen);
+  }, []);
+
+  async function startPresentation() {
+    setPresentationPage(0);
+    await presentationRef.current?.requestFullscreen?.();
+  }
 
   /* =======================================================
      CARREGAMENTO
@@ -1867,53 +1887,67 @@ export function Clients() {
 
       {/* PAINEL PARA APRESENTAÇÃO AO CLIENTE */}
       {selectedClient && (
-        <Card ref={presentationRef} elevation={0} sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2.25, mb: 2, overflow: "hidden", bgcolor: "background.default", "&:fullscreen": { position: "fixed", inset: 0, width: "100vw", height: "100vh", maxWidth: "none", overflowY: "auto", borderRadius: 0, m: 0, p: { xs: 0, md: 1.5 }, zIndex: 99999 } }}>
-          <Box sx={{ px: { xs: 2, md: 2.5 }, py: 2, color: "white", background: `linear-gradient(110deg, ${aliareColors.greenDark}, ${aliareColors.green})` }}>
+        <Card ref={presentationRef} elevation={0} sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2.25, mb: 2, overflow: "hidden", bgcolor: "background.default", "@media print": { breakInside: "avoid", "& .presentation-actions": { display: "none !important" } }, "&:fullscreen": { position: "fixed", inset: 0, width: "100vw", height: "100vh", maxWidth: "none", borderRadius: 0, m: 0, zIndex: 99999, display: "flex", flexDirection: "column" } }}>
+          <Box sx={{ px: { xs: 2, md: 3 }, py: 2, color: "white", background: `linear-gradient(110deg, ${aliareColors.greenDark}, ${aliareColors.green})` }}>
             <Stack direction={{ xs: "column", md: "row" }} spacing={1.5} sx={{ alignItems: { md: "center" }, justifyContent: "space-between" }}>
               <Box>
                 <Typography variant="overline" sx={{ opacity: .85, fontWeight: 800 }}>Suporte e Sustentação</Typography>
-                <Typography sx={{ fontSize: { xs: "1.35rem", md: "1.7rem" }, fontWeight: 900, lineHeight: 1.15 }}>{selectedClient}</Typography>
+                <Typography sx={{ fontSize: { xs: "1.35rem", md: isPresenting ? "2.15rem" : "1.7rem" }, fontWeight: 900, lineHeight: 1.15 }}>{selectedClient}</Typography>
                 <Typography variant="body2" sx={{ opacity: .9, mt: .5 }}>
                   {executiveArea || "Todas as frentes"} · {effectiveStartDate.toLocaleDateString("pt-BR")} a {effectiveEndDate.toLocaleDateString("pt-BR")}
                 </Typography>
               </Box>
-              <Button variant="contained" color="inherit" onClick={() => presentationRef.current?.requestFullscreen?.()} sx={{ color: aliareColors.greenDark, fontWeight: 800 }}>
-                Apresentar em tela cheia
-              </Button>
+              <Stack className="presentation-actions" direction="row" spacing={1} sx={{ alignItems: "center" }}>
+                {isPresenting && <Typography variant="body2" sx={{ mr: 1, fontWeight: 800 }}>Página {presentationPage + 1} de 4</Typography>}
+                <Button variant="contained" color="inherit" onClick={isPresenting ? () => void document.exitFullscreen() : () => void startPresentation()} startIcon={isPresenting ? <FullscreenExitOutlined /> : undefined} sx={{ color: aliareColors.greenDark, fontWeight: 800 }}>
+                  {isPresenting ? "Sair da apresentação" : "Apresentar em tela cheia"}
+                </Button>
+              </Stack>
             </Stack>
           </Box>
 
-          <CardContent sx={{ p: { xs: 1.5, md: 2 } }}>
-            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2,1fr)", lg: "repeat(5,minmax(0,1fr))" }, gap: 1.25, mb: 2 }}>
-              <PresentationKpi title="Atendimentos" value={scopedTickets.length} detail="no período" color="#075985" onClick={() => showTickets("Atendimentos no foco", scopedTickets)} />
-              <PresentationKpi title="Bugs" value={presentationSummary.bugs.length} detail={`${presentationSummary.bugs.filter((ticket) => ticket.azureWorkItem || ticket.taskNumber).length} com Task`} color="#008A68" onClick={() => showTickets("Bugs identificados", presentationSummary.bugs)} />
-              <PresentationKpi title="Com Task" value={presentationSummary.withTask.length} detail="correção, evolução ou apoio" color="#2676B9" onClick={() => showTickets("Atendimentos com Task", presentationSummary.withTask)} />
-              <PresentationKpi title="Pendências" value={presentationSummary.pending.length} detail="em acompanhamento" color="#B7791F" onClick={() => showTickets("Pendências ativas", presentationSummary.pending)} />
-              <PresentationKpi title="SLA solução" value={formatSlaPercent(portfolioSummary.solutionSla.percent)} detail={`${portfolioSummary.solutionSla.onTime} de ${portfolioSummary.solutionSla.measured} medidos`} color="#159A68" onClick={() => showTickets("SLA solução", scopedTickets.filter((ticket) => Boolean(normalize(ticket.solutionSlaIndicator))))} />
-            </Box>
-
-            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "repeat(3,minmax(0,1fr))" }, gap: 1.5 }}>
-              <ExecutiveBarPanel title="Atendimentos por processo" data={presentationSummary.areas} onClick={(name) => showTickets(`Processo: ${name}`, scopedTickets.filter((ticket) => classifyExecutiveProcess(ticket) === name))} />
-              <ExecutiveDonutPanel title="Status das Tasks" data={presentationSummary.taskStatuses} total={presentationSummary.taskItems.length} />
-              <ExecutiveDonutPanel title="Status das pendências" data={presentationSummary.pendingStatuses} total={presentationSummary.pending.length} />
-              <ExecutiveBarPanel title="Bugs por processo" data={presentationSummary.bugAreas} onClick={(name) => showTickets(`Bugs · ${name}`, presentationSummary.bugs.filter((ticket) => classifyExecutiveProcess(ticket) === name))} />
-
-              <Box sx={{ p: 1.75, border: "1px solid", borderColor: "divider", borderRadius: 2 }}>
+          <CardContent sx={{ p: { xs: 1.5, md: isPresenting ? 3 : 2 }, flex: isPresenting ? 1 : undefined, overflow: isPresenting ? "hidden" : undefined, display: "flex", flexDirection: "column" }}>
+            {(!isPresenting || presentationPage === 0) && <Box sx={{ height: isPresenting ? "100%" : "auto", display: "flex", flexDirection: "column", justifyContent: isPresenting ? "center" : undefined }}>
+              <Typography variant="h5" sx={{ fontWeight: 900, mb: 2 }}>Resumo executivo</Typography>
+              <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2,1fr)", lg: "repeat(5,minmax(0,1fr))" }, gap: 1.25, mb: 2 }}>
+                <PresentationKpi title="Atendimentos" value={scopedTickets.length} detail="no período" color="#075985" onClick={() => showTickets("Atendimentos no foco", scopedTickets)} />
+                <PresentationKpi title="Bugs" value={presentationSummary.bugs.length} detail={`${presentationSummary.bugs.filter((ticket) => ticket.azureWorkItem || ticket.taskNumber).length} com Task`} color="#008A68" onClick={() => showTickets("Bugs identificados", presentationSummary.bugs)} />
+                <PresentationKpi title="Com Task" value={presentationSummary.withTask.length} detail="correção, evolução ou apoio" color="#2676B9" onClick={() => showTickets("Atendimentos com Task", presentationSummary.withTask)} />
+                <PresentationKpi title="Pendências" value={presentationSummary.pending.length} detail="em acompanhamento" color="#B7791F" onClick={() => showTickets("Pendências ativas", presentationSummary.pending)} />
+                <PresentationKpi title="SLA solução" value={formatSlaPercent(portfolioSummary.solutionSla.percent)} detail={`${portfolioSummary.solutionSla.onTime} de ${portfolioSummary.solutionSla.measured} medidos`} color="#159A68" onClick={() => showTickets("SLA solução", scopedTickets.filter((ticket) => Boolean(normalize(ticket.solutionSlaIndicator))))} />
+              </Box>
+              <Box sx={{ p: 2.25, border: "1px solid", borderColor: "divider", borderRadius: 2, bgcolor: "background.paper" }}>
                 <Typography sx={{ fontWeight: 850 }}>Principais insights</Typography>
-                <Stack spacing={1} sx={{ mt: 1.25 }}>
-                  {executiveInsights.slice(0, 4).map((item) => <Typography key={item} variant="body2" sx={{ lineHeight: 1.45 }}>• {item}</Typography>)}
-                </Stack>
+                <Stack spacing={1} sx={{ mt: 1.25 }}>{executiveInsights.slice(0, 5).map((item) => <Typography key={item} variant="body1" sx={{ lineHeight: 1.55 }}>• {item}</Typography>)}</Stack>
               </Box>
+            </Box>}
 
-              <Box sx={{ p: 1.75, borderRadius: 2, bgcolor: presentationSummary.pending.length ? "rgba(245,158,11,.10)" : "rgba(22,163,74,.08)", border: "1px solid", borderColor: presentationSummary.pending.length ? "rgba(245,158,11,.28)" : "rgba(22,163,74,.22)" }}>
-                <Typography sx={{ fontWeight: 850 }}>Pontos de atenção</Typography>
-                <Typography variant="body2" sx={{ mt: 1, lineHeight: 1.5 }}>
-                  {presentationSummary.pending.length
-                    ? `${presentationSummary.pending.length} pendência(s) permanecem ativas. ${presentationSummary.bugs.filter(isOpen).length} delas são bugs e ${presentationSummary.pending.filter((ticket) => normalize(ticket.justification).includes("cliente")).length} aguardam ação ou retorno do cliente.`
-                    : "Não há pendências ativas no recorte selecionado."}
-                </Typography>
+            {(!isPresenting || presentationPage === 1) && <Box sx={{ mt: isPresenting ? 0 : 1.5, height: isPresenting ? "100%" : "auto", display: "grid", gridTemplateColumns: { xs: "1fr", lg: "repeat(2,minmax(0,1fr))" }, gap: 2 }}>
+              <ExecutiveBarPanel title="Atendimentos por processo" data={presentationSummary.areas} onClick={(name) => showTickets(`Processo: ${name}`, scopedTickets.filter((ticket) => classifyExecutiveProcess(ticket) === name))} />
+              <ExecutiveBarPanel title="Bugs por processo" data={presentationSummary.bugAreas} onClick={(name) => showTickets(`Bugs · ${name}`, presentationSummary.bugs.filter((ticket) => classifyExecutiveProcess(ticket) === name))} />
+            </Box>}
+
+            {(!isPresenting || presentationPage === 2) && <Box sx={{ mt: isPresenting ? 0 : 1.5, height: isPresenting ? "100%" : "auto", display: "grid", gridTemplateColumns: { xs: "1fr", lg: "repeat(2,minmax(0,1fr))" }, gap: 2 }}>
+              <ExecutiveDonutPanel title="Status das Tasks" data={presentationSummary.taskStatuses} total={presentationSummary.taskItems.length} />
+              <Box sx={{ p: 2.25, border: "1px solid", borderColor: "divider", borderRadius: 2, bgcolor: "background.paper" }}>
+                <Typography variant="h6" sx={{ fontWeight: 900 }}>Leitura das entregas</Typography>
+                <Typography sx={{ mt: 1.5, lineHeight: 1.65 }}>{presentationSummary.taskItems.length} Task(s) relacionadas ao cliente, sendo {portfolioSummary.azureWithVersion} com versão informada, {portfolioSummary.azurePrioritized} priorizada(s) e {portfolioSummary.azureBlocked} com processo bloqueado.</Typography>
               </Box>
-            </Box>
+            </Box>}
+
+            {(!isPresenting || presentationPage === 3) && <Box sx={{ mt: isPresenting ? 0 : 1.5, height: isPresenting ? "100%" : "auto", display: "grid", gridTemplateColumns: { xs: "1fr", lg: "repeat(2,minmax(0,1fr))" }, gap: 2 }}>
+              <ExecutiveDonutPanel title="Status das pendências" data={presentationSummary.pendingStatuses} total={presentationSummary.pending.length} />
+              <Box sx={{ p: 2.25, borderRadius: 2, bgcolor: presentationSummary.pending.length ? "rgba(245,158,11,.10)" : "rgba(22,163,74,.08)", border: "1px solid", borderColor: presentationSummary.pending.length ? "rgba(245,158,11,.28)" : "rgba(22,163,74,.22)" }}>
+                <Typography variant="h6" sx={{ fontWeight: 900 }}>Pontos de atenção e encaminhamento</Typography>
+                <Typography sx={{ mt: 1.5, lineHeight: 1.65 }}>{presentationSummary.pending.length ? `${presentationSummary.pending.length} pendência(s) permanecem ativas. ${presentationSummary.bugs.filter(isOpen).length} são bugs e ${presentationSummary.pending.filter((ticket) => normalize(ticket.justification).includes("cliente")).length} aguardam ação ou retorno do cliente.` : "Não há pendências ativas no recorte selecionado."}</Typography>
+              </Box>
+            </Box>}
+
+            {isPresenting && <Stack className="presentation-actions" direction="row" spacing={1.5} sx={{ mt: "auto", pt: 2, justifyContent: "space-between", alignItems: "center" }}>
+              <Button variant="outlined" color="inherit" startIcon={<ArrowBackOutlined />} disabled={presentationPage === 0} onClick={() => setPresentationPage((page) => Math.max(0, page - 1))}>Anterior</Button>
+              <Stack direction="row" spacing={0.75}>{[0, 1, 2, 3].map((page) => <Box key={page} onClick={() => setPresentationPage(page)} sx={{ width: page === presentationPage ? 28 : 9, height: 9, borderRadius: 5, bgcolor: page === presentationPage ? aliareColors.green : "divider", cursor: "pointer", transition: "all .2s" }} />)}</Stack>
+              <Button variant="contained" endIcon={<ArrowForwardOutlined />} disabled={presentationPage === 3} onClick={() => setPresentationPage((page) => Math.min(3, page + 1))}>Próxima</Button>
+            </Stack>}
           </CardContent>
         </Card>
       )}
