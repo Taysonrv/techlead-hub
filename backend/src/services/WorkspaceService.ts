@@ -272,7 +272,7 @@ export class WorkspaceService {
       if (issue === "withoutClient") return { AND: [{ client: null }, { participantClients: null }] };
       if (issue === "withoutModule") return { module: null };
       if (issue === "withoutOwner") return { assignedToName: null };
-      if (issue === "completedWithoutVersion") return { state: { in: TERMINAL }, deliveredVersion: null };
+      if (issue === "completedWithoutVersion") return { state: { in: ["Concluído", "Concluido", "Closed", "Done", "Resolved"] }, deliveredVersion: null };
       if (issue === "activeTaskWithVersion") return { state: { notIn: TERMINAL }, deliveredVersion: { not: null } };
       return {};
     };
@@ -325,6 +325,18 @@ export class WorkspaceService {
       return ["New", "InAttendance", "Stopped"].includes(ticket.baseStatus ?? "") ||
         /novo|desenvolvimento|andamento|aguard|paus|parad/.test(status);
     };
+    const isTicketFinalized = (ticket: { baseStatus: string | null; status: string }) => {
+      const status = normalizeStatus(ticket.status);
+      return ["Resolved", "Closed"].includes(ticket.baseStatus ?? "")
+        || /conclu|fechad|encerrad|resolvid|cancelad/.test(status);
+    };
+    const sameClient = (left: string, right: string) => {
+      const normalizedLeft = normalizeStatus(left).replace(/[^a-z0-9]+/g, " ").trim();
+      const normalizedRight = normalizeStatus(right).replace(/[^a-z0-9]+/g, " ").trim();
+      return normalizedLeft === normalizedRight
+        || normalizedLeft.includes(normalizedRight)
+        || normalizedRight.includes(normalizedLeft);
+    };
     const isCanceledTask = (state: string) => /cancelad|canceled/.test(normalizeStatus(state));
     const isTerminalTask = (state: string) => TERMINAL.some((value) => normalizeStatus(value) === normalizeStatus(state));
     const finishedLinkedTasks = linkedTasks.filter((item) => isTerminalTask(item.state));
@@ -359,14 +371,14 @@ export class WorkspaceService {
       return task && !isCanceledTask(task.state) ? [{ ticket, task }] : [];
     });
     const closedTicketsWithActiveTask = scopedTickets.flatMap((ticket) => {
-      if (isTicketOpen(ticket)) return [];
+      if (!isTicketFinalized(ticket)) return [];
       const task = findLinkedTask(ticket, activeLinkedTasks);
       return task ? [{ ticket, task }] : [];
     });
     const clientMismatches = scopedTickets.flatMap((ticket) => {
       const task = findLinkedTask(ticket, linkedTasks);
       if (!task?.client || !ticket.client) return [];
-      return normalizeStatus(task.client) !== normalizeStatus(ticket.client) ? [{ ticket, task }] : [];
+      return !sameClient(task.client, ticket.client) ? [{ ticket, task }] : [];
     });
 
     const derivedTicketIssues = ["danglingTaskTickets", "ticketOpenTaskFinished", "ticketOpenTaskWithoutDelivery", "ticketClosedTaskOpen", "clientMismatch"];
@@ -379,7 +391,7 @@ export class WorkspaceService {
         OR: [
           issueWhere("withoutTicket"), { client: null }, { module: null },
           { assignedToName: null },
-          { state: { in: TERMINAL }, deliveredVersion: null },
+          { state: { in: ["Concluído", "Concluido", "Closed", "Done", "Resolved"] }, deliveredVersion: null },
         ],
       }] },
       orderBy: { azureChangedAt: "desc" },
