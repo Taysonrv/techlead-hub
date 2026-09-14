@@ -3,7 +3,7 @@ import {
   Drawer, FormControl, InputLabel, MenuItem, Select, Stack,
   TextField, Typography,
 } from "@mui/material";
-import { SearchOutlined } from "@mui/icons-material";
+import { DownloadOutlined, SearchOutlined } from "@mui/icons-material";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../services/api";
@@ -32,7 +32,7 @@ const metrics = [
   ["withoutModule", "Sem módulo", "Work Items sem módulo funcional preenchido."],
   ["withoutOwner", "Sem responsável", "Work Items sem Assigned To no Azure."],
   ["completedWithoutVersion", "Concluídas sem versão", "Itens concluídos sem versão de entrega."],
-  ["ticketOpenTaskFinished", "Ticket aberto com Task finalizada", "Atendimentos ainda abertos cuja Correção, Evolução ou APOIO já foi concluída com versão ou cancelada."],
+  ["ticketOpenTaskFinished", "Ticket aberto com Task finalizada", "Atendimentos pendentes cuja Task foi concluída e possui versão efetivamente entregue, ou foi cancelada. Aguardando validar versão não é pendência."],
   ["danglingTaskTickets", "Tickets com Task inexistente", "Tickets que apontam para um ID ausente no snapshot Azure."],
   ["duplicatedMovideskLinks", "Vínculos Movidesk duplicados", "Atendimentos relacionados a mais de um Work Item."],
 ] as const;
@@ -71,6 +71,30 @@ export function DataQuality() {
     }
   }
 
+  function exportHygieneList() {
+    const rows = data?.samples ?? [];
+    const escape = (value: unknown) => `"${String(value ?? "").replace(/"/g, '""')}"`;
+    const header = ["Atendimento", "Assunto", "Cliente", "Analista", "Status do ticket", "Task", "Estado da Task", "Versão entregue"];
+    const csv = [header, ...rows.map((item) => [
+      item.movideskTicket ?? item.id,
+      item.title,
+      item.client,
+      item.assignedToName,
+      item.state,
+      item.taskNumber,
+      item.taskState,
+      item.deliveredVersion,
+    ])].map((row) => row.map(escape).join(";")).join("\\r\\n");
+    const blob = new Blob(["\\uFEFF", csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    const analyst = user ? user.normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").replace(/[^a-zA-Z0-9]+/g, "-").toLowerCase() : "equipe";
+    anchor.href = url;
+    anchor.download = `tickets-task-finalizada-${analyst}.csv`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }
+
   const hasFilters = Boolean(type || client || user || search || issue);
   const title = useMemo(() => metrics.find(([key]) => key === issue)?.[1] ?? "Pendências encontradas", [issue]);
 
@@ -93,8 +117,15 @@ export function DataQuality() {
     </Box>
 
     <Card variant="outlined" sx={{ mt: 2 }}><CardContent>
-      <Typography variant="h6" sx={{ fontWeight: 800 }}>{title}</Typography>
-      <Typography variant="caption" color="text.secondary">{data?.samples.length ?? 0} registro(s) no recorte atual</Typography>
+      <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ justifyContent: "space-between", alignItems: { sm: "center" } }}>
+        <Box>
+          <Typography variant="h6" sx={{ fontWeight: 800 }}>{title}</Typography>
+          <Typography variant="caption" color="text.secondary">{data?.samples.length ?? 0} registro(s) no recorte atual</Typography>
+        </Box>
+        {issue === "ticketOpenTaskFinished" && <Button variant="outlined" startIcon={<DownloadOutlined />} disabled={!data?.samples.length} onClick={exportHygieneList}>
+          Exportar atendimentos{user ? " do analista" : ""}
+        </Button>}
+      </Stack>
       {loading ? <Box sx={{ py: 8, textAlign: "center" }}><CircularProgress /></Box> : <Stack spacing={1} sx={{ mt: 2 }}>{data?.samples.map((item) => <Button key={`${item.source}-${item.id}`} onClick={() => void open(item)} sx={{ justifyContent: "flex-start", textTransform: "none", border: "1px solid", borderColor: "divider", p: 1.3, borderRadius: 1.5 }}><Box sx={{ textAlign: "left", minWidth: 0 }}><Stack direction="row" spacing={1} sx={{ alignItems: "center" }}><Chip size="small" label={item.workItemType} /><Typography sx={{ fontWeight: 750 }}>#{item.source === "MOVIDESK" ? item.movideskTicket ?? item.id : item.id} · {item.title}</Typography></Stack><Typography variant="caption" color="text.secondary">{[item.state, item.client ?? "Sem cliente", item.module ?? "Sem módulo", item.assignedToName ?? "Sem responsável", item.movideskTicket ? `Ticket ${item.movideskTicket}` : "Sem ticket", item.taskNumber ? `Task #${item.taskNumber}` : "Sem Task", item.taskState ?? null, item.deliveredVersion ?? "Sem versão"].filter(Boolean).join(" · ")}</Typography></Box></Button>)}</Stack>}
     </CardContent></Card>
 
