@@ -367,6 +367,25 @@ export class ManagementPdfService {
           `Recomendação: ${item.recommendation}`,
         ]),
       },
+      clientHealth: {
+        title: options.filters?.client ? `Saúde do cliente · ${options.filters.client}` : "Saúde da carteira de clientes",
+        subtitle: "Resumo executivo de atendimento, SLA e desenvolvimento",
+        data: [
+          { label: "Atendimentos", value: ticketTotal },
+          { label: "Pendências", value: ticketOpen },
+          { label: "SLA no prazo", value: slaMet },
+          { label: "Correções", value: corrections },
+          { label: "Evoluções", value: evolutions },
+          { label: "Apoios", value: supports },
+          { label: "Priorizados", value: prioritized },
+          { label: "Bloqueados", value: blocked },
+        ],
+        notes: [
+          `Taxa de resolução: ${ticketTotal > 0 ? (((ticketResolved + ticketClosed) / ticketTotal) * 100).toFixed(1) : "0.0"}%.`,
+          `SLA de solução: ${slaMeasured > 0 ? ((slaMet / slaMeasured) * 100).toFixed(1) : "0.0"}% (${slaMet} de ${slaMeasured} medidos).`,
+          ...managementInsights.slice(0, 3).map((item) => `${item.topic}: ${item.finding}`),
+        ],
+      },
       tickets: {
         title:
           "Atendimentos",
@@ -567,6 +586,7 @@ export class ManagementPdfService {
         string[]
       > = {
       executive: [
+        "clientHealth",
         "insights",
         "tickets",
         "sla",
@@ -589,6 +609,7 @@ export class ManagementPdfService {
         "categories",
       ],
       clients: [
+        "clientHealth",
         "insights",
         "clients",
         "categories",
