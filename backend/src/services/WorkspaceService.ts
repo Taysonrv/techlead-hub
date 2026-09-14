@@ -269,11 +269,11 @@ export class WorkspaceService {
           ...(linkedTaskIds.length ? [{ id: { notIn: linkedTaskIds } }] : []),
         ],
       };
-      if (issue === "withoutClient") return { AND: [{ workItemType: { not: { equals: "APOIO", mode: "insensitive" } } }, { client: null }, { participantClients: null }] };
+      if (issue === "withoutClient") return { AND: [{ NOT: { workItemType: { equals: "APOIO", mode: "insensitive" } } }, { client: null }, { participantClients: null }] };
       if (issue === "withoutModule") return { module: null };
       if (issue === "withoutOwner") return { assignedToName: null };
-      if (issue === "completedWithoutVersion") return { AND: [{ workItemType: { not: { equals: "APOIO", mode: "insensitive" } } }, { state: { in: ["Concluído", "Concluido", "Closed", "Done", "Resolved"] } }, { deliveredVersion: null }] };
-      if (issue === "activeTaskWithVersion") return { AND: [{ workItemType: { not: { equals: "APOIO", mode: "insensitive" } } }, { state: { notIn: TERMINAL } }, { deliveredVersion: { not: null } }] };
+      if (issue === "completedWithoutVersion") return { AND: [{ NOT: { workItemType: { equals: "APOIO", mode: "insensitive" } } }, { state: { in: ["Concluído", "Concluido", "Closed", "Done", "Resolved"] } }, { deliveredVersion: null }] };
+      if (issue === "activeTaskWithVersion") return { AND: [{ NOT: { workItemType: { equals: "APOIO", mode: "insensitive" } } }, { state: { notIn: TERMINAL } }, { deliveredVersion: { not: null } }] };
       return {};
     };
 
