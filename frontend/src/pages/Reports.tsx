@@ -76,6 +76,15 @@ type ReportDefinition = {
     typeof AssessmentOutlined;
 };
 
+const REPORT_ACCENTS: Record<ReportScope, string> = {
+  executive: aliareColors.green,
+  analysts: aliareColors.info,
+  sla: aliareColors.purple,
+  clients: aliareColors.cyan,
+  development: aliareColors.warning,
+  versions: "#E85D75",
+};
+
 const REPORTS:
   ReportDefinition[] = [
   {
@@ -402,7 +411,7 @@ export function Reports() {
                   event.target.value
                 )
               }
-              helperText="Máximo de 366 dias."
+              helperText="Histórico disponível de até 10 anos."
               slotProps={{
                 inputLabel: {
                   shrink:
@@ -479,7 +488,7 @@ export function Reports() {
           <BarChartOutlined />
         }
       >
-        Os arquivos incluem dados tabulares, indicadores, percentuais, gráficos de barras e gráficos de pizza. O Excel mantém cada eixo em uma aba própria; o PDF utiliza páginas prontas para apresentação.
+        Os arquivos seguem um padrão executivo: resumo, indicadores, evolução por categoria, leitura gerencial, recomendações, tabelas detalhadas e um gráfico comparativo por seção. Excel e PDF recebem exatamente o mesmo período e filtros.
       </Alert>
     </Stack>
   );
@@ -513,6 +522,7 @@ function ReportCard({
 }) {
   const Icon =
     report.icon;
+  const accent = REPORT_ACCENTS[report.scope];
 
   const excelLoading =
     downloading ===
@@ -534,13 +544,17 @@ function ReportCard({
           "divider",
         borderRadius:
           2.5,
+        overflow: "hidden",
+        background: `linear-gradient(145deg, color-mix(in srgb, ${accent} 7%, white), #FFFFFF 46%)`,
+        position: "relative",
+        "&::before": { content: '""', position: "absolute", inset: "0 0 auto", height: 5, backgroundColor: accent },
         transition:
           "border-color 160ms ease, box-shadow 160ms ease",
         "&:hover": {
           borderColor:
-            aliareColors.green,
+            accent,
           boxShadow:
-            "0 12px 30px rgba(16,24,40,0.07)",
+            `0 14px 32px color-mix(in srgb, ${accent} 17%, transparent)`,
         },
       }}
     >
@@ -577,9 +591,9 @@ function ReportCard({
               flexShrink:
                 0,
               backgroundColor:
-                "rgba(24,199,122,0.12)",
+                `color-mix(in srgb, ${accent} 14%, white)`,
               color:
-                aliareColors.greenDark,
+                accent,
             }}
           >
             <Icon />
@@ -635,23 +649,12 @@ function ReportCard({
           </Box>
         </Stack>
 
-        <Typography
-          variant="body2"
-          sx={{
-            mt: 2.25,
-            pt: 2,
-            borderTop:
-              "1px solid",
-            borderColor:
-              "divider",
-            lineHeight:
-              1.6,
-            flex:
-              1,
-          }}
-        >
-          {report.contents}
-        </Typography>
+        <Box sx={{ mt: 2.25, pt: 2, borderTop: "1px solid", borderColor: "divider", flex: 1 }}>
+          <Typography variant="overline" sx={{ color: accent, fontWeight: 850 }}>Conteúdo executivo</Typography>
+          <Stack direction="row" useFlexGap flexWrap="wrap" spacing={0.75} sx={{ mt: 0.75 }}>
+            {report.contents.split(",").map((content) => <Chip key={content} size="small" label={content.trim().replace(/\.$/, "")} sx={{ backgroundColor: `color-mix(in srgb, ${accent} 10%, white)`, color: "text.primary", border: `1px solid color-mix(in srgb, ${accent} 25%, white)` }} />)}
+          </Stack>
+        </Box>
 
         <Box sx={{ mt: 2, pt: 2, borderTop: "1px solid", borderColor: "divider" }}>
           <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "center", mb: 1.25 }}>
