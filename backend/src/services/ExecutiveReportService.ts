@@ -124,6 +124,7 @@ export class ExecutiveReportService {
       blocked,
       azureStates,
       versions,
+      ticketTimeline,
     ] =
       await Promise.all([
         prisma.user.findUnique({
@@ -351,7 +352,25 @@ export class ExecutiveReportService {
           take:
             20,
         }),
+        prisma.ticket.findMany({
+          where: ticketWhere,
+          select: { createdDate: true, category: true },
+          orderBy: { createdDate: "asc" },
+        }),
       ]);
+
+    const categoryNames = categories
+      .slice(0, 8)
+      .flatMap((item) => item.category ? [item.category] : []);
+    const categoryEvolution = new Map<string, Map<string, number>>();
+    for (const ticket of ticketTimeline) {
+      const category = ticket.category ?? "Não informado";
+      if (categoryNames.length && !categoryNames.includes(category)) continue;
+      const month = ticket.createdDate.toISOString().slice(0, 7);
+      const monthData = categoryEvolution.get(month) ?? new Map<string, number>();
+      monthData.set(category, (monthData.get(category) ?? 0) + 1);
+      categoryEvolution.set(month, monthData);
+    }
 
     const insights = buildManagementInsights({
       ticketsTotal,
@@ -820,6 +839,14 @@ export class ExecutiveReportService {
       generatedBy,
     );
 
+    this.addCategoryEvolutionSheet(
+      workbook,
+      categoryEvolution,
+      categoryNames,
+      options,
+      generatedBy,
+    );
+
     this.addInsightSheet(
       workbook,
       insights,
@@ -888,6 +915,47 @@ export class ExecutiveReportService {
       ...(filters.azureState ? [{ state: { equals: filters.azureState, mode: "insensitive" as const } }] : []),
       ...(filters.version ? [{ deliveredVersion: { equals: filters.version, mode: "insensitive" as const } }] : []),
     ];
+  }
+
+  private addCategoryEvolutionSheet(
+    workbook: ExcelJS.Workbook,
+    evolution: Map<string, Map<string, number>>,
+    categories: string[],
+    options: ExecutiveReportOptions,
+    generatedBy: string,
+  ) {
+    const sheet = workbook.addWorksheet("Evolução Categorias", {
+      views: [{ state: "frozen", xSplit: 1, ySplit: 5 }],
+    });
+    const categoryColumns = categories.length ? categories : ["Não informado"];
+    this.configureSheet(sheet, [16, ...categoryColumns.map(() => 22)]);
+    sheet.mergeCells(1, 1, 1, Math.max(2, categoryColumns.length + 1));
+    sheet.getCell("A1").value = "EVOLUÇÃO MENSAL POR CATEGORIA";
+    sheet.getCell("A2").value = "Período";
+    sheet.getCell("B2").value = this.periodLabel(options.from, options.to);
+    sheet.getCell("A3").value = "Gerado por";
+    sheet.getCell("B3").value = generatedBy;
+    this.styleTitle(sheet.getCell("A1"));
+
+    const header = sheet.addRow(["Mês", ...categoryColumns, "Total"]);
+    this.styleHeader(header);
+
+    for (const [month, values] of [...evolution.entries()].sort(([left], [right]) => left.localeCompare(right))) {
+      const counts = categoryColumns.map((category) => values.get(category) ?? 0);
+      sheet.addRow([
+        month.split("-").reverse().join("/"),
+        ...counts,
+        counts.reduce((sum, value) => sum + value, 0),
+      ]);
+    }
+
+    if (!evolution.size) {
+      sheet.addRow(["Sem dados no período", ...categoryColumns.map(() => 0), 0]);
+    }
+    sheet.autoFilter = {
+      from: { row: 4, column: 1 },
+      to: { row: 4, column: categoryColumns.length + 2 },
+    };
   }
 
   private filtersLabel(filters?: ReportFilters) {
@@ -1176,6 +1244,7 @@ export class ExecutiveReportService {
         string[]
       > = {
       executive: [
+        "Evolução Categorias",
         "Insights Diretoria",
         "Resumo Executivo",
         "Analistas",
@@ -1188,29 +1257,34 @@ export class ExecutiveReportService {
         "Desenvolvimento",
       ],
       analysts: [
+        "Evolução Categorias",
         "Insights Diretoria",
         "Analistas",
         "Situação Atendimentos",
       ],
       sla: [
+        "Evolução Categorias",
         "Insights Diretoria",
         "SLA",
         "Situação Atendimentos",
         "Categorias",
       ],
       clients: [
+        "Evolução Categorias",
         "Insights Diretoria",
         "Clientes",
         "Categorias",
         "Situação Atendimentos",
       ],
       development: [
+        "Evolução Categorias",
         "Insights Diretoria",
         "Desenvolvimento",
         "Estados Azure",
         "Versões",
       ],
       versions: [
+        "Evolução Categorias",
         "Insights Diretoria",
         "Versões",
         "Estados Azure",
