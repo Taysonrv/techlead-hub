@@ -18,7 +18,8 @@ type Sample = {
   module: string | null; assignedToName: string | null; movideskTicket: number | null;
   participantClients?: string | string[] | null;
   participantMovideskTickets?: string | number[] | null;
-  deliveredVersion: string | null; taskNumber: number | null; source: "AZURE" | "MOVIDESK";
+  deliveredVersion: string | null; taskNumber: number | null; taskState?: string | null;
+  taskTitle?: string | null; source: "AZURE" | "MOVIDESK";
 };
 type Data = {
   summary: Record<string, number>;
@@ -31,6 +32,7 @@ const metrics = [
   ["withoutModule", "Sem módulo", "Work Items sem módulo funcional preenchido."],
   ["withoutOwner", "Sem responsável", "Work Items sem Assigned To no Azure."],
   ["completedWithoutVersion", "Concluídas sem versão", "Itens concluídos sem versão de entrega."],
+  ["ticketOpenTaskFinished", "Ticket aberto com Task finalizada", "Atendimentos ainda abertos cuja Correção, Evolução ou APOIO já foi concluída com versão ou cancelada."],
   ["danglingTaskTickets", "Tickets com Task inexistente", "Tickets que apontam para um ID ausente no snapshot Azure."],
   ["duplicatedMovideskLinks", "Vínculos Movidesk duplicados", "Atendimentos relacionados a mais de um Work Item."],
 ] as const;
@@ -93,12 +95,12 @@ export function DataQuality() {
     <Card variant="outlined" sx={{ mt: 2 }}><CardContent>
       <Typography variant="h6" sx={{ fontWeight: 800 }}>{title}</Typography>
       <Typography variant="caption" color="text.secondary">{data?.samples.length ?? 0} registro(s) no recorte atual</Typography>
-      {loading ? <Box sx={{ py: 8, textAlign: "center" }}><CircularProgress /></Box> : <Stack spacing={1} sx={{ mt: 2 }}>{data?.samples.map((item) => <Button key={`${item.source}-${item.id}`} onClick={() => void open(item)} sx={{ justifyContent: "flex-start", textTransform: "none", border: "1px solid", borderColor: "divider", p: 1.3, borderRadius: 1.5 }}><Box sx={{ textAlign: "left", minWidth: 0 }}><Stack direction="row" spacing={1} sx={{ alignItems: "center" }}><Chip size="small" label={item.workItemType} /><Typography sx={{ fontWeight: 750 }}>#{item.source === "MOVIDESK" ? item.movideskTicket ?? item.id : item.id} · {item.title}</Typography></Stack><Typography variant="caption" color="text.secondary">{[item.state, item.client ?? "Sem cliente", item.module ?? "Sem módulo", item.assignedToName ?? "Sem responsável", item.movideskTicket ? `Ticket ${item.movideskTicket}` : "Sem ticket", item.deliveredVersion ?? "Sem versão"].join(" · ")}</Typography></Box></Button>)}</Stack>}
+      {loading ? <Box sx={{ py: 8, textAlign: "center" }}><CircularProgress /></Box> : <Stack spacing={1} sx={{ mt: 2 }}>{data?.samples.map((item) => <Button key={`${item.source}-${item.id}`} onClick={() => void open(item)} sx={{ justifyContent: "flex-start", textTransform: "none", border: "1px solid", borderColor: "divider", p: 1.3, borderRadius: 1.5 }}><Box sx={{ textAlign: "left", minWidth: 0 }}><Stack direction="row" spacing={1} sx={{ alignItems: "center" }}><Chip size="small" label={item.workItemType} /><Typography sx={{ fontWeight: 750 }}>#{item.source === "MOVIDESK" ? item.movideskTicket ?? item.id : item.id} · {item.title}</Typography></Stack><Typography variant="caption" color="text.secondary">{[item.state, item.client ?? "Sem cliente", item.module ?? "Sem módulo", item.assignedToName ?? "Sem responsável", item.movideskTicket ? `Ticket ${item.movideskTicket}` : "Sem ticket", item.taskNumber ? `Task #${item.taskNumber}` : "Sem Task", item.taskState ?? null, item.deliveredVersion ?? "Sem versão"].filter(Boolean).join(" · ")}</Typography></Box></Button>)}</Stack>}
     </CardContent></Card>
 
     <Drawer anchor="right" open={Boolean(selected)} onClose={() => setSelected(null)} slotProps={{ paper: { sx: detailDrawerPaperSx } }}>
       <DetailPanelHeader eyebrow={selected?.workItemType} title={selected?.title ?? "Detalhes do registro"} identifier={`#${selected?.source === "MOVIDESK" ? selected.movideskTicket : selected?.id}`} onClose={() => setSelected(null)} />
-      <DetailSection title="Visão operacional"><DetailFieldGrid fields={selected ? Object.entries({ Estado: selected.state, "Cliente principal": selected.client, "Clientes participantes": formatList(selected.participantClients), Módulo: selected.module, Responsável: selected.assignedToName, "Ticket principal": selected.movideskTicket, "Tickets participantes": formatList(selected.participantMovideskTickets), Versão: selected.deliveredVersion }).map(([label, value]) => [label, String(value ?? "Não informado")]) : []} /></DetailSection>
+      <DetailSection title="Visão operacional"><DetailFieldGrid fields={selected ? Object.entries({ Estado: selected.state, "Cliente principal": selected.client, "Clientes participantes": formatList(selected.participantClients), Módulo: selected.module, Responsável: selected.assignedToName, "Ticket principal": selected.movideskTicket, "Tickets participantes": formatList(selected.participantMovideskTickets), "Task relacionada": selected.taskNumber ? `#${selected.taskNumber}` : null, "Estado da Task": selected.taskState, "Título da Task": selected.taskTitle, Versão: selected.deliveredVersion }).map(([label, value]) => [label, String(value ?? "Não informado")]) : []} /></DetailSection>
       {detail && <Alert severity="info" sx={{ mt: 2 }}>Detalhes completos e histórico carregados do Azure.</Alert>}
       <Button variant="contained" sx={{ mt: 3 }} onClick={() => selected && navigate(selected.source === "MOVIDESK" ? `/tickets?movidesk=${selected.movideskTicket}` : `${route(selected.workItemType)}?task=${selected.id}`)}>Abrir registro completo</Button>
     </Drawer>
