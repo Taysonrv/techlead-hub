@@ -269,11 +269,11 @@ export class WorkspaceService {
           ...(linkedTaskIds.length ? [{ id: { notIn: linkedTaskIds } }] : []),
         ],
       };
-      if (issue === "withoutClient") return { AND: [{ client: null }, { participantClients: null }] };
+      if (issue === "withoutClient") return { AND: [{ workItemType: { not: { equals: "APOIO", mode: "insensitive" } } }, { client: null }, { participantClients: null }] };
       if (issue === "withoutModule") return { module: null };
       if (issue === "withoutOwner") return { assignedToName: null };
-      if (issue === "completedWithoutVersion") return { state: { in: ["Concluído", "Concluido", "Closed", "Done", "Resolved"] }, deliveredVersion: null };
-      if (issue === "activeTaskWithVersion") return { state: { notIn: TERMINAL }, deliveredVersion: { not: null } };
+      if (issue === "completedWithoutVersion") return { AND: [{ workItemType: { not: { equals: "APOIO", mode: "insensitive" } } }, { state: { in: ["Concluído", "Concluido", "Closed", "Done", "Resolved"] } }, { deliveredVersion: null }] };
+      if (issue === "activeTaskWithVersion") return { AND: [{ workItemType: { not: { equals: "APOIO", mode: "insensitive" } } }, { state: { notIn: TERMINAL } }, { deliveredVersion: { not: null } }] };
       return {};
     };
 
@@ -337,6 +337,7 @@ export class WorkspaceService {
         || normalizedLeft.includes(normalizedRight)
         || normalizedRight.includes(normalizedLeft);
     };
+    const isSupportTask = (task: { workItemType: string }) => normalizeStatus(task.workItemType).includes("apoio");
     const isCanceledTask = (state: string) => /cancelad|canceled/.test(normalizeStatus(state));
     const isTerminalTask = (state: string) => TERMINAL.some((value) => normalizeStatus(value) === normalizeStatus(state));
     const finishedLinkedTasks = linkedTasks.filter((item) => isTerminalTask(item.state));
@@ -359,6 +360,7 @@ export class WorkspaceService {
     const ticketsAwaitingClosure = scopedTickets.flatMap((ticket) => {
       if (!isTicketOpen(ticket)) return [];
       const task = findLinkedTask(ticket, finishedLinkedTasks);
+      if (task && isSupportTask(task)) return [];
       if (!task) return [];
       // A versão usada na higienização é a entrega importada do ticket Movidesk.
       // AzureWorkItem.deliveredVersion representa a versão de registro/classificação da Task.
@@ -368,21 +370,36 @@ export class WorkspaceService {
     const ticketsFinishedWithoutDelivery = scopedTickets.flatMap((ticket) => {
       if (!isTicketOpen(ticket) || ticket.deliveredVersion?.trim()) return [];
       const task = findLinkedTask(ticket, finishedLinkedTasks);
-      return task && !isCanceledTask(task.state) ? [{ ticket, task }] : [];
+      return task && !isSupportTask(task) && !isCanceledTask(task.state) ? [{ ticket, task }] : [];
     });
     const closedTicketsWithActiveTask = scopedTickets.flatMap((ticket) => {
       if (!isTicketFinalized(ticket)) return [];
       const task = findLinkedTask(ticket, activeLinkedTasks);
-      return task ? [{ ticket, task }] : [];
+      return task && !isSupportTask(task) ? [{ ticket, task }] : [];
     });
     const clientMismatches = scopedTickets.flatMap((ticket) => {
       const task = findLinkedTask(ticket, linkedTasks);
-      if (!task?.client || !ticket.client) return [];
+      if (!task?.client || !ticket.client || isSupportTask(task)) return [];
       return !sameClient(task.client, ticket.client) ? [{ ticket, task }] : [];
     });
+    const scopedTicketByMovidesk = new Map(scopedTickets.map((ticket) => [ticket.movideskId, ticket]));
+    const supportDivergences = linkedTasks.filter((task) => {
+      if (!isSupportTask(task)) return false;
+      const linkedIds = [
+        ...(task.movideskTicket ? [task.movideskTicket] : []),
+        ...(task.participantMovideskTickets?.match(/\d+/g) ?? []).map(Number),
+      ];
+      if (!linkedIds.length) return false;
+      return linkedIds.some((id) => {
+        const ticket = scopedTicketByMovidesk.get(id);
+        return !ticket || (ticket.taskNumber !== null && ticket.taskNumber !== task.id);
+      });
+    });
 
-    const derivedTicketIssues = ["danglingTaskTickets", "ticketOpenTaskFinished", "ticketOpenTaskWithoutDelivery", "ticketClosedTaskOpen", "clientMismatch"];
-    const azureSamples = params.issue && derivedTicketIssues.includes(params.issue)
+    const derivedTicketIssues = ["danglingTaskTickets", "ticketOpenTaskFinished", "ticketOpenTaskWithoutDelivery", "ticketClosedTaskOpen", "clientMismatch", "supportLinkDivergence"];
+    const azureSamples = params.issue === "supportLinkDivergence"
+      ? supportDivergences.slice(0, 100)
+      : params.issue && derivedTicketIssues.includes(params.issue)
       ? []
       : await prisma.azureWorkItem.findMany({
       where: { AND: [scope, params.issue === "duplicatedMovideskLinks"
@@ -455,6 +472,7 @@ export class WorkspaceService {
         ticketOpenTaskWithoutDelivery: ticketsFinishedWithoutDelivery.length,
         ticketClosedTaskOpen: closedTicketsWithActiveTask.length,
         clientMismatch: clientMismatches.length,
+        supportLinkDivergence: supportDivergences.length,
         activeTaskWithVersion: activeLinkedTasks.filter((item) => Boolean(item.deliveredVersion?.trim())).length,
       },
       samples,
