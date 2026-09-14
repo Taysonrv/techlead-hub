@@ -34,6 +34,7 @@ import {
   ArrowForwardOutlined,
   FullscreenExitOutlined,
   InfoOutlined,
+  PictureAsPdfOutlined,
 } from "@mui/icons-material";
 
 import {
@@ -201,6 +202,7 @@ export function Clients() {
   const presentationRef = useRef<HTMLDivElement>(null);
   const [presentationPage, setPresentationPage] = useState(0);
   const [isPresenting, setIsPresenting] = useState(false);
+  const [exportingPresentation, setExportingPresentation] = useState(false);
 
   const [tickets, setTickets] =
     useState<Ticket[]>([]);
@@ -263,6 +265,41 @@ export function Clients() {
     setPresentationPage(0);
     await presentationRef.current?.requestFullscreen?.();
   }
+
+  async function exportClientPresentation() {
+    if (!selectedClient || exportingPresentation) return;
+    try {
+      setExportingPresentation(true);
+      setError(null);
+      const from = effectiveStartDate.toISOString().slice(0, 10);
+      const to = effectiveEndDate.toISOString().slice(0, 10);
+      const response = await api.get<Blob>("/reports/executive.pdf", {
+        params: {
+          from,
+          to,
+          client: selectedClient,
+          category: category || undefined,
+          ticketStatus: status || undefined,
+          analyst: owner || undefined,
+        },
+        responseType: "blob",
+      });
+      const url = URL.createObjectURL(response.data);
+      const anchor = document.createElement("a");
+      const clientName = selectedClient.normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").replace(/[^a-zA-Z0-9]+/g, "-").replace(/^-|-$/g, "");
+      anchor.href = url;
+      anchor.download = `techlead-hub-${clientName}-executivo-${from}-${to}.pdf`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      setError("Não foi possível exportar o relatório executivo deste cliente.");
+    } finally {
+      setExportingPresentation(false);
+    }
+  }
+
 
   /* =======================================================
      CARREGAMENTO
@@ -1899,6 +1936,9 @@ export function Clients() {
               </Box>
               <Stack className="presentation-actions" direction="row" spacing={1} sx={{ alignItems: "center" }}>
                 {isPresenting && <Typography variant="body2" sx={{ mr: 1, fontWeight: 800 }}>Página {presentationPage + 1} de 4</Typography>}
+                {!isPresenting && <Button variant="outlined" color="inherit" startIcon={<PictureAsPdfOutlined />} disabled={exportingPresentation} onClick={() => void exportClientPresentation()} sx={{ color: "white", borderColor: "rgba(255,255,255,.65)", "&:hover": { borderColor: "white", bgcolor: "rgba(255,255,255,.10)" } }}>
+                  {exportingPresentation ? "Gerando PDF..." : "Exportar PDF"}
+                </Button>}
                 <Button variant="contained" color="inherit" onClick={isPresenting ? () => void document.exitFullscreen() : () => void startPresentation()} startIcon={isPresenting ? <FullscreenExitOutlined /> : undefined} sx={{ color: aliareColors.greenDark, fontWeight: 800 }}>
                   {isPresenting ? "Sair da apresentação" : "Apresentar em tela cheia"}
                 </Button>
@@ -1922,9 +1962,14 @@ export function Clients() {
               </Box>
             </Box>}
 
-            {(!isPresenting || presentationPage === 1) && <Box sx={{ mt: isPresenting ? 0 : 1.5, height: isPresenting ? "100%" : "auto", display: "grid", gridTemplateColumns: { xs: "1fr", lg: "repeat(2,minmax(0,1fr))" }, gap: 2 }}>
+            {(!isPresenting || presentationPage === 1) && <Box sx={{ mt: isPresenting ? 0 : 1.5, height: isPresenting ? "100%" : "auto", display: "grid", gridTemplateColumns: { xs: "1fr", lg: "repeat(3,minmax(0,1fr))" }, gap: 2 }}>
               <ExecutiveBarPanel title="Atendimentos por processo" data={presentationSummary.areas} onClick={(name) => showTickets(`Processo: ${name}`, scopedTickets.filter((ticket) => classifyExecutiveProcess(ticket) === name))} />
               <ExecutiveBarPanel title="Bugs por processo" data={presentationSummary.bugAreas} onClick={(name) => showTickets(`Bugs · ${name}`, presentationSummary.bugs.filter((ticket) => classifyExecutiveProcess(ticket) === name))} />
+              <Box sx={{ p: 2.25, border: "1px solid", borderColor: "divider", borderRadius: 2, bgcolor: "background.paper" }}>
+                <Typography variant="h6" sx={{ fontWeight: 900 }}>Leitura da demanda</Typography>
+                <Typography sx={{ mt: 1.5, lineHeight: 1.65 }}>O processo com maior volume é {presentationSummary.areas[0]?.name ?? "não identificado"}, com {presentationSummary.areas[0]?.value ?? 0} atendimento(s). Entre os bugs, {presentationSummary.bugAreas[0]?.name ?? "nenhum processo"} concentra {presentationSummary.bugAreas[0]?.value ?? 0} ocorrência(s).</Typography>
+                <Typography sx={{ mt: 1.25, lineHeight: 1.65, color: "text.secondary" }}>Direcionamento: avaliar causa raiz, recorrência, necessidade de treinamento e oportunidade de correção preventiva nos processos mais representativos.</Typography>
+              </Box>
             </Box>}
 
             {(!isPresenting || presentationPage === 2) && <Box sx={{ mt: isPresenting ? 0 : 1.5, height: isPresenting ? "100%" : "auto", display: "grid", gridTemplateColumns: { xs: "1fr", lg: "repeat(2,minmax(0,1fr))" }, gap: 2 }}>
