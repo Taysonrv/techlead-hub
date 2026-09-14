@@ -82,11 +82,11 @@ const REPORTS:
     scope:
       "executive",
     title:
-      "Relatório Executivo",
+      "Histórico e Saúde do Cliente",
     description:
-      "Visão consolidada da operação para apresentação à coordenação e clientes.",
+      "Levantamento executivo completo para visitas, reuniões e acompanhamento da saúde operacional.",
     contents:
-      "Atendimentos, SLA, analistas, clientes, categorias, desenvolvimento, estados Azure e versões.",
+      "Histórico de atendimentos, carteira aberta e concluída, SLA, categorias, analistas, Correções, Evoluções, APOIOs, estados, priorizações e versões entregues.",
     icon:
       AssessmentOutlined,
   },
@@ -169,7 +169,7 @@ export function Reports() {
           new Date();
         date.setDate(
           date.getDate() -
-            29
+            364
         );
         return formatInputDate(
           date
