@@ -651,7 +651,7 @@ function ReportCard({
 
         <Box sx={{ mt: 2.25, pt: 2, borderTop: "1px solid", borderColor: "divider", flex: 1 }}>
           <Typography variant="overline" sx={{ color: accent, fontWeight: 850 }}>Conteúdo executivo</Typography>
-          <Stack direction="row" useFlexGap flexWrap="wrap" spacing={0.75} sx={{ mt: 0.75 }}>
+          <Stack direction="row" useFlexGap spacing={0.75} sx={{ mt: 0.75, flexWrap: "wrap" }}>
             {report.contents.split(",").map((content) => <Chip key={content} size="small" label={content.trim().replace(/\.$/, "")} sx={{ backgroundColor: `color-mix(in srgb, ${accent} 10%, white)`, color: "text.primary", border: `1px solid color-mix(in srgb, ${accent} 25%, white)` }} />)}
           </Stack>
         </Box>
