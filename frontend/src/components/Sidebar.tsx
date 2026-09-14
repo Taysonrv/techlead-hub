@@ -853,6 +853,7 @@ export function Sidebar() {
 
       {user && (
         <Box
+          id="global-user-controls"
           sx={{
             position: "fixed",
             top: 14,
