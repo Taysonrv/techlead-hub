@@ -15,7 +15,6 @@ import {
 
 import {
   createBarChartPng,
-  createPieChartPng,
 } from "./ReportChartService";
 
 import {
@@ -111,8 +110,7 @@ export class ExecutiveReportService {
       ticketsOpen,
       ticketsResolved,
       ticketsClosed,
-      slaMeasured,
-      slaMet,
+      slaTickets,
       analysts,
       clients,
       categories,
@@ -177,25 +175,14 @@ export class ExecutiveReportService {
           },
         }),
 
-        prisma.ticket.count({
-          where: {
-            ...ticketWhere,
-            solutionSlaIndicator: {
-              not:
-                null,
-            },
-          },
-        }),
-
-        prisma.ticket.count({
-          where: {
-            ...ticketWhere,
-            solutionSlaIndicator: {
-              contains:
-                "Dentro",
-              mode:
-                "insensitive",
-            },
+        prisma.ticket.findMany({
+          where:
+            ticketWhere,
+          select: {
+            solutionSlaIndicator: true,
+            dueDate: true,
+            resolvedDate: true,
+            closedDate: true,
           },
         }),
 
@@ -358,6 +345,14 @@ export class ExecutiveReportService {
           orderBy: { createdDate: "asc" },
         }),
       ]);
+
+    const slaResults = slaTickets.map((ticket) => classifySolutionSla(
+      ticket.solutionSlaIndicator,
+      ticket.resolvedDate ?? ticket.closedDate,
+      ticket.dueDate,
+    ));
+    const slaMeasured = slaResults.filter((result) => result !== null).length;
+    const slaMet = slaResults.filter((result) => result === true).length;
 
     const categoryNames = categories
       .slice(0, 8)
@@ -529,7 +524,7 @@ export class ExecutiveReportService {
         [
           "SLA dentro do prazo",
           slaMet,
-          "Indicador de solução contendo a expressão Dentro.",
+          "Indicador oficial do Movidesk normalizado; quando ausente, compara a data de solução com o vencimento.",
         ],
         [
           "Percentual SLA",
@@ -1207,28 +1202,13 @@ export class ExecutiveReportService {
     sheet.getColumn(legendColumn + 1).width = 14;
     sheet.getColumn(legendColumn + 2).width = 14;
 
-    if (chartValues.length > 1) {
-      const pie = workbook.addImage({
-        base64: createPieChartPng(chartValues).toString("base64"),
-        extension: "png",
-      });
-      sheet.addImage(pie, {
-        tl: { col: column, row },
-        ext: { width: 390, height: 250 },
-      });
-    } else {
-      sheet.getCell(row + 2, column + 1).value =
-        "Distribuição única: o gráfico de pizza foi omitido por não agregar comparação.";
-      sheet.getCell(row + 2, column + 1).alignment = { wrapText: true };
-    }
-
     const bars = workbook.addImage({
       base64: createBarChartPng(chartValues).toString("base64"),
       extension: "png",
     });
     sheet.addImage(bars, {
-      tl: { col: column, row: row + 15 },
-      ext: { width: 430, height: 250 },
+      tl: { col: column, row },
+      ext: { width: 500, height: 280 },
     });
   }
 
@@ -1590,6 +1570,24 @@ export class ExecutiveReportService {
   }
 }
 
+
+function classifySolutionSla(
+  indicator: string | null,
+  completedAt: Date | null,
+  dueAt: Date | null,
+): boolean | null {
+  const normalized = indicator
+    ?.normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .trim().toLocaleLowerCase("pt-BR");
+
+  if (normalized) {
+    if (/nao violad|dentro|no prazo|cumprid|atingid|within|not violated|\bmet\b/.test(normalized)) return true;
+    if (/fora|vencid|violad|nao cumpr|not met|expired|estourad/.test(normalized)) return false;
+  }
+
+  if (completedAt && dueAt) return completedAt.getTime() <= dueAt.getTime();
+  return null;
+}
 
 function clientAliases(value: string) {
   const normalized = value.trim();
