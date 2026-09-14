@@ -668,7 +668,7 @@ function drawLegend(
 ) {
   values.forEach(
     (
-      _item,
+      item,
       index,
     ) => {
       const currentX =
