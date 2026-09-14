@@ -18,6 +18,11 @@ import {
   createPieChartPng,
 } from "./ReportChartService";
 
+import {
+  buildManagementInsights,
+  type ManagementInsight,
+} from "./ManagementInsightService";
+
 export type ReportScope =
   | "executive"
   | "analysts"
@@ -347,6 +352,32 @@ export class ExecutiveReportService {
             20,
         }),
       ]);
+
+    const insights = buildManagementInsights({
+      ticketsTotal,
+      ticketsOpen,
+      ticketsResolved,
+      ticketsClosed,
+      slaMeasured,
+      slaMet,
+      corrections,
+      evolutions,
+      supports,
+      prioritized,
+      blocked,
+      topCategory: categories[0] ? {
+        label: categories[0].category ?? "Não informado",
+        total: categories[0]._count._all,
+      } : null,
+      topAnalyst: analysts[0] ? {
+        label: analysts[0].owner ?? "Não informado",
+        total: analysts[0]._count._all,
+      } : null,
+      topVersion: versions[0] ? {
+        label: versions[0].deliveredVersion ?? "Não informada",
+        total: versions[0]._count._all,
+      } : null,
+    });
 
     const workbook =
       new ExcelJS.Workbook();
@@ -785,6 +816,13 @@ export class ExecutiveReportService {
       generatedBy,
     );
 
+    this.addInsightSheet(
+      workbook,
+      insights,
+      options,
+      generatedBy,
+    );
+
     this.applyScope(
       workbook,
       options.scope ??
@@ -841,6 +879,45 @@ export class ExecutiveReportService {
       ...(filters.azureState ? [{ state: { equals: filters.azureState, mode: "insensitive" as const } }] : []),
       ...(filters.version ? [{ deliveredVersion: { equals: filters.version, mode: "insensitive" as const } }] : []),
     ];
+  }
+
+  private addInsightSheet(
+    workbook: ExcelJS.Workbook,
+    insights: ManagementInsight[],
+    options: ExecutiveReportOptions,
+    generatedBy: string,
+  ) {
+    const sheet = workbook.addWorksheet("Insights Diretoria", {
+      views: [{ state: "frozen", ySplit: 5 }],
+    });
+    this.configureSheet(sheet, [14, 28, 72, 72]);
+    sheet.mergeCells("A1:D1");
+    sheet.getCell("A1").value = "LEITURA EXECUTIVA E RECOMENDAÇÕES";
+    sheet.getCell("A2").value = "Período";
+    sheet.getCell("B2").value = this.periodLabel(options.from, options.to);
+    sheet.getCell("A3").value = "Gerado por";
+    sheet.getCell("B3").value = generatedBy;
+    this.styleTitle(sheet.getCell("A1"));
+
+    const header = sheet.addRow(["Prioridade", "Tema", "Achado", "Recomendação"]);
+    this.styleHeader(header);
+
+    for (const insight of insights) {
+      const row = sheet.addRow([
+        insight.priority,
+        insight.topic,
+        insight.finding,
+        insight.recommendation,
+      ]);
+      row.alignment = { vertical: "top", wrapText: true };
+      row.height = 42;
+      row.getCell(1).font = {
+        bold: true,
+        color: { argb: insight.priority === "ALTA" ? "FFB42318" : insight.priority === "POSITIVA" ? "FF087443" : "FF7A5200" },
+      };
+    }
+    sheet.autoFilter = "A4:D4";
+    sheet.pageSetup.fitToWidth = 1;
   }
 
   private addRankingSheet(
@@ -1094,6 +1171,7 @@ export class ExecutiveReportService {
         string[]
       > = {
       executive: [
+        "Insights Diretoria",
         "Resumo Executivo",
         "Analistas",
         "Clientes",
@@ -1105,25 +1183,30 @@ export class ExecutiveReportService {
         "Desenvolvimento",
       ],
       analysts: [
+        "Insights Diretoria",
         "Analistas",
         "Situação Atendimentos",
       ],
       sla: [
+        "Insights Diretoria",
         "SLA",
         "Situação Atendimentos",
         "Categorias",
       ],
       clients: [
+        "Insights Diretoria",
         "Clientes",
         "Categorias",
         "Situação Atendimentos",
       ],
       development: [
+        "Insights Diretoria",
         "Desenvolvimento",
         "Estados Azure",
         "Versões",
       ],
       versions: [
+        "Insights Diretoria",
         "Versões",
         "Estados Azure",
         "Desenvolvimento",
