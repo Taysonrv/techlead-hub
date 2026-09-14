@@ -32,7 +32,8 @@ const metrics = [
   ["ticketClosedTaskOpen", "Ticket encerrado com Task ativa", "Ticket concluído, fechado ou resolvido enquanto a Task relacionada ainda está em andamento.", "Fluxo"],
   ["activeTaskWithVersion", "Task ativa com versão informada", "Task não finalizada que já possui versão preenchida. Pode indicar classificação antecipada ou estado desatualizado.", "Versão"],
   ["completedWithoutVersion", "Task finalizada sem versão", "Correção, evolução ou apoio concluído no Azure sem versão de entrega informada.", "Versão"],
-  ["clientMismatch", "Cliente divergente", "O cliente principal do ticket difere do cliente principal da Task relacionada.", "Vínculo"],
+  ["clientMismatch", "Cliente divergente", "O cliente principal do ticket difere do cliente principal da Correção ou Evolução relacionada. APOIO não exige cliente.", "Vínculo"],
+  ["supportLinkDivergence", "APOIO com vínculo divergente", "APOIO referencia ticket inexistente no recorte ou ticket que aponta para outra Task. Cliente e versão não são obrigatórios para APOIO.", "APOIO"],
   ["danglingTaskTickets", "Referência de Task inexistente", "Ticket aponta para um ID de Task ausente no snapshot atual do Azure.", "Vínculo"],
   ["duplicatedMovideskLinks", "Ticket ligado a várias Tasks", "O mesmo atendimento Movidesk está como vínculo principal em mais de uma Task; revisar se todas as relações são válidas.", "Vínculo"],
   ["withoutTicket", "Task sem ticket", "Work Item sem atendimento principal, participante ou vínculo reverso no Movidesk.", "Cadastro"],
@@ -121,7 +122,7 @@ export function DataQuality() {
 
     {error && <Alert severity="error" sx={{ mt: 2 }}>Não foi possível analisar a qualidade dos dados.</Alert>}
     <Box sx={{ mt: 2, display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2,1fr)", lg: "repeat(4,1fr)" }, gap: 2 }}>
-      {metrics.map(([key, label, info, group]) => <KpiCard key={key} title={label} value={data?.summary[key] ?? 0} subtitle={group} info={info} accent={issue === key ? aliareColors.green : group === "Fluxo" ? "#ef4444" : group === "Versão" ? "#8b5cf6" : group === "Vínculo" ? "#f59e0b" : "#2676b9"} active={issue === key} onClick={() => setIssue(issue === key ? "" : key)} />)}
+      {metrics.map(([key, label, info, group]) => <KpiCard key={key} title={label} value={data?.summary[key] ?? 0} subtitle={group} info={info} accent={issue === key ? aliareColors.green : group === "Fluxo" ? "#ef4444" : group === "Versão" ? "#8b5cf6" : group === "Vínculo" ? "#f59e0b" : group === "APOIO" ? "#0891b2" : "#2676b9"} active={issue === key} onClick={() => setIssue(issue === key ? "" : key)} />)}
     </Box>
 
     <Card variant="outlined" sx={{ mt: 2 }}><CardContent>
