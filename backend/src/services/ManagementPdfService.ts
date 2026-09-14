@@ -673,7 +673,12 @@ export class ManagementPdfService {
   private azureFilters(filters?: ReportFilters): Prisma.AzureWorkItemWhereInput[] {
     if (!filters) return [];
     return [
-      ...(filters.client ? [{ OR: [{ client: { equals: filters.client, mode: "insensitive" as const } }, { participantClients: { contains: filters.client, mode: "insensitive" as const } }] }] : []),
+      ...(filters.client ? [{
+        OR: clientAliases(filters.client).flatMap((client) => [
+          { client: { contains: client, mode: "insensitive" as const } },
+          { participantClients: { contains: client, mode: "insensitive" as const } },
+        ]),
+      }] : []),
       ...(filters.analyst ? [{ OR: [{ assignedToName: { equals: filters.analyst, mode: "insensitive" as const } }, { createdByName: { equals: filters.analyst, mode: "insensitive" as const } }] }] : []),
       ...(filters.workItemType ? [{ workItemType: { equals: filters.workItemType, mode: "insensitive" as const } }] : []),
       ...(filters.azureState ? [{ state: { equals: filters.azureState, mode: "insensitive" as const } }] : []),
@@ -1547,4 +1552,11 @@ function dateLabel(
   return value.toLocaleDateString(
     "pt-BR",
   );
+}
+
+
+function clientAliases(value: string) {
+  const normalized = value.trim();
+  const shortName = normalized.split(/\s+-\s+/)[0]?.trim() ?? normalized;
+  return [...new Set([normalized, shortName].filter((item) => item.length >= 3))];
 }
