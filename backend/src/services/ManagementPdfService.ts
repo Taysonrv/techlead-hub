@@ -108,8 +108,7 @@ export class ManagementPdfService {
       ticketOpen,
       ticketResolved,
       ticketClosed,
-      slaMeasured,
-      slaMet,
+      slaTickets,
       analysts,
       clients,
       categories,
@@ -167,24 +166,14 @@ export class ManagementPdfService {
             },
           },
         }),
-        prisma.ticket.count({
-          where: {
-            ...ticketWhere,
-            solutionSlaIndicator: {
-              not:
-                null,
-            },
-          },
-        }),
-        prisma.ticket.count({
-          where: {
-            ...ticketWhere,
-            solutionSlaIndicator: {
-              contains:
-                "Dentro",
-              mode:
-                "insensitive",
-            },
+        prisma.ticket.findMany({
+          where:
+            ticketWhere,
+          select: {
+            solutionSlaIndicator: true,
+            dueDate: true,
+            resolvedDate: true,
+            closedDate: true,
           },
         }),
         prisma.ticket.groupBy({
@@ -329,6 +318,14 @@ export class ManagementPdfService {
             15,
         }),
       ]);
+
+    const slaResults = slaTickets.map((ticket) => classifySolutionSla(
+      ticket.solutionSlaIndicator,
+      ticket.resolvedDate ?? ticket.closedDate,
+      ticket.dueDate,
+    ));
+    const slaMeasured = slaResults.filter((result) => result !== null).length;
+    const slaMet = slaResults.filter((result) => result === true).length;
 
     const managementInsights = buildManagementInsights({
       ticketsTotal: ticketTotal,
@@ -1554,6 +1551,23 @@ function dateLabel(
   );
 }
 
+
+function classifySolutionSla(
+  indicator: string | null,
+  completedAt: Date | null,
+  dueAt: Date | null,
+): boolean | null {
+  const normalized = indicator
+    ?.normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .trim().toLocaleLowerCase("pt-BR");
+
+  if (normalized) {
+    if (/nao violad|dentro|no prazo|cumprid|atingid|within|not violated|\bmet\b/.test(normalized)) return true;
+    if (/fora|vencid|violad|nao cumpr|not met|expired|estourad/.test(normalized)) return false;
+  }
+  if (completedAt && dueAt) return completedAt.getTime() <= dueAt.getTime();
+  return null;
+}
 
 function clientAliases(value: string) {
   const normalized = value.trim();
