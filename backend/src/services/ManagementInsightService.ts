@@ -28,7 +28,7 @@ export function buildManagementInsights(input: ManagementInsightInput): Manageme
   const openRate = percent(input.ticketsOpen, input.ticketsTotal);
   const slaRate = percent(input.slaMet, input.slaMeasured);
   const measuredRate = percent(input.slaMeasured, input.ticketsTotal);
-  const developmentTotal = input.corrections + input.evolutions + input.supports;
+  const developmentTotal = input.corrections;
   const insights: ManagementInsight[] = [];
 
   insights.push({
@@ -62,8 +62,8 @@ export function buildManagementInsights(input: ManagementInsightInput): Manageme
 
   insights.push({
     priority: input.blocked > 0 ? "ALTA" : input.prioritized > 0 ? "MÉDIA" : "INFORMATIVA",
-    topic: "Desenvolvimento",
-    finding: `${developmentTotal} itens: ${input.corrections} correções, ${input.evolutions} evoluções e ${input.supports} apoios; ${input.prioritized} priorizados e ${input.blocked} com processo bloqueado.`,
+    topic: "Correções de suporte",
+    finding: `${developmentTotal} correção(ões) de suporte e sustentação; ${input.prioritized} priorizada(s) e ${input.blocked} com processo bloqueado. Evoluções e APOIOs não compõem o relatório.`,
     recommendation: input.blocked > 0
       ? "Tratar imediatamente os itens com processo bloqueado e comunicar responsáveis, impacto e previsão."
       : "Acompanhar priorizados até a entrega e validar o retorno ao atendimento de origem.",
