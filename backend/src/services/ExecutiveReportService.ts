@@ -14,10 +14,6 @@ import {
 } from "../domain/OperationalScope";
 
 import {
-  createBarChartPng,
-} from "./ReportChartService";
-
-import {
   buildManagementInsights,
   type ManagementInsight,
 } from "./ManagementInsightService";
@@ -78,6 +74,7 @@ export class ExecutiveReportService {
       Prisma.AzureWorkItemWhereInput = {
       AND: [
         azureOperationalScope(),
+        { workItemType: { equals: "Correção Clientes", mode: "insensitive" } },
         {
           OR: [
             {
@@ -341,7 +338,7 @@ export class ExecutiveReportService {
         }),
         prisma.ticket.findMany({
           where: ticketWhere,
-          select: { createdDate: true, category: true },
+          select: { createdDate: true, resolvedDate: true, closedDate: true, category: true },
           orderBy: { createdDate: "asc" },
         }),
       ]);
@@ -366,6 +363,22 @@ export class ExecutiveReportService {
       monthData.set(category, (monthData.get(category) ?? 0) + 1);
       categoryEvolution.set(month, monthData);
     }
+    const situationByMonth = new Map<string, { open: number; resolved: number; closed: number }>();
+    for (const ticket of ticketTimeline) {
+      const month = ticket.createdDate.toISOString().slice(0, 7);
+      const current = situationByMonth.get(month) ?? { open: 0, resolved: 0, closed: 0 };
+      if (ticket.closedDate) current.closed += 1;
+      else if (ticket.resolvedDate) current.resolved += 1;
+      else current.open += 1;
+      situationByMonth.set(month, current);
+    }
+    const situationRows: RankingRow[] = [...situationByMonth.entries()]
+      .sort(([left], [right]) => left.localeCompare(right))
+      .flatMap(([month, values]) => [
+        { label: `${month.split("-").reverse().join("/")} · Em aberto`, total: values.open },
+        { label: `${month.split("-").reverse().join("/")} · Resolvidos`, total: values.resolved },
+        { label: `${month.split("-").reverse().join("/")} · Fechados`, total: values.closed },
+      ]);
 
     const insights = buildManagementInsights({
       ticketsTotal,
@@ -512,9 +525,9 @@ export class ExecutiveReportService {
           "Com data de resolução e ainda sem data de encerramento.",
         ],
         [
-          "Encerrados",
+          "Fechados",
           ticketsClosed,
-          "Com data de encerramento preenchida.",
+          "Com data de fechamento preenchida.",
         ],
         [
           "Com indicador de SLA",
@@ -564,16 +577,6 @@ export class ExecutiveReportService {
           "System.WorkItemType = Correção Clientes.",
         ],
         [
-          "Evoluções",
-          evolutions,
-          "System.WorkItemType = Evolução.",
-        ],
-        [
-          "Apoios",
-          supports,
-          "System.WorkItemType = APOIO, sem diferenciar capitalização.",
-        ],
-        [
           "Priorizados",
           prioritized,
           "Campo de priorização ativo.",
@@ -585,60 +588,6 @@ export class ExecutiveReportService {
         ],
       ],
       7,
-    );
-
-    this.addCharts(
-      workbook,
-      summary,
-      [
-        {
-          label:
-            "Em aberto",
-          value:
-            ticketsOpen,
-        },
-        {
-          label:
-            "Resolvidos",
-          value:
-            ticketsResolved,
-        },
-        {
-          label:
-            "Encerrados",
-          value:
-            ticketsClosed,
-        },
-      ],
-      4,
-      1,
-    );
-
-    this.addCharts(
-      workbook,
-      summary,
-      [
-        {
-          label:
-            "Correções",
-          value:
-            corrections,
-        },
-        {
-          label:
-            "Evoluções",
-          value:
-            evolutions,
-        },
-        {
-          label:
-            "Apoios",
-          value:
-            supports,
-        },
-      ],
-      4,
-      19,
     );
 
     this.addRankingSheet(
@@ -751,16 +700,6 @@ export class ExecutiveReportService {
                 slaMet,
             ),
         },
-        {
-          label:
-            "Não medido",
-          total:
-            Math.max(
-              0,
-              ticketsTotal -
-                slaMeasured,
-            ),
-        },
       ],
       options,
       generatedBy,
@@ -769,27 +708,8 @@ export class ExecutiveReportService {
     this.addRankingSheet(
       workbook,
       "Situação Atendimentos",
-      "Situação dos atendimentos Movidesk",
-      [
-        {
-          label:
-            "Em aberto",
-          total:
-            ticketsOpen,
-        },
-        {
-          label:
-            "Resolvidos",
-          total:
-            ticketsResolved,
-        },
-        {
-          label:
-            "Encerrados",
-          total:
-            ticketsClosed,
-        },
-      ],
+      "Evolução mensal da situação dos atendimentos",
+      situationRows,
       options,
       generatedBy,
     );
@@ -797,25 +717,13 @@ export class ExecutiveReportService {
     this.addRankingSheet(
       workbook,
       "Desenvolvimento",
-      "Correções, evoluções e apoios",
+      "Correções de suporte e sustentação",
       [
         {
           label:
             "Correções",
           total:
             corrections,
-        },
-        {
-          label:
-            "Evoluções",
-          total:
-            evolutions,
-        },
-        {
-          label:
-            "Apoios",
-          total:
-            supports,
         },
         {
           label:
@@ -941,13 +849,13 @@ export class ExecutiveReportService {
     const resolutionRate = metrics.ticketsTotal > 0 ? (metrics.ticketsResolved + metrics.ticketsClosed) / metrics.ticketsTotal : 0;
     const slaRate = metrics.slaMeasured > 0 ? metrics.slaMet / metrics.slaMeasured : 0;
     const header = sheet.getRow(5);
-    ["Indicador", "Resultado", "Leitura executiva", "Correções", "Evoluções", "Apoios"].forEach((value, index) => header.getCell(index + 1).value = value);
+    ["Indicador", "Resultado", "Leitura executiva", "Correções", "Priorizadas", "Bloqueadas"].forEach((value, index) => header.getCell(index + 1).value = value);
     this.styleHeader(header);
     const rows: Array<[string, number | string, string, number | string, number | string, number | string]> = [
-      ["Atendimentos no período", metrics.ticketsTotal, "Volume total analisado no recorte.", metrics.corrections, metrics.evolutions, metrics.supports],
-      ["Em aberto", metrics.ticketsOpen, "Carteira que ainda exige acompanhamento.", metrics.prioritized, metrics.blocked, metrics.corrections + metrics.evolutions + metrics.supports],
-      ["Taxa de resolução", resolutionRate, `${metrics.ticketsResolved + metrics.ticketsClosed} atendimento(s) resolvido(s) ou encerrado(s).`, "Priorizadas", "Bloqueadas", "Total Dev."],
-      ["SLA de solução", slaRate, `${metrics.slaMet} de ${metrics.slaMeasured} atendimento(s) medidos dentro do prazo.`, metrics.prioritized, metrics.blocked, metrics.corrections + metrics.evolutions + metrics.supports],
+      ["Atendimentos no período", metrics.ticketsTotal, "Volume total de tickets criados no recorte.", metrics.corrections, metrics.prioritized, metrics.blocked],
+      ["Em aberto", metrics.ticketsOpen, "Tickets sem resolução e sem fechamento.", metrics.corrections, metrics.prioritized, metrics.blocked],
+      ["Taxa de resolução", resolutionRate, `${metrics.ticketsResolved + metrics.ticketsClosed} atendimento(s) resolvido(s) ou fechado(s).`, metrics.corrections, metrics.prioritized, metrics.blocked],
+      ["SLA de solução", slaRate, `${metrics.slaMet} de ${metrics.slaMeasured} atendimento(s) medidos dentro do prazo; não medidos são excluídos.`, metrics.corrections, metrics.prioritized, metrics.blocked],
     ];
     rows.forEach((values, index) => {
       const row = sheet.addRow(values);
@@ -1094,6 +1002,7 @@ export class ExecutiveReportService {
         48,
         18,
         22,
+        68,
       ],
     );
 
@@ -1141,6 +1050,7 @@ export class ExecutiveReportService {
         "Descrição",
         "Quantidade",
         "Participação",
+        "Definição",
       ]);
 
     this.styleHeader(
@@ -1173,6 +1083,7 @@ export class ExecutiveReportService {
               ? item.total /
                 total
               : 0,
+            rankingDefinition(name, item.label),
           ]);
 
         row.getCell(
@@ -1193,87 +1104,11 @@ export class ExecutiveReportService {
         row:
           4,
         column:
-          4,
+          5,
       },
     };
 
-    this.addCharts(
-      workbook,
-      sheet,
-      rows.map(
-        (
-          item,
-        ) => ({
-          label:
-            item.label,
-          value:
-            item.total,
-        }),
-      ),
-      4,
-      5,
-    );
     sheet.pageSetup.printArea = `A1:N${Math.max(sheet.rowCount, 20)}`;
-  }
-
-  private addCharts(
-    workbook: ExcelJS.Workbook,
-    sheet: ExcelJS.Worksheet,
-    values: Array<{ label: string; value: number }>,
-    column: number,
-    row: number,
-  ) {
-    const chartValues = values
-      .filter((item) => Number.isFinite(item.value) && item.value > 0)
-      .sort((left, right) => right.value - left.value)
-      .slice(0, 10);
-
-    const legendColumn = column + 8;
-    const total = chartValues.reduce((sum, item) => sum + item.value, 0);
-    const colors = [
-      "FF18C77A", "FF0078D4", "FFFFAA00", "FFDC3545", "FF6F42C1",
-      "FF20C997", "FFFD7E14", "FF6C757D", "FF0D6EFD", "FF198754",
-    ];
-
-    sheet.getCell(row + 1, legendColumn).value = "Legenda";
-    sheet.getCell(row + 1, legendColumn).font = { bold: true };
-    sheet.getCell(row + 1, legendColumn + 1).value = "Quantidade";
-    sheet.getCell(row + 1, legendColumn + 1).font = { bold: true };
-    sheet.getCell(row + 1, legendColumn + 2).value = "Participação";
-    sheet.getCell(row + 1, legendColumn + 2).font = { bold: true };
-
-    if (!chartValues.length) {
-      sheet.getCell(row + 2, legendColumn).value = "Sem dados para o recorte selecionado";
-      return;
-    }
-
-    chartValues.forEach((item, index) => {
-      const currentRow = row + index + 2;
-      const labelCell = sheet.getCell(currentRow, legendColumn);
-      labelCell.value = item.label;
-      labelCell.fill = {
-        type: "pattern",
-        pattern: "solid",
-        fgColor: { argb: semanticChartArgb(item.label, colors[index % colors.length]!) },
-      };
-      labelCell.font = { color: { argb: "FFFFFFFF" }, bold: true };
-      labelCell.alignment = { wrapText: true };
-      sheet.getCell(currentRow, legendColumn + 1).value = item.value;
-      sheet.getCell(currentRow, legendColumn + 2).value = total > 0 ? item.value / total : 0;
-      sheet.getCell(currentRow, legendColumn + 2).numFmt = "0.00%";
-    });
-    sheet.getColumn(legendColumn).width = 34;
-    sheet.getColumn(legendColumn + 1).width = 14;
-    sheet.getColumn(legendColumn + 2).width = 14;
-
-    const bars = workbook.addImage({
-      base64: createBarChartPng(chartValues).toString("base64"),
-      extension: "png",
-    });
-    sheet.addImage(bars, {
-      tl: { col: column, row },
-      ext: { width: 430, height: 245 },
-    });
   }
 
   private applyScope(
@@ -1290,6 +1125,7 @@ export class ExecutiveReportService {
       executive: [
         "Painel do Cliente",
         "Evolução Categorias",
+        "Situação Atendimentos",
         "Insights Diretoria",
         "Resumo Executivo",
         "Analistas",
@@ -1303,12 +1139,14 @@ export class ExecutiveReportService {
       ],
       analysts: [
         "Evolução Categorias",
+        "Situação Atendimentos",
         "Insights Diretoria",
         "Analistas",
         "Situação Atendimentos",
       ],
       sla: [
         "Evolução Categorias",
+        "Situação Atendimentos",
         "Insights Diretoria",
         "SLA",
         "Situação Atendimentos",
@@ -1317,6 +1155,7 @@ export class ExecutiveReportService {
       clients: [
         "Painel do Cliente",
         "Evolução Categorias",
+        "Situação Atendimentos",
         "Insights Diretoria",
         "Clientes",
         "Categorias",
@@ -1324,6 +1163,7 @@ export class ExecutiveReportService {
       ],
       development: [
         "Evolução Categorias",
+        "Situação Atendimentos",
         "Insights Diretoria",
         "Desenvolvimento",
         "Estados Azure",
@@ -1331,6 +1171,7 @@ export class ExecutiveReportService {
       ],
       versions: [
         "Evolução Categorias",
+        "Situação Atendimentos",
         "Insights Diretoria",
         "Versões",
         "Estados Azure",
@@ -1657,4 +1498,20 @@ function clientAliases(value: string) {
   const normalized = value.trim();
   const shortName = normalized.split(/\s+-\s+/)[0]?.trim() ?? normalized;
   return [...new Set([normalized, shortName].filter((item) => item.length >= 3))];
+}
+
+function rankingDefinition(sheet: string, label: string) {
+  if (sheet === "SLA") return label.includes("Dentro") ? "Tickets medidos cujo indicador oficial ou data de conclusão ficou dentro do prazo." : "Tickets medidos cujo indicador oficial ou data de conclusão ultrapassou o prazo.";
+  if (sheet === "Situação Atendimentos") {
+    if (label.includes("Em aberto")) return "Tickets criados no mês que permanecem sem resolução e sem fechamento.";
+    if (label.includes("Resolvidos")) return "Tickets criados no mês com resolução registrada e ainda sem fechamento.";
+    return "Tickets criados no mês com data de fechamento registrada.";
+  }
+  if (sheet === "Desenvolvimento") return "Correções de suporte e sustentação vinculadas ao recorte; evoluções e apoios não compõem este relatório.";
+  if (sheet === "Analistas") return "Quantidade de tickets do período atribuídos ao responsável.";
+  if (sheet === "Clientes") return "Quantidade de tickets do período vinculados ao cliente.";
+  if (sheet === "Categorias") return "Quantidade de tickets do período classificada nesta categoria.";
+  if (sheet === "Estados Azure") return "Correções de suporte e sustentação atualmente neste estado do Azure.";
+  if (sheet === "Versões") return "Correções de suporte e sustentação entregues nesta versão.";
+  return "Quantidade apurada no período e filtros selecionados.";
 }
