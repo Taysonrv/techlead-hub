@@ -208,7 +208,10 @@ export class WorkspaceService {
           ...(params.user ? [{ owner: { equals: params.user, mode: "insensitive" as const } }] : []),
         ],
       },
-      select: { id: true, taskNumber: true, movideskId: true, subject: true, status: true, client: true, owner: true },
+      select: {
+        id: true, taskNumber: true, movideskId: true, subject: true,
+        status: true, baseStatus: true, client: true, owner: true,
+      },
     });
     const taskIds = scopedTickets.map((item) => item.taskNumber).filter((value): value is number => value !== null);
     const movideskIds = scopedTickets.map((item) => item.movideskId).filter((value): value is number => value !== null);
@@ -274,7 +277,7 @@ export class WorkspaceService {
 
     const [
       withoutTicket, withoutClient, withoutModule, withoutOwner,
-      completedWithoutVersion, existingTasks, duplicates,
+      completedWithoutVersion, existingTasks, duplicates, finishedLinkedTasks,
     ] = await Promise.all([
       prisma.azureWorkItem.count({ where: { AND: [scope, issueWhere("withoutTicket")] } }),
       prisma.azureWorkItem.count({ where: { AND: [scope, issueWhere("withoutClient")] } }),
@@ -290,6 +293,26 @@ export class WorkspaceService {
         _count: { id: true },
         having: { id: { _count: { gt: 1 } } },
       }),
+      prisma.azureWorkItem.findMany({
+        where: {
+          AND: [
+            scope,
+            { state: { in: TERMINAL } },
+            {
+              OR: [
+                { deliveredVersion: { not: null } },
+                { state: { in: ["Cancelado", "Canceled"] } },
+              ],
+            },
+          ],
+        },
+        orderBy: [{ azureClosedAt: "desc" }, { azureChangedAt: "desc" }],
+        select: {
+          id: true, workItemType: true, title: true, state: true,
+          client: true, assignedToName: true, deliveredVersion: true,
+          movideskTicket: true, participantMovideskTickets: true,
+        },
+      }),
     ]);
 
     const existingTaskIds = new Set(existingTasks.map((item) => item.id));
@@ -298,6 +321,26 @@ export class WorkspaceService {
     );
     const duplicatedIds = duplicates.map((item) => item.movideskTicket)
       .filter((value): value is number => value !== null);
+
+    const isTicketOpen = (ticket: { baseStatus: string | null; status: string }) =>
+      ["New", "InAttendance", "Stopped"].includes(ticket.baseStatus ?? "") ||
+      /novo|andamento|aguard|paus|parad/i.test(ticket.status);
+
+    const finishedTaskById = new Map(finishedLinkedTasks.map((item) => [item.id, item]));
+    const finishedTaskByTicket = new Map<number, (typeof finishedLinkedTasks)[number]>();
+    for (const item of finishedLinkedTasks) {
+      if (item.movideskTicket) finishedTaskByTicket.set(item.movideskTicket, item);
+      for (const match of item.participantMovideskTickets?.match(/\d+/g) ?? []) {
+        finishedTaskByTicket.set(Number(match), item);
+      }
+    }
+
+    const ticketsAwaitingClosure = scopedTickets.flatMap((ticket) => {
+      if (!isTicketOpen(ticket)) return [];
+      const task = (ticket.taskNumber ? finishedTaskById.get(ticket.taskNumber) : undefined)
+        ?? finishedTaskByTicket.get(ticket.movideskId);
+      return task ? [{ ticket, task }] : [];
+    });
 
     const azureSamples = params.issue === "danglingTaskTickets"
       ? []
@@ -322,7 +365,23 @@ export class WorkspaceService {
       },
     });
 
-    const samples = params.issue === "danglingTaskTickets"
+    const samples = params.issue === "ticketOpenTaskFinished"
+      ? ticketsAwaitingClosure.slice(0, 100).map(({ ticket, task }) => ({
+          id: ticket.id,
+          workItemType: task.workItemType,
+          title: ticket.subject,
+          state: ticket.status,
+          client: ticket.client,
+          module: null,
+          assignedToName: ticket.owner,
+          movideskTicket: ticket.movideskId,
+          deliveredVersion: task.deliveredVersion,
+          taskNumber: task.id,
+          taskState: task.state,
+          taskTitle: task.title,
+          source: "MOVIDESK" as const,
+        }))
+      : params.issue === "danglingTaskTickets"
       ? danglingTickets.slice(0, 50).map((ticket) => ({
           id: ticket.id,
           workItemType: "Ticket Movidesk",
@@ -344,6 +403,7 @@ export class WorkspaceService {
         completedWithoutVersion,
         danglingTaskTickets: danglingTickets.length,
         duplicatedMovideskLinks: duplicates.length,
+        ticketOpenTaskFinished: ticketsAwaitingClosure.length,
       },
       samples,
       filters: {
