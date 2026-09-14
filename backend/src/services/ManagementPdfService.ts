@@ -149,6 +149,8 @@ export class ManagementPdfService {
               not:
                 null,
             },
+            closedDate:
+              null,
           },
         }),
         prisma.ticket.count({
