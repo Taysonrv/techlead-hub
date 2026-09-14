@@ -632,6 +632,7 @@ export class ManagementPdfService {
         user?.name ??
         user?.username ??
         "Usuário",
+      filters: reportFiltersLabel(options.filters),
       sections,
     });
   }
@@ -681,6 +682,19 @@ export class ManagementPdfService {
   }
 }
 
+function reportFiltersLabel(filters?: ReportFilters) {
+  const labels = [
+    filters?.client ? `Cliente: ${filters.client}` : null,
+    filters?.analyst ? `Analista: ${filters.analyst}` : null,
+    filters?.category ? `Categoria: ${filters.category}` : null,
+    filters?.ticketStatus ? `Status ticket: ${filters.ticketStatus}` : null,
+    filters?.workItemType ? `Tipo Azure: ${filters.workItemType}` : null,
+    filters?.azureState ? `Estado Azure: ${filters.azureState}` : null,
+    filters?.version ? `Versão: ${filters.version}` : null,
+  ].filter((value): value is string => Boolean(value));
+  return labels.length ? labels.join(" | ") : "Todos os registros do escopo operacional";
+}
+
 function reportTitle(
   scope:
     ReportScope,
@@ -713,6 +727,7 @@ function buildPdf(input: {
   title: string;
   period: string;
   generatedBy: string;
+  filters: string;
   sections: Section[];
 }) {
   const objects:
@@ -873,6 +888,7 @@ function pageContent(
     title: string;
     period: string;
     generatedBy: string;
+    filters: string;
   },
   section:
     Section,
@@ -922,6 +938,15 @@ function pageContent(
       0.36,
       0.4,
     ],
+  );
+  text(
+    commands,
+    `Filtros: ${report.filters}`,
+    34,
+    520,
+    8,
+    false,
+    [0.32, 0.36, 0.4],
   );
   text(
     commands,
