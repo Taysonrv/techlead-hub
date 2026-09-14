@@ -9,9 +9,45 @@ export type ReleaseNote = {
   items: readonly ReleaseNoteItem[];
 };
 
-export const FALLBACK_APP_VERSION = "1.0.0-rc.1";
+export const FALLBACK_APP_VERSION = "1.0.0-rc.3";
 
 export const releaseNotes: Record<string, ReleaseNote> = {
+  "1.0.0-rc.3": {
+    version: "1.0.0-rc.3",
+    title: "Desktop resiliente e atualização corrigida",
+    items: [
+      {
+        title: "Inicialização do Desktop",
+        description:
+          "O aplicativo volta a iniciar com o backend local empacotado enquanto o servidor Web central ainda não estiver configurado.",
+      },
+      {
+        title: "Servidor Web opcional",
+        description:
+          "A conexão com https://techlead-hub.aliare.co somente é ativada quando TECHLEAD_HUB_SERVER_URL for definida na implantação.",
+      },
+      {
+        title: "Atualizações Beta e RC",
+        description:
+          "O canal Beta aceita novas versões de pré-lançamento, impede downgrade e consulta os artefatos publicados em techlead-hub-releases.",
+      },
+      {
+        title: "Publicação mais segura",
+        description:
+          "O workflow publica apenas o instalador, o blockmap e o manifesto do canal, sem enviar arquivos internos do electron-builder.",
+      },
+      {
+        title: "Minha Operação",
+        description:
+          "Kanban compacto em uma única linha, cartões mais legíveis, status na listagem e abertura dos atendimentos com os mesmos detalhes da tela de Tickets.",
+      },
+      {
+        title: "Versão Web",
+        description:
+          "A imagem Docker continua sendo gerada junto com a versão Desktop, pronta para implantação e validação pela infraestrutura.",
+      },
+    ],
+  },
     "1.0.0-rc.1": {
     version: "1.0.0-rc.1",
     title: "TechLead Hub Web e operação centralizada",
