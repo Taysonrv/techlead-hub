@@ -1211,8 +1211,9 @@ export class ExecutiveReportService {
         }),
       ),
       4,
-      1,
+      5,
     );
+    sheet.pageSetup.printArea = `A1:N${Math.max(sheet.rowCount, 20)}`;
   }
 
   private addCharts(
@@ -1271,7 +1272,7 @@ export class ExecutiveReportService {
     });
     sheet.addImage(bars, {
       tl: { col: column, row },
-      ext: { width: 500, height: 280 },
+      ext: { width: 430, height: 245 },
     });
   }
 
@@ -1376,7 +1377,7 @@ export class ExecutiveReportService {
           number
         >
       >,
-    expectedRows:
+    _expectedRows:
       number,
   ) {
     sheet.mergeCells(
@@ -1432,19 +1433,6 @@ export class ExecutiveReportService {
       },
     );
 
-    for (
-      let index =
-        rows.length;
-      index <
-        expectedRows;
-      index++
-    ) {
-      sheet.getRow(
-        startRow +
-        index +
-        1,
-      );
-    }
   }
 
   private configureSheet(
