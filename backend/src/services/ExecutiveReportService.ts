@@ -156,6 +156,8 @@ export class ExecutiveReportService {
               not:
                 null,
             },
+            closedDate:
+              null,
           },
         }),
 
@@ -446,9 +448,9 @@ export class ExecutiveReportService {
           "Regra",
         ],
         [
-          "Tickets abertos no período",
+          "Tickets criados no período",
           ticketsTotal,
-          "Data de abertura entre o início e o fim selecionados.",
+          "Data de criação entre o início e o fim selecionados.",
         ],
         [
           "Em aberto",
@@ -458,7 +460,7 @@ export class ExecutiveReportService {
         [
           "Resolvidos",
           ticketsResolved,
-          "Com data de resolução preenchida.",
+          "Com data de resolução e ainda sem data de encerramento.",
         ],
         [
           "Encerrados",
