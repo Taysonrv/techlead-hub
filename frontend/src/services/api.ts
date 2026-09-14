@@ -116,8 +116,10 @@ api.interceptors.request.use(
 ========================================================= */
 
 api.interceptors.response.use(
-  (response) =>
-    response,
+  (response) => {
+    window.dispatchEvent(new CustomEvent("techlead-hub:backend-available"));
+    return response;
+  },
 
   (
     error:
@@ -126,6 +128,10 @@ api.interceptors.response.use(
     const status =
       error.response
         ?.status;
+
+    if (!error.response || status === 503) {
+      window.dispatchEvent(new CustomEvent("techlead-hub:backend-unavailable"));
+    }
 
     /*
      * Não removemos token quando o próprio endpoint

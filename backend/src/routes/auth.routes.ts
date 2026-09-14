@@ -149,6 +149,12 @@ authRoutes.post(
   )
 );
 
+authRoutes.post(
+  "/heartbeat",
+  authMiddleware,
+  auth.heartbeat.bind(auth)
+);
+
 /* =========================================================
    EXPORT
 ========================================================= */

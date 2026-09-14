@@ -7,6 +7,8 @@ export class HealthController {
       project: "TechLead Hub",
       version: process.env.APP_VERSION?.trim() || "development",
       runtime: process.env.APP_RUNTIME?.trim() || "desktop",
+      nodeVersion: process.version,
+      timestamp: new Date().toISOString(),
     });
   }
 }

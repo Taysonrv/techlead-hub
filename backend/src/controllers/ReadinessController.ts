@@ -37,6 +37,9 @@ export class ReadinessController {
         .json({
           status:
             "ready",
+          version: process.env.APP_VERSION?.trim() || "development",
+          runtime: process.env.APP_RUNTIME?.trim() || "desktop",
+          database: "ready",
         });
     } catch {
       return response

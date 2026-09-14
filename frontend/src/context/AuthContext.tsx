@@ -75,6 +75,7 @@ type LoginInput = {
   password: string;
 
   deviceName?: string;
+  forceTransfer?: boolean;
 };
 
 type ChangePasswordInput = {
@@ -273,6 +274,17 @@ export function AuthProvider({
     clearSession,
   ]);
 
+  /* Mantém a sessão central ativa e detecta revogação em outra plataforma. */
+  useEffect(() => {
+    if (!user) return;
+    const heartbeat = () => void api.post<{ accessToken?: string }>("/auth/heartbeat")
+      .then((response) => { if (response.data.accessToken) setAccessToken(response.data.accessToken); })
+      .catch(() => undefined);
+    heartbeat();
+    const timer = window.setInterval(heartbeat, 60_000);
+    return () => window.clearInterval(timer);
+  }, [user]);
+
   /* =======================================================
      LOGIN
   ======================================================= */
@@ -283,7 +295,12 @@ export function AuthProvider({
         username,
         password,
         deviceName,
+        forceTransfer,
       }: LoginInput) => {
+        const clientType = window.techLeadHub?.desktop ? "DESKTOP" : "WEB";
+        const appVersion = window.techLeadHub?.getVersion
+          ? await window.techLeadHub.getVersion().catch(() => "unknown")
+          : import.meta.env.VITE_APP_VERSION ?? "web";
         const response =
           await api.post<LoginResponse>(
             "/auth/login",
@@ -294,6 +311,10 @@ export function AuthProvider({
               deviceName:
                 deviceName ??
                 getDefaultDeviceName(),
+              deviceId: getDeviceId(),
+              clientType,
+              appVersion,
+              forceTransfer: forceTransfer === true,
             }
           );
 
@@ -500,5 +521,18 @@ function getDefaultDeviceName() {
     return "TechLead Hub Web";
   } catch {
     return "TechLead Hub";
+  }
+}
+
+function getDeviceId() {
+  const key = "techlead-hub.device-id";
+  try {
+    const existing = localStorage.getItem(key);
+    if (existing) return existing;
+    const value = crypto.randomUUID();
+    localStorage.setItem(key, value);
+    return value;
+  } catch {
+    return "unknown-device";
   }
 }

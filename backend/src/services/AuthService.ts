@@ -27,7 +27,13 @@ type LoginInput = {
   deviceName?: string | null;
   userAgent?: string | null;
   ipAddress?: string | null;
+  clientType?: string | null;
+  deviceId?: string | null;
+  appVersion?: string | null;
+  forceTransfer?: boolean;
 };
+
+const SESSION_IDLE_TIMEOUT_MS = 5 * 60 * 1_000;
 
 type ChangePasswordInput = {
   userId: number;
@@ -423,6 +429,10 @@ export class AuthService {
     deviceName,
     userAgent,
     ipAddress,
+    clientType,
+    deviceId,
+    appVersion,
+    forceTransfer,
   }: LoginInput) {
     const identifier =
       normalizeLoginIdentifier(
@@ -522,6 +532,60 @@ export class AuthService {
       );
     }
 
+    const normalizedClientType = clientType?.trim().toUpperCase() === "DESKTOP" ? "DESKTOP" : "WEB";
+    const serverVersion = process.env.APP_VERSION?.trim();
+    const clientMajor = appVersion?.match(/^(\d+)\./)?.[1];
+    const serverMajor = serverVersion?.match(/^(\d+)\./)?.[1];
+    if (clientMajor && serverMajor && clientMajor !== serverMajor) {
+      throw new AuthError(`Esta versão do aplicativo não é compatível com o servidor ${serverVersion}. Atualize o TechLead Hub.`, 426, "INCOMPATIBLE_VERSION");
+    }
+    const now = new Date();
+    const activeSince = new Date(now.getTime() - SESSION_IDLE_TIMEOUT_MS);
+    const conflictingSessions = await prisma.userSession.findMany({
+      where: {
+        userId: user.id,
+        revokedAt: null,
+        expiresAt: { gt: now },
+        lastActivityAt: { gt: activeSince },
+        clientType: { not: normalizedClientType },
+      },
+      select: { id: true, clientType: true, deviceName: true, lastActivityAt: true },
+    });
+
+    const conflictingSession = conflictingSessions[0];
+    if (conflictingSession && !forceTransfer) {
+      throw new AuthError(
+        `Este usuário já possui uma sessão ativa na versão ${conflictingSession.clientType === "DESKTOP" ? "Desktop" : "Web"}.`,
+        409,
+        "SESSION_CONFLICT",
+      );
+    }
+
+    await prisma.$transaction(async (transaction) => {
+      await transaction.userSession.updateMany({
+        where: {
+          userId: user.id,
+          revokedAt: null,
+          OR: [
+            { lastActivityAt: { lte: activeSince } },
+            ...(forceTransfer ? [{ clientType: { not: normalizedClientType } }] : []),
+          ],
+        },
+        data: { revokedAt: now },
+      });
+      if (forceTransfer && conflictingSession) {
+        await transaction.auditLog.create({
+          data: {
+            userId: user.id,
+            action: "SESSION_TRANSFERRED",
+            entity: "UserSession",
+            metadata: { from: conflictingSession.clientType, to: normalizedClientType },
+            ipAddress: sanitizeOptionalText(ipAddress),
+          },
+        });
+      }
+    });
+
     /* =====================================================
        CRIA SESSÃO
     ===================================================== */
@@ -550,6 +614,10 @@ export class AuthService {
           sanitizeOptionalText(
             deviceName
           ),
+        deviceId: sanitizeOptionalText(deviceId),
+        clientType: normalizedClientType,
+        appVersion: sanitizeOptionalText(appVersion),
+        lastActivityAt: now,
 
         userAgent:
           sanitizeOptionalText(
@@ -1218,6 +1286,22 @@ export class AuthService {
       },
     });
   }
+
+  async heartbeat(sessionToken: string) {
+    const tokenHash = hashSessionToken(sessionToken.trim());
+    const session = await prisma.userSession.findUnique({
+      where: { tokenHash },
+      select: { id: true, revokedAt: true, expiresAt: true, user: { select: { id: true, username: true, role: true, active: true, approvalStatus: true } } },
+    });
+    const now = new Date();
+    if (!session || session.revokedAt || session.expiresAt <= now || !session.user.active || session.user.approvalStatus !== "APPROVED") {
+      throw new AuthError("Sessão expirada ou inválida.", 401);
+    }
+    const expiresAt = getSessionExpiration();
+    await prisma.userSession.update({ where: { id: session.id }, data: { lastActivityAt: now, expiresAt } });
+    const accessToken = createAccessToken({ sub: String(session.user.id), sid: sessionToken, username: session.user.username, role: session.user.role });
+    return { active: true, accessToken, expiresAt: expiresAt.toISOString(), serverTime: now.toISOString() };
+  }
 }
 
 /* =========================================================
@@ -1545,13 +1629,14 @@ export class AuthError
   extends Error {
   statusCode:
     number;
+  code?: string;
 
   constructor(
     message:
       string,
 
-    statusCode =
-      400
+    statusCode = 400,
+    code?: string,
   ) {
     super(
       message
@@ -1562,5 +1647,6 @@ export class AuthError
 
     this.statusCode =
       statusCode;
+    this.code = code;
   }
 }

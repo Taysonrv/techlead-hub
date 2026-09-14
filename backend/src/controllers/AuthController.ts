@@ -218,6 +218,10 @@ export class AuthController {
         username,
         password,
         deviceName,
+        clientType,
+        deviceId,
+        appVersion,
+        forceTransfer,
       } =
         request.body ?? {};
 
@@ -247,6 +251,10 @@ export class AuthController {
           ipAddress:
             request.ip ??
             null,
+          clientType: toOptionalStringValue(clientType),
+          deviceId: toOptionalStringValue(deviceId),
+          appVersion: toOptionalStringValue(appVersion),
+          forceTransfer: forceTransfer === true,
         });
 
       return response
@@ -576,6 +584,16 @@ export class AuthController {
       );
     }
   }
+
+  async heartbeat(request: AuthenticatedRequest, response: Response) {
+    try {
+      const sessionToken = request.auth?.sessionToken;
+      if (!sessionToken) return response.status(401).json({ message: "Usuário não autenticado." });
+      return response.status(200).json(await authService.heartbeat(sessionToken));
+    } catch (error) {
+      return handleAuthError(error, response);
+    }
+  }
 }
 
 /* =========================================================
@@ -660,6 +678,7 @@ function handleAuthError(
       .json({
         message:
           error.message,
+        ...(error.code ? { code: error.code } : {}),
       });
   }
 

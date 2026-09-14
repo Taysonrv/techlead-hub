@@ -53,6 +53,9 @@ type ConfigurationForm = {
   bpmnSiteUrl: string;
 };
 
+type ActiveSession = { id: number; clientType: string; deviceName: string | null; appVersion: string | null; ipAddress: string | null; createdAt: string; lastActivityAt: string; user: { id: number; name: string; username: string } };
+type Diagnostics = { status: string; appVersion: string; runtime: string; nodeVersion: string; database: { status: string; latencyMs: number }; sessionPolicy: { exclusiveAcrossPlatforms: boolean; idleTimeoutMinutes: number }; checkedAt: string };
+
 const EMPTY_FORM: ConfigurationForm = {
   databaseUrl: "",
   organization: "",
@@ -78,6 +81,8 @@ export function Settings() {
     useState<string | null>(null);
   const [success, setSuccess] =
     useState<string | null>(null);
+  const [sessions, setSessions] = useState<ActiveSession[]>([]);
+  const [diagnostics, setDiagnostics] = useState<Diagnostics | null>(null);
 
   useEffect(() => {
     void loadConfiguration();
@@ -88,8 +93,14 @@ export function Settings() {
       setLoading(true);
       setError(null);
 
-      const response = await api.get<ConfigurationState>("/system-settings");
+      const [response, sessionResponse, diagnosticsResponse] = await Promise.all([
+        api.get<ConfigurationState>("/system-settings"),
+        api.get<{ sessions: ActiveSession[] }>("/sessions"),
+        api.get<Diagnostics>("/system-settings/diagnostics"),
+      ]);
       const current = response.data;
+      setSessions(sessionResponse.data.sessions);
+      setDiagnostics(diagnosticsResponse.data);
 
       setConfiguration(current);
       setForm((previous) => ({
@@ -110,6 +121,16 @@ export function Settings() {
       );
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function revokeSession(sessionId: number) {
+    try {
+      await api.delete(`/sessions/${sessionId}`);
+      setSessions((current) => current.filter((session) => session.id !== sessionId));
+      setSuccess("Sessão encerrada com sucesso.");
+    } catch {
+      setError("Não foi possível encerrar a sessão.");
     }
   }
 
@@ -230,6 +251,25 @@ export function Settings() {
       )}
 
       <Stack spacing={2.5}>
+        <Card elevation={0} sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2.5 }}>
+          <CardContent sx={{ p: { xs: 2, md: 2.5 } }}>
+            <Typography sx={{ fontWeight: 800 }}>Diagnóstico da plataforma</Typography>
+            <Typography variant="body2" color="text.secondary">Versões e disponibilidade do ambiente compartilhado entre Web e Desktop.</Typography>
+            <Divider sx={{ my: 2 }} />
+            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr 1fr", md: "repeat(5, 1fr)" }, gap: 1.5 }}>
+              {[['Aplicação', diagnostics?.status], ['Versão', diagnostics?.appVersion], ['Ambiente', diagnostics?.runtime], ['Banco', diagnostics?.database?.status], ['Latência', diagnostics ? `${diagnostics.database.latencyMs} ms` : null]].map(([label, value]) => <Box key={label}><Typography variant="caption" color="text.secondary">{label}</Typography><Typography sx={{ fontWeight: 750 }}>{value ?? "—"}</Typography></Box>)}
+            </Box>
+          </CardContent>
+        </Card>
+
+        <Card elevation={0} sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2.5 }}>
+          <CardContent sx={{ p: { xs: 2, md: 2.5 } }}>
+            <Stack direction={{ xs: "column", sm: "row" }} sx={{ justifyContent: "space-between", gap: 1 }}><Box><Typography sx={{ fontWeight: 800 }}>Sessões ativas</Typography><Typography variant="body2" color="text.secondary">Um usuário não pode utilizar Web e Desktop simultaneamente. Sessões inativas expiram em cinco minutos.</Typography></Box><Chip label={`${sessions.length} ativa(s)`} color="success" variant="outlined" /></Stack>
+            <Divider sx={{ my: 2 }} />
+            <Stack spacing={1}>{sessions.map((session) => <Box key={session.id} sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 2, p: 1.25, border: "1px solid", borderColor: "divider", borderRadius: 1.5 }}><Box sx={{ minWidth: 0 }}><Stack direction="row" spacing={1} sx={{ alignItems: "center", flexWrap: "wrap" }}><Typography sx={{ fontWeight: 800 }}>{session.user.name}</Typography><Chip size="small" label={session.clientType === "DESKTOP" ? "Desktop" : "Web"} /><Chip size="small" variant="outlined" label={session.appVersion || "Versão não informada"} /></Stack><Typography variant="caption" color="text.secondary">{session.deviceName || session.user.username} · atividade {new Date(session.lastActivityAt).toLocaleString("pt-BR")}</Typography></Box><Button size="small" color="error" onClick={() => void revokeSession(session.id)}>Encerrar</Button></Box>)}{!sessions.length && <Typography variant="body2" color="text.secondary">Nenhuma sessão ativa.</Typography>}</Stack>
+          </CardContent>
+        </Card>
+
         {window.techLeadHub && configuration?.runtime !== "web" && <Card
           elevation={0}
           sx={{

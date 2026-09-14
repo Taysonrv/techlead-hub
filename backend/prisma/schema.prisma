@@ -75,6 +75,7 @@ model User {
   importRuns          ImportRun[]
   azureSyncRuns       AzureSyncRun[]
   systemSettings      SystemSetting[] @relation("SystemSettingUpdatedBy")
+  auditLogs           AuditLog[]
 
   @@index([name])
   @@index([role])
@@ -137,8 +138,12 @@ model UserSession {
   revokedAt DateTime?
 
   deviceName String?
+  deviceId   String?
+  clientType String @default("WEB")
+  appVersion String?
   userAgent  String?
   ipAddress  String?
+  lastActivityAt DateTime @default(now())
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -146,6 +151,23 @@ model UserSession {
   @@index([userId])
   @@index([expiresAt])
   @@index([revokedAt])
+  @@index([userId, clientType, revokedAt])
+  @@index([lastActivityAt])
+}
+
+model AuditLog {
+  id Int @id @default(autoincrement())
+  userId Int?
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action String @db.VarChar(100)
+  entity String? @db.VarChar(100)
+  entityId String? @db.VarChar(120)
+  metadata Json?
+  ipAddress String?
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([action, createdAt])
 }
 
 // =========================================================
