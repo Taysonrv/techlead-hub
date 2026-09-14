@@ -16,6 +16,10 @@ import type {
   ReportScope,
 } from "./ExecutiveReportService";
 
+import {
+  buildManagementInsights,
+} from "./ManagementInsightService";
+
 type PdfOptions = {
   from: Date;
   to: Date;
@@ -33,6 +37,7 @@ type Section = {
   title: string;
   subtitle: string;
   data: Datum[];
+  notes?: string[];
 };
 
 const COLORS = [
@@ -325,11 +330,46 @@ export class ManagementPdfService {
         }),
       ]);
 
+    const managementInsights = buildManagementInsights({
+      ticketsTotal: ticketTotal,
+      ticketsOpen: ticketOpen,
+      ticketsResolved: ticketResolved,
+      ticketsClosed: ticketClosed,
+      slaMeasured,
+      slaMet,
+      corrections,
+      evolutions,
+      supports,
+      prioritized,
+      blocked,
+      topCategory: categories[0] ? {
+        label: categories[0].category ?? "Não informado",
+        total: categories[0]._count._all,
+      } : null,
+      topAnalyst: analysts[0] ? {
+        label: analysts[0].owner ?? "Não informado",
+        total: analysts[0]._count._all,
+      } : null,
+      topVersion: versions[0] ? {
+        label: versions[0].deliveredVersion ?? "Não informada",
+        total: versions[0]._count._all,
+      } : null,
+    });
+
     const all:
       Record<
         string,
         Section
       > = {
+      insights: {
+        title: "Leitura executiva",
+        subtitle: "Achados e recomendações produzidos a partir do recorte selecionado",
+        data: [],
+        notes: managementInsights.flatMap((item) => [
+          `${item.priority} | ${item.topic}: ${item.finding}`,
+          `Recomendação: ${item.recommendation}`,
+        ]),
+      },
       tickets: {
         title:
           "Atendimentos",
@@ -530,6 +570,7 @@ export class ManagementPdfService {
         string[]
       > = {
       executive: [
+        "insights",
         "tickets",
         "sla",
         "analysts",
@@ -540,25 +581,30 @@ export class ManagementPdfService {
         "versions",
       ],
       analysts: [
+        "insights",
         "analysts",
         "tickets",
       ],
       sla: [
+        "insights",
         "sla",
         "tickets",
         "categories",
       ],
       clients: [
+        "insights",
         "clients",
         "categories",
         "tickets",
       ],
       development: [
+        "insights",
         "development",
         "states",
         "versions",
       ],
       versions: [
+        "insights",
         "versions",
         "states",
         "development",
@@ -913,6 +959,37 @@ function pageContent(
         0,
         12,
       );
+
+  if (section.notes?.length) {
+    let noteY = 440;
+    section.notes.slice(0, 12).forEach((line, index) => {
+      const recommendation = line.startsWith("Recomendação:");
+      if (!recommendation) {
+        fillRect(commands, 34, noteY - 7, 7, 7, COLORS[Math.floor(index / 2) % COLORS.length]!);
+      }
+      text(
+        commands,
+        truncate(line, recommendation ? 125 : 112),
+        recommendation ? 48 : 50,
+        noteY,
+        recommendation ? 8 : 9,
+        !recommendation,
+        recommendation ? [0.28, 0.32, 0.36] : [0.08, 0.16, 0.12],
+      );
+      noteY -= recommendation ? 34 : 19;
+    });
+
+    text(
+      commands,
+      `TechLead Hub | Página ${page} de ${pageCount}`,
+      34,
+      22,
+      8,
+      false,
+      [0.45, 0.48, 0.52],
+    );
+    return commands.join("\n");
+  }
 
   drawPie(
     commands,
