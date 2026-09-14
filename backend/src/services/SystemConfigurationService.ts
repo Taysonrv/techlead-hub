@@ -66,6 +66,7 @@ class SystemConfigurationService {
   }
 
   async save(input: SystemConfigurationInput, updatedById: number) {
+    const changedKeys: string[] = [];
     for (const key of Object.keys(SETTING_ENV) as Array<keyof typeof SETTING_ENV>) {
       const value = input[key]?.trim();
       if (!value) continue;
@@ -80,6 +81,12 @@ class SystemConfigurationService {
           "updatedById" = EXCLUDED."updatedById"
       `;
       process.env[SETTING_ENV[key]] = value;
+      changedKeys.push(key);
+    }
+    if (changedKeys.length) {
+      await prisma.auditLog.create({
+        data: { userId: updatedById, action: "SYSTEM_SETTINGS_UPDATED", entity: "SystemSetting", metadata: { keys: changedKeys } },
+      });
     }
     return this.status();
   }

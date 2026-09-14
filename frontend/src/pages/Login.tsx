@@ -326,6 +326,7 @@ export function Login() {
     useState<string | null>(
       null
     );
+  const [sessionConflict, setSessionConflict] = useState(false);
 
   /* =======================================================
      REDIRECIONAMENTO
@@ -415,6 +416,7 @@ export function Login() {
 
     setSubmitting(true);
     setError(null);
+    setSessionConflict(false);
 
     try {
       await login({
@@ -433,12 +435,30 @@ export function Login() {
     } catch (
       requestError
     ) {
+      setSessionConflict(
+        axios.isAxiosError(requestError) &&
+        requestError.response?.data?.code === "SESSION_CONFLICT"
+      );
       setError(
         getErrorMessage(
           requestError,
           "Não foi possível realizar o login."
         )
       );
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleSessionTransfer() {
+    if (submitting) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      await login({ username: username.trim(), password, forceTransfer: true });
+      navigate(redirectTo, { replace: true });
+    } catch (requestError) {
+      setError(getErrorMessage(requestError, "Não foi possível transferir a sessão."));
     } finally {
       setSubmitting(false);
     }
@@ -1092,6 +1112,8 @@ export function Login() {
                     submitting
                   }
                   error={error}
+                  sessionConflict={sessionConflict}
+                  onSessionTransfer={() => void handleSessionTransfer()}
                   onSubmit={
                     handleLogin
                   }
@@ -1313,6 +1335,8 @@ function LoginForm({
   setShowPassword,
   submitting,
   error,
+  sessionConflict,
+  onSessionTransfer,
   onSubmit,
   onRegister,
   onForgotPassword,
@@ -1325,6 +1349,8 @@ function LoginForm({
   setShowPassword: (value: boolean) => void;
   submitting: boolean;
   error: string | null;
+  sessionConflict: boolean;
+  onSessionTransfer: () => void;
   onSubmit: (
     event:
       FormEvent<HTMLFormElement>
@@ -1372,6 +1398,12 @@ function LoginForm({
         >
           {error}
         </Alert>
+      )}
+
+      {sessionConflict && (
+        <Button fullWidth variant="outlined" color="warning" disabled={submitting} onClick={onSessionTransfer} sx={{ mb: 2 }}>
+          Encerrar a outra sessão e continuar
+        </Button>
       )}
 
       <Box

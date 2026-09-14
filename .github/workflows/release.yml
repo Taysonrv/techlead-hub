@@ -138,6 +138,8 @@ jobs:
         with:
           context: .
           push: true
+          build-args: |
+            APP_VERSION=${{ needs.metadata.outputs.version }}
           tags: |
             ghcr.io/taysonrv/techlead-hub:${{ needs.metadata.outputs.version }}
             ghcr.io/taysonrv/techlead-hub:${{ needs.metadata.outputs.channel }}

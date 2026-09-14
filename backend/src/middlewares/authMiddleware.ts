@@ -164,10 +164,13 @@ export async function authMiddleware(
 
         select: {
           userId: true,
+          id: true,
 
           revokedAt: true,
 
           expiresAt: true,
+          lastActivityAt: true,
+          clientType: true,
 
           user: {
             select: {
@@ -233,6 +236,12 @@ export async function authMiddleware(
       return unauthorized(
         response
       );
+    }
+
+    const idleTimeoutMs = Number(process.env.SESSION_IDLE_TIMEOUT_MS ?? 5 * 60 * 1_000);
+    if (session.lastActivityAt.getTime() <= now.getTime() - idleTimeoutMs) {
+      await prisma.userSession.update({ where: { id: session.id }, data: { revokedAt: now } });
+      return unauthorized(response, "Sessão encerrada por inatividade.");
     }
 
     /* =====================================================

@@ -15,6 +15,7 @@ import axios from "axios";
 
 import {
   useState,
+  type ChangeEvent,
   type FormEvent,
 } from "react";
 
@@ -23,6 +24,8 @@ import {
   type UserRole,
 } from "../context/AuthContext";
 import { PageHeader } from "../components/PageHeader";
+import { UserAvatar } from "../components/UserAvatar";
+import { api } from "../services/api";
 
 /* =========================================================
    PERFIL
@@ -32,6 +35,7 @@ export function Profile() {
   const {
     user,
     changePassword,
+    refreshUser,
   } =
     useAuth();
 
@@ -74,6 +78,35 @@ export function Profile() {
     useState<
       string | null
     >(null);
+
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const [avatarMessage, setAvatarMessage] = useState<string | null>(null);
+
+  async function handleAvatar(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) { setAvatarMessage("Utilize uma imagem JPG, PNG ou WebP."); return; }
+    if (file.size > 2 * 1024 * 1024) { setAvatarMessage("A foto deve possuir no máximo 2 MB."); return; }
+    try {
+      setAvatarUploading(true); setAvatarMessage(null);
+      const form = new FormData(); form.append("avatar", file);
+      await api.put("/auth/me/avatar", form);
+      await refreshUser();
+      setAvatarMessage("Foto de perfil atualizada.");
+    } catch { setAvatarMessage("Não foi possível atualizar a foto de perfil."); }
+    finally { setAvatarUploading(false); }
+  }
+
+  async function removeAvatar() {
+    try {
+      setAvatarUploading(true); setAvatarMessage(null);
+      await api.delete("/auth/me/avatar");
+      await refreshUser();
+      setAvatarMessage("Foto de perfil removida.");
+    } catch { setAvatarMessage("Não foi possível remover a foto de perfil."); }
+    finally { setAvatarUploading(false); }
+  }
 
   if (!user) {
     return (
@@ -263,7 +296,9 @@ export function Profile() {
               },
             }}
           >
-            <Box>
+            <Stack direction="row" spacing={2} sx={{ alignItems: "center" }}>
+              <UserAvatar user={user} size={72} />
+              <Box>
               <Typography
                 sx={{
                   fontWeight:
@@ -285,7 +320,15 @@ export function Profile() {
               >
                 @{user.username}
               </Typography>
-            </Box>
+                <Stack direction="row" spacing={1} sx={{ mt: 1, flexWrap: "wrap" }}>
+                  <Button component="label" size="small" variant="outlined" disabled={avatarUploading}>
+                    {avatarUploading ? "Enviando..." : "Alterar foto"}
+                    <input hidden type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => void handleAvatar(event)} />
+                  </Button>
+                  {user.avatarUpdatedAt && <Button size="small" color="error" disabled={avatarUploading} onClick={() => void removeAvatar()}>Remover</Button>}
+                </Stack>
+              </Box>
+            </Stack>
 
             <Stack
               direction="row"
@@ -326,6 +369,8 @@ export function Profile() {
               />
             </Stack>
           </Stack>
+
+          {avatarMessage && <Alert severity={avatarMessage.includes("atualizada") || avatarMessage.includes("removida") ? "success" : "warning"} sx={{ mt: 2 }}>{avatarMessage}</Alert>}
 
           <Divider
             sx={{

@@ -17,6 +17,8 @@ services:
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-https://techlead-hub.aliare.co}
       PASSWORD_RESET_URL: ${PASSWORD_RESET_URL:-https://techlead-hub.aliare.co/login}
       AZURE_SYNC_SCHEDULER_ENABLED: ${AZURE_SYNC_SCHEDULER_ENABLED:-true}
+      MIGRATE_ON_START: ${MIGRATE_ON_START:-true}
+      SESSION_IDLE_TIMEOUT_MS: ${SESSION_IDLE_TIMEOUT_MS:-300000}
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3333/health/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
       interval: 30s

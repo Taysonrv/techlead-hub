@@ -54,6 +54,7 @@ import {
 import { globalRoutes } from "./global.routes";
 import { knowledgeRoutes } from "./knowledge.routes";
 import { systemSettingsRoutes } from "./system-settings.routes";
+import { sessionRoutes } from "./session.routes";
 
 /* =========================================================
    ROUTER
@@ -105,6 +106,7 @@ routes.use(
 routes.use("/api/global", globalRoutes);
 routes.use("/api/knowledge", knowledgeRoutes);
 routes.use("/api/system-settings", systemSettingsRoutes);
+routes.use("/api/sessions", sessionRoutes);
 
 /* =========================================================
    ADMINISTRAÇÃO DE USUÁRIOS

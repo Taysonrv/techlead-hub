@@ -1,12 +1,15 @@
 import {
+  Alert,
   Box,
   CircularProgress,
   Typography,
 } from "@mui/material";
 
-import type {
-  ReactNode,
+import {
+  useEffect,
+  useState,
 } from "react";
+import type { ReactNode } from "react";
 
 import {
   BrowserRouter,
@@ -115,6 +118,17 @@ function AuthenticatedLayout({
 }: {
   children: ReactNode;
 }) {
+  const [backendUnavailable, setBackendUnavailable] = useState(false);
+  useEffect(() => {
+    const unavailable = () => setBackendUnavailable(true);
+    const available = () => setBackendUnavailable(false);
+    window.addEventListener("techlead-hub:backend-unavailable", unavailable);
+    window.addEventListener("techlead-hub:backend-available", available);
+    return () => {
+      window.removeEventListener("techlead-hub:backend-unavailable", unavailable);
+      window.removeEventListener("techlead-hub:backend-available", available);
+    };
+  }, []);
   return (
     <ProtectedRoute>
       <FiltersProvider>
@@ -155,6 +169,7 @@ function AuthenticatedLayout({
             }}
           >
             <GlobalTopBar />
+            {backendUnavailable && <Alert severity="warning" sx={{ mb: 2 }}>O servidor central está temporariamente indisponível. Verifique a conexão e tente novamente; seus dados locais de navegação foram preservados.</Alert>}
             <Box
               sx={{
                 width: "100%",
