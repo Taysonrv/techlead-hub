@@ -834,6 +834,12 @@ export class ExecutiveReportService {
       generatedBy,
     );
 
+    this.addClientHealthSheet(workbook, {
+      ticketsTotal, ticketsOpen, ticketsResolved, ticketsClosed,
+      slaMeasured, slaMet, corrections, evolutions, supports,
+      prioritized, blocked,
+    }, insights, options, generatedBy);
+
     this.addCategoryEvolutionSheet(
       workbook,
       categoryEvolution,
@@ -910,6 +916,63 @@ export class ExecutiveReportService {
       ...(filters.azureState ? [{ state: { equals: filters.azureState, mode: "insensitive" as const } }] : []),
       ...(filters.version ? [{ deliveredVersion: { equals: filters.version, mode: "insensitive" as const } }] : []),
     ];
+  }
+
+  private addClientHealthSheet(
+    workbook: ExcelJS.Workbook,
+    metrics: {
+      ticketsTotal: number; ticketsOpen: number; ticketsResolved: number; ticketsClosed: number;
+      slaMeasured: number; slaMet: number; corrections: number; evolutions: number; supports: number;
+      prioritized: number; blocked: number;
+    },
+    insights: ManagementInsight[],
+    options: ExecutiveReportOptions,
+    generatedBy: string,
+  ) {
+    const sheet = workbook.addWorksheet("Painel do Cliente", { views: [{ state: "frozen", ySplit: 6 }] });
+    this.configureSheet(sheet, [28, 18, 62, 18, 18, 18]);
+    sheet.mergeCells("A1:F1");
+    sheet.getCell("A1").value = (options.filters?.client ?? "CARTEIRA DE CLIENTES").toLocaleUpperCase("pt-BR");
+    this.styleTitle(sheet.getCell("A1"));
+    sheet.getCell("A2").value = "Período"; sheet.getCell("B2").value = this.periodLabel(options.from, options.to);
+    sheet.getCell("D2").value = "Gerado por"; sheet.getCell("E2").value = generatedBy;
+    sheet.getCell("A3").value = "Escopo"; sheet.getCell("B3").value = this.filtersLabel(options.filters);
+
+    const resolutionRate = metrics.ticketsTotal > 0 ? (metrics.ticketsResolved + metrics.ticketsClosed) / metrics.ticketsTotal : 0;
+    const slaRate = metrics.slaMeasured > 0 ? metrics.slaMet / metrics.slaMeasured : 0;
+    const header = sheet.getRow(5);
+    ["Indicador", "Resultado", "Leitura executiva", "Correções", "Evoluções", "Apoios"].forEach((value, index) => header.getCell(index + 1).value = value);
+    this.styleHeader(header);
+    const rows: Array<[string, number | string, string, number | string, number | string, number | string]> = [
+      ["Atendimentos no período", metrics.ticketsTotal, "Volume total analisado no recorte.", metrics.corrections, metrics.evolutions, metrics.supports],
+      ["Em aberto", metrics.ticketsOpen, "Carteira que ainda exige acompanhamento.", metrics.prioritized, metrics.blocked, metrics.corrections + metrics.evolutions + metrics.supports],
+      ["Taxa de resolução", resolutionRate, `${metrics.ticketsResolved + metrics.ticketsClosed} atendimento(s) resolvido(s) ou encerrado(s).`, "Priorizadas", "Bloqueadas", "Total Dev."],
+      ["SLA de solução", slaRate, `${metrics.slaMet} de ${metrics.slaMeasured} atendimento(s) medidos dentro do prazo.`, metrics.prioritized, metrics.blocked, metrics.corrections + metrics.evolutions + metrics.supports],
+    ];
+    rows.forEach((values, index) => {
+      const row = sheet.addRow(values);
+      if (index >= 2) row.getCell(2).numFmt = "0.0%";
+      row.getCell(2).font = { bold: true, size: 14, color: { argb: index === 1 && metrics.ticketsOpen > 0 ? "FFB7791F" : "FF10945B" } };
+      row.alignment = { vertical: "middle", wrapText: true };
+      row.height = 32;
+    });
+
+    sheet.getCell("A11").value = "INSIGHTS E RECOMENDAÇÕES";
+    sheet.mergeCells("A11:F11");
+    this.styleSectionTitle(sheet.getCell("A11"));
+    insights.slice(0, 6).forEach((insight, index) => {
+      const row = sheet.getRow(12 + index);
+      row.getCell(1).value = insight.priority;
+      row.getCell(2).value = insight.topic;
+      sheet.mergeCells(12 + index, 3, 12 + index, 4);
+      row.getCell(3).value = insight.finding;
+      sheet.mergeCells(12 + index, 5, 12 + index, 6);
+      row.getCell(5).value = insight.recommendation;
+      row.alignment = { vertical: "top", wrapText: true };
+      row.height = 45;
+      row.getCell(1).font = { bold: true, color: { argb: insight.priority === "ALTA" ? "FFDC3545" : insight.priority === "POSITIVA" ? "FF10945B" : "FFB7791F" } };
+    });
+    sheet.pageSetup.fitToWidth = 1;
   }
 
   private addCategoryEvolutionSheet(
@@ -1224,6 +1287,7 @@ export class ExecutiveReportService {
         string[]
       > = {
       executive: [
+        "Painel do Cliente",
         "Evolução Categorias",
         "Insights Diretoria",
         "Resumo Executivo",
@@ -1250,6 +1314,7 @@ export class ExecutiveReportService {
         "Categorias",
       ],
       clients: [
+        "Painel do Cliente",
         "Evolução Categorias",
         "Insights Diretoria",
         "Clientes",
