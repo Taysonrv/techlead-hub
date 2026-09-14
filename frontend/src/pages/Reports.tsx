@@ -95,7 +95,7 @@ const REPORTS:
     description:
       "Levantamento executivo completo para visitas, reuniões e acompanhamento da saúde operacional.",
     contents:
-      "Histórico de atendimentos, carteira aberta e concluída, SLA, categorias, analistas, Correções, Evoluções, APOIOs, estados, priorizações e versões entregues.",
+      "Histórico de atendimentos, carteira aberta e concluída, SLA, categorias, analistas, Correções de suporte, estados, priorizações e versões entregues.",
     icon:
       AssessmentOutlined,
   },
@@ -139,11 +139,11 @@ const REPORTS:
     scope:
       "development",
     title:
-      "Correções, Evoluções e Apoios",
+      "Correções de Suporte",
     description:
-      "Visão gerencial das demandas encaminhadas ao desenvolvimento.",
+      "Visão gerencial das correções encaminhadas pelo suporte e sustentação.",
     contents:
-      "Correções, evoluções, apoios, priorizações, bloqueios, estados e versões.",
+      "Correções, priorizações, bloqueios, estados e versões.",
     icon:
       BugReportOutlined,
   },
@@ -488,7 +488,7 @@ export function Reports() {
           <BarChartOutlined />
         }
       >
-        Os arquivos seguem um padrão executivo: resumo, indicadores, evolução por categoria, leitura gerencial, recomendações, tabelas detalhadas e um gráfico comparativo por seção. Excel e PDF recebem exatamente o mesmo período e filtros.
+        Os arquivos seguem um padrão executivo: resumo, indicadores, evolução por categoria, leitura gerencial, recomendações, tabelas detalhadas, definições dos indicadores e evolução mensal dos atendimentos. Excel e PDF recebem exatamente o mesmo período e filtros.
       </Alert>
     </Stack>
   );
