@@ -211,6 +211,7 @@ export class WorkspaceService {
       select: {
         id: true, taskNumber: true, movideskId: true, subject: true,
         status: true, baseStatus: true, client: true, owner: true,
+        deliveredVersion: true,
       },
     });
     const taskIds = scopedTickets.map((item) => item.taskNumber).filter((value): value is number => value !== null);
@@ -298,12 +299,6 @@ export class WorkspaceService {
           AND: [
             scope,
             { state: { in: TERMINAL } },
-            {
-              OR: [
-                { deliveredVersion: { not: null } },
-                { state: { in: ["Cancelado", "Canceled"] } },
-              ],
-            },
           ],
         },
         orderBy: [{ azureClosedAt: "desc" }, { azureChangedAt: "desc" }],
@@ -322,9 +317,17 @@ export class WorkspaceService {
     const duplicatedIds = duplicates.map((item) => item.movideskTicket)
       .filter((value): value is number => value !== null);
 
-    const isTicketOpen = (ticket: { baseStatus: string | null; status: string }) =>
-      ["New", "InAttendance", "Stopped"].includes(ticket.baseStatus ?? "") ||
-      /novo|andamento|aguard|paus|parad/i.test(ticket.status);
+    const normalizeStatus = (value: string) => value
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      .trim().toLocaleLowerCase("pt-BR");
+    const isTicketOpen = (ticket: { baseStatus: string | null; status: string }) => {
+      const status = normalizeStatus(ticket.status);
+      if (status === "aguardando validar versao") return false;
+      if (/conclu|fechad|encerrad|resolvid|cancelad/.test(status)) return false;
+      return ["New", "InAttendance", "Stopped"].includes(ticket.baseStatus ?? "") ||
+        /novo|desenvolvimento|andamento|aguard|paus|parad/.test(status);
+    };
+    const isCanceledTask = (state: string) => /cancelad|canceled/.test(normalizeStatus(state));
 
     const finishedTaskById = new Map(finishedLinkedTasks.map((item) => [item.id, item]));
     const finishedTaskByTicket = new Map<number, (typeof finishedLinkedTasks)[number]>();
@@ -339,7 +342,11 @@ export class WorkspaceService {
       if (!isTicketOpen(ticket)) return [];
       const task = (ticket.taskNumber ? finishedTaskById.get(ticket.taskNumber) : undefined)
         ?? finishedTaskByTicket.get(ticket.movideskId);
-      return task ? [{ ticket, task }] : [];
+      if (!task) return [];
+      // A versão usada na higienização é a entrega importada do ticket Movidesk.
+      // AzureWorkItem.deliveredVersion representa a versão de registro/classificação da Task.
+      const hasDeliveredVersion = Boolean(ticket.deliveredVersion?.trim());
+      return isCanceledTask(task.state) || hasDeliveredVersion ? [{ ticket, task }] : [];
     });
 
     const azureSamples = params.issue === "danglingTaskTickets"
@@ -375,7 +382,7 @@ export class WorkspaceService {
           module: null,
           assignedToName: ticket.owner,
           movideskTicket: ticket.movideskId,
-          deliveredVersion: task.deliveredVersion,
+          deliveredVersion: ticket.deliveredVersion,
           taskNumber: task.id,
           taskState: task.state,
           taskTitle: task.title,
