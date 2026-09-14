@@ -267,37 +267,26 @@ export function Clients() {
   }
 
   async function exportClientPresentation() {
-    if (!selectedClient || exportingPresentation) return;
-    try {
-      setExportingPresentation(true);
-      setError(null);
-      const from = effectiveStartDate.toISOString().slice(0, 10);
-      const to = effectiveEndDate.toISOString().slice(0, 10);
-      const response = await api.get<Blob>("/reports/executive.pdf", {
-        params: {
-          from,
-          to,
-          client: selectedClient,
-          category: category || undefined,
-          ticketStatus: status || undefined,
-          analyst: owner || undefined,
-        },
-        responseType: "blob",
-      });
-      const url = URL.createObjectURL(response.data);
-      const anchor = document.createElement("a");
-      const clientName = selectedClient.normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").replace(/[^a-zA-Z0-9]+/g, "-").replace(/^-|-$/g, "");
-      anchor.href = url;
-      anchor.download = `techlead-hub-${clientName}-executivo-${from}-${to}.pdf`;
-      document.body.appendChild(anchor);
-      anchor.click();
-      anchor.remove();
-      URL.revokeObjectURL(url);
-    } catch {
-      setError("Não foi possível exportar o relatório executivo deste cliente.");
-    } finally {
+    if (exportingPresentation) return;
+    setExportingPresentation(true);
+    setError(null);
+
+    const cleanup = () => {
+      document.body.classList.remove("client-pdf-export");
       setExportingPresentation(false);
-    }
+      window.removeEventListener("afterprint", cleanup);
+    };
+
+    document.body.classList.add("client-pdf-export");
+    window.addEventListener("afterprint", cleanup);
+    window.setTimeout(() => {
+      try {
+        window.print();
+      } catch {
+        cleanup();
+        setError("Não foi possível abrir a impressão desta tela.");
+      }
+    }, 150);
   }
 
 
@@ -1341,6 +1330,34 @@ export function Clients() {
 
   return (
     <>
+      <style>{`
+        @media print {
+          @page { size: A4 landscape; margin: 8mm; }
+          body.client-pdf-export { background: #fff !important; }
+          body.client-pdf-export .MuiDrawer-root,
+          body.client-pdf-export main > div:first-of-type,
+          body.client-pdf-export .presentation-actions,
+          body.client-pdf-export .client-print-hidden {
+            display: none !important;
+          }
+          body.client-pdf-export main {
+            padding: 0 !important;
+            margin: 0 !important;
+            min-height: auto !important;
+            overflow: visible !important;
+            background: #fff !important;
+          }
+          body.client-pdf-export main > div:last-child {
+            width: 100% !important;
+            max-width: none !important;
+          }
+          body.client-pdf-export .MuiCard-root,
+          body.client-pdf-export .MuiPaper-root {
+            break-inside: avoid;
+            box-shadow: none !important;
+          }
+        }
+      `}</style>
       {/* =================================================
           CABEÇALHO
       ================================================= */}
@@ -4446,19 +4463,29 @@ function classifyExecutiveProcess(ticket: Ticket) {
   const text = executiveClassificationText(ticket);
   const matches = (terms: string[]) => terms.some((term) => text.includes(term));
 
-  if (area === "Insumos") return "Insumos";
-  if (area === "Legislação") return "Legislação";
+  if (matches(["pedido de venda", "orcamento", "tabela de preco", "comissao", "vendedor", "faturamento de saida", "venda"])) return "Vendas e Faturamento";
+  if (matches(["cadastro de pessoa", "cadastro pessoa", "cliente", "fornecedor", "produto", "item", "filial", "usuario", "parametro", "configurador"])) return "Cadastros e Configurações";
+  if (matches(["relatorio", "painel", "dashboard", "analytics", "consulta", "impressao", "layout"])) return "Relatórios e Consultas";
+  if (matches(["integracao", "api", "webservice", "sincron", "importacao", "exportacao", "xml", "arquivo", "conector"])) return "Integrações e Importações";
+  if (matches(["permissao", "acesso", "perfil", "senha", "login", "seguranca", "autorizacao"])) return "Acessos e Segurança";
+  if (matches(["lentidao", "performance", "desempenho", "timeout", "servidor", "processamento", "erro 500"])) return "Desempenho e Infraestrutura";
+  if (area === "Insumos") return "Insumos e Receituário";
+  if (area === "Legislação") return "Legislação e Obrigações";
   if (area === "Verticais" && matches(["semente", "beneficiamento"])) return "Vertical - Sementes";
   if (area === "Verticais" && matches(["armazenagem", "armazem", "silo"])) return "Vertical - Armazém";
-  if (area === "Verticais" && matches(["romaneio", "pesagem", "classificacao"])) return "Vertical - Romaneios";
-  if (area === "Verticais" && matches(["contrato", "fixacao", "graos"])) return "Vertical - Contratos";
-  if (matches(["financeiro", "titulo", "boleto", "bordero", "bancario", "contas a pagar", "contas a receber", "acerto"])) return "Financeiro";
+  if (matches(["romaneio", "pesagem", "classificacao", "balanca"])) return "Recebimento e Romaneios";
+  if (matches(["financeiro", "titulo", "boleto", "bordero", "bancario", "contas a pagar", "contas a receber", "acerto", "caixa", "despesa"])) return "Financeiro";
   if (matches(["pedido de compra", "cotacao", "solicitacao de compra", "ordem de compra", "compras"])) return "Compras";
   if (matches(["faturamento de entrada", "importacao nf", "importador de nota", "nota de entrada", "nfe de terceiro"])) return "Faturamento de Entrada";
-  if (matches(["contrato", "fixacao", "graos", "ato cooperado", "saldo agricola"])) return "Contratos";
-  if (matches(["estoque", "lote"])) return "Estoque";
-  if (matches(["fiscal", "nf-e", "nfe", "mdf-e", "mdfe", "ct-e", "cte", "sefaz", "tribut"] )) return "Fiscal/Faturamento";
-  return "Outros temas";
+  if (matches(["contrato", "fixacao", "graos", "ato cooperado", "saldo agricola", "barter"])) return "Contratos e Grãos";
+  if (matches(["estoque", "lote", "saldo", "inventario", "movimentacao"])) return "Estoque";
+  if (matches(["fiscal", "nf-e", "nfe", "mdf-e", "mdfe", "ct-e", "cte", "sefaz", "tribut", "sped", "efd"])) return "Fiscal e Documentos Eletrônicos";
+  if (matches(["contabil", "contabilidade", "plano de contas", "lancamento contabil", "centro de custo"])) return "Contábil";
+  if (matches(["producao", "ordem de producao", "industrial", "formula", "beneficiamento"])) return "Produção";
+  if (ticket.service?.trim()) return `Serviço: ${ticket.service.trim()}`;
+  if (ticket.category?.trim()) return `Categoria: ${ticket.category.trim()}`;
+  if (ticket.department?.trim()) return `Área: ${ticket.department.trim()}`;
+  return "Processo não informado";
 }
 
 function executiveClassificationText(ticket: Ticket) {
