@@ -2762,6 +2762,8 @@ export class AzureWorkItemService {
         true,
       participantMovideskTickets:
         true,
+      registeredVersion:
+        true,
       deliveredVersion:
         true,
       prioritized:
@@ -2905,6 +2907,8 @@ export class AzureWorkItemService {
       movideskTicket:
         true,
       participantMovideskTickets:
+        true,
+      registeredVersion:
         true,
       deliveredVersion:
         true,
