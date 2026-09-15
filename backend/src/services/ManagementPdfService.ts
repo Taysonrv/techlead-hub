@@ -587,14 +587,10 @@ export class ManagementPdfService {
         string[]
       > = {
       executive: [
-        "situationEvolution",
         "clientHealth",
-        "insights",
-        "tickets",
-        "sla",
-        "analysts",
-        "clients",
+        "situationEvolution",
         "categories",
+        "analysts",
         "development",
         "states",
         "versions",
@@ -943,10 +939,10 @@ function pageContent(
     ],
   );
 
-  text(
+  centeredText(
     commands,
     report.title,
-    34,
+    421,
     568,
     19,
     true,
@@ -978,18 +974,18 @@ function pageContent(
     false,
     [0.32, 0.36, 0.4],
   );
-  text(
+  centeredText(
     commands,
     section.title,
-    34,
+    421,
     500,
     18,
     true,
   );
-  text(
+  centeredText(
     commands,
     section.subtitle,
-    34,
+    421,
     480,
     10,
     false,
@@ -1261,6 +1257,19 @@ function text(
     `${color.join(" ")} rg`,
     `BT /${bold ? "F2" : "F1"} ${size} Tf ${number(x)} ${number(y)} Td (${pdfText(value)}) Tj ET`,
   );
+}
+
+function centeredText(
+  commands: string[],
+  value: string,
+  centerX: number,
+  y: number,
+  size: number,
+  bold = false,
+  color: readonly number[] = [0.04, 0.06, 0.08],
+) {
+  const estimatedWidth = pdfText(value).length * size * (bold ? 0.56 : 0.51);
+  text(commands, value, Math.max(34, centerX - estimatedWidth / 2), y, size, bold, color);
 }
 
 function pdfText(
