@@ -120,6 +120,7 @@ export class ExecutiveReportService {
       azureStates,
       versions,
       ticketTimeline,
+      ticketDetails,
     ] =
       await Promise.all([
         prisma.user.findUnique({
@@ -340,6 +341,19 @@ export class ExecutiveReportService {
           where: ticketWhere,
           select: { createdDate: true, resolvedDate: true, closedDate: true, category: true },
           orderBy: { createdDate: "asc" },
+        }),
+        prisma.ticket.findMany({
+          where: ticketWhere,
+          select: {
+            movideskId: true,
+            subject: true,
+            status: true,
+            owner: true,
+            client: true,
+            category: true,
+            createdDate: true,
+          },
+          orderBy: [{ createdDate: "desc" }, { movideskId: "desc" }],
         }),
       ]);
 
@@ -677,6 +691,13 @@ export class ExecutiveReportService {
       generatedBy,
     );
 
+    this.addTicketDetailsSheet(
+      workbook,
+      ticketDetails,
+      options,
+      generatedBy,
+    );
+
     this.addCategoryEvolutionSheet(
       workbook,
       categoryEvolution,
@@ -931,6 +952,72 @@ export class ExecutiveReportService {
     sheet.pageSetup.fitToWidth = 1;
   }
 
+  private addTicketDetailsSheet(
+    workbook: ExcelJS.Workbook,
+    tickets: Array<{
+      movideskId: number;
+      subject: string;
+      status: string;
+      owner: string | null;
+      client: string | null;
+      category: string | null;
+      createdDate: Date;
+    }>,
+    options: ExecutiveReportOptions,
+    generatedBy: string,
+  ) {
+    const sheet = workbook.addWorksheet("Atendimentos", {
+      views: [{ state: "frozen", ySplit: 4 }],
+    });
+    this.configureSheet(sheet, [16, 70, 24, 32, 34, 30, 16]);
+    sheet.mergeCells("A1:G1");
+    sheet.getCell("A1").value = "ATENDIMENTOS UTILIZADOS NA ANÁLISE";
+    this.styleTitle(sheet.getCell("A1"));
+    sheet.getCell("A2").value = "Período";
+    sheet.getCell("B2").value = this.periodLabel(options.from, options.to);
+    sheet.getCell("D2").value = "Gerado por";
+    sheet.getCell("E2").value = generatedBy;
+    sheet.getCell("A3").value = "Filtros";
+    sheet.mergeCells("B3:G3");
+    sheet.getCell("B3").value = this.filtersLabel(options.filters);
+
+    const header = sheet.addRow([
+      "Ticket",
+      "Título",
+      "Status",
+      "Responsável",
+      "Cliente",
+      "Categoria",
+      "Data de abertura",
+    ]);
+    this.styleHeader(header);
+
+    tickets.forEach((ticket) => {
+      const row = sheet.addRow([
+        ticket.movideskId,
+        ticket.subject,
+        ticket.status,
+        ticket.owner ?? "Não informado",
+        ticket.client ?? "Não informado",
+        ticket.category ?? "Não informada",
+        ticket.createdDate,
+      ]);
+      row.getCell(1).numFmt = "0";
+      row.getCell(7).numFmt = "dd/mm/yyyy";
+      row.alignment = { vertical: "top", wrapText: true };
+    });
+
+    if (!tickets.length) {
+      sheet.addRow(["", "Nenhum atendimento encontrado para o período e filtros selecionados."]);
+    }
+
+    sheet.autoFilter = {
+      from: { row: 4, column: 1 },
+      to: { row: 4, column: 7 },
+    };
+    sheet.pageSetup.printArea = `A1:G${Math.max(sheet.rowCount, 5)}`;
+  }
+
   private addRankingSheet(
     workbook:
       ExcelJS.Workbook,
@@ -1069,12 +1156,12 @@ export class ExecutiveReportService {
     scope: ReportScope,
   ) {
     const sheets: Record<ReportScope, string[]> = {
-      executive: ["Resumo Executivo", "Evolução Categorias", "Analistas", "Clientes", "Categorias", "Correções", "SLA"],
-      analysts: ["Evolução Categorias", "Analistas"],
-      sla: ["Resumo Executivo", "Evolução Categorias", "SLA", "Categorias"],
-      clients: ["Resumo Executivo", "Evolução Categorias", "Clientes", "Categorias", "SLA"],
-      development: ["Resumo Executivo", "Evolução Categorias", "Correções"],
-      versions: ["Resumo Executivo", "Evolução Categorias", "Correções"],
+      executive: ["Resumo Executivo", "Evolução Categorias", "Analistas", "Clientes", "Categorias", "Correções", "SLA", "Atendimentos"],
+      analysts: ["Evolução Categorias", "Analistas", "Atendimentos"],
+      sla: ["Resumo Executivo", "Evolução Categorias", "SLA", "Categorias", "Atendimentos"],
+      clients: ["Resumo Executivo", "Evolução Categorias", "Clientes", "Categorias", "SLA", "Atendimentos"],
+      development: ["Resumo Executivo", "Evolução Categorias", "Correções", "Atendimentos"],
+      versions: ["Resumo Executivo", "Evolução Categorias", "Correções", "Atendimentos"],
     };
     const allowed = new Set(sheets[scope]);
     workbook.worksheets
