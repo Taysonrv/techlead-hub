@@ -1341,6 +1341,14 @@ export function Clients() {
           body.client-pdf-export .client-print-hidden {
             display: none !important;
           }
+          body.client-pdf-export main > div:last-child > :not(#client-export-content) {
+            display: none !important;
+          }
+          body.client-pdf-export #client-export-content {
+            display: block !important;
+            width: 100% !important;
+            margin: 0 !important;
+          }
           body.client-pdf-export main {
             padding: 0 !important;
             margin: 0 !important;
@@ -1954,7 +1962,7 @@ export function Clients() {
 
       {/* PAINEL PARA APRESENTAÇÃO AO CLIENTE */}
       {selectedClient && (
-        <Card ref={presentationRef} elevation={0} sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2.25, mb: 2, overflow: "hidden", bgcolor: "background.default", "@media print": { breakInside: "avoid", "& .presentation-actions": { display: "none !important" } }, "&:fullscreen": { position: "fixed", inset: 0, width: "100vw", height: "100vh", maxWidth: "none", borderRadius: 0, m: 0, zIndex: 99999, display: "flex", flexDirection: "column" } }}>
+        <Card id="client-export-content" ref={presentationRef} elevation={0} sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2.25, mb: 2, overflow: "hidden", bgcolor: "background.default", "@media print": { breakInside: "avoid", "& .presentation-actions": { display: "none !important" } }, "&:fullscreen": { position: "fixed", inset: 0, width: "100vw", height: "100vh", maxWidth: "none", borderRadius: 0, m: 0, zIndex: 99999, display: "flex", flexDirection: "column" } }}>
           <Box sx={{ px: { xs: 2, md: 3 }, py: 2, color: "white", background: `linear-gradient(110deg, ${aliareColors.greenDark}, ${aliareColors.green})` }}>
             <Stack direction={{ xs: "column", md: "row" }} spacing={1.5} sx={{ alignItems: { md: "center" }, justifyContent: "space-between" }}>
               <Box>
