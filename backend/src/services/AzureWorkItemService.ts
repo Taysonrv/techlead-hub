@@ -152,35 +152,6 @@ export class AzureWorkItemService {
               pageSize,
           );
 
-    const relatedTickets = items.length
-      ? await prisma.ticket.findMany({
-          where: {
-            OR: [
-              { taskNumber: { in: items.map((item) => item.id) } },
-              {
-                movideskId: {
-                  in: items
-                    .flatMap((item) => item.movideskTicket ? [item.movideskTicket] : []),
-                },
-              },
-            ],
-          },
-          select: {
-            taskNumber: true,
-            movideskId: true,
-            deliveredVersion: true,
-          },
-        })
-      : [];
-
-    const versionByTask = new Map<number, string>();
-    const versionByTicket = new Map<number, string>();
-    relatedTickets.forEach((ticket) => {
-      if (!ticket.deliveredVersion?.trim()) return;
-      if (ticket.taskNumber) versionByTask.set(ticket.taskNumber, ticket.deliveredVersion);
-      versionByTicket.set(ticket.movideskId, ticket.deliveredVersion);
-    });
-
     return {
       page,
       pageSize,
@@ -188,14 +159,7 @@ export class AzureWorkItemService {
       totalPages,
       hasPreviousPage: page > 1,
       hasNextPage: page < totalPages,
-      items: items.map((item) => ({
-        ...item,
-        registrationVersion: item.deliveredVersion,
-        deliveryVersion:
-          versionByTask.get(item.id) ??
-          (item.movideskTicket ? versionByTicket.get(item.movideskTicket) : undefined) ??
-          null,
-      })),
+      items,
     };
   }
 
@@ -383,9 +347,6 @@ export class AzureWorkItemService {
 
       participantClients: this.stringLines(workItem.participantClients),
       participantMovideskTickets: this.participantTicketIds(workItem.participantMovideskTickets),
-      registrationVersion: workItem.deliveredVersion,
-      deliveryVersion: tickets.find((ticket) => Boolean(ticket.deliveredVersion?.trim()))?.deliveredVersion ?? null,
-
       relatedTicket:
         tickets[0] ??
         null,
@@ -745,35 +706,6 @@ export class AzureWorkItemService {
         },
       });
 
-    const ticketIds = new Set<number>();
-    items.forEach((item) => {
-      if (item.movideskTicket) ticketIds.add(item.movideskTicket);
-      this.participantTicketIds(item.participantMovideskTickets).forEach((id) => ticketIds.add(id));
-    });
-    const deliveryTickets = items.length
-      ? await prisma.ticket.findMany({
-          where: {
-            deliveredVersion: { not: null },
-            OR: [
-              { taskNumber: { in: items.map((item) => item.id) } },
-              { movideskId: { in: [...ticketIds] } },
-            ],
-          },
-          select: {
-            taskNumber: true,
-            movideskId: true,
-            deliveredVersion: true,
-          },
-        })
-      : [];
-    const deliveryByTask = new Map<number, string>();
-    const deliveryByTicket = new Map<number, string>();
-    deliveryTickets.forEach((ticket) => {
-      if (!ticket.deliveredVersion?.trim()) return;
-      if (ticket.taskNumber) deliveryByTask.set(ticket.taskNumber, ticket.deliveredVersion);
-      deliveryByTicket.set(ticket.movideskId, ticket.deliveredVersion);
-    });
-
     type VersionAccumulator = {
       version:
         string | null;
@@ -847,13 +779,9 @@ export class AzureWorkItemService {
     for (
       const item of items
     ) {
-      const linkedTicketVersions = [
-        ...(item.movideskTicket ? [deliveryByTicket.get(item.movideskTicket)] : []),
-        ...this.participantTicketIds(item.participantMovideskTickets).map((id) => deliveryByTicket.get(id)),
-      ].filter((value): value is string => Boolean(value));
       const version =
         this.normalizeVersion(
-          deliveryByTask.get(item.id) ?? linkedTicketVersions[0] ?? null,
+          item.deliveredVersion,
         );
 
       const key =
@@ -2753,6 +2681,8 @@ export class AzureWorkItemService {
       participantMovideskTickets:
         true,
       iterationPath:
+        true,
+      registeredVersion:
         true,
       deliveredVersion:
         true,
