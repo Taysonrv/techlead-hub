@@ -27,19 +27,17 @@ type Data = {
   filters: { clients: string[]; users: string[]; types: string[] };
 };
 const metrics = [
-  ["ticketOpenTaskFinished", "Pronto para encerrar", "Ticket ainda pendente, mas a Task foi cancelada ou concluída e possui versão efetivamente entregue. Aguardando validar versão não entra neste recorte.", "Fluxo"],
-  ["ticketOpenTaskWithoutDelivery", "Task finalizada sem entrega", "Task concluída vinculada a ticket aberto, porém sem versão de entrega importada no Movidesk. Exige validar publicação antes de encerrar.", "Fluxo"],
-  ["ticketClosedTaskOpen", "Ticket encerrado com Task ativa", "Ticket concluído, fechado ou resolvido enquanto a Task relacionada ainda está em andamento.", "Fluxo"],
-  ["activeTaskWithVersion", "Task ativa com versão informada", "Task não finalizada que já possui versão preenchida. Pode indicar classificação antecipada ou estado desatualizado.", "Versão"],
-  ["completedWithoutVersion", "Task finalizada sem versão", "Correção, evolução ou apoio concluído no Azure sem versão de entrega informada.", "Versão"],
-  ["clientMismatch", "Cliente divergente", "O cliente principal do ticket difere do cliente principal da Correção ou Evolução relacionada. APOIO não exige cliente.", "Vínculo"],
+  ["ticketOpenTaskFinished", "Pronto para encerrar", "Ticket ainda pendente, mas a Tarefa foi cancelada ou concluída e possui versão efetivamente entregue. Aguardando validar versão não entra neste recorte.", "Fluxo"],
+  ["ticketOpenTaskWithoutDelivery", "Tarefa finalizada sem entrega", "Tarefa concluída vinculada a ticket aberto, porém sem versão de entrega importada no Movidesk. Exige validar publicação antes de encerrar.", "Fluxo"],
+  ["ticketClosedTaskOpen", "Ticket encerrado com Tarefa ativa", "Ticket concluído, fechado ou resolvido enquanto a Tarefa relacionada ainda está em andamento.", "Fluxo"],
+  ["activeTaskWithVersion", "Tarefa ativa com versão entregue", "Tarefa não finalizada vinculada a atendimento que já possui versão entregue. Pode indicar estado desatualizado.", "Versão"],
+  ["completedWithoutVersion", "Tarefa finalizada sem versão entregue", "Correção ou evolução concluída e vinculada a atendimento sem versão entregue no Movidesk.", "Versão"],
+  ["clientMismatch", "Cliente divergente", "O cliente do atendimento não consta como cliente principal nem como cliente participante da Correção ou Evolução relacionada. APOIO não exige cliente.", "Vínculo"],
   ["supportLinkDivergence", "APOIO com vínculo divergente", "APOIO referencia ticket inexistente no recorte ou ticket que aponta para outra Task. Cliente e versão não são obrigatórios para APOIO.", "APOIO"],
-  ["danglingTaskTickets", "Referência de Task inexistente", "Ticket aponta para um ID de Task ausente no snapshot atual do Azure.", "Vínculo"],
-  ["duplicatedMovideskLinks", "Ticket ligado a várias Tasks", "O mesmo atendimento Movidesk está como vínculo principal em mais de uma Task; revisar se todas as relações são válidas.", "Vínculo"],
-  ["withoutTicket", "Task sem ticket", "Work Item sem atendimento principal, participante ou vínculo reverso no Movidesk.", "Cadastro"],
+  ["danglingTaskTickets", "Referência de Task inexistente", "Ticket aponta para um ID de Tarefa ausente no snapshot atual do Azure.", "Vínculo"],
+  ["duplicatedMovideskLinks", "Ticket ligado a várias Tarefas", "O mesmo atendimento Movidesk está como vínculo principal em mais de uma Tarefa; revisar se todas as relações são válidas.", "Vínculo"],
+  ["withoutTicket", "Tarefa sem ticket", "Work Item sem atendimento principal, participante ou vínculo reverso no Movidesk.", "Cadastro"],
   ["withoutClient", "Task sem cliente", "Work Item sem cliente principal e sem clientes participantes identificados.", "Cadastro"],
-  ["withoutModule", "Task sem módulo", "Work Item sem módulo ou rotina funcional preenchida.", "Cadastro"],
-  ["withoutOwner", "Task sem responsável", "Work Item sem responsável definido no Azure DevOps.", "Cadastro"],
 ] as const;
 
 export function DataQuality() {
@@ -79,7 +77,7 @@ export function DataQuality() {
   function exportPendingList() {
     const rows = data?.samples ?? [];
     const escape = (value: unknown) => `"${String(value ?? "").replace(/"/g, '""')}"`;
-    const header = ["Origem", "Tipo", "Atendimento", "Assunto / Título", "Cliente do ticket", "Cliente da Task", "Analista", "Status do ticket / Task", "Task", "Estado da Task", "Versão entregue"];
+    const header = ["Origem", "Tipo", "Atendimento", "Assunto / Título", "Cliente do ticket", "Cliente da Tarefa", "Analista", "Status do ticket / Tarefa", "Tarefa", "Estado da Tarefa", "Versão entregue"];
     const csv = [header, ...rows.map((item) => [
       item.source,
       item.workItemType,
@@ -108,7 +106,7 @@ export function DataQuality() {
   const title = useMemo(() => metrics.find(([key]) => key === issue)?.[1] ?? "Pendências encontradas", [issue]);
 
   return <Box sx={{ pb: 4 }}>
-    <PageHeader eyebrow="Governança" title="Pendências" description="Central de inconsistências cadastrais, vínculos e etapas divergentes entre tickets, Tasks e versões." meta={`${data?.samples.length ?? 0} registro(s) no recorte atual`} />
+    <PageHeader eyebrow="Governança" title="Pendências" description="Central de inconsistências cadastrais, vínculos e etapas divergentes entre atendimentos, Tarefas e versões." meta={`${data?.samples.length ?? 0} registro(s) no recorte atual`} />
 
     <Card variant="outlined" sx={{ mt: 2 }}><CardContent>
       <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "2fr repeat(3, minmax(170px, 1fr)) auto" }, gap: 1.2 }}>
@@ -135,12 +133,12 @@ export function DataQuality() {
           Exportar lista{user ? " do analista" : ""}
         </Button>
       </Stack>
-      {loading ? <Box sx={{ py: 8, textAlign: "center" }}><CircularProgress /></Box> : <Stack spacing={1} sx={{ mt: 2 }}>{data?.samples.map((item) => <Button key={`${item.source}-${item.id}`} onClick={() => void open(item)} sx={{ justifyContent: "flex-start", textTransform: "none", border: "1px solid", borderColor: "divider", p: 1.3, borderRadius: 1.5 }}><Box sx={{ textAlign: "left", minWidth: 0 }}><Stack direction="row" spacing={1} sx={{ alignItems: "center" }}><Chip size="small" label={item.workItemType} /><Typography sx={{ fontWeight: 750 }}>#{item.source === "MOVIDESK" ? item.movideskTicket ?? item.id : item.id} · {item.title}</Typography></Stack><Typography variant="caption" color="text.secondary">{[item.state, item.client ?? "Sem cliente", item.module ?? "Sem módulo", item.assignedToName ?? "Sem responsável", item.movideskTicket ? `Ticket ${item.movideskTicket}` : "Sem ticket", item.taskNumber ? `Task #${item.taskNumber}` : "Sem Task", item.taskState ?? null, item.deliveredVersion ?? "Sem versão"].filter(Boolean).join(" · ")}</Typography></Box></Button>)}</Stack>}
+      {loading ? <Box sx={{ py: 8, textAlign: "center" }}><CircularProgress /></Box> : <Stack spacing={1} sx={{ mt: 2 }}>{data?.samples.map((item) => <Button key={`${item.source}-${item.id}`} onClick={() => void open(item)} sx={{ justifyContent: "flex-start", textTransform: "none", border: "1px solid", borderColor: "divider", p: 1.3, borderRadius: 1.5 }}><Box sx={{ textAlign: "left", minWidth: 0 }}><Stack direction="row" spacing={1} sx={{ alignItems: "center" }}><Chip size="small" label={item.workItemType} /><Typography sx={{ fontWeight: 750 }}>#{item.source === "MOVIDESK" ? item.movideskTicket ?? item.id : item.id} · {item.title}</Typography></Stack><Typography variant="caption" color="text.secondary">{[item.state, item.client ?? "Sem cliente", item.module ?? "Sem módulo", item.assignedToName ?? "Sem responsável", item.movideskTicket ? `Ticket ${item.movideskTicket}` : "Sem ticket", item.taskNumber ? `Tarefa #${item.taskNumber}` : "Sem Tarefa", item.taskState ?? null, item.deliveredVersion ?? "Sem versão"].filter(Boolean).join(" · ")}</Typography></Box></Button>)}</Stack>}
     </CardContent></Card>
 
     <Drawer anchor="right" open={Boolean(selected)} onClose={() => setSelected(null)} slotProps={{ paper: { sx: detailDrawerPaperSx } }}>
       <DetailPanelHeader eyebrow={selected?.workItemType} title={selected?.title ?? "Detalhes do registro"} identifier={`#${selected?.source === "MOVIDESK" ? selected.movideskTicket : selected?.id}`} onClose={() => setSelected(null)} />
-      <DetailSection title="Visão operacional"><DetailFieldGrid fields={selected ? Object.entries({ Estado: selected.state, "Cliente principal": selected.client, "Clientes participantes": formatList(selected.participantClients), Módulo: selected.module, Responsável: selected.assignedToName, "Ticket principal": selected.movideskTicket, "Tickets participantes": formatList(selected.participantMovideskTickets), "Task relacionada": selected.taskNumber ? `#${selected.taskNumber}` : null, "Estado da Task": selected.taskState, "Título da Task": selected.taskTitle, "Cliente da Task": selected.taskClient, Versão: selected.deliveredVersion }).map(([label, value]) => [label, String(value ?? "Não informado")]) : []} /></DetailSection>
+      <DetailSection title="Visão operacional"><DetailFieldGrid fields={selected ? Object.entries({ Estado: selected.state, "Cliente principal": selected.client, "Clientes participantes": formatList(selected.participantClients), Módulo: selected.module, Responsável: selected.assignedToName, "Ticket principal": selected.movideskTicket, "Tickets participantes": formatList(selected.participantMovideskTickets), "Tarefa relacionada": selected.taskNumber ? `#${selected.taskNumber}` : null, "Estado da Tarefa": selected.taskState, "Título da Tarefa": selected.taskTitle, "Cliente da Tarefa": selected.taskClient, "Versão entregue": selected.deliveredVersion }).map(([label, value]) => [label, String(value ?? "Não informado")]) : []} /></DetailSection>
       {detail && <Alert severity="info" sx={{ mt: 2 }}>Detalhes completos e histórico carregados do Azure.</Alert>}
       <Button variant="contained" sx={{ mt: 3 }} onClick={() => selected && navigate(selected.source === "MOVIDESK" ? `/tickets?movidesk=${selected.movideskTicket}` : `${route(selected.workItemType)}?task=${selected.id}`)}>Abrir registro completo</Button>
     </Drawer>
