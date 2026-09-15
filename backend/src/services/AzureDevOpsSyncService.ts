@@ -123,6 +123,7 @@ type ExistingWorkItem = {
   assignedToName: string | null;
   prioritized: boolean | null;
   blockedProcess: boolean | null;
+  registeredVersion: string | null;
   deliveredVersion: string | null;
   movideskTicket: number | null;
   client: string | null;
@@ -865,6 +866,7 @@ export class AzureDevOpsSyncService {
                   assignedToName: true,
                   prioritized: true,
                   blockedProcess: true,
+                  registeredVersion: true,
                   deliveredVersion: true,
                   movideskTicket: true,
                   client: true,
@@ -1019,6 +1021,7 @@ export class AzureDevOpsSyncService {
             assignedToName: true,
             prioritized: true,
             blockedProcess: true,
+            registeredVersion: true,
             deliveredVersion: true,
             movideskTicket: true,
             client: true,
@@ -1088,6 +1091,7 @@ export class AzureDevOpsSyncService {
       ["assignedToName", existing.assignedToName, mapped.assignedToName],
       ["prioritized", existing.prioritized, mapped.prioritized],
       ["blockedProcess", existing.blockedProcess, mapped.blockedProcess],
+      ["registeredVersion", existing.registeredVersion, mapped.registeredVersion],
       ["deliveredVersion", existing.deliveredVersion, mapped.deliveredVersion],
       ["movideskTicket", existing.movideskTicket, mapped.movideskTicket],
       ["client", existing.client, mapped.client],
@@ -1391,7 +1395,20 @@ export class AzureDevOpsSyncService {
       return false;
     }
 
+    const mappedRegisteredVersion =
+      typeof mapped.registeredVersion === "string"
+        ? mapped.registeredVersion
+        : null;
+    const mappedDeliveredVersion =
+      typeof mapped.deliveredVersion === "string"
+        ? mapped.deliveredVersion
+        : null;
+    const versionsMatch =
+      existing.registeredVersion === mappedRegisteredVersion &&
+      existing.deliveredVersion === mappedDeliveredVersion;
+
     if (
+      versionsMatch &&
       existing.revision !==
         null &&
       mapped.revision !==
@@ -1411,6 +1428,7 @@ export class AzureDevOpsSyncService {
         : null;
 
     if (
+      versionsMatch &&
       existing.azureChangedAt &&
       mappedChangedAt &&
       existing.azureChangedAt
@@ -1489,6 +1507,8 @@ export class AzureDevOpsSyncService {
         mapped.movideskTicket,
       participantMovideskTickets:
         mapped.participantMovideskTickets,
+      registeredVersion:
+        mapped.registeredVersion,
       deliveredVersion:
         mapped.deliveredVersion,
 
