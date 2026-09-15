@@ -33,11 +33,11 @@ const metrics = [
   ["activeTaskWithVersion", "Tarefa ativa com versão entregue", "Tarefa não finalizada vinculada a atendimento que já possui versão entregue. Pode indicar estado desatualizado.", "Versão"],
   ["completedWithoutVersion", "Tarefa finalizada sem versão entregue", "Correção ou evolução concluída e vinculada a atendimento sem versão entregue no Movidesk.", "Versão"],
   ["clientMismatch", "Cliente divergente", "O cliente do atendimento não consta como cliente principal nem como cliente participante da Correção ou Evolução relacionada. APOIO não exige cliente.", "Vínculo"],
-  ["supportLinkDivergence", "APOIO com vínculo divergente", "APOIO referencia ticket inexistente no recorte ou ticket que aponta para outra Task. Cliente e versão não são obrigatórios para APOIO.", "APOIO"],
-  ["danglingTaskTickets", "Referência de Task inexistente", "Ticket aponta para um ID de Tarefa ausente no snapshot atual do Azure.", "Vínculo"],
+  ["supportLinkDivergence", "APOIO com vínculo divergente", "APOIO referencia ticket inexistente no recorte ou ticket que aponta para outra Tarefa. Cliente e versão não são obrigatórios para APOIO.", "APOIO"],
+  ["danglingTaskTickets", "Referência de Tarefa inexistente", "Ticket aponta para um ID de Tarefa ausente no snapshot atual do Azure.", "Vínculo"],
   ["duplicatedMovideskLinks", "Ticket ligado a várias Tarefas", "O mesmo atendimento Movidesk está como vínculo principal em mais de uma Tarefa; revisar se todas as relações são válidas.", "Vínculo"],
   ["withoutTicket", "Tarefa sem ticket", "Work Item sem atendimento principal, participante ou vínculo reverso no Movidesk.", "Cadastro"],
-  ["withoutClient", "Task sem cliente", "Work Item sem cliente principal e sem clientes participantes identificados.", "Cadastro"],
+  ["withoutClient", "Tarefa sem cliente", "Work Item sem cliente principal e sem clientes participantes identificados.", "Cadastro"],
 ] as const;
 
 export function DataQuality() {
