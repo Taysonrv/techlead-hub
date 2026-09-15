@@ -305,7 +305,6 @@ model Ticket {
   @@index([responseSlaIndicator])
   @@index([taskNumber])
   @@index([taskStatus])
-  @@index([registeredVersion])
   @@index([deliveredVersion])
   @@index([importedAt])
   @@index([importBatch])
@@ -504,6 +503,7 @@ model AzureWorkItem {
   @@index([process])
   // Integrações / versão
   @@index([movideskTicket])
+  @@index([registeredVersion])
   @@index([deliveredVersion])
   // Priorização
   @@index([prioritized])
