@@ -124,8 +124,7 @@ type AzureWorkItem = {
   movideskTicket: number | null;
   participantMovideskTickets?: string | number[] | null;
   deliveredVersion: string | null;
-  registrationVersion?: string | null;
-  deliveryVersion?: string | null;
+  registeredVersion?: string | null;
   prioritized: NullableBoolean;
   blockedProcess: NullableBoolean;
   parentId?: number | null;
@@ -3720,7 +3719,7 @@ export function AzureWorkItems({
                     setDeliveredVersion(value ?? "");
                   }}
                   renderInput={(params) => (
-                    <TextField {...params} label="Versão de cadastro" />
+                    <TextField {...params} label="Versão entregue" />
                   )}
                 />
 
@@ -4247,16 +4246,16 @@ export function AzureWorkItems({
 
                               <TableCell
                                 sx={{ width: 210, minWidth: 210, maxWidth: 210, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
-                                title={(item.registrationVersion ?? item.deliveredVersion) ?? undefined}
+                                title={(item.registeredVersion) ?? undefined}
                               >
-                                {item.registrationVersion ?? item.deliveredVersion ?? "-"}
+                                {item.registeredVersion ?? "-"}
                               </TableCell>
 
                               <TableCell
                                 sx={{ width: 210, minWidth: 210, maxWidth: 210, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
-                                title={item.deliveryVersion ?? undefined}
+                                title={item.deliveredVersion ?? undefined}
                               >
-                                {item.deliveryVersion ?? "-"}
+                                {item.deliveredVersion ?? "-"}
                               </TableCell>
 
                               <TableCell>
@@ -4678,14 +4677,13 @@ export function AzureWorkItems({
                     <DetailField
                       label="Versão de cadastro"
                       value={normalizeText(
-                        selectedWorkItem.registrationVersion ??
-                        selectedWorkItem.deliveredVersion,
+                        selectedWorkItem.registeredVersion,
                       )}
                     />
 
                     <DetailField
                       label="Versão entregue"
-                      value={normalizeText(selectedWorkItem.deliveryVersion)}
+                      value={normalizeText(selectedWorkItem.deliveredVersion)}
                     />
 
                     <DetailField
