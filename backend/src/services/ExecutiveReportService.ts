@@ -646,35 +646,21 @@ export class ExecutiveReportService {
 
     this.addRankingSheet(
       workbook,
-      "Estados Azure",
-      "Work Items por estado",
-      azureStates.map(
-        (item) => ({
-          label:
-            item.state,
-          total:
-            item._count
-              ._all,
-        }),
-      ),
-      options,
-      generatedBy,
-    );
-
-    this.addRankingSheet(
-      workbook,
-      "Versões",
-      "Work Items por versão entregue",
-      versions.map(
-        (item) => ({
-          label:
-            item.deliveredVersion ??
-            "Não informada",
-          total:
-            item._count
-              ._all,
-        }),
-      ),
+      "Correções",
+      "Correções de suporte: situação e entrega",
+      [
+        { label: "Indicador · Correções no período", total: corrections },
+        { label: "Indicador · Priorizadas", total: prioritized },
+        { label: "Indicador · Processo bloqueado", total: blocked },
+        ...azureStates.map((item) => ({
+          label: `Estado · ${item.state}`,
+          total: item._count._all,
+        })),
+        ...versions.map((item) => ({
+          label: `Versão entregue · ${item.deliveredVersion ?? "Não informada"}`,
+          total: item._count._all,
+        })),
+      ],
       options,
       generatedBy,
     );
@@ -684,84 +670,39 @@ export class ExecutiveReportService {
       "SLA",
       "Cumprimento do SLA de solução",
       [
-        {
-          label:
-            "Dentro do prazo",
-          total:
-            slaMet,
-        },
-        {
-          label:
-            "Fora do prazo",
-          total:
-            Math.max(
-              0,
-              slaMeasured -
-                slaMet,
-            ),
-        },
+        { label: "Dentro do prazo", total: slaMet },
+        { label: "Fora do prazo", total: Math.max(0, slaMeasured - slaMet) },
       ],
       options,
       generatedBy,
     );
-
-    this.addRankingSheet(
-      workbook,
-      "Situação Atendimentos",
-      "Evolução mensal da situação dos atendimentos",
-      situationRows,
-      options,
-      generatedBy,
-    );
-
-    this.addRankingSheet(
-      workbook,
-      "Desenvolvimento",
-      "Correções de suporte e sustentação",
-      [
-        {
-          label:
-            "Correções",
-          total:
-            corrections,
-        },
-        {
-          label:
-            "Priorizados",
-          total:
-            prioritized,
-        },
-        {
-          label:
-            "Processo bloqueado",
-          total:
-            blocked,
-        },
-      ],
-      options,
-      generatedBy,
-    );
-
-    this.addClientHealthSheet(workbook, {
-      ticketsTotal, ticketsOpen, ticketsResolved, ticketsClosed,
-      slaMeasured, slaMet, corrections, evolutions, supports,
-      prioritized, blocked,
-    }, insights, options, generatedBy);
 
     this.addCategoryEvolutionSheet(
       workbook,
       categoryEvolution,
       categoryNames,
+      situationRows,
       options,
       generatedBy,
     );
 
-    this.addInsightSheet(
-      workbook,
-      insights,
-      options,
-      generatedBy,
+    this.addSection(
+      summary,
+      25,
+      "Leitura executiva e recomendações",
+      [
+        ["Prioridade", "Achado", "Recomendação"],
+        ...insights.slice(0, 6).map((insight) => [
+          `${insight.priority} · ${insight.topic}`,
+          insight.finding,
+          insight.recommendation,
+        ]),
+      ],
+      7,
     );
+    summary.getColumn(2).width = 52;
+    summary.getColumn(3).width = 68;
+    summary.pageSetup.printArea = `A1:C${Math.max(summary.rowCount, 32)}`;
 
     this.applyScope(
       workbook,
@@ -887,6 +828,7 @@ export class ExecutiveReportService {
     workbook: ExcelJS.Workbook,
     evolution: Map<string, Map<string, number>>,
     categories: string[],
+    situationRows: RankingRow[],
     options: ExecutiveReportOptions,
     generatedBy: string,
   ) {
@@ -918,6 +860,17 @@ export class ExecutiveReportService {
     if (!evolution.size) {
       sheet.addRow(["Sem dados no período", ...categoryColumns.map(() => 0), 0]);
     }
+
+    const situationStart = sheet.rowCount + 2;
+    sheet.mergeCells(situationStart, 1, situationStart, Math.max(2, categoryColumns.length + 2));
+    sheet.getCell(situationStart, 1).value = "SITUAÇÃO MENSAL DOS ATENDIMENTOS";
+    this.styleSectionTitle(sheet.getCell(situationStart, 1));
+    const situationHeader = sheet.getRow(situationStart + 1);
+    situationHeader.getCell(1).value = "Mês e situação";
+    situationHeader.getCell(2).value = "Quantidade";
+    this.styleHeader(situationHeader);
+    situationRows.forEach((item) => sheet.addRow([item.label, item.total]));
+
     sheet.autoFilter = {
       from: { row: 4, column: 1 },
       to: { row: 4, column: categoryColumns.length + 2 },
@@ -1108,102 +1061,25 @@ export class ExecutiveReportService {
       },
     };
 
-    sheet.pageSetup.printArea = `A1:N${Math.max(sheet.rowCount, 20)}`;
+    sheet.pageSetup.printArea = `A1:E${Math.max(sheet.rowCount, 8)}`;
   }
 
   private applyScope(
-    workbook:
-      ExcelJS.Workbook,
-    scope:
-      ReportScope,
+    workbook: ExcelJS.Workbook,
+    scope: ReportScope,
   ) {
-    const sheets:
-      Record<
-        ReportScope,
-        string[]
-      > = {
-      executive: [
-        "Painel do Cliente",
-        "Evolução Categorias",
-        "Situação Atendimentos",
-        "Insights Diretoria",
-        "Resumo Executivo",
-        "Analistas",
-        "Clientes",
-        "Categorias",
-        "Estados Azure",
-        "Versões",
-        "SLA",
-        "Situação Atendimentos",
-        "Desenvolvimento",
-      ],
-      analysts: [
-        "Evolução Categorias",
-        "Situação Atendimentos",
-        "Insights Diretoria",
-        "Analistas",
-        "Situação Atendimentos",
-      ],
-      sla: [
-        "Evolução Categorias",
-        "Situação Atendimentos",
-        "Insights Diretoria",
-        "SLA",
-        "Situação Atendimentos",
-        "Categorias",
-      ],
-      clients: [
-        "Painel do Cliente",
-        "Evolução Categorias",
-        "Situação Atendimentos",
-        "Insights Diretoria",
-        "Clientes",
-        "Categorias",
-        "Situação Atendimentos",
-      ],
-      development: [
-        "Evolução Categorias",
-        "Situação Atendimentos",
-        "Insights Diretoria",
-        "Desenvolvimento",
-        "Estados Azure",
-        "Versões",
-      ],
-      versions: [
-        "Evolução Categorias",
-        "Situação Atendimentos",
-        "Insights Diretoria",
-        "Versões",
-        "Estados Azure",
-        "Desenvolvimento",
-      ],
+    const sheets: Record<ReportScope, string[]> = {
+      executive: ["Resumo Executivo", "Evolução Categorias", "Analistas", "Clientes", "Categorias", "Correções", "SLA"],
+      analysts: ["Evolução Categorias", "Analistas"],
+      sla: ["Resumo Executivo", "Evolução Categorias", "SLA", "Categorias"],
+      clients: ["Resumo Executivo", "Evolução Categorias", "Clientes", "Categorias", "SLA"],
+      development: ["Resumo Executivo", "Evolução Categorias", "Correções"],
+      versions: ["Resumo Executivo", "Evolução Categorias", "Correções"],
     };
-
-    const allowed =
-      new Set(
-        sheets[
-          scope
-        ],
-      );
-
+    const allowed = new Set(sheets[scope]);
     workbook.worksheets
-      .filter(
-        (
-          sheet,
-        ) =>
-          !allowed.has(
-            sheet.name,
-          ),
-      )
-      .forEach(
-        (
-          sheet,
-        ) => {
-          workbook.removeWorksheet(
-            sheet.id,
-          );
-        },
-      );
+      .filter((sheet) => !allowed.has(sheet.name))
+      .forEach((sheet) => workbook.removeWorksheet(sheet.id));
   }
 
   private addSection(
