@@ -305,6 +305,7 @@ model Ticket {
   @@index([responseSlaIndicator])
   @@index([taskNumber])
   @@index([taskStatus])
+  @@index([registeredVersion])
   @@index([deliveredVersion])
   @@index([importedAt])
   @@index([importBatch])
@@ -415,7 +416,10 @@ model AzureWorkItem {
   movideskTicket Int?
   participantMovideskTickets String? @db.Text
 
-  // Versão relacionada ao Work Item
+  // Versão definida no cadastro/classificação da Tarefa.
+  registeredVersion String?
+
+  // Versão efetivamente vinculada na seção Entrega > Versões.
   deliveredVersion String?
 
   // Priorização / impacto
