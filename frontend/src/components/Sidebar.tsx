@@ -394,7 +394,7 @@ export function Sidebar() {
               <AssessmentOutlined fontSize="small" />,
           },
           {
-            label: "Qualidade dos Dados",
+            label: "Pendências",
             path: "/qualidade-dados",
             icon: <FactCheckOutlined fontSize="small" />,
           },
@@ -853,6 +853,7 @@ export function Sidebar() {
 
       {user && (
         <Box
+          id="global-user-controls"
           sx={{
             position: "fixed",
             top: 14,

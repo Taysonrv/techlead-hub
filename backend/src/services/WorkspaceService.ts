@@ -211,6 +211,7 @@ export class WorkspaceService {
       select: {
         id: true, taskNumber: true, movideskId: true, subject: true,
         status: true, baseStatus: true, client: true, owner: true,
+        deliveredVersion: true,
       },
     });
     const taskIds = scopedTickets.map((item) => item.taskNumber).filter((value): value is number => value !== null);
@@ -268,16 +269,17 @@ export class WorkspaceService {
           ...(linkedTaskIds.length ? [{ id: { notIn: linkedTaskIds } }] : []),
         ],
       };
-      if (issue === "withoutClient") return { AND: [{ client: null }, { participantClients: null }] };
+      if (issue === "withoutClient") return { AND: [{ NOT: { workItemType: { equals: "APOIO", mode: "insensitive" } } }, { client: null }, { participantClients: null }] };
       if (issue === "withoutModule") return { module: null };
       if (issue === "withoutOwner") return { assignedToName: null };
-      if (issue === "completedWithoutVersion") return { state: { in: TERMINAL }, deliveredVersion: null };
+      if (issue === "completedWithoutVersion") return { AND: [{ NOT: { workItemType: { equals: "APOIO", mode: "insensitive" } } }, { state: { in: ["Concluído", "Concluido", "Closed", "Done", "Resolved"] } }, { deliveredVersion: null }] };
+      if (issue === "activeTaskWithVersion") return { AND: [{ NOT: { workItemType: { equals: "APOIO", mode: "insensitive" } } }, { state: { notIn: TERMINAL } }, { deliveredVersion: { not: null } }] };
       return {};
     };
 
     const [
       withoutTicket, withoutClient, withoutModule, withoutOwner,
-      completedWithoutVersion, existingTasks, duplicates, finishedLinkedTasks,
+      completedWithoutVersion, existingTasks, duplicates, linkedTasks,
     ] = await Promise.all([
       prisma.azureWorkItem.count({ where: { AND: [scope, issueWhere("withoutTicket")] } }),
       prisma.azureWorkItem.count({ where: { AND: [scope, issueWhere("withoutClient")] } }),
@@ -295,21 +297,12 @@ export class WorkspaceService {
       }),
       prisma.azureWorkItem.findMany({
         where: {
-          AND: [
-            scope,
-            { state: { in: TERMINAL } },
-            {
-              OR: [
-                { deliveredVersion: { not: null } },
-                { state: { in: ["Cancelado", "Canceled"] } },
-              ],
-            },
-          ],
+          AND: [scope],
         },
         orderBy: [{ azureClosedAt: "desc" }, { azureChangedAt: "desc" }],
         select: {
           id: true, workItemType: true, title: true, state: true,
-          client: true, assignedToName: true, deliveredVersion: true,
+          client: true, participantClients: true, assignedToName: true, deliveredVersion: true,
           movideskTicket: true, participantMovideskTickets: true,
         },
       }),
@@ -322,9 +315,33 @@ export class WorkspaceService {
     const duplicatedIds = duplicates.map((item) => item.movideskTicket)
       .filter((value): value is number => value !== null);
 
-    const isTicketOpen = (ticket: { baseStatus: string | null; status: string }) =>
-      ["New", "InAttendance", "Stopped"].includes(ticket.baseStatus ?? "") ||
-      /novo|andamento|aguard|paus|parad/i.test(ticket.status);
+    const normalizeStatus = (value: string) => value
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      .trim().toLocaleLowerCase("pt-BR");
+    const isTicketOpen = (ticket: { baseStatus: string | null; status: string }) => {
+      const status = normalizeStatus(ticket.status);
+      if (status === "aguardando validar versao") return false;
+      if (/conclu|fechad|encerrad|resolvid|cancelad/.test(status)) return false;
+      return ["New", "InAttendance", "Stopped"].includes(ticket.baseStatus ?? "") ||
+        /novo|desenvolvimento|andamento|aguard|paus|parad/.test(status);
+    };
+    const isTicketFinalized = (ticket: { baseStatus: string | null; status: string }) => {
+      const status = normalizeStatus(ticket.status);
+      return ["Resolved", "Closed"].includes(ticket.baseStatus ?? "")
+        || /conclu|fechad|encerrad|resolvid|cancelad/.test(status);
+    };
+    const sameClient = (left: string, right: string) => {
+      const normalizedLeft = normalizeStatus(left).replace(/[^a-z0-9]+/g, " ").trim();
+      const normalizedRight = normalizeStatus(right).replace(/[^a-z0-9]+/g, " ").trim();
+      return normalizedLeft === normalizedRight
+        || normalizedLeft.includes(normalizedRight)
+        || normalizedRight.includes(normalizedLeft);
+    };
+    const isSupportTask = (task: { workItemType: string }) => normalizeStatus(task.workItemType).includes("apoio");
+    const isCanceledTask = (state: string) => /cancelad|canceled/.test(normalizeStatus(state));
+    const isTerminalTask = (state: string) => TERMINAL.some((value) => normalizeStatus(value) === normalizeStatus(state));
+    const finishedLinkedTasks = linkedTasks.filter((item) => isTerminalTask(item.state));
+    const activeLinkedTasks = linkedTasks.filter((item) => !isTerminalTask(item.state));
 
     const finishedTaskById = new Map(finishedLinkedTasks.map((item) => [item.id, item]));
     const finishedTaskByTicket = new Map<number, (typeof finishedLinkedTasks)[number]>();
@@ -335,14 +352,61 @@ export class WorkspaceService {
       }
     }
 
+    const findLinkedTask = (ticket: (typeof scopedTickets)[number], items: typeof linkedTasks) =>
+      (ticket.taskNumber ? items.find((item) => item.id === ticket.taskNumber) : undefined)
+      ?? items.find((item) => item.movideskTicket === ticket.movideskId
+        || (item.participantMovideskTickets?.match(/\d+/g) ?? []).map(Number).includes(ticket.movideskId));
+
     const ticketsAwaitingClosure = scopedTickets.flatMap((ticket) => {
       if (!isTicketOpen(ticket)) return [];
-      const task = (ticket.taskNumber ? finishedTaskById.get(ticket.taskNumber) : undefined)
-        ?? finishedTaskByTicket.get(ticket.movideskId);
-      return task ? [{ ticket, task }] : [];
+      const task = findLinkedTask(ticket, finishedLinkedTasks);
+      if (task && isSupportTask(task)) return [];
+      if (!task) return [];
+      // A versão usada na higienização é a entrega importada do ticket Movidesk.
+      // AzureWorkItem.deliveredVersion representa a versão de registro/classificação da Task.
+      const hasDeliveredVersion = Boolean(ticket.deliveredVersion?.trim());
+      return isCanceledTask(task.state) || hasDeliveredVersion ? [{ ticket, task }] : [];
+    });
+    const ticketsFinishedWithoutDelivery = scopedTickets.flatMap((ticket) => {
+      if (!isTicketOpen(ticket) || ticket.deliveredVersion?.trim()) return [];
+      const task = findLinkedTask(ticket, finishedLinkedTasks);
+      return task && !isSupportTask(task) && !isCanceledTask(task.state) ? [{ ticket, task }] : [];
+    });
+    const closedTicketsWithActiveTask = scopedTickets.flatMap((ticket) => {
+      if (!isTicketFinalized(ticket)) return [];
+      const task = findLinkedTask(ticket, activeLinkedTasks);
+      return task && !isSupportTask(task) ? [{ ticket, task }] : [];
+    });
+    const clientMismatches = scopedTickets.flatMap((ticket) => {
+      const task = findLinkedTask(ticket, linkedTasks);
+      if (!task || !ticket.client || isSupportTask(task)) return [];
+      const taskClients = [
+        ...(task.client ? [task.client] : []),
+        ...(task.participantClients?.split(/[;,\r\n]+/).map((value) => value.trim()).filter(Boolean) ?? []),
+      ];
+      if (!taskClients.length) return [];
+      return taskClients.some((taskClient) => sameClient(taskClient, ticket.client!))
+        ? []
+        : [{ ticket, task }];
+    });
+    const scopedTicketByMovidesk = new Map(scopedTickets.map((ticket) => [ticket.movideskId, ticket]));
+    const supportDivergences = linkedTasks.filter((task) => {
+      if (!isSupportTask(task)) return false;
+      const linkedIds = [
+        ...(task.movideskTicket ? [task.movideskTicket] : []),
+        ...(task.participantMovideskTickets?.match(/\d+/g) ?? []).map(Number),
+      ];
+      if (!linkedIds.length) return false;
+      return linkedIds.some((id) => {
+        const ticket = scopedTicketByMovidesk.get(id);
+        return !ticket || (ticket.taskNumber !== null && ticket.taskNumber !== task.id);
+      });
     });
 
-    const azureSamples = params.issue === "danglingTaskTickets"
+    const derivedTicketIssues = ["danglingTaskTickets", "ticketOpenTaskFinished", "ticketOpenTaskWithoutDelivery", "ticketClosedTaskOpen", "clientMismatch", "supportLinkDivergence"];
+    const azureSamples = params.issue === "supportLinkDivergence"
+      ? supportDivergences.slice(0, 100)
+      : params.issue && derivedTicketIssues.includes(params.issue)
       ? []
       : await prisma.azureWorkItem.findMany({
       where: { AND: [scope, params.issue === "duplicatedMovideskLinks"
@@ -351,7 +415,7 @@ export class WorkspaceService {
         OR: [
           issueWhere("withoutTicket"), { client: null }, { module: null },
           { assignedToName: null },
-          { state: { in: TERMINAL }, deliveredVersion: null },
+          { state: { in: ["Concluído", "Concluido", "Closed", "Done", "Resolved"] }, deliveredVersion: null },
         ],
       }] },
       orderBy: { azureChangedAt: "desc" },
@@ -365,8 +429,7 @@ export class WorkspaceService {
       },
     });
 
-    const samples = params.issue === "ticketOpenTaskFinished"
-      ? ticketsAwaitingClosure.slice(0, 100).map(({ ticket, task }) => ({
+    const toTicketSample = ({ ticket, task }: { ticket: (typeof scopedTickets)[number]; task: (typeof linkedTasks)[number] }) => ({
           id: ticket.id,
           workItemType: task.workItemType,
           title: ticket.subject,
@@ -375,12 +438,21 @@ export class WorkspaceService {
           module: null,
           assignedToName: ticket.owner,
           movideskTicket: ticket.movideskId,
-          deliveredVersion: task.deliveredVersion,
+          deliveredVersion: ticket.deliveredVersion,
           taskNumber: task.id,
           taskState: task.state,
           taskTitle: task.title,
+          taskClient: task.client,
           source: "MOVIDESK" as const,
-        }))
+        });
+    const samples = params.issue === "ticketOpenTaskFinished"
+      ? ticketsAwaitingClosure.slice(0, 100).map(toTicketSample)
+      : params.issue === "ticketOpenTaskWithoutDelivery"
+      ? ticketsFinishedWithoutDelivery.slice(0, 100).map(toTicketSample)
+      : params.issue === "ticketClosedTaskOpen"
+      ? closedTicketsWithActiveTask.slice(0, 100).map(toTicketSample)
+      : params.issue === "clientMismatch"
+      ? clientMismatches.slice(0, 100).map(toTicketSample)
       : params.issue === "danglingTaskTickets"
       ? danglingTickets.slice(0, 50).map((ticket) => ({
           id: ticket.id,
@@ -400,10 +472,18 @@ export class WorkspaceService {
     return {
       summary: {
         withoutTicket, withoutClient, withoutModule, withoutOwner,
-        completedWithoutVersion,
+        completedWithoutVersion: ticketsFinishedWithoutDelivery.length,
         danglingTaskTickets: danglingTickets.length,
         duplicatedMovideskLinks: duplicates.length,
         ticketOpenTaskFinished: ticketsAwaitingClosure.length,
+        ticketOpenTaskWithoutDelivery: ticketsFinishedWithoutDelivery.length,
+        ticketClosedTaskOpen: closedTicketsWithActiveTask.length,
+        clientMismatch: clientMismatches.length,
+        supportLinkDivergence: supportDivergences.length,
+        activeTaskWithVersion: scopedTickets.filter((ticket) =>
+          Boolean(ticket.deliveredVersion?.trim()) &&
+          Boolean(findLinkedTask(ticket, activeLinkedTasks)),
+        ).length,
       },
       samples,
       filters: {

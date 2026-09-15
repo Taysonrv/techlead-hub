@@ -51,6 +51,24 @@ export const aliareColors = {
 
   info:
     "#2F6FED",
+
+  purple:
+    "#7C3AED",
+
+  cyan:
+    "#0891B2",
+
+  surfaceBlue:
+    "#EFF6FF",
+
+  surfaceGreen:
+    "#ECFDF5",
+
+  surfaceAmber:
+    "#FFFBEB",
+
+  surfaceRed:
+    "#FEF2F2",
 } as const;
 
 /* =========================================================
@@ -187,6 +205,12 @@ export const theme =
 
             backgroundColor:
               aliareColors.background,
+
+            backgroundImage:
+              "radial-gradient(circle at 92% 0%, rgba(24,199,122,.075), transparent 28%), linear-gradient(180deg, #F8FAFB 0%, #F3F5F6 100%)",
+
+            backgroundAttachment:
+              "fixed",
           },
 
           "*": {
@@ -305,6 +329,34 @@ export const theme =
             fontWeight:
               650,
           },
+        },
+      },
+
+      MuiTableHead: {
+        styleOverrides: {
+          root: {
+            backgroundColor: aliareColors.graphite,
+            "& .MuiTableCell-head": {
+              color: "#FFFFFF",
+              fontWeight: 800,
+              borderBottomColor: aliareColors.graphite,
+            },
+          },
+        },
+      },
+
+      MuiTableRow: {
+        styleOverrides: {
+          root: {
+            "&:nth-of-type(even)": { backgroundColor: "rgba(15, 23, 42, .018)" },
+            "&:hover": { backgroundColor: "rgba(24, 199, 122, .055)" },
+          },
+        },
+      },
+
+      MuiAlert: {
+        styleOverrides: {
+          root: { borderRadius: 12, border: `1px solid ${aliareColors.border}` },
         },
       },
 

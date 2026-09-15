@@ -124,6 +124,7 @@ type AzureWorkItem = {
   movideskTicket: number | null;
   participantMovideskTickets?: string | number[] | null;
   deliveredVersion: string | null;
+  registeredVersion?: string | null;
   prioritized: NullableBoolean;
   blockedProcess: NullableBoolean;
   parentId?: number | null;
@@ -3718,7 +3719,7 @@ export function AzureWorkItems({
                     setDeliveredVersion(value ?? "");
                   }}
                   renderInput={(params) => (
-                    <TextField {...params} label="Versão" />
+                    <TextField {...params} label="Versão entregue" />
                   )}
                 />
 
@@ -4034,7 +4035,7 @@ export function AzureWorkItems({
                   <TableContainer sx={{ maxWidth: "100%", overflowX: "auto" }}>
                     <Table
                       size="small"
-                      sx={{ minWidth: 1740, tableLayout: "fixed" }}
+                      sx={{ minWidth: 1950, tableLayout: "fixed" }}
                     >
                       <TableHead>
                         <TableRow>
@@ -4066,8 +4067,12 @@ export function AzureWorkItems({
                             Módulo
                           </TableCell>
 
-                          <TableCell sx={{ width: 230, minWidth: 230 }}>
-                            Versão
+                          <TableCell sx={{ width: 210, minWidth: 210 }}>
+                            Versão de cadastro
+                          </TableCell>
+
+                          <TableCell sx={{ width: 210, minWidth: 210 }}>
+                            Versão entregue
                           </TableCell>
 
                           <TableCell>
@@ -4240,19 +4245,17 @@ export function AzureWorkItems({
                               </TableCell>
 
                               <TableCell
-                                sx={{
-                                  width: 230,
-                                  minWidth: 230,
-                                  maxWidth: 230,
-                                  whiteSpace:
-                                    "nowrap",
-                                  overflow: "hidden",
-                                  textOverflow: "ellipsis",
-                                }}
+                                sx={{ width: 210, minWidth: 210, maxWidth: 210, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
+                                title={(item.registeredVersion) ?? undefined}
+                              >
+                                {item.registeredVersion ?? "-"}
+                              </TableCell>
+
+                              <TableCell
+                                sx={{ width: 210, minWidth: 210, maxWidth: 210, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
                                 title={item.deliveredVersion ?? undefined}
                               >
-                                {item.deliveredVersion ??
-                                  "-"}
+                                {item.deliveredVersion ?? "-"}
                               </TableCell>
 
                               <TableCell>
@@ -4672,12 +4675,15 @@ export function AzureWorkItems({
                     />
 
                     <DetailField
-                      label="Versão"
-                      value={
-                        normalizeText(
-                          selectedWorkItem.deliveredVersion,
-                        )
-                      }
+                      label="Versão de cadastro"
+                      value={normalizeText(
+                        selectedWorkItem.registeredVersion,
+                      )}
+                    />
+
+                    <DetailField
+                      label="Versão entregue"
+                      value={normalizeText(selectedWorkItem.deliveredVersion)}
                     />
 
                     <DetailField
