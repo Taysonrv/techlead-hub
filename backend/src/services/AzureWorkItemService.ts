@@ -734,6 +734,8 @@ export class AzureWorkItemService {
             true,
           movideskTicket:
             true,
+          participantMovideskTickets:
+            true,
           azureChangedAt:
             true,
           stateChangedAt:
@@ -742,6 +744,35 @@ export class AzureWorkItemService {
             true,
         },
       });
+
+    const ticketIds = new Set<number>();
+    items.forEach((item) => {
+      if (item.movideskTicket) ticketIds.add(item.movideskTicket);
+      this.participantTicketIds(item.participantMovideskTickets).forEach((id) => ticketIds.add(id));
+    });
+    const deliveryTickets = items.length
+      ? await prisma.ticket.findMany({
+          where: {
+            deliveredVersion: { not: null },
+            OR: [
+              { taskNumber: { in: items.map((item) => item.id) } },
+              { movideskId: { in: [...ticketIds] } },
+            ],
+          },
+          select: {
+            taskNumber: true,
+            movideskId: true,
+            deliveredVersion: true,
+          },
+        })
+      : [];
+    const deliveryByTask = new Map<number, string>();
+    const deliveryByTicket = new Map<number, string>();
+    deliveryTickets.forEach((ticket) => {
+      if (!ticket.deliveredVersion?.trim()) return;
+      if (ticket.taskNumber) deliveryByTask.set(ticket.taskNumber, ticket.deliveredVersion);
+      deliveryByTicket.set(ticket.movideskId, ticket.deliveredVersion);
+    });
 
     type VersionAccumulator = {
       version:
@@ -816,9 +847,13 @@ export class AzureWorkItemService {
     for (
       const item of items
     ) {
+      const linkedTicketVersions = [
+        ...(item.movideskTicket ? [deliveryByTicket.get(item.movideskTicket)] : []),
+        ...this.participantTicketIds(item.participantMovideskTickets).map((id) => deliveryByTicket.get(id)),
+      ].filter((value): value is string => Boolean(value));
       const version =
         this.normalizeVersion(
-          item.deliveredVersion,
+          deliveryByTask.get(item.id) ?? linkedTicketVersions[0] ?? null,
         );
 
       const key =
