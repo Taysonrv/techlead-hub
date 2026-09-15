@@ -68,6 +68,18 @@ export async function ensureApplicationSchema() {
   `);
 
   await prisma.$executeRawUnsafe(`
+    UPDATE "AzureWorkItem"
+    SET "registeredVersion" = "deliveredVersion"
+    WHERE "registeredVersion" IS NULL
+      AND "deliveredVersion" IS NOT NULL
+  `);
+
+  await prisma.$executeRawUnsafe(`
+    CREATE INDEX IF NOT EXISTS "AzureWorkItem_registeredVersion_idx"
+    ON "AzureWorkItem" ("registeredVersion")
+  `);
+
+  await prisma.$executeRawUnsafe(`
     CREATE INDEX IF NOT EXISTS "AzureWorkItem_participantClients_idx"
     ON "AzureWorkItem" ("participantClients")
   `);
