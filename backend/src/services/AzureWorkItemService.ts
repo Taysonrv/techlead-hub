@@ -152,17 +152,50 @@ export class AzureWorkItemService {
               pageSize,
           );
 
+    const relatedTickets = items.length
+      ? await prisma.ticket.findMany({
+          where: {
+            OR: [
+              { taskNumber: { in: items.map((item) => item.id) } },
+              {
+                movideskId: {
+                  in: items
+                    .flatMap((item) => item.movideskTicket ? [item.movideskTicket] : []),
+                },
+              },
+            ],
+          },
+          select: {
+            taskNumber: true,
+            movideskId: true,
+            deliveredVersion: true,
+          },
+        })
+      : [];
+
+    const versionByTask = new Map<number, string>();
+    const versionByTicket = new Map<number, string>();
+    relatedTickets.forEach((ticket) => {
+      if (!ticket.deliveredVersion?.trim()) return;
+      if (ticket.taskNumber) versionByTask.set(ticket.taskNumber, ticket.deliveredVersion);
+      versionByTicket.set(ticket.movideskId, ticket.deliveredVersion);
+    });
+
     return {
       page,
       pageSize,
       total,
       totalPages,
-      hasPreviousPage:
-        page > 1,
-      hasNextPage:
-        page <
-        totalPages,
-      items,
+      hasPreviousPage: page > 1,
+      hasNextPage: page < totalPages,
+      items: items.map((item) => ({
+        ...item,
+        registrationVersion: item.deliveredVersion,
+        deliveryVersion:
+          versionByTask.get(item.id) ??
+          (item.movideskTicket ? versionByTicket.get(item.movideskTicket) : undefined) ??
+          null,
+      })),
     };
   }
 
@@ -350,6 +383,8 @@ export class AzureWorkItemService {
 
       participantClients: this.stringLines(workItem.participantClients),
       participantMovideskTickets: this.participantTicketIds(workItem.participantMovideskTickets),
+      registrationVersion: workItem.deliveredVersion,
+      deliveryVersion: tickets.find((ticket) => Boolean(ticket.deliveredVersion?.trim()))?.deliveredVersion ?? null,
 
       relatedTicket:
         tickets[0] ??
@@ -2681,6 +2716,8 @@ export class AzureWorkItemService {
       movideskTicket:
         true,
       participantMovideskTickets:
+        true,
+      iterationPath:
         true,
       deliveredVersion:
         true,
