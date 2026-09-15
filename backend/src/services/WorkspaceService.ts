@@ -302,7 +302,7 @@ export class WorkspaceService {
         orderBy: [{ azureClosedAt: "desc" }, { azureChangedAt: "desc" }],
         select: {
           id: true, workItemType: true, title: true, state: true,
-          client: true, assignedToName: true, deliveredVersion: true,
+          client: true, participantClients: true, assignedToName: true, deliveredVersion: true,
           movideskTicket: true, participantMovideskTickets: true,
         },
       }),
@@ -379,8 +379,15 @@ export class WorkspaceService {
     });
     const clientMismatches = scopedTickets.flatMap((ticket) => {
       const task = findLinkedTask(ticket, linkedTasks);
-      if (!task?.client || !ticket.client || isSupportTask(task)) return [];
-      return !sameClient(task.client, ticket.client) ? [{ ticket, task }] : [];
+      if (!task || !ticket.client || isSupportTask(task)) return [];
+      const taskClients = [
+        ...(task.client ? [task.client] : []),
+        ...(task.participantClients?.split(/[;,\r\n]+/).map((value) => value.trim()).filter(Boolean) ?? []),
+      ];
+      if (!taskClients.length) return [];
+      return taskClients.some((taskClient) => sameClient(taskClient, ticket.client!))
+        ? []
+        : [{ ticket, task }];
     });
     const scopedTicketByMovidesk = new Map(scopedTickets.map((ticket) => [ticket.movideskId, ticket]));
     const supportDivergences = linkedTasks.filter((task) => {
@@ -465,7 +472,7 @@ export class WorkspaceService {
     return {
       summary: {
         withoutTicket, withoutClient, withoutModule, withoutOwner,
-        completedWithoutVersion,
+        completedWithoutVersion: ticketsFinishedWithoutDelivery.length,
         danglingTaskTickets: danglingTickets.length,
         duplicatedMovideskLinks: duplicates.length,
         ticketOpenTaskFinished: ticketsAwaitingClosure.length,
@@ -473,7 +480,10 @@ export class WorkspaceService {
         ticketClosedTaskOpen: closedTicketsWithActiveTask.length,
         clientMismatch: clientMismatches.length,
         supportLinkDivergence: supportDivergences.length,
-        activeTaskWithVersion: activeLinkedTasks.filter((item) => Boolean(item.deliveredVersion?.trim())).length,
+        activeTaskWithVersion: scopedTickets.filter((ticket) =>
+          Boolean(ticket.deliveredVersion?.trim()) &&
+          Boolean(findLinkedTask(ticket, activeLinkedTasks)),
+        ).length,
       },
       samples,
       filters: {
