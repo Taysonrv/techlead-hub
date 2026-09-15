@@ -63,7 +63,8 @@ export async function ensureApplicationSchema() {
   await prisma.$executeRawUnsafe(`
     ALTER TABLE "AzureWorkItem"
       ADD COLUMN IF NOT EXISTS "participantClients" TEXT,
-      ADD COLUMN IF NOT EXISTS "participantMovideskTickets" TEXT
+      ADD COLUMN IF NOT EXISTS "participantMovideskTickets" TEXT,
+      ADD COLUMN IF NOT EXISTS "registeredVersion" TEXT
   `);
 
   await prisma.$executeRawUnsafe(`
