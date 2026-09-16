@@ -4,13 +4,17 @@ import {
 } from "express";
 
 import { MovideskExcelImportService } from "../services/MovideskExcelImportService";
+import { MovideskJsonImportService } from "../services/MovideskJsonImportService";
 
 import type {
   AuthenticatedRequest,
 } from "../middlewares/authMiddleware";
 
-const service =
+const excelService =
   new MovideskExcelImportService();
+
+const jsonService =
+  new MovideskJsonImportService();
 
 export class ImportController {
   async tickets(
@@ -23,43 +27,36 @@ export class ImportController {
           .status(400)
           .json({
             error:
-              "Nenhum arquivo Excel foi enviado.",
+              "Nenhum arquivo do Movidesk foi enviado.",
           });
       }
 
-      const allowedMimeTypes =
-        [
-          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-          "application/vnd.ms-excel",
-          "application/octet-stream",
-        ];
+      const fileName =
+        req.file.originalname.toLowerCase();
+      const isExcel =
+        fileName.endsWith(".xlsx");
+      const isJson =
+        fileName.endsWith(".json");
 
-      const hasValidExtension =
-        req.file.originalname
-          .toLowerCase()
-          .endsWith(
-            ".xlsx"
-          );
-
-      if (
-        !hasValidExtension ||
-        !allowedMimeTypes.includes(
-          req.file.mimetype
-        )
-      ) {
+      if (!isExcel && !isJson) {
         return res
           .status(400)
           .json({
             error:
-              "Formato inválido. Envie um arquivo .xlsx.",
+              "Formato inválido. Envie um arquivo .xlsx ou .json do Movidesk.",
           });
       }
 
       const authenticatedRequest =
         req as AuthenticatedRequest;
 
+      const importer =
+        isJson
+          ? jsonService
+          : excelService;
+
       const result =
-        await service.execute(
+        await importer.execute(
           req.file.buffer,
           {
             fileName:
@@ -79,7 +76,7 @@ export class ImportController {
       });
     } catch (error) {
       console.error(
-        "Erro na importação do Excel:",
+        "Erro na importação do Movidesk:",
         error
       );
 
