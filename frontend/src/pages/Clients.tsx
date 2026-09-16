@@ -279,6 +279,9 @@ export function Clients() {
 
     document.body.classList.add("client-pdf-export");
     window.addEventListener("afterprint", cleanup);
+    // Os gráficos responsivos precisam recalcular as dimensões depois que
+    // a grade muda do dashboard para a página A4.
+    window.setTimeout(() => window.dispatchEvent(new Event("resize")), 120);
     window.setTimeout(() => {
       try {
         window.print();
@@ -286,7 +289,7 @@ export function Clients() {
         cleanup();
         setError("Não foi possível abrir a impressão desta tela.");
       }
-    }, 150);
+    }, 650);
   }
 
 
@@ -1333,7 +1336,11 @@ export function Clients() {
       <style>{`
         @media print {
           @page { size: A4 portrait; margin: 9mm; }
-          body.client-pdf-export { background: #fff !important; }
+          html, body.client-pdf-export {
+            background: #fff !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
           body.client-pdf-export .MuiDrawer-root,
           body.client-pdf-export #global-user-controls,
           body.client-pdf-export main > div:first-of-type,
@@ -1365,17 +1372,62 @@ export function Clients() {
             break-inside: avoid;
             box-shadow: none !important;
           }
+          body.client-pdf-export #client-export-content {
+            border: 0 !important;
+            border-radius: 0 !important;
+            color: #111827 !important;
+          }
+          body.client-pdf-export #client-export-content > .MuiBox-root:first-of-type {
+            min-height: 108px !important;
+            display: flex !important;
+            justify-content: center !important;
+            text-align: center !important;
+            background: #008a68 !important;
+            color: #fff !important;
+            border-radius: 12px !important;
+            margin-bottom: 12px !important;
+          }
+          body.client-pdf-export #client-export-content > .MuiBox-root:first-of-type .MuiStack-root {
+            width: 100% !important;
+            justify-content: center !important;
+          }
+          body.client-pdf-export #client-export-content > .MuiBox-root:first-of-type .MuiBox-root {
+            width: 100% !important;
+          }
           body.client-pdf-export .client-print-kpi-grid {
-            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+            grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
             gap: 8px !important;
           }
           body.client-pdf-export .client-print-section-grid {
-            grid-template-columns: 1fr !important;
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+            align-content: start !important;
             gap: 10px !important;
+          }
+          body.client-pdf-export .client-print-three > :last-child {
+            grid-column: 1 / -1 !important;
           }
           body.client-pdf-export .client-print-page {
             break-before: page;
             break-inside: avoid;
+            width: 100% !important;
+            min-height: 250mm !important;
+            padding-top: 4mm !important;
+          }
+          body.client-pdf-export .client-print-page .recharts-responsive-container {
+            width: 100% !important;
+            min-width: 0 !important;
+          }
+          body.client-pdf-export .client-print-page svg {
+            max-width: 100% !important;
+            overflow: visible !important;
+          }
+          body.client-pdf-export .client-print-page-title {
+            grid-column: 1 / -1 !important;
+            text-align: center !important;
+            margin: 0 0 8px !important;
+          }
+          body.client-pdf-export .client-print-conclusion {
+            grid-column: 1 / -1 !important;
           }
         }
       `}</style>
@@ -1973,7 +2025,7 @@ export function Clients() {
                 </Typography>
               </Box>
               <Stack className="presentation-actions" direction="row" spacing={1} sx={{ alignItems: "center" }}>
-                {isPresenting && <Typography variant="body2" sx={{ mr: 1, fontWeight: 800 }}>Página {presentationPage + 1} de 4</Typography>}
+                {isPresenting && <Typography variant="body2" sx={{ mr: 1, fontWeight: 800 }}>Página {presentationPage + 1} de 5</Typography>}
                 {!isPresenting && <Button variant="outlined" color="inherit" startIcon={<PictureAsPdfOutlined />} disabled={exportingPresentation} onClick={() => void exportClientPresentation()} sx={{ color: "white", borderColor: "rgba(255,255,255,.65)", "&:hover": { borderColor: "white", bgcolor: "rgba(255,255,255,.10)" } }}>
                   {exportingPresentation ? "Gerando PDF..." : "Exportar PDF"}
                 </Button>}
@@ -1987,12 +2039,13 @@ export function Clients() {
           <CardContent sx={{ p: { xs: 1.5, md: isPresenting ? 3 : 2 }, flex: isPresenting ? 1 : undefined, overflow: isPresenting ? "hidden" : undefined, display: "flex", flexDirection: "column" }}>
             {(!isPresenting || presentationPage === 0) && <Box sx={{ height: isPresenting ? "100%" : "auto", display: "flex", flexDirection: "column", justifyContent: isPresenting ? "center" : undefined }}>
               <Typography variant="h5" sx={{ fontWeight: 900, mb: 2 }}>Resumo executivo</Typography>
-              <Box className="client-print-kpi-grid" sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2,1fr)", lg: "repeat(5,minmax(0,1fr))" }, gap: 1.25, mb: 2 }}>
+              <Box className="client-print-kpi-grid" sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2,1fr)", lg: "repeat(6,minmax(0,1fr))" }, gap: 1.25, mb: 2 }}>
                 <PresentationKpi title="Atendimentos" value={scopedTickets.length} detail="no período" color="#075985" onClick={() => showTickets("Atendimentos no foco", scopedTickets)} />
                 <PresentationKpi title="Bugs" value={presentationSummary.bugs.length} detail={`${presentationSummary.bugs.filter((ticket) => ticket.azureWorkItem || ticket.taskNumber).length} com Task`} color="#008A68" onClick={() => showTickets("Bugs identificados", presentationSummary.bugs)} />
                 <PresentationKpi title="Com Task" value={presentationSummary.withTask.length} detail="correção, evolução ou apoio" color="#2676B9" onClick={() => showTickets("Atendimentos com Task", presentationSummary.withTask)} />
                 <PresentationKpi title="Pendências" value={presentationSummary.pending.length} detail="em acompanhamento" color="#B7791F" onClick={() => showTickets("Pendências ativas", presentationSummary.pending)} />
                 <PresentationKpi title="SLA solução" value={formatSlaPercent(portfolioSummary.solutionSla.percent)} detail={`${portfolioSummary.solutionSla.onTime} de ${portfolioSummary.solutionSla.measured} medidos`} color="#159A68" onClick={() => showTickets("SLA solução", scopedTickets.filter((ticket) => Boolean(normalize(ticket.solutionSlaIndicator))))} />
+                <PresentationKpi title="Tempo médio de solução" value={formatMinutes(clients.find((item) => item.client === selectedClient)?.averageResolutionMinutes ?? null)} detail={`${clients.find((item) => item.client === selectedClient)?.measuredResolutionTimes ?? 0} atendimento(s) medido(s)`} color="#7C3AED" onClick={() => showTickets("Atendimentos com tempo de solução", scopedTickets.filter((ticket) => ticketResolutionMinutes(ticket) !== null))} />
               </Box>
               <Box sx={{ p: 2.25, border: "1px solid", borderColor: "divider", borderRadius: 2, bgcolor: "background.paper" }}>
                 <Typography sx={{ fontWeight: 850 }}>Principais insights</Typography>
@@ -2000,7 +2053,8 @@ export function Clients() {
               </Box>
             </Box>}
 
-            {(!isPresenting || presentationPage === 1) && <Box className="client-print-section-grid client-print-page" sx={{ mt: isPresenting ? 0 : 1.5, height: isPresenting ? "100%" : "auto", display: "grid", gridTemplateColumns: { xs: "1fr", lg: "repeat(3,minmax(0,1fr))" }, gap: 2 }}>
+            {(!isPresenting || presentationPage === 1) && <Box className="client-print-section-grid client-print-three client-print-page" sx={{ mt: isPresenting ? 0 : 1.5, height: isPresenting ? "100%" : "auto", display: "grid", gridTemplateColumns: { xs: "1fr", lg: "repeat(3,minmax(0,1fr))" }, gap: 2 }}>
+              <Typography className="client-print-page-title" variant="h5" sx={{ fontWeight: 900 }}>Demanda e recorrência</Typography>
               <ExecutiveBarPanel title="Atendimentos por processo" data={presentationSummary.areas} onClick={(name) => showTickets(`Processo: ${name}`, scopedTickets.filter((ticket) => classifyExecutiveProcess(ticket) === name))} />
               <ExecutiveBarPanel title="Bugs por processo" data={presentationSummary.bugAreas} onClick={(name) => showTickets(`Bugs · ${name}`, presentationSummary.bugs.filter((ticket) => classifyExecutiveProcess(ticket) === name))} />
               <Box sx={{ p: 2.25, border: "1px solid", borderColor: "divider", borderRadius: 2, bgcolor: "background.paper" }}>
@@ -2011,7 +2065,8 @@ export function Clients() {
             </Box>}
 
             {(!isPresenting || presentationPage === 2) && <Box className="client-print-section-grid client-print-page" sx={{ mt: isPresenting ? 0 : 1.5, height: isPresenting ? "100%" : "auto", display: "grid", gridTemplateColumns: { xs: "1fr", lg: "repeat(2,minmax(0,1fr))" }, gap: 2 }}>
-              <ExecutiveDonutPanel title="Status das Tasks" data={presentationSummary.taskStatuses} total={presentationSummary.taskItems.length} />
+              <Typography className="client-print-page-title" variant="h5" sx={{ fontWeight: 900 }}>Entregas e desenvolvimento</Typography>
+              <ExecutiveDonutPanel title="Status das Tarefas" data={presentationSummary.taskStatuses} total={presentationSummary.taskItems.length} />
               <Box sx={{ p: 2.25, border: "1px solid", borderColor: "divider", borderRadius: 2, bgcolor: "background.paper" }}>
                 <Typography variant="h6" sx={{ fontWeight: 900 }}>Leitura das entregas</Typography>
                 <Typography sx={{ mt: 1.5, lineHeight: 1.65 }}>{presentationSummary.taskItems.length} Task(s) relacionadas ao cliente, sendo {portfolioSummary.azureWithVersion} com versão informada, {portfolioSummary.azurePrioritized} priorizada(s) e {portfolioSummary.azureBlocked} com processo bloqueado.</Typography>
@@ -2019,6 +2074,7 @@ export function Clients() {
             </Box>}
 
             {(!isPresenting || presentationPage === 3) && <Box className="client-print-section-grid client-print-page" sx={{ mt: isPresenting ? 0 : 1.5, height: isPresenting ? "100%" : "auto", display: "grid", gridTemplateColumns: { xs: "1fr", lg: "repeat(2,minmax(0,1fr))" }, gap: 2 }}>
+              <Typography className="client-print-page-title" variant="h5" sx={{ fontWeight: 900 }}>Pendências e encaminhamentos</Typography>
               <ExecutiveDonutPanel title="Status das pendências" data={presentationSummary.pendingStatuses} total={presentationSummary.pending.length} />
               <Box sx={{ p: 2.25, borderRadius: 2, bgcolor: presentationSummary.pending.length ? "rgba(245,158,11,.10)" : "rgba(22,163,74,.08)", border: "1px solid", borderColor: presentationSummary.pending.length ? "rgba(245,158,11,.28)" : "rgba(22,163,74,.22)" }}>
                 <Typography variant="h6" sx={{ fontWeight: 900 }}>Pontos de atenção e encaminhamento</Typography>
@@ -2026,10 +2082,33 @@ export function Clients() {
               </Box>
             </Box>}
 
+            {(!isPresenting || presentationPage === 4) && <Box className="client-print-section-grid client-print-page" sx={{ mt: isPresenting ? 0 : 1.5, height: isPresenting ? "100%" : "auto", display: "grid", gridTemplateColumns: "1fr", gap: 2 }}>
+              <Typography className="client-print-page-title" variant="h5" sx={{ fontWeight: 900 }}>Conclusão executiva</Typography>
+              <Box className="client-print-conclusion" sx={{ p: 3, border: "1px solid", borderColor: "divider", borderRadius: 2, bgcolor: "background.paper" }}>
+                <Typography variant="h6" sx={{ fontWeight: 900, color: aliareColors.greenDark }}>Resumo do período</Typography>
+                <Typography sx={{ mt: 1.5, lineHeight: 1.75 }}>
+                  Foram analisados {scopedTickets.length} atendimento(s) de {selectedClient}, com taxa de resolução de {portfolioSummary.resolutionRate.toFixed(1)}%, SLA de solução de {formatSlaPercent(portfolioSummary.solutionSla.percent)} e tempo médio de solução de {formatMinutes(clients.find((item) => item.client === selectedClient)?.averageResolutionMinutes ?? null)}.
+                </Typography>
+                <Typography sx={{ mt: 1.5, lineHeight: 1.75 }}>
+                  O recorte possui {presentationSummary.pending.length} pendência(s), {presentationSummary.bugs.length} bug(s) e {presentationSummary.taskItems.length} Tarefa(s) relacionada(s). O processo mais recorrente é {presentationSummary.areas[0]?.name ?? "não identificado"}, com {presentationSummary.areas[0]?.value ?? 0} ocorrência(s).
+                </Typography>
+                <Typography variant="h6" sx={{ mt: 3, fontWeight: 900 }}>Recomendação</Typography>
+                <Typography sx={{ mt: 1, lineHeight: 1.75 }}>
+                  {presentationSummary.pending.length
+                    ? "Priorizar a revisão das pendências, acompanhar as entregas com versão informada e atuar preventivamente nos processos de maior recorrência."
+                    : "Manter o acompanhamento periódico da carteira e preservar as práticas que sustentam o resultado atual."}
+                </Typography>
+              </Box>
+              <Box className="client-print-conclusion" sx={{ p: 2.5, borderRadius: 2, bgcolor: "rgba(0,138,104,.08)", border: "1px solid rgba(0,138,104,.25)" }}>
+                <Typography sx={{ fontWeight: 850 }}>Leitura para a direção</Typography>
+                <Stack spacing={1} sx={{ mt: 1.25 }}>{executiveInsights.slice(0, 5).map((item) => <Typography key={item} sx={{ lineHeight: 1.55 }}>• {item}</Typography>)}</Stack>
+              </Box>
+            </Box>}
+
             {isPresenting && <Stack className="presentation-actions" direction="row" spacing={1.5} sx={{ mt: "auto", pt: 2, justifyContent: "space-between", alignItems: "center" }}>
               <Button variant="outlined" color="inherit" startIcon={<ArrowBackOutlined />} disabled={presentationPage === 0} onClick={() => setPresentationPage((page) => Math.max(0, page - 1))}>Anterior</Button>
-              <Stack direction="row" spacing={0.75}>{[0, 1, 2, 3].map((page) => <Box key={page} onClick={() => setPresentationPage(page)} sx={{ width: page === presentationPage ? 28 : 9, height: 9, borderRadius: 5, bgcolor: page === presentationPage ? aliareColors.green : "divider", cursor: "pointer", transition: "all .2s" }} />)}</Stack>
-              <Button variant="contained" endIcon={<ArrowForwardOutlined />} disabled={presentationPage === 3} onClick={() => setPresentationPage((page) => Math.min(3, page + 1))}>Próxima</Button>
+              <Stack direction="row" spacing={0.75}>{[0, 1, 2, 3, 4].map((page) => <Box key={page} onClick={() => setPresentationPage(page)} sx={{ width: page === presentationPage ? 28 : 9, height: 9, borderRadius: 5, bgcolor: page === presentationPage ? aliareColors.green : "divider", cursor: "pointer", transition: "all .2s" }} />)}</Stack>
+              <Button variant="contained" endIcon={<ArrowForwardOutlined />} disabled={presentationPage === 4} onClick={() => setPresentationPage((page) => Math.min(4, page + 1))}>Próxima</Button>
             </Stack>}
           </CardContent>
         </Card>
