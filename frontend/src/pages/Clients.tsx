@@ -30,7 +30,11 @@ import {
 } from "@mui/material";
 
 import {
+  ArrowBackOutlined,
+  ArrowForwardOutlined,
+  FullscreenExitOutlined,
   InfoOutlined,
+  PictureAsPdfOutlined,
 } from "@mui/icons-material";
 
 import {
@@ -196,6 +200,9 @@ const STATUS_COLORS: Record<
 export function Clients() {
   const navigate = useNavigate();
   const presentationRef = useRef<HTMLDivElement>(null);
+  const [presentationPage, setPresentationPage] = useState(0);
+  const [isPresenting, setIsPresenting] = useState(false);
+  const [exportingPresentation, setExportingPresentation] = useState(false);
 
   const [tickets, setTickets] =
     useState<Ticket[]>([]);
@@ -243,6 +250,48 @@ export function Clients() {
     effectiveStartDate,
     effectiveEndDate,
   } = useFilters();
+
+  useEffect(() => {
+    const handleFullscreen = () => {
+      const active = document.fullscreenElement === presentationRef.current;
+      setIsPresenting(active);
+      if (!active) setPresentationPage(0);
+    };
+    document.addEventListener("fullscreenchange", handleFullscreen);
+    return () => document.removeEventListener("fullscreenchange", handleFullscreen);
+  }, []);
+
+  async function startPresentation() {
+    setPresentationPage(0);
+    await presentationRef.current?.requestFullscreen?.();
+  }
+
+  async function exportClientPresentation() {
+    if (exportingPresentation) return;
+    setExportingPresentation(true);
+    setError(null);
+
+    const cleanup = () => {
+      document.body.classList.remove("client-pdf-export");
+      setExportingPresentation(false);
+      window.removeEventListener("afterprint", cleanup);
+    };
+
+    document.body.classList.add("client-pdf-export");
+    window.addEventListener("afterprint", cleanup);
+    // Os gráficos responsivos precisam recalcular as dimensões depois que
+    // a grade muda do dashboard para a página A4.
+    window.setTimeout(() => window.dispatchEvent(new Event("resize")), 120);
+    window.setTimeout(() => {
+      try {
+        window.print();
+      } catch {
+        cleanup();
+        setError("Não foi possível abrir a impressão desta tela.");
+      }
+    }, 650);
+  }
+
 
   /* =======================================================
      CARREGAMENTO
@@ -1284,6 +1333,105 @@ export function Clients() {
 
   return (
     <>
+      <style>{`
+        @media print {
+          @page { size: A4 portrait; margin: 9mm; }
+          html, body.client-pdf-export {
+            background: #fff !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          body.client-pdf-export .MuiDrawer-root,
+          body.client-pdf-export #global-user-controls,
+          body.client-pdf-export main > div:first-of-type,
+          body.client-pdf-export .presentation-actions,
+          body.client-pdf-export .client-print-hidden {
+            display: none !important;
+          }
+          body.client-pdf-export main > div:last-child > :not(#client-export-content) {
+            display: none !important;
+          }
+          body.client-pdf-export #client-export-content {
+            display: block !important;
+            width: 100% !important;
+            margin: 0 !important;
+          }
+          body.client-pdf-export main {
+            padding: 0 !important;
+            margin: 0 !important;
+            min-height: auto !important;
+            overflow: visible !important;
+            background: #fff !important;
+          }
+          body.client-pdf-export main > div:last-child {
+            width: 100% !important;
+            max-width: none !important;
+          }
+          body.client-pdf-export .MuiCard-root,
+          body.client-pdf-export .MuiPaper-root {
+            break-inside: avoid;
+            box-shadow: none !important;
+          }
+          body.client-pdf-export #client-export-content {
+            border: 0 !important;
+            border-radius: 0 !important;
+            color: #111827 !important;
+          }
+          body.client-pdf-export #client-export-content > .MuiBox-root:first-of-type {
+            min-height: 108px !important;
+            display: flex !important;
+            justify-content: center !important;
+            text-align: center !important;
+            background: #d1fae5 !important;
+            color: #064e3b !important;
+            border-radius: 12px !important;
+            margin-bottom: 12px !important;
+          }
+          body.client-pdf-export #client-export-content > .MuiBox-root:first-of-type .MuiStack-root {
+            width: 100% !important;
+            justify-content: center !important;
+          }
+          body.client-pdf-export #client-export-content > .MuiBox-root:first-of-type .MuiBox-root {
+            width: 100% !important;
+          }
+          body.client-pdf-export .client-print-kpi-grid {
+            grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+            gap: 8px !important;
+          }
+          body.client-pdf-export .client-print-section-grid {
+            grid-template-columns: 1fr !important;
+            align-content: start !important;
+            gap: 10px !important;
+          }
+          body.client-pdf-export .client-print-page {
+            break-before: page;
+            break-inside: avoid;
+            width: 100% !important;
+            min-height: 0 !important;
+            padding-top: 3mm !important;
+          }
+          body.client-pdf-export .client-print-page .recharts-responsive-container {
+            width: 100% !important;
+            min-width: 0 !important;
+          }
+          body.client-pdf-export .client-print-page svg {
+            max-width: 100% !important;
+            overflow: visible !important;
+          }
+          body.client-pdf-export .client-print-page-title {
+            grid-column: 1 / -1 !important;
+            text-align: center !important;
+            margin: 0 0 8px !important;
+          }
+          body.client-pdf-export .client-print-conclusion {
+            grid-column: 1 / -1 !important;
+          }
+          body.client-pdf-export .client-print-continuation {
+            break-before: auto !important;
+            padding-top: 0 !important;
+          }
+        }
+      `}</style>
       {/* =================================================
           CABEÇALHO
       ================================================= */}
@@ -1792,7 +1940,7 @@ export function Clients() {
             <Chip size="small" variant="outlined" label={selectedClient || `${summary.totalClients} cliente(s) na carteira`} />
           </Stack>
 
-          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2, 1fr)", lg: "repeat(4, 1fr)" }, gap: 1.25 }}>
+          <Box className="client-print-kpi-grid" sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2, 1fr)", lg: "repeat(4, 1fr)" }, gap: 1.25 }}>
             <ExecutiveMetric
               title="Taxa de resolução"
               value={`${portfolioSummary.resolutionRate}%`}
@@ -1867,53 +2015,102 @@ export function Clients() {
 
       {/* PAINEL PARA APRESENTAÇÃO AO CLIENTE */}
       {selectedClient && (
-        <Card ref={presentationRef} elevation={0} sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2.25, mb: 2, overflow: "hidden", bgcolor: "background.default", "&:fullscreen": { position: "fixed", inset: 0, width: "100vw", height: "100vh", maxWidth: "none", overflowY: "auto", borderRadius: 0, m: 0, p: { xs: 0, md: 1.5 }, zIndex: 99999 } }}>
-          <Box sx={{ px: { xs: 2, md: 2.5 }, py: 2, color: "white", background: `linear-gradient(110deg, ${aliareColors.greenDark}, ${aliareColors.green})` }}>
+        <Card id="client-export-content" ref={presentationRef} elevation={0} sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2.25, mb: 2, overflow: "hidden", bgcolor: "background.default", "@media print": { breakInside: "avoid", "& .presentation-actions": { display: "none !important" } }, "&:fullscreen": { position: "fixed", inset: 0, width: "100vw", height: "100vh", maxWidth: "none", borderRadius: 0, m: 0, zIndex: 99999, display: "flex", flexDirection: "column" } }}>
+          <Box sx={{ px: { xs: 2, md: 3 }, py: 2, color: "white", background: `linear-gradient(110deg, ${aliareColors.greenDark}, ${aliareColors.green})` }}>
             <Stack direction={{ xs: "column", md: "row" }} spacing={1.5} sx={{ alignItems: { md: "center" }, justifyContent: "space-between" }}>
               <Box>
                 <Typography variant="overline" sx={{ opacity: .85, fontWeight: 800 }}>Suporte e Sustentação</Typography>
-                <Typography sx={{ fontSize: { xs: "1.35rem", md: "1.7rem" }, fontWeight: 900, lineHeight: 1.15 }}>{selectedClient}</Typography>
+                <Typography sx={{ fontSize: { xs: "1.35rem", md: isPresenting ? "2.15rem" : "1.7rem" }, fontWeight: 900, lineHeight: 1.15 }}>{selectedClient}</Typography>
                 <Typography variant="body2" sx={{ opacity: .9, mt: .5 }}>
                   {executiveArea || "Todas as frentes"} · {effectiveStartDate.toLocaleDateString("pt-BR")} a {effectiveEndDate.toLocaleDateString("pt-BR")}
                 </Typography>
               </Box>
-              <Button variant="contained" color="inherit" onClick={() => presentationRef.current?.requestFullscreen?.()} sx={{ color: aliareColors.greenDark, fontWeight: 800 }}>
-                Apresentar em tela cheia
-              </Button>
+              <Stack className="presentation-actions" direction="row" spacing={1} sx={{ alignItems: "center" }}>
+                {isPresenting && <Typography variant="body2" sx={{ mr: 1, fontWeight: 800 }}>Página {presentationPage + 1} de 5</Typography>}
+                {!isPresenting && <Button variant="outlined" color="inherit" startIcon={<PictureAsPdfOutlined />} disabled={exportingPresentation} onClick={() => void exportClientPresentation()} sx={{ color: "white", borderColor: "rgba(255,255,255,.65)", "&:hover": { borderColor: "white", bgcolor: "rgba(255,255,255,.10)" } }}>
+                  {exportingPresentation ? "Gerando PDF..." : "Exportar PDF"}
+                </Button>}
+                <Button variant="contained" color="inherit" onClick={isPresenting ? () => void document.exitFullscreen() : () => void startPresentation()} startIcon={isPresenting ? <FullscreenExitOutlined /> : undefined} sx={{ color: aliareColors.greenDark, fontWeight: 800 }}>
+                  {isPresenting ? "Sair da apresentação" : "Apresentar em tela cheia"}
+                </Button>
+              </Stack>
             </Stack>
           </Box>
 
-          <CardContent sx={{ p: { xs: 1.5, md: 2 } }}>
-            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2,1fr)", lg: "repeat(5,minmax(0,1fr))" }, gap: 1.25, mb: 2 }}>
-              <PresentationKpi title="Atendimentos" value={scopedTickets.length} detail="no período" color="#075985" onClick={() => showTickets("Atendimentos no foco", scopedTickets)} />
-              <PresentationKpi title="Bugs" value={presentationSummary.bugs.length} detail={`${presentationSummary.bugs.filter((ticket) => ticket.azureWorkItem || ticket.taskNumber).length} com Task`} color="#008A68" onClick={() => showTickets("Bugs identificados", presentationSummary.bugs)} />
-              <PresentationKpi title="Com Task" value={presentationSummary.withTask.length} detail="correção, evolução ou apoio" color="#2676B9" onClick={() => showTickets("Atendimentos com Task", presentationSummary.withTask)} />
-              <PresentationKpi title="Pendências" value={presentationSummary.pending.length} detail="em acompanhamento" color="#B7791F" onClick={() => showTickets("Pendências ativas", presentationSummary.pending)} />
-              <PresentationKpi title="SLA solução" value={formatSlaPercent(portfolioSummary.solutionSla.percent)} detail={`${portfolioSummary.solutionSla.onTime} de ${portfolioSummary.solutionSla.measured} medidos`} color="#159A68" onClick={() => showTickets("SLA solução", scopedTickets.filter((ticket) => Boolean(normalize(ticket.solutionSlaIndicator))))} />
-            </Box>
-
-            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "repeat(3,minmax(0,1fr))" }, gap: 1.5 }}>
-              <ExecutiveBarPanel title="Atendimentos por processo" data={presentationSummary.areas} onClick={(name) => showTickets(`Processo: ${name}`, scopedTickets.filter((ticket) => classifyExecutiveProcess(ticket) === name))} />
-              <ExecutiveDonutPanel title="Status das Tasks" data={presentationSummary.taskStatuses} total={presentationSummary.taskItems.length} />
-              <ExecutiveDonutPanel title="Status das pendências" data={presentationSummary.pendingStatuses} total={presentationSummary.pending.length} />
-              <ExecutiveBarPanel title="Bugs por processo" data={presentationSummary.bugAreas} onClick={(name) => showTickets(`Bugs · ${name}`, presentationSummary.bugs.filter((ticket) => classifyExecutiveProcess(ticket) === name))} />
-
-              <Box sx={{ p: 1.75, border: "1px solid", borderColor: "divider", borderRadius: 2 }}>
-                <Typography sx={{ fontWeight: 850 }}>Principais insights</Typography>
-                <Stack spacing={1} sx={{ mt: 1.25 }}>
-                  {executiveInsights.slice(0, 4).map((item) => <Typography key={item} variant="body2" sx={{ lineHeight: 1.45 }}>• {item}</Typography>)}
-                </Stack>
+          <CardContent sx={{ p: { xs: 1.5, md: isPresenting ? 3 : 2 }, flex: isPresenting ? 1 : undefined, overflow: isPresenting ? "hidden" : undefined, display: "flex", flexDirection: "column" }}>
+            {(!isPresenting || presentationPage === 0) && <Box sx={{ height: isPresenting ? "100%" : "auto", display: "flex", flexDirection: "column", justifyContent: isPresenting ? "center" : undefined }}>
+              <Typography variant="h5" sx={{ fontWeight: 900, mb: 2 }}>Resumo executivo</Typography>
+              <Box className="client-print-kpi-grid" sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2,1fr)", lg: "repeat(6,minmax(0,1fr))" }, gap: 1.25, mb: 2 }}>
+                <PresentationKpi title="Atendimentos" value={scopedTickets.length} detail="no período" color="#075985" onClick={() => showTickets("Atendimentos no foco", scopedTickets)} />
+                <PresentationKpi title="Bugs" value={presentationSummary.bugs.length} detail={`${presentationSummary.bugs.filter((ticket) => ticket.azureWorkItem || ticket.taskNumber).length} com Task`} color="#008A68" onClick={() => showTickets("Bugs identificados", presentationSummary.bugs)} />
+                <PresentationKpi title="Com Task" value={presentationSummary.withTask.length} detail="correção, evolução ou apoio" color="#2676B9" onClick={() => showTickets("Atendimentos com Task", presentationSummary.withTask)} />
+                <PresentationKpi title="Pendências" value={presentationSummary.pending.length} detail="em acompanhamento" color="#B7791F" onClick={() => showTickets("Pendências ativas", presentationSummary.pending)} />
+                <PresentationKpi title="SLA solução" value={formatSlaPercent(portfolioSummary.solutionSla.percent)} detail={`${portfolioSummary.solutionSla.onTime} de ${portfolioSummary.solutionSla.measured} medidos`} color="#159A68" onClick={() => showTickets("SLA solução", scopedTickets.filter((ticket) => Boolean(normalize(ticket.solutionSlaIndicator))))} />
+                <PresentationKpi title="Tempo médio de solução" value={formatMinutes(clients.find((item) => item.client === selectedClient)?.averageResolutionMinutes ?? null)} detail={`${clients.find((item) => item.client === selectedClient)?.measuredResolutionTimes ?? 0} atendimento(s) medido(s)`} color="#7C3AED" onClick={() => showTickets("Atendimentos com tempo de solução", scopedTickets.filter((ticket) => ticketResolutionMinutes(ticket) !== null))} />
               </Box>
+              <Box sx={{ p: 2.25, border: "1px solid", borderColor: "divider", borderRadius: 2, bgcolor: "background.paper" }}>
+                <Typography sx={{ fontWeight: 850 }}>Principais insights</Typography>
+                <Stack spacing={1} sx={{ mt: 1.25 }}>{executiveInsights.slice(0, 5).map((item) => <Typography key={item} variant="body1" sx={{ lineHeight: 1.55 }}>• {item}</Typography>)}</Stack>
+              </Box>
+            </Box>}
 
-              <Box sx={{ p: 1.75, borderRadius: 2, bgcolor: presentationSummary.pending.length ? "rgba(245,158,11,.10)" : "rgba(22,163,74,.08)", border: "1px solid", borderColor: presentationSummary.pending.length ? "rgba(245,158,11,.28)" : "rgba(22,163,74,.22)" }}>
-                <Typography sx={{ fontWeight: 850 }}>Pontos de atenção</Typography>
-                <Typography variant="body2" sx={{ mt: 1, lineHeight: 1.5 }}>
+            {(!isPresenting || presentationPage === 1) && <Box className="client-print-section-grid client-print-page" sx={{ mt: isPresenting ? 0 : 1.5, height: isPresenting ? "100%" : "auto", display: "grid", gridTemplateColumns: "1fr", gap: 2 }}>
+              <Typography className="client-print-page-title" variant="h5" sx={{ fontWeight: 900 }}>Demanda e recorrência</Typography>
+              <ExecutiveBarPanel title="Atendimentos por processo" data={presentationSummary.areas} onClick={(name) => showTickets(`Processo: ${name}`, scopedTickets.filter((ticket) => classifyExecutiveProcess(ticket) === name))} />
+              <ExecutiveBarPanel title="Bugs por processo" data={presentationSummary.bugAreas} onClick={(name) => showTickets(`Bugs · ${name}`, presentationSummary.bugs.filter((ticket) => classifyExecutiveProcess(ticket) === name))} />
+              <Box sx={{ p: 2.25, border: "1px solid", borderColor: "divider", borderRadius: 2, bgcolor: "background.paper" }}>
+                <Typography variant="h6" sx={{ fontWeight: 900 }}>Leitura da demanda</Typography>
+                <Typography sx={{ mt: 1.5, lineHeight: 1.65 }}>O processo com maior volume é {presentationSummary.areas[0]?.name ?? "não identificado"}, com {presentationSummary.areas[0]?.value ?? 0} atendimento(s). Entre os bugs, {presentationSummary.bugAreas[0]?.name ?? "nenhum processo"} concentra {presentationSummary.bugAreas[0]?.value ?? 0} ocorrência(s).</Typography>
+                <Typography sx={{ mt: 1.25, lineHeight: 1.65, color: "text.secondary" }}>Direcionamento: avaliar causa raiz, recorrência, necessidade de treinamento e oportunidade de correção preventiva nos processos mais representativos.</Typography>
+              </Box>
+            </Box>}
+
+            {(!isPresenting || presentationPage === 2) && <Box className="client-print-section-grid client-print-page" sx={{ mt: isPresenting ? 0 : 1.5, height: isPresenting ? "100%" : "auto", display: "grid", gridTemplateColumns: "1fr", gap: 2 }}>
+              <Typography className="client-print-page-title" variant="h5" sx={{ fontWeight: 900 }}>Entregas e desenvolvimento</Typography>
+              <ExecutiveDonutPanel title="Status das Tarefas" data={presentationSummary.taskStatuses} total={presentationSummary.taskItems.length} />
+              <Box sx={{ p: 2.25, border: "1px solid", borderColor: "divider", borderRadius: 2, bgcolor: "background.paper" }}>
+                <Typography variant="h6" sx={{ fontWeight: 900 }}>Leitura das entregas</Typography>
+                <Typography sx={{ mt: 1.5, lineHeight: 1.65 }}>{presentationSummary.taskItems.length} Task(s) relacionadas ao cliente, sendo {portfolioSummary.azureWithVersion} com versão informada, {portfolioSummary.azurePrioritized} priorizada(s) e {portfolioSummary.azureBlocked} com processo bloqueado.</Typography>
+              </Box>
+            </Box>}
+
+            {(!isPresenting || presentationPage === 3) && <Box className="client-print-section-grid client-print-page client-print-continuation" sx={{ mt: isPresenting ? 0 : 1.5, height: isPresenting ? "100%" : "auto", display: "grid", gridTemplateColumns: "1fr", gap: 2 }}>
+              <Typography className="client-print-page-title" variant="h5" sx={{ fontWeight: 900 }}>Pendências e encaminhamentos</Typography>
+              <ExecutiveDonutPanel title="Status das pendências" data={presentationSummary.pendingStatuses} total={presentationSummary.pending.length} />
+              <Box sx={{ p: 2.25, borderRadius: 2, bgcolor: presentationSummary.pending.length ? "rgba(245,158,11,.10)" : "rgba(22,163,74,.08)", border: "1px solid", borderColor: presentationSummary.pending.length ? "rgba(245,158,11,.28)" : "rgba(22,163,74,.22)" }}>
+                <Typography variant="h6" sx={{ fontWeight: 900 }}>Pontos de atenção e encaminhamento</Typography>
+                <Typography sx={{ mt: 1.5, lineHeight: 1.65 }}>{presentationSummary.pending.length ? `${presentationSummary.pending.length} pendência(s) permanecem ativas. ${presentationSummary.bugs.filter(isOpen).length} são bugs e ${presentationSummary.pending.filter((ticket) => normalize(ticket.justification).includes("cliente")).length} aguardam ação ou retorno do cliente.` : "Não há pendências ativas no recorte selecionado."}</Typography>
+              </Box>
+            </Box>}
+
+            {(!isPresenting || presentationPage === 4) && <Box className="client-print-section-grid client-print-page" sx={{ mt: isPresenting ? 0 : 1.5, height: isPresenting ? "100%" : "auto", display: "grid", gridTemplateColumns: "1fr", gap: 2 }}>
+              <Typography className="client-print-page-title" variant="h5" sx={{ fontWeight: 900 }}>Conclusão executiva</Typography>
+              <Box className="client-print-conclusion" sx={{ p: 3, border: "1px solid", borderColor: "divider", borderRadius: 2, bgcolor: "background.paper" }}>
+                <Typography variant="h6" sx={{ fontWeight: 900, color: aliareColors.greenDark }}>Resumo do período</Typography>
+                <Typography sx={{ mt: 1.5, lineHeight: 1.75 }}>
+                  Foram analisados {scopedTickets.length} atendimento(s) de {selectedClient}, com taxa de resolução de {portfolioSummary.resolutionRate.toFixed(1)}%, SLA de solução de {formatSlaPercent(portfolioSummary.solutionSla.percent)} e tempo médio de solução de {formatMinutes(clients.find((item) => item.client === selectedClient)?.averageResolutionMinutes ?? null)}.
+                </Typography>
+                <Typography sx={{ mt: 1.5, lineHeight: 1.75 }}>
+                  O recorte possui {presentationSummary.pending.length} pendência(s), {presentationSummary.bugs.length} bug(s) e {presentationSummary.taskItems.length} Tarefa(s) relacionada(s). O processo mais recorrente é {presentationSummary.areas[0]?.name ?? "não identificado"}, com {presentationSummary.areas[0]?.value ?? 0} ocorrência(s).
+                </Typography>
+                <Typography variant="h6" sx={{ mt: 3, fontWeight: 900 }}>Recomendação</Typography>
+                <Typography sx={{ mt: 1, lineHeight: 1.75 }}>
                   {presentationSummary.pending.length
-                    ? `${presentationSummary.pending.length} pendência(s) permanecem ativas. ${presentationSummary.bugs.filter(isOpen).length} delas são bugs e ${presentationSummary.pending.filter((ticket) => normalize(ticket.justification).includes("cliente")).length} aguardam ação ou retorno do cliente.`
-                    : "Não há pendências ativas no recorte selecionado."}
+                    ? "Priorizar a revisão das pendências, acompanhar as entregas com versão informada e atuar preventivamente nos processos de maior recorrência."
+                    : "Manter o acompanhamento periódico da carteira e preservar as práticas que sustentam o resultado atual."}
                 </Typography>
               </Box>
-            </Box>
+              <Box className="client-print-conclusion" sx={{ p: 2.5, borderRadius: 2, bgcolor: "rgba(0,138,104,.08)", border: "1px solid rgba(0,138,104,.25)" }}>
+                <Typography sx={{ fontWeight: 850 }}>Leitura para a direção</Typography>
+                <Stack spacing={1} sx={{ mt: 1.25 }}>{executiveInsights.slice(0, 5).map((item) => <Typography key={item} sx={{ lineHeight: 1.55 }}>• {item}</Typography>)}</Stack>
+              </Box>
+            </Box>}
+
+            {isPresenting && <Stack className="presentation-actions" direction="row" spacing={1.5} sx={{ mt: "auto", pt: 2, justifyContent: "space-between", alignItems: "center" }}>
+              <Button variant="outlined" color="inherit" startIcon={<ArrowBackOutlined />} disabled={presentationPage === 0} onClick={() => setPresentationPage((page) => Math.max(0, page - 1))}>Anterior</Button>
+              <Stack direction="row" spacing={0.75}>{[0, 1, 2, 3, 4].map((page) => <Box key={page} onClick={() => setPresentationPage(page)} sx={{ width: page === presentationPage ? 28 : 9, height: 9, borderRadius: 5, bgcolor: page === presentationPage ? aliareColors.green : "divider", cursor: "pointer", transition: "all .2s" }} />)}</Stack>
+              <Button variant="contained" endIcon={<ArrowForwardOutlined />} disabled={presentationPage === 4} onClick={() => setPresentationPage((page) => Math.min(4, page + 1))}>Próxima</Button>
+            </Stack>}
           </CardContent>
         </Card>
       )}
@@ -3984,25 +4181,61 @@ function PresentationKpi({ title, value, detail, color, onClick }: {
 }
 
 function ExecutiveDonutPanel({ title, data, total }: { title: string; data: PieDataItem[]; total: number }) {
+  const safeTotal = Math.max(total, 0);
+  let accumulated = 0;
+  const segments = data.map((item, index) => {
+    const start = safeTotal > 0 ? (accumulated / safeTotal) * 100 : 0;
+    accumulated += item.value;
+    const end = safeTotal > 0 ? (accumulated / safeTotal) * 100 : 0;
+    return `${PIE_COLORS[index % PIE_COLORS.length]} ${start}% ${end}%`;
+  });
+  const chartBackground = segments.length
+    ? `conic-gradient(${segments.join(", ")})`
+    : "#e5e7eb";
+
   return (
-    <Box sx={{ p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: 2, minWidth: 0 }}>
+    <Box sx={{ p: 2, border: "1px solid", borderColor: "divider", borderRadius: 2, minWidth: 0, bgcolor: "background.paper" }}>
       <Typography sx={{ fontWeight: 850 }}>{title}</Typography>
-      {data.length ? <>
-        <Box sx={{ height: 175, position: "relative" }}>
-          <ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={data} dataKey="value" nameKey="name" innerRadius={42} outerRadius={67} paddingAngle={2}>{data.map((item, index) => <Cell key={item.name} fill={PIE_COLORS[index % PIE_COLORS.length]} />)}</Pie><Tooltip content={<CompactPieTooltip valueLabel="item(ns)" />} /></PieChart></ResponsiveContainer>
-          <Box sx={{ position: "absolute", inset: 0, display: "grid", placeContent: "center", textAlign: "center", pointerEvents: "none" }}><Typography sx={{ fontWeight: 900, fontSize: "1.25rem" }}>{total}</Typography><Typography variant="caption">total</Typography></Box>
+      {data.length ? (
+        <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: { xs: "1fr", md: "220px minmax(0,1fr)" }, gap: 2.5, alignItems: "center" }}>
+          <Box sx={{ width: 170, height: 170, mx: "auto", borderRadius: "50%", background: chartBackground, position: "relative", printColorAdjust: "exact", WebkitPrintColorAdjust: "exact" }}>
+            <Box sx={{ position: "absolute", inset: 28, borderRadius: "50%", bgcolor: "background.paper", display: "grid", placeContent: "center", textAlign: "center" }}>
+              <Typography sx={{ fontWeight: 900, fontSize: "1.35rem", lineHeight: 1 }}>{safeTotal}</Typography>
+              <Typography variant="caption">total</Typography>
+            </Box>
+          </Box>
+          <CompactPieLegend data={data} total={safeTotal} />
         </Box>
-        <CompactPieLegend data={data} total={total} />
-      </> : <Typography variant="body2" color="text.secondary" sx={{ py: 8, textAlign: "center" }}>Sem dados no recorte.</Typography>}
+      ) : (
+        <Typography variant="body2" color="text.secondary" sx={{ py: 4, textAlign: "center" }}>Sem dados no recorte.</Typography>
+      )}
     </Box>
   );
 }
 
 function ExecutiveBarPanel({ title, data, onClick }: { title: string; data: PieDataItem[]; onClick: (name: string) => void }) {
+  const maximum = Math.max(...data.map((item) => item.value), 1);
   return (
-    <Box sx={{ p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: 2, minWidth: 0 }}>
+    <Box sx={{ p: 2, border: "1px solid", borderColor: "divider", borderRadius: 2, minWidth: 0, bgcolor: "background.paper" }}>
       <Typography sx={{ fontWeight: 850 }}>{title}</Typography>
-      {data.length ? <Box sx={{ height: 255, mt: 1 }}><ResponsiveContainer width="100%" height="100%"><BarChart data={data} layout="vertical" margin={{ left: 8, right: 18 }}><CartesianGrid strokeDasharray="3 3" horizontal={false} /><XAxis type="number" allowDecimals={false} /><YAxis dataKey="name" type="category" width={115} tick={{ fontSize: 10 }} tickFormatter={(value) => abbreviate(String(value), 17)} /><Tooltip /><Bar dataKey="value" name="Tickets" fill={aliareColors.green} radius={[0, 5, 5, 0]} cursor="pointer" onClick={(data) => { const name = String((data as { name?: unknown }).name ?? ""); if (name && name !== "Outros") onClick(name); }} /></BarChart></ResponsiveContainer></Box> : <Typography variant="body2" color="text.secondary" sx={{ py: 8, textAlign: "center" }}>Sem dados no recorte.</Typography>}
+      {data.length ? (
+        <Stack spacing={0.8} sx={{ mt: 1.5 }}>
+          {data.map((item) => (
+            <Box key={item.name} role={item.name !== "Outros" ? "button" : undefined} tabIndex={item.name !== "Outros" ? 0 : undefined}
+              onClick={() => item.name !== "Outros" && onClick(item.name)}
+              onKeyDown={(event) => (event.key === "Enter" || event.key === " ") && item.name !== "Outros" && onClick(item.name)}
+              sx={{ display: "grid", gridTemplateColumns: { xs: "115px minmax(0,1fr) 30px", sm: "190px minmax(0,1fr) 38px" }, gap: 1, alignItems: "center", cursor: item.name !== "Outros" ? "pointer" : "default" }}>
+              <Typography variant="caption" title={item.name} sx={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textAlign: "right" }}>{item.name}</Typography>
+              <Box sx={{ height: 20, borderRadius: 1, bgcolor: "rgba(0,138,104,.10)", overflow: "hidden" }}>
+                <Box sx={{ width: `${Math.max((item.value / maximum) * 100, item.value > 0 ? 3 : 0)}%`, height: "100%", borderRadius: 1, bgcolor: aliareColors.green, printColorAdjust: "exact", WebkitPrintColorAdjust: "exact" }} />
+              </Box>
+              <Typography variant="caption" sx={{ fontWeight: 850, textAlign: "right" }}>{item.value}</Typography>
+            </Box>
+          ))}
+        </Stack>
+      ) : (
+        <Typography variant="body2" color="text.secondary" sx={{ py: 4, textAlign: "center" }}>Sem dados no recorte.</Typography>
+      )}
     </Box>
   );
 }
@@ -4367,19 +4600,29 @@ function classifyExecutiveProcess(ticket: Ticket) {
   const text = executiveClassificationText(ticket);
   const matches = (terms: string[]) => terms.some((term) => text.includes(term));
 
-  if (area === "Insumos") return "Insumos";
-  if (area === "Legislação") return "Legislação";
+  if (matches(["pedido de venda", "orcamento", "tabela de preco", "comissao", "vendedor", "faturamento de saida", "venda"])) return "Vendas e Faturamento";
+  if (matches(["cadastro de pessoa", "cadastro pessoa", "cliente", "fornecedor", "produto", "item", "filial", "usuario", "parametro", "configurador"])) return "Cadastros e Configurações";
+  if (matches(["relatorio", "painel", "dashboard", "analytics", "consulta", "impressao", "layout"])) return "Relatórios e Consultas";
+  if (matches(["integracao", "api", "webservice", "sincron", "importacao", "exportacao", "xml", "arquivo", "conector"])) return "Integrações e Importações";
+  if (matches(["permissao", "acesso", "perfil", "senha", "login", "seguranca", "autorizacao"])) return "Acessos e Segurança";
+  if (matches(["lentidao", "performance", "desempenho", "timeout", "servidor", "processamento", "erro 500"])) return "Desempenho e Infraestrutura";
+  if (area === "Insumos") return "Insumos e Receituário";
+  if (area === "Legislação") return "Legislação e Obrigações";
   if (area === "Verticais" && matches(["semente", "beneficiamento"])) return "Vertical - Sementes";
   if (area === "Verticais" && matches(["armazenagem", "armazem", "silo"])) return "Vertical - Armazém";
-  if (area === "Verticais" && matches(["romaneio", "pesagem", "classificacao"])) return "Vertical - Romaneios";
-  if (area === "Verticais" && matches(["contrato", "fixacao", "graos"])) return "Vertical - Contratos";
-  if (matches(["financeiro", "titulo", "boleto", "bordero", "bancario", "contas a pagar", "contas a receber", "acerto"])) return "Financeiro";
+  if (matches(["romaneio", "pesagem", "classificacao", "balanca"])) return "Recebimento e Romaneios";
+  if (matches(["financeiro", "titulo", "boleto", "bordero", "bancario", "contas a pagar", "contas a receber", "acerto", "caixa", "despesa"])) return "Financeiro";
   if (matches(["pedido de compra", "cotacao", "solicitacao de compra", "ordem de compra", "compras"])) return "Compras";
   if (matches(["faturamento de entrada", "importacao nf", "importador de nota", "nota de entrada", "nfe de terceiro"])) return "Faturamento de Entrada";
-  if (matches(["contrato", "fixacao", "graos", "ato cooperado", "saldo agricola"])) return "Contratos";
-  if (matches(["estoque", "lote"])) return "Estoque";
-  if (matches(["fiscal", "nf-e", "nfe", "mdf-e", "mdfe", "ct-e", "cte", "sefaz", "tribut"] )) return "Fiscal/Faturamento";
-  return "Outros temas";
+  if (matches(["contrato", "fixacao", "graos", "ato cooperado", "saldo agricola", "barter"])) return "Contratos e Grãos";
+  if (matches(["estoque", "lote", "saldo", "inventario", "movimentacao"])) return "Estoque";
+  if (matches(["fiscal", "nf-e", "nfe", "mdf-e", "mdfe", "ct-e", "cte", "sefaz", "tribut", "sped", "efd"])) return "Fiscal e Documentos Eletrônicos";
+  if (matches(["contabil", "contabilidade", "plano de contas", "lancamento contabil", "centro de custo"])) return "Contábil";
+  if (matches(["producao", "ordem de producao", "industrial", "formula", "beneficiamento"])) return "Produção";
+  if (ticket.service?.trim()) return `Serviço: ${ticket.service.trim()}`;
+  if (ticket.category?.trim()) return `Categoria: ${ticket.category.trim()}`;
+  if (ticket.department?.trim()) return `Área: ${ticket.department.trim()}`;
+  return "Processo não informado";
 }
 
 function executiveClassificationText(ticket: Ticket) {

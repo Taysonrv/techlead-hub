@@ -157,11 +157,8 @@ export class AzureWorkItemService {
       pageSize,
       total,
       totalPages,
-      hasPreviousPage:
-        page > 1,
-      hasNextPage:
-        page <
-        totalPages,
+      hasPreviousPage: page > 1,
+      hasNextPage: page < totalPages,
       items,
     };
   }
@@ -350,7 +347,6 @@ export class AzureWorkItemService {
 
       participantClients: this.stringLines(workItem.participantClients),
       participantMovideskTickets: this.participantTicketIds(workItem.participantMovideskTickets),
-
       relatedTicket:
         tickets[0] ??
         null,
@@ -698,6 +694,8 @@ export class AzureWorkItemService {
           blockedProcess:
             true,
           movideskTicket:
+            true,
+          participantMovideskTickets:
             true,
           azureChangedAt:
             true,
@@ -2682,6 +2680,10 @@ export class AzureWorkItemService {
         true,
       participantMovideskTickets:
         true,
+      iterationPath:
+        true,
+      registeredVersion:
+        true,
       deliveredVersion:
         true,
       prioritized:
@@ -2759,6 +2761,8 @@ export class AzureWorkItemService {
       movideskTicket:
         true,
       participantMovideskTickets:
+        true,
+      registeredVersion:
         true,
       deliveredVersion:
         true,
@@ -2903,6 +2907,8 @@ export class AzureWorkItemService {
       movideskTicket:
         true,
       participantMovideskTickets:
+        true,
+      registeredVersion:
         true,
       deliveredVersion:
         true,

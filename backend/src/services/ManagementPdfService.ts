@@ -16,6 +16,10 @@ import type {
   ReportScope,
 } from "./ExecutiveReportService";
 
+import {
+  buildManagementInsights,
+} from "./ManagementInsightService";
+
 type PdfOptions = {
   from: Date;
   to: Date;
@@ -33,6 +37,7 @@ type Section = {
   title: string;
   subtitle: string;
   data: Datum[];
+  notes?: string[];
 };
 
 const COLORS = [
@@ -71,6 +76,7 @@ export class ManagementPdfService {
       Prisma.AzureWorkItemWhereInput = {
       AND: [
         azureOperationalScope(),
+        { workItemType: { equals: "Correção Clientes", mode: "insensitive" } },
         {
           OR: [
             {
@@ -103,8 +109,7 @@ export class ManagementPdfService {
       ticketOpen,
       ticketResolved,
       ticketClosed,
-      slaMeasured,
-      slaMet,
+      slaTickets,
       analysts,
       clients,
       categories,
@@ -115,6 +120,7 @@ export class ManagementPdfService {
       blocked,
       states,
       versions,
+      ticketTimeline,
     ] =
       await Promise.all([
         prisma.user.findUnique({
@@ -149,6 +155,8 @@ export class ManagementPdfService {
               not:
                 null,
             },
+            closedDate:
+              null,
           },
         }),
         prisma.ticket.count({
@@ -160,24 +168,14 @@ export class ManagementPdfService {
             },
           },
         }),
-        prisma.ticket.count({
-          where: {
-            ...ticketWhere,
-            solutionSlaIndicator: {
-              not:
-                null,
-            },
-          },
-        }),
-        prisma.ticket.count({
-          where: {
-            ...ticketWhere,
-            solutionSlaIndicator: {
-              contains:
-                "Dentro",
-              mode:
-                "insensitive",
-            },
+        prisma.ticket.findMany({
+          where:
+            ticketWhere,
+          select: {
+            solutionSlaIndicator: true,
+            dueDate: true,
+            resolvedDate: true,
+            closedDate: true,
           },
         }),
         prisma.ticket.groupBy({
@@ -321,13 +319,90 @@ export class ManagementPdfService {
           take:
             15,
         }),
+        prisma.ticket.findMany({
+          where: ticketWhere,
+          select: { createdDate: true, resolvedDate: true, closedDate: true },
+          orderBy: { createdDate: "asc" },
+        }),
       ]);
+
+    const slaResults = slaTickets.map((ticket) => classifySolutionSla(
+      ticket.solutionSlaIndicator,
+      ticket.resolvedDate ?? ticket.closedDate,
+      ticket.dueDate,
+    ));
+    const slaMeasured = slaResults.filter((result) => result !== null).length;
+    const slaMet = slaResults.filter((result) => result === true).length;
+    const situationByMonth = new Map<string, { open: number; resolved: number; closed: number }>();
+    for (const ticket of ticketTimeline) {
+      const month = ticket.createdDate.toISOString().slice(0, 7);
+      const current = situationByMonth.get(month) ?? { open: 0, resolved: 0, closed: 0 };
+      if (ticket.closedDate) current.closed += 1;
+      else if (ticket.resolvedDate) current.resolved += 1;
+      else current.open += 1;
+      situationByMonth.set(month, current);
+    }
+    const situationNotes = [...situationByMonth.entries()]
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([month, values]) => `${month.split("-").reverse().join("/")}: ${values.open} em aberto, ${values.resolved} resolvidos e ${values.closed} fechados.`);
+
+    const managementInsights = buildManagementInsights({
+      ticketsTotal: ticketTotal,
+      ticketsOpen: ticketOpen,
+      ticketsResolved: ticketResolved,
+      ticketsClosed: ticketClosed,
+      slaMeasured,
+      slaMet,
+      corrections,
+      evolutions,
+      supports,
+      prioritized,
+      blocked,
+      topCategory: categories[0] ? {
+        label: categories[0].category ?? "Não informado",
+        total: categories[0]._count._all,
+      } : null,
+      topAnalyst: analysts[0] ? {
+        label: analysts[0].owner ?? "Não informado",
+        total: analysts[0]._count._all,
+      } : null,
+      topVersion: versions[0] ? {
+        label: versions[0].deliveredVersion ?? "Não informada",
+        total: versions[0]._count._all,
+      } : null,
+    });
 
     const all:
       Record<
         string,
         Section
       > = {
+      insights: {
+        title: "Leitura executiva",
+        subtitle: "Achados e recomendações produzidos a partir do recorte selecionado",
+        data: [],
+        notes: managementInsights.flatMap((item) => [
+          `${item.priority} | ${item.topic}: ${item.finding}`,
+          `Recomendação: ${item.recommendation}`,
+        ]),
+      },
+      clientHealth: {
+        title: options.filters?.client ? `Saúde do cliente · ${options.filters.client}` : "Saúde da carteira de clientes",
+        subtitle: "Resumo executivo de atendimento, SLA e desenvolvimento",
+        data: [
+          { label: "Atendimentos", value: ticketTotal },
+          { label: "Pendências", value: ticketOpen },
+          { label: "SLA no prazo", value: slaMet },
+          { label: "Correções", value: corrections },
+          { label: "Priorizados", value: prioritized },
+          { label: "Bloqueados", value: blocked },
+        ],
+        notes: [
+          `Taxa de resolução: ${ticketTotal > 0 ? (((ticketResolved + ticketClosed) / ticketTotal) * 100).toFixed(1) : "0.0"}%.`,
+          `SLA de solução: ${slaMeasured > 0 ? ((slaMet / slaMeasured) * 100).toFixed(1) : "0.0"}% (${slaMet} de ${slaMeasured} medidos).`,
+          ...managementInsights.slice(0, 3).map((item) => `${item.topic}: ${item.finding}`),
+        ],
+      },
       tickets: {
         title:
           "Atendimentos",
@@ -348,7 +423,7 @@ export class ManagementPdfService {
           },
           {
             label:
-              "Encerrados",
+              "Fechados",
             value:
               ticketClosed,
           },
@@ -374,16 +449,6 @@ export class ManagementPdfService {
                 0,
                 slaMeasured -
                   slaMet,
-              ),
-          },
-          {
-            label:
-              "Não medido",
-            value:
-              Math.max(
-                0,
-                ticketTotal -
-                  slaMeasured,
               ),
           },
         ],
@@ -447,27 +512,15 @@ export class ManagementPdfService {
       },
       development: {
         title:
-          "Desenvolvimento",
+          "Correções",
         subtitle:
-          "Correções, evoluções e apoios",
+          "Correções de suporte e sustentação; evoluções e apoios não compõem este relatório",
         data: [
           {
             label:
               "Correções",
             value:
               corrections,
-          },
-          {
-            label:
-              "Evoluções",
-            value:
-              evolutions,
-          },
-          {
-            label:
-              "Apoios",
-            value:
-              supports,
           },
           {
             label:
@@ -482,6 +535,12 @@ export class ManagementPdfService {
               blocked,
           },
         ],
+      },
+      situationEvolution: {
+        title: "Evolução mensal dos atendimentos",
+        subtitle: "Situação atual dos tickets agrupada pelo mês de abertura",
+        data: [],
+        notes: situationNotes.length ? situationNotes : ["Sem atendimentos no período selecionado."],
       },
       states: {
         title:
@@ -528,35 +587,45 @@ export class ManagementPdfService {
         string[]
       > = {
       executive: [
-        "tickets",
-        "sla",
-        "analysts",
-        "clients",
+        "clientHealth",
+        "situationEvolution",
         "categories",
+        "analysts",
         "development",
         "states",
         "versions",
       ],
       analysts: [
+        "situationEvolution",
+        "insights",
         "analysts",
         "tickets",
       ],
       sla: [
+        "situationEvolution",
+        "insights",
         "sla",
         "tickets",
         "categories",
       ],
       clients: [
+        "situationEvolution",
+        "clientHealth",
+        "insights",
         "clients",
         "categories",
         "tickets",
       ],
       development: [
+        "situationEvolution",
+        "insights",
         "development",
         "states",
         "versions",
       ],
       versions: [
+        "situationEvolution",
+        "insights",
         "versions",
         "states",
         "development",
@@ -584,6 +653,7 @@ export class ManagementPdfService {
         user?.name ??
         user?.username ??
         "Usuário",
+      filters: reportFiltersLabel(options.filters),
       sections,
     });
   }
@@ -624,13 +694,31 @@ export class ManagementPdfService {
   private azureFilters(filters?: ReportFilters): Prisma.AzureWorkItemWhereInput[] {
     if (!filters) return [];
     return [
-      ...(filters.client ? [{ OR: [{ client: { equals: filters.client, mode: "insensitive" as const } }, { participantClients: { contains: filters.client, mode: "insensitive" as const } }] }] : []),
+      ...(filters.client ? [{
+        OR: clientAliases(filters.client).flatMap((client) => [
+          { client: { contains: client, mode: "insensitive" as const } },
+          { participantClients: { contains: client, mode: "insensitive" as const } },
+        ]),
+      }] : []),
       ...(filters.analyst ? [{ OR: [{ assignedToName: { equals: filters.analyst, mode: "insensitive" as const } }, { createdByName: { equals: filters.analyst, mode: "insensitive" as const } }] }] : []),
       ...(filters.workItemType ? [{ workItemType: { equals: filters.workItemType, mode: "insensitive" as const } }] : []),
       ...(filters.azureState ? [{ state: { equals: filters.azureState, mode: "insensitive" as const } }] : []),
       ...(filters.version ? [{ deliveredVersion: { equals: filters.version, mode: "insensitive" as const } }] : []),
     ];
   }
+}
+
+function reportFiltersLabel(filters?: ReportFilters) {
+  const labels = [
+    filters?.client ? `Cliente: ${filters.client}` : null,
+    filters?.analyst ? `Analista: ${filters.analyst}` : null,
+    filters?.category ? `Categoria: ${filters.category}` : null,
+    filters?.ticketStatus ? `Status ticket: ${filters.ticketStatus}` : null,
+    filters?.workItemType ? `Tipo Azure: ${filters.workItemType}` : null,
+    filters?.azureState ? `Estado Azure: ${filters.azureState}` : null,
+    filters?.version ? `Versão: ${filters.version}` : null,
+  ].filter((value): value is string => Boolean(value));
+  return labels.length ? labels.join(" | ") : "Todos os registros do escopo operacional";
 }
 
 function reportTitle(
@@ -651,7 +739,7 @@ function reportTitle(
     clients:
       "Análise de Clientes",
     development:
-      "Correções, Evoluções e Apoios",
+      "Correções de Suporte",
     versions:
       "Análise por Versões",
   };
@@ -665,6 +753,7 @@ function buildPdf(input: {
   title: string;
   period: string;
   generatedBy: string;
+  filters: string;
   sections: Section[];
 }) {
   const objects:
@@ -825,6 +914,7 @@ function pageContent(
     title: string;
     period: string;
     generatedBy: string;
+    filters: string;
   },
   section:
     Section,
@@ -849,10 +939,10 @@ function pageContent(
     ],
   );
 
-  text(
+  centeredText(
     commands,
     report.title,
-    34,
+    421,
     568,
     19,
     true,
@@ -877,16 +967,25 @@ function pageContent(
   );
   text(
     commands,
-    section.title,
+    `Filtros: ${report.filters}`,
     34,
+    520,
+    8,
+    false,
+    [0.32, 0.36, 0.4],
+  );
+  centeredText(
+    commands,
+    section.title,
+    421,
     500,
     18,
     true,
   );
-  text(
+  centeredText(
     commands,
     section.subtitle,
-    34,
+    421,
     480,
     10,
     false,
@@ -912,26 +1011,44 @@ function pageContent(
         12,
       );
 
-  drawPie(
-    commands,
-    data,
-    190,
-    300,
-    115,
-  );
-  drawBars(
-    commands,
-    data,
-    370,
-    255,
-    425,
-    185,
-  );
+  if (section.notes?.length) {
+    let noteY = 440;
+    section.notes.slice(0, 12).forEach((line, index) => {
+      const recommendation = line.startsWith("Recomendação:");
+      if (!recommendation) {
+        fillRect(commands, 34, noteY - 7, 7, 7, COLORS[Math.floor(index / 2) % COLORS.length]!);
+      }
+      text(
+        commands,
+        truncate(line, recommendation ? 125 : 112),
+        recommendation ? 48 : 50,
+        noteY,
+        recommendation ? 8 : 9,
+        !recommendation,
+        recommendation ? [0.28, 0.32, 0.36] : [0.08, 0.16, 0.12],
+      );
+      noteY -= recommendation ? 34 : 19;
+    });
+
+    text(
+      commands,
+      `TechLead Hub | Página ${page} de ${pageCount}`,
+      34,
+      22,
+      8,
+      false,
+      [0.45, 0.48, 0.52],
+    );
+    return commands.join("\n");
+  }
+
+  text(commands, sectionDefinition(section.title), 34, 448, 9, false, [0.28, 0.32, 0.36]);
   drawTable(
     commands,
     data,
+    section.title,
     34,
-    55,
+    155,
     770,
   );
 
@@ -954,272 +1071,12 @@ function pageContent(
   );
 }
 
-function drawPie(
-  commands:
-    string[],
-  data:
-    Datum[],
-  centerX:
-    number,
-  centerY:
-    number,
-  radius:
-    number,
-) {
-  const total =
-    data.reduce(
-      (
-        sum,
-        item,
-      ) =>
-        sum +
-        Math.max(
-          0,
-          item.value,
-        ),
-      0,
-    );
-
-  if (total <= 0) {
-    return;
-  }
-
-  let start =
-    Math.PI /
-    2;
-
-  data
-    .slice(
-      0,
-      8,
-    )
-    .forEach(
-      (
-        item,
-        index,
-      ) => {
-        const angle =
-          Math.max(
-            0,
-            item.value,
-          ) /
-          total *
-          Math.PI *
-          2;
-        const points:
-          Array<
-            [
-              number,
-              number,
-            ]
-          > = [
-          [
-            centerX,
-            centerY,
-          ],
-        ];
-        const steps =
-          Math.max(
-            2,
-            Math.ceil(
-              angle /
-              (
-                Math.PI /
-                20
-              ),
-            ),
-          );
-
-        for (
-          let step =
-            0;
-          step <=
-            steps;
-          step += 1
-        ) {
-          const current =
-            start -
-            angle *
-            step /
-            steps;
-          points.push([
-            centerX +
-              Math.cos(
-                current,
-              ) *
-              radius,
-            centerY +
-              Math.sin(
-                current,
-              ) *
-              radius,
-          ]);
-        }
-
-        const color =
-          COLORS[
-            index %
-              COLORS.length
-          ]!;
-
-        commands.push(
-          `${color.join(" ")} rg`,
-          `${number(points[0]![0])} ${number(points[0]![1])} m`,
-        );
-
-        points.slice(
-          1,
-        ).forEach(
-          (
-            point,
-          ) => {
-            commands.push(
-              `${number(point[0])} ${number(point[1])} l`,
-            );
-          },
-        );
-
-        commands.push(
-          "h f"
-        );
-
-        start -=
-          angle;
-      },
-    );
-
-  data
-    .slice(
-      0,
-      8,
-    )
-    .forEach(
-      (
-        item,
-        index,
-      ) => {
-        const y =
-          420 -
-          index *
-            18;
-        const color =
-          COLORS[
-            index %
-              COLORS.length
-          ]!;
-
-        fillRect(
-          commands,
-          315,
-          y - 8,
-          9,
-          9,
-          color,
-        );
-        text(
-          commands,
-          `${truncate(item.label, 27)}: ${item.value}`,
-          330,
-          y - 6,
-          8,
-        );
-      },
-    );
-}
-
-function drawBars(
-  commands:
-    string[],
-  data:
-    Datum[],
-  x:
-    number,
-  y:
-    number,
-  width:
-    number,
-  height:
-    number,
-) {
-  const values =
-    data.slice(
-      0,
-      10,
-    );
-  const max =
-    Math.max(
-      1,
-      ...values.map(
-        (
-          item,
-        ) =>
-          item.value,
-      ),
-    );
-  const gap =
-    7;
-  const barWidth =
-    Math.max(
-      8,
-      (
-        width -
-        gap *
-          (
-            values.length -
-            1
-          )
-      ) /
-      Math.max(
-        1,
-        values.length,
-      ),
-    );
-
-  values.forEach(
-    (
-      item,
-      index,
-    ) => {
-      const barHeight =
-        Math.max(
-          1,
-          item.value /
-          max *
-          height,
-        );
-      const color =
-        COLORS[
-          index %
-            COLORS.length
-        ]!;
-
-      fillRect(
-        commands,
-        x +
-          index *
-            (
-              barWidth +
-              gap
-            ),
-        y,
-        barWidth,
-        barHeight,
-        color,
-      );
-    },
-  );
-
-  commands.push(
-    "0.72 0.75 0.78 RG",
-    `${x} ${y} m ${x + width} ${y} l S`,
-  );
-}
-
 function drawTable(
   commands:
     string[],
   data:
     Datum[],
+  sectionTitle: string,
   x:
     number,
   y:
@@ -1233,7 +1090,7 @@ function drawTable(
       6,
     );
   const rowHeight =
-    19;
+    34;
   const top =
     y +
     (
@@ -1271,7 +1128,7 @@ function drawTable(
   text(
     commands,
     "Quantidade",
-    x + width - 82,
+    x + width - 92,
     top - 13,
     8,
     true,
@@ -1332,14 +1189,24 @@ function drawTable(
           85,
         ),
         x + 8,
-        currentY + 6,
+        currentY + 20,
         8,
+        true,
+      );
+      text(
+        commands,
+        truncate(datumDefinition(sectionTitle, item.label), 112),
+        x + 8,
+        currentY + 7,
+        7,
+        false,
+        [0.34, 0.38, 0.42],
       );
       text(
         commands,
         `${item.value}  (${total > 0 ? (item.value / total * 100).toFixed(1) : "0.0"}%)`,
-        x + width - 82,
-        currentY + 6,
+        x + width - 92,
+        currentY + 17,
         8,
       );
     },
@@ -1390,6 +1257,19 @@ function text(
     `${color.join(" ")} rg`,
     `BT /${bold ? "F2" : "F1"} ${size} Tf ${number(x)} ${number(y)} Td (${pdfText(value)}) Tj ET`,
   );
+}
+
+function centeredText(
+  commands: string[],
+  value: string,
+  centerX: number,
+  y: number,
+  size: number,
+  bold = false,
+  color: readonly number[] = [0.04, 0.06, 0.08],
+) {
+  const estimatedWidth = pdfText(value).length * size * (bold ? 0.56 : 0.51);
+  text(commands, value, Math.max(34, centerX - estimatedWidth / 2), y, size, bold, color);
 }
 
 function pdfText(
@@ -1443,4 +1323,51 @@ function dateLabel(
   return value.toLocaleDateString(
     "pt-BR",
   );
+}
+
+
+function classifySolutionSla(
+  indicator: string | null,
+  completedAt: Date | null,
+  dueAt: Date | null,
+): boolean | null {
+  const normalized = indicator
+    ?.normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .trim().toLocaleLowerCase("pt-BR");
+
+  if (normalized) {
+    if (/nao violad|dentro|no prazo|cumprid|atingid|within|not violated|\bmet\b/.test(normalized)) return true;
+    if (/fora|vencid|violad|nao cumpr|not met|expired|estourad/.test(normalized)) return false;
+  }
+  if (completedAt && dueAt) return completedAt.getTime() <= dueAt.getTime();
+  return null;
+}
+
+function clientAliases(value: string) {
+  const normalized = value.trim();
+  const shortName = normalized.split(/\s+-\s+/)[0]?.trim() ?? normalized;
+  return [...new Set([normalized, shortName].filter((item) => item.length >= 3))];
+}
+
+function sectionDefinition(title: string) {
+  if (title.includes("SLA")) return "Somente tickets com medição válida compõem quantidades e percentuais; registros não medidos são excluídos.";
+  if (title.includes("Evolução mensal")) return "Cada linha apresenta a situação atual dos tickets criados naquele mês.";
+  if (title.includes("Correções")) return "Somente Correções de suporte e sustentação do Azure DevOps; Evoluções e APOIOs são excluídos.";
+  return "Valores calculados com o período e os filtros indicados no cabeçalho.";
+}
+
+function datumDefinition(section: string, label: string) {
+  if (section.includes("SLA")) return label.includes("Dentro") ? "Medição oficial dentro do prazo ou conclusão anterior ao vencimento." : "Medição oficial violada ou conclusão posterior ao vencimento.";
+  if (section.includes("Atendimentos")) {
+    if (label.includes("Em aberto")) return "Sem resolução e sem fechamento.";
+    if (label.includes("Resolvidos")) return "Com resolução registrada e ainda sem fechamento.";
+    if (label.includes("Fechados")) return "Com data de fechamento registrada.";
+  }
+  if (section.includes("Analistas")) return "Tickets atribuídos ao responsável no recorte.";
+  if (section.includes("Clientes")) return "Tickets vinculados ao cliente no recorte.";
+  if (section.includes("Categorias")) return "Tickets classificados nesta categoria.";
+  if (section.includes("Estados")) return "Correções atualmente neste estado do Azure.";
+  if (section.includes("Versões")) return "Correções entregues nesta versão.";
+  if (section.includes("Correções")) return "Correções de suporte e sustentação no recorte.";
+  return "Quantidade apurada no período selecionado.";
 }

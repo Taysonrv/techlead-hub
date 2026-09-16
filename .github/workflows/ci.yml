@@ -42,6 +42,7 @@ jobs:
           npm run prisma:generate --prefix backend
           npm exec --prefix backend -- prisma validate
           npm run build --prefix backend
+          npm run test --prefix backend
 
       - name: Validar frontend
         shell: pwsh

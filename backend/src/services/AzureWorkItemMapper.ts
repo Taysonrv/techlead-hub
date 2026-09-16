@@ -7,7 +7,8 @@ import { Prisma } from "@prisma/client";
  * possuem identificadores GUID.
  */
 export const AZURE_WORK_ITEM_FIELDS = {
-  version: "Custom.86c406e1-621a-4216-8978-6d8b80c98737",
+  registrationVersion: "Custom.86c406e1-621a-4216-8978-6d8b80c98737",
+  deliveredVersions: "Custom.Versoes",
   workaround: "Custom.250bc342-0d60-4543-89ce-cd25338209da",
   correctionType: "Custom.362d5b2b-02aa-4283-8897-5f04c8e0a52b",
   technicalSolution: "Custom.a3c2ec46-d02c-4249-9a5c-b70c66f8de84",
@@ -63,6 +64,29 @@ function stringValue(value: unknown): string | null {
   const normalized = value.trim();
 
   return normalized.length > 0 ? normalized : null;
+}
+
+export function deliveredVersionValue(fields: Record<string, unknown>): string | null {
+  const directCandidates = [
+    AZURE_WORK_ITEM_FIELDS.deliveredVersions,
+    "Custom.VersaoEntregue",
+    "Custom.VersoesEntregues",
+    "Custom.DeliveredVersion",
+    "Custom.DeliveredVersions",
+  ];
+  const direct = directCandidates
+    .map((candidate) => fields[candidate])
+    .find((value) => value !== undefined && value !== null);
+  const semantic = direct ?? Object.entries(fields).find(([key]) => {
+    const normalized = key.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR");
+    return (normalized.includes("versao") || normalized.includes("version")) &&
+      (normalized.includes("entreg") || normalized.endsWith(".versoes") || normalized.endsWith(".versions"));
+  })?.[1];
+  const values = stringListValue(semantic).filter((value) => {
+    const normalized = value.toLocaleLowerCase("en-US");
+    return normalized !== "no selection made" && normalized !== "nenhuma seleção";
+  });
+  return values.length ? values.join(", ") : null;
 }
 
 function integerValue(value: unknown): number | null {
@@ -398,9 +422,11 @@ export function mapAzureWorkItem(
       fields[AZURE_WORK_ITEM_FIELDS.movideskTicket],
     ),
 
-    deliveredVersion: stringValue(
-      fields[AZURE_WORK_ITEM_FIELDS.version],
+    registeredVersion: stringValue(
+      fields[AZURE_WORK_ITEM_FIELDS.registrationVersion],
     ),
+
+    deliveredVersion: deliveredVersionValue(fields),
 
     prioritized: booleanValue(
       fields[AZURE_WORK_ITEM_FIELDS.prioritized],

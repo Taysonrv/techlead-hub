@@ -158,10 +158,7 @@ export function createPieChartPng(
         canvas,
         x,
         y,
-        COLORS[
-          colorIndex %
-            COLORS.length
-        ]!,
+        chartColor(data[colorIndex]!, colorIndex),
       );
     }
   }
@@ -303,10 +300,7 @@ export function createBarChartPng(
         y,
         barWidth,
         barHeight,
-        COLORS[
-          index %
-            COLORS.length
-        ]!,
+        chartColor(item, index),
       );
     },
   );
@@ -325,6 +319,17 @@ export function createBarChartPng(
   return encodePng(
     canvas,
   );
+}
+
+function chartColor(item: ChartDatum, index: number): readonly [number, number, number] {
+  const label = item.label.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR");
+  if (/dentro|conclu|encerrad|resolvid|entreg/.test(label)) return [24, 199, 122];
+  if (/fora|venc|bloque|erro|cancel/.test(label)) return [220, 53, 69];
+  if (/nao medido|sem |nao inform/.test(label)) return [108, 117, 125];
+  if (/aberto|andamento|correc/.test(label)) return [0, 120, 212];
+  if (/evolu/.test(label)) return [111, 66, 193];
+  if (/apoio|prioriz/.test(label)) return [255, 170, 0];
+  return COLORS[index % COLORS.length]!;
 }
 
 function normalize(
@@ -663,7 +668,7 @@ function drawLegend(
 ) {
   values.forEach(
     (
-      _item,
+      item,
       index,
     ) => {
       const currentX =
@@ -685,10 +690,7 @@ function drawLegend(
         currentY,
         18,
         18,
-        COLORS[
-          index %
-            COLORS.length
-        ]!,
+        chartColor(item, index),
       );
     },
   );
