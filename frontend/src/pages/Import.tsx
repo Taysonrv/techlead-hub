@@ -116,7 +116,7 @@ type AzureSyncDashboardStatus = {
 };
 
 const MAX_FILE_SIZE =
-  25 * 1024 * 1024;
+  50 * 1024 * 1024;
 
 const AZURE_STATUS_REFRESH_MS =
   30_000;
@@ -294,12 +294,11 @@ export function Import() {
         .toLowerCase();
 
     if (
-      !fileName.endsWith(
-        ".xlsx",
-      )
+      !fileName.endsWith(".xlsx") &&
+      !fileName.endsWith(".json")
     ) {
       setError(
-        "Formato inválido. Selecione um arquivo Excel no formato .xlsx.",
+        "Formato inválido. Selecione uma exportação .xlsx ou um payload .json do Movidesk.",
       );
 
       return false;
@@ -310,7 +309,7 @@ export function Import() {
       MAX_FILE_SIZE
     ) {
       setError(
-        "O arquivo excede o limite de 25 MB.",
+        "O arquivo excede o limite de 50 MB.",
       );
 
       return false;
@@ -512,7 +511,7 @@ export function Import() {
           CABEÇALHO
       ===================================================== */}
 
-      <PageHeader eyebrow="Gestão" title="Importar e Sincronizar Dados" description="Importe os dados do Movidesk e acompanhe a sincronização automática do Azure DevOps." />
+      <PageHeader eyebrow="Gestão" title="Importar e Sincronizar Dados" description="Importe planilhas ou payloads JSON do Movidesk e acompanhe a sincronização automática do Azure DevOps." />
 
       {/* =====================================================
           HISTÓRICO CONSOLIDADO
@@ -1065,9 +1064,9 @@ export function Import() {
             2,
         }}
       >
-        A importação cria tickets novos e atualiza os já existentes
-        pelo número do atendimento no Movidesk. Registros existentes
-        não são duplicados.
+        A importação cria tickets novos e atualiza os existentes pelo número
+        do atendimento. O JSON preserva o payload completo e aproveita
+        históricos, SLA, vínculos, causa, serviços e campos de Tarefa.
       </Alert>
 
       <Card
@@ -1175,7 +1174,7 @@ export function Import() {
                 inputRef
               }
               type="file"
-              accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+              accept=".xlsx,.json,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/json"
               hidden
               onChange={
                 handleFileChange
@@ -1197,7 +1196,7 @@ export function Import() {
                       "1.05rem",
                   }}
                 >
-                  Arraste o Excel do Movidesk para cá
+                  Arraste o Excel ou JSON do Movidesk para cá
                 </Typography>
 
                 <Typography
