@@ -1052,7 +1052,7 @@ export function Import() {
 
       <SectionHeader
         title="Movidesk"
-        description="Importação manual da exportação Excel utilizada pela base do TechLead Hub."
+        description="Importação manual de planilhas e payloads JSON utilizados pela base do TechLead Hub."
       />
 
       <Alert
@@ -1220,7 +1220,7 @@ export function Import() {
                       0.75,
                   }}
                 >
-                  Formato .xlsx • Máximo 25 MB
+                  Formatos .xlsx e .json • Máximo 50 MB
                 </Typography>
 
                 <Button
