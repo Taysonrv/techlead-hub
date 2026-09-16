@@ -431,7 +431,7 @@ export class WorkspaceService {
       isTicketOpen(ticket) && isAwaitingReturn(ticket) && isMissingClassification(ticket.cause),
     );
     const suspectedClassification = scopedTickets.filter((ticket) =>
-      hasSuspiciousClassification(ticket),
+      isTicketOpen(ticket) && hasSuspiciousClassification(ticket),
     );
 
     const derivedTicketIssues = ["danglingTaskTickets", "ticketOpenTaskFinished", "ticketOpenTaskWithoutDelivery", "ticketClosedTaskOpen", "clientMismatch", "supportLinkDivergence", "awaitingReturnWithoutCause", "suspectedClassification"];
