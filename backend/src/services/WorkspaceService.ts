@@ -164,7 +164,7 @@ export class WorkspaceService {
       orderBy: [{ azureChangedAt: "desc" }, { id: "desc" }],
       select: {
         id: true, workItemType: true, title: true, state: true,
-        client: true, assignedToName: true, deliveredVersion: true,
+        client: true, assignedToName: true, registeredVersion: true, deliveredVersion: true,
         participantClients: true,
         movideskTicket: true, azureChangedAt: true,
         participantMovideskTickets: true,
@@ -302,7 +302,7 @@ export class WorkspaceService {
         orderBy: [{ azureClosedAt: "desc" }, { azureChangedAt: "desc" }],
         select: {
           id: true, workItemType: true, title: true, state: true,
-          client: true, participantClients: true, assignedToName: true, deliveredVersion: true,
+          client: true, participantClients: true, assignedToName: true, registeredVersion: true, deliveredVersion: true,
           movideskTicket: true, participantMovideskTickets: true,
         },
       }),
@@ -362,15 +362,17 @@ export class WorkspaceService {
       const task = findLinkedTask(ticket, finishedLinkedTasks);
       if (task && isSupportTask(task)) return [];
       if (!task) return [];
-      // A versão usada na higienização é a entrega importada do ticket Movidesk.
-      // AzureWorkItem.deliveredVersion representa a versão de registro/classificação da Task.
-      const hasDeliveredVersion = Boolean(ticket.deliveredVersion?.trim());
-      return isCanceledTask(task.state) || hasDeliveredVersion ? [{ ticket, task }] : [];
+      // A pendência de encerramento depende da entrega oficial da Tarefa no Azure.
+      // Tarefas canceladas e tickets em "Aguardando validar versão" não entram neste recorte.
+      const hasDeliveredVersion = Boolean(task.deliveredVersion?.trim());
+      return !isCanceledTask(task.state) && hasDeliveredVersion ? [{ ticket, task }] : [];
     });
     const ticketsFinishedWithoutDelivery = scopedTickets.flatMap((ticket) => {
-      if (!isTicketOpen(ticket) || ticket.deliveredVersion?.trim()) return [];
+      if (!isTicketOpen(ticket)) return [];
       const task = findLinkedTask(ticket, finishedLinkedTasks);
-      return task && !isSupportTask(task) && !isCanceledTask(task.state) ? [{ ticket, task }] : [];
+      return task && !isSupportTask(task) && !isCanceledTask(task.state) && !task.deliveredVersion?.trim()
+        ? [{ ticket, task }]
+        : [];
     });
     const closedTicketsWithActiveTask = scopedTickets.flatMap((ticket) => {
       if (!isTicketFinalized(ticket)) return [];
@@ -424,7 +426,7 @@ export class WorkspaceService {
         id: true, workItemType: true, title: true, state: true,
         client: true, module: true, assignedToName: true,
         participantClients: true,
-        movideskTicket: true, deliveredVersion: true,
+        movideskTicket: true, registeredVersion: true, deliveredVersion: true,
         participantMovideskTickets: true,
       },
     });
@@ -438,7 +440,8 @@ export class WorkspaceService {
           module: null,
           assignedToName: ticket.owner,
           movideskTicket: ticket.movideskId,
-          deliveredVersion: ticket.deliveredVersion,
+          registeredVersion: task.registeredVersion,
+          deliveredVersion: task.deliveredVersion,
           taskNumber: task.id,
           taskState: task.state,
           taskTitle: task.title,
@@ -463,6 +466,7 @@ export class WorkspaceService {
           module: null,
           assignedToName: ticket.owner,
           movideskTicket: ticket.movideskId,
+          registeredVersion: null,
           deliveredVersion: null,
           taskNumber: ticket.taskNumber,
           source: "MOVIDESK" as const,
@@ -480,9 +484,8 @@ export class WorkspaceService {
         ticketClosedTaskOpen: closedTicketsWithActiveTask.length,
         clientMismatch: clientMismatches.length,
         supportLinkDivergence: supportDivergences.length,
-        activeTaskWithVersion: scopedTickets.filter((ticket) =>
-          Boolean(ticket.deliveredVersion?.trim()) &&
-          Boolean(findLinkedTask(ticket, activeLinkedTasks)),
+        activeTaskWithVersion: activeLinkedTasks.filter((task) =>
+          !isSupportTask(task) && Boolean(task.deliveredVersion?.trim()),
         ).length,
       },
       samples,
