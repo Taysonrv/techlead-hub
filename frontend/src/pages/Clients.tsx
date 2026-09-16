@@ -1382,8 +1382,8 @@ export function Clients() {
             display: flex !important;
             justify-content: center !important;
             text-align: center !important;
-            background: #008a68 !important;
-            color: #fff !important;
+            background: #d1fae5 !important;
+            color: #064e3b !important;
             border-radius: 12px !important;
             margin-bottom: 12px !important;
           }
