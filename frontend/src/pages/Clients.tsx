@@ -1399,19 +1399,16 @@ export function Clients() {
             gap: 8px !important;
           }
           body.client-pdf-export .client-print-section-grid {
-            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+            grid-template-columns: 1fr !important;
             align-content: start !important;
             gap: 10px !important;
-          }
-          body.client-pdf-export .client-print-three > :last-child {
-            grid-column: 1 / -1 !important;
           }
           body.client-pdf-export .client-print-page {
             break-before: page;
             break-inside: avoid;
             width: 100% !important;
-            min-height: 250mm !important;
-            padding-top: 4mm !important;
+            min-height: 0 !important;
+            padding-top: 3mm !important;
           }
           body.client-pdf-export .client-print-page .recharts-responsive-container {
             width: 100% !important;
@@ -1428,6 +1425,10 @@ export function Clients() {
           }
           body.client-pdf-export .client-print-conclusion {
             grid-column: 1 / -1 !important;
+          }
+          body.client-pdf-export .client-print-continuation {
+            break-before: auto !important;
+            padding-top: 0 !important;
           }
         }
       `}</style>
@@ -2053,7 +2054,7 @@ export function Clients() {
               </Box>
             </Box>}
 
-            {(!isPresenting || presentationPage === 1) && <Box className="client-print-section-grid client-print-three client-print-page" sx={{ mt: isPresenting ? 0 : 1.5, height: isPresenting ? "100%" : "auto", display: "grid", gridTemplateColumns: { xs: "1fr", lg: "repeat(3,minmax(0,1fr))" }, gap: 2 }}>
+            {(!isPresenting || presentationPage === 1) && <Box className="client-print-section-grid client-print-page" sx={{ mt: isPresenting ? 0 : 1.5, height: isPresenting ? "100%" : "auto", display: "grid", gridTemplateColumns: "1fr" }, gap: 2 }}>
               <Typography className="client-print-page-title" variant="h5" sx={{ fontWeight: 900 }}>Demanda e recorrência</Typography>
               <ExecutiveBarPanel title="Atendimentos por processo" data={presentationSummary.areas} onClick={(name) => showTickets(`Processo: ${name}`, scopedTickets.filter((ticket) => classifyExecutiveProcess(ticket) === name))} />
               <ExecutiveBarPanel title="Bugs por processo" data={presentationSummary.bugAreas} onClick={(name) => showTickets(`Bugs · ${name}`, presentationSummary.bugs.filter((ticket) => classifyExecutiveProcess(ticket) === name))} />
@@ -2064,7 +2065,7 @@ export function Clients() {
               </Box>
             </Box>}
 
-            {(!isPresenting || presentationPage === 2) && <Box className="client-print-section-grid client-print-page" sx={{ mt: isPresenting ? 0 : 1.5, height: isPresenting ? "100%" : "auto", display: "grid", gridTemplateColumns: { xs: "1fr", lg: "repeat(2,minmax(0,1fr))" }, gap: 2 }}>
+            {(!isPresenting || presentationPage === 2) && <Box className="client-print-section-grid client-print-page" sx={{ mt: isPresenting ? 0 : 1.5, height: isPresenting ? "100%" : "auto", display: "grid", gridTemplateColumns: "1fr" }, gap: 2 }}>
               <Typography className="client-print-page-title" variant="h5" sx={{ fontWeight: 900 }}>Entregas e desenvolvimento</Typography>
               <ExecutiveDonutPanel title="Status das Tarefas" data={presentationSummary.taskStatuses} total={presentationSummary.taskItems.length} />
               <Box sx={{ p: 2.25, border: "1px solid", borderColor: "divider", borderRadius: 2, bgcolor: "background.paper" }}>
@@ -2073,7 +2074,7 @@ export function Clients() {
               </Box>
             </Box>}
 
-            {(!isPresenting || presentationPage === 3) && <Box className="client-print-section-grid client-print-page" sx={{ mt: isPresenting ? 0 : 1.5, height: isPresenting ? "100%" : "auto", display: "grid", gridTemplateColumns: { xs: "1fr", lg: "repeat(2,minmax(0,1fr))" }, gap: 2 }}>
+            {(!isPresenting || presentationPage === 3) && <Box className="client-print-section-grid client-print-page client-print-continuation" sx={{ mt: isPresenting ? 0 : 1.5, height: isPresenting ? "100%" : "auto", display: "grid", gridTemplateColumns: "1fr" }, gap: 2 }}>
               <Typography className="client-print-page-title" variant="h5" sx={{ fontWeight: 900 }}>Pendências e encaminhamentos</Typography>
               <ExecutiveDonutPanel title="Status das pendências" data={presentationSummary.pendingStatuses} total={presentationSummary.pending.length} />
               <Box sx={{ p: 2.25, borderRadius: 2, bgcolor: presentationSummary.pending.length ? "rgba(245,158,11,.10)" : "rgba(22,163,74,.08)", border: "1px solid", borderColor: presentationSummary.pending.length ? "rgba(245,158,11,.28)" : "rgba(22,163,74,.22)" }}>
@@ -4180,25 +4181,61 @@ function PresentationKpi({ title, value, detail, color, onClick }: {
 }
 
 function ExecutiveDonutPanel({ title, data, total }: { title: string; data: PieDataItem[]; total: number }) {
+  const safeTotal = Math.max(total, 0);
+  let accumulated = 0;
+  const segments = data.map((item, index) => {
+    const start = safeTotal > 0 ? (accumulated / safeTotal) * 100 : 0;
+    accumulated += item.value;
+    const end = safeTotal > 0 ? (accumulated / safeTotal) * 100 : 0;
+    return `${PIE_COLORS[index % PIE_COLORS.length]} ${start}% ${end}%`;
+  });
+  const chartBackground = segments.length
+    ? `conic-gradient(${segments.join(", ")})`
+    : "#e5e7eb";
+
   return (
-    <Box sx={{ p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: 2, minWidth: 0 }}>
+    <Box sx={{ p: 2, border: "1px solid", borderColor: "divider", borderRadius: 2, minWidth: 0, bgcolor: "background.paper" }}>
       <Typography sx={{ fontWeight: 850 }}>{title}</Typography>
-      {data.length ? <>
-        <Box sx={{ height: 175, position: "relative" }}>
-          <ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={data} dataKey="value" nameKey="name" innerRadius={42} outerRadius={67} paddingAngle={2}>{data.map((item, index) => <Cell key={item.name} fill={PIE_COLORS[index % PIE_COLORS.length]} />)}</Pie><Tooltip content={<CompactPieTooltip valueLabel="item(ns)" />} /></PieChart></ResponsiveContainer>
-          <Box sx={{ position: "absolute", inset: 0, display: "grid", placeContent: "center", textAlign: "center", pointerEvents: "none" }}><Typography sx={{ fontWeight: 900, fontSize: "1.25rem" }}>{total}</Typography><Typography variant="caption">total</Typography></Box>
+      {data.length ? (
+        <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: { xs: "1fr", md: "220px minmax(0,1fr)" }, gap: 2.5, alignItems: "center" }}>
+          <Box sx={{ width: 170, height: 170, mx: "auto", borderRadius: "50%", background: chartBackground, position: "relative", printColorAdjust: "exact", WebkitPrintColorAdjust: "exact" }}>
+            <Box sx={{ position: "absolute", inset: 28, borderRadius: "50%", bgcolor: "background.paper", display: "grid", placeContent: "center", textAlign: "center" }}>
+              <Typography sx={{ fontWeight: 900, fontSize: "1.35rem", lineHeight: 1 }}>{safeTotal}</Typography>
+              <Typography variant="caption">total</Typography>
+            </Box>
+          </Box>
+          <CompactPieLegend data={data} total={safeTotal} />
         </Box>
-        <CompactPieLegend data={data} total={total} />
-      </> : <Typography variant="body2" color="text.secondary" sx={{ py: 8, textAlign: "center" }}>Sem dados no recorte.</Typography>}
+      ) : (
+        <Typography variant="body2" color="text.secondary" sx={{ py: 4, textAlign: "center" }}>Sem dados no recorte.</Typography>
+      )}
     </Box>
   );
 }
 
 function ExecutiveBarPanel({ title, data, onClick }: { title: string; data: PieDataItem[]; onClick: (name: string) => void }) {
+  const maximum = Math.max(...data.map((item) => item.value), 1);
   return (
-    <Box sx={{ p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: 2, minWidth: 0 }}>
+    <Box sx={{ p: 2, border: "1px solid", borderColor: "divider", borderRadius: 2, minWidth: 0, bgcolor: "background.paper" }}>
       <Typography sx={{ fontWeight: 850 }}>{title}</Typography>
-      {data.length ? <Box sx={{ height: 255, mt: 1 }}><ResponsiveContainer width="100%" height="100%"><BarChart data={data} layout="vertical" margin={{ left: 8, right: 18 }}><CartesianGrid strokeDasharray="3 3" horizontal={false} /><XAxis type="number" allowDecimals={false} /><YAxis dataKey="name" type="category" width={115} tick={{ fontSize: 10 }} tickFormatter={(value) => abbreviate(String(value), 17)} /><Tooltip /><Bar dataKey="value" name="Tickets" fill={aliareColors.green} radius={[0, 5, 5, 0]} cursor="pointer" onClick={(data) => { const name = String((data as { name?: unknown }).name ?? ""); if (name && name !== "Outros") onClick(name); }} /></BarChart></ResponsiveContainer></Box> : <Typography variant="body2" color="text.secondary" sx={{ py: 8, textAlign: "center" }}>Sem dados no recorte.</Typography>}
+      {data.length ? (
+        <Stack spacing={0.8} sx={{ mt: 1.5 }}>
+          {data.map((item) => (
+            <Box key={item.name} role={item.name !== "Outros" ? "button" : undefined} tabIndex={item.name !== "Outros" ? 0 : undefined}
+              onClick={() => item.name !== "Outros" && onClick(item.name)}
+              onKeyDown={(event) => (event.key === "Enter" || event.key === " ") && item.name !== "Outros" && onClick(item.name)}
+              sx={{ display: "grid", gridTemplateColumns: { xs: "115px minmax(0,1fr) 30px", sm: "190px minmax(0,1fr) 38px" }, gap: 1, alignItems: "center", cursor: item.name !== "Outros" ? "pointer" : "default" }}>
+              <Typography variant="caption" title={item.name} sx={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textAlign: "right" }}>{item.name}</Typography>
+              <Box sx={{ height: 20, borderRadius: 1, bgcolor: "rgba(0,138,104,.10)", overflow: "hidden" }}>
+                <Box sx={{ width: `${Math.max((item.value / maximum) * 100, item.value > 0 ? 3 : 0)}%`, height: "100%", borderRadius: 1, bgcolor: aliareColors.green, printColorAdjust: "exact", WebkitPrintColorAdjust: "exact" }} />
+              </Box>
+              <Typography variant="caption" sx={{ fontWeight: 850, textAlign: "right" }}>{item.value}</Typography>
+            </Box>
+          ))}
+        </Stack>
+      ) : (
+        <Typography variant="body2" color="text.secondary" sx={{ py: 4, textAlign: "center" }}>Sem dados no recorte.</Typography>
+      )}
     </Box>
   );
 }
