@@ -66,7 +66,7 @@ function stringValue(value: unknown): string | null {
   return normalized.length > 0 ? normalized : null;
 }
 
-function deliveredVersionValue(fields: Record<string, unknown>): string | null {
+export function deliveredVersionValue(fields: Record<string, unknown>): string | null {
   const directCandidates = [
     AZURE_WORK_ITEM_FIELDS.deliveredVersions,
     "Custom.VersaoEntregue",
