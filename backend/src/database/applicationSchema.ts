@@ -60,6 +60,51 @@ export async function ensureApplicationSchema() {
     )
   `);
 
+
+  /*
+   * Campos enriquecidos do payload JSON do Movidesk.
+   * Apenas amplia a estrutura; nenhum valor existente é recalculado.
+   */
+  await prisma.$executeRawUnsafe(`
+    ALTER TABLE "Ticket"
+      ADD COLUMN IF NOT EXISTS "serviceFirstLevel" TEXT,
+      ADD COLUMN IF NOT EXISTS "serviceSecondLevel" TEXT,
+      ADD COLUMN IF NOT EXISTS "serviceThirdLevel" TEXT,
+      ADD COLUMN IF NOT EXISTS "businessArea" TEXT,
+      ADD COLUMN IF NOT EXISTS "origin" INTEGER,
+      ADD COLUMN IF NOT EXISTS "isDeleted" BOOLEAN NOT NULL DEFAULT FALSE,
+      ADD COLUMN IF NOT EXISTS "createdBy" TEXT,
+      ADD COLUMN IF NOT EXISTS "lastActionDate" TIMESTAMP(3),
+      ADD COLUMN IF NOT EXISTS "lastUpdate" TIMESTAMP(3),
+      ADD COLUMN IF NOT EXISTS "canceledDate" TIMESTAMP(3),
+      ADD COLUMN IF NOT EXISTS "reopenedDate" TIMESTAMP(3),
+      ADD COLUMN IF NOT EXISTS "actionCount" INTEGER,
+      ADD COLUMN IF NOT EXISTS "resolvedInFirstCall" BOOLEAN,
+      ADD COLUMN IF NOT EXISTS "stoppedWorkingMinutes" INTEGER,
+      ADD COLUMN IF NOT EXISTS "slaAgreement" TEXT,
+      ADD COLUMN IF NOT EXISTS "slaAgreementRule" TEXT,
+      ADD COLUMN IF NOT EXISTS "slaSolutionTimeMinutes" INTEGER,
+      ADD COLUMN IF NOT EXISTS "slaResponseTimeMinutes" INTEGER,
+      ADD COLUMN IF NOT EXISTS "slaSolutionDueDate" TIMESTAMP(3),
+      ADD COLUMN IF NOT EXISTS "slaResponseDueDate" TIMESTAMP(3),
+      ADD COLUMN IF NOT EXISTS "slaRealResponseDate" TIMESTAMP(3),
+      ADD COLUMN IF NOT EXISTS "slaPaused" BOOLEAN,
+      ADD COLUMN IF NOT EXISTS "taskTitle" TEXT,
+      ADD COLUMN IF NOT EXISTS "taskType" TEXT,
+      ADD COLUMN IF NOT EXISTS "taskUrl" TEXT,
+      ADD COLUMN IF NOT EXISTS "registeredVersion" TEXT,
+      ADD COLUMN IF NOT EXISTS "causeDetail" TEXT,
+      ADD COLUMN IF NOT EXISTS "rawData" JSONB
+  `);
+
+  await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Ticket_serviceFirstLevel_idx" ON "Ticket" ("serviceFirstLevel")`);
+  await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Ticket_serviceSecondLevel_idx" ON "Ticket" ("serviceSecondLevel")`);
+  await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Ticket_serviceThirdLevel_idx" ON "Ticket" ("serviceThirdLevel")`);
+  await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Ticket_businessArea_idx" ON "Ticket" ("businessArea")`);
+  await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Ticket_taskType_idx" ON "Ticket" ("taskType")`);
+  await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Ticket_registeredVersion_idx" ON "Ticket" ("registeredVersion")`);
+  await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Ticket_lastUpdate_idx" ON "Ticket" ("lastUpdate")`);
+
   await prisma.$executeRawUnsafe(`
     ALTER TABLE "AzureWorkItem"
       ADD COLUMN IF NOT EXISTS "participantClients" TEXT,
@@ -67,12 +112,6 @@ export async function ensureApplicationSchema() {
       ADD COLUMN IF NOT EXISTS "registeredVersion" TEXT
   `);
 
-  await prisma.$executeRawUnsafe(`
-    UPDATE "AzureWorkItem"
-    SET "registeredVersion" = "deliveredVersion"
-    WHERE "registeredVersion" IS NULL
-      AND "deliveredVersion" IS NOT NULL
-  `);
 
   await prisma.$executeRawUnsafe(`
     CREATE INDEX IF NOT EXISTS "AzureWorkItem_registeredVersion_idx"
