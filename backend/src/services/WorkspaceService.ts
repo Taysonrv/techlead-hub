@@ -211,6 +211,7 @@ export class WorkspaceService {
       select: {
         id: true, taskNumber: true, movideskId: true, subject: true,
         status: true, baseStatus: true, client: true, owner: true,
+        category: true, cause: true, justification: true,
         deliveredVersion: true,
       },
     });
@@ -325,6 +326,27 @@ export class WorkspaceService {
       return ["New", "InAttendance", "Stopped"].includes(ticket.baseStatus ?? "") ||
         /novo|desenvolvimento|andamento|aguard|paus|parad/.test(status);
     };
+    const isAwaitingReturn = (ticket: { status: string; justification?: string | null }) => {
+      const status = normalizeStatus(ticket.status);
+      const justification = normalizeStatus(ticket.justification ?? "");
+      return /aguardando.*retorno|retorno.*cliente/.test(status)
+        || /aguardando.*retorno|retorno.*cliente/.test(justification);
+    };
+    const isMissingClassification = (value: string | null) => {
+      const normalized = normalizeStatus(value ?? "");
+      return !normalized || ["nao informado", "sem causa", "sem categoria", "outros", "outro", "-"].includes(normalized);
+    };
+    const hasSuspiciousClassification = (ticket: { category: string | null; cause: string | null }) => {
+      if (isMissingClassification(ticket.category) || isMissingClassification(ticket.cause)) return true;
+      const category = normalizeStatus(ticket.category ?? "");
+      const cause = normalizeStatus(ticket.cause ?? "");
+      const doubtCategory = /duvida|orientacao/.test(category);
+      const problemCategory = /problema|erro|incidente/.test(category);
+      const doubtCause = /duvida|orientacao|treinamento/.test(cause);
+      const problemCause = /bug|erro|falha|configuracao|operacional/.test(cause);
+      return (doubtCategory && problemCause) || (problemCategory && doubtCause);
+    };
+
     const isTicketFinalized = (ticket: { baseStatus: string | null; status: string }) => {
       const status = normalizeStatus(ticket.status);
       return ["Resolved", "Closed"].includes(ticket.baseStatus ?? "")
@@ -405,7 +427,14 @@ export class WorkspaceService {
       });
     });
 
-    const derivedTicketIssues = ["danglingTaskTickets", "ticketOpenTaskFinished", "ticketOpenTaskWithoutDelivery", "ticketClosedTaskOpen", "clientMismatch", "supportLinkDivergence"];
+    const awaitingReturnWithoutCause = scopedTickets.filter((ticket) =>
+      isTicketOpen(ticket) && isAwaitingReturn(ticket) && isMissingClassification(ticket.cause),
+    );
+    const suspectedClassification = scopedTickets.filter((ticket) =>
+      hasSuspiciousClassification(ticket),
+    );
+
+    const derivedTicketIssues = ["danglingTaskTickets", "ticketOpenTaskFinished", "ticketOpenTaskWithoutDelivery", "ticketClosedTaskOpen", "clientMismatch", "supportLinkDivergence", "awaitingReturnWithoutCause", "suspectedClassification"];
     const azureSamples = params.issue === "supportLinkDivergence"
       ? supportDivergences.slice(0, 100)
       : params.issue && derivedTicketIssues.includes(params.issue)
@@ -448,7 +477,27 @@ export class WorkspaceService {
           taskClient: task.client,
           source: "MOVIDESK" as const,
         });
-    const samples = params.issue === "ticketOpenTaskFinished"
+    const toClassificationSample = (ticket: (typeof scopedTickets)[number]) => ({
+      id: ticket.id,
+      workItemType: "Atendimento Movidesk",
+      title: ticket.subject,
+      state: ticket.status,
+      client: ticket.client,
+      module: null,
+      assignedToName: ticket.owner,
+      category: ticket.category,
+      cause: ticket.cause,
+      movideskTicket: ticket.movideskId,
+      registeredVersion: null,
+      deliveredVersion: ticket.deliveredVersion,
+      taskNumber: ticket.taskNumber,
+      source: "MOVIDESK" as const,
+    });
+    const samples = params.issue === "awaitingReturnWithoutCause"
+      ? awaitingReturnWithoutCause.slice(0, 100).map(toClassificationSample)
+      : params.issue === "suspectedClassification"
+      ? suspectedClassification.slice(0, 100).map(toClassificationSample)
+      : params.issue === "ticketOpenTaskFinished"
       ? ticketsAwaitingClosure.slice(0, 100).map(toTicketSample)
       : params.issue === "ticketOpenTaskWithoutDelivery"
       ? ticketsFinishedWithoutDelivery.slice(0, 100).map(toTicketSample)
@@ -484,6 +533,8 @@ export class WorkspaceService {
         ticketClosedTaskOpen: closedTicketsWithActiveTask.length,
         clientMismatch: clientMismatches.length,
         supportLinkDivergence: supportDivergences.length,
+        awaitingReturnWithoutCause: awaitingReturnWithoutCause.length,
+        suspectedClassification: suspectedClassification.length,
         activeTaskWithVersion: activeLinkedTasks.filter((task) =>
           !isSupportTask(task) && Boolean(task.deliveredVersion?.trim()),
         ).length,
