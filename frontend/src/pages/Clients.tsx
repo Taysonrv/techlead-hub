@@ -2054,7 +2054,7 @@ export function Clients() {
               </Box>
             </Box>}
 
-            {(!isPresenting || presentationPage === 1) && <Box className="client-print-section-grid client-print-page" sx={{ mt: isPresenting ? 0 : 1.5, height: isPresenting ? "100%" : "auto", display: "grid", gridTemplateColumns: "1fr" }, gap: 2 }}>
+            {(!isPresenting || presentationPage === 1) && <Box className="client-print-section-grid client-print-page" sx={{ mt: isPresenting ? 0 : 1.5, height: isPresenting ? "100%" : "auto", display: "grid", gridTemplateColumns: "1fr", gap: 2 }}>
               <Typography className="client-print-page-title" variant="h5" sx={{ fontWeight: 900 }}>Demanda e recorrência</Typography>
               <ExecutiveBarPanel title="Atendimentos por processo" data={presentationSummary.areas} onClick={(name) => showTickets(`Processo: ${name}`, scopedTickets.filter((ticket) => classifyExecutiveProcess(ticket) === name))} />
               <ExecutiveBarPanel title="Bugs por processo" data={presentationSummary.bugAreas} onClick={(name) => showTickets(`Bugs · ${name}`, presentationSummary.bugs.filter((ticket) => classifyExecutiveProcess(ticket) === name))} />
@@ -2065,7 +2065,7 @@ export function Clients() {
               </Box>
             </Box>}
 
-            {(!isPresenting || presentationPage === 2) && <Box className="client-print-section-grid client-print-page" sx={{ mt: isPresenting ? 0 : 1.5, height: isPresenting ? "100%" : "auto", display: "grid", gridTemplateColumns: "1fr" }, gap: 2 }}>
+            {(!isPresenting || presentationPage === 2) && <Box className="client-print-section-grid client-print-page" sx={{ mt: isPresenting ? 0 : 1.5, height: isPresenting ? "100%" : "auto", display: "grid", gridTemplateColumns: "1fr", gap: 2 }}>
               <Typography className="client-print-page-title" variant="h5" sx={{ fontWeight: 900 }}>Entregas e desenvolvimento</Typography>
               <ExecutiveDonutPanel title="Status das Tarefas" data={presentationSummary.taskStatuses} total={presentationSummary.taskItems.length} />
               <Box sx={{ p: 2.25, border: "1px solid", borderColor: "divider", borderRadius: 2, bgcolor: "background.paper" }}>
@@ -2074,7 +2074,7 @@ export function Clients() {
               </Box>
             </Box>}
 
-            {(!isPresenting || presentationPage === 3) && <Box className="client-print-section-grid client-print-page client-print-continuation" sx={{ mt: isPresenting ? 0 : 1.5, height: isPresenting ? "100%" : "auto", display: "grid", gridTemplateColumns: "1fr" }, gap: 2 }}>
+            {(!isPresenting || presentationPage === 3) && <Box className="client-print-section-grid client-print-page client-print-continuation" sx={{ mt: isPresenting ? 0 : 1.5, height: isPresenting ? "100%" : "auto", display: "grid", gridTemplateColumns: "1fr", gap: 2 }}>
               <Typography className="client-print-page-title" variant="h5" sx={{ fontWeight: 900 }}>Pendências e encaminhamentos</Typography>
               <ExecutiveDonutPanel title="Status das pendências" data={presentationSummary.pendingStatuses} total={presentationSummary.pending.length} />
               <Box sx={{ p: 2.25, borderRadius: 2, bgcolor: presentationSummary.pending.length ? "rgba(245,158,11,.10)" : "rgba(22,163,74,.08)", border: "1px solid", borderColor: presentationSummary.pending.length ? "rgba(245,158,11,.28)" : "rgba(22,163,74,.22)" }}>
