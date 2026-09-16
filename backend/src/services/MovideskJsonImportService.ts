@@ -93,7 +93,7 @@ export class MovideskJsonImportService {
 
     for (let index = 0; index < rows.length; index += 1) {
       try {
-        const ticket = this.mapTicket(rows[index]);
+        const ticket = this.mapTicket(rows[index]!);
         if (seen.has(ticket.movideskId)) {
           ignored += 1;
           errorDetails.push({
