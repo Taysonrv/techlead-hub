@@ -86,11 +86,24 @@ import {
  * mas a tipagem instalada não os expõe diretamente.
  */
 function Stack(
-  props: React.ComponentProps<typeof MuiStack> & Record<string, unknown>,
+  props: React.ComponentProps<typeof MuiStack> & {
+    alignItems?: unknown;
+    justifyContent?: unknown;
+    flexWrap?: unknown;
+  },
 ) {
+  const { alignItems, justifyContent, flexWrap, sx, ...rest } = props;
   return (
     <MuiStack
-      {...props}
+      {...rest}
+      sx={[
+        ...(Array.isArray(sx) ? sx : sx ? [sx] : []),
+        {
+          ...(alignItems !== undefined ? { alignItems } : {}),
+          ...(justifyContent !== undefined ? { justifyContent } : {}),
+          ...(flexWrap !== undefined ? { flexWrap } : {}),
+        },
+      ] as React.ComponentProps<typeof MuiStack>["sx"]}
     />
   );
 }
