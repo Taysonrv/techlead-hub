@@ -1,4 +1,4 @@
-# Roadmap após a 1.0.0-rc.6
+# Roadmap da 1.0.0-rc.7
 
 ## Entregue na RC.6
 
@@ -11,7 +11,14 @@
 
 ## Próximos incrementos
 
+- Chat interno contextual com proteção contra envio de credenciais.
+- Central de Coordenação com riscos e carga consolidada.
+- Fundação Microsoft 365 para Planner, Outlook e Teams.
+- Endurecimento de segurança e documentação operacional.
+
 - Processamento distribuído em fila persistente para importações acima de 10 mil registros.
 - Observabilidade central com métricas, alertas e retenção configurável.
 - Testes end-to-end dos fluxos críticos Web e Desktop.
 - Refinamentos contínuos dos relatórios e indicadores executivos.
+- Mensagens em tempo real por SSE/WebSocket e menções.
+- Escrita controlada em Planner, Outlook e Teams.

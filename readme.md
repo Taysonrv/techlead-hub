@@ -4,8 +4,8 @@ Aplicação Web e Desktop para gestão operacional e executiva do suporte e sust
 
 ## Versão em preparação
 
-`1.0.0-rc.6`
+`1.0.0-rc.7`
 
-Esta versão consolida as melhorias recentes de Movidesk, Azure DevOps, Pendências e desempenho, além da Central de Sincronizações auditável, inspeção prévia de importações e carregamento das telas sob demanda.
+Esta versão adiciona a fundação segura do chat interno, Central de Coordenação, proteção contra vazamento de credenciais e documentação operacional, além de preparar Planner, Outlook e Teams sobre a conexão Microsoft 365 existente.
 
-Consulte `docs/04-API.md` para os endpoints e `docs/05-Backlog.md` para o escopo da entrega e próximos incrementos.
+Comece por `docs/01-Requisitos.md` e `docs/02-Arquitetura.md`. Segurança e operação estão descritas em `docs/07-Seguranca-e-Privacidade.md` e `docs/10-Operacao-e-Runbook.md`.

@@ -7,12 +7,34 @@ on:
     branches:
       - main
       - feature/**
+      - feat/**
+      - fix/**
+
+permissions:
+  contents: read
 
 concurrency:
   group: validate-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: Verificar segredos versionados
+        run: node scripts/security-check.mjs
+      - name: Auditar dependências críticas
+        run: |
+          npm audit --prefix backend --audit-level=critical --omit=dev
+          npm audit --prefix frontend --audit-level=critical --omit=dev
+          npm audit --prefix desktop --audit-level=critical --omit=dev
+
   validate:
     runs-on: windows-latest
     env:
@@ -52,7 +74,9 @@ jobs:
 
       - name: Validar desktop
         shell: pwsh
-        run: npm run build:desktop --prefix desktop
+        run: |
+          npm test --prefix desktop
+          npm run build:desktop --prefix desktop
 
   validate-web-image:
     runs-on: ubuntu-latest

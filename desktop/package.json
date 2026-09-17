@@ -1,6 +1,6 @@
 {
   "name": "techlead-hub-desktop",
-  "version": "1.0.0-rc.6",
+  "version": "1.0.0-rc.7",
   "description": "TechLead Hub - Support Intelligence",
   "main": "dist/main.js",
   "author": "Aliare - Suporte e Sustentação - SIMER",
@@ -11,6 +11,7 @@
     "build:backend": "npm --prefix ../backend run prisma:generate && npm --prefix ../backend run build",
     "build:frontend": "npm --prefix ../frontend run build",
     "build": "npm run build:desktop",
+    "test": "node --import tsx --test src/**/*.test.ts",
     "build:all": "npm run build:backend && npm run build:frontend && npm run build:desktop",
     "dev": "npm run build:desktop && electron .",
     "start": "npm run dev",

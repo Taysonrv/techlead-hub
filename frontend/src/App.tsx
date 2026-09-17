@@ -56,6 +56,8 @@ const Reports = lazy(() => import("./pages/Reports").then((module) => ({ default
 const MyOperation = lazy(() => import("./pages/MyOperation").then((module) => ({ default: module.MyOperation })));
 const DataQuality = lazy(() => import("./pages/DataQuality").then((module) => ({ default: module.DataQuality })));
 const Knowledge = lazy(() => import("./pages/Knowledge").then((module) => ({ default: module.Knowledge })));
+const Chat = lazy(() => import("./pages/Chat").then((module) => ({ default: module.Chat })));
+const Coordination = lazy(() => import("./pages/Coordination").then((module) => ({ default: module.Coordination })));
 
 import {
   aliareColors,
@@ -230,6 +232,9 @@ function App() {
               </AuthenticatedLayout>
             }
           />
+
+          <Route path="/chat" element={<AuthenticatedLayout><Chat /></AuthenticatedLayout>} />
+          <Route path="/coordenacao" element={<AuthenticatedLayout><Coordination /></AuthenticatedLayout>} />
 
           <Route
             path="/analistas"

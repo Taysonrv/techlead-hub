@@ -32,6 +32,15 @@ import type {
   UpdateInfo,
 } from "electron-updater";
 
+import {
+  compareAppVersions,
+  findNewestRelease,
+} from "./update-discovery.js";
+
+import type {
+  GitHubRelease,
+} from "./update-discovery.js";
+
 /* =========================================================
    CONFIGURAÇÕES
 ========================================================= */
@@ -119,6 +128,14 @@ const UPDATE_REPOSITORY = {
   owner: "Taysonrv",
   repo: "techlead-hub-releases",
 } as const;
+
+const UPDATE_MANIFEST =
+  IS_PRERELEASE
+    ? "beta.yml"
+    : "latest.yml";
+
+const RELEASE_DISCOVERY_TIMEOUT =
+  8_000;
 
 /* =========================================================
    TIPOS DE ATUALIZAÇÃO
@@ -220,6 +237,16 @@ function getAutoUpdater():
   return autoUpdater;
 }
 
+function configureGitHubUpdateFeed() {
+  getAutoUpdater().setFeedURL({
+    provider: "github",
+    owner: UPDATE_REPOSITORY.owner,
+    repo: UPDATE_REPOSITORY.repo,
+    private: false,
+    channel: UPDATE_CHANNEL,
+  });
+}
+
 function setUpdateState(
   patch:
     Partial<UpdateState>
@@ -244,52 +271,57 @@ function setUpdateState(
   }
 }
 
-function compareAppVersions(left: string, right: string): number {
-  const parse = (value: string) => {
-    const match = value.trim().replace(/^v/i, "").match(
-      /^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?/,
+async function configureDiscoveredUpdateFeed(): Promise<"configured" | "current" | "fallback"> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), RELEASE_DISCOVERY_TIMEOUT);
+
+  try {
+    const response = await fetch(
+      `https://api.github.com/repos/${UPDATE_REPOSITORY.owner}/${UPDATE_REPOSITORY.repo}/releases?per_page=30`,
+      {
+        headers: {
+          Accept: "application/vnd.github+json",
+          "User-Agent": `${APP_NAME}/${app.getVersion()}`,
+          "X-GitHub-Api-Version": "2022-11-28",
+        },
+        signal: controller.signal,
+      },
     );
-    if (!match) return null;
-    return {
-      core: [Number(match[1]), Number(match[2]), Number(match[3])],
-      prerelease: match[4]?.split(".") ?? [],
-    };
-  };
 
-  const leftVersion = parse(left);
-  const rightVersion = parse(right);
-  if (!leftVersion || !rightVersion) {
-    return left.localeCompare(right, "en", { numeric: true, sensitivity: "base" });
+    if (!response.ok) {
+      throw new Error(`GitHub respondeu HTTP ${response.status}.`);
+    }
+
+    const releases = await response.json() as GitHubRelease[];
+    const release = findNewestRelease(releases, IS_PRERELEASE, UPDATE_MANIFEST);
+
+    if (!release) {
+      console.warn(`[updater] Nenhuma release válida com ${UPDATE_MANIFEST} foi localizada.`);
+      configureGitHubUpdateFeed();
+      return "fallback";
+    }
+
+    if (compareAppVersions(release.tag_name, app.getVersion()) <= 0) {
+      console.log(`[updater] Release mais recente confirmada pela API: ${release.tag_name}.`);
+      return "current";
+    }
+
+    const releaseUrl = `https://github.com/${UPDATE_REPOSITORY.owner}/${UPDATE_REPOSITORY.repo}/releases/download/${encodeURIComponent(release.tag_name)}/`;
+    getAutoUpdater().setFeedURL({
+      provider: "generic",
+      url: releaseUrl,
+      channel: UPDATE_CHANNEL,
+    });
+
+    console.log(`[updater] Release descoberta: ${release.tag_name}; feed direto: ${releaseUrl}`);
+    return "configured";
+  } catch (error) {
+    console.warn("[updater] Descoberta explícita indisponível; usando o provedor GitHub.", error);
+    configureGitHubUpdateFeed();
+    return "fallback";
+  } finally {
+    clearTimeout(timeout);
   }
-
-  for (let index = 0; index < 3; index += 1) {
-    const difference = leftVersion.core[index] - rightVersion.core[index];
-    if (difference !== 0) return difference;
-  }
-
-  if (!leftVersion.prerelease.length && rightVersion.prerelease.length) return 1;
-  if (leftVersion.prerelease.length && !rightVersion.prerelease.length) return -1;
-
-  for (
-    let index = 0;
-    index < Math.max(leftVersion.prerelease.length, rightVersion.prerelease.length);
-    index += 1
-  ) {
-    const leftPart = leftVersion.prerelease[index];
-    const rightPart = rightVersion.prerelease[index];
-    if (leftPart === undefined) return -1;
-    if (rightPart === undefined) return 1;
-    if (leftPart === rightPart) continue;
-
-    const leftNumber = /^\d+$/.test(leftPart) ? Number(leftPart) : null;
-    const rightNumber = /^\d+$/.test(rightPart) ? Number(rightPart) : null;
-    if (leftNumber !== null && rightNumber !== null) return leftNumber - rightNumber;
-    if (leftNumber !== null) return -1;
-    if (rightNumber !== null) return 1;
-    return leftPart.localeCompare(rightPart, "en", { sensitivity: "base" });
-  }
-
-  return 0;
 }
 
 function configureAutoUpdater() {
@@ -335,13 +367,7 @@ function configureAutoUpdater() {
    * configuração antiga do app-update.yml mantenha a instalação presa
    * a uma release anterior após atualizações manuais.
    */
-  updater.setFeedURL({
-    provider: "github",
-    owner: UPDATE_REPOSITORY.owner,
-    repo: UPDATE_REPOSITORY.repo,
-    private: false,
-    channel: UPDATE_CHANNEL,
-  });
+  configureGitHubUpdateFeed();
 
   updater.autoDownload =
     false;
@@ -589,6 +615,27 @@ async function checkForUpdates() {
   }
 
   try {
+    setUpdateState({
+      status: "checking",
+      availableVersion: null,
+      message: "Verificando atualizações...",
+    });
+
+    const discovery = await configureDiscoveredUpdateFeed();
+
+    if (discovery === "current") {
+      setUpdateState({
+        status: "not-available",
+        availableVersion: null,
+        percent: 0,
+        transferred: 0,
+        total: 0,
+        bytesPerSecond: 0,
+        message: "Você está usando a versão mais recente.",
+      });
+      return updateState;
+    }
+
     await getAutoUpdater()
       .checkForUpdates();
 

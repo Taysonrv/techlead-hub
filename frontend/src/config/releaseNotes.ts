@@ -9,9 +9,20 @@ export type ReleaseNote = {
   items: readonly ReleaseNoteItem[];
 };
 
-export const FALLBACK_APP_VERSION = "1.0.0-rc.6";
+export const FALLBACK_APP_VERSION = "1.0.0-rc.7";
 
 export const releaseNotes: Record<string, ReleaseNote> = {
+  "1.0.0-rc.7": {
+    version: "1.0.0-rc.7",
+    title: "Colaboração, coordenação e proteção de dados",
+    items: [
+      { title: "Chat interno seguro", description: "Canais da equipe com controle de membros, histórico auditável e bloqueio de padrões de credenciais." },
+      { title: "Central de Coordenação", description: "Backlog, criticidade, vencimentos, bloqueios e carga combinada de tickets e Work Items por analista." },
+      { title: "Microsoft 365", description: "Leitura delegada de Planner, calendário Outlook e equipes do Teams sobre a conexão corporativa existente." },
+      { title: "Proteção contra vazamento", description: "Cabeçalhos defensivos, respostas sem cache, token por sessão do navegador e verificação de segredos no CI." },
+      { title: "Documentação completa", description: "Requisitos, arquitetura, banco, API, segurança, integrações e runbook de operação e publicação." },
+    ],
+  },
   "1.0.0-rc.6": {
     version: "1.0.0-rc.6",
     title: "Sincronizações auditáveis, desempenho e dados enriquecidos",
