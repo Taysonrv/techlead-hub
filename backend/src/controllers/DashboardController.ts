@@ -863,6 +863,26 @@ export class DashboardController {
           {
             where: snapshotWhere,
 
+            /* O payload completo é carregado somente no detalhe. */
+            select: {
+              id: true, movideskId: true, protocol: true, subject: true,
+              category: true, cause: true, urgency: true, status: true,
+              baseStatus: true, justification: true, client: true,
+              contact: true, owner: true, ownerTeam: true, service: true,
+              department: true, serviceFirstLevel: true,
+              serviceSecondLevel: true, serviceThirdLevel: true,
+              businessArea: true, createdDate: true, dueDate: true,
+              firstResponseDueDate: true, firstResponseDate: true,
+              resolvedDate: true, closedDate: true, canceledDate: true,
+              reopenedDate: true, lastActionDate: true, lastUpdate: true,
+              actionCount: true, resolvedInFirstCall: true,
+              solutionSlaIndicator: true, responseSlaIndicator: true,
+              lifetimeMinutes: true, stoppedMinutes: true, taskNumber: true,
+              taskStatus: true, taskTitle: true, taskType: true, taskUrl: true,
+              registeredVersion: true, deliveredVersion: true,
+              importSource: true, importedAt: true, importBatch: true,
+            },
+
             orderBy: {
               createdDate:
                 "desc",
@@ -908,7 +928,7 @@ export class DashboardController {
                 OR: [
                   ...(taskNumbers.length ? [{ id: { in: taskNumbers } }] : []),
                   ...(ticketMovideskIds.length ? [{ movideskTicket: { in: ticketMovideskIds } }] : []),
-                  ...ticketMovideskIds.map((id) => ({ participantMovideskTickets: { contains: `,${id},` } })),
+                  { participantMovideskTickets: { not: null } },
                 ],
               },
               select: {
@@ -1141,8 +1161,6 @@ export class DashboardController {
             importBatch:
               ticket.importBatch,
 
-            /* Histórico e indicadores extraídos do payload completo do Movidesk */
-            ...analyzeMovideskPayload(ticket.rawData),
           })
         );
 
@@ -1161,6 +1179,43 @@ export class DashboardController {
           error:
             "Não foi possível buscar os tickets.",
         });
+    }
+  }
+
+  /**
+   * Histórico pesado do Movidesk carregado sob demanda. Mantém a listagem
+   * rápida e entrega ações, trocas de responsável e satisfação no drawer.
+   */
+  async ticketAnalytics(
+    req: Request,
+    res: Response
+  ) {
+    try {
+      const id = Number(req.params.id);
+      if (!Number.isInteger(id) || id <= 0) {
+        return res.status(400).json({ error: "Atendimento inválido." });
+      }
+
+      const ticket = await prisma.ticket.findFirst({
+        where: {
+          ...(await getLatestSnapshotWhere()),
+          id,
+        },
+        select: {
+          rawData: true,
+        },
+      });
+
+      if (!ticket) {
+        return res.status(404).json({ error: "Atendimento não encontrado." });
+      }
+
+      return res.json(analyzeMovideskPayload(ticket.rawData));
+    } catch (error) {
+      console.error("Erro ao buscar histórico do atendimento:", error);
+      return res.status(500).json({
+        error: "Não foi possível carregar o histórico do atendimento.",
+      });
     }
   }
 }
