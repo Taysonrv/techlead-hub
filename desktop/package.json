@@ -1,6 +1,6 @@
 {
   "name": "techlead-hub-desktop",
-  "version": "1.0.0-rc.6",
+  "version": "1.0.0-rc.7",
   "description": "TechLead Hub - Support Intelligence",
   "main": "dist/main.js",
   "author": "Aliare - Suporte e Sustentação - SIMER",
@@ -24,7 +24,8 @@
     "publish:beta": "npm run clean:release && npm run build:all && electron-builder --win nsis --publish always",
     "release:beta:publish": "npm run version:beta && npm run publish:beta",
     "validate:release": "node scripts/validate-release.mjs",
-    "publish:stable": "npm run clean:release && npm run build:all && electron-builder --win nsis --config.publish.0.channel=latest --config.publish.0.releaseType=release --publish always"
+    "publish:stable": "npm run clean:release && npm run build:all && electron-builder --win nsis --config.publish.0.channel=latest --config.publish.0.releaseType=release --publish always",
+    "test:updater": "tsx --test src/updaterRelease.test.ts"
   },
   "dependencies": {
     "electron-updater": "^6.6.2"
