@@ -110,6 +110,11 @@ type Ticket = {
   lastUpdate: string | null;
   actionCount: number | null;
   resolvedInFirstCall: boolean | null;
+  ownerHandoffs?: number;
+  reopenCount?: number;
+  satisfactionScore?: number | null;
+  satisfactionComment?: string | null;
+  timeline?: Array<{ date: string; type: string; title: string; description: string | null; author: string | null }>;
 
   lifetimeMinutes: number | null;
   stoppedMinutes: number | null;
@@ -2921,6 +2926,10 @@ export function Tickets() {
                 <TicketField label="Última ação" value={formatDate(selectedTicket.lastActionDate)} />
                 <TicketField label="Última atualização" value={formatDate(selectedTicket.lastUpdate)} />
                 <TicketField label="Quantidade de ações" value={selectedTicket.actionCount} />
+                <TicketField label="Trocas de responsável" value={selectedTicket.ownerHandoffs} />
+                <TicketField label="Quantidade de reaberturas" value={selectedTicket.reopenCount} />
+                <TicketField label="Resolvido no primeiro contato" value={selectedTicket.resolvedInFirstCall === null ? "Não informado" : selectedTicket.resolvedInFirstCall ? "Sim" : "Não"} />
+                <TicketField label="Satisfação" value={selectedTicket.satisfactionScore != null ? `${selectedTicket.satisfactionScore}/5` : null} />
               </Box>
 
               {/* JUSTIFICATIVA */}
@@ -2953,6 +2962,26 @@ export function Tickets() {
                       selectedTicket.justification
                     }
                   </Typography>
+                </>
+              )}
+
+              {Boolean(selectedTicket.timeline?.length) && (
+                <>
+                  <Divider sx={{ mb: 2.25 }} />
+                  <SectionTitle>Linha do tempo do atendimento</SectionTitle>
+                  <Stack spacing={1} sx={{ mb: 2.25 }}>
+                    {selectedTicket.timeline!.slice(-12).reverse().map((entry, index) => (
+                      <Box key={`${entry.date}-${entry.type}-${index}`} sx={{ borderLeft: "3px solid", borderColor: entry.type === "Satisfação" ? "warning.main" : "primary.main", pl: 1.5, py: 0.5 }}>
+                        <Stack direction="row" spacing={1} sx={{ alignItems: "center", flexWrap: "wrap" }}>
+                          <Chip size="small" label={entry.type} />
+                          <Typography variant="body2" sx={{ fontWeight: 750 }}>{entry.title}</Typography>
+                          <Typography variant="caption" color="text.secondary">{formatDate(entry.date)}</Typography>
+                        </Stack>
+                        {entry.author && <Typography variant="caption" color="text.secondary">Por {entry.author}</Typography>}
+                        {entry.description && <Typography variant="body2" sx={{ mt: 0.4, whiteSpace: "pre-wrap" }}>{entry.description}</Typography>}
+                      </Box>
+                    ))}
+                  </Stack>
                 </>
               )}
 
