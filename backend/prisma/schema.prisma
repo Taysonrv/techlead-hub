@@ -184,6 +184,7 @@ model ImportRun {
 
   source   String?
   fileName String?
+  fileHash String? @db.VarChar(64)
 
   status ImportStatus @default(PROCESSING)
 
@@ -194,6 +195,7 @@ model ImportRun {
   errorRows    Int @default(0)
 
   message String?
+  errorDetails Json?
 
   startedAt  DateTime  @default(now())
   finishedAt DateTime?
@@ -207,6 +209,7 @@ model ImportRun {
   updatedAt DateTime @updatedAt
 
   @@index([status])
+  @@index([fileHash])
   @@index([userId])
   @@index([startedAt])
   @@index([finishedAt])

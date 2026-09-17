@@ -6,6 +6,8 @@ import {
 } from "@mui/material";
 
 import {
+  lazy,
+  Suspense,
   useEffect,
   useState,
 } from "react";
@@ -36,74 +38,24 @@ import {
   FiltersProvider,
 } from "./context/FiltersContext";
 
-import {
-  Dashboard,
-} from "./pages/Dashboard";
-
-import {
-  Tickets,
-} from "./pages/Tickets";
-
-import {
-  Analysts,
-} from "./pages/Analysts";
-
-import {
-  Clients,
-} from "./pages/Clients";
-
-import {
-  Attention,
-} from "./pages/Attention";
-
-import {
-  Performance,
-} from "./pages/Performance";
-
-import {
-  Import,
-} from "./pages/Import";
-
-import {
-  About,
-} from "./pages/About";
-
-import {
-  Profile,
-} from "./pages/Profile";
-
-import {
-  Login,
-} from "./pages/Login";
-
-import {
-  Users,
-} from "./pages/Users";
-
-import {
-  AzureWorkItems,
-} from "./pages/AzureWorkItems";
-
-import {
-  Versions,
-} from "./pages/Versions";
-
-import {
-  Settings,
-} from "./pages/Settings";
-
-import {
-  Reports,
-} from "./pages/Reports";
-
-import {
-  MyOperation,
-} from "./pages/MyOperation";
-
-import {
-  DataQuality,
-} from "./pages/DataQuality";
-import { Knowledge } from "./pages/Knowledge";
+const Dashboard = lazy(() => import("./pages/Dashboard").then((module) => ({ default: module.Dashboard })));
+const Tickets = lazy(() => import("./pages/Tickets").then((module) => ({ default: module.Tickets })));
+const Analysts = lazy(() => import("./pages/Analysts").then((module) => ({ default: module.Analysts })));
+const Clients = lazy(() => import("./pages/Clients").then((module) => ({ default: module.Clients })));
+const Attention = lazy(() => import("./pages/Attention").then((module) => ({ default: module.Attention })));
+const Performance = lazy(() => import("./pages/Performance").then((module) => ({ default: module.Performance })));
+const Import = lazy(() => import("./pages/Import").then((module) => ({ default: module.Import })));
+const About = lazy(() => import("./pages/About").then((module) => ({ default: module.About })));
+const Profile = lazy(() => import("./pages/Profile").then((module) => ({ default: module.Profile })));
+const Login = lazy(() => import("./pages/Login").then((module) => ({ default: module.Login })));
+const Users = lazy(() => import("./pages/Users").then((module) => ({ default: module.Users })));
+const AzureWorkItems = lazy(() => import("./pages/AzureWorkItems").then((module) => ({ default: module.AzureWorkItems })));
+const Versions = lazy(() => import("./pages/Versions").then((module) => ({ default: module.Versions })));
+const Settings = lazy(() => import("./pages/Settings").then((module) => ({ default: module.Settings })));
+const Reports = lazy(() => import("./pages/Reports").then((module) => ({ default: module.Reports })));
+const MyOperation = lazy(() => import("./pages/MyOperation").then((module) => ({ default: module.MyOperation })));
+const DataQuality = lazy(() => import("./pages/DataQuality").then((module) => ({ default: module.DataQuality })));
+const Knowledge = lazy(() => import("./pages/Knowledge").then((module) => ({ default: module.Knowledge })));
 
 import {
   aliareColors,
@@ -252,6 +204,7 @@ function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
+        <Suspense fallback={<Box sx={{ minHeight: "100vh", display: "grid", placeItems: "center" }}><CircularProgress size={32} /></Box>}>
         <Routes>
           <Route
             path="/login"
@@ -447,6 +400,7 @@ function App() {
             }
           />
         </Routes>
+        </Suspense>
       </AuthProvider>
     </BrowserRouter>
   );

@@ -22,6 +22,11 @@ syncCenterRoutes.get(
   controller.history,
 );
 
+syncCenterRoutes.get(
+  "/movidesk/:runId/errors",
+  controller.errors,
+);
+
 export {
   syncCenterRoutes,
 };

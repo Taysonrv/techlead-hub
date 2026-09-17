@@ -47,6 +47,17 @@ export async function ensureApplicationSchema() {
 
   await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "AuditLog_userId_createdAt_idx" ON "AuditLog" ("userId", "createdAt" DESC)`);
   await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "AuditLog_action_createdAt_idx" ON "AuditLog" ("action", "createdAt" DESC)`);
+
+  await prisma.$executeRawUnsafe(`
+    ALTER TABLE "ImportRun"
+      ADD COLUMN IF NOT EXISTS "fileHash" VARCHAR(64),
+      ADD COLUMN IF NOT EXISTS "errorDetails" JSONB
+  `);
+
+  await prisma.$executeRawUnsafe(`
+    CREATE INDEX IF NOT EXISTS "ImportRun_fileHash_idx"
+    ON "ImportRun" ("fileHash")
+  `);
   await prisma.$executeRawUnsafe(`
     CREATE TABLE IF NOT EXISTS "SystemSetting" (
       "key" VARCHAR(120) PRIMARY KEY,

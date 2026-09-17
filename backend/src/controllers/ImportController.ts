@@ -5,6 +5,7 @@ import {
 
 import { MovideskExcelImportService } from "../services/MovideskExcelImportService";
 import { MovideskJsonImportService } from "../services/MovideskJsonImportService";
+import { ImportPreviewService } from "../services/ImportPreviewService";
 
 import type {
   AuthenticatedRequest,
@@ -16,7 +17,27 @@ const excelService =
 const jsonService =
   new MovideskJsonImportService();
 
+const previewService =
+  new ImportPreviewService();
+
 export class ImportController {
+  async preview(
+    req: Request,
+    res: Response,
+  ) {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: "Nenhum arquivo do Movidesk foi enviado." });
+      }
+
+      return res.json(await previewService.inspect(req.file));
+    } catch (error) {
+      return res.status(400).json({
+        error: error instanceof Error ? error.message : "Não foi possível validar o arquivo.",
+      });
+    }
+  }
+
   async tickets(
     req: Request,
     res: Response
@@ -61,6 +82,8 @@ export class ImportController {
           {
             fileName:
               req.file.originalname,
+            fileHash:
+              req.body.fileHash || undefined,
             userId:
               authenticatedRequest.auth
                 ?.userId ??

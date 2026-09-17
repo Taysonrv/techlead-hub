@@ -176,6 +176,23 @@ export class SyncCenterController {
     }
   };
 
+  public errors = async (
+    request: Request,
+    response: Response,
+  ): Promise<Response> => {
+    try {
+      const runId = this.positiveInteger(request.params.runId);
+      if (!runId) return response.status(400).json({ message: "Execução inválida." });
+
+      const run = await this.service.importErrors(runId);
+      if (!run) return response.status(404).json({ message: "Execução não encontrada." });
+
+      return response.status(200).json(run);
+    } catch (error) {
+      return this.error(response, error);
+    }
+  };
+
   private text(
     value: unknown,
   ) {

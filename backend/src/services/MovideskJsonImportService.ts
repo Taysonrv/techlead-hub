@@ -49,6 +49,7 @@ export class MovideskJsonImportService {
     fileBuffer: Buffer,
     options: {
       fileName?: string | null;
+      fileHash?: string | null;
       userId?: number | null;
       source?: "MOVIDESK_JSON" | "MOVIDESK_API";
     } = {},
@@ -73,12 +74,14 @@ export class MovideskJsonImportService {
     }
 
     const source = options.source ?? "MOVIDESK_JSON";
+    const fileHash = options.fileHash ?? crypto.createHash("sha256").update(fileBuffer).digest("hex");
     const batchId = crypto.randomUUID();
     const importRun = await prisma.importRun.create({
       data: {
         batch: batchId,
         source,
         fileName: options.fileName ?? null,
+        fileHash,
         userId: options.userId ?? null,
         status: "PROCESSING",
         totalRows: rows.length,
@@ -164,8 +167,21 @@ export class MovideskJsonImportService {
             : ignored > 0
               ? `Importação JSON concluída com ${ignored} registro(s) ignorado(s).`
               : `${source === "MOVIDESK_API" ? "Sincronização da API" : "Importação JSON"} concluída com sucesso.`,
+        errorDetails: errorDetails.slice(0, 500) as Prisma.InputJsonValue,
       },
     });
+
+    if (options.userId) {
+      await prisma.auditLog.create({
+        data: {
+          userId: options.userId,
+          action: "MOVIDESK_IMPORT_COMPLETED",
+          entity: "ImportRun",
+          entityId: String(importRun.id),
+          metadata: { source, fileName: options.fileName ?? null, totalRows: rows.length, created, updated, ignored, errors },
+        },
+      });
+    }
 
     return {
       batchId,
