@@ -62,18 +62,32 @@ export function DataQuality() {
   const [selected, setSelected] = useState<Sample | null>(null);
   const [detail, setDetail] = useState<Record<string, unknown> | null>(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (signal?: AbortSignal) => {
     try {
       setLoading(true); setError(false);
       const response = await api.get<Data>("/workspace/data-quality", { params: {
         type: type || undefined, client: client || undefined, user: user || undefined,
         issue: issue || undefined, search: search || undefined,
-      } });
+      }, signal, timeout: 45_000 });
+      if (signal?.aborted) return;
       setData(response.data);
-    } catch { setError(true); } finally { setLoading(false); }
+    } catch (requestError) {
+      if (signal?.aborted) return;
+      console.error("Erro ao carregar pendências:", requestError);
+      setError(true);
+    } finally {
+      if (!signal?.aborted) setLoading(false);
+    }
   }, [type, client, user, issue, search]);
 
-  useEffect(() => { const timer = window.setTimeout(() => void load(), 250); return () => window.clearTimeout(timer); }, [load]);
+  useEffect(() => {
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => void load(controller.signal), 250);
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [load]);
 
   async function open(item: Sample) {
     setSelected(item); setDetail(null);
