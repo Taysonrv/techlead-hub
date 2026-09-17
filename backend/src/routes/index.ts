@@ -55,6 +55,7 @@ import { globalRoutes } from "./global.routes";
 import { knowledgeRoutes } from "./knowledge.routes";
 import { systemSettingsRoutes } from "./system-settings.routes";
 import { sessionRoutes } from "./session.routes";
+import { movideskRoutes } from "./movidesk.routes";
 
 /* =========================================================
    ROUTER
@@ -201,6 +202,11 @@ routes.use(
 routes.use(
   "/api/sync-center",
   syncCenterRoutes,
+);
+
+routes.use(
+  "/api/movidesk",
+  movideskRoutes,
 );
 
 /* =========================================================
