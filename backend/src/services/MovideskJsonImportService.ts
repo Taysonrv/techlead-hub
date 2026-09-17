@@ -47,7 +47,11 @@ const CUSTOM_FIELDS = {
 export class MovideskJsonImportService {
   async execute(
     fileBuffer: Buffer,
-    options: { fileName?: string | null; userId?: number | null } = {},
+    options: {
+      fileName?: string | null;
+      userId?: number | null;
+      source?: "MOVIDESK_JSON" | "MOVIDESK_API";
+    } = {},
   ): Promise<ImportResult> {
     if (!fileBuffer?.length) {
       throw new Error("O arquivo JSON enviado está vazio.");
@@ -68,11 +72,12 @@ export class MovideskJsonImportService {
       throw new Error("O arquivo excede o limite de 10.000 tickets por lote.");
     }
 
+    const source = options.source ?? "MOVIDESK_JSON";
     const batchId = crypto.randomUUID();
     const importRun = await prisma.importRun.create({
       data: {
         batch: batchId,
-        source: "MOVIDESK_JSON",
+        source,
         fileName: options.fileName ?? null,
         userId: options.userId ?? null,
         status: "PROCESSING",
@@ -118,14 +123,14 @@ export class MovideskJsonImportService {
           where: { movideskId: ticket.movideskId },
           create: {
             ...ticket,
-            importSource: "MOVIDESK_JSON",
+            importSource: source,
             importBatch: batchId,
             importedAt: new Date(),
             importRunId: importRun.id,
           },
           update: {
             ...ticket,
-            importSource: "MOVIDESK_JSON",
+            importSource: source,
             importBatch: batchId,
             importedAt: new Date(),
             importRunId: importRun.id,
@@ -158,7 +163,7 @@ export class MovideskJsonImportService {
             ? `Importação JSON concluída com ${errors} erro(s).`
             : ignored > 0
               ? `Importação JSON concluída com ${ignored} registro(s) ignorado(s).`
-              : "Importação JSON concluída com sucesso.",
+              : `${source === "MOVIDESK_API" ? "Sincronização da API" : "Importação JSON"} concluída com sucesso.`,
       },
     });
 
