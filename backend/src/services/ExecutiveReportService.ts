@@ -17,7 +17,7 @@ import {
   buildManagementInsights,
   type ManagementInsight,
 } from "./ManagementInsightService";
-import { analyzeMovideskPayload } from "./MovideskPayloadAnalytics";
+import { analyzeMovideskIndicators } from "./MovideskPayloadAnalytics";
 
 export type ReportScope =
   | "executive"
@@ -416,7 +416,7 @@ export class ExecutiveReportService {
     const serviceEvolution = monthlyRanking((ticket) => ticket.serviceSecondLevel);
     const causeEvolution = monthlyRanking((ticket) => ticket.cause);
     const clientEvolution = monthlyRanking((ticket) => ticket.client);
-    const payloadAnalytics = ticketTimeline.map((ticket) => analyzeMovideskPayload(ticket.rawData));
+    const payloadAnalytics = ticketTimeline.map((ticket) => analyzeMovideskIndicators(ticket.rawData));
     const reopened = payloadAnalytics.filter((item) => item.reopenCount > 0).length;
     const excessiveHandoffs = payloadAnalytics.filter((item) => item.ownerHandoffs >= 3).length;
     const satisfactionMeasured = payloadAnalytics.filter((item) => item.satisfactionScore !== null).length;

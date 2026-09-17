@@ -302,6 +302,10 @@ export class DashboardController {
               },
             },
 
+            omit: {
+              rawData: true,
+            },
+
             orderBy: {
               createdDate:
                 "asc",

@@ -4,12 +4,14 @@ import {
 import type { Prisma } from "@prisma/client";
 import { SIMER_CLIENTS, SUPPORT_ANALYSTS, ticketOperationalScope } from "../domain/OperationalScope";
 import { MovideskService } from "./MovideskService";
-import { analyzeMovideskPayload } from "./MovideskPayloadAnalytics";
+import { analyzeMovideskIndicators } from "./MovideskPayloadAnalytics";
 
 const TERMINAL = ["Concluído", "Concluido", "Closed", "Done", "Resolved", "Cancelado", "Canceled"];
 const normalizedWords = (value: string) => value
   .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
   .toLocaleUpperCase("pt-BR").split(/\s+/).filter((word) => word.length > 2);
+
+const dataQualityCache = new Map<string, { expiresAt: number; value: unknown }>();
 
 export class WorkspaceService {
   public async myOperation(userId: number, params: {
@@ -60,11 +62,12 @@ export class WorkspaceService {
           { assignedToEmail: { equals: user.email, mode: "insensitive" as const } },
         ] : []),
         ...(taskIds.length ? [{ id: { in: taskIds } }] : []),
-        ...ownedMovideskIds.map((id) => ({ participantMovideskTickets: { contains: `,${id},` } })),
+        ...(ownedMovideskIds.length ? [{ movideskTicket: { in: ownedMovideskIds } }] : []),
+        { participantMovideskTickets: { not: null } },
       ],
     };
 
-    const workItems = await prisma.azureWorkItem.findMany({
+    const workItemCandidates = await prisma.azureWorkItem.findMany({
         where: { AND: [
           identity,
           ...(params.client ? [{ OR: [
@@ -79,16 +82,32 @@ export class WorkspaceService {
           ] }] : []),
         ] },
         orderBy: [{ azureChangedAt: "desc" }, { id: "desc" }],
-        take: 500,
+        take: 5000,
         select: {
           id: true, workItemType: true, title: true, state: true,
+          createdByName: true, createdByEmail: true,
           client: true, assignedToName: true, prioritized: true,
+          assignedToEmail: true,
           participantClients: true,
           blockedProcess: true, deliveredVersion: true,
           movideskTicket: true, azureChangedAt: true,
           participantMovideskTickets: true,
         },
       });
+    const ownedTicketSet = new Set(ownedMovideskIds);
+    const taskIdSet = new Set(taskIds);
+    const same = (left: string | null, right: string | null) =>
+      Boolean(left && right && left.localeCompare(right, "pt-BR", { sensitivity: "base" }) === 0);
+    const workItems = workItemCandidates.filter((item) =>
+      same(item.createdByName, operationName)
+      || same(item.assignedToName, operationName)
+      || same(item.createdByEmail, user.email)
+      || same(item.assignedToEmail, user.email)
+      || taskIdSet.has(item.id)
+      || Boolean(item.movideskTicket && ownedTicketSet.has(item.movideskTicket))
+      || (item.participantMovideskTickets?.match(/\d+/g) ?? [])
+        .some((id) => ownedTicketSet.has(Number(id))),
+    );
 
     const isTerminal = (state: string) => TERMINAL.some((item) => item.toLocaleLowerCase("pt-BR") === state.toLocaleLowerCase("pt-BR"));
     const openWorkItems = workItems.filter((item) => !isTerminal(item.state)).length;
@@ -201,6 +220,11 @@ export class WorkspaceService {
     issue?: string | null;
     search?: string | null;
   } = {}) {
+    const cacheKey = JSON.stringify(params);
+    const cached = dataQualityCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) return cached.value;
+    if (dataQualityCache.size > 40) dataQualityCache.clear();
+
     const scopedTickets = await prisma.ticket.findMany({
       where: {
         AND: [
@@ -230,7 +254,7 @@ export class WorkspaceService {
             ...SIMER_CLIENTS.map((client) => ({ participantClients: { contains: client, mode: "insensitive" as const } })),
             ...(taskIds.length ? [{ id: { in: taskIds } }] : []),
             ...(movideskIds.length ? [{ movideskTicket: { in: movideskIds } }] : []),
-            ...movideskIds.map((id) => ({ participantMovideskTickets: { contains: `,${id},` } })),
+            { participantMovideskTickets: { not: null } },
           ],
         },
         ...(params.type ? [{ workItemType: { equals: params.type, mode: "insensitive" as const } }] : []),
@@ -263,60 +287,56 @@ export class WorkspaceService {
     const linkedTaskIds = [...new Set(allTicketLinks
       .map((item) => item.taskNumber)
       .filter((value): value is number => value !== null))];
+    const linkedTaskIdSet = new Set(linkedTaskIds);
 
-    const issueWhere = (issue: string): Prisma.AzureWorkItemWhereInput => {
-      if (issue === "withoutTicket") return {
-        AND: [
-          { movideskTicket: null },
-          { participantMovideskTickets: null },
-          ...(linkedTaskIds.length ? [{ id: { notIn: linkedTaskIds } }] : []),
-        ],
-      };
-      if (issue === "withoutClient") return { AND: [{ NOT: { workItemType: { equals: "APOIO", mode: "insensitive" } } }, { client: null }, { participantClients: null }] };
-      if (issue === "withoutModule") return { module: null };
-      if (issue === "withoutOwner") return { assignedToName: null };
-      if (issue === "completedWithoutVersion") return { AND: [{ NOT: { workItemType: { equals: "APOIO", mode: "insensitive" } } }, { state: { in: ["Concluído", "Concluido", "Closed", "Done", "Resolved"] } }, { deliveredVersion: null }] };
-      if (issue === "activeTaskWithVersion") return { AND: [{ NOT: { workItemType: { equals: "APOIO", mode: "insensitive" } } }, { state: { notIn: TERMINAL } }, { deliveredVersion: { not: null } }] };
-      return {};
+    /* Uma única leitura substitui cinco counts e duas listagens do mesmo escopo. */
+    const linkedTaskCandidates = await prisma.azureWorkItem.findMany({
+      where: { AND: [scope] },
+      orderBy: [{ azureClosedAt: "desc" }, { azureChangedAt: "desc" }],
+      select: {
+        id: true, workItemType: true, title: true, state: true,
+        createdByName: true,
+        client: true, participantClients: true, assignedToName: true,
+        module: true, registeredVersion: true, deliveredVersion: true,
+        movideskTicket: true, participantMovideskTickets: true,
+      },
+    });
+    const taskIdScope = new Set(taskIds);
+    const movideskIdScope = new Set(movideskIds);
+    const normalizeScopeValue = (value: string | null) => (value ?? "")
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR");
+    const belongsToOperationalScope = (item: (typeof linkedTaskCandidates)[number]) => {
+      const people = [item.createdByName, item.assignedToName].map(normalizeScopeValue);
+      const clients = [item.client, item.participantClients].map(normalizeScopeValue);
+      return SUPPORT_ANALYSTS.some((analyst) => people.includes(normalizeScopeValue(analyst)))
+        || SIMER_CLIENTS.some((client) => clients.some((value) => value.includes(normalizeScopeValue(client))))
+        || taskIdScope.has(item.id)
+        || Boolean(item.movideskTicket && movideskIdScope.has(item.movideskTicket))
+        || (item.participantMovideskTickets?.match(/\d+/g) ?? [])
+          .some((id) => movideskIdScope.has(Number(id)));
     };
+    const linkedTasks = linkedTaskCandidates.filter(belongsToOperationalScope);
 
-    const [
-      withoutTicket, withoutClient, withoutModule, withoutOwner,
-      completedWithoutVersion, existingTasks, duplicates, linkedTasks,
-    ] = await Promise.all([
-      prisma.azureWorkItem.count({ where: { AND: [scope, issueWhere("withoutTicket")] } }),
-      prisma.azureWorkItem.count({ where: { AND: [scope, issueWhere("withoutClient")] } }),
-      prisma.azureWorkItem.count({ where: { AND: [scope, issueWhere("withoutModule")] } }),
-      prisma.azureWorkItem.count({ where: { AND: [scope, issueWhere("withoutOwner")] } }),
-      prisma.azureWorkItem.count({
-        where: { AND: [scope, issueWhere("completedWithoutVersion")] },
-      }),
-      prisma.azureWorkItem.findMany({ where: { id: { in: taskIds } }, select: { id: true } }),
-      prisma.azureWorkItem.groupBy({
-        by: ["movideskTicket"],
-        where: { AND: [scope, { movideskTicket: { not: null } }] },
-        _count: { id: true },
-        having: { id: { _count: { gt: 1 } } },
-      }),
-      prisma.azureWorkItem.findMany({
-        where: {
-          AND: [scope],
-        },
-        orderBy: [{ azureClosedAt: "desc" }, { azureChangedAt: "desc" }],
-        select: {
-          id: true, workItemType: true, title: true, state: true,
-          client: true, participantClients: true, assignedToName: true, registeredVersion: true, deliveredVersion: true,
-          movideskTicket: true, participantMovideskTickets: true,
-        },
-      }),
-    ]);
-
-    const existingTaskIds = new Set(existingTasks.map((item) => item.id));
+    const existingTaskIds = new Set(linkedTasks.map((item) => item.id));
     const danglingTickets = scopedTickets.filter((ticket) =>
       ticket.taskNumber !== null && !existingTaskIds.has(ticket.taskNumber),
     );
-    const duplicatedIds = duplicates.map((item) => item.movideskTicket)
-      .filter((value): value is number => value !== null);
+    const movideskLinkCounts = new Map<number, number>();
+    linkedTasks.forEach((item) => {
+      if (item.movideskTicket) {
+        movideskLinkCounts.set(item.movideskTicket, (movideskLinkCounts.get(item.movideskTicket) ?? 0) + 1);
+      }
+    });
+    const duplicatedIds = [...movideskLinkCounts.entries()]
+      .filter(([, count]) => count > 1).map(([id]) => id);
+    const withoutTicket = linkedTasks.filter((item) =>
+      !item.movideskTicket && !item.participantMovideskTickets && !linkedTaskIdSet.has(item.id),
+    ).length;
+    const withoutClient = linkedTasks.filter((item) =>
+      !/apoio/i.test(item.workItemType) && !item.client && !item.participantClients,
+    ).length;
+    const withoutModule = linkedTasks.filter((item) => !item.module).length;
+    const withoutOwner = linkedTasks.filter((item) => !item.assignedToName).length;
 
     const normalizeStatus = (value: string) => value
       .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
@@ -367,23 +387,28 @@ export class WorkspaceService {
     const finishedLinkedTasks = linkedTasks.filter((item) => isTerminalTask(item.state));
     const activeLinkedTasks = linkedTasks.filter((item) => !isTerminalTask(item.state));
 
-    const finishedTaskById = new Map(finishedLinkedTasks.map((item) => [item.id, item]));
-    const finishedTaskByTicket = new Map<number, (typeof finishedLinkedTasks)[number]>();
-    for (const item of finishedLinkedTasks) {
-      if (item.movideskTicket) finishedTaskByTicket.set(item.movideskTicket, item);
-      for (const match of item.participantMovideskTickets?.match(/\d+/g) ?? []) {
-        finishedTaskByTicket.set(Number(match), item);
-      }
-    }
-
-    const findLinkedTask = (ticket: (typeof scopedTickets)[number], items: typeof linkedTasks) =>
-      (ticket.taskNumber ? items.find((item) => item.id === ticket.taskNumber) : undefined)
-      ?? items.find((item) => item.movideskTicket === ticket.movideskId
-        || (item.participantMovideskTickets?.match(/\d+/g) ?? []).map(Number).includes(ticket.movideskId));
+    const createLinkIndex = (items: typeof linkedTasks) => {
+      const byId = new Map(items.map((item) => [item.id, item]));
+      const byTicket = new Map<number, (typeof items)[number]>();
+      items.forEach((item) => {
+        if (item.movideskTicket) byTicket.set(item.movideskTicket, item);
+        (item.participantMovideskTickets?.match(/\d+/g) ?? [])
+          .forEach((id) => byTicket.set(Number(id), item));
+      });
+      return { byId, byTicket };
+    };
+    const allLinks = createLinkIndex(linkedTasks);
+    const finishedLinks = createLinkIndex(finishedLinkedTasks);
+    const activeLinks = createLinkIndex(activeLinkedTasks);
+    const findLinkedTask = (
+      ticket: (typeof scopedTickets)[number],
+      index: ReturnType<typeof createLinkIndex>,
+    ) => (ticket.taskNumber ? index.byId.get(ticket.taskNumber) : undefined)
+      ?? index.byTicket.get(ticket.movideskId);
 
     const ticketsAwaitingClosure = scopedTickets.flatMap((ticket) => {
       if (!isTicketOpen(ticket)) return [];
-      const task = findLinkedTask(ticket, finishedLinkedTasks);
+      const task = findLinkedTask(ticket, finishedLinks);
       if (task && isSupportTask(task)) return [];
       if (!task) return [];
       // A pendência de encerramento depende da entrega oficial da Tarefa no Azure.
@@ -393,18 +418,18 @@ export class WorkspaceService {
     });
     const ticketsFinishedWithoutDelivery = scopedTickets.flatMap((ticket) => {
       if (!isTicketOpen(ticket)) return [];
-      const task = findLinkedTask(ticket, finishedLinkedTasks);
+      const task = findLinkedTask(ticket, finishedLinks);
       return task && !isSupportTask(task) && !isCanceledTask(task.state) && !task.deliveredVersion?.trim()
         ? [{ ticket, task }]
         : [];
     });
     const closedTicketsWithActiveTask = scopedTickets.flatMap((ticket) => {
       if (!isTicketFinalized(ticket)) return [];
-      const task = findLinkedTask(ticket, activeLinkedTasks);
+      const task = findLinkedTask(ticket, activeLinks);
       return task && !isSupportTask(task) ? [{ ticket, task }] : [];
     });
     const clientMismatches = scopedTickets.flatMap((ticket) => {
-      const task = findLinkedTask(ticket, linkedTasks);
+      const task = findLinkedTask(ticket, allLinks);
       if (!task || !ticket.client || isSupportTask(task)) return [];
       const taskClients = [
         ...(task.client ? [task.client] : []),
@@ -431,7 +456,7 @@ export class WorkspaceService {
 
     const analyticsByTicketId = new Map(scopedTickets.map((ticket) => [
       ticket.id,
-      analyzeMovideskPayload(ticket.rawData),
+      analyzeMovideskIndicators(ticket.rawData),
     ]));
     const staleThreshold = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
     const lastMovement = (ticket: (typeof scopedTickets)[number]) =>
@@ -459,30 +484,22 @@ export class WorkspaceService {
     );
 
     const derivedTicketIssues = ["danglingTaskTickets", "ticketOpenTaskFinished", "ticketOpenTaskWithoutDelivery", "ticketClosedTaskOpen", "clientMismatch", "supportLinkDivergence", "awaitingReturnWithoutCause", "awaitingReturnOverdue", "reopenedTickets", "excessiveOwnerHandoffs", "lowSatisfaction", "suspectedClassification"];
+    const matchesAzureIssue = (item: (typeof linkedTasks)[number]) => {
+      if (params.issue === "duplicatedMovideskLinks") return Boolean(item.movideskTicket && duplicatedIds.includes(item.movideskTicket));
+      if (params.issue === "withoutTicket") return !item.movideskTicket && !item.participantMovideskTickets && !linkedTaskIdSet.has(item.id);
+      if (params.issue === "withoutClient") return !isSupportTask(item) && !item.client && !item.participantClients;
+      if (params.issue === "completedWithoutVersion") return !isSupportTask(item) && isTerminalTask(item.state) && !item.deliveredVersion;
+      if (params.issue === "activeTaskWithVersion") return !isSupportTask(item) && !isTerminalTask(item.state) && Boolean(item.deliveredVersion);
+      if (!params.issue) return (!item.movideskTicket && !item.participantMovideskTickets)
+        || !item.client || !item.module || !item.assignedToName
+        || (isTerminalTask(item.state) && !item.deliveredVersion);
+      return true;
+    };
     const azureSamples = params.issue === "supportLinkDivergence"
       ? supportDivergences.slice(0, 100)
       : params.issue && derivedTicketIssues.includes(params.issue)
       ? []
-      : await prisma.azureWorkItem.findMany({
-      where: { AND: [scope, params.issue === "duplicatedMovideskLinks"
-        ? { movideskTicket: { in: duplicatedIds } }
-        : params.issue ? issueWhere(params.issue) : {
-        OR: [
-          issueWhere("withoutTicket"), { client: null }, { module: null },
-          { assignedToName: null },
-          { state: { in: ["Concluído", "Concluido", "Closed", "Done", "Resolved"] }, deliveredVersion: null },
-        ],
-      }] },
-      orderBy: { azureChangedAt: "desc" },
-      take: 50,
-      select: {
-        id: true, workItemType: true, title: true, state: true,
-        client: true, module: true, assignedToName: true,
-        participantClients: true,
-        movideskTicket: true, registeredVersion: true, deliveredVersion: true,
-        participantMovideskTickets: true,
-      },
-    });
+      : linkedTasks.filter(matchesAzureIssue).slice(0, 50);
 
     const toTicketSample = ({ ticket, task }: { ticket: (typeof scopedTickets)[number]; task: (typeof linkedTasks)[number] }) => ({
           id: ticket.id,
@@ -557,12 +574,12 @@ export class WorkspaceService {
         }))
       : azureSamples.map((item) => ({ ...item, taskNumber: item.id, source: "AZURE" as const }));
 
-    return {
+    const result = {
       summary: {
         withoutTicket, withoutClient, withoutModule, withoutOwner,
         completedWithoutVersion: ticketsFinishedWithoutDelivery.length,
         danglingTaskTickets: danglingTickets.length,
-        duplicatedMovideskLinks: duplicates.length,
+        duplicatedMovideskLinks: duplicatedIds.length,
         ticketOpenTaskFinished: ticketsAwaitingClosure.length,
         ticketOpenTaskWithoutDelivery: ticketsFinishedWithoutDelivery.length,
         ticketClosedTaskOpen: closedTicketsWithActiveTask.length,
@@ -587,6 +604,8 @@ export class WorkspaceService {
         types: ["Correção Clientes", "Evolução", "APOIO"],
       },
     };
+    dataQualityCache.set(cacheKey, { expiresAt: Date.now() + 30_000, value: result });
+    return result;
   }
 }
 
