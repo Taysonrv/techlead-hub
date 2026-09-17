@@ -17,6 +17,7 @@ import {
   buildManagementInsights,
   type ManagementInsight,
 } from "./ManagementInsightService";
+import { analyzeMovideskPayload } from "./MovideskPayloadAnalytics";
 
 export type ReportScope =
   | "executive"
@@ -339,7 +340,11 @@ export class ExecutiveReportService {
         }),
         prisma.ticket.findMany({
           where: ticketWhere,
-          select: { createdDate: true, resolvedDate: true, closedDate: true, category: true },
+          select: {
+            createdDate: true, resolvedDate: true, closedDate: true, category: true,
+            cause: true, client: true, serviceSecondLevel: true,
+            resolvedInFirstCall: true, rawData: true,
+          },
           orderBy: { createdDate: "asc" },
         }),
         prisma.ticket.findMany({
@@ -394,6 +399,37 @@ export class ExecutiveReportService {
         { label: `${month.split("-").reverse().join("/")} · Fechados`, total: values.closed },
       ]);
 
+    const monthlyRanking = (
+      selector: (ticket: (typeof ticketTimeline)[number]) => string | null,
+    ): RankingRow[] => {
+      const grouped = new Map<string, number>();
+      for (const ticket of ticketTimeline) {
+        const month = ticket.createdDate.toISOString().slice(0, 7).split("-").reverse().join("/");
+        const label = selector(ticket)?.trim() || "Não informado";
+        const key = `${month} · ${label}`;
+        grouped.set(key, (grouped.get(key) ?? 0) + 1);
+      }
+      return [...grouped.entries()]
+        .map(([label, total]) => ({ label, total }))
+        .sort((left, right) => left.label.localeCompare(right.label));
+    };
+    const serviceEvolution = monthlyRanking((ticket) => ticket.serviceSecondLevel);
+    const causeEvolution = monthlyRanking((ticket) => ticket.cause);
+    const clientEvolution = monthlyRanking((ticket) => ticket.client);
+    const payloadAnalytics = ticketTimeline.map((ticket) => analyzeMovideskPayload(ticket.rawData));
+    const reopened = payloadAnalytics.filter((item) => item.reopenCount > 0).length;
+    const excessiveHandoffs = payloadAnalytics.filter((item) => item.ownerHandoffs >= 3).length;
+    const satisfactionMeasured = payloadAnalytics.filter((item) => item.satisfactionScore !== null).length;
+    const lowSatisfaction = payloadAnalytics.filter((item) =>
+      item.satisfactionScore !== null && item.satisfactionScore <= 2,
+    ).length;
+    const firstCallMeasured = ticketTimeline.filter((ticket) =>
+      ticket.resolvedInFirstCall !== null,
+    ).length;
+    const firstCallResolved = ticketTimeline.filter((ticket) =>
+      ticket.resolvedInFirstCall === true,
+    ).length;
+
     const insights = buildManagementInsights({
       ticketsTotal,
       ticketsOpen,
@@ -406,6 +442,12 @@ export class ExecutiveReportService {
       supports,
       prioritized,
       blocked,
+      reopened,
+      firstCallResolved,
+      firstCallMeasured,
+      excessiveHandoffs,
+      satisfactionMeasured,
+      lowSatisfaction,
       topCategory: categories[0] ? {
         label: categories[0].category ?? "Não informado",
         total: categories[0]._count._all,
@@ -654,6 +696,33 @@ export class ExecutiveReportService {
               ._all,
         }),
       ),
+      options,
+      generatedBy,
+    );
+
+    this.addRankingSheet(
+      workbook,
+      "Evolução Serviços",
+      "Evolução mensal por serviço",
+      serviceEvolution,
+      options,
+      generatedBy,
+    );
+
+    this.addRankingSheet(
+      workbook,
+      "Evolução Causas",
+      "Evolução mensal por causa",
+      causeEvolution,
+      options,
+      generatedBy,
+    );
+
+    this.addRankingSheet(
+      workbook,
+      "Evolução Clientes",
+      "Evolução mensal por cliente",
+      clientEvolution,
       options,
       generatedBy,
     );
