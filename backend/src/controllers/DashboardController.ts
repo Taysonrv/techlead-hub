@@ -8,6 +8,7 @@ import type {
 } from "@prisma/client";
 
 import { prisma } from "../database/prisma";
+import { analyzeMovideskPayload } from "../services/MovideskPayloadAnalytics";
 
 import {
   ticketOperationalScope,
@@ -1139,6 +1140,9 @@ export class DashboardController {
 
             importBatch:
               ticket.importBatch,
+
+            /* Histórico e indicadores extraídos do payload completo do Movidesk */
+            ...analyzeMovideskPayload(ticket.rawData),
           })
         );
 
