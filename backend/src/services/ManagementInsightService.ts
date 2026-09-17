@@ -20,6 +20,12 @@ export type ManagementInsightInput = {
   topCategory?: { label: string; total: number } | null;
   topAnalyst?: { label: string; total: number } | null;
   topVersion?: { label: string; total: number } | null;
+  reopened?: number;
+  firstCallResolved?: number;
+  firstCallMeasured?: number;
+  excessiveHandoffs?: number;
+  satisfactionMeasured?: number;
+  lowSatisfaction?: number;
 };
 
 export function buildManagementInsights(input: ManagementInsightInput): ManagementInsight[] {
@@ -75,6 +81,36 @@ export function buildManagementInsights(input: ManagementInsightInput): Manageme
       topic: "Distribuição da operação",
       finding: `${input.topAnalyst.label} responde por ${input.topAnalyst.total} tickets (${percent(input.topAnalyst.total, input.ticketsTotal).toFixed(1)}%).`,
       recommendation: "Validar equilíbrio da carteira considerando complexidade, idade e especialidade, não apenas volume.",
+    });
+  }
+
+  if ((input.reopened ?? 0) > 0 || (input.firstCallMeasured ?? 0) > 0) {
+    const firstCallRate = percent(input.firstCallResolved ?? 0, input.firstCallMeasured ?? 0);
+    insights.push({
+      priority: (input.reopened ?? 0) > Math.max(3, input.ticketsTotal * 0.1) ? "MÉDIA" : "INFORMATIVA",
+      topic: "Efetividade da solução",
+      finding: `${input.reopened ?? 0} atendimento(s) reaberto(s); resolução no primeiro contato de ${firstCallRate.toFixed(1)}% entre ${input.firstCallMeasured ?? 0} registros medidos.`,
+      recommendation: "Revisar causas de reabertura e transformar soluções recorrentes em procedimento ou base de conhecimento.",
+    });
+  }
+
+  if ((input.excessiveHandoffs ?? 0) > 0) {
+    insights.push({
+      priority: "MÉDIA",
+      topic: "Continuidade do atendimento",
+      finding: `${input.excessiveHandoffs} atendimento(s) tiveram três ou mais trocas de responsável.`,
+      recommendation: "Revisar roteamento, especialidades e definição do responsável principal.",
+    });
+  }
+
+  if ((input.satisfactionMeasured ?? 0) > 0) {
+    insights.push({
+      priority: (input.lowSatisfaction ?? 0) > 0 ? "ALTA" : "POSITIVA",
+      topic: "Experiência do cliente",
+      finding: `${input.satisfactionMeasured} avaliação(ões) recebida(s), com ${input.lowSatisfaction ?? 0} nota(s) baixa(s).`,
+      recommendation: (input.lowSatisfaction ?? 0) > 0
+        ? "Analisar os históricos com avaliação baixa e registrar plano de recuperação com o cliente."
+        : "Manter o acompanhamento e ampliar a cobertura das pesquisas de satisfação.",
     });
   }
 
