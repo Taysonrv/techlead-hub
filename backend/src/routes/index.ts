@@ -157,6 +157,11 @@ routes.get(
   dashboard.tickets,
 );
 
+routes.get(
+  "/api/dashboard/tickets/:id/analytics",
+  dashboard.ticketAnalytics,
+);
+
 /* =========================================================
    IMPORTAÇÃO DE DADOS
 ========================================================= */

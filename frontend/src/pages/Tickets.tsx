@@ -134,6 +134,14 @@ type Ticket = {
   importBatch?: string | null;
 };
 
+type TicketAnalytics = {
+  timeline: NonNullable<Ticket["timeline"]>;
+  ownerHandoffs: number;
+  reopenCount: number;
+  satisfactionScore: number | null;
+  satisfactionComment: string | null;
+};
+
 type AzureTaskSummary = {
   id: number;
   workItemType: string;
@@ -432,6 +440,32 @@ export function Tickets() {
     void loadAzureTask();
     return () => { active = false; };
   }, [selectedTicket?.taskNumber]);
+
+  useEffect(() => {
+    let active = true;
+    const ticketId = selectedTicket?.id;
+
+    if (!ticketId || selectedTicket.timeline) return () => { active = false; };
+
+    async function loadTicketAnalytics() {
+      try {
+        const response = await api.get<TicketAnalytics>(
+          `/dashboard/tickets/${ticketId}/analytics`
+        );
+
+        if (!active) return;
+        setSelectedTicket((current) => {
+          if (!current || current.id !== ticketId) return current;
+          return { ...current, ...response.data };
+        });
+      } catch (requestError) {
+        console.error("Erro ao carregar histórico do atendimento:", requestError);
+      }
+    }
+
+    void loadTicketAnalytics();
+    return () => { active = false; };
+  }, [selectedTicket?.id, selectedTicket?.timeline]);
 
   function openTaskInHub(task: AzureTaskDetail) {
     const route = task.workItemType === "Evolução" ? "/evolucoes" : "/correcoes";
