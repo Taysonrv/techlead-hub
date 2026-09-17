@@ -21,6 +21,7 @@ import path from "node:path";
 import http from "node:http";
 import https from "node:https";
 import crypto from "node:crypto";
+import { compareVersions, discoverLatestBetaRelease } from "./updaterRelease";
 
 import {
   autoUpdater,
@@ -244,54 +245,6 @@ function setUpdateState(
   }
 }
 
-function compareAppVersions(left: string, right: string): number {
-  const parse = (value: string) => {
-    const match = value.trim().replace(/^v/i, "").match(
-      /^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?/,
-    );
-    if (!match) return null;
-    return {
-      core: [Number(match[1]), Number(match[2]), Number(match[3])],
-      prerelease: match[4]?.split(".") ?? [],
-    };
-  };
-
-  const leftVersion = parse(left);
-  const rightVersion = parse(right);
-  if (!leftVersion || !rightVersion) {
-    return left.localeCompare(right, "en", { numeric: true, sensitivity: "base" });
-  }
-
-  for (let index = 0; index < 3; index += 1) {
-    const difference = leftVersion.core[index] - rightVersion.core[index];
-    if (difference !== 0) return difference;
-  }
-
-  if (!leftVersion.prerelease.length && rightVersion.prerelease.length) return 1;
-  if (leftVersion.prerelease.length && !rightVersion.prerelease.length) return -1;
-
-  for (
-    let index = 0;
-    index < Math.max(leftVersion.prerelease.length, rightVersion.prerelease.length);
-    index += 1
-  ) {
-    const leftPart = leftVersion.prerelease[index];
-    const rightPart = rightVersion.prerelease[index];
-    if (leftPart === undefined) return -1;
-    if (rightPart === undefined) return 1;
-    if (leftPart === rightPart) continue;
-
-    const leftNumber = /^\d+$/.test(leftPart) ? Number(leftPart) : null;
-    const rightNumber = /^\d+$/.test(rightPart) ? Number(rightPart) : null;
-    if (leftNumber !== null && rightNumber !== null) return leftNumber - rightNumber;
-    if (leftNumber !== null) return -1;
-    if (rightNumber !== null) return 1;
-    return leftPart.localeCompare(rightPart, "en", { sensitivity: "base" });
-  }
-
-  return 0;
-}
-
 function configureAutoUpdater() {
   if (
     updaterConfigured
@@ -396,7 +349,7 @@ function configureAutoUpdater() {
       info:
         UpdateInfo
     ) => {
-      if (compareAppVersions(info.version, app.getVersion()) <= 0) {
+      if (compareVersions(info.version, app.getVersion()) <= 0) {
         console.log(
           `[updater] Manifesto ignorado por não ser mais recente: ${info.version} <= ${app.getVersion()}`
         );
@@ -589,8 +542,34 @@ async function checkForUpdates() {
   }
 
   try {
-    await getAutoUpdater()
-      .checkForUpdates();
+    const updater = getAutoUpdater();
+
+    if (IS_PRERELEASE) {
+      try {
+        const latest = await discoverLatestBetaRelease(
+          UPDATE_REPOSITORY.owner,
+          UPDATE_REPOSITORY.repo,
+        );
+
+        if (latest && compareVersions(latest.version, app.getVersion()) > 0) {
+          updater.setFeedURL({
+            provider: "generic",
+            url: latest.feedUrl,
+            channel: UPDATE_CHANNEL,
+          });
+          console.log(
+            `[updater] Feed beta resolvido explicitamente: ${latest.tag}`
+          );
+        }
+      } catch (discoveryError) {
+        console.warn(
+          "[updater] Descoberta explícita falhou; usando feed GitHub padrão.",
+          discoveryError,
+        );
+      }
+    }
+
+    await updater.checkForUpdates();
 
     return updateState;
   } catch (error) {
