@@ -52,7 +52,9 @@ jobs:
 
       - name: Validar desktop
         shell: pwsh
-        run: npm run build:desktop --prefix desktop
+        run: |
+          npm run test:updater --prefix desktop
+          npm run build:desktop --prefix desktop
 
   validate-web-image:
     runs-on: ubuntu-latest
