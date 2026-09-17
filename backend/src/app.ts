@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import path from "path";
 import fs from "fs";
+import crypto from "node:crypto";
 
 import routes from "./routes";
 
@@ -13,6 +14,23 @@ const app = express();
 
 app.disable("x-powered-by");
 app.set("trust proxy", process.env.TRUST_PROXY?.trim() || "loopback");
+
+app.use((req, res, next) => {
+  const requestId = typeof req.headers["x-request-id"] === "string" && /^[A-Za-z0-9._-]{8,100}$/.test(req.headers["x-request-id"])
+    ? req.headers["x-request-id"]
+    : crypto.randomUUID();
+  res.setHeader("X-Request-Id", requestId);
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("Referrer-Policy", "no-referrer");
+  res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=(), usb=()");
+  res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
+  res.setHeader("Cross-Origin-Resource-Policy", "same-origin");
+  res.setHeader("Content-Security-Policy", "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; img-src 'self' data: blob:; font-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' https://login.microsoftonline.com https://graph.microsoft.com");
+  if (req.path.startsWith("/api/")) res.setHeader("Cache-Control", "no-store, max-age=0");
+  if (req.secure) res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+  next();
+});
 
 const allowedOrigins = new Set(
   (process.env.CORS_ALLOWED_ORIGINS ?? "")

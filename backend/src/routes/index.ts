@@ -56,6 +56,8 @@ import { knowledgeRoutes } from "./knowledge.routes";
 import { systemSettingsRoutes } from "./system-settings.routes";
 import { sessionRoutes } from "./session.routes";
 import { movideskRoutes } from "./movidesk.routes";
+import { chatRoutes } from "./chat.routes";
+import { coordinationRoutes } from "./coordination.routes";
 
 /* =========================================================
    ROUTER
@@ -108,6 +110,8 @@ routes.use("/api/global", globalRoutes);
 routes.use("/api/knowledge", knowledgeRoutes);
 routes.use("/api/system-settings", systemSettingsRoutes);
 routes.use("/api/sessions", sessionRoutes);
+routes.use("/api/chat", chatRoutes);
+routes.use("/api/coordination", coordinationRoutes);
 
 /* =========================================================
    ADMINISTRAÇÃO DE USUÁRIOS

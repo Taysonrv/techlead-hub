@@ -27,9 +27,16 @@ const ACCESS_TOKEN_KEY =
 
 export function getAccessToken() {
   try {
-    return localStorage.getItem(
+    const current = sessionStorage.getItem(
       ACCESS_TOKEN_KEY
     );
+    if (current) return current;
+    const legacy = localStorage.getItem(ACCESS_TOKEN_KEY);
+    if (legacy) {
+      sessionStorage.setItem(ACCESS_TOKEN_KEY, legacy);
+      localStorage.removeItem(ACCESS_TOKEN_KEY);
+    }
+    return legacy;
   } catch {
     return null;
   }
@@ -40,7 +47,7 @@ export function setAccessToken(
     string
 ) {
   try {
-    localStorage.setItem(
+    sessionStorage.setItem(
       ACCESS_TOKEN_KEY,
       token
     );
@@ -53,9 +60,10 @@ export function setAccessToken(
 
 export function removeAccessToken() {
   try {
-    localStorage.removeItem(
+    sessionStorage.removeItem(
       ACCESS_TOKEN_KEY
     );
+    localStorage.removeItem(ACCESS_TOKEN_KEY);
   } catch {
     console.warn(
       "[auth] Não foi possível remover o token."
@@ -101,6 +109,8 @@ api.interceptors.request.use(
       config.headers.Authorization =
         `Bearer ${token}`;
     }
+
+    config.headers["X-Request-Id"] = cryptoRequestId();
 
     return config;
   },
@@ -178,4 +188,12 @@ api.interceptors.response.use(
 
 export function getApiBaseUrl() {
   return API_URL;
+}
+
+function cryptoRequestId() {
+  try {
+    return globalThis.crypto.randomUUID();
+  } catch {
+    return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  }
 }

@@ -37,6 +37,13 @@ enum AzureSyncStatus {
   ERROR
 }
 
+enum ChatChannelType {
+  DIRECT
+  TEAM
+  CLIENT
+  CONTEXT
+}
+
 // =========================================================
 // USUÁRIO
 // =========================================================
@@ -79,12 +86,64 @@ model User {
   azureSyncRuns       AzureSyncRun[]
   systemSettings      SystemSetting[] @relation("SystemSettingUpdatedBy")
   auditLogs           AuditLog[]
+  chatMemberships     ChatChannelMember[]
+  chatMessages        ChatMessage[] @relation("ChatMessageAuthor")
 
   @@index([name])
   @@index([role])
   @@index([active])
   @@index([approvalStatus])
   @@index([approvedById])
+}
+
+model ChatChannel {
+  id          Int @id @default(autoincrement())
+  name        String @db.VarChar(120)
+  type        ChatChannelType @default(TEAM)
+  description String? @db.VarChar(500)
+  contextType String? @db.VarChar(40)
+  contextId   String? @db.VarChar(120)
+  clientName  String? @db.VarChar(160)
+  archivedAt  DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  members     ChatChannelMember[]
+  messages    ChatMessage[]
+
+  @@index([type, archivedAt])
+  @@index([contextType, contextId])
+}
+
+model ChatChannelMember {
+  channelId Int
+  userId    Int
+  channel   ChatChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lastReadAt DateTime?
+  mutedAt    DateTime?
+  joinedAt   DateTime @default(now())
+
+  @@id([channelId, userId])
+  @@index([userId, lastReadAt])
+}
+
+model ChatMessage {
+  id        Int @id @default(autoincrement())
+  channelId Int
+  authorId  Int
+  parentId  Int?
+  content   String @db.VarChar(4000)
+  editedAt  DateTime?
+  deletedAt DateTime?
+  createdAt DateTime @default(now())
+  channel   ChatChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  author    User @relation("ChatMessageAuthor", fields: [authorId], references: [id], onDelete: Restrict)
+  parent    ChatMessage? @relation("ChatMessageReplies", fields: [parentId], references: [id], onDelete: SetNull)
+  replies   ChatMessage[] @relation("ChatMessageReplies")
+
+  @@index([channelId, createdAt])
+  @@index([authorId, createdAt])
+  @@index([parentId])
 }
 
 // =========================================================

@@ -21,7 +21,6 @@ import path from "node:path";
 import http from "node:http";
 import https from "node:https";
 import crypto from "node:crypto";
-import { compareVersions, discoverLatestBetaRelease } from "./updaterRelease";
 
 import {
   autoUpdater,
@@ -32,6 +31,15 @@ import type {
   ProgressInfo,
   UpdateInfo,
 } from "electron-updater";
+
+import {
+  compareAppVersions,
+  findNewestRelease,
+} from "./update-discovery.js";
+
+import type {
+  GitHubRelease,
+} from "./update-discovery.js";
 
 /* =========================================================
    CONFIGURAÇÕES
@@ -120,6 +128,14 @@ const UPDATE_REPOSITORY = {
   owner: "Taysonrv",
   repo: "techlead-hub-releases",
 } as const;
+
+const UPDATE_MANIFEST =
+  IS_PRERELEASE
+    ? "beta.yml"
+    : "latest.yml";
+
+const RELEASE_DISCOVERY_TIMEOUT =
+  8_000;
 
 /* =========================================================
    TIPOS DE ATUALIZAÇÃO
@@ -221,6 +237,16 @@ function getAutoUpdater():
   return autoUpdater;
 }
 
+function configureGitHubUpdateFeed() {
+  getAutoUpdater().setFeedURL({
+    provider: "github",
+    owner: UPDATE_REPOSITORY.owner,
+    repo: UPDATE_REPOSITORY.repo,
+    private: false,
+    channel: UPDATE_CHANNEL,
+  });
+}
+
 function setUpdateState(
   patch:
     Partial<UpdateState>
@@ -242,6 +268,59 @@ function setUpdateState(
       "updater:state",
       updateState
     );
+  }
+}
+
+async function configureDiscoveredUpdateFeed(): Promise<"configured" | "current" | "fallback"> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), RELEASE_DISCOVERY_TIMEOUT);
+
+  try {
+    const response = await fetch(
+      `https://api.github.com/repos/${UPDATE_REPOSITORY.owner}/${UPDATE_REPOSITORY.repo}/releases?per_page=30`,
+      {
+        headers: {
+          Accept: "application/vnd.github+json",
+          "User-Agent": `${APP_NAME}/${app.getVersion()}`,
+          "X-GitHub-Api-Version": "2022-11-28",
+        },
+        signal: controller.signal,
+      },
+    );
+
+    if (!response.ok) {
+      throw new Error(`GitHub respondeu HTTP ${response.status}.`);
+    }
+
+    const releases = await response.json() as GitHubRelease[];
+    const release = findNewestRelease(releases, IS_PRERELEASE, UPDATE_MANIFEST);
+
+    if (!release) {
+      console.warn(`[updater] Nenhuma release válida com ${UPDATE_MANIFEST} foi localizada.`);
+      configureGitHubUpdateFeed();
+      return "fallback";
+    }
+
+    if (compareAppVersions(release.tag_name, app.getVersion()) <= 0) {
+      console.log(`[updater] Release mais recente confirmada pela API: ${release.tag_name}.`);
+      return "current";
+    }
+
+    const releaseUrl = `https://github.com/${UPDATE_REPOSITORY.owner}/${UPDATE_REPOSITORY.repo}/releases/download/${encodeURIComponent(release.tag_name)}/`;
+    getAutoUpdater().setFeedURL({
+      provider: "generic",
+      url: releaseUrl,
+      channel: UPDATE_CHANNEL,
+    });
+
+    console.log(`[updater] Release descoberta: ${release.tag_name}; feed direto: ${releaseUrl}`);
+    return "configured";
+  } catch (error) {
+    console.warn("[updater] Descoberta explícita indisponível; usando o provedor GitHub.", error);
+    configureGitHubUpdateFeed();
+    return "fallback";
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
@@ -288,13 +367,7 @@ function configureAutoUpdater() {
    * configuração antiga do app-update.yml mantenha a instalação presa
    * a uma release anterior após atualizações manuais.
    */
-  updater.setFeedURL({
-    provider: "github",
-    owner: UPDATE_REPOSITORY.owner,
-    repo: UPDATE_REPOSITORY.repo,
-    private: false,
-    channel: UPDATE_CHANNEL,
-  });
+  configureGitHubUpdateFeed();
 
   updater.autoDownload =
     false;
@@ -349,7 +422,7 @@ function configureAutoUpdater() {
       info:
         UpdateInfo
     ) => {
-      if (compareVersions(info.version, app.getVersion()) <= 0) {
+      if (compareAppVersions(info.version, app.getVersion()) <= 0) {
         console.log(
           `[updater] Manifesto ignorado por não ser mais recente: ${info.version} <= ${app.getVersion()}`
         );
@@ -542,34 +615,29 @@ async function checkForUpdates() {
   }
 
   try {
-    const updater = getAutoUpdater();
+    setUpdateState({
+      status: "checking",
+      availableVersion: null,
+      message: "Verificando atualizações...",
+    });
 
-    if (IS_PRERELEASE) {
-      try {
-        const latest = await discoverLatestBetaRelease(
-          UPDATE_REPOSITORY.owner,
-          UPDATE_REPOSITORY.repo,
-        );
+    const discovery = await configureDiscoveredUpdateFeed();
 
-        if (latest && compareVersions(latest.version, app.getVersion()) > 0) {
-          updater.setFeedURL({
-            provider: "generic",
-            url: latest.feedUrl,
-            channel: UPDATE_CHANNEL,
-          });
-          console.log(
-            `[updater] Feed beta resolvido explicitamente: ${latest.tag}`
-          );
-        }
-      } catch (discoveryError) {
-        console.warn(
-          "[updater] Descoberta explícita falhou; usando feed GitHub padrão.",
-          discoveryError,
-        );
-      }
+    if (discovery === "current") {
+      setUpdateState({
+        status: "not-available",
+        availableVersion: null,
+        percent: 0,
+        transferred: 0,
+        total: 0,
+        bytesPerSecond: 0,
+        message: "Você está usando a versão mais recente.",
+      });
+      return updateState;
     }
 
-    await updater.checkForUpdates();
+    await getAutoUpdater()
+      .checkForUpdates();
 
     return updateState;
   } catch (error) {

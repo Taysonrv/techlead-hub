@@ -39,6 +39,8 @@ import {
   UploadFileOutlined,
   WarningAmberOutlined,
   WorkspacesOutlined,
+  ForumOutlined,
+  InsightsOutlined,
 } from "@mui/icons-material";
 
 import {
@@ -274,6 +276,16 @@ export function Sidebar() {
           icon: <WorkspacesOutlined fontSize="small" />,
         },
         {
+          label: "Chat interno",
+          path: "/chat",
+          icon: <ForumOutlined fontSize="small" />,
+        },
+        ...(user?.role === "ADMIN" || user?.role === "COORDENADOR" ? [{
+          label: "Central de Coordenação",
+          path: "/coordenacao",
+          icon: <InsightsOutlined fontSize="small" />,
+        }] : []),
+        {
           label:
             "Tickets",
           path:
@@ -314,7 +326,7 @@ export function Sidebar() {
             <WarningAmberOutlined fontSize="small" />,
         },
       ],
-      [],
+      [user?.role],
     );
 
   /* =======================================================

@@ -1,4 +1,4 @@
-# API da RC.6
+# API da RC.7
 
 Todas as rotas abaixo utilizam a autenticação padrão da aplicação. Operações de importação e sincronização exigem perfil Administrador ou Coordenador.
 
@@ -17,3 +17,15 @@ Todas as rotas abaixo utilizam a autenticação padrão da aplicação. Operaç�
 - `POST /api/azure-devops/sync/full`: sincronização completa do Azure DevOps.
 
 Os arquivos aceitos possuem limite de 50 MB. Payloads JSON são limitados a 10 mil tickets por lote.
+
+## Chat interno
+
+- `GET /api/chat/channels`: canais dos quais o usuário é membro.
+- `POST /api/chat/channels`: cria canal e associação inicial.
+- `GET /api/chat/channels/:channelId/messages`: histórico autorizado, limitado a 100 mensagens por página.
+- `POST /api/chat/channels/:channelId/messages`: envia mensagem após inspeção de segredos.
+- `DELETE /api/chat/messages/:messageId`: remoção lógica pelo autor ou liderança.
+
+## Coordenação
+
+- `GET /api/coordination/summary`: indicadores e carga consolidada. Perfis `ADMIN` e `COORDENADOR`.

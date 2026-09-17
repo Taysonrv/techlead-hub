@@ -23,6 +23,7 @@ export type KnowledgeHit = {
 };
 
 export class MicrosoftKnowledgeService {
+  private readonly scopes = "openid profile email offline_access User.Read Sites.Read.All Files.Read.All Tasks.Read Calendars.ReadBasic Team.ReadBasic.All Channel.ReadBasic.All";
   private readonly tenantId = process.env.MICROSOFT_TENANT_ID?.trim() ?? "";
   private readonly clientId = process.env.MICROSOFT_CLIENT_ID?.trim() ?? "";
   private readonly sharePointSite = process.env.SHAREPOINT_SITE_URL?.trim() ?? "";
@@ -46,7 +47,7 @@ export class MicrosoftKnowledgeService {
     this.ensureConfigured();
     const body = new URLSearchParams({
       client_id: this.clientId,
-      scope: "openid profile email offline_access User.Read Sites.Read.All Files.Read.All",
+      scope: this.scopes,
     });
     const response = await axios.post(
       `https://login.microsoftonline.com/${encodeURIComponent(this.tenantId)}/oauth2/v2.0/devicecode`,
@@ -140,6 +141,28 @@ export class MicrosoftKnowledgeService {
     return result.flat();
   }
 
+  async coordinationSnapshot(userId: number) {
+    if (!this.status(userId).connected) return { connected: false, plannerTasks: [], events: [], teams: [], warnings: [] as string[] };
+    const now = new Date();
+    const end = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1_000);
+    const warnings: string[] = [];
+    const [planner, calendar, teams] = await Promise.allSettled([
+      this.graphGet(userId, "/v1.0/me/planner/tasks?$select=id,title,percentComplete,dueDateTime,planId"),
+      this.graphGet(userId, `/v1.0/me/calendarView?startDateTime=${encodeURIComponent(now.toISOString())}&endDateTime=${encodeURIComponent(end.toISOString())}&$select=id,subject,start,end,webLink&$orderby=start/dateTime&$top=20`),
+      this.graphGet(userId, "/v1.0/me/joinedTeams?$select=id,displayName,webUrl"),
+    ]);
+    if (planner.status === "rejected") warnings.push("Planner indisponível ou sem consentimento.");
+    if (calendar.status === "rejected") warnings.push("Calendário Outlook indisponível ou sem consentimento.");
+    if (teams.status === "rejected") warnings.push("Teams indisponível ou sem consentimento.");
+    return {
+      connected: true,
+      plannerTasks: planner.status === "fulfilled" ? (planner.value.value ?? []).slice(0, 50) : [],
+      events: calendar.status === "fulfilled" ? calendar.value.value ?? [] : [],
+      teams: teams.status === "fulfilled" ? teams.value.value ?? [] : [],
+      warnings,
+    };
+  }
+
   private ensureConfigured() {
     if (!this.tenantId || !this.clientId) {
       throw Object.assign(new Error("Microsoft 365 aguardando Tenant ID e Client ID nas Configurações."), { statusCode: 503 });
@@ -157,7 +180,7 @@ export class MicrosoftKnowledgeService {
           client_id: this.clientId,
           grant_type: "refresh_token",
           refresh_token: token.refreshToken,
-          scope: "openid profile email offline_access User.Read Sites.Read.All Files.Read.All",
+          scope: this.scopes,
         });
         const response = await axios.post(
           `https://login.microsoftonline.com/${encodeURIComponent(this.tenantId)}/oauth2/v2.0/token`,
