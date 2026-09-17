@@ -97,25 +97,40 @@ jobs:
           $repo = "Taysonrv/techlead-hub-releases"
           if (-not (gh release view $env:RELEASE_TAG --repo $repo 2>$null)) {
             gh release create $env:RELEASE_TAG --repo $repo --target main --draft --title "TechLead Hub $env:RELEASE_VERSION" --notes "Versão Beta do TechLead Hub. Consulte as novidades dentro do aplicativo."
+            if ($LASTEXITCODE -ne 0) { throw "Não foi possível criar a release $env:RELEASE_TAG." }
           }
           $assets = Get-ChildItem release -File | Where-Object {
             $_.Extension -in @(".exe", ".blockmap") -or
             $_.Name -in @("beta.yml", "latest.yml")
           } | ForEach-Object { $_.FullName }
           if (-not $assets) { throw "Nenhum artefato de atualização foi localizado." }
-          gh release upload $env:RELEASE_TAG $assets --repo $repo --clobber
-          gh release edit $env:RELEASE_TAG --repo $repo --draft=false --prerelease=true
+
+          $uploaded = $false
+          for ($attempt = 1; $attempt -le 3; $attempt++) {
+            gh release upload $env:RELEASE_TAG $assets --repo $repo --clobber
+            if ($LASTEXITCODE -eq 0) {
+              $uploaded = $true
+              break
+            }
+            if ($attempt -lt 3) {
+              Write-Warning "Upload falhou na tentativa $attempt. Tentando novamente..."
+              Start-Sleep -Seconds (15 * $attempt)
+            }
+          }
+          if (-not $uploaded) { throw "Falha ao enviar os artefatos após 3 tentativas." }
 
           $verifyDir = Join-Path $env:RUNNER_TEMP "release-verification"
           New-Item -ItemType Directory -Force -Path $verifyDir | Out-Null
           gh release download $env:RELEASE_TAG --repo $repo --pattern "beta.yml" --dir $verifyDir --clobber
+          if ($LASTEXITCODE -ne 0) { throw "Não foi possível baixar beta.yml para validação." }
 
           $manifest = Get-Content (Join-Path $verifyDir "beta.yml") -Raw
-          if ($manifest -notmatch "(?m)^version:\\s*$([regex]::Escape($env:RELEASE_VERSION))\\s*$") {
+          if ($manifest -notmatch "(?m)^version:\s*$([regex]::Escape($env:RELEASE_VERSION))\s*$") {
             throw "beta.yml não aponta para a versão $env:RELEASE_VERSION."
           }
 
           $assetNames = gh release view $env:RELEASE_TAG --repo $repo --json assets --jq ".assets[].name"
+          if ($LASTEXITCODE -ne 0) { throw "Não foi possível consultar os artefatos publicados." }
           $expected = @(
             "beta.yml",
             "TechLead-Hub-Setup-$env:RELEASE_VERSION.exe",
@@ -126,6 +141,10 @@ jobs:
               throw "Artefato obrigatório ausente na release: $asset"
             }
           }
+
+          gh release edit $env:RELEASE_TAG --repo $repo --draft=false --prerelease=true
+          if ($LASTEXITCODE -ne 0) { throw "Não foi possível publicar a release validada." }
+
       - name: Publicar versão estável no repositório principal
         if: needs.metadata.outputs.channel == 'stable'
         shell: pwsh
