@@ -243,6 +243,21 @@ model Ticket {
   // Produto / Serviço
   service    String?
   department String?
+  serviceFirstLevel  String?
+  serviceSecondLevel String?
+  serviceThirdLevel  String?
+  businessArea String?
+
+  // Metadados completos do Movidesk
+  origin Int?
+  isDeleted Boolean @default(false)
+  createdBy String?
+  lastActionDate DateTime?
+  lastUpdate DateTime?
+  canceledDate DateTime?
+  reopenedDate DateTime?
+  actionCount Int?
+  resolvedInFirstCall Boolean?
 
   // Datas
   createdDate DateTime
@@ -261,6 +276,17 @@ model Ticket {
   // Tempos
   lifetimeMinutes Int?
   stoppedMinutes  Int?
+  stoppedWorkingMinutes Int?
+
+  // SLA detalhado retornado pela API
+  slaAgreement String?
+  slaAgreementRule String?
+  slaSolutionTimeMinutes Int?
+  slaResponseTimeMinutes Int?
+  slaSolutionDueDate DateTime?
+  slaResponseDueDate DateTime?
+  slaRealResponseDate DateTime?
+  slaPaused Boolean?
 
   // Desenvolvimento / Azure DevOps
   //
@@ -274,7 +300,15 @@ model Ticket {
   // Ticket.taskNumber == AzureWorkItem.id
   taskNumber       Int?
   taskStatus       String?
+  taskTitle        String?
+  taskType         String?
+  taskUrl          String? @db.Text
+  registeredVersion String?
   deliveredVersion String?
+  causeDetail      String?
+
+  // Payload completo para auditoria e novas análises sem nova extração
+  rawData Json?
 
   // Controle da importação
   importSource String?
@@ -295,7 +329,12 @@ model Ticket {
   @@index([status])
   @@index([baseStatus])
   @@index([category])
+  @@index([cause])
   @@index([urgency])
+  @@index([serviceFirstLevel])
+  @@index([serviceSecondLevel])
+  @@index([serviceThirdLevel])
+  @@index([businessArea])
   @@index([createdDate])
   @@index([dueDate])
   @@index([firstResponseDate])
@@ -305,7 +344,10 @@ model Ticket {
   @@index([responseSlaIndicator])
   @@index([taskNumber])
   @@index([taskStatus])
+  @@index([taskType])
+  @@index([registeredVersion])
   @@index([deliveredVersion])
+  @@index([lastUpdate])
   @@index([importedAt])
   @@index([importBatch])
   @@index([importRunId])

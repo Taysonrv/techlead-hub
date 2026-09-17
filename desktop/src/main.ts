@@ -115,6 +115,11 @@ const UPDATE_CHANNEL =
 const UPDATE_CHECK_DELAY =
   5_000;
 
+const UPDATE_REPOSITORY = {
+  owner: "Taysonrv",
+  repo: "techlead-hub-releases",
+} as const;
+
 /* =========================================================
    TIPOS DE ATUALIZAÇÃO
 ========================================================= */
@@ -325,6 +330,19 @@ function configureAutoUpdater() {
    * - o usuário escolhe quando baixar;
    * - o usuário escolhe quando instalar/reiniciar.
    */
+  /*
+   * Define a origem explicitamente em runtime. Isso evita que uma
+   * configuração antiga do app-update.yml mantenha a instalação presa
+   * a uma release anterior após atualizações manuais.
+   */
+  updater.setFeedURL({
+    provider: "github",
+    owner: UPDATE_REPOSITORY.owner,
+    repo: UPDATE_REPOSITORY.repo,
+    private: false,
+    channel: UPDATE_CHANNEL,
+  });
+
   updater.autoDownload =
     false;
 
@@ -548,7 +566,7 @@ function configureAutoUpdater() {
   );
 
   console.log(
-    `[updater] Configurado. Canal: ${UPDATE_CHANNEL}`
+    `[updater] Configurado. Origem: ${UPDATE_REPOSITORY.owner}/${UPDATE_REPOSITORY.repo}; canal: ${UPDATE_CHANNEL}`
   );
 }
 

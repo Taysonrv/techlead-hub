@@ -4,6 +4,7 @@ import {
 import type { Prisma } from "@prisma/client";
 import { SIMER_CLIENTS, SUPPORT_ANALYSTS, ticketOperationalScope } from "../domain/OperationalScope";
 import { MovideskService } from "./MovideskService";
+import { analyzeMovideskPayload } from "./MovideskPayloadAnalytics";
 
 const TERMINAL = ["Concluído", "Concluido", "Closed", "Done", "Resolved", "Cancelado", "Canceled"];
 const normalizedWords = (value: string) => value
@@ -212,7 +213,8 @@ export class WorkspaceService {
         id: true, taskNumber: true, movideskId: true, subject: true,
         status: true, baseStatus: true, client: true, owner: true,
         category: true, cause: true, justification: true,
-        deliveredVersion: true,
+        deliveredVersion: true, lastActionDate: true, lastUpdate: true,
+        reopenedDate: true, resolvedInFirstCall: true, rawData: true,
       },
     });
     const taskIds = scopedTickets.map((item) => item.taskNumber).filter((value): value is number => value !== null);
@@ -427,14 +429,36 @@ export class WorkspaceService {
       });
     });
 
+    const analyticsByTicketId = new Map(scopedTickets.map((ticket) => [
+      ticket.id,
+      analyzeMovideskPayload(ticket.rawData),
+    ]));
+    const staleThreshold = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
+    const lastMovement = (ticket: (typeof scopedTickets)[number]) =>
+      ticket.lastActionDate ?? ticket.lastUpdate;
     const awaitingReturnWithoutCause = scopedTickets.filter((ticket) =>
       isTicketOpen(ticket) && isAwaitingReturn(ticket) && isMissingClassification(ticket.cause),
     );
+    const awaitingReturnOverdue = scopedTickets.filter((ticket) => {
+      const movement = lastMovement(ticket);
+      return isTicketOpen(ticket) && isAwaitingReturn(ticket)
+        && Boolean(movement && movement < staleThreshold);
+    });
+    const reopenedTickets = scopedTickets.filter((ticket) =>
+      isTicketOpen(ticket) && (analyticsByTicketId.get(ticket.id)?.reopenCount ?? 0) > 0,
+    );
+    const excessiveOwnerHandoffs = scopedTickets.filter((ticket) =>
+      isTicketOpen(ticket) && (analyticsByTicketId.get(ticket.id)?.ownerHandoffs ?? 0) >= 3,
+    );
+    const lowSatisfaction = scopedTickets.filter((ticket) => {
+      const score = analyticsByTicketId.get(ticket.id)?.satisfactionScore;
+      return score !== null && score !== undefined && score <= 2;
+    });
     const suspectedClassification = scopedTickets.filter((ticket) =>
       isTicketOpen(ticket) && hasSuspiciousClassification(ticket),
     );
 
-    const derivedTicketIssues = ["danglingTaskTickets", "ticketOpenTaskFinished", "ticketOpenTaskWithoutDelivery", "ticketClosedTaskOpen", "clientMismatch", "supportLinkDivergence", "awaitingReturnWithoutCause", "suspectedClassification"];
+    const derivedTicketIssues = ["danglingTaskTickets", "ticketOpenTaskFinished", "ticketOpenTaskWithoutDelivery", "ticketClosedTaskOpen", "clientMismatch", "supportLinkDivergence", "awaitingReturnWithoutCause", "awaitingReturnOverdue", "reopenedTickets", "excessiveOwnerHandoffs", "lowSatisfaction", "suspectedClassification"];
     const azureSamples = params.issue === "supportLinkDivergence"
       ? supportDivergences.slice(0, 100)
       : params.issue && derivedTicketIssues.includes(params.issue)
@@ -491,10 +515,21 @@ export class WorkspaceService {
       registeredVersion: null,
       deliveredVersion: ticket.deliveredVersion,
       taskNumber: ticket.taskNumber,
+      lastMovement: lastMovement(ticket),
+      resolvedInFirstCall: ticket.resolvedInFirstCall,
+      ...analyticsByTicketId.get(ticket.id),
       source: "MOVIDESK" as const,
     });
     const samples = params.issue === "awaitingReturnWithoutCause"
       ? awaitingReturnWithoutCause.slice(0, 100).map(toClassificationSample)
+      : params.issue === "awaitingReturnOverdue"
+      ? awaitingReturnOverdue.slice(0, 100).map(toClassificationSample)
+      : params.issue === "reopenedTickets"
+      ? reopenedTickets.slice(0, 100).map(toClassificationSample)
+      : params.issue === "excessiveOwnerHandoffs"
+      ? excessiveOwnerHandoffs.slice(0, 100).map(toClassificationSample)
+      : params.issue === "lowSatisfaction"
+      ? lowSatisfaction.slice(0, 100).map(toClassificationSample)
       : params.issue === "suspectedClassification"
       ? suspectedClassification.slice(0, 100).map(toClassificationSample)
       : params.issue === "ticketOpenTaskFinished"
@@ -534,6 +569,12 @@ export class WorkspaceService {
         clientMismatch: clientMismatches.length,
         supportLinkDivergence: supportDivergences.length,
         awaitingReturnWithoutCause: awaitingReturnWithoutCause.length,
+        awaitingReturnOverdue: awaitingReturnOverdue.length,
+        reopenedTickets: reopenedTickets.length,
+        excessiveOwnerHandoffs: excessiveOwnerHandoffs.length,
+        lowSatisfaction: lowSatisfaction.length,
+        resolvedInFirstCall: scopedTickets.filter((ticket) => ticket.resolvedInFirstCall === true).length,
+        notResolvedInFirstCall: scopedTickets.filter((ticket) => ticket.resolvedInFirstCall === false).length,
         suspectedClassification: suspectedClassification.length,
         activeTaskWithVersion: activeLinkedTasks.filter((task) =>
           !isSupportTask(task) && Boolean(task.deliveredVersion?.trim()),

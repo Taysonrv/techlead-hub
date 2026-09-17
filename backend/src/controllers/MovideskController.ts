@@ -7,9 +7,9 @@ export class MovideskController {
 
         const service = new MovideskService();
 
-        const tickets = await service.getTickets();
+        const result = await service.syncTickets();
 
-        return res.json(tickets);
+        return res.json(result);
 
     }
 

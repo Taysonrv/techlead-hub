@@ -1,4 +1,5 @@
 import axios from "axios";
+import { MovideskJsonImportService } from "./MovideskJsonImportService";
 
 export class MovideskService {
 
@@ -27,15 +28,40 @@ export class MovideskService {
 
                     token: this.token(),
 
-                    $select:
-                        "id,subject,status,category,createdDate,lastUpdate,ownerTeam,serviceFirstLevel"
-
-                }
+                    $select: [
+                        "id", "protocol", "subject", "category", "urgency", "status", "baseStatus",
+                        "justification", "createdDate", "lastUpdate", "lastActionDate", "resolvedIn",
+                        "closedIn", "canceledIn", "reopenedIn", "actionCount", "resolvedInFirstCall",
+                        "ownerTeam", "serviceFirstLevel", "serviceSecondLevel", "serviceThirdLevel",
+                        "slaAgreement", "slaAgreementRule", "slaSolutionTime", "slaResponseTime",
+                        "slaSolutionDate", "slaResponseDate", "slaRealResponseDate",
+                        "slaSolutionDateIsPaused", "lifeTimeWorkingTime", "stoppedTime",
+                        "stoppedTimeWorkingTime", "origin", "isDeleted"
+                    ].join(","),
+                    $expand: [
+                        "owner", "createdBy", "clients", "actions", "ownerHistories",
+                        "statusHistories", "satisfactionSurveyResponses", "customFieldValues"
+                    ].join(","),
+                    $top: 1000,
+                },
+                timeout: 120_000,
             }
         );
 
         return response.data;
 
+    }
+
+    async syncTickets(userId?: number | null) {
+        const tickets = await this.getTickets();
+        return new MovideskJsonImportService().execute(
+            Buffer.from(JSON.stringify(tickets), "utf8"),
+            {
+                fileName: "API Movidesk",
+                userId: userId ?? null,
+                source: "MOVIDESK_API",
+            },
+        );
     }
 
     async updateTicketStatus(

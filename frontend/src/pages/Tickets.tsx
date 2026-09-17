@@ -91,6 +91,10 @@ type Ticket = {
 
   service: string | null;
   department: string | null;
+  serviceFirstLevel: string | null;
+  serviceSecondLevel: string | null;
+  serviceThirdLevel: string | null;
+  businessArea: string | null;
 
   createdDate: string;
   dueDate: string | null;
@@ -100,12 +104,27 @@ type Ticket = {
 
   resolvedDate: string | null;
   closedDate: string | null;
+  canceledDate: string | null;
+  reopenedDate: string | null;
+  lastActionDate: string | null;
+  lastUpdate: string | null;
+  actionCount: number | null;
+  resolvedInFirstCall: boolean | null;
+  ownerHandoffs?: number;
+  reopenCount?: number;
+  satisfactionScore?: number | null;
+  satisfactionComment?: string | null;
+  timeline?: Array<{ date: string; type: string; title: string; description: string | null; author: string | null }>;
 
   lifetimeMinutes: number | null;
   stoppedMinutes: number | null;
 
   taskNumber: number | null;
   taskStatus: string | null;
+  taskTitle: string | null;
+  taskType: string | null;
+  taskUrl: string | null;
+  registeredVersion: string | null;
   deliveredVersion: string | null;
 
   azureWorkItem?: AzureTaskSummary | null;
@@ -624,6 +643,13 @@ export function Tickets() {
             ).includes(
               normalizedSearch
             ) ||
+            normalize(ticket.serviceFirstLevel).includes(normalizedSearch) ||
+            normalize(ticket.serviceSecondLevel).includes(normalizedSearch) ||
+            normalize(ticket.serviceThirdLevel).includes(normalizedSearch) ||
+            normalize(ticket.businessArea).includes(normalizedSearch) ||
+            normalize(ticket.taskTitle).includes(normalizedSearch) ||
+            normalize(ticket.taskType).includes(normalizedSearch) ||
+            normalize(ticket.registeredVersion).includes(normalizedSearch) ||
             normalize(
               ticket.taskNumber !==
                 null
@@ -2793,19 +2819,10 @@ export function Tickets() {
                   }
                 />
 
-                <TicketField
-                  label="Serviço"
-                  value={
-                    selectedTicket.service
-                  }
-                />
-
-                <TicketField
-                  label="Departamento"
-                  value={
-                    selectedTicket.department
-                  }
-                />
+                <TicketField label="Serviço principal" value={selectedTicket.serviceFirstLevel ?? selectedTicket.department} />
+                <TicketField label="Serviço secundário" value={selectedTicket.serviceSecondLevel ?? selectedTicket.service} />
+                <TicketField label="Serviço detalhado" value={selectedTicket.serviceThirdLevel} />
+                <TicketField label="Área do cliente" value={selectedTicket.businessArea} />
 
                 <TicketField
                   label="Solicitante"
@@ -2902,12 +2919,17 @@ export function Tickets() {
 
                 <TicketField
                   label="Fechamento"
-                  value={
-                    formatDate(
-                      selectedTicket.closedDate
-                    )
-                  }
+                  value={formatDate(selectedTicket.closedDate)}
                 />
+                <TicketField label="Cancelamento" value={formatDate(selectedTicket.canceledDate)} />
+                <TicketField label="Reabertura" value={formatDate(selectedTicket.reopenedDate)} />
+                <TicketField label="Última ação" value={formatDate(selectedTicket.lastActionDate)} />
+                <TicketField label="Última atualização" value={formatDate(selectedTicket.lastUpdate)} />
+                <TicketField label="Quantidade de ações" value={selectedTicket.actionCount} />
+                <TicketField label="Trocas de responsável" value={selectedTicket.ownerHandoffs} />
+                <TicketField label="Quantidade de reaberturas" value={selectedTicket.reopenCount} />
+                <TicketField label="Resolvido no primeiro contato" value={selectedTicket.resolvedInFirstCall === null ? "Não informado" : selectedTicket.resolvedInFirstCall ? "Sim" : "Não"} />
+                <TicketField label="Satisfação" value={selectedTicket.satisfactionScore != null ? `${selectedTicket.satisfactionScore}/5` : null} />
               </Box>
 
               {/* JUSTIFICATIVA */}
@@ -2943,10 +2965,33 @@ export function Tickets() {
                 </>
               )}
 
+              {Boolean(selectedTicket.timeline?.length) && (
+                <>
+                  <Divider sx={{ mb: 2.25 }} />
+                  <SectionTitle>Linha do tempo do atendimento</SectionTitle>
+                  <Stack spacing={1} sx={{ mb: 2.25 }}>
+                    {selectedTicket.timeline!.slice(-12).reverse().map((entry, index) => (
+                      <Box key={`${entry.date}-${entry.type}-${index}`} sx={{ borderLeft: "3px solid", borderColor: entry.type === "Satisfação" ? "warning.main" : "primary.main", pl: 1.5, py: 0.5 }}>
+                        <Stack direction="row" spacing={1} sx={{ alignItems: "center", flexWrap: "wrap" }}>
+                          <Chip size="small" label={entry.type} />
+                          <Typography variant="body2" sx={{ fontWeight: 750 }}>{entry.title}</Typography>
+                          <Typography variant="caption" color="text.secondary">{formatDate(entry.date)}</Typography>
+                        </Stack>
+                        {entry.author && <Typography variant="caption" color="text.secondary">Por {entry.author}</Typography>}
+                        {entry.description && <Typography variant="body2" sx={{ mt: 0.4, whiteSpace: "pre-wrap" }}>{entry.description}</Typography>}
+                      </Box>
+                    ))}
+                  </Stack>
+                </>
+              )}
+
               {/* DESENVOLVIMENTO / AZURE DEVOPS */}
 
               {(selectedTicket.taskNumber ||
                 selectedTicket.taskStatus ||
+                selectedTicket.taskTitle ||
+                selectedTicket.taskType ||
+                selectedTicket.registeredVersion ||
                 selectedTicket.deliveredVersion) && (
                 <>
                   <Divider sx={{ mb: 2.25 }} />
@@ -3029,9 +3074,22 @@ export function Tickets() {
                     </Card>
                   ) : !azureTaskLoading && (
                     <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" }, gap: 1.5 }}>
-                      <TicketField label="Task" value={selectedTicket.taskNumber ? `#${selectedTicket.taskNumber}` : null} />
-                      <TicketField label="Status da Task (Movidesk)" value={selectedTicket.taskStatus} />
-                      <TicketField label="Versão entregue (Movidesk)" value={selectedTicket.deliveredVersion} />
+                      <TicketField label="Tarefa" value={selectedTicket.taskNumber ? `#${selectedTicket.taskNumber}` : null} />
+                      <TicketField label="Tipo da Tarefa" value={selectedTicket.taskType} />
+                      <TicketField label="Título da Tarefa" value={selectedTicket.taskTitle} />
+                      <TicketField label="Status da Tarefa (Movidesk)" value={selectedTicket.taskStatus} />
+                      <TicketField label="Versão de cadastro" value={selectedTicket.registeredVersion} />
+                      <TicketField label="Versão entregue" value={selectedTicket.deliveredVersion} />
+                      {selectedTicket.taskUrl && (
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          endIcon={<OpenInNewOutlined />}
+                          onClick={() => window.open(selectedTicket.taskUrl ?? "", "_blank", "noopener,noreferrer")}
+                        >
+                          Abrir Tarefa no Azure
+                        </Button>
+                      )}
                     </Box>
                   )}
                 </>

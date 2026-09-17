@@ -109,6 +109,10 @@ type Ticket = {
 
   lifetimeMinutes: number | null;
   stoppedMinutes: number | null;
+  resolvedInFirstCall?: boolean | null;
+  ownerHandoffs?: number;
+  reopenCount?: number;
+  satisfactionScore?: number | null;
 
   taskNumber: number | null;
   taskStatus: string | null;
@@ -985,6 +989,18 @@ export function Clients() {
       ? Math.round((portfolioSummary.open / portfolioSummary.total) * 1000) / 10
       : 0;
     const unassigned = scopedTickets.filter((ticket) => !ticket.owner?.trim()).length;
+    const firstCallMeasured = scopedTickets.filter((ticket) => ticket.resolvedInFirstCall != null);
+    const firstCallRate = firstCallMeasured.length
+      ? Math.round((firstCallMeasured.filter((ticket) => ticket.resolvedInFirstCall).length / firstCallMeasured.length) * 1000) / 10
+      : null;
+    const reopened = scopedTickets.filter((ticket) => (ticket.reopenCount ?? 0) > 0).length;
+    const excessiveHandoffs = scopedTickets.filter((ticket) => (ticket.ownerHandoffs ?? 0) >= 3).length;
+    const satisfaction = scopedTickets
+      .map((ticket) => ticket.satisfactionScore)
+      .filter((value): value is number => value != null);
+    const averageSatisfaction = satisfaction.length
+      ? Math.round((satisfaction.reduce((sum, value) => sum + value, 0) / satisfaction.length) * 10) / 10
+      : null;
     return [
       topCategory
         ? `${topCategory.name} concentra ${Math.round((topCategory.value / Math.max(scopedTickets.length, 1)) * 100)}% dos atendimentos do recorte.`
@@ -996,6 +1012,18 @@ export function Clients() {
       unassigned
         ? `${unassigned} atendimento(s) estão sem responsável informado.`
         : "Todos os atendimentos do recorte possuem responsável informado.",
+      firstCallRate === null
+        ? "A resolução no primeiro contato ainda não possui medição suficiente."
+        : `${firstCallRate}% dos atendimentos medidos foram resolvidos no primeiro contato.`,
+      reopened
+        ? `${reopened} atendimento(s) tiveram reabertura e devem ter a efetividade da solução revisada.`
+        : "Não foram identificadas reaberturas no recorte.",
+      excessiveHandoffs
+        ? `${excessiveHandoffs} atendimento(s) tiveram três ou mais trocas de responsável.`
+        : "Não há concentração relevante de trocas de responsável.",
+      averageSatisfaction === null
+        ? "Ainda não há avaliações de satisfação no recorte."
+        : `A satisfação média é ${averageSatisfaction}/5 em ${satisfaction.length} avaliação(ões).`,
     ];
   }, [categoryPieData, portfolioSummary, scopedTickets]);
 

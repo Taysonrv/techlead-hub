@@ -20,7 +20,7 @@ const upload =
 
     limits: {
       fileSize:
-        25 *
+        50 *
         1024 *
         1024,
     },

@@ -8,6 +8,7 @@ import type {
 } from "@prisma/client";
 
 import { prisma } from "../database/prisma";
+import { analyzeMovideskPayload } from "../services/MovideskPayloadAnalytics";
 
 import {
   ticketOperationalScope,
@@ -1031,6 +1032,18 @@ export class DashboardController {
             department:
               ticket.department,
 
+            serviceFirstLevel:
+              ticket.serviceFirstLevel,
+
+            serviceSecondLevel:
+              ticket.serviceSecondLevel,
+
+            serviceThirdLevel:
+              ticket.serviceThirdLevel,
+
+            businessArea:
+              ticket.businessArea,
+
             /* Datas */
 
             createdDate:
@@ -1050,6 +1063,24 @@ export class DashboardController {
 
             closedDate:
               ticket.closedDate,
+
+            canceledDate:
+              ticket.canceledDate,
+
+            reopenedDate:
+              ticket.reopenedDate,
+
+            lastActionDate:
+              ticket.lastActionDate,
+
+            lastUpdate:
+              ticket.lastUpdate,
+
+            actionCount:
+              ticket.actionCount,
+
+            resolvedInFirstCall:
+              ticket.resolvedInFirstCall,
 
             /* SLA oficial Movidesk */
 
@@ -1075,6 +1106,18 @@ export class DashboardController {
             taskStatus:
               ticket.taskStatus,
 
+            taskTitle:
+              ticket.taskTitle,
+
+            taskType:
+              ticket.taskType,
+
+            taskUrl:
+              ticket.taskUrl,
+
+            registeredVersion:
+              ticket.registeredVersion,
+
             deliveredVersion:
               ticket.deliveredVersion,
 
@@ -1097,6 +1140,9 @@ export class DashboardController {
 
             importBatch:
               ticket.importBatch,
+
+            /* Histórico e indicadores extraídos do payload completo do Movidesk */
+            ...analyzeMovideskPayload(ticket.rawData),
           })
         );
 
@@ -1127,32 +1173,15 @@ type SnapshotWhere =
  * e bem-sucedida do Movidesk. O histórico permanece preservado.
  */
 async function getLatestSnapshotWhere(): Promise<SnapshotWhere> {
-  const latestImportRun =
-    await prisma.importRun.findFirst({
-      where: {
-        status: "SUCCESS",
-        source: "MOVÍDESK_EXCEL",
-        finishedAt: {
-          not: null,
-        },
-      },
-      orderBy: [
-        { finishedAt: "desc" },
-        { id: "desc" },
-      ],
-      select: {
-        id: true,
-      },
-    });
-
+  /*
+   * Cada número do Movidesk é único no banco. Excel, JSON e API apenas
+   * atualizam o mesmo registro; portanto, a visão operacional não deve
+   * depender do último arquivo importado. Isso permite importar lotes
+   * JSON complementares sem ocultar tickets de lotes anteriores.
+   */
   return {
     ...ticketOperationalScope(),
-    ...(latestImportRun
-      ? {
-          importRunId:
-            latestImportRun.id,
-        }
-      : {}),
+    isDeleted: false,
   };
 }
 

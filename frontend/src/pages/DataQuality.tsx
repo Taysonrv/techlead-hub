@@ -20,6 +20,9 @@ type Sample = {
   participantMovideskTickets?: string | number[] | null;
   registeredVersion?: string | null; deliveredVersion: string | null; taskNumber: number | null; taskState?: string | null;
   taskTitle?: string | null; taskClient?: string | null; source: "AZURE" | "MOVIDESK";
+  lastMovement?: string | null; ownerHandoffs?: number; reopenCount?: number;
+  resolvedInFirstCall?: boolean | null; satisfactionScore?: number | null;
+  satisfactionComment?: string | null;
 };
 type Data = {
   summary: Record<string, number>;
@@ -28,6 +31,10 @@ type Data = {
 };
 const metrics = [
   ["awaitingReturnWithoutCause", "Aguardando retorno sem causa", "Atendimento aberto de cliente SIMER aguardando retorno, mas sem causa informada ou com valor genérico. A causa deve registrar por que o atendimento depende do cliente.", "Classificação"],
+  ["awaitingReturnOverdue", "Retorno do cliente acima de 3 dias", "Atendimento aberto aguardando retorno do cliente, sem movimentação há mais de três dias. Permite cobrar, reavaliar ou encerrar conforme o processo.", "Prazo"],
+  ["reopenedTickets", "Atendimentos reabertos", "Atendimentos ativos que já foram reabertos. Devem ser acompanhados para identificar falha na solução, recorrência ou validação incompleta.", "Recorrência"],
+  ["excessiveOwnerHandoffs", "Muitas trocas de responsável", "Atendimentos ativos com três ou mais trocas de responsável. Pode indicar roteamento incorreto, falta de domínio ou quebra de continuidade.", "Coordenação"],
+  ["lowSatisfaction", "Baixa satisfação", "Atendimentos dos clientes SIMER com avaliação igual ou inferior a 2. Exige análise do histórico e plano de recuperação.", "Experiência"],
   ["suspectedClassification", "Categoria ou causa a revisar", "Atendimento aberto de cliente SIMER sem categoria ou causa, com valor genérico ou combinação contraditória entre dúvida/orientação e problema/erro.", "Classificação"],
   ["ticketOpenTaskFinished", "Pronto para encerrar", "Ticket ainda pendente, mas a Tarefa foi cancelada ou concluída e possui versão efetivamente entregue. Aguardando validar versão não entra neste recorte.", "Fluxo"],
   ["ticketOpenTaskWithoutDelivery", "Tarefa finalizada sem entrega", "Tarefa concluída vinculada a ticket aberto, porém sem versão entregue registrada no Azure. Exige validar publicação antes de encerrar.", "Fluxo"],
@@ -81,6 +88,10 @@ export function DataQuality() {
     const actions: Record<string, string> = {
       awaitingReturnWithoutCause: "Informar a causa antes de manter o atendimento aguardando retorno.",
       suspectedClassification: "Revisar categoria e causa conforme o assunto e a causa raiz.",
+      awaitingReturnOverdue: "Cobrar retorno, registrar a ação e reavaliar manutenção do ticket aberto.",
+      reopenedTickets: "Revisar causa da reabertura e confirmar se a solução anterior foi efetiva.",
+      excessiveOwnerHandoffs: "Definir responsável principal e revisar o roteamento do atendimento.",
+      lowSatisfaction: "Analisar o histórico e registrar uma ação de recuperação com o cliente.",
       ticketOpenTaskFinished: "Validar a entrega e concluir o atendimento.",
       ticketOpenTaskWithoutDelivery: "Confirmar publicação ou preencher a versão entregue.",
       ticketClosedTaskOpen: "Atualizar o estado da Tarefa ou reabrir o atendimento.",
@@ -100,7 +111,7 @@ export function DataQuality() {
     const rows = data?.samples ?? [];
     const escape = (value: unknown) => `"${String(value ?? "").replace(/"/g, '""')}"`;
     const guidance = issueGuidance();
-    const header = ["Origem", "Tipo", "Atendimento", "Assunto / Título", "Cliente do ticket", "Cliente da Tarefa", "Categoria", "Causa", "Analista", "Status do atendimento", "Tarefa", "Estado da Tarefa", "Versão de cadastro", "Versão entregue", "Motivo da pendência", "Ação recomendada"];
+    const header = ["Origem", "Tipo", "Atendimento", "Assunto / Título", "Cliente do ticket", "Cliente da Tarefa", "Categoria", "Causa", "Analista", "Status do atendimento", "Última movimentação", "Reaberturas", "Trocas de responsável", "Satisfação", "Tarefa", "Estado da Tarefa", "Versão de cadastro", "Versão entregue", "Motivo da pendência", "Ação recomendada"];
     const csv = [header, ...rows.map((item) => [
       item.source,
       item.workItemType,
@@ -112,6 +123,10 @@ export function DataQuality() {
       item.cause,
       item.assignedToName,
       item.state,
+      item.lastMovement,
+      item.reopenCount,
+      item.ownerHandoffs,
+      item.satisfactionScore,
       item.taskNumber,
       item.taskState,
       item.registeredVersion,
@@ -166,7 +181,7 @@ export function DataQuality() {
 
     <Drawer anchor="right" open={Boolean(selected)} onClose={() => setSelected(null)} slotProps={{ paper: { sx: detailDrawerPaperSx } }}>
       <DetailPanelHeader eyebrow={selected?.workItemType} title={selected?.title ?? "Detalhes do registro"} identifier={`#${selected?.source === "MOVIDESK" ? selected.movideskTicket : selected?.id}`} onClose={() => setSelected(null)} />
-      <DetailSection title="Visão operacional"><DetailFieldGrid fields={selected ? Object.entries({ Estado: selected.state, "Cliente principal": selected.client, "Clientes participantes": formatList(selected.participantClients), Categoria: selected.category, Causa: selected.cause, Módulo: selected.module, Responsável: selected.assignedToName, "Ticket principal": selected.movideskTicket, "Tickets participantes": formatList(selected.participantMovideskTickets), "Tarefa relacionada": selected.taskNumber ? `#${selected.taskNumber}` : null, "Estado da Tarefa": selected.taskState, "Título da Tarefa": selected.taskTitle, "Cliente da Tarefa": selected.taskClient, "Versão de cadastro": selected.registeredVersion, "Versão entregue": selected.deliveredVersion, "Motivo da pendência": issueGuidance().reason, "Ação recomendada": issueGuidance().action }).map(([label, value]) => [label, String(value ?? "Não informado")]) : []} /></DetailSection>
+      <DetailSection title="Visão operacional"><DetailFieldGrid fields={selected ? Object.entries({ Estado: selected.state, "Cliente principal": selected.client, "Clientes participantes": formatList(selected.participantClients), Categoria: selected.category, Causa: selected.cause, Módulo: selected.module, Responsável: selected.assignedToName, "Ticket principal": selected.movideskTicket, "Tickets participantes": formatList(selected.participantMovideskTickets), "Tarefa relacionada": selected.taskNumber ? `#${selected.taskNumber}` : null, "Estado da Tarefa": selected.taskState, "Título da Tarefa": selected.taskTitle, "Cliente da Tarefa": selected.taskClient, "Versão de cadastro": selected.registeredVersion, "Versão entregue": selected.deliveredVersion, "Motivo da pendência": issueGuidance().reason, "Última movimentação": selected.lastMovement, Reaberturas: selected.reopenCount, "Trocas de responsável": selected.ownerHandoffs, "Resolvido no primeiro contato": selected.resolvedInFirstCall === null || selected.resolvedInFirstCall === undefined ? "Não informado" : selected.resolvedInFirstCall ? "Sim" : "Não", Satisfação: selected.satisfactionScore, "Comentário da satisfação": selected.satisfactionComment, "Ação recomendada": issueGuidance().action }).map(([label, value]) => [label, String(value ?? "Não informado")]) : []} /></DetailSection>
       {detail && <Alert severity="info" sx={{ mt: 2 }}>Detalhes completos e histórico carregados do Azure.</Alert>}
       <Button variant="contained" sx={{ mt: 3 }} onClick={() => selected && navigate(selected.source === "MOVIDESK" ? `/tickets?movidesk=${selected.movideskTicket}` : `${route(selected.workItemType)}?task=${selected.id}`)}>Abrir registro completo</Button>
     </Drawer>
