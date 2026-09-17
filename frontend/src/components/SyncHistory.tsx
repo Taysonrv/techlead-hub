@@ -66,6 +66,7 @@ type SyncHistoryItem = {
   updated: number;
   skipped: number;
   errors: number;
+  hasErrorDetails: boolean;
   message: string | null;
   startedAt: string;
   finishedAt: string | null;
@@ -92,8 +93,10 @@ const PAGE_SIZE = 10;
 export function SyncHistory() {
   const {
     isAdmin,
+    user,
   } =
     useAuth();
+  const canSynchronize = isAdmin || user?.role === "COORDENADOR";
 
   const [provider, setProvider] =
     useState<SyncProvider>("");
@@ -109,6 +112,7 @@ export function SyncHistory() {
     useState<
       "incremental" |
       "full" |
+      "movidesk" |
       null
     >(null);
   const [error, setError] =
@@ -307,6 +311,43 @@ export function SyncHistory() {
     }
   }
 
+  async function runMovidesk() {
+    if (executing) return;
+    try {
+      setExecuting("movidesk");
+      setError(null);
+      setNotice(null);
+      await api.post("/movidesk/sync", undefined, { timeout: 0 });
+      setNotice("Sincronização do Movidesk concluída.");
+      setPage(1);
+      await loadHistory();
+    } catch (runError: unknown) {
+      const message = typeof runError === "object" && runError !== null && "response" in runError
+        ? (runError as { response?: { data?: { message?: string } } }).response?.data?.message
+        : null;
+      setError(message ?? "Não foi possível sincronizar o Movidesk.");
+    } finally {
+      setExecuting(null);
+    }
+  }
+
+  async function downloadErrors(item: SyncHistoryItem) {
+    try {
+      const response = await api.get<{ errorDetails: Array<{ row: number; message: string }> }>(
+        `/sync-center/movidesk/${item.runId}/errors`,
+      );
+      const escape = (value: string | number) => `"${String(value).replace(/"/g, '""')}"`;
+      const csv = ["Linha;Ocorrência", ...response.data.errorDetails.map((detail) => `${escape(detail.row)};${escape(detail.message)}`)].join("\n");
+      const anchor = document.createElement("a");
+      anchor.href = URL.createObjectURL(new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" }));
+      anchor.download = `ocorrencias-${item.batch}.csv`;
+      anchor.click();
+      URL.revokeObjectURL(anchor.href);
+    } catch {
+      setError("Não foi possível baixar as ocorrências desta execução.");
+    }
+  }
+
   return (
     <Card
       elevation={0}
@@ -406,8 +447,17 @@ export function SyncHistory() {
             }}
             spacing={1}
           >
-            {isAdmin && (
+            {canSynchronize && (
               <>
+                <Button
+                  variant="outlined"
+                  startIcon={executing === "movidesk" ? <CircularProgress size={16} /> : <SyncOutlined />}
+                  disabled={Boolean(executing)}
+                  onClick={() => void runMovidesk()}
+                >
+                  Sincronizar Movidesk
+                </Button>
+
                 <Button
                   variant="outlined"
                   startIcon={
@@ -611,6 +661,7 @@ export function SyncHistory() {
                 <TableCell>
                   Responsável
                 </TableCell>
+                <TableCell align="right">Ações</TableCell>
               </TableRow>
             </TableHead>
 
@@ -618,7 +669,7 @@ export function SyncHistory() {
               {loading ? (
                 <TableRow>
                   <TableCell
-                    colSpan={10}
+                    colSpan={11}
                     align="center"
                     sx={{
                       py:
@@ -666,7 +717,6 @@ export function SyncHistory() {
                             )}
                         </Typography>
                       </TableCell>
-
                       <TableCell>
                         {formatDateTime(
                           item.startedAt,
@@ -719,13 +769,18 @@ export function SyncHistory() {
                             ?.username ??
                           "Automático"}
                       </TableCell>
+                      <TableCell align="right">
+                        {item.provider === "MOVIDESK" && item.hasErrorDetails ? (
+                          <Button size="small" onClick={() => void downloadErrors(item)}>Baixar erros</Button>
+                        ) : "—"}
+                      </TableCell>
                     </TableRow>
                   ),
                 )
               ) : (
                 <TableRow>
                   <TableCell
-                    colSpan={10}
+                    colSpan={11}
                     align="center"
                     sx={{
                       py:

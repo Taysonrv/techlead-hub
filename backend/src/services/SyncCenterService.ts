@@ -118,6 +118,7 @@ export class SyncCenterService {
                 batch: true,
                 source: true,
                 fileName: true,
+                errorDetails: true,
                 status: true,
                 totalRows: true,
                 insertedRows: true,
@@ -207,6 +208,8 @@ export class SyncCenterService {
             run.skippedRows,
           errors:
             run.errorRows,
+          hasErrorDetails:
+            Array.isArray(run.errorDetails) && run.errorDetails.length > 0,
           message:
             run.message,
           startedAt:
@@ -250,6 +253,8 @@ export class SyncCenterService {
             run.skippedItems,
           errors:
             run.errorItems,
+          hasErrorDetails:
+            false,
           message:
             run.message,
           startedAt:
@@ -367,7 +372,7 @@ export class SyncCenterService {
       providers: {
         movidesk: {
           configured:
-            true,
+            Boolean(process.env.MOVIDESK_TOKEN),
           latestRun:
             latestMovidesk,
         },
@@ -385,6 +390,25 @@ export class SyncCenterService {
             latestAzure,
         },
       },
+    };
+  }
+
+  public async importErrors(runId: number) {
+    const run = await prisma.importRun.findUnique({
+      where: { id: runId },
+      select: {
+        id: true,
+        batch: true,
+        fileName: true,
+        errorDetails: true,
+      },
+    });
+
+    if (!run) return null;
+
+    return {
+      ...run,
+      errorDetails: Array.isArray(run.errorDetails) ? run.errorDetails : [],
     };
   }
 

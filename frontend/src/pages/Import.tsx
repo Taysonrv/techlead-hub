@@ -64,6 +64,21 @@ type ImportResult = {
   }[];
 };
 
+type ImportPreview = {
+  fileName: string;
+  format: "JSON" | "EXCEL";
+  size: number;
+  hash: string;
+  totalRows: number;
+  columns: string[];
+  duplicate: null | {
+    batchId: string;
+    status: string;
+    startedAt: string;
+    finishedAt: string | null;
+  };
+};
+
 /* =========================================================
    TIPOS - AZURE
 ========================================================= */
@@ -155,6 +170,9 @@ export function Import() {
     useState<ImportResult | null>(
       null,
     );
+
+  const [preview, setPreview] = useState<ImportPreview | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
 
   /* =======================================================
      AZURE
@@ -336,6 +354,7 @@ export function Import() {
     setResult(
       null,
     );
+    setPreview(null);
 
     if (
       !validateFile(
@@ -352,6 +371,27 @@ export function Import() {
     setFile(
       selectedFile,
     );
+
+    void inspectFile(selectedFile);
+  }
+
+  async function inspectFile(selectedFile: File) {
+    try {
+      setPreviewLoading(true);
+      const formData = new FormData();
+      formData.append("file", selectedFile);
+      const response = await api.post<ImportPreview>(
+        "/import/tickets/preview",
+        formData,
+        { headers: { "Content-Type": "multipart/form-data" } },
+      );
+      setPreview(response.data);
+    } catch (err: unknown) {
+      setFile(null);
+      setError(getApiErrorMessage(err, "Não foi possível validar o arquivo antes da importação."));
+    } finally {
+      setPreviewLoading(false);
+    }
   }
 
   function handleFileChange(
@@ -433,6 +473,7 @@ export function Import() {
     setResult(
       null,
     );
+    setPreview(null);
   }
 
   async function importFile() {
@@ -466,6 +507,7 @@ export function Import() {
         "file",
         file,
       );
+      if (preview?.hash) formData.append("fileHash", preview.hash);
 
       const response =
         await api.post(
@@ -503,6 +545,17 @@ export function Import() {
         false,
       );
     }
+  }
+
+  function downloadCurrentErrors() {
+    if (!result?.errorDetails.length) return;
+    const escape = (value: string | number) => `"${String(value).replace(/"/g, '""')}"`;
+    const csv = ["Linha;Ocorrência", ...result.errorDetails.map((item) => `${escape(item.row)};${escape(item.message)}`)].join("\n");
+    const anchor = document.createElement("a");
+    anchor.href = URL.createObjectURL(new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" }));
+    anchor.download = `ocorrencias-importacao-${result.batchId}.csv`;
+    anchor.click();
+    URL.revokeObjectURL(anchor.href);
   }
 
   return (
@@ -1245,7 +1298,7 @@ export function Import() {
                 }}
               >
                 <Chip
-                  label="Arquivo pronto"
+                  label={previewLoading ? "Validando arquivo" : "Arquivo validado"}
                   color="success"
                   size="small"
                   sx={{
@@ -1273,6 +1326,13 @@ export function Import() {
                 >
                   {fileSize}
                 </Typography>
+
+                {preview && (
+                  <Stack direction="row" spacing={1} useFlexGap sx={{ mt: 1, justifyContent: "center", flexWrap: "wrap" }}>
+                    <Chip size="small" variant="outlined" label={preview.format} />
+                    <Chip size="small" variant="outlined" label={`${preview.totalRows.toLocaleString("pt-BR")} registros`} />
+                  </Stack>
+                )}
 
                 <Typography
                   variant="caption"
@@ -1339,6 +1399,12 @@ export function Import() {
             </Alert>
           )}
 
+          {preview?.duplicate && (
+            <Alert severity="warning" sx={{ mt: 2 }}>
+              Este mesmo arquivo já foi processado em {new Date(preview.duplicate.startedAt).toLocaleString("pt-BR")} no lote {preview.duplicate.batchId}. Você ainda pode reprocessá-lo para atualizar os dados.
+            </Alert>
+          )}
+
           <Stack
             direction={{
               xs:
@@ -1376,7 +1442,9 @@ export function Import() {
               variant="contained"
               disabled={
                 !file ||
-                loading
+                loading ||
+                previewLoading ||
+                !preview
               }
               onClick={
                 importFile
@@ -1388,7 +1456,9 @@ export function Import() {
             >
               {loading
                 ? "Importando..."
-                : "Importar dados"}
+                : previewLoading
+                  ? "Validando..."
+                  : "Confirmar importação"}
             </Button>
           </Stack>
         </CardContent>
@@ -1616,14 +1686,10 @@ export function Import() {
               }}
             >
               <CardContent>
-                <Typography
-                  sx={{
-                    fontWeight:
-                      800,
-                  }}
-                >
-                  Ocorrências da importação
-                </Typography>
+                <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ justifyContent: "space-between", alignItems: { sm: "center" } }}>
+                  <Typography sx={{ fontWeight: 800 }}>Ocorrências da importação</Typography>
+                  <Button size="small" variant="outlined" onClick={downloadCurrentErrors}>Baixar CSV</Button>
+                </Stack>
 
                 <Typography
                   variant="body2"

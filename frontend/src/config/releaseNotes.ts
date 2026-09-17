@@ -9,9 +9,56 @@ export type ReleaseNote = {
   items: readonly ReleaseNoteItem[];
 };
 
-export const FALLBACK_APP_VERSION = "1.0.0-rc.4";
+export const FALLBACK_APP_VERSION = "1.0.0-rc.6";
 
 export const releaseNotes: Record<string, ReleaseNote> = {
+  "1.0.0-rc.6": {
+    version: "1.0.0-rc.6",
+    title: "Sincronizações auditáveis, desempenho e dados enriquecidos",
+    items: [
+      {
+        title: "Central de Sincronizações",
+        description:
+          "Movidesk, importações e Azure DevOps passam a compartilhar histórico, ações manuais, situação, duração e resultados em uma única visão.",
+      },
+      {
+        title: "Importação validada",
+        description:
+          "Arquivos Excel e JSON são inspecionados antes da confirmação, com quantidade de registros, formato e aviso de arquivo já processado.",
+      },
+      {
+        title: "Auditoria e ocorrências",
+        description:
+          "As importações registram o responsável, a assinatura do arquivo e as ocorrências, que podem ser baixadas em CSV pelo resultado ou histórico.",
+      },
+      {
+        title: "Movidesk enriquecido",
+        description:
+          "Linha do tempo, reaberturas, resolução no primeiro contato, satisfação e payload completo apoiam análises operacionais e executivas.",
+      },
+      {
+        title: "Pendências e desempenho",
+        description:
+          "Consultas compartilhadas, índices em memória, cache curto e carregamento sob demanda reduzem o tempo das telas e restauram Pendências com a base completa.",
+      },
+      {
+        title: "Carregamento por tela",
+        description:
+          "As páginas são carregadas sob demanda, reduzindo o pacote inicial e acelerando a abertura do aplicativo Web e Desktop.",
+      },
+    ],
+  },
+  "1.0.0-rc.5": {
+    version: "1.0.0-rc.5",
+    title: "Consolidação executiva e operacional",
+    items: [
+      {
+        title: "Gestão integrada",
+        description:
+          "Consolidação das melhorias executivas, operacionais, de relatórios, notificações, usuários e experiência das telas principais.",
+      },
+    ],
+  },
   "1.0.0-rc.4": {
     version: "1.0.0-rc.4",
     title: "Saúde do cliente e higienização operacional",

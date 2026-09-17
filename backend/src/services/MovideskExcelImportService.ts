@@ -1,5 +1,6 @@
 import ExcelJS from "exceljs";
 import crypto from "node:crypto";
+import { Prisma } from "@prisma/client";
 
 import { prisma } from "../database/prisma";
 
@@ -31,6 +32,7 @@ export class MovideskExcelImportService {
     fileBuffer: Buffer,
     options: {
       fileName?: string | null;
+      fileHash?: string | null;
       userId?: number | null;
     } = {},
   ): Promise<ImportResult> {
@@ -85,6 +87,7 @@ export class MovideskExcelImportService {
 
     const batchId =
       crypto.randomUUID();
+    const fileHash = options.fileHash ?? crypto.createHash("sha256").update(fileBuffer).digest("hex");
 
     let created = 0;
     let updated = 0;
@@ -141,6 +144,7 @@ export class MovideskExcelImportService {
           fileName:
             options.fileName ??
             null,
+          fileHash,
           userId:
             options.userId ??
             null,
@@ -323,8 +327,21 @@ export class MovideskExcelImportService {
             : ignored > 0
               ? `Importação concluída com ${ignored} linha(s) ignorada(s).`
               : "Importação concluída com sucesso.",
+        errorDetails: errorDetails.slice(0, 500) as Prisma.InputJsonValue,
       },
     });
+
+    if (options.userId) {
+      await prisma.auditLog.create({
+        data: {
+          userId: options.userId,
+          action: "MOVIDESK_IMPORT_COMPLETED",
+          entity: "ImportRun",
+          entityId: String(importRun.id),
+          metadata: { source: "MOVÍDESK_EXCEL", fileName: options.fileName ?? null, totalRows: rows.length, created, updated, ignored, errors },
+        },
+      });
+    }
 
     return {
       batchId,

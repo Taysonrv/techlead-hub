@@ -27,6 +27,13 @@ const upload =
   });
 
 router.post(
+  "/import/tickets/preview",
+  requireRoles("ADMIN", "COORDENADOR"),
+  upload.single("file"),
+  (req, res) => controller.preview(req, res),
+);
+
+router.post(
   "/import/tickets",
   requireRoles("ADMIN", "COORDENADOR"),
   upload.single(
