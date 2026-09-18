@@ -4,7 +4,7 @@ import {
 
 export type AppNotification = {
   key: string;
-  kind: "SIMER_VERSION" | "AZURE_COMPLETED" | "AZURE_UPDATED";
+  kind: "SIMER_VERSION" | "AZURE_COMPLETED" | "AZURE_UPDATED" | "CHAT_MENTION";
   title: string;
   message: string;
   occurredAt: Date;
@@ -47,6 +47,7 @@ export class NotificationService {
         select: {
           name: true,
           email: true,
+          username: true,
         },
       });
 
@@ -122,7 +123,7 @@ export class NotificationService {
       })),
     ];
 
-    const [workItems, versions] =
+    const [workItems, versions, chatMentions] =
       await Promise.all([
         prisma.azureWorkItem.findMany({
           where: {
@@ -160,6 +161,32 @@ export class NotificationService {
             deliveredVersion: true,
             azureChangedAt: true,
             updatedAt: true,
+          },
+        }),
+        prisma.chatMessage.findMany({
+          where: {
+            deletedAt: null,
+            authorId: { not: userId },
+            createdAt: { gte: since },
+            content: {
+              contains: `@${user.username}`,
+              mode: "insensitive",
+            },
+            channel: {
+              members: {
+                some: { userId },
+              },
+            },
+          },
+          orderBy: { createdAt: "desc" },
+          take: 30,
+          select: {
+            id: true,
+            content: true,
+            createdAt: true,
+            channelId: true,
+            channel: { select: { name: true } },
+            author: { select: { name: true } },
           },
         }),
       ]);
@@ -200,6 +227,15 @@ export class NotificationService {
         } satisfies AppNotification;
       });
 
+    const mentionNotifications = chatMentions.map((item) => ({
+      key: `chat-mention:${item.id}`,
+      kind: "CHAT_MENTION" as const,
+      title: `Menção em ${item.channel.name}`,
+      message: `${item.author.name}: ${item.content.slice(0, 180)}`,
+      occurredAt: item.createdAt,
+      path: `/chat?channel=${item.channelId}`,
+    }));
+
     const preferences = await this.preferences(userId);
     const readRows = await prisma.$queryRaw<Array<{
       notificationKey: string;
@@ -210,9 +246,11 @@ export class NotificationService {
     `;
     const readKeys = new Set(readRows.map((row) => row.notificationKey));
 
-    const notifications = [...itemNotifications, ...versionNotifications]
+    const notifications = [...mentionNotifications, ...itemNotifications, ...versionNotifications]
       .filter((item) =>
-        item.kind === "SIMER_VERSION"
+        item.kind === "CHAT_MENTION"
+          ? true
+          : item.kind === "SIMER_VERSION"
           ? preferences.simerVersion
           : item.kind === "AZURE_COMPLETED"
             ? preferences.azureCompleted

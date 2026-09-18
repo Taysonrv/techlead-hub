@@ -20,10 +20,11 @@ Os arquivos aceitos possuem limite de 50 MB. Payloads JSON são limitados a 10 m
 
 ## Chat interno
 
+- `GET /api/chat/participants`: usuários ativos e aprovados disponíveis para canais.
 - `GET /api/chat/channels`: canais dos quais o usuário é membro.
 - `POST /api/chat/channels`: cria canal e associação inicial.
 - `GET /api/chat/channels/:channelId/messages`: histórico autorizado, limitado a 100 mensagens por página.
-- `POST /api/chat/channels/:channelId/messages`: envia mensagem após inspeção de segredos.
+- `POST /api/chat/channels/:channelId/messages`: envia mensagem após inspeção de segredos e resolve menções de membros no formato `@usuario`.
 - `DELETE /api/chat/messages/:messageId`: remoção lógica pelo autor ou liderança.
 
 ## Coordenação

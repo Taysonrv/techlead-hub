@@ -19,6 +19,7 @@ import {
   NotificationsNoneOutlined,
   OpenInNewOutlined,
   TaskAltOutlined,
+  AlternateEmailOutlined,
 } from "@mui/icons-material";
 
 import {
@@ -50,7 +51,8 @@ type NotificationKind =
   | "APP_VERSION"
   | "SIMER_VERSION"
   | "AZURE_COMPLETED"
-  | "AZURE_UPDATED";
+  | "AZURE_UPDATED"
+  | "CHAT_MENTION";
 
 type HubNotification = {
   key: string;
@@ -295,6 +297,8 @@ export function NotificationCenter() {
             ? Inventory2Outlined
             : item.kind === "SIMER_VERSION"
               ? OpenInNewOutlined
+              : item.kind === "CHAT_MENTION"
+                ? AlternateEmailOutlined
               : item.kind === "AZURE_COMPLETED"
                 ? CheckCircleOutlined
                 : TaskAltOutlined;

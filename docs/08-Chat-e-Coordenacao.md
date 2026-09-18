@@ -11,7 +11,7 @@ Tipos de canal:
 - `CLIENT`: contexto de cliente.
 - `CONTEXT`: ticket, Work Item, versão ou outro objeto operacional.
 
-O backend sempre confirma a associação antes de listar, enviar ou remover mensagens.
+O backend sempre confirma a associação antes de listar, enviar ou remover mensagens. A criação do canal aceita somente usuários ativos e aprovados, a quantidade de não lidas é calculada individualmente e menções por `@usuario` geram notificações com navegação para o canal.
 
 ## Central de Coordenação
 

@@ -1,6 +1,7 @@
 import { AddCommentOutlined, ForumOutlined, SendRounded, ShieldOutlined } from "@mui/icons-material";
-import { Alert, Box, Button, Chip, CircularProgress, Divider, IconButton, List, ListItemButton, ListItemText, Paper, Stack, TextField, Typography } from "@mui/material";
+import { Alert, Box, Button, Checkbox, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Divider, FormControlLabel, IconButton, List, ListItemButton, ListItemText, Paper, Stack, TextField, Typography } from "@mui/material";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { api } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { PageHeader } from "../components/PageHeader";
@@ -11,13 +12,18 @@ type Channel = { id: number; name: string; type: string; description?: string | 
 
 export function Chat() {
   const { user } = useAuth();
+  const [searchParams] = useSearchParams();
   const [channels, setChannels] = useState<Channel[]>([]);
+  const [participants, setParticipants] = useState<Person[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [content, setContent] = useState("");
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
+  const [createOpen, setCreateOpen] = useState(false);
+  const [channelName, setChannelName] = useState("");
+  const [memberIds, setMemberIds] = useState<number[]>([]);
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
   const selected = useMemo(() => channels.find((channel) => channel.id === selectedId) ?? null, [channels, selectedId]);
@@ -25,14 +31,21 @@ export function Chat() {
   const loadChannels = useCallback(async () => {
     const response = await api.get<{ channels: Channel[] }>("/chat/channels");
     setChannels(response.data.channels);
-    setSelectedId((current) => current ?? response.data.channels[0]?.id ?? null);
-  }, []);
+    const requested = Number(searchParams.get("channel"));
+    setSelectedId((current) =>
+      current ??
+      response.data.channels.find((channel) => channel.id === requested)?.id ??
+      response.data.channels[0]?.id ??
+      null,
+    );
+  }, [searchParams]);
 
   const loadMessages = useCallback(async (channelId: number, quiet = false) => {
     try {
       if (!quiet) setLoading(true);
       const response = await api.get<{ messages: Message[] }>(`/chat/channels/${channelId}/messages`);
       setMessages(response.data.messages);
+      setChannels((current) => current.map((channel) => channel.id === channelId ? { ...channel, unread: 0 } : channel));
       setError("");
     } catch (requestError: any) {
       if (!quiet) setError(requestError?.response?.data?.error || "Não foi possível carregar a conversa.");
@@ -41,7 +54,12 @@ export function Chat() {
     }
   }, []);
 
-  useEffect(() => { void loadChannels().catch(() => { setError("Não foi possível carregar os canais."); setLoading(false); }); }, [loadChannels]);
+  useEffect(() => {
+    void Promise.all([
+      loadChannels(),
+      api.get<{ participants: Person[] }>("/chat/participants").then((response) => setParticipants(response.data.participants)),
+    ]).catch(() => { setError("Não foi possível carregar os canais."); setLoading(false); });
+  }, [loadChannels]);
   useEffect(() => {
     if (!selectedId) { setLoading(false); return; }
     void loadMessages(selectedId);
@@ -51,12 +69,20 @@ export function Chat() {
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
   async function createChannel() {
-    const name = window.prompt("Nome do novo canal:")?.trim();
+    const name = channelName.trim();
     if (!name) return;
     try {
-      const response = await api.post<Channel>("/chat/channels", { name, type: "TEAM", description: "Canal interno da equipe" });
+      const response = await api.post<Channel>("/chat/channels", {
+        name,
+        type: "TEAM",
+        description: "Canal interno da equipe",
+        memberIds,
+      });
       await loadChannels();
       setSelectedId(response.data.id);
+      setCreateOpen(false);
+      setChannelName("");
+      setMemberIds([]);
     } catch (requestError: any) { setError(requestError?.response?.data?.error || "Não foi possível criar o canal."); }
   }
 
@@ -81,7 +107,7 @@ export function Chat() {
       <Box sx={{ borderRight: { md: "1px solid" }, borderColor: "divider" }}>
         <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between", p: 2 }}>
           <Typography sx={{ fontWeight: 850 }}>Conversas</Typography>
-          <IconButton size="small" aria-label="Criar canal" onClick={() => void createChannel()}><AddCommentOutlined /></IconButton>
+          <IconButton size="small" aria-label="Criar canal" onClick={() => setCreateOpen(true)}><AddCommentOutlined /></IconButton>
         </Stack>
         <Divider />
         <List disablePadding>{channels.map((channel) => <ListItemButton key={channel.id} selected={channel.id === selectedId} onClick={() => setSelectedId(channel.id)} sx={{ py: 1.5 }}>
@@ -103,10 +129,31 @@ export function Chat() {
         </Box>
         <Divider />
         <Stack direction="row" spacing={1} sx={{ p: 2, alignItems: "flex-end" }}>
-          <TextField fullWidth multiline maxRows={5} value={content} disabled={!selectedId || sending} placeholder="Escreva uma mensagem sem dados sensíveis..." slotProps={{ htmlInput: { maxLength: 4000 } }} onChange={(event) => setContent(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void send(); } }} />
+          <TextField fullWidth multiline maxRows={5} value={content} disabled={!selectedId || sending} placeholder="Escreva uma mensagem; use @usuario para mencionar..." slotProps={{ htmlInput: { maxLength: 4000 } }} onChange={(event) => setContent(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void send(); } }} />
           <Button variant="contained" endIcon={sending ? <CircularProgress size={16} color="inherit" /> : <SendRounded />} disabled={!selectedId || !content.trim() || sending} onClick={() => void send()}>Enviar</Button>
         </Stack>
       </Box>
     </Paper>
+    <Dialog open={createOpen} onClose={() => setCreateOpen(false)} fullWidth maxWidth="sm">
+      <DialogTitle>Novo canal da equipe</DialogTitle>
+      <DialogContent>
+        <TextField autoFocus fullWidth label="Nome do canal" value={channelName} onChange={(event) => setChannelName(event.target.value)} sx={{ mt: 1, mb: 2 }} slotProps={{ htmlInput: { maxLength: 120 } }} />
+        <Typography variant="subtitle2" sx={{ mb: 1 }}>Participantes</Typography>
+        <Box sx={{ maxHeight: 280, overflowY: "auto", border: "1px solid", borderColor: "divider", borderRadius: 1, px: 1 }}>
+          {participants.filter((person) => person.id !== user?.id).map((person) => (
+            <FormControlLabel
+              key={person.id}
+              control={<Checkbox checked={memberIds.includes(person.id)} onChange={(_, checked) => setMemberIds((current) => checked ? [...current, person.id] : current.filter((id) => id !== person.id))} />}
+              label={`${person.name} · @${person.username}`}
+              sx={{ display: "flex", mx: 0 }}
+            />
+          ))}
+        </Box>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={() => setCreateOpen(false)}>Cancelar</Button>
+        <Button variant="contained" disabled={channelName.trim().length < 3} onClick={() => void createChannel()}>Criar canal</Button>
+      </DialogActions>
+    </Dialog>
   </Stack>;
 }
