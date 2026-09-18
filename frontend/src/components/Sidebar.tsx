@@ -17,7 +17,6 @@ import {
 } from "@mui/material";
 
 import {
-  AssessmentOutlined,
   AutoFixHighOutlined,
   BugReportOutlined,
   ConfirmationNumberOutlined,
@@ -25,6 +24,7 @@ import {
   ExpandMoreRounded,
   ExpandLessRounded,
   InfoOutlined,
+  Inventory2Outlined,
   LogoutOutlined,
   ManageAccountsOutlined,
   MenuBookOutlined,
