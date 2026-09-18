@@ -248,12 +248,12 @@ export const theme =
         styleOverrides: {
           paper: {
             "&.MuiDrawer-paperAnchorRight": {
-              width: "min(620px, 100vw) !important",
+              width: "min(560px, 92vw)",
               maxWidth: "100vw",
               boxSizing: "border-box",
             },
             "&.MuiDrawer-paperAnchorRight > .MuiBox-root:first-of-type": {
-              width: "100% !important",
+              width: "100%",
               maxWidth: "100%",
               boxSizing: "border-box",
             },
