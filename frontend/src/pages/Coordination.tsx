@@ -1,13 +1,9 @@
 import {
-  AssignmentLateOutlined,
-  BlockOutlined,
   BusinessOutlined,
   FactCheckOutlined,
   GroupsOutlined,
   InsightsOutlined,
   IntegrationInstructionsOutlined,
-  PriorityHighOutlined,
-  ScheduleOutlined,
   TrendingUpOutlined,
   WarningAmberOutlined,
 } from "@mui/icons-material";
@@ -105,14 +101,14 @@ export function Coordination() {
     [data],
   );
 
-  const cards: Array<[string, number, ElementType, string]> = data
+  const cards: Array<[string, number, string]> = data
     ? [
-        ["Backlog atual", data.indicators.openTickets, GroupsOutlined, "Atendimentos abertos do escopo cooperativas."],
-        ["Críticos", data.indicators.criticalTickets, PriorityHighOutlined, "Atendimentos críticos em aberto."],
-        ["Sem movimento 72h", data.indicators.staleTickets, WarningAmberOutlined, "Tickets sem atualização há pelo menos 72 horas."],
-        ["Vencem em 7 dias", data.indicators.dueSoon, ScheduleOutlined, "Itens com prazo nos próximos sete dias."],
-        ["Itens bloqueados", data.indicators.blockedItems, BlockOutlined, "Tarefas Azure bloqueadas no escopo da operação."],
-        ["Sem responsável", data.indicators.unassignedItems, AssignmentLateOutlined, "Tarefas sem responsável identificado."],
+        ["Backlog atual", data.indicators.openTickets, "Atendimentos abertos do escopo cooperativas."],
+        ["Críticos", data.indicators.criticalTickets, "Atendimentos críticos em aberto."],
+        ["Sem movimento 72h", data.indicators.staleTickets, "Tickets sem atualização há pelo menos 72 horas."],
+        ["Vencem em 7 dias", data.indicators.dueSoon, "Itens com prazo nos próximos sete dias."],
+        ["Itens bloqueados", data.indicators.blockedItems, "Tarefas Azure bloqueadas no escopo da operação."],
+        ["Sem responsável", data.indicators.unassignedItems, "Tarefas sem responsável identificado."],
       ]
     : [];
 
@@ -212,7 +208,7 @@ export function Coordination() {
                   gap: 2,
                 }}
               >
-                {cards.map(([label, value, icon, info]) => (
+                {cards.map(([label, value, info]) => (
                   <KpiCard
                     key={label}
                     title={label}
@@ -226,7 +222,6 @@ export function Coordination() {
                           ? aliareColors.warning
                           : aliareColors.info
                     }
-                    icon={createElement(icon, { fontSize: "small" })}
                   />
                 ))}
               </Box>
