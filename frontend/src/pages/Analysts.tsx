@@ -3899,11 +3899,7 @@ export function Analysts() {
       >
         <Box
           sx={{
-            width: {
-              xs: 320,
-              sm: 500,
-            },
-
+            width: "100%",
             p: 2.5,
           }}
         >
