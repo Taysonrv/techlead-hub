@@ -13,3 +13,10 @@ test("bloqueia credencial Bearer no chat", () => {
 test("remove valores sensíveis de metadados", () => {
   assert.deepEqual(dataProtectionService.redact({ token: "segredo", nested: { value: "ok" } }), { token: "[REMOVIDO]", nested: { value: "ok" } });
 });
+
+test("normaliza e remove duplicidades de menções", () => {
+  assert.deepEqual(
+    dataProtectionService.mentionUsernames("Olá @Tayson, alinhe com @analista.n1 e @tayson"),
+    ["tayson", "analista.n1"],
+  );
+});

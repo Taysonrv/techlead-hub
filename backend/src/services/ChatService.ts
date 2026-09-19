@@ -5,6 +5,17 @@ import { dataProtectionService } from "./DataProtectionService";
 const memberUserSelect = { id: true, name: true, username: true, role: true, avatarUpdatedAt: true } as const;
 
 export class ChatService {
+  async listParticipants() {
+    return prisma.user.findMany({
+      where: {
+        active: true,
+        approvalStatus: "APPROVED",
+      },
+      orderBy: { name: "asc" },
+      select: memberUserSelect,
+    });
+  }
+
   async listChannels(userId: number) {
     const memberships = await prisma.chatChannelMember.findMany({
       where: { userId, channel: { archivedAt: null } },
@@ -18,11 +29,18 @@ export class ChatService {
         },
       },
     });
-    return memberships.map(({ channel, lastReadAt }) => ({
+    return Promise.all(memberships.map(async ({ channel, lastReadAt, joinedAt }) => ({
       ...channel,
       lastReadAt,
-      unread: channel.messages[0] && (!lastReadAt || channel.messages[0].createdAt > lastReadAt) ? 1 : 0,
-    }));
+      unread: await prisma.chatMessage.count({
+        where: {
+          channelId: channel.id,
+          deletedAt: null,
+          authorId: { not: userId },
+          createdAt: { gt: lastReadAt ?? joinedAt },
+        },
+      }),
+    })));
   }
 
   async createChannel(userId: number, role: string, input: Record<string, unknown>) {
@@ -31,6 +49,17 @@ export class ChatService {
     const requestedMembers = Array.isArray(input.memberIds) ? input.memberIds.map(Number).filter(Number.isSafeInteger) : [];
     const memberIds = [...new Set([userId, ...requestedMembers])];
     if (role === "ANALISTA" && memberIds.length > 20) throw Object.assign(new Error("O canal excede o limite de membros permitido."), { statusCode: 403 });
+    const validMembers = await prisma.user.findMany({
+      where: {
+        id: { in: memberIds },
+        active: true,
+        approvalStatus: "APPROVED",
+      },
+      select: { id: true },
+    });
+    if (validMembers.length !== memberIds.length) {
+      throw Object.assign(new Error("Um ou mais participantes não estão ativos ou aprovados."), { statusCode: 400 });
+    }
     const type = ["DIRECT", "TEAM", "CLIENT", "CONTEXT"].includes(String(input.type)) ? String(input.type) as "DIRECT" | "TEAM" | "CLIENT" | "CONTEXT" : "TEAM";
     const channel = await prisma.chatChannel.create({
       data: {
@@ -75,8 +104,27 @@ export class ChatService {
       include: { author: { select: memberUserSelect } },
     });
     await prisma.chatChannel.update({ where: { id: channelId }, data: { updatedAt: new Date() } });
-    await this.audit(userId, "CHAT_MESSAGE_CREATED", "ChatMessage", message.id, { channelId, length: content.length });
-    return message;
+    const usernames = dataProtectionService.mentionUsernames(content);
+    const mentionedMembers = usernames.length
+      ? await prisma.chatChannelMember.findMany({
+          where: {
+            channelId,
+            userId: { not: userId },
+            user: {
+              username: { in: usernames, mode: "insensitive" },
+              active: true,
+            },
+          },
+          select: { user: { select: memberUserSelect } },
+        })
+      : [];
+    const mentions = mentionedMembers.map(({ user }) => user);
+    await this.audit(userId, "CHAT_MESSAGE_CREATED", "ChatMessage", message.id, {
+      channelId,
+      length: content.length,
+      mentionCount: mentions.length,
+    });
+    return { ...message, mentions };
   }
 
   async deleteMessage(userId: number, role: string, messageId: number) {

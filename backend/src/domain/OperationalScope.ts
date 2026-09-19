@@ -19,6 +19,8 @@ export const SIMER_CLIENTS = [
   "COPERAMA - ITURAMA-MG",
 ] as const;
 
+export const SUPPORT_COORDINATOR = "WELLINGTON ALVES GOLD" as const;
+
 export const SUPPORT_ANALYSTS = [
   "ALAN KARDEK DA SILVA BARROS NETO",
   "DÉBORA DAL CORREIA",
@@ -27,7 +29,11 @@ export const SUPPORT_ANALYSTS = [
   "RENAN BRENO CARVALHO",
   "TAYSON ALVES DE ARAUJO",
   "THIAGO DE LIMA MACHADO",
-  "WELLINGTON ALVES GOLD",
+] as const;
+
+export const SUPPORT_OPERATIONAL_MEMBERS = [
+  ...SUPPORT_ANALYSTS,
+  SUPPORT_COORDINATOR,
 ] as const;
 
 export function ticketOperationalScope():

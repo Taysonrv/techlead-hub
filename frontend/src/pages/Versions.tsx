@@ -2945,11 +2945,11 @@ export function Versions() {
           paper: {
             sx: {
               width: {
-                xs:
-                  "100%",
-                sm:
-                  620,
+                xs: "calc(100vw - 16px)",
+                sm: 520,
+                lg: 560,
               },
+              maxWidth: "100vw",
             },
           },
         }}

@@ -9,9 +9,19 @@ export type ReleaseNote = {
   items: readonly ReleaseNoteItem[];
 };
 
-export const FALLBACK_APP_VERSION = "1.0.0-rc.7";
+export const FALLBACK_APP_VERSION = "1.0.0-rc.8";
 
 export const releaseNotes: Record<string, ReleaseNote> = {
+  "1.0.0-rc.8": {
+    version: "1.0.0-rc.8",
+    title: "Colaboração operacional e menções",
+    items: [
+      { title: "Canais com participantes", description: "O chat permite selecionar usuários ativos e aprovados ao criar um canal da equipe." },
+      { title: "Menções integradas", description: "Mensagens com @usuario geram notificações navegáveis para o canal relacionado." },
+      { title: "Não lidas precisas", description: "Cada canal passa a exibir a quantidade real de mensagens ainda não visualizadas pelo usuário." },
+      { title: "Segurança preservada", description: "Menções respeitam os membros do canal e continuam protegidas contra envio de credenciais." },
+    ],
+  },
   "1.0.0-rc.7": {
     version: "1.0.0-rc.7",
     title: "Colaboração, coordenação e proteção de dados",

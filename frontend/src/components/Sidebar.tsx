@@ -17,29 +17,22 @@ import {
 } from "@mui/material";
 
 import {
-  AssessmentOutlined,
   AutoFixHighOutlined,
   BugReportOutlined,
-  BusinessOutlined,
   ConfirmationNumberOutlined,
   DashboardOutlined,
   ExpandMoreRounded,
   ExpandLessRounded,
-  GroupsOutlined,
   InfoOutlined,
   Inventory2Outlined,
-  FactCheckOutlined,
   LogoutOutlined,
   ManageAccountsOutlined,
   MenuBookOutlined,
   PersonOutlined,
   SettingsOutlined,
   SupportAgentOutlined,
-  TrendingUpOutlined,
   UploadFileOutlined,
-  WarningAmberOutlined,
   WorkspacesOutlined,
-  ForumOutlined,
   InsightsOutlined,
 } from "@mui/icons-material";
 
@@ -275,13 +268,8 @@ export function Sidebar() {
           path: "/minha-operacao",
           icon: <WorkspacesOutlined fontSize="small" />,
         },
-        {
-          label: "Chat interno",
-          path: "/chat",
-          icon: <ForumOutlined fontSize="small" />,
-        },
         ...(user?.role === "ADMIN" || user?.role === "COORDENADOR" ? [{
-          label: "Central de Coordenação",
+          label: "Central da Coordenação",
           path: "/coordenacao",
           icon: <InsightsOutlined fontSize="small" />,
         }] : []),
@@ -292,38 +280,6 @@ export function Sidebar() {
             "/tickets",
           icon:
             <ConfirmationNumberOutlined fontSize="small" />,
-        },
-        {
-          label:
-            "Analistas",
-          path:
-            "/analistas",
-          icon:
-            <GroupsOutlined fontSize="small" />,
-        },
-        {
-          label:
-            "Clientes",
-          path:
-            "/clientes",
-          icon:
-            <BusinessOutlined fontSize="small" />,
-        },
-        {
-          label:
-            "Desempenho",
-          path:
-            "/desempenho",
-          icon:
-            <TrendingUpOutlined fontSize="small" />,
-        },
-        {
-          label:
-            "Pontos de Atenção",
-          path:
-            "/atencao",
-          icon:
-            <WarningAmberOutlined fontSize="small" />,
         },
       ],
       [user?.role],
@@ -378,42 +334,21 @@ export function Sidebar() {
 
   const systemMenu =
     useMemo<MenuItemData[]>(
-      () => {
-        const items:
-          MenuItemData[] =
-          [];
-
-        items.push(
-          {
-            label: "Base de Conhecimento",
-            path: "/conhecimento",
-            icon: <MenuBookOutlined fontSize="small" />,
-          },
-          {
-            label:
-              "Dados e Sincronizações",
-            path:
-              "/importar",
-            icon:
-              <UploadFileOutlined fontSize="small" />,
-          },
-          {
-            label:
-              "Relatórios",
-            path:
-              "/relatorios",
-            icon:
-              <AssessmentOutlined fontSize="small" />,
-          },
-          {
-            label: "Pendências",
-            path: "/qualidade-dados",
-            icon: <FactCheckOutlined fontSize="small" />,
-          },
-        );
-
-        return items;
-      },
+      () => [
+        {
+          label: "Base de Conhecimento",
+          path: "/conhecimento",
+          icon: <MenuBookOutlined fontSize="small" />,
+        },
+        {
+          label:
+            "Dados e Sincronizações",
+          path:
+            "/importar",
+          icon:
+            <UploadFileOutlined fontSize="small" />,
+        },
+      ],
       [],
     );
 

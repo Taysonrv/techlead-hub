@@ -22,6 +22,15 @@ export class DataProtectionService {
     }
   }
 
+  mentionUsernames(value: string) {
+    return [...new Set(
+      [...value.matchAll(/(^|\s)@([A-Za-z0-9._-]{2,50})\b/g)]
+        .map((match) => match[2])
+        .filter((username): username is string => Boolean(username))
+        .map((username) => username.toLocaleLowerCase("pt-BR")),
+    )];
+  }
+
   redact(value: unknown): unknown {
     if (typeof value === "string") {
       return SECRET_PATTERNS.reduce((text, item) => text.replace(item.pattern, `[REMOVIDO: ${item.label}]`), value);
