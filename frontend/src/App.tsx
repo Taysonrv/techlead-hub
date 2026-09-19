@@ -58,6 +58,7 @@ const DataQuality = lazy(() => import("./pages/DataQuality").then((module) => ({
 const Knowledge = lazy(() => import("./pages/Knowledge").then((module) => ({ default: module.Knowledge })));
 const Chat = lazy(() => import("./pages/Chat").then((module) => ({ default: module.Chat })));
 const Coordination = lazy(() => import("./pages/Coordination").then((module) => ({ default: module.Coordination })));
+const TechnicalLeadership = lazy(() => import("./pages/TechnicalLeadership").then((module) => ({ default: module.TechnicalLeadership })));
 
 import {
   aliareColors,
@@ -235,6 +236,7 @@ function App() {
 
           <Route path="/chat" element={<AuthenticatedLayout><Chat /></AuthenticatedLayout>} />
           <Route path="/coordenacao" element={<AuthenticatedLayout><Coordination /></AuthenticatedLayout>} />
+          <Route path="/lideranca-tecnica" element={<AuthenticatedLayout><TechnicalLeadership /></AuthenticatedLayout>} />
 
           <Route
             path="/analistas"
