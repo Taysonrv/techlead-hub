@@ -386,6 +386,13 @@ export class WorkspaceService {
     const isTerminalTask = (state: string) => TERMINAL.some((value) => normalizeStatus(value) === normalizeStatus(state));
     const finishedLinkedTasks = linkedTasks.filter((item) => isTerminalTask(item.state));
     const activeLinkedTasks = linkedTasks.filter((item) => !isTerminalTask(item.state));
+    const normalizeVersion = (value: string | null) => normalizeStatus(value ?? "").replace(/\s+/g, "");
+    const versionMismatches = linkedTasks.filter((item) =>
+      !isSupportTask(item)
+      && Boolean(item.registeredVersion?.trim())
+      && Boolean(item.deliveredVersion?.trim())
+      && normalizeVersion(item.registeredVersion) !== normalizeVersion(item.deliveredVersion),
+    );
 
     const createLinkIndex = (items: typeof linkedTasks) => {
       const byId = new Map(items.map((item) => [item.id, item]));
@@ -490,9 +497,11 @@ export class WorkspaceService {
       if (params.issue === "withoutClient") return !isSupportTask(item) && !item.client && !item.participantClients;
       if (params.issue === "completedWithoutVersion") return !isSupportTask(item) && isTerminalTask(item.state) && !item.deliveredVersion;
       if (params.issue === "activeTaskWithVersion") return !isSupportTask(item) && !isTerminalTask(item.state) && Boolean(item.deliveredVersion);
+      if (params.issue === "versionMismatch") return versionMismatches.some((task) => task.id === item.id);
       if (!params.issue) return (!item.movideskTicket && !item.participantMovideskTickets)
         || !item.client || !item.module || !item.assignedToName
-        || (isTerminalTask(item.state) && !item.deliveredVersion);
+        || (isTerminalTask(item.state) && !item.deliveredVersion)
+        || versionMismatches.some((task) => task.id === item.id);
       return true;
     };
     const azureSamples = params.issue === "supportLinkDivergence"
@@ -596,6 +605,7 @@ export class WorkspaceService {
         activeTaskWithVersion: activeLinkedTasks.filter((task) =>
           !isSupportTask(task) && Boolean(task.deliveredVersion?.trim()),
         ).length,
+        versionMismatch: versionMismatches.length,
       },
       samples,
       filters: {
