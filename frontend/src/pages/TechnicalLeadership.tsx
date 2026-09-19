@@ -8,6 +8,7 @@ import {
   SchoolOutlined, TrackChangesOutlined, TrendingDownOutlined, TrendingUpOutlined,
 } from "@mui/icons-material";
 import { useEffect, useMemo, useState } from "react";
+import type { ReactElement, ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../services/api";
 import { PageHeader } from "../components/PageHeader";
@@ -71,7 +72,7 @@ const tabInfo: Record<TabKey, string> = {
   development: "Mostra concentração de temas e pontos de apoio por analista para orientar desenvolvimento técnico, sem ranking.",
 };
 
-function AreaTitle({ title, info, icon }: { title: string; info: string; icon?: React.ReactNode }) {
+function AreaTitle({ title, info, icon }: { title: string; info: string; icon?: ReactNode }) {
   return <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
     {icon}<Typography sx={{ fontWeight: 850 }}>{title}</Typography>
     <Tooltip title={info}><IconButton size="small" aria-label={`Informações sobre ${title}`}><InfoOutlined sx={{ fontSize: 16 }} /></IconButton></Tooltip>
@@ -185,7 +186,7 @@ export function TechnicalLeadership() {
         ["recurrences", "Recorrências", <TrackChangesOutlined fontSize="small" />],
         ["gaps", "Gaps", <ErrorOutlineOutlined fontSize="small" />],
         ["development", "Desenvolvimento", <GroupsOutlined fontSize="small" />],
-      ] as Array<[TabKey, string, React.ReactElement]>).map(([key, label, icon]) => <Tab key={key} value={key} icon={icon} iconPosition="start" label={<Stack direction="row" spacing={.5} sx={{ alignItems: "center" }}><span>{label}</span><Tooltip title={tabInfo[key]}><InfoOutlined onClick={(e) => e.stopPropagation()} sx={{ fontSize: 15, color: "text.secondary" }} /></Tooltip></Stack>} />)}
+      ] as Array<[TabKey, string, ReactElement]>).map(([key, label, icon]) => <Tab key={key} value={key} icon={icon} iconPosition="start" label={<Stack direction="row" spacing={.5} sx={{ alignItems: "center" }}><span>{label}</span><Tooltip title={tabInfo[key]}><InfoOutlined onClick={(e) => e.stopPropagation()} sx={{ fontSize: 15, color: "text.secondary" }} /></Tooltip></Stack>} />)}
     </Tabs></Card>
 
     {data && tab === "radar" && <Box>
@@ -249,7 +250,7 @@ export function TechnicalLeadership() {
       {drawer && <DetailPanelHeader eyebrow="Liderança técnica" title={drawer.title} onClose={() => setDrawer(null)} />}
       {drawer?.kind === "radar" && <DetailSection title="Itens para investigação">
         <Stack spacing={1}>{drawer.items.map((item) => <Button key={isTask(item) ? `task-${item.id}` : `ticket-${item.id}`} variant="outlined" endIcon={<OpenInNewOutlined />} onClick={() => openItem(item)} sx={{ justifyContent: "space-between", textAlign: "left", textTransform: "none" }}>
-          <Box sx={{ minWidth: 0 }}><Typography sx={{ fontWeight: 800 }}>{isTask(item) ? `#${item.id} · ${item.title}` : `#${item.movideskId} · ${item.subject}`}</Typography><Typography variant="caption" color="text.secondary">{[item.status ?? (isTask(item) ? item.state : ""), item.client, isTask(item) ? item.assignedToName : item.owner].filter(Boolean).join(" · ")}</Typography></Box>
+          <Box sx={{ minWidth: 0 }}><Typography sx={{ fontWeight: 800 }}>{isTask(item) ? `#${item.id} · ${item.title}` : `#${item.movideskId} · ${item.subject}`}</Typography><Typography variant="caption" color="text.secondary">{[isTask(item) ? item.state : item.status, item.client, isTask(item) ? item.assignedToName : item.owner].filter(Boolean).join(" · ")}</Typography></Box>
         </Button>)}</Stack>
         {!drawer.items.length && <Alert severity="success">Nenhum item neste recorte.</Alert>}
       </DetailSection>}
