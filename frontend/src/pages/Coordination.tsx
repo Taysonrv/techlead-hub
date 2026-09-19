@@ -14,6 +14,8 @@ import {
   CardContent,
   Chip,
   CircularProgress,
+  Drawer,
+  Button,
   LinearProgress,
   Stack,
   Tab,
@@ -24,6 +26,8 @@ import { createElement, useCallback, useEffect, useMemo, useState } from "react"
 import type { ElementType } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { KpiCard } from "../components/KpiCard";
+import { DetailFieldGrid, DetailPanelHeader, DetailSection } from "../components/DetailPanel";
+import { detailDrawerPaperSx } from "../theme/layoutTokens";
 import { PageHeader } from "../components/PageHeader";
 import { api } from "../services/api";
 import { aliareColors } from "../theme/theme";
@@ -44,6 +48,12 @@ type Data = {
 };
 
 type MainTab = "cadastros" | "movimentos" | "analises";
+type DetailKind = "backlog" | "critical" | "stale" | "dueSoon" | "blocked" | "unassigned" | "analyst";
+type DetailData = {
+  kind: DetailKind; analyst: string | null; total: number; truncated: boolean;
+  tickets: Array<{ movideskId: number; subject: string; status: string; urgency: string | null; client: string | null; owner: string | null; lastUpdate: string | null; dueDate: string | null; taskNumber: number | null; registeredVersion: string | null; deliveredVersion: string | null }>;
+  workItems: Array<{ id: number; workItemType: string; title: string; state: string; client: string | null; assignedToName: string | null; createdByName: string | null; criticality: string | null; blockedProcess: boolean | null; movideskTicket: number | null; registeredVersion: string | null; deliveredVersion: string | null; azureChangedAt: string | null; remoteUrl: string | null }>;
+};
 
 const mainTabs: Array<{ key: MainTab; label: string; icon: ElementType }> = [
   { key: "cadastros", label: "Cadastros", icon: GroupsOutlined },
@@ -78,6 +88,9 @@ export function Coordination() {
   const [data, setData] = useState<Data | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailTitle, setDetailTitle] = useState("");
+  const [details, setDetails] = useState<DetailData | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -101,16 +114,26 @@ export function Coordination() {
     [data],
   );
 
-  const cards: Array<[string, number, string]> = data
+  const cards: Array<[DetailKind, string, number, string]> = data
     ? [
-        ["Backlog atual", data.indicators.openTickets, "Atendimentos abertos do escopo cooperativas."],
-        ["Críticos", data.indicators.criticalTickets, "Atendimentos críticos em aberto."],
-        ["Sem movimento 72h", data.indicators.staleTickets, "Tickets sem atualização há pelo menos 72 horas."],
-        ["Vencem em 7 dias", data.indicators.dueSoon, "Itens com prazo nos próximos sete dias."],
-        ["Itens bloqueados", data.indicators.blockedItems, "Tarefas Azure bloqueadas no escopo da operação."],
-        ["Sem responsável", data.indicators.unassignedItems, "Tarefas sem responsável identificado."],
+        ["backlog", "Backlog atual", data.indicators.openTickets, "Atendimentos abertos do escopo cooperativas."],
+        ["critical", "Críticos", data.indicators.criticalTickets, "Atendimentos críticos em aberto."],
+        ["stale", "Sem movimento 72h", data.indicators.staleTickets, "Tickets sem atualização há pelo menos 72 horas."],
+        ["dueSoon", "Vencem em 7 dias", data.indicators.dueSoon, "Itens com prazo nos próximos sete dias."],
+        ["blocked", "Itens bloqueados", data.indicators.blockedItems, "Tarefas Azure bloqueadas no escopo da operação."],
+        ["unassigned", "Sem responsável", data.indicators.unassignedItems, "Tarefas sem responsável identificado."],
       ]
     : [];
+
+  async function openDetails(kind: DetailKind, title: string, analyst?: string) {
+    try {
+      setDetailTitle(title); setDetails(null); setDetailLoading(true);
+      const response = await api.get<DetailData>("/coordination/details", { params: { kind, analyst, limit: 50 } });
+      setDetails(response.data);
+    } catch {
+      setError("Não foi possível carregar os detalhes da coordenação.");
+    } finally { setDetailLoading(false); }
+  }
 
   function changeTab(value: MainTab) {
     setTab(value);
@@ -208,13 +231,14 @@ export function Coordination() {
                   gap: 2,
                 }}
               >
-                {cards.map(([label, value, info]) => (
+                {cards.map(([kind, label, value, info]) => (
                   <KpiCard
                     key={label}
                     title={label}
                     value={value}
                     subtitle={tab === "analises" ? "Análise gerencial" : "Operação atual"}
                     info={info}
+                    onClick={() => void openDetails(kind, label)}
                     accent={
                       label === "Críticos" || label === "Sem movimento 72h"
                         ? aliareColors.error
@@ -246,7 +270,10 @@ export function Coordination() {
 
                   <Stack spacing={2}>
                     {data.workload.map((item) => (
-                      <Box key={item.analyst}>
+                      <Box key={item.analyst} role="button" tabIndex={0}
+                        onClick={() => void openDetails("analyst", `Carga de ${item.analyst}`, item.analyst)}
+                        onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") void openDetails("analyst", `Carga de ${item.analyst}`, item.analyst); }}
+                        sx={{ p: 1, mx: -1, borderRadius: 1.5, cursor: "pointer", "&:hover": { bgcolor: "action.hover" }, "&:focus-visible": { outline: "2px solid", outlineColor: "primary.main" } }}>
                         <Stack
                           direction={{ xs: "column", sm: "row" }}
                           spacing={0.5}
@@ -313,6 +340,26 @@ export function Coordination() {
           )}
         </CardContent>
       </Card>
+      <Drawer anchor="right" open={Boolean(detailTitle)} onClose={() => { setDetailTitle(""); setDetails(null); }} slotProps={{ paper: { sx: detailDrawerPaperSx } }}>
+        <DetailPanelHeader eyebrow="Coordenação" title={detailTitle || "Detalhes"} identifier={details ? `${details.total} item(ns) carregado(s)` : undefined} onClose={() => { setDetailTitle(""); setDetails(null); }} />
+        {detailLoading ? <Box sx={{ py: 8, display: "grid", placeItems: "center" }}><CircularProgress /></Box> : details ? (
+          <Stack spacing={2}>
+            {details.truncated && <Alert severity="info">Exibindo os primeiros 50 registros do recorte.</Alert>}
+            {details.tickets.length > 0 && <DetailSection title="Atendimentos Movidesk"><Stack spacing={1}>{details.tickets.map((ticket) => (
+              <Button key={ticket.movideskId} variant="outlined" onClick={() => navigate(`/tickets?movidesk=${ticket.movideskId}`)} sx={{ justifyContent: "flex-start", textTransform: "none", textAlign: "left", p: 1.25 }}>
+                <Box sx={{ minWidth: 0 }}><Typography sx={{ fontWeight: 800 }}>#{ticket.movideskId} · {ticket.subject}</Typography><Typography variant="caption" color="text.secondary">{[ticket.status, ticket.urgency, ticket.client, ticket.owner].filter(Boolean).join(" · ")}</Typography></Box>
+              </Button>
+            ))}</Stack></DetailSection>}
+            {details.workItems.length > 0 && <DetailSection title="Work Items Azure"><Stack spacing={1}>{details.workItems.map((item) => (
+              <Button key={item.id} variant="outlined" onClick={() => navigate(item.workItemType.toLocaleLowerCase("pt-BR").includes("apoio") ? `/apoios?task=${item.id}` : item.workItemType.toLocaleLowerCase("pt-BR").includes("evolu") ? `/evolucoes?task=${item.id}` : `/correcoes?task=${item.id}`)} sx={{ justifyContent: "flex-start", textTransform: "none", textAlign: "left", p: 1.25 }}>
+                <Box sx={{ minWidth: 0 }}><Typography sx={{ fontWeight: 800 }}>#{item.id} · {item.title}</Typography><Typography variant="caption" color="text.secondary">{[item.workItemType, item.state, item.client, item.assignedToName ?? "Sem responsável"].filter(Boolean).join(" · ")}</Typography></Box>
+              </Button>
+            ))}</Stack></DetailSection>}
+            {details.total === 0 && <Alert severity="info">Nenhum registro encontrado para este recorte.</Alert>}
+            {details.analyst && <DetailSection title="Escopo do analista"><DetailFieldGrid fields={[["Analista", details.analyst], ["Total carregado", details.total]]} /></DetailSection>}
+          </Stack>
+        ) : null}
+      </Drawer>
     </Box>
   );
 }
