@@ -20,6 +20,8 @@ export class WorkspaceController {
       client: typeof request.query.client === "string" ? request.query.client.trim() : null,
       user: typeof request.query.user === "string" ? request.query.user.trim() : null,
       days: Number.isFinite(Number(request.query.days)) ? Number(request.query.days) : 30,
+      startDate: typeof request.query.startDate === "string" ? request.query.startDate.trim() : null,
+      endDate: typeof request.query.endDate === "string" ? request.query.endDate.trim() : null,
     }));
 
   public dataQuality = async (request: AuthenticatedRequest, response: Response) =>
