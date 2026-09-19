@@ -1,5 +1,5 @@
 import { prisma } from "../database/prisma";
-import { SIMER_CLIENTS, SUPPORT_ANALYSTS, azureOperationalScope, ticketOperationalScope } from "../domain/OperationalScope";
+import { SIMER_CLIENTS, SUPPORT_ANALYSTS, SUPPORT_COORDINATOR, azureOperationalScope, ticketOperationalScope } from "../domain/OperationalScope";
 import { microsoftKnowledgeService } from "./MicrosoftKnowledgeService";
 
 const OPEN_TICKET_STATES = ["New", "InAttendance", "Stopped"];
@@ -136,6 +136,7 @@ export class CoordinationService {
         .map((item) => ({ ...item, total: item.tickets + item.workItems }))
         .sort((a, b) => b.total - a.total || a.analyst.localeCompare(b.analyst, "pt-BR")),
       scope: {
+        coordinator: SUPPORT_COORDINATOR,
         analysts: [...SUPPORT_ANALYSTS],
         clients: [...SIMER_CLIENTS],
       },
