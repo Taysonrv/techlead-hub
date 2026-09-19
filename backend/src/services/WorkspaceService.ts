@@ -218,15 +218,22 @@ export class WorkspaceService {
     client?: string | null;
     user?: string | null;
     days?: number | null;
+    startDate?: string | null;
+    endDate?: string | null;
   } = {}) {
     const cacheKey = JSON.stringify(params);
     const cached = technicalLeadershipCache.get(cacheKey);
     if (cached && cached.expiresAt > Date.now()) return cached.value;
     if (technicalLeadershipCache.size > 30) technicalLeadershipCache.clear();
 
-    const days = Math.min(Math.max(params.days ?? 30, 7), 90);
+    const requestedDays = Math.min(Math.max(params.days ?? 30, 1), 3660);
     const now = new Date();
-    const periodStart = new Date(now.getTime() - days * 86400000);
+    const parsedStart = params.startDate ? new Date(`${params.startDate}T00:00:00`) : null;
+    const parsedEnd = params.endDate ? new Date(`${params.endDate}T23:59:59.999`) : null;
+    const customRange = Boolean(parsedStart && parsedEnd && !Number.isNaN(parsedStart.getTime()) && !Number.isNaN(parsedEnd.getTime()) && parsedStart <= parsedEnd);
+    const periodStart = customRange ? parsedStart! : new Date(now.getTime() - requestedDays * 86400000);
+    const periodEnd = customRange ? parsedEnd! : now;
+    const days = Math.max(1, Math.ceil((periodEnd.getTime() - periodStart.getTime()) / 86400000));
     const previousStart = new Date(periodStart.getTime() - days * 86400000);
     const stale3d = new Date(now.getTime() - 3 * 86400000);
     const stale5d = new Date(now.getTime() - 5 * 86400000);
@@ -320,7 +327,7 @@ export class WorkspaceService {
     const recurrenceKey = (ticket: (typeof tickets)[number]) =>
       [ticket.serviceSecondLevel, ticket.serviceFirstLevel, ticket.service, ticket.category, ticket.cause]
         .map((value) => normalize(value)).find((value) => value.length >= 4) ?? "sem classificacao";
-    const currentTickets = tickets.filter((ticket) => ticket.createdDate >= periodStart);
+    const currentTickets = tickets.filter((ticket) => ticket.createdDate >= periodStart && ticket.createdDate <= periodEnd);
     const previousTickets = tickets.filter((ticket) => ticket.createdDate >= previousStart && ticket.createdDate < periodStart);
     const aggregate = (items: typeof tickets) => {
       const map = new Map<string, { count: number; clients: Set<string>; analysts: Set<string>; examples: typeof tickets }>();
