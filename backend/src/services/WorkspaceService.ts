@@ -12,6 +12,7 @@ const normalizedWords = (value: string) => value
   .toLocaleUpperCase("pt-BR").split(/\s+/).filter((word) => word.length > 2);
 
 const dataQualityCache = new Map<string, { expiresAt: number; value: unknown }>();
+const technicalLeadershipCache = new Map<string, { expiresAt: number; value: unknown }>();
 
 export class WorkspaceService {
   public async myOperation(userId: number, params: {
@@ -218,6 +219,11 @@ export class WorkspaceService {
     user?: string | null;
     days?: number | null;
   } = {}) {
+    const cacheKey = JSON.stringify(params);
+    const cached = technicalLeadershipCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) return cached.value;
+    if (technicalLeadershipCache.size > 30) technicalLeadershipCache.clear();
+
     const days = Math.min(Math.max(params.days ?? 30, 7), 90);
     const now = new Date();
     const periodStart = new Date(now.getTime() - days * 86400000);
@@ -383,7 +389,7 @@ export class WorkspaceService {
       ...(blocked.length ? [`Atuar sobre ${blocked.length} Work Item(s) bloqueado(s) com as áreas responsáveis.`] : []),
     ].slice(0, 6);
 
-    return {
+    const result = {
       generatedAt: now,
       periodDays: days,
       radar: {
@@ -406,6 +412,8 @@ export class WorkspaceService {
       recommendations,
       filters: { clients: [...SIMER_CLIENTS], users: [...SUPPORT_ANALYSTS] },
     };
+    technicalLeadershipCache.set(cacheKey, { expiresAt: Date.now() + 30_000, value: result });
+    return result;
   }
 
   public async dataQuality(params: {
