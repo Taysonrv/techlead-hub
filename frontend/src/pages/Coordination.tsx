@@ -285,9 +285,12 @@ export function Coordination() {
                           sx={{ justifyContent: "space-between", mb: 0.6 }}
                         >
                           <Typography sx={{ fontWeight: 750 }}>{item.analyst}</Typography>
-                          <Typography variant="body2" color="text.secondary">
-                            {item.tickets} tickets · {item.workItems} itens Azure
-                          </Typography>
+                          <Stack direction="row" spacing={0.5} sx={{ alignItems: "center" }}>
+                            <Typography variant="body2" color="text.secondary">
+                              {item.tickets} tickets · {item.workItems} itens Azure
+                            </Typography>
+                            <Tooltip title="Clique para abrir o recorte operacional deste analista."><InfoOutlined sx={{ fontSize: 15, color: "text.secondary" }} /></Tooltip>
+                          </Stack>
                         </Stack>
                         <LinearProgress
                           variant="determinate"
