@@ -33,7 +33,7 @@ type Recurrence = {
 type Gap = { id: string; type: string; title: string; evidence: string; impact: string; action: string; status: string };
 type Development = { analyst: string; tickets: number; stale: number; themes: Array<{ topic: string; count: number }> };
 type Data = {
-  generatedAt: string; periodDays: number;
+  generatedAt: string; periodDays: number; periodStart?: string; periodEnd?: string;
   radar: Record<string, number>;
   radarSamples: Record<string, Array<Ticket | Task>>;
   audit: { candidates: number; sample: Array<Ticket & { reason: string }> };
@@ -44,6 +44,23 @@ type Data = {
 };
 
 type TabKey = "radar" | "audit" | "recurrences" | "gaps" | "development";
+type PeriodPreset = "7" | "30" | "60" | "90" | "month" | "semester" | "year" | "custom";
+
+function dateInputValue(date: Date) {
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return local.toISOString().slice(0, 10);
+}
+
+function resolvePeriod(preset: PeriodPreset, customStart: string, customEnd: string) {
+  const now = new Date();
+  if (preset === "custom") return { days: 30, startDate: customStart || undefined, endDate: customEnd || undefined };
+  if (["7", "30", "60", "90"].includes(preset)) return { days: Number(preset) };
+  const start = new Date(now);
+  if (preset === "month") start.setDate(1);
+  if (preset === "semester") { start.setMonth(now.getMonth() < 6 ? 0 : 6, 1); }
+  if (preset === "year") start.setMonth(0, 1);
+  return { days: Math.max(1, Math.ceil((now.getTime() - start.getTime()) / 86400000)), startDate: dateInputValue(start), endDate: dateInputValue(now) };
+}
 type DrawerState =
   | { kind: "radar"; key: string; title: string; items: Array<Ticket | Task> }
   | { kind: "audit"; title: string; items: Array<Ticket & { reason: string }> }
@@ -99,19 +116,23 @@ export function TechnicalLeadership() {
   const [tab, setTab] = useState<TabKey>("radar");
   const [client, setClient] = useState("");
   const [user, setUser] = useState("");
-  const [days, setDays] = useState(30);
+  const [period, setPeriod] = useState<PeriodPreset>("30");
+  const [customStart, setCustomStart] = useState("");
+  const [customEnd, setCustomEnd] = useState("");
   const [drawer, setDrawer] = useState<DrawerState>(null);
 
   useEffect(() => {
     let active = true;
     setLoading(true);
     setError("");
-    api.get<Data>("/workspace/technical-leadership", { params: { client: client || undefined, user: user || undefined, days } })
+    const range = resolvePeriod(period, customStart, customEnd);
+    if (period === "custom" && (!customStart || !customEnd)) { setLoading(false); return () => { active = false; }; }
+    api.get<Data>("/workspace/technical-leadership", { params: { client: client || undefined, user: user || undefined, ...range } })
       .then((response) => active && setData(response.data))
       .catch(() => active && setError("Não foi possível carregar a Central de Liderança Técnica."))
       .finally(() => active && setLoading(false));
     return () => { active = false; };
-  }, [client, user, days]);
+  }, [client, user, period, customStart, customEnd]);
 
   const attention = useMemo(() => data ? [
     data.radar.slaOverdue, data.radar.newTooLong, data.radar.pausedTooLong, data.radar.blocked,
@@ -158,10 +179,18 @@ export function TechnicalLeadership() {
           </Box>
           <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
             <FormControl size="small" sx={{ minWidth: 180, bgcolor: "rgba(7,20,35,.72)", borderRadius: 1.5, "& .MuiInputLabel-root": { color: "rgba(215,229,246,.68)" }, "& .MuiOutlinedInput-root": { color: "#F3F8FF", "& fieldset": { borderColor: "rgba(131,175,220,.30)" }, "&:hover fieldset": { borderColor: "rgba(47,208,255,.55)" } }, "& .MuiSvgIcon-root": { color: "rgba(215,229,246,.72)" } }}><InputLabel>Cliente</InputLabel><Select value={client} label="Cliente" onChange={(e) => setClient(e.target.value)}><MenuItem value="">Todos</MenuItem>{data?.filters.clients.map((v) => <MenuItem key={v} value={v}>{v}</MenuItem>)}</Select></FormControl>
-            <FormControl size="small" sx={{ minWidth: 180, bgcolor: "#fff", borderRadius: 1 }}><InputLabel>Analista</InputLabel><Select value={user} label="Analista" onChange={(e) => setUser(e.target.value)}><MenuItem value="">Todos</MenuItem>{data?.filters.users.map((v) => <MenuItem key={v} value={v}>{v}</MenuItem>)}</Select></FormControl>
-            <FormControl size="small" sx={{ minWidth: 120, bgcolor: "rgba(7,20,35,.72)", borderRadius: 1.5, "& .MuiInputLabel-root": { color: "rgba(215,229,246,.68)" }, "& .MuiOutlinedInput-root": { color: "#F3F8FF", "& fieldset": { borderColor: "rgba(131,175,220,.30)" }, "&:hover fieldset": { borderColor: "rgba(47,208,255,.55)" } }, "& .MuiSvgIcon-root": { color: "rgba(215,229,246,.72)" } }}><InputLabel>Período</InputLabel><Select value={days} label="Período" onChange={(e) => setDays(Number(e.target.value))}><MenuItem value={7}>7 dias</MenuItem><MenuItem value={30}>30 dias</MenuItem><MenuItem value={60}>60 dias</MenuItem><MenuItem value={90}>90 dias</MenuItem></Select></FormControl>
+            <FormControl size="small" sx={{ minWidth: 180, bgcolor: "rgba(7,20,35,.72)", borderRadius: 1.5, "& .MuiInputLabel-root": { color: "rgba(215,229,246,.68)" }, "& .MuiOutlinedInput-root": { color: "#F3F8FF", bgcolor: "rgba(7,20,35,.72)", "& fieldset": { borderColor: "rgba(131,175,220,.30)" }, "&:hover fieldset": { borderColor: "rgba(47,208,255,.55)" } }, "& .MuiSvgIcon-root": { color: "rgba(215,229,246,.72)" } }}><InputLabel>Analista</InputLabel><Select value={user} label="Analista" onChange={(e) => setUser(e.target.value)}><MenuItem value="">Todos</MenuItem>{data?.filters.users.map((v) => <MenuItem key={v} value={v}>{v}</MenuItem>)}</Select></FormControl>
+            <FormControl size="small" sx={{ minWidth: 155, bgcolor: "rgba(7,20,35,.72)", borderRadius: 1.5, "& .MuiInputLabel-root": { color: "rgba(215,229,246,.68)" }, "& .MuiOutlinedInput-root": { color: "#F3F8FF", bgcolor: "rgba(7,20,35,.72)", "& fieldset": { borderColor: "rgba(131,175,220,.30)" }, "&:hover fieldset": { borderColor: "rgba(47,208,255,.55)" } }, "& .MuiSvgIcon-root": { color: "rgba(215,229,246,.72)" } }}><InputLabel>Período</InputLabel><Select value={period} label="Período" onChange={(e) => setPeriod(e.target.value as PeriodPreset)}><MenuItem value="7">7 dias</MenuItem><MenuItem value="30">30 dias</MenuItem><MenuItem value="60">60 dias</MenuItem><MenuItem value="90">90 dias</MenuItem><MenuItem value="month">Este mês</MenuItem><MenuItem value="semester">Este semestre</MenuItem><MenuItem value="year">Este ano</MenuItem><MenuItem value="custom">Personalizado</MenuItem></Select></FormControl>
           </Stack>
         </Stack>
+        {period === "custom" && <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ mt: 1.5, justifyContent: "flex-end" }}>
+          <Box component="label" sx={{ display: "grid", gap: .4, fontSize: ".72rem", color: "rgba(215,229,246,.68)" }}>Data inicial
+            <Box component="input" type="date" value={customStart} max={customEnd || undefined} onChange={(e) => setCustomStart(e.currentTarget.value)} sx={{ colorScheme: "dark", height: 38, px: 1.2, borderRadius: 1.5, color: "#F3F8FF", bgcolor: "rgba(7,20,35,.72)", border: "1px solid rgba(131,175,220,.30)", outline: "none", "&:focus": { borderColor: aliareColors.green } }} />
+          </Box>
+          <Box component="label" sx={{ display: "grid", gap: .4, fontSize: ".72rem", color: "rgba(215,229,246,.68)" }}>Data final
+            <Box component="input" type="date" value={customEnd} min={customStart || undefined} onChange={(e) => setCustomEnd(e.currentTarget.value)} sx={{ colorScheme: "dark", height: 38, px: 1.2, borderRadius: 1.5, color: "#F3F8FF", bgcolor: "rgba(7,20,35,.72)", border: "1px solid rgba(131,175,220,.30)", outline: "none", "&:focus": { borderColor: aliareColors.green } }} />
+          </Box>
+        </Stack>}
 
         {data && <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr 1fr", md: "repeat(4,1fr)" }, gap: 1.2, mt: 2 }}>
           {[
