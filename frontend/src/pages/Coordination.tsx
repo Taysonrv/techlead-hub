@@ -6,6 +6,7 @@ import {
   IntegrationInstructionsOutlined,
   TrendingUpOutlined,
   WarningAmberOutlined,
+  InfoOutlined,
 } from "@mui/icons-material";
 import {
   Alert,
@@ -17,6 +18,8 @@ import {
   Drawer,
   Button,
   LinearProgress,
+  IconButton,
+  Tooltip,
   Stack,
   Tab,
   Tabs,
@@ -55,10 +58,10 @@ type DetailData = {
   workItems: Array<{ id: number; workItemType: string; title: string; state: string; client: string | null; assignedToName: string | null; createdByName: string | null; criticality: string | null; blockedProcess: boolean | null; movideskTicket: number | null; registeredVersion: string | null; deliveredVersion: string | null; azureChangedAt: string | null; remoteUrl: string | null }>;
 };
 
-const mainTabs: Array<{ key: MainTab; label: string; icon: ElementType }> = [
-  { key: "cadastros", label: "Cadastros", icon: GroupsOutlined },
-  { key: "movimentos", label: "Movimentos", icon: InsightsOutlined },
-  { key: "analises", label: "Análises", icon: TrendingUpOutlined },
+const mainTabs: Array<{ key: MainTab; label: string; icon: ElementType; info: string }> = [
+  { key: "cadastros", label: "Cadastros", icon: GroupsOutlined, info: "Acessos rápidos para equipe e clientes do escopo operacional." },
+  { key: "movimentos", label: "Movimentos", icon: InsightsOutlined, info: "Rotinas para acompanhar execução, atenção e pendências da operação." },
+  { key: "analises", label: "Análises", icon: TrendingUpOutlined, info: "Visões gerenciais de desempenho, relatórios e versões." },
 ];
 
 const routines: Record<MainTab, Array<{ label: string; path: string; icon: ElementType; description: string }>> = {
@@ -178,7 +181,7 @@ export function Coordination() {
             <Tab
               key={item.key}
               value={item.key}
-              label={item.label}
+              label={<Stack direction="row" spacing={0.5} sx={{ alignItems: "center" }}><span>{item.label}</span><Tooltip title={item.info}><InfoOutlined onClick={(event) => event.stopPropagation()} sx={{ fontSize: 15, color: "text.secondary" }} /></Tooltip></Stack>}
               icon={createElement(item.icon, { fontSize: "small" })}
               iconPosition="start"
             />
@@ -188,21 +191,23 @@ export function Coordination() {
         <Box sx={{ px: { xs: 1.5, md: 2.25 }, py: 1.5, borderBottom: "1px solid", borderColor: "divider", bgcolor: "rgba(47,111,237,.025)" }}>
           <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap" }}>
             {routines[tab].map((routine) => (
-              <Chip
-                key={routine.path}
-                icon={createElement(routine.icon, { fontSize: "small" })}
-                label={routine.label}
-                clickable
-                onClick={() => navigate(routine.path)}
-                variant="outlined"
-                sx={{
-                  height: 38,
-                  px: 0.5,
-                  fontWeight: 750,
-                  bgcolor: "background.paper",
-                  "&:hover": { borderColor: aliareColors.info, bgcolor: "rgba(47,111,237,.05)" },
-                }}
-              />
+              <Stack key={routine.path} direction="row" spacing={0.25} sx={{ alignItems: "center" }}>
+                <Chip
+                  icon={createElement(routine.icon, { fontSize: "small" })}
+                  label={routine.label}
+                  clickable
+                  onClick={() => navigate(routine.path)}
+                  variant="outlined"
+                  sx={{
+                    height: 38,
+                    px: 0.5,
+                    fontWeight: 750,
+                    bgcolor: "background.paper",
+                    "&:hover": { borderColor: aliareColors.info, bgcolor: "rgba(47,111,237,.05)" },
+                  }}
+                />
+                <Tooltip title={routine.description}><IconButton size="small" aria-label={`Informações sobre ${routine.label}`}><InfoOutlined sx={{ fontSize: 16 }} /></IconButton></Tooltip>
+              </Stack>
             ))}
           </Stack>
         </Box>
