@@ -32,7 +32,7 @@ export const SUPPORT_ANALYSTS = [
 ] as const;
 
 export const SUPPORT_OPERATIONAL_MEMBERS = [
-  ...SUPPORT_OPERATIONAL_MEMBERS,
+  ...SUPPORT_ANALYSTS,
   SUPPORT_COORDINATOR,
 ] as const;
 
