@@ -55,18 +55,26 @@ let azureSyncScheduler: AzureDevOpsSyncScheduler | undefined;
 let server: Server | undefined;
 
 async function start() {
-  await ensureApplicationSchema();
-  await systemConfigurationService.loadIntoEnvironment();
+  let databaseReady = false;
+  try {
+    await ensureApplicationSchema();
+    await systemConfigurationService.loadIntoEnvironment();
+    databaseReady = true;
+    process.env.APP_DATABASE_READY = "true";
+  } catch (error) {
+    process.env.APP_DATABASE_READY = "false";
+    console.error("[server] Banco indisponível na inicialização; API subirá em modo degradado:", error);
+  }
 
   /*
-   * O app é importado somente depois da configuração central. Assim,
-   * services criados durante o carregamento das rotas recebem os valores
-   * persistidos pelo administrador no PostgreSQL.
+   * O HTTP permanece disponível mesmo se o banco estiver temporariamente
+   * indisponível. Isso permite health-check, diagnóstico e recuperação sem
+   * transformar uma indisponibilidade do PostgreSQL em falha de processo.
    */
   const appModule = await import("./app.js");
   const exported = appModule.default as unknown as { default?: Express };
   const app = (exported.default ?? exported) as Express;
-  azureSyncScheduler = new AzureDevOpsSyncScheduler();
+  azureSyncScheduler = databaseReady ? new AzureDevOpsSyncScheduler() : undefined;
 
   server = app.listen(
     PORT,
@@ -81,12 +89,13 @@ async function start() {
        * HTTP está efetivamente ouvindo.
        */
       azureSyncScheduler?.start();
+      if (!databaseReady) console.warn("[server] Scheduler Azure não iniciado enquanto o banco estiver indisponível.");
     },
   );
 }
 
 void start().catch((error) => {
-  console.error("[server] Não foi possível preparar o banco:", error);
+  console.error("[server] Falha fatal ao iniciar o servidor:", error);
   process.exit(1);
 });
 
