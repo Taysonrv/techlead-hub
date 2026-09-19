@@ -16,6 +16,7 @@ import { KpiCard } from "../components/KpiCard";
 import { DetailFieldGrid, DetailPanelHeader, DetailSection } from "../components/DetailPanel";
 import { detailDrawerPaperSx } from "../theme/layoutTokens";
 import { aliareColors } from "../theme/theme";
+import { useColorMode } from "../context/ColorModeContext";
 
 type Ticket = {
   id: number; movideskId: number; subject: string; status: string; client: string | null; owner: string | null;
@@ -91,6 +92,7 @@ function isTask(item: Ticket | Task): item is Task {
 
 export function TechnicalLeadership() {
   const navigate = useNavigate();
+  const { mode } = useColorMode();
   const [data, setData] = useState<Data | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -127,11 +129,11 @@ export function TechnicalLeadership() {
 
   return <Box sx={{
     mx: { xs: -1, md: -2 }, mt: { xs: -1, md: -2 }, p: { xs: 1.5, md: 2.5 }, borderRadius: { xs: 0, md: 3 },
-    minHeight: "100vh", color: "#E8F1FF",
-    background: "radial-gradient(circle at 20% 0%, rgba(0,199,142,.10), transparent 28%), radial-gradient(circle at 88% 12%, rgba(84,73,255,.12), transparent 30%), linear-gradient(145deg,#071321 0%,#09192B 48%,#07111F 100%)",
-    "& .MuiCard-root": { background: "linear-gradient(145deg, rgba(14,35,56,.94), rgba(10,25,43,.96))", border: "1px solid rgba(116,166,216,.18)", boxShadow: "0 12px 34px rgba(0,0,0,.16)", color: "#E8F1FF" },
-    "& .MuiTypography-colorTextSecondary": { color: "rgba(208,224,242,.66)" },
-    "& .MuiIconButton-root": { color: "rgba(205,224,244,.72)" },
+    minHeight: "100vh",
+    color: "text.primary",
+    background: mode === "dark"
+      ? "radial-gradient(circle at 20% 0%, rgba(0,199,142,.10), transparent 28%), radial-gradient(circle at 88% 12%, rgba(84,73,255,.12), transparent 30%), linear-gradient(145deg,#071321 0%,#09192B 48%,#07111F 100%)"
+      : "radial-gradient(circle at 18% 0%, rgba(24,199,122,.055), transparent 26%), linear-gradient(180deg,#F8FAFB,#F3F5F6)",
   }}>
     <PageHeader
       eyebrow="Liderança técnica"
@@ -172,21 +174,21 @@ export function TechnicalLeadership() {
       </CardContent>
     </Card>
 
-    {data && <Card sx={{ mb: 2.5, background: "linear-gradient(135deg, rgba(7,55,70,.96), rgba(12,31,54,.96)) !important", borderColor: "rgba(0,199,142,.22) !important" }}><CardContent>
+    {data && <Card sx={{ mb: 2.5, borderColor: mode === "dark" ? "rgba(0,199,142,.22)" : "divider" }}><CardContent>
       <Stack direction={{ xs: "column", md: "row" }} sx={{ justifyContent: "space-between", alignItems: { md: "center" }, gap: 1 }}>
         <AreaTitle title="Leitura semanal" icon={<AutoGraphOutlined color="primary" />} info="Compara o volume do período atual com a janela anterior e destaca indicadores operacionais para a rotina semanal de gestão." />
         <Delta value={data.weekly.changePct} />
       </Stack>
       <Box sx={{ display: "grid", gridTemplateColumns: { xs: "repeat(2,1fr)", md: "repeat(5,1fr)" }, gap: 1.2, mt: 1.5 }}>
-        {[["Atual", data.weekly.current], ["Anterior", data.weekly.previous], ["Pausados", data.weekly.paused], ["Sem movimento", data.weekly.stale], ["Bloqueados", data.weekly.blocked]].map(([label, value]) => <Box key={String(label)} sx={{ p: 1.25, borderRadius: 2, background: "linear-gradient(145deg, rgba(18,47,69,.90), rgba(12,31,51,.92))", border: "1px solid rgba(117,166,211,.18)" }}><Typography variant="caption" color="text.secondary">{label}</Typography><Typography sx={{ fontWeight: 850, fontSize: "1.25rem" }}>{value}</Typography></Box>)}
+        {[["Atual", data.weekly.current], ["Anterior", data.weekly.previous], ["Pausados", data.weekly.paused], ["Sem movimento", data.weekly.stale], ["Bloqueados", data.weekly.blocked]].map(([label, value]) => <Box key={String(label)} sx={{ p: 1.25, borderRadius: 2, background: mode === "dark" ? "linear-gradient(145deg, rgba(18,47,69,.90), rgba(12,31,51,.92))" : "rgba(15,23,42,.025)", border: "1px solid", borderColor: "divider" }}><Typography variant="caption" color="text.secondary">{label}</Typography><Typography sx={{ fontWeight: 850, fontSize: "1.25rem" }}>{value}</Typography></Box>)}
       </Box>
-      {data.recommendations.length > 0 && <Box sx={{ mt: 1.5, p: 1.4, borderRadius: 2, background: "linear-gradient(135deg, rgba(0,199,142,.12), rgba(20,64,75,.35))", border: "1px solid rgba(0,199,142,.28)" }}>
+      {data.recommendations.length > 0 && <Box sx={{ mt: 1.5, p: 1.4, borderRadius: 2, background: mode === "dark" ? "linear-gradient(135deg, rgba(0,199,142,.12), rgba(20,64,75,.35))" : aliareColors.surfaceGreen, border: "1px solid rgba(0,199,142,.28)" }}>
         <AreaTitle title="Ações recomendadas" info="Sugestões geradas a partir dos sinais objetivos da operação. Não executam ações automaticamente e devem passar por julgamento técnico." />
         <Stack spacing={.65} sx={{ mt: .8 }}>{data.recommendations.map((item, index) => <Typography key={item} variant="body2"><b>{index + 1}.</b> {item}</Typography>)}</Stack>
       </Box>}
     </CardContent></Card>}
 
-    <Card sx={{ mb: 2.5, background: "linear-gradient(90deg, rgba(10,31,51,.98), rgba(14,31,58,.98)) !important" }}><Tabs value={tab} onChange={(_, value) => setTab(value)} variant="scrollable" scrollButtons="auto" sx={{ px: 1, "& .MuiTab-root": { color: "rgba(207,224,242,.68)", minHeight: 56 }, "& .Mui-selected": { color: "#42E6C1 !important", bgcolor: "rgba(0,199,142,.08)" }, "& .MuiTabs-indicator": { bgcolor: "#21D9AE", height: 3, borderRadius: 3 } }}>
+    <Card sx={{ mb: 2.5 }}><Tabs value={tab} onChange={(_, value) => setTab(value)} variant="scrollable" scrollButtons="auto" sx={{ px: 1, "& .MuiTab-root": { minHeight: 56 }, "& .Mui-selected": { bgcolor: mode === "dark" ? "rgba(0,199,142,.08)" : "rgba(24,199,122,.06)" }, "& .MuiTabs-indicator": { height: 3, borderRadius: 3 } }}>
       {([
         ["radar", "Radar", <RadarOutlined fontSize="small" />],
         ["audit", "Auditoria", <AssignmentTurnedInOutlined fontSize="small" />],
