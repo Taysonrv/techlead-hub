@@ -22,6 +22,7 @@ import {
   PersonOutlined,
   VisibilityOffOutlined,
   VisibilityOutlined,
+  AutoGraphOutlined,
 } from "@mui/icons-material";
 
 import {
@@ -49,6 +50,7 @@ import {
 import {
   aliareColors,
 } from "../theme/theme";
+import { useColorMode } from "../context/ColorModeContext";
 
 /* =========================================================
    TIPOS
@@ -64,6 +66,14 @@ type ScreenMode =
   | "REGISTER_SUCCESS"
   | "FORGOT_PASSWORD"
   | "RESET_PASSWORD";
+
+const leadershipMessages = [
+  { title: "Liderar é transformar sinais em direção.", description: "Antecipe desvios, priorize o que exige atenção e transforme dados da operação em ações objetivas." },
+  { title: "Conhecimento que fica no time escala a operação.", description: "Identifique recorrências, compartilhe contexto e converta resoluções individuais em capacidade coletiva." },
+  { title: "Indicador sem ação é apenas informação.", description: "Use evidências para investigar causas, definir responsáveis e acompanhar o resultado das decisões." },
+  { title: "A melhor intervenção acontece antes do estouro.", description: "Observe SLA, pausas, bloqueios e falta de movimento para apoiar o time no momento certo." },
+  { title: "Liderança técnica conecta operação e evolução.", description: "Aproxime suporte, produto e desenvolvimento com contexto, evidência e acompanhamento contínuo." },
+] as const;
 
 /* =========================================================
    COMPONENT
@@ -84,6 +94,9 @@ export function Login() {
 
   const location =
     useLocation();
+
+  const { mode: colorMode } = useColorMode();
+  const [leadershipMessage, setLeadershipMessage] = useState(0);
 
   const [
     mode,
@@ -363,6 +376,13 @@ export function Login() {
       resetToken,
     ]
   );
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setLeadershipMessage((current) => (current + 1) % leadershipMessages.length);
+    }, 5200);
+    return () => window.clearInterval(timer);
+  }, []);
 
   /* =======================================================
      LIMPAR ERRO
@@ -852,46 +872,23 @@ export function Login() {
             }}
           />
 
-          <Typography
-            sx={{
-              fontSize: {
-                md: "1.4rem",
-                lg: "1.65rem",
-              },
-
-              lineHeight:
-                1.35,
-
-              fontWeight:
-                700,
-
-              letterSpacing:
-                "-0.02em",
-            }}
-          >
-            Gestão da operação com contexto,
-            prioridade e inteligência.
-          </Typography>
-
-          <Typography
-            sx={{
-              mt: 2,
-
-              maxWidth:
-                420,
-
-              lineHeight:
-                1.75,
-
-              color:
-                "rgba(255,255,255,0.54)",
-            }}
-          >
-            Indicadores, carteira de atendimentos,
-            pontos de atenção e visão gerencial do
-            Suporte e Sustentação do SIMER em um
-            único ambiente.
-          </Typography>
+          <Box key={leadershipMessage} sx={{ minHeight: 158, animation: "leadershipMessageIn .55s ease both", "@keyframes leadershipMessageIn": { from: { opacity: 0, transform: "translateY(8px)" }, to: { opacity: 1, transform: "translateY(0)" } } }}>
+            <Stack direction="row" spacing={1} sx={{ alignItems: "center", mb: 1.2 }}>
+              <AutoGraphOutlined sx={{ color: aliareColors.green, fontSize: 19 }} />
+              <Typography variant="caption" sx={{ color: aliareColors.green, fontWeight: 850, letterSpacing: ".08em", textTransform: "uppercase" }}>
+                Liderança em foco
+              </Typography>
+            </Stack>
+            <Typography sx={{ fontSize: { md: "1.4rem", lg: "1.65rem" }, lineHeight: 1.35, fontWeight: 700, letterSpacing: "-0.02em" }}>
+              {leadershipMessages[leadershipMessage].title}
+            </Typography>
+            <Typography sx={{ mt: 1.4, maxWidth: 430, lineHeight: 1.7, color: "rgba(255,255,255,0.56)" }}>
+              {leadershipMessages[leadershipMessage].description}
+            </Typography>
+          </Box>
+          <Stack direction="row" spacing={0.7} sx={{ mt: 1.5 }}>
+            {leadershipMessages.map((_, index) => <Box key={index} sx={{ width: index === leadershipMessage ? 24 : 7, height: 4, borderRadius: 99, bgcolor: index === leadershipMessage ? aliareColors.green : "rgba(255,255,255,.16)", transition: "all .3s ease" }} />)}
+          </Stack>
 
           <Stack
             direction="row"
@@ -1059,8 +1056,8 @@ export function Login() {
               overflow:
                 "hidden",
 
-              boxShadow:
-                "0 18px 50px rgba(16,24,40,0.07)",
+              boxShadow: colorMode === "dark" ? "0 22px 60px rgba(0,0,0,.28)" : "0 18px 50px rgba(16,24,40,0.07)",
+              background: colorMode === "dark" ? "linear-gradient(145deg,#0D2439,#0A1C2F)" : "background.paper",
             }}
           >
             <Box
@@ -1122,6 +1119,7 @@ export function Login() {
                       "REGISTER"
                     )
                   }
+                  colorMode={colorMode}
                   onForgotPassword={() => {
                     setRecoveryEmail(
                       username.includes("@")
@@ -1340,6 +1338,7 @@ function LoginForm({
   onSubmit,
   onRegister,
   onForgotPassword,
+  colorMode,
 }: {
   username: string;
   setUsername: (value: string) => void;
@@ -1357,6 +1356,7 @@ function LoginForm({
   ) => void;
   onRegister: () => void;
   onForgotPassword: () => void;
+  colorMode: "light" | "dark";
 }) {
   return (
     <>
@@ -1427,6 +1427,11 @@ function LoginForm({
           disabled={
             submitting
           }
+          sx={{
+            "& .MuiOutlinedInput-root": { backgroundColor: colorMode === "dark" ? "#081A2B" : "background.paper" },
+            "& .MuiInputBase-input": { backgroundColor: "transparent !important", color: "text.primary", WebkitTextFillColor: "currentColor" },
+            "& input:-webkit-autofill": { WebkitBoxShadow: colorMode === "dark" ? "0 0 0 1000px #081A2B inset" : undefined, WebkitTextFillColor: colorMode === "dark" ? "#E8F1FF" : undefined, caretColor: colorMode === "dark" ? "#E8F1FF" : undefined },
+          }}
           slotProps={{
             input: {
               startAdornment:
@@ -1465,6 +1470,9 @@ function LoginForm({
           autoComplete="current-password"
           sx={{
             mt: 2,
+            "& .MuiOutlinedInput-root": { backgroundColor: colorMode === "dark" ? "#081A2B" : "background.paper" },
+            "& .MuiInputBase-input": { backgroundColor: "transparent !important", color: "text.primary", WebkitTextFillColor: "currentColor" },
+            "& input:-webkit-autofill": { WebkitBoxShadow: colorMode === "dark" ? "0 0 0 1000px #081A2B inset" : undefined, WebkitTextFillColor: colorMode === "dark" ? "#E8F1FF" : undefined, caretColor: colorMode === "dark" ? "#E8F1FF" : undefined },
           }}
         />
 
