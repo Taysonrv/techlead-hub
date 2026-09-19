@@ -104,6 +104,9 @@ function AuthenticatedLayout({
               minWidth: 0,
               minHeight: "100vh",
               backgroundColor: "background.default",
+              backgroundImage: (theme) => theme.palette.mode === "dark" ? "radial-gradient(circle at 88% 0%, rgba(84,73,255,.07), transparent 26%), linear-gradient(145deg,rgba(7,19,33,.98),rgba(9,25,43,.98))" : "none",
+              color: "text.primary",
+              transition: "background-color .2s ease, color .2s ease",
               overflowX: "hidden",
 
               px: {
