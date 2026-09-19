@@ -92,6 +92,9 @@ type VersionSummary = {
   versions: number;
   withVersion: number;
   withoutVersion: number;
+  withRegisteredVersion: number;
+  withoutRegisteredVersion: number;
+  versionMismatch: number;
   corrections: number;
   evolutions: number;
   prioritized: number;
@@ -154,6 +157,7 @@ type WorkItem = {
   module: string | null;
   process: string | null;
   movideskTicket: number | null;
+  registeredVersion: string | null;
   deliveredVersion: string | null;
   prioritized: boolean | null;
   blockedProcess: boolean | null;
@@ -237,6 +241,9 @@ const EMPTY_SUMMARY:
     versions: 0,
     withVersion: 0,
     withoutVersion: 0,
+    withRegisteredVersion: 0,
+    withoutRegisteredVersion: 0,
+    versionMismatch: 0,
     corrections: 0,
     evolutions: 0,
     prioritized: 0,
@@ -2109,6 +2116,23 @@ export function Versions() {
         />
 
         <MetricCard
+          title="Versões divergentes"
+          value={summary.versionMismatch}
+          description="Cadastro diferente da entrega"
+          severity={summary.versionMismatch > 0 ? "warning" : "success"}
+          info={{
+            title: "Versões divergentes",
+            summary: "Correções e Evoluções cuja versão cadastrada difere da versão efetivamente entregue.",
+            calculation: "Compara registeredVersion e deliveredVersion normalizadas.",
+            source: "Azure DevOps",
+            reference: "registeredVersion × deliveredVersion",
+            periodRule: "Respeita os filtros aplicados na visão de versões.",
+            notes: "APOIO não é tratado como pendência de versão na Qualidade dos Dados.",
+          }}
+          onClick={() => navigate("/qualidade-dados?issue=versionMismatch")}
+        />
+
+        <MetricCard
           title="Correções"
           active={
             activeMetricFilter ===
@@ -3105,7 +3129,11 @@ export function Versions() {
                   <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
                     {selectedTask.descriptionText || selectedTask.technicalSolutionText || "Detalhamento textual não informado no Azure."}
                   </Typography>
-                  {selectedTask.deliveredVersion && <Chip size="small" label={`Versão ${selectedTask.deliveredVersion}`} sx={{ mt: 1 }} />}
+                  <Stack direction="row" spacing={1} useFlexGap sx={{ mt: 1, flexWrap: "wrap" }}>
+                    {selectedTask.registeredVersion && <Chip size="small" variant="outlined" label={`Cadastrada: ${selectedTask.registeredVersion}`} />}
+                    {selectedTask.deliveredVersion && <Chip size="small" label={`Entregue: ${selectedTask.deliveredVersion}`} />}
+                    {selectedTask.registeredVersion && selectedTask.deliveredVersion && selectedTask.registeredVersion.trim().toLocaleLowerCase("pt-BR") !== selectedTask.deliveredVersion.trim().toLocaleLowerCase("pt-BR") && <Chip size="small" color="warning" label="Versões divergentes" />}
+                  </Stack>
                   <Stack direction="row" spacing={1} useFlexGap sx={{ mt: 1.5, flexWrap: "wrap" }}>
                     <Button size="small" variant="contained" onClick={() => openWorkItem(selectedTask)}>Abrir em {shortType(selectedTask.workItemType)}</Button>
                     {selectedTask.azureWebUrl && <Button size="small" component="a" href={selectedTask.azureWebUrl} target="_blank" rel="noopener noreferrer" endIcon={<OpenInNewOutlined />}>Abrir Task no Azure</Button>}
