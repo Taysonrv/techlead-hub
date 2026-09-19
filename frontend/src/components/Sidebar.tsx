@@ -34,6 +34,7 @@ import {
   UploadFileOutlined,
   WorkspacesOutlined,
   InsightsOutlined,
+  RadarOutlined,
 } from "@mui/icons-material";
 
 import {
@@ -137,8 +138,9 @@ export function Sidebar() {
   ] =
     useState<HTMLElement | null>(null);
 
-  const [openSections, setOpenSections] = useState<Record<"operation" | "development" | "management", boolean>>(() => ({
+  const [openSections, setOpenSections] = useState<Record<"operation" | "leadership" | "development" | "management", boolean>>(() => ({
     operation: true,
+    leadership: true,
     development: true,
     management: true,
   }));
@@ -283,6 +285,22 @@ export function Sidebar() {
         },
       ],
       [user?.role],
+    );
+
+  /* =======================================================
+     LIDERANÇA TÉCNICA
+  ======================================================= */
+
+  const leadershipMenu =
+    useMemo<MenuItemData[]>(
+      () => [
+        {
+          label: "Central de Liderança",
+          path: "/lideranca-tecnica",
+          icon: <RadarOutlined fontSize="small" />,
+        },
+      ],
+      [],
     );
 
   /* =======================================================
@@ -461,7 +479,7 @@ export function Sidebar() {
             0,
 
           overflowY:
-            "hidden",
+            "auto",
 
           overflowX:
             "hidden",
@@ -687,6 +705,18 @@ export function Sidebar() {
           items={mainMenu}
           open={openSections.operation}
           onToggle={() => setOpenSections((current) => ({ ...current, operation: !current.operation }))}
+        />
+
+        {/* =================================================
+            LIDERANÇA TÉCNICA
+        ================================================= */}
+
+        <MenuSection
+          title="Liderança Técnica"
+          ariaLabel="Navegação de liderança técnica"
+          items={leadershipMenu}
+          open={openSections.leadership}
+          onToggle={() => setOpenSections((current) => ({ ...current, leadership: !current.leadership }))}
         />
 
         {/* =================================================
@@ -1365,7 +1395,8 @@ function MenuItem({
    PERFIL
 ========================================================= */
 
-function sectionForPath(path: string): "operation" | "development" | "management" {
+function sectionForPath(path: string): "operation" | "leadership" | "development" | "management" {
+  if (path.startsWith("/lideranca-tecnica")) return "leadership";
   if (["/correcoes", "/evolucoes", "/apoios", "/versoes"].some((item) => path.startsWith(item))) return "development";
   if (["/importar", "/relatorios", "/qualidade-dados", "/conhecimento"].some((item) => path.startsWith(item))) return "management";
   return "operation";
