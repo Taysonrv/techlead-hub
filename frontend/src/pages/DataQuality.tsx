@@ -5,7 +5,7 @@ import {
 } from "@mui/material";
 import { DownloadOutlined, SearchOutlined } from "@mui/icons-material";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "../services/api";
 import { aliareColors } from "../theme/theme";
 import { PageHeader } from "../components/PageHeader";
@@ -52,6 +52,7 @@ const metrics = [
 
 export function DataQuality() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [data, setData] = useState<Data | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -59,7 +60,7 @@ export function DataQuality() {
   const [client, setClient] = useState("");
   const [user, setUser] = useState("");
   const [search, setSearch] = useState("");
-  const [issue, setIssue] = useState("");
+  const [issue, setIssue] = useState(() => searchParams.get("issue") ?? "");
   const [selected, setSelected] = useState<Sample | null>(null);
   const [detail, setDetail] = useState<Record<string, unknown> | null>(null);
 
