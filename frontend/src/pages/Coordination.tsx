@@ -33,7 +33,7 @@ type Data = {
   indicators: Record<string, number>;
   workload: Array<{ analyst: string; tickets: number; workItems: number; total: number }>;
   integrations: Record<string, { configured: boolean; connected: boolean; items: number }>;
-  scope: { analysts: string[]; clients: string[] };
+  scope: { coordinator: string; analysts: string[]; clients: string[] };
   microsoft: {
     connected: boolean;
     plannerTasks: Array<{ id: string; title: string; percentComplete: number; dueDateTime?: string }>;
@@ -125,7 +125,7 @@ export function Coordination() {
         eyebrow="Coordenação"
         title="Central da Coordenação"
         description="Gestão operacional da equipe e dos clientes cooperativas em um único ponto."
-        meta={data ? `Escopo: ${data.scope.analysts.length} analistas · ${data.scope.clients.length} clientes cooperativas` : undefined}
+        meta={data ? `Coordenação: ${data.scope.coordinator} · ${data.scope.analysts.length} analistas · ${data.scope.clients.length} clientes cooperativas` : undefined}
       />
 
       <Card
