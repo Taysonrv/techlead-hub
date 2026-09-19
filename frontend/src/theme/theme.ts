@@ -149,7 +149,6 @@ export function createAppTheme(mode: PaletteMode = "light") {
       MuiButton: {
         defaultProps: { disableElevation: true },
         styleOverrides: {
-          root: { borderRadius: 8, minHeight: 38, textTransform: "none", fontWeight: 700 },
           root: {
             borderRadius: 8,
             minHeight: 38,
