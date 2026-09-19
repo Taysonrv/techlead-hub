@@ -9,10 +9,14 @@ import type {
   ReactNode,
 } from "react";
 
-type PeriodOption =
+export type PeriodOption =
   | "7d"
   | "30d"
+  | "60d"
+  | "90d"
   | "month"
+  | "semester"
+  | "year"
   | "custom";
 
 type FiltersContextData = {
@@ -96,19 +100,24 @@ export function FiltersProvider({
       );
     }
 
-    if (
-      period === "month"
-    ) {
-      start =
-        new Date(
-          now.getFullYear(),
-          now.getMonth(),
-          1,
-          0,
-          0,
-          0,
-          0
-        );
+    if (period === "60d") {
+      start.setDate(start.getDate() - 60);
+    }
+
+    if (period === "90d") {
+      start.setDate(start.getDate() - 90);
+    }
+
+    if (period === "month") {
+      start = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+    }
+
+    if (period === "semester") {
+      start = new Date(now.getFullYear(), now.getMonth() < 6 ? 0 : 6, 1, 0, 0, 0, 0);
+    }
+
+    if (period === "year") {
+      start = new Date(now.getFullYear(), 0, 1, 0, 0, 0, 0);
     }
 
     if (
