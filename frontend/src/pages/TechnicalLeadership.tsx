@@ -125,18 +125,25 @@ export function TechnicalLeadership() {
 
   if (loading && !data) return <Box sx={{ minHeight: 420, display: "grid", placeItems: "center" }}><CircularProgress /></Box>;
 
-  return <Box>
+  return <Box sx={{
+    mx: { xs: -1, md: -2 }, mt: { xs: -1, md: -2 }, p: { xs: 1.5, md: 2.5 }, borderRadius: { xs: 0, md: 3 },
+    minHeight: "100vh", color: "#E8F1FF",
+    background: "radial-gradient(circle at 20% 0%, rgba(0,199,142,.10), transparent 28%), radial-gradient(circle at 88% 12%, rgba(84,73,255,.12), transparent 30%), linear-gradient(145deg,#071321 0%,#09192B 48%,#07111F 100%)",
+    "& .MuiCard-root": { background: "linear-gradient(145deg, rgba(14,35,56,.94), rgba(10,25,43,.96))", border: "1px solid rgba(116,166,216,.18)", boxShadow: "0 12px 34px rgba(0,0,0,.16)", color: "#E8F1FF" },
+    "& .MuiTypography-colorTextSecondary": { color: "rgba(208,224,242,.66)" },
+    "& .MuiIconButton-root": { color: "rgba(205,224,244,.72)" },
+  }}>
     <PageHeader
       eyebrow="Liderança técnica"
       title="Central de Liderança Técnica"
       description="Radar executivo para transformar sinais da operação em investigação, orientação e ação acompanhada."
       meta={data ? `Atualizado em ${new Date(data.generatedAt).toLocaleString("pt-BR")} · janela de ${data.periodDays} dias` : undefined}
-      action={<Stack direction="row" spacing={1}><Chip icon={<RadarOutlined />} label={`${attention} requerem atenção`} color={attention ? "warning" : "success"} /></Stack>}
+      action={<Stack direction="row" spacing={1}><Chip icon={<RadarOutlined />} label={`${attention} requerem atenção`} color={attention ? "warning" : "success"} sx={{ fontWeight: 850, boxShadow: attention ? "0 0 22px rgba(255,167,38,.18)" : "0 0 22px rgba(0,199,142,.18)" }} /></Stack>}
     />
 
     {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
-    <Card sx={{ mb: 2.5, overflow: "hidden", background: `linear-gradient(125deg, ${aliareColors.black}, ${aliareColors.graphite} 58%, #12382A)`, color: "#fff" }}>
+    <Card sx={{ mb: 2.5, overflow: "hidden", background: "linear-gradient(125deg, rgba(7,47,70,.98), rgba(16,31,67,.98) 58%, rgba(28,29,78,.96)) !important", borderColor: "rgba(54,202,255,.24) !important", boxShadow: "0 18px 44px rgba(0,0,0,.24), inset 0 1px rgba(255,255,255,.03) !important", color: "#fff" }}>
       <CardContent sx={{ p: { xs: 2, md: 2.5 } }}>
         <Stack direction={{ xs: "column", lg: "row" }} spacing={2} sx={{ justifyContent: "space-between", alignItems: { lg: "center" } }}>
           <Box>
@@ -148,9 +155,9 @@ export function TechnicalLeadership() {
             <Typography variant="body2" sx={{ color: "rgba(255,255,255,.62)", mt: .5 }}>Indicadores → desvios → investigação → gap → ação → acompanhamento.</Typography>
           </Box>
           <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
-            <FormControl size="small" sx={{ minWidth: 180, bgcolor: "#fff", borderRadius: 1 }}><InputLabel>Cliente</InputLabel><Select value={client} label="Cliente" onChange={(e) => setClient(e.target.value)}><MenuItem value="">Todos</MenuItem>{data?.filters.clients.map((v) => <MenuItem key={v} value={v}>{v}</MenuItem>)}</Select></FormControl>
+            <FormControl size="small" sx={{ minWidth: 180, bgcolor: "rgba(7,20,35,.72)", borderRadius: 1.5, "& .MuiInputLabel-root": { color: "rgba(215,229,246,.68)" }, "& .MuiOutlinedInput-root": { color: "#F3F8FF", "& fieldset": { borderColor: "rgba(131,175,220,.30)" }, "&:hover fieldset": { borderColor: "rgba(47,208,255,.55)" } }, "& .MuiSvgIcon-root": { color: "rgba(215,229,246,.72)" } }}><InputLabel>Cliente</InputLabel><Select value={client} label="Cliente" onChange={(e) => setClient(e.target.value)}><MenuItem value="">Todos</MenuItem>{data?.filters.clients.map((v) => <MenuItem key={v} value={v}>{v}</MenuItem>)}</Select></FormControl>
             <FormControl size="small" sx={{ minWidth: 180, bgcolor: "#fff", borderRadius: 1 }}><InputLabel>Analista</InputLabel><Select value={user} label="Analista" onChange={(e) => setUser(e.target.value)}><MenuItem value="">Todos</MenuItem>{data?.filters.users.map((v) => <MenuItem key={v} value={v}>{v}</MenuItem>)}</Select></FormControl>
-            <FormControl size="small" sx={{ minWidth: 120, bgcolor: "#fff", borderRadius: 1 }}><InputLabel>Período</InputLabel><Select value={days} label="Período" onChange={(e) => setDays(Number(e.target.value))}><MenuItem value={7}>7 dias</MenuItem><MenuItem value={30}>30 dias</MenuItem><MenuItem value={60}>60 dias</MenuItem><MenuItem value={90}>90 dias</MenuItem></Select></FormControl>
+            <FormControl size="small" sx={{ minWidth: 120, bgcolor: "rgba(7,20,35,.72)", borderRadius: 1.5, "& .MuiInputLabel-root": { color: "rgba(215,229,246,.68)" }, "& .MuiOutlinedInput-root": { color: "#F3F8FF", "& fieldset": { borderColor: "rgba(131,175,220,.30)" }, "&:hover fieldset": { borderColor: "rgba(47,208,255,.55)" } }, "& .MuiSvgIcon-root": { color: "rgba(215,229,246,.72)" } }}><InputLabel>Período</InputLabel><Select value={days} label="Período" onChange={(e) => setDays(Number(e.target.value))}><MenuItem value={7}>7 dias</MenuItem><MenuItem value={30}>30 dias</MenuItem><MenuItem value={60}>60 dias</MenuItem><MenuItem value={90}>90 dias</MenuItem></Select></FormControl>
           </Stack>
         </Stack>
 
@@ -160,26 +167,26 @@ export function TechnicalLeadership() {
             ["Backlog aberto", data.weekly.open],
             ["SLA vencido", data.weekly.overdue],
             ["Tasks bloqueadas", data.weekly.blocked],
-          ].map(([label, value]) => <Box key={String(label)} sx={{ p: 1.4, borderRadius: 2, border: "1px solid rgba(255,255,255,.09)", bgcolor: "rgba(255,255,255,.04)" }}><Typography variant="caption" sx={{ color: "rgba(255,255,255,.55)" }}>{label}</Typography><Typography sx={{ fontWeight: 900, fontSize: "1.45rem", mt: .25 }}>{value}</Typography></Box>)}
+          ].map(([label, value]) => <Box key={String(label)} sx={{ p: 1.4, borderRadius: 2, border: "1px solid rgba(255,255,255,.09)", background: "linear-gradient(145deg, rgba(19,69,91,.62), rgba(18,35,62,.58))", boxShadow: "inset 0 1px rgba(255,255,255,.035)" }}><Typography variant="caption" sx={{ color: "rgba(255,255,255,.55)" }}>{label}</Typography><Typography sx={{ fontWeight: 900, fontSize: "1.45rem", mt: .25 }}>{value}</Typography></Box>)}
         </Box>}
       </CardContent>
     </Card>
 
-    {data && <Card sx={{ mb: 2.5 }}><CardContent>
+    {data && <Card sx={{ mb: 2.5, background: "linear-gradient(135deg, rgba(7,55,70,.96), rgba(12,31,54,.96)) !important", borderColor: "rgba(0,199,142,.22) !important" }}><CardContent>
       <Stack direction={{ xs: "column", md: "row" }} sx={{ justifyContent: "space-between", alignItems: { md: "center" }, gap: 1 }}>
         <AreaTitle title="Leitura semanal" icon={<AutoGraphOutlined color="primary" />} info="Compara o volume do período atual com a janela anterior e destaca indicadores operacionais para a rotina semanal de gestão." />
         <Delta value={data.weekly.changePct} />
       </Stack>
       <Box sx={{ display: "grid", gridTemplateColumns: { xs: "repeat(2,1fr)", md: "repeat(5,1fr)" }, gap: 1.2, mt: 1.5 }}>
-        {[["Atual", data.weekly.current], ["Anterior", data.weekly.previous], ["Pausados", data.weekly.paused], ["Sem movimento", data.weekly.stale], ["Bloqueados", data.weekly.blocked]].map(([label, value]) => <Box key={String(label)} sx={{ p: 1.25, borderRadius: 2, bgcolor: "background.default", border: "1px solid", borderColor: "divider" }}><Typography variant="caption" color="text.secondary">{label}</Typography><Typography sx={{ fontWeight: 850, fontSize: "1.25rem" }}>{value}</Typography></Box>)}
+        {[["Atual", data.weekly.current], ["Anterior", data.weekly.previous], ["Pausados", data.weekly.paused], ["Sem movimento", data.weekly.stale], ["Bloqueados", data.weekly.blocked]].map(([label, value]) => <Box key={String(label)} sx={{ p: 1.25, borderRadius: 2, background: "linear-gradient(145deg, rgba(18,47,69,.90), rgba(12,31,51,.92))", border: "1px solid rgba(117,166,211,.18)" }}><Typography variant="caption" color="text.secondary">{label}</Typography><Typography sx={{ fontWeight: 850, fontSize: "1.25rem" }}>{value}</Typography></Box>)}
       </Box>
-      {data.recommendations.length > 0 && <Box sx={{ mt: 1.5, p: 1.4, borderRadius: 2, bgcolor: aliareColors.surfaceGreen, border: `1px solid ${aliareColors.greenLight}` }}>
+      {data.recommendations.length > 0 && <Box sx={{ mt: 1.5, p: 1.4, borderRadius: 2, background: "linear-gradient(135deg, rgba(0,199,142,.12), rgba(20,64,75,.35))", border: "1px solid rgba(0,199,142,.28)" }}>
         <AreaTitle title="Ações recomendadas" info="Sugestões geradas a partir dos sinais objetivos da operação. Não executam ações automaticamente e devem passar por julgamento técnico." />
         <Stack spacing={.65} sx={{ mt: .8 }}>{data.recommendations.map((item, index) => <Typography key={item} variant="body2"><b>{index + 1}.</b> {item}</Typography>)}</Stack>
       </Box>}
     </CardContent></Card>}
 
-    <Card sx={{ mb: 2.5 }}><Tabs value={tab} onChange={(_, value) => setTab(value)} variant="scrollable" scrollButtons="auto" sx={{ px: 1 }}>
+    <Card sx={{ mb: 2.5, background: "linear-gradient(90deg, rgba(10,31,51,.98), rgba(14,31,58,.98)) !important" }}><Tabs value={tab} onChange={(_, value) => setTab(value)} variant="scrollable" scrollButtons="auto" sx={{ px: 1, "& .MuiTab-root": { color: "rgba(207,224,242,.68)", minHeight: 56 }, "& .Mui-selected": { color: "#42E6C1 !important", bgcolor: "rgba(0,199,142,.08)" }, "& .MuiTabs-indicator": { bgcolor: "#21D9AE", height: 3, borderRadius: 3 } }}>
       {([
         ["radar", "Radar", <RadarOutlined fontSize="small" />],
         ["audit", "Auditoria", <AssignmentTurnedInOutlined fontSize="small" />],
@@ -202,7 +209,7 @@ export function TechnicalLeadership() {
         <Chip label={`${data.audit.candidates} candidato(s) · amostra de ${data.audit.sample.length}`} />
       </Stack>
       <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(2,1fr)" }, gap: 1.5, mt: 1.2 }}>
-        {data.audit.sample.map((ticket) => <Card key={ticket.id} onClick={() => setDrawer({ kind: "audit", title: "Auditoria semanal", items: [ticket] })} sx={{ cursor: "pointer", "&:hover": { borderColor: aliareColors.green, transform: "translateY(-1px)" }, transition: ".15s" }}><CardContent>
+        {data.audit.sample.map((ticket) => <Card key={ticket.id} onClick={() => setDrawer({ kind: "audit", title: "Auditoria semanal", items: [ticket] })} sx={{ cursor: "pointer", background: "linear-gradient(145deg, rgba(17,45,67,.96), rgba(12,29,49,.96)) !important", "&:hover": { borderColor: `${aliareColors.green} !important`, transform: "translateY(-2px)", boxShadow: "0 14px 34px rgba(0,199,142,.10)" }, transition: ".15s" }}><CardContent>
           <Stack direction="row" sx={{ justifyContent: "space-between", gap: 1 }}><Typography sx={{ fontWeight: 850 }}>#{ticket.movideskId}</Typography><Tooltip title="Candidato selecionado por heurísticas operacionais. A confirmação depende de análise humana."><InfoOutlined sx={{ fontSize: 17, color: "text.secondary" }} /></Tooltip></Stack>
           <Typography variant="body2" sx={{ mt: .5, fontWeight: 700 }}>{ticket.subject}</Typography>
           <Chip size="small" color="warning" label={ticket.reason} sx={{ mt: 1, maxWidth: "100%" }} />
@@ -213,7 +220,7 @@ export function TechnicalLeadership() {
     {data && tab === "recurrences" && <Box>
       <AreaTitle title="Radar de recorrências" info={tabInfo.recurrences} icon={<TrackChangesOutlined color="primary" />} />
       <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(2,1fr)", xl: "repeat(3,1fr)" }, gap: 1.5, mt: 1.2 }}>
-        {data.recurrences.map((item) => <Card key={item.topic} onClick={() => setDrawer({ kind: "recurrence", title: item.topic, recurrence: item })} sx={{ cursor: "pointer", "&:hover": { borderColor: aliareColors.cyan, boxShadow: "0 8px 24px rgba(16,24,40,.07)" } }}><CardContent>
+        {data.recurrences.map((item) => <Card key={item.topic} onClick={() => setDrawer({ kind: "recurrence", title: item.topic, recurrence: item })} sx={{ cursor: "pointer", background: "linear-gradient(145deg, rgba(12,48,70,.96), rgba(14,28,53,.96)) !important", "&:hover": { borderColor: `${aliareColors.cyan} !important`, boxShadow: "0 12px 30px rgba(47,208,255,.10)" } }}><CardContent>
           <Stack direction="row" sx={{ justifyContent: "space-between", gap: 1 }}><Typography sx={{ fontWeight: 850, textTransform: "capitalize" }}>{item.topic}</Typography><Tooltip title="Tema agrupado por classificação/serviço dos tickets do período. Clique para ver evidências e ação sugerida."><InfoOutlined sx={{ fontSize: 17, color: "text.secondary" }} /></Tooltip></Stack>
           <Typography sx={{ fontWeight: 900, fontSize: "1.7rem", color: aliareColors.cyan, mt: .7 }}>{item.count}</Typography>
           <Typography variant="caption" color="text.secondary">{item.clients.length} cliente(s) · {item.analysts.length} analista(s)</Typography>
@@ -226,7 +233,7 @@ export function TechnicalLeadership() {
     {data && tab === "gaps" && <Box>
       <AreaTitle title="Gestão de gaps técnicos" info={tabInfo.gaps} icon={<ErrorOutlineOutlined color="primary" />} />
       <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "repeat(2,1fr)" }, gap: 1.5, mt: 1.2 }}>
-        {data.gaps.map((gap) => <Card key={gap.id} onClick={() => setDrawer({ kind: "gap", title: gap.title, gap })} sx={{ cursor: "pointer", "&:hover": { borderColor: aliareColors.purple } }}><CardContent>
+        {data.gaps.map((gap) => <Card key={gap.id} onClick={() => setDrawer({ kind: "gap", title: gap.title, gap })} sx={{ cursor: "pointer", background: "linear-gradient(145deg, rgba(29,32,72,.96), rgba(13,28,49,.96)) !important", "&:hover": { borderColor: `${aliareColors.purple} !important`, boxShadow: "0 12px 30px rgba(124,92,255,.11)" } }}><CardContent>
           <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "flex-start", gap: 1 }}><Box><Typography variant="caption" color="text.secondary">{gap.id} · {gap.type}</Typography><Typography sx={{ fontWeight: 850 }}>{gap.title}</Typography></Box><Tooltip title="Gap derivado de evidências operacionais. Clique para revisar impacto, evidência e ação sugerida."><InfoOutlined sx={{ fontSize: 17, color: "text.secondary" }} /></Tooltip></Stack>
           <Stack direction="row" spacing={1} sx={{ mt: 1 }}><Chip size="small" label={gap.impact} color={gap.impact === "Alto" ? "error" : "warning"} /><Chip size="small" label={gap.status} variant="outlined" /></Stack>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>{gap.evidence}</Typography>
@@ -238,7 +245,7 @@ export function TechnicalLeadership() {
       <AreaTitle title="Desenvolvimento técnico do time" info={tabInfo.development} icon={<SchoolOutlined color="primary" />} />
       <Alert severity="info" sx={{ mt: 1.2, mb: 1.5 }}>Esta visão não é ranking. Ela ajuda a identificar concentração de temas, necessidade de apoio e oportunidades de transferência de conhecimento.</Alert>
       <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(2,1fr)", xl: "repeat(3,1fr)" }, gap: 1.5 }}>
-        {data.development.map((item) => <Card key={item.analyst} onClick={() => setDrawer({ kind: "development", title: item.analyst, development: item })} sx={{ cursor: "pointer", "&:hover": { borderColor: aliareColors.green } }}><CardContent>
+        {data.development.map((item) => <Card key={item.analyst} onClick={() => setDrawer({ kind: "development", title: item.analyst, development: item })} sx={{ cursor: "pointer", background: "linear-gradient(145deg, rgba(12,51,60,.96), rgba(12,29,49,.96)) !important", "&:hover": { borderColor: `${aliareColors.green} !important`, boxShadow: "0 12px 30px rgba(0,199,142,.10)" } }}><CardContent>
           <Stack direction="row" sx={{ justifyContent: "space-between", gap: 1 }}><Typography sx={{ fontWeight: 850 }}>{item.analyst}</Typography><Tooltip title="Mostra volume e temas do período para orientar apoio técnico e compartilhamento de conhecimento."><InfoOutlined sx={{ fontSize: 17, color: "text.secondary" }} /></Tooltip></Stack>
           <Stack direction="row" spacing={1} sx={{ mt: 1 }}><Chip size="small" label={`${item.tickets} tickets`} /><Chip size="small" color={item.stale ? "warning" : "success"} label={`${item.stale} sem movimento`} /></Stack>
           <Stack spacing={.4} sx={{ mt: 1.2 }}>{item.themes.map((theme) => <Typography key={theme.topic} variant="caption" color="text.secondary">• {theme.topic}: <b>{theme.count}</b></Typography>)}</Stack>
