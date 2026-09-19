@@ -1,6 +1,6 @@
 import { Box, Divider, IconButton, Popover, Typography } from "@mui/material";
 import { InfoOutlined } from "@mui/icons-material";
-import { useState, type MouseEvent } from "react";
+import { useState } from "react";
 
 export type InfoPopoverContent = {
   title: string;
