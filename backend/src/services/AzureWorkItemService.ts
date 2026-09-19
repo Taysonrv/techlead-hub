@@ -687,6 +687,8 @@ export class AzureWorkItemService {
             true,
           criticality:
             true,
+          registeredVersion:
+            true,
           deliveredVersion:
             true,
           prioritized:
@@ -754,6 +756,12 @@ export class AzureWorkItemService {
     let withoutVersion =
       0;
 
+    let withRegisteredVersion =
+      0;
+
+    let versionMismatch =
+      0;
+
     let corrections =
       0;
 
@@ -783,6 +791,20 @@ export class AzureWorkItemService {
         this.normalizeVersion(
           item.deliveredVersion,
         );
+      const registeredVersion =
+        this.normalizeVersion(
+          item.registeredVersion,
+        );
+      if (registeredVersion) {
+        withRegisteredVersion += 1;
+      }
+      if (
+        registeredVersion &&
+        version &&
+        this.normalizeComparable(registeredVersion) !== this.normalizeComparable(version)
+      ) {
+        versionMismatch += 1;
+      }
 
       const key =
         version ??
@@ -1105,6 +1127,9 @@ export class AzureWorkItemService {
           ).length,
         withVersion,
         withoutVersion,
+        withRegisteredVersion,
+        withoutRegisteredVersion: items.length - withRegisteredVersion,
+        versionMismatch,
         corrections,
         evolutions,
         prioritized,
