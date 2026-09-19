@@ -150,7 +150,17 @@ export function createAppTheme(mode: PaletteMode = "light") {
         defaultProps: { disableElevation: true },
         styleOverrides: {
           root: { borderRadius: 8, minHeight: 38, textTransform: "none", fontWeight: 700 },
-          containedPrimary: { backgroundColor: dark ? aliareColors.green : aliareColors.black, color: dark ? "#071811" : "#FFFFFF", "&:hover": { backgroundColor: dark ? "#22D98A" : aliareColors.graphiteSoft } },
+          root: {
+            borderRadius: 8,
+            minHeight: 38,
+            textTransform: "none",
+            fontWeight: 700,
+            "&.MuiButton-containedPrimary": {
+              backgroundColor: dark ? aliareColors.green : aliareColors.black,
+              color: dark ? "#071811" : "#FFFFFF",
+              "&:hover": { backgroundColor: dark ? "#22D98A" : aliareColors.graphiteSoft },
+            },
+          },
           outlined: { borderColor: dark ? "rgba(130,173,216,.28)" : undefined },
         },
       },
