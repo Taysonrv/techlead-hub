@@ -75,16 +75,16 @@ export function GlobalTopBar() {
           )}
       </Box>
 
-      <IconButton
-        title={mode === "dark" ? "Usar modo claro" : "Usar modo escuro"}
-        aria-label={mode === "dark" ? "Ativar modo claro" : "Ativar modo escuro"}
-        onClick={toggleMode}
-        sx={{ position: "fixed", top: 18, right: 76, width: 46, height: 46, bgcolor: "background.paper", border: "1px solid", borderColor: "divider", borderRadius: 2, boxShadow: "0 2px 10px rgba(0,0,0,.08)", pointerEvents: "auto", zIndex: (theme) => theme.zIndex.appBar + 1, "&:hover": { bgcolor: "background.paper", borderColor: "rgba(24,199,122,.45)" } }}
-      >
-        {mode === "dark" ? <LightModeOutlined /> : <DarkModeOutlined />}
-      </IconButton>
-
-      {calendarPortal && createPortal(<IconButton title="Calendário operacional" onClick={(event: MouseEvent<HTMLElement>) => setCalendarAnchor(event.currentTarget)} sx={{ width: 46, height: 46, bgcolor: "background.paper", border: "1px solid", borderColor: "divider", borderRadius: 2, boxShadow: "0 2px 10px rgba(0,0,0,.06)", "&:hover": { bgcolor: "background.paper", borderColor: "rgba(24,199,122,.38)" } }}><Badge color="success" variant={events.length ? "dot" : "standard"}><CalendarMonthOutlined /></Badge></IconButton>, calendarPortal)}
+      {calendarPortal && createPortal(<>
+        <IconButton
+          title={mode === "dark" ? "Usar modo claro" : "Usar modo escuro"}
+          aria-label={mode === "dark" ? "Ativar modo claro" : "Ativar modo escuro"}
+          onClick={toggleMode}
+          sx={{ width: 46, height: 46, bgcolor: "background.paper", border: "1px solid", borderColor: "divider", borderRadius: 2, boxShadow: "0 2px 10px rgba(0,0,0,.06)", "&:hover": { bgcolor: "background.paper", borderColor: "rgba(24,199,122,.45)" } }}
+        >
+          {mode === "dark" ? <LightModeOutlined /> : <DarkModeOutlined />}
+        </IconButton>
+        <IconButton title="Calendário operacional" onClick={(event: MouseEvent<HTMLElement>) => setCalendarAnchor(event.currentTarget)} sx={{ width: 46, height: 46, bgcolor: "background.paper", border: "1px solid", borderColor: "divider", borderRadius: 2, boxShadow: "0 2px 10px rgba(0,0,0,.06)", "&:hover": { bgcolor: "background.paper", borderColor: "rgba(24,199,122,.38)" } }}><Badge color="success" variant={events.length ? "dot" : "standard"}><CalendarMonthOutlined /></Badge></IconButton></>, calendarPortal)}
 
       <Popover open={Boolean(calendarAnchor)} anchorEl={calendarAnchor} onClose={() => setCalendarAnchor(null)} anchorOrigin={{ vertical: "bottom", horizontal: "right" }} transformOrigin={{ vertical: "top", horizontal: "right" }} slotProps={{ paper: { sx: { mt: 1, width: { xs: 340, sm: 420 }, maxWidth: "calc(100vw - 24px)", maxHeight: "calc(100vh - 90px)", borderRadius: 2 } } }}>
         <Box sx={{ p: 1.5 }}>
