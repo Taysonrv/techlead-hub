@@ -4,6 +4,7 @@ import {
   Button,
   CircularProgress,
   Collapse,
+  IconButton,
   Divider,
   Drawer,
   List,
@@ -35,6 +36,7 @@ import {
   WorkspacesOutlined,
   InsightsOutlined,
   RadarOutlined,
+  ChatBubbleOutlineRounded,
 } from "@mui/icons-material";
 
 import {
@@ -843,6 +845,15 @@ export function Sidebar() {
           }}
         >
           <Box id="global-calendar-slot" sx={{ display: "flex", alignItems: "center" }} />
+
+          <IconButton
+            title="Chat"
+            aria-label="Abrir chat"
+            onClick={() => navigate("/chat")}
+            sx={{ width: 46, height: 46, bgcolor: "background.paper", border: "1px solid", borderColor: location.pathname === "/chat" ? "rgba(24,199,122,.55)" : "divider", borderRadius: 2, boxShadow: "0 2px 10px rgba(0,0,0,.06)", color: location.pathname === "/chat" ? aliareColors.green : "text.primary", "&:hover": { bgcolor: "background.paper", borderColor: "rgba(24,199,122,.45)" } }}
+          >
+            <ChatBubbleOutlineRounded />
+          </IconButton>
 
           <NotificationCenter />
 
