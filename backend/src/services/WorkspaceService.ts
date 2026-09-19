@@ -596,6 +596,9 @@ export class WorkspaceService {
     const isTerminalTask = (state: string) => TERMINAL.some((value) => normalizeStatus(value) === normalizeStatus(state));
     const finishedLinkedTasks = linkedTasks.filter((item) => isTerminalTask(item.state));
     const activeLinkedTasks = linkedTasks.filter((item) => !isTerminalTask(item.state));
+    const completedWithoutVersionTasks = finishedLinkedTasks.filter((item) =>
+      !isSupportTask(item) && !isCanceledTask(item.state) && !item.deliveredVersion?.trim(),
+    );
     const normalizeVersion = (value: string | null) => normalizeStatus(value ?? "").replace(/\s+/g, "");
     const versionMismatches = linkedTasks.filter((item) =>
       !isSupportTask(item)
@@ -705,12 +708,12 @@ export class WorkspaceService {
       if (params.issue === "duplicatedMovideskLinks") return Boolean(item.movideskTicket && duplicatedIds.includes(item.movideskTicket));
       if (params.issue === "withoutTicket") return !item.movideskTicket && !item.participantMovideskTickets && !linkedTaskIdSet.has(item.id);
       if (params.issue === "withoutClient") return !isSupportTask(item) && !item.client && !item.participantClients;
-      if (params.issue === "completedWithoutVersion") return !isSupportTask(item) && isTerminalTask(item.state) && !item.deliveredVersion;
+      if (params.issue === "completedWithoutVersion") return completedWithoutVersionTasks.some((task) => task.id === item.id);
       if (params.issue === "activeTaskWithVersion") return !isSupportTask(item) && !isTerminalTask(item.state) && Boolean(item.deliveredVersion);
       if (params.issue === "versionMismatch") return versionMismatches.some((task) => task.id === item.id);
-      if (!params.issue) return (!item.movideskTicket && !item.participantMovideskTickets)
-        || !item.client || !item.module || !item.assignedToName
-        || (isTerminalTask(item.state) && !item.deliveredVersion)
+      if (!params.issue) return (!item.movideskTicket && !item.participantMovideskTickets && !linkedTaskIdSet.has(item.id))
+        || (!isSupportTask(item) && !item.client && !item.participantClients) || !item.module || !item.assignedToName
+        || completedWithoutVersionTasks.some((task) => task.id === item.id)
         || versionMismatches.some((task) => task.id === item.id);
       return true;
     };
@@ -796,7 +799,7 @@ export class WorkspaceService {
     const result = {
       summary: {
         withoutTicket, withoutClient, withoutModule, withoutOwner,
-        completedWithoutVersion: ticketsFinishedWithoutDelivery.length,
+        completedWithoutVersion: completedWithoutVersionTasks.length,
         danglingTaskTickets: danglingTickets.length,
         duplicatedMovideskLinks: duplicatedIds.length,
         ticketOpenTaskFinished: ticketsAwaitingClosure.length,
