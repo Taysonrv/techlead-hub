@@ -89,7 +89,7 @@ export class WorkspaceService {
           client: true, assignedToName: true, prioritized: true,
           assignedToEmail: true,
           participantClients: true,
-          blockedProcess: true, deliveredVersion: true,
+          blockedProcess: true, registeredVersion: true, deliveredVersion: true,
           movideskTicket: true, azureChangedAt: true,
           participantMovideskTickets: true,
         },
