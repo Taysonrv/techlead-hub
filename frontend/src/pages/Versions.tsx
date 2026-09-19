@@ -1248,6 +1248,58 @@ export function Versions() {
     );
   }
 
+  async function openVersionMismatchDetail() {
+    setSelectedVersion(null);
+    setSelectedTask(null);
+    setDetailContext({
+      title: "Versões divergentes",
+      subtitle: "Versão cadastrada diferente da versão efetivamente entregue",
+      version: null,
+    });
+    setVersionItems([]);
+    setVersionItemsTotal(0);
+    setDetailLoading(true);
+    setDetailError(null);
+    try {
+      const response = await api.get("/workspace/data-quality", {
+        params: {
+          issue: "versionMismatch",
+          client: client || undefined,
+          search: appliedSearch || undefined,
+        },
+      });
+      const samples = Array.isArray(response.data?.samples) ? response.data.samples : [];
+      const mapped: WorkItem[] = samples
+        .filter((item: any) => item.source === "AZURE")
+        .map((item: any) => ({
+          id: item.taskNumber ?? item.id,
+          workItemType: item.workItemType,
+          title: item.title,
+          state: item.state,
+          assignedToName: item.assignedToName ?? null,
+          client: item.client ?? null,
+          criticality: item.criticality ?? null,
+          module: item.module ?? null,
+          process: item.process ?? null,
+          movideskTicket: item.movideskTicket ?? null,
+          registeredVersion: item.registeredVersion ?? null,
+          deliveredVersion: item.deliveredVersion ?? null,
+          prioritized: item.prioritized ?? null,
+          blockedProcess: item.blockedProcess ?? null,
+          azureChangedAt: item.azureChangedAt ?? null,
+          stateChangedAt: item.stateChangedAt ?? null,
+          syncedAt: item.syncedAt ?? null,
+        }));
+      setVersionItems(mapped);
+      setVersionItemsTotal(response.data?.summary?.versionMismatch ?? mapped.length);
+    } catch (currentError) {
+      console.error("Erro ao carregar divergências de versão:", currentError);
+      setDetailError("Não foi possível carregar as Tasks com divergência de versão.");
+    } finally {
+      setDetailLoading(false);
+    }
+  }
+
   function closeDetail() {
     setSelectedVersion(
       null,
@@ -2129,7 +2181,7 @@ export function Versions() {
             periodRule: "Respeita os filtros aplicados na visão de versões.",
             notes: "APOIO não é tratado como pendência de versão na Qualidade dos Dados.",
           }}
-          onClick={() => navigate("/qualidade-dados?issue=versionMismatch")}
+          onClick={() => void openVersionMismatchDetail()}
         />
 
         <MetricCard
