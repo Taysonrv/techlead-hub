@@ -352,8 +352,6 @@ type PieDataItem = {
 const PAGE_SIZE =
   25;
 
-const DRAWER_WIDTH =
-  620;
 
 const PIPELINE_STAGES: PipelineStage[] = [
   {
