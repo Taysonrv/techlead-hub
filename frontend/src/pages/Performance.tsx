@@ -844,7 +844,8 @@ export function Performance() {
                   <CartesianGrid
                     strokeDasharray="3 3"
                     vertical={false}
-                    stroke="#EAECF0"
+                    stroke={theme.palette.divider}
+                    opacity={0.55}
                   />
 
                   <XAxis
