@@ -279,6 +279,14 @@ export async function authMiddleware(
        imediatamente para a sessão existente.
     ===================================================== */
 
+    const activityUpdateIntervalMs = Number(process.env.SESSION_ACTIVITY_UPDATE_INTERVAL_MS ?? 60_000);
+    if (session.lastActivityAt.getTime() <= now.getTime() - activityUpdateIntervalMs) {
+      void prisma.userSession.update({
+        where: { id: session.id },
+        data: { lastActivityAt: now },
+      }).catch((error) => console.warn("[auth] Não foi possível atualizar a atividade da sessão:", error));
+    }
+
     request.auth = {
       userId,
 
