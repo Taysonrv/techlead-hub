@@ -5,7 +5,7 @@
 export const chartPalette = [
   "#18C77A",
   "#2F6FED",
-  "#171717",
+  "#22D3EE",
   "#8B5CF6",
   "#F59E0B",
   "#E53935",
