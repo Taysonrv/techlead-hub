@@ -38,6 +38,7 @@ import { useNavigate } from "react-router-dom";
 
 import { api } from "../services/api";
 import { PeriodFilter } from "../components/PeriodFilter";
+import { PageHeader } from "../components/PageHeader";
 import { useFilters } from "../context/FiltersContext";
 import { aliareColors } from "../theme/theme";
 import { calculateOfficialSla } from "../utils/officialSla";
@@ -1053,106 +1054,7 @@ const latestImportedAt =
                 "center",
             }}
           >
-            <Box
-              sx={{
-                width:
-                  30,
-
-                height:
-                  3,
-
-                borderRadius:
-                  99,
-
-                backgroundColor:
-                  aliareColors.green,
-              }}
-            />
-
-            <Typography
-              variant="caption"
-              sx={{
-                fontWeight:
-                  800,
-
-                letterSpacing:
-                  "0.08em",
-
-                textTransform:
-                  "uppercase",
-
-                color:
-                  aliareColors.greenDark,
-              }}
-            >
-              Operação
-            </Typography>
-          </Stack>
-
-          <Typography
-            sx={{
-              mt:
-                0.8,
-
-              fontWeight:
-                800,
-
-              letterSpacing:
-                "-0.025em",
-
-              fontSize: {
-                xs: "1.7rem",
-                md: "1.9rem",
-                xl: "2.1rem",
-              },
-            }}
-          >
-            Dashboard Executivo
-          </Typography>
-
-          <Typography
-            variant="body2"
-            color="text.secondary"
-            sx={{
-              mt: 0.25,
-            }}
-          >
-            Visão consolidada da operação de suporte
-          </Typography>
-
-          <Typography
-            variant="caption"
-            color="text.secondary"
-            sx={{
-              display: "block",
-              mt: 0.5,
-            }}
-          >
-            {periodLabel(period)}
-            {" • "}
-            {filteredTickets.length}
-            {" ticket(s) analisado(s)"}
-          </Typography>
-
-          <Typography
-            variant="caption"
-            color="text.secondary"
-            sx={{
-              display: "block",
-              mt: 0.25,
-            }}
-          >
-            Última atualização dos dados:{" "}
-            {latestImportedAt
-              ? formatDateTime(
-                  latestImportedAt.toISOString()
-                )
-              : "informação de importação indisponível"}
-          </Typography>
-        </Box>
-
-        <PeriodFilter />
-      </Box>
+            <PageHeader eyebrow="Operação" title="Dashboard Executivo" description="Visão consolidada da operação de suporte" meta={<>{periodLabel(period)}{" • "}{filteredTickets.length} ticket(s) analisado(s)</>} action={<PeriodFilter />} />
 
       {/* =================================================
           KPIs
