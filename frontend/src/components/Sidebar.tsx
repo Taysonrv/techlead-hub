@@ -141,19 +141,17 @@ export function Sidebar() {
     useState<HTMLElement | null>(null);
 
   const [openSections, setOpenSections] = useState<Record<"operation" | "leadership" | "development" | "management", boolean>>(() => ({
-    operation: true,
-    leadership: true,
-    development: true,
-    management: true,
+    operation: false,
+    leadership: false,
+    development: false,
+    management: false,
   }));
 
   const profileMenuOpen =
     Boolean(profileAnchor);
 
-  useEffect(() => {
-    const section = sectionForPath(location.pathname);
-    setOpenSections((current) => ({ ...current, [section]: true }));
-  }, [location.pathname]);
+  // O menu inicia recolhido. A navegação não força a abertura automática
+  // de uma seção; o usuário decide quais grupos deseja expandir.
 
   /* =======================================================
      VERSÃO DO APLICATIVO
