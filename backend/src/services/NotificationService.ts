@@ -72,6 +72,9 @@ export class NotificationService {
         select: {
           taskNumber: true,
           movideskId: true,
+          subject: true,
+          dueDate: true,
+          lastUpdate: true,
         },
       });
 
