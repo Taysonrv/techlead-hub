@@ -3012,7 +3012,9 @@ export function Analysts() {
               </Box>
 
               <CompactPieLegend
-                data={visibleAnalystPieData}
+                data={analystPieData}
+                hiddenItems={hiddenAnalystSlices}
+                onToggleItem={(name) => togglePieSlice(setHiddenAnalystSlices, analystPieData, name)}
                 onItemClick={(
                   name
                 ) => {
@@ -3167,7 +3169,9 @@ export function Analysts() {
               </Box>
 
               <CompactPieLegend
-                data={visibleStatusPieData}
+                data={statusPieData}
+                hiddenItems={hiddenStatusSlices}
+                onToggleItem={(name) => togglePieSlice(setHiddenStatusSlices, statusPieData, name)}
                 onItemClick={(
                   name
                 ) => {
