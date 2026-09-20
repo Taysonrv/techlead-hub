@@ -2170,17 +2170,6 @@ export function Clients() {
                 data={
                   clientPieData
                 }
-                total={
-                  clientPieData.reduce(
-                    (
-                      sum,
-                      item
-                    ) =>
-                      sum +
-                      item.value,
-                    0
-                  )
-                }
                 onItemClick={(
                   name
                 ) => {
@@ -2235,7 +2224,7 @@ export function Clients() {
                   </PieChart>
                 </ResponsiveContainer>
               </Box>
-              <CompactPieLegend data={categoryPieData} total={scopedTickets.length}
+              <CompactPieLegend data={categoryPieData}
                 onItemClick={(name) => name !== "Outros" && showTickets(`Categoria: ${name}`, scopedTickets.filter((ticket) => (ticket.category?.trim() || "Sem categoria") === name))} />
             </Box>
           ) : <EmptyChart />}
@@ -2377,9 +2366,6 @@ export function Clients() {
               <CompactPieLegend
                 data={
                   statusPieData
-                }
-                total={
-                  scopedTickets.length
                 }
                 onItemClick={(
                   name
@@ -3997,7 +3983,7 @@ function ExecutiveDonutPanel({ title, data, total }: { title: string; data: PieD
               <Typography variant="caption">total</Typography>
             </Box>
           </Box>
-          <CompactPieLegend data={data} total={safeTotal} />
+          <CompactPieLegend data={data} />
         </Box>
       ) : (
         <Typography variant="body2" color="text.secondary" sx={{ py: 4, textAlign: "center" }}>Sem dados no recorte.</Typography>
