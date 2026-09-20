@@ -1023,29 +1023,7 @@ const latestImportedAt =
           CABEÇALHO
       ================================================= */}
 
-      <Box
-        sx={{
-          mb: 2.5,
-
-          display: "flex",
-
-          flexDirection: {
-            xs: "column",
-            lg: "row",
-          },
-
-          justifyContent:
-            "space-between",
-
-          alignItems: {
-            xs: "stretch",
-            lg: "center",
-          },
-
-          gap: 2,
-        }}
-      >
-        <PageHeader
+      <PageHeader
         eyebrow="Operação"
         title="Dashboard Executivo"
         description="Visão consolidada da operação de suporte"
