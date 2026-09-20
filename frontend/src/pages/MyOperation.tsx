@@ -84,6 +84,9 @@ export function MyOperation() {
       if (metric === "concluded") return item.source === "AZURE" && lane(item.status) === "Concluídos/Fechados";
       if (metric === "prioritized") return Boolean(item.workItem?.prioritized);
       if (metric === "blocked") return Boolean(item.workItem?.blockedProcess);
+      if (metric === "attention") return Boolean(item.workItem?.blockedProcess)
+        || Boolean(item.workItem?.prioritized)
+        || (item.updatedAt ? Date.now() - new Date(item.updatedAt).getTime() >= 3 * 86_400_000 : false);
       return true;
     }).sort((a, b) => sort === "recent"
       ? new Date(b.updatedAt ?? 0).getTime() - new Date(a.updatedAt ?? 0).getTime()
@@ -167,7 +170,14 @@ export function MyOperation() {
     <Stack direction={{ xs: "column", md: "row" }} spacing={1} useFlexGap sx={{ mt: 1.5, alignItems: { md: "center" }, flexWrap: "wrap" }}>
       <FormControl size="small" sx={{ minWidth: 170 }}><InputLabel>Ordenação</InputLabel><Select label="Ordenação" value={sort} onChange={(event) => setSort(event.target.value as SortMode)}><MenuItem value="priority">Prioridade operacional</MenuItem><MenuItem value="recent">Mais recentes</MenuItem><MenuItem value="oldest">Mais antigos</MenuItem></Select></FormControl>
       <Button size="small" variant="outlined" startIcon={<BookmarkAddOutlined />} onClick={saveCurrentView}>Salvar visão</Button>
-      <Chip icon={<FilterAltOutlined />} label={`${focusItems} item(ns) de atenção no recorte`} variant="outlined" />
+      <Chip
+        icon={<FilterAltOutlined />}
+        label={metric === "attention" ? `Foco ativo · ${focusItems} item(ns)` : `${focusItems} item(ns) de atenção no recorte`}
+        color={metric === "attention" ? "warning" : "default"}
+        variant={metric === "attention" ? "filled" : "outlined"}
+        onClick={() => setMetric(metric === "attention" ? "" : "attention")}
+        sx={{ cursor: "pointer" }}
+      />
       {savedViews.map((saved) => <Chip key={saved.id} label={saved.name} onClick={() => applySavedView(saved)} onDelete={() => deleteSavedView(saved.id)} deleteIcon={<DeleteOutline />} variant="outlined" />)}
     </Stack>
     </CardContent></Card>
