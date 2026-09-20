@@ -2993,6 +2993,7 @@ function DonutAnalysisCard({
   colors: readonly string[];
   onItemClick?: (label: string) => void;
 }) {
+  const theme = useTheme();
   const [hiddenItems, setHiddenItems] = useState<Set<string>>(() => new Set());
   const visibleData = data.filter((item) => !hiddenItems.has(item.label));
   const total = visibleData.reduce((sum, item) => sum + item.total, 0);
@@ -3035,8 +3036,8 @@ function DonutAnalysisCard({
             <Tooltip
               contentStyle={{
                 borderRadius: 12,
-                border: `1px solid ${chartGrid}`,
-                background: chartTooltipStyle.background,
+                border: `1px solid ${theme.palette.divider}`,
+                background: theme.palette.background.paper,
                 boxShadow: "0 14px 36px rgba(0,0,0,.18)",
               }}
               cursor={false}
