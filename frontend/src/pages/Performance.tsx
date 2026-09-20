@@ -526,9 +526,12 @@ export function Performance() {
           gap: 2,
         }}
       >
-        <Box>
-          <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
-            <PageHeader eyebrow="Qualidade operacional" title="Desempenho do Atendimento" description="Prazos, risco operacional e desempenho da equipe em uma visão única" action={<PeriodFilter />} />
+        <PageHeader
+        eyebrow="Qualidade operacional"
+        title="Desempenho do Atendimento"
+        description="Prazos, risco operacional e desempenho da equipe em uma visão única"
+        action={<PeriodFilter />}
+      />
 
       <Alert
         severity="info"
