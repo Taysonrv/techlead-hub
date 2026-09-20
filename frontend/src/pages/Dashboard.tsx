@@ -11,10 +11,14 @@ import {
   CircularProgress,
   Divider,
   Drawer,
+  IconButton,
+  Popover,
   Snackbar,
   Stack,
   Typography,
 } from "@mui/material";
+
+import { InfoOutlined } from "@mui/icons-material";
 
 import {
   Bar,
