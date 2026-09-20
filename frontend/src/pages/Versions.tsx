@@ -69,6 +69,8 @@ import {
 } from "../theme/theme";
 import { InfoPopover, type InfoPopoverContent } from "../components/InfoPopover";
 import { PageHeader } from "../components/PageHeader";
+import { ExecutiveSection } from "../components/ExecutiveSection";
+import { KpiCard as ExecutiveKpiCard } from "../components/KpiCard";
 
 function Stack(
   props:
@@ -3370,201 +3372,13 @@ export function Versions() {
 }
 
 function MetricCard({
-  title,
-  value,
-  description,
-  severity = "default",
-  active = false,
-  info,
-  onClick,
+  title, value, description, severity = "default", active = false, info, onClick,
 }: {
-  title: string;
-  value: string | number;
-  description: string;
-  severity?:
-    | "default"
-    | "success"
-    | "warning"
-    | "error";
-  active?: boolean;
-  info: CardInfo;
-  onClick: () => void;
+  title: string; value: string | number; description: string;
+  severity?: "default" | "success" | "warning" | "error"; active?: boolean; info: CardInfo; onClick: () => void;
 }) {
-  const accentColor =
-    severity ===
-    "error"
-      ? "#EF4444"
-      : severity ===
-        "warning"
-      ? "#F59E0B"
-      : severity ===
-        "success"
-      ? aliareColors.green
-      : aliareColors.green;
-
-  return (
-    <Card
-      elevation={0}
-      role="button"
-      tabIndex={0}
-      onClick={
-        onClick
-      }
-      onKeyDown={(
-        event,
-      ) => {
-        if (
-          event.key ===
-            "Enter" ||
-          event.key ===
-            " "
-        ) {
-          onClick();
-        }
-      }}
-      sx={{
-        position:
-          "relative",
-        overflow:
-          "hidden",
-        height:
-          "100%",
-        minHeight:
-          122,
-        border:
-          "1px solid",
-        borderColor:
-          active
-            ? accentColor
-            : "divider",
-        borderRadius:
-          2.25,
-        cursor:
-          "pointer",
-        backgroundColor:
-          active
-            ? "rgba(24,199,122,0.035)"
-            : "background.paper",
-        boxShadow:
-          active
-            ? "0 6px 20px rgba(16,24,40,0.07)"
-            : "none",
-        transition:
-          "transform .15s ease, box-shadow .15s ease, border-color .15s ease",
-        "&::before": {
-          content:
-            '""',
-          position:
-            "absolute",
-          top:
-            0,
-          left:
-            0,
-          width:
-            "100%",
-          height:
-            3,
-          backgroundColor:
-            accentColor,
-        },
-        "&:hover": {
-          transform:
-            "translateY(-2px)",
-          borderColor:
-            accentColor,
-          boxShadow:
-            "0 8px 24px rgba(16,24,40,0.08)",
-        },
-        "&:focus-visible": {
-          outline:
-            `2px solid ${accentColor}`,
-          outlineOffset:
-            2,
-        },
-      }}
-    >
-      <CardContent
-        sx={{
-          p: {
-            xs:
-              1.4,
-            md:
-              1.55,
-          },
-          "&:last-child": {
-            pb: {
-              xs:
-                1.4,
-              md:
-                1.55,
-            },
-          },
-        }}
-      >
-        <Stack
-          direction="row"
-          spacing={1}
-          sx={{
-            alignItems:
-              "center",
-            justifyContent:
-              "space-between",
-          }}
-        >
-          <Typography
-            variant="body2"
-            sx={{
-              fontWeight:
-                750,
-            }}
-          >
-            {title}
-          </Typography>
-
-          <CardInfoButton
-            info={
-              info
-            }
-          />
-        </Stack>
-
-        <Typography
-          sx={{
-            mt:
-              0.55,
-            fontSize: {
-              xs:
-                "1.65rem",
-              md:
-                "1.8rem",
-              xl:
-                "1.9rem",
-            },
-            lineHeight:
-              1.05,
-            fontWeight:
-              800,
-          }}
-        >
-          {value}
-        </Typography>
-
-        <Typography
-          variant="caption"
-          color="text.secondary"
-          sx={{
-            display:
-              "block",
-            mt:
-              0.55,
-          }}
-        >
-          {description}
-        </Typography>
-
-      </CardContent>
-    </Card>
-  );
+  const accentColor = severity === "error" ? "#EF4444" : severity === "warning" ? "#F59E0B" : aliareColors.green;
+  return <ExecutiveKpiCard title={title} value={value} subtitle={description} info={`${info.summary} • ${info.periodRule}`} accent={accentColor} active={active} onClick={onClick} />;
 }
 
 function MiniMetric({
@@ -3698,20 +3512,7 @@ function DonutCard({
     ) => void;
 }) {
   return (
-    <Card
-      elevation={0}
-      sx={{
-        border:
-          "1px solid",
-        borderColor:
-          "divider",
-        borderRadius:
-          2.25,
-        backgroundColor:
-          "background.paper",
-      }}
-    >
-      <CardContent>
+    <ExecutiveSection compact>
         <Stack
           direction="row"
           spacing={1}
@@ -4002,8 +3803,7 @@ function DonutCard({
             ),
           )}
         </Stack>
-      </CardContent>
-    </Card>
+      </ExecutiveSection>
   );
 }
 
