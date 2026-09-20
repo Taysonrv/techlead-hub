@@ -47,6 +47,7 @@ import { api } from "../services/api";
 import { useFilters } from "../context/FiltersContext";
 import { PeriodFilter } from "../components/PeriodFilter";
 import { PageHeader } from "../components/PageHeader";
+import { useTheme } from "@mui/material/styles";
 import { ExecutiveSection } from "../components/ExecutiveSection";
 
 import {
@@ -874,7 +875,7 @@ export function Performance() {
                     type="monotone"
                     dataKey="resolution"
                     name="Resolução"
-                    stroke="#171717"
+                    stroke="currentColor"
                     strokeWidth={2.2}
                     dot={{ r: 2.5 }}
                     activeDot={{ r: 5 }}
@@ -1484,6 +1485,7 @@ function DonutCard({
   info: CardInfo;
   onSliceClick?: (name: string) => void;
 }) {
+  const theme = useTheme();
   return (
     <ExecutiveSection compact>
         <Stack
@@ -1553,7 +1555,7 @@ function DonutCard({
                   style={{
                     fontSize: 23,
                     fontWeight: 800,
-                    fill: aliareColors.text,
+                    fill: theme.palette.text.primary,
                   }}
                 >
                   {centerValue}
@@ -1566,7 +1568,7 @@ function DonutCard({
                   dominantBaseline="middle"
                   style={{
                     fontSize: 11,
-                    fill: aliareColors.textSecondary,
+                    fill: theme.palette.text.secondary,
                   }}
                 >
                   {centerLabel}
