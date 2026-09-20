@@ -17,7 +17,7 @@ import { DetailFieldGrid, DetailPanelHeader, DetailSection } from "../components
 import { detailDrawerPaperSx } from "../theme/layoutTokens";
 import { aliareColors } from "../theme/theme";
 import { useColorMode } from "../context/ColorModeContext";
-import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip as ChartTooltip, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip as ChartTooltip, XAxis, YAxis } from "recharts";
 
 type Ticket = {
   id: number; movideskId: number; subject: string; status: string; client: string | null; owner: string | null;
@@ -239,7 +239,7 @@ export function TechnicalLeadership() {
             <Bar dataKey="value" name="Quantidade" radius={[7, 7, 2, 2]}>
               {[
                 aliareColors.info, aliareColors.error, aliareColors.warning, aliareColors.cyan, aliareColors.purple,
-              ].map((fill, index) => <rect key={index} fill={fill} />)}
+              ].map((fill, index) => <Cell key={index} fill={fill} />)}
             </Bar>
           </BarChart>
         </ResponsiveContainer>
