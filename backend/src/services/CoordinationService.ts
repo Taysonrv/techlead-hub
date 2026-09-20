@@ -205,11 +205,17 @@ export class CoordinationService {
       .sort((a, b) => b.total - a.total || a.analyst.localeCompare(b.analyst, "pt-BR"));
 
     const sortedLoads = workloadRows.map((item) => item.total).sort((a, b) => a - b);
-    const medianLoad = sortedLoads.length
-      ? sortedLoads.length % 2
-        ? sortedLoads[Math.floor(sortedLoads.length / 2)]
-        : Math.round((sortedLoads[sortedLoads.length / 2 - 1] + sortedLoads[sortedLoads.length / 2]) / 2)
-      : 0;
+    let medianLoad = 0;
+    if (sortedLoads.length > 0) {
+      const middle = Math.floor(sortedLoads.length / 2);
+      if (sortedLoads.length % 2 === 1) {
+        medianLoad = sortedLoads[middle] ?? 0;
+      } else {
+        const lower = sortedLoads[middle - 1] ?? 0;
+        const upper = sortedLoads[middle] ?? 0;
+        medianLoad = Math.round((lower + upper) / 2);
+      }
+    }
     const overloadedAnalysts = workloadRows.filter((item) =>
       medianLoad > 0 && item.total >= Math.max(medianLoad * 1.5, medianLoad + 5),
     );
