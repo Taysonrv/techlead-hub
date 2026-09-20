@@ -28,6 +28,7 @@ import {
   TableRow,
   Typography,
 } from "@mui/material";
+import { useTheme } from "@mui/material/styles";
 
 import {
   ArrowBackOutlined,
@@ -204,6 +205,10 @@ const STATUS_COLORS: Record<
 ========================================================= */
 
 export function Clients() {
+  const theme = useTheme();
+  const [hiddenClientSlices, setHiddenClientSlices] = useState<Set<string>>(() => new Set());
+  const [hiddenCategorySlices, setHiddenCategorySlices] = useState<Set<string>>(() => new Set());
+  const [hiddenStatusSlices, setHiddenStatusSlices] = useState<Set<string>>(() => new Set());
   const [clientsPage, setClientsPage] = useState(0);
   const navigate = useNavigate();
   const presentationRef = useRef<HTMLDivElement>(null);
@@ -985,6 +990,19 @@ export function Clients() {
     (ticket) => ticket.owner?.trim() || "Sem responsável",
     8,
   ), [scopedTickets]);
+
+  const visibleClientPieData = useMemo(() => clientPieData.filter((item) => !hiddenClientSlices.has(item.name)), [clientPieData, hiddenClientSlices]);
+  const visibleCategoryPieData = useMemo(() => categoryPieData.filter((item) => !hiddenCategorySlices.has(item.name)), [categoryPieData, hiddenCategorySlices]);
+  const visibleStatusPieData = useMemo(() => statusPieData.filter((item) => !hiddenStatusSlices.has(item.name)), [statusPieData, hiddenStatusSlices]);
+
+  const togglePieSlice = (setter: React.Dispatch<React.SetStateAction<Set<string>>>, data: PieDataItem[], name: string) => {
+    setter((current) => {
+      const next = new Set(current);
+      if (next.has(name)) next.delete(name);
+      else if (data.length - next.size > 1) next.add(name);
+      return next;
+    });
+  };
 
   const executiveInsights = useMemo(() => {
     const topCategory = categoryPieData[0];
@@ -2087,9 +2105,7 @@ export function Clients() {
                 >
                   <PieChart>
                     <Pie
-                      data={
-                        clientPieData
-                      }
+                      data={visibleClientPieData}
                       dataKey="value"
                       nameKey="name"
                       cx="50%"
@@ -2137,7 +2153,7 @@ export function Clients() {
                         );
                       }}
                     >
-                      {clientPieData.map(
+                      {visibleClientPieData.map(
                         (
                           _,
                           index
@@ -2167,9 +2183,7 @@ export function Clients() {
               </Box>
 
               <CompactPieLegend
-                data={
-                  clientPieData
-                }
+                data={visibleClientPieData}
                 onItemClick={(
                   name
                 ) => {
@@ -2213,18 +2227,18 @@ export function Clients() {
               <Box sx={{ height: 235, minWidth: 0 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
-                    <Pie data={categoryPieData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={76} innerRadius={44} paddingAngle={2} cursor="pointer"
+                    <Pie data={visibleCategoryPieData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={76} innerRadius={44} paddingAngle={2} cursor="pointer"
                       onClick={(data) => {
                         const name = String((data as { payload?: { name?: unknown } }).payload?.name ?? "");
                         if (name && name !== "Outros") showTickets(`Categoria: ${name}`, scopedTickets.filter((ticket) => (ticket.category?.trim() || "Sem categoria") === name));
                       }}>
-                      {categoryPieData.map((item, index) => <Cell key={`${item.name}-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />)}
+                      {visibleCategoryPieData.map((item, index) => <Cell key={`${item.name}-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />)}
                     </Pie>
                     <Tooltip content={<CompactPieTooltip valueLabel="ticket(s)" />} />
                   </PieChart>
                 </ResponsiveContainer>
               </Box>
-              <CompactPieLegend data={categoryPieData}
+              <CompactPieLegend data={visibleCategoryPieData}
                 onItemClick={(name) => name !== "Outros" && showTickets(`Categoria: ${name}`, scopedTickets.filter((ticket) => (ticket.category?.trim() || "Sem categoria") === name))} />
             </Box>
           ) : <EmptyChart />}
@@ -2267,9 +2281,7 @@ export function Clients() {
                 >
                   <PieChart>
                     <Pie
-                      data={
-                        statusPieData
-                      }
+                      data={visibleStatusPieData}
                       dataKey="value"
                       nameKey="name"
                       cx="50%"
@@ -2328,7 +2340,7 @@ export function Clients() {
                         }
                       }}
                     >
-                      {statusPieData.map(
+                      {visibleStatusPieData.map(
                         (
                           _,
                           index
@@ -2364,9 +2376,7 @@ export function Clients() {
               </Box>
 
               <CompactPieLegend
-                data={
-                  statusPieData
-                }
+                data={visibleStatusPieData}
                 onItemClick={(
                   name
                 ) => {
@@ -2420,10 +2430,10 @@ export function Clients() {
             <Box sx={{ height: 290, mt: 1 }}>
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={ownerChartData} layout="vertical" margin={{ top: 8, right: 24, bottom: 8, left: 18 }}>
-                  <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                  <XAxis type="number" allowDecimals={false} />
-                  <YAxis type="category" dataKey="name" width={135} tick={{ fontSize: 11 }} tickFormatter={(value) => abbreviate(String(value), 20)} />
-                  <Tooltip />
+                  <CartesianGrid strokeDasharray="4 6" horizontal={false} stroke={theme.palette.divider} opacity={0.55} />
+                  <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11, fill: theme.palette.text.secondary }} axisLine={false} tickLine={false} />
+                  <YAxis type="category" dataKey="name" width={135} tick={{ fontSize: 11, fill: theme.palette.text.secondary }} axisLine={false} tickLine={false} tickFormatter={(value) => abbreviate(String(value), 20)} />
+                  <Tooltip contentStyle={{ borderRadius: 12, border: `1px solid ${theme.palette.divider}`, background: theme.palette.background.paper, boxShadow: "0 12px 32px rgba(0,0,0,.16)" }} cursor={{ fill: theme.palette.action.hover }} />
                   <Bar dataKey="value" name="Tickets" fill={aliareColors.green} radius={[0, 6, 6, 0]} cursor="pointer"
                     onClick={(data) => {
                       const name = String((data as { name?: unknown }).name ?? "");
@@ -3571,26 +3581,30 @@ export function Clients() {
 
 function CompactPieLegend({
   data,
+  hiddenItems: controlledHiddenItems,
+  onToggleItem,
   onItemClick,
 }: {
-  data:
-    PieDataItem[];
-
-
-  onItemClick?:
-    (
-      name:
-        string
-    ) => void;
+  data: PieDataItem[];
+  hiddenItems?: Set<string>;
+  onToggleItem?: (name: string) => void;
+  onItemClick?: (name: string) => void;
 }) {
-  const [hiddenItems, setHiddenItems] = useState<Set<string>>(() => new Set());
+  const [localHiddenItems, setLocalHiddenItems] = useState<Set<string>>(() => new Set());
+  const hiddenItems = controlledHiddenItems ?? localHiddenItems;
   const visibleTotal = data.reduce((sum, item) => hiddenItems.has(item.name) ? sum : sum + item.value, 0);
-  const toggleItem = (name: string) => setHiddenItems((current) => {
-    const next = new Set(current);
-    if (next.has(name)) next.delete(name);
-    else if (data.length - next.size > 1) next.add(name);
-    return next;
-  });
+  const toggleItem = (name: string) => {
+    if (onToggleItem) {
+      onToggleItem(name);
+      return;
+    }
+    setLocalHiddenItems((current) => {
+      const next = new Set(current);
+      if (next.has(name)) next.delete(name);
+      else if (data.length - next.size > 1) next.add(name);
+      return next;
+    });
+  };
 
   return (
     <Stack
