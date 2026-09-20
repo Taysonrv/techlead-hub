@@ -150,6 +150,17 @@ export function createAppTheme(mode: PaletteMode = "light") {
           },
         },
       },
+      MuiCardHeader: {
+        styleOverrides: {
+          root: {
+            padding: "18px 20px 12px",
+            borderBottom: `1px solid ${border}`,
+            ...(dark && { background: "linear-gradient(90deg, rgba(20,53,78,.42), rgba(8,24,41,.08))" }),
+          },
+          title: { fontWeight: 800, letterSpacing: "-.01em" },
+          subheader: { color: textSecondary },
+        },
+      },
       MuiCardContent: {
         styleOverrides: {
           root: {
@@ -252,6 +263,10 @@ export function createAppTheme(mode: PaletteMode = "light") {
       MuiTableContainer: {
         styleOverrides: {
           root: {
+            scrollbarColor: dark ? "#31516E #091827" : undefined,
+            "&::-webkit-scrollbar": { height: 9, width: 9 },
+            "&::-webkit-scrollbar-track": { background: dark ? "#091827" : "#EEF1F3" },
+            "&::-webkit-scrollbar-thumb": { background: dark ? "#31516E" : "#C7CDD3", borderRadius: 99 },
             borderRadius: 14,
             border: `1px solid ${border}`,
             ...(dark && { background: "linear-gradient(145deg,rgba(13,33,54,.94),rgba(8,24,41,.96))", boxShadow: "inset 0 1px rgba(255,255,255,.025), 0 12px 28px rgba(0,0,0,.10)" }),
@@ -273,6 +288,14 @@ export function createAppTheme(mode: PaletteMode = "light") {
             "&:hover": { backgroundColor: dark ? "rgba(24,199,122,.075)" : "rgba(24,199,122,.055)" },
             ...(dark && { transition: "background-color .14s ease", "&:hover td:first-of-type": { boxShadow: "inset 2px 0 #18C77A" } }),
           },
+        },
+      },
+      MuiFormHelperText: {
+        styleOverrides: { root: dark ? { color: "#849CB6" } : {} },
+      },
+      MuiInputBase: {
+        styleOverrides: {
+          input: dark ? { "&::placeholder": { color: "#7F98B3", opacity: 1 } } : {},
         },
       },
       MuiAlert: {
@@ -354,6 +377,11 @@ export function createAppTheme(mode: PaletteMode = "light") {
               "&.Mui-selected": { backgroundColor: "rgba(24,199,122,.16)", color: "#5BE7AD" },
             }),
           },
+        },
+      },
+      MuiSkeleton: {
+        styleOverrides: {
+          root: dark ? { backgroundColor: "rgba(124,172,218,.10)", "&::after": { background: "linear-gradient(90deg, transparent, rgba(124,172,218,.10), transparent)" } } : {},
         },
       },
       MuiLinearProgress: {
