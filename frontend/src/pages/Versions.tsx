@@ -68,6 +68,7 @@ import {
   aliareColors,
 } from "../theme/theme";
 import { InfoPopover, type InfoPopoverContent } from "../components/InfoPopover";
+import { PageHeader } from "../components/PageHeader";
 
 function Stack(
   props:
@@ -1384,131 +1385,13 @@ export function Versions() {
 
   return (
     <>
-      <Box
-        sx={{
-          mb:
-            2.5,
-          display:
-            "flex",
-          flexDirection: {
-            xs:
-              "column",
-            lg:
-              "row",
-          },
-          justifyContent:
-            "space-between",
-          alignItems: {
-            xs:
-              "stretch",
-            lg:
-              "center",
-          },
-          gap:
-            2,
-        }}
-      >
-        <Box>
-          <Stack
-            direction="row"
-            spacing={1}
-            sx={{
-              alignItems:
-                "center",
-            }}
-          >
-            <Box
-              sx={{
-                width:
-                  30,
-                height:
-                  3,
-                borderRadius:
-                  99,
-                backgroundColor:
-                  aliareColors.green,
-              }}
-            />
-
-            <Typography
-              variant="caption"
-              sx={{
-                fontWeight:
-                  800,
-                letterSpacing:
-                  "0.08em",
-                textTransform:
-                  "uppercase",
-                color:
-                  aliareColors.greenDark,
-              }}
-            >
-              Desenvolvimento
-            </Typography>
-          </Stack>
-
-          <Typography
-            sx={{
-              mt:
-                0.8,
-              fontWeight:
-                800,
-              letterSpacing:
-                "-0.025em",
-              fontSize: {
-                xs:
-                  "1.7rem",
-                md:
-                  "1.9rem",
-                xl:
-                  "2.1rem",
-              },
-            }}
-          >
-            Versões
-          </Typography>
-
-          <Typography
-            variant="body2"
-            color="text.secondary"
-            sx={{
-              mt:
-                0.25,
-            }}
-          >
-            Planejamento, cobertura e riscos das versões vinculadas às Tasks do Azure
-          </Typography>
-
-          <Typography
-            variant="caption"
-            color="text.secondary"
-            sx={{
-              display:
-                "block",
-              mt:
-                0.5,
-            }}
-          >
-            {summary.total} Work Item(s) no recorte •{" "}
-            {summary.versions} versão(ões) identificada(s)
-          </Typography>
-        </Box>
-
-        <Button
-          variant="outlined"
-          size="small"
-          onClick={() =>
-            void load()
-          }
-          disabled={
-            loading
-          }
-        >
-          {loading
-            ? "Atualizando..."
-            : "Recarregar"}
-        </Button>
-      </Box>
+      <PageHeader
+        eyebrow="Desenvolvimento"
+        title="Versões"
+        description="Planejamento, cobertura e riscos das versões vinculadas às Tasks do Azure"
+        meta={<>{summary.total} Work Item(s) no recorte • {summary.versions} versão(ões) identificada(s)</>}
+        action={<Button variant="outlined" size="small" onClick={() => void load()} disabled={loading}>{loading ? "Atualizando..." : "Recarregar"}</Button>}
+      />
 
       {error && (
         <Alert
