@@ -81,6 +81,7 @@ import {
 } from "../theme/chartPalette";
 import { PageHeader } from "../components/PageHeader";
 import { ExecutiveSection } from "../components/ExecutiveSection";
+import { useTheme } from "@mui/material/styles";
 
 /*
  * Compatibilidade com a versão do MUI usada pelo projeto:
@@ -881,6 +882,7 @@ function AnalysisDonutCard({
       PieDataItem,
   ) => void;
 }) {
+  const theme = useTheme();
   return (
     <ExecutiveSection compact>
         <Stack
@@ -1001,7 +1003,7 @@ function AnalysisDonutCard({
                     fontWeight:
                       800,
                     fill:
-                      aliareColors.text,
+                      theme.palette.text.primary,
                   }}
                 >
                   {centerValue}
@@ -1016,7 +1018,7 @@ function AnalysisDonutCard({
                     fontSize:
                       11,
                     fill:
-                      aliareColors.textSecondary,
+                      theme.palette.text.secondary,
                   }}
                 >
                   {centerLabel}
@@ -2818,7 +2820,7 @@ export function AzureWorkItems({
         <Box
           sx={{
             order:
-              3,
+              2,
             display:
               "grid",
             gridTemplateColumns: {
@@ -2936,7 +2938,7 @@ export function AzureWorkItems({
           variant="outlined"
           sx={{
             order:
-              4,
+              3,
           }}
         >
           <CardContent>
@@ -3152,7 +3154,7 @@ export function AzureWorkItems({
             variant="outlined"
             sx={{
               order:
-                5,
+                4,
             }}
           >
             <CardContent
@@ -3259,7 +3261,7 @@ export function AzureWorkItems({
           variant="outlined"
           sx={{
             order:
-              2,
+              5,
           }}
         >
           <CardContent>
@@ -3945,7 +3947,7 @@ export function AzureWorkItems({
                           </TableCell>
 
                           <TableCell sx={{ width: 210, minWidth: 210 }}>
-                            Versão de cadastro
+                            Versão cadastrada
                           </TableCell>
 
                           <TableCell sx={{ width: 210, minWidth: 210 }}>
