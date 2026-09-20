@@ -1,6 +1,6 @@
 import { Alert, Box, Button, Card, CardContent, Chip, CircularProgress, Divider, MenuItem, Stack, TextField, Typography } from "@mui/material";
 import { CloudDoneOutlined, LoginOutlined, OpenInNewOutlined, SearchOutlined } from "@mui/icons-material";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { PageHeader } from "../components/PageHeader";
 import { api } from "../services/api";
 
@@ -16,9 +16,15 @@ export function Knowledge() {
   const [loading, setLoading] = useState(false);
   const [connection, setConnection] = useState<{ connectionId: string; userCode: string; verificationUri: string; message: string } | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const connectionTimer = useRef<number | null>(null);
 
   const loadStatus = async () => setStatus((await api.get<Status>("/knowledge/status")).data);
-  useEffect(() => { void loadStatus(); }, []);
+  useEffect(() => {
+    void loadStatus();
+    return () => {
+      if (connectionTimer.current !== null) window.clearTimeout(connectionTimer.current);
+    };
+  }, []);
 
   async function connect() {
     try {
@@ -26,7 +32,29 @@ export function Knowledge() {
       const response = await api.post("/knowledge/microsoft/connect");
       setConnection(response.data);
       window.open(response.data.verificationUri, "_blank", "noopener,noreferrer");
+      scheduleConnectionCheck(response.data.connectionId, Math.max(Number(response.data.interval ?? 5), 3) * 1000);
     } catch (error: any) { setMessage(error?.response?.data?.message || "Não foi possível iniciar a conexão Microsoft."); }
+  }
+
+  function scheduleConnectionCheck(connectionId: string, delayMs: number) {
+    if (connectionTimer.current !== null) window.clearTimeout(connectionTimer.current);
+    connectionTimer.current = window.setTimeout(async () => {
+      try {
+        const response = await api.post(`/knowledge/microsoft/connect/${connectionId}`);
+        if (response.data.connected) {
+          connectionTimer.current = null;
+          setConnection(null);
+          setMessage("Conta Microsoft conectada com sucesso. A sessão será reutilizada nas próximas sincronizações.");
+          await loadStatus();
+          return;
+        }
+        scheduleConnectionCheck(connectionId, Number(response.data.retryAfterMs ?? delayMs));
+      } catch (error: any) {
+        connectionTimer.current = null;
+        setConnection(null);
+        setMessage(error?.response?.data?.message || "A conexão Microsoft expirou. Tente conectar novamente.");
+      }
+    }, delayMs);
   }
 
   async function confirmConnection() {
@@ -34,8 +62,10 @@ export function Knowledge() {
     try {
       const response = await api.post(`/knowledge/microsoft/connect/${connection.connectionId}`);
       if (response.data.connected) {
+        if (connectionTimer.current !== null) window.clearTimeout(connectionTimer.current);
+        connectionTimer.current = null;
         setConnection(null);
-        setMessage("Conta Microsoft conectada com sucesso.");
+        setMessage("Conta Microsoft conectada com sucesso. A sessão será reutilizada nas próximas sincronizações.");
         await loadStatus();
       } else setMessage("A autorização ainda não foi concluída na página da Microsoft.");
     } catch (error: any) { setMessage(error?.response?.data?.message || "Não foi possível concluir a conexão."); }
@@ -68,7 +98,7 @@ export function Knowledge() {
         <Chip color={status?.azure.wikiAvailable ? "success" : "warning"} variant="outlined" label={status?.azure.wikiAvailable ? `Wiki Azure conectada: ${status.azure.wiki}` : status?.azure.configured ? "Wiki Azure indisponível" : "Wiki Azure não configurada"} />
         <Chip icon={status?.connected ? <CloudDoneOutlined /> : undefined} color={status?.connected ? "success" : "default"} variant="outlined" label={status?.connected ? `Microsoft: ${status.account || "conectado"}` : status?.configured ? "Microsoft não conectado" : "Microsoft aguardando configuração"} />
         {status?.configured && !status.connected && <Button size="small" startIcon={<LoginOutlined />} onClick={() => void connect()}>Conectar conta Microsoft</Button>}
-        {connection && <><Chip color="primary" label={`Código: ${connection.userCode}`} /><Button size="small" variant="outlined" onClick={() => void confirmConnection()}>Já autorizei</Button></>}
+        {connection && <><Chip color="primary" label={`Código: ${connection.userCode}`} /><Typography variant="caption" color="text.secondary">Aguardando a autorização no navegador…</Typography><Button size="small" variant="outlined" onClick={() => void confirmConnection()}>Verificar agora</Button></>}
       </Stack>
     </CardContent></Card>
     {warnings.map((warning) => <Alert severity="warning" sx={{ mb: 1 }} key={warning}>{warning}</Alert>)}
