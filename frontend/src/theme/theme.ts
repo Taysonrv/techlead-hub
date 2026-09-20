@@ -123,11 +123,17 @@ export function createAppTheme(mode: PaletteMode = "light") {
       MuiCard: {
         styleOverrides: {
           root: {
+            position: "relative",
             border: `1px solid ${border}`,
-            boxShadow: dark ? "0 12px 34px rgba(0,0,0,.16)" : "0 1px 2px rgba(16,24,40,.035)",
+            boxShadow: dark ? "0 16px 42px rgba(0,0,0,.18), inset 0 1px rgba(255,255,255,.025)" : "0 6px 22px rgba(16,24,40,.045)",
             borderRadius: 18,
-            background: dark ? "linear-gradient(145deg, rgba(14,35,56,.96), rgba(10,25,43,.98))" : aliareColors.paper,
+            background: dark ? "linear-gradient(145deg, rgba(14,35,56,.96), rgba(8,24,41,.985))" : "linear-gradient(180deg,#FFFFFF,#FBFCFD)",
             backgroundColor: paper,
+            transition: "border-color .18s ease, box-shadow .18s ease, transform .18s ease",
+            "&:hover": dark ? {
+              borderColor: "rgba(74,178,211,.28)",
+              boxShadow: "0 18px 46px rgba(0,0,0,.22), inset 0 1px rgba(255,255,255,.035)",
+            } : undefined,
           },
         },
       },
@@ -190,6 +196,23 @@ export function createAppTheme(mode: PaletteMode = "light") {
         },
       },
       MuiTextField: { defaultProps: { size: "small" } },
+      MuiFormControl: {
+        styleOverrides: {
+          root: {
+            "& .MuiInputLabel-root": dark ? { color: "#8FA7C1" } : undefined,
+          },
+        },
+      },
+      MuiAutocomplete: {
+        styleOverrides: {
+          paper: {
+            border: `1px solid ${border}`,
+            borderRadius: 12,
+            backgroundColor: paper,
+            ...(dark && { boxShadow: "0 18px 44px rgba(0,0,0,.34)" }),
+          },
+        },
+      },
       MuiOutlinedInput: {
         styleOverrides: {
           root: {
