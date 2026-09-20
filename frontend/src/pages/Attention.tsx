@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import type { MouseEvent } from "react";
 
 import {
   Alert,
