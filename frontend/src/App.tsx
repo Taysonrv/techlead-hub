@@ -135,16 +135,16 @@ function AuthenticatedLayout({
                 maxWidth: "100%",
                 minHeight: "calc(100vh - 96px)",
                 position: "relative",
-                "&::before": (theme) => theme.palette.mode === "dark" ? {
+                "&::before": (theme) => ({
                   content: '""',
                   position: "fixed",
                   pointerEvents: "none",
                   inset: "96px 24px 24px 284px",
                   borderRadius: 28,
-                  border: "1px solid rgba(74,139,199,.055)",
-                  background: "linear-gradient(145deg,rgba(9,29,48,.16),rgba(10,23,43,.04))",
-                  boxShadow: "inset 0 1px rgba(255,255,255,.012)",
-                } : undefined,
+                  border: theme.palette.mode === "dark" ? "1px solid rgba(74,139,199,.055)" : "1px solid transparent",
+                  background: theme.palette.mode === "dark" ? "linear-gradient(145deg,rgba(9,29,48,.16),rgba(10,23,43,.04))" : "transparent",
+                  boxShadow: theme.palette.mode === "dark" ? "inset 0 1px rgba(255,255,255,.012)" : "none",
+                }),
                 "& > *": { position: "relative", zIndex: 1 },
               }}
             >
