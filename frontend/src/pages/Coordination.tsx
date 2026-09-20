@@ -7,6 +7,17 @@ import {
   TrendingUpOutlined,
   WarningAmberOutlined,
   InfoOutlined,
+  SearchOutlined,
+  BugReportOutlined,
+  AutoFixHighOutlined,
+  SupportAgentOutlined,
+  Inventory2Outlined,
+  ConfirmationNumberOutlined,
+  MenuBookOutlined,
+  UploadFileOutlined,
+  RadarOutlined,
+  StarBorderOutlined,
+  StarRounded,
 } from "@mui/icons-material";
 import {
   Alert,
@@ -25,6 +36,8 @@ import {
   Tab,
   Tabs,
   Typography,
+  TextField,
+  InputAdornment,
 } from "@mui/material";
 import { createElement, useCallback, useEffect, useMemo, useState } from "react";
 import type { ElementType } from "react";
@@ -52,7 +65,8 @@ type Data = {
   };
 };
 
-type MainTab = "cadastros" | "movimentos" | "analises";
+type MainTab = "cadastros" | "movimentos" | "analises" | "desenvolvimento" | "gestao";
+type Routine = { label: string; path: string; icon: ElementType; description: string; keywords?: string[] };
 type DetailKind = "backlog" | "critical" | "stale" | "dueSoon" | "blocked" | "unassigned" | "analyst";
 type DetailData = {
   kind: DetailKind; analyst: string | null; total: number; truncated: boolean;
@@ -63,25 +77,41 @@ type DetailData = {
 const mainTabs: Array<{ key: MainTab; label: string; icon: ElementType; info: string }> = [
   { key: "cadastros", label: "Cadastros", icon: GroupsOutlined, info: "Acessos rápidos para equipe e clientes do escopo operacional." },
   { key: "movimentos", label: "Movimentos", icon: InsightsOutlined, info: "Rotinas para acompanhar execução, atenção e pendências da operação." },
-  { key: "analises", label: "Análises", icon: TrendingUpOutlined, info: "Visões gerenciais de desempenho, relatórios e versões." },
+  { key: "analises", label: "Análises", icon: TrendingUpOutlined, info: "Visões gerenciais de desempenho, relatórios e liderança." },
+  { key: "desenvolvimento", label: "Desenvolvimento", icon: IntegrationInstructionsOutlined, info: "Correções, evoluções, apoios e versões do produto." },
+  { key: "gestao", label: "Gestão", icon: FactCheckOutlined, info: "Conhecimento, sincronizações e governança da operação." },
 ];
 
-const routines: Record<MainTab, Array<{ label: string; path: string; icon: ElementType; description: string }>> = {
+const routines: Record<MainTab, Routine[]> = {
   cadastros: [
-    { label: "Analistas", path: "/analistas", icon: GroupsOutlined, description: "Equipe oficial de suporte e sustentação." },
-    { label: "Clientes", path: "/clientes", icon: BusinessOutlined, description: "Clientes cooperativas do escopo SIMER." },
+    { label: "Analistas", path: "/analistas", icon: GroupsOutlined, description: "Equipe oficial de suporte e sustentação.", keywords: ["equipe", "usuários", "responsáveis"] },
+    { label: "Clientes", path: "/clientes", icon: BusinessOutlined, description: "Clientes cooperativas do escopo SIMER.", keywords: ["cooperativas", "carteira"] },
   ],
   movimentos: [
-    { label: "Minha Operação", path: "/minha-operacao", icon: InsightsOutlined, description: "Fila operacional, tarefas e atendimentos em execução." },
-    { label: "Pontos de Atenção", path: "/atencao", icon: WarningAmberOutlined, description: "Riscos, criticidades e itens que exigem atuação." },
-    { label: "Pendências", path: "/qualidade-dados", icon: FactCheckOutlined, description: "Qualidade, vínculos e divergências entre fontes." },
+    { label: "Minha Operação", path: "/minha-operacao", icon: InsightsOutlined, description: "Fila operacional, tarefas e atendimentos em execução.", keywords: ["kanban", "fila", "trabalho"] },
+    { label: "Tickets", path: "/tickets", icon: ConfirmationNumberOutlined, description: "Atendimentos Movidesk e seus vínculos operacionais.", keywords: ["movidesk", "atendimentos"] },
+    { label: "Pontos de Atenção", path: "/atencao", icon: WarningAmberOutlined, description: "Riscos, criticidades e itens que exigem atuação.", keywords: ["risco", "crítico", "sla"] },
+    { label: "Pendências", path: "/qualidade-dados", icon: FactCheckOutlined, description: "Qualidade, vínculos e divergências entre fontes.", keywords: ["qualidade", "dados", "divergências"] },
   ],
   analises: [
-    { label: "Desempenho", path: "/desempenho", icon: TrendingUpOutlined, description: "Produtividade, SLA e acompanhamento de performance." },
-    { label: "Relatórios", path: "/relatorios", icon: InsightsOutlined, description: "Relatórios gerenciais e executivos." },
-    { label: "Versões", path: "/versoes", icon: IntegrationInstructionsOutlined, description: "Entregas, cobertura e distribuição por versão." },
+    { label: "Dashboard", path: "/", icon: InsightsOutlined, description: "Visão executiva consolidada da operação.", keywords: ["indicadores", "kpi", "executivo"] },
+    { label: "Desempenho", path: "/desempenho", icon: TrendingUpOutlined, description: "Produtividade, SLA e acompanhamento de performance.", keywords: ["performance", "produtividade", "sla"] },
+    { label: "Relatórios", path: "/relatorios", icon: InsightsOutlined, description: "Relatórios gerenciais e executivos.", keywords: ["excel", "pdf", "gerencial"] },
+    { label: "Central de Liderança", path: "/lideranca-tecnica", icon: RadarOutlined, description: "Radar executivo, recorrências, gaps e desenvolvimento técnico.", keywords: ["liderança", "radar", "recorrências", "gaps"] },
+  ],
+  desenvolvimento: [
+    { label: "Correções", path: "/correcoes", icon: BugReportOutlined, description: "Bugs e correções acompanhadas no Azure DevOps.", keywords: ["bug", "task", "azure"] },
+    { label: "Evoluções", path: "/evolucoes", icon: AutoFixHighOutlined, description: "Melhorias e evoluções funcionais do produto.", keywords: ["melhoria", "produto", "azure"] },
+    { label: "Apoios", path: "/apoios", icon: SupportAgentOutlined, description: "APOIOs vinculados aos atendimentos e à sustentação.", keywords: ["apoio", "azure", "atendimento"] },
+    { label: "Versões", path: "/versoes", icon: Inventory2Outlined, description: "Entregas, cobertura e distribuição por versão.", keywords: ["lte", "lts", "rc", "release"] },
+  ],
+  gestao: [
+    { label: "Base de Conhecimento", path: "/conhecimento", icon: MenuBookOutlined, description: "Wiki, procedimentos e conhecimento operacional.", keywords: ["wiki", "procedimento", "sharepoint"] },
+    { label: "Dados e Sincronizações", path: "/importar", icon: UploadFileOutlined, description: "Sincronizações, integrações e cargas de dados.", keywords: ["sincronizar", "azure", "movidesk", "importar"] },
   ],
 };
+
+const allRoutines = mainTabs.flatMap((group) => routines[group.key].map((routine) => ({ ...routine, group: group.key, groupLabel: group.label })));
 
 export function Coordination() {
   const navigate = useNavigate();
@@ -97,6 +127,13 @@ export function Coordination() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailTitle, setDetailTitle] = useState("");
   const [details, setDetails] = useState<DetailData | null>(null);
+  const [routineSearch, setRoutineSearch] = useState("");
+  const [favoriteRoutines, setFavoriteRoutines] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem("coordination-favorite-routines") || "[]"); } catch { return []; }
+  });
+  const [recentRoutines, setRecentRoutines] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem("coordination-recent-routines") || "[]"); } catch { return []; }
+  });
 
   const load = useCallback(async () => {
     try {
@@ -141,6 +178,24 @@ export function Coordination() {
     } finally { setDetailLoading(false); }
   }
 
+  const normalizedRoutineSearch = routineSearch.trim().toLocaleLowerCase("pt-BR");
+  const matchingRoutines = normalizedRoutineSearch
+    ? allRoutines.filter((routine) => [routine.label, routine.description, routine.groupLabel, ...(routine.keywords ?? [])].join(" ").toLocaleLowerCase("pt-BR").includes(normalizedRoutineSearch))
+    : [];
+
+  function openRoutine(routine: Routine) {
+    const next = [routine.path, ...recentRoutines.filter((path) => path !== routine.path)].slice(0, 5);
+    setRecentRoutines(next);
+    localStorage.setItem("coordination-recent-routines", JSON.stringify(next));
+    navigate(routine.path);
+  }
+
+  function toggleFavorite(path: string) {
+    const next = favoriteRoutines.includes(path) ? favoriteRoutines.filter((item) => item !== path) : [...favoriteRoutines, path];
+    setFavoriteRoutines(next);
+    localStorage.setItem("coordination-favorite-routines", JSON.stringify(next));
+  }
+
   function changeTab(value: MainTab) {
     setTab(value);
     const next = new URLSearchParams(searchParams);
@@ -157,63 +212,76 @@ export function Coordination() {
         meta={data ? `Coordenação: ${data.scope.coordinator} · ${data.scope.analysts.length} analistas · ${data.scope.clients.length} clientes cooperativas` : undefined}
       />
 
-      <Card
-        variant="outlined"
-        sx={{
-          overflow: "hidden",
-          borderRadius: 2.25,
-          backgroundColor: "background.paper",
-          mb: 2,
-        }}
-      >
-        <Tabs
-          value={tab}
-          onChange={(_, value: MainTab) => changeTab(value)}
-          variant="scrollable"
-          scrollButtons="auto"
-          sx={{
-            minHeight: 58,
-            borderBottom: "1px solid",
-            borderColor: "divider",
-            "& .MuiTab-root": { minHeight: 58, fontWeight: 800, px: 3 },
-            "& .Mui-selected": { color: `${aliareColors.info} !important` },
-            "& .MuiTabs-indicator": { height: 3, backgroundColor: aliareColors.info },
-          }}
-        >
-          {mainTabs.map((item) => (
-            <Tab
-              key={item.key}
-              value={item.key}
-              label={<Stack direction="row" spacing={0.5} sx={{ alignItems: "center" }}><span>{item.label}</span><Tooltip title={item.info}><InfoOutlined onClick={(event) => event.stopPropagation()} sx={{ fontSize: 15, color: "text.secondary" }} /></Tooltip></Stack>}
-              icon={createElement(item.icon, { fontSize: "small" })}
-              iconPosition="start"
+      <Card variant="outlined" sx={{ overflow: "hidden", borderRadius: 2.5, backgroundColor: "background.paper", mb: 2 }}>
+        <Box sx={{ p: { xs: 1.5, md: 2 }, borderBottom: "1px solid", borderColor: "divider", background: theme.palette.mode === "dark" ? "linear-gradient(110deg,rgba(24,199,122,.055),rgba(47,111,237,.035),transparent)" : "linear-gradient(110deg,rgba(24,199,122,.045),rgba(47,111,237,.025),transparent)" }}>
+          <Stack direction={{ xs: "column", md: "row" }} spacing={1.25} sx={{ justifyContent: "space-between", alignItems: { md: "center" } }}>
+            <Box>
+              <Typography sx={{ fontWeight: 900, fontSize: "1rem" }}>Navegador de rotinas</Typography>
+              <Typography variant="body2" color="text.secondary">Localize rapidamente qualquer rotina da coordenação por área, nome ou finalidade.</Typography>
+            </Box>
+            <TextField
+              size="small"
+              value={routineSearch}
+              onChange={(event) => setRoutineSearch(event.target.value)}
+              placeholder="Buscar rotina, ação ou assunto..."
+              sx={{ width: { xs: "100%", md: 360 } }}
+              slotProps={{ input: { startAdornment: <InputAdornment position="start"><SearchOutlined fontSize="small" /></InputAdornment> } }}
             />
-          ))}
-        </Tabs>
-
-        <Box sx={{ px: { xs: 1.5, md: 2.25 }, py: 1.5, borderBottom: "1px solid", borderColor: "divider", bgcolor: "rgba(47,111,237,.025)" }}>
-          <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap" }}>
-            {routines[tab].map((routine) => (
-              <Stack key={routine.path} direction="row" spacing={0.25} sx={{ alignItems: "center" }}>
-                <Chip
-                  icon={createElement(routine.icon, { fontSize: "small" })}
-                  label={routine.label}
-                  clickable
-                  onClick={() => navigate(routine.path)}
-                  variant="outlined"
-                  sx={{
-                    height: 38,
-                    px: 0.5,
-                    fontWeight: 750,
-                    bgcolor: "background.paper",
-                    "&:hover": { borderColor: aliareColors.info, bgcolor: "rgba(47,111,237,.05)" },
-                  }}
-                />
-                <Tooltip title={routine.description}><IconButton size="small" aria-label={`Informações sobre ${routine.label}`}><InfoOutlined sx={{ fontSize: 16 }} /></IconButton></Tooltip>
-              </Stack>
-            ))}
           </Stack>
         </Box>
+
+        {normalizedRoutineSearch ? (
+          <Box sx={{ p: { xs: 1.5, md: 2 } }}>
+            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 800 }}>{matchingRoutines.length} ROTINA(S) ENCONTRADA(S)</Typography>
+            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(2,1fr)", xl: "repeat(3,1fr)" }, gap: 1, mt: 1 }}>
+              {matchingRoutines.map((routine) => (
+                <Button key={routine.path} onClick={() => openRoutine(routine)} sx={{ justifyContent: "flex-start", textAlign: "left", textTransform: "none", p: 1.25, border: "1px solid", borderColor: "divider", borderRadius: 1.75 }}>
+                  <Stack direction="row" spacing={1.1} sx={{ alignItems: "center", minWidth: 0 }}>
+                    <Box sx={{ display: "grid", placeItems: "center", width: 36, height: 36, borderRadius: 1.4, bgcolor: "action.hover", color: "primary.main", flexShrink: 0 }}>{createElement(routine.icon, { fontSize: "small" })}</Box>
+                    <Box sx={{ minWidth: 0 }}><Typography sx={{ fontWeight: 800, color: "text.primary" }}>{routine.label}</Typography><Typography variant="caption" color="text.secondary">{routine.groupLabel} · {routine.description}</Typography></Box>
+                  </Stack>
+                </Button>
+              ))}
+            </Box>
+            {!matchingRoutines.length && <Alert severity="info" sx={{ mt: 1.5 }}>Nenhuma rotina corresponde à pesquisa. Tente pelo nome da tela, processo ou ação desejada.</Alert>}
+          </Box>
+        ) : (
+          <>
+            <Tabs value={tab} onChange={(_, value: MainTab) => changeTab(value)} variant="scrollable" scrollButtons="auto" sx={{ minHeight: 58, borderBottom: "1px solid", borderColor: "divider", "& .MuiTab-root": { minHeight: 58, fontWeight: 800, px: { xs: 2, md: 2.5 } }, "& .Mui-selected": { color: `${aliareColors.info} !important` }, "& .MuiTabs-indicator": { height: 3, backgroundColor: aliareColors.info } }}>
+              {mainTabs.map((item) => <Tab key={item.key} value={item.key} label={<Stack direction="row" spacing={0.5} sx={{ alignItems: "center" }}><span>{item.label}</span><Tooltip title={item.info}><InfoOutlined onClick={(event) => event.stopPropagation()} sx={{ fontSize: 15, color: "text.secondary" }} /></Tooltip></Stack>} icon={createElement(item.icon, { fontSize: "small" })} iconPosition="start" />)}
+            </Tabs>
+
+            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "minmax(0,1fr) 250px" }, minHeight: 220 }}>
+              <Box sx={{ p: { xs: 1.5, md: 2 }, borderRight: { lg: "1px solid" }, borderColor: "divider" }}>
+                <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 850 }}>{mainTabs.find((item) => item.key === tab)?.label}</Typography>
+                <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2,minmax(0,1fr))" }, gap: 1, mt: .75 }}>
+                  {routines[tab].map((routine) => (
+                    <Box key={routine.path} sx={{ position: "relative", border: "1px solid", borderColor: "divider", borderRadius: 2, overflow: "hidden", transition: ".16s", "&:hover": { borderColor: "primary.main", transform: "translateY(-1px)", boxShadow: "0 10px 26px rgba(16,24,40,.08)" } }}>
+                      <Button onClick={() => openRoutine(routine)} sx={{ width: "100%", minHeight: 82, justifyContent: "flex-start", textAlign: "left", textTransform: "none", p: 1.35, pr: 5 }}>
+                        <Stack direction="row" spacing={1.2} sx={{ alignItems: "flex-start" }}>
+                          <Box sx={{ display: "grid", placeItems: "center", width: 38, height: 38, borderRadius: 1.5, bgcolor: theme.palette.mode === "dark" ? "rgba(24,199,122,.09)" : "rgba(24,199,122,.065)", color: "primary.main", flexShrink: 0 }}>{createElement(routine.icon, { fontSize: "small" })}</Box>
+                          <Box><Typography sx={{ fontWeight: 850, color: "text.primary" }}>{routine.label}</Typography><Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: .25, lineHeight: 1.35 }}>{routine.description}</Typography></Box>
+                        </Stack>
+                      </Button>
+                      <Tooltip title={favoriteRoutines.includes(routine.path) ? "Remover dos favoritos" : "Adicionar aos favoritos"}><IconButton size="small" onClick={() => toggleFavorite(routine.path)} sx={{ position: "absolute", top: 8, right: 8 }}>{favoriteRoutines.includes(routine.path) ? <StarRounded sx={{ color: aliareColors.warning }} fontSize="small" /> : <StarBorderOutlined fontSize="small" />}</IconButton></Tooltip>
+                    </Box>
+                  ))}
+                </Box>
+              </Box>
+              <Box sx={{ p: { xs: 1.5, md: 2 }, bgcolor: theme.palette.mode === "dark" ? "rgba(7,20,35,.22)" : "rgba(248,250,252,.7)" }}>
+                <Typography sx={{ fontWeight: 850, fontSize: ".82rem" }}>Acesso rápido</Typography>
+                <Typography variant="caption" color="text.secondary">Favoritos e rotinas utilizadas recentemente.</Typography>
+                <Stack spacing={.5} sx={{ mt: 1.25 }}>
+                  {[...favoriteRoutines, ...recentRoutines].filter((path, index, values) => values.indexOf(path) === index).slice(0, 6).map((path) => {
+                    const routine = allRoutines.find((item) => item.path === path);
+                    return routine ? <Button key={path} size="small" onClick={() => openRoutine(routine)} startIcon={createElement(routine.icon, { fontSize: "small" })} sx={{ justifyContent: "flex-start", textTransform: "none", color: "text.primary" }}>{routine.label}</Button> : null;
+                  })}
+                  {!favoriteRoutines.length && !recentRoutines.length && <Typography variant="caption" color="text.secondary" sx={{ py: 1 }}>Abra ou favorite uma rotina para criar seus atalhos.</Typography>}
+                </Stack>
+              </Box>
+            </Box>
+          </>
+        )}
 
         <CardContent sx={{ p: { xs: 1.5, md: 2.25 } }}>
           <Alert
