@@ -4,7 +4,7 @@ import {
 
 export type AppNotification = {
   key: string;
-  kind: "SIMER_VERSION" | "AZURE_COMPLETED" | "AZURE_UPDATED" | "CHAT_MENTION";
+  kind: "SIMER_VERSION" | "AZURE_COMPLETED" | "AZURE_UPDATED" | "CHAT_MENTION" | "OPERATION_ALERT";
   title: string;
   message: string;
   occurredAt: Date;
@@ -236,6 +236,34 @@ export class NotificationService {
       path: `/chat?channel=${item.channelId}`,
     }));
 
+    const now = new Date();
+    const staleBefore = new Date(now.getTime() - 72 * 60 * 60 * 1_000);
+    const operationalAlerts: AppNotification[] = relatedTickets.flatMap((ticket) => {
+      const alerts: AppNotification[] = [];
+      if (ticket.dueDate && ticket.dueDate < now) {
+        alerts.push({
+          key: `operation:overdue:${ticket.movideskId}:${ticket.dueDate.toISOString().slice(0, 10)}`,
+          kind: "OPERATION_ALERT",
+          title: "Prazo vencido na sua operação",
+          message: `#${ticket.movideskId} · ${ticket.subject}`,
+          occurredAt: ticket.dueDate,
+          path: `/tickets?movidesk=${ticket.movideskId}`,
+        });
+      }
+      if (!ticket.lastUpdate || ticket.lastUpdate < staleBefore) {
+        const occurredAt = ticket.lastUpdate ?? since;
+        alerts.push({
+          key: `operation:stale:${ticket.movideskId}:${occurredAt.toISOString().slice(0, 10)}`,
+          kind: "OPERATION_ALERT",
+          title: "Atendimento sem movimento há 72h",
+          message: `#${ticket.movideskId} · ${ticket.subject}`,
+          occurredAt,
+          path: `/tickets?movidesk=${ticket.movideskId}`,
+        });
+      }
+      return alerts;
+    });
+
     const preferences = await this.preferences(userId);
     const readRows = await prisma.$queryRaw<Array<{
       notificationKey: string;
@@ -246,9 +274,9 @@ export class NotificationService {
     `;
     const readKeys = new Set(readRows.map((row) => row.notificationKey));
 
-    const notifications = [...mentionNotifications, ...itemNotifications, ...versionNotifications]
+    const notifications = [...operationalAlerts, ...mentionNotifications, ...itemNotifications, ...versionNotifications]
       .filter((item) =>
-        item.kind === "CHAT_MENTION"
+        item.kind === "CHAT_MENTION" || item.kind === "OPERATION_ALERT"
           ? true
           : item.kind === "SIMER_VERSION"
           ? preferences.simerVersion
