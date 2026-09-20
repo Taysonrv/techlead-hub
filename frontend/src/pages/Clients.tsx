@@ -3960,69 +3960,6 @@ function StandardMetricCard({
   return <ExecutiveKpiCard title={title} value={value} subtitle={description} info={`${info.summary} • ${info.periodRule}`} accent={accentColor} onClick={onClick} />;
 }
 
-function MetricInfo({ definition }: { definition: MetricInfoDefinition }) {
-  const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
-  const open = Boolean(anchorEl);
-
-  return (
-    <>
-      <IconButton
-        size="small"
-        aria-label={`Informações sobre ${definition.title}`}
-        title={`Informações sobre ${definition.title}`}
-        onClick={(event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          setAnchorEl(event.currentTarget);
-        }}
-        onKeyDown={(event) => event.stopPropagation()}
-        sx={{ p: 0.3, color: "text.secondary", flexShrink: 0, "&:hover": { color: aliareColors.greenDark, backgroundColor: "rgba(24,199,122,0.08)" } }}
-      >
-        <InfoOutlined sx={{ fontSize: 16 }} />
-      </IconButton>
-      <Popover
-        open={open}
-        anchorEl={anchorEl}
-        onClose={() => setAnchorEl(null)}
-        anchorOrigin={{ vertical: "bottom", horizontal: "left" }}
-        transformOrigin={{ vertical: "top", horizontal: "left" }}
-        slotProps={{
-          paper: {
-            onClick: (event: React.MouseEvent<HTMLElement>) => event.stopPropagation(),
-            sx: { width: { xs: 320, sm: 390 }, maxWidth: "calc(100vw - 32px)", mt: 0.75, p: 2, borderRadius: 2, border: "1px solid", borderColor: "divider", boxShadow: "0 14px 40px rgba(16,24,40,0.14)" },
-          },
-        }}
-      >
-        <Stack spacing={1.2}>
-          <Box>
-            <Typography sx={{ fontWeight: 850 }}>{definition.title}</Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.4, lineHeight: 1.55 }}>{definition.summary}</Typography>
-          </Box>
-          <Divider />
-          <MetricInfoLine label="Como é calculado" value={definition.calculation} />
-          <MetricInfoLine label="Fonte" value={definition.source} />
-          <MetricInfoLine label="Campo de referência" value={definition.reference} />
-          <MetricInfoLine label="Regra de período" value={definition.periodRule} />
-          {definition.notes && (
-            <Box sx={{ p: 1.1, borderRadius: 1.5, backgroundColor: "rgba(24,199,122,0.055)", border: "1px solid rgba(24,199,122,0.16)" }}>
-              <Typography variant="caption" sx={{ fontWeight: 800, color: aliareColors.greenDark }}>Observação</Typography>
-              <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.25, lineHeight: 1.5 }}>{definition.notes}</Typography>
-            </Box>
-          )}
-        </Stack>
-      </Popover>
-    </>
-  );
-}
-
-function MetricInfoLine({ label, value }: { label: string; value: string }) {
-  return (
-    <Box>
-      <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>{label}</Typography>
-      <Typography variant="body2" sx={{ mt: 0.15, lineHeight: 1.5 }}>{value}</Typography>
-    </Box>
-  );
-}
 
 function PresentationKpi({ title, value, detail, color, onClick }: {
   title: string; value: ReactNode; detail: string; color: string; onClick: () => void;
