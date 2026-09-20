@@ -24,6 +24,7 @@ import {
   TableCell,
   TableContainer,
   TableHead,
+  TablePagination,
   TableRow,
   Tooltip,
   Typography,
@@ -167,6 +168,12 @@ export function Attention() {
 
   const [riskFilter, setRiskFilter] =
     useState<"" | "azure">("");
+
+  const [page, setPage] =
+    useState(0);
+
+  const [rowsPerPage, setRowsPerPage] =
+    useState(10);
 
   const [selectedTicket, setSelectedTicket] =
     useState<AttentionTicket | null>(null);
@@ -681,6 +688,20 @@ export function Attention() {
       client,
       riskFilter,
     ].filter(Boolean).length;
+
+  useEffect(() => {
+    setPage(0);
+  }, [level, owner, client, riskFilter, effectiveStartDate, effectiveEndDate]);
+
+  useEffect(() => {
+    const lastPage = Math.max(0, Math.ceil(filteredTickets.length / rowsPerPage) - 1);
+    if (page > lastPage) setPage(lastPage);
+  }, [filteredTickets.length, page, rowsPerPage]);
+
+  const paginatedTickets = useMemo(
+    () => filteredTickets.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage),
+    [filteredTickets, page, rowsPerPage],
+  );
 
   function clearFilters() {
     setLevel("");
@@ -1331,7 +1352,7 @@ export function Attention() {
             <TableHead
               sx={{
                 backgroundColor:
-                  "#F8FAF9",
+                  "background.paper",
 
                 "& .MuiTableCell-root":
                   {
@@ -1410,7 +1431,7 @@ export function Attention() {
             </TableHead>
 
             <TableBody>
-              {filteredTickets.map(
+              {paginatedTickets.map(
                 (ticket) => (
                   <TableRow
                     key={ticket.id}
@@ -1651,6 +1672,23 @@ export function Attention() {
             </TableBody>
           </Table>
         </TableContainer>
+
+        <TablePagination
+          component="div"
+          count={filteredTickets.length}
+          page={page}
+          onPageChange={(_, nextPage) => setPage(nextPage)}
+          rowsPerPage={rowsPerPage}
+          onRowsPerPageChange={(event) => {
+            setRowsPerPage(Number(event.target.value));
+            setPage(0);
+          }}
+          rowsPerPageOptions={[10, 25, 50]}
+          labelRowsPerPage="Itens por página:"
+          labelDisplayedRows={({ from, to, count }) => `${from}–${to} de ${count}`}
+          showFirstButton
+          showLastButton
+        />
       </Card>
 
       {/* DRAWER DE DETALHE */}
