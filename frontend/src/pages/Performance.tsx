@@ -860,28 +860,56 @@ export function Performance() {
                     axisLine={false}
                   />
 
-                  <Tooltip />
-                  <Legend />
+                  <Tooltip
+                    contentStyle={{
+                      borderRadius: 12,
+                      border: "1px solid",
+                      borderColor: theme.palette.divider,
+                      background: theme.palette.background.paper,
+                      boxShadow: "0 12px 32px rgba(0,0,0,.16)",
+                    }}
+                    formatter={(value, name) => [`${Number(value).toLocaleString("pt-BR")}%`, String(name)]}
+                  />
+                  <Legend
+                    onClick={(entry) => {
+                      const key = String(entry.dataKey ?? "");
+                      if (key === "firstResponse" || key === "resolution") {
+                        setHiddenTrendSeries((current) => {
+                          const next = new Set(current);
+                          if (next.has(key)) next.delete(key);
+                          else if (2 - next.size > 1) next.add(key);
+                          return next;
+                        });
+                      }
+                    }}
+                    formatter={(value, entry) => {
+                      const key = String(entry.dataKey ?? "");
+                      const active = !hiddenTrendSeries.has(key);
+                      return <span style={{ opacity: active ? 1 : .38, textDecoration: active ? "none" : "line-through", cursor: "pointer" }}>{value}</span>;
+                    }}
+                  />
 
-                  <Line
+                  {!hiddenTrendSeries.has("firstResponse") && <Line
                     type="monotone"
                     dataKey="firstResponse"
                     name="Primeira resposta"
                     stroke={aliareColors.green}
-                    strokeWidth={2.4}
-                    dot={{ r: 2.5 }}
+                    strokeWidth={3}
+                    dot={false}
                     activeDot={{ r: 5 }}
-                  />
+                    animationDuration={500}
+                  />}
 
-                  <Line
+                  {!hiddenTrendSeries.has("resolution") && <Line
                     type="monotone"
                     dataKey="resolution"
                     name="Resolução"
-                    stroke="currentColor"
-                    strokeWidth={2.2}
-                    dot={{ r: 2.5 }}
+                    stroke={semanticChartColors.info}
+                    strokeWidth={3}
+                    dot={false}
                     activeDot={{ r: 5 }}
-                  />
+                    animationDuration={500}
+                  />}
                 </LineChart>
               </ResponsiveContainer>
             ) : (
@@ -1500,6 +1528,7 @@ function DonutCard({
   onSliceClick?: (name: string) => void;
 }) {
   const theme = useTheme();
+  const [hiddenTrendSeries, setHiddenTrendSeries] = useState<Set<string>>(() => new Set());
   return (
     <ExecutiveSection compact>
         <Stack
@@ -1528,7 +1557,7 @@ function DonutCard({
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
-                  data={data}
+                  data={visibleData}
                   dataKey="value"
                   nameKey="name"
                   innerRadius={62}
@@ -1554,7 +1583,7 @@ function DonutCard({
                     }
                   }}
                 >
-                  {data.map((item) => (
+                  {visibleData.map((item) => (
                     <Cell key={item.name} fill={item.color} />
                   ))}
                 </Pie>
@@ -1572,7 +1601,7 @@ function DonutCard({
                     fill: theme.palette.text.primary,
                   }}
                 >
-                  {centerValue}
+                  {hiddenItems.size > 0 ? visibleTotal : centerValue}
                 </text>
 
                 <text
@@ -1595,10 +1624,31 @@ function DonutCard({
         </Box>
 
         {data.length > 0 && (
-          <DonutLegend
-            data={data}
-            onItemClick={onSliceClick}
-          />
+          <Stack spacing={0.55}>
+            {data.map((item) => {
+              const active = !hiddenItems.has(item.name);
+              return (
+                <Box
+                  key={item.name}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => toggleItem(item.name)}
+                  onDoubleClick={() => onSliceClick?.(item.name)}
+                  onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") toggleItem(item.name); }}
+                  sx={{
+                    display: "grid", gridTemplateColumns: "10px 1fr auto", gap: .8, alignItems: "center",
+                    px: .7, py: .35, borderRadius: 1, cursor: "pointer", opacity: active ? 1 : .38,
+                    textDecoration: active ? "none" : "line-through", transition: "all .2s ease",
+                    "&:hover": { bgcolor: "action.hover", transform: "translateX(2px)" },
+                  }}
+                >
+                  <Box sx={{ width: 8, height: 8, borderRadius: "50%", bgcolor: active ? item.color : "text.disabled", boxShadow: active ? `0 0 8px ${item.color}88` : "none" }} />
+                  <Typography variant="caption" sx={{ fontWeight: 700 }}>{item.name}</Typography>
+                  <Typography variant="caption" sx={{ fontWeight: 900 }}>{item.value}</Typography>
+                </Box>
+              );
+            })}
+          </Stack>
         )}
       </ExecutiveSection>
   );
