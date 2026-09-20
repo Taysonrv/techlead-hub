@@ -56,6 +56,7 @@ import { api } from "../services/api";
 import { calculateOfficialSla } from "../utils/officialSla";
 import { useFilters } from "../context/FiltersContext";
 import { PeriodFilter } from "../components/PeriodFilter";
+import { PageHeader } from "../components/PageHeader";
 import { aliareColors } from "../theme/theme";
 import {
   chartPalette,
@@ -1504,95 +1505,22 @@ export function Clients() {
                 "center",
             }}
           >
-            <Box
-              sx={{
-                width:
-                  30,
-
-                height:
-                  3,
-
-                borderRadius:
-                  99,
-
-                backgroundColor:
-                  aliareColors.green,
-              }}
-            />
-
-            <Typography
-              variant="caption"
-              sx={{
-                fontWeight:
-                  800,
-
-                letterSpacing:
-                  "0.08em",
-
-                textTransform:
-                  "uppercase",
-
-                color:
-                  aliareColors.greenDark,
-              }}
-            >
-              Carteira
-            </Typography>
-          </Stack>
-
-          <Typography
-            sx={{
-              mt:
-                0.8,
-
-              fontWeight:
-                800,
-
-              letterSpacing:
-                "-0.025em",
-
-              fontSize: {
-                xs: "1.7rem",
-                md: "1.9rem",
-                xl: "2.1rem",
-              },
-            }}
-          >
-            {selectedClient || "Clientes"}
-          </Typography>
-
-          <Typography
-            variant="body2"
-            color="text.secondary"
-            sx={{
-              mt: 0.25,
-            }}
-          >
-            {selectedClient
-              ? "Painel executivo do cliente: atendimento, SLA, demanda e desenvolvimento"
-              : "Resultados da carteira, qualidade do atendimento e acompanhamento do desenvolvimento"}
-          </Typography>
-
-          <Typography
-            variant="caption"
-            color="text.secondary"
-            sx={{
-              display:
-                "block",
-              mt: 0.5,
-            }}
-          >
-            {
-              scopedTickets.length
-            }{" "}
-            ticket(s) analisado(s)
-            no filtro atual
-          </Typography>
+            <Stack direction="row" spacing={2} sx={{ alignItems: "center", mb: 2.5 }}>
+        {selectedClient && (
+          <Avatar variant="rounded" sx={{ width: 64, height: 64, bgcolor: aliareColors.greenDark, color: "white", fontSize: "1.1rem", fontWeight: 900, boxShadow: "0 10px 28px rgba(0,91,73,.22)" }}>
+            {clientInitials(selectedClient)}
+          </Avatar>
+        )}
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          <PageHeader
+            eyebrow="Carteira"
+            title={selectedClient || "Clientes"}
+            description={selectedClient ? "Painel executivo do cliente: atendimento, SLA, demanda e desenvolvimento" : "Resultados da carteira, qualidade do atendimento e acompanhamento do desenvolvimento"}
+            meta={<>{scopedTickets.length} ticket(s) analisado(s) no filtro atual</>}
+            action={<PeriodFilter />}
+          />
         </Box>
-        </Stack>
-
-        <PeriodFilter />
-      </Box>
+      </Stack>
 
       {/* =================================================
           FILTROS
