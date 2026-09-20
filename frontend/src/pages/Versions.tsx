@@ -69,6 +69,7 @@ import {
 } from "../theme/theme";
 import { InfoPopover, type InfoPopoverContent } from "../components/InfoPopover";
 import { PageHeader } from "../components/PageHeader";
+import { useTheme } from "@mui/material/styles";
 import { ExecutiveSection } from "../components/ExecutiveSection";
 import { KpiCard as ExecutiveKpiCard } from "../components/KpiCard";
 
@@ -3511,6 +3512,7 @@ function DonutCard({
         string,
     ) => void;
 }) {
+  const theme = useTheme();
   return (
     <ExecutiveSection compact>
         <Stack
@@ -3644,7 +3646,7 @@ function DonutCard({
                     fontWeight:
                       800,
                     fill:
-                      aliareColors.text,
+                      theme.palette.text.primary,
                   }}
                 >
                   {centerValue}
@@ -3659,7 +3661,7 @@ function DonutCard({
                     fontSize:
                       11,
                     fill:
-                      aliareColors.textSecondary,
+                      theme.palette.text.secondary,
                   }}
                 >
                   {centerLabel}
