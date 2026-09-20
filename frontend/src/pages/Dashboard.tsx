@@ -514,32 +514,6 @@ export function Dashboard() {
     [categories]
   );
 
-  const monthlyCategoryEvolution = useMemo(() => {
-    const months = new Map<string, Record<string, string | number>>();
-
-    filteredTickets.forEach((ticket) => {
-      const date = new Date(ticket.createdDate);
-      if (Number.isNaN(date.getTime())) return;
-
-      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-      const row = months.get(monthKey) ?? {
-        monthKey,
-        month: date.toLocaleDateString("pt-BR", { month: "short", year: "2-digit" }).replace(".", ""),
-      };
-
-      const category = ticket.category ?? "Sem categoria";
-      if (topCategoryLabels.includes(category)) {
-        row[category] = Number(row[category] ?? 0) + 1;
-      }
-
-      months.set(monthKey, row);
-    });
-
-    return Array.from(months.values()).sort((a, b) =>
-      String(a.monthKey).localeCompare(String(b.monthKey))
-    );
-  }, [filteredTickets, topCategoryLabels]);
-
   const dailyFlow = useMemo(() => {
     const opened = new Map<string, number>();
     const resolved = new Map<string, number>();
@@ -1426,7 +1400,7 @@ export function Dashboard() {
           ============================================== */}
 
           <MonthlyCategoryEvolutionCard
-            data={monthlyCategoryEvolution}
+            tickets={filteredTickets}
             categories={topCategoryLabels}
             colors={chartPalette}
             isDark={isDark}
@@ -2816,23 +2790,69 @@ function CardBase({
 }
 
 function MonthlyCategoryEvolutionCard({
-  data,
+  tickets,
   categories,
   colors,
   isDark,
   chartGrid,
   chartTooltipStyle,
 }: {
-  data: Array<Record<string, string | number>>;
+  tickets: Ticket[];
   categories: string[];
   colors: readonly string[];
   isDark: boolean;
   chartGrid: string;
   chartTooltipStyle: Record<string, string | number>;
 }) {
+  type Granularity = "month" | "week" | "day";
+  const [granularity, setGranularity] = useState<Granularity>("month");
+
+  const granularityMeta: Record<Granularity, { label: string; average: string; helper: string }> = {
+    month: { label: "Mensal", average: "Média mensal", helper: "Consolidado por mês" },
+    week: { label: "Semanal", average: "Média semanal", helper: "Consolidado por semana" },
+    day: { label: "Diário", average: "Média diária", helper: "Consolidado por dia" },
+  };
+
+  const data = useMemo(() => {
+    const groups = new Map<string, Record<string, string | number>>();
+
+    tickets.forEach((ticket) => {
+      const date = new Date(ticket.createdDate);
+      if (Number.isNaN(date.getTime())) return;
+
+      let key = "";
+      let label = "";
+
+      if (granularity === "month") {
+        key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+        label = date.toLocaleDateString("pt-BR", { month: "short", year: "2-digit" }).replace(".", "");
+      } else if (granularity === "week") {
+        const monday = new Date(date);
+        const day = monday.getDay();
+        const diff = day === 0 ? -6 : 1 - day;
+        monday.setDate(monday.getDate() + diff);
+        monday.setHours(0, 0, 0, 0);
+        key = `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, "0")}-${String(monday.getDate()).padStart(2, "0")}`;
+        label = `Sem. ${monday.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}`;
+      } else {
+        key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+        label = date.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+      }
+
+      const row = groups.get(key) ?? { periodKey: key, period: label };
+      const category = ticket.category ?? "Sem categoria";
+      if (categories.includes(category)) row[category] = Number(row[category] ?? 0) + 1;
+      groups.set(key, row);
+    });
+
+    return Array.from(groups.values()).sort((a, b) => String(a.periodKey).localeCompare(String(b.periodKey)));
+  }, [tickets, categories, granularity]);
+
   const total = data.reduce((sum, row) =>
     sum + categories.reduce((acc, category) => acc + Number(row[category] ?? 0), 0), 0);
   const average = data.length ? Math.round(total / data.length) : 0;
+  const maxTotal = Math.max(0, ...data.map((row) => categories.reduce((sum, category) => sum + Number(row[category] ?? 0), 0)));
+  const chartHeight = granularity === "day" ? 430 : 390;
 
   return (
     <Card
@@ -2854,8 +2874,7 @@ function MonthlyCategoryEvolutionCard({
         <Stack direction="row" spacing={1.4} sx={{ alignItems: "center" }}>
           <Box sx={{
             width: 48, height: 48, borderRadius: 2, display: "grid", placeItems: "center",
-            border: "1px solid rgba(0,229,170,.38)",
-            bgcolor: "rgba(0,229,170,.07)",
+            border: "1px solid rgba(0,229,170,.38)", bgcolor: "rgba(0,229,170,.07)",
             boxShadow: "0 0 24px rgba(0,229,170,.08)",
           }}>
             <Box sx={{ display: "flex", gap: .35, alignItems: "flex-end", height: 24 }}>
@@ -2863,22 +2882,46 @@ function MonthlyCategoryEvolutionCard({
             </Box>
           </Box>
           <Box>
-            <Typography sx={{ fontWeight: 900, fontSize: { xs: "1.08rem", md: "1.28rem" } }}>Evolução mensal por categoria</Typography>
-            <Typography variant="body2" color="text.secondary">Distribuição das principais categorias ao longo do período selecionado</Typography>
+            <Typography sx={{ fontWeight: 900, fontSize: { xs: "1.08rem", md: "1.28rem" } }}>
+              Evolução {granularityMeta[granularity].label.toLowerCase()} por categoria
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              {granularityMeta[granularity].helper} das principais categorias no período selecionado
+            </Typography>
           </Box>
         </Stack>
+
         <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap" }}>
-          <Box sx={{ display: "flex", border: "1px solid", borderColor: isDark ? "rgba(56,189,248,.25)" : "divider", borderRadius: 2, overflow: "hidden" }}>
-            {["Mensal", "Semanal", "Diário"].map((label, index) => (
-              <Box key={label} sx={{
-                px: 2, py: .8, fontSize: 13, fontWeight: index === 0 ? 850 : 600,
-                color: index === 0 ? "#E8FFF8" : "text.secondary",
-                bgcolor: index === 0 ? "rgba(0,199,142,.16)" : "transparent",
-                border: index === 0 ? "1px solid #00C78E" : "1px solid transparent",
-                borderRadius: index === 0 ? 1.5 : 0,
-                boxShadow: index === 0 ? "0 0 14px rgba(0,199,142,.13)" : "none",
-              }}>{label}</Box>
-            ))}
+          <Box sx={{
+            display: "flex", p: .35, gap: .3, border: "1px solid",
+            borderColor: isDark ? "rgba(56,189,248,.25)" : "divider",
+            borderRadius: 2.2, bgcolor: isDark ? "rgba(3,20,35,.72)" : "background.default",
+          }}>
+            {(["month", "week", "day"] as Granularity[]).map((value) => {
+              const selected = granularity === value;
+              return (
+                <Box
+                  component="button"
+                  type="button"
+                  key={value}
+                  aria-pressed={selected}
+                  onClick={() => setGranularity(value)}
+                  sx={{
+                    appearance: "none", border: selected ? "1px solid #00E0A4" : "1px solid transparent",
+                    outline: 0, cursor: "pointer", px: { xs: 1.25, sm: 2 }, py: .72, borderRadius: 1.65,
+                    fontFamily: "inherit", fontSize: 13, fontWeight: selected ? 900 : 700,
+                    color: selected ? (isDark ? "#E8FFF8" : "#087A5A") : "text.secondary",
+                    bgcolor: selected ? (isDark ? "rgba(0,199,142,.18)" : "rgba(0,199,142,.10)") : "transparent",
+                    boxShadow: selected ? "0 0 0 1px rgba(0,224,164,.06), 0 0 20px rgba(0,224,164,.13), inset 0 0 16px rgba(0,224,164,.05)" : "none",
+                    transition: "all .24s cubic-bezier(.2,.8,.2,1)",
+                    "&:hover": { color: selected ? undefined : (isDark ? "#D9F7EF" : "text.primary"), bgcolor: selected ? undefined : "action.hover" },
+                    "&:focus-visible": { boxShadow: "0 0 0 3px rgba(0,224,164,.22)" },
+                  }}
+                >
+                  {granularityMeta[value].label}
+                </Box>
+              );
+            })}
           </Box>
           <Chip size="medium" variant="outlined" label={`Top ${categories.length} categorias`} sx={{ height: 38, fontWeight: 800 }} />
         </Stack>
@@ -2887,13 +2930,15 @@ function MonthlyCategoryEvolutionCard({
       <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5} sx={{ mt: 2 }}>
         {[
           ["Total no período", total.toLocaleString("pt-BR")],
-          ["Média mensal", average.toLocaleString("pt-BR")],
-        ].map(([label, value]) => (
+          [granularityMeta[granularity].average, average.toLocaleString("pt-BR")],
+          ["Pico no intervalo", maxTotal.toLocaleString("pt-BR")],
+        ].map(([label, value], index) => (
           <Box key={label} sx={{
-            minWidth: { sm: 240 }, px: 2, py: 1.25, borderRadius: 2,
+            minWidth: { sm: 210 }, px: 2, py: 1.25, borderRadius: 2,
             border: "1px solid", borderColor: isDark ? "rgba(56,189,248,.25)" : "divider",
-            borderLeft: "2px solid #00C78E",
+            borderLeft: `2px solid ${index === 2 ? "#2F6FED" : "#00C78E"}`,
             bgcolor: isDark ? "rgba(5,31,51,.66)" : "background.default",
+            transition: "all .25s ease",
           }}>
             <Typography variant="caption" color="text.secondary">{label}</Typography>
             <Typography sx={{ fontSize: "1.65rem", lineHeight: 1.2, fontWeight: 900, mt: .25 }}>{value}</Typography>
@@ -2901,17 +2946,34 @@ function MonthlyCategoryEvolutionCard({
         ))}
       </Stack>
 
-      <Box sx={{ height: { xs: 330, md: 390 }, mt: 2 }}>
+      <Box
+        key={granularity}
+        sx={{
+          height: { xs: 350, md: chartHeight }, mt: 2,
+          animation: "categoryChartIn .34s cubic-bezier(.2,.8,.2,1)",
+          "@keyframes categoryChartIn": {
+            from: { opacity: 0, transform: "translateY(8px)", filter: "blur(3px)" },
+            to: { opacity: 1, transform: "translateY(0)", filter: "blur(0)" },
+          },
+        }}
+      >
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={data} margin={{ top: 8, right: 16, left: 8, bottom: 8 }} barCategoryGap="32%">
+          <BarChart data={data} margin={{ top: 8, right: 16, left: 8, bottom: granularity === "day" ? 18 : 8 }} barCategoryGap={granularity === "day" ? "18%" : "32%"}>
             <CartesianGrid strokeDasharray="4 5" vertical={false} stroke={chartGrid} />
-            <XAxis dataKey="month" tick={{ fontSize: 12 }} tickMargin={10} axisLine={{ stroke: isDark ? "rgba(148,163,184,.42)" : "#D0D5DD" }} />
+            <XAxis
+              dataKey="period"
+              tick={{ fontSize: granularity === "day" ? 10 : 12 }}
+              tickMargin={10}
+              minTickGap={granularity === "day" ? 18 : 8}
+              interval="preserveStartEnd"
+              axisLine={{ stroke: isDark ? "rgba(148,163,184,.42)" : "#D0D5DD" }}
+            />
             <YAxis allowDecimals={false} tick={{ fontSize: 11 }} width={44} axisLine={{ stroke: isDark ? "rgba(148,163,184,.42)" : "#D0D5DD" }} label={{ value: "Tickets", angle: -90, position: "insideLeft", style: { fill: isDark ? "#B9C9D9" : "#667085", fontSize: 12 } }} />
             <Tooltip
               contentStyle={chartTooltipStyle}
               cursor={{ fill: isDark ? "rgba(56,189,248,.045)" : "rgba(15,23,42,.035)" }}
               formatter={(value, name) => [Number(value).toLocaleString("pt-BR"), String(name)]}
-              labelFormatter={(label) => String(label)}
+              labelFormatter={(label) => `${granularityMeta[granularity].label}: ${String(label)}`}
             />
             {categories.map((category, index) => (
               <Bar
@@ -2920,8 +2982,10 @@ function MonthlyCategoryEvolutionCard({
                 name={category}
                 stackId="categories"
                 fill={colors[index % colors.length]}
-                maxBarSize={110}
+                maxBarSize={granularity === "day" ? 42 : granularity === "week" ? 72 : 110}
                 radius={index === categories.length - 1 ? [5, 5, 0, 0] : 0}
+                animationDuration={520}
+                animationBegin={index * 45}
               />
             ))}
           </BarChart>
