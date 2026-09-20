@@ -3926,16 +3926,9 @@ function getAttentionInfo(
   };
 }
 
-/*
- * A fila usa a mesma regra central aplicada na tela
- * Desempenho. Os limiares de atenção são derivados do
- * serviceLevel.ts:
- *
- * NORMAL    -> Normal
- * ATTENTION -> Atenção (gatilho oficial: 40% restante)
- * CRITICAL  -> Crítico
- * OVERDUE   -> Vencido
- */
+// A fila usa a mesma regra central aplicada na tela Desempenho.
+// Limiar oficial: NORMAL = Normal; ATTENTION = Atenção (40% restante);
+// CRITICAL = Crítico; OVERDUE = Vencido.
 function getAttentionLevel(
   ticket:
     Ticket
