@@ -850,14 +850,14 @@ export function Performance() {
 
                   <XAxis
                     dataKey="date"
-                    tick={{ fontSize: 11 }}
+                    tick={{ fontSize: 11, fill: theme.palette.text.secondary }}
                     tickLine={false}
                     axisLine={false}
                   />
 
                   <YAxis
                     domain={[0, 100]}
-                    tick={{ fontSize: 11 }}
+                    tick={{ fontSize: 11, fill: theme.palette.text.secondary }}
                     tickFormatter={(value) => `${value}%`}
                     tickLine={false}
                     axisLine={false}
@@ -1599,7 +1599,15 @@ function DonutCard({
                   ))}
                 </Pie>
 
-                <Tooltip />
+                <Tooltip
+                  contentStyle={{
+                    borderRadius: 12,
+                    border: `1px solid ${theme.palette.divider}`,
+                    background: theme.palette.background.paper,
+                    boxShadow: "0 14px 36px rgba(0,0,0,.18)",
+                  }}
+                  cursor={false}
+                />
 
                 <text
                   x="50%"
