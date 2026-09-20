@@ -1465,47 +1465,7 @@ export function Clients() {
           CABEÇALHO
       ================================================= */}
 
-      <Box
-        sx={{
-          mb: 2.5,
-
-          display: "flex",
-
-          flexDirection: {
-            xs: "column",
-            lg: "row",
-          },
-
-          justifyContent:
-            "space-between",
-
-          alignItems: {
-            xs: "stretch",
-            lg: "center",
-          },
-
-          gap: 2,
-        }}
-      >
-        <Stack direction="row" spacing={2} sx={{ alignItems: "center", minWidth: 0 }}>
-          {selectedClient && (
-            <Avatar
-              variant="rounded"
-              sx={{ width: 72, height: 72, bgcolor: aliareColors.greenDark, color: "white", fontSize: "1.15rem", fontWeight: 900, boxShadow: "0 8px 22px rgba(0,91,73,.18)" }}
-            >
-              {clientInitials(selectedClient)}
-            </Avatar>
-          )}
-        <Box sx={{ minWidth: 0 }}>
-          <Stack
-            direction="row"
-            spacing={1}
-            sx={{
-              alignItems:
-                "center",
-            }}
-          >
-            <Stack direction="row" spacing={2} sx={{ alignItems: "center", mb: 2.5 }}>
+      <Stack direction="row" spacing={2} sx={{ alignItems: "center", mb: 2.5 }}>
         {selectedClient && (
           <Avatar variant="rounded" sx={{ width: 64, height: 64, bgcolor: aliareColors.greenDark, color: "white", fontSize: "1.1rem", fontWeight: 900, boxShadow: "0 10px 28px rgba(0,91,73,.22)" }}>
             {clientInitials(selectedClient)}
