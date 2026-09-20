@@ -516,17 +516,7 @@ export function Performance() {
 
   return (
     <>
-      <Box
-        sx={{
-          mb: 2.25,
-          display: "flex",
-          flexDirection: { xs: "column", lg: "row" },
-          justifyContent: "space-between",
-          alignItems: { xs: "stretch", lg: "center" },
-          gap: 2,
-        }}
-      >
-        <PageHeader
+      <PageHeader
         eyebrow="Qualidade operacional"
         title="Desempenho do Atendimento"
         description="Prazos, risco operacional e desempenho da equipe em uma visão única"
