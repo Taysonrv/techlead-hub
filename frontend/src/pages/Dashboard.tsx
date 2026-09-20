@@ -1400,7 +1400,7 @@ export function Dashboard() {
           ============================================== */}
 
           <MonthlyCategoryEvolutionCard
-            tickets={filteredTickets}
+            tickets={tickets}
             categories={topCategoryLabels}
             colors={chartPalette}
             isDark={isDark}
@@ -2806,208 +2806,175 @@ function MonthlyCategoryEvolutionCard({
 }) {
   type Granularity = "month" | "week" | "day";
   const [granularity, setGranularity] = useState<Granularity>("month");
+  const [hiddenCategories, setHiddenCategories] = useState<Set<string>>(() => new Set());
 
-  const granularityMeta: Record<Granularity, { label: string; average: string; helper: string }> = {
-    month: { label: "Mensal", average: "Média mensal", helper: "Consolidado por mês" },
-    week: { label: "Semanal", average: "Média semanal", helper: "Consolidado por semana" },
-    day: { label: "Diário", average: "Média diária", helper: "Consolidado por dia" },
+  const meta: Record<Granularity, { label: string; average: string; helper: string }> = {
+    month: { label: "Mensal", average: "Média mensal", helper: "Últimos 6 meses consolidados" },
+    week: { label: "Semanal", average: "Média semanal", helper: "Últimas 12 semanas consolidadas" },
+    day: { label: "Diário", average: "Média diária", helper: "Últimos 30 dias consolidados" },
   };
 
+  const visibleCategories = categories.filter((category) => !hiddenCategories.has(category));
+
   const data = useMemo(() => {
-    const groups = new Map<string, Record<string, string | number>>();
+    const now = new Date();
+    const anchor = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const periods: Array<{ key: string; label: string; start: Date; end: Date }> = [];
+
+    if (granularity === "month") {
+      for (let offset = 5; offset >= 0; offset -= 1) {
+        const start = new Date(anchor.getFullYear(), anchor.getMonth() - offset, 1);
+        const end = new Date(start.getFullYear(), start.getMonth() + 1, 0, 23, 59, 59, 999);
+        periods.push({
+          key: `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}`,
+          label: start.toLocaleDateString("pt-BR", { month: "short", year: "2-digit" }).replace(".", ""),
+          start, end,
+        });
+      }
+    } else if (granularity === "week") {
+      const currentMonday = new Date(anchor);
+      const day = currentMonday.getDay();
+      currentMonday.setDate(currentMonday.getDate() + (day === 0 ? -6 : 1 - day));
+      currentMonday.setHours(0, 0, 0, 0);
+      for (let offset = 11; offset >= 0; offset -= 1) {
+        const start = new Date(currentMonday);
+        start.setDate(start.getDate() - offset * 7);
+        const end = new Date(start);
+        end.setDate(end.getDate() + 6);
+        end.setHours(23, 59, 59, 999);
+        periods.push({
+          key: start.toISOString().slice(0, 10),
+          label: `Sem. ${start.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}`,
+          start, end,
+        });
+      }
+    } else {
+      for (let offset = 29; offset >= 0; offset -= 1) {
+        const start = new Date(anchor);
+        start.setDate(start.getDate() - offset);
+        start.setHours(0, 0, 0, 0);
+        const end = new Date(start);
+        end.setHours(23, 59, 59, 999);
+        periods.push({
+          key: start.toISOString().slice(0, 10),
+          label: start.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }),
+          start, end,
+        });
+      }
+    }
+
+    const rows = periods.map((period) => {
+      const row: Record<string, string | number> = { periodKey: period.key, period: period.label };
+      categories.forEach((category) => { row[category] = 0; });
+      return row;
+    });
 
     tickets.forEach((ticket) => {
       const date = new Date(ticket.createdDate);
       if (Number.isNaN(date.getTime())) return;
-
-      let key = "";
-      let label = "";
-
-      if (granularity === "month") {
-        key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-        label = date.toLocaleDateString("pt-BR", { month: "short", year: "2-digit" }).replace(".", "");
-      } else if (granularity === "week") {
-        const monday = new Date(date);
-        const day = monday.getDay();
-        const diff = day === 0 ? -6 : 1 - day;
-        monday.setDate(monday.getDate() + diff);
-        monday.setHours(0, 0, 0, 0);
-        key = `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, "0")}-${String(monday.getDate()).padStart(2, "0")}`;
-        label = `Sem. ${monday.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}`;
-      } else {
-        key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-        label = date.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
-      }
-
-      const row = groups.get(key) ?? { periodKey: key, period: label };
       const category = ticket.category ?? "Sem categoria";
-      if (categories.includes(category)) row[category] = Number(row[category] ?? 0) + 1;
-      groups.set(key, row);
+      if (!categories.includes(category)) return;
+      const index = periods.findIndex((period) => date >= period.start && date <= period.end);
+      if (index >= 0) rows[index][category] = Number(rows[index][category] ?? 0) + 1;
     });
 
-    return Array.from(groups.values()).sort((a, b) => String(a.periodKey).localeCompare(String(b.periodKey)));
+    return rows;
   }, [tickets, categories, granularity]);
 
-  const total = data.reduce((sum, row) =>
-    sum + categories.reduce((acc, category) => acc + Number(row[category] ?? 0), 0), 0);
+  const total = data.reduce((sum, row) => sum + visibleCategories.reduce((acc, category) => acc + Number(row[category] ?? 0), 0), 0);
   const average = data.length ? Math.round(total / data.length) : 0;
-  const maxTotal = Math.max(0, ...data.map((row) => categories.reduce((sum, category) => sum + Number(row[category] ?? 0), 0)));
-  const chartHeight = granularity === "day" ? 430 : 390;
+  const maxTotal = Math.max(0, ...data.map((row) => visibleCategories.reduce((sum, category) => sum + Number(row[category] ?? 0), 0)));
+
+  const toggleCategory = (category: string) => {
+    setHiddenCategories((current) => {
+      const next = new Set(current);
+      if (next.has(category)) next.delete(category);
+      else if (categories.length - next.size > 1) next.add(category);
+      return next;
+    });
+  };
 
   return (
-    <Card
-      elevation={0}
-      sx={{
-        mb: 2,
-        p: { xs: 1.5, md: 2.25 },
-        borderRadius: 3,
-        border: "1px solid",
-        borderColor: isDark ? "rgba(22,178,229,.30)" : "divider",
-        background: isDark
-          ? "radial-gradient(circle at 55% 48%, rgba(18,111,190,.12), transparent 36%), linear-gradient(145deg, rgba(5,29,48,.99), rgba(4,22,38,.99))"
-          : "background.paper",
-        boxShadow: isDark ? "0 18px 44px rgba(0,0,0,.22), inset 0 1px rgba(255,255,255,.025)" : "0 5px 20px rgba(16,24,40,.06)",
-        overflow: "hidden",
-      }}
-    >
+    <Card elevation={0} sx={{
+      mb: 2, p: { xs: 1.5, md: 2.25 }, borderRadius: 3, border: "1px solid",
+      borderColor: isDark ? "rgba(22,178,229,.30)" : "divider",
+      background: isDark ? "radial-gradient(circle at 55% 48%, rgba(18,111,190,.12), transparent 36%), linear-gradient(145deg, rgba(5,29,48,.99), rgba(4,22,38,.99))" : "background.paper",
+      boxShadow: isDark ? "0 18px 44px rgba(0,0,0,.22), inset 0 1px rgba(255,255,255,.025)" : "0 5px 20px rgba(16,24,40,.06)",
+      overflow: "hidden",
+    }}>
       <Stack direction={{ xs: "column", lg: "row" }} spacing={1.5} sx={{ justifyContent: "space-between", alignItems: { lg: "flex-start" } }}>
         <Stack direction="row" spacing={1.4} sx={{ alignItems: "center" }}>
-          <Box sx={{
-            width: 48, height: 48, borderRadius: 2, display: "grid", placeItems: "center",
-            border: "1px solid rgba(0,229,170,.38)", bgcolor: "rgba(0,229,170,.07)",
-            boxShadow: "0 0 24px rgba(0,229,170,.08)",
-          }}>
+          <Box sx={{ width: 48, height: 48, borderRadius: 2, display: "grid", placeItems: "center", border: "1px solid rgba(0,229,170,.38)", bgcolor: "rgba(0,229,170,.07)", boxShadow: "0 0 24px rgba(0,229,170,.08)" }}>
             <Box sx={{ display: "flex", gap: .35, alignItems: "flex-end", height: 24 }}>
               {[13, 23, 17].map((height, index) => <Box key={height} sx={{ width: 6, height, borderRadius: 1, bgcolor: index === 1 ? "#36F0C0" : "#00D99C", boxShadow: "0 0 8px rgba(0,229,170,.35)" }} />)}
             </Box>
           </Box>
           <Box>
-            <Typography sx={{ fontWeight: 900, fontSize: { xs: "1.08rem", md: "1.28rem" } }}>
-              Evolução {granularityMeta[granularity].label.toLowerCase()} por categoria
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              {granularityMeta[granularity].helper} das principais categorias no período selecionado
-            </Typography>
+            <Typography sx={{ fontWeight: 900, fontSize: { xs: "1.08rem", md: "1.28rem" } }}>Evolução {meta[granularity].label.toLowerCase()} por categoria</Typography>
+            <Typography variant="body2" color="text.secondary">{meta[granularity].helper} • clique nas categorias para exibir/ocultar</Typography>
           </Box>
         </Stack>
-
         <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap" }}>
-          <Box sx={{
-            display: "flex", p: .35, gap: .3, border: "1px solid",
-            borderColor: isDark ? "rgba(56,189,248,.25)" : "divider",
-            borderRadius: 2.2, bgcolor: isDark ? "rgba(3,20,35,.72)" : "background.default",
-          }}>
+          <Box sx={{ display: "flex", p: .35, gap: .3, border: "1px solid", borderColor: isDark ? "rgba(56,189,248,.25)" : "divider", borderRadius: 2.2, bgcolor: isDark ? "rgba(3,20,35,.72)" : "background.default" }}>
             {(["month", "week", "day"] as Granularity[]).map((value) => {
               const selected = granularity === value;
-              return (
-                <Box
-                  component="button"
-                  type="button"
-                  key={value}
-                  aria-pressed={selected}
-                  onClick={() => setGranularity(value)}
-                  sx={{
-                    appearance: "none", border: selected ? "1px solid #00E0A4" : "1px solid transparent",
-                    outline: 0, cursor: "pointer", px: { xs: 1.25, sm: 2 }, py: .72, borderRadius: 1.65,
-                    fontFamily: "inherit", fontSize: 13, fontWeight: selected ? 900 : 700,
-                    color: selected ? (isDark ? "#E8FFF8" : "#087A5A") : "text.secondary",
-                    bgcolor: selected ? (isDark ? "rgba(0,199,142,.18)" : "rgba(0,199,142,.10)") : "transparent",
-                    boxShadow: selected ? "0 0 0 1px rgba(0,224,164,.06), 0 0 20px rgba(0,224,164,.13), inset 0 0 16px rgba(0,224,164,.05)" : "none",
-                    transition: "all .24s cubic-bezier(.2,.8,.2,1)",
-                    "&:hover": { color: selected ? undefined : (isDark ? "#D9F7EF" : "text.primary"), bgcolor: selected ? undefined : "action.hover" },
-                    "&:focus-visible": { boxShadow: "0 0 0 3px rgba(0,224,164,.22)" },
-                  }}
-                >
-                  {granularityMeta[value].label}
-                </Box>
-              );
+              return <Box component="button" type="button" key={value} aria-pressed={selected} onClick={() => setGranularity(value)} sx={{
+                appearance: "none", border: selected ? "1px solid #00E0A4" : "1px solid transparent", outline: 0, cursor: "pointer",
+                px: { xs: 1.25, sm: 2 }, py: .72, borderRadius: 1.65, fontFamily: "inherit", fontSize: 13, fontWeight: selected ? 900 : 700,
+                color: selected ? (isDark ? "#E8FFF8" : "#087A5A") : "text.secondary",
+                bgcolor: selected ? (isDark ? "rgba(0,199,142,.18)" : "rgba(0,199,142,.10)") : "transparent",
+                boxShadow: selected ? "0 0 20px rgba(0,224,164,.13), inset 0 0 16px rgba(0,224,164,.05)" : "none",
+                transition: "all .24s cubic-bezier(.2,.8,.2,1)", "&:hover": { bgcolor: selected ? undefined : "action.hover" },
+                "&:focus-visible": { boxShadow: "0 0 0 3px rgba(0,224,164,.22)" },
+              }}>{meta[value].label}</Box>;
             })}
           </Box>
-          <Chip size="medium" variant="outlined" label={`Top ${categories.length} categorias`} sx={{ height: 38, fontWeight: 800 }} />
+          <Chip size="medium" variant="outlined" label={`${visibleCategories.length}/${categories.length} categorias ativas`} sx={{ height: 38, fontWeight: 800 }} />
         </Stack>
       </Stack>
 
       <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5} sx={{ mt: 2 }}>
         {[
-          ["Total no período", total.toLocaleString("pt-BR")],
-          [granularityMeta[granularity].average, average.toLocaleString("pt-BR")],
+          ["Total visível", total.toLocaleString("pt-BR")],
+          [meta[granularity].average, average.toLocaleString("pt-BR")],
           ["Pico no intervalo", maxTotal.toLocaleString("pt-BR")],
-        ].map(([label, value], index) => (
-          <Box key={label} sx={{
-            minWidth: { sm: 210 }, px: 2, py: 1.25, borderRadius: 2,
-            border: "1px solid", borderColor: isDark ? "rgba(56,189,248,.25)" : "divider",
-            borderLeft: `2px solid ${index === 2 ? "#2F6FED" : "#00C78E"}`,
-            bgcolor: isDark ? "rgba(5,31,51,.66)" : "background.default",
-            transition: "all .25s ease",
-          }}>
-            <Typography variant="caption" color="text.secondary">{label}</Typography>
-            <Typography sx={{ fontSize: "1.65rem", lineHeight: 1.2, fontWeight: 900, mt: .25 }}>{value}</Typography>
-          </Box>
-        ))}
+        ].map(([label, value], index) => <Box key={label} sx={{
+          minWidth: { sm: 210 }, px: 2, py: 1.25, borderRadius: 2, border: "1px solid",
+          borderColor: isDark ? "rgba(56,189,248,.25)" : "divider", borderLeft: `2px solid ${index === 2 ? "#2F6FED" : "#00C78E"}`,
+          bgcolor: isDark ? "rgba(5,31,51,.66)" : "background.default", transition: "all .25s ease",
+        }}>
+          <Typography variant="caption" color="text.secondary">{label}</Typography>
+          <Typography sx={{ fontSize: "1.65rem", lineHeight: 1.2, fontWeight: 900, mt: .25 }}>{value}</Typography>
+        </Box>)}
       </Stack>
 
-      <Box
-        key={granularity}
-        sx={{
-          height: { xs: 350, md: chartHeight }, mt: 2,
-          animation: "categoryChartIn .34s cubic-bezier(.2,.8,.2,1)",
-          "@keyframes categoryChartIn": {
-            from: { opacity: 0, transform: "translateY(8px)", filter: "blur(3px)" },
-            to: { opacity: 1, transform: "translateY(0)", filter: "blur(0)" },
-          },
-        }}
-      >
+      <Box key={granularity + visibleCategories.join("|")} sx={{
+        height: { xs: 350, md: granularity === "day" ? 430 : 390 }, mt: 2,
+        animation: "categoryChartIn .34s cubic-bezier(.2,.8,.2,1)",
+        "@keyframes categoryChartIn": { from: { opacity: 0, transform: "translateY(8px)", filter: "blur(3px)" }, to: { opacity: 1, transform: "translateY(0)", filter: "blur(0)" } },
+      }}>
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data} margin={{ top: 8, right: 16, left: 8, bottom: granularity === "day" ? 18 : 8 }} barCategoryGap={granularity === "day" ? "18%" : "32%"}>
             <CartesianGrid strokeDasharray="4 5" vertical={false} stroke={chartGrid} />
-            <XAxis
-              dataKey="period"
-              tick={{ fontSize: granularity === "day" ? 10 : 12 }}
-              tickMargin={10}
-              minTickGap={granularity === "day" ? 18 : 8}
-              interval="preserveStartEnd"
-              axisLine={{ stroke: isDark ? "rgba(148,163,184,.42)" : "#D0D5DD" }}
-            />
+            <XAxis dataKey="period" tick={{ fontSize: granularity === "day" ? 10 : 12 }} tickMargin={10} minTickGap={granularity === "day" ? 18 : 8} interval="preserveStartEnd" axisLine={{ stroke: isDark ? "rgba(148,163,184,.42)" : "#D0D5DD" }} />
             <YAxis allowDecimals={false} tick={{ fontSize: 11 }} width={44} axisLine={{ stroke: isDark ? "rgba(148,163,184,.42)" : "#D0D5DD" }} label={{ value: "Tickets", angle: -90, position: "insideLeft", style: { fill: isDark ? "#B9C9D9" : "#667085", fontSize: 12 } }} />
-            <Tooltip
-              contentStyle={chartTooltipStyle}
-              cursor={{ fill: isDark ? "rgba(56,189,248,.045)" : "rgba(15,23,42,.035)" }}
-              formatter={(value, name) => [Number(value).toLocaleString("pt-BR"), String(name)]}
-              labelFormatter={(label) => `${granularityMeta[granularity].label}: ${String(label)}`}
-            />
-            {categories.map((category, index) => (
-              <Bar
-                key={category}
-                dataKey={category}
-                name={category}
-                stackId="categories"
-                fill={colors[index % colors.length]}
-                maxBarSize={granularity === "day" ? 42 : granularity === "week" ? 72 : 110}
-                radius={index === categories.length - 1 ? [5, 5, 0, 0] : 0}
-                animationDuration={520}
-                animationBegin={index * 45}
-              />
-            ))}
+            <Tooltip contentStyle={chartTooltipStyle} cursor={{ fill: isDark ? "rgba(56,189,248,.045)" : "rgba(15,23,42,.035)" }} formatter={(value, name) => [Number(value).toLocaleString("pt-BR"), String(name)]} labelFormatter={(label) => `${meta[granularity].label}: ${String(label)}`} />
+            {visibleCategories.map((category) => {
+              const index = categories.indexOf(category);
+              return <Bar key={category} dataKey={category} name={category} stackId="categories" fill={colors[index % colors.length]} maxBarSize={granularity === "day" ? 42 : granularity === "week" ? 72 : 110} radius={category === visibleCategories[visibleCategories.length - 1] ? [5, 5, 0, 0] : 0} animationDuration={520} animationBegin={Math.max(index, 0) * 45} />;
+            })}
           </BarChart>
         </ResponsiveContainer>
       </Box>
 
       <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap", mt: .75 }}>
-        {categories.map((category, index) => (
-          <Chip
-            key={category}
-            size="small"
-            label={category}
-            icon={<Box component="span" sx={{ width: 9, height: 9, borderRadius: "50%", bgcolor: colors[index % colors.length], boxShadow: `0 0 8px ${colors[index % colors.length]}88` }} />}
-            sx={{
-              height: 31, fontWeight: 750,
-              border: "1px solid", borderColor: isDark ? "rgba(56,189,248,.25)" : "divider",
-              bgcolor: isDark ? "rgba(6,30,49,.74)" : "background.paper",
-              "& .MuiChip-icon": { ml: 1 },
-            }}
-            variant="outlined"
-          />
-        ))}
+        {categories.map((category, index) => {
+          const active = !hiddenCategories.has(category);
+          return <Chip key={category} size="small" label={category} onClick={() => toggleCategory(category)}
+            icon={<Box component="span" sx={{ width: 9, height: 9, borderRadius: "50%", bgcolor: active ? colors[index % colors.length] : "text.disabled", boxShadow: active ? `0 0 8px ${colors[index % colors.length]}88` : "none" }} />}
+            sx={{ height: 31, fontWeight: 750, opacity: active ? 1 : .42, cursor: "pointer", textDecoration: active ? "none" : "line-through", border: "1px solid", borderColor: active ? (isDark ? "rgba(56,189,248,.32)" : "divider") : "divider", bgcolor: active && isDark ? "rgba(6,30,49,.74)" : "background.paper", transition: "all .2s ease", "&:hover": { transform: "translateY(-1px)" }, "& .MuiChip-icon": { ml: 1 } }}
+            variant="outlined" />;
+        })}
       </Stack>
     </Card>
   );
@@ -3026,7 +2993,15 @@ function DonutAnalysisCard({
   colors: readonly string[];
   onItemClick?: (label: string) => void;
 }) {
-  const total = data.reduce((sum, item) => sum + item.total, 0);
+  const [hiddenItems, setHiddenItems] = useState<Set<string>>(() => new Set());
+  const visibleData = data.filter((item) => !hiddenItems.has(item.label));
+  const total = visibleData.reduce((sum, item) => sum + item.total, 0);
+  const toggleItem = (label: string) => setHiddenItems((current) => {
+    const next = new Set(current);
+    if (next.has(label)) next.delete(label);
+    else if (data.length - next.size > 1) next.add(label);
+    return next;
+  });
 
   return (
     <CardBase>
@@ -3036,7 +3011,7 @@ function DonutAnalysisCard({
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
             <Pie
-              data={data}
+              data={visibleData}
               dataKey="total"
               nameKey="label"
               cx="50%"
@@ -3046,14 +3021,16 @@ function DonutAnalysisCard({
               paddingAngle={2}
               stroke="none"
               onClick={(_entry, index) => {
-                const item = data[index];
+                const item = visibleData[index];
                 if (item) onItemClick?.(item.label);
               }}
               style={{ cursor: onItemClick ? "pointer" : "default" }}
             >
-              {data.map((item, index) => (
+              {visibleData.map((item) => {
+                const index = data.findIndex((row) => row.label === item.label);
+                return (
                 <Cell key={item.label} fill={colors[index % colors.length]} />
-              ))}
+              )})}
             </Pie>
             <Tooltip />
           </PieChart>
@@ -3064,13 +3041,15 @@ function DonutAnalysisCard({
         </Box>
       </Box>
       <Stack spacing={.55}>
-        {data.map((item, index) => (
-          <Box key={item.label} onClick={() => onItemClick?.(item.label)} sx={{ display: "grid", gridTemplateColumns: "10px 1fr auto", alignItems: "center", gap: .8, cursor: onItemClick ? "pointer" : "default", px: .4, py: .2, borderRadius: 1, "&:hover": { bgcolor: "action.hover" } }}>
+        {data.map((item, index) => {
+          const active = !hiddenItems.has(item.label);
+          return (
+          <Box key={item.label} onClick={() => toggleItem(item.label)} sx={{ display: "grid", gridTemplateColumns: "10px 1fr auto", alignItems: "center", gap: .8, cursor: "pointer", px: .6, py: .35, borderRadius: 1, opacity: active ? 1 : .4, textDecoration: active ? "none" : "line-through", transition: "all .2s ease", "&:hover": { bgcolor: "action.hover" } }}>
             <Box sx={{ width: 8, height: 8, borderRadius: "50%", bgcolor: colors[index % colors.length], boxShadow: `0 0 10px ${colors[index % colors.length]}` }} />
             <Typography variant="caption" noWrap>{item.label}</Typography>
             <Typography variant="caption" sx={{ fontWeight: 850 }}>{item.total}</Typography>
           </Box>
-        ))}
+        )})}
       </Stack>
     </CardBase>
   );
