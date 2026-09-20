@@ -3002,17 +3002,6 @@ export function Analysts() {
                 data={
                   analystPieData
                 }
-                total={
-                  analystPieData.reduce(
-                    (
-                      sum,
-                      item
-                    ) =>
-                      sum +
-                      item.value,
-                    0
-                  )
-                }
                 onItemClick={(
                   name
                 ) => {
@@ -3171,9 +3160,6 @@ export function Analysts() {
               <CompactPieLegend
                 data={
                   statusPieData
-                }
-                total={
-                  scopedTickets.length
                 }
                 onItemClick={(
                   name
