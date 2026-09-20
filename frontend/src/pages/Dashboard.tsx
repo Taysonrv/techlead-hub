@@ -23,6 +23,11 @@ import {
   CartesianGrid,
   Line,
   LineChart,
+  Area,
+  AreaChart,
+  Pie,
+  PieChart,
+  Cell,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -1354,217 +1359,61 @@ export function Dashboard() {
         0 && (
         <>
           {/* =============================================
-              EVOLUÇÃO + CATEGORIA
+              VISÃO ANALÍTICA PRINCIPAL
           ============================================== */}
 
           <Box
             sx={{
-              display:
-                "grid",
-
-              gridTemplateColumns:
-                {
-                  xs: "1fr",
-                  lg: "2fr 1fr",
-                },
-
+              display: "grid",
+              gridTemplateColumns: { xs: "1fr", xl: "1.65fr 1fr 1fr" },
               gap: 2,
               mb: 2,
             }}
           >
             <CardBase>
-              <Typography
-                sx={{
-                  fontWeight: 800,
-                  fontSize:
-                    "1.05rem",
-                }}
-              >
-                Evolução dos Tickets
-              </Typography>
-
-              <Typography
-                variant="caption"
-                color="text.secondary"
-              >
-                Volume de abertura por dia
-              </Typography>
-
-              <Box
-                sx={{
-                  height: 250,
-                  mt: 1.5,
-                }}
-              >
-                <ResponsiveContainer
-                  width="100%"
-                  height="100%"
-                >
-                  <LineChart
-                    data={trends}
-                    margin={{
-                      top: 8,
-                      right: 12,
-                      left: -8,
-                      bottom: 4,
-                    }}
-                  >
-                    <CartesianGrid
-                      strokeDasharray="3 3"
-                      vertical={false}
-                      stroke={chartGrid}
-                    />
-
-                    <XAxis
-                      dataKey="date"
-                      tick={{
-                        fontSize: 11,
-                      }}
-                      minTickGap={22}
-                      interval="preserveStartEnd"
-                      tickMargin={8}
-                    />
-
-                    <YAxis
-                      allowDecimals={
-                        false
-                      }
-                      tick={{
-                        fontSize: 11,
-                      }}
-                      width={34}
-                    />
-
-                    <Tooltip
-                      content={
-                        <TrendTooltip />
-                      }
-                    />
-
-                    <Line
-                      type="monotone"
-                      dataKey="total"
-                      name="Tickets"
-                      stroke={aliareColors.green}
-                      strokeWidth={2.5}
-                      dot={{
-                        r: 3,
-                        strokeWidth: 2,
-                        fill: "#FFFFFF",
-                        stroke:
-                          aliareColors.green,
-                      }}
-                      activeDot={{
-                        r: 5,
-                        fill:
-                          aliareColors.green,
-                        stroke:
-                          "#FFFFFF",
-                        strokeWidth:
-                          2,
-                      }}
-                    />
-                  </LineChart>
+              <Typography sx={{ fontWeight: 850, fontSize: "1.05rem" }}>Evolução dos Tickets</Typography>
+              <Typography variant="caption" color="text.secondary">Volume de abertura por dia • tendência do período</Typography>
+              <Box sx={{ height: 290, mt: 1.5 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={trends} margin={{ top: 8, right: 12, left: -8, bottom: 4 }}>
+                    <defs>
+                      <linearGradient id="ticketArea" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor={aliareColors.green} stopOpacity={0.42} />
+                        <stop offset="95%" stopColor={aliareColors.green} stopOpacity={0.015} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={chartGrid} />
+                    <XAxis dataKey="date" tick={{ fontSize: 11 }} minTickGap={22} interval="preserveStartEnd" tickMargin={8} />
+                    <YAxis allowDecimals={false} tick={{ fontSize: 11 }} width={34} />
+                    <Tooltip content={<TrendTooltip />} />
+                    <Area type="monotone" dataKey="total" name="Tickets" stroke={aliareColors.green} strokeWidth={3} fill="url(#ticketArea)" activeDot={{ r: 5, fill: aliareColors.green, stroke: "#FFFFFF", strokeWidth: 2 }} />
+                  </AreaChart>
                 </ResponsiveContainer>
               </Box>
             </CardBase>
 
-            <CardBase>
-              <Typography
-                sx={{
-                  fontWeight: 800,
-                  fontSize:
-                    "1.05rem",
-                }}
-              >
-                Tickets por Categoria
-              </Typography>
+            <DonutAnalysisCard
+              title="Tickets por Categoria"
+              subtitle="Distribuição no período"
+              data={categories.slice(0, 6)}
+              colors={chartPalette}
+              onItemClick={showCategory}
+            />
 
-              <Typography
-                variant="caption"
-                color="text.secondary"
-              >
-                Clique em uma categoria para investigar
-              </Typography>
-
-              <Box
-                sx={{
-                  height: 250,
-                  mt: 1.5,
-                }}
-              >
-                <ResponsiveContainer
-                  width="100%"
-                  height="100%"
-                >
-                  <BarChart
-                    data={categories.slice(
-                      0,
-                      6
-                    )}
-                    layout="vertical"
-                    margin={{
-                      left: 15,
-                      right: 15,
-                    }}
-                  >
-                    <CartesianGrid
-                      strokeDasharray="3 3"
-                      stroke={chartGrid}
-                    />
-
-                    <XAxis
-                      type="number"
-                      allowDecimals={
-                        false
-                      }
-                    />
-
-                    <YAxis
-                      type="category"
-                      dataKey="label"
-                      width={95}
-                      tick={{
-                        fontSize: 10,
-                      }}
-                    />
-
-                    <Tooltip contentStyle={chartTooltipStyle} cursor={{ fill: isDark ? "rgba(56,189,248,.055)" : "rgba(15,23,42,.035)" }} />
-
-                    <Bar
-                      dataKey="total"
-                      fill={aliareColors.green}
-                      radius={[
-                        0,
-                        5,
-                        5,
-                        0,
-                      ]}
-                      cursor="pointer"
-                      onClick={(data) => {
-                        const label =
-                          (
-                            data as {
-                              payload?: {
-                                label?: unknown;
-                              };
-                            }
-                          ).payload?.label;
-
-                        if (
-                          typeof label ===
-                          "string"
-                        ) {
-                          showCategory(
-                            label
-                          );
-                        }
-                      }}
-                    />
-                  </BarChart>
-                </ResponsiveContainer>
-              </Box>
-            </CardBase>
+            <DonutAnalysisCard
+              title="Status dos Tickets"
+              subtitle="Composição do backlog atual"
+              data={backlogStatus}
+              colors={[semanticChartColors.normal, semanticChartColors.positive, semanticChartColors.stopped]}
+              onItemClick={(label) => {
+                const map: Record<string, Ticket[]> = {
+                  "Novos": newTickets,
+                  "Em atendimento": attendanceTickets,
+                  "Parados": stoppedTickets,
+                };
+                showTickets(`Status: ${label}`, map[label] ?? []);
+              }}
+            />
           </Box>
 
           {/* =============================================
@@ -1689,41 +1538,12 @@ export function Dashboard() {
           </Box>
 
           {/* =============================================
-              ANALISTAS + CLIENTES
+              RANKINGS EXECUTIVOS
           ============================================== */}
 
-          <Box
-            sx={{
-              display:
-                "grid",
-
-              gridTemplateColumns:
-                {
-                  xs: "1fr",
-                  lg: "1fr 1fr",
-                },
-
-              gap: 2,
-              mb: 2,
-            }}
-          >
-            <RankingCard
-              title="Tickets por Analista"
-              subtitle="Clique no responsável para visualizar a carteira"
-              data={owners}
-              onItemClick={
-                showOwner
-              }
-            />
-
-            <RankingCard
-              title="Tickets por Cliente"
-              subtitle="Clique no cliente para visualizar seus chamados"
-              data={clients}
-              onItemClick={
-                showClient
-              }
-            />
+          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "1fr 1fr" }, gap: 2, mb: 2 }}>
+            <RankingCard title="TOP 5 - Clientes" subtitle="Clientes com maior volume de tickets" data={clients} onItemClick={showClient} />
+            <RankingCard title="TOP 5 - Analistas" subtitle="Volume de tickets por responsável" data={owners} onItemClick={showOwner} />
           </Box>
 
           {/* =============================================
@@ -3026,6 +2846,66 @@ function CardBase({
   );
 }
 
+function DonutAnalysisCard({
+  title,
+  subtitle,
+  data,
+  colors,
+  onItemClick,
+}: {
+  title: string;
+  subtitle: string;
+  data: RankingItem[];
+  colors: readonly string[];
+  onItemClick?: (label: string) => void;
+}) {
+  const total = data.reduce((sum, item) => sum + item.total, 0);
+
+  return (
+    <CardBase>
+      <Typography sx={{ fontWeight: 850, fontSize: "1.05rem" }}>{title}</Typography>
+      <Typography variant="caption" color="text.secondary">{subtitle}</Typography>
+      <Box sx={{ height: 190, mt: .8, position: "relative" }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <PieChart>
+            <Pie
+              data={data}
+              dataKey="total"
+              nameKey="label"
+              cx="50%"
+              cy="50%"
+              innerRadius={54}
+              outerRadius={76}
+              paddingAngle={2}
+              stroke="none"
+              onClick={(entry) => onItemClick?.(entry.label)}
+              style={{ cursor: onItemClick ? "pointer" : "default" }}
+            >
+              {data.map((item, index) => (
+                <Cell key={item.label} fill={colors[index % colors.length]} />
+              ))}
+            </Pie>
+            <Tooltip />
+          </PieChart>
+        </ResponsiveContainer>
+        <Box sx={{ position: "absolute", inset: 0, display: "grid", placeContent: "center", pointerEvents: "none", textAlign: "center" }}>
+          <Typography sx={{ fontSize: "1.45rem", fontWeight: 900, lineHeight: 1 }}>{total}</Typography>
+          <Typography variant="caption" color="text.secondary">tickets</Typography>
+        </Box>
+      </Box>
+      <Stack spacing={.55}>
+        {data.map((item, index) => (
+          <Box key={item.label} onClick={() => onItemClick?.(item.label)} sx={{ display: "grid", gridTemplateColumns: "10px 1fr auto", alignItems: "center", gap: .8, cursor: onItemClick ? "pointer" : "default", px: .4, py: .2, borderRadius: 1, "&:hover": { bgcolor: "action.hover" } }}>
+            <Box sx={{ width: 8, height: 8, borderRadius: "50%", bgcolor: colors[index % colors.length], boxShadow: `0 0 10px ${colors[index % colors.length]}` }} />
+            <Typography variant="caption" noWrap>{item.label}</Typography>
+            <Typography variant="caption" sx={{ fontWeight: 850 }}>{item.total}</Typography>
+          </Box>
+        ))}
+      </Stack>
+    </CardBase>
+  );
+}
+
 /* =========================================================
    RANKING INTERATIVO
 ========================================================= */
@@ -3066,100 +2946,34 @@ function RankingCard({
         {subtitle}
       </Typography>
 
-      {data
-        .slice(0, 6)
-        .map(
-          (
-            item,
-            index
-          ) => (
+      <Stack spacing={1.15}>
+        {data.slice(0, 5).map((item, index) => {
+          const max = Math.max(...data.slice(0, 5).map((row) => row.total), 1);
+          const pct = Math.max(6, (item.total / max) * 100);
+          const color = chartPalette[index % chartPalette.length];
+
+          return (
             <Box
               key={`${item.label}-${index}`}
               role="button"
               tabIndex={0}
-              onClick={() =>
-                onItemClick(
-                  item.label
-                )
-              }
-              onKeyDown={(
-                event
-              ) => {
-                if (
-                  event.key ===
-                    "Enter" ||
-                  event.key ===
-                    " "
-                ) {
-                  onItemClick(
-                    item.label
-                  );
-                }
+              onClick={() => onItemClick(item.label)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") onItemClick(item.label);
               }}
-              sx={{
-                display: "flex",
-
-                justifyContent:
-                  "space-between",
-
-                alignItems:
-                  "center",
-
-                py: 0.85,
-                px: 0.75,
-
-                borderTop:
-                  index === 0
-                    ? "none"
-                    : "1px solid",
-
-                borderColor:
-                  "divider",
-
-                borderRadius: 1,
-
-                cursor:
-                  "pointer",
-
-                "&:hover": {
-                  backgroundColor:
-                    "action.hover",
-                },
-              }}
+              sx={{ cursor: "pointer", px: .25 }}
             >
-              <Typography
-                variant="body2"
-              sx={{ fontWeight: 600 }}
-              >
-                {item.label}
-              </Typography>
-
-              <Chip
-                size="small"
-                label={
-                  item.total
-                }
-                variant="outlined"
-                sx={{
-                  minWidth:
-                    38,
-
-                  fontWeight:
-                    750,
-
-                  color:
-                    aliareColors.greenDark,
-
-                  borderColor:
-                    "rgba(24,199,122,0.32)",
-
-                  backgroundColor:
-                    "rgba(24,199,122,0.05)",
-                }}
-              />
+              <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "center", mb: .45 }}>
+                <Typography variant="body2" sx={{ fontWeight: 700 }} noWrap>{item.label}</Typography>
+                <Typography variant="caption" sx={{ fontWeight: 900, ml: 1 }}>{item.total}</Typography>
+              </Stack>
+              <Box sx={{ height: 10, borderRadius: 99, bgcolor: "rgba(72,115,154,.16)", overflow: "hidden" }}>
+                <Box sx={{ width: `${pct}%`, height: "100%", borderRadius: 99, background: `linear-gradient(90deg, ${color}, ${color}CC)`, boxShadow: `0 0 14px ${color}55`, transition: "width .35s ease" }} />
+              </Box>
             </Box>
-          )
-        )}
+          );
+        })}
+      </Stack>
     </CardBase>
   );
 }
