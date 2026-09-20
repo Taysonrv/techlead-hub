@@ -3336,7 +3336,8 @@ function groupByField(
   field:
     | "category"
     | "owner"
-    | "client",
+    | "client"
+    | "cause",
 
   fallback: string
 ): RankingItem[] {
