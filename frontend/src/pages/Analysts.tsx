@@ -312,6 +312,8 @@ const STATUS_COLORS: Record<
 ===================================================== */
 
 export function Analysts() {
+  const [hiddenAnalystSlices, setHiddenAnalystSlices] = useState<Set<string>>(() => new Set());
+  const [hiddenStatusSlices, setHiddenStatusSlices] = useState<Set<string>>(() => new Set());
   const [productivityPage, setProductivityPage] = useState(0);
   const [analystsPage, setAnalystsPage] = useState(0);
   const navigate = useNavigate();
@@ -1651,6 +1653,19 @@ export function Analysts() {
     );
   }
 
+
+  const visibleAnalystPieData = analystPieData.filter((item) => !hiddenAnalystSlices.has(item.name));
+  const visibleStatusPieData = statusPieData.filter((item) => !hiddenStatusSlices.has(item.name));
+
+  const togglePieSlice = (setter: React.Dispatch<React.SetStateAction<Set<string>>>, data: PieDataItem[], name: string) => {
+    setter((current) => {
+      const next = new Set(current);
+      if (next.has(name)) next.delete(name);
+      else if (data.length - next.size > 1) next.add(name);
+      return next;
+    });
+  };
+
   /* =====================================================
      RENDER
   ===================================================== */
@@ -2932,9 +2947,7 @@ export function Analysts() {
                 >
                   <PieChart>
                     <Pie
-                      data={
-                        analystPieData
-                      }
+                      data={visibleAnalystPieData}
                       dataKey="value"
                       nameKey="name"
                       cx="50%"
@@ -2969,7 +2982,7 @@ export function Analysts() {
                           "pointer",
                       }}
                     >
-                      {analystPieData.map(
+                      {visibleAnalystPieData.map(
                         (
                           _,
                           index
@@ -2999,9 +3012,7 @@ export function Analysts() {
               </Box>
 
               <CompactPieLegend
-                data={
-                  analystPieData
-                }
+                data={visibleAnalystPieData}
                 onItemClick={(
                   name
                 ) => {
@@ -3058,9 +3069,7 @@ export function Analysts() {
                 >
                   <PieChart>
                     <Pie
-                      data={
-                        statusPieData
-                      }
+                      data={visibleStatusPieData}
                       dataKey="value"
                       nameKey="name"
                       cx="50%"
@@ -3122,7 +3131,7 @@ export function Analysts() {
                         }
                       }}
                     >
-                      {statusPieData.map(
+                      {visibleStatusPieData.map(
                         (
                           _,
                           index
@@ -3158,9 +3167,7 @@ export function Analysts() {
               </Box>
 
               <CompactPieLegend
-                data={
-                  statusPieData
-                }
+                data={visibleStatusPieData}
                 onItemClick={(
                   name
                 ) => {
@@ -4778,26 +4785,30 @@ export function Analysts() {
 
 function CompactPieLegend({
   data,
+  hiddenItems: controlledHiddenItems,
+  onToggleItem,
   onItemClick,
 }: {
-  data:
-    PieDataItem[];
-
-
-  onItemClick?:
-    (
-      name:
-        string
-    ) => void;
+  data: PieDataItem[];
+  hiddenItems?: Set<string>;
+  onToggleItem?: (name: string) => void;
+  onItemClick?: (name: string) => void;
 }) {
-  const [hiddenItems, setHiddenItems] = useState<Set<string>>(() => new Set());
+  const [localHiddenItems, setLocalHiddenItems] = useState<Set<string>>(() => new Set());
+  const hiddenItems = controlledHiddenItems ?? localHiddenItems;
   const visibleTotal = data.reduce((sum, item) => hiddenItems.has(item.name) ? sum : sum + item.value, 0);
-  const toggleItem = (name: string) => setHiddenItems((current) => {
-    const next = new Set(current);
-    if (next.has(name)) next.delete(name);
-    else if (data.length - next.size > 1) next.add(name);
-    return next;
-  });
+  const toggleItem = (name: string) => {
+    if (onToggleItem) {
+      onToggleItem(name);
+      return;
+    }
+    setLocalHiddenItems((current) => {
+      const next = new Set(current);
+      if (next.has(name)) next.delete(name);
+      else if (data.length - next.size > 1) next.add(name);
+      return next;
+    });
+  };
 
   return (
     <Stack
