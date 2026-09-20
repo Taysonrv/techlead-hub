@@ -147,7 +147,10 @@ function AuthenticatedLayout({
                 }),
                 "& > *": { position: "relative", zIndex: 1 },
                 "& .MuiCard-root": { backdropFilter: "blur(14px)" },
-                "& .MuiTableContainer-root": { overflow: "hidden" },
+                "& .MuiCard-root:focus-within": (theme) => ({
+                  borderColor: theme.palette.mode === "dark" ? "rgba(24,199,122,.24)" : "rgba(16,148,91,.18)",
+                }),
+                "& .MuiTableContainer-root": { overflow: "auto", overscrollBehavior: "contain" },
                 "& .MuiTableHead-root .MuiTableCell-root": {
                   letterSpacing: ".015em",
                   fontWeight: 800,
@@ -155,6 +158,10 @@ function AuthenticatedLayout({
                 "& .MuiDrawer-paperAnchorRight": {
                   backdropFilter: "blur(18px)",
                 },
+                "& .MuiAlert-root": { backdropFilter: "blur(12px)" },
+                "& .MuiTableRow-root": { transition: "background-color .14s ease, box-shadow .14s ease" },
+                "& .MuiTableCell-root": { verticalAlign: "middle" },
+                "& .MuiChip-root": { maxWidth: "100%" },
                 "& .MuiInputBase-root, & .MuiButton-root, & .MuiChip-root": {
                   transition: "border-color .16s ease, background-color .16s ease, box-shadow .16s ease, transform .16s ease",
                 },
