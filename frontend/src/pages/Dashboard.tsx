@@ -1045,16 +1045,13 @@ const latestImportedAt =
           gap: 2,
         }}
       >
-        <Box>
-          <Stack
-            direction="row"
-            spacing={1}
-            sx={{
-              alignItems:
-                "center",
-            }}
-          >
-            <PageHeader eyebrow="Operação" title="Dashboard Executivo" description="Visão consolidada da operação de suporte" meta={<>{periodLabel(period)}{" • "}{filteredTickets.length} ticket(s) analisado(s)</>} action={<PeriodFilter />} />
+        <PageHeader
+        eyebrow="Operação"
+        title="Dashboard Executivo"
+        description="Visão consolidada da operação de suporte"
+        meta={<>{periodLabel(period)}{" • "}{filteredTickets.length} ticket(s) analisado(s)</>}
+        action={<PeriodFilter />}
+      />
 
       {/* =================================================
           KPIs
