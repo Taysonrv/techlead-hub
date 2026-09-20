@@ -2521,7 +2521,7 @@ export function Versions() {
             <TableHead
               sx={{
                 backgroundColor:
-                  "#F8FAF9",
+                  "background.paper",
               }}
             >
               <TableRow>
