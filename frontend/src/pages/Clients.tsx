@@ -16,7 +16,6 @@ import {
   IconButton,
   InputLabel,
   MenuItem,
-  Popover,
   Select,
   Snackbar,
   Stack,
@@ -33,7 +32,6 @@ import {
   ArrowBackOutlined,
   ArrowForwardOutlined,
   FullscreenExitOutlined,
-  InfoOutlined,
   PictureAsPdfOutlined,
 } from "@mui/icons-material";
 
