@@ -2878,7 +2878,10 @@ function DonutAnalysisCard({
               outerRadius={76}
               paddingAngle={2}
               stroke="none"
-              onClick={(entry) => onItemClick?.(entry.label)}
+              onClick={(_entry, index) => {
+                const item = data[index];
+                if (item) onItemClick?.(item.label);
+              }}
               style={{ cursor: onItemClick ? "pointer" : "default" }}
             >
               {data.map((item, index) => (
