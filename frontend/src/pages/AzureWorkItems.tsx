@@ -79,6 +79,7 @@ import {
   chartPalette,
   semanticChartColors,
 } from "../theme/chartPalette";
+import { PageHeader } from "../components/PageHeader";
 
 /*
  * Compatibilidade com a versão do MUI usada pelo projeto:
@@ -2560,133 +2561,13 @@ export function AzureWorkItems({
             CABEÇALHO
         ================================================= */}
 
-        <Stack
-          direction={{
-            xs:
-              "column",
-            md:
-              "row",
-          }}
-          spacing={2}
-          sx={{
-            alignItems: {
-              md:
-                "center",
-            },
-            justifyContent:
-              "space-between",
-          }}
-        >
-          <Box>
-            <Stack
-              direction="row"
-              spacing={1}
-              sx={{
-                alignItems:
-                  "center",
-              }}
-            >
-              <Box
-                sx={{
-                  width: 30,
-                  height: 3,
-                  borderRadius: 99,
-                  backgroundColor:
-                    aliareColors.green,
-                }}
-              />
-
-              <Typography
-                variant="caption"
-                sx={{
-                  fontWeight: 800,
-                  letterSpacing:
-                    "0.08em",
-                  textTransform:
-                    "uppercase",
-                  color:
-                    aliareColors.greenDark,
-                }}
-              >
-                Desenvolvimento
-              </Typography>
-            </Stack>
-
-            <Typography
-              sx={{
-                mt: 0.8,
-                fontWeight: 800,
-                letterSpacing:
-                  "-0.03em",
-                fontSize: {
-                  xs:
-                    "1.7rem",
-                  md:
-                    "1.9rem",
-                  xl:
-                    "2.1rem",
-                },
-              }}
-            >
-              {title}
-            </Typography>
-
-            <Typography
-              variant="body2"
-              color="text.secondary"
-              sx={{
-                mt: 0.25,
-              }}
-            >
-              {subtitle}
-            </Typography>
-
-            <Typography
-              variant="caption"
-              color="text.secondary"
-              sx={{
-                display:
-                  "block",
-                mt: 0.5,
-              }}
-            >
-              {formatNumber(summary?.total)} Work Item(s) sincronizado(s)
-            </Typography>
-          </Box>
-
-          <Stack
-            direction="row"
-            spacing={1}
-            alignItems="center"
-          >
-            <Typography
-              variant="caption"
-              color="text.secondary"
-              sx={{
-                display: {
-                  xs:
-                    "none",
-                  md:
-                    "block",
-                },
-              }}
-            >
-              Dados locais sincronizados com Azure DevOps
-            </Typography>
-
-            <Button
-              variant="outlined"
-              startIcon={
-                <RefreshOutlined />
-              }
-              onClick={() =>
-                void loadAll()
-              }
-            >
-              Recarregar
-            </Button>
-          </Stack>
-        </Stack>
+        <PageHeader
+          eyebrow="Desenvolvimento"
+          title={title}
+          description={subtitle}
+          meta={<>{formatNumber(summary?.total)} Work Item(s) sincronizado(s) • Dados locais sincronizados com Azure DevOps</>}
+          action={<Button variant="outlined" startIcon={<RefreshOutlined />} onClick={() => void loadAll()}>Recarregar</Button>}
+        />
 
         {error && (
           <Alert
