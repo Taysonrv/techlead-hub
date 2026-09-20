@@ -883,6 +883,15 @@ function AnalysisDonutCard({
   ) => void;
 }) {
   const theme = useTheme();
+  const [hiddenItems, setHiddenItems] = useState<Set<string>>(() => new Set());
+  const visibleData = data.filter((item) => !hiddenItems.has(item.name));
+  const visibleTotal = visibleData.reduce((sum, item) => sum + item.value, 0);
+  const toggleItem = (name: string) => setHiddenItems((current) => {
+    const next = new Set(current);
+    if (next.has(name)) next.delete(name);
+    else if (data.length - next.size > 1) next.add(name);
+    return next;
+  });
   return (
     <ExecutiveSection compact>
         <Stack
@@ -938,9 +947,7 @@ function AnalysisDonutCard({
             >
               <PieChart>
                 <Pie
-                  data={
-                    data
-                  }
+                  data={visibleData}
                   dataKey="value"
                   nameKey="name"
                   innerRadius={58}
@@ -974,7 +981,7 @@ function AnalysisDonutCard({
                     }
                   }}
                 >
-                  {data.map(
+                  {visibleData.map(
                     (
                       item,
                     ) => (
@@ -1006,7 +1013,7 @@ function AnalysisDonutCard({
                       theme.palette.text.primary,
                   }}
                 >
-                  {centerValue}
+                  {hiddenItems.size > 0 ? formatNumber(visibleTotal) : centerValue}
                 </text>
 
                 <text
@@ -1066,7 +1073,9 @@ function AnalysisDonutCard({
           {data.map(
             (
               item,
-            ) => (
+            ) => {
+              const active = !hiddenItems.has(item.name);
+              return (
               <Box
                 key={
                   item.name
@@ -1083,15 +1092,9 @@ function AnalysisDonutCard({
                     ? undefined
                     : 0
                 }
-                onClick={() => {
-                  if (
-                    item.clickable !==
-                    false
-                  ) {
-                    onItemClick?.(
-                      item,
-                    );
-                  }
+                onClick={() => toggleItem(item.name)}
+                onDoubleClick={() => {
+                  if (item.clickable !== false) onItemClick?.(item);
                 }}
                 onKeyDown={(event) => {
                   if (
@@ -1104,9 +1107,7 @@ function AnalysisDonutCard({
                         " "
                     )
                   ) {
-                    onItemClick?.(
-                      item,
-                    );
+                    toggleItem(item.name);
                   }
                 }}
                 sx={{
@@ -1122,11 +1123,10 @@ function AnalysisDonutCard({
                     0.2,
                   borderRadius:
                     1,
-                  cursor:
-                    item.clickable ===
-                    false
-                      ? "default"
-                      : "pointer",
+                  cursor: "pointer",
+                  opacity: active ? 1 : 0.38,
+                  textDecoration: active ? "none" : "line-through",
+                  transition: "all .2s ease",
                   "&:hover":
                     item.clickable ===
                     false
@@ -1145,8 +1145,8 @@ function AnalysisDonutCard({
                       10,
                     borderRadius:
                       "50%",
-                    backgroundColor:
-                      item.color,
+                    backgroundColor: active ? item.color : theme.palette.text.disabled,
+                    boxShadow: active ? `0 0 8px ${item.color}88` : "none",
                     flexShrink:
                       0,
                   }}
@@ -1175,7 +1175,8 @@ function AnalysisDonutCard({
                   )}
                 </Typography>
               </Box>
-            ),
+              );
+            },
           )}
         </Stack>
       </ExecutiveSection>
