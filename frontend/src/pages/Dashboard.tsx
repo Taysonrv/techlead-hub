@@ -16,6 +16,7 @@ import {
   Stack,
   Typography,
 } from "@mui/material";
+import { useTheme } from "@mui/material/styles";
 
 import {
   Bar,
