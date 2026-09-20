@@ -22,6 +22,7 @@ import {
   TableCell,
   TableContainer,
   TableHead,
+  TablePagination,
   TableRow,
   TextField,
   Typography,
@@ -334,6 +335,9 @@ export function Tickets() {
     setCopyMessage,
   ] =
     useState("");
+
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(25);
 
   const {
     effectiveStartDate,
@@ -868,6 +872,20 @@ export function Tickets() {
       filteredTickets,
       sortMode,
     ]);
+
+  const paginatedTickets = useMemo(
+    () => sortedTickets.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage),
+    [sortedTickets, page, rowsPerPage],
+  );
+
+  useEffect(() => {
+    const lastPage = Math.max(0, Math.ceil(sortedTickets.length / rowsPerPage) - 1);
+    if (page > lastPage) setPage(lastPage);
+  }, [sortedTickets.length, rowsPerPage, page]);
+
+  useEffect(() => {
+    setPage(0);
+  }, [search, status, urgency, category, owner, client, team, service, quickFilter, sortMode, effectiveStartDate, effectiveEndDate]);
 
   /* =======================================================
      FILTROS ATIVOS
@@ -2045,7 +2063,7 @@ export function Tickets() {
             <TableHead
               sx={{
                 backgroundColor:
-                  "#F8FAF9",
+                  "action.hover",
 
                 "& .MuiTableCell-root":
                   {
@@ -2138,7 +2156,7 @@ export function Tickets() {
             </TableHead>
 
             <TableBody>
-              {sortedTickets.map(
+              {paginatedTickets.map(
                 (ticket) => {
                   const attention =
                     getAttentionInfo(
@@ -2169,7 +2187,7 @@ export function Tickets() {
                         "&:hover":
                           {
                             backgroundColor:
-                              "#FAFBFA",
+                              "action.hover",
                           },
                       }}
                     >
@@ -2509,6 +2527,27 @@ export function Tickets() {
             </TableBody>
           </Table>
         </TableContainer>
+
+        <TablePagination
+          component="div"
+          count={sortedTickets.length}
+          page={page}
+          onPageChange={(_event, nextPage) => setPage(nextPage)}
+          rowsPerPage={rowsPerPage}
+          onRowsPerPageChange={(event) => {
+            setRowsPerPage(Number(event.target.value));
+            setPage(0);
+          }}
+          rowsPerPageOptions={[10, 25, 50, 100]}
+          labelRowsPerPage="Tickets por página:"
+          labelDisplayedRows={({ from, to, count }) => `${from}–${to} de ${count}`}
+          sx={{
+            borderTop: "1px solid",
+            borderColor: "divider",
+            backgroundColor: "background.paper",
+            color: "text.primary",
+          }}
+        />
       </Card>
 
       {/* ===================================================
