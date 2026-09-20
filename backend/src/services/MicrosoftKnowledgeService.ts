@@ -1,5 +1,6 @@
 import axios from "axios";
 import crypto from "node:crypto";
+import { prisma } from "../database/prisma";
 
 type DeviceSession = {
   deviceCode: string;
@@ -31,7 +32,8 @@ export class MicrosoftKnowledgeService {
   private readonly sessions = new Map<string, DeviceSession>();
   private readonly tokens = new Map<number, TokenState>();
 
-  status(userId: number) {
+  async status(userId: number) {
+    await this.restoreConnection(userId);
     const token = this.tokens.get(userId);
     const connected = Boolean(token && (token.expiresAt > Date.now() + 30_000 || token.refreshToken));
     return {
@@ -97,7 +99,10 @@ export class MicrosoftKnowledgeService {
       const profile = await this.graphGet(userId, "/v1.0/me?$select=displayName,userPrincipalName,mail");
       const account = profile.mail || profile.userPrincipalName || profile.displayName || null;
       const token = this.tokens.get(userId);
-      if (token) token.account = account;
+      if (token) {
+        token.account = account;
+        await this.persistConnection(userId, token);
+      }
       return { connected: true, account };
     } catch (error) {
       if (axios.isAxiosError(error) && error.response?.data?.error === "authorization_pending") {
@@ -107,8 +112,9 @@ export class MicrosoftKnowledgeService {
     }
   }
 
-  disconnect(userId: number) {
+  async disconnect(userId: number) {
     this.tokens.delete(userId);
+    await prisma.$executeRaw`DELETE FROM "MicrosoftUserConnection" WHERE "userId" = ${userId}`;
     return { connected: false };
   }
 
@@ -142,7 +148,7 @@ export class MicrosoftKnowledgeService {
   }
 
   async coordinationSnapshot(userId: number) {
-    if (!this.status(userId).connected) return { connected: false, plannerTasks: [], events: [], teams: [], warnings: [] as string[] };
+    if (!(await this.status(userId)).connected) return { connected: false, plannerTasks: [], events: [], teams: [], warnings: [] as string[] };
     const now = new Date();
     const end = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1_000);
     const warnings: string[] = [];
@@ -170,6 +176,7 @@ export class MicrosoftKnowledgeService {
   }
 
   private async token(userId: number) {
+    await this.restoreConnection(userId);
     const token = this.tokens.get(userId);
     if (!token) {
       throw Object.assign(new Error("Conecte sua conta Microsoft para consultar SharePoint e BPMN."), { statusCode: 401 });
@@ -190,6 +197,7 @@ export class MicrosoftKnowledgeService {
         token.accessToken = response.data.access_token;
         token.expiresAt = Date.now() + Number(response.data.expires_in ?? 3600) * 1000;
         token.refreshToken = response.data.refresh_token || token.refreshToken;
+        await this.persistConnection(userId, token);
       } catch {
         this.tokens.delete(userId);
       }
@@ -199,6 +207,59 @@ export class MicrosoftKnowledgeService {
       throw Object.assign(new Error("Conecte sua conta Microsoft para consultar SharePoint e BPMN."), { statusCode: 401 });
     }
     return token.accessToken;
+  }
+
+  private encryptionKey() {
+    const secret = process.env.SYSTEM_CONFIG_KEY?.trim() || process.env.JWT_SECRET?.trim();
+    if (!secret || secret.length < 32) throw new Error("Chave segura da aplicação indisponível.");
+    return crypto.createHash("sha256").update(secret).digest();
+  }
+
+  private encrypt(value: string) {
+    const iv = crypto.randomBytes(12);
+    const cipher = crypto.createCipheriv("aes-256-gcm", this.encryptionKey(), iv);
+    const encrypted = Buffer.concat([cipher.update(value, "utf8"), cipher.final()]);
+    return ["v1", iv.toString("base64"), cipher.getAuthTag().toString("base64"), encrypted.toString("base64")].join(":");
+  }
+
+  private decrypt(value: string) {
+    const [version, iv, tag, encrypted] = value.split(":");
+    if (version !== "v1" || !iv || !tag || !encrypted) throw new Error("Sessão Microsoft inválida.");
+    const decipher = crypto.createDecipheriv("aes-256-gcm", this.encryptionKey(), Buffer.from(iv, "base64"));
+    decipher.setAuthTag(Buffer.from(tag, "base64"));
+    return Buffer.concat([decipher.update(Buffer.from(encrypted, "base64")), decipher.final()]).toString("utf8");
+  }
+
+  private async persistConnection(userId: number, token: TokenState) {
+    if (!token.refreshToken) return;
+    const encrypted = this.encrypt(token.refreshToken);
+    await prisma.$executeRaw`
+      INSERT INTO "MicrosoftUserConnection" ("userId", "refreshToken", "account", "connectedAt", "updatedAt")
+      VALUES (${userId}, ${encrypted}, ${token.account ?? null}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      ON CONFLICT ("userId") DO UPDATE SET
+        "refreshToken" = EXCLUDED."refreshToken",
+        "account" = EXCLUDED."account",
+        "updatedAt" = CURRENT_TIMESTAMP
+    `;
+  }
+
+  private async restoreConnection(userId: number) {
+    if (this.tokens.has(userId)) return;
+    const rows = await prisma.$queryRaw<Array<{ refreshToken: string; account: string | null }>>`
+      SELECT "refreshToken", "account" FROM "MicrosoftUserConnection" WHERE "userId" = ${userId} LIMIT 1
+    `;
+    const row = rows[0];
+    if (!row) return;
+    try {
+      this.tokens.set(userId, {
+        accessToken: "",
+        expiresAt: 0,
+        refreshToken: this.decrypt(row.refreshToken),
+        account: row.account ?? undefined,
+      });
+    } catch {
+      await prisma.$executeRaw`DELETE FROM "MicrosoftUserConnection" WHERE "userId" = ${userId}`;
+    }
   }
 
   private async graphGet(userId: number, path: string) {
