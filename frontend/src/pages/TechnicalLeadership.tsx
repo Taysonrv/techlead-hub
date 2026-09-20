@@ -17,6 +17,7 @@ import { DetailFieldGrid, DetailPanelHeader, DetailSection } from "../components
 import { detailDrawerPaperSx } from "../theme/layoutTokens";
 import { aliareColors } from "../theme/theme";
 import { useColorMode } from "../context/ColorModeContext";
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip as ChartTooltip, XAxis, YAxis } from "recharts";
 
 type Ticket = {
   id: number; movideskId: number; subject: string; status: string; client: string | null; owner: string | null;
@@ -215,6 +216,34 @@ export function TechnicalLeadership() {
         <AreaTitle title="Ações recomendadas" info="Sugestões geradas a partir dos sinais objetivos da operação. Não executam ações automaticamente e devem passar por julgamento técnico." />
         <Stack spacing={.65} sx={{ mt: .8 }}>{data.recommendations.map((item, index) => <Typography key={item} variant="body2"><b>{index + 1}.</b> {item}</Typography>)}</Stack>
       </Box>}
+    </CardContent></Card>}
+
+    {data && <Card sx={{ mb: 2.5, overflow: "hidden" }}><CardContent>
+      <Stack direction={{ xs: "column", md: "row" }} sx={{ justifyContent: "space-between", alignItems: { md: "center" }, gap: 1, mb: 1.5 }}>
+        <AreaTitle title="Pulso operacional" icon={<AutoGraphOutlined color="primary" />} info="Compara os principais sinais objetivos do período atual e oferece uma leitura visual rápida antes da investigação detalhada." />
+        <Chip size="small" label={`${data.weekly.current} atendimentos no período`} variant="outlined" />
+      </Stack>
+      <Box sx={{ width: "100%", height: 270 }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={[
+            { label: "Backlog", value: data.weekly.open, fill: aliareColors.info },
+            { label: "SLA vencido", value: data.weekly.overdue, fill: aliareColors.error },
+            { label: "Pausados", value: data.weekly.paused, fill: aliareColors.warning },
+            { label: "Sem movimento", value: data.weekly.stale, fill: aliareColors.cyan },
+            { label: "Bloqueados", value: data.weekly.blocked, fill: aliareColors.purple },
+          ]} margin={{ top: 8, right: 12, left: -10, bottom: 4 }}>
+            <CartesianGrid stroke={mode === "dark" ? "rgba(148,163,184,.18)" : "rgba(15,23,42,.10)"} strokeDasharray="4 4" vertical={false} />
+            <XAxis dataKey="label" tick={{ fontSize: 11, fill: mode === "dark" ? "#AFC0D4" : "#667085" }} axisLine={false} tickLine={false} />
+            <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: mode === "dark" ? "#AFC0D4" : "#667085" }} axisLine={false} tickLine={false} />
+            <ChartTooltip contentStyle={{ borderRadius: 12, border: mode === "dark" ? "1px solid rgba(148,163,184,.22)" : "1px solid rgba(15,23,42,.12)", background: mode === "dark" ? "#0E2338" : "#FFFFFF", boxShadow: "0 14px 36px rgba(0,0,0,.18)" }} cursor={{ fill: mode === "dark" ? "rgba(255,255,255,.035)" : "rgba(15,23,42,.035)" }} />
+            <Bar dataKey="value" name="Quantidade" radius={[7, 7, 2, 2]}>
+              {[
+                aliareColors.info, aliareColors.error, aliareColors.warning, aliareColors.cyan, aliareColors.purple,
+              ].map((fill, index) => <rect key={index} fill={fill} />)}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      </Box>
     </CardContent></Card>}
 
     <Card sx={{ mb: 2.5 }}><Tabs value={tab} onChange={(_, value) => setTab(value)} variant="scrollable" scrollButtons="auto" sx={{ px: 1, "& .MuiTab-root": { minHeight: 56 }, "& .Mui-selected": { bgcolor: mode === "dark" ? "rgba(0,199,142,.08)" : "rgba(24,199,122,.06)" }, "& .MuiTabs-indicator": { height: 3, borderRadius: 3 } }}>
