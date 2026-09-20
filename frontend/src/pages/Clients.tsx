@@ -993,7 +993,6 @@ export function Clients() {
 
   const visibleClientPieData = useMemo(() => clientPieData.filter((item) => !hiddenClientSlices.has(item.name)), [clientPieData, hiddenClientSlices]);
   const visibleCategoryPieData = useMemo(() => categoryPieData.filter((item) => !hiddenCategorySlices.has(item.name)), [categoryPieData, hiddenCategorySlices]);
-  const visibleStatusPieData = useMemo(() => statusPieData.filter((item) => !hiddenStatusSlices.has(item.name)), [statusPieData, hiddenStatusSlices]);
 
   const togglePieSlice = (setter: React.Dispatch<React.SetStateAction<Set<string>>>, data: PieDataItem[], name: string) => {
     setter((current) => {
@@ -1132,6 +1131,8 @@ export function Clients() {
           item.value > 0
       );
     }, [scopedTickets]);
+
+  const visibleStatusPieData = useMemo(() => statusPieData.filter((item) => !hiddenStatusSlices.has(item.name)), [statusPieData, hiddenStatusSlices]);
 
   /* =======================================================
      DRILL-DOWN
@@ -2183,7 +2184,9 @@ export function Clients() {
               </Box>
 
               <CompactPieLegend
-                data={visibleClientPieData}
+                data={clientPieData}
+                hiddenItems={hiddenClientSlices}
+                onToggleItem={(name) => togglePieSlice(setHiddenClientSlices, clientPieData, name)}
                 onItemClick={(
                   name
                 ) => {
@@ -2238,7 +2241,9 @@ export function Clients() {
                   </PieChart>
                 </ResponsiveContainer>
               </Box>
-              <CompactPieLegend data={visibleCategoryPieData}
+              <CompactPieLegend data={categoryPieData}
+                hiddenItems={hiddenCategorySlices}
+                onToggleItem={(name) => togglePieSlice(setHiddenCategorySlices, categoryPieData, name)}
                 onItemClick={(name) => name !== "Outros" && showTickets(`Categoria: ${name}`, scopedTickets.filter((ticket) => (ticket.category?.trim() || "Sem categoria") === name))} />
             </Box>
           ) : <EmptyChart />}
@@ -2376,7 +2381,9 @@ export function Clients() {
               </Box>
 
               <CompactPieLegend
-                data={visibleStatusPieData}
+                data={statusPieData}
+                hiddenItems={hiddenStatusSlices}
+                onToggleItem={(name) => togglePieSlice(setHiddenStatusSlices, statusPieData, name)}
                 onItemClick={(
                   name
                 ) => {
