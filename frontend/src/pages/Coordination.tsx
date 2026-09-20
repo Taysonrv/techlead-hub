@@ -56,6 +56,12 @@ type Data = {
   workload: Array<{ analyst: string; tickets: number; workItems: number; total: number }>;
   integrations: Record<string, { configured: boolean; connected: boolean; items: number }>;
   scope: { coordinator: string; analysts: string[]; clients: string[] };
+  intelligence: {
+    health: "critical" | "attention" | "stable";
+    medianLoad: number;
+    overloadedAnalysts: Array<{ analyst: string; tickets: number; workItems: number; total: number }>;
+    priorities: Array<{ key: string; kind: DetailKind; severity: "critical" | "high" | "medium"; title: string; count: number; description: string; action: string }>;
+  };
   microsoft: {
     connected: boolean;
     plannerTasks: Array<{ id: string; title: string; percentComplete: number; dueDateTime?: string }>;
@@ -67,7 +73,7 @@ type Data = {
 
 type MainTab = "cadastros" | "movimentos" | "analises" | "desenvolvimento" | "gestao";
 type Routine = { label: string; path: string; icon: ElementType; description: string; keywords?: string[] };
-type DetailKind = "backlog" | "critical" | "stale" | "dueSoon" | "blocked" | "unassigned" | "analyst";
+type DetailKind = "backlog" | "critical" | "stale" | "dueSoon" | "overdue" | "blocked" | "unassigned" | "analyst";
 type DetailData = {
   kind: DetailKind; analyst: string | null; total: number; truncated: boolean;
   tickets: Array<{ movideskId: number; subject: string; status: string; urgency: string | null; client: string | null; owner: string | null; lastUpdate: string | null; dueDate: string | null; taskNumber: number | null; registeredVersion: string | null; deliveredVersion: string | null }>;
@@ -162,6 +168,7 @@ export function Coordination() {
         ["backlog", "Backlog atual", data.indicators.openTickets, "Atendimentos abertos do escopo cooperativas."],
         ["critical", "Críticos", data.indicators.criticalTickets, "Atendimentos críticos em aberto."],
         ["stale", "Sem movimento 72h", data.indicators.staleTickets, "Tickets sem atualização há pelo menos 72 horas."],
+        ["overdue", "Prazos vencidos", data.indicators.overdueTickets, "Atendimentos abertos com prazo já ultrapassado."],
         ["dueSoon", "Vencem em 7 dias", data.indicators.dueSoon, "Itens com prazo nos próximos sete dias."],
         ["blocked", "Itens bloqueados", data.indicators.blockedItems, "Tarefas Azure bloqueadas no escopo da operação."],
         ["unassigned", "Sem responsável", data.indicators.unassignedItems, "Tarefas sem responsável identificado."],
@@ -300,6 +307,70 @@ export function Coordination() {
             </Box>
           ) : (
             <Stack spacing={2}>
+              <Card variant="outlined" sx={{ overflow: "hidden", borderColor: data.intelligence.health === "critical" ? "error.light" : data.intelligence.health === "attention" ? "warning.light" : "success.light" }}>
+                <CardContent>
+                  <Stack direction={{ xs: "column", lg: "row" }} spacing={1.5} sx={{ justifyContent: "space-between", alignItems: { lg: "center" }, mb: 1.5 }}>
+                    <Box>
+                      <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
+                        <RadarOutlined sx={{ color: data.intelligence.health === "critical" ? "error.main" : data.intelligence.health === "attention" ? "warning.main" : "success.main" }} />
+                        <Typography variant="h6" sx={{ fontWeight: 900 }}>Prioridades de atuação</Typography>
+                        <Chip
+                          size="small"
+                          label={data.intelligence.health === "critical" ? "Ação imediata" : data.intelligence.health === "attention" ? "Requer atenção" : "Operação estável"}
+                          color={data.intelligence.health === "critical" ? "error" : data.intelligence.health === "attention" ? "warning" : "success"}
+                          variant="outlined"
+                        />
+                      </Stack>
+                      <Typography variant="body2" color="text.secondary" sx={{ mt: .4 }}>
+                        Leitura automática dos sinais operacionais para orientar a atuação da coordenação.
+                      </Typography>
+                    </Box>
+                    <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap" }}>
+                      <Chip size="small" label={`Carga mediana: ${data.intelligence.medianLoad}`} variant="outlined" />
+                      <Chip size="small" label={`${data.intelligence.overloadedAnalysts.length} analista(s) acima da faixa`} variant="outlined" />
+                    </Stack>
+                  </Stack>
+
+                  {data.intelligence.priorities.length ? (
+                    <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(2,minmax(0,1fr))", xl: "repeat(3,minmax(0,1fr))" }, gap: 1 }}>
+                      {data.intelligence.priorities.map((priority) => (
+                        <Button
+                          key={priority.key}
+                          onClick={() => void openDetails(priority.kind, priority.title)}
+                          sx={{
+                            justifyContent: "flex-start",
+                            textAlign: "left",
+                            textTransform: "none",
+                            p: 1.25,
+                            border: "1px solid",
+                            borderColor: priority.severity === "critical" ? "error.light" : priority.severity === "high" ? "warning.light" : "divider",
+                            borderRadius: 2,
+                            bgcolor: priority.severity === "critical"
+                              ? (theme.palette.mode === "dark" ? "rgba(239,68,68,.07)" : "rgba(239,68,68,.035)")
+                              : "transparent",
+                          }}
+                        >
+                          <Box sx={{ width: "100%" }}>
+                            <Stack direction="row" spacing={1} sx={{ justifyContent: "space-between", alignItems: "center" }}>
+                              <Typography sx={{ fontWeight: 850, color: "text.primary" }}>{priority.title}</Typography>
+                              <Chip size="small" label={priority.count} color={priority.severity === "critical" ? "error" : priority.severity === "high" ? "warning" : "default"} />
+                            </Stack>
+                            <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: .6, lineHeight: 1.35 }}>{priority.description}</Typography>
+                            <Typography variant="caption" sx={{ display: "block", mt: .65, color: "primary.main", fontWeight: 750 }}>{priority.action}</Typography>
+                          </Box>
+                        </Button>
+                      ))}
+                    </Box>
+                  ) : <Alert severity="success">Nenhum sinal prioritário foi identificado no momento.</Alert>}
+
+                  {data.intelligence.overloadedAnalysts.length > 0 && (
+                    <Alert severity="warning" sx={{ mt: 1.25 }}>
+                      Carga acima da faixa: {data.intelligence.overloadedAnalysts.map((item) => `${item.analyst} (${item.total})`).join(" · ")}. Avalie redistribuição considerando complexidade e contexto, não apenas quantidade.
+                    </Alert>
+                  )}
+                </CardContent>
+              </Card>
+
               <Box
                 sx={{
                   display: "grid",
