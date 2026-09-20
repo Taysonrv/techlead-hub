@@ -80,6 +80,7 @@ import {
   semanticChartColors,
 } from "../theme/chartPalette";
 import { PageHeader } from "../components/PageHeader";
+import { ExecutiveSection } from "../components/ExecutiveSection";
 
 /*
  * Compatibilidade com a versão do MUI usada pelo projeto:
@@ -881,22 +882,7 @@ function AnalysisDonutCard({
   ) => void;
 }) {
   return (
-    <Card
-      elevation={0}
-      sx={{
-        border:
-          "1px solid",
-        borderColor:
-          "divider",
-        borderRadius:
-          2.25,
-        backgroundColor:
-          "background.paper",
-        boxShadow:
-          "0 1px 2px rgba(16,24,40,0.035)",
-      }}
-    >
-      <CardContent>
+    <ExecutiveSection compact>
         <Stack
           direction="row"
           spacing={1}
@@ -1190,8 +1176,7 @@ function AnalysisDonutCard({
             ),
           )}
         </Stack>
-      </CardContent>
-    </Card>
+      </ExecutiveSection>
   );
 }
 
