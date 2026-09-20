@@ -2560,7 +2560,7 @@ export function Clients() {
             <TableHead
               sx={{
                 backgroundColor:
-                  "#F8FAF9",
+                  "background.paper",
 
                 "& .MuiTableCell-root":
                   {
