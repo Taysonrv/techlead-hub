@@ -1425,52 +1425,14 @@ export function Dashboard() {
               EVOLUÇÃO MENSAL POR CATEGORIA
           ============================================== */}
 
-          <CardBase>
-            <Stack direction={{ xs: "column", md: "row" }} spacing={1} sx={{ justifyContent: "space-between", alignItems: { md: "center" } }}>
-              <Box>
-                <Typography sx={{ fontWeight: 800, fontSize: "1.05rem" }}>
-                  Evolução mensal por categoria
-                </Typography>
-                <Typography variant="caption" color="text.secondary">
-                  Distribuição das principais categorias ao longo do período selecionado
-                </Typography>
-              </Box>
-              <Chip size="small" variant="outlined" label={`Top ${topCategoryLabels.length} categorias`} />
-            </Stack>
-
-            <Box sx={{ height: 320, mt: 1.5 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={monthlyCategoryEvolution} margin={{ top: 8, right: 12, left: 4, bottom: 4 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={chartGrid} />
-                  <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-                  <YAxis allowDecimals={false} tick={{ fontSize: 11 }} width={34} />
-                  <Tooltip contentStyle={chartTooltipStyle} cursor={{ fill: isDark ? "rgba(56,189,248,.055)" : "rgba(15,23,42,.035)" }} />
-                  {topCategoryLabels.map((category, index) => (
-                    <Bar
-                      key={category}
-                      dataKey={category}
-                      name={category}
-                      stackId="categories"
-                      fill={chartPalette[index % chartPalette.length]}
-                      radius={index === topCategoryLabels.length - 1 ? [4, 4, 0, 0] : 0}
-                    />
-                  ))}
-                </BarChart>
-              </ResponsiveContainer>
-            </Box>
-
-            <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap", mt: 1 }}>
-              {topCategoryLabels.map((category, index) => (
-                <Chip
-                  key={category}
-                  size="small"
-                  label={category}
-                  sx={{ borderLeft: `4px solid ${chartPalette[index % chartPalette.length]}` }}
-                  variant="outlined"
-                />
-              ))}
-            </Stack>
-          </CardBase>
+          <MonthlyCategoryEvolutionCard
+            data={monthlyCategoryEvolution}
+            categories={topCategoryLabels}
+            colors={chartPalette}
+            isDark={isDark}
+            chartGrid={chartGrid}
+            chartTooltipStyle={chartTooltipStyle}
+          />
 
           <Box
             sx={{
@@ -2849,6 +2811,140 @@ function CardBase({
       >
         {children}
       </CardContent>
+    </Card>
+  );
+}
+
+function MonthlyCategoryEvolutionCard({
+  data,
+  categories,
+  colors,
+  isDark,
+  chartGrid,
+  chartTooltipStyle,
+}: {
+  data: Array<Record<string, string | number>>;
+  categories: string[];
+  colors: readonly string[];
+  isDark: boolean;
+  chartGrid: string;
+  chartTooltipStyle: Record<string, string | number>;
+}) {
+  const total = data.reduce((sum, row) =>
+    sum + categories.reduce((acc, category) => acc + Number(row[category] ?? 0), 0), 0);
+  const average = data.length ? Math.round(total / data.length) : 0;
+
+  return (
+    <Card
+      elevation={0}
+      sx={{
+        mb: 2,
+        p: { xs: 1.5, md: 2.25 },
+        borderRadius: 3,
+        border: "1px solid",
+        borderColor: isDark ? "rgba(22,178,229,.30)" : "divider",
+        background: isDark
+          ? "radial-gradient(circle at 55% 48%, rgba(18,111,190,.12), transparent 36%), linear-gradient(145deg, rgba(5,29,48,.99), rgba(4,22,38,.99))"
+          : "background.paper",
+        boxShadow: isDark ? "0 18px 44px rgba(0,0,0,.22), inset 0 1px rgba(255,255,255,.025)" : "0 5px 20px rgba(16,24,40,.06)",
+        overflow: "hidden",
+      }}
+    >
+      <Stack direction={{ xs: "column", lg: "row" }} spacing={1.5} sx={{ justifyContent: "space-between", alignItems: { lg: "flex-start" } }}>
+        <Stack direction="row" spacing={1.4} sx={{ alignItems: "center" }}>
+          <Box sx={{
+            width: 48, height: 48, borderRadius: 2, display: "grid", placeItems: "center",
+            border: "1px solid rgba(0,229,170,.38)",
+            bgcolor: "rgba(0,229,170,.07)",
+            boxShadow: "0 0 24px rgba(0,229,170,.08)",
+          }}>
+            <Box sx={{ display: "flex", gap: .35, alignItems: "flex-end", height: 24 }}>
+              {[13, 23, 17].map((height, index) => <Box key={height} sx={{ width: 6, height, borderRadius: 1, bgcolor: index === 1 ? "#36F0C0" : "#00D99C", boxShadow: "0 0 8px rgba(0,229,170,.35)" }} />)}
+            </Box>
+          </Box>
+          <Box>
+            <Typography sx={{ fontWeight: 900, fontSize: { xs: "1.08rem", md: "1.28rem" } }}>Evolução mensal por categoria</Typography>
+            <Typography variant="body2" color="text.secondary">Distribuição das principais categorias ao longo do período selecionado</Typography>
+          </Box>
+        </Stack>
+        <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap" }}>
+          <Box sx={{ display: "flex", border: "1px solid", borderColor: isDark ? "rgba(56,189,248,.25)" : "divider", borderRadius: 2, overflow: "hidden" }}>
+            {["Mensal", "Semanal", "Diário"].map((label, index) => (
+              <Box key={label} sx={{
+                px: 2, py: .8, fontSize: 13, fontWeight: index === 0 ? 850 : 600,
+                color: index === 0 ? "#E8FFF8" : "text.secondary",
+                bgcolor: index === 0 ? "rgba(0,199,142,.16)" : "transparent",
+                border: index === 0 ? "1px solid #00C78E" : "1px solid transparent",
+                borderRadius: index === 0 ? 1.5 : 0,
+                boxShadow: index === 0 ? "0 0 14px rgba(0,199,142,.13)" : "none",
+              }}>{label}</Box>
+            ))}
+          </Box>
+          <Chip size="medium" variant="outlined" label={`Top ${categories.length} categorias`} sx={{ height: 38, fontWeight: 800 }} />
+        </Stack>
+      </Stack>
+
+      <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5} sx={{ mt: 2 }}>
+        {[
+          ["Total no período", total.toLocaleString("pt-BR")],
+          ["Média mensal", average.toLocaleString("pt-BR")],
+        ].map(([label, value]) => (
+          <Box key={label} sx={{
+            minWidth: { sm: 240 }, px: 2, py: 1.25, borderRadius: 2,
+            border: "1px solid", borderColor: isDark ? "rgba(56,189,248,.25)" : "divider",
+            borderLeft: "2px solid #00C78E",
+            bgcolor: isDark ? "rgba(5,31,51,.66)" : "background.default",
+          }}>
+            <Typography variant="caption" color="text.secondary">{label}</Typography>
+            <Typography sx={{ fontSize: "1.65rem", lineHeight: 1.2, fontWeight: 900, mt: .25 }}>{value}</Typography>
+          </Box>
+        ))}
+      </Stack>
+
+      <Box sx={{ height: { xs: 330, md: 390 }, mt: 2 }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={data} margin={{ top: 8, right: 16, left: 8, bottom: 8 }} barCategoryGap="32%">
+            <CartesianGrid strokeDasharray="4 5" vertical={false} stroke={chartGrid} />
+            <XAxis dataKey="month" tick={{ fontSize: 12 }} tickMargin={10} axisLine={{ stroke: isDark ? "rgba(148,163,184,.42)" : "#D0D5DD" }} />
+            <YAxis allowDecimals={false} tick={{ fontSize: 11 }} width={44} axisLine={{ stroke: isDark ? "rgba(148,163,184,.42)" : "#D0D5DD" }} label={{ value: "Tickets", angle: -90, position: "insideLeft", style: { fill: isDark ? "#B9C9D9" : "#667085", fontSize: 12 } }} />
+            <Tooltip
+              contentStyle={chartTooltipStyle}
+              cursor={{ fill: isDark ? "rgba(56,189,248,.045)" : "rgba(15,23,42,.035)" }}
+              formatter={(value, name) => [Number(value).toLocaleString("pt-BR"), String(name)]}
+              labelFormatter={(label) => String(label)}
+            />
+            {categories.map((category, index) => (
+              <Bar
+                key={category}
+                dataKey={category}
+                name={category}
+                stackId="categories"
+                fill={colors[index % colors.length]}
+                maxBarSize={110}
+                radius={index === categories.length - 1 ? [5, 5, 0, 0] : 0}
+              />
+            ))}
+          </BarChart>
+        </ResponsiveContainer>
+      </Box>
+
+      <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap", mt: .75 }}>
+        {categories.map((category, index) => (
+          <Chip
+            key={category}
+            size="small"
+            label={category}
+            icon={<Box component="span" sx={{ width: 9, height: 9, borderRadius: "50%", bgcolor: colors[index % colors.length], boxShadow: `0 0 8px ${colors[index % colors.length]}88` }} />}
+            sx={{
+              height: 31, fontWeight: 750,
+              border: "1px solid", borderColor: isDark ? "rgba(56,189,248,.25)" : "divider",
+              bgcolor: isDark ? "rgba(6,30,49,.74)" : "background.paper",
+              "& .MuiChip-icon": { ml: 1 },
+            }}
+            variant="outlined"
+          />
+        ))}
+      </Stack>
     </Card>
   );
 }
