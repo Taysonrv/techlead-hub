@@ -186,7 +186,12 @@ export function createAppTheme(mode: PaletteMode = "light") {
           paper: {
             background: dark ? "linear-gradient(180deg,#0B1C2E,#081725)" : paper,
             borderColor: border,
-            "&.MuiDrawer-paperAnchorRight": { width: "min(560px, 92vw)", maxWidth: "100vw", boxSizing: "border-box" },
+            "&.MuiDrawer-paperAnchorRight": {
+              width: "min(560px, 92vw)", maxWidth: "100vw", boxSizing: "border-box",
+              borderLeft: `1px solid ${dark ? "rgba(69,201,225,.22)" : border}`,
+              boxShadow: dark ? "-24px 0 60px rgba(0,0,0,.32)" : "-18px 0 48px rgba(16,24,40,.12)",
+              "&::before": { content: '""', position: "absolute", inset: "0 auto 0 0", width: 2, background: "linear-gradient(180deg,#18C77A,#22D3EE,transparent 80%)", opacity: dark ? .9 : .5 },
+            },
             "&.MuiDrawer-paperAnchorRight > .MuiBox-root:first-of-type": { width: "100%", maxWidth: "100%", boxSizing: "border-box" },
           },
         },
@@ -199,6 +204,10 @@ export function createAppTheme(mode: PaletteMode = "light") {
             minHeight: 38,
             textTransform: "none",
             fontWeight: 700,
+            letterSpacing: ".005em",
+            transition: "transform .16s ease, box-shadow .16s ease, background-color .16s ease, border-color .16s ease",
+            "&:hover": { transform: "translateY(-1px)" },
+            "&:focus-visible": { outline: `2px solid ${aliareColors.green}`, outlineOffset: 2 },
             "&.MuiButton-containedPrimary": {
               backgroundColor: dark ? aliareColors.green : aliareColors.black,
               color: dark ? "#071811" : "#FFFFFF",
@@ -277,6 +286,8 @@ export function createAppTheme(mode: PaletteMode = "light") {
         styleOverrides: {
           root: {
             borderBottomColor: border,
+            paddingTop: 13,
+            paddingBottom: 13,
             ...(dark && { color: "#DCE9F7" }),
           },
         },
@@ -390,7 +401,53 @@ export function createAppTheme(mode: PaletteMode = "light") {
           bar: { borderRadius: 99 },
         },
       },
-      MuiDialog: { styleOverrides: { paper: { background: dark ? "linear-gradient(145deg,#0E2338,#0A192B)" : undefined } } },
+      MuiToggleButtonGroup: {
+        styleOverrides: {
+          root: {
+            padding: 3,
+            borderRadius: 12,
+            border: `1px solid ${border}`,
+            backgroundColor: dark ? "rgba(7,20,35,.46)" : "rgba(248,250,252,.9)",
+          },
+          grouped: { border: 0, borderRadius: "9px !important", margin: 1 },
+        },
+      },
+      MuiToggleButton: {
+        styleOverrides: {
+          root: {
+            minHeight: 34,
+            fontWeight: 750,
+            textTransform: "none",
+            color: textSecondary,
+            "&.Mui-selected": {
+              color: dark ? "#54E7B0" : aliareColors.greenDark,
+              backgroundColor: dark ? "rgba(24,199,122,.13)" : "rgba(24,199,122,.09)",
+              boxShadow: dark ? "inset 0 0 0 1px rgba(24,199,122,.18), 0 0 18px rgba(24,199,122,.06)" : "inset 0 0 0 1px rgba(24,199,122,.12)",
+            },
+          },
+        },
+      },
+      MuiMenuItem: {
+        styleOverrides: {
+          root: {
+            borderRadius: 8,
+            margin: "2px 5px",
+            minHeight: 38,
+            "&.Mui-selected": { backgroundColor: dark ? "rgba(24,199,122,.12)" : "rgba(24,199,122,.08)" },
+            "&:hover": { backgroundColor: dark ? "rgba(76,141,255,.09)" : "rgba(15,23,42,.04)" },
+          },
+        },
+      },
+      MuiDialog: {
+        styleOverrides: {
+          paper: {
+            border: `1px solid ${border}`,
+            borderRadius: 18,
+            background: dark ? "linear-gradient(145deg,#0E2338,#0A192B)" : undefined,
+            boxShadow: dark ? "0 28px 80px rgba(0,0,0,.42)" : "0 24px 64px rgba(16,24,40,.18)",
+          },
+        },
+      },
       MuiMenu: { styleOverrides: { paper: { backgroundColor: paper } } },
       MuiPopover: { styleOverrides: { paper: { backgroundColor: paper } } },
     },
