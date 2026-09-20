@@ -15,6 +15,7 @@ import {
   TableCell,
   TableContainer,
   TableHead,
+  TablePagination,
   TableRow,
   Typography,
 } from "@mui/material";
@@ -149,6 +150,7 @@ type AnalystPerformance = {
 };
 
 export function Performance() {
+  const [analystsPage, setAnalystsPage] = useState(0);
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -1075,7 +1077,7 @@ export function Performance() {
             </TableHead>
 
             <TableBody>
-              {analysts.map((analyst) => (
+              {analysts.slice(analystsPage * 10, analystsPage * 10 + 10).map((analyst) => (
                 <TableRow
                   key={analyst.owner}
                   hover
@@ -1225,6 +1227,18 @@ export function Performance() {
             </TableBody>
           </Table>
         </TableContainer>
+              <TablePagination
+                component="div"
+                count={analysts.length}
+                page={Math.min(analystsPage, Math.max(0, Math.ceil(analysts.length / 10) - 1))}
+                onPageChange={(_event, value) => setAnalystsPage(value)}
+                rowsPerPage={10}
+                rowsPerPageOptions={[10]}
+                labelRowsPerPage="Itens por página"
+                labelDisplayedRows={({ from, to, count }) => `${from}–${to} de ${count}`}
+                showFirstButton
+                showLastButton
+              />
       </Card>
 
       <Alert
