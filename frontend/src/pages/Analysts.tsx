@@ -23,6 +23,7 @@ import {
   TableCell,
   TableContainer,
   TableHead,
+  TablePagination,
   TableRow,
   Typography,
 } from "@mui/material";
@@ -311,6 +312,8 @@ const STATUS_COLORS: Record<
 ===================================================== */
 
 export function Analysts() {
+  const [productivityPage, setProductivityPage] = useState(0);
+  const [analystsPage, setAnalystsPage] = useState(0);
   const navigate = useNavigate();
 
   const [tickets, setTickets] =
@@ -2673,7 +2676,7 @@ export function Analysts() {
                   </TableHead>
 
                   <TableBody>
-                    {productivityAnalysts.map(
+                    {productivityAnalysts.slice(productivityPage * 10, productivityPage * 10 + 10).map(
                       (item) => (
                         <TableRow
                           key={
@@ -2858,6 +2861,18 @@ export function Analysts() {
                   </TableBody>
                 </Table>
               </TableContainer>
+              <TablePagination
+                component="div"
+                count={productivityAnalysts.length}
+                page={Math.min(productivityPage, Math.max(0, Math.ceil(productivityAnalysts.length / 10) - 1))}
+                onPageChange={(_event, value) => setProductivityPage(value)}
+                rowsPerPage={10}
+                rowsPerPageOptions={[10]}
+                labelRowsPerPage="Itens por página"
+                labelDisplayedRows={({ from, to, count }) => `${from}–${to} de ${count}`}
+                showFirstButton
+                showLastButton
+              />
             </>
           )}
         </CardContent>
@@ -3378,7 +3393,7 @@ export function Analysts() {
             </TableHead>
 
             <TableBody>
-              {analysts.map(
+              {analysts.slice(analystsPage * 10, analystsPage * 10 + 10).map(
                 (analyst) => {
                   const analystTickets =
                     scopedTickets.filter(
@@ -3742,6 +3757,18 @@ export function Analysts() {
             </TableBody>
           </Table>
         </TableContainer>
+              <TablePagination
+                component="div"
+                count={analysts.length}
+                page={Math.min(analystsPage, Math.max(0, Math.ceil(analysts.length / 10) - 1))}
+                onPageChange={(_event, value) => setAnalystsPage(value)}
+                rowsPerPage={10}
+                rowsPerPageOptions={[10]}
+                labelRowsPerPage="Itens por página"
+                labelDisplayedRows={({ from, to, count }) => `${from}–${to} de ${count}`}
+                showFirstButton
+                showLastButton
+              />
       </Card>
 
       {/* ===============================================
