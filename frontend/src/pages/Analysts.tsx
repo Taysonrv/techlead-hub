@@ -4807,6 +4807,15 @@ function CompactPieLegend({
         string
     ) => void;
 }) {
+  const [hiddenItems, setHiddenItems] = useState<Set<string>>(() => new Set());
+  const visibleTotal = data.reduce((sum, item) => hiddenItems.has(item.name) ? sum : sum + item.value, 0);
+  const toggleItem = (name: string) => setHiddenItems((current) => {
+    const next = new Set(current);
+    if (next.has(name)) next.delete(name);
+    else if (data.length - next.size > 1) next.add(name);
+    return next;
+  });
+
   return (
     <Stack
       spacing={0.5}
@@ -4820,20 +4829,16 @@ function CompactPieLegend({
           index
         ) => {
           const percent =
-            total > 0
+            visibleTotal > 0
               ? Math.round(
                   (item.value /
-                    total) *
+                    visibleTotal) *
                     100
                 )
               : 0;
 
-          const clickable =
-            Boolean(
-              onItemClick
-            ) &&
-            item.name !==
-              "Outros";
+          const active = !hiddenItems.has(item.name);
+          const clickable = true;
 
           return (
             <Box
@@ -4851,30 +4856,15 @@ function CompactPieLegend({
               title={
                 item.name
               }
-              onClick={() => {
-                if (
-                  clickable
-                ) {
-                  onItemClick?.(
-                    item.name
-                  );
-                }
+              onClick={() => toggleItem(item.name)}
+              onDoubleClick={() => {
+                if (item.name !== "Outros") onItemClick?.(item.name);
               }}
               onKeyDown={(
                 event
               ) => {
-                if (
-                  clickable &&
-                  (
-                    event.key ===
-                      "Enter" ||
-                    event.key ===
-                      " "
-                  )
-                ) {
-                  onItemClick?.(
-                    item.name
-                  );
+                if (event.key === "Enter" || event.key === " ") {
+                  toggleItem(item.name);
                 }
               }}
               sx={{
@@ -4895,10 +4885,10 @@ function CompactPieLegend({
                 borderRadius:
                   1.25,
 
-                cursor:
-                  clickable
-                    ? "pointer"
-                    : "default",
+                cursor: "pointer",
+                opacity: active ? 1 : 0.38,
+                textDecoration: active ? "none" : "line-through",
+                transition: "all .2s ease",
 
                 "&:hover":
                   clickable
@@ -4917,11 +4907,8 @@ function CompactPieLegend({
                   borderRadius:
                     "50%",
 
-                  backgroundColor:
-                    PIE_COLORS[
-                      index %
-                        PIE_COLORS.length
-                    ],
+                  backgroundColor: active ? PIE_COLORS[index % PIE_COLORS.length] : "text.disabled",
+                  boxShadow: active ? `0 0 8px ${PIE_COLORS[index % PIE_COLORS.length]}88` : "none",
                 }}
               />
 
