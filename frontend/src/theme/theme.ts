@@ -270,7 +270,36 @@ export function createAppTheme(mode: PaletteMode = "light") {
           },
         },
       },
-      MuiAlert: { styleOverrides: { root: { borderRadius: 12, border: `1px solid ${border}` } } },
+      MuiAlert: {
+        styleOverrides: {
+          root: {
+            borderRadius: 14,
+            border: `1px solid ${border}`,
+            ...(dark && { backdropFilter: "blur(12px)", boxShadow: "inset 0 1px rgba(255,255,255,.025)" }),
+          },
+        },
+      },
+      MuiDivider: {
+        styleOverrides: {
+          root: { borderColor: border },
+        },
+      },
+      MuiTablePagination: {
+        styleOverrides: {
+          root: {
+            borderTop: `1px solid ${border}`,
+            ...(dark && { backgroundColor: "rgba(8,24,41,.78)", color: textSecondary }),
+          },
+        },
+      },
+      MuiSnackbarContent: {
+        styleOverrides: {
+          root: {
+            borderRadius: 12,
+            ...(dark && { background: "linear-gradient(145deg,#102B42,#0A1B2D)", border: `1px solid ${border}` }),
+          },
+        },
+      },
       MuiTooltip: { styleOverrides: { tooltip: { backgroundColor: dark ? "#162D43" : aliareColors.graphite, fontSize: ".75rem", borderRadius: 7, border: dark ? "1px solid rgba(116,166,216,.20)" : undefined } } },
       MuiTabs: {
         styleOverrides: {
