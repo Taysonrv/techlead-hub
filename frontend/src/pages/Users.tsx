@@ -503,8 +503,9 @@ export function Users() {
               />
             </Box>
           ) : (
-            <TableContainer>
-              <Table>
+            <>
+              <TableContainer>
+                <Table>
                 <TableHead>
                   <TableRow>
                     <TableCell>
@@ -669,8 +670,9 @@ export function Users() {
                     </TableRow>
                   )}
                 </TableBody>
-              </Table>
-            </TableContainer>
+                </Table>
+              </TableContainer>
+
               <TablePagination
                 component="div"
                 count={users.length}
@@ -683,6 +685,7 @@ export function Users() {
                 showFirstButton
                 showLastButton
               />
+            </>
           )}
         </CardContent>
       </Card>
