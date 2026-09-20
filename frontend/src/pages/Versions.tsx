@@ -3642,7 +3642,15 @@ function DonutCard({
                   )}
                 </Pie>
 
-                <RechartsTooltip />
+                <RechartsTooltip
+                  contentStyle={{
+                    borderRadius: 12,
+                    border: `1px solid ${theme.palette.divider}`,
+                    background: theme.palette.background.paper,
+                    boxShadow: "0 14px 36px rgba(0,0,0,.18)",
+                  }}
+                  cursor={false}
+                />
 
                 <text
                   x="50%"
