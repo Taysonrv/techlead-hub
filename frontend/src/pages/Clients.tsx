@@ -1985,7 +1985,202 @@ export function Clients() {
 
             {(!isPresenting || presentationPage === 2) && <Box className="client-print-section-grid client-print-page" sx={{ mt: isPresenting ? 0 : 1.5, height: isPresenting ? "100%" : "auto", display: "grid", gridTemplateColumns: "1fr", gap: 2 }}>
               <Typography className="client-print-page-title" variant="h5" sx={{ fontWeight: 900 }}>Entregas e desenvolvimento</Typography>
-              <ExecutiveDonutPanel title="Status das Tarefas" data={presentationSummary.taskStatuses}
+              <ExecutiveDonutPanel title="Status das Tarefas" data={presentationSummary.taskStatuses} total={presentationSummary.taskItems.length} />
+              <Box sx={{ p: 2.25, border: "1px solid", borderColor: "divider", borderRadius: 2, bgcolor: "background.paper" }}>
+                <Typography variant="h6" sx={{ fontWeight: 900 }}>Leitura das entregas</Typography>
+                <Typography sx={{ mt: 1.5, lineHeight: 1.65 }}>{presentationSummary.taskItems.length} Task(s) relacionadas ao cliente, sendo {portfolioSummary.azureWithVersion} com versão informada, {portfolioSummary.azurePrioritized} priorizada(s) e {portfolioSummary.azureBlocked} com processo bloqueado.</Typography>
+              </Box>
+            </Box>}
+
+            {(!isPresenting || presentationPage === 3) && <Box className="client-print-section-grid client-print-page client-print-continuation" sx={{ mt: isPresenting ? 0 : 1.5, height: isPresenting ? "100%" : "auto", display: "grid", gridTemplateColumns: "1fr", gap: 2 }}>
+              <Typography className="client-print-page-title" variant="h5" sx={{ fontWeight: 900 }}>Pendências e encaminhamentos</Typography>
+              <ExecutiveDonutPanel title="Status das pendências" data={presentationSummary.pendingStatuses} total={presentationSummary.pending.length} />
+              <Box sx={{ p: 2.25, borderRadius: 2, bgcolor: presentationSummary.pending.length ? "rgba(245,158,11,.10)" : "rgba(22,163,74,.08)", border: "1px solid", borderColor: presentationSummary.pending.length ? "rgba(245,158,11,.28)" : "rgba(22,163,74,.22)" }}>
+                <Typography variant="h6" sx={{ fontWeight: 900 }}>Pontos de atenção e encaminhamento</Typography>
+                <Typography sx={{ mt: 1.5, lineHeight: 1.65 }}>{presentationSummary.pending.length ? `${presentationSummary.pending.length} pendência(s) permanecem ativas. ${presentationSummary.bugs.filter(isOpen).length} são bugs e ${presentationSummary.pending.filter((ticket) => normalize(ticket.justification).includes("cliente")).length} aguardam ação ou retorno do cliente.` : "Não há pendências ativas no recorte selecionado."}</Typography>
+              </Box>
+            </Box>}
+
+            {(!isPresenting || presentationPage === 4) && <Box className="client-print-section-grid client-print-page" sx={{ mt: isPresenting ? 0 : 1.5, height: isPresenting ? "100%" : "auto", display: "grid", gridTemplateColumns: "1fr", gap: 2 }}>
+              <Typography className="client-print-page-title" variant="h5" sx={{ fontWeight: 900 }}>Conclusão executiva</Typography>
+              <Box className="client-print-conclusion" sx={{ p: 3, border: "1px solid", borderColor: "divider", borderRadius: 2, bgcolor: "background.paper" }}>
+                <Typography variant="h6" sx={{ fontWeight: 900, color: aliareColors.greenDark }}>Resumo do período</Typography>
+                <Typography sx={{ mt: 1.5, lineHeight: 1.75 }}>
+                  Foram analisados {scopedTickets.length} atendimento(s) de {selectedClient}, com taxa de resolução de {portfolioSummary.resolutionRate.toFixed(1)}%, SLA de solução de {formatSlaPercent(portfolioSummary.solutionSla.percent)} e tempo médio de solução de {formatMinutes(clients.find((item) => item.client === selectedClient)?.averageResolutionMinutes ?? null)}.
+                </Typography>
+                <Typography sx={{ mt: 1.5, lineHeight: 1.75 }}>
+                  O recorte possui {presentationSummary.pending.length} pendência(s), {presentationSummary.bugs.length} bug(s) e {presentationSummary.taskItems.length} Tarefa(s) relacionada(s). O processo mais recorrente é {presentationSummary.areas[0]?.name ?? "não identificado"}, com {presentationSummary.areas[0]?.value ?? 0} ocorrência(s).
+                </Typography>
+                <Typography variant="h6" sx={{ mt: 3, fontWeight: 900 }}>Recomendação</Typography>
+                <Typography sx={{ mt: 1, lineHeight: 1.75 }}>
+                  {presentationSummary.pending.length
+                    ? "Priorizar a revisão das pendências, acompanhar as entregas com versão informada e atuar preventivamente nos processos de maior recorrência."
+                    : "Manter o acompanhamento periódico da carteira e preservar as práticas que sustentam o resultado atual."}
+                </Typography>
+              </Box>
+              <Box className="client-print-conclusion" sx={{ p: 2.5, borderRadius: 2, bgcolor: "rgba(0,138,104,.08)", border: "1px solid rgba(0,138,104,.25)" }}>
+                <Typography sx={{ fontWeight: 850 }}>Leitura para a direção</Typography>
+                <Stack spacing={1} sx={{ mt: 1.25 }}>{executiveInsights.slice(0, 5).map((item) => <Typography key={item} sx={{ lineHeight: 1.55 }}>• {item}</Typography>)}</Stack>
+              </Box>
+            </Box>}
+
+            {isPresenting && <Stack className="presentation-actions" direction="row" spacing={1.5} sx={{ mt: "auto", pt: 2, justifyContent: "space-between", alignItems: "center" }}>
+              <Button variant="outlined" color="inherit" startIcon={<ArrowBackOutlined />} disabled={presentationPage === 0} onClick={() => setPresentationPage((page) => Math.max(0, page - 1))}>Anterior</Button>
+              <Stack direction="row" spacing={0.75}>{[0, 1, 2, 3, 4].map((page) => <Box key={page} onClick={() => setPresentationPage(page)} sx={{ width: page === presentationPage ? 28 : 9, height: 9, borderRadius: 5, bgcolor: page === presentationPage ? aliareColors.green : "divider", cursor: "pointer", transition: "all .2s" }} />)}</Stack>
+              <Button variant="contained" endIcon={<ArrowForwardOutlined />} disabled={presentationPage === 4} onClick={() => setPresentationPage((page) => Math.min(4, page + 1))}>Próxima</Button>
+            </Stack>}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* =================================================
+          GRÁFICOS
+      ================================================= */}
+
+      <Box
+        sx={{
+          display: "grid",
+
+          gridTemplateColumns: {
+            xs: "1fr",
+            lg: "repeat(3, minmax(0, 1fr))",
+          },
+
+          gap: 2,
+          mb: 2,
+        }}
+      >
+        {/* DISTRIBUIÇÃO POR CLIENTE */}
+
+        <ChartCard
+          title="Distribuição por Cliente"
+          subtitle="Participação dos clientes no volume de chamados"
+        >
+          {clientPieData.length >
+          0 ? (
+            <Box
+              sx={{
+                display:
+                  "grid",
+
+                gridTemplateColumns:
+                  {
+                    xs: "1fr",
+                    sm: "minmax(220px, 0.9fr) minmax(0, 1.1fr)",
+                  },
+
+                gap: 1.5,
+
+                alignItems:
+                  "center",
+              }}
+            >
+              <Box
+                sx={{
+                  height: 235,
+                  minWidth: 0,
+                }}
+              >
+                <ResponsiveContainer
+                  width="100%"
+                  height="100%"
+                >
+                  <PieChart>
+                    <Pie
+                      data={
+                        clientPieData
+                      }
+                      dataKey="value"
+                      nameKey="name"
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={78}
+                      innerRadius={46}
+                      paddingAngle={2}
+                      cursor="pointer"
+                      onClick={(data) => {
+                        const name =
+                          String(
+                            (
+                              data as {
+                                payload?: {
+                                  name?: unknown;
+                                };
+                              }
+                            ).payload?.name ??
+                              ""
+                          );
+
+                        if (
+                          !name ||
+                          name ===
+                            "Outros"
+                        ) {
+                          return;
+                        }
+
+                        const list =
+                          periodTickets.filter(
+                            (ticket) =>
+                              (ticket.client ??
+                                "Sem cliente") ===
+                                name &&
+                              (!category ||
+                                ticket.category ===
+                                  category)
+                          );
+
+                        showTickets(
+                          `Cliente: ${name}`,
+                          list,
+                          "Tickets que compõem esta participação"
+                        );
+                      }}
+                    >
+                      {clientPieData.map(
+                        (
+                          _,
+                          index
+                        ) => (
+                          <Cell
+                            key={`${clientPieData[index]?.name ?? "client"}-${index}`}
+                            fill={
+                              PIE_COLORS[
+                                index %
+                                  PIE_COLORS.length
+                              ]
+                            }
+                          />
+                        )
+                      )}
+                    </Pie>
+
+                    <Tooltip
+                      content={
+                        <CompactPieTooltip
+                          valueLabel="ticket(s)"
+                        />
+                      }
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </Box>
+
+              <CompactPieLegend
+                data={
+                  clientPieData
+                }
+                total={
+                  clientPieData.reduce(
+                    (
+                      sum,
+                      item
+                    ) =>
+                      sum +
+                      item.value,
+                    0
+                  )
+                }
                 onItemClick={(
                   name
                 ) => {
@@ -2040,7 +2235,7 @@ export function Clients() {
                   </PieChart>
                 </ResponsiveContainer>
               </Box>
-              <CompactPieLegend data={categoryPieData}
+              <CompactPieLegend data={categoryPieData} total={scopedTickets.length}
                 onItemClick={(name) => name !== "Outros" && showTickets(`Categoria: ${name}`, scopedTickets.filter((ticket) => (ticket.category?.trim() || "Sem categoria") === name))} />
             </Box>
           ) : <EmptyChart />}
@@ -2182,6 +2377,9 @@ export function Clients() {
               <CompactPieLegend
                 data={
                   statusPieData
+                }
+                total={
+                  scopedTickets.length
                 }
                 onItemClick={(
                   name
@@ -3387,11 +3585,14 @@ export function Clients() {
 
 function CompactPieLegend({
   data,
+  total,
   onItemClick,
 }: {
   data:
     PieDataItem[];
 
+  total:
+    number;
 
   onItemClick?:
     (
@@ -3799,7 +4000,7 @@ function ExecutiveDonutPanel({ title, data, total }: { title: string; data: PieD
               <Typography variant="caption">total</Typography>
             </Box>
           </Box>
-          <CompactPieLegend data={data} />
+          <CompactPieLegend data={data} total={safeTotal} />
         </Box>
       ) : (
         <Typography variant="body2" color="text.secondary" sx={{ py: 4, textAlign: "center" }}>Sem dados no recorte.</Typography>
