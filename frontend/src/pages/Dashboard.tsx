@@ -29,6 +29,8 @@ import {
   YAxis,
 } from "recharts";
 
+import { useColorMode } from "../context/ColorModeContext";
+
 import { useNavigate } from "react-router-dom";
 
 import { api } from "../services/api";
@@ -162,6 +164,17 @@ type MetricInfoDefinition = {
 
 export function Dashboard() {
   const navigate = useNavigate();
+  const { mode } = useColorMode();
+  const isDark = mode === "dark";
+  const chartGrid = isDark ? "rgba(148,163,184,.16)" : "#E4E7EC";
+  const chartTick = isDark ? "#8EA4BC" : "#667085";
+  const chartTooltipStyle = {
+    background: isDark ? "rgba(7,23,39,.96)" : "#FFFFFF",
+    border: `1px solid ${isDark ? "rgba(56,189,248,.24)" : "#E4E7EC"}`,
+    borderRadius: 12,
+    boxShadow: isDark ? "0 14px 34px rgba(0,0,0,.38)" : "0 12px 28px rgba(16,24,40,.12)",
+    color: isDark ? "#EAF4FF" : "#101828",
+  };
 
   const [tickets, setTickets] =
     useState<Ticket[]>([]);
@@ -1046,7 +1059,19 @@ export function Dashboard() {
   ======================================================= */
 
   return (
-    <>
+    <Box sx={{
+      mx: { xs: -1, md: -2 },
+      mt: { xs: -1, md: -2 },
+      p: { xs: 1.5, md: 2.5 },
+      minHeight: "100vh",
+      borderRadius: { xs: 0, md: 3 },
+      background: isDark
+        ? "radial-gradient(circle at 18% 0%, rgba(0,199,142,.08), transparent 26%), radial-gradient(circle at 88% 8%, rgba(47,111,237,.10), transparent 28%), linear-gradient(145deg,#061421 0%,#081A2C 52%,#06111D 100%)"
+        : "linear-gradient(180deg,#F8FAFC,#F4F6F8)",
+      "& .recharts-cartesian-grid line": { stroke: chartGrid },
+      "& .recharts-cartesian-axis-tick text": { fill: chartTick },
+      "& .recharts-default-tooltip": chartTooltipStyle,
+    }}>
       {/* =================================================
           CABEÇALHO
       ================================================= */}
@@ -1387,7 +1412,7 @@ export function Dashboard() {
                     <CartesianGrid
                       strokeDasharray="3 3"
                       vertical={false}
-                      stroke="#EAECF0"
+                      stroke={chartGrid}
                     />
 
                     <XAxis
@@ -1485,7 +1510,7 @@ export function Dashboard() {
                   >
                     <CartesianGrid
                       strokeDasharray="3 3"
-                      stroke="#EAECF0"
+                      stroke={chartGrid}
                     />
 
                     <XAxis
@@ -1504,7 +1529,7 @@ export function Dashboard() {
                       }}
                     />
 
-                    <Tooltip />
+                    <Tooltip contentStyle={chartTooltipStyle} cursor={{ fill: isDark ? "rgba(56,189,248,.055)" : "rgba(15,23,42,.035)" }} />
 
                     <Bar
                       dataKey="total"
@@ -1562,10 +1587,10 @@ export function Dashboard() {
             <Box sx={{ height: 320, mt: 1.5 }}>
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={monthlyCategoryEvolution} margin={{ top: 8, right: 12, left: -8, bottom: 4 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#EAECF0" />
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={chartGrid} />
                   <XAxis dataKey="month" tick={{ fontSize: 11 }} />
                   <YAxis allowDecimals={false} tick={{ fontSize: 11 }} width={34} />
-                  <Tooltip />
+                  <Tooltip contentStyle={chartTooltipStyle} cursor={{ fill: isDark ? "rgba(56,189,248,.055)" : "rgba(15,23,42,.035)" }} />
                   {topCategoryLabels.map((category, index) => (
                     <Bar
                       key={category}
@@ -1611,10 +1636,10 @@ export function Dashboard() {
               <Box sx={{ height: 230, mt: 1.5 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={monthlyFlow} margin={{ top: 8, right: 10, left: -12, bottom: 4 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#EAECF0" />
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={chartGrid} />
                     <XAxis dataKey="month" tick={{ fontSize: 10 }} />
                     <YAxis allowDecimals={false} tick={{ fontSize: 10 }} width={32} />
-                    <Tooltip />
+                    <Tooltip contentStyle={chartTooltipStyle} cursor={{ fill: isDark ? "rgba(56,189,248,.055)" : "rgba(15,23,42,.035)" }} />
                     <Line type="monotone" dataKey="opened" name="Abertos" stroke={semanticChartColors.normal} strokeWidth={2.5} />
                     <Line type="monotone" dataKey="resolved" name="Resolvidos" stroke={semanticChartColors.positive} strokeWidth={2.5} />
                   </LineChart>
@@ -1632,10 +1657,10 @@ export function Dashboard() {
               <Box sx={{ height: 230, mt: 1.5 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={causes.slice(0, 6)} layout="vertical" margin={{ left: 12, right: 10 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#EAECF0" />
+                    <CartesianGrid strokeDasharray="3 3" stroke={chartGrid} />
                     <XAxis type="number" allowDecimals={false} />
                     <YAxis type="category" dataKey="label" width={105} tick={{ fontSize: 9 }} />
-                    <Tooltip />
+                    <Tooltip contentStyle={chartTooltipStyle} cursor={{ fill: isDark ? "rgba(56,189,248,.055)" : "rgba(15,23,42,.035)" }} />
                     <Bar dataKey="total" name="Tickets" fill={semanticChartColors.attention} radius={[0, 5, 5, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
@@ -1652,10 +1677,10 @@ export function Dashboard() {
               <Box sx={{ height: 230, mt: 1.5 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={backlogStatus} margin={{ top: 8, right: 10, left: -12, bottom: 4 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#EAECF0" />
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={chartGrid} />
                     <XAxis dataKey="label" tick={{ fontSize: 9 }} interval={0} />
                     <YAxis allowDecimals={false} tick={{ fontSize: 10 }} width={32} />
-                    <Tooltip />
+                    <Tooltip contentStyle={chartTooltipStyle} cursor={{ fill: isDark ? "rgba(56,189,248,.055)" : "rgba(15,23,42,.035)" }} />
                     <Bar dataKey="total" name="Tickets" fill={semanticChartColors.stopped} radius={[5, 5, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
@@ -2747,7 +2772,7 @@ export function Dashboard() {
         }
         message={copyMessage}
       />
-    </>
+    </Box>
   );
 }
 
@@ -2957,6 +2982,8 @@ function CardBase({
   children:
     ReactNode;
 }) {
+  const { mode } = useColorMode();
+  const isDark = mode === "dark";
   return (
     <Card
       elevation={0}
@@ -2964,17 +2991,24 @@ function CardBase({
         border:
           "1px solid",
 
-        borderColor:
-          "divider",
+        borderColor: isDark ? "rgba(77,153,210,.24)" : "divider",
 
-        borderRadius:
-          2.25,
+        borderRadius: 3,
 
-        backgroundColor:
-          "background.paper",
+        background: isDark
+          ? "linear-gradient(145deg, rgba(11,35,56,.98), rgba(7,25,43,.98))"
+          : "background.paper",
 
-        boxShadow:
-          "0 1px 2px rgba(16,24,40,0.035)",
+        boxShadow: isDark
+          ? "0 16px 38px rgba(0,0,0,.20), inset 0 1px rgba(255,255,255,.025)"
+          : "0 4px 18px rgba(16,24,40,.055)",
+
+        overflow: "hidden",
+        transition: "border-color .18s ease, box-shadow .18s ease, transform .18s ease",
+        "&:hover": {
+          borderColor: isDark ? "rgba(47,208,255,.34)" : "rgba(24,199,122,.32)",
+          boxShadow: isDark ? "0 18px 44px rgba(0,0,0,.26)" : "0 8px 24px rgba(16,24,40,.08)",
+        },
       }}
     >
       <CardContent
