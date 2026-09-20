@@ -17,6 +17,7 @@ import {
   TableCell,
   TableContainer,
   TableHead,
+  TablePagination,
   TableRow,
   Typography,
 } from "@mui/material";
@@ -111,6 +112,7 @@ type ConfirmationState = {
 ========================================================= */
 
 export function Users() {
+  const [usersPage, setUsersPage] = useState(0);
   const [
     users,
     setUsers,
@@ -534,7 +536,7 @@ export function Users() {
                 </TableHead>
 
                 <TableBody>
-                  {users.map(
+                  {users.slice(usersPage * 10, usersPage * 10 + 10).map(
                     (
                       user
                     ) => (
@@ -669,6 +671,18 @@ export function Users() {
                 </TableBody>
               </Table>
             </TableContainer>
+              <TablePagination
+                component="div"
+                count={users.length}
+                page={Math.min(usersPage, Math.max(0, Math.ceil(users.length / 10) - 1))}
+                onPageChange={(_event, value) => setUsersPage(value)}
+                rowsPerPage={10}
+                rowsPerPageOptions={[10]}
+                labelRowsPerPage="Itens por página"
+                labelDisplayedRows={({ from, to, count }) => `${from}–${to} de ${count}`}
+                showFirstButton
+                showLastButton
+              />
           )}
         </CardContent>
       </Card>
