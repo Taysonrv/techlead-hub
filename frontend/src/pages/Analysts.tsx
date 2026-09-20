@@ -45,6 +45,7 @@ import { useNavigate } from "react-router-dom";
 import { api } from "../services/api";
 import { useFilters } from "../context/FiltersContext";
 import { PeriodFilter } from "../components/PeriodFilter";
+import { PageHeader } from "../components/PageHeader";
 import { aliareColors } from "../theme/theme";
 import {
   chartPalette,
@@ -1691,92 +1692,7 @@ export function Analysts() {
                 "center",
             }}
           >
-            <Box
-              sx={{
-                width:
-                  30,
-
-                height:
-                  3,
-
-                borderRadius:
-                  99,
-
-                backgroundColor:
-                  aliareColors.green,
-              }}
-            />
-
-            <Typography
-              variant="caption"
-              sx={{
-                fontWeight:
-                  800,
-
-                letterSpacing:
-                  "0.08em",
-
-                textTransform:
-                  "uppercase",
-
-                color:
-                  aliareColors.greenDark,
-              }}
-            >
-              Equipe
-            </Typography>
-          </Stack>
-
-          <Typography
-            sx={{
-              mt:
-                0.8,
-
-              fontWeight:
-                800,
-
-              letterSpacing:
-                "-0.025em",
-
-              fontSize: {
-                xs: "1.7rem",
-                md: "1.9rem",
-                xl: "2.1rem",
-              },
-            }}
-          >
-            Analistas
-          </Typography>
-
-          <Typography
-            variant="body2"
-            color="text.secondary"
-            sx={{
-              mt: 0.25,
-            }}
-          >
-            Visão de carga, distribuição e riscos da equipe
-          </Typography>
-
-          <Typography
-            variant="caption"
-            color="text.secondary"
-            sx={{
-              display:
-                "block",
-              mt: 0.5,
-            }}
-          >
-            {
-              scopedTickets.length
-            }{" "}
-            ticket(s) analisado(s)
-            no período
-          </Typography>
-        </Box>
-
-        <PeriodFilter />
-      </Box>
+            <PageHeader eyebrow="Equipe" title="Analistas" description="Visão de carga, distribuição e riscos da equipe" meta={<>{scopedTickets.length} ticket(s) analisado(s) no período</>} action={<PeriodFilter />} />
 
       {/* ===============================================
           FILTROS GERENCIAIS
