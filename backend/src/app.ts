@@ -75,6 +75,32 @@ app.use(
   })
 );
 
+const requestWindows = new Map<string, { startedAt: number; count: number }>();
+app.use("/api", (req, res, next) => {
+  if (req.path === "/auth/login") return next();
+  const windowMs = Math.max(Number(process.env.API_RATE_LIMIT_WINDOW_MS ?? 60_000), 10_000);
+  const maxRequests = Math.max(Number(process.env.API_RATE_LIMIT_MAX ?? 600), 60);
+  const now = Date.now();
+  const key = req.ip || req.socket.remoteAddress || "unknown";
+  const current = requestWindows.get(key);
+  if (!current || current.startedAt <= now - windowMs) {
+    requestWindows.set(key, { startedAt: now, count: 1 });
+  } else {
+    current.count += 1;
+    if (current.count > maxRequests) {
+      const retryAfter = Math.max(1, Math.ceil((current.startedAt + windowMs - now) / 1000));
+      res.setHeader("Retry-After", String(retryAfter));
+      return res.status(429).json({ error: "Muitas requisições. Aguarde alguns instantes e tente novamente." });
+    }
+  }
+  if (requestWindows.size > 5_000) {
+    for (const [entryKey, value] of requestWindows) {
+      if (value.startedAt <= now - windowMs) requestWindows.delete(entryKey);
+    }
+  }
+  next();
+});
+
 /* =========================================================
    API
 ========================================================= */
