@@ -1452,7 +1452,7 @@ export function Attention() {
                       "&:hover":
                         {
                           backgroundColor:
-                            "#FAFBFA",
+                            "action.hover",
                         },
                     }}
                   >
