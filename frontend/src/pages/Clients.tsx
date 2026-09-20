@@ -24,6 +24,7 @@ import {
   TableCell,
   TableContainer,
   TableHead,
+  TablePagination,
   TableRow,
   Typography,
 } from "@mui/material";
@@ -203,6 +204,7 @@ const STATUS_COLORS: Record<
 ========================================================= */
 
 export function Clients() {
+  const [clientsPage, setClientsPage] = useState(0);
   const navigate = useNavigate();
   const presentationRef = useRef<HTMLDivElement>(null);
   const [presentationPage, setPresentationPage] = useState(0);
@@ -2648,7 +2650,7 @@ export function Clients() {
             </TableHead>
 
             <TableBody>
-              {clients.map(
+              {clients.slice(clientsPage * 10, clientsPage * 10 + 10).map(
                 (client) => {
                   const ticketsOfClient =
                     scopedTickets.filter(
@@ -2912,6 +2914,18 @@ export function Clients() {
             </TableBody>
           </Table>
         </TableContainer>
+              <TablePagination
+                component="div"
+                count={clients.length}
+                page={Math.min(clientsPage, Math.max(0, Math.ceil(clients.length / 10) - 1))}
+                onPageChange={(_event, value) => setClientsPage(value)}
+                rowsPerPage={10}
+                rowsPerPageOptions={[10]}
+                labelRowsPerPage="Itens por página"
+                labelDisplayedRows={({ from, to, count }) => `${from}–${to} de ${count}`}
+                showFirstButton
+                showLastButton
+              />
       </Card>
 
       {/* =================================================
