@@ -3513,6 +3513,15 @@ function DonutCard({
     ) => void;
 }) {
   const theme = useTheme();
+  const [hiddenItems, setHiddenItems] = useState<Set<string>>(() => new Set());
+  const visibleData = data.filter((item) => !hiddenItems.has(item.name));
+  const visibleTotal = visibleData.reduce((sum, item) => sum + item.value, 0);
+  const toggleItem = (name: string) => setHiddenItems((current) => {
+    const next = new Set(current);
+    if (next.has(name)) next.delete(name);
+    else if (data.length - next.size > 1) next.add(name);
+    return next;
+  });
   return (
     <ExecutiveSection compact>
         <Stack
@@ -3569,7 +3578,7 @@ function DonutCard({
               <PieChart>
                 <Pie
                   data={
-                    data
+                    visibleData
                   }
                   dataKey="value"
                   nameKey="name"
@@ -3617,7 +3626,7 @@ function DonutCard({
                     }
                   }}
                 >
-                  {data.map(
+                  {visibleData.map(
                     (
                       item,
                     ) => (
@@ -3649,7 +3658,7 @@ function DonutCard({
                       theme.palette.text.primary,
                   }}
                 >
-                  {centerValue}
+                  {hiddenItems.size > 0 ? visibleTotal : centerValue}
                 </text>
 
                 <text
@@ -3710,37 +3719,12 @@ function DonutCard({
                 key={
                   item.name
                 }
-                role={
-                  onSliceClick
-                    ? "button"
-                    : undefined
-                }
-                tabIndex={
-                  onSliceClick
-                    ? 0
-                    : undefined
-                }
-                onClick={() =>
-                  onSliceClick?.(
-                    item.name,
-                  )
-                }
-                onKeyDown={(
-                  event,
-                ) => {
-                  if (
-                    onSliceClick &&
-                    (
-                      event.key ===
-                        "Enter" ||
-                      event.key ===
-                        " "
-                    )
-                  ) {
-                    onSliceClick(
-                      item.name,
-                    );
-                  }
+                role="button"
+                tabIndex={0}
+                onClick={() => toggleItem(item.name)}
+                onDoubleClick={() => onSliceClick?.(item.name)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") toggleItem(item.name);
                 }}
                 sx={{
                   display:
@@ -3755,17 +3739,14 @@ function DonutCard({
                     0.2,
                   borderRadius:
                     1,
-                  cursor:
-                    onSliceClick
-                      ? "pointer"
-                      : "default",
-                  "&:hover":
-                    onSliceClick
-                      ? {
-                          backgroundColor:
-                            "action.hover",
-                        }
-                      : undefined,
+                  cursor: "pointer",
+                  opacity: hiddenItems.has(item.name) ? 0.38 : 1,
+                  textDecoration: hiddenItems.has(item.name) ? "line-through" : "none",
+                  transition: "all .2s ease",
+                  "&:hover": {
+                    backgroundColor: "action.hover",
+                    transform: "translateY(-1px)",
+                  },
                 }}
               >
                 <Box
@@ -3776,8 +3757,8 @@ function DonutCard({
                       9,
                     borderRadius:
                       "50%",
-                    backgroundColor:
-                      item.color,
+                    backgroundColor: hiddenItems.has(item.name) ? theme.palette.text.disabled : item.color,
+                    boxShadow: hiddenItems.has(item.name) ? "none" : `0 0 8px ${item.color}88`,
                   }}
                 />
 
