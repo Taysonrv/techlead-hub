@@ -1,7 +1,7 @@
 import {
   Alert, Autocomplete, Box, Button, Card, CardContent, Chip, CircularProgress,
   Drawer, FormControl, InputLabel, MenuItem, Select, Stack,
-  TextField, Typography,
+  TextField, Typography, useTheme,
 } from "@mui/material";
 import { DownloadOutlined, SearchOutlined } from "@mui/icons-material";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -12,6 +12,7 @@ import { PageHeader } from "../components/PageHeader";
 import { KpiCard } from "../components/KpiCard";
 import { DetailFieldGrid, DetailPanelHeader, DetailSection } from "../components/DetailPanel";
 import { detailDrawerPaperSx } from "../theme/layoutTokens";
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip as ChartTooltip, XAxis, YAxis } from "recharts";
 
 type Sample = {
   id: number; workItemType: string; title: string; state: string; client: string | null;
@@ -51,6 +52,7 @@ const metrics = [
 ] as const;
 
 export function DataQuality() {
+  const theme = useTheme();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [data, setData] = useState<Data | null>(null);
@@ -182,6 +184,24 @@ export function DataQuality() {
     <Box sx={{ mt: 2, display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2,1fr)", lg: "repeat(4,1fr)" }, gap: 2 }}>
       {metrics.map(([key, label, info, group]) => <KpiCard key={key} title={label} value={data?.summary[key] ?? 0} subtitle={group} info={info} accent={issue === key ? aliareColors.green : group === "Fluxo" ? "#ef4444" : group === "Versão" ? "#8b5cf6" : group === "Vínculo" ? "#f59e0b" : group === "APOIO" ? "#0891b2" : "#2676b9"} active={issue === key} onClick={() => setIssue(issue === key ? "" : key)} />)}
     </Box>
+
+    <Card variant="outlined" sx={{ mt: 2, overflow: "hidden" }}><CardContent>
+      <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ justifyContent: "space-between", alignItems: { sm: "center" }, mb: 1.5 }}>
+        <Box><Typography variant="h6" sx={{ fontWeight: 850 }}>Mapa de pendências por grupo</Typography><Typography variant="body2" color="text.secondary">Concentração das inconsistências para orientar a atuação da equipe.</Typography></Box>
+        <Chip label="Clique nos cards acima para investigar" variant="outlined" />
+      </Stack>
+      <Box sx={{ width: "100%", height: 280 }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={Array.from(new Set(metrics.map(([, , , group]) => group))).map((group) => ({ group, total: metrics.filter(([, , , itemGroup]) => itemGroup === group).reduce((sum, [key]) => sum + Number(data?.summary[key] ?? 0), 0) }))} margin={{ top: 8, right: 12, left: -10, bottom: 4 }}>
+            <CartesianGrid stroke={theme.palette.divider} strokeDasharray="4 4" vertical={false} opacity={0.55} />
+            <XAxis dataKey="group" tick={{ fontSize: 11, fill: theme.palette.text.secondary }} axisLine={false} tickLine={false} />
+            <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: theme.palette.text.secondary }} axisLine={false} tickLine={false} />
+            <ChartTooltip contentStyle={{ borderRadius: 12, border: `1px solid ${theme.palette.divider}`, background: theme.palette.background.paper, boxShadow: "0 14px 36px rgba(0,0,0,.18)" }} cursor={{ fill: theme.palette.action.hover }} />
+            <Bar dataKey="total" name="Pendências" fill={aliareColors.info} radius={[7, 7, 2, 2]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </Box>
+    </CardContent></Card>
 
     <Card variant="outlined" sx={{ mt: 2 }}><CardContent>
       <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ justifyContent: "space-between", alignItems: { sm: "center" } }}>
