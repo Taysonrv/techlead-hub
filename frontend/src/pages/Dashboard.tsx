@@ -39,6 +39,7 @@ import { useNavigate } from "react-router-dom";
 import { api } from "../services/api";
 import { PeriodFilter } from "../components/PeriodFilter";
 import { PageHeader } from "../components/PageHeader";
+import { KpiCard as ExecutiveKpiCard } from "../components/KpiCard";
 import { useFilters } from "../context/FiltersContext";
 import { aliareColors } from "../theme/theme";
 import { calculateOfficialSla } from "../utils/officialSla";
@@ -2740,89 +2741,14 @@ function StandardMetricCard({
   onClick?: () => void;
 }) {
   return (
-    <Card
-      elevation={0}
-      role={onClick ? "button" : undefined}
-      tabIndex={onClick ? 0 : undefined}
+    <ExecutiveKpiCard
+      title={title}
+      value={value}
+      subtitle={description}
+      info={`${info.summary} • ${info.periodRule}`}
+      accent={accentColor}
       onClick={onClick}
-      onKeyDown={(event) => {
-        if (onClick && (event.key === "Enter" || event.key === " ")) {
-          onClick();
-        }
-      }}
-      sx={{
-        position: "relative",
-        overflow: "hidden",
-        border: "1px solid",
-        borderColor: "divider",
-        borderRadius: 2.25,
-        height: "100%",
-        backgroundColor: "background.paper",
-        cursor: onClick ? "pointer" : "default",
-        transition: "transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease",
-        "&::before": {
-          content: '""',
-          position: "absolute",
-          top: 0,
-          left: 0,
-          width: "100%",
-          height: 3,
-          backgroundColor: accentColor,
-        },
-        ...(onClick && {
-          "&:hover": {
-            transform: "translateY(-2px)",
-            borderColor: accentColor,
-            boxShadow: "0 8px 24px rgba(16,24,40,0.08)",
-          },
-          "&:focus-visible": {
-            outline: `2px solid ${accentColor}`,
-            outlineOffset: "2px",
-          },
-        }),
-      }}
-    >
-      <CardContent
-        sx={{
-          p: { xs: 1.6, md: 1.8 },
-          "&:last-child": { pb: { xs: 1.6, md: 1.8 } },
-        }}
-      >
-        <Stack
-          direction="row"
-          sx={{ alignItems: "center", justifyContent: "space-between", gap: 1 }}
-        >
-          <Typography
-            variant="body2"
-            sx={{ fontWeight: 700, color: "text.primary", minWidth: 0 }}
-          >
-            {title}
-          </Typography>
-
-          <MetricInfo definition={info} />
-        </Stack>
-
-        <Typography
-          sx={{
-            fontWeight: 800,
-            mt: 0.6,
-            letterSpacing: "-0.025em",
-            fontSize: { xs: "1.75rem", md: "1.95rem", xl: "2.1rem" },
-            lineHeight: 1.05,
-          }}
-        >
-          {value}
-        </Typography>
-
-        <Typography
-          variant="caption"
-          color="text.secondary"
-          sx={{ display: "block", mt: 0.75, minHeight: 18 }}
-        >
-          {description}
-        </Typography>
-      </CardContent>
-    </Card>
+    />
   );
 }
 
