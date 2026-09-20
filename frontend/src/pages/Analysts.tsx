@@ -1661,38 +1661,13 @@ export function Analysts() {
           CABEÇALHO
       ================================================ */}
 
-      <Box
-        sx={{
-          mb: 2.5,
-
-          display: "flex",
-
-          flexDirection: {
-            xs: "column",
-            lg: "row",
-          },
-
-          justifyContent:
-            "space-between",
-
-          alignItems: {
-            xs: "stretch",
-            lg: "center",
-          },
-
-          gap: 2,
-        }}
-      >
-        <Box>
-          <Stack
-            direction="row"
-            spacing={1}
-            sx={{
-              alignItems:
-                "center",
-            }}
-          >
-            <PageHeader eyebrow="Equipe" title="Analistas" description="Visão de carga, distribuição e riscos da equipe" meta={<>{scopedTickets.length} ticket(s) analisado(s) no período</>} action={<PeriodFilter />} />
+      <PageHeader
+        eyebrow="Equipe"
+        title="Analistas"
+        description="Visão de carga, distribuição e riscos da equipe"
+        meta={<>{scopedTickets.length} ticket(s) analisado(s) no período</>}
+        action={<PeriodFilter />}
+      />
 
       {/* ===============================================
           FILTROS GERENCIAIS
