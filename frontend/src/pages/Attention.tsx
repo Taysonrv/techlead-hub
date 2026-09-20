@@ -45,6 +45,7 @@ import { useNavigate } from "react-router-dom";
 import { api } from "../services/api";
 import { useFilters } from "../context/FiltersContext";
 import { PeriodFilter } from "../components/PeriodFilter";
+import { PageHeader } from "../components/PageHeader";
 import { aliareColors } from "../theme/theme";
 import {
   semanticChartColors,
@@ -847,94 +848,7 @@ export function Attention() {
                 "center",
             }}
           >
-            <Box
-              sx={{
-                width:
-                  30,
-
-                height:
-                  3,
-
-                borderRadius:
-                  99,
-
-                backgroundColor:
-                  aliareColors.green,
-              }}
-            />
-
-            <Typography
-              variant="caption"
-              sx={{
-                fontWeight:
-                  800,
-
-                letterSpacing:
-                  "0.08em",
-
-                textTransform:
-                  "uppercase",
-
-                color:
-                  aliareColors.greenDark,
-              }}
-            >
-              Gestão de risco
-            </Typography>
-          </Stack>
-
-          <Typography
-            sx={{
-              mt:
-                0.8,
-
-              fontWeight:
-                800,
-
-              letterSpacing:
-                "-0.03em",
-
-              fontSize: {
-                xs:
-                  "1.7rem",
-                md:
-                  "1.9rem",
-                xl:
-                  "2.1rem",
-              },
-            }}
-          >
-            Pontos de Atenção
-          </Typography>
-
-          <Typography
-            variant="body2"
-            color="text.secondary"
-            sx={{
-              mt:
-                0.25,
-            }}
-          >
-            Situações que exigem acompanhamento da liderança
-          </Typography>
-
-          <Typography
-            variant="caption"
-            color="text.secondary"
-            sx={{
-              display:
-                "block",
-
-              mt:
-                0.5,
-            }}
-          >
-            {periodTickets.length} ticket(s) analisado(s) no período
-          </Typography>
-        </Box>
-
-        <PeriodFilter />
-      </Box>
+            <PageHeader eyebrow="Gestão de risco" title="Pontos de Atenção" description="Situações que exigem acompanhamento da liderança" meta={<>{periodTickets.length} ticket(s) analisado(s) no período</>} action={<PeriodFilter />} />
 
       <Alert
         severity="info"
