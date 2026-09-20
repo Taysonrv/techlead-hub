@@ -39,6 +39,7 @@ import { useFilters } from "../context/FiltersContext";
 import { aliareColors } from "../theme/theme";
 import { calculateOfficialSla } from "../utils/officialSla";
 import {
+  chartPalette,
   semanticChartColors,
 } from "../theme/chartPalette";
 
@@ -487,6 +488,82 @@ export function Dashboard() {
       effectiveStartDate,
       effectiveEndDate,
     ]);
+
+  /* =======================================================
+     ANÁLISES GERENCIAIS
+  ======================================================= */
+
+  const topCategoryLabels = useMemo(
+    () => categories.slice(0, 6).map((item) => item.label),
+    [categories]
+  );
+
+  const monthlyCategoryEvolution = useMemo(() => {
+    const months = new Map<string, Record<string, string | number>>();
+
+    filteredTickets.forEach((ticket) => {
+      const date = new Date(ticket.createdDate);
+      if (Number.isNaN(date.getTime())) return;
+
+      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+      const row = months.get(monthKey) ?? {
+        monthKey,
+        month: date.toLocaleDateString("pt-BR", { month: "short", year: "2-digit" }).replace(".", ""),
+      };
+
+      const category = ticket.category ?? "Sem categoria";
+      if (topCategoryLabels.includes(category)) {
+        row[category] = Number(row[category] ?? 0) + 1;
+      }
+
+      months.set(monthKey, row);
+    });
+
+    return Array.from(months.values()).sort((a, b) =>
+      String(a.monthKey).localeCompare(String(b.monthKey))
+    );
+  }, [filteredTickets, topCategoryLabels]);
+
+  const monthlyFlow = useMemo(() => {
+    const months = new Map<string, { monthKey: string; month: string; opened: number; resolved: number }>();
+
+    const ensureMonth = (date: Date) => {
+      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+      if (!months.has(monthKey)) {
+        months.set(monthKey, {
+          monthKey,
+          month: date.toLocaleDateString("pt-BR", { month: "short", year: "2-digit" }).replace(".", ""),
+          opened: 0,
+          resolved: 0,
+        });
+      }
+      return months.get(monthKey)!;
+    };
+
+    openedInPeriod.forEach((ticket) => {
+      const date = new Date(ticket.createdDate);
+      if (!Number.isNaN(date.getTime())) ensureMonth(date).opened += 1;
+    });
+
+    resolvedInPeriod.forEach((ticket) => {
+      if (!ticket.resolvedDate) return;
+      const date = new Date(ticket.resolvedDate);
+      if (!Number.isNaN(date.getTime())) ensureMonth(date).resolved += 1;
+    });
+
+    return Array.from(months.values()).sort((a, b) => a.monthKey.localeCompare(b.monthKey));
+  }, [openedInPeriod, resolvedInPeriod]);
+
+  const causes = useMemo(
+    () => groupByField(filteredTickets, "cause", "Sem causa").slice(0, 8),
+    [filteredTickets]
+  );
+
+  const backlogStatus = useMemo(() => [
+    { label: "Novos", total: newTickets.length },
+    { label: "Em atendimento", total: attendanceTickets.length },
+    { label: "Parados", total: stoppedTickets.length },
+  ], [newTickets, attendanceTickets, stoppedTickets]);
 
   /* =======================================================
      PONTOS DE ATENÇÃO
@@ -1459,6 +1536,127 @@ export function Dashboard() {
                         }
                       }}
                     />
+                  </BarChart>
+                </ResponsiveContainer>
+              </Box>
+            </CardBase>
+          </Box>
+
+          {/* =============================================
+              EVOLUÇÃO MENSAL POR CATEGORIA
+          ============================================== */}
+
+          <CardBase>
+            <Stack direction={{ xs: "column", md: "row" }} spacing={1} sx={{ justifyContent: "space-between", alignItems: { md: "center" } }}>
+              <Box>
+                <Typography sx={{ fontWeight: 800, fontSize: "1.05rem" }}>
+                  Evolução mensal por categoria
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  Distribuição das principais categorias ao longo do período selecionado
+                </Typography>
+              </Box>
+              <Chip size="small" variant="outlined" label={`Top ${topCategoryLabels.length} categorias`} />
+            </Stack>
+
+            <Box sx={{ height: 320, mt: 1.5 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={monthlyCategoryEvolution} margin={{ top: 8, right: 12, left: -8, bottom: 4 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#EAECF0" />
+                  <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                  <YAxis allowDecimals={false} tick={{ fontSize: 11 }} width={34} />
+                  <Tooltip />
+                  {topCategoryLabels.map((category, index) => (
+                    <Bar
+                      key={category}
+                      dataKey={category}
+                      name={category}
+                      stackId="categories"
+                      fill={chartPalette[index % chartPalette.length]}
+                      radius={index === topCategoryLabels.length - 1 ? [4, 4, 0, 0] : 0}
+                    />
+                  ))}
+                </BarChart>
+              </ResponsiveContainer>
+            </Box>
+
+            <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap", mt: 1 }}>
+              {topCategoryLabels.map((category, index) => (
+                <Chip
+                  key={category}
+                  size="small"
+                  label={category}
+                  sx={{ borderLeft: `4px solid ${chartPalette[index % chartPalette.length]}` }}
+                  variant="outlined"
+                />
+              ))}
+            </Stack>
+          </CardBase>
+
+          <Box
+            sx={{
+              display: "grid",
+              gridTemplateColumns: { xs: "1fr", lg: "repeat(3, 1fr)" },
+              gap: 2,
+              my: 2,
+            }}
+          >
+            <CardBase>
+              <Typography sx={{ fontWeight: 800, fontSize: "1.05rem" }}>
+                Abertos x Resolvidos
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                Fluxo mensal de entrada e resolução
+              </Typography>
+              <Box sx={{ height: 230, mt: 1.5 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={monthlyFlow} margin={{ top: 8, right: 10, left: -12, bottom: 4 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#EAECF0" />
+                    <XAxis dataKey="month" tick={{ fontSize: 10 }} />
+                    <YAxis allowDecimals={false} tick={{ fontSize: 10 }} width={32} />
+                    <Tooltip />
+                    <Line type="monotone" dataKey="opened" name="Abertos" stroke={semanticChartColors.normal} strokeWidth={2.5} />
+                    <Line type="monotone" dataKey="resolved" name="Resolvidos" stroke={semanticChartColors.positive} strokeWidth={2.5} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </Box>
+            </CardBase>
+
+            <CardBase>
+              <Typography sx={{ fontWeight: 800, fontSize: "1.05rem" }}>
+                Principais causas
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                Motivos mais frequentes no período
+              </Typography>
+              <Box sx={{ height: 230, mt: 1.5 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={causes.slice(0, 6)} layout="vertical" margin={{ left: 12, right: 10 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#EAECF0" />
+                    <XAxis type="number" allowDecimals={false} />
+                    <YAxis type="category" dataKey="label" width={105} tick={{ fontSize: 9 }} />
+                    <Tooltip />
+                    <Bar dataKey="total" name="Tickets" fill={semanticChartColors.attention} radius={[0, 5, 5, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </Box>
+            </CardBase>
+
+            <CardBase>
+              <Typography sx={{ fontWeight: 800, fontSize: "1.05rem" }}>
+                Composição do backlog
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                Situação atual dos tickets pendentes
+              </Typography>
+              <Box sx={{ height: 230, mt: 1.5 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={backlogStatus} margin={{ top: 8, right: 10, left: -12, bottom: 4 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#EAECF0" />
+                    <XAxis dataKey="label" tick={{ fontSize: 9 }} interval={0} />
+                    <YAxis allowDecimals={false} tick={{ fontSize: 10 }} width={32} />
+                    <Tooltip />
+                    <Bar dataKey="total" name="Tickets" fill={semanticChartColors.stopped} radius={[5, 5, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </Box>
