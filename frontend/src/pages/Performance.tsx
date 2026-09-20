@@ -46,6 +46,7 @@ import {
 import { api } from "../services/api";
 import { useFilters } from "../context/FiltersContext";
 import { PeriodFilter } from "../components/PeriodFilter";
+import { PageHeader } from "../components/PageHeader";
 
 import {
   aliareColors,
@@ -527,46 +528,7 @@ export function Performance() {
       >
         <Box>
           <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
-            <Box
-              sx={{
-                width: 30,
-                height: 3,
-                borderRadius: 99,
-                backgroundColor: aliareColors.green,
-              }}
-            />
-
-            <Typography
-              variant="caption"
-              sx={{
-                fontWeight: 800,
-                letterSpacing: "0.08em",
-                textTransform: "uppercase",
-                color: aliareColors.greenDark,
-              }}
-            >
-              Qualidade operacional
-            </Typography>
-          </Stack>
-
-          <Typography
-            sx={{
-              mt: 0.8,
-              fontWeight: 800,
-              letterSpacing: "-0.03em",
-              fontSize: { xs: "1.7rem", md: "1.9rem", xl: "2.1rem" },
-            }}
-          >
-            Desempenho do Atendimento
-          </Typography>
-
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>
-            Prazos, risco operacional e desempenho da equipe em uma visão única
-          </Typography>
-        </Box>
-
-        <PeriodFilter />
-      </Box>
+            <PageHeader eyebrow="Qualidade operacional" title="Desempenho do Atendimento" description="Prazos, risco operacional e desempenho da equipe em uma visão única" action={<PeriodFilter />} />
 
       <Alert
         severity="info"
