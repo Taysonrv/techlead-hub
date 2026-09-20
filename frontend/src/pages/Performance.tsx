@@ -1051,7 +1051,7 @@ export function Performance() {
           <Table size="small">
             <TableHead
               sx={{
-                backgroundColor: "#F8FAF9",
+                backgroundColor: "background.paper",
                 "& .MuiTableCell-root": {
                   color: "text.secondary",
                   fontSize: "0.72rem",
@@ -1077,7 +1077,7 @@ export function Performance() {
                 <TableRow
                   key={analyst.owner}
                   hover
-                  sx={{ "&:hover": { backgroundColor: "#FAFBFA" } }}
+                  sx={{ "&:hover": { backgroundColor: "action.hover" } }}
                 >
                   <TableCell>
                     <Box
@@ -1288,7 +1288,7 @@ export function Performance() {
                       border: "1px solid",
                       borderColor: "divider",
                       borderRadius: 1.5,
-                      backgroundColor: "#FAFBFA",
+                      backgroundColor: "action.hover",
                     }}
                   >
                     <Stack
