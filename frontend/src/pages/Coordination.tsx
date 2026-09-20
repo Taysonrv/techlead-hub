@@ -19,6 +19,7 @@ import {
   Button,
   LinearProgress,
   IconButton,
+  useTheme,
   Tooltip,
   Stack,
   Tab,
@@ -34,6 +35,7 @@ import { detailDrawerPaperSx } from "../theme/layoutTokens";
 import { PageHeader } from "../components/PageHeader";
 import { api } from "../services/api";
 import { aliareColors } from "../theme/theme";
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip as ChartTooltip, XAxis, YAxis } from "recharts";
 
 type Data = {
   generatedAt: string;
@@ -83,6 +85,7 @@ const routines: Record<MainTab, Array<{ label: string; path: string; icon: Eleme
 
 export function Coordination() {
   const navigate = useNavigate();
+  const theme = useTheme();
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedTab = searchParams.get("aba") as MainTab | null;
   const [tab, setTab] = useState<MainTab>(
@@ -254,6 +257,30 @@ export function Coordination() {
                   />
                 ))}
               </Box>
+
+              <Card variant="outlined" sx={{ overflow: "hidden" }}>
+                <CardContent>
+                  <Stack direction={{ xs: "column", md: "row" }} spacing={1} sx={{ justifyContent: "space-between", alignItems: { md: "center" }, mb: 1.5 }}>
+                    <Box>
+                      <Typography variant="h6" sx={{ fontWeight: 850 }}>Distribuição da carga operacional</Typography>
+                      <Typography variant="body2" color="text.secondary">Tickets e itens Azure por analista da equipe oficial.</Typography>
+                    </Box>
+                    <Chip label="Visão comparativa" variant="outlined" />
+                  </Stack>
+                  {data.workload.length ? <Box sx={{ width: "100%", height: Math.max(250, data.workload.length * 42) }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={data.workload} layout="vertical" margin={{ top: 6, right: 18, left: 8, bottom: 4 }}>
+                        <CartesianGrid stroke={theme.palette.divider} strokeDasharray="4 4" horizontal={false} opacity={0.55} />
+                        <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11, fill: theme.palette.text.secondary }} axisLine={false} tickLine={false} />
+                        <YAxis type="category" dataKey="analyst" width={118} tick={{ fontSize: 11, fill: theme.palette.text.secondary }} axisLine={false} tickLine={false} />
+                        <ChartTooltip contentStyle={{ borderRadius: 12, border: `1px solid ${theme.palette.divider}`, background: theme.palette.background.paper, boxShadow: "0 14px 36px rgba(0,0,0,.18)" }} cursor={{ fill: theme.palette.action.hover }} />
+                        <Bar dataKey="tickets" name="Tickets" stackId="load" fill={aliareColors.info} radius={[0, 0, 0, 0]} />
+                        <Bar dataKey="workItems" name="Azure" stackId="load" fill={aliareColors.green} radius={[0, 6, 6, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </Box> : <Typography color="text.secondary">Nenhuma carga pendente localizada para os analistas da equipe.</Typography>}
+                </CardContent>
+              </Card>
 
               <Card variant="outlined">
                 <CardContent>
