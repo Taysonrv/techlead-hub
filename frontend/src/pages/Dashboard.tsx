@@ -12,13 +12,10 @@ import {
   Divider,
   Drawer,
   IconButton,
-  Popover,
   Snackbar,
   Stack,
   Typography,
 } from "@mui/material";
-
-import { InfoOutlined } from "@mui/icons-material";
 
 import {
   Bar,
@@ -2751,14 +2748,6 @@ function StandardMetricCard({
 }
 
 
-function MetricInfoLine({ label, value }: { label: string; value: string }) {
-  return (
-    <Box>
-      <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>{label}</Typography>
-      <Typography variant="body2" sx={{ mt: 0.15, lineHeight: 1.5 }}>{value}</Typography>
-    </Box>
-  );
-}
 
 /* =========================================================
    CARD BASE
