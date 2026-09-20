@@ -1,10 +1,11 @@
-import { CalendarMonthOutlined, ChevronLeft, ChevronRight, SearchOutlined } from "@mui/icons-material";
+import { CalendarMonthOutlined, ChevronLeft, ChevronRight, DarkModeOutlined, LightModeOutlined, SearchOutlined } from "@mui/icons-material";
 import { Badge, Box, CircularProgress, IconButton, InputAdornment, List, ListItemButton, ListItemText, Paper, Popover, Stack, TextField, Typography } from "@mui/material";
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { api } from "../services/api";
 import { aliareColors } from "../theme/theme";
+import { useColorMode } from "../context/ColorModeContext";
 
 type SearchItem = { id: string; type: string; title: string; subtitle: string; path: string };
 type CalendarEvent = { id: string; date: string; kind: string; title: string; subtitle: string; path: string };
@@ -12,6 +13,7 @@ type Holiday = { date: string; name: string };
 
 export function GlobalTopBar() {
   const navigate = useNavigate();
+  const { mode, toggleMode } = useColorMode();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchItem[]>([]);
   const [searching, setSearching] = useState(false);
@@ -73,7 +75,16 @@ export function GlobalTopBar() {
           )}
       </Box>
 
-      {calendarPortal && createPortal(<IconButton title="Calendário operacional" onClick={(event: MouseEvent<HTMLElement>) => setCalendarAnchor(event.currentTarget)} sx={{ width: 46, height: 46, bgcolor: "background.paper", border: "1px solid", borderColor: "divider", borderRadius: 2, boxShadow: "0 2px 10px rgba(0,0,0,.06)", "&:hover": { bgcolor: "background.paper", borderColor: "rgba(24,199,122,.38)" } }}><Badge color="success" variant={events.length ? "dot" : "standard"}><CalendarMonthOutlined /></Badge></IconButton>, calendarPortal)}
+      {calendarPortal && createPortal(<>
+        <IconButton
+          title={mode === "dark" ? "Usar modo claro" : "Usar modo escuro"}
+          aria-label={mode === "dark" ? "Ativar modo claro" : "Ativar modo escuro"}
+          onClick={toggleMode}
+          sx={{ width: 46, height: 46, bgcolor: "background.paper", border: "1px solid", borderColor: "divider", borderRadius: 2, boxShadow: "0 2px 10px rgba(0,0,0,.06)", "&:hover": { bgcolor: "background.paper", borderColor: "rgba(24,199,122,.45)" } }}
+        >
+          {mode === "dark" ? <LightModeOutlined /> : <DarkModeOutlined />}
+        </IconButton>
+        <IconButton title="Calendário operacional" onClick={(event: MouseEvent<HTMLElement>) => setCalendarAnchor(event.currentTarget)} sx={{ width: 46, height: 46, bgcolor: "background.paper", border: "1px solid", borderColor: "divider", borderRadius: 2, boxShadow: "0 2px 10px rgba(0,0,0,.06)", "&:hover": { bgcolor: "background.paper", borderColor: "rgba(24,199,122,.38)" } }}><Badge color="success" variant={events.length ? "dot" : "standard"}><CalendarMonthOutlined /></Badge></IconButton></>, calendarPortal)}
 
       <Popover open={Boolean(calendarAnchor)} anchorEl={calendarAnchor} onClose={() => setCalendarAnchor(null)} anchorOrigin={{ vertical: "bottom", horizontal: "right" }} transformOrigin={{ vertical: "top", horizontal: "right" }} slotProps={{ paper: { sx: { mt: 1, width: { xs: 340, sm: 420 }, maxWidth: "calc(100vw - 24px)", maxHeight: "calc(100vh - 90px)", borderRadius: 2 } } }}>
         <Box sx={{ p: 1.5 }}>

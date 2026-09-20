@@ -79,6 +79,16 @@ app.use(
    API
 ========================================================= */
 
+app.get("/health", (_req, res) => {
+  const databaseReady = process.env.APP_DATABASE_READY !== "false";
+  res.status(databaseReady ? 200 : 503).json({
+    status: databaseReady ? "ok" : "degraded",
+    database: databaseReady ? "ready" : "unavailable",
+    scheduler: databaseReady ? "enabled" : "disabled",
+    timestamp: new Date().toISOString(),
+  });
+});
+
 app.use(routes);
 
 /* =========================================================

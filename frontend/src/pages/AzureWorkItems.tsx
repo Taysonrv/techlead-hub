@@ -79,6 +79,9 @@ import {
   chartPalette,
   semanticChartColors,
 } from "../theme/chartPalette";
+import { PageHeader } from "../components/PageHeader";
+import { ExecutiveSection } from "../components/ExecutiveSection";
+import { useTheme } from "@mui/material/styles";
 
 /*
  * Compatibilidade com a versão do MUI usada pelo projeto:
@@ -879,23 +882,18 @@ function AnalysisDonutCard({
       PieDataItem,
   ) => void;
 }) {
+  const theme = useTheme();
+  const [hiddenItems, setHiddenItems] = useState<Set<string>>(() => new Set());
+  const visibleData = data.filter((item) => !hiddenItems.has(item.name));
+  const visibleTotal = visibleData.reduce((sum, item) => sum + item.value, 0);
+  const toggleItem = (name: string) => setHiddenItems((current) => {
+    const next = new Set(current);
+    if (next.has(name)) next.delete(name);
+    else if (data.length - next.size > 1) next.add(name);
+    return next;
+  });
   return (
-    <Card
-      elevation={0}
-      sx={{
-        border:
-          "1px solid",
-        borderColor:
-          "divider",
-        borderRadius:
-          2.25,
-        backgroundColor:
-          "background.paper",
-        boxShadow:
-          "0 1px 2px rgba(16,24,40,0.035)",
-      }}
-    >
-      <CardContent>
+    <ExecutiveSection compact>
         <Stack
           direction="row"
           spacing={1}
@@ -949,15 +947,16 @@ function AnalysisDonutCard({
             >
               <PieChart>
                 <Pie
-                  data={
-                    data
-                  }
+                  data={visibleData}
                   dataKey="value"
                   nameKey="name"
-                  innerRadius={58}
-                  outerRadius={84}
-                  paddingAngle={2}
+                  innerRadius={60}
+                  outerRadius={86}
+                  paddingAngle={3}
+                  cornerRadius={4}
                   stroke="none"
+                  isAnimationActive
+                  animationDuration={650}
                   cursor="pointer"
                   onClick={(entry) => {
                     const candidate =
@@ -985,7 +984,7 @@ function AnalysisDonutCard({
                     }
                   }}
                 >
-                  {data.map(
+                  {visibleData.map(
                     (
                       item,
                     ) => (
@@ -1014,10 +1013,10 @@ function AnalysisDonutCard({
                     fontWeight:
                       800,
                     fill:
-                      aliareColors.text,
+                      theme.palette.text.primary,
                   }}
                 >
-                  {centerValue}
+                  {hiddenItems.size > 0 ? formatNumber(visibleTotal) : centerValue}
                 </text>
 
                 <text
@@ -1029,7 +1028,7 @@ function AnalysisDonutCard({
                     fontSize:
                       11,
                     fill:
-                      aliareColors.textSecondary,
+                      theme.palette.text.secondary,
                   }}
                 >
                   {centerLabel}
@@ -1077,7 +1076,9 @@ function AnalysisDonutCard({
           {data.map(
             (
               item,
-            ) => (
+            ) => {
+              const active = !hiddenItems.has(item.name);
+              return (
               <Box
                 key={
                   item.name
@@ -1094,15 +1095,9 @@ function AnalysisDonutCard({
                     ? undefined
                     : 0
                 }
-                onClick={() => {
-                  if (
-                    item.clickable !==
-                    false
-                  ) {
-                    onItemClick?.(
-                      item,
-                    );
-                  }
+                onClick={() => toggleItem(item.name)}
+                onDoubleClick={() => {
+                  if (item.clickable !== false) onItemClick?.(item);
                 }}
                 onKeyDown={(event) => {
                   if (
@@ -1115,9 +1110,7 @@ function AnalysisDonutCard({
                         " "
                     )
                   ) {
-                    onItemClick?.(
-                      item,
-                    );
+                    toggleItem(item.name);
                   }
                 }}
                 sx={{
@@ -1127,17 +1120,13 @@ function AnalysisDonutCard({
                     "center",
                   gap:
                     0.55,
-                  px:
-                    0.4,
-                  py:
-                    0.2,
-                  borderRadius:
-                    1,
-                  cursor:
-                    item.clickable ===
-                    false
-                      ? "default"
-                      : "pointer",
+                  px: 0.75,
+                  py: 0.45,
+                  borderRadius: 1.25,
+                  cursor: "pointer",
+                  opacity: active ? 1 : 0.38,
+                  textDecoration: active ? "none" : "line-through",
+                  transition: "all .2s ease",
                   "&:hover":
                     item.clickable ===
                     false
@@ -1156,8 +1145,8 @@ function AnalysisDonutCard({
                       10,
                     borderRadius:
                       "50%",
-                    backgroundColor:
-                      item.color,
+                    backgroundColor: active ? item.color : theme.palette.text.disabled,
+                    boxShadow: active ? `0 0 8px ${item.color}88` : "none",
                     flexShrink:
                       0,
                   }}
@@ -1186,11 +1175,11 @@ function AnalysisDonutCard({
                   )}
                 </Typography>
               </Box>
-            ),
+              );
+            },
           )}
         </Stack>
-      </CardContent>
-    </Card>
+      </ExecutiveSection>
   );
 }
 
@@ -2560,133 +2549,13 @@ export function AzureWorkItems({
             CABEÇALHO
         ================================================= */}
 
-        <Stack
-          direction={{
-            xs:
-              "column",
-            md:
-              "row",
-          }}
-          spacing={2}
-          sx={{
-            alignItems: {
-              md:
-                "center",
-            },
-            justifyContent:
-              "space-between",
-          }}
-        >
-          <Box>
-            <Stack
-              direction="row"
-              spacing={1}
-              sx={{
-                alignItems:
-                  "center",
-              }}
-            >
-              <Box
-                sx={{
-                  width: 30,
-                  height: 3,
-                  borderRadius: 99,
-                  backgroundColor:
-                    aliareColors.green,
-                }}
-              />
-
-              <Typography
-                variant="caption"
-                sx={{
-                  fontWeight: 800,
-                  letterSpacing:
-                    "0.08em",
-                  textTransform:
-                    "uppercase",
-                  color:
-                    aliareColors.greenDark,
-                }}
-              >
-                Desenvolvimento
-              </Typography>
-            </Stack>
-
-            <Typography
-              sx={{
-                mt: 0.8,
-                fontWeight: 800,
-                letterSpacing:
-                  "-0.03em",
-                fontSize: {
-                  xs:
-                    "1.7rem",
-                  md:
-                    "1.9rem",
-                  xl:
-                    "2.1rem",
-                },
-              }}
-            >
-              {title}
-            </Typography>
-
-            <Typography
-              variant="body2"
-              color="text.secondary"
-              sx={{
-                mt: 0.25,
-              }}
-            >
-              {subtitle}
-            </Typography>
-
-            <Typography
-              variant="caption"
-              color="text.secondary"
-              sx={{
-                display:
-                  "block",
-                mt: 0.5,
-              }}
-            >
-              {formatNumber(summary?.total)} Work Item(s) sincronizado(s)
-            </Typography>
-          </Box>
-
-          <Stack
-            direction="row"
-            spacing={1}
-            alignItems="center"
-          >
-            <Typography
-              variant="caption"
-              color="text.secondary"
-              sx={{
-                display: {
-                  xs:
-                    "none",
-                  md:
-                    "block",
-                },
-              }}
-            >
-              Dados locais sincronizados com Azure DevOps
-            </Typography>
-
-            <Button
-              variant="outlined"
-              startIcon={
-                <RefreshOutlined />
-              }
-              onClick={() =>
-                void loadAll()
-              }
-            >
-              Recarregar
-            </Button>
-          </Stack>
-        </Stack>
+        <PageHeader
+          eyebrow="Desenvolvimento"
+          title={title}
+          description={subtitle}
+          meta={<>{formatNumber(summary?.total)} Work Item(s) sincronizado(s) • Dados locais sincronizados com Azure DevOps</>}
+          action={<Button variant="outlined" startIcon={<RefreshOutlined />} onClick={() => void loadAll()}>Recarregar</Button>}
+        />
 
         {error && (
           <Alert
@@ -2952,7 +2821,7 @@ export function AzureWorkItems({
         <Box
           sx={{
             order:
-              3,
+              2,
             display:
               "grid",
             gridTemplateColumns: {
@@ -3070,7 +2939,7 @@ export function AzureWorkItems({
           variant="outlined"
           sx={{
             order:
-              4,
+              3,
           }}
         >
           <CardContent>
@@ -3286,7 +3155,7 @@ export function AzureWorkItems({
             variant="outlined"
             sx={{
               order:
-                5,
+                4,
             }}
           >
             <CardContent
@@ -3393,7 +3262,7 @@ export function AzureWorkItems({
           variant="outlined"
           sx={{
             order:
-              2,
+              5,
           }}
         >
           <CardContent>
@@ -4079,7 +3948,7 @@ export function AzureWorkItems({
                           </TableCell>
 
                           <TableCell sx={{ width: 210, minWidth: 210 }}>
-                            Versão de cadastro
+                            Versão cadastrada
                           </TableCell>
 
                           <TableCell sx={{ width: 210, minWidth: 210 }}>

@@ -5,6 +5,19 @@ import type { AuthenticatedRequest } from "../middlewares/authMiddleware";
 
 const coordinationRoutes = Router();
 coordinationRoutes.use(requireRoles("ADMIN", "COORDENADOR"));
+coordinationRoutes.get("/details", async (req: AuthenticatedRequest, res) => {
+  try {
+    const kind = String(req.query.kind ?? "backlog");
+    const analyst = typeof req.query.analyst === "string" ? req.query.analyst : undefined;
+    const parsedLimit = Number(req.query.limit ?? 50);
+    const limit = Number.isFinite(parsedLimit) ? parsedLimit : 50;
+    res.json(await coordinationService.details(kind, analyst, limit));
+  } catch (error) {
+    console.error("[coordination] Falha ao carregar detalhes:", error);
+    res.status(500).json({ error: "Não foi possível carregar os detalhes da coordenação." });
+  }
+});
+
 coordinationRoutes.get("/summary", async (req: AuthenticatedRequest, res) => {
   try { res.json(await coordinationService.summary(req.auth!.userId)); }
   catch (error) { console.error("[coordination] Falha ao montar visão:", error); res.status(500).json({ error: "Não foi possível gerar a visão de coordenação." }); }

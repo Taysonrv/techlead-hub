@@ -6,16 +6,10 @@ import {
   createRoot,
 } from "react-dom/client";
 
-import {
-  CssBaseline,
-  ThemeProvider,
-} from "@mui/material";
 
 import App from "./App";
 
-import {
-  theme,
-} from "./theme/theme";
+import { AppThemeProvider } from "./context/ColorModeContext";
 
 import "./index.css";
 
@@ -42,14 +36,8 @@ createRoot(
   rootElement
 ).render(
   <StrictMode>
-    <ThemeProvider
-      theme={
-        theme
-      }
-    >
-      <CssBaseline />
-
+    <AppThemeProvider>
       <App />
-    </ThemeProvider>
+    </AppThemeProvider>
   </StrictMode>
 );

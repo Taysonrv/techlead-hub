@@ -58,6 +58,7 @@ const DataQuality = lazy(() => import("./pages/DataQuality").then((module) => ({
 const Knowledge = lazy(() => import("./pages/Knowledge").then((module) => ({ default: module.Knowledge })));
 const Chat = lazy(() => import("./pages/Chat").then((module) => ({ default: module.Chat })));
 const Coordination = lazy(() => import("./pages/Coordination").then((module) => ({ default: module.Coordination })));
+const TechnicalLeadership = lazy(() => import("./pages/TechnicalLeadership").then((module) => ({ default: module.TechnicalLeadership })));
 
 import {
   aliareColors,
@@ -103,6 +104,9 @@ function AuthenticatedLayout({
               minWidth: 0,
               minHeight: "100vh",
               backgroundColor: "background.default",
+              backgroundImage: (theme) => theme.palette.mode === "dark" ? "radial-gradient(circle at 88% 0%, rgba(84,73,255,.07), transparent 26%), linear-gradient(145deg,rgba(7,19,33,.98),rgba(9,25,43,.98))" : "none",
+              color: "text.primary",
+              transition: "background-color .2s ease, color .2s ease",
               overflowX: "hidden",
 
               px: {
@@ -125,9 +129,42 @@ function AuthenticatedLayout({
             <GlobalTopBar />
             {backendUnavailable && <Alert severity="warning" sx={{ mb: 2 }}>O servidor central está temporariamente indisponível. Verifique a conexão e tente novamente; seus dados locais de navegação foram preservados.</Alert>}
             <Box
+              className="techlead-page-surface futuristic-page"
               sx={{
                 width: "100%",
                 maxWidth: "100%",
+                minHeight: "calc(100vh - 96px)",
+                position: "relative",
+                "&::before": (theme) => ({
+                  content: '""',
+                  position: "fixed",
+                  pointerEvents: "none",
+                  inset: "96px 24px 24px 284px",
+                  borderRadius: 28,
+                  border: theme.palette.mode === "dark" ? "1px solid rgba(74,139,199,.055)" : "1px solid transparent",
+                  background: theme.palette.mode === "dark" ? "linear-gradient(145deg,rgba(9,29,48,.16),rgba(10,23,43,.04))" : "transparent",
+                  boxShadow: theme.palette.mode === "dark" ? "inset 0 1px rgba(255,255,255,.012)" : "none",
+                }),
+                "& > *": { position: "relative", zIndex: 1 },
+                "& .MuiCard-root": { backdropFilter: "blur(14px)" },
+                "& .MuiCard-root:focus-within": (theme) => ({
+                  borderColor: theme.palette.mode === "dark" ? "rgba(24,199,122,.24)" : "rgba(16,148,91,.18)",
+                }),
+                "& .MuiTableContainer-root": { overflow: "auto", overscrollBehavior: "contain" },
+                "& .MuiTableHead-root .MuiTableCell-root": {
+                  letterSpacing: ".015em",
+                  fontWeight: 800,
+                },
+                "& .MuiDrawer-paperAnchorRight": {
+                  backdropFilter: "blur(18px)",
+                },
+                "& .MuiAlert-root": { backdropFilter: "blur(12px)" },
+                "& .MuiTableRow-root": { transition: "background-color .14s ease, box-shadow .14s ease" },
+                "& .MuiTableCell-root": { verticalAlign: "middle" },
+                "& .MuiChip-root": { maxWidth: "100%" },
+                "& .MuiInputBase-root, & .MuiButton-root, & .MuiChip-root": {
+                  transition: "border-color .16s ease, background-color .16s ease, box-shadow .16s ease, transform .16s ease",
+                },
               }}
             >
               {children}
@@ -235,6 +272,7 @@ function App() {
 
           <Route path="/chat" element={<AuthenticatedLayout><Chat /></AuthenticatedLayout>} />
           <Route path="/coordenacao" element={<AuthenticatedLayout><Coordination /></AuthenticatedLayout>} />
+          <Route path="/lideranca-tecnica" element={<AuthenticatedLayout><TechnicalLeadership /></AuthenticatedLayout>} />
 
           <Route
             path="/analistas"

@@ -8,7 +8,7 @@ import {
   TextField,
 } from "@mui/material";
 
-import { useFilters } from "../context/FiltersContext";
+import { useFilters, type PeriodOption } from "../context/FiltersContext";
 
 export function PeriodFilter() {
   const {
@@ -50,11 +50,7 @@ export function PeriodFilter() {
           label="Período"
           onChange={(event) =>
             setPeriod(
-              event.target.value as
-                | "7d"
-                | "30d"
-                | "month"
-                | "custom"
+              event.target.value as PeriodOption
             )
           }
         >
@@ -66,8 +62,24 @@ export function PeriodFilter() {
             Últimos 30 dias
           </MenuItem>
 
+          <MenuItem value="60d">
+            Últimos 60 dias
+          </MenuItem>
+
+          <MenuItem value="90d">
+            Últimos 90 dias
+          </MenuItem>
+
           <MenuItem value="month">
             Este mês
+          </MenuItem>
+
+          <MenuItem value="semester">
+            Este semestre
+          </MenuItem>
+
+          <MenuItem value="year">
+            Este ano
           </MenuItem>
 
           <MenuItem value="custom">

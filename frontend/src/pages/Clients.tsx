@@ -16,7 +16,6 @@ import {
   IconButton,
   InputLabel,
   MenuItem,
-  Popover,
   Select,
   Snackbar,
   Stack,
@@ -25,15 +24,16 @@ import {
   TableCell,
   TableContainer,
   TableHead,
+  TablePagination,
   TableRow,
   Typography,
 } from "@mui/material";
+import { useTheme } from "@mui/material/styles";
 
 import {
   ArrowBackOutlined,
   ArrowForwardOutlined,
   FullscreenExitOutlined,
-  InfoOutlined,
   PictureAsPdfOutlined,
 } from "@mui/icons-material";
 
@@ -56,6 +56,9 @@ import { api } from "../services/api";
 import { calculateOfficialSla } from "../utils/officialSla";
 import { useFilters } from "../context/FiltersContext";
 import { PeriodFilter } from "../components/PeriodFilter";
+import { PageHeader } from "../components/PageHeader";
+import { KpiCard as ExecutiveKpiCard } from "../components/KpiCard";
+import { ExecutiveSection } from "../components/ExecutiveSection";
 import { aliareColors } from "../theme/theme";
 import {
   chartPalette,
@@ -202,6 +205,11 @@ const STATUS_COLORS: Record<
 ========================================================= */
 
 export function Clients() {
+  const theme = useTheme();
+  const [hiddenClientSlices, setHiddenClientSlices] = useState<Set<string>>(() => new Set());
+  const [hiddenCategorySlices, setHiddenCategorySlices] = useState<Set<string>>(() => new Set());
+  const [hiddenStatusSlices, setHiddenStatusSlices] = useState<Set<string>>(() => new Set());
+  const [clientsPage, setClientsPage] = useState(0);
   const navigate = useNavigate();
   const presentationRef = useRef<HTMLDivElement>(null);
   const [presentationPage, setPresentationPage] = useState(0);
@@ -983,6 +991,18 @@ export function Clients() {
     8,
   ), [scopedTickets]);
 
+  const visibleClientPieData = useMemo(() => clientPieData.filter((item) => !hiddenClientSlices.has(item.name)), [clientPieData, hiddenClientSlices]);
+  const visibleCategoryPieData = useMemo(() => categoryPieData.filter((item) => !hiddenCategorySlices.has(item.name)), [categoryPieData, hiddenCategorySlices]);
+
+  const togglePieSlice = (setter: React.Dispatch<React.SetStateAction<Set<string>>>, data: PieDataItem[], name: string) => {
+    setter((current) => {
+      const next = new Set(current);
+      if (next.has(name)) next.delete(name);
+      else if (data.length - next.size > 1) next.add(name);
+      return next;
+    });
+  };
+
   const executiveInsights = useMemo(() => {
     const topCategory = categoryPieData[0];
     const openRate = portfolioSummary.total
@@ -1111,6 +1131,8 @@ export function Clients() {
           item.value > 0
       );
     }, [scopedTickets]);
+
+  const visibleStatusPieData = useMemo(() => statusPieData.filter((item) => !hiddenStatusSlices.has(item.name)), [statusPieData, hiddenStatusSlices]);
 
   /* =======================================================
      DRILL-DOWN
@@ -1464,135 +1486,22 @@ export function Clients() {
           CABEÇALHO
       ================================================= */}
 
-      <Box
-        sx={{
-          mb: 2.5,
-
-          display: "flex",
-
-          flexDirection: {
-            xs: "column",
-            lg: "row",
-          },
-
-          justifyContent:
-            "space-between",
-
-          alignItems: {
-            xs: "stretch",
-            lg: "center",
-          },
-
-          gap: 2,
-        }}
-      >
-        <Stack direction="row" spacing={2} sx={{ alignItems: "center", minWidth: 0 }}>
-          {selectedClient && (
-            <Avatar
-              variant="rounded"
-              sx={{ width: 72, height: 72, bgcolor: aliareColors.greenDark, color: "white", fontSize: "1.15rem", fontWeight: 900, boxShadow: "0 8px 22px rgba(0,91,73,.18)" }}
-            >
-              {clientInitials(selectedClient)}
-            </Avatar>
-          )}
-        <Box sx={{ minWidth: 0 }}>
-          <Stack
-            direction="row"
-            spacing={1}
-            sx={{
-              alignItems:
-                "center",
-            }}
-          >
-            <Box
-              sx={{
-                width:
-                  30,
-
-                height:
-                  3,
-
-                borderRadius:
-                  99,
-
-                backgroundColor:
-                  aliareColors.green,
-              }}
-            />
-
-            <Typography
-              variant="caption"
-              sx={{
-                fontWeight:
-                  800,
-
-                letterSpacing:
-                  "0.08em",
-
-                textTransform:
-                  "uppercase",
-
-                color:
-                  aliareColors.greenDark,
-              }}
-            >
-              Carteira
-            </Typography>
-          </Stack>
-
-          <Typography
-            sx={{
-              mt:
-                0.8,
-
-              fontWeight:
-                800,
-
-              letterSpacing:
-                "-0.025em",
-
-              fontSize: {
-                xs: "1.7rem",
-                md: "1.9rem",
-                xl: "2.1rem",
-              },
-            }}
-          >
-            {selectedClient || "Clientes"}
-          </Typography>
-
-          <Typography
-            variant="body2"
-            color="text.secondary"
-            sx={{
-              mt: 0.25,
-            }}
-          >
-            {selectedClient
-              ? "Painel executivo do cliente: atendimento, SLA, demanda e desenvolvimento"
-              : "Resultados da carteira, qualidade do atendimento e acompanhamento do desenvolvimento"}
-          </Typography>
-
-          <Typography
-            variant="caption"
-            color="text.secondary"
-            sx={{
-              display:
-                "block",
-              mt: 0.5,
-            }}
-          >
-            {
-              scopedTickets.length
-            }{" "}
-            ticket(s) analisado(s)
-            no filtro atual
-          </Typography>
+      <Stack direction="row" spacing={2} sx={{ alignItems: "center", mb: 2.5 }}>
+        {selectedClient && (
+          <Avatar variant="rounded" sx={{ width: 64, height: 64, bgcolor: aliareColors.greenDark, color: "white", fontSize: "1.1rem", fontWeight: 900, boxShadow: "0 10px 28px rgba(0,91,73,.22)" }}>
+            {clientInitials(selectedClient)}
+          </Avatar>
+        )}
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          <PageHeader
+            eyebrow="Carteira"
+            title={selectedClient || "Clientes"}
+            description={selectedClient ? "Painel executivo do cliente: atendimento, SLA, demanda e desenvolvimento" : "Resultados da carteira, qualidade do atendimento e acompanhamento do desenvolvimento"}
+            meta={<>{scopedTickets.length} ticket(s) analisado(s) no filtro atual</>}
+            action={<PeriodFilter />}
+          />
         </Box>
-        </Stack>
-
-        <PeriodFilter />
-      </Box>
+      </Stack>
 
       {/* =================================================
           FILTROS
@@ -2197,9 +2106,7 @@ export function Clients() {
                 >
                   <PieChart>
                     <Pie
-                      data={
-                        clientPieData
-                      }
+                      data={visibleClientPieData}
                       dataKey="value"
                       nameKey="name"
                       cx="50%"
@@ -2247,7 +2154,7 @@ export function Clients() {
                         );
                       }}
                     >
-                      {clientPieData.map(
+                      {visibleClientPieData.map(
                         (
                           _,
                           index
@@ -2277,20 +2184,9 @@ export function Clients() {
               </Box>
 
               <CompactPieLegend
-                data={
-                  clientPieData
-                }
-                total={
-                  clientPieData.reduce(
-                    (
-                      sum,
-                      item
-                    ) =>
-                      sum +
-                      item.value,
-                    0
-                  )
-                }
+                data={clientPieData}
+                hiddenItems={hiddenClientSlices}
+                onToggleItem={(name) => togglePieSlice(setHiddenClientSlices, clientPieData, name)}
                 onItemClick={(
                   name
                 ) => {
@@ -2334,18 +2230,20 @@ export function Clients() {
               <Box sx={{ height: 235, minWidth: 0 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
-                    <Pie data={categoryPieData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={76} innerRadius={44} paddingAngle={2} cursor="pointer"
+                    <Pie data={visibleCategoryPieData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={76} innerRadius={44} paddingAngle={2} cursor="pointer"
                       onClick={(data) => {
                         const name = String((data as { payload?: { name?: unknown } }).payload?.name ?? "");
                         if (name && name !== "Outros") showTickets(`Categoria: ${name}`, scopedTickets.filter((ticket) => (ticket.category?.trim() || "Sem categoria") === name));
                       }}>
-                      {categoryPieData.map((item, index) => <Cell key={`${item.name}-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />)}
+                      {visibleCategoryPieData.map((item, index) => <Cell key={`${item.name}-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />)}
                     </Pie>
                     <Tooltip content={<CompactPieTooltip valueLabel="ticket(s)" />} />
                   </PieChart>
                 </ResponsiveContainer>
               </Box>
-              <CompactPieLegend data={categoryPieData} total={scopedTickets.length}
+              <CompactPieLegend data={categoryPieData}
+                hiddenItems={hiddenCategorySlices}
+                onToggleItem={(name) => togglePieSlice(setHiddenCategorySlices, categoryPieData, name)}
                 onItemClick={(name) => name !== "Outros" && showTickets(`Categoria: ${name}`, scopedTickets.filter((ticket) => (ticket.category?.trim() || "Sem categoria") === name))} />
             </Box>
           ) : <EmptyChart />}
@@ -2388,9 +2286,7 @@ export function Clients() {
                 >
                   <PieChart>
                     <Pie
-                      data={
-                        statusPieData
-                      }
+                      data={visibleStatusPieData}
                       dataKey="value"
                       nameKey="name"
                       cx="50%"
@@ -2449,7 +2345,7 @@ export function Clients() {
                         }
                       }}
                     >
-                      {statusPieData.map(
+                      {visibleStatusPieData.map(
                         (
                           _,
                           index
@@ -2485,12 +2381,9 @@ export function Clients() {
               </Box>
 
               <CompactPieLegend
-                data={
-                  statusPieData
-                }
-                total={
-                  scopedTickets.length
-                }
+                data={statusPieData}
+                hiddenItems={hiddenStatusSlices}
+                onToggleItem={(name) => togglePieSlice(setHiddenStatusSlices, statusPieData, name)}
                 onItemClick={(
                   name
                 ) => {
@@ -2544,10 +2437,10 @@ export function Clients() {
             <Box sx={{ height: 290, mt: 1 }}>
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={ownerChartData} layout="vertical" margin={{ top: 8, right: 24, bottom: 8, left: 18 }}>
-                  <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                  <XAxis type="number" allowDecimals={false} />
-                  <YAxis type="category" dataKey="name" width={135} tick={{ fontSize: 11 }} tickFormatter={(value) => abbreviate(String(value), 20)} />
-                  <Tooltip />
+                  <CartesianGrid strokeDasharray="4 6" horizontal={false} stroke={theme.palette.divider} opacity={0.55} />
+                  <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11, fill: theme.palette.text.secondary }} axisLine={false} tickLine={false} />
+                  <YAxis type="category" dataKey="name" width={135} tick={{ fontSize: 11, fill: theme.palette.text.secondary }} axisLine={false} tickLine={false} tickFormatter={(value) => abbreviate(String(value), 20)} />
+                  <Tooltip contentStyle={{ borderRadius: 12, border: `1px solid ${theme.palette.divider}`, background: theme.palette.background.paper, boxShadow: "0 12px 32px rgba(0,0,0,.16)" }} cursor={{ fill: theme.palette.action.hover }} />
                   <Bar dataKey="value" name="Tickets" fill={aliareColors.green} radius={[0, 6, 6, 0]} cursor="pointer"
                     onClick={(data) => {
                       const name = String((data as { name?: unknown }).name ?? "");
@@ -2672,7 +2565,7 @@ export function Clients() {
             <TableHead
               sx={{
                 backgroundColor:
-                  "#F8FAF9",
+                  "background.paper",
 
                 "& .MuiTableCell-root":
                   {
@@ -2760,7 +2653,7 @@ export function Clients() {
             </TableHead>
 
             <TableBody>
-              {clients.map(
+              {clients.slice(clientsPage * 10, clientsPage * 10 + 10).map(
                 (client) => {
                   const ticketsOfClient =
                     scopedTickets.filter(
@@ -3024,6 +2917,18 @@ export function Clients() {
             </TableBody>
           </Table>
         </TableContainer>
+              <TablePagination
+                component="div"
+                count={clients.length}
+                page={Math.min(clientsPage, Math.max(0, Math.ceil(clients.length / 10) - 1))}
+                onPageChange={(_event, value) => setClientsPage(value)}
+                rowsPerPage={10}
+                rowsPerPageOptions={[10]}
+                labelRowsPerPage="Itens por página"
+                labelDisplayedRows={({ from, to, count }) => `${from}–${to} de ${count}`}
+                showFirstButton
+                showLastButton
+              />
       </Card>
 
       {/* =================================================
@@ -3683,21 +3588,31 @@ export function Clients() {
 
 function CompactPieLegend({
   data,
-  total,
+  hiddenItems: controlledHiddenItems,
+  onToggleItem,
   onItemClick,
 }: {
-  data:
-    PieDataItem[];
-
-  total:
-    number;
-
-  onItemClick?:
-    (
-      name:
-        string
-    ) => void;
+  data: PieDataItem[];
+  hiddenItems?: Set<string>;
+  onToggleItem?: (name: string) => void;
+  onItemClick?: (name: string) => void;
 }) {
+  const [localHiddenItems, setLocalHiddenItems] = useState<Set<string>>(() => new Set());
+  const hiddenItems = controlledHiddenItems ?? localHiddenItems;
+  const visibleTotal = data.reduce((sum, item) => hiddenItems.has(item.name) ? sum : sum + item.value, 0);
+  const toggleItem = (name: string) => {
+    if (onToggleItem) {
+      onToggleItem(name);
+      return;
+    }
+    setLocalHiddenItems((current) => {
+      const next = new Set(current);
+      if (next.has(name)) next.delete(name);
+      else if (data.length - next.size > 1) next.add(name);
+      return next;
+    });
+  };
+
   return (
     <Stack
       spacing={0.5}
@@ -3711,20 +3626,16 @@ function CompactPieLegend({
           index
         ) => {
           const percent =
-            total > 0
+            visibleTotal > 0
               ? Math.round(
                   (item.value /
-                    total) *
+                    visibleTotal) *
                     100
                 )
               : 0;
 
-          const clickable =
-            Boolean(
-              onItemClick
-            ) &&
-            item.name !==
-              "Outros";
+          const active = !hiddenItems.has(item.name);
+          const clickable = true;
 
           return (
             <Box
@@ -3742,30 +3653,15 @@ function CompactPieLegend({
               title={
                 item.name
               }
-              onClick={() => {
-                if (
-                  clickable
-                ) {
-                  onItemClick?.(
-                    item.name
-                  );
-                }
+              onClick={() => toggleItem(item.name)}
+              onDoubleClick={() => {
+                if (item.name !== "Outros") onItemClick?.(item.name);
               }}
               onKeyDown={(
                 event
               ) => {
-                if (
-                  clickable &&
-                  (
-                    event.key ===
-                      "Enter" ||
-                    event.key ===
-                      " "
-                  )
-                ) {
-                  onItemClick?.(
-                    item.name
-                  );
+                if (event.key === "Enter" || event.key === " ") {
+                  toggleItem(item.name);
                 }
               }}
               sx={{
@@ -3786,10 +3682,10 @@ function CompactPieLegend({
                 borderRadius:
                   1.25,
 
-                cursor:
-                  clickable
-                    ? "pointer"
-                    : "default",
+                cursor: "pointer",
+                opacity: active ? 1 : 0.38,
+                textDecoration: active ? "none" : "line-through",
+                transition: "all .2s ease",
 
                 "&:hover":
                   clickable
@@ -3808,11 +3704,8 @@ function CompactPieLegend({
                   borderRadius:
                     "50%",
 
-                  backgroundColor:
-                    PIE_COLORS[
-                      index %
-                        PIE_COLORS.length
-                    ],
+                  backgroundColor: active ? PIE_COLORS[index % PIE_COLORS.length] : "text.disabled",
+                  boxShadow: active ? `0 0 8px ${PIE_COLORS[index % PIE_COLORS.length]}88` : "none",
                 }}
               />
 
@@ -4063,134 +3956,13 @@ function MetricCard({
 }
 
 function StandardMetricCard({
-  title,
-  value,
-  description,
-  info,
-  accentColor,
-  onClick,
+  title, value, description, info, accentColor, onClick,
 }: {
-  title: string;
-  value: ReactNode;
-  description: string;
-  info: MetricInfoDefinition;
-  accentColor: string;
-  onClick?: () => void;
+  title: string; value: ReactNode; description: string; info: MetricInfoDefinition; accentColor: string; onClick?: () => void;
 }) {
-  return (
-    <Card
-      elevation={0}
-      role={onClick ? "button" : undefined}
-      tabIndex={onClick ? 0 : undefined}
-      onClick={onClick}
-      onKeyDown={(event) => {
-        if (onClick && (event.key === "Enter" || event.key === " ")) onClick();
-      }}
-      sx={{
-        position: "relative",
-        overflow: "hidden",
-        border: "1px solid",
-        borderColor: "divider",
-        borderRadius: 2.25,
-        height: "100%",
-        backgroundColor: "background.paper",
-        cursor: onClick ? "pointer" : "default",
-        transition: "transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease",
-        "&::before": {
-          content: '""', position: "absolute", top: 0, left: 0,
-          width: "100%", height: 3, backgroundColor: accentColor,
-        },
-        ...(onClick && {
-          "&:hover": {
-            transform: "translateY(-2px)", borderColor: accentColor,
-            boxShadow: "0 8px 24px rgba(16,24,40,0.08)",
-          },
-          "&:focus-visible": { outline: `2px solid ${accentColor}`, outlineOffset: "2px" },
-        }),
-      }}
-    >
-      <CardContent sx={{ p: { xs: 1.6, md: 1.8 }, "&:last-child": { pb: { xs: 1.6, md: 1.8 } } }}>
-        <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between", gap: 1 }}>
-          <Typography variant="body2" sx={{ fontWeight: 700, color: "text.primary", minWidth: 0 }}>
-            {title}
-          </Typography>
-          <MetricInfo definition={info} />
-        </Stack>
-
-        <Typography sx={{ mt: 0.6, fontWeight: 800, letterSpacing: "-0.025em", fontSize: { xs: "1.75rem", md: "1.95rem", xl: "2.1rem" }, lineHeight: 1.05 }}>
-          {value}
-        </Typography>
-        <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.75, minHeight: 18 }}>
-          {description}
-        </Typography>
-      </CardContent>
-    </Card>
-  );
+  return <ExecutiveKpiCard title={title} value={value} subtitle={description} info={`${info.summary} • ${info.periodRule}`} accent={accentColor} onClick={onClick} />;
 }
 
-function MetricInfo({ definition }: { definition: MetricInfoDefinition }) {
-  const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
-  const open = Boolean(anchorEl);
-
-  return (
-    <>
-      <IconButton
-        size="small"
-        aria-label={`Informações sobre ${definition.title}`}
-        title={`Informações sobre ${definition.title}`}
-        onClick={(event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          setAnchorEl(event.currentTarget);
-        }}
-        onKeyDown={(event) => event.stopPropagation()}
-        sx={{ p: 0.3, color: "text.secondary", flexShrink: 0, "&:hover": { color: aliareColors.greenDark, backgroundColor: "rgba(24,199,122,0.08)" } }}
-      >
-        <InfoOutlined sx={{ fontSize: 16 }} />
-      </IconButton>
-      <Popover
-        open={open}
-        anchorEl={anchorEl}
-        onClose={() => setAnchorEl(null)}
-        anchorOrigin={{ vertical: "bottom", horizontal: "left" }}
-        transformOrigin={{ vertical: "top", horizontal: "left" }}
-        slotProps={{
-          paper: {
-            onClick: (event: React.MouseEvent<HTMLElement>) => event.stopPropagation(),
-            sx: { width: { xs: 320, sm: 390 }, maxWidth: "calc(100vw - 32px)", mt: 0.75, p: 2, borderRadius: 2, border: "1px solid", borderColor: "divider", boxShadow: "0 14px 40px rgba(16,24,40,0.14)" },
-          },
-        }}
-      >
-        <Stack spacing={1.2}>
-          <Box>
-            <Typography sx={{ fontWeight: 850 }}>{definition.title}</Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.4, lineHeight: 1.55 }}>{definition.summary}</Typography>
-          </Box>
-          <Divider />
-          <MetricInfoLine label="Como é calculado" value={definition.calculation} />
-          <MetricInfoLine label="Fonte" value={definition.source} />
-          <MetricInfoLine label="Campo de referência" value={definition.reference} />
-          <MetricInfoLine label="Regra de período" value={definition.periodRule} />
-          {definition.notes && (
-            <Box sx={{ p: 1.1, borderRadius: 1.5, backgroundColor: "rgba(24,199,122,0.055)", border: "1px solid rgba(24,199,122,0.16)" }}>
-              <Typography variant="caption" sx={{ fontWeight: 800, color: aliareColors.greenDark }}>Observação</Typography>
-              <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.25, lineHeight: 1.5 }}>{definition.notes}</Typography>
-            </Box>
-          )}
-        </Stack>
-      </Popover>
-    </>
-  );
-}
-
-function MetricInfoLine({ label, value }: { label: string; value: string }) {
-  return (
-    <Box>
-      <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>{label}</Typography>
-      <Typography variant="body2" sx={{ mt: 0.15, lineHeight: 1.5 }}>{value}</Typography>
-    </Box>
-  );
-}
 
 function PresentationKpi({ title, value, detail, color, onClick }: {
   title: string; value: ReactNode; detail: string; color: string; onClick: () => void;
@@ -4232,7 +4004,7 @@ function ExecutiveDonutPanel({ title, data, total }: { title: string; data: PieD
               <Typography variant="caption">total</Typography>
             </Box>
           </Box>
-          <CompactPieLegend data={data} total={safeTotal} />
+          <CompactPieLegend data={data} />
         </Box>
       ) : (
         <Typography variant="body2" color="text.secondary" sx={{ py: 4, textAlign: "center" }}>Sem dados no recorte.</Typography>
@@ -4273,63 +4045,11 @@ function ExecutiveBarPanel({ title, data, onClick }: { title: string; data: PieD
 ========================================================= */
 
 function ChartCard({
-  title,
-  subtitle,
-  children,
+  title, subtitle, children,
 }: {
-  title: string;
-  subtitle: string;
-  children:
-    ReactNode;
+  title: string; subtitle: string; children: ReactNode;
 }) {
-  return (
-    <Card
-      elevation={0}
-      sx={{
-        border:
-          "1px solid",
-        borderColor:
-          "divider",
-        borderRadius:
-          2.25,
-
-        backgroundColor:
-          "background.paper",
-
-        boxShadow:
-          "0 1px 2px rgba(16,24,40,0.035)",
-      }}
-    >
-      <CardContent
-        sx={{
-          p: 2,
-
-          "&:last-child": {
-            pb: 2,
-          },
-        }}
-      >
-        <Typography
-        sx={{
-          fontWeight: 800,
-            fontSize:
-              "1.05rem",
-          }}
-        >
-          {title}
-        </Typography>
-
-        <Typography
-          variant="caption"
-          color="text.secondary"
-        >
-          {subtitle}
-        </Typography>
-
-        {children}
-      </CardContent>
-    </Card>
-  );
+  return <ExecutiveSection title={title} subtitle={subtitle} compact>{children}</ExecutiveSection>;
 }
 
 /* =========================================================

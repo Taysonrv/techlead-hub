@@ -1,17 +1,18 @@
 import {
   Alert, Autocomplete, Box, Button, Card, CardContent, Chip, CircularProgress,
   Drawer, FormControl, InputLabel, MenuItem, Select, Stack,
-  TextField, Typography,
+  TextField, Typography, useTheme,
 } from "@mui/material";
 import { DownloadOutlined, SearchOutlined } from "@mui/icons-material";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "../services/api";
 import { aliareColors } from "../theme/theme";
 import { PageHeader } from "../components/PageHeader";
 import { KpiCard } from "../components/KpiCard";
 import { DetailFieldGrid, DetailPanelHeader, DetailSection } from "../components/DetailPanel";
 import { detailDrawerPaperSx } from "../theme/layoutTokens";
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip as ChartTooltip, XAxis, YAxis } from "recharts";
 
 type Sample = {
   id: number; workItemType: string; title: string; state: string; client: string | null;
@@ -41,6 +42,7 @@ const metrics = [
   ["ticketClosedTaskOpen", "Ticket encerrado com Tarefa ativa", "Ticket concluído, fechado ou resolvido enquanto a Tarefa relacionada ainda está em andamento.", "Fluxo"],
   ["activeTaskWithVersion", "Tarefa ativa com versão entregue", "Tarefa não finalizada vinculada a atendimento que já possui versão entregue. Pode indicar estado desatualizado.", "Versão"],
   ["completedWithoutVersion", "Tarefa finalizada sem versão entregue", "Correção ou evolução concluída e vinculada a atendimento sem versão entregue no Azure.", "Versão"],
+  ["versionMismatch", "Versão cadastrada ≠ entregue", "Correção ou evolução possui versão cadastrada diferente da versão efetivamente registrada na entrega. O indicador ajuda a identificar classificação desatualizada ou entrega divergente.", "Versão"],
   ["clientMismatch", "Cliente divergente", "O cliente do atendimento não consta como cliente principal nem como cliente participante da Correção ou Evolução relacionada. APOIO não exige cliente.", "Vínculo"],
   ["supportLinkDivergence", "APOIO com vínculo divergente", "APOIO referencia ticket inexistente no recorte ou ticket que aponta para outra Tarefa. Cliente e versão não são obrigatórios para APOIO.", "APOIO"],
   ["danglingTaskTickets", "Referência de Tarefa inexistente", "Ticket aponta para um ID de Tarefa ausente no snapshot atual do Azure.", "Vínculo"],
@@ -50,7 +52,9 @@ const metrics = [
 ] as const;
 
 export function DataQuality() {
+  const theme = useTheme();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [data, setData] = useState<Data | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -58,7 +62,7 @@ export function DataQuality() {
   const [client, setClient] = useState("");
   const [user, setUser] = useState("");
   const [search, setSearch] = useState("");
-  const [issue, setIssue] = useState("");
+  const [issue, setIssue] = useState(() => searchParams.get("issue") ?? "");
   const [selected, setSelected] = useState<Sample | null>(null);
   const [detail, setDetail] = useState<Record<string, unknown> | null>(null);
 
@@ -111,6 +115,7 @@ export function DataQuality() {
       ticketClosedTaskOpen: "Atualizar o estado da Tarefa ou reabrir o atendimento.",
       activeTaskWithVersion: "Validar se a Tarefa já pode ser concluída.",
       completedWithoutVersion: "Informar a versão efetivamente entregue.",
+      versionMismatch: "Validar a versão planejada no cadastro e a versão efetivamente entregue antes de ajustar o registro.",
       clientMismatch: "Revisar cliente principal e clientes participantes.",
       supportLinkDivergence: "Corrigir o vínculo do APOIO com o atendimento.",
       danglingTaskTickets: "Corrigir ou remover a referência de Tarefa no atendimento.",
@@ -179,6 +184,24 @@ export function DataQuality() {
     <Box sx={{ mt: 2, display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2,1fr)", lg: "repeat(4,1fr)" }, gap: 2 }}>
       {metrics.map(([key, label, info, group]) => <KpiCard key={key} title={label} value={data?.summary[key] ?? 0} subtitle={group} info={info} accent={issue === key ? aliareColors.green : group === "Fluxo" ? "#ef4444" : group === "Versão" ? "#8b5cf6" : group === "Vínculo" ? "#f59e0b" : group === "APOIO" ? "#0891b2" : "#2676b9"} active={issue === key} onClick={() => setIssue(issue === key ? "" : key)} />)}
     </Box>
+
+    <Card variant="outlined" sx={{ mt: 2, overflow: "hidden" }}><CardContent>
+      <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ justifyContent: "space-between", alignItems: { sm: "center" }, mb: 1.5 }}>
+        <Box><Typography variant="h6" sx={{ fontWeight: 850 }}>Mapa de pendências por grupo</Typography><Typography variant="body2" color="text.secondary">Concentração das inconsistências para orientar a atuação da equipe.</Typography></Box>
+        <Chip label="Clique nos cards acima para investigar" variant="outlined" />
+      </Stack>
+      <Box sx={{ width: "100%", height: 280 }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={Array.from(new Set(metrics.map(([, , , group]) => group))).map((group) => ({ group, total: metrics.filter(([, , , itemGroup]) => itemGroup === group).reduce((sum, [key]) => sum + Number(data?.summary[key] ?? 0), 0) }))} margin={{ top: 8, right: 12, left: -10, bottom: 4 }}>
+            <CartesianGrid stroke={theme.palette.divider} strokeDasharray="4 4" vertical={false} opacity={0.55} />
+            <XAxis dataKey="group" tick={{ fontSize: 11, fill: theme.palette.text.secondary }} axisLine={false} tickLine={false} />
+            <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: theme.palette.text.secondary }} axisLine={false} tickLine={false} />
+            <ChartTooltip contentStyle={{ borderRadius: 12, border: `1px solid ${theme.palette.divider}`, background: theme.palette.background.paper, boxShadow: "0 14px 36px rgba(0,0,0,.18)" }} cursor={{ fill: theme.palette.action.hover }} />
+            <Bar dataKey="total" name="Pendências" fill={aliareColors.info} radius={[7, 7, 2, 2]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </Box>
+    </CardContent></Card>
 
     <Card variant="outlined" sx={{ mt: 2 }}><CardContent>
       <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ justifyContent: "space-between", alignItems: { sm: "center" } }}>

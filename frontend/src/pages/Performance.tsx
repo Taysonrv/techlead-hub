@@ -15,6 +15,7 @@ import {
   TableCell,
   TableContainer,
   TableHead,
+  TablePagination,
   TableRow,
   Typography,
 } from "@mui/material";
@@ -46,6 +47,9 @@ import {
 import { api } from "../services/api";
 import { useFilters } from "../context/FiltersContext";
 import { PeriodFilter } from "../components/PeriodFilter";
+import { PageHeader } from "../components/PageHeader";
+import { useTheme } from "@mui/material/styles";
+import { ExecutiveSection } from "../components/ExecutiveSection";
 
 import {
   aliareColors,
@@ -146,6 +150,9 @@ type AnalystPerformance = {
 };
 
 export function Performance() {
+  const theme = useTheme();
+  const [hiddenTrendSeries, setHiddenTrendSeries] = useState<Set<string>>(() => new Set());
+  const [analystsPage, setAnalystsPage] = useState(0);
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -515,58 +522,12 @@ export function Performance() {
 
   return (
     <>
-      <Box
-        sx={{
-          mb: 2.25,
-          display: "flex",
-          flexDirection: { xs: "column", lg: "row" },
-          justifyContent: "space-between",
-          alignItems: { xs: "stretch", lg: "center" },
-          gap: 2,
-        }}
-      >
-        <Box>
-          <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
-            <Box
-              sx={{
-                width: 30,
-                height: 3,
-                borderRadius: 99,
-                backgroundColor: aliareColors.green,
-              }}
-            />
-
-            <Typography
-              variant="caption"
-              sx={{
-                fontWeight: 800,
-                letterSpacing: "0.08em",
-                textTransform: "uppercase",
-                color: aliareColors.greenDark,
-              }}
-            >
-              Qualidade operacional
-            </Typography>
-          </Stack>
-
-          <Typography
-            sx={{
-              mt: 0.8,
-              fontWeight: 800,
-              letterSpacing: "-0.03em",
-              fontSize: { xs: "1.7rem", md: "1.9rem", xl: "2.1rem" },
-            }}
-          >
-            Desempenho do Atendimento
-          </Typography>
-
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>
-            Prazos, risco operacional e desempenho da equipe em uma visão única
-          </Typography>
-        </Box>
-
-        <PeriodFilter />
-      </Box>
+      <PageHeader
+        eyebrow="Qualidade operacional"
+        title="Desempenho do Atendimento"
+        description="Prazos, risco operacional e desempenho da equipe em uma visão única"
+        action={<PeriodFilter />}
+      />
 
       <Alert
         severity="info"
@@ -883,46 +844,75 @@ export function Performance() {
                   <CartesianGrid
                     strokeDasharray="3 3"
                     vertical={false}
-                    stroke="#EAECF0"
+                    stroke={theme.palette.divider}
+                    opacity={0.55}
                   />
 
                   <XAxis
                     dataKey="date"
-                    tick={{ fontSize: 11 }}
+                    tick={{ fontSize: 11, fill: theme.palette.text.secondary }}
                     tickLine={false}
                     axisLine={false}
                   />
 
                   <YAxis
                     domain={[0, 100]}
-                    tick={{ fontSize: 11 }}
+                    tick={{ fontSize: 11, fill: theme.palette.text.secondary }}
                     tickFormatter={(value) => `${value}%`}
                     tickLine={false}
                     axisLine={false}
                   />
 
-                  <Tooltip />
-                  <Legend />
+                  <Tooltip
+                    contentStyle={{
+                      borderRadius: 12,
+                      border: "1px solid",
+                      borderColor: theme.palette.divider,
+                      background: theme.palette.background.paper,
+                      boxShadow: "0 12px 32px rgba(0,0,0,.16)",
+                    }}
+                    formatter={(value, name) => [`${Number(value).toLocaleString("pt-BR")}%`, String(name)]}
+                  />
+                  <Legend
+                    onClick={(entry) => {
+                      const key = String(entry.dataKey ?? "");
+                      if (key === "firstResponse" || key === "resolution") {
+                        setHiddenTrendSeries((current) => {
+                          const next = new Set(current);
+                          if (next.has(key)) next.delete(key);
+                          else if (2 - next.size > 1) next.add(key);
+                          return next;
+                        });
+                      }
+                    }}
+                    formatter={(value, entry) => {
+                      const key = String(entry.dataKey ?? "");
+                      const active = !hiddenTrendSeries.has(key);
+                      return <span style={{ opacity: active ? 1 : .38, textDecoration: active ? "none" : "line-through", cursor: "pointer" }}>{value}</span>;
+                    }}
+                  />
 
-                  <Line
+                  {!hiddenTrendSeries.has("firstResponse") && <Line
                     type="monotone"
                     dataKey="firstResponse"
                     name="Primeira resposta"
                     stroke={aliareColors.green}
-                    strokeWidth={2.4}
-                    dot={{ r: 2.5 }}
+                    strokeWidth={3}
+                    dot={false}
                     activeDot={{ r: 5 }}
-                  />
+                    animationDuration={500}
+                  />}
 
-                  <Line
+                  {!hiddenTrendSeries.has("resolution") && <Line
                     type="monotone"
                     dataKey="resolution"
                     name="Resolução"
-                    stroke="#171717"
-                    strokeWidth={2.2}
-                    dot={{ r: 2.5 }}
+                    stroke={semanticChartColors.normal}
+                    strokeWidth={3}
+                    dot={false}
                     activeDot={{ r: 5 }}
-                  />
+                    animationDuration={500}
+                  />}
                 </LineChart>
               </ResponsiveContainer>
             ) : (
@@ -1096,7 +1086,7 @@ export function Performance() {
           <Table size="small">
             <TableHead
               sx={{
-                backgroundColor: "#F8FAF9",
+                backgroundColor: "background.paper",
                 "& .MuiTableCell-root": {
                   color: "text.secondary",
                   fontSize: "0.72rem",
@@ -1118,11 +1108,11 @@ export function Performance() {
             </TableHead>
 
             <TableBody>
-              {analysts.map((analyst) => (
+              {analysts.slice(analystsPage * 10, analystsPage * 10 + 10).map((analyst) => (
                 <TableRow
                   key={analyst.owner}
                   hover
-                  sx={{ "&:hover": { backgroundColor: "#FAFBFA" } }}
+                  sx={{ "&:hover": { backgroundColor: "action.hover" } }}
                 >
                   <TableCell>
                     <Box
@@ -1268,6 +1258,18 @@ export function Performance() {
             </TableBody>
           </Table>
         </TableContainer>
+              <TablePagination
+                component="div"
+                count={analysts.length}
+                page={Math.min(analystsPage, Math.max(0, Math.ceil(analysts.length / 10) - 1))}
+                onPageChange={(_event, value) => setAnalystsPage(value)}
+                rowsPerPage={10}
+                rowsPerPageOptions={[10]}
+                labelRowsPerPage="Itens por página"
+                labelDisplayedRows={({ from, to, count }) => `${from}–${to} de ${count}`}
+                showFirstButton
+                showLastButton
+              />
       </Card>
 
       <Alert
@@ -1333,7 +1335,7 @@ export function Performance() {
                       border: "1px solid",
                       borderColor: "divider",
                       borderRadius: 1.5,
-                      backgroundColor: "#FAFBFA",
+                      backgroundColor: "action.hover",
                     }}
                   >
                     <Stack
@@ -1528,18 +1530,18 @@ function DonutCard({
   info: CardInfo;
   onSliceClick?: (name: string) => void;
 }) {
+  const theme = useTheme();
+  const [hiddenItems, setHiddenItems] = useState<Set<string>>(() => new Set());
+  const visibleData = data.filter((item) => !hiddenItems.has(item.name));
+  const visibleTotal = visibleData.reduce((sum, item) => sum + item.value, 0);
+  const toggleItem = (name: string) => setHiddenItems((current) => {
+    const next = new Set(current);
+    if (next.has(name)) next.delete(name);
+    else if (data.length - next.size > 1) next.add(name);
+    return next;
+  });
   return (
-    <Card
-      elevation={0}
-      sx={{
-        border: "1px solid",
-        borderColor: "divider",
-        borderRadius: 2.25,
-        backgroundColor: "background.paper",
-        boxShadow: "0 1px 2px rgba(16,24,40,0.035)",
-      }}
-    >
-      <CardContent>
+    <ExecutiveSection compact>
         <Stack
           direction="row"
           sx={{
@@ -1566,7 +1568,7 @@ function DonutCard({
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
-                  data={data}
+                  data={visibleData}
                   dataKey="value"
                   nameKey="name"
                   innerRadius={62}
@@ -1592,12 +1594,20 @@ function DonutCard({
                     }
                   }}
                 >
-                  {data.map((item) => (
+                  {visibleData.map((item) => (
                     <Cell key={item.name} fill={item.color} />
                   ))}
                 </Pie>
 
-                <Tooltip />
+                <Tooltip
+                  contentStyle={{
+                    borderRadius: 12,
+                    border: `1px solid ${theme.palette.divider}`,
+                    background: theme.palette.background.paper,
+                    boxShadow: "0 14px 36px rgba(0,0,0,.18)",
+                  }}
+                  cursor={false}
+                />
 
                 <text
                   x="50%"
@@ -1607,10 +1617,10 @@ function DonutCard({
                   style={{
                     fontSize: 23,
                     fontWeight: 800,
-                    fill: aliareColors.text,
+                    fill: theme.palette.text.primary,
                   }}
                 >
-                  {centerValue}
+                  {hiddenItems.size > 0 ? visibleTotal : centerValue}
                 </text>
 
                 <text
@@ -1620,7 +1630,7 @@ function DonutCard({
                   dominantBaseline="middle"
                   style={{
                     fontSize: 11,
-                    fill: aliareColors.textSecondary,
+                    fill: theme.palette.text.secondary,
                   }}
                 >
                   {centerLabel}
@@ -1633,13 +1643,33 @@ function DonutCard({
         </Box>
 
         {data.length > 0 && (
-          <DonutLegend
-            data={data}
-            onItemClick={onSliceClick}
-          />
+          <Stack spacing={0.55}>
+            {data.map((item) => {
+              const active = !hiddenItems.has(item.name);
+              return (
+                <Box
+                  key={item.name}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => toggleItem(item.name)}
+                  onDoubleClick={() => onSliceClick?.(item.name)}
+                  onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") toggleItem(item.name); }}
+                  sx={{
+                    display: "grid", gridTemplateColumns: "10px 1fr auto", gap: .8, alignItems: "center",
+                    px: .7, py: .35, borderRadius: 1, cursor: "pointer", opacity: active ? 1 : .38,
+                    textDecoration: active ? "none" : "line-through", transition: "all .2s ease",
+                    "&:hover": { bgcolor: "action.hover", transform: "translateX(2px)" },
+                  }}
+                >
+                  <Box sx={{ width: 8, height: 8, borderRadius: "50%", bgcolor: active ? item.color : "text.disabled", boxShadow: active ? `0 0 8px ${item.color}88` : "none" }} />
+                  <Typography variant="caption" sx={{ fontWeight: 700 }}>{item.name}</Typography>
+                  <Typography variant="caption" sx={{ fontWeight: 900 }}>{item.value}</Typography>
+                </Box>
+              );
+            })}
+          </Stack>
         )}
-      </CardContent>
-    </Card>
+      </ExecutiveSection>
   );
 }
 
@@ -2102,86 +2132,6 @@ function CardSectionHeader({
       </Box>
 
       <CardInfoButton info={info} />
-    </Stack>
-  );
-}
-
-function DonutLegend({
-  data,
-  onItemClick,
-}: {
-  data: Array<{
-    name: string;
-    value: number;
-    color: string;
-  }>;
-  onItemClick?: (name: string) => void;
-}) {
-  return (
-    <Stack
-      direction="row"
-      spacing={1}
-      useFlexGap
-      sx={{
-        justifyContent: "center",
-        alignItems: "center",
-        flexWrap: "wrap",
-        mt: 0.5,
-      }}
-    >
-      {data.map((item) => (
-        <Box
-          key={item.name}
-          role={onItemClick ? "button" : undefined}
-          tabIndex={onItemClick ? 0 : undefined}
-          onClick={() => onItemClick?.(item.name)}
-          onKeyDown={(event) => {
-            if (
-              onItemClick &&
-              (event.key === "Enter" || event.key === " ")
-            ) {
-              onItemClick(item.name);
-            }
-          }}
-          sx={{
-            display: "flex",
-            alignItems: "center",
-            gap: 0.55,
-            cursor: onItemClick ? "pointer" : "default",
-            borderRadius: 1,
-            px: 0.4,
-            py: 0.2,
-            "&:hover": onItemClick
-              ? { backgroundColor: "action.hover" }
-              : undefined,
-          }}
-        >
-          <Box
-            sx={{
-              width: 10,
-              height: 10,
-              borderRadius: "50%",
-              backgroundColor: item.color,
-              flexShrink: 0,
-            }}
-          />
-
-          <Typography
-            variant="caption"
-            sx={{ color: item.color, fontWeight: 600 }}
-          >
-            {item.name}
-          </Typography>
-
-          <Typography
-            variant="caption"
-            color="text.secondary"
-            sx={{ fontWeight: 700 }}
-          >
-            {item.value}
-          </Typography>
-        </Box>
-      ))}
     </Stack>
   );
 }

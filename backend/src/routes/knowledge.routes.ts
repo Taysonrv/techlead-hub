@@ -10,7 +10,7 @@ const fail = (res: any, error: any) => res.status(Number(error?.statusCode) || 5
 knowledgeRoutes.get("/status", async (req, res) => {
   try {
     const azureStatus = await azure.getStatus();
-    res.json({ ...microsoftKnowledgeService.status(userId(req)), azure: azureStatus });
+    res.json({ ...(await microsoftKnowledgeService.status(userId(req))), azure: azureStatus });
   } catch (error) { fail(res, error); }
 });
 knowledgeRoutes.post("/microsoft/connect", async (req, res) => {
@@ -19,7 +19,7 @@ knowledgeRoutes.post("/microsoft/connect", async (req, res) => {
 knowledgeRoutes.post("/microsoft/connect/:connectionId", async (req, res) => {
   try { res.json(await microsoftKnowledgeService.finishConnection(userId(req), req.params.connectionId)); } catch (error) { fail(res, error); }
 });
-knowledgeRoutes.delete("/microsoft/connect", (req, res) => res.json(microsoftKnowledgeService.disconnect(userId(req))));
+knowledgeRoutes.delete("/microsoft/connect", async (req, res) => res.json(await microsoftKnowledgeService.disconnect(userId(req))));
 knowledgeRoutes.get("/search", async (req, res) => {
   try {
     const query = String(req.query.q ?? "");

@@ -12,36 +12,40 @@ import {
   Divider,
   Drawer,
   IconButton,
-  Popover,
   Snackbar,
   Stack,
   Typography,
 } from "@mui/material";
-
-import {
-  InfoOutlined,
-} from "@mui/icons-material";
+import { useTheme } from "@mui/material/styles";
 
 import {
   Bar,
   BarChart,
   CartesianGrid,
-  Line,
-  LineChart,
+  Area,
+  AreaChart,
+  Pie,
+  PieChart,
+  Cell,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from "recharts";
 
+import { useColorMode } from "../context/ColorModeContext";
+
 import { useNavigate } from "react-router-dom";
 
 import { api } from "../services/api";
 import { PeriodFilter } from "../components/PeriodFilter";
+import { PageHeader } from "../components/PageHeader";
+import { KpiCard as ExecutiveKpiCard } from "../components/KpiCard";
 import { useFilters } from "../context/FiltersContext";
 import { aliareColors } from "../theme/theme";
 import { calculateOfficialSla } from "../utils/officialSla";
 import {
+  chartPalette,
   semanticChartColors,
 } from "../theme/chartPalette";
 
@@ -164,6 +168,17 @@ type MetricInfoDefinition = {
 
 export function Dashboard() {
   const navigate = useNavigate();
+  const { mode } = useColorMode();
+  const isDark = mode === "dark";
+  const chartGrid = isDark ? "rgba(148,163,184,.16)" : "#E4E7EC";
+  const chartTick = isDark ? "#8EA4BC" : "#667085";
+  const chartTooltipStyle = {
+    background: isDark ? "rgba(7,23,39,.96)" : "#FFFFFF",
+    border: `1px solid ${isDark ? "rgba(56,189,248,.24)" : "#E4E7EC"}`,
+    borderRadius: 12,
+    boxShadow: isDark ? "0 14px 34px rgba(0,0,0,.38)" : "0 12px 28px rgba(16,24,40,.12)",
+    color: isDark ? "#EAF4FF" : "#101828",
+  };
 
   const [tickets, setTickets] =
     useState<Ticket[]>([]);
@@ -492,49 +507,61 @@ export function Dashboard() {
     ]);
 
   /* =======================================================
-     ÚLTIMA ATUALIZAÇÃO DOS DADOS
+     ANÁLISES GERENCIAIS
   ======================================================= */
 
-const latestImportedAt =
-  useMemo<Date | null>(() => {
-    let latest:
-      Date | null =
-      null;
+  const topCategoryLabels = useMemo(
+    () => categories.slice(0, 6).map((item) => item.label),
+    [categories]
+  );
 
-    tickets.forEach(
-      (ticket) => {
-        if (
-          !ticket.importedAt
-        ) {
-          return;
-        }
+  const dailyFlow = useMemo(() => {
+    const opened = new Map<string, number>();
+    const resolved = new Map<string, number>();
 
-        const importedAt =
-          new Date(
-            ticket.importedAt
-          );
+    openedInPeriod.forEach((ticket) => {
+      const date = new Date(ticket.createdDate);
+      if (Number.isNaN(date.getTime())) return;
+      const key = formatIsoDate(date);
+      opened.set(key, (opened.get(key) ?? 0) + 1);
+    });
 
-        if (
-          Number.isNaN(
-            importedAt.getTime()
-          )
-        ) {
-          return;
-        }
+    resolvedInPeriod.forEach((ticket) => {
+      if (!ticket.resolvedDate) return;
+      const date = new Date(ticket.resolvedDate);
+      if (Number.isNaN(date.getTime())) return;
+      const key = formatIsoDate(date);
+      resolved.set(key, (resolved.get(key) ?? 0) + 1);
+    });
 
-        if (
-          !latest ||
-          importedAt.getTime() >
-            latest.getTime()
-        ) {
-          latest =
-            importedAt;
-        }
-      }
-    );
+    const result: Array<{ sortDate: string; date: string; opened: number; resolved: number }> = [];
+    const cursor = startOfDay(effectiveStartDate);
+    const lastDay = endOfDay(effectiveEndDate);
 
-    return latest;
-  }, [tickets]);
+    while (cursor <= lastDay) {
+      const key = formatIsoDate(cursor);
+      result.push({
+        sortDate: key,
+        date: formatShortDate(key),
+        opened: opened.get(key) ?? 0,
+        resolved: resolved.get(key) ?? 0,
+      });
+      cursor.setDate(cursor.getDate() + 1);
+    }
+
+    return result;
+  }, [openedInPeriod, resolvedInPeriod, effectiveStartDate, effectiveEndDate]);
+
+  const causes = useMemo(
+    () => groupByField(filteredTickets, "cause", "Sem causa").slice(0, 8),
+    [filteredTickets]
+  );
+
+  const backlogStatus = useMemo(() => [
+    { label: "Novos", total: newTickets.length },
+    { label: "Em atendimento", total: attendanceTickets.length },
+    { label: "Parados", total: stoppedTickets.length },
+  ], [newTickets, attendanceTickets, stoppedTickets]);
 
   /* =======================================================
      PONTOS DE ATENÇÃO
@@ -1017,142 +1044,30 @@ const latestImportedAt =
   ======================================================= */
 
   return (
-    <>
+    <Box sx={{
+      mx: { xs: -1, md: -2 },
+      mt: { xs: -1, md: -2 },
+      p: { xs: 1.5, md: 2.5 },
+      minHeight: "100vh",
+      borderRadius: { xs: 0, md: 3 },
+      background: isDark
+        ? "radial-gradient(circle at 18% 0%, rgba(0,199,142,.08), transparent 26%), radial-gradient(circle at 88% 8%, rgba(47,111,237,.10), transparent 28%), linear-gradient(145deg,#061421 0%,#081A2C 52%,#06111D 100%)"
+        : "linear-gradient(180deg,#F8FAFC,#F4F6F8)",
+      "& .recharts-cartesian-grid line": { stroke: chartGrid },
+      "& .recharts-cartesian-axis-tick text": { fill: chartTick },
+      "& .recharts-default-tooltip": chartTooltipStyle,
+    }}>
       {/* =================================================
           CABEÇALHO
       ================================================= */}
 
-      <Box
-        sx={{
-          mb: 2.5,
-
-          display: "flex",
-
-          flexDirection: {
-            xs: "column",
-            lg: "row",
-          },
-
-          justifyContent:
-            "space-between",
-
-          alignItems: {
-            xs: "stretch",
-            lg: "center",
-          },
-
-          gap: 2,
-        }}
-      >
-        <Box>
-          <Stack
-            direction="row"
-            spacing={1}
-            sx={{
-              alignItems:
-                "center",
-            }}
-          >
-            <Box
-              sx={{
-                width:
-                  30,
-
-                height:
-                  3,
-
-                borderRadius:
-                  99,
-
-                backgroundColor:
-                  aliareColors.green,
-              }}
-            />
-
-            <Typography
-              variant="caption"
-              sx={{
-                fontWeight:
-                  800,
-
-                letterSpacing:
-                  "0.08em",
-
-                textTransform:
-                  "uppercase",
-
-                color:
-                  aliareColors.greenDark,
-              }}
-            >
-              Operação
-            </Typography>
-          </Stack>
-
-          <Typography
-            sx={{
-              mt:
-                0.8,
-
-              fontWeight:
-                800,
-
-              letterSpacing:
-                "-0.025em",
-
-              fontSize: {
-                xs: "1.7rem",
-                md: "1.9rem",
-                xl: "2.1rem",
-              },
-            }}
-          >
-            Dashboard Executivo
-          </Typography>
-
-          <Typography
-            variant="body2"
-            color="text.secondary"
-            sx={{
-              mt: 0.25,
-            }}
-          >
-            Visão consolidada da operação de suporte
-          </Typography>
-
-          <Typography
-            variant="caption"
-            color="text.secondary"
-            sx={{
-              display: "block",
-              mt: 0.5,
-            }}
-          >
-            {periodLabel(period)}
-            {" • "}
-            {filteredTickets.length}
-            {" ticket(s) analisado(s)"}
-          </Typography>
-
-          <Typography
-            variant="caption"
-            color="text.secondary"
-            sx={{
-              display: "block",
-              mt: 0.25,
-            }}
-          >
-            Última atualização dos dados:{" "}
-            {latestImportedAt
-              ? formatDateTime(
-                  latestImportedAt.toISOString()
-                )
-              : "informação de importação indisponível"}
-          </Typography>
-        </Box>
-
-        <PeriodFilter />
-      </Box>
+      <PageHeader
+        eyebrow="Operação"
+        title="Dashboard Executivo"
+        description="Visão consolidada da operação de suporte"
+        meta={<>{periodLabel(period)}{" • "}{filteredTickets.length} ticket(s) analisado(s)</>}
+        action={<PeriodFilter />}
+      />
 
       {/* =================================================
           KPIs
@@ -1165,7 +1080,7 @@ const latestImportedAt =
           gridTemplateColumns: {
             xs: "1fr",
             sm: "repeat(2, 1fr)",
-            lg: "repeat(3, 1fr)",
+            lg: "repeat(4, minmax(0, 1fr))",
           },
 
           gap: {
@@ -1307,7 +1222,7 @@ const latestImportedAt =
                   xs: "1fr",
                   sm: "repeat(2, minmax(0, 1fr))",
                   lg: "repeat(3, minmax(0, 1fr))",
-                  xl: "repeat(6, minmax(0, 1fr))",
+                  xl: "repeat(3, minmax(0, 1fr))",
                 },
                 gap: 1.25,
               }}
@@ -1424,213 +1339,142 @@ const latestImportedAt =
         0 && (
         <>
           {/* =============================================
-              EVOLUÇÃO + CATEGORIA
+              VISÃO ANALÍTICA PRINCIPAL
           ============================================== */}
 
           <Box
             sx={{
-              display:
-                "grid",
-
-              gridTemplateColumns:
-                {
-                  xs: "1fr",
-                  lg: "2fr 1fr",
-                },
-
+              display: "grid",
+              gridTemplateColumns: { xs: "1fr", xl: "1.65fr 1fr 1fr" },
               gap: 2,
               mb: 2,
             }}
           >
             <CardBase>
-              <Typography
-                sx={{
-                  fontWeight: 800,
-                  fontSize:
-                    "1.05rem",
-                }}
-              >
-                Evolução dos Tickets
-              </Typography>
-
-              <Typography
-                variant="caption"
-                color="text.secondary"
-              >
-                Volume de abertura por dia
-              </Typography>
-
-              <Box
-                sx={{
-                  height: 250,
-                  mt: 1.5,
-                }}
-              >
-                <ResponsiveContainer
-                  width="100%"
-                  height="100%"
-                >
-                  <LineChart
-                    data={trends}
-                    margin={{
-                      top: 8,
-                      right: 12,
-                      left: -8,
-                      bottom: 4,
-                    }}
-                  >
-                    <CartesianGrid
-                      strokeDasharray="3 3"
-                      vertical={false}
-                      stroke="#EAECF0"
-                    />
-
-                    <XAxis
-                      dataKey="date"
-                      tick={{
-                        fontSize: 11,
-                      }}
-                      minTickGap={22}
-                      interval="preserveStartEnd"
-                      tickMargin={8}
-                    />
-
-                    <YAxis
-                      allowDecimals={
-                        false
-                      }
-                      tick={{
-                        fontSize: 11,
-                      }}
-                      width={34}
-                    />
-
-                    <Tooltip
-                      content={
-                        <TrendTooltip />
-                      }
-                    />
-
-                    <Line
-                      type="monotone"
-                      dataKey="total"
-                      name="Tickets"
-                      stroke={aliareColors.green}
-                      strokeWidth={2.5}
-                      dot={{
-                        r: 3,
-                        strokeWidth: 2,
-                        fill: "#FFFFFF",
-                        stroke:
-                          aliareColors.green,
-                      }}
-                      activeDot={{
-                        r: 5,
-                        fill:
-                          aliareColors.green,
-                        stroke:
-                          "#FFFFFF",
-                        strokeWidth:
-                          2,
-                      }}
-                    />
-                  </LineChart>
+              <Typography sx={{ fontWeight: 850, fontSize: "1.05rem" }}>Evolução dos Tickets</Typography>
+              <Typography variant="caption" color="text.secondary">Volume de abertura por dia • tendência do período</Typography>
+              <Box sx={{ height: 290, mt: 1.5 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={trends} margin={{ top: 8, right: 12, left: 4, bottom: 4 }}>
+                    <defs>
+                      <linearGradient id="ticketArea" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor={aliareColors.green} stopOpacity={0.42} />
+                        <stop offset="95%" stopColor={aliareColors.green} stopOpacity={0.015} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={chartGrid} />
+                    <XAxis dataKey="date" tick={{ fontSize: 11 }} minTickGap={22} interval="preserveStartEnd" tickMargin={8} />
+                    <YAxis allowDecimals={false} tick={{ fontSize: 11 }} width={42} />
+                    <Tooltip content={<TrendTooltip />} />
+                    <Area type="monotone" dataKey="total" name="Tickets" stroke={aliareColors.green} strokeWidth={3} fill="url(#ticketArea)" activeDot={{ r: 5, fill: aliareColors.green, stroke: "#FFFFFF", strokeWidth: 2 }} />
+                  </AreaChart>
                 </ResponsiveContainer>
               </Box>
             </CardBase>
 
+            <DonutAnalysisCard
+              title="Tickets por Categoria"
+              subtitle="Distribuição no período"
+              data={categories.slice(0, 6)}
+              colors={chartPalette}
+              onItemClick={showCategory}
+            />
+
+            <DonutAnalysisCard
+              title="Status dos Tickets"
+              subtitle="Composição do backlog atual"
+              data={backlogStatus}
+              colors={[semanticChartColors.normal, semanticChartColors.positive, semanticChartColors.stopped]}
+              onItemClick={(label) => {
+                const map: Record<string, Ticket[]> = {
+                  "Novos": newTickets,
+                  "Em atendimento": attendanceTickets,
+                  "Parados": stoppedTickets,
+                };
+                showTickets(`Status: ${label}`, map[label] ?? []);
+              }}
+            />
+          </Box>
+
+          {/* =============================================
+              EVOLUÇÃO MENSAL POR CATEGORIA
+          ============================================== */}
+
+          <MonthlyCategoryEvolutionCard
+            tickets={tickets}
+            categories={topCategoryLabels}
+            colors={chartPalette}
+            isDark={isDark}
+            chartGrid={chartGrid}
+            chartTooltipStyle={chartTooltipStyle}
+          />
+
+          <Box
+            sx={{
+              display: "grid",
+              gridTemplateColumns: { xs: "1fr", xl: "1.25fr .75fr" },
+              gap: 2,
+              my: 2,
+            }}
+          >
             <CardBase>
-              <Typography
-                sx={{
-                  fontWeight: 800,
-                  fontSize:
-                    "1.05rem",
-                }}
-              >
-                Tickets por Categoria
+              <Stack direction={{ xs: "column", sm: "row" }} sx={{ justifyContent: "space-between", gap: 1 }}>
+                <Box>
+                  <Typography sx={{ fontWeight: 850, fontSize: "1.05rem" }}>
+                    Abertos x Resolvidos
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Fluxo diário no período • identifica entrada acima da capacidade de resolução
+                  </Typography>
+                </Box>
+                <Stack direction="row" spacing={.7}>
+                  <Chip size="small" variant="outlined" label={`${openedInPeriod.length} abertos`} />
+                  <Chip size="small" variant="outlined" label={`${resolvedInPeriod.length} resolvidos`} />
+                </Stack>
+              </Stack>
+              <Box sx={{ height: 255, mt: 1.5 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={dailyFlow} margin={{ top: 8, right: 12, left: 4, bottom: 4 }}>
+                    <defs>
+                      <linearGradient id="openedFlow" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor={semanticChartColors.normal} stopOpacity={0.24} />
+                        <stop offset="95%" stopColor={semanticChartColors.normal} stopOpacity={0.01} />
+                      </linearGradient>
+                      <linearGradient id="resolvedFlow" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor={semanticChartColors.positive} stopOpacity={0.20} />
+                        <stop offset="95%" stopColor={semanticChartColors.positive} stopOpacity={0.01} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={chartGrid} />
+                    <XAxis dataKey="date" tick={{ fontSize: 10 }} minTickGap={24} interval="preserveStartEnd" tickMargin={8} />
+                    <YAxis allowDecimals={false} tick={{ fontSize: 10 }} width={42} />
+                    <Tooltip contentStyle={chartTooltipStyle} />
+                    <Area type="monotone" dataKey="opened" name="Abertos" stroke={semanticChartColors.normal} strokeWidth={2.4} fill="url(#openedFlow)" />
+                    <Area type="monotone" dataKey="resolved" name="Resolvidos" stroke={semanticChartColors.positive} strokeWidth={2.4} fill="url(#resolvedFlow)" />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </Box>
+              <Stack direction="row" spacing={2} sx={{ mt: .5 }}>
+                <Typography variant="caption" sx={{ color: semanticChartColors.normal, fontWeight: 800 }}>● Abertos</Typography>
+                <Typography variant="caption" sx={{ color: semanticChartColors.positive, fontWeight: 800 }}>● Resolvidos</Typography>
+              </Stack>
+            </CardBase>
+
+            <CardBase>
+              <Typography sx={{ fontWeight: 850, fontSize: "1.05rem" }}>
+                Principais causas
               </Typography>
-
-              <Typography
-                variant="caption"
-                color="text.secondary"
-              >
-                Clique em uma categoria para investigar
+              <Typography variant="caption" color="text.secondary">
+                Causas mais frequentes • clique na leitura para direcionar ação preventiva
               </Typography>
-
-              <Box
-                sx={{
-                  height: 250,
-                  mt: 1.5,
-                }}
-              >
-                <ResponsiveContainer
-                  width="100%"
-                  height="100%"
-                >
-                  <BarChart
-                    data={categories.slice(
-                      0,
-                      6
-                    )}
-                    layout="vertical"
-                    margin={{
-                      left: 15,
-                      right: 15,
-                    }}
-                  >
-                    <CartesianGrid
-                      strokeDasharray="3 3"
-                      stroke="#EAECF0"
-                    />
-
-                    <XAxis
-                      type="number"
-                      allowDecimals={
-                        false
-                      }
-                    />
-
-                    <YAxis
-                      type="category"
-                      dataKey="label"
-                      width={95}
-                      tick={{
-                        fontSize: 10,
-                      }}
-                    />
-
-                    <Tooltip />
-
-                    <Bar
-                      dataKey="total"
-                      fill={aliareColors.green}
-                      radius={[
-                        0,
-                        5,
-                        5,
-                        0,
-                      ]}
-                      cursor="pointer"
-                      onClick={(data) => {
-                        const label =
-                          (
-                            data as {
-                              payload?: {
-                                label?: unknown;
-                              };
-                            }
-                          ).payload?.label;
-
-                        if (
-                          typeof label ===
-                          "string"
-                        ) {
-                          showCategory(
-                            label
-                          );
-                        }
-                      }}
-                    />
+              <Box sx={{ height: 285, mt: 1.25 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={causes.slice(0, 6)} layout="vertical" margin={{ left: 18, right: 18, top: 4, bottom: 4 }}>
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={chartGrid} />
+                    <XAxis type="number" allowDecimals={false} tick={{ fontSize: 10 }} />
+                    <YAxis type="category" dataKey="label" width={118} tick={{ fontSize: 10 }} />
+                    <Tooltip contentStyle={chartTooltipStyle} cursor={{ fill: isDark ? "rgba(255,183,3,.05)" : "rgba(15,23,42,.035)" }} />
+                    <Bar dataKey="total" name="Tickets" fill={semanticChartColors.attention} radius={[0, 7, 7, 0]} barSize={18} />
                   </BarChart>
                 </ResponsiveContainer>
               </Box>
@@ -1638,41 +1482,12 @@ const latestImportedAt =
           </Box>
 
           {/* =============================================
-              ANALISTAS + CLIENTES
+              RANKINGS EXECUTIVOS
           ============================================== */}
 
-          <Box
-            sx={{
-              display:
-                "grid",
-
-              gridTemplateColumns:
-                {
-                  xs: "1fr",
-                  lg: "1fr 1fr",
-                },
-
-              gap: 2,
-              mb: 2,
-            }}
-          >
-            <RankingCard
-              title="Tickets por Analista"
-              subtitle="Clique no responsável para visualizar a carteira"
-              data={owners}
-              onItemClick={
-                showOwner
-              }
-            />
-
-            <RankingCard
-              title="Tickets por Cliente"
-              subtitle="Clique no cliente para visualizar seus chamados"
-              data={clients}
-              onItemClick={
-                showClient
-              }
-            />
+          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "1fr 1fr" }, gap: 2, mb: 2 }}>
+            <RankingCard title="TOP 5 - Clientes" subtitle="Clientes com maior volume de tickets" data={clients} onItemClick={showClient} />
+            <RankingCard title="TOP 5 - Analistas" subtitle="Volume de tickets por responsável" data={owners} onItemClick={showOwner} />
           </Box>
 
           {/* =============================================
@@ -2721,7 +2536,7 @@ const latestImportedAt =
         }
         message={copyMessage}
       />
-    </>
+    </Box>
   );
 }
 
@@ -2908,177 +2723,18 @@ function StandardMetricCard({
   onClick?: () => void;
 }) {
   return (
-    <Card
-      elevation={0}
-      role={onClick ? "button" : undefined}
-      tabIndex={onClick ? 0 : undefined}
+    <ExecutiveKpiCard
+      title={title}
+      value={value}
+      subtitle={description}
+      info={`${info.summary} • ${info.periodRule}`}
+      accent={accentColor}
       onClick={onClick}
-      onKeyDown={(event) => {
-        if (onClick && (event.key === "Enter" || event.key === " ")) {
-          onClick();
-        }
-      }}
-      sx={{
-        position: "relative",
-        overflow: "hidden",
-        border: "1px solid",
-        borderColor: "divider",
-        borderRadius: 2.25,
-        height: "100%",
-        backgroundColor: "background.paper",
-        cursor: onClick ? "pointer" : "default",
-        transition: "transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease",
-        "&::before": {
-          content: '""',
-          position: "absolute",
-          top: 0,
-          left: 0,
-          width: "100%",
-          height: 3,
-          backgroundColor: accentColor,
-        },
-        ...(onClick && {
-          "&:hover": {
-            transform: "translateY(-2px)",
-            borderColor: accentColor,
-            boxShadow: "0 8px 24px rgba(16,24,40,0.08)",
-          },
-          "&:focus-visible": {
-            outline: `2px solid ${accentColor}`,
-            outlineOffset: "2px",
-          },
-        }),
-      }}
-    >
-      <CardContent
-        sx={{
-          p: { xs: 1.6, md: 1.8 },
-          "&:last-child": { pb: { xs: 1.6, md: 1.8 } },
-        }}
-      >
-        <Stack
-          direction="row"
-          sx={{ alignItems: "center", justifyContent: "space-between", gap: 1 }}
-        >
-          <Typography
-            variant="body2"
-            sx={{ fontWeight: 700, color: "text.primary", minWidth: 0 }}
-          >
-            {title}
-          </Typography>
-
-          <MetricInfo definition={info} />
-        </Stack>
-
-        <Typography
-          sx={{
-            fontWeight: 800,
-            mt: 0.6,
-            letterSpacing: "-0.025em",
-            fontSize: { xs: "1.75rem", md: "1.95rem", xl: "2.1rem" },
-            lineHeight: 1.05,
-          }}
-        >
-          {value}
-        </Typography>
-
-        <Typography
-          variant="caption"
-          color="text.secondary"
-          sx={{ display: "block", mt: 0.75, minHeight: 18 }}
-        >
-          {description}
-        </Typography>
-      </CardContent>
-    </Card>
+    />
   );
 }
 
-function MetricInfo({ definition }: { definition: MetricInfoDefinition }) {
-  const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
-  const open = Boolean(anchorEl);
 
-  return (
-    <>
-      <IconButton
-        size="small"
-        aria-label={`Informações sobre ${definition.title}`}
-        title={`Informações sobre ${definition.title}`}
-        onClick={(event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          setAnchorEl(event.currentTarget);
-        }}
-        onKeyDown={(event) => event.stopPropagation()}
-        sx={{
-          p: 0.3,
-          color: "text.secondary",
-          flexShrink: 0,
-          "&:hover": {
-            color: aliareColors.greenDark,
-            backgroundColor: "rgba(24,199,122,0.08)",
-          },
-        }}
-      >
-        <InfoOutlined sx={{ fontSize: 16 }} />
-      </IconButton>
-
-      <Popover
-        open={open}
-        anchorEl={anchorEl}
-        onClose={() => setAnchorEl(null)}
-        anchorOrigin={{ vertical: "bottom", horizontal: "left" }}
-        transformOrigin={{ vertical: "top", horizontal: "left" }}
-        slotProps={{
-          paper: {
-            onClick: (event: React.MouseEvent<HTMLElement>) => event.stopPropagation(),
-            sx: {
-              width: { xs: 320, sm: 390 },
-              maxWidth: "calc(100vw - 32px)",
-              mt: 0.75,
-              p: 2,
-              borderRadius: 2,
-              border: "1px solid",
-              borderColor: "divider",
-              boxShadow: "0 14px 40px rgba(16,24,40,0.14)",
-            },
-          },
-        }}
-      >
-        <Stack spacing={1.2}>
-          <Box>
-            <Typography sx={{ fontWeight: 850 }}>{definition.title}</Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.4, lineHeight: 1.55 }}>
-              {definition.summary}
-            </Typography>
-          </Box>
-          <Divider />
-          <MetricInfoLine label="Como é calculado" value={definition.calculation} />
-          <MetricInfoLine label="Fonte" value={definition.source} />
-          <MetricInfoLine label="Campo de referência" value={definition.reference} />
-          <MetricInfoLine label="Regra de período" value={definition.periodRule} />
-          {definition.notes && (
-            <Box sx={{ p: 1.1, borderRadius: 1.5, backgroundColor: "rgba(24,199,122,0.055)", border: "1px solid rgba(24,199,122,0.16)" }}>
-              <Typography variant="caption" sx={{ fontWeight: 800, color: aliareColors.greenDark }}>Observação</Typography>
-              <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.25, lineHeight: 1.5 }}>
-                {definition.notes}
-              </Typography>
-            </Box>
-          )}
-        </Stack>
-      </Popover>
-    </>
-  );
-}
-
-function MetricInfoLine({ label, value }: { label: string; value: string }) {
-  return (
-    <Box>
-      <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>{label}</Typography>
-      <Typography variant="body2" sx={{ mt: 0.15, lineHeight: 1.5 }}>{value}</Typography>
-    </Box>
-  );
-}
 
 /* =========================================================
    CARD BASE
@@ -3090,6 +2746,8 @@ function CardBase({
   children:
     ReactNode;
 }) {
+  const { mode } = useColorMode();
+  const isDark = mode === "dark";
   return (
     <Card
       elevation={0}
@@ -3097,17 +2755,24 @@ function CardBase({
         border:
           "1px solid",
 
-        borderColor:
-          "divider",
+        borderColor: isDark ? "rgba(77,153,210,.24)" : "divider",
 
-        borderRadius:
-          2.25,
+        borderRadius: 3,
 
-        backgroundColor:
-          "background.paper",
+        background: isDark
+          ? "linear-gradient(145deg, rgba(11,35,56,.98), rgba(7,25,43,.98))"
+          : "background.paper",
 
-        boxShadow:
-          "0 1px 2px rgba(16,24,40,0.035)",
+        boxShadow: isDark
+          ? "0 16px 38px rgba(0,0,0,.20), inset 0 1px rgba(255,255,255,.025)"
+          : "0 4px 18px rgba(16,24,40,.055)",
+
+        overflow: "hidden",
+        transition: "border-color .18s ease, box-shadow .18s ease, transform .18s ease",
+        "&:hover": {
+          borderColor: isDark ? "rgba(47,208,255,.34)" : "rgba(24,199,122,.32)",
+          boxShadow: isDark ? "0 18px 44px rgba(0,0,0,.26)" : "0 8px 24px rgba(16,24,40,.08)",
+        },
       }}
     >
       <CardContent
@@ -3122,6 +2787,281 @@ function CardBase({
         {children}
       </CardContent>
     </Card>
+  );
+}
+
+function MonthlyCategoryEvolutionCard({
+  tickets,
+  categories,
+  colors,
+  isDark,
+  chartGrid,
+  chartTooltipStyle,
+}: {
+  tickets: Ticket[];
+  categories: string[];
+  colors: readonly string[];
+  isDark: boolean;
+  chartGrid: string;
+  chartTooltipStyle: Record<string, string | number>;
+}) {
+  type Granularity = "month" | "week" | "day";
+  const [granularity, setGranularity] = useState<Granularity>("month");
+  const [hiddenCategories, setHiddenCategories] = useState<Set<string>>(() => new Set());
+
+  const meta: Record<Granularity, { label: string; average: string; helper: string }> = {
+    month: { label: "Mensal", average: "Média mensal", helper: "Últimos 6 meses consolidados" },
+    week: { label: "Semanal", average: "Média semanal", helper: "Últimas 12 semanas consolidadas" },
+    day: { label: "Diário", average: "Média diária", helper: "Últimos 30 dias consolidados" },
+  };
+
+  const visibleCategories = categories.filter((category) => !hiddenCategories.has(category));
+
+  const data = useMemo(() => {
+    const now = new Date();
+    const anchor = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const periods: Array<{ key: string; label: string; start: Date; end: Date }> = [];
+
+    if (granularity === "month") {
+      for (let offset = 5; offset >= 0; offset -= 1) {
+        const start = new Date(anchor.getFullYear(), anchor.getMonth() - offset, 1);
+        const end = new Date(start.getFullYear(), start.getMonth() + 1, 0, 23, 59, 59, 999);
+        periods.push({
+          key: `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}`,
+          label: start.toLocaleDateString("pt-BR", { month: "short", year: "2-digit" }).replace(".", ""),
+          start, end,
+        });
+      }
+    } else if (granularity === "week") {
+      const currentMonday = new Date(anchor);
+      const day = currentMonday.getDay();
+      currentMonday.setDate(currentMonday.getDate() + (day === 0 ? -6 : 1 - day));
+      currentMonday.setHours(0, 0, 0, 0);
+      for (let offset = 11; offset >= 0; offset -= 1) {
+        const start = new Date(currentMonday);
+        start.setDate(start.getDate() - offset * 7);
+        const end = new Date(start);
+        end.setDate(end.getDate() + 6);
+        end.setHours(23, 59, 59, 999);
+        periods.push({
+          key: start.toISOString().slice(0, 10),
+          label: `Sem. ${start.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}`,
+          start, end,
+        });
+      }
+    } else {
+      for (let offset = 29; offset >= 0; offset -= 1) {
+        const start = new Date(anchor);
+        start.setDate(start.getDate() - offset);
+        start.setHours(0, 0, 0, 0);
+        const end = new Date(start);
+        end.setHours(23, 59, 59, 999);
+        periods.push({
+          key: start.toISOString().slice(0, 10),
+          label: start.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }),
+          start, end,
+        });
+      }
+    }
+
+    const rows = periods.map((period) => {
+      const row: Record<string, string | number> = { periodKey: period.key, period: period.label };
+      categories.forEach((category) => { row[category] = 0; });
+      return row;
+    });
+
+    tickets.forEach((ticket) => {
+      const date = new Date(ticket.createdDate);
+      if (Number.isNaN(date.getTime())) return;
+      const category = ticket.category ?? "Sem categoria";
+      if (!categories.includes(category)) return;
+      const index = periods.findIndex((period) => date >= period.start && date <= period.end);
+      if (index >= 0) rows[index][category] = Number(rows[index][category] ?? 0) + 1;
+    });
+
+    return rows;
+  }, [tickets, categories, granularity]);
+
+  const total = data.reduce((sum, row) => sum + visibleCategories.reduce((acc, category) => acc + Number(row[category] ?? 0), 0), 0);
+  const average = data.length ? Math.round(total / data.length) : 0;
+  const maxTotal = Math.max(0, ...data.map((row) => visibleCategories.reduce((sum, category) => sum + Number(row[category] ?? 0), 0)));
+
+  const toggleCategory = (category: string) => {
+    setHiddenCategories((current) => {
+      const next = new Set(current);
+      if (next.has(category)) next.delete(category);
+      else if (categories.length - next.size > 1) next.add(category);
+      return next;
+    });
+  };
+
+  return (
+    <Card elevation={0} sx={{
+      mb: 2, p: { xs: 1.5, md: 2.25 }, borderRadius: 3, border: "1px solid",
+      borderColor: isDark ? "rgba(22,178,229,.30)" : "divider",
+      background: isDark ? "radial-gradient(circle at 55% 48%, rgba(18,111,190,.12), transparent 36%), linear-gradient(145deg, rgba(5,29,48,.99), rgba(4,22,38,.99))" : "background.paper",
+      boxShadow: isDark ? "0 18px 44px rgba(0,0,0,.22), inset 0 1px rgba(255,255,255,.025)" : "0 5px 20px rgba(16,24,40,.06)",
+      overflow: "hidden",
+    }}>
+      <Stack direction={{ xs: "column", lg: "row" }} spacing={1.5} sx={{ justifyContent: "space-between", alignItems: { lg: "flex-start" } }}>
+        <Stack direction="row" spacing={1.4} sx={{ alignItems: "center" }}>
+          <Box sx={{ width: 48, height: 48, borderRadius: 2, display: "grid", placeItems: "center", border: "1px solid rgba(0,229,170,.38)", bgcolor: "rgba(0,229,170,.07)", boxShadow: "0 0 24px rgba(0,229,170,.08)" }}>
+            <Box sx={{ display: "flex", gap: .35, alignItems: "flex-end", height: 24 }}>
+              {[13, 23, 17].map((height, index) => <Box key={height} sx={{ width: 6, height, borderRadius: 1, bgcolor: index === 1 ? "#36F0C0" : "#00D99C", boxShadow: "0 0 8px rgba(0,229,170,.35)" }} />)}
+            </Box>
+          </Box>
+          <Box>
+            <Typography sx={{ fontWeight: 900, fontSize: { xs: "1.08rem", md: "1.28rem" } }}>Evolução {meta[granularity].label.toLowerCase()} por categoria</Typography>
+            <Typography variant="body2" color="text.secondary">{meta[granularity].helper} • clique nas categorias para exibir/ocultar</Typography>
+          </Box>
+        </Stack>
+        <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap" }}>
+          <Box sx={{ display: "flex", p: .35, gap: .3, border: "1px solid", borderColor: isDark ? "rgba(56,189,248,.25)" : "divider", borderRadius: 2.2, bgcolor: isDark ? "rgba(3,20,35,.72)" : "background.default" }}>
+            {(["month", "week", "day"] as Granularity[]).map((value) => {
+              const selected = granularity === value;
+              return <Box component="button" type="button" key={value} aria-pressed={selected} onClick={() => setGranularity(value)} sx={{
+                appearance: "none", border: selected ? "1px solid #00E0A4" : "1px solid transparent", outline: 0, cursor: "pointer",
+                px: { xs: 1.25, sm: 2 }, py: .72, borderRadius: 1.65, fontFamily: "inherit", fontSize: 13, fontWeight: selected ? 900 : 700,
+                color: selected ? (isDark ? "#E8FFF8" : "#087A5A") : "text.secondary",
+                bgcolor: selected ? (isDark ? "rgba(0,199,142,.18)" : "rgba(0,199,142,.10)") : "transparent",
+                boxShadow: selected ? "0 0 20px rgba(0,224,164,.13), inset 0 0 16px rgba(0,224,164,.05)" : "none",
+                transition: "all .24s cubic-bezier(.2,.8,.2,1)", "&:hover": { bgcolor: selected ? undefined : "action.hover" },
+                "&:focus-visible": { boxShadow: "0 0 0 3px rgba(0,224,164,.22)" },
+              }}>{meta[value].label}</Box>;
+            })}
+          </Box>
+          <Chip size="medium" variant="outlined" label={`${visibleCategories.length}/${categories.length} categorias ativas`} sx={{ height: 38, fontWeight: 800 }} />
+        </Stack>
+      </Stack>
+
+      <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5} sx={{ mt: 2 }}>
+        {[
+          ["Total visível", total.toLocaleString("pt-BR")],
+          [meta[granularity].average, average.toLocaleString("pt-BR")],
+          ["Pico no intervalo", maxTotal.toLocaleString("pt-BR")],
+        ].map(([label, value], index) => <Box key={label} sx={{
+          minWidth: { sm: 210 }, px: 2, py: 1.25, borderRadius: 2, border: "1px solid",
+          borderColor: isDark ? "rgba(56,189,248,.25)" : "divider", borderLeft: `2px solid ${index === 2 ? "#2F6FED" : "#00C78E"}`,
+          bgcolor: isDark ? "rgba(5,31,51,.66)" : "background.default", transition: "all .25s ease",
+        }}>
+          <Typography variant="caption" color="text.secondary">{label}</Typography>
+          <Typography sx={{ fontSize: "1.65rem", lineHeight: 1.2, fontWeight: 900, mt: .25 }}>{value}</Typography>
+        </Box>)}
+      </Stack>
+
+      <Box key={granularity + visibleCategories.join("|")} sx={{
+        height: { xs: 350, md: granularity === "day" ? 430 : 390 }, mt: 2,
+        animation: "categoryChartIn .34s cubic-bezier(.2,.8,.2,1)",
+        "@keyframes categoryChartIn": { from: { opacity: 0, transform: "translateY(8px)", filter: "blur(3px)" }, to: { opacity: 1, transform: "translateY(0)", filter: "blur(0)" } },
+      }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={data} margin={{ top: 8, right: 16, left: 8, bottom: granularity === "day" ? 18 : 8 }} barCategoryGap={granularity === "day" ? "18%" : "32%"}>
+            <CartesianGrid strokeDasharray="4 5" vertical={false} stroke={chartGrid} />
+            <XAxis dataKey="period" tick={{ fontSize: granularity === "day" ? 10 : 12 }} tickMargin={10} minTickGap={granularity === "day" ? 18 : 8} interval="preserveStartEnd" axisLine={{ stroke: isDark ? "rgba(148,163,184,.42)" : "#D0D5DD" }} />
+            <YAxis allowDecimals={false} tick={{ fontSize: 11 }} width={44} axisLine={{ stroke: isDark ? "rgba(148,163,184,.42)" : "#D0D5DD" }} label={{ value: "Tickets", angle: -90, position: "insideLeft", style: { fill: isDark ? "#B9C9D9" : "#667085", fontSize: 12 } }} />
+            <Tooltip contentStyle={chartTooltipStyle} cursor={{ fill: isDark ? "rgba(56,189,248,.045)" : "rgba(15,23,42,.035)" }} formatter={(value, name) => [Number(value).toLocaleString("pt-BR"), String(name)]} labelFormatter={(label) => `${meta[granularity].label}: ${String(label)}`} />
+            {visibleCategories.map((category) => {
+              const index = categories.indexOf(category);
+              return <Bar key={category} dataKey={category} name={category} stackId="categories" fill={colors[index % colors.length]} maxBarSize={granularity === "day" ? 42 : granularity === "week" ? 72 : 110} radius={category === visibleCategories[visibleCategories.length - 1] ? [5, 5, 0, 0] : 0} animationDuration={520} animationBegin={Math.max(index, 0) * 45} />;
+            })}
+          </BarChart>
+        </ResponsiveContainer>
+      </Box>
+
+      <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap", mt: .75 }}>
+        {categories.map((category, index) => {
+          const active = !hiddenCategories.has(category);
+          return <Chip key={category} size="small" label={category} onClick={() => toggleCategory(category)}
+            icon={<Box component="span" sx={{ width: 9, height: 9, borderRadius: "50%", bgcolor: active ? colors[index % colors.length] : "text.disabled", boxShadow: active ? `0 0 8px ${colors[index % colors.length]}88` : "none" }} />}
+            sx={{ height: 31, fontWeight: 750, opacity: active ? 1 : .42, cursor: "pointer", textDecoration: active ? "none" : "line-through", border: "1px solid", borderColor: active ? (isDark ? "rgba(56,189,248,.32)" : "divider") : "divider", bgcolor: active && isDark ? "rgba(6,30,49,.74)" : "background.paper", transition: "all .2s ease", "&:hover": { transform: "translateY(-1px)" }, "& .MuiChip-icon": { ml: 1 } }}
+            variant="outlined" />;
+        })}
+      </Stack>
+    </Card>
+  );
+}
+
+function DonutAnalysisCard({
+  title,
+  subtitle,
+  data,
+  colors,
+  onItemClick,
+}: {
+  title: string;
+  subtitle: string;
+  data: RankingItem[];
+  colors: readonly string[];
+  onItemClick?: (label: string) => void;
+}) {
+  const theme = useTheme();
+  const [hiddenItems, setHiddenItems] = useState<Set<string>>(() => new Set());
+  const visibleData = data.filter((item) => !hiddenItems.has(item.label));
+  const total = visibleData.reduce((sum, item) => sum + item.total, 0);
+  const toggleItem = (label: string) => setHiddenItems((current) => {
+    const next = new Set(current);
+    if (next.has(label)) next.delete(label);
+    else if (data.length - next.size > 1) next.add(label);
+    return next;
+  });
+
+  return (
+    <CardBase>
+      <Typography sx={{ fontWeight: 850, fontSize: "1.05rem" }}>{title}</Typography>
+      <Typography variant="caption" color="text.secondary">{subtitle}</Typography>
+      <Box sx={{ height: 190, mt: .8, position: "relative" }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <PieChart>
+            <Pie
+              data={visibleData}
+              dataKey="total"
+              nameKey="label"
+              cx="50%"
+              cy="50%"
+              innerRadius={54}
+              outerRadius={76}
+              paddingAngle={2}
+              stroke="none"
+              onClick={(_entry, index) => {
+                const item = visibleData[index];
+                if (item) onItemClick?.(item.label);
+              }}
+              style={{ cursor: onItemClick ? "pointer" : "default" }}
+            >
+              {visibleData.map((item) => {
+                const index = data.findIndex((row) => row.label === item.label);
+                return (
+                <Cell key={item.label} fill={colors[index % colors.length]} />
+              )})}
+            </Pie>
+            <Tooltip
+              contentStyle={{
+                borderRadius: 12,
+                border: `1px solid ${theme.palette.divider}`,
+                background: theme.palette.background.paper,
+                boxShadow: "0 14px 36px rgba(0,0,0,.18)",
+              }}
+              cursor={false}
+            />
+          </PieChart>
+        </ResponsiveContainer>
+        <Box sx={{ position: "absolute", inset: 0, display: "grid", placeContent: "center", pointerEvents: "none", textAlign: "center" }}>
+          <Typography sx={{ fontSize: "1.45rem", fontWeight: 900, lineHeight: 1 }}>{total}</Typography>
+          <Typography variant="caption" color="text.secondary">tickets</Typography>
+        </Box>
+      </Box>
+      <Stack spacing={.55}>
+        {data.map((item, index) => {
+          const active = !hiddenItems.has(item.label);
+          return (
+          <Box key={item.label} onClick={() => toggleItem(item.label)} sx={{ display: "grid", gridTemplateColumns: "10px 1fr auto", alignItems: "center", gap: .8, cursor: "pointer", px: .6, py: .35, borderRadius: 1, opacity: active ? 1 : .4, textDecoration: active ? "none" : "line-through", transition: "all .2s ease", "&:hover": { bgcolor: "action.hover" } }}>
+            <Box sx={{ width: 8, height: 8, borderRadius: "50%", bgcolor: colors[index % colors.length], boxShadow: `0 0 10px ${colors[index % colors.length]}` }} />
+            <Typography variant="caption" noWrap>{item.label}</Typography>
+            <Typography variant="caption" sx={{ fontWeight: 850 }}>{item.total}</Typography>
+          </Box>
+        )})}
+      </Stack>
+    </CardBase>
   );
 }
 
@@ -3165,100 +3105,34 @@ function RankingCard({
         {subtitle}
       </Typography>
 
-      {data
-        .slice(0, 6)
-        .map(
-          (
-            item,
-            index
-          ) => (
+      <Stack spacing={1.15}>
+        {data.slice(0, 5).map((item, index) => {
+          const max = Math.max(...data.slice(0, 5).map((row) => row.total), 1);
+          const pct = Math.max(6, (item.total / max) * 100);
+          const color = chartPalette[index % chartPalette.length];
+
+          return (
             <Box
               key={`${item.label}-${index}`}
               role="button"
               tabIndex={0}
-              onClick={() =>
-                onItemClick(
-                  item.label
-                )
-              }
-              onKeyDown={(
-                event
-              ) => {
-                if (
-                  event.key ===
-                    "Enter" ||
-                  event.key ===
-                    " "
-                ) {
-                  onItemClick(
-                    item.label
-                  );
-                }
+              onClick={() => onItemClick(item.label)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") onItemClick(item.label);
               }}
-              sx={{
-                display: "flex",
-
-                justifyContent:
-                  "space-between",
-
-                alignItems:
-                  "center",
-
-                py: 0.85,
-                px: 0.75,
-
-                borderTop:
-                  index === 0
-                    ? "none"
-                    : "1px solid",
-
-                borderColor:
-                  "divider",
-
-                borderRadius: 1,
-
-                cursor:
-                  "pointer",
-
-                "&:hover": {
-                  backgroundColor:
-                    "action.hover",
-                },
-              }}
+              sx={{ cursor: "pointer", px: .25 }}
             >
-              <Typography
-                variant="body2"
-              sx={{ fontWeight: 600 }}
-              >
-                {item.label}
-              </Typography>
-
-              <Chip
-                size="small"
-                label={
-                  item.total
-                }
-                variant="outlined"
-                sx={{
-                  minWidth:
-                    38,
-
-                  fontWeight:
-                    750,
-
-                  color:
-                    aliareColors.greenDark,
-
-                  borderColor:
-                    "rgba(24,199,122,0.32)",
-
-                  backgroundColor:
-                    "rgba(24,199,122,0.05)",
-                }}
-              />
+              <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "center", mb: .45 }}>
+                <Typography variant="body2" sx={{ fontWeight: 700 }} noWrap>{item.label}</Typography>
+                <Typography variant="caption" sx={{ fontWeight: 900, ml: 1 }}>{item.total}</Typography>
+              </Stack>
+              <Box sx={{ height: 10, borderRadius: 99, bgcolor: "rgba(72,115,154,.16)", overflow: "hidden" }}>
+                <Box sx={{ width: `${pct}%`, height: "100%", borderRadius: 99, background: `linear-gradient(90deg, ${color}, ${color}CC)`, boxShadow: `0 0 14px ${color}55`, transition: "width .35s ease" }} />
+              </Box>
             </Box>
-          )
-        )}
+          );
+        })}
+      </Stack>
     </CardBase>
   );
 }
@@ -3469,7 +3343,8 @@ function groupByField(
   field:
     | "category"
     | "owner"
-    | "client",
+    | "client"
+    | "cause",
 
   fallback: string
 ): RankingItem[] {

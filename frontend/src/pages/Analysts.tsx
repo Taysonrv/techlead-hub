@@ -15,7 +15,6 @@ import {
   IconButton,
   InputLabel,
   MenuItem,
-  Popover,
   Select,
   Snackbar,
   Stack,
@@ -24,13 +23,10 @@ import {
   TableCell,
   TableContainer,
   TableHead,
+  TablePagination,
   TableRow,
   Typography,
 } from "@mui/material";
-
-import {
-  InfoOutlined,
-} from "@mui/icons-material";
 
 import {
   Cell,
@@ -45,6 +41,9 @@ import { useNavigate } from "react-router-dom";
 import { api } from "../services/api";
 import { useFilters } from "../context/FiltersContext";
 import { PeriodFilter } from "../components/PeriodFilter";
+import { PageHeader } from "../components/PageHeader";
+import { KpiCard as ExecutiveKpiCard } from "../components/KpiCard";
+import { ExecutiveSection } from "../components/ExecutiveSection";
 import { aliareColors } from "../theme/theme";
 import {
   chartPalette,
@@ -313,6 +312,10 @@ const STATUS_COLORS: Record<
 ===================================================== */
 
 export function Analysts() {
+  const [hiddenAnalystSlices, setHiddenAnalystSlices] = useState<Set<string>>(() => new Set());
+  const [hiddenStatusSlices, setHiddenStatusSlices] = useState<Set<string>>(() => new Set());
+  const [productivityPage, setProductivityPage] = useState(0);
+  const [analystsPage, setAnalystsPage] = useState(0);
   const navigate = useNavigate();
 
   const [tickets, setTickets] =
@@ -1650,6 +1653,19 @@ export function Analysts() {
     );
   }
 
+
+  const visibleAnalystPieData = analystPieData.filter((item) => !hiddenAnalystSlices.has(item.name));
+  const visibleStatusPieData = statusPieData.filter((item) => !hiddenStatusSlices.has(item.name));
+
+  const togglePieSlice = (setter: React.Dispatch<React.SetStateAction<Set<string>>>, data: PieDataItem[], name: string) => {
+    setter((current) => {
+      const next = new Set(current);
+      if (next.has(name)) next.delete(name);
+      else if (data.length - next.size > 1) next.add(name);
+      return next;
+    });
+  };
+
   /* =====================================================
      RENDER
   ===================================================== */
@@ -1660,123 +1676,13 @@ export function Analysts() {
           CABEÇALHO
       ================================================ */}
 
-      <Box
-        sx={{
-          mb: 2.5,
-
-          display: "flex",
-
-          flexDirection: {
-            xs: "column",
-            lg: "row",
-          },
-
-          justifyContent:
-            "space-between",
-
-          alignItems: {
-            xs: "stretch",
-            lg: "center",
-          },
-
-          gap: 2,
-        }}
-      >
-        <Box>
-          <Stack
-            direction="row"
-            spacing={1}
-            sx={{
-              alignItems:
-                "center",
-            }}
-          >
-            <Box
-              sx={{
-                width:
-                  30,
-
-                height:
-                  3,
-
-                borderRadius:
-                  99,
-
-                backgroundColor:
-                  aliareColors.green,
-              }}
-            />
-
-            <Typography
-              variant="caption"
-              sx={{
-                fontWeight:
-                  800,
-
-                letterSpacing:
-                  "0.08em",
-
-                textTransform:
-                  "uppercase",
-
-                color:
-                  aliareColors.greenDark,
-              }}
-            >
-              Equipe
-            </Typography>
-          </Stack>
-
-          <Typography
-            sx={{
-              mt:
-                0.8,
-
-              fontWeight:
-                800,
-
-              letterSpacing:
-                "-0.025em",
-
-              fontSize: {
-                xs: "1.7rem",
-                md: "1.9rem",
-                xl: "2.1rem",
-              },
-            }}
-          >
-            Analistas
-          </Typography>
-
-          <Typography
-            variant="body2"
-            color="text.secondary"
-            sx={{
-              mt: 0.25,
-            }}
-          >
-            Visão de carga, distribuição e riscos da equipe
-          </Typography>
-
-          <Typography
-            variant="caption"
-            color="text.secondary"
-            sx={{
-              display:
-                "block",
-              mt: 0.5,
-            }}
-          >
-            {
-              scopedTickets.length
-            }{" "}
-            ticket(s) analisado(s)
-            no período
-          </Typography>
-        </Box>
-
-        <PeriodFilter />
-      </Box>
+      <PageHeader
+        eyebrow="Equipe"
+        title="Analistas"
+        description="Visão de carga, distribuição e riscos da equipe"
+        meta={<>{scopedTickets.length} ticket(s) analisado(s) no período</>}
+        action={<PeriodFilter />}
+      />
 
       {/* ===============================================
           FILTROS GERENCIAIS
@@ -2785,7 +2691,7 @@ export function Analysts() {
                   </TableHead>
 
                   <TableBody>
-                    {productivityAnalysts.map(
+                    {productivityAnalysts.slice(productivityPage * 10, productivityPage * 10 + 10).map(
                       (item) => (
                         <TableRow
                           key={
@@ -2970,6 +2876,18 @@ export function Analysts() {
                   </TableBody>
                 </Table>
               </TableContainer>
+              <TablePagination
+                component="div"
+                count={productivityAnalysts.length}
+                page={Math.min(productivityPage, Math.max(0, Math.ceil(productivityAnalysts.length / 10) - 1))}
+                onPageChange={(_event, value) => setProductivityPage(value)}
+                rowsPerPage={10}
+                rowsPerPageOptions={[10]}
+                labelRowsPerPage="Itens por página"
+                labelDisplayedRows={({ from, to, count }) => `${from}–${to} de ${count}`}
+                showFirstButton
+                showLastButton
+              />
             </>
           )}
         </CardContent>
@@ -3029,9 +2947,7 @@ export function Analysts() {
                 >
                   <PieChart>
                     <Pie
-                      data={
-                        analystPieData
-                      }
+                      data={visibleAnalystPieData}
                       dataKey="value"
                       nameKey="name"
                       cx="50%"
@@ -3066,7 +2982,7 @@ export function Analysts() {
                           "pointer",
                       }}
                     >
-                      {analystPieData.map(
+                      {visibleAnalystPieData.map(
                         (
                           _,
                           index
@@ -3096,20 +3012,9 @@ export function Analysts() {
               </Box>
 
               <CompactPieLegend
-                data={
-                  analystPieData
-                }
-                total={
-                  analystPieData.reduce(
-                    (
-                      sum,
-                      item
-                    ) =>
-                      sum +
-                      item.value,
-                    0
-                  )
-                }
+                data={analystPieData}
+                hiddenItems={hiddenAnalystSlices}
+                onToggleItem={(name) => togglePieSlice(setHiddenAnalystSlices, analystPieData, name)}
                 onItemClick={(
                   name
                 ) => {
@@ -3166,9 +3071,7 @@ export function Analysts() {
                 >
                   <PieChart>
                     <Pie
-                      data={
-                        statusPieData
-                      }
+                      data={visibleStatusPieData}
                       dataKey="value"
                       nameKey="name"
                       cx="50%"
@@ -3230,7 +3133,7 @@ export function Analysts() {
                         }
                       }}
                     >
-                      {statusPieData.map(
+                      {visibleStatusPieData.map(
                         (
                           _,
                           index
@@ -3266,12 +3169,9 @@ export function Analysts() {
               </Box>
 
               <CompactPieLegend
-                data={
-                  statusPieData
-                }
-                total={
-                  scopedTickets.length
-                }
+                data={statusPieData}
+                hiddenItems={hiddenStatusSlices}
+                onToggleItem={(name) => togglePieSlice(setHiddenStatusSlices, statusPieData, name)}
                 onItemClick={(
                   name
                 ) => {
@@ -3403,7 +3303,7 @@ export function Analysts() {
             <TableHead
               sx={{
                 backgroundColor:
-                  "#F8FAF9",
+                  "background.paper",
 
                 "& .MuiTableCell-root":
                   {
@@ -3490,7 +3390,7 @@ export function Analysts() {
             </TableHead>
 
             <TableBody>
-              {analysts.map(
+              {analysts.slice(analystsPage * 10, analystsPage * 10 + 10).map(
                 (analyst) => {
                   const analystTickets =
                     scopedTickets.filter(
@@ -3854,6 +3754,18 @@ export function Analysts() {
             </TableBody>
           </Table>
         </TableContainer>
+              <TablePagination
+                component="div"
+                count={analysts.length}
+                page={Math.min(analystsPage, Math.max(0, Math.ceil(analysts.length / 10) - 1))}
+                onPageChange={(_event, value) => setAnalystsPage(value)}
+                rowsPerPage={10}
+                rowsPerPageOptions={[10]}
+                labelRowsPerPage="Itens por página"
+                labelDisplayedRows={({ from, to, count }) => `${from}–${to} de ${count}`}
+                showFirstButton
+                showLastButton
+              />
       </Card>
 
       {/* ===============================================
@@ -4877,21 +4789,31 @@ export function Analysts() {
 
 function CompactPieLegend({
   data,
-  total,
+  hiddenItems: controlledHiddenItems,
+  onToggleItem,
   onItemClick,
 }: {
-  data:
-    PieDataItem[];
-
-  total:
-    number;
-
-  onItemClick?:
-    (
-      name:
-        string
-    ) => void;
+  data: PieDataItem[];
+  hiddenItems?: Set<string>;
+  onToggleItem?: (name: string) => void;
+  onItemClick?: (name: string) => void;
 }) {
+  const [localHiddenItems, setLocalHiddenItems] = useState<Set<string>>(() => new Set());
+  const hiddenItems = controlledHiddenItems ?? localHiddenItems;
+  const visibleTotal = data.reduce((sum, item) => hiddenItems.has(item.name) ? sum : sum + item.value, 0);
+  const toggleItem = (name: string) => {
+    if (onToggleItem) {
+      onToggleItem(name);
+      return;
+    }
+    setLocalHiddenItems((current) => {
+      const next = new Set(current);
+      if (next.has(name)) next.delete(name);
+      else if (data.length - next.size > 1) next.add(name);
+      return next;
+    });
+  };
+
   return (
     <Stack
       spacing={0.5}
@@ -4905,20 +4827,16 @@ function CompactPieLegend({
           index
         ) => {
           const percent =
-            total > 0
+            visibleTotal > 0
               ? Math.round(
                   (item.value /
-                    total) *
+                    visibleTotal) *
                     100
                 )
               : 0;
 
-          const clickable =
-            Boolean(
-              onItemClick
-            ) &&
-            item.name !==
-              "Outros";
+          const active = !hiddenItems.has(item.name);
+          const clickable = true;
 
           return (
             <Box
@@ -4936,30 +4854,15 @@ function CompactPieLegend({
               title={
                 item.name
               }
-              onClick={() => {
-                if (
-                  clickable
-                ) {
-                  onItemClick?.(
-                    item.name
-                  );
-                }
+              onClick={() => toggleItem(item.name)}
+              onDoubleClick={() => {
+                if (item.name !== "Outros") onItemClick?.(item.name);
               }}
               onKeyDown={(
                 event
               ) => {
-                if (
-                  clickable &&
-                  (
-                    event.key ===
-                      "Enter" ||
-                    event.key ===
-                      " "
-                  )
-                ) {
-                  onItemClick?.(
-                    item.name
-                  );
+                if (event.key === "Enter" || event.key === " ") {
+                  toggleItem(item.name);
                 }
               }}
               sx={{
@@ -4980,10 +4883,10 @@ function CompactPieLegend({
                 borderRadius:
                   1.25,
 
-                cursor:
-                  clickable
-                    ? "pointer"
-                    : "default",
+                cursor: "pointer",
+                opacity: active ? 1 : 0.38,
+                textDecoration: active ? "none" : "line-through",
+                transition: "all .2s ease",
 
                 "&:hover":
                   clickable
@@ -5002,11 +4905,8 @@ function CompactPieLegend({
                   borderRadius:
                     "50%",
 
-                  backgroundColor:
-                    PIE_COLORS[
-                      index %
-                        PIE_COLORS.length
-                    ],
+                  backgroundColor: active ? PIE_COLORS[index % PIE_COLORS.length] : "text.disabled",
+                  boxShadow: active ? `0 0 8px ${PIE_COLORS[index % PIE_COLORS.length]}88` : "none",
                 }}
               />
 
@@ -5263,162 +5163,19 @@ function MetricCard({
 }
 
 function UnifiedMetricCard({
-  title,
-  value,
-  description,
-  info,
-  accentColor,
-  onClick,
+  title, value, description, info, accentColor, onClick,
 }: {
-  title: string;
-  value: ReactNode;
-  description: string;
-  info: ProductivityInfoDefinition;
-  accentColor: string;
-  onClick?: () => void;
+  title: string; value: ReactNode; description: string; info: ProductivityInfoDefinition; accentColor: string; onClick?: () => void;
 }) {
-  return (
-    <Card
-      elevation={0}
-      role={onClick ? "button" : undefined}
-      tabIndex={onClick ? 0 : undefined}
-      onClick={onClick}
-      onKeyDown={(event) => {
-        if (onClick && (event.key === "Enter" || event.key === " ")) {
-          onClick();
-        }
-      }}
-      sx={{
-        position: "relative",
-        overflow: "hidden",
-        border: "1px solid",
-        borderColor: "divider",
-        borderRadius: 2.25,
-        height: "100%",
-        backgroundColor: "background.paper",
-        cursor: onClick ? "pointer" : "default",
-        transition: "transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease",
-        "&::before": {
-          content: '""',
-          position: "absolute",
-          top: 0,
-          left: 0,
-          width: "100%",
-          height: 3,
-          backgroundColor: accentColor,
-        },
-        ...(onClick && {
-          "&:hover": {
-            transform: "translateY(-2px)",
-            borderColor: accentColor,
-            boxShadow: "0 8px 24px rgba(16,24,40,0.08)",
-          },
-          "&:focus-visible": {
-            outline: `2px solid ${accentColor}`,
-            outlineOffset: "2px",
-          },
-        }),
-      }}
-    >
-      <CardContent
-        sx={{
-          p: { xs: 1.6, md: 1.8 },
-          "&:last-child": { pb: { xs: 1.6, md: 1.8 } },
-        }}
-      >
-        <Stack
-          direction="row"
-          sx={{ alignItems: "center", justifyContent: "space-between", gap: 1 }}
-        >
-          <Typography variant="body2" sx={{ fontWeight: 700, color: "text.primary", minWidth: 0 }}>
-            {title}
-          </Typography>
-          <ProductivityInfo definition={info} />
-        </Stack>
-
-        <Typography
-          sx={{
-            mt: 0.6,
-            fontWeight: 800,
-            letterSpacing: "-0.025em",
-            fontSize: { xs: "1.75rem", md: "1.95rem", xl: "2.1rem" },
-            lineHeight: 1.05,
-          }}
-        >
-          {value}
-        </Typography>
-
-        <Typography
-          variant="caption"
-          color="text.secondary"
-          sx={{ display: "block", mt: 0.75, minHeight: 18 }}
-        >
-          {description}
-        </Typography>
-      </CardContent>
-    </Card>
-  );
+  return <ExecutiveKpiCard title={title} value={value} subtitle={description} info={`${info.summary} • ${info.periodRule}`} accent={accentColor} onClick={onClick} />;
 }
 
 function ChartCard({
-  title,
-  subtitle,
-  children,
+  title, subtitle, children,
 }: {
-  title: string;
-  subtitle: string;
-  children: ReactNode;
+  title: string; subtitle: string; children: ReactNode;
 }) {
-  return (
-    <Card
-      elevation={0}
-      sx={{
-        border:
-          "1px solid",
-
-        borderColor:
-          "divider",
-
-        borderRadius:
-          2.25,
-
-        backgroundColor:
-          "background.paper",
-
-        boxShadow:
-          "0 1px 2px rgba(16,24,40,0.035)",
-      }}
-    >
-      <CardContent
-        sx={{
-          p: 2,
-
-          "&:last-child": {
-            pb: 2,
-          },
-        }}
-      >
-        <Typography
-          sx={{
-          fontWeight: 800,
-            fontSize:
-              "1.05rem",
-          }}
-        >
-          {title}
-        </Typography>
-
-        <Typography
-          variant="caption"
-          color="text.secondary"
-        >
-          {subtitle}
-        </Typography>
-
-        {children}
-      </CardContent>
-    </Card>
-  );
+  return <ExecutiveSection title={title} subtitle={subtitle} compact>{children}</ExecutiveSection>;
 }
 
 /* =====================================================
@@ -5610,225 +5367,6 @@ type ProductivityInfoDefinition = {
   notes?: string;
 };
 
-function ProductivityInfo({
-  definition,
-}: {
-  definition: ProductivityInfoDefinition;
-}) {
-  const [
-    anchorEl,
-    setAnchorEl,
-  ] =
-    useState<HTMLElement | null>(
-      null
-    );
-
-  const open =
-    Boolean(anchorEl);
-
-  return (
-    <>
-      <IconButton
-        size="small"
-        aria-label={`Informações sobre ${definition.title}`}
-        aria-haspopup="dialog"
-        aria-expanded={open}
-        title={`Como é calculado: ${definition.title}`}
-        onClick={(event) => {
-          event.preventDefault();
-          event.stopPropagation();
-
-          setAnchorEl(
-            event.currentTarget
-          );
-        }}
-        onKeyDown={(event) =>
-          event.stopPropagation()
-        }
-        sx={{
-          p: 0.3,
-          color: "text.secondary",
-          "&:hover": {
-            color:
-              aliareColors.greenDark,
-            backgroundColor:
-              "rgba(24,199,122,0.08)",
-          },
-        }}
-      >
-        <InfoOutlined
-          sx={{
-            fontSize: 16,
-          }}
-        />
-      </IconButton>
-
-      <Popover
-        open={open}
-        anchorEl={anchorEl}
-        onClose={() =>
-          setAnchorEl(null)
-        }
-        anchorOrigin={{
-          vertical: "bottom",
-          horizontal: "left",
-        }}
-        transformOrigin={{
-          vertical: "top",
-          horizontal: "left",
-        }}
-        slotProps={{
-          paper: {
-            onClick: (
-              event: React.MouseEvent<HTMLElement>
-            ) =>
-              event.stopPropagation(),
-            sx: {
-              width: {
-                xs: 320,
-                sm: 390,
-              },
-              maxWidth:
-                "calc(100vw - 32px)",
-              mt: 0.75,
-              p: 2,
-              borderRadius: 2,
-              border:
-                "1px solid",
-              borderColor:
-                "divider",
-              boxShadow:
-                "0 14px 40px rgba(16,24,40,0.14)",
-            },
-          },
-        }}
-      >
-        <Stack
-          spacing={1.2}
-        >
-          <Box>
-            <Typography
-              sx={{
-                fontWeight: 850,
-              }}
-            >
-              {definition.title}
-            </Typography>
-
-            <Typography
-              variant="body2"
-              color="text.secondary"
-              sx={{
-                mt: 0.4,
-                lineHeight: 1.55,
-              }}
-            >
-              {definition.summary}
-            </Typography>
-          </Box>
-
-          <Divider />
-
-          <ProductivityInfoLine
-            label="Como é calculado"
-            value={
-              definition.calculation
-            }
-          />
-
-          <ProductivityInfoLine
-            label="Fonte"
-            value={
-              definition.source
-            }
-          />
-
-          <ProductivityInfoLine
-            label="Campo de referência"
-            value={
-              definition.reference
-            }
-          />
-
-          <ProductivityInfoLine
-            label="Regra de período"
-            value={
-              definition.periodRule
-            }
-          />
-
-          {definition.notes && (
-            <Box
-              sx={{
-                p: 1.1,
-                borderRadius: 1.5,
-                backgroundColor:
-                  "rgba(24,199,122,0.055)",
-                border:
-                  "1px solid rgba(24,199,122,0.16)",
-              }}
-            >
-              <Typography
-                variant="caption"
-                sx={{
-                  fontWeight: 800,
-                  color:
-                    aliareColors.greenDark,
-                }}
-              >
-                Observação
-              </Typography>
-
-              <Typography
-                variant="caption"
-                color="text.secondary"
-                sx={{
-                  display: "block",
-                  mt: 0.25,
-                  lineHeight: 1.5,
-                }}
-              >
-                {definition.notes}
-              </Typography>
-            </Box>
-          )}
-        </Stack>
-      </Popover>
-    </>
-  );
-}
-
-function ProductivityInfoLine({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
-}) {
-  return (
-    <Box>
-      <Typography
-        variant="caption"
-        color="text.secondary"
-        sx={{
-          fontWeight: 700,
-        }}
-      >
-        {label}
-      </Typography>
-
-      <Typography
-        variant="body2"
-        sx={{
-          mt: 0.15,
-          lineHeight: 1.5,
-        }}
-      >
-        {value}
-      </Typography>
-    </Box>
-  );
-}
 
 function ProductivityCard({
   title,

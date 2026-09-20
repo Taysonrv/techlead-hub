@@ -15,7 +15,6 @@ import {
   InputAdornment,
   InputLabel,
   MenuItem,
-  Popover,
   Select,
   Stack as MuiStack,
   Table,
@@ -31,7 +30,6 @@ import {
 
 import {
   ExpandMoreOutlined,
-  InfoOutlined,
   Inventory2Outlined,
   OpenInNewOutlined,
   SearchOutlined,
@@ -69,6 +67,11 @@ import {
 import {
   aliareColors,
 } from "../theme/theme";
+import { InfoPopover, type InfoPopoverContent } from "../components/InfoPopover";
+import { PageHeader } from "../components/PageHeader";
+import { useTheme } from "@mui/material/styles";
+import { ExecutiveSection } from "../components/ExecutiveSection";
+import { KpiCard as ExecutiveKpiCard } from "../components/KpiCard";
 
 function Stack(
   props:
@@ -92,6 +95,9 @@ type VersionSummary = {
   versions: number;
   withVersion: number;
   withoutVersion: number;
+  withRegisteredVersion: number;
+  withoutRegisteredVersion: number;
+  versionMismatch: number;
   corrections: number;
   evolutions: number;
   prioritized: number;
@@ -154,6 +160,7 @@ type WorkItem = {
   module: string | null;
   process: string | null;
   movideskTicket: number | null;
+  registeredVersion: string | null;
   deliveredVersion: string | null;
   prioritized: boolean | null;
   blockedProcess: boolean | null;
@@ -211,15 +218,7 @@ type VersionMetricFilter =
   | "blocked"
   | "critical";
 
-type CardInfo = {
-  title: string;
-  summary: string;
-  calculation: string;
-  source: string;
-  reference?: string;
-  periodRule: string;
-  notes?: string;
-};
+type CardInfo = InfoPopoverContent;
 
 type DetailRequest = {
   params?: Record<string, string | number>;
@@ -237,6 +236,9 @@ const EMPTY_SUMMARY:
     versions: 0,
     withVersion: 0,
     withoutVersion: 0,
+    withRegisteredVersion: 0,
+    withoutRegisteredVersion: 0,
+    versionMismatch: 0,
     corrections: 0,
     evolutions: 0,
     prioritized: 0,
@@ -1241,6 +1243,58 @@ export function Versions() {
     );
   }
 
+  async function openVersionMismatchDetail() {
+    setSelectedVersion(null);
+    setSelectedTask(null);
+    setDetailContext({
+      title: "Versões divergentes",
+      subtitle: "Versão cadastrada diferente da versão efetivamente entregue",
+      version: null,
+    });
+    setVersionItems([]);
+    setVersionItemsTotal(0);
+    setDetailLoading(true);
+    setDetailError(null);
+    try {
+      const response = await api.get("/workspace/data-quality", {
+        params: {
+          issue: "versionMismatch",
+          client: client || undefined,
+          search: appliedSearch || undefined,
+        },
+      });
+      const samples = Array.isArray(response.data?.samples) ? response.data.samples : [];
+      const mapped: WorkItem[] = samples
+        .filter((item: any) => item.source === "AZURE")
+        .map((item: any) => ({
+          id: item.taskNumber ?? item.id,
+          workItemType: item.workItemType,
+          title: item.title,
+          state: item.state,
+          assignedToName: item.assignedToName ?? null,
+          client: item.client ?? null,
+          criticality: item.criticality ?? null,
+          module: item.module ?? null,
+          process: item.process ?? null,
+          movideskTicket: item.movideskTicket ?? null,
+          registeredVersion: item.registeredVersion ?? null,
+          deliveredVersion: item.deliveredVersion ?? null,
+          prioritized: item.prioritized ?? null,
+          blockedProcess: item.blockedProcess ?? null,
+          azureChangedAt: item.azureChangedAt ?? null,
+          stateChangedAt: item.stateChangedAt ?? null,
+          syncedAt: item.syncedAt ?? null,
+        }));
+      setVersionItems(mapped);
+      setVersionItemsTotal(response.data?.summary?.versionMismatch ?? mapped.length);
+    } catch (currentError) {
+      console.error("Erro ao carregar divergências de versão:", currentError);
+      setDetailError("Não foi possível carregar as Tasks com divergência de versão.");
+    } finally {
+      setDetailLoading(false);
+    }
+  }
+
   function closeDetail() {
     setSelectedVersion(
       null,
@@ -1334,131 +1388,13 @@ export function Versions() {
 
   return (
     <>
-      <Box
-        sx={{
-          mb:
-            2.5,
-          display:
-            "flex",
-          flexDirection: {
-            xs:
-              "column",
-            lg:
-              "row",
-          },
-          justifyContent:
-            "space-between",
-          alignItems: {
-            xs:
-              "stretch",
-            lg:
-              "center",
-          },
-          gap:
-            2,
-        }}
-      >
-        <Box>
-          <Stack
-            direction="row"
-            spacing={1}
-            sx={{
-              alignItems:
-                "center",
-            }}
-          >
-            <Box
-              sx={{
-                width:
-                  30,
-                height:
-                  3,
-                borderRadius:
-                  99,
-                backgroundColor:
-                  aliareColors.green,
-              }}
-            />
-
-            <Typography
-              variant="caption"
-              sx={{
-                fontWeight:
-                  800,
-                letterSpacing:
-                  "0.08em",
-                textTransform:
-                  "uppercase",
-                color:
-                  aliareColors.greenDark,
-              }}
-            >
-              Desenvolvimento
-            </Typography>
-          </Stack>
-
-          <Typography
-            sx={{
-              mt:
-                0.8,
-              fontWeight:
-                800,
-              letterSpacing:
-                "-0.025em",
-              fontSize: {
-                xs:
-                  "1.7rem",
-                md:
-                  "1.9rem",
-                xl:
-                  "2.1rem",
-              },
-            }}
-          >
-            Versões
-          </Typography>
-
-          <Typography
-            variant="body2"
-            color="text.secondary"
-            sx={{
-              mt:
-                0.25,
-            }}
-          >
-            Planejamento, cobertura e riscos das versões vinculadas às Tasks do Azure
-          </Typography>
-
-          <Typography
-            variant="caption"
-            color="text.secondary"
-            sx={{
-              display:
-                "block",
-              mt:
-                0.5,
-            }}
-          >
-            {summary.total} Work Item(s) no recorte •{" "}
-            {summary.versions} versão(ões) identificada(s)
-          </Typography>
-        </Box>
-
-        <Button
-          variant="outlined"
-          size="small"
-          onClick={() =>
-            void load()
-          }
-          disabled={
-            loading
-          }
-        >
-          {loading
-            ? "Atualizando..."
-            : "Recarregar"}
-        </Button>
-      </Box>
+      <PageHeader
+        eyebrow="Desenvolvimento"
+        title="Versões"
+        description="Planejamento, cobertura e riscos das versões vinculadas às Tasks do Azure"
+        meta={<>{summary.total} Work Item(s) no recorte • {summary.versions} versão(ões) identificada(s)</>}
+        action={<Button variant="outlined" size="small" onClick={() => void load()} disabled={loading}>{loading ? "Atualizando..." : "Recarregar"}</Button>}
+      />
 
       {error && (
         <Alert
@@ -2109,6 +2045,23 @@ export function Versions() {
         />
 
         <MetricCard
+          title="Versões divergentes"
+          value={summary.versionMismatch}
+          description="Cadastro diferente da entrega"
+          severity={summary.versionMismatch > 0 ? "warning" : "success"}
+          info={{
+            title: "Versões divergentes",
+            summary: "Correções e Evoluções cuja versão cadastrada difere da versão efetivamente entregue.",
+            calculation: "Compara registeredVersion e deliveredVersion normalizadas.",
+            source: "Azure DevOps",
+            reference: "registeredVersion × deliveredVersion",
+            periodRule: "Respeita os filtros aplicados na visão de versões.",
+            notes: "APOIO não é tratado como pendência de versão na Qualidade dos Dados.",
+          }}
+          onClick={() => void openVersionMismatchDetail()}
+        />
+
+        <MetricCard
           title="Correções"
           active={
             activeMetricFilter ===
@@ -2571,7 +2524,7 @@ export function Versions() {
             <TableHead
               sx={{
                 backgroundColor:
-                  "#F8FAF9",
+                  "background.paper",
               }}
             >
               <TableRow>
@@ -3105,7 +3058,11 @@ export function Versions() {
                   <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
                     {selectedTask.descriptionText || selectedTask.technicalSolutionText || "Detalhamento textual não informado no Azure."}
                   </Typography>
-                  {selectedTask.deliveredVersion && <Chip size="small" label={`Versão ${selectedTask.deliveredVersion}`} sx={{ mt: 1 }} />}
+                  <Stack direction="row" spacing={1} useFlexGap sx={{ mt: 1, flexWrap: "wrap" }}>
+                    {selectedTask.registeredVersion && <Chip size="small" variant="outlined" label={`Cadastrada: ${selectedTask.registeredVersion}`} />}
+                    {selectedTask.deliveredVersion && <Chip size="small" label={`Entregue: ${selectedTask.deliveredVersion}`} />}
+                    {selectedTask.registeredVersion && selectedTask.deliveredVersion && selectedTask.registeredVersion.trim().toLocaleLowerCase("pt-BR") !== selectedTask.deliveredVersion.trim().toLocaleLowerCase("pt-BR") && <Chip size="small" color="warning" label="Versões divergentes" />}
+                  </Stack>
                   <Stack direction="row" spacing={1} useFlexGap sx={{ mt: 1.5, flexWrap: "wrap" }}>
                     <Button size="small" variant="contained" onClick={() => openWorkItem(selectedTask)}>Abrir em {shortType(selectedTask.workItemType)}</Button>
                     {selectedTask.azureWebUrl && <Button size="small" component="a" href={selectedTask.azureWebUrl} target="_blank" rel="noopener noreferrer" endIcon={<OpenInNewOutlined />}>Abrir Task no Azure</Button>}
@@ -3416,201 +3373,13 @@ export function Versions() {
 }
 
 function MetricCard({
-  title,
-  value,
-  description,
-  severity = "default",
-  active = false,
-  info,
-  onClick,
+  title, value, description, severity = "default", active = false, info, onClick,
 }: {
-  title: string;
-  value: string | number;
-  description: string;
-  severity?:
-    | "default"
-    | "success"
-    | "warning"
-    | "error";
-  active?: boolean;
-  info: CardInfo;
-  onClick: () => void;
+  title: string; value: string | number; description: string;
+  severity?: "default" | "success" | "warning" | "error"; active?: boolean; info: CardInfo; onClick: () => void;
 }) {
-  const accentColor =
-    severity ===
-    "error"
-      ? "#EF4444"
-      : severity ===
-        "warning"
-      ? "#F59E0B"
-      : severity ===
-        "success"
-      ? aliareColors.green
-      : aliareColors.green;
-
-  return (
-    <Card
-      elevation={0}
-      role="button"
-      tabIndex={0}
-      onClick={
-        onClick
-      }
-      onKeyDown={(
-        event,
-      ) => {
-        if (
-          event.key ===
-            "Enter" ||
-          event.key ===
-            " "
-        ) {
-          onClick();
-        }
-      }}
-      sx={{
-        position:
-          "relative",
-        overflow:
-          "hidden",
-        height:
-          "100%",
-        minHeight:
-          122,
-        border:
-          "1px solid",
-        borderColor:
-          active
-            ? accentColor
-            : "divider",
-        borderRadius:
-          2.25,
-        cursor:
-          "pointer",
-        backgroundColor:
-          active
-            ? "rgba(24,199,122,0.035)"
-            : "background.paper",
-        boxShadow:
-          active
-            ? "0 6px 20px rgba(16,24,40,0.07)"
-            : "none",
-        transition:
-          "transform .15s ease, box-shadow .15s ease, border-color .15s ease",
-        "&::before": {
-          content:
-            '""',
-          position:
-            "absolute",
-          top:
-            0,
-          left:
-            0,
-          width:
-            "100%",
-          height:
-            3,
-          backgroundColor:
-            accentColor,
-        },
-        "&:hover": {
-          transform:
-            "translateY(-2px)",
-          borderColor:
-            accentColor,
-          boxShadow:
-            "0 8px 24px rgba(16,24,40,0.08)",
-        },
-        "&:focus-visible": {
-          outline:
-            `2px solid ${accentColor}`,
-          outlineOffset:
-            2,
-        },
-      }}
-    >
-      <CardContent
-        sx={{
-          p: {
-            xs:
-              1.4,
-            md:
-              1.55,
-          },
-          "&:last-child": {
-            pb: {
-              xs:
-                1.4,
-              md:
-                1.55,
-            },
-          },
-        }}
-      >
-        <Stack
-          direction="row"
-          spacing={1}
-          sx={{
-            alignItems:
-              "center",
-            justifyContent:
-              "space-between",
-          }}
-        >
-          <Typography
-            variant="body2"
-            sx={{
-              fontWeight:
-                750,
-            }}
-          >
-            {title}
-          </Typography>
-
-          <CardInfoButton
-            info={
-              info
-            }
-          />
-        </Stack>
-
-        <Typography
-          sx={{
-            mt:
-              0.55,
-            fontSize: {
-              xs:
-                "1.65rem",
-              md:
-                "1.8rem",
-              xl:
-                "1.9rem",
-            },
-            lineHeight:
-              1.05,
-            fontWeight:
-              800,
-          }}
-        >
-          {value}
-        </Typography>
-
-        <Typography
-          variant="caption"
-          color="text.secondary"
-          sx={{
-            display:
-              "block",
-            mt:
-              0.55,
-          }}
-        >
-          {description}
-        </Typography>
-
-      </CardContent>
-    </Card>
-  );
+  const accentColor = severity === "error" ? "#EF4444" : severity === "warning" ? "#F59E0B" : aliareColors.green;
+  return <ExecutiveKpiCard title={title} value={value} subtitle={description} info={`${info.summary} • ${info.periodRule}`} accent={accentColor} active={active} onClick={onClick} />;
 }
 
 function MiniMetric({
@@ -3707,215 +3476,8 @@ function RiskNumber({
   );
 }
 
-function CardInfoButton({
-  info,
-}: {
-  info:
-    CardInfo;
-}) {
-  const [
-    anchorEl,
-    setAnchorEl,
-  ] =
-    useState<HTMLElement | null>(
-      null,
-    );
-
-  return (
-    <>
-      <IconButton
-        size="small"
-        title={`Informações sobre ${info.title}`}
-        aria-label={`Informações sobre ${info.title}`}
-        onClick={(
-          event,
-        ) => {
-          event.stopPropagation();
-
-          setAnchorEl(
-            event.currentTarget,
-          );
-        }}
-        onKeyDown={(
-          event,
-        ) =>
-          event.stopPropagation()
-        }
-        sx={{
-          width:
-            28,
-          height:
-            28,
-          color:
-            "text.secondary",
-          flexShrink:
-            0,
-        }}
-      >
-        <InfoOutlined
-          sx={{
-            fontSize:
-              17,
-          }}
-        />
-      </IconButton>
-
-      <Popover
-        open={
-          Boolean(
-            anchorEl,
-          )
-        }
-        anchorEl={
-          anchorEl
-        }
-        onClose={() =>
-          setAnchorEl(
-            null,
-          )
-        }
-        anchorOrigin={{
-          vertical:
-            "bottom",
-          horizontal:
-            "right",
-        }}
-        transformOrigin={{
-          vertical:
-            "top",
-          horizontal:
-            "right",
-        }}
-        onClick={(
-          event,
-        ) =>
-          event.stopPropagation()
-        }
-        slotProps={{
-          paper: {
-            sx: {
-              width:
-                340,
-              maxWidth:
-                "calc(100vw - 32px)",
-              p:
-                2,
-              borderRadius:
-                2,
-            },
-          },
-        }}
-      >
-        <Typography
-          sx={{
-            fontWeight:
-              800,
-          }}
-        >
-          {info.title}
-        </Typography>
-
-        <Typography
-          variant="body2"
-          color="text.secondary"
-          sx={{
-            mt:
-              0.75,
-          }}
-        >
-          {info.summary}
-        </Typography>
-
-        <Divider
-          sx={{
-            my:
-              1.5,
-          }}
-        />
-
-        <InfoLine
-          label="Cálculo"
-          value={
-            info.calculation
-          }
-        />
-
-        <InfoLine
-          label="Fonte"
-          value={
-            info.source
-          }
-        />
-
-        {info.reference && (
-          <InfoLine
-            label="Referência"
-            value={
-              info.reference
-            }
-          />
-        )}
-
-        <InfoLine
-          label="Regra do recorte"
-          value={
-            info.periodRule
-          }
-        />
-
-        {info.notes && (
-          <InfoLine
-            label="Observação"
-            value={
-              info.notes
-            }
-          />
-        )}
-      </Popover>
-    </>
-  );
-}
-
-function InfoLine({
-  label,
-  value,
-}: {
-  label:
-    string;
-  value:
-    string;
-}) {
-  return (
-    <Box
-      sx={{
-        mt:
-          1,
-      }}
-    >
-      <Typography
-        variant="caption"
-        color="text.secondary"
-        sx={{
-          fontWeight:
-            700,
-        }}
-      >
-        {label}
-      </Typography>
-
-      <Typography
-        variant="body2"
-        sx={{
-          mt:
-            0.15,
-          lineHeight:
-            1.45,
-        }}
-      >
-        {value}
-      </Typography>
-    </Box>
-  );
+function CardInfoButton({ info }: { info: CardInfo }) {
+  return <InfoPopover info={info} />;
 }
 
 function DonutCard({
@@ -3950,21 +3512,18 @@ function DonutCard({
         string,
     ) => void;
 }) {
+  const theme = useTheme();
+  const [hiddenItems, setHiddenItems] = useState<Set<string>>(() => new Set());
+  const visibleData = data.filter((item) => !hiddenItems.has(item.name));
+  const visibleTotal = visibleData.reduce((sum, item) => sum + item.value, 0);
+  const toggleItem = (name: string) => setHiddenItems((current) => {
+    const next = new Set(current);
+    if (next.has(name)) next.delete(name);
+    else if (data.length - next.size > 1) next.add(name);
+    return next;
+  });
   return (
-    <Card
-      elevation={0}
-      sx={{
-        border:
-          "1px solid",
-        borderColor:
-          "divider",
-        borderRadius:
-          2.25,
-        backgroundColor:
-          "background.paper",
-      }}
-    >
-      <CardContent>
+    <ExecutiveSection compact>
         <Stack
           direction="row"
           spacing={1}
@@ -4019,7 +3578,7 @@ function DonutCard({
               <PieChart>
                 <Pie
                   data={
-                    data
+                    visibleData
                   }
                   dataKey="value"
                   nameKey="name"
@@ -4067,7 +3626,7 @@ function DonutCard({
                     }
                   }}
                 >
-                  {data.map(
+                  {visibleData.map(
                     (
                       item,
                     ) => (
@@ -4083,7 +3642,15 @@ function DonutCard({
                   )}
                 </Pie>
 
-                <RechartsTooltip />
+                <RechartsTooltip
+                  contentStyle={{
+                    borderRadius: 12,
+                    border: `1px solid ${theme.palette.divider}`,
+                    background: theme.palette.background.paper,
+                    boxShadow: "0 14px 36px rgba(0,0,0,.18)",
+                  }}
+                  cursor={false}
+                />
 
                 <text
                   x="50%"
@@ -4096,10 +3663,10 @@ function DonutCard({
                     fontWeight:
                       800,
                     fill:
-                      aliareColors.text,
+                      theme.palette.text.primary,
                   }}
                 >
-                  {centerValue}
+                  {hiddenItems.size > 0 ? visibleTotal : centerValue}
                 </text>
 
                 <text
@@ -4111,7 +3678,7 @@ function DonutCard({
                     fontSize:
                       11,
                     fill:
-                      aliareColors.textSecondary,
+                      theme.palette.text.secondary,
                   }}
                 >
                   {centerLabel}
@@ -4160,37 +3727,12 @@ function DonutCard({
                 key={
                   item.name
                 }
-                role={
-                  onSliceClick
-                    ? "button"
-                    : undefined
-                }
-                tabIndex={
-                  onSliceClick
-                    ? 0
-                    : undefined
-                }
-                onClick={() =>
-                  onSliceClick?.(
-                    item.name,
-                  )
-                }
-                onKeyDown={(
-                  event,
-                ) => {
-                  if (
-                    onSliceClick &&
-                    (
-                      event.key ===
-                        "Enter" ||
-                      event.key ===
-                        " "
-                    )
-                  ) {
-                    onSliceClick(
-                      item.name,
-                    );
-                  }
+                role="button"
+                tabIndex={0}
+                onClick={() => toggleItem(item.name)}
+                onDoubleClick={() => onSliceClick?.(item.name)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") toggleItem(item.name);
                 }}
                 sx={{
                   display:
@@ -4205,17 +3747,14 @@ function DonutCard({
                     0.2,
                   borderRadius:
                     1,
-                  cursor:
-                    onSliceClick
-                      ? "pointer"
-                      : "default",
-                  "&:hover":
-                    onSliceClick
-                      ? {
-                          backgroundColor:
-                            "action.hover",
-                        }
-                      : undefined,
+                  cursor: "pointer",
+                  opacity: hiddenItems.has(item.name) ? 0.38 : 1,
+                  textDecoration: hiddenItems.has(item.name) ? "line-through" : "none",
+                  transition: "all .2s ease",
+                  "&:hover": {
+                    backgroundColor: "action.hover",
+                    transform: "translateY(-1px)",
+                  },
                 }}
               >
                 <Box
@@ -4226,8 +3765,8 @@ function DonutCard({
                       9,
                     borderRadius:
                       "50%",
-                    backgroundColor:
-                      item.color,
+                    backgroundColor: hiddenItems.has(item.name) ? theme.palette.text.disabled : item.color,
+                    boxShadow: hiddenItems.has(item.name) ? "none" : `0 0 8px ${item.color}88`,
                   }}
                 />
 
@@ -4255,8 +3794,7 @@ function DonutCard({
             ),
           )}
         </Stack>
-      </CardContent>
-    </Card>
+      </ExecutiveSection>
   );
 }
 

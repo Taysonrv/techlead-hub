@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import type { MouseEvent } from "react";
 
 import {
   Alert,
@@ -15,7 +14,6 @@ import {
   IconButton,
   InputLabel,
   MenuItem,
-  Popover,
   Select,
   Snackbar,
   Stack,
@@ -24,6 +22,7 @@ import {
   TableCell,
   TableContainer,
   TableHead,
+  TablePagination,
   TableRow,
   Tooltip,
   Typography,
@@ -31,7 +30,6 @@ import {
 
 import {
   ContentCopyOutlined,
-  InfoOutlined,
   OpenInNewOutlined,
   PriorityHighOutlined,
   ReportProblemOutlined,
@@ -45,6 +43,8 @@ import { useNavigate } from "react-router-dom";
 import { api } from "../services/api";
 import { useFilters } from "../context/FiltersContext";
 import { PeriodFilter } from "../components/PeriodFilter";
+import { PageHeader } from "../components/PageHeader";
+import { KpiCard as ExecutiveKpiCard } from "../components/KpiCard";
 import { aliareColors } from "../theme/theme";
 import {
   semanticChartColors,
@@ -166,6 +166,12 @@ export function Attention() {
 
   const [riskFilter, setRiskFilter] =
     useState<"" | "azure">("");
+
+  const [page, setPage] =
+    useState(0);
+
+  const [rowsPerPage, setRowsPerPage] =
+    useState(10);
 
   const [selectedTicket, setSelectedTicket] =
     useState<AttentionTicket | null>(null);
@@ -681,6 +687,20 @@ export function Attention() {
       riskFilter,
     ].filter(Boolean).length;
 
+  useEffect(() => {
+    setPage(0);
+  }, [level, owner, client, riskFilter, effectiveStartDate, effectiveEndDate]);
+
+  useEffect(() => {
+    const lastPage = Math.max(0, Math.ceil(filteredTickets.length / rowsPerPage) - 1);
+    if (page > lastPage) setPage(lastPage);
+  }, [filteredTickets.length, page, rowsPerPage]);
+
+  const paginatedTickets = useMemo(
+    () => filteredTickets.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage),
+    [filteredTickets, page, rowsPerPage],
+  );
+
   function clearFilters() {
     setLevel("");
     setOwner("");
@@ -816,125 +836,13 @@ export function Attention() {
     <>
       {/* CABEÇALHO */}
 
-      <Box
-        sx={{
-          mb: 2.5,
-
-          display: "flex",
-
-          flexDirection: {
-            xs: "column",
-            lg: "row",
-          },
-
-          justifyContent:
-            "space-between",
-
-          alignItems: {
-            xs: "stretch",
-            lg: "center",
-          },
-
-          gap: 2,
-        }}
-      >
-        <Box>
-          <Stack
-            direction="row"
-            spacing={1}
-            sx={{
-              alignItems:
-                "center",
-            }}
-          >
-            <Box
-              sx={{
-                width:
-                  30,
-
-                height:
-                  3,
-
-                borderRadius:
-                  99,
-
-                backgroundColor:
-                  aliareColors.green,
-              }}
-            />
-
-            <Typography
-              variant="caption"
-              sx={{
-                fontWeight:
-                  800,
-
-                letterSpacing:
-                  "0.08em",
-
-                textTransform:
-                  "uppercase",
-
-                color:
-                  aliareColors.greenDark,
-              }}
-            >
-              Gestão de risco
-            </Typography>
-          </Stack>
-
-          <Typography
-            sx={{
-              mt:
-                0.8,
-
-              fontWeight:
-                800,
-
-              letterSpacing:
-                "-0.03em",
-
-              fontSize: {
-                xs:
-                  "1.7rem",
-                md:
-                  "1.9rem",
-                xl:
-                  "2.1rem",
-              },
-            }}
-          >
-            Pontos de Atenção
-          </Typography>
-
-          <Typography
-            variant="body2"
-            color="text.secondary"
-            sx={{
-              mt:
-                0.25,
-            }}
-          >
-            Situações que exigem acompanhamento da liderança
-          </Typography>
-
-          <Typography
-            variant="caption"
-            color="text.secondary"
-            sx={{
-              display:
-                "block",
-
-              mt:
-                0.5,
-            }}
-          >
-            {periodTickets.length} ticket(s) analisado(s) no período
-          </Typography>
-        </Box>
-
-        <PeriodFilter />
-      </Box>
+      <PageHeader
+        eyebrow="Gestão de risco"
+        title="Pontos de Atenção"
+        description="Situações que exigem acompanhamento da liderança"
+        meta={<>{periodTickets.length} ticket(s) analisado(s) no período</>}
+        action={<PeriodFilter />}
+      />
 
       <Alert
         severity="info"
@@ -1442,7 +1350,7 @@ export function Attention() {
             <TableHead
               sx={{
                 backgroundColor:
-                  "#F8FAF9",
+                  "background.paper",
 
                 "& .MuiTableCell-root":
                   {
@@ -1521,7 +1429,7 @@ export function Attention() {
             </TableHead>
 
             <TableBody>
-              {filteredTickets.map(
+              {paginatedTickets.map(
                 (ticket) => (
                   <TableRow
                     key={ticket.id}
@@ -1544,7 +1452,7 @@ export function Attention() {
                       "&:hover":
                         {
                           backgroundColor:
-                            "#FAFBFA",
+                            "action.hover",
                         },
                     }}
                   >
@@ -1762,6 +1670,23 @@ export function Attention() {
             </TableBody>
           </Table>
         </TableContainer>
+
+        <TablePagination
+          component="div"
+          count={filteredTickets.length}
+          page={page}
+          onPageChange={(_, nextPage) => setPage(nextPage)}
+          rowsPerPage={rowsPerPage}
+          onRowsPerPageChange={(event) => {
+            setRowsPerPage(Number(event.target.value));
+            setPage(0);
+          }}
+          rowsPerPageOptions={[10, 25, 50]}
+          labelRowsPerPage="Itens por página:"
+          labelDisplayedRows={({ from, to, count }) => `${from}–${to} de ${count}`}
+          showFirstButton
+          showLastButton
+        />
       </Card>
 
       {/* DRAWER DE DETALHE */}
@@ -2550,527 +2475,25 @@ function AzureAttentionSummary({
 ===================================================== */
 
 function IndicatorCard({
-  title,
-  value,
-  description,
-  info,
-  severity = "default",
-  onClick,
+  title, value, description, info, severity = "default", onClick,
 }: {
-  title: string;
-  value: number;
-  description: string;
-  info: CardInfoDefinition;
-
-  severity?:
-    | "default"
-    | "error"
-    | "warning"
-    | "info";
-
-  onClick?: () => void;
+  title: string; value: number; description: string; info: CardInfoDefinition;
+  severity?: "default" | "error" | "warning" | "info"; onClick?: () => void;
 }) {
-  const accentColor =
-    severity === "error"
-      ? semanticChartColors.overdue
-      : severity === "warning"
-      ? semanticChartColors.attention
-      : severity === "info"
-      ? semanticChartColors.normal
-      : aliareColors.green;
-
-  return (
-    <Card
-      elevation={0}
-      role={
-        onClick
-          ? "button"
-          : undefined
-      }
-      tabIndex={
-        onClick
-          ? 0
-          : undefined
-      }
-      onClick={onClick}
-      onKeyDown={(event) => {
-        if (
-          onClick &&
-          (
-            event.key ===
-              "Enter" ||
-            event.key ===
-              " "
-          )
-        ) {
-          onClick();
-        }
-      }}
-      sx={{
-        position:
-          "relative",
-
-        overflow:
-          "hidden",
-
-        border:
-          "1px solid",
-
-        borderColor:
-          "divider",
-
-        borderRadius:
-          2.25,
-
-        height:
-          "100%",
-
-        backgroundColor:
-          "background.paper",
-
-        cursor:
-          onClick
-            ? "pointer"
-            : "default",
-
-        transition:
-          "transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease",
-
-        "&::before": {
-          content:
-            '""',
-
-          position:
-            "absolute",
-
-          top:
-            0,
-
-          left:
-            0,
-
-          width:
-            "100%",
-
-          height:
-            3,
-
-          backgroundColor:
-            accentColor,
-        },
-
-        ...(onClick && {
-          "&:hover": {
-            transform:
-              "translateY(-2px)",
-
-            borderColor:
-              accentColor,
-
-            boxShadow:
-              "0 8px 24px rgba(16,24,40,0.08)",
-          },
-
-          "&:focus-visible": {
-            outline:
-              `2px solid ${accentColor}`,
-
-            outlineOffset:
-              "2px",
-          },
-        }),
-      }}
-    >
-      <CardContent
-        sx={{
-          p: {
-            xs:
-              1.6,
-            md:
-              1.8,
-          },
-
-          "&:last-child": {
-            pb: {
-              xs:
-                1.6,
-              md:
-                1.8,
-            },
-          },
-        }}
-      >
-        <Stack
-          direction="row"
-          spacing={1}
-          sx={{
-            alignItems:
-              "center",
-
-            justifyContent:
-              "space-between",
-
-            gap:
-              1,
-          }}
-        >
-          <Typography
-            variant="body2"
-            sx={{
-              fontWeight:
-                800,
-
-              color:
-                "text.primary",
-            }}
-          >
-            {title}
-          </Typography>
-
-          <CardInfo
-            definition={info}
-          />
-        </Stack>
-
-        <Typography
-          sx={{
-            fontWeight:
-              800,
-
-            mt:
-              0.6,
-
-            letterSpacing:
-              "-0.025em",
-
-            fontSize: {
-              xs:
-                "1.75rem",
-              md:
-                "1.95rem",
-              xl:
-                "2.1rem",
-            },
-
-            lineHeight:
-              1.05,
-          }}
-        >
-          {value}
-        </Typography>
-
-        <Typography
-          variant="caption"
-          color="text.secondary"
-          sx={{
-            display:
-              "block",
-
-            mt:
-              0.75,
-
-            minHeight:
-              18,
-          }}
-        >
-          {description}
-        </Typography>
-
-        {onClick && (
-          <Typography
-            variant="caption"
-            sx={{
-              display:
-                "inline-block",
-
-              mt:
-                0.85,
-
-              fontWeight:
-                700,
-
-              color:
-                aliareColors.greenDark,
-            }}
-          >
-            Ver tickets →
-          </Typography>
-        )}
-      </CardContent>
-    </Card>
-  );
+  const accentColor = severity === "error"
+    ? semanticChartColors.overdue
+    : severity === "warning"
+    ? semanticChartColors.attention
+    : severity === "info"
+    ? semanticChartColors.normal
+    : aliareColors.green;
+  return <ExecutiveKpiCard title={title} value={value} subtitle={description} info={`${info.summary} • ${info.periodRule}`} accent={accentColor} onClick={onClick} />;
 }
 
 /* =====================================================
    INFORMAÇÃO DO CARD
 ===================================================== */
 
-function CardInfo({
-  definition,
-}: {
-  definition:
-    CardInfoDefinition;
-}) {
-  const [
-    anchorEl,
-    setAnchorEl,
-  ] =
-    useState<HTMLElement | null>(
-      null
-    );
-
-  const open =
-    Boolean(anchorEl);
-
-  return (
-    <>
-      <IconButton
-        size="small"
-        aria-label={`Informações sobre ${definition.title}`}
-        aria-haspopup="dialog"
-        aria-expanded={open}
-        title={`Como é calculado: ${definition.title}`}
-        onClick={(event) => {
-          event.preventDefault();
-          event.stopPropagation();
-
-          setAnchorEl(
-            event.currentTarget
-          );
-        }}
-        onKeyDown={(event) =>
-          event.stopPropagation()
-        }
-        sx={{
-          p:
-            0.3,
-
-          color:
-            "text.secondary",
-
-          "&:hover": {
-            color:
-              aliareColors.greenDark,
-
-            backgroundColor:
-              "rgba(24,199,122,0.08)",
-          },
-        }}
-      >
-        <InfoOutlined
-          sx={{
-            fontSize:
-              16,
-          }}
-        />
-      </IconButton>
-
-      <Popover
-        open={open}
-        anchorEl={anchorEl}
-        onClose={() =>
-          setAnchorEl(null)
-        }
-        anchorOrigin={{
-          vertical:
-            "bottom",
-          horizontal:
-            "left",
-        }}
-        transformOrigin={{
-          vertical:
-            "top",
-          horizontal:
-            "left",
-        }}
-        slotProps={{
-          paper: {
-            onClick: (
-              event:
-                MouseEvent<HTMLElement>
-            ) =>
-              event.stopPropagation(),
-
-            sx: {
-              width: {
-                xs:
-                  320,
-                sm:
-                  390,
-              },
-
-              maxWidth:
-                "calc(100vw - 32px)",
-
-              mt:
-                0.75,
-
-              p:
-                2,
-
-              borderRadius:
-                2,
-
-              border:
-                "1px solid",
-
-              borderColor:
-                "divider",
-
-              boxShadow:
-                "0 14px 40px rgba(16,24,40,0.14)",
-            },
-          },
-        }}
-      >
-        <Stack
-          spacing={
-            1.2
-          }
-        >
-          <Box>
-            <Typography
-              sx={{
-                fontWeight:
-                  850,
-              }}
-            >
-              {definition.title}
-            </Typography>
-
-            <Typography
-              variant="body2"
-              color="text.secondary"
-              sx={{
-                mt:
-                  0.4,
-
-                lineHeight:
-                  1.55,
-              }}
-            >
-              {definition.summary}
-            </Typography>
-          </Box>
-
-          <Divider />
-
-          <CardInfoLine
-            label="Como é calculado"
-            value={
-              definition.calculation
-            }
-          />
-
-          <CardInfoLine
-            label="Fonte"
-            value={
-              definition.source
-            }
-          />
-
-          <CardInfoLine
-            label="Campo de referência"
-            value={
-              definition.reference
-            }
-          />
-
-          <CardInfoLine
-            label="Regra de período"
-            value={
-              definition.periodRule
-            }
-          />
-
-          {definition.notes && (
-            <Box
-              sx={{
-                p:
-                  1.1,
-
-                borderRadius:
-                  1.5,
-
-                backgroundColor:
-                  "rgba(24,199,122,0.055)",
-
-                border:
-                  "1px solid rgba(24,199,122,0.16)",
-              }}
-            >
-              <Typography
-                variant="caption"
-                sx={{
-                  fontWeight:
-                    800,
-
-                  color:
-                    aliareColors.greenDark,
-                }}
-              >
-                Observação
-              </Typography>
-
-              <Typography
-                variant="caption"
-                color="text.secondary"
-                sx={{
-                  display:
-                    "block",
-
-                  mt:
-                    0.25,
-
-                  lineHeight:
-                    1.5,
-                }}
-              >
-                {definition.notes}
-              </Typography>
-            </Box>
-          )}
-        </Stack>
-      </Popover>
-    </>
-  );
-}
-
-function CardInfoLine({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
-}) {
-  return (
-    <Box>
-      <Typography
-        variant="caption"
-        color="text.secondary"
-        sx={{
-          fontWeight:
-            700,
-        }}
-      >
-        {label}
-      </Typography>
-
-      <Typography
-        variant="body2"
-        sx={{
-          mt:
-            0.15,
-
-          lineHeight:
-            1.5,
-        }}
-      >
-        {value}
-      </Typography>
-    </Box>
-  );
-}
 
 /* =====================================================
    NÍVEL

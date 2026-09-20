@@ -6,6 +6,80 @@ const OPEN_TICKET_STATES = ["New", "InAttendance", "Stopped"];
 const CLOSED_WORK_ITEM_STATES = ["Closed", "Resolved", "Concluído", "Concluido", "Done", "Removed"];
 
 export class CoordinationService {
+  async details(kind: string, analyst?: string, limit = 50) {
+    const now = new Date();
+    const staleBefore = new Date(now.getTime() - 72 * 60 * 60 * 1_000);
+    const nextSevenDays = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1_000);
+    const safeLimit = Math.min(Math.max(limit, 1), 100);
+    const ticketScope = ticketOperationalScope();
+    const azureScope = azureOperationalScope();
+
+    const ticketExtra: Record<string, unknown> =
+      kind === "critical" ? { urgency: "Crítica" } :
+      kind === "stale" ? { OR: [{ lastUpdate: { lt: staleBefore } }, { lastUpdate: null }] } :
+      kind === "dueSoon" ? { dueDate: { gte: now, lte: nextSevenDays } } :
+      {};
+
+    const azureExtra: Record<string, unknown> =
+      kind === "blocked" ? { blockedProcess: true } :
+      kind === "unassigned" ? { assignedToName: null } :
+      {};
+
+    const wantsTickets = ["backlog", "critical", "stale", "dueSoon", "analyst"].includes(kind);
+    const wantsAzure = ["blocked", "unassigned", "analyst"].includes(kind);
+
+    const [tickets, workItems] = await Promise.all([
+      wantsTickets
+        ? prisma.ticket.findMany({
+            where: {
+              AND: [
+                ticketScope,
+                { isDeleted: false, baseStatus: { in: OPEN_TICKET_STATES } },
+                ticketExtra,
+                ...(analyst ? [{ owner: { equals: analyst, mode: "insensitive" as const } }] : []),
+              ],
+            },
+            orderBy: [{ urgency: "desc" }, { lastUpdate: "asc" }],
+            take: safeLimit,
+            select: {
+              movideskId: true, subject: true, status: true, urgency: true, client: true,
+              owner: true, lastUpdate: true, dueDate: true, taskNumber: true,
+              registeredVersion: true, deliveredVersion: true,
+            },
+          })
+        : Promise.resolve([]),
+      wantsAzure
+        ? prisma.azureWorkItem.findMany({
+            where: {
+              AND: [
+                azureScope,
+                { state: { notIn: CLOSED_WORK_ITEM_STATES } },
+                azureExtra,
+                ...(analyst ? [{ createdByName: { equals: analyst, mode: "insensitive" as const } }] : []),
+              ],
+            },
+            orderBy: [{ azureChangedAt: "asc" }],
+            take: safeLimit,
+            select: {
+              id: true, workItemType: true, title: true, state: true, client: true,
+              assignedToName: true, createdByName: true, criticality: true, blockedProcess: true,
+              movideskTicket: true, registeredVersion: true, deliveredVersion: true,
+              azureChangedAt: true, remoteUrl: true,
+            },
+          })
+        : Promise.resolve([]),
+    ]);
+
+    return {
+      kind,
+      analyst: analyst ?? null,
+      total: tickets.length + workItems.length,
+      truncated: tickets.length === safeLimit || workItems.length === safeLimit,
+      tickets,
+      workItems,
+    };
+  }
+
   async summary(userId: number) {
     const now = new Date();
     const staleBefore = new Date(now.getTime() - 72 * 60 * 60 * 1_000);

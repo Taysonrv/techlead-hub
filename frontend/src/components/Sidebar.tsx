@@ -4,6 +4,7 @@ import {
   Button,
   CircularProgress,
   Collapse,
+  IconButton,
   Divider,
   Drawer,
   List,
@@ -34,6 +35,8 @@ import {
   UploadFileOutlined,
   WorkspacesOutlined,
   InsightsOutlined,
+  RadarOutlined,
+  ChatBubbleOutlineRounded,
 } from "@mui/icons-material";
 
 import {
@@ -137,19 +140,18 @@ export function Sidebar() {
   ] =
     useState<HTMLElement | null>(null);
 
-  const [openSections, setOpenSections] = useState<Record<"operation" | "development" | "management", boolean>>(() => ({
-    operation: true,
-    development: true,
-    management: true,
+  const [openSections, setOpenSections] = useState<Record<"operation" | "leadership" | "development" | "management", boolean>>(() => ({
+    operation: false,
+    leadership: false,
+    development: false,
+    management: false,
   }));
 
   const profileMenuOpen =
     Boolean(profileAnchor);
 
-  useEffect(() => {
-    const section = sectionForPath(location.pathname);
-    setOpenSections((current) => ({ ...current, [section]: true }));
-  }, [location.pathname]);
+  // O menu inicia recolhido. A navegação não força a abertura automática
+  // de uma seção; o usuário decide quais grupos deseja expandir.
 
   /* =======================================================
      VERSÃO DO APLICATIVO
@@ -283,6 +285,22 @@ export function Sidebar() {
         },
       ],
       [user?.role],
+    );
+
+  /* =======================================================
+     LIDERANÇA TÉCNICA
+  ======================================================= */
+
+  const leadershipMenu =
+    useMemo<MenuItemData[]>(
+      () => [
+        {
+          label: "Central de Liderança",
+          path: "/lideranca-tecnica",
+          icon: <RadarOutlined fontSize="small" />,
+        },
+      ],
+      [],
     );
 
   /* =======================================================
@@ -461,7 +479,7 @@ export function Sidebar() {
             0,
 
           overflowY:
-            "hidden",
+            "auto",
 
           overflowX:
             "hidden",
@@ -690,6 +708,18 @@ export function Sidebar() {
         />
 
         {/* =================================================
+            LIDERANÇA TÉCNICA
+        ================================================= */}
+
+        <MenuSection
+          title="Liderança Técnica"
+          ariaLabel="Navegação de liderança técnica"
+          items={leadershipMenu}
+          open={openSections.leadership}
+          onToggle={() => setOpenSections((current) => ({ ...current, leadership: !current.leadership }))}
+        />
+
+        {/* =================================================
             DESENVOLVIMENTO
         ================================================= */}
 
@@ -813,6 +843,15 @@ export function Sidebar() {
           }}
         >
           <Box id="global-calendar-slot" sx={{ display: "flex", alignItems: "center" }} />
+
+          <IconButton
+            title="Chat"
+            aria-label="Abrir chat"
+            onClick={() => navigate("/chat")}
+            sx={{ width: 46, height: 46, bgcolor: "background.paper", border: "1px solid", borderColor: location.pathname === "/chat" ? "rgba(24,199,122,.55)" : "divider", borderRadius: 2, boxShadow: "0 2px 10px rgba(0,0,0,.06)", color: location.pathname === "/chat" ? aliareColors.green : "text.primary", "&:hover": { bgcolor: "background.paper", borderColor: "rgba(24,199,122,.45)" } }}
+          >
+            <ChatBubbleOutlineRounded />
+          </IconButton>
 
           <NotificationCenter />
 
@@ -1364,12 +1403,6 @@ function MenuItem({
 /* =========================================================
    PERFIL
 ========================================================= */
-
-function sectionForPath(path: string): "operation" | "development" | "management" {
-  if (["/correcoes", "/evolucoes", "/apoios", "/versoes"].some((item) => path.startsWith(item))) return "development";
-  if (["/importar", "/relatorios", "/qualidade-dados", "/conhecimento"].some((item) => path.startsWith(item))) return "management";
-  return "operation";
-}
 
 function getRoleLabel(
   role:

@@ -6,6 +6,18 @@ import {
   IntegrationInstructionsOutlined,
   TrendingUpOutlined,
   WarningAmberOutlined,
+  InfoOutlined,
+  SearchOutlined,
+  BugReportOutlined,
+  AutoFixHighOutlined,
+  SupportAgentOutlined,
+  Inventory2Outlined,
+  ConfirmationNumberOutlined,
+  MenuBookOutlined,
+  UploadFileOutlined,
+  RadarOutlined,
+  StarBorderOutlined,
+  StarRounded,
 } from "@mui/icons-material";
 import {
   Alert,
@@ -14,19 +26,29 @@ import {
   CardContent,
   Chip,
   CircularProgress,
+  Drawer,
+  Button,
   LinearProgress,
+  IconButton,
+  useTheme,
+  Tooltip,
   Stack,
   Tab,
   Tabs,
   Typography,
+  TextField,
+  InputAdornment,
 } from "@mui/material";
 import { createElement, useCallback, useEffect, useMemo, useState } from "react";
 import type { ElementType } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { KpiCard } from "../components/KpiCard";
+import { DetailFieldGrid, DetailPanelHeader, DetailSection } from "../components/DetailPanel";
+import { detailDrawerPaperSx } from "../theme/layoutTokens";
 import { PageHeader } from "../components/PageHeader";
 import { api } from "../services/api";
 import { aliareColors } from "../theme/theme";
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip as ChartTooltip, XAxis, YAxis } from "recharts";
 
 type Data = {
   generatedAt: string;
@@ -43,33 +65,57 @@ type Data = {
   };
 };
 
-type MainTab = "cadastros" | "movimentos" | "analises";
+type MainTab = "cadastros" | "movimentos" | "analises" | "desenvolvimento" | "gestao";
+type Routine = { label: string; path: string; icon: ElementType; description: string; keywords?: string[] };
+type DetailKind = "backlog" | "critical" | "stale" | "dueSoon" | "blocked" | "unassigned" | "analyst";
+type DetailData = {
+  kind: DetailKind; analyst: string | null; total: number; truncated: boolean;
+  tickets: Array<{ movideskId: number; subject: string; status: string; urgency: string | null; client: string | null; owner: string | null; lastUpdate: string | null; dueDate: string | null; taskNumber: number | null; registeredVersion: string | null; deliveredVersion: string | null }>;
+  workItems: Array<{ id: number; workItemType: string; title: string; state: string; client: string | null; assignedToName: string | null; createdByName: string | null; criticality: string | null; blockedProcess: boolean | null; movideskTicket: number | null; registeredVersion: string | null; deliveredVersion: string | null; azureChangedAt: string | null; remoteUrl: string | null }>;
+};
 
-const mainTabs: Array<{ key: MainTab; label: string; icon: ElementType }> = [
-  { key: "cadastros", label: "Cadastros", icon: GroupsOutlined },
-  { key: "movimentos", label: "Movimentos", icon: InsightsOutlined },
-  { key: "analises", label: "Análises", icon: TrendingUpOutlined },
+const mainTabs: Array<{ key: MainTab; label: string; icon: ElementType; info: string }> = [
+  { key: "cadastros", label: "Cadastros", icon: GroupsOutlined, info: "Acessos rápidos para equipe e clientes do escopo operacional." },
+  { key: "movimentos", label: "Movimentos", icon: InsightsOutlined, info: "Rotinas para acompanhar execução, atenção e pendências da operação." },
+  { key: "analises", label: "Análises", icon: TrendingUpOutlined, info: "Visões gerenciais de desempenho, relatórios e liderança." },
+  { key: "desenvolvimento", label: "Desenvolvimento", icon: IntegrationInstructionsOutlined, info: "Correções, evoluções, apoios e versões do produto." },
+  { key: "gestao", label: "Gestão", icon: FactCheckOutlined, info: "Conhecimento, sincronizações e governança da operação." },
 ];
 
-const routines: Record<MainTab, Array<{ label: string; path: string; icon: ElementType; description: string }>> = {
+const routines: Record<MainTab, Routine[]> = {
   cadastros: [
-    { label: "Analistas", path: "/analistas", icon: GroupsOutlined, description: "Equipe oficial de suporte e sustentação." },
-    { label: "Clientes", path: "/clientes", icon: BusinessOutlined, description: "Clientes cooperativas do escopo SIMER." },
+    { label: "Analistas", path: "/analistas", icon: GroupsOutlined, description: "Equipe oficial de suporte e sustentação.", keywords: ["equipe", "usuários", "responsáveis"] },
+    { label: "Clientes", path: "/clientes", icon: BusinessOutlined, description: "Clientes cooperativas do escopo SIMER.", keywords: ["cooperativas", "carteira"] },
   ],
   movimentos: [
-    { label: "Minha Operação", path: "/minha-operacao", icon: InsightsOutlined, description: "Fila operacional, tarefas e atendimentos em execução." },
-    { label: "Pontos de Atenção", path: "/atencao", icon: WarningAmberOutlined, description: "Riscos, criticidades e itens que exigem atuação." },
-    { label: "Pendências", path: "/qualidade-dados", icon: FactCheckOutlined, description: "Qualidade, vínculos e divergências entre fontes." },
+    { label: "Minha Operação", path: "/minha-operacao", icon: InsightsOutlined, description: "Fila operacional, tarefas e atendimentos em execução.", keywords: ["kanban", "fila", "trabalho"] },
+    { label: "Tickets", path: "/tickets", icon: ConfirmationNumberOutlined, description: "Atendimentos Movidesk e seus vínculos operacionais.", keywords: ["movidesk", "atendimentos"] },
+    { label: "Pontos de Atenção", path: "/atencao", icon: WarningAmberOutlined, description: "Riscos, criticidades e itens que exigem atuação.", keywords: ["risco", "crítico", "sla"] },
+    { label: "Pendências", path: "/qualidade-dados", icon: FactCheckOutlined, description: "Qualidade, vínculos e divergências entre fontes.", keywords: ["qualidade", "dados", "divergências"] },
   ],
   analises: [
-    { label: "Desempenho", path: "/desempenho", icon: TrendingUpOutlined, description: "Produtividade, SLA e acompanhamento de performance." },
-    { label: "Relatórios", path: "/relatorios", icon: InsightsOutlined, description: "Relatórios gerenciais e executivos." },
-    { label: "Versões", path: "/versoes", icon: IntegrationInstructionsOutlined, description: "Entregas, cobertura e distribuição por versão." },
+    { label: "Dashboard", path: "/", icon: InsightsOutlined, description: "Visão executiva consolidada da operação.", keywords: ["indicadores", "kpi", "executivo"] },
+    { label: "Desempenho", path: "/desempenho", icon: TrendingUpOutlined, description: "Produtividade, SLA e acompanhamento de performance.", keywords: ["performance", "produtividade", "sla"] },
+    { label: "Relatórios", path: "/relatorios", icon: InsightsOutlined, description: "Relatórios gerenciais e executivos.", keywords: ["excel", "pdf", "gerencial"] },
+    { label: "Central de Liderança", path: "/lideranca-tecnica", icon: RadarOutlined, description: "Radar executivo, recorrências, gaps e desenvolvimento técnico.", keywords: ["liderança", "radar", "recorrências", "gaps"] },
+  ],
+  desenvolvimento: [
+    { label: "Correções", path: "/correcoes", icon: BugReportOutlined, description: "Bugs e correções acompanhadas no Azure DevOps.", keywords: ["bug", "task", "azure"] },
+    { label: "Evoluções", path: "/evolucoes", icon: AutoFixHighOutlined, description: "Melhorias e evoluções funcionais do produto.", keywords: ["melhoria", "produto", "azure"] },
+    { label: "Apoios", path: "/apoios", icon: SupportAgentOutlined, description: "APOIOs vinculados aos atendimentos e à sustentação.", keywords: ["apoio", "azure", "atendimento"] },
+    { label: "Versões", path: "/versoes", icon: Inventory2Outlined, description: "Entregas, cobertura e distribuição por versão.", keywords: ["lte", "lts", "rc", "release"] },
+  ],
+  gestao: [
+    { label: "Base de Conhecimento", path: "/conhecimento", icon: MenuBookOutlined, description: "Wiki, procedimentos e conhecimento operacional.", keywords: ["wiki", "procedimento", "sharepoint"] },
+    { label: "Dados e Sincronizações", path: "/importar", icon: UploadFileOutlined, description: "Sincronizações, integrações e cargas de dados.", keywords: ["sincronizar", "azure", "movidesk", "importar"] },
   ],
 };
 
+const allRoutines = mainTabs.flatMap((group) => routines[group.key].map((routine) => ({ ...routine, group: group.key, groupLabel: group.label })));
+
 export function Coordination() {
   const navigate = useNavigate();
+  const theme = useTheme();
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedTab = searchParams.get("aba") as MainTab | null;
   const [tab, setTab] = useState<MainTab>(
@@ -78,6 +124,16 @@ export function Coordination() {
   const [data, setData] = useState<Data | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailTitle, setDetailTitle] = useState("");
+  const [details, setDetails] = useState<DetailData | null>(null);
+  const [routineSearch, setRoutineSearch] = useState("");
+  const [favoriteRoutines, setFavoriteRoutines] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem("coordination-favorite-routines") || "[]"); } catch { return []; }
+  });
+  const [recentRoutines, setRecentRoutines] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem("coordination-recent-routines") || "[]"); } catch { return []; }
+  });
 
   const load = useCallback(async () => {
     try {
@@ -101,16 +157,44 @@ export function Coordination() {
     [data],
   );
 
-  const cards: Array<[string, number, string]> = data
+  const cards: Array<[DetailKind, string, number, string]> = data
     ? [
-        ["Backlog atual", data.indicators.openTickets, "Atendimentos abertos do escopo cooperativas."],
-        ["Críticos", data.indicators.criticalTickets, "Atendimentos críticos em aberto."],
-        ["Sem movimento 72h", data.indicators.staleTickets, "Tickets sem atualização há pelo menos 72 horas."],
-        ["Vencem em 7 dias", data.indicators.dueSoon, "Itens com prazo nos próximos sete dias."],
-        ["Itens bloqueados", data.indicators.blockedItems, "Tarefas Azure bloqueadas no escopo da operação."],
-        ["Sem responsável", data.indicators.unassignedItems, "Tarefas sem responsável identificado."],
+        ["backlog", "Backlog atual", data.indicators.openTickets, "Atendimentos abertos do escopo cooperativas."],
+        ["critical", "Críticos", data.indicators.criticalTickets, "Atendimentos críticos em aberto."],
+        ["stale", "Sem movimento 72h", data.indicators.staleTickets, "Tickets sem atualização há pelo menos 72 horas."],
+        ["dueSoon", "Vencem em 7 dias", data.indicators.dueSoon, "Itens com prazo nos próximos sete dias."],
+        ["blocked", "Itens bloqueados", data.indicators.blockedItems, "Tarefas Azure bloqueadas no escopo da operação."],
+        ["unassigned", "Sem responsável", data.indicators.unassignedItems, "Tarefas sem responsável identificado."],
       ]
     : [];
+
+  async function openDetails(kind: DetailKind, title: string, analyst?: string) {
+    try {
+      setDetailTitle(title); setDetails(null); setDetailLoading(true);
+      const response = await api.get<DetailData>("/coordination/details", { params: { kind, analyst, limit: 50 } });
+      setDetails(response.data);
+    } catch {
+      setError("Não foi possível carregar os detalhes da coordenação.");
+    } finally { setDetailLoading(false); }
+  }
+
+  const normalizedRoutineSearch = routineSearch.trim().toLocaleLowerCase("pt-BR");
+  const matchingRoutines = normalizedRoutineSearch
+    ? allRoutines.filter((routine) => [routine.label, routine.description, routine.groupLabel, ...(routine.keywords ?? [])].join(" ").toLocaleLowerCase("pt-BR").includes(normalizedRoutineSearch))
+    : [];
+
+  function openRoutine(routine: Routine) {
+    const next = [routine.path, ...recentRoutines.filter((path) => path !== routine.path)].slice(0, 5);
+    setRecentRoutines(next);
+    localStorage.setItem("coordination-recent-routines", JSON.stringify(next));
+    navigate(routine.path);
+  }
+
+  function toggleFavorite(path: string) {
+    const next = favoriteRoutines.includes(path) ? favoriteRoutines.filter((item) => item !== path) : [...favoriteRoutines, path];
+    setFavoriteRoutines(next);
+    localStorage.setItem("coordination-favorite-routines", JSON.stringify(next));
+  }
 
   function changeTab(value: MainTab) {
     setTab(value);
@@ -128,61 +212,76 @@ export function Coordination() {
         meta={data ? `Coordenação: ${data.scope.coordinator} · ${data.scope.analysts.length} analistas · ${data.scope.clients.length} clientes cooperativas` : undefined}
       />
 
-      <Card
-        variant="outlined"
-        sx={{
-          overflow: "hidden",
-          borderRadius: 2.25,
-          backgroundColor: "background.paper",
-          mb: 2,
-        }}
-      >
-        <Tabs
-          value={tab}
-          onChange={(_, value: MainTab) => changeTab(value)}
-          variant="scrollable"
-          scrollButtons="auto"
-          sx={{
-            minHeight: 58,
-            borderBottom: "1px solid",
-            borderColor: "divider",
-            "& .MuiTab-root": { minHeight: 58, fontWeight: 800, px: 3 },
-            "& .Mui-selected": { color: `${aliareColors.info} !important` },
-            "& .MuiTabs-indicator": { height: 3, backgroundColor: aliareColors.info },
-          }}
-        >
-          {mainTabs.map((item) => (
-            <Tab
-              key={item.key}
-              value={item.key}
-              label={item.label}
-              icon={createElement(item.icon, { fontSize: "small" })}
-              iconPosition="start"
+      <Card variant="outlined" sx={{ overflow: "hidden", borderRadius: 2.5, backgroundColor: "background.paper", mb: 2 }}>
+        <Box sx={{ p: { xs: 1.5, md: 2 }, borderBottom: "1px solid", borderColor: "divider", background: theme.palette.mode === "dark" ? "linear-gradient(110deg,rgba(24,199,122,.055),rgba(47,111,237,.035),transparent)" : "linear-gradient(110deg,rgba(24,199,122,.045),rgba(47,111,237,.025),transparent)" }}>
+          <Stack direction={{ xs: "column", md: "row" }} spacing={1.25} sx={{ justifyContent: "space-between", alignItems: { md: "center" } }}>
+            <Box>
+              <Typography sx={{ fontWeight: 900, fontSize: "1rem" }}>Navegador de rotinas</Typography>
+              <Typography variant="body2" color="text.secondary">Localize rapidamente qualquer rotina da coordenação por área, nome ou finalidade.</Typography>
+            </Box>
+            <TextField
+              size="small"
+              value={routineSearch}
+              onChange={(event) => setRoutineSearch(event.target.value)}
+              placeholder="Buscar rotina, ação ou assunto..."
+              sx={{ width: { xs: "100%", md: 360 } }}
+              slotProps={{ input: { startAdornment: <InputAdornment position="start"><SearchOutlined fontSize="small" /></InputAdornment> } }}
             />
-          ))}
-        </Tabs>
-
-        <Box sx={{ px: { xs: 1.5, md: 2.25 }, py: 1.5, borderBottom: "1px solid", borderColor: "divider", bgcolor: "rgba(47,111,237,.025)" }}>
-          <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap" }}>
-            {routines[tab].map((routine) => (
-              <Chip
-                key={routine.path}
-                icon={createElement(routine.icon, { fontSize: "small" })}
-                label={routine.label}
-                clickable
-                onClick={() => navigate(routine.path)}
-                variant="outlined"
-                sx={{
-                  height: 38,
-                  px: 0.5,
-                  fontWeight: 750,
-                  bgcolor: "background.paper",
-                  "&:hover": { borderColor: aliareColors.info, bgcolor: "rgba(47,111,237,.05)" },
-                }}
-              />
-            ))}
           </Stack>
         </Box>
+
+        {normalizedRoutineSearch ? (
+          <Box sx={{ p: { xs: 1.5, md: 2 } }}>
+            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 800 }}>{matchingRoutines.length} ROTINA(S) ENCONTRADA(S)</Typography>
+            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(2,1fr)", xl: "repeat(3,1fr)" }, gap: 1, mt: 1 }}>
+              {matchingRoutines.map((routine) => (
+                <Button key={routine.path} onClick={() => openRoutine(routine)} sx={{ justifyContent: "flex-start", textAlign: "left", textTransform: "none", p: 1.25, border: "1px solid", borderColor: "divider", borderRadius: 1.75 }}>
+                  <Stack direction="row" spacing={1.1} sx={{ alignItems: "center", minWidth: 0 }}>
+                    <Box sx={{ display: "grid", placeItems: "center", width: 36, height: 36, borderRadius: 1.4, bgcolor: "action.hover", color: "primary.main", flexShrink: 0 }}>{createElement(routine.icon, { fontSize: "small" })}</Box>
+                    <Box sx={{ minWidth: 0 }}><Typography sx={{ fontWeight: 800, color: "text.primary" }}>{routine.label}</Typography><Typography variant="caption" color="text.secondary">{routine.groupLabel} · {routine.description}</Typography></Box>
+                  </Stack>
+                </Button>
+              ))}
+            </Box>
+            {!matchingRoutines.length && <Alert severity="info" sx={{ mt: 1.5 }}>Nenhuma rotina corresponde à pesquisa. Tente pelo nome da tela, processo ou ação desejada.</Alert>}
+          </Box>
+        ) : (
+          <>
+            <Tabs value={tab} onChange={(_, value: MainTab) => changeTab(value)} variant="scrollable" scrollButtons="auto" sx={{ minHeight: 58, borderBottom: "1px solid", borderColor: "divider", "& .MuiTab-root": { minHeight: 58, fontWeight: 800, px: { xs: 2, md: 2.5 } }, "& .Mui-selected": { color: `${aliareColors.info} !important` }, "& .MuiTabs-indicator": { height: 3, backgroundColor: aliareColors.info } }}>
+              {mainTabs.map((item) => <Tab key={item.key} value={item.key} label={<Stack direction="row" spacing={0.5} sx={{ alignItems: "center" }}><span>{item.label}</span><Tooltip title={item.info}><InfoOutlined onClick={(event) => event.stopPropagation()} sx={{ fontSize: 15, color: "text.secondary" }} /></Tooltip></Stack>} icon={createElement(item.icon, { fontSize: "small" })} iconPosition="start" />)}
+            </Tabs>
+
+            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "minmax(0,1fr) 250px" }, minHeight: 220 }}>
+              <Box sx={{ p: { xs: 1.5, md: 2 }, borderRight: { lg: "1px solid" }, borderColor: "divider" }}>
+                <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 850 }}>{mainTabs.find((item) => item.key === tab)?.label}</Typography>
+                <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2,minmax(0,1fr))" }, gap: 1, mt: .75 }}>
+                  {routines[tab].map((routine) => (
+                    <Box key={routine.path} sx={{ position: "relative", border: "1px solid", borderColor: "divider", borderRadius: 2, overflow: "hidden", transition: ".16s", "&:hover": { borderColor: "primary.main", transform: "translateY(-1px)", boxShadow: "0 10px 26px rgba(16,24,40,.08)" } }}>
+                      <Button onClick={() => openRoutine(routine)} sx={{ width: "100%", minHeight: 82, justifyContent: "flex-start", textAlign: "left", textTransform: "none", p: 1.35, pr: 5 }}>
+                        <Stack direction="row" spacing={1.2} sx={{ alignItems: "flex-start" }}>
+                          <Box sx={{ display: "grid", placeItems: "center", width: 38, height: 38, borderRadius: 1.5, bgcolor: theme.palette.mode === "dark" ? "rgba(24,199,122,.09)" : "rgba(24,199,122,.065)", color: "primary.main", flexShrink: 0 }}>{createElement(routine.icon, { fontSize: "small" })}</Box>
+                          <Box><Typography sx={{ fontWeight: 850, color: "text.primary" }}>{routine.label}</Typography><Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: .25, lineHeight: 1.35 }}>{routine.description}</Typography></Box>
+                        </Stack>
+                      </Button>
+                      <Tooltip title={favoriteRoutines.includes(routine.path) ? "Remover dos favoritos" : "Adicionar aos favoritos"}><IconButton size="small" onClick={() => toggleFavorite(routine.path)} sx={{ position: "absolute", top: 8, right: 8 }}>{favoriteRoutines.includes(routine.path) ? <StarRounded sx={{ color: aliareColors.warning }} fontSize="small" /> : <StarBorderOutlined fontSize="small" />}</IconButton></Tooltip>
+                    </Box>
+                  ))}
+                </Box>
+              </Box>
+              <Box sx={{ p: { xs: 1.5, md: 2 }, bgcolor: theme.palette.mode === "dark" ? "rgba(7,20,35,.22)" : "rgba(248,250,252,.7)" }}>
+                <Typography sx={{ fontWeight: 850, fontSize: ".82rem" }}>Acesso rápido</Typography>
+                <Typography variant="caption" color="text.secondary">Favoritos e rotinas utilizadas recentemente.</Typography>
+                <Stack spacing={.5} sx={{ mt: 1.25 }}>
+                  {[...favoriteRoutines, ...recentRoutines].filter((path, index, values) => values.indexOf(path) === index).slice(0, 6).map((path) => {
+                    const routine = allRoutines.find((item) => item.path === path);
+                    return routine ? <Button key={path} size="small" onClick={() => openRoutine(routine)} startIcon={createElement(routine.icon, { fontSize: "small" })} sx={{ justifyContent: "flex-start", textTransform: "none", color: "text.primary" }}>{routine.label}</Button> : null;
+                  })}
+                  {!favoriteRoutines.length && !recentRoutines.length && <Typography variant="caption" color="text.secondary" sx={{ py: 1 }}>Abra ou favorite uma rotina para criar seus atalhos.</Typography>}
+                </Stack>
+              </Box>
+            </Box>
+          </>
+        )}
 
         <CardContent sx={{ p: { xs: 1.5, md: 2.25 } }}>
           <Alert
@@ -208,13 +307,14 @@ export function Coordination() {
                   gap: 2,
                 }}
               >
-                {cards.map(([label, value, info]) => (
+                {cards.map(([kind, label, value, info]) => (
                   <KpiCard
                     key={label}
                     title={label}
                     value={value}
                     subtitle={tab === "analises" ? "Análise gerencial" : "Operação atual"}
                     info={info}
+                    onClick={() => void openDetails(kind, label)}
                     accent={
                       label === "Críticos" || label === "Sem movimento 72h"
                         ? aliareColors.error
@@ -225,6 +325,30 @@ export function Coordination() {
                   />
                 ))}
               </Box>
+
+              <Card variant="outlined" sx={{ overflow: "hidden" }}>
+                <CardContent>
+                  <Stack direction={{ xs: "column", md: "row" }} spacing={1} sx={{ justifyContent: "space-between", alignItems: { md: "center" }, mb: 1.5 }}>
+                    <Box>
+                      <Typography variant="h6" sx={{ fontWeight: 850 }}>Distribuição da carga operacional</Typography>
+                      <Typography variant="body2" color="text.secondary">Tickets e itens Azure por analista da equipe oficial.</Typography>
+                    </Box>
+                    <Chip label="Visão comparativa" variant="outlined" />
+                  </Stack>
+                  {data.workload.length ? <Box sx={{ width: "100%", height: Math.max(250, data.workload.length * 42) }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={data.workload} layout="vertical" margin={{ top: 6, right: 18, left: 8, bottom: 4 }}>
+                        <CartesianGrid stroke={theme.palette.divider} strokeDasharray="4 4" horizontal={false} opacity={0.55} />
+                        <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11, fill: theme.palette.text.secondary }} axisLine={false} tickLine={false} />
+                        <YAxis type="category" dataKey="analyst" width={118} tick={{ fontSize: 11, fill: theme.palette.text.secondary }} axisLine={false} tickLine={false} />
+                        <ChartTooltip contentStyle={{ borderRadius: 12, border: `1px solid ${theme.palette.divider}`, background: theme.palette.background.paper, boxShadow: "0 14px 36px rgba(0,0,0,.18)" }} cursor={{ fill: theme.palette.action.hover }} />
+                        <Bar dataKey="tickets" name="Tickets" stackId="load" fill={aliareColors.info} radius={[0, 0, 0, 0]} />
+                        <Bar dataKey="workItems" name="Azure" stackId="load" fill={aliareColors.green} radius={[0, 6, 6, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </Box> : <Typography color="text.secondary">Nenhuma carga pendente localizada para os analistas da equipe.</Typography>}
+                </CardContent>
+              </Card>
 
               <Card variant="outlined">
                 <CardContent>
@@ -246,16 +370,22 @@ export function Coordination() {
 
                   <Stack spacing={2}>
                     {data.workload.map((item) => (
-                      <Box key={item.analyst}>
+                      <Box key={item.analyst} role="button" tabIndex={0}
+                        onClick={() => void openDetails("analyst", `Carga de ${item.analyst}`, item.analyst)}
+                        onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") void openDetails("analyst", `Carga de ${item.analyst}`, item.analyst); }}
+                        sx={{ p: 1, mx: -1, borderRadius: 1.5, cursor: "pointer", "&:hover": { bgcolor: "action.hover" }, "&:focus-visible": { outline: "2px solid", outlineColor: "primary.main" } }}>
                         <Stack
                           direction={{ xs: "column", sm: "row" }}
                           spacing={0.5}
                           sx={{ justifyContent: "space-between", mb: 0.6 }}
                         >
                           <Typography sx={{ fontWeight: 750 }}>{item.analyst}</Typography>
-                          <Typography variant="body2" color="text.secondary">
-                            {item.tickets} tickets · {item.workItems} itens Azure
-                          </Typography>
+                          <Stack direction="row" spacing={0.5} sx={{ alignItems: "center" }}>
+                            <Typography variant="body2" color="text.secondary">
+                              {item.tickets} tickets · {item.workItems} itens Azure
+                            </Typography>
+                            <Tooltip title="Clique para abrir o recorte operacional deste analista."><InfoOutlined sx={{ fontSize: 15, color: "text.secondary" }} /></Tooltip>
+                          </Stack>
                         </Stack>
                         <LinearProgress
                           variant="determinate"
@@ -313,6 +443,26 @@ export function Coordination() {
           )}
         </CardContent>
       </Card>
+      <Drawer anchor="right" open={Boolean(detailTitle)} onClose={() => { setDetailTitle(""); setDetails(null); }} slotProps={{ paper: { sx: detailDrawerPaperSx } }}>
+        <DetailPanelHeader eyebrow="Coordenação" title={detailTitle || "Detalhes"} identifier={details ? `${details.total} item(ns) carregado(s)` : undefined} onClose={() => { setDetailTitle(""); setDetails(null); }} />
+        {detailLoading ? <Box sx={{ py: 8, display: "grid", placeItems: "center" }}><CircularProgress /></Box> : details ? (
+          <Stack spacing={2}>
+            {details.truncated && <Alert severity="info">Exibindo os primeiros 50 registros do recorte.</Alert>}
+            {details.tickets.length > 0 && <DetailSection title="Atendimentos Movidesk"><Stack spacing={1}>{details.tickets.map((ticket) => (
+              <Button key={ticket.movideskId} variant="outlined" onClick={() => navigate(`/tickets?movidesk=${ticket.movideskId}`)} sx={{ justifyContent: "flex-start", textTransform: "none", textAlign: "left", p: 1.25 }}>
+                <Box sx={{ minWidth: 0 }}><Typography sx={{ fontWeight: 800 }}>#{ticket.movideskId} · {ticket.subject}</Typography><Typography variant="caption" color="text.secondary">{[ticket.status, ticket.urgency, ticket.client, ticket.owner].filter(Boolean).join(" · ")}</Typography></Box>
+              </Button>
+            ))}</Stack></DetailSection>}
+            {details.workItems.length > 0 && <DetailSection title="Work Items Azure"><Stack spacing={1}>{details.workItems.map((item) => (
+              <Button key={item.id} variant="outlined" onClick={() => navigate(item.workItemType.toLocaleLowerCase("pt-BR").includes("apoio") ? `/apoios?task=${item.id}` : item.workItemType.toLocaleLowerCase("pt-BR").includes("evolu") ? `/evolucoes?task=${item.id}` : `/correcoes?task=${item.id}`)} sx={{ justifyContent: "flex-start", textTransform: "none", textAlign: "left", p: 1.25 }}>
+                <Box sx={{ minWidth: 0 }}><Typography sx={{ fontWeight: 800 }}>#{item.id} · {item.title}</Typography><Typography variant="caption" color="text.secondary">{[item.workItemType, item.state, item.client, item.assignedToName ?? "Sem responsável"].filter(Boolean).join(" · ")}</Typography></Box>
+              </Button>
+            ))}</Stack></DetailSection>}
+            {details.total === 0 && <Alert severity="info">Nenhum registro encontrado para este recorte.</Alert>}
+            {details.analyst && <DetailSection title="Escopo do analista"><DetailFieldGrid fields={[["Analista", details.analyst], ["Total carregado", details.total]]} /></DetailSection>}
+          </Stack>
+        ) : null}
+      </Drawer>
     </Box>
   );
 }
