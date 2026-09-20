@@ -86,7 +86,7 @@ const tabInfo: Record<TabKey, string> = {
   radar: "Prioriza situações operacionais que merecem intervenção antes de virarem recorrência ou estouro.",
   audit: "Seleciona candidatos para revisão humana. O sistema sinaliza indícios; não altera classificações automaticamente.",
   recurrences: "Agrupa temas repetidos e compara o período atual com o anterior para sugerir investigação, treinamento ou causa raiz.",
-  gaps: "Consolida sinais técnicos relevantes em gaps com evidência, impacto e ação sugerida.",
+  gaps: "Transforma sinais recorrentes da operação em pontos de atenção técnicos, explicando o motivo, a prioridade e a próxima ação sugerida.",
   development: "Mostra concentração de temas e pontos de apoio por analista para orientar desenvolvimento técnico, sem ranking.",
 };
 
@@ -222,7 +222,7 @@ export function TechnicalLeadership() {
         ["radar", "Radar", <RadarOutlined fontSize="small" />],
         ["audit", "Auditoria", <AssignmentTurnedInOutlined fontSize="small" />],
         ["recurrences", "Recorrências", <TrackChangesOutlined fontSize="small" />],
-        ["gaps", "Gaps", <ErrorOutlineOutlined fontSize="small" />],
+        ["gaps", "Gaps técnicos", <ErrorOutlineOutlined fontSize="small" />],
         ["development", "Desenvolvimento", <GroupsOutlined fontSize="small" />],
       ] as Array<[TabKey, string, ReactElement]>).map(([key, label, icon]) => <Tab key={key} value={key} icon={icon} iconPosition="start" label={<Stack direction="row" spacing={.5} sx={{ alignItems: "center" }}><span>{label}</span><Tooltip title={tabInfo[key]}><InfoOutlined onClick={(e) => e.stopPropagation()} sx={{ fontSize: 15, color: "text.secondary" }} /></Tooltip></Stack>} />)}
     </Tabs></Card>
@@ -262,13 +262,56 @@ export function TechnicalLeadership() {
     </Box>}
 
     {data && tab === "gaps" && <Box>
-      <AreaTitle title="Gestão de gaps técnicos" info={tabInfo.gaps} icon={<ErrorOutlineOutlined color="primary" />} />
-      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "repeat(2,1fr)" }, gap: 1.5, mt: 1.2 }}>
-        {data.gaps.map((gap) => <Card key={gap.id} onClick={() => setDrawer({ kind: "gap", title: gap.title, gap })} sx={{ cursor: "pointer", background: "linear-gradient(145deg, rgba(29,32,72,.96), rgba(13,28,49,.96)) !important", "&:hover": { borderColor: `${aliareColors.purple} !important`, boxShadow: "0 12px 30px rgba(124,92,255,.11)" } }}><CardContent>
-          <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "flex-start", gap: 1 }}><Box><Typography variant="caption" color="text.secondary">{gap.id} · {gap.type}</Typography><Typography sx={{ fontWeight: 850 }}>{gap.title}</Typography></Box><Tooltip title="Gap derivado de evidências operacionais. Clique para revisar impacto, evidência e ação sugerida."><InfoOutlined sx={{ fontSize: 17, color: "text.secondary" }} /></Tooltip></Stack>
-          <Stack direction="row" spacing={1} sx={{ mt: 1 }}><Chip size="small" label={gap.impact} color={gap.impact === "Alto" ? "error" : "warning"} /><Chip size="small" label={gap.status} variant="outlined" /></Stack>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>{gap.evidence}</Typography>
-        </CardContent></Card>)}
+      <AreaTitle title="Pontos de atenção técnicos" info={tabInfo.gaps} icon={<ErrorOutlineOutlined color="primary" />} />
+
+      <Alert severity="info" sx={{ mt: 1.2, mb: 1.5 }}>
+        Esta visão transforma sinais encontrados nos tickets em pontos de investigação. Um gap não significa, por si só, um erro do sistema:
+        ele indica um tema que merece validação da liderança antes de definir uma ação.
+      </Alert>
+
+      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(3,1fr)" }, gap: 1.2, mb: 1.5 }}>
+        {[
+          ["Pontos identificados", data.gaps.length],
+          ["Prioridade alta", data.gaps.filter((gap) => gap.impact === "Alto").length],
+          ["Demais prioridades", data.gaps.filter((gap) => gap.impact !== "Alto").length],
+        ].map(([label, value]) => <Box key={String(label)} sx={{ p: 1.35, borderRadius: 2, border: "1px solid", borderColor: "divider", bgcolor: mode === "dark" ? "rgba(15,36,58,.72)" : "background.paper" }}>
+          <Typography variant="caption" color="text.secondary">{label}</Typography>
+          <Typography sx={{ fontWeight: 900, fontSize: "1.45rem", mt: .15 }}>{value}</Typography>
+        </Box>)}
+      </Box>
+
+      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "repeat(2,1fr)" }, gap: 1.5 }}>
+        {data.gaps.map((gap) => <Card key={gap.id} onClick={() => setDrawer({ kind: "gap", title: gap.title, gap })} sx={{ cursor: "pointer", background: "linear-gradient(145deg, rgba(29,32,72,.96), rgba(13,28,49,.96)) !important", "&:hover": { borderColor: `${aliareColors.purple} !important`, boxShadow: "0 12px 30px rgba(124,92,255,.11)", transform: "translateY(-2px)" }, transition: ".15s" }}>
+          <CardContent>
+            <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "flex-start", gap: 1 }}>
+              <Box>
+                <Typography variant="caption" color="text.secondary">PONTO {gap.id} · {gap.type}</Typography>
+                <Typography sx={{ fontWeight: 900, fontSize: "1.05rem", mt: .25, textTransform: "capitalize" }}>{gap.title}</Typography>
+              </Box>
+              <Tooltip title="Clique para abrir o diagnóstico completo e revisar a ação sugerida."><InfoOutlined sx={{ fontSize: 17, color: "text.secondary" }} /></Tooltip>
+            </Stack>
+
+            <Stack direction="row" spacing={1} sx={{ mt: 1.1, flexWrap: "wrap", rowGap: .7 }}>
+              <Chip size="small" label={`Prioridade: ${gap.impact}`} color={gap.impact === "Alto" ? "error" : "warning"} />
+              <Chip size="small" label={`Status: ${gap.status}`} variant="outlined" />
+            </Stack>
+
+            <Box sx={{ mt: 1.4, p: 1.2, borderRadius: 1.5, bgcolor: "rgba(255,255,255,.035)", border: "1px solid rgba(255,255,255,.06)" }}>
+              <Typography variant="caption" sx={{ color: "text.secondary", fontWeight: 800 }}>POR QUE FOI SINALIZADO</Typography>
+              <Typography variant="body2" sx={{ mt: .35 }}>{gap.evidence}</Typography>
+            </Box>
+
+            <Box sx={{ mt: 1.1 }}>
+              <Typography variant="caption" sx={{ color: "text.secondary", fontWeight: 800 }}>PRÓXIMA AÇÃO SUGERIDA</Typography>
+              <Typography variant="body2" sx={{ mt: .3 }}>{gap.action}</Typography>
+            </Box>
+
+            <Typography variant="caption" sx={{ display: "block", mt: 1.25, color: aliareColors.cyan, fontWeight: 800 }}>
+              Abrir diagnóstico completo →
+            </Typography>
+          </CardContent>
+        </Card>)}
+        {!data.gaps.length && <Alert severity="success">Nenhum ponto de atenção técnico foi identificado neste período.</Alert>}
       </Box>
     </Box>}
 
@@ -294,7 +337,7 @@ export function TechnicalLeadership() {
       </DetailSection>}
       {drawer?.kind === "audit" && <DetailSection title="Revisão humana recomendada"><Stack spacing={1}>{drawer.items.map((ticket) => <Card key={ticket.id} variant="outlined"><CardContent><Typography sx={{ fontWeight: 850 }}>#{ticket.movideskId} · {ticket.subject}</Typography><Typography variant="body2" color="text.secondary" sx={{ mt: .5 }}>{ticket.reason}</Typography><DetailFieldGrid fields={[["Categoria", ticket.category ?? "Não informado"], ["Causa", ticket.cause ?? "Não informado"], ["Responsável", ticket.owner ?? "Não informado"], ["Cliente", ticket.client ?? "Não informado"]]} /><Button sx={{ mt: 1 }} endIcon={<OpenInNewOutlined />} onClick={() => openItem(ticket)}>Abrir atendimento</Button></CardContent></Card>)}</Stack></DetailSection>}
       {drawer?.kind === "recurrence" && <><DetailSection title="Diagnóstico"><DetailFieldGrid fields={[["Ocorrências", drawer.recurrence.count], ["Período anterior", drawer.recurrence.previous], ["Clientes", drawer.recurrence.clients.join(", ") || "—"], ["Analistas", drawer.recurrence.analysts.join(", ") || "—"]]} /></DetailSection><DetailSection title="Ação sugerida"><Alert severity="info">{drawer.recurrence.action}</Alert></DetailSection><DetailSection title="Evidências"><Stack spacing={1}>{drawer.recurrence.examples.map((ticket) => <Button key={ticket.id} variant="outlined" onClick={() => openItem(ticket)} endIcon={<OpenInNewOutlined />} sx={{ justifyContent: "space-between" }}>#{ticket.movideskId} · {ticket.subject}</Button>)}</Stack></DetailSection></>}
-      {drawer?.kind === "gap" && <><DetailSection title="Gap técnico"><DetailFieldGrid fields={[["ID", drawer.gap.id], ["Tipo", drawer.gap.type], ["Impacto", drawer.gap.impact], ["Status", drawer.gap.status], ["Evidência", drawer.gap.evidence]]} /></DetailSection><DetailSection title="Próxima ação sugerida"><Alert severity="info">{drawer.gap.action}</Alert></DetailSection></>}
+      {drawer?.kind === "gap" && <><DetailSection title="Diagnóstico do ponto de atenção"><Alert severity="info" sx={{ mb: 1.5 }}>Este item é um sinal para investigação da liderança e não uma confirmação automática de falha.</Alert><DetailFieldGrid fields={[["Identificador", drawer.gap.id], ["Origem do sinal", drawer.gap.type], ["Prioridade", drawer.gap.impact], ["Status da análise", drawer.gap.status]]} /></DetailSection><DetailSection title="Por que foi sinalizado"><Typography variant="body2">{drawer.gap.evidence}</Typography></DetailSection><DetailSection title="Próxima ação sugerida"><Alert severity="info">{drawer.gap.action}</Alert></DetailSection></>}
       {drawer?.kind === "development" && <><DetailSection title="Visão técnica"><DetailFieldGrid fields={[["Analista", drawer.development.analyst], ["Tickets no período", drawer.development.tickets], ["Sem movimento", drawer.development.stale]]} /></DetailSection><DetailSection title="Temas mais frequentes"><Stack spacing={.8}>{drawer.development.themes.map((theme) => <Box key={theme.topic} sx={{ p: 1, borderRadius: 1.5, bgcolor: "background.default" }}><Typography variant="body2"><b>{theme.topic}</b> · {theme.count}</Typography></Box>)}</Stack></DetailSection></>}
     </Drawer>
   </Box>;
