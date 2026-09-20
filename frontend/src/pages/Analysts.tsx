@@ -46,6 +46,8 @@ import { api } from "../services/api";
 import { useFilters } from "../context/FiltersContext";
 import { PeriodFilter } from "../components/PeriodFilter";
 import { PageHeader } from "../components/PageHeader";
+import { KpiCard as ExecutiveKpiCard } from "../components/KpiCard";
+import { ExecutiveSection } from "../components/ExecutiveSection";
 import { aliareColors } from "../theme/theme";
 import {
   chartPalette,
@@ -5154,162 +5156,19 @@ function MetricCard({
 }
 
 function UnifiedMetricCard({
-  title,
-  value,
-  description,
-  info,
-  accentColor,
-  onClick,
+  title, value, description, info, accentColor, onClick,
 }: {
-  title: string;
-  value: ReactNode;
-  description: string;
-  info: ProductivityInfoDefinition;
-  accentColor: string;
-  onClick?: () => void;
+  title: string; value: ReactNode; description: string; info: ProductivityInfoDefinition; accentColor: string; onClick?: () => void;
 }) {
-  return (
-    <Card
-      elevation={0}
-      role={onClick ? "button" : undefined}
-      tabIndex={onClick ? 0 : undefined}
-      onClick={onClick}
-      onKeyDown={(event) => {
-        if (onClick && (event.key === "Enter" || event.key === " ")) {
-          onClick();
-        }
-      }}
-      sx={{
-        position: "relative",
-        overflow: "hidden",
-        border: "1px solid",
-        borderColor: "divider",
-        borderRadius: 2.25,
-        height: "100%",
-        backgroundColor: "background.paper",
-        cursor: onClick ? "pointer" : "default",
-        transition: "transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease",
-        "&::before": {
-          content: '""',
-          position: "absolute",
-          top: 0,
-          left: 0,
-          width: "100%",
-          height: 3,
-          backgroundColor: accentColor,
-        },
-        ...(onClick && {
-          "&:hover": {
-            transform: "translateY(-2px)",
-            borderColor: accentColor,
-            boxShadow: "0 8px 24px rgba(16,24,40,0.08)",
-          },
-          "&:focus-visible": {
-            outline: `2px solid ${accentColor}`,
-            outlineOffset: "2px",
-          },
-        }),
-      }}
-    >
-      <CardContent
-        sx={{
-          p: { xs: 1.6, md: 1.8 },
-          "&:last-child": { pb: { xs: 1.6, md: 1.8 } },
-        }}
-      >
-        <Stack
-          direction="row"
-          sx={{ alignItems: "center", justifyContent: "space-between", gap: 1 }}
-        >
-          <Typography variant="body2" sx={{ fontWeight: 700, color: "text.primary", minWidth: 0 }}>
-            {title}
-          </Typography>
-          <ProductivityInfo definition={info} />
-        </Stack>
-
-        <Typography
-          sx={{
-            mt: 0.6,
-            fontWeight: 800,
-            letterSpacing: "-0.025em",
-            fontSize: { xs: "1.75rem", md: "1.95rem", xl: "2.1rem" },
-            lineHeight: 1.05,
-          }}
-        >
-          {value}
-        </Typography>
-
-        <Typography
-          variant="caption"
-          color="text.secondary"
-          sx={{ display: "block", mt: 0.75, minHeight: 18 }}
-        >
-          {description}
-        </Typography>
-      </CardContent>
-    </Card>
-  );
+  return <ExecutiveKpiCard title={title} value={value} subtitle={description} info={`${info.summary} • ${info.periodRule}`} accent={accentColor} onClick={onClick} />;
 }
 
 function ChartCard({
-  title,
-  subtitle,
-  children,
+  title, subtitle, children,
 }: {
-  title: string;
-  subtitle: string;
-  children: ReactNode;
+  title: string; subtitle: string; children: ReactNode;
 }) {
-  return (
-    <Card
-      elevation={0}
-      sx={{
-        border:
-          "1px solid",
-
-        borderColor:
-          "divider",
-
-        borderRadius:
-          2.25,
-
-        backgroundColor:
-          "background.paper",
-
-        boxShadow:
-          "0 1px 2px rgba(16,24,40,0.035)",
-      }}
-    >
-      <CardContent
-        sx={{
-          p: 2,
-
-          "&:last-child": {
-            pb: 2,
-          },
-        }}
-      >
-        <Typography
-          sx={{
-          fontWeight: 800,
-            fontSize:
-              "1.05rem",
-          }}
-        >
-          {title}
-        </Typography>
-
-        <Typography
-          variant="caption"
-          color="text.secondary"
-        >
-          {subtitle}
-        </Typography>
-
-        {children}
-      </CardContent>
-    </Card>
-  );
+  return <ExecutiveSection title={title} subtitle={subtitle} compact>{children}</ExecutiveSection>;
 }
 
 /* =====================================================
