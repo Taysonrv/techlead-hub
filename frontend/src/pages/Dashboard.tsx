@@ -21,8 +21,6 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
-  Line,
-  LineChart,
   Area,
   AreaChart,
   Pie,
@@ -542,35 +540,42 @@ export function Dashboard() {
     );
   }, [filteredTickets, topCategoryLabels]);
 
-  const monthlyFlow = useMemo(() => {
-    const months = new Map<string, { monthKey: string; month: string; opened: number; resolved: number }>();
-
-    const ensureMonth = (date: Date) => {
-      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-      if (!months.has(monthKey)) {
-        months.set(monthKey, {
-          monthKey,
-          month: date.toLocaleDateString("pt-BR", { month: "short", year: "2-digit" }).replace(".", ""),
-          opened: 0,
-          resolved: 0,
-        });
-      }
-      return months.get(monthKey)!;
-    };
+  const dailyFlow = useMemo(() => {
+    const opened = new Map<string, number>();
+    const resolved = new Map<string, number>();
 
     openedInPeriod.forEach((ticket) => {
       const date = new Date(ticket.createdDate);
-      if (!Number.isNaN(date.getTime())) ensureMonth(date).opened += 1;
+      if (Number.isNaN(date.getTime())) return;
+      const key = formatIsoDate(date);
+      opened.set(key, (opened.get(key) ?? 0) + 1);
     });
 
     resolvedInPeriod.forEach((ticket) => {
       if (!ticket.resolvedDate) return;
       const date = new Date(ticket.resolvedDate);
-      if (!Number.isNaN(date.getTime())) ensureMonth(date).resolved += 1;
+      if (Number.isNaN(date.getTime())) return;
+      const key = formatIsoDate(date);
+      resolved.set(key, (resolved.get(key) ?? 0) + 1);
     });
 
-    return Array.from(months.values()).sort((a, b) => a.monthKey.localeCompare(b.monthKey));
-  }, [openedInPeriod, resolvedInPeriod]);
+    const result: Array<{ sortDate: string; date: string; opened: number; resolved: number }> = [];
+    const cursor = startOfDay(effectiveStartDate);
+    const lastDay = endOfDay(effectiveEndDate);
+
+    while (cursor <= lastDay) {
+      const key = formatIsoDate(cursor);
+      result.push({
+        sortDate: key,
+        date: formatShortDate(key),
+        opened: opened.get(key) ?? 0,
+        resolved: resolved.get(key) ?? 0,
+      });
+      cursor.setDate(cursor.getDate() + 1);
+    }
+
+    return result;
+  }, [openedInPeriod, resolvedInPeriod, effectiveStartDate, effectiveEndDate]);
 
   const causes = useMemo(
     () => groupByField(filteredTickets, "cause", "Sem causa").slice(0, 8),
@@ -1100,7 +1105,7 @@ export function Dashboard() {
           gridTemplateColumns: {
             xs: "1fr",
             sm: "repeat(2, 1fr)",
-            lg: "repeat(3, 1fr)",
+            lg: "repeat(4, minmax(0, 1fr))",
           },
 
           gap: {
@@ -1242,7 +1247,7 @@ export function Dashboard() {
                   xs: "1fr",
                   sm: "repeat(2, minmax(0, 1fr))",
                   lg: "repeat(3, minmax(0, 1fr))",
-                  xl: "repeat(6, minmax(0, 1fr))",
+                  xl: "repeat(3, minmax(0, 1fr))",
                 },
                 gap: 1.25,
               }}
@@ -1375,7 +1380,7 @@ export function Dashboard() {
               <Typography variant="caption" color="text.secondary">Volume de abertura por dia • tendência do período</Typography>
               <Box sx={{ height: 290, mt: 1.5 }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={trends} margin={{ top: 8, right: 12, left: -8, bottom: 4 }}>
+                  <AreaChart data={trends} margin={{ top: 8, right: 12, left: 4, bottom: 4 }}>
                     <defs>
                       <linearGradient id="ticketArea" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="5%" stopColor={aliareColors.green} stopOpacity={0.42} />
@@ -1384,7 +1389,7 @@ export function Dashboard() {
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={chartGrid} />
                     <XAxis dataKey="date" tick={{ fontSize: 11 }} minTickGap={22} interval="preserveStartEnd" tickMargin={8} />
-                    <YAxis allowDecimals={false} tick={{ fontSize: 11 }} width={34} />
+                    <YAxis allowDecimals={false} tick={{ fontSize: 11 }} width={42} />
                     <Tooltip content={<TrendTooltip />} />
                     <Area type="monotone" dataKey="total" name="Tickets" stroke={aliareColors.green} strokeWidth={3} fill="url(#ticketArea)" activeDot={{ r: 5, fill: aliareColors.green, stroke: "#FFFFFF", strokeWidth: 2 }} />
                   </AreaChart>
@@ -1435,7 +1440,7 @@ export function Dashboard() {
 
             <Box sx={{ height: 320, mt: 1.5 }}>
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={monthlyCategoryEvolution} margin={{ top: 8, right: 12, left: -8, bottom: 4 }}>
+                <BarChart data={monthlyCategoryEvolution} margin={{ top: 8, right: 12, left: 4, bottom: 4 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={chartGrid} />
                   <XAxis dataKey="month" tick={{ fontSize: 11 }} />
                   <YAxis allowDecimals={false} tick={{ fontSize: 11 }} width={34} />
@@ -1470,67 +1475,69 @@ export function Dashboard() {
           <Box
             sx={{
               display: "grid",
-              gridTemplateColumns: { xs: "1fr", lg: "repeat(3, 1fr)" },
+              gridTemplateColumns: { xs: "1fr", xl: "1.25fr .75fr" },
               gap: 2,
               my: 2,
             }}
           >
             <CardBase>
-              <Typography sx={{ fontWeight: 800, fontSize: "1.05rem" }}>
-                Abertos x Resolvidos
-              </Typography>
-              <Typography variant="caption" color="text.secondary">
-                Fluxo mensal de entrada e resolução
-              </Typography>
-              <Box sx={{ height: 230, mt: 1.5 }}>
+              <Stack direction={{ xs: "column", sm: "row" }} sx={{ justifyContent: "space-between", gap: 1 }}>
+                <Box>
+                  <Typography sx={{ fontWeight: 850, fontSize: "1.05rem" }}>
+                    Abertos x Resolvidos
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Fluxo diário no período • identifica entrada acima da capacidade de resolução
+                  </Typography>
+                </Box>
+                <Stack direction="row" spacing={.7}>
+                  <Chip size="small" variant="outlined" label={`${openedInPeriod.length} abertos`} />
+                  <Chip size="small" variant="outlined" label={`${resolvedInPeriod.length} resolvidos`} />
+                </Stack>
+              </Stack>
+              <Box sx={{ height: 255, mt: 1.5 }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={monthlyFlow} margin={{ top: 8, right: 10, left: -12, bottom: 4 }}>
+                  <AreaChart data={dailyFlow} margin={{ top: 8, right: 12, left: 4, bottom: 4 }}>
+                    <defs>
+                      <linearGradient id="openedFlow" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor={semanticChartColors.normal} stopOpacity={0.24} />
+                        <stop offset="95%" stopColor={semanticChartColors.normal} stopOpacity={0.01} />
+                      </linearGradient>
+                      <linearGradient id="resolvedFlow" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor={semanticChartColors.positive} stopOpacity={0.20} />
+                        <stop offset="95%" stopColor={semanticChartColors.positive} stopOpacity={0.01} />
+                      </linearGradient>
+                    </defs>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={chartGrid} />
-                    <XAxis dataKey="month" tick={{ fontSize: 10 }} />
-                    <YAxis allowDecimals={false} tick={{ fontSize: 10 }} width={32} />
-                    <Tooltip contentStyle={chartTooltipStyle} cursor={{ fill: isDark ? "rgba(56,189,248,.055)" : "rgba(15,23,42,.035)" }} />
-                    <Line type="monotone" dataKey="opened" name="Abertos" stroke={semanticChartColors.normal} strokeWidth={2.5} />
-                    <Line type="monotone" dataKey="resolved" name="Resolvidos" stroke={semanticChartColors.positive} strokeWidth={2.5} />
-                  </LineChart>
+                    <XAxis dataKey="date" tick={{ fontSize: 10 }} minTickGap={24} interval="preserveStartEnd" tickMargin={8} />
+                    <YAxis allowDecimals={false} tick={{ fontSize: 10 }} width={42} />
+                    <Tooltip contentStyle={chartTooltipStyle} />
+                    <Area type="monotone" dataKey="opened" name="Abertos" stroke={semanticChartColors.normal} strokeWidth={2.4} fill="url(#openedFlow)" />
+                    <Area type="monotone" dataKey="resolved" name="Resolvidos" stroke={semanticChartColors.positive} strokeWidth={2.4} fill="url(#resolvedFlow)" />
+                  </AreaChart>
                 </ResponsiveContainer>
               </Box>
+              <Stack direction="row" spacing={2} sx={{ mt: .5 }}>
+                <Typography variant="caption" sx={{ color: semanticChartColors.normal, fontWeight: 800 }}>● Abertos</Typography>
+                <Typography variant="caption" sx={{ color: semanticChartColors.positive, fontWeight: 800 }}>● Resolvidos</Typography>
+              </Stack>
             </CardBase>
 
             <CardBase>
-              <Typography sx={{ fontWeight: 800, fontSize: "1.05rem" }}>
+              <Typography sx={{ fontWeight: 850, fontSize: "1.05rem" }}>
                 Principais causas
               </Typography>
               <Typography variant="caption" color="text.secondary">
-                Motivos mais frequentes no período
+                Causas mais frequentes • clique na leitura para direcionar ação preventiva
               </Typography>
-              <Box sx={{ height: 230, mt: 1.5 }}>
+              <Box sx={{ height: 285, mt: 1.25 }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={causes.slice(0, 6)} layout="vertical" margin={{ left: 12, right: 10 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke={chartGrid} />
-                    <XAxis type="number" allowDecimals={false} />
-                    <YAxis type="category" dataKey="label" width={105} tick={{ fontSize: 9 }} />
-                    <Tooltip contentStyle={chartTooltipStyle} cursor={{ fill: isDark ? "rgba(56,189,248,.055)" : "rgba(15,23,42,.035)" }} />
-                    <Bar dataKey="total" name="Tickets" fill={semanticChartColors.attention} radius={[0, 5, 5, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </Box>
-            </CardBase>
-
-            <CardBase>
-              <Typography sx={{ fontWeight: 800, fontSize: "1.05rem" }}>
-                Composição do backlog
-              </Typography>
-              <Typography variant="caption" color="text.secondary">
-                Situação atual dos tickets pendentes
-              </Typography>
-              <Box sx={{ height: 230, mt: 1.5 }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={backlogStatus} margin={{ top: 8, right: 10, left: -12, bottom: 4 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={chartGrid} />
-                    <XAxis dataKey="label" tick={{ fontSize: 9 }} interval={0} />
-                    <YAxis allowDecimals={false} tick={{ fontSize: 10 }} width={32} />
-                    <Tooltip contentStyle={chartTooltipStyle} cursor={{ fill: isDark ? "rgba(56,189,248,.055)" : "rgba(15,23,42,.035)" }} />
-                    <Bar dataKey="total" name="Tickets" fill={semanticChartColors.stopped} radius={[5, 5, 0, 0]} />
+                  <BarChart data={causes.slice(0, 6)} layout="vertical" margin={{ left: 18, right: 18, top: 4, bottom: 4 }}>
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={chartGrid} />
+                    <XAxis type="number" allowDecimals={false} tick={{ fontSize: 10 }} />
+                    <YAxis type="category" dataKey="label" width={118} tick={{ fontSize: 10 }} />
+                    <Tooltip contentStyle={chartTooltipStyle} cursor={{ fill: isDark ? "rgba(255,183,3,.05)" : "rgba(15,23,42,.035)" }} />
+                    <Bar dataKey="total" name="Tickets" fill={semanticChartColors.attention} radius={[0, 7, 7, 0]} barSize={18} />
                   </BarChart>
                 </ResponsiveContainer>
               </Box>
