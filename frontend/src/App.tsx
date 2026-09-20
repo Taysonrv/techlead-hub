@@ -129,7 +129,7 @@ function AuthenticatedLayout({
             <GlobalTopBar />
             {backendUnavailable && <Alert severity="warning" sx={{ mb: 2 }}>O servidor central está temporariamente indisponível. Verifique a conexão e tente novamente; seus dados locais de navegação foram preservados.</Alert>}
             <Box
-              className="techlead-page-surface"
+              className="techlead-page-surface futuristic-page"
               sx={{
                 width: "100%",
                 maxWidth: "100%",
@@ -146,6 +146,18 @@ function AuthenticatedLayout({
                   boxShadow: theme.palette.mode === "dark" ? "inset 0 1px rgba(255,255,255,.012)" : "none",
                 }),
                 "& > *": { position: "relative", zIndex: 1 },
+                "& .MuiCard-root": { backdropFilter: "blur(14px)" },
+                "& .MuiTableContainer-root": { overflow: "hidden" },
+                "& .MuiTableHead-root .MuiTableCell-root": {
+                  letterSpacing: ".015em",
+                  fontWeight: 800,
+                },
+                "& .MuiDrawer-paperAnchorRight": {
+                  backdropFilter: "blur(18px)",
+                },
+                "& .MuiInputBase-root, & .MuiButton-root, & .MuiChip-root": {
+                  transition: "border-color .16s ease, background-color .16s ease, box-shadow .16s ease, transform .16s ease",
+                },
               }}
             >
               {children}
