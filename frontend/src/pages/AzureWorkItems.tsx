@@ -950,10 +950,13 @@ function AnalysisDonutCard({
                   data={visibleData}
                   dataKey="value"
                   nameKey="name"
-                  innerRadius={58}
-                  outerRadius={84}
-                  paddingAngle={2}
+                  innerRadius={60}
+                  outerRadius={86}
+                  paddingAngle={3}
+                  cornerRadius={4}
                   stroke="none"
+                  isAnimationActive
+                  animationDuration={650}
                   cursor="pointer"
                   onClick={(entry) => {
                     const candidate =
@@ -1117,12 +1120,9 @@ function AnalysisDonutCard({
                     "center",
                   gap:
                     0.55,
-                  px:
-                    0.4,
-                  py:
-                    0.2,
-                  borderRadius:
-                    1,
+                  px: 0.75,
+                  py: 0.45,
+                  borderRadius: 1.25,
                   cursor: "pointer",
                   opacity: active ? 1 : 0.38,
                   textDecoration: active ? "none" : "line-through",
