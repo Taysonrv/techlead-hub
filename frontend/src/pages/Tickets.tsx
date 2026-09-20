@@ -48,6 +48,7 @@ import { api } from "../services/api";
 import { useFilters } from "../context/FiltersContext";
 import { PeriodFilter } from "../components/PeriodFilter";
 import { PageHeader } from "../components/PageHeader";
+import { KpiCard as ExecutiveKpiCard } from "../components/KpiCard";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
 import {
@@ -3107,253 +3108,20 @@ function KpiCard({
   value,
   description,
   info,
-  accent =
-    aliareColors.green,
-  active =
-    false,
+  accent = aliareColors.green,
+  active = false,
   onClick,
 }: KpiCardProps) {
-  const [
-    infoAnchor,
-    setInfoAnchor,
-  ] = useState<HTMLElement | null>(null);
-
-  const infoOpen = Boolean(infoAnchor);
-
   return (
-    <Card
-      elevation={0}
-      role="button"
-      tabIndex={0}
-      onClick={
-        onClick
-      }
-      onKeyDown={(
-        event
-      ) => {
-        if (
-          event.key ===
-            "Enter" ||
-          event.key ===
-            " "
-        ) {
-          onClick();
-        }
-      }}
-      sx={{
-        position:
-          "relative",
-
-        overflow:
-          "hidden",
-
-        border:
-          "1px solid",
-
-        borderColor:
-          active
-            ? accent
-            : "divider",
-
-        borderRadius:
-          2.1,
-
-        cursor:
-          "pointer",
-
-        backgroundColor:
-          active
-            ? "rgba(24,199,122,0.035)"
-            : "background.paper",
-
-        transition:
-          "transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease",
-
-        "&::before":
-          {
-            content:
-              '""',
-
-            position:
-              "absolute",
-
-            top:
-              0,
-
-            left:
-              0,
-
-            width:
-              "100%",
-
-            height:
-              3,
-
-            backgroundColor:
-              accent,
-          },
-
-        "&:hover":
-          {
-            transform:
-              "translateY(-2px)",
-
-            borderColor:
-              accent,
-
-            boxShadow:
-              "0 8px 22px rgba(16,24,40,0.07)",
-          },
-      }}
-    >
-      <CardContent
-        sx={{
-          p:
-            1.45,
-
-          "&:last-child":
-            {
-              pb:
-                1.45,
-            },
-        }}
-      >
-        <Stack
-          direction="row"
-          spacing={0.45}
-          sx={{ alignItems: "center", justifyContent: "space-between" }}
-        >
-          <Typography
-            variant="caption"
-            color="text.secondary"
-            sx={{ fontWeight: 700 }}
-          >
-            {title}
-          </Typography>
-
-          {info && (
-            <>
-              <IconButton
-                size="small"
-                aria-label={`Informações sobre ${title}`}
-                aria-describedby={
-                  infoOpen
-                    ? `kpi-info-${title}`
-                    : undefined
-                }
-                onClick={(event) => {
-                  event.stopPropagation();
-                  setInfoAnchor(event.currentTarget);
-                }}
-                sx={{
-                  width: 24,
-                  height: 24,
-                  color: "text.secondary",
-                }}
-              >
-                <InfoOutlined sx={{ fontSize: 15 }} />
-              </IconButton>
-
-              <Popover
-                id={`kpi-info-${title}`}
-                open={infoOpen}
-                anchorEl={infoAnchor}
-                onClose={() => setInfoAnchor(null)}
-                anchorOrigin={{
-                  vertical: "bottom",
-                  horizontal: "right",
-                }}
-                transformOrigin={{
-                  vertical: "top",
-                  horizontal: "right",
-                }}
-                slotProps={{
-                  paper: {
-                    onClick: (
-                      event: React.MouseEvent<HTMLElement>,
-                    ) => event.stopPropagation(),
-                    sx: {
-                      mt: 0.75,
-                      p: 1.5,
-                      width: 300,
-                      maxWidth: "calc(100vw - 32px)",
-                      borderRadius: 2,
-                      border: "1px solid",
-                      borderColor: "divider",
-                      boxShadow: "0 10px 30px rgba(16,24,40,0.12)",
-                    },
-                  },
-                }}
-              >
-                <Typography
-                  variant="subtitle2"
-                  sx={{
-                    fontWeight: 800,
-                    mb: 0.5,
-                  }}
-                >
-                  {title}
-                </Typography>
-
-                <Typography
-                  variant="body2"
-                  color="text.secondary"
-                  sx={{
-                    lineHeight: 1.55,
-                  }}
-                >
-                  {info}
-                </Typography>
-              </Popover>
-            </>
-          )}
-        </Stack>
-
-        <Typography
-          sx={{
-            mt:
-              0.35,
-
-            fontSize:
-              "1.65rem",
-
-            lineHeight:
-              1,
-
-            fontWeight:
-              800,
-
-            letterSpacing:
-              "-0.03em",
-          }}
-        >
-          {value}
-        </Typography>
-
-        <Typography
-          variant="caption"
-          color="text.secondary"
-          sx={{
-            display:
-              "block",
-
-            mt:
-              0.55,
-
-            overflow:
-              "hidden",
-
-            textOverflow:
-              "ellipsis",
-
-            whiteSpace:
-              "nowrap",
-          }}
-        >
-          {description}
-        </Typography>
-      </CardContent>
-    </Card>
+    <ExecutiveKpiCard
+      title={title}
+      value={value}
+      subtitle={description}
+      info={info}
+      accent={accent}
+      active={active}
+      onClick={onClick}
+    />
   );
 }
 
