@@ -47,6 +47,7 @@ import { api } from "../services/api";
 import { useFilters } from "../context/FiltersContext";
 import { PeriodFilter } from "../components/PeriodFilter";
 import { PageHeader } from "../components/PageHeader";
+import { ExecutiveSection } from "../components/ExecutiveSection";
 
 import {
   aliareColors,
@@ -1484,17 +1485,7 @@ function DonutCard({
   onSliceClick?: (name: string) => void;
 }) {
   return (
-    <Card
-      elevation={0}
-      sx={{
-        border: "1px solid",
-        borderColor: "divider",
-        borderRadius: 2.25,
-        backgroundColor: "background.paper",
-        boxShadow: "0 1px 2px rgba(16,24,40,0.035)",
-      }}
-    >
-      <CardContent>
+    <ExecutiveSection compact>
         <Stack
           direction="row"
           sx={{
@@ -1593,8 +1584,7 @@ function DonutCard({
             onItemClick={onSliceClick}
           />
         )}
-      </CardContent>
-    </Card>
+      </ExecutiveSection>
   );
 }
 
