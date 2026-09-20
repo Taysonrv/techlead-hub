@@ -20,6 +20,7 @@ import {
   OpenInNewOutlined,
   TaskAltOutlined,
   AlternateEmailOutlined,
+  WarningAmberOutlined,
 } from "@mui/icons-material";
 
 import {
@@ -52,7 +53,8 @@ type NotificationKind =
   | "SIMER_VERSION"
   | "AZURE_COMPLETED"
   | "AZURE_UPDATED"
-  | "CHAT_MENTION";
+  | "CHAT_MENTION"
+  | "OPERATION_ALERT";
 
 type HubNotification = {
   key: string;
@@ -299,6 +301,8 @@ export function NotificationCenter() {
               ? OpenInNewOutlined
               : item.kind === "CHAT_MENTION"
                 ? AlternateEmailOutlined
+                : item.kind === "OPERATION_ALERT"
+                  ? WarningAmberOutlined
               : item.kind === "AZURE_COMPLETED"
                 ? CheckCircleOutlined
                 : TaskAltOutlined;
@@ -316,7 +320,7 @@ export function NotificationCenter() {
                 backgroundColor: isUnread ? "rgba(24,199,122,0.07)" : "transparent",
               }}
             >
-              <Icon sx={{ mt: 0.2, color: isUnread ? aliareColors.green : "text.secondary" }} />
+              <Icon sx={{ mt: 0.2, color: item.kind === "OPERATION_ALERT" ? "warning.main" : isUnread ? aliareColors.green : "text.secondary" }} />
               <Box sx={{ minWidth: 0, flex: 1 }}>
                 <Typography sx={{ fontSize: "0.82rem", fontWeight: isUnread ? 800 : 650 }}>
                   {item.title}
