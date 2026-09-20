@@ -1404,13 +1404,6 @@ function MenuItem({
    PERFIL
 ========================================================= */
 
-function sectionForPath(path: string): "operation" | "leadership" | "development" | "management" {
-  if (path.startsWith("/lideranca-tecnica")) return "leadership";
-  if (["/correcoes", "/evolucoes", "/apoios", "/versoes"].some((item) => path.startsWith(item))) return "development";
-  if (["/importar", "/relatorios", "/qualidade-dados", "/conhecimento"].some((item) => path.startsWith(item))) return "management";
-  return "operation";
-}
-
 function getRoleLabel(
   role:
     UserRole |
