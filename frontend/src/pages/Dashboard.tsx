@@ -3032,7 +3032,15 @@ function DonutAnalysisCard({
                 <Cell key={item.label} fill={colors[index % colors.length]} />
               )})}
             </Pie>
-            <Tooltip />
+            <Tooltip
+              contentStyle={{
+                borderRadius: 12,
+                border: `1px solid ${chartGrid}`,
+                background: chartTooltipStyle.background,
+                boxShadow: "0 14px 36px rgba(0,0,0,.18)",
+              }}
+              cursor={false}
+            />
           </PieChart>
         </ResponsiveContainer>
         <Box sx={{ position: "absolute", inset: 0, display: "grid", placeContent: "center", pointerEvents: "none", textAlign: "center" }}>
