@@ -9,6 +9,7 @@ import {
   Divider,
   Drawer,
   FormControl,
+  IconButton,
   InputAdornment,
   InputLabel,
   MenuItem,
