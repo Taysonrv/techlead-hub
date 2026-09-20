@@ -150,6 +150,8 @@ type AnalystPerformance = {
 };
 
 export function Performance() {
+  const theme = useTheme();
+  const [hiddenTrendSeries, setHiddenTrendSeries] = useState<Set<string>>(() => new Set());
   const [analystsPage, setAnalystsPage] = useState(0);
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState(true);
@@ -904,7 +906,7 @@ export function Performance() {
                     type="monotone"
                     dataKey="resolution"
                     name="Resolução"
-                    stroke={semanticChartColors.info}
+                    stroke={semanticChartColors.normal}
                     strokeWidth={3}
                     dot={false}
                     activeDot={{ r: 5 }}
@@ -1528,7 +1530,15 @@ function DonutCard({
   onSliceClick?: (name: string) => void;
 }) {
   const theme = useTheme();
-  const [hiddenTrendSeries, setHiddenTrendSeries] = useState<Set<string>>(() => new Set());
+  const [hiddenItems, setHiddenItems] = useState<Set<string>>(() => new Set());
+  const visibleData = data.filter((item) => !hiddenItems.has(item.name));
+  const visibleTotal = visibleData.reduce((sum, item) => sum + item.value, 0);
+  const toggleItem = (name: string) => setHiddenItems((current) => {
+    const next = new Set(current);
+    if (next.has(name)) next.delete(name);
+    else if (data.length - next.size > 1) next.add(name);
+    return next;
+  });
   return (
     <ExecutiveSection compact>
         <Stack
@@ -2113,86 +2123,6 @@ function CardSectionHeader({
       </Box>
 
       <CardInfoButton info={info} />
-    </Stack>
-  );
-}
-
-function DonutLegend({
-  data,
-  onItemClick,
-}: {
-  data: Array<{
-    name: string;
-    value: number;
-    color: string;
-  }>;
-  onItemClick?: (name: string) => void;
-}) {
-  return (
-    <Stack
-      direction="row"
-      spacing={1}
-      useFlexGap
-      sx={{
-        justifyContent: "center",
-        alignItems: "center",
-        flexWrap: "wrap",
-        mt: 0.5,
-      }}
-    >
-      {data.map((item) => (
-        <Box
-          key={item.name}
-          role={onItemClick ? "button" : undefined}
-          tabIndex={onItemClick ? 0 : undefined}
-          onClick={() => onItemClick?.(item.name)}
-          onKeyDown={(event) => {
-            if (
-              onItemClick &&
-              (event.key === "Enter" || event.key === " ")
-            ) {
-              onItemClick(item.name);
-            }
-          }}
-          sx={{
-            display: "flex",
-            alignItems: "center",
-            gap: 0.55,
-            cursor: onItemClick ? "pointer" : "default",
-            borderRadius: 1,
-            px: 0.4,
-            py: 0.2,
-            "&:hover": onItemClick
-              ? { backgroundColor: "action.hover" }
-              : undefined,
-          }}
-        >
-          <Box
-            sx={{
-              width: 10,
-              height: 10,
-              borderRadius: "50%",
-              backgroundColor: item.color,
-              flexShrink: 0,
-            }}
-          />
-
-          <Typography
-            variant="caption"
-            sx={{ color: item.color, fontWeight: 600 }}
-          >
-            {item.name}
-          </Typography>
-
-          <Typography
-            variant="caption"
-            color="text.secondary"
-            sx={{ fontWeight: 700 }}
-          >
-            {item.value}
-          </Typography>
-        </Box>
-      ))}
     </Stack>
   );
 }
