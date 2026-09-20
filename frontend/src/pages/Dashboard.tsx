@@ -493,51 +493,6 @@ export function Dashboard() {
     ]);
 
   /* =======================================================
-     ÚLTIMA ATUALIZAÇÃO DOS DADOS
-  ======================================================= */
-
-const latestImportedAt =
-  useMemo<Date | null>(() => {
-    let latest:
-      Date | null =
-      null;
-
-    tickets.forEach(
-      (ticket) => {
-        if (
-          !ticket.importedAt
-        ) {
-          return;
-        }
-
-        const importedAt =
-          new Date(
-            ticket.importedAt
-          );
-
-        if (
-          Number.isNaN(
-            importedAt.getTime()
-          )
-        ) {
-          return;
-        }
-
-        if (
-          !latest ||
-          importedAt.getTime() >
-            latest.getTime()
-        ) {
-          latest =
-            importedAt;
-        }
-      }
-    );
-
-    return latest;
-  }, [tickets]);
-
-  /* =======================================================
      PONTOS DE ATENÇÃO
   ======================================================= */
 
