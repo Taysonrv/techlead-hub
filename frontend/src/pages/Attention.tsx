@@ -817,38 +817,13 @@ export function Attention() {
     <>
       {/* CABEÇALHO */}
 
-      <Box
-        sx={{
-          mb: 2.5,
-
-          display: "flex",
-
-          flexDirection: {
-            xs: "column",
-            lg: "row",
-          },
-
-          justifyContent:
-            "space-between",
-
-          alignItems: {
-            xs: "stretch",
-            lg: "center",
-          },
-
-          gap: 2,
-        }}
-      >
-        <Box>
-          <Stack
-            direction="row"
-            spacing={1}
-            sx={{
-              alignItems:
-                "center",
-            }}
-          >
-            <PageHeader eyebrow="Gestão de risco" title="Pontos de Atenção" description="Situações que exigem acompanhamento da liderança" meta={<>{periodTickets.length} ticket(s) analisado(s) no período</>} action={<PeriodFilter />} />
+      <PageHeader
+        eyebrow="Gestão de risco"
+        title="Pontos de Atenção"
+        description="Situações que exigem acompanhamento da liderança"
+        meta={<>{periodTickets.length} ticket(s) analisado(s) no período</>}
+        action={<PeriodFilter />}
+      />
 
       <Alert
         severity="info"
