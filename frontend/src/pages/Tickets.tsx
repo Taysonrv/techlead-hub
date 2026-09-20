@@ -1176,45 +1176,13 @@ export function Tickets() {
           CABEÇALHO
       =================================================== */}
 
-      <Box
-        sx={{
-          mb:
-            2.25,
-
-          display:
-            "flex",
-
-          flexDirection: {
-            xs:
-              "column",
-            lg:
-              "row",
-          },
-
-          justifyContent:
-            "space-between",
-
-          alignItems: {
-            xs:
-              "stretch",
-            lg:
-              "center",
-          },
-
-          gap:
-            2,
-        }}
-      >
-        <Box>
-          <Stack
-            direction="row"
-            spacing={1}
-            sx={{
-              alignItems:
-                "center",
-            }}
-          >
-            <PageHeader eyebrow="Operação" title="Tickets" description="Consulte, priorize e investigue os chamados da operação" action={<PeriodFilter />} />
+      <PageHeader
+        eyebrow="Operação"
+        title="Tickets"
+        description="Consulte, priorize e investigue os chamados da operação"
+        meta={<>{periodTickets.length} ticket(s) no período • {filteredTickets.length} após filtros</>}
+        action={<PeriodFilter />}
+      />
 
       <Alert
         severity="info"
