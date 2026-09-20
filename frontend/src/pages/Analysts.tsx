@@ -4792,14 +4792,11 @@ export function Analysts() {
 
 function CompactPieLegend({
   data,
-  total,
   onItemClick,
 }: {
   data:
     PieDataItem[];
 
-  total:
-    number;
 
   onItemClick?:
     (
