@@ -1,5 +1,5 @@
 import { Alert, Autocomplete, Box, Button, Card, CardContent, Chip, CircularProgress, Drawer, FormControl, InputLabel, MenuItem, Select, Stack, TextField, ToggleButton, ToggleButtonGroup, Tooltip, Typography } from "@mui/material";
-import { BookmarkAddOutlined, DeleteOutline, DragIndicatorOutlined, FilterAltOutlined, InfoOutlined, OpenInNewOutlined, ScheduleOutlined, SearchOutlined, ViewColumnOutlined, ViewListOutlined } from "@mui/icons-material";
+import { BookmarkAddOutlined, DeleteOutlined, DragIndicatorOutlined, FilterAltOutlined, InfoOutlined, OpenInNewOutlined, ScheduleOutlined, SearchOutlined, ViewColumnOutlined, ViewListOutlined } from "@mui/icons-material";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../services/api";
@@ -178,7 +178,7 @@ export function MyOperation() {
         onClick={() => setMetric(metric === "attention" ? "" : "attention")}
         sx={{ cursor: "pointer" }}
       />
-      {savedViews.map((saved) => <Chip key={saved.id} label={saved.name} onClick={() => applySavedView(saved)} onDelete={() => deleteSavedView(saved.id)} deleteIcon={<DeleteOutline />} variant="outlined" />)}
+      {savedViews.map((saved) => <Chip key={saved.id} label={saved.name} onClick={() => applySavedView(saved)} onDelete={() => deleteSavedView(saved.id)} deleteIcon={<DeleteOutlined />} variant="outlined" />)}
     </Stack>
     </CardContent></Card>
 
