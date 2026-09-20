@@ -2566,6 +2566,14 @@ export function Tickets() {
             null
           )
         }
+        slotProps={{
+          paper: {
+            sx: {
+              backgroundColor: "background.paper",
+              color: "text.primary",
+            },
+          },
+        }}
       >
         <Box
           sx={{
@@ -3093,7 +3101,7 @@ export function Tickets() {
                         borderColor: azureTask.blockedProcess
                           ? semanticChartColors.overdue
                           : "divider",
-                        backgroundColor: "#FAFBFA",
+                        backgroundColor: "action.hover",
                       }}
                     >
                       <CardContent sx={{ "&:last-child": { pb: 2 } }}>
@@ -4199,7 +4207,7 @@ function DeadlineStatusRow({
           1.5,
 
         backgroundColor:
-          "#FAFBFA",
+          "action.hover",
       }}
     >
       <Stack
