@@ -54,6 +54,11 @@ type Data = {
   generatedAt: string;
   indicators: Record<string, number>;
   workload: Array<{ analyst: string; tickets: number; workItems: number; total: number }>;
+  serviceAnalytics: {
+    totalOpenTickets: number; classifiedServices: number; specificServices: number; withoutService: number;
+    genericService: number; suspectedMismatch: number; classificationRate: number; catalogSize: number;
+    ranking: Array<{ service: string; count: number }>;
+  };
   integrations: Record<string, { configured: boolean; connected: boolean; items: number }>;
   scope: { coordinator: string; analysts: string[]; clients: string[] };
   intelligence: {
@@ -396,6 +401,40 @@ export function Coordination() {
                   />
                 ))}
               </Box>
+
+              <Card variant="outlined" sx={{ overflow: "hidden" }}>
+                <CardContent>
+                  <Stack direction={{ xs: "column", lg: "row" }} spacing={1.5} sx={{ justifyContent: "space-between", alignItems: { lg: "center" }, mb: 1.5 }}>
+                    <Box>
+                      <Typography variant="h6" sx={{ fontWeight: 850 }}>Qualidade da classificação por Serviço</Typography>
+                      <Typography variant="body2" color="text.secondary">Leitura dos atendimentos abertos SIMER e da especificidade do Serviço informado no Movidesk.</Typography>
+                    </Box>
+                    <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap" }}>
+                      <Chip label={`${data.serviceAnalytics.classificationRate}% específicos`} color={data.serviceAnalytics.classificationRate >= 90 ? "success" : data.serviceAnalytics.classificationRate >= 75 ? "warning" : "error"} variant="outlined" />
+                      <Chip label={`${data.serviceAnalytics.catalogSize} serviços conhecidos`} variant="outlined" />
+                    </Stack>
+                  </Stack>
+                  <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2,1fr)", xl: "repeat(4,1fr)" }, gap: 1.25, mb: 2 }}>
+                    <KpiCard title="Com serviço específico" value={data.serviceAnalytics.specificServices} subtitle="Atendimentos abertos" info="Tickets com Serviço preenchido além dos níveis genéricos do SIMER." accent={aliareColors.green} />
+                    <KpiCard title="Sem serviço" value={data.serviceAnalytics.withoutService} subtitle="Requer classificação" info="Atendimentos abertos sem Serviço identificado." onClick={() => navigate("/qualidade-dados?issue=withoutService")} accent={aliareColors.error} />
+                    <KpiCard title="SIMER genérico" value={data.serviceAnalytics.genericService} subtitle="Requer revisão" info="Tickets classificados apenas como SIMER, sem rotina específica." onClick={() => navigate("/qualidade-dados?issue=genericSimerService")} accent={aliareColors.warning} />
+                    <KpiCard title="Possível incorreto" value={data.serviceAnalytics.suspectedMismatch} subtitle="Sugestão assistiva" info="Serviço atual diverge de uma sugestão com evidência suficiente. Exige validação humana." onClick={() => navigate("/qualidade-dados?issue=suspectedServiceMismatch")} accent={aliareColors.info} />
+                  </Box>
+                  {data.serviceAnalytics.ranking.length ? (
+                    <Box sx={{ width: "100%", height: Math.max(260, data.serviceAnalytics.ranking.length * 38) }}>
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={data.serviceAnalytics.ranking} layout="vertical" margin={{ top: 4, right: 18, left: 12, bottom: 4 }}>
+                          <CartesianGrid stroke={theme.palette.divider} strokeDasharray="4 4" horizontal={false} opacity={0.55} />
+                          <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11, fill: theme.palette.text.secondary }} axisLine={false} tickLine={false} />
+                          <YAxis type="category" dataKey="service" width={260} tick={{ fontSize: 10, fill: theme.palette.text.secondary }} axisLine={false} tickLine={false} tickFormatter={(value: string) => value.split("»").at(-1)?.trim() ?? value} />
+                          <ChartTooltip contentStyle={{ borderRadius: 12, border: `1px solid ${theme.palette.divider}`, background: theme.palette.background.paper }} formatter={(value) => [value, "Atendimentos"]} labelFormatter={(value) => String(value)} />
+                          <Bar dataKey="count" name="Atendimentos" fill={aliareColors.info} radius={[0, 6, 6, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </Box>
+                  ) : <Alert severity="info">Ainda não há Serviços suficientes no histórico sincronizado para montar o ranking.</Alert>}
+                </CardContent>
+              </Card>
 
               <Card variant="outlined" sx={{ overflow: "hidden" }}>
                 <CardContent>
