@@ -41,6 +41,10 @@ import type {
   GitHubRelease,
 } from "./update-discovery.js";
 
+import {
+  PROVISIONED_DATABASE_URL,
+} from "./provisioned-config.js";
+
 /* =========================================================
    CONFIGURAÇÕES
 ========================================================= */
@@ -53,16 +57,6 @@ const BACKEND_HOST =
 
 const BACKEND_PORT =
   3333;
-
-/*
- * Provisionamento opcional de primeira instalação.
- *
- * O valor é injetado no build pelo workflow e nunca deve ser
- * persistido no repositório. Na primeira execução ele é movido
- * imediatamente para o safeStorage do Windows.
- */
-const PROVISIONED_DATABASE_URL =
-  process.env.TECHLEAD_HUB_DATABASE_URL?.trim() ?? "";
 
 /*
  * O Desktop continua autossuficiente e usa o backend empacotado por padrão.
@@ -2176,19 +2170,10 @@ async function resolveDatabaseUrl() {
   }
 
   /*
-   * Build corporativo: a credencial pode ser provisionada pelo
-   * pipeline sem fazer parte do código-fonte. Na primeira execução
-   * salvamos no armazenamento seguro do Windows e passamos a usar
-   * somente a cópia protegida.
-   */
-  if (PROVISIONED_DATABASE_URL) {
-    saveDatabaseUrl(PROVISIONED_DATABASE_URL);
-    console.log("[desktop] Conexão do banco provisionada automaticamente.");
-    return PROVISIONED_DATABASE_URL;
-  }
-
-  /*
    * 2. Armazenamento seguro.
+   *
+   * Em atualizações, a configuração já validada pelo usuário sempre
+   * prevalece sobre o provisionamento do instalador.
    */
   const secureDatabaseUrl =
     readSecureValue(
@@ -2206,7 +2191,20 @@ async function resolveDatabaseUrl() {
   }
 
   /*
-   * 3. Migração automática das versões antigas que
+   * 3. Provisionamento do instalador para primeira execução.
+   *
+   * O workflow gera provisioned-config.ts somente no runner. O valor
+   * compilado é usado apenas quando esta conta do Windows ainda não
+   * possui DATABASE_URL no safeStorage.
+   */
+  if (PROVISIONED_DATABASE_URL.trim()) {
+    saveDatabaseUrl(PROVISIONED_DATABASE_URL.trim());
+    console.log("[desktop] Conexão inicial do banco provisionada pelo instalador.");
+    return PROVISIONED_DATABASE_URL.trim();
+  }
+
+  /*
+   * 4. Migração automática das versões antigas que
    * mantinham DATABASE_URL em config.env.
    */
   const migratedDatabaseUrl =
@@ -2222,7 +2220,7 @@ async function resolveDatabaseUrl() {
   }
 
   /*
-   * 4. Desenvolvimento: backend/.env continua permitido.
+   * 5. Desenvolvimento: backend/.env continua permitido.
    *
    * O arquivo não é empacotado e permanece fora do Git.
    */
@@ -2246,7 +2244,7 @@ async function resolveDatabaseUrl() {
   }
 
   /*
-   * 5. Primeira execução da versão instalada.
+   * 6. Primeira execução da versão instalada.
    */
   return showIntegratedSetup();
 }
