@@ -2937,6 +2937,42 @@ async function bootstrap() {
     return;
   }
 
+  /*
+   * Se existe um processo respondendo na porta, mas o banco ainda não
+   * está pronto, não iniciamos uma segunda instância. Isso ocorre, por
+   * exemplo, após atualização/reinício enquanto o backend anterior ainda
+   * está encerrando ou quando ele iniciou em modo degradado.
+   */
+  const backendAlreadyOnline =
+    await checkBackendHealth();
+
+  if (backendAlreadyOnline) {
+    console.log(
+      "[desktop] Backend já está respondendo; aguardando somente a prontidão do banco."
+    );
+
+    const existingDatabaseReady =
+      await waitForBackendReady();
+
+    if (existingDatabaseReady) {
+      createWindow();
+      scheduleInitialUpdateCheck();
+      return;
+    }
+
+    await dialog.showMessageBox({
+      type: "error",
+      title: APP_NAME,
+      message: "O backend está online, mas o banco de dados não ficou disponível.",
+      detail:
+        "A porta 3333 está respondendo normalmente. Verifique a conexão com o PostgreSQL/rede/VPN e tente novamente. O TechLead Hub não iniciará uma segunda instância do backend.",
+      buttons: ["Fechar"],
+    });
+
+    app.quit();
+    return;
+  }
+
   const databaseUrl =
     await resolveDatabaseUrl();
 
