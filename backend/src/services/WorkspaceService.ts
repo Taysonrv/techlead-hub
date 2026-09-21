@@ -5,7 +5,7 @@ import type { Prisma } from "@prisma/client";
 import { SIMER_CLIENTS, SUPPORT_ANALYSTS, ticketOperationalScope } from "../domain/OperationalScope";
 import { MovideskService } from "./MovideskService";
 import { analyzeMovideskIndicators } from "./MovideskPayloadAnalytics";
-import { suggestSimerService } from "../domain/SimerServiceCatalog";
+import { SIMER_SERVICE_CATALOG, suggestSimerService, type SimerServiceCatalogItem } from "../domain/SimerServiceCatalog";
 
 const TERMINAL = ["Concluído", "Concluido", "Closed", "Done", "Resolved", "Cancelado", "Canceled"];
 const normalizedWords = (value: string) => value
@@ -741,6 +741,30 @@ export class WorkspaceService {
       isTicketOpen(ticket) && !hasNoService(ticket) && isGenericSimerService(ticket),
     );
 
+    /*
+     * Catálogo vivo: usa todos os caminhos de Serviço já sincronizados do
+     * Movidesk no escopo SIMER. Assim a cobertura cresce automaticamente
+     * conforme a operação utiliza novos serviços, sem depender de deploy.
+     */
+    const dynamicServiceCatalog = new Map<string, SimerServiceCatalogItem>();
+    for (const seed of SIMER_SERVICE_CATALOG) dynamicServiceCatalog.set(normalizeStatus(seed.path), seed);
+    for (const ticket of scopedTickets) {
+      const path = ticketServicePath(ticket).join(" » ") || ticket.service?.trim() || "";
+      if (!path || !/simer/i.test(path)) continue;
+      const segments = path.split("»").map((value) => value.trim()).filter(Boolean);
+      const name = segments.at(-1) ?? path;
+      const module = segments.find((value, index) =>
+        index >= 2 && !/^(siagri simer|simer)$/i.test(value),
+      ) ?? null;
+      dynamicServiceCatalog.set(normalizeStatus(path), {
+        id: `observed:${normalizeStatus(path)}`,
+        path,
+        name,
+        module,
+      });
+    }
+    const serviceCatalog = [...dynamicServiceCatalog.values()];
+
     const serviceSuggestionByTicketId = new Map(
       scopedTickets.map((ticket) => [
         ticket.id,
@@ -752,7 +776,7 @@ export class WorkspaceService {
           serviceFirstLevel: ticket.serviceFirstLevel,
           serviceSecondLevel: ticket.serviceSecondLevel,
           serviceThirdLevel: ticket.serviceThirdLevel,
-        }),
+        }, serviceCatalog),
       ]),
     );
 
@@ -892,6 +916,7 @@ export class WorkspaceService {
         withoutService: withoutService.length,
         genericSimerService: genericSimerService.length,
         suspectedServiceMismatch: suspectedServiceMismatch.length,
+        serviceCatalogSize: serviceCatalog.length,
         activeTaskWithVersion: activeLinkedTasks.filter((task) =>
           !isSupportTask(task) && Boolean(task.deliveredVersion?.trim()),
         ).length,
