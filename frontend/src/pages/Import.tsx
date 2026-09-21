@@ -107,6 +107,17 @@ type AzureSyncRun = {
   finishedAt: string | null;
 };
 
+type SyncHealthState = "healthy" | "attention" | "critical" | "unknown";
+type SyncCenterSummary = {
+  running: number;
+  health: SyncHealthState;
+  checkedAt: string;
+  providers: {
+    movidesk: { configured: boolean; health: { state: SyncHealthState; ageMinutes: number | null; stale: boolean } };
+    azureDevOps: { configured: boolean; health: { state: SyncHealthState; ageMinutes: number | null; stale: boolean } };
+  };
+};
+
 type AzureSyncDashboardStatus = {
   scheduler: {
     enabled: boolean;
@@ -202,6 +213,8 @@ export function Import() {
       null,
     );
 
+  const [syncHealth, setSyncHealth] = useState<SyncCenterSummary | null>(null);
+
   const fileSize =
     useMemo(
       () => {
@@ -249,6 +262,13 @@ export function Import() {
           setAzureStatus(
             response.data,
           );
+
+          try {
+            const healthResponse = await api.get<SyncCenterSummary>("/sync-center/summary");
+            setSyncHealth(healthResponse.data);
+          } catch (healthError) {
+            console.warn("Não foi possível consultar a saúde consolidada das integrações:", healthError);
+          }
         } catch (
           err: unknown
         ) {
@@ -571,6 +591,29 @@ export function Import() {
       ===================================================== */}
 
       <SyncHistory />
+
+      {syncHealth && (
+        <Card elevation={0} sx={{ mb: 3, border: "1px solid", borderColor: syncHealth.health === "critical" ? "error.main" : syncHealth.health === "attention" ? "warning.main" : "divider", borderRadius: 2.5 }}>
+          <CardContent sx={{ p: { xs: 2, md: 2.5 }, "&:last-child": { pb: { xs: 2, md: 2.5 } } }}>
+            <Stack direction={{ xs: "column", md: "row" }} spacing={2} sx={{ justifyContent: "space-between", alignItems: { md: "center" } }}>
+              <Box>
+                <Typography sx={{ fontWeight: 850 }}>Saúde das integrações</Typography>
+                <Typography variant="body2" color="text.secondary">Leitura consolidada de disponibilidade e atualização dos dados operacionais.</Typography>
+              </Box>
+              <Chip
+                size="small"
+                color={syncHealth.health === "critical" ? "error" : syncHealth.health === "attention" ? "warning" : "success"}
+                label={syncHealth.health === "critical" ? "Ação necessária" : syncHealth.health === "attention" ? "Requer atenção" : "Integrações saudáveis"}
+              />
+            </Stack>
+            <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2,minmax(0,1fr))" }, gap: 1.25 }}>
+              <IntegrationHealthCard title="Movidesk" configured={syncHealth.providers.movidesk.configured} health={syncHealth.providers.movidesk.health} />
+              <IntegrationHealthCard title="Azure DevOps" configured={syncHealth.providers.azureDevOps.configured} health={syncHealth.providers.azureDevOps.health} />
+            </Box>
+            {syncHealth.running > 0 && <Alert severity="info" sx={{ mt: 1.5 }}>{syncHealth.running} sincronização(ões) em processamento neste momento.</Alert>}
+          </CardContent>
+        </Card>
+      )}
 
       <EmailRecoveryConfiguration />
 
@@ -1746,6 +1789,16 @@ export function Import() {
 /* =========================================================
    COMPONENTES
 ========================================================= */
+
+function IntegrationHealthCard({ title, configured, health }: { title: string; configured: boolean; health: { state: SyncHealthState; ageMinutes: number | null; stale: boolean } }) {
+  const color = !configured ? "default" : health.state === "critical" ? "error" : health.state === "attention" || health.state === "unknown" ? "warning" : "success";
+  const label = !configured ? "Não configurado" : health.state === "critical" ? "Crítico" : health.state === "attention" ? "Atenção" : health.state === "unknown" ? "Sem histórico" : "Saudável";
+  const age = health.ageMinutes == null ? "Sem execução registrada" : health.ageMinutes < 60 ? `Atualizado há ${health.ageMinutes} min` : health.ageMinutes < 1440 ? `Atualizado há ${Math.round(health.ageMinutes / 60)} h` : `Atualizado há ${Math.round(health.ageMinutes / 1440)} dia(s)`;
+  return <Box sx={{ p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: 2 }}>
+    <Stack direction="row" spacing={1} sx={{ justifyContent: "space-between", alignItems: "center" }}><Typography sx={{ fontWeight: 800 }}>{title}</Typography><Chip size="small" color={color} variant="outlined" label={label} /></Stack>
+    <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: .6 }}>{age}</Typography>
+  </Box>;
+}
 
 function SectionHeader({
   title,

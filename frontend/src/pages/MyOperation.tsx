@@ -1,5 +1,5 @@
 import { Alert, Autocomplete, Box, Button, Card, CardContent, Chip, CircularProgress, Drawer, FormControl, InputLabel, MenuItem, Select, Stack, TextField, ToggleButton, ToggleButtonGroup, Tooltip, Typography } from "@mui/material";
-import { DragIndicatorOutlined, InfoOutlined, OpenInNewOutlined, ScheduleOutlined, SearchOutlined, ViewColumnOutlined, ViewListOutlined } from "@mui/icons-material";
+import { BookmarkAddOutlined, CalendarMonthOutlined, DeleteOutlined, DragIndicatorOutlined, FilterAltOutlined, GroupsOutlined, InfoOutlined, OpenInNewOutlined, ScheduleOutlined, SearchOutlined, TaskAltOutlined, ViewColumnOutlined, ViewListOutlined } from "@mui/icons-material";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../services/api";
@@ -17,6 +17,15 @@ type TicketDetail = { ticket: Ticket & Record<string, unknown>; relatedWorkItems
 type KnowledgeItem = { id?: number | null; title: string; path?: string; excerpt: string; webUrl: string | null; score?: number; source?: "azure-wiki" | "sharepoint" | "bpmn" };
 type Unified = { key: string; source: "MOVIDESK" | "AZURE"; id: number; title: string; status: string; client: string | null; type: string; updatedAt: string | null; ticket?: Ticket; workItem?: WorkItem };
 type SourceView = "tickets" | "tasks" | "both";
+type SortMode = "priority" | "recent" | "oldest";
+type SavedView = { id: string; name: string; client: string; type: string; search: string; metric: string; sourceView: SourceView; view: "kanban" | "list"; sort: SortMode };
+type MicrosoftOperation = {
+  connected: boolean;
+  plannerTasks: Array<{ id: string; title: string; percentComplete?: number; dueDateTime?: string | null; planId?: string }>;
+  events: Array<{ id: string; subject: string; start?: { dateTime?: string; timeZone?: string }; end?: { dateTime?: string; timeZone?: string }; webLink?: string }>;
+  teams: Array<{ id: string; displayName: string; webUrl?: string }>;
+  warnings: string[];
+};
 
 const metrics = [
   ["tickets", "Meus atendimentos", "Atendimentos Movidesk sob sua responsabilidade.", "tickets"],
@@ -57,6 +66,12 @@ export function MyOperation() {
   const [knowledge, setKnowledge] = useState<KnowledgeItem[]>([]);
   const [knowledgeLoading, setKnowledgeLoading] = useState(false);
   const [visibleByLane, setVisibleByLane] = useState<Record<string, number>>({});
+  const [sort, setSort] = useState<SortMode>("priority");
+  const [microsoft, setMicrosoft] = useState<MicrosoftOperation | null>(null);
+  const [microsoftLoading, setMicrosoftLoading] = useState(false);
+  const [savedViews, setSavedViews] = useState<SavedView[]>(() => {
+    try { return JSON.parse(localStorage.getItem("my-operation-saved-views") || "[]"); } catch { return []; }
+  });
 
   const load = useCallback(async () => {
     try {
@@ -66,6 +81,15 @@ export function MyOperation() {
     } catch { setError("Não foi possível carregar sua operação."); } finally { setLoading(false); }
   }, [client, type, search]);
   useEffect(() => { const timer = window.setTimeout(() => void load(), 250); return () => window.clearTimeout(timer); }, [load]);
+  useEffect(() => {
+    let active = true;
+    setMicrosoftLoading(true);
+    api.get<MicrosoftOperation>("/knowledge/microsoft/operation")
+      .then((response) => { if (active) setMicrosoft(response.data); })
+      .catch(() => { if (active) setMicrosoft(null); })
+      .finally(() => { if (active) setMicrosoftLoading(false); });
+    return () => { active = false; };
+  }, []);
 
   const items = useMemo<Unified[]>(() => {
     if (!data) return [];
@@ -78,9 +102,44 @@ export function MyOperation() {
       if (metric === "concluded") return item.source === "AZURE" && lane(item.status) === "Concluídos/Fechados";
       if (metric === "prioritized") return Boolean(item.workItem?.prioritized);
       if (metric === "blocked") return Boolean(item.workItem?.blockedProcess);
+      if (metric === "attention") return Boolean(item.workItem?.blockedProcess)
+        || Boolean(item.workItem?.prioritized)
+        || (item.updatedAt ? Date.now() - new Date(item.updatedAt).getTime() >= 3 * 86_400_000 : false);
       return true;
-    }).sort(operationPriority);
-  }, [data, metric, sourceView]);
+    }).sort((a, b) => sort === "recent"
+      ? new Date(b.updatedAt ?? 0).getTime() - new Date(a.updatedAt ?? 0).getTime()
+      : sort === "oldest"
+        ? new Date(a.updatedAt ?? 0).getTime() - new Date(b.updatedAt ?? 0).getTime()
+        : operationPriority(a, b));
+  }, [data, metric, sourceView, sort]);
+
+  const focusItems = useMemo(() => items.filter((item) =>
+    Boolean(item.workItem?.blockedProcess)
+    || Boolean(item.workItem?.prioritized)
+    || (item.updatedAt ? Date.now() - new Date(item.updatedAt).getTime() >= 3 * 86_400_000 : false),
+  ).length, [items]);
+
+  function saveCurrentView() {
+    const name = window.prompt("Nome da visão:", client || type || metric || "Minha visão");
+    if (!name?.trim()) return;
+    const saved: SavedView = {
+      id: String(Date.now()), name: name.trim(), client, type, search, metric, sourceView, view, sort,
+    };
+    const next = [saved, ...savedViews].slice(0, 8);
+    setSavedViews(next);
+    localStorage.setItem("my-operation-saved-views", JSON.stringify(next));
+  }
+
+  function applySavedView(saved: SavedView) {
+    setClient(saved.client); setType(saved.type); setSearch(saved.search); setMetric(saved.metric);
+    setSourceView(saved.sourceView); setView(saved.view); setSort(saved.sort);
+  }
+
+  function deleteSavedView(id: string) {
+    const next = savedViews.filter((item) => item.id !== id);
+    setSavedViews(next);
+    localStorage.setItem("my-operation-saved-views", JSON.stringify(next));
+  }
 
   const searchKnowledge = async (query: string) => {
     const normalized = query.trim();
@@ -123,9 +182,23 @@ export function MyOperation() {
       <Autocomplete size="small" options={data?.filters.clients ?? []} value={client || null} onChange={(_, value) => setClient(value ?? "")} renderInput={(params) => <TextField {...params} label="Cliente" />} />
       <FormControl size="small"><InputLabel>Conteúdo</InputLabel><Select label="Conteúdo" value={sourceView} onChange={(event) => setSourceView(event.target.value as SourceView)}><MenuItem value="tickets">Atendimentos</MenuItem><MenuItem value="tasks">Tarefas</MenuItem><MenuItem value="both">Ambos</MenuItem></Select></FormControl>
       <FormControl size="small"><InputLabel>Tipo de tarefa</InputLabel><Select label="Tipo de tarefa" value={type} onChange={(event) => setType(event.target.value)} disabled={sourceView === "tickets"}><MenuItem value="">Todas</MenuItem>{data?.filters.types.map((value) => <MenuItem key={value} value={value}>{value}</MenuItem>)}</Select></FormControl>
-      <Button onClick={() => { setClient(""); setType(""); setSearch(""); setMetric(""); }}>Limpar</Button>
+      <Button onClick={() => { setClient(""); setType(""); setSearch(""); setMetric(""); setSort("priority"); }}>Limpar</Button>
       <ToggleButtonGroup exclusive size="small" value={view} onChange={(_, value) => value && setView(value)}><ToggleButton value="kanban" aria-label="Kanban"><ViewColumnOutlined /></ToggleButton><ToggleButton value="list" aria-label="Lista"><ViewListOutlined /></ToggleButton></ToggleButtonGroup>
-    </Box></CardContent></Card>
+    </Box>
+    <Stack direction={{ xs: "column", md: "row" }} spacing={1} useFlexGap sx={{ mt: 1.5, alignItems: { md: "center" }, flexWrap: "wrap" }}>
+      <FormControl size="small" sx={{ minWidth: 170 }}><InputLabel>Ordenação</InputLabel><Select label="Ordenação" value={sort} onChange={(event) => setSort(event.target.value as SortMode)}><MenuItem value="priority">Prioridade operacional</MenuItem><MenuItem value="recent">Mais recentes</MenuItem><MenuItem value="oldest">Mais antigos</MenuItem></Select></FormControl>
+      <Button size="small" variant="outlined" startIcon={<BookmarkAddOutlined />} onClick={saveCurrentView}>Salvar visão</Button>
+      <Chip
+        icon={<FilterAltOutlined />}
+        label={metric === "attention" ? `Foco ativo · ${focusItems} item(ns)` : `${focusItems} item(ns) de atenção no recorte`}
+        color={metric === "attention" ? "warning" : "default"}
+        variant={metric === "attention" ? "filled" : "outlined"}
+        onClick={() => setMetric(metric === "attention" ? "" : "attention")}
+        sx={{ cursor: "pointer" }}
+      />
+      {savedViews.map((saved) => <Chip key={saved.id} label={saved.name} onClick={() => applySavedView(saved)} onDelete={() => deleteSavedView(saved.id)} deleteIcon={<DeleteOutlined />} variant="outlined" />)}
+    </Stack>
+    </CardContent></Card>
 
     {error && <Alert severity="error" onClose={() => setError("")} sx={{ mt: 2 }}>{error}</Alert>}
     {savingStatus && <Alert severity="info" sx={{ mt: 2 }}>Salvando a organização do atendimento…</Alert>}
@@ -152,6 +225,21 @@ export function MyOperation() {
           </Box>;
         })}
       </Box> : <Stack spacing={1} sx={{ mt: 2 }}>{items.map((item) => <OperationCard key={item.key} item={item} draggable={false} onClick={() => void openItem(item)} />)}</Stack>}
+
+    <Card variant="outlined" sx={{ mt: 2 }}><CardContent>
+      <Stack direction={{ xs: "column", md: "row" }} spacing={1} sx={{ justifyContent: "space-between", alignItems: { md: "center" } }}>
+        <Box><Typography variant="h6" sx={{ fontWeight: 850 }}>Microsoft 365 na operação</Typography><Typography variant="body2" color="text.secondary">Agenda Outlook, tarefas Planner e equipes Teams vinculadas à sua conta corporativa.</Typography></Box>
+        <Chip size="small" color={microsoft?.connected ? "success" : "default"} variant="outlined" label={microsoftLoading ? "Consultando..." : microsoft?.connected ? "Conta conectada" : "Microsoft não conectado"} />
+      </Stack>
+      {microsoftLoading ? <Box sx={{ py: 3, textAlign: "center" }}><CircularProgress size={24} /></Box> : !microsoft?.connected ? <Alert severity="info" sx={{ mt: 1.5 }} action={<Button size="small" onClick={() => navigate("/conhecimento")}>Conectar</Button>}>Conecte sua conta Microsoft na Base de Conhecimento para trazer Planner, Outlook e Teams para esta operação.</Alert> : <>
+        {microsoft.warnings.map((warning) => <Alert key={warning} severity="warning" sx={{ mt: 1 }}>{warning}</Alert>)}
+        <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: { xs: "1fr", lg: "repeat(3,minmax(0,1fr))" }, gap: 1.25 }}>
+          <Card variant="outlined"><CardContent sx={{ p: 1.5, "&:last-child": { pb: 1.5 } }}><Stack direction="row" spacing={1} sx={{ alignItems: "center" }}><TaskAltOutlined color="primary" /><Typography sx={{ fontWeight: 850 }}>Planner</Typography><Chip size="small" label={microsoft.plannerTasks.length} /></Stack><Stack spacing={.6} sx={{ mt: 1 }}>{microsoft.plannerTasks.slice(0, 5).map((task) => <Box key={task.id}><Typography variant="body2" sx={{ fontWeight: 700 }}>{task.title}</Typography><Typography variant="caption" color="text.secondary">{task.percentComplete ?? 0}% concluído{task.dueDateTime ? ` · prazo ${new Date(task.dueDateTime).toLocaleDateString("pt-BR")}` : ""}</Typography></Box>)}</Stack>{!microsoft.plannerTasks.length && <Typography variant="caption" color="text.secondary">Nenhuma tarefa disponível.</Typography>}</CardContent></Card>
+          <Card variant="outlined"><CardContent sx={{ p: 1.5, "&:last-child": { pb: 1.5 } }}><Stack direction="row" spacing={1} sx={{ alignItems: "center" }}><CalendarMonthOutlined color="primary" /><Typography sx={{ fontWeight: 850 }}>Próximos 7 dias</Typography><Chip size="small" label={microsoft.events.length} /></Stack><Stack spacing={.6} sx={{ mt: 1 }}>{microsoft.events.slice(0, 5).map((event) => <Box key={event.id}><Typography variant="body2" sx={{ fontWeight: 700 }}>{event.subject}</Typography><Typography variant="caption" color="text.secondary">{event.start?.dateTime ? new Date(event.start.dateTime).toLocaleString("pt-BR") : "Horário não informado"}</Typography>{event.webLink && <Button size="small" component="a" href={event.webLink} target="_blank" rel="noopener noreferrer" sx={{ ml: .5, minWidth: 0, p: 0 }}>Abrir</Button>}</Box>)}</Stack>{!microsoft.events.length && <Typography variant="caption" color="text.secondary">Nenhum compromisso disponível.</Typography>}</CardContent></Card>
+          <Card variant="outlined"><CardContent sx={{ p: 1.5, "&:last-child": { pb: 1.5 } }}><Stack direction="row" spacing={1} sx={{ alignItems: "center" }}><GroupsOutlined color="primary" /><Typography sx={{ fontWeight: 850 }}>Teams</Typography><Chip size="small" label={microsoft.teams.length} /></Stack><Stack spacing={.6} sx={{ mt: 1 }}>{microsoft.teams.slice(0, 5).map((team) => <Button key={team.id} size="small" component={team.webUrl ? "a" : "button"} href={team.webUrl || undefined} target={team.webUrl ? "_blank" : undefined} rel={team.webUrl ? "noopener noreferrer" : undefined} sx={{ justifyContent: "flex-start", textTransform: "none", px: 0 }}>{team.displayName}</Button>)}</Stack>{!microsoft.teams.length && <Typography variant="caption" color="text.secondary">Nenhuma equipe disponível.</Typography>}</CardContent></Card>
+        </Box>
+      </>}
+    </CardContent></Card>
 
     <Card variant="outlined" sx={{ mt: 2 }}><CardContent><Stack direction={{ xs: "column", sm: "row" }} sx={{ justifyContent: "space-between", gap: 1 }}><Box><Typography variant="h6" sx={{ fontWeight: 850 }}>Versões atuais para consulta</Typography><Typography variant="body2" color="text.secondary">Últimas versões LTS, LTE e RC identificadas no Azure, com suas tarefas.</Typography></Box><Button endIcon={<OpenInNewOutlined />} onClick={() => navigate("/versoes")}>Abrir versões</Button></Stack>
       {data?.latestVersions.length ? <Box sx={{ mt: 2, display: "grid", gridTemplateColumns: { xs: "1fr", lg: "repeat(3,1fr)" }, gap: 1.5 }}>{data.latestVersions.map((group) => <Card key={group.channel} variant="outlined"><CardContent><Stack direction="row" sx={{ justifyContent: "space-between" }}><Chip label={group.channel} color="success" size="small" /><Typography sx={{ fontWeight: 850 }}>{group.version}</Typography></Stack><Stack spacing={.7} sx={{ mt: 1.5 }}>{group.tasks.map((task) => <Button key={task.id} onClick={() => navigate(`${route(task.workItemType)}?task=${task.id}`)} sx={{ justifyContent: "flex-start", textTransform: "none", textAlign: "left" }}>#{task.id} · {task.title}</Button>)}</Stack></CardContent></Card>)}</Box> : <Alert severity="info" sx={{ mt: 2 }}>Nenhuma versão LTS, LTE ou RC foi identificada.</Alert>}

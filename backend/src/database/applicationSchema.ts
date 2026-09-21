@@ -128,6 +128,9 @@ export async function ensureApplicationSchema() {
   await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Ticket_taskType_idx" ON "Ticket" ("taskType")`);
   await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Ticket_registeredVersion_idx" ON "Ticket" ("registeredVersion")`);
   await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Ticket_lastUpdate_idx" ON "Ticket" ("lastUpdate")`);
+  await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Ticket_owner_status_updatedAt_idx" ON "Ticket" ("owner", "status", "updatedAt" DESC)`);
+  await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Ticket_client_updatedAt_idx" ON "Ticket" ("client", "updatedAt" DESC)`);
+  await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Ticket_dueDate_idx" ON "Ticket" ("dueDate") WHERE "dueDate" IS NOT NULL`);
 
   await prisma.$executeRawUnsafe(`
     ALTER TABLE "AzureWorkItem"
@@ -145,6 +148,16 @@ export async function ensureApplicationSchema() {
   await prisma.$executeRawUnsafe(`
     CREATE INDEX IF NOT EXISTS "AzureWorkItem_participantClients_idx"
     ON "AzureWorkItem" ("participantClients")
+  `);
+
+  await prisma.$executeRawUnsafe(`
+    CREATE INDEX IF NOT EXISTS "AzureWorkItem_assignedToName_state_changed_idx"
+    ON "AzureWorkItem" ("assignedToName", "state", "azureChangedAt" DESC)
+  `);
+
+  await prisma.$executeRawUnsafe(`
+    CREATE INDEX IF NOT EXISTS "AzureWorkItem_type_state_changed_idx"
+    ON "AzureWorkItem" ("workItemType", "state", "azureChangedAt" DESC)
   `);
 
   await prisma.$executeRawUnsafe(`

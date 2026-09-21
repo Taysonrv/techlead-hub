@@ -18,6 +18,7 @@ export class CoordinationService {
       kind === "critical" ? { urgency: "Crítica" } :
       kind === "stale" ? { OR: [{ lastUpdate: { lt: staleBefore } }, { lastUpdate: null }] } :
       kind === "dueSoon" ? { dueDate: { gte: now, lte: nextSevenDays } } :
+      kind === "overdue" ? { dueDate: { lt: now } } :
       {};
 
     const azureExtra: Record<string, unknown> =
@@ -25,7 +26,7 @@ export class CoordinationService {
       kind === "unassigned" ? { assignedToName: null } :
       {};
 
-    const wantsTickets = ["backlog", "critical", "stale", "dueSoon", "analyst"].includes(kind);
+    const wantsTickets = ["backlog", "critical", "stale", "dueSoon", "overdue", "analyst"].includes(kind);
     const wantsAzure = ["blocked", "unassigned", "analyst"].includes(kind);
 
     const [tickets, workItems] = await Promise.all([
@@ -93,6 +94,7 @@ export class CoordinationService {
       criticalTickets,
       staleTickets,
       dueSoon,
+      overdueTickets,
       blockedItems,
       unassignedItems,
       ticketOwners,
@@ -124,6 +126,18 @@ export class CoordinationService {
               isDeleted: false,
               baseStatus: { in: OPEN_TICKET_STATES },
               dueDate: { gte: now, lte: nextSevenDays },
+            },
+          ],
+        },
+      }),
+      prisma.ticket.count({
+        where: {
+          AND: [
+            ticketScope,
+            {
+              isDeleted: false,
+              baseStatus: { in: OPEN_TICKET_STATES },
+              dueDate: { lt: now },
             },
           ],
         },
@@ -185,6 +199,84 @@ export class CoordinationService {
       workload.get(analyst)!.workItems += row._count.id;
     }
 
+    const workloadRows = [...workload.values()]
+      .filter((item) => item.tickets > 0 || item.workItems > 0)
+      .map((item) => ({ ...item, total: item.tickets + item.workItems }))
+      .sort((a, b) => b.total - a.total || a.analyst.localeCompare(b.analyst, "pt-BR"));
+
+    const sortedLoads = workloadRows.map((item) => item.total).sort((a, b) => a - b);
+    let medianLoad = 0;
+    if (sortedLoads.length > 0) {
+      const middle = Math.floor(sortedLoads.length / 2);
+      if (sortedLoads.length % 2 === 1) {
+        medianLoad = sortedLoads[middle] ?? 0;
+      } else {
+        const lower = sortedLoads[middle - 1] ?? 0;
+        const upper = sortedLoads[middle] ?? 0;
+        medianLoad = Math.round((lower + upper) / 2);
+      }
+    }
+    const overloadedAnalysts = workloadRows.filter((item) =>
+      medianLoad > 0 && item.total >= Math.max(medianLoad * 1.5, medianLoad + 5),
+    );
+
+    const priorities = [
+      {
+        key: "overdue",
+        kind: "overdue",
+        severity: "critical",
+        title: "Prazos vencidos",
+        count: overdueTickets,
+        description: "Atendimentos abertos cujo prazo já foi ultrapassado.",
+        action: "Atuar primeiro nos itens vencidos e validar impedimentos.",
+      },
+      {
+        key: "critical",
+        kind: "critical",
+        severity: "critical",
+        title: "Atendimentos críticos",
+        count: criticalTickets,
+        description: "Itens críticos ainda em aberto no escopo da operação.",
+        action: "Confirmar responsável, próximo passo e comunicação com o cliente.",
+      },
+      {
+        key: "blocked",
+        kind: "blocked",
+        severity: "high",
+        title: "Tarefas bloqueadas",
+        count: blockedItems,
+        description: "Work Items Azure com bloqueio de processo identificado.",
+        action: "Remover impedimentos ou escalar o bloqueio para a área responsável.",
+      },
+      {
+        key: "stale",
+        kind: "stale",
+        severity: "high",
+        title: "Sem movimento há 72h",
+        count: staleTickets,
+        description: "Atendimentos sem atualização recente que podem estar perdendo tração.",
+        action: "Revisar pendência, registrar avanço ou atualizar a expectativa.",
+      },
+      {
+        key: "dueSoon",
+        kind: "dueSoon",
+        severity: "medium",
+        title: "Prazos nos próximos 7 dias",
+        count: dueSoon,
+        description: "Itens que entrarão em zona de vencimento na próxima semana.",
+        action: "Antecipar validações e dependências antes do vencimento.",
+      },
+      {
+        key: "unassigned",
+        kind: "unassigned",
+        severity: "medium",
+        title: "Itens sem responsável",
+        count: unassignedItems,
+        description: "Work Items Azure sem responsável identificado.",
+        action: "Definir ownership para evitar itens órfãos na operação.",
+      },
+    ].filter((item) => item.count > 0);
+
     const microsoft = await microsoftKnowledgeService
       .coordinationSnapshot(userId)
       .catch(() => ({
@@ -202,13 +294,21 @@ export class CoordinationService {
         criticalTickets,
         staleTickets,
         dueSoon,
+        overdueTickets,
         blockedItems,
         unassignedItems,
       },
-      workload: [...workload.values()]
-        .filter((item) => item.tickets > 0 || item.workItems > 0)
-        .map((item) => ({ ...item, total: item.tickets + item.workItems }))
-        .sort((a, b) => b.total - a.total || a.analyst.localeCompare(b.analyst, "pt-BR")),
+      workload: workloadRows,
+      intelligence: {
+        priorities,
+        medianLoad,
+        overloadedAnalysts,
+        health: priorities.some((item) => item.severity === "critical")
+          ? "critical"
+          : priorities.some((item) => item.severity === "high")
+            ? "attention"
+            : "stable",
+      },
       scope: {
         coordinator: SUPPORT_COORDINATOR,
         analysts: [...SUPPORT_ANALYSTS],

@@ -20,6 +20,9 @@ knowledgeRoutes.post("/microsoft/connect/:connectionId", async (req, res) => {
   try { res.json(await microsoftKnowledgeService.finishConnection(userId(req), req.params.connectionId)); } catch (error) { fail(res, error); }
 });
 knowledgeRoutes.delete("/microsoft/connect", async (req, res) => res.json(await microsoftKnowledgeService.disconnect(userId(req))));
+knowledgeRoutes.get("/microsoft/operation", async (req, res) => {
+  try { res.json(await microsoftKnowledgeService.coordinationSnapshot(userId(req))); } catch (error) { fail(res, error); }
+});
 knowledgeRoutes.get("/search", async (req, res) => {
   try {
     const query = String(req.query.q ?? "");

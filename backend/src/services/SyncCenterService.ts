@@ -365,16 +365,38 @@ export class SyncCenterService {
         }),
       ]);
 
+    const now = Date.now();
+    const providerHealth = (run: { status: string; startedAt: Date; finishedAt: Date | null } | null, expectedMinutes: number) => {
+      if (!run) return { state: "unknown" as const, ageMinutes: null, stale: true };
+      const ageMinutes = Math.max(0, Math.round((now - run.startedAt.getTime()) / 60_000));
+      const failed = run.status === "ERROR";
+      const processingTooLong = run.status === "PROCESSING" && ageMinutes > expectedMinutes * 2;
+      const stale = ageMinutes > expectedMinutes * 3;
+      return {
+        state: failed || processingTooLong ? "critical" as const : stale ? "attention" as const : "healthy" as const,
+        ageMinutes,
+        stale,
+      };
+    };
+
+    const movideskHealth = providerHealth(latestMovidesk, 24 * 60);
+    const azureHealth = providerHealth(latestAzure, Number(process.env.AZURE_SYNC_INTERVAL_MINUTES ?? 15));
+    const states = [movideskHealth.state, azureHealth.state];
+    const health = states.includes("critical") ? "critical" : states.includes("attention") || states.includes("unknown") ? "attention" : "healthy";
+
     return {
       running:
         movideskProcessing +
         azureProcessing,
+      health,
+      checkedAt: new Date(now),
       providers: {
         movidesk: {
           configured:
             Boolean(process.env.MOVIDESK_TOKEN),
           latestRun:
             latestMovidesk,
+          health: movideskHealth,
         },
         azureDevOps: {
           configured:
@@ -388,6 +410,7 @@ export class SyncCenterService {
             ),
           latestRun:
             latestAzure,
+          health: azureHealth,
         },
       },
     };
