@@ -82,10 +82,10 @@ jobs:
         shell: pwsh
         working-directory: desktop
         env:
-          TECHLEAD_HUB_DATABASE_URL: ${{ secrets.TECHLEAD_HUB_DATABASE_URL }}
+          TECHLEAD_HUB_DATABASE_URL: ${{ vars.TECHLEAD_HUB_DATABASE_URL }}
         run: |
           if ([string]::IsNullOrWhiteSpace($env:TECHLEAD_HUB_DATABASE_URL)) {
-            throw "Secret TECHLEAD_HUB_DATABASE_URL não configurado para o instalador Desktop."
+            throw "Variable TECHLEAD_HUB_DATABASE_URL não configurada para o instalador Desktop."
           }
           npx electron-builder --win nsis --publish never
       - name: Validar artefatos
