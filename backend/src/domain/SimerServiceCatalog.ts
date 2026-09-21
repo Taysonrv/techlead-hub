@@ -5,6 +5,15 @@ export type SimerServiceCatalogItem = {
   module: string | null;
 };
 
+/*
+ * Catálogo de fallback.
+ *
+ * A fonte principal para a auditoria é o próprio histórico sincronizado do
+ * Movidesk (serviços já usados nos tickets SIMER). Estes registros cobrem o
+ * catálogo real do ambiente sem duplicarmos centenas de opções manualmente
+ * no código. A lista abaixo permanece como seed para serviços importantes que
+ * ainda não tenham aparecido no histórico local.
+ */
 export const SIMER_SERVICE_CATALOG: readonly SimerServiceCatalogItem[] = [
   { id: "797250", path: "ATENDIMENTO AO CLIENTE » SIAGRI SIMER » ARMAZENAGEM DE GRÃOS", name: "ARMAZENAGEM DE GRÃOS", module: "ARMAZENAGEM DE GRÃOS" },
   { id: "797645", path: "ATENDIMENTO AO CLIENTE » SIAGRI SIMER » ARMAZENAGEM DE GRÃOS » AUTORIZAÇÃO DE TRANSFERÊNCIA DE GRÃOS", name: "AUTORIZAÇÃO DE TRANSFERÊNCIA DE GRÃOS", module: "ARMAZENAGEM DE GRÃOS" },
@@ -40,7 +49,7 @@ export function suggestSimerService(input: {
   serviceFirstLevel?: string | null;
   serviceSecondLevel?: string | null;
   serviceThirdLevel?: string | null;
-}) {
+}, catalog: readonly SimerServiceCatalogItem[] = SIMER_SERVICE_CATALOG) {
   const source = [
     input.subject,
     input.category,
@@ -56,7 +65,7 @@ export function suggestSimerService(input: {
     input.serviceThirdLevel,
   ].filter(Boolean).join(" » ") || input.currentService || "";
 
-  const ranked = SIMER_SERVICE_CATALOG.map((item) => {
+  const ranked = catalog.map((item) => {
     const itemWords = words(item.path);
     const matches = itemWords.filter((word) => sourceWords.has(word));
     const specificBonus = item.path.split("»").length >= 4 ? 2 : 0;
