@@ -58,6 +58,9 @@ type Data = {
     totalOpenTickets: number; classifiedServices: number; specificServices: number; withoutService: number;
     genericService: number; suspectedMismatch: number; classificationRate: number; catalogSize: number;
     ranking: Array<{ service: string; count: number }>;
+    moduleRanking: Array<{ module: string; count: number }>;
+    clientQuality: Array<{ client: string; total: number; issues: number; rate: number }>;
+    analystQuality: Array<{ analyst: string; total: number; issues: number; rate: number }>;
   };
   integrations: Record<string, { configured: boolean; connected: boolean; items: number }>;
   scope: { coordinator: string; analysts: string[]; clients: string[] };
@@ -433,6 +436,48 @@ export function Coordination() {
                       </ResponsiveContainer>
                     </Box>
                   ) : <Alert severity="info">Ainda não há Serviços suficientes no histórico sincronizado para montar o ranking.</Alert>}
+
+                  <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", xl: "repeat(3,minmax(0,1fr))" }, gap: 1.5, mt: 2 }}>
+                    <Box sx={{ p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: 2 }}>
+                      <Typography sx={{ fontWeight: 850 }}>Módulos mais demandados</Typography>
+                      <Typography variant="caption" color="text.secondary">Distribuição dos atendimentos abertos pelos módulos derivados do Serviço.</Typography>
+                      <Stack spacing={.75} sx={{ mt: 1.25 }}>
+                        {data.serviceAnalytics.moduleRanking.slice(0, 6).map((item) => (
+                          <Stack key={item.module} direction="row" spacing={1} sx={{ justifyContent: "space-between", alignItems: "center" }}>
+                            <Typography variant="body2" noWrap title={item.module}>{item.module}</Typography>
+                            <Chip size="small" label={item.count} variant="outlined" />
+                          </Stack>
+                        ))}
+                        {!data.serviceAnalytics.moduleRanking.length && <Typography variant="caption" color="text.secondary">Sem módulos classificados.</Typography>}
+                      </Stack>
+                    </Box>
+
+                    <Box sx={{ p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: 2 }}>
+                      <Typography sx={{ fontWeight: 850 }}>Qualidade por cliente</Typography>
+                      <Typography variant="caption" color="text.secondary">Clientes com maior quantidade de ausências, classificações genéricas ou divergências sugeridas.</Typography>
+                      <Stack spacing={.75} sx={{ mt: 1.25 }}>
+                        {data.serviceAnalytics.clientQuality.slice(0, 6).map((item) => (
+                          <Stack key={item.client} direction="row" spacing={1} sx={{ justifyContent: "space-between", alignItems: "center" }}>
+                            <Box sx={{ minWidth: 0 }}><Typography variant="body2" noWrap title={item.client}>{item.client}</Typography><Typography variant="caption" color="text.secondary">{item.issues} revisão(ões) de {item.total}</Typography></Box>
+                            <Chip size="small" label={`${item.rate}%`} color={item.rate >= 90 ? "success" : item.rate >= 75 ? "warning" : "error"} variant="outlined" />
+                          </Stack>
+                        ))}
+                      </Stack>
+                    </Box>
+
+                    <Box sx={{ p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: 2 }}>
+                      <Typography sx={{ fontWeight: 850 }}>Qualidade por analista</Typography>
+                      <Typography variant="caption" color="text.secondary">Indicador de apoio à revisão de classificação, sem avaliação individual automática.</Typography>
+                      <Stack spacing={.75} sx={{ mt: 1.25 }}>
+                        {data.serviceAnalytics.analystQuality.slice(0, 6).map((item) => (
+                          <Stack key={item.analyst} direction="row" spacing={1} sx={{ justifyContent: "space-between", alignItems: "center" }}>
+                            <Box sx={{ minWidth: 0 }}><Typography variant="body2" noWrap title={item.analyst}>{item.analyst}</Typography><Typography variant="caption" color="text.secondary">{item.issues} revisão(ões) de {item.total}</Typography></Box>
+                            <Chip size="small" label={`${item.rate}%`} color={item.rate >= 90 ? "success" : item.rate >= 75 ? "warning" : "error"} variant="outlined" />
+                          </Stack>
+                        ))}
+                      </Stack>
+                    </Box>
+                  </Box>
                 </CardContent>
               </Card>
 
