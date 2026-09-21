@@ -180,7 +180,7 @@ export class CoordinationService {
       prisma.ticket.findMany({
         where: { AND: [ticketScope, { isDeleted: false, baseStatus: { in: OPEN_TICKET_STATES } }] },
         select: {
-          id: true, subject: true, category: true, cause: true, service: true,
+          id: true, subject: true, category: true, cause: true, service: true, client: true, owner: true,
           serviceFirstLevel: true, serviceSecondLevel: true, serviceThirdLevel: true,
         },
       }),
@@ -267,6 +267,39 @@ export class CoordinationService {
       .map(([service, count]) => ({ service, count }))
       .sort((a, b) => b.count - a.count || a.service.localeCompare(b.service, "pt-BR"))
       .slice(0, 10);
+    const serviceModuleCounts = new Map<string, number>();
+    const serviceClientIssues = new Map<string, { total: number; issues: number }>();
+    const serviceAnalystIssues = new Map<string, { total: number; issues: number }>();
+    for (const ticket of serviceTickets) {
+      const path = servicePath(ticket);
+      const parts = path.split("»").map((value) => value.trim()).filter(Boolean);
+      const module = parts.find((value, index) => index >= 2 && !/^(siagri simer|simer)$/i.test(value));
+      if (module) serviceModuleCounts.set(module, (serviceModuleCounts.get(module) ?? 0) + 1);
+
+      const suggestion = path ? suggestSimerService({
+        subject: ticket.subject, category: ticket.category, cause: ticket.cause, currentService: ticket.service,
+        serviceFirstLevel: ticket.serviceFirstLevel, serviceSecondLevel: ticket.serviceSecondLevel, serviceThirdLevel: ticket.serviceThirdLevel,
+      }, serviceCatalog) : null;
+      const mismatch = Boolean(path && suggestion && suggestion.confidence !== "LOW" && normalize(path) !== normalize(suggestion.path) && !normalize(suggestion.path).includes(normalize(path)));
+      const issue = !path || isGenericService(path) || mismatch;
+
+      if (ticket.client) {
+        const row = serviceClientIssues.get(ticket.client) ?? { total: 0, issues: 0 };
+        row.total += 1; if (issue) row.issues += 1; serviceClientIssues.set(ticket.client, row);
+      }
+      if (ticket.owner) {
+        const row = serviceAnalystIssues.get(ticket.owner) ?? { total: 0, issues: 0 };
+        row.total += 1; if (issue) row.issues += 1; serviceAnalystIssues.set(ticket.owner, row);
+      }
+    }
+    const moduleRanking = [...serviceModuleCounts.entries()].map(([module, count]) => ({ module, count }))
+      .sort((a, b) => b.count - a.count || a.module.localeCompare(b.module, "pt-BR")).slice(0, 10);
+    const clientQuality = [...serviceClientIssues.entries()].map(([client, row]) => ({
+      client, ...row, rate: row.total ? Math.round(((row.total - row.issues) / row.total) * 100) : 0,
+    })).sort((a, b) => b.issues - a.issues || b.total - a.total).slice(0, 10);
+    const analystQuality = [...serviceAnalystIssues.entries()].map(([analyst, row]) => ({
+      analyst, ...row, rate: row.total ? Math.round(((row.total - row.issues) / row.total) * 100) : 0,
+    })).sort((a, b) => b.issues - a.issues || b.total - a.total).slice(0, 10);
     const classifiedServices = Math.max(serviceTickets.length - withoutService, 0);
     const specificServices = Math.max(classifiedServices - genericService, 0);
     const classificationRate = serviceTickets.length
@@ -378,6 +411,9 @@ export class CoordinationService {
         classificationRate,
         catalogSize: serviceCatalog.length,
         ranking: serviceRanking,
+        moduleRanking,
+        clientQuality,
+        analystQuality,
       },
       intelligence: {
         priorities,
