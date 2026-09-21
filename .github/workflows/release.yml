@@ -72,12 +72,18 @@ jobs:
           node -e "const fs=require('fs');const p='desktop/package.json';const j=require('./'+p);j.build.publish[0].channel=process.env.RELEASE_CHANNEL==='stable'?'latest':'beta';j.build.publish[0].releaseType=process.env.RELEASE_CHANNEL==='stable'?'release':'prerelease';fs.writeFileSync(p,JSON.stringify(j,null,2)+'\n')"
       - name: Compilar e testar
         shell: pwsh
+        env:
+          TECHLEAD_HUB_DATABASE_URL: ${{ secrets.TECHLEAD_HUB_DATABASE_URL }}
         run: |
+          if ([string]::IsNullOrWhiteSpace($env:TECHLEAD_HUB_DATABASE_URL)) {
+            throw "Secret TECHLEAD_HUB_DATABASE_URL não configurado para o build Desktop."
+          }
           npm run prisma:generate --prefix backend
           npm run build --prefix backend
           npm run build --prefix frontend
           npm test --prefix desktop
           npm run build:desktop --prefix desktop
+          Remove-Item Env:TECHLEAD_HUB_DATABASE_URL -ErrorAction SilentlyContinue
       - name: Gerar instalador sem publicar
         shell: pwsh
         working-directory: desktop
