@@ -95,6 +95,88 @@ export class CoordinationService {
     };
   }
 
+  async serviceIntelligence(filters: { client?: string; analyst?: string; months?: number } = {}) {
+    const months = Math.min(Math.max(filters.months ?? 6, 3), 12);
+    const since = new Date();
+    since.setMonth(since.getMonth() - months + 1);
+    since.setDate(1); since.setHours(0, 0, 0, 0);
+    const scope = ticketOperationalScope();
+    const tickets = await prisma.ticket.findMany({
+      where: {
+        AND: [
+          scope,
+          { isDeleted: false, createdDate: { gte: since } },
+          ...(filters.client ? [{ client: { equals: filters.client, mode: "insensitive" as const } }] : []),
+          ...(filters.analyst ? [{ owner: { equals: filters.analyst, mode: "insensitive" as const } }] : []),
+        ],
+      },
+      select: {
+        movideskId: true, subject: true, category: true, cause: true, client: true, owner: true,
+        service: true, serviceFirstLevel: true, serviceSecondLevel: true, serviceThirdLevel: true,
+        createdDate: true, baseStatus: true,
+      },
+      orderBy: { createdDate: "desc" },
+    });
+    const normalize = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR").trim();
+    const pathOf = (ticket: (typeof tickets)[number]) =>
+      [ticket.serviceFirstLevel, ticket.serviceSecondLevel, ticket.serviceThirdLevel].map((v) => v?.trim()).filter((v): v is string => Boolean(v)).join(" » ") || ticket.service?.trim() || "";
+    const generic = (path: string) => {
+      const values = path.split("»").map(normalize).filter(Boolean);
+      return values.some((v) => v.includes("simer")) && values.filter((v) => !/^(atendimento ao cliente|siagri simer|simer|siagri)$/.test(v)).length === 0;
+    };
+    const catalogMap = new Map<string, SimerServiceCatalogItem>();
+    for (const item of SIMER_SERVICE_CATALOG) catalogMap.set(normalize(item.path), item);
+    for (const ticket of tickets) {
+      const path = pathOf(ticket); if (!path || !/simer/i.test(path)) continue;
+      const parts = path.split("»").map((v) => v.trim()).filter(Boolean);
+      catalogMap.set(normalize(path), { id: `observed:${normalize(path)}`, path, name: parts.at(-1) ?? path, module: parts.length >= 3 ? parts[2] ?? null : null });
+    }
+    const catalog = [...catalogMap.values()];
+    const monthsMap = new Map<string, { month: string; total: number; specific: number; generic: number; withoutService: number; suspected: number }>();
+    const serviceCounts = new Map<string, number>(), moduleCounts = new Map<string, number>();
+    let specific = 0, genericCount = 0, withoutService = 0, suspected = 0;
+    const samples: Array<{ movideskId: number; subject: string; client: string | null; owner: string | null; currentService: string; suggestedService: string | null; confidence: string | null; evidence: string[]; createdDate: Date }> = [];
+    for (const ticket of tickets) {
+      const key = ticket.createdDate.toISOString().slice(0, 7);
+      const month = monthsMap.get(key) ?? { month: key, total: 0, specific: 0, generic: 0, withoutService: 0, suspected: 0 };
+      month.total += 1;
+      const path = pathOf(ticket);
+      if (!path) { withoutService += 1; month.withoutService += 1; }
+      else {
+        serviceCounts.set(path, (serviceCounts.get(path) ?? 0) + 1);
+        const parts = path.split("»").map((v) => v.trim()).filter(Boolean);
+        const module = parts.length >= 3 ? parts[2] : null;
+        if (module) moduleCounts.set(module, (moduleCounts.get(module) ?? 0) + 1);
+        if (generic(path)) { genericCount += 1; month.generic += 1; } else { specific += 1; month.specific += 1; }
+      }
+      const suggestion = suggestSimerService({
+        subject: ticket.subject, category: ticket.category, cause: ticket.cause, currentService: ticket.service,
+        serviceFirstLevel: ticket.serviceFirstLevel, serviceSecondLevel: ticket.serviceSecondLevel, serviceThirdLevel: ticket.serviceThirdLevel,
+      }, catalog);
+      const mismatch = Boolean(path && suggestion && suggestion.confidence !== "LOW" && normalize(path) !== normalize(suggestion.path) && !normalize(suggestion.path).includes(normalize(path)));
+      if (mismatch) { suspected += 1; month.suspected += 1; }
+      if ((!path || generic(path) || mismatch) && samples.length < 30) samples.push({
+        movideskId: ticket.movideskId, subject: ticket.subject, client: ticket.client, owner: ticket.owner,
+        currentService: path || "Sem serviço", suggestedService: suggestion?.path ?? null, confidence: suggestion?.confidence ?? null,
+        evidence: suggestion?.evidence ?? [], createdDate: ticket.createdDate,
+      });
+      monthsMap.set(key, month);
+    }
+    const ranking = [...serviceCounts].map(([service, count]) => ({ service, count })).sort((a,b) => b.count-a.count).slice(0,12);
+    const modules = [...moduleCounts].map(([module, count]) => ({ module, count })).sort((a,b) => b.count-a.count).slice(0,12);
+    return {
+      periodMonths: months, total: tickets.length, specific, generic: genericCount, withoutService, suspected,
+      classificationRate: tickets.length ? Math.round((specific / tickets.length) * 100) : 0,
+      catalogSize: catalog.length,
+      trend: [...monthsMap.values()].sort((a,b) => a.month.localeCompare(b.month)),
+      ranking, modules, samples,
+      filters: {
+        clients: [...new Set(tickets.map((t) => t.client).filter((v): v is string => Boolean(v)))].sort((a,b) => a.localeCompare(b,"pt-BR")),
+        analysts: [...SUPPORT_ANALYSTS],
+      },
+    };
+  }
+
   async summary(userId: number) {
     const now = new Date();
     const staleBefore = new Date(now.getTime() - 72 * 60 * 60 * 1_000);
