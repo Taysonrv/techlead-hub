@@ -111,6 +111,7 @@ const routines: Record<MainTab, Routine[]> = {
     { label: "Dashboard", path: "/", icon: InsightsOutlined, description: "Visão executiva consolidada da operação.", keywords: ["indicadores", "kpi", "executivo"] },
     { label: "Desempenho", path: "/desempenho", icon: TrendingUpOutlined, description: "Produtividade, SLA e acompanhamento de performance.", keywords: ["performance", "produtividade", "sla"] },
     { label: "Relatórios", path: "/relatorios", icon: InsightsOutlined, description: "Relatórios gerenciais e executivos.", keywords: ["excel", "pdf", "gerencial"] },
+    { label: "Serviços SIMER", path: "/servicos", icon: FactCheckOutlined, description: "Inteligência histórica da classificação e demanda por Serviços.", keywords: ["serviço", "movidesk", "módulos", "classificação"] },
     { label: "Central de Liderança", path: "/lideranca-tecnica", icon: RadarOutlined, description: "Radar executivo, recorrências, gaps e desenvolvimento técnico.", keywords: ["liderança", "radar", "recorrências", "gaps"] },
   ],
   desenvolvimento: [
