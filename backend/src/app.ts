@@ -107,7 +107,15 @@ app.use("/api", (req, res, next) => {
 
 app.get("/health", (_req, res) => {
   const databaseReady = process.env.APP_DATABASE_READY !== "false";
-  res.status(databaseReady ? 200 : 503).json({
+
+  /*
+   * /health é exclusivamente liveness: se o Express respondeu,
+   * o processo está vivo. A disponibilidade do PostgreSQL pertence
+   * ao /health/ready. Manter 200 aqui evita que o Desktop interprete
+   * banco degradado como falha da porta 3333 e tente subir um segundo
+   * backend sobre a mesma porta.
+   */
+  res.status(200).json({
     status: databaseReady ? "ok" : "degraded",
     database: databaseReady ? "ready" : "unavailable",
     scheduler: databaseReady ? "enabled" : "disabled",
