@@ -70,6 +70,16 @@ jobs:
         run: |
           npm version "$env:RELEASE_VERSION" --prefix desktop --no-git-tag-version --allow-same-version
           node -e "const fs=require('fs');const p='desktop/package.json';const j=require('./'+p);j.build.publish[0].channel=process.env.RELEASE_CHANNEL==='stable'?'latest':'beta';j.build.publish[0].releaseType=process.env.RELEASE_CHANNEL==='stable'?'release':'prerelease';fs.writeFileSync(p,JSON.stringify(j,null,2)+'\n')"
+      - name: Provisionar configuracao inicial do Desktop
+        shell: pwsh
+        env:
+          TECHLEAD_HUB_DATABASE_URL: ${{ vars.TECHLEAD_HUB_DATABASE_URL }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:TECHLEAD_HUB_DATABASE_URL)) {
+            throw "Variable TECHLEAD_HUB_DATABASE_URL não configurada para o instalador Desktop."
+          }
+          $encoded = ConvertTo-Json $env:TECHLEAD_HUB_DATABASE_URL -Compress
+          Set-Content -Path "desktop/src/provisioned-config.ts" -Value "export const PROVISIONED_DATABASE_URL = $encoded;" -Encoding UTF8
       - name: Compilar e testar
         shell: pwsh
         run: |
@@ -81,13 +91,7 @@ jobs:
       - name: Gerar instalador sem publicar
         shell: pwsh
         working-directory: desktop
-        env:
-          TECHLEAD_HUB_DATABASE_URL: ${{ vars.TECHLEAD_HUB_DATABASE_URL }}
-        run: |
-          if ([string]::IsNullOrWhiteSpace($env:TECHLEAD_HUB_DATABASE_URL)) {
-            throw "Variable TECHLEAD_HUB_DATABASE_URL não configurada para o instalador Desktop."
-          }
-          npx electron-builder --win nsis --publish never
+        run: npx electron-builder --win nsis --publish never
       - name: Validar artefatos
         shell: pwsh
         working-directory: desktop
