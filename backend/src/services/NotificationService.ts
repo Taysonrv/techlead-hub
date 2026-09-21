@@ -64,10 +64,16 @@ export class NotificationService {
     const relatedTickets =
       await prisma.ticket.findMany({
         where: {
-          owner: {
-            equals: user.name,
-            mode: "insensitive",
-          },
+          AND: [
+            {
+              owner: {
+                equals: user.name,
+                mode: "insensitive",
+              },
+            },
+            { isDeleted: false },
+            { baseStatus: { in: ["New", "InAttendance", "Stopped"] } },
+          ],
         },
         select: {
           taskNumber: true,
@@ -253,8 +259,8 @@ export class NotificationService {
           path: `/tickets?movidesk=${ticket.movideskId}`,
         });
       }
-      if (!ticket.lastUpdate || ticket.lastUpdate < staleBefore) {
-        const occurredAt = ticket.lastUpdate ?? since;
+      if (ticket.lastUpdate && ticket.lastUpdate < staleBefore) {
+        const occurredAt = ticket.lastUpdate;
         alerts.push({
           key: `operation:stale:${ticket.movideskId}:${occurredAt.toISOString().slice(0, 10)}`,
           kind: "OPERATION_ALERT",
