@@ -5,6 +5,7 @@ import type { Prisma } from "@prisma/client";
 import { SIMER_CLIENTS, SUPPORT_ANALYSTS, ticketOperationalScope } from "../domain/OperationalScope";
 import { MovideskService } from "./MovideskService";
 import { analyzeMovideskIndicators } from "./MovideskPayloadAnalytics";
+import { suggestSimerService } from "../domain/SimerServiceCatalog";
 
 const TERMINAL = ["Concluído", "Concluido", "Closed", "Done", "Resolved", "Cancelado", "Canceled"];
 const normalizedWords = (value: string) => value
@@ -740,7 +741,31 @@ export class WorkspaceService {
       isTicketOpen(ticket) && !hasNoService(ticket) && isGenericSimerService(ticket),
     );
 
-    const derivedTicketIssues = ["danglingTaskTickets", "ticketOpenTaskFinished", "ticketOpenTaskWithoutDelivery", "ticketClosedTaskOpen", "clientMismatch", "supportLinkDivergence", "awaitingReturnWithoutCause", "awaitingReturnOverdue", "reopenedTickets", "excessiveOwnerHandoffs", "lowSatisfaction", "suspectedClassification", "withoutService", "genericSimerService"];
+    const serviceSuggestionByTicketId = new Map(
+      scopedTickets.map((ticket) => [
+        ticket.id,
+        suggestSimerService({
+          subject: ticket.subject,
+          category: ticket.category,
+          cause: ticket.cause,
+          currentService: ticket.service,
+          serviceFirstLevel: ticket.serviceFirstLevel,
+          serviceSecondLevel: ticket.serviceSecondLevel,
+          serviceThirdLevel: ticket.serviceThirdLevel,
+        }),
+      ]),
+    );
+
+    const suspectedServiceMismatch = scopedTickets.filter((ticket) => {
+      if (!isTicketOpen(ticket)) return false;
+      const suggestion = serviceSuggestionByTicketId.get(ticket.id);
+      if (!suggestion || suggestion.confidence === "LOW") return false;
+      const current = normalizeStatus(ticketServicePath(ticket).join(" » ") || ticket.service || "");
+      const suggested = normalizeStatus(suggestion.path);
+      return Boolean(current && current !== suggested && !suggested.includes(current));
+    });
+
+    const derivedTicketIssues = ["danglingTaskTickets", "ticketOpenTaskFinished", "ticketOpenTaskWithoutDelivery", "ticketClosedTaskOpen", "clientMismatch", "supportLinkDivergence", "awaitingReturnWithoutCause", "awaitingReturnOverdue", "reopenedTickets", "excessiveOwnerHandoffs", "lowSatisfaction", "suspectedClassification", "withoutService", "genericSimerService", "suspectedServiceMismatch"];
     const matchesAzureIssue = (item: (typeof linkedTasks)[number]) => {
       if (params.issue === "duplicatedMovideskLinks") return Boolean(item.movideskTicket && duplicatedIds.includes(item.movideskTicket));
       if (params.issue === "withoutTicket") return !item.movideskTicket && !item.participantMovideskTickets && !linkedTaskIdSet.has(item.id);
@@ -792,6 +817,7 @@ export class WorkspaceService {
       serviceSecondLevel: ticket.serviceSecondLevel,
       serviceThirdLevel: ticket.serviceThirdLevel,
       servicePath: ticketServicePath(ticket).join(" » ") || ticket.service || null,
+      serviceSuggestion: serviceSuggestionByTicketId.get(ticket.id) ?? null,
       movideskTicket: ticket.movideskId,
       registeredVersion: null,
       deliveredVersion: ticket.deliveredVersion,
@@ -817,6 +843,8 @@ export class WorkspaceService {
       ? withoutService.slice(0, 100).map(toClassificationSample)
       : params.issue === "genericSimerService"
       ? genericSimerService.slice(0, 100).map(toClassificationSample)
+      : params.issue === "suspectedServiceMismatch"
+      ? suspectedServiceMismatch.slice(0, 100).map(toClassificationSample)
       : params.issue === "ticketOpenTaskFinished"
       ? ticketsAwaitingClosure.slice(0, 100).map(toTicketSample)
       : params.issue === "ticketOpenTaskWithoutDelivery"
@@ -863,6 +891,7 @@ export class WorkspaceService {
         suspectedClassification: suspectedClassification.length,
         withoutService: withoutService.length,
         genericSimerService: genericSimerService.length,
+        suspectedServiceMismatch: suspectedServiceMismatch.length,
         activeTaskWithVersion: activeLinkedTasks.filter((task) =>
           !isSupportTask(task) && Boolean(task.deliveredVersion?.trim()),
         ).length,
