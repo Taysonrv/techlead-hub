@@ -1,6 +1,7 @@
 import { prisma } from "../database/prisma";
 import { SIMER_CLIENTS, SUPPORT_ANALYSTS, SUPPORT_COORDINATOR, azureOperationalScope, ticketOperationalScope } from "../domain/OperationalScope";
 import { microsoftKnowledgeService } from "./MicrosoftKnowledgeService";
+import { SIMER_SERVICE_CATALOG, suggestSimerService, type SimerServiceCatalogItem } from "../domain/SimerServiceCatalog";
 
 const OPEN_TICKET_STATES = ["New", "InAttendance", "Stopped"];
 const CLOSED_WORK_ITEM_STATES = ["Closed", "Resolved", "Concluído", "Concluido", "Done", "Removed"];
@@ -99,6 +100,7 @@ export class CoordinationService {
       unassignedItems,
       ticketOwners,
       workItemOwners,
+      serviceTickets,
     ] = await Promise.all([
       prisma.ticket.count({
         where: { AND: [ticketScope, { isDeleted: false, baseStatus: { in: OPEN_TICKET_STATES } }] },
@@ -175,6 +177,13 @@ export class CoordinationService {
         },
         _count: { id: true },
       }),
+      prisma.ticket.findMany({
+        where: { AND: [ticketScope, { isDeleted: false, baseStatus: { in: OPEN_TICKET_STATES } }] },
+        select: {
+          id: true, subject: true, category: true, cause: true, service: true,
+          serviceFirstLevel: true, serviceSecondLevel: true, serviceThirdLevel: true,
+        },
+      }),
     ]);
 
     const workload = new Map<string, { analyst: string; tickets: number; workItems: number }>(
@@ -203,6 +212,66 @@ export class CoordinationService {
       .filter((item) => item.tickets > 0 || item.workItems > 0)
       .map((item) => ({ ...item, total: item.tickets + item.workItems }))
       .sort((a, b) => b.total - a.total || a.analyst.localeCompare(b.analyst, "pt-BR"));
+
+    const normalize = (value: string) =>
+      value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR").trim();
+    const servicePath = (ticket: (typeof serviceTickets)[number]) =>
+      [ticket.serviceFirstLevel, ticket.serviceSecondLevel, ticket.serviceThirdLevel]
+        .map((value) => value?.trim()).filter((value): value is string => Boolean(value))
+        .join(" » ") || ticket.service?.trim() || "";
+
+    const serviceCatalogMap = new Map<string, SimerServiceCatalogItem>();
+    for (const item of SIMER_SERVICE_CATALOG) serviceCatalogMap.set(normalize(item.path), item);
+    for (const ticket of serviceTickets) {
+      const path = servicePath(ticket);
+      if (!path || !/simer/i.test(path)) continue;
+      const parts = path.split("»").map((value) => value.trim()).filter(Boolean);
+      const name = parts.at(-1) ?? path;
+      const module = parts.find((value, index) => index >= 2 && !/^(siagri simer|simer)$/i.test(value)) ?? null;
+      serviceCatalogMap.set(normalize(path), { id: `observed:${normalize(path)}`, path, name, module });
+    }
+    const serviceCatalog = [...serviceCatalogMap.values()];
+    const isGenericService = (path: string) => {
+      const values = path.split("»").map((value) => normalize(value)).filter(Boolean);
+      if (!values.some((value) => value.includes("simer"))) return false;
+      return values.filter((value) => !/^(atendimento ao cliente|siagri simer|simer|siagri)$/.test(value)).length === 0;
+    };
+    let withoutService = 0;
+    let genericService = 0;
+    let suspectedMismatch = 0;
+    const serviceCounts = new Map<string, number>();
+    for (const ticket of serviceTickets) {
+      const path = servicePath(ticket);
+      if (!path) {
+        withoutService += 1;
+        continue;
+      }
+      serviceCounts.set(path, (serviceCounts.get(path) ?? 0) + 1);
+      if (isGenericService(path)) genericService += 1;
+      const suggestion = suggestSimerService({
+        subject: ticket.subject,
+        category: ticket.category,
+        cause: ticket.cause,
+        currentService: ticket.service,
+        serviceFirstLevel: ticket.serviceFirstLevel,
+        serviceSecondLevel: ticket.serviceSecondLevel,
+        serviceThirdLevel: ticket.serviceThirdLevel,
+      }, serviceCatalog);
+      if (suggestion && suggestion.confidence !== "LOW") {
+        const current = normalize(path);
+        const suggested = normalize(suggestion.path);
+        if (current !== suggested && !suggested.includes(current)) suspectedMismatch += 1;
+      }
+    }
+    const serviceRanking = [...serviceCounts.entries()]
+      .map(([service, count]) => ({ service, count }))
+      .sort((a, b) => b.count - a.count || a.service.localeCompare(b.service, "pt-BR"))
+      .slice(0, 10);
+    const classifiedServices = Math.max(serviceTickets.length - withoutService, 0);
+    const specificServices = Math.max(classifiedServices - genericService, 0);
+    const classificationRate = serviceTickets.length
+      ? Math.round((specificServices / serviceTickets.length) * 100)
+      : 0;
 
     const sortedLoads = workloadRows.map((item) => item.total).sort((a, b) => a - b);
     let medianLoad = 0;
@@ -299,6 +368,17 @@ export class CoordinationService {
         unassignedItems,
       },
       workload: workloadRows,
+      serviceAnalytics: {
+        totalOpenTickets: serviceTickets.length,
+        classifiedServices,
+        specificServices,
+        withoutService,
+        genericService,
+        suspectedMismatch,
+        classificationRate,
+        catalogSize: serviceCatalog.length,
+        ranking: serviceRanking,
+      },
       intelligence: {
         priorities,
         medianLoad,
