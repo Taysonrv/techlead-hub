@@ -2472,16 +2472,21 @@ function stopBackend() {
    HTTP / HEALTH / READINESS
 ========================================================= */
 
-function requestStatus(
+type HttpProbe = {
+  status: number | null;
+  body: string | null;
+};
+
+function requestProbe(
   url: string
 ) {
-  return new Promise<number | null>(
+  return new Promise<HttpProbe>(
     (resolve) => {
       let settled =
         false;
 
       const finish = (
-        value: number | null
+        value: HttpProbe
       ) => {
         if (settled) {
           return;
@@ -2504,12 +2509,18 @@ function requestStatus(
             },
           },
           (response) => {
-            response.resume();
+            const chunks: Buffer[] = [];
 
-            finish(
-              response.statusCode ??
-                null
-            );
+            response.on("data", (chunk: Buffer | string) => {
+              chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+            });
+
+            response.on("end", () => {
+              finish({
+                status: response.statusCode ?? null,
+                body: chunks.length ? Buffer.concat(chunks).toString("utf8") : null,
+              });
+            });
           }
         );
 
@@ -2518,14 +2529,14 @@ function requestStatus(
         () => {
           request.destroy();
 
-          finish(null);
+          finish({ status: null, body: null });
         }
       );
 
       request.on(
         "error",
         () => {
-          finish(null);
+          finish({ status: null, body: null });
         }
       );
     }
@@ -2533,28 +2544,32 @@ function requestStatus(
 }
 
 async function checkBackendHealth() {
-  const status =
-    await requestStatus(
+  const probe =
+    await requestProbe(
       HEALTH_URL
     );
 
   return Boolean(
-    status &&
-    status >= 200 &&
-    status < 300
+    probe.status &&
+    probe.status >= 200 &&
+    probe.status < 300
+  );
+}
+
+async function getBackendReadyProbe() {
+  return requestProbe(
+    READY_URL
   );
 }
 
 async function checkBackendReady() {
-  const status =
-    await requestStatus(
-      READY_URL
-    );
+  const probe =
+    await getBackendReadyProbe();
 
   return Boolean(
-    status &&
-    status >= 200 &&
-    status < 300
+    probe.status &&
+    probe.status >= 200 &&
+    probe.status < 300
   );
 }
 
@@ -3049,6 +3064,28 @@ async function bootstrap() {
   if (
     !databaseReady
   ) {
+    const readyProbe = await getBackendReadyProbe();
+    let diagnostic =
+      "O backend foi iniciado, mas o PostgreSQL não respondeu corretamente.";
+
+    if (readyProbe.body) {
+      try {
+        const payload = JSON.parse(readyProbe.body) as {
+          database?: string;
+          error?: string;
+          message?: string;
+        };
+        const detail = payload.error ?? payload.message;
+        if (detail) {
+          diagnostic += ` Diagnóstico: ${detail}`;
+        } else if (payload.database) {
+          diagnostic += ` Estado do banco: ${payload.database}.`;
+        }
+      } catch {
+        diagnostic += " O endpoint de readiness respondeu sem detalhes estruturados.";
+      }
+    }
+
     const response = await dialog.showMessageBox(
       {
         type:
@@ -3061,7 +3098,7 @@ async function bootstrap() {
           "Não foi possível conectar ao banco de dados.",
 
         detail:
-          "O backend foi iniciado, mas o PostgreSQL não respondeu corretamente. Verifique a DATABASE_URL, a rede/VPN e a disponibilidade do banco.",
+          `${diagnostic} Verifique principalmente se esta máquina consegue alcançar o servidor PostgreSQL pela rede/VPN e se a porta 5432 está liberada.`,
 
         buttons: ["Reconfigurar", "Fechar"],
         defaultId: 0,
