@@ -447,6 +447,7 @@ export class WorkspaceService {
         id: true, taskNumber: true, movideskId: true, subject: true,
         status: true, baseStatus: true, client: true, owner: true,
         category: true, cause: true, justification: true,
+        service: true, serviceFirstLevel: true, serviceSecondLevel: true, serviceThirdLevel: true,
         deliveredVersion: true, lastActionDate: true, lastUpdate: true,
         reopenedDate: true, resolvedInFirstCall: true, rawData: true,
       },
@@ -703,7 +704,43 @@ export class WorkspaceService {
       isTicketOpen(ticket) && hasSuspiciousClassification(ticket),
     );
 
-    const derivedTicketIssues = ["danglingTaskTickets", "ticketOpenTaskFinished", "ticketOpenTaskWithoutDelivery", "ticketClosedTaskOpen", "clientMismatch", "supportLinkDivergence", "awaitingReturnWithoutCause", "awaitingReturnOverdue", "reopenedTickets", "excessiveOwnerHandoffs", "lowSatisfaction", "suspectedClassification"];
+    /*
+     * Auditoria inicial do campo Serviço do Movidesk.
+     *
+     * Nesta primeira etapa não tentamos "adivinhar" automaticamente um
+     * serviço específico. Identificamos classificações ausentes ou
+     * excessivamente genéricas e expomos a hierarquia já sincronizada.
+     * Isso cria uma base segura para, na próxima evolução, cruzar assunto,
+     * categoria e catálogo oficial de serviços para sugerir o serviço correto.
+     */
+    const ticketServicePath = (ticket: (typeof scopedTickets)[number]) =>
+      [ticket.serviceFirstLevel, ticket.serviceSecondLevel, ticket.serviceThirdLevel]
+        .map((value) => value?.trim())
+        .filter((value): value is string => Boolean(value));
+
+    const hasNoService = (ticket: (typeof scopedTickets)[number]) =>
+      !ticket.service?.trim() && ticketServicePath(ticket).length === 0;
+
+    const isGenericSimerService = (ticket: (typeof scopedTickets)[number]) => {
+      const path = ticketServicePath(ticket).map(normalizeStatus);
+      const service = normalizeStatus(ticket.service ?? "");
+      const values = [...path, service].filter(Boolean);
+      if (!values.some((value) => /simer/.test(value))) return false;
+
+      const specificValues = values.filter((value) =>
+        !/^(atendimento ao cliente|siagri simer|simer|siagri)$/.test(value),
+      );
+      return specificValues.length === 0;
+    };
+
+    const withoutService = scopedTickets.filter((ticket) =>
+      isTicketOpen(ticket) && hasNoService(ticket),
+    );
+    const genericSimerService = scopedTickets.filter((ticket) =>
+      isTicketOpen(ticket) && !hasNoService(ticket) && isGenericSimerService(ticket),
+    );
+
+    const derivedTicketIssues = ["danglingTaskTickets", "ticketOpenTaskFinished", "ticketOpenTaskWithoutDelivery", "ticketClosedTaskOpen", "clientMismatch", "supportLinkDivergence", "awaitingReturnWithoutCause", "awaitingReturnOverdue", "reopenedTickets", "excessiveOwnerHandoffs", "lowSatisfaction", "suspectedClassification", "withoutService", "genericSimerService"];
     const matchesAzureIssue = (item: (typeof linkedTasks)[number]) => {
       if (params.issue === "duplicatedMovideskLinks") return Boolean(item.movideskTicket && duplicatedIds.includes(item.movideskTicket));
       if (params.issue === "withoutTicket") return !item.movideskTicket && !item.participantMovideskTickets && !linkedTaskIdSet.has(item.id);
@@ -750,6 +787,11 @@ export class WorkspaceService {
       assignedToName: ticket.owner,
       category: ticket.category,
       cause: ticket.cause,
+      service: ticket.service,
+      serviceFirstLevel: ticket.serviceFirstLevel,
+      serviceSecondLevel: ticket.serviceSecondLevel,
+      serviceThirdLevel: ticket.serviceThirdLevel,
+      servicePath: ticketServicePath(ticket).join(" » ") || ticket.service || null,
       movideskTicket: ticket.movideskId,
       registeredVersion: null,
       deliveredVersion: ticket.deliveredVersion,
@@ -771,6 +813,10 @@ export class WorkspaceService {
       ? lowSatisfaction.slice(0, 100).map(toClassificationSample)
       : params.issue === "suspectedClassification"
       ? suspectedClassification.slice(0, 100).map(toClassificationSample)
+      : params.issue === "withoutService"
+      ? withoutService.slice(0, 100).map(toClassificationSample)
+      : params.issue === "genericSimerService"
+      ? genericSimerService.slice(0, 100).map(toClassificationSample)
       : params.issue === "ticketOpenTaskFinished"
       ? ticketsAwaitingClosure.slice(0, 100).map(toTicketSample)
       : params.issue === "ticketOpenTaskWithoutDelivery"
@@ -815,6 +861,8 @@ export class WorkspaceService {
         resolvedInFirstCall: scopedTickets.filter((ticket) => ticket.resolvedInFirstCall === true).length,
         notResolvedInFirstCall: scopedTickets.filter((ticket) => ticket.resolvedInFirstCall === false).length,
         suspectedClassification: suspectedClassification.length,
+        withoutService: withoutService.length,
+        genericSimerService: genericSimerService.length,
         activeTaskWithVersion: activeLinkedTasks.filter((task) =>
           !isSupportTask(task) && Boolean(task.deliveredVersion?.trim()),
         ).length,
