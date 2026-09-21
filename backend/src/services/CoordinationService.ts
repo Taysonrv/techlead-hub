@@ -7,7 +7,7 @@ const OPEN_TICKET_STATES = ["New", "InAttendance", "Stopped"];
 const CLOSED_WORK_ITEM_STATES = ["Closed", "Resolved", "Concluído", "Concluido", "Done", "Removed"];
 
 export class CoordinationService {
-  async details(kind: string, analyst?: string, limit = 50) {
+  async details(kind: string, analyst?: string, limit = 50, serviceModule?: string, serviceClient?: string) {
     const now = new Date();
     const staleBefore = new Date(now.getTime() - 72 * 60 * 60 * 1_000);
     const nextSevenDays = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1_000);
@@ -27,7 +27,7 @@ export class CoordinationService {
       kind === "unassigned" ? { assignedToName: null } :
       {};
 
-    const wantsTickets = ["backlog", "critical", "stale", "dueSoon", "overdue", "analyst"].includes(kind);
+    const wantsTickets = ["backlog", "critical", "stale", "dueSoon", "overdue", "analyst", "serviceModule", "serviceClient", "serviceAnalyst"].includes(kind);
     const wantsAzure = ["blocked", "unassigned", "analyst"].includes(kind);
 
     const [tickets, workItems] = await Promise.all([
@@ -39,6 +39,15 @@ export class CoordinationService {
                 { isDeleted: false, baseStatus: { in: OPEN_TICKET_STATES } },
                 ticketExtra,
                 ...(analyst ? [{ owner: { equals: analyst, mode: "insensitive" as const } }] : []),
+                ...(serviceClient ? [{ client: { equals: serviceClient, mode: "insensitive" as const } }] : []),
+                ...(serviceModule ? [{
+                  OR: [
+                    { service: { contains: serviceModule, mode: "insensitive" as const } },
+                    { serviceFirstLevel: { contains: serviceModule, mode: "insensitive" as const } },
+                    { serviceSecondLevel: { contains: serviceModule, mode: "insensitive" as const } },
+                    { serviceThirdLevel: { contains: serviceModule, mode: "insensitive" as const } },
+                  ],
+                }] : []),
               ],
             },
             orderBy: [{ urgency: "desc" }, { lastUpdate: "asc" }],
@@ -47,6 +56,8 @@ export class CoordinationService {
               movideskId: true, subject: true, status: true, urgency: true, client: true,
               owner: true, lastUpdate: true, dueDate: true, taskNumber: true,
               registeredVersion: true, deliveredVersion: true,
+              service: true, serviceFirstLevel: true, serviceSecondLevel: true, serviceThirdLevel: true,
+              category: true, cause: true,
             },
           })
         : Promise.resolve([]),
@@ -75,6 +86,8 @@ export class CoordinationService {
     return {
       kind,
       analyst: analyst ?? null,
+      serviceModule: serviceModule ?? null,
+      serviceClient: serviceClient ?? null,
       total: tickets.length + workItems.length,
       truncated: tickets.length === safeLimit || workItems.length === safeLimit,
       tickets,
