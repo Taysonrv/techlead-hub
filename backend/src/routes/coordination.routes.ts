@@ -9,9 +9,11 @@ coordinationRoutes.get("/details", async (req: AuthenticatedRequest, res) => {
   try {
     const kind = String(req.query.kind ?? "backlog");
     const analyst = typeof req.query.analyst === "string" ? req.query.analyst : undefined;
+    const serviceModule = typeof req.query.serviceModule === "string" ? req.query.serviceModule : undefined;
+    const serviceClient = typeof req.query.serviceClient === "string" ? req.query.serviceClient : undefined;
     const parsedLimit = Number(req.query.limit ?? 50);
     const limit = Number.isFinite(parsedLimit) ? parsedLimit : 50;
-    res.json(await coordinationService.details(kind, analyst, limit));
+    res.json(await coordinationService.details(kind, analyst, limit, serviceModule, serviceClient));
   } catch (error) {
     console.error("[coordination] Falha ao carregar detalhes:", error);
     res.status(500).json({ error: "Não foi possível carregar os detalhes da coordenação." });
