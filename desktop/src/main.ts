@@ -55,6 +55,16 @@ const BACKEND_PORT =
   3333;
 
 /*
+ * Provisionamento opcional de primeira instalação.
+ *
+ * O valor é injetado no build pelo workflow e nunca deve ser
+ * persistido no repositório. Na primeira execução ele é movido
+ * imediatamente para o safeStorage do Windows.
+ */
+const PROVISIONED_DATABASE_URL =
+  process.env.TECHLEAD_HUB_DATABASE_URL?.trim() ?? "";
+
+/*
  * O Desktop continua autossuficiente e usa o backend empacotado por padrão.
  * O servidor Web central só é ativado quando a implantação definir
  * TECHLEAD_HUB_SERVER_URL explicitamente.
@@ -2163,6 +2173,18 @@ async function resolveDatabaseUrl() {
     );
 
     return environmentDatabaseUrl;
+  }
+
+  /*
+   * Build corporativo: a credencial pode ser provisionada pelo
+   * pipeline sem fazer parte do código-fonte. Na primeira execução
+   * salvamos no armazenamento seguro do Windows e passamos a usar
+   * somente a cópia protegida.
+   */
+  if (PROVISIONED_DATABASE_URL) {
+    saveDatabaseUrl(PROVISIONED_DATABASE_URL);
+    console.log("[desktop] Conexão do banco provisionada automaticamente.");
+    return PROVISIONED_DATABASE_URL;
   }
 
   /*
