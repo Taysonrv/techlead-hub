@@ -1779,7 +1779,7 @@ function normalizeConfigurationInput(input: unknown): ConfigurationValues {
     wiki: text(value.wiki),
     pat: text(value.pat),
     smtpHost: text(value.smtpHost),
-    smtpPort: text(value.smtpPort) || "587",
+    smtpPort: text(value.smtpPort),
     smtpSecure: text(value.smtpSecure) || "false",
     smtpUser: text(value.smtpUser),
     smtpPassword: text(value.smtpPassword),
@@ -1816,9 +1816,12 @@ function saveApplicationConfiguration(input: unknown) {
 
   const existingEmail = resolveEmailConfiguration();
   const existingMicrosoft = resolveMicrosoftConfiguration();
-  const smtpPassword =
-    value.smtpPassword ||
-    existingEmail.password;
+  const smtpHost = value.smtpHost || existingEmail.host;
+  const smtpPortValue = value.smtpPort || (existingEmail.host ? existingEmail.port : "");
+  const smtpSecure = value.smtpSecure || existingEmail.secure;
+  const smtpUser = value.smtpUser || existingEmail.user;
+  const smtpPassword = value.smtpPassword || existingEmail.password;
+  const smtpFrom = value.smtpFrom || existingEmail.from;
 
   if (
     !databaseUrl ||
@@ -1836,15 +1839,15 @@ function saveApplicationConfiguration(input: unknown) {
   }
 
   const emailFields = [
-    value.smtpHost,
-    value.smtpPort,
-    value.smtpUser,
+    smtpHost,
+    smtpPortValue,
+    smtpUser,
     smtpPassword,
-    value.smtpFrom,
+    smtpFrom,
   ];
   const hasSomeEmail = emailFields.some(Boolean);
   const hasAllEmail = emailFields.every(Boolean);
-  const smtpPort = Number(value.smtpPort);
+  const smtpPort = Number(smtpPortValue);
 
   if (
     hasSomeEmail &&
@@ -1868,12 +1871,12 @@ function saveApplicationConfiguration(input: unknown) {
   }
 
   if (hasAllEmail) {
-    saveSecureValue("smtpHost", value.smtpHost);
-    saveSecureValue("smtpPort", value.smtpPort);
-    saveSecureValue("smtpSecure", value.smtpSecure);
-    saveSecureValue("smtpUser", value.smtpUser);
+    saveSecureValue("smtpHost", smtpHost);
+    saveSecureValue("smtpPort", smtpPortValue);
+    saveSecureValue("smtpSecure", smtpSecure || "false");
+    saveSecureValue("smtpUser", smtpUser);
     saveSecureValue("smtpPassword", smtpPassword);
-    saveSecureValue("smtpFrom", value.smtpFrom);
+    saveSecureValue("smtpFrom", smtpFrom);
   }
 
   const tenantId = value.tenantId || existingMicrosoft.tenantId;
@@ -1921,6 +1924,12 @@ async function selectConfigurationFile() {
     project: parseEnvValue(content, "AZURE_DEVOPS_PROJECT") || "",
     wiki: parseEnvValue(content, "AZURE_DEVOPS_WIKI") || "",
     pat: parseEnvValue(content, "AZURE_DEVOPS_PAT") || "",
+    smtpHost: parseEnvValue(content, "SMTP_HOST") || "",
+    smtpPort: parseEnvValue(content, "SMTP_PORT") || "",
+    smtpSecure: parseEnvValue(content, "SMTP_SECURE") || "",
+    smtpUser: parseEnvValue(content, "SMTP_USER") || "",
+    smtpPassword: parseEnvValue(content, "SMTP_PASSWORD") || "",
+    smtpFrom: parseEnvValue(content, "SMTP_FROM") || "",
     tenantId: parseEnvValue(content, "MICROSOFT_TENANT_ID") || "",
     clientId: parseEnvValue(content, "MICROSOFT_CLIENT_ID") || "",
     sharePointSiteUrl: parseEnvValue(content, "SHAREPOINT_SITE_URL") || "",
