@@ -81,10 +81,10 @@ type Data = {
 
 type MainTab = "cadastros" | "movimentos" | "analises" | "desenvolvimento" | "gestao";
 type Routine = { label: string; path: string; icon: ElementType; description: string; keywords?: string[] };
-type DetailKind = "backlog" | "critical" | "stale" | "dueSoon" | "overdue" | "blocked" | "unassigned" | "analyst";
+type DetailKind = "backlog" | "critical" | "stale" | "dueSoon" | "overdue" | "blocked" | "unassigned" | "analyst" | "serviceModule" | "serviceClient" | "serviceAnalyst";
 type DetailData = {
   kind: DetailKind; analyst: string | null; total: number; truncated: boolean;
-  tickets: Array<{ movideskId: number; subject: string; status: string; urgency: string | null; client: string | null; owner: string | null; lastUpdate: string | null; dueDate: string | null; taskNumber: number | null; registeredVersion: string | null; deliveredVersion: string | null }>;
+  tickets: Array<{ movideskId: number; subject: string; status: string; urgency: string | null; client: string | null; owner: string | null; lastUpdate: string | null; dueDate: string | null; taskNumber: number | null; registeredVersion: string | null; deliveredVersion: string | null; service: string | null; serviceFirstLevel: string | null; serviceSecondLevel: string | null; serviceThirdLevel: string | null; category: string | null; cause: string | null }>;
   workItems: Array<{ id: number; workItemType: string; title: string; state: string; client: string | null; assignedToName: string | null; createdByName: string | null; criticality: string | null; blockedProcess: boolean | null; movideskTicket: number | null; registeredVersion: string | null; deliveredVersion: string | null; azureChangedAt: string | null; remoteUrl: string | null }>;
 };
 
@@ -183,10 +183,10 @@ export function Coordination() {
       ]
     : [];
 
-  async function openDetails(kind: DetailKind, title: string, analyst?: string) {
+  async function openDetails(kind: DetailKind, title: string, analyst?: string, serviceModule?: string, serviceClient?: string) {
     try {
       setDetailTitle(title); setDetails(null); setDetailLoading(true);
-      const response = await api.get<DetailData>("/coordination/details", { params: { kind, analyst, limit: 50 } });
+      const response = await api.get<DetailData>("/coordination/details", { params: { kind, analyst, serviceModule, serviceClient, limit: 50 } });
       setDetails(response.data);
     } catch {
       setError("Não foi possível carregar os detalhes da coordenação.");
@@ -443,10 +443,10 @@ export function Coordination() {
                       <Typography variant="caption" color="text.secondary">Distribuição dos atendimentos abertos pelos módulos derivados do Serviço.</Typography>
                       <Stack spacing={.75} sx={{ mt: 1.25 }}>
                         {data.serviceAnalytics.moduleRanking.slice(0, 6).map((item) => (
-                          <Stack key={item.module} direction="row" spacing={1} sx={{ justifyContent: "space-between", alignItems: "center" }}>
+                          <Button key={item.module} onClick={() => void openDetails("serviceModule", `Serviço · ${item.module}`, undefined, item.module)} sx={{ justifyContent: "space-between", textTransform: "none", color: "text.primary", px: .5 }}>
                             <Typography variant="body2" noWrap title={item.module}>{item.module}</Typography>
                             <Chip size="small" label={item.count} variant="outlined" />
-                          </Stack>
+                          </Button>
                         ))}
                         {!data.serviceAnalytics.moduleRanking.length && <Typography variant="caption" color="text.secondary">Sem módulos classificados.</Typography>}
                       </Stack>
@@ -457,10 +457,10 @@ export function Coordination() {
                       <Typography variant="caption" color="text.secondary">Clientes com maior quantidade de ausências, classificações genéricas ou divergências sugeridas.</Typography>
                       <Stack spacing={.75} sx={{ mt: 1.25 }}>
                         {data.serviceAnalytics.clientQuality.slice(0, 6).map((item) => (
-                          <Stack key={item.client} direction="row" spacing={1} sx={{ justifyContent: "space-between", alignItems: "center" }}>
-                            <Box sx={{ minWidth: 0 }}><Typography variant="body2" noWrap title={item.client}>{item.client}</Typography><Typography variant="caption" color="text.secondary">{item.issues} revisão(ões) de {item.total}</Typography></Box>
+                          <Button key={item.client} onClick={() => void openDetails("serviceClient", `Serviços · ${item.client}`, undefined, undefined, item.client)} sx={{ justifyContent: "space-between", textTransform: "none", color: "text.primary", px: .5 }}>
+                            <Box sx={{ minWidth: 0, textAlign: "left" }}><Typography variant="body2" noWrap title={item.client}>{item.client}</Typography><Typography variant="caption" color="text.secondary">{item.issues} revisão(ões) de {item.total}</Typography></Box>
                             <Chip size="small" label={`${item.rate}%`} color={item.rate >= 90 ? "success" : item.rate >= 75 ? "warning" : "error"} variant="outlined" />
-                          </Stack>
+                          </Button>
                         ))}
                       </Stack>
                     </Box>
@@ -470,10 +470,10 @@ export function Coordination() {
                       <Typography variant="caption" color="text.secondary">Indicador de apoio à revisão de classificação, sem avaliação individual automática.</Typography>
                       <Stack spacing={.75} sx={{ mt: 1.25 }}>
                         {data.serviceAnalytics.analystQuality.slice(0, 6).map((item) => (
-                          <Stack key={item.analyst} direction="row" spacing={1} sx={{ justifyContent: "space-between", alignItems: "center" }}>
-                            <Box sx={{ minWidth: 0 }}><Typography variant="body2" noWrap title={item.analyst}>{item.analyst}</Typography><Typography variant="caption" color="text.secondary">{item.issues} revisão(ões) de {item.total}</Typography></Box>
+                          <Button key={item.analyst} onClick={() => void openDetails("serviceAnalyst", `Serviços · ${item.analyst}`, item.analyst)} sx={{ justifyContent: "space-between", textTransform: "none", color: "text.primary", px: .5 }}>
+                            <Box sx={{ minWidth: 0, textAlign: "left" }}><Typography variant="body2" noWrap title={item.analyst}>{item.analyst}</Typography><Typography variant="caption" color="text.secondary">{item.issues} revisão(ões) de {item.total}</Typography></Box>
                             <Chip size="small" label={`${item.rate}%`} color={item.rate >= 90 ? "success" : item.rate >= 75 ? "warning" : "error"} variant="outlined" />
-                          </Stack>
+                          </Button>
                         ))}
                       </Stack>
                     </Box>
@@ -605,7 +605,9 @@ export function Coordination() {
             {details.truncated && <Alert severity="info">Exibindo os primeiros 50 registros do recorte.</Alert>}
             {details.tickets.length > 0 && <DetailSection title="Atendimentos Movidesk"><Stack spacing={1}>{details.tickets.map((ticket) => (
               <Button key={ticket.movideskId} variant="outlined" onClick={() => navigate(`/tickets?movidesk=${ticket.movideskId}`)} sx={{ justifyContent: "flex-start", textTransform: "none", textAlign: "left", p: 1.25 }}>
-                <Box sx={{ minWidth: 0 }}><Typography sx={{ fontWeight: 800 }}>#{ticket.movideskId} · {ticket.subject}</Typography><Typography variant="caption" color="text.secondary">{[ticket.status, ticket.urgency, ticket.client, ticket.owner].filter(Boolean).join(" · ")}</Typography></Box>
+                <Box sx={{ minWidth: 0 }}><Typography sx={{ fontWeight: 800 }}>#{ticket.movideskId} · {ticket.subject}</Typography><Typography variant="caption" color="text.secondary">{[ticket.status, ticket.urgency, ticket.client, ticket.owner].filter(Boolean).join(" · ")}</Typography>
+                {(ticket.serviceThirdLevel || ticket.serviceSecondLevel || ticket.serviceFirstLevel || ticket.service) && <Typography variant="caption" color="primary.main" sx={{ display: "block", mt: .35 }}>{[ticket.serviceFirstLevel, ticket.serviceSecondLevel, ticket.serviceThirdLevel].filter(Boolean).join(" » ") || ticket.service}</Typography>}
+                {(ticket.category || ticket.cause) && <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>{[ticket.category, ticket.cause].filter(Boolean).join(" · ")}</Typography>}</Box>
               </Button>
             ))}</Stack></DetailSection>}
             {details.workItems.length > 0 && <DetailSection title="Work Items Azure"><Stack spacing={1}>{details.workItems.map((item) => (
