@@ -41,6 +41,17 @@ function words(value: string) {
     .filter((word) => word.length >= 4 && !STOP_WORDS.has(word));
 }
 
+export type SimerServiceSuggestion = {
+  path: string;
+  service: string;
+  module: string | null;
+  confidence: "HIGH" | "MEDIUM" | "LOW";
+  score: number;
+  evidence: string[];
+  reasons: string[];
+  alternatives: Array<{ path: string; service: string; score: number }>;
+};
+
 export function suggestSimerService(input: {
   subject?: string | null;
   category?: string | null;
@@ -49,42 +60,48 @@ export function suggestSimerService(input: {
   serviceFirstLevel?: string | null;
   serviceSecondLevel?: string | null;
   serviceThirdLevel?: string | null;
-}, catalog: readonly SimerServiceCatalogItem[] = SIMER_SERVICE_CATALOG) {
-  const source = [
-    input.subject,
-    input.category,
-    input.cause,
-  ].filter(Boolean).join(" ");
-
+}, catalog: readonly SimerServiceCatalogItem[] = SIMER_SERVICE_CATALOG): SimerServiceSuggestion | null {
+  const source = [input.subject, input.category, input.cause].filter(Boolean).join(" ");
   const sourceWords = new Set(words(source));
   if (!sourceWords.size) return null;
 
-  const currentPath = [
-    input.serviceFirstLevel,
-    input.serviceSecondLevel,
-    input.serviceThirdLevel,
-  ].filter(Boolean).join(" » ") || input.currentService || "";
+  const currentPath = [input.serviceFirstLevel, input.serviceSecondLevel, input.serviceThirdLevel]
+    .filter(Boolean).join(" » ") || input.currentService || "";
+  const currentWords = new Set(words(currentPath));
 
   const ranked = catalog.map((item) => {
-    const itemWords = words(item.path);
+    const itemWords = [...new Set(words(item.path))];
     const matches = itemWords.filter((word) => sourceWords.has(word));
-    const specificBonus = item.path.split("»").length >= 4 ? 2 : 0;
-    const score = matches.length * 3 + specificBonus;
-    return { item, score, matches };
+    const currentOverlap = itemWords.filter((word) => currentWords.has(word));
+    const specificity = item.path.split("»").length;
+    const exactPhraseBonus = itemWords.some((word) => normalize(input.subject ?? "").includes(word)) ? 1 : 0;
+    const score = matches.length * 4 + Math.min(currentOverlap.length, 2) + (specificity >= 4 ? 2 : 0) + exactPhraseBonus;
+    return { item, score, matches, currentOverlap };
   })
-    .filter((entry) => entry.score >= 5)
+    .filter((entry) => entry.score >= 7 && entry.matches.length >= 1)
     .sort((a, b) => b.score - a.score || b.matches.length - a.matches.length);
 
   const best = ranked[0];
   if (!best) return null;
+  const second = ranked[1];
 
   const normalizedCurrent = normalize(currentPath);
   const normalizedSuggested = normalize(best.item.path);
-  if (normalizedCurrent && normalizedSuggested.includes(normalizedCurrent) && normalizedCurrent.length > 20) {
+  if (normalizedCurrent && (normalizedSuggested === normalizedCurrent || normalizedSuggested.includes(normalizedCurrent)) && normalizedCurrent.length > 20) {
     return null;
   }
 
-  const confidence = best.score >= 11 ? "HIGH" : best.score >= 8 ? "MEDIUM" : "LOW";
+  const margin = second ? best.score - second.score : best.score;
+  const confidence: SimerServiceSuggestion["confidence"] =
+    best.score >= 15 && margin >= 4 ? "HIGH" :
+    best.score >= 10 && margin >= 2 ? "MEDIUM" : "LOW";
+
+  const reasons = [
+    best.matches.length ? `Termos coincidentes: ${best.matches.slice(0, 6).join(", ")}.` : null,
+    best.currentOverlap.length ? `Há proximidade com a classificação atual em: ${best.currentOverlap.slice(0, 4).join(", ")}.` : null,
+    second ? `Diferença de ${margin} ponto(s) para a segunda opção.` : "Não houve segunda opção com evidência suficiente.",
+  ].filter((value): value is string => Boolean(value));
+
   return {
     path: best.item.path,
     service: best.item.name,
@@ -92,5 +109,11 @@ export function suggestSimerService(input: {
     confidence,
     score: best.score,
     evidence: best.matches.slice(0, 6),
-  } as const;
+    reasons,
+    alternatives: ranked.slice(1, 4).map((entry) => ({
+      path: entry.item.path,
+      service: entry.item.name,
+      score: entry.score,
+    })),
+  };
 }
