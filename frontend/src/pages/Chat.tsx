@@ -207,24 +207,24 @@ export function Chat() {
   const stickers = ["🎉 PARABÉNS!","🚀 VAMOS!","✅ RESOLVIDO","👏 BOA!","🎯 NA META","🔥 PRIORIDADE","💡 IDEIA","🤝 OBRIGADO","☕ CAFÉ?","😎 FECHOU!","🛠️ EM ANÁLISE","📣 ATENÇÃO"];
   const append = (value: string) => setContent((current) => current ? `${current} ${value}` : value);
 
-  return <Stack spacing={1.25} sx={{ height: "100%", maxHeight: "100%", minHeight: 0, overflow: "hidden", p: { xs: 1.25, md: 2 }, boxSizing: "border-box", background: (theme) => theme.palette.mode === "dark" ? "radial-gradient(circle at 12% 0%, rgba(24,199,122,.09), transparent 28%)" : "radial-gradient(circle at 10% 0%, rgba(24,199,122,.08), transparent 30%)" }}>
-    <Paper elevation={0} sx={{ flexShrink: 0, px: { xs: 1.5, md: 2 }, py: 1.25, borderRadius: 3.5, border: "1px solid", borderColor: "divider", background: (theme) => theme.palette.mode === "dark" ? "linear-gradient(110deg,rgba(24,199,122,.10),rgba(47,111,237,.06),rgba(255,255,255,.025))" : "linear-gradient(110deg,rgba(24,199,122,.10),rgba(47,111,237,.055),rgba(255,255,255,.94))", boxShadow: "0 10px 32px rgba(15,23,42,.06)" }}>
-      <Stack direction={{ xs: "column", md: "row" }} spacing={1.25} sx={{ alignItems: { md: "center" }, justifyContent: "space-between" }}>
-        <Stack direction="row" spacing={1.35} sx={{ alignItems: "center", minWidth: 0 }}>
-          <Box sx={{ width: 42, height: 42, borderRadius: 2.5, display: "grid", placeItems: "center", flexShrink: 0, color: "primary.main", bgcolor: "rgba(24,199,122,.10)", border: "1px solid rgba(24,199,122,.20)" }}><ForumOutlined /></Box>
+  return <Stack spacing={1} sx={{ height: "100%", maxHeight: "100%", minHeight: 0, overflow: "hidden", p: { xs: 1, md: 1.25 }, boxSizing: "border-box", bgcolor: "background.default" }}>
+    <Paper elevation={0} sx={{ flexShrink: 0, px: 1.5, py: 1, minHeight: 62, borderRadius: 3, border: "1px solid", borderColor: "divider", bgcolor: "background.paper", boxShadow: "0 6px 20px rgba(15,23,42,.05)" }}>
+      <Stack direction="row" spacing={1.5} sx={{ height: "100%", alignItems: "center", justifyContent: "space-between", minWidth: 0 }}>
+        <Stack direction="row" spacing={1.1} sx={{ alignItems: "center", minWidth: 0, flex: 1 }}>
+          <Box sx={{ width: 38, height: 38, borderRadius: 2.2, display: "grid", placeItems: "center", flexShrink: 0, color: "primary.main", bgcolor: "rgba(24,199,122,.10)", border: "1px solid rgba(24,199,122,.20)" }}><ForumOutlined fontSize="small" /></Box>
           <Box sx={{ minWidth: 0 }}>
-            <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}><Typography variant="h5" sx={{ fontWeight: 950, lineHeight: 1, letterSpacing: "-.025em" }}>Chat interno</Typography><Chip size="small" label={{ ONLINE: "Online", AWAY: "Ausente", BUSY: "Ocupado" }[availability]} color={availability === "BUSY" ? "error" : availability === "AWAY" ? "warning" : "success"} onClick={() => { const next = availability === "ONLINE" ? "AWAY" : availability === "AWAY" ? "BUSY" : "ONLINE"; setAvailability(next); localStorage.setItem("techlead-chat-status", next); }} sx={{ fontWeight: 800 }} /></Stack>
-            <Typography variant="caption" color="text.secondary">Comunicação da equipe em tempo real</Typography>
+            <Stack direction="row" spacing={.8} sx={{ alignItems: "center" }}><Typography sx={{ fontWeight: 950, fontSize: "1.05rem", lineHeight: 1.1, whiteSpace: "nowrap" }}>Chat interno</Typography><Chip size="small" label={{ ONLINE: "Online", AWAY: "Ausente", BUSY: "Ocupado" }[availability]} color={availability === "BUSY" ? "error" : availability === "AWAY" ? "warning" : "success"} onClick={() => { const next = availability === "ONLINE" ? "AWAY" : availability === "AWAY" ? "BUSY" : "ONLINE"; setAvailability(next); localStorage.setItem("techlead-chat-status", next); }} sx={{ height: 22, fontWeight: 800 }} /></Stack>
+            <Typography variant="caption" color="text.secondary" noWrap>Comunicação da equipe em tempo real</Typography>
           </Box>
         </Stack>
-        <Stack direction="row" spacing={1} sx={{ alignItems: "center", minWidth: 0, flex: { md: 1 }, justifyContent: "flex-end", pr: { md: 300 } }}>
-          <TextField size="small" value={statusMessage} onChange={(event) => { const value = event.target.value.slice(0,160); setStatusMessage(value); localStorage.setItem("techlead-chat-status-message", value); }} placeholder="Sua mensagem pessoal..." sx={{ width: { xs: "100%", md: 310 }, "& .MuiOutlinedInput-root": { borderRadius: 999, bgcolor: "background.paper" } }} slotProps={{ input: { startAdornment: <EditOutlined sx={{ mr: .8, fontSize: 16, color: "text.secondary" }} /> } }} />
-          <Tooltip title="Presença sincronizada em tempo real"><AutoAwesomeOutlined sx={{ color: "primary.main", fontSize: 19 }} /></Tooltip>
+        <Stack direction="row" spacing={.8} sx={{ alignItems: "center", width: { xs: 220, md: 330 }, mr: { md: 29 }, flexShrink: 0 }}>
+          <TextField size="small" fullWidth value={statusMessage} onChange={(event) => { const value = event.target.value.slice(0,160); setStatusMessage(value); localStorage.setItem("techlead-chat-status-message", value); }} placeholder="Mensagem pessoal" sx={{ "& .MuiOutlinedInput-root": { height: 36, borderRadius: 2, bgcolor: "background.default" } }} slotProps={{ input: { startAdornment: <EditOutlined sx={{ mr: .7, fontSize: 15, color: "text.secondary" }} /> } }} />
+          <Tooltip title="Presença sincronizada"><AutoAwesomeOutlined sx={{ color: "primary.main", fontSize: 18, flexShrink: 0 }} /></Tooltip>
         </Stack>
       </Stack>
     </Paper>
     {error && <Alert severity="error" onClose={() => setError("")}>{error}</Alert>}
-    <Paper elevation={0} sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "300px minmax(0,1fr)" }, minHeight: 0, flex: 1, overflow: "hidden", borderRadius: 4, maxHeight: "100%", height: "100%", border: "1px solid", borderColor: "divider", boxShadow: "0 16px 42px rgba(15,23,42,.08)", bgcolor: "background.paper" }}>
+    <Paper elevation={0} sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "290px minmax(0,1fr)" }, minHeight: 0, flex: 1, overflow: "hidden", borderRadius: 4, maxHeight: "100%", height: "100%", border: "1px solid", borderColor: "divider", boxShadow: "0 16px 42px rgba(15,23,42,.08)", bgcolor: "background.paper" }}>
       <Box sx={{ borderRight: { md: "1px solid" }, borderColor: "divider", minHeight: 0, overflowY: "auto", overscrollBehavior: "contain", bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(255,255,255,.018)" : "rgba(248,250,252,.72)" }}>
         <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between", px: 1.5, py: 1.25 }}>
           <Box><Typography sx={{ fontWeight: 900 }}>Contatos</Typography><Typography variant="caption" color="text.secondary">{channels.length} conversa(s)</Typography></Box>
