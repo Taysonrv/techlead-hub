@@ -2,6 +2,7 @@ import { prisma } from "../database/prisma";
 import { SIMER_CLIENTS, SUPPORT_ANALYSTS, SUPPORT_COORDINATOR, azureOperationalScope, ticketOperationalScope } from "../domain/OperationalScope";
 import { microsoftKnowledgeService } from "./MicrosoftKnowledgeService";
 import { SIMER_SERVICE_CATALOG, suggestSimerService, type SimerServiceCatalogItem } from "../domain/SimerServiceCatalog";
+import { extractMovideskTimeEntries } from "./MovideskPayloadAnalytics";
 
 const OPEN_TICKET_STATES = ["New", "InAttendance", "Stopped"];
 const CLOSED_WORK_ITEM_STATES = ["Closed", "Resolved", "Concluído", "Concluido", "Done", "Removed"];
@@ -196,6 +197,34 @@ export class CoordinationService {
         analysts: [...SUPPORT_ANALYSTS],
       },
     };
+  }
+
+  async productivityCapacity(days = 28) {
+    const now = new Date();
+    const start = new Date(now.getTime() - (Math.min(Math.max(days, 7), 90) - 1) * 86400000);
+    start.setHours(0, 0, 0, 0);
+    const holidays = new Set((process.env.PRODUCTIVITY_HOLIDAYS ?? "").split(",").map((value) => value.trim()).filter(Boolean));
+    const hoursPerDay = Math.min(Math.max(Number(process.env.PRODUCTIVITY_HOURS_PER_DAY ?? 8) || 8, 1), 24);
+    const dateKey = (value: Date) => `${value.getFullYear()}-${String(value.getMonth()+1).padStart(2,"0")}-${String(value.getDate()).padStart(2,"0")}`;
+    const isBusiness = (value: Date) => value.getDay() !== 0 && value.getDay() !== 6 && !holidays.has(dateKey(value));
+    let businessDays = 0; for (const day = new Date(start); day <= now; day.setDate(day.getDate()+1)) if (isBusiness(day)) businessDays += 1;
+    const tickets = await prisma.ticket.findMany({
+      where: { AND: [ticketOperationalScope(), { isDeleted: false }, { owner: { in: [...SUPPORT_ANALYSTS], mode: "insensitive" } }] },
+      select: { owner: true, rawData: true },
+    });
+    const same = (a: string | null, b: string) => Boolean(a && a.localeCompare(b, "pt-BR", { sensitivity: "base" }) === 0);
+    const analysts = SUPPORT_ANALYSTS.map((analyst) => {
+      let minutes = 0;
+      for (const ticket of tickets) for (const entry of extractMovideskTimeEntries(ticket.rawData)) {
+        if (entry.date) { const date = new Date(entry.date); if (date < start || date > now) continue; }
+        if (entry.analyst ? same(entry.analyst, analyst) : same(ticket.owner, analyst)) minutes += entry.minutes;
+      }
+      const expectedHours = businessDays * hoursPerDay, registeredHours = Number((minutes/60).toFixed(2));
+      return { analyst, expectedHours, registeredHours, coverageRate: expectedHours ? Number((registeredHours/expectedHours*100).toFixed(1)) : null };
+    });
+    const expectedHours = analysts.reduce((sum,row)=>sum+row.expectedHours,0);
+    const registeredHours = Number(analysts.reduce((sum,row)=>sum+row.registeredHours,0).toFixed(2));
+    return { days, businessDays, hoursPerDay, expectedHours, registeredHours, coverageRate: expectedHours ? Number((registeredHours/expectedHours*100).toFixed(1)) : null, analysts };
   }
 
   async summary(userId: number) {
