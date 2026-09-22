@@ -96,7 +96,7 @@ function AuthenticatedLayout({
             display: "flex",
             width: "100%",
             minHeight: "100vh",
-            height: isChat ? "100vh" : "auto",
+            height: isChat ? "100dvh" : "auto",
             overflow: isChat ? "hidden" : "visible",
             backgroundColor: "background.default",
           }}
@@ -109,7 +109,7 @@ function AuthenticatedLayout({
               flexGrow: 1,
               minWidth: 0,
               minHeight: isChat ? 0 : "100vh",
-              height: isChat ? "100vh" : "auto",
+              height: isChat ? "100dvh" : "auto",
               boxSizing: "border-box",
               overflow: isChat ? "hidden" : undefined,
               backgroundColor: "background.default",
@@ -120,7 +120,7 @@ function AuthenticatedLayout({
 
               px: 0,
 
-              py: isChat ? 1.5 : {
+              py: isChat ? 0 : {
                 xs: 1.5,
                 sm: 2,
                 md: 2.5,
@@ -129,16 +129,16 @@ function AuthenticatedLayout({
               },
             }}
           >
-<Box sx={{ px: { xs: 1.5, sm: 2, md: 2.5, lg: 3, xl: 4 } }}><GlobalTopBar /></Box>
+{!isChat && <Box sx={{ px: { xs: 1.5, sm: 2, md: 2.5, lg: 3, xl: 4 } }}><GlobalTopBar /></Box>}
             {backendUnavailable && <Alert severity="warning" sx={{ mx: { xs: 1.5, sm: 2, md: 2.5, lg: 3, xl: 4 }, mb: 2 }}>O servidor central está temporariamente indisponível. Verifique a conexão e tente novamente; seus dados locais de navegação foram preservados.</Alert>}
             <Box
               className="techlead-page-surface futuristic-page"
               sx={{
                 width: "100%",
                 maxWidth: "100%",
-                px: { xs: 1.5, sm: 2, md: 2.5, lg: 3, xl: 4 },
+                px: isChat ? 0 : { xs: 1.5, sm: 2, md: 2.5, lg: 3, xl: 4 },
                 minHeight: isChat ? 0 : "calc(100vh - 96px)",
-                height: isChat ? "calc(100vh - 76px)" : "auto",
+                height: isChat ? "100dvh" : "auto",
                 overflow: isChat ? "hidden" : "visible",
                 boxSizing: "border-box",
                 position: "relative",
