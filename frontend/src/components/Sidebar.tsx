@@ -62,6 +62,7 @@ import {
   type UserRole,
 } from "../context/AuthContext";
 import { UserAvatar } from "./UserAvatar";
+import { BugReportDialog } from "./BugReportDialog";
 
 import {
   api,
@@ -115,6 +116,8 @@ export function Sidebar() {
     isAdmin,
   } =
     useAuth();
+
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
 
   const [
     appVersion,
@@ -806,6 +809,8 @@ export function Sidebar() {
                 1,
             }}
           >
+            <Button size="small" startIcon={<BugReportOutlined sx={{ fontSize: 15 }} />} onClick={() => setFeedbackOpen(true)} sx={{ minHeight: 28, px: .75, color: "rgba(255,255,255,.62)", fontSize: ".66rem !important" }}>Reportar</Button>
+
             <Typography
               variant="caption"
               sx={{
@@ -841,6 +846,8 @@ export function Sidebar() {
         </Box>
       </Box>
       </Drawer>
+
+      <BugReportDialog open={feedbackOpen} onClose={() => setFeedbackOpen(false)} />
 
       {user && (
         <Box
