@@ -1,4 +1,4 @@
-import { AddCommentOutlined, ForumOutlined, SendRounded, ShieldOutlined, EmojiEmotionsOutlined, CelebrationOutlined, NotificationsActiveOutlined, ReplyOutlined, CloseOutlined } from "@mui/icons-material";
+import { AddCommentOutlined, ForumOutlined, SendRounded, ShieldOutlined, EmojiEmotionsOutlined, CelebrationOutlined, NotificationsActiveOutlined, ReplyOutlined, CloseOutlined, SearchOutlined, Circle, MoreHorizOutlined } from "@mui/icons-material";
 import { Alert, Box, Button, Checkbox, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Divider, FormControlLabel, IconButton, List, ListItemButton, ListItemText, Paper, Popover, Stack, TextField, Tooltip, Typography } from "@mui/material";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
@@ -30,8 +30,14 @@ export function Chat() {
   const [stickersOpen, setStickersOpen] = useState(false);
   const previousUnread = useRef(0);
   const [replyTo, setReplyTo] = useState<Message | null>(null);
+  const [conversationSearch, setConversationSearch] = useState("");
+  const [messageSearch, setMessageSearch] = useState("");
+  const [typing, setTyping] = useState(false);
+  const typingTimer = useRef<number | null>(null);
 
   const selected = useMemo(() => channels.find((channel) => channel.id === selectedId) ?? null, [channels, selectedId]);
+  const visibleChannels = useMemo(() => channels.filter((channel) => [channel.name, channel.description, channel.clientName].some((value) => value?.toLowerCase().includes(conversationSearch.toLowerCase()))), [channels, conversationSearch]);
+  const visibleMessages = useMemo(() => messages.filter((message) => !messageSearch.trim() || message.content.toLowerCase().includes(messageSearch.toLowerCase())), [messages, messageSearch]);
 
   const loadChannels = useCallback(async () => {
     const response = await api.get<{ channels: Channel[] }>("/chat/channels");
@@ -127,7 +133,7 @@ export function Chat() {
   }
 
   const emojis = ["😀","😄","😂","😊","😉","😍","🤝","👏","👍","👀","🎯","🚀","🔥","✅","⚠️","💡","🙏","🎉","❤️","💬"];
-  const stickers = ["🎉 PARABÉNS!","🚀 VAMOS!","✅ RESOLVIDO","👏 BOA!","🎯 NA META","🔥 PRIORIDADE","💡 IDEIA","🤝 OBRIGADO"];
+  const stickers = ["🎉 PARABÉNS!","🚀 VAMOS!","✅ RESOLVIDO","👏 BOA!","🎯 NA META","🔥 PRIORIDADE","💡 IDEIA","🤝 OBRIGADO","☕ CAFÉ?","😎 FECHOU!","🛠️ EM ANÁLISE","📣 ATENÇÃO"];
   const append = (value: string) => setContent((current) => current ? `${current} ${value}` : value);
 
   return <Stack spacing={1} sx={{ height: "100%", maxHeight: "100%", minHeight: 0, overflow: "hidden" }}>
@@ -138,38 +144,42 @@ export function Chat() {
     {error && <Alert severity="error" onClose={() => setError("")}>{error}</Alert>}
     <Paper variant="outlined" sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "280px minmax(0,1fr)" }, minHeight: 0, flex: 1, overflow: "hidden", borderRadius: 3 }}>
       <Box sx={{ borderRight: { md: "1px solid" }, borderColor: "divider", minHeight: 0, overflowY: "auto", overscrollBehavior: "contain" }}>
-        <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between", p: 2 }}>
-          <Typography sx={{ fontWeight: 850 }}>Conversas</Typography>
-          <IconButton size="small" aria-label="Criar canal" onClick={() => setCreateOpen(true)}><AddCommentOutlined /></IconButton>
+        <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between", px: 1.5, py: 1.25 }}>
+          <Box><Typography sx={{ fontWeight: 900 }}>Contatos</Typography><Typography variant="caption" color="text.secondary">{channels.length} conversa(s)</Typography></Box>
+          <Tooltip title="Nova conversa"><IconButton size="small" aria-label="Criar canal" onClick={() => setCreateOpen(true)}><AddCommentOutlined /></IconButton></Tooltip>
         </Stack>
+        <Box sx={{ px: 1.25, pb: 1 }}><TextField size="small" fullWidth value={conversationSearch} onChange={(event) => setConversationSearch(event.target.value)} placeholder="Localizar contato..." slotProps={{ input: { startAdornment: <SearchOutlined sx={{ mr: .7, fontSize: 18, color: "text.secondary" }} /> } }} /></Box>
         <Divider />
-        <List disablePadding>{channels.map((channel) => <ListItemButton key={channel.id} selected={channel.id === selectedId} onClick={() => setSelectedId(channel.id)} sx={{ py: 1.5 }}>
-          <ForumOutlined fontSize="small" sx={{ mr: 1.5, color: "text.secondary" }} />
+        <List disablePadding>{visibleChannels.map((channel) => <ListItemButton key={channel.id} selected={channel.id === selectedId} onClick={() => setSelectedId(channel.id)} sx={{ py: 1.5 }}>
+          <Box sx={{ position: "relative", mr: 1.2, width: 34, height: 34, borderRadius: "50%", bgcolor: channel.id === selectedId ? "primary.main" : "action.hover", display: "grid", placeItems: "center", fontWeight: 900 }}>{channel.name.slice(0,1).toUpperCase()}<Circle sx={{ position: "absolute", width: 9, height: 9, right: -1, bottom: 1, color: "success.main", stroke: "background.paper", strokeWidth: 4 }} /></Box>
           <ListItemText primary={channel.name} secondary={channel.clientName || channel.description || "Canal da equipe"} slotProps={{ primary: { sx: { fontWeight: 750 } } }} />
           {channel.unread > 0 && <Chip size="small" color="primary" label={channel.unread} />}
         </ListItemButton>)}</List>
         {!channels.length && !loading && <Box sx={{ p: 3, textAlign: "center" }}><Typography color="text.secondary" variant="body2">Crie o primeiro canal da equipe.</Typography></Box>}
       </Box>
       <Box sx={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
-        <Box sx={{ p: 2 }}><Typography sx={{ fontWeight: 850 }}>{selected?.name || "Selecione uma conversa"}</Typography><Typography variant="caption" color="text.secondary">Atualização segura a cada 5 segundos</Typography></Box>
+        <Stack direction="row" spacing={1} sx={{ px: 1.5, py: 1, alignItems: "center", justifyContent: "space-between" }}><Box><Stack direction="row" spacing={.7} sx={{ alignItems: "center" }}><Typography sx={{ fontWeight: 900 }}>{selected?.name || "Selecione uma conversa"}</Typography>{selected && <Chip size="small" icon={<Circle sx={{ fontSize: "9px !important" }} />} label="Online" color="success" variant="outlined" />}</Stack><Typography variant="caption" color="text.secondary">Mensagens instantâneas · atualização automática</Typography></Box><Stack direction="row" spacing={.5}><TextField size="small" value={messageSearch} onChange={(event) => setMessageSearch(event.target.value)} placeholder="Buscar na conversa" sx={{ width: 210 }} slotProps={{ input: { startAdornment: <SearchOutlined sx={{ mr: .5, fontSize: 17, color: "text.secondary" }} /> } }} /><IconButton size="small"><MoreHorizOutlined /></IconButton></Stack></Stack>
         <Divider />
         <Box ref={messagesRef} sx={{ flex: 1, minHeight: 0, overflowY: "auto", overscrollBehavior: "contain", p: 2.5, bgcolor: "background.default" }}>
-          {loading ? <Box sx={{ display: "grid", placeItems: "center", minHeight: 160 }}><CircularProgress size={28} /></Box> : messages.map((message) => {
+          {loading ? <Box sx={{ display: "grid", placeItems: "center", minHeight: 160 }}><CircularProgress size={28} /></Box> : visibleMessages.map((message, messageIndex) => {
             const mine = message.author.id === user?.id;
             const parent = message.parentId ? messages.find((item) => item.id === message.parentId) : null;
+            const previous = visibleMessages[messageIndex - 1];
+            const sameAuthor = previous?.author.id === message.author.id && (new Date(message.createdAt).getTime() - new Date(previous.createdAt).getTime()) < 5 * 60_000;
             const mentioned = Boolean(user?.username && message.content.toLowerCase().includes(`@${user.username.toLowerCase()}`));
             const renderContent = (value: string) => value.split(/(@[\\w.-]+)/g).map((part, index) => part.startsWith("@") ? <Box component="span" key={index} sx={{ fontWeight: 900, textDecoration: "underline" }}>{part}</Box> : part);
-            return <Box key={message.id} sx={{ display: "flex", justifyContent: mine ? "flex-end" : "flex-start", mb: .8 }}><Paper elevation={0} sx={{ maxWidth: "76%", p: 1.25, bgcolor: mine ? "primary.main" : mentioned ? "rgba(245,158,11,.10)" : "background.paper", color: mine ? "primary.contrastText" : "text.primary", border: mine ? 0 : "1px solid", borderColor: mentioned ? "warning.main" : "divider", borderRadius: 2 }}><Stack direction="row" spacing={1} sx={{ justifyContent: "space-between", alignItems: "center" }}><Typography variant="caption" sx={{ fontWeight: 800, opacity: .8 }}>{message.author.name}</Typography><Tooltip title="Responder"><IconButton size="small" onClick={() => setReplyTo(message)} sx={{ color: "inherit", opacity: .65 }}><ReplyOutlined sx={{ fontSize: 16 }} /></IconButton></Tooltip></Stack>{parent && <Box sx={{ px: 1, py: .6, mb: .6, borderLeft: "3px solid", borderColor: mine ? "rgba(255,255,255,.55)" : "primary.main", bgcolor: mine ? "rgba(255,255,255,.12)" : "action.hover", borderRadius: 1 }}><Typography variant="caption" sx={{ fontWeight: 800 }}>{parent.author.name}</Typography><Typography variant="caption" noWrap sx={{ display: "block", maxWidth: 420 }}>{parent.content}</Typography></Box>}<Typography sx={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{renderContent(message.content)}</Typography><Typography variant="caption" sx={{ display: "block", textAlign: "right", opacity: .7 }}>{new Date(message.createdAt).toLocaleString("pt-BR")}</Typography></Paper></Box>;
+            return <Box key={message.id} sx={{ display: "flex", justifyContent: mine ? "flex-end" : "flex-start", mb: sameAuthor ? .25 : 1.1, mt: sameAuthor ? 0 : .6 }}><Paper elevation={0} sx={{ maxWidth: "76%", p: 1.25, bgcolor: mine ? "primary.main" : mentioned ? "rgba(245,158,11,.10)" : "background.paper", color: mine ? "primary.contrastText" : "text.primary", border: mine ? 0 : "1px solid", borderColor: mentioned ? "warning.main" : "divider", borderRadius: 2 }}><Stack direction="row" spacing={1} sx={{ justifyContent: "space-between", alignItems: "center" }}><Typography variant="caption" sx={{ fontWeight: 800, opacity: .8 }}>{sameAuthor ? "" : message.author.name}</Typography><Tooltip title="Responder"><IconButton size="small" onClick={() => setReplyTo(message)} sx={{ color: "inherit", opacity: .65 }}><ReplyOutlined sx={{ fontSize: 16 }} /></IconButton></Tooltip></Stack>{parent && <Box sx={{ px: 1, py: .6, mb: .6, borderLeft: "3px solid", borderColor: mine ? "rgba(255,255,255,.55)" : "primary.main", bgcolor: mine ? "rgba(255,255,255,.12)" : "action.hover", borderRadius: 1 }}><Typography variant="caption" sx={{ fontWeight: 800 }}>{parent.author.name}</Typography><Typography variant="caption" noWrap sx={{ display: "block", maxWidth: 420 }}>{parent.content}</Typography></Box>}<Typography sx={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{renderContent(message.content)}</Typography><Typography variant="caption" sx={{ display: "block", textAlign: "right", opacity: .7 }}>{new Date(message.createdAt).toLocaleString("pt-BR")}</Typography></Paper></Box>;
           })}
           <div ref={bottomRef} />
         </Box>
         <Divider />
+        {typing && content.trim() && <Typography variant="caption" color="text.secondary" sx={{ px: 1.6, pt: .45 }}>Você está digitando...</Typography>}
         {replyTo && <Stack direction="row" sx={{ px: 1.5, py: .7, alignItems: "center", justifyContent: "space-between", bgcolor: "action.hover", borderTop: "1px solid", borderColor: "divider" }}><Box><Typography variant="caption" sx={{ fontWeight: 850 }}>Respondendo a {replyTo.author.name}</Typography><Typography variant="caption" color="text.secondary" noWrap sx={{ display: "block", maxWidth: 620 }}>{replyTo.content}</Typography></Box><IconButton size="small" onClick={() => setReplyTo(null)}><CloseOutlined fontSize="small" /></IconButton></Stack>}
         <Stack direction="row" spacing={1} sx={{ p: 1.25, alignItems: "flex-end", bgcolor: "background.paper" }}>
           <Tooltip title="Emojis"><IconButton onClick={(event) => setEmojiAnchor(event.currentTarget)} disabled={!selectedId}><EmojiEmotionsOutlined /></IconButton></Tooltip>
           <Tooltip title="Figurinhas"><IconButton onClick={() => setStickersOpen(true)} disabled={!selectedId}><CelebrationOutlined /></IconButton></Tooltip>
           <Tooltip title="Ativar notificações do sistema"><IconButton onClick={() => { if ("Notification" in window && Notification.permission === "default") void Notification.requestPermission(); }}><NotificationsActiveOutlined /></IconButton></Tooltip>
-          <TextField size="small" fullWidth multiline maxRows={5} value={content} disabled={!selectedId || sending} placeholder="Escreva uma mensagem; use @usuario para mencionar..." slotProps={{ htmlInput: { maxLength: 4000 } }} onChange={(event) => setContent(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void send(); } }} />
+          <TextField size="small" fullWidth multiline maxRows={5} value={content} disabled={!selectedId || sending} placeholder="Escreva uma mensagem; use @usuario para mencionar..." slotProps={{ htmlInput: { maxLength: 4000 } }} onChange={(event) => { setContent(event.target.value); setTyping(true); if (typingTimer.current) window.clearTimeout(typingTimer.current); typingTimer.current = window.setTimeout(() => setTyping(false), 1200); }} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void send(); } }} />
           <Button variant="contained" endIcon={sending ? <CircularProgress size={16} color="inherit" /> : <SendRounded />} disabled={!selectedId || !content.trim() || sending} onClick={() => void send()}>Enviar</Button>
         </Stack>
       </Box>
