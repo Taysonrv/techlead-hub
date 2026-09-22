@@ -171,8 +171,8 @@ export function Sidebar() {
     if (!user) { setChatUnread(0); return; }
     const loadChatUnread = async () => {
       try {
-        const response = await api.get<Array<{ unread?: number }>>("/chat/channels");
-        setChatUnread(response.data.reduce((total, channel) => total + (channel.unread ?? 0), 0));
+        const response = await api.get<{ channels: Array<{ unread?: number }> }>("/chat/channels");
+        setChatUnread(response.data.channels.reduce((total, channel) => total + (channel.unread ?? 0), 0));
       } catch { /* indicador não deve afetar a navegação */ }
     };
     void loadChatUnread();
