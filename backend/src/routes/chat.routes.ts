@@ -8,6 +8,7 @@ const fail = (res: Response, error: unknown) => { const typed = error as { statu
 
 chatRoutes.get("/participants", async (_req, res) => { try { res.json({ participants: await chatService.listParticipants() }); } catch (error) { fail(res, error); } });
 chatRoutes.get("/channels", async (req: AuthenticatedRequest, res) => { try { res.json({ channels: await chatService.listChannels(req.auth!.userId) }); } catch (error) { fail(res, error); } });
+chatRoutes.post("/direct/:userId", async (req: AuthenticatedRequest, res) => { try { res.status(201).json(await chatService.openDirectChannel(req.auth!.userId, id(req.params.userId))); } catch (error) { fail(res, error); } });
 chatRoutes.post("/channels", async (req: AuthenticatedRequest, res) => { try { res.status(201).json(await chatService.createChannel(req.auth!.userId, req.auth!.role, req.body ?? {})); } catch (error) { fail(res, error); } });
 chatRoutes.get("/channels/:channelId/messages", async (req: AuthenticatedRequest, res) => { try { res.json({ messages: await chatService.listMessages(req.auth!.userId, id(req.params.channelId), req.query.beforeId ? id(String(req.query.beforeId)) : undefined) }); } catch (error) { fail(res, error); } });
 chatRoutes.post("/channels/:channelId/messages", async (req: AuthenticatedRequest, res) => { try { res.status(201).json(await chatService.sendMessage(req.auth!.userId, id(req.params.channelId), req.body ?? {})); } catch (error) { fail(res, error); } });
