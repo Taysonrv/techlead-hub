@@ -137,6 +137,7 @@ export function Coordination() {
     requestedTab && mainTabs.some((item) => item.key === requestedTab) ? requestedTab : "movimentos",
   );
   const [data, setData] = useState<Data | null>(null);
+  const [capacity, setCapacity] = useState<{ days: number; businessDays: number; hoursPerDay: number; expectedHours: number; registeredHours: number; coverageRate: number | null; analysts: Array<{ analyst: string; expectedHours: number; registeredHours: number; coverageRate: number | null }> } | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -166,6 +167,12 @@ export function Coordination() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    api.get("/coordination/productivity-capacity", { params: { days: 28 } })
+      .then((response) => setCapacity(response.data))
+      .catch(() => setCapacity(null));
+  }, []);
 
   const maximum = useMemo(
     () => Math.max(...(data?.workload.map((item) => item.total) ?? [1]), 1),
@@ -481,6 +488,21 @@ export function Coordination() {
                   </Box>
                 </CardContent>
               </Card>
+
+              {capacity && <Card variant="outlined">
+                <CardContent>
+                  <Stack direction={{ xs: "column", md: "row" }} spacing={1} sx={{ justifyContent: "space-between", alignItems: { md: "center" } }}>
+                    <Box><Typography variant="h6" sx={{ fontWeight: 850 }}>Capacidade e horas registradas</Typography><Typography variant="body2" color="text.secondary">Últimos {capacity.days} dias. A cobertura compara apontamentos Movidesk com a jornada prevista e deve ser lida junto com volume, SLA e complexidade.</Typography></Box>
+                    <Button variant="outlined" onClick={() => navigate("/analistas")}>Abrir análise completa</Button>
+                  </Stack>
+                  <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(3,1fr)" }, gap: 1.25, mt: 1.5 }}>
+                    <KpiCard title="Horas previstas" value={`${capacity.expectedHours.toLocaleString("pt-BR")}h`} subtitle={`${capacity.businessDays} dias úteis · ${capacity.hoursPerDay}h/dia`} info="Capacidade teórica da equipe no período, antes de ajustes individuais por férias ou afastamentos." accent={aliareColors.info}/>
+                    <KpiCard title="Horas registradas" value={`${capacity.registeredHours.toLocaleString("pt-BR")}h`} subtitle="Apontamentos Movidesk" info="Soma dos apontamentos de tempo encontrados nos atendimentos da equipe." accent={aliareColors.green}/>
+                    <KpiCard title="Cobertura de apontamento" value={capacity.coverageRate === null ? "—" : `${capacity.coverageRate.toLocaleString("pt-BR")}%`} subtitle="Registradas ÷ previstas" info="Indicador de cobertura de registro de tempo; não representa isoladamente produtividade ou desempenho." accent={aliareColors.warning}/>
+                  </Box>
+                  <Stack spacing={.5} sx={{ mt: 1.25 }}>{capacity.analysts.map((item) => <Button key={item.analyst} onClick={() => navigate(`/analistas?analyst=${encodeURIComponent(item.analyst)}`)} sx={{ justifyContent: "space-between", textTransform: "none", color: "text.primary", borderBottom: "1px solid", borderColor: "divider", borderRadius: 0 }}><Typography variant="body2" sx={{ fontWeight: 700 }}>{item.analyst}</Typography><Stack direction="row" spacing={1} sx={{ alignItems: "center" }}><Typography variant="caption" color="text.secondary">{item.registeredHours.toLocaleString("pt-BR")}h / {item.expectedHours.toLocaleString("pt-BR")}h</Typography><Chip size="small" variant="outlined" label={item.coverageRate === null ? "—" : `${item.coverageRate.toLocaleString("pt-BR")}%`} /></Stack></Button>)}</Stack>
+                </CardContent>
+              </Card>}
 
               <Card variant="outlined" sx={{ overflow: "hidden" }}>
                 <CardContent>
