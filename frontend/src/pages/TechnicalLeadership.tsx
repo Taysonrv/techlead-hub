@@ -29,10 +29,10 @@ type Task = {
 };
 type Recurrence = {
   topic: string; count: number; previous: number; changePct: number | null; clients: string[]; analysts: string[];
-  action: string; examples: Ticket[];
+  action: string; examples: Ticket[]; linkedExamples?: number; confidence?: "ALTA" | "MÉDIA";
 };
 type Gap = { id: string; type: string; title: string; evidence: string; impact: string; action: string; status: string };
-type Development = { analyst: string; tickets: number; stale: number; themes: Array<{ topic: string; count: number }> };
+type Development = { analyst: string; tickets: number; stale: number; linkedTasks?: number; blockedTasks?: number; finishedTasks?: number; themes: Array<{ topic: string; count: number }> };
 type Data = {
   generatedAt: string; periodDays: number; periodStart?: string; periodEnd?: string;
   radar: Record<string, number>;
@@ -219,7 +219,7 @@ export function TechnicalLeadership() {
         <Delta value={data.weekly.changePct} />
       </Stack>
       <Box sx={{ display: "grid", gridTemplateColumns: { xs: "repeat(2,1fr)", md: "repeat(5,1fr)" }, gap: 1.2, mt: 1.5 }}>
-        {[["Atual", data.weekly.current], ["Anterior", data.weekly.previous], ["Pausados", data.weekly.paused], ["Sem movimento", data.weekly.stale], ["Bloqueados", data.weekly.blocked]].map(([label, value]) => <Box key={String(label)} sx={{ p: 1.25, borderRadius: 2, background: mode === "dark" ? "linear-gradient(145deg, rgba(18,47,69,.90), rgba(12,31,51,.92))" : "rgba(15,23,42,.025)", border: "1px solid", borderColor: "divider" }}><Typography variant="caption" color="text.secondary">{label}</Typography><Typography sx={{ fontWeight: 850, fontSize: "1.25rem" }}>{value}</Typography></Box>)}
+        {[["Atual", data.weekly.current, "radar"], ["Anterior", data.weekly.previous, "recurrences"], ["Pausados", data.weekly.paused, "radar"], ["Sem movimento", data.weekly.stale, "audit"], ["Bloqueados", data.weekly.blocked, "radar"]].map(([label, value, target]) => <Box key={String(label)} role="button" tabIndex={0} onClick={() => setTab(target as TabKey)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") setTab(target as TabKey); }} sx={{ cursor: "pointer", p: 1.25, borderRadius: 2, background: mode === "dark" ? "linear-gradient(145deg, rgba(18,47,69,.90), rgba(12,31,51,.92))" : "rgba(15,23,42,.025)", border: "1px solid", borderColor: "divider" }}><Typography variant="caption" color="text.secondary">{label}</Typography><Typography sx={{ fontWeight: 850, fontSize: "1.25rem" }}>{value}</Typography></Box>)}
       </Box>
       {data.recommendations.length > 0 && <Box sx={{ mt: 1.5, p: 1.4, borderRadius: 2, background: mode === "dark" ? "linear-gradient(135deg, rgba(0,199,142,.12), rgba(20,64,75,.35))" : aliareColors.surfaceGreen, border: "1px solid rgba(0,199,142,.28)" }}>
         <AreaTitle title="Ações recomendadas" info="Sugestões geradas a partir dos sinais objetivos da operação. Não executam ações automaticamente e devem passar por julgamento técnico." />
@@ -278,7 +278,7 @@ export function TechnicalLeadership() {
         <Chip label={`${data.audit.candidates} candidato(s) · amostra de ${data.audit.sample.length}`} />
       </Stack>
       <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(2,1fr)" }, gap: 1.5, mt: 1.2 }}>
-        {data.audit.sample.map((ticket) => <Card key={ticket.id} onClick={() => setDrawer({ kind: "audit", title: "Auditoria semanal", items: [ticket] })} sx={{ cursor: "pointer", background: "linear-gradient(145deg, rgba(17,45,67,.96), rgba(12,29,49,.96)) !important", "&:hover": { borderColor: `${aliareColors.green} !important`, transform: "translateY(-2px)", boxShadow: "0 14px 34px rgba(0,199,142,.10)" }, transition: ".15s" }}><CardContent>
+        {data.audit.sample.map((ticket) => <Card key={ticket.id} onClick={() => setDrawer({ kind: "audit", title: "Auditoria semanal", items: [ticket] })} sx={{ cursor: "pointer", background: mode === "dark" ? "linear-gradient(145deg, rgba(17,45,67,.96), rgba(12,29,49,.96)) !important" : "linear-gradient(145deg,#FFFFFF,#F4FAF8) !important", "&:hover": { borderColor: `${aliareColors.green} !important`, transform: "translateY(-2px)", boxShadow: "0 14px 34px rgba(0,199,142,.10)" }, transition: ".15s" }}><CardContent>
           <Stack direction="row" sx={{ justifyContent: "space-between", gap: 1 }}><Typography sx={{ fontWeight: 850 }}>#{ticket.movideskId}</Typography><Tooltip title="Candidato selecionado por heurísticas operacionais. A confirmação depende de análise humana."><InfoOutlined sx={{ fontSize: 17, color: "text.secondary" }} /></Tooltip></Stack>
           <Typography variant="body2" sx={{ mt: .5, fontWeight: 700 }}>{ticket.subject}</Typography>
           <Chip size="small" color="warning" label={ticket.reason} sx={{ mt: 1, maxWidth: "100%" }} />
@@ -289,11 +289,11 @@ export function TechnicalLeadership() {
     {data && tab === "recurrences" && <Box>
       <AreaTitle title="Radar de recorrências" info={tabInfo.recurrences} icon={<TrackChangesOutlined color="primary" />} />
       <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(2,1fr)", xl: "repeat(3,1fr)" }, gap: 1.5, mt: 1.2 }}>
-        {data.recurrences.map((item) => <Card key={item.topic} onClick={() => setDrawer({ kind: "recurrence", title: item.topic, recurrence: item })} sx={{ cursor: "pointer", background: "linear-gradient(145deg, rgba(12,48,70,.96), rgba(14,28,53,.96)) !important", "&:hover": { borderColor: `${aliareColors.cyan} !important`, boxShadow: "0 12px 30px rgba(47,208,255,.10)" } }}><CardContent>
+        {data.recurrences.map((item) => <Card key={item.topic} onClick={() => setDrawer({ kind: "recurrence", title: item.topic, recurrence: item })} sx={{ cursor: "pointer", background: mode === "dark" ? "linear-gradient(145deg, rgba(12,48,70,.96), rgba(14,28,53,.96)) !important" : "linear-gradient(145deg,#FFFFFF,#F3FAFC) !important", "&:hover": { borderColor: `${aliareColors.cyan} !important`, boxShadow: "0 12px 30px rgba(47,208,255,.10)" } }}><CardContent>
           <Stack direction="row" sx={{ justifyContent: "space-between", gap: 1 }}><Typography sx={{ fontWeight: 850, textTransform: "capitalize" }}>{item.topic}</Typography><Tooltip title="Tema agrupado por classificação/serviço dos tickets do período. Clique para ver evidências e ação sugerida."><InfoOutlined sx={{ fontSize: 17, color: "text.secondary" }} /></Tooltip></Stack>
           <Typography sx={{ fontWeight: 900, fontSize: "1.7rem", color: aliareColors.cyan, mt: .7 }}>{item.count}</Typography>
-          <Typography variant="caption" color="text.secondary">{item.clients.length} cliente(s) · {item.analysts.length} analista(s)</Typography>
-          <Box sx={{ mt: 1 }}><Delta value={item.changePct} /></Box>
+          <Typography variant="caption" color="text.secondary">{item.clients.length} cliente(s) · {item.analysts.length} analista(s) · {item.linkedExamples ?? 0} evidência(s) com Azure</Typography>
+          <Stack direction="row" spacing={.7} sx={{ mt: 1, flexWrap: "wrap" }}><Delta value={item.changePct} />{item.confidence && <Chip size="small" variant="outlined" color={item.confidence === "ALTA" ? "success" : "warning"} label={`Confiança ${item.confidence.toLowerCase()}`} />}</Stack>
         </CardContent></Card>)}
         {!data.recurrences.length && <Alert severity="success">Nenhuma recorrência relevante detectada neste período.</Alert>}
       </Box>
@@ -319,7 +319,7 @@ export function TechnicalLeadership() {
       </Box>
 
       <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "repeat(2,1fr)" }, gap: 1.5 }}>
-        {data.gaps.map((gap) => <Card key={gap.id} onClick={() => setDrawer({ kind: "gap", title: gap.title, gap })} sx={{ cursor: "pointer", background: "linear-gradient(145deg, rgba(29,32,72,.96), rgba(13,28,49,.96)) !important", "&:hover": { borderColor: `${aliareColors.purple} !important`, boxShadow: "0 12px 30px rgba(124,92,255,.11)", transform: "translateY(-2px)" }, transition: ".15s" }}>
+        {data.gaps.map((gap) => <Card key={gap.id} onClick={() => setDrawer({ kind: "gap", title: gap.title, gap })} sx={{ cursor: "pointer", background: mode === "dark" ? "linear-gradient(145deg, rgba(29,32,72,.96), rgba(13,28,49,.96)) !important" : "linear-gradient(145deg,#FFFFFF,#F7F5FF) !important", "&:hover": { borderColor: `${aliareColors.purple} !important`, boxShadow: "0 12px 30px rgba(124,92,255,.11)", transform: "translateY(-2px)" }, transition: ".15s" }}>
           <CardContent>
             <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "flex-start", gap: 1 }}>
               <Box>
@@ -334,7 +334,7 @@ export function TechnicalLeadership() {
               <Chip size="small" label={`Status: ${gap.status}`} variant="outlined" />
             </Stack>
 
-            <Box sx={{ mt: 1.4, p: 1.2, borderRadius: 1.5, bgcolor: "rgba(255,255,255,.035)", border: "1px solid rgba(255,255,255,.06)" }}>
+            <Box sx={{ mt: 1.4, p: 1.2, borderRadius: 1.5, bgcolor: mode === "dark" ? "rgba(255,255,255,.035)" : "rgba(124,92,255,.045)", border: "1px solid", borderColor: mode === "dark" ? "rgba(255,255,255,.06)" : "rgba(124,92,255,.12)" }}>
               <Typography variant="caption" sx={{ color: "text.secondary", fontWeight: 800 }}>POR QUE FOI SINALIZADO</Typography>
               <Typography variant="body2" sx={{ mt: .35 }}>{gap.evidence}</Typography>
             </Box>
@@ -357,9 +357,9 @@ export function TechnicalLeadership() {
       <AreaTitle title="Desenvolvimento técnico do time" info={tabInfo.development} icon={<SchoolOutlined color="primary" />} />
       <Alert severity="info" sx={{ mt: 1.2, mb: 1.5 }}>Esta visão não é ranking. Ela ajuda a identificar concentração de temas, necessidade de apoio e oportunidades de transferência de conhecimento.</Alert>
       <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(2,1fr)", xl: "repeat(3,1fr)" }, gap: 1.5 }}>
-        {data.development.map((item) => <Card key={item.analyst} onClick={() => setDrawer({ kind: "development", title: item.analyst, development: item })} sx={{ cursor: "pointer", background: "linear-gradient(145deg, rgba(12,51,60,.96), rgba(12,29,49,.96)) !important", "&:hover": { borderColor: `${aliareColors.green} !important`, boxShadow: "0 12px 30px rgba(0,199,142,.10)" } }}><CardContent>
+        {data.development.map((item) => <Card key={item.analyst} onClick={() => setDrawer({ kind: "development", title: item.analyst, development: item })} sx={{ cursor: "pointer", background: mode === "dark" ? "linear-gradient(145deg, rgba(12,51,60,.96), rgba(12,29,49,.96)) !important" : "linear-gradient(145deg,#FFFFFF,#F2FBF7) !important", "&:hover": { borderColor: `${aliareColors.green} !important`, boxShadow: "0 12px 30px rgba(0,199,142,.10)" } }}><CardContent>
           <Stack direction="row" sx={{ justifyContent: "space-between", gap: 1 }}><Typography sx={{ fontWeight: 850 }}>{item.analyst}</Typography><Tooltip title="Mostra volume e temas do período para orientar apoio técnico e compartilhamento de conhecimento."><InfoOutlined sx={{ fontSize: 17, color: "text.secondary" }} /></Tooltip></Stack>
-          <Stack direction="row" spacing={1} sx={{ mt: 1 }}><Chip size="small" label={`${item.tickets} tickets`} /><Chip size="small" color={item.stale ? "warning" : "success"} label={`${item.stale} sem movimento`} /></Stack>
+          <Stack direction="row" spacing={1} sx={{ mt: 1, flexWrap: "wrap", rowGap: .6 }}><Chip size="small" label={`${item.tickets} tickets`} /><Chip size="small" color={item.stale ? "warning" : "success"} label={`${item.stale} sem movimento`} /><Chip size="small" variant="outlined" label={`${item.linkedTasks ?? 0} Tasks vinculadas`} />{Boolean(item.blockedTasks) && <Chip size="small" color="warning" label={`${item.blockedTasks} bloqueadas`} />}</Stack>
           <Stack spacing={.4} sx={{ mt: 1.2 }}>{item.themes.map((theme) => <Typography key={theme.topic} variant="caption" color="text.secondary">• {theme.topic}: <b>{theme.count}</b></Typography>)}</Stack>
         </CardContent></Card>)}
       </Box>
