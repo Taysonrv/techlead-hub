@@ -37,6 +37,7 @@ import {
   InsightsOutlined,
   RadarOutlined,
   ChatBubbleOutlineRounded,
+  HomeOutlined,
 } from "@mui/icons-material";
 
 import {
@@ -710,6 +711,13 @@ export function Sidebar() {
               Inteligência da operação
             </Typography>
           </Box>
+        </Box>
+
+        <Box sx={{ px: 1.1, mb: .5 }}>
+          <ListItemButton component={NavLink} to="/" end sx={{ minHeight: 40, px: 1.3, borderRadius: 1.2, color: "rgba(255,255,255,.72)", "&:hover": { bgcolor: "rgba(255,255,255,.05)", color: "#fff" }, "&.active": { bgcolor: "rgba(24,199,122,.10)", color: "#fff" }, "&.active .MuiListItemIcon-root": { color: aliareColors.green } }}>
+            <ListItemIcon sx={{ minWidth: 32, color: "rgba(255,255,255,.50)" }}><HomeOutlined fontSize="small" /></ListItemIcon>
+            <ListItemText primary="Página inicial" slotProps={{ primary: { sx: { fontSize: ".76rem", fontWeight: 800 } } }} />
+          </ListItemButton>
         </Box>
 
         {/* =================================================
