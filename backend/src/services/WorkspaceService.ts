@@ -409,14 +409,20 @@ export class WorkspaceService {
       ...classificationAudit.map((ticket) => ({ ticket, reason: "Possível divergência entre categoria e causa", score: 4 })),
       ...noMovement.map((ticket) => ({ ticket, reason: "Sem movimentação há mais de 72h", score: 3 })),
       ...slaOverdue.map((ticket) => ({ ticket, reason: "SLA/prazo vencido", score: 5 })),
+      ...closedTicketActiveTask.map((ticket) => ({ ticket, reason: "Ticket encerrado com Task Azure ainda ativa", score: 7 })),
+      ...openTicketFinishedTask.map((ticket) => ({ ticket, reason: "Ticket aberto com Task Azure concluída", score: 6 })),
     ].sort((a, b) => b.score - a.score)
       .filter((item, index, all) => all.findIndex((other) => other.ticket.id === item.ticket.id) === index)
       .slice(0, 10)
       .map(({ ticket, reason }) => ({ ...ticket, reason }));
 
-    const recurrenceKey = (ticket: (typeof tickets)[number]) =>
-      [ticket.serviceSecondLevel, ticket.serviceFirstLevel, ticket.service, ticket.category, ticket.cause]
-        .map((value) => normalize(value)).find((value) => value.length >= 4) ?? "sem classificacao";
+    const recurrenceKey = (ticket: (typeof tickets)[number]) => {
+      const generic = new Set(["simer", "siagri simer", "atendimento ao cliente", "outros", "outro", "nao informado", "sem classificacao"]);
+      const candidates = [ticket.serviceThirdLevel, ticket.serviceSecondLevel, ticket.serviceFirstLevel, ticket.service, ticket.category, ticket.cause]
+        .map((value) => normalize(value))
+        .filter((value) => value.length >= 4 && !generic.has(value));
+      return candidates[0] ?? "sem classificacao";
+    };
     const currentTickets = tickets.filter((ticket) => ticket.createdDate >= periodStart && ticket.createdDate <= periodEnd);
     const previousTickets = tickets.filter((ticket) => ticket.createdDate >= previousStart && ticket.createdDate < periodStart);
     const aggregate = (items: typeof tickets) => {
@@ -435,7 +441,7 @@ export class WorkspaceService {
     const currentAgg = aggregate(currentTickets);
     const previousAgg = aggregate(previousTickets);
     const recurrences = [...currentAgg.entries()]
-      .filter(([, value]) => value.count >= 3)
+      .filter(([topic, value]) => topic !== "sem classificacao" && value.count >= 3)
       .map(([topic, value]) => {
         const previous = previousAgg.get(topic)?.count ?? 0;
         const changePct = previous > 0 ? Math.round(((value.count - previous) / previous) * 100) : null;
@@ -444,15 +450,20 @@ export class WorkspaceService {
           : value.clients.size === 1 && value.count >= 5
           ? "Avaliar orientação ou treinamento direcionado ao cliente."
           : "Avaliar causa raiz e recorrência com Produto/Desenvolvimento.";
-        return { topic, count: value.count, previous, changePct, clients: [...value.clients], analysts: [...value.analysts], action, examples: value.examples.slice(0, 3) };
+        const linkedExamples = value.examples.filter((ticket) => Boolean(linkedTask(ticket))).length;
+        const confidence = value.count >= 5 && (value.clients.size >= 2 || value.analysts.size >= 2) ? "ALTA" : "MÉDIA";
+        return { topic, count: value.count, previous, changePct, clients: [...value.clients], analysts: [...value.analysts], action, examples: value.examples.slice(0, 3), linkedExamples, confidence };
       }).sort((a, b) => b.count - a.count).slice(0, 12);
 
     const analystDevelopment = SUPPORT_ANALYSTS.map((analyst) => {
       const analystTickets = currentTickets.filter((ticket) => normalize(ticket.owner) === normalize(analyst));
       const stale = analystTickets.filter((ticket) => openTicket(ticket) && movement(ticket) < stale3d).length;
-      const themes = [...aggregate(analystTickets).entries()].sort((a, b) => b[1].count - a[1].count).slice(0, 3)
+      const themes = [...aggregate(analystTickets).entries()].filter(([topic]) => topic !== "sem classificacao").sort((a, b) => b[1].count - a[1].count).slice(0, 3)
         .map(([topic, value]) => ({ topic, count: value.count }));
-      return { analyst, tickets: analystTickets.length, stale, themes };
+      const linked = analystTickets.map(linkedTask).filter((task): task is NonNullable<ReturnType<typeof linkedTask>> => Boolean(task));
+      const blockedTasks = linked.filter((task) => Boolean(task.blockedProcess)).length;
+      const finishedTasks = linked.filter((task) => terminalTask(task.state)).length;
+      return { analyst, tickets: analystTickets.length, stale, themes, linkedTasks: linked.length, blockedTasks, finishedTasks };
     }).filter((item) => item.tickets > 0 || item.stale > 0);
 
     const gaps = [
@@ -501,7 +512,7 @@ export class WorkspaceService {
         closedTicketActiveTask: closedTicketActiveTask.slice(0, 50), openTicketFinishedTask: openTicketFinishedTask.slice(0, 50),
         blocked: blocked.slice(0, 50), taskStale: taskStale.slice(0, 50), unassigned: unassigned.slice(0, 50),
       },
-      audit: { candidates: classificationAudit.length, sample: auditSample },
+      audit: { candidates: new Set([...classificationAudit, ...noMovement, ...slaOverdue, ...closedTicketActiveTask, ...openTicketFinishedTask].map((ticket) => ticket.id)).size, sample: auditSample },
       recurrences,
       gaps,
       development: analystDevelopment,
