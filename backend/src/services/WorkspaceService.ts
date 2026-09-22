@@ -2,7 +2,7 @@ import {
   prisma,
 } from "../database/prisma";
 import type { Prisma } from "@prisma/client";
-import { SIMER_CLIENTS, SUPPORT_ANALYSTS, ticketOperationalScope } from "../domain/OperationalScope";
+import { SIMER_CLIENTS, SUPPORT_ANALYSTS, SUPPORT_COORDINATOR, SUPPORT_TEAMS, ticketOperationalScope, type SupportTeamName } from "../domain/OperationalScope";
 import { MovideskService } from "./MovideskService";
 import { analyzeMovideskIndicators } from "./MovideskPayloadAnalytics";
 import { SIMER_SERVICE_CATALOG, suggestSimerService, type SimerServiceCatalogItem } from "../domain/SimerServiceCatalog";
@@ -18,6 +18,7 @@ const technicalLeadershipCache = new Map<string, { expiresAt: number; value: unk
 export class WorkspaceService {
   public async myOperation(userId: number, params: {
     client?: string | null; type?: string | null; search?: string | null;
+    analyst?: string | null; team?: string | null;
   } = {}) {
     const user = await prisma.user.findUnique({
       where: { id: userId },
@@ -29,10 +30,23 @@ export class WorkspaceService {
       const analystWords = normalizedWords(analyst);
       return userWords.every((word) => analystWords.includes(word));
     }) ?? user.name;
+    const teamMembers = params.team && params.team in SUPPORT_TEAMS
+      ? [...SUPPORT_TEAMS[params.team as SupportTeamName]]
+      : [];
+    const requestedOwners = params.analyst
+      ? [params.analyst]
+      : teamMembers.length
+        ? teamMembers
+        : [operationName];
+    const allowedOwners = [...new Set(requestedOwners.filter((owner) =>
+      SUPPORT_ANALYSTS.some((analyst) => analyst.localeCompare(owner, "pt-BR", { sensitivity: "base" }) === 0)
+      || SUPPORT_COORDINATOR.localeCompare(owner, "pt-BR", { sensitivity: "base" }) === 0
+    ))];
+    const operationOwners = allowedOwners.length ? allowedOwners : [operationName];
 
     const tickets = await prisma.ticket.findMany({
       where: { AND: [
-        { owner: { equals: operationName, mode: "insensitive" } },
+        { owner: { in: operationOwners, mode: "insensitive" } },
         ...(params.client ? [{ client: { equals: params.client, mode: "insensitive" as const } }] : []),
         ...(params.search ? [{ OR: [
           { subject: { contains: params.search, mode: "insensitive" as const } },
@@ -57,8 +71,8 @@ export class WorkspaceService {
     const ownedMovideskIds = tickets.map((item) => item.movideskId);
     const identity = {
       OR: [
-        { createdByName: { equals: operationName, mode: "insensitive" as const } },
-        { assignedToName: { equals: operationName, mode: "insensitive" as const } },
+        { createdByName: { in: operationOwners, mode: "insensitive" as const } },
+        { assignedToName: { in: operationOwners, mode: "insensitive" as const } },
         ...(user.email ? [
           { createdByEmail: { equals: user.email, mode: "insensitive" as const } },
           { assignedToEmail: { equals: user.email, mode: "insensitive" as const } },
@@ -101,8 +115,8 @@ export class WorkspaceService {
     const same = (left: string | null, right: string | null) =>
       Boolean(left && right && left.localeCompare(right, "pt-BR", { sensitivity: "base" }) === 0);
     const workItems = workItemCandidates.filter((item) =>
-      same(item.createdByName, operationName)
-      || same(item.assignedToName, operationName)
+      operationOwners.some((owner) => same(item.createdByName, owner))
+      || operationOwners.some((owner) => same(item.assignedToName, owner))
       || same(item.createdByEmail, user.email)
       || same(item.assignedToEmail, user.email)
       || taskIdSet.has(item.id)
@@ -153,6 +167,8 @@ export class WorkspaceService {
       filters: {
         clients: [...new Set([...tickets.map((item) => item.client).filter((value): value is string => Boolean(value)), ...workItems.map((item) => item.client).filter((value): value is string => Boolean(value))])].sort(),
         types: ["Correção Clientes", "Evolução", "APOIO"],
+        analysts: [...SUPPORT_ANALYSTS, SUPPORT_COORDINATOR],
+        teams: Object.entries(SUPPORT_TEAMS).map(([name, members]) => ({ name, members: [...members] })),
       },
     };
   }
