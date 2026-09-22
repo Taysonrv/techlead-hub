@@ -20,6 +20,16 @@ coordinationRoutes.get("/details", async (req: AuthenticatedRequest, res) => {
   }
 });
 
+coordinationRoutes.get("/productivity-capacity", async (req: AuthenticatedRequest, res) => {
+  try {
+    const parsedDays = Number(req.query.days ?? 28);
+    res.json(await coordinationService.productivityCapacity(Number.isFinite(parsedDays) ? parsedDays : 28));
+  } catch (error) {
+    console.error("[coordination] Falha ao montar capacidade produtiva:", error);
+    res.status(500).json({ error: "Não foi possível gerar a capacidade produtiva." });
+  }
+});
+
 coordinationRoutes.get("/services", async (req: AuthenticatedRequest, res) => {
   try {
     const client = typeof req.query.client === "string" ? req.query.client.trim() : undefined;
