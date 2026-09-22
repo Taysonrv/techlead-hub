@@ -29,7 +29,6 @@ export function Chat() {
   const [emojiAnchor, setEmojiAnchor] = useState<HTMLElement | null>(null);
   const [stickersOpen, setStickersOpen] = useState(false);
   const previousUnread = useRef(0);
-  const previousMessageIds = useRef<Set<number>>(new Set());
   const [replyTo, setReplyTo] = useState<Message | null>(null);
 
   const selected = useMemo(() => channels.find((channel) => channel.id === selectedId) ?? null, [channels, selectedId]);
