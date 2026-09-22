@@ -43,6 +43,37 @@ export class ChatService {
     })));
   }
 
+  async openDirectChannel(userId: number, targetUserId: number) {
+    if (userId === targetUserId) throw Object.assign(new Error("Selecione outro usuário para iniciar a conversa."), { statusCode: 400 });
+    const target = await prisma.user.findFirst({ where: { id: targetUserId, active: true, approvalStatus: "APPROVED" }, select: memberUserSelect });
+    if (!target) throw Object.assign(new Error("Usuário não localizado ou indisponível."), { statusCode: 404 });
+    const existing = await prisma.chatChannel.findFirst({
+      where: {
+        type: "DIRECT",
+        archivedAt: null,
+        AND: [
+          { members: { some: { userId } } },
+          { members: { some: { userId: targetUserId } } },
+          { members: { every: { userId: { in: [userId, targetUserId] } } } },
+        ],
+      },
+      include: { members: { include: { user: { select: memberUserSelect } } } },
+    });
+    if (existing && existing.members.length === 2) return existing;
+    const current = await prisma.user.findUnique({ where: { id: userId }, select: { name: true } });
+    const channel = await prisma.chatChannel.create({
+      data: {
+        name: target.name,
+        type: "DIRECT",
+        description: "Conversa privada",
+        members: { create: [{ userId }, { userId: targetUserId }] },
+      },
+      include: { members: { include: { user: { select: memberUserSelect } } } },
+    });
+    await this.audit(userId, "CHAT_DIRECT_CREATED", "ChatChannel", channel.id, { targetUserId, participants: [current?.name, target.name].filter(Boolean) });
+    return channel;
+  }
+
   async createChannel(userId: number, role: string, input: Record<string, unknown>) {
     const name = dataProtectionService.normalizeText(input.name, 120);
     if (name.length < 3) throw Object.assign(new Error("Informe um nome com ao menos 3 caracteres."), { statusCode: 400 });
