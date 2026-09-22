@@ -100,12 +100,14 @@ export class CoordinationService {
     const since = new Date();
     since.setMonth(since.getMonth() - months + 1);
     since.setDate(1); since.setHours(0, 0, 0, 0);
+    const previousSince = new Date(since);
+    previousSince.setMonth(previousSince.getMonth() - months);
     const scope = ticketOperationalScope();
-    const tickets = await prisma.ticket.findMany({
+    const allTickets = await prisma.ticket.findMany({
       where: {
         AND: [
           scope,
-          { isDeleted: false, createdDate: { gte: since } },
+          { isDeleted: false, createdDate: { gte: previousSince } },
           ...(filters.client ? [{ client: { equals: filters.client, mode: "insensitive" as const } }] : []),
           ...(filters.analyst ? [{ owner: { equals: filters.analyst, mode: "insensitive" as const } }] : []),
         ],
@@ -117,6 +119,8 @@ export class CoordinationService {
       },
       orderBy: { createdDate: "desc" },
     });
+    const tickets = allTickets.filter((ticket) => ticket.createdDate >= since);
+    const previousTickets = allTickets.filter((ticket) => ticket.createdDate >= previousSince && ticket.createdDate < since);
     const normalize = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR").trim();
     const pathOf = (ticket: (typeof tickets)[number]) =>
       [ticket.serviceFirstLevel, ticket.serviceSecondLevel, ticket.serviceThirdLevel].map((v) => v?.trim()).filter((v): v is string => Boolean(v)).join(" » ") || ticket.service?.trim() || "";
@@ -164,12 +168,29 @@ export class CoordinationService {
     }
     const ranking = [...serviceCounts].map(([service, count]) => ({ service, count })).sort((a,b) => b.count-a.count).slice(0,12);
     const modules = [...moduleCounts].map(([module, count]) => ({ module, count })).sort((a,b) => b.count-a.count).slice(0,12);
+    const causesMap = new Map<string, number>(), categoriesMap = new Map<string, number>();
+    for (const ticket of tickets) {
+      const cause = ticket.cause?.trim(); const category = ticket.category?.trim();
+      if (cause) causesMap.set(cause, (causesMap.get(cause) ?? 0) + 1);
+      if (category) categoriesMap.set(category, (categoriesMap.get(category) ?? 0) + 1);
+    }
+    const causes = [...causesMap].map(([cause, count]) => ({ cause, count })).sort((a,b) => b.count-a.count).slice(0,10);
+    const categories = [...categoriesMap].map(([category, count]) => ({ category, count })).sort((a,b) => b.count-a.count).slice(0,10);
+    const previousTotal = previousTickets.length;
+    const volumeDelta = previousTotal ? Math.round(((tickets.length - previousTotal) / previousTotal) * 100) : tickets.length ? 100 : 0;
+    const previousSpecific = previousTickets.filter((ticket) => {
+      const path = pathOf(ticket); return Boolean(path) && !generic(path);
+    }).length;
+    const previousRate = previousTotal ? Math.round((previousSpecific / previousTotal) * 100) : 0;
+    const currentRate = tickets.length ? Math.round((specific / tickets.length) * 100) : 0;
+    const classificationDelta = currentRate - previousRate;
     return {
       periodMonths: months, total: tickets.length, specific, generic: genericCount, withoutService, suspected,
-      classificationRate: tickets.length ? Math.round((specific / tickets.length) * 100) : 0,
+      classificationRate: currentRate,
       catalogSize: catalog.length,
+      comparison: { previousTotal, volumeDelta, previousClassificationRate: previousRate, classificationDelta },
       trend: [...monthsMap.values()].sort((a,b) => a.month.localeCompare(b.month)),
-      ranking, modules, samples,
+      ranking, modules, causes, categories, samples,
       filters: {
         clients: [...new Set(tickets.map((t) => t.client).filter((v): v is string => Boolean(v)))].sort((a,b) => a.localeCompare(b,"pt-BR")),
         analysts: [...SUPPORT_ANALYSTS],
