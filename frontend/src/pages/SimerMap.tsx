@@ -1,70 +1,34 @@
-import { Alert, Box, Button, Card, CardContent, Chip, CircularProgress, InputAdornment, Stack, TextField, Typography } from "@mui/material";
-import { AccountTreeOutlined, SearchOutlined, UploadFileOutlined, OpenInNewOutlined } from "@mui/icons-material";
+import { Alert, Box, Button, Card, CardContent, Chip, CircularProgress, Dialog, DialogContent, DialogTitle, InputAdornment, LinearProgress, Stack, TextField, Typography } from "@mui/material";
+import { AccountTreeOutlined, SearchOutlined, UploadFileOutlined, OpenInNewOutlined, HubOutlined, PsychologyOutlined, FolderOpenOutlined } from "@mui/icons-material";
 import { useCallback, useEffect, useState } from "react";
 import { PageHeader } from "../components/PageHeader";
 import { api } from "../services/api";
 import { aliareColors } from "../theme/theme";
 
-type Summary = { total:number; maps:number; importedAt:string|null; builderApiUrl:string; items:Array<{mapName:string;total:number}> };
-type Result = { id:number; sourceFile:string; mapName:string; nodeText:string; path:string; depth:number; parentPath:string|null };
+type Summary={total:number;maps:number;links:number;importedAt:string|null;builderApiUrl:string;items:Array<{mapName:string;total:number}>;kinds:Array<{kind:string;total:number}>};
+type Result={id:number;sourceFile:string;mapName:string;nodeId:string|null;nodeText:string;path:string;depth:number;parentPath:string|null;icon:string|null;link:string|null;nodeKind:string|null;score?:number;matchedTerms?:string[]};
+type Builder={reachable:boolean;status:number|null;latencyMs:number};
+const folderProps={webkitdirectory:"",directory:""} as Record<string,string>;
 
-export function SimerMap() {
-  const [summary,setSummary]=useState<Summary|null>(null);
-  const [query,setQuery]=useState("");
-  const [items,setItems]=useState<Result[]>([]);
-  const [loading,setLoading]=useState(false);
-  const [message,setMessage]=useState("");
-  const loadSummary=useCallback(async()=>{ const r=await api.get<Summary>("/simer-map/summary"); setSummary(r.data); },[]);
-  useEffect(()=>{void loadSummary();},[loadSummary]);
-
-  async function search(){
-    if(!query.trim()){setItems([]);return;}
-    setLoading(true); setMessage("");
-    try { const r=await api.get<{items:Result[]}>("/simer-map/search",{params:{q:query.trim()}}); setItems(r.data.items); }
-    catch { setMessage("Não foi possível consultar o mapa SIMER."); } finally { setLoading(false); }
-  }
-  async function importFiles(files: FileList|null){
-    if(!files?.length)return;
-    setLoading(true); setMessage("");
-    try {
-      let total=0;
-      for(const file of Array.from(files)){
-        if(!file.name.toLowerCase().endsWith(".mm")) continue;
-        const content=await file.text();
-        const r=await api.post<{total:number}>("/simer-map/import",{sourceFile:file.name,content});
-        total+=r.data.total;
-      }
-      setMessage(`Importação concluída: ${total} nó(s) de conhecimento processado(s).`);
-      await loadSummary();
-    } catch(e:unknown){ setMessage((e as {response?:{data?:{message?:string}}}).response?.data?.message ?? "Falha ao importar o mapa."); }
-    finally{setLoading(false);}
-  }
-
-  return <Box sx={{pb:4}}>
-    <PageHeader eyebrow="Liderança técnica" title="Mapa SIMER" description="Consulta inteligente da estrutura funcional e técnica do SIMER para apoiar análise de atendimentos, diagnóstico e abertura de correções." meta={summary ? `${summary.maps} mapa(s) · ${summary.total} nó(s) indexado(s)` : "Carregando base"} />
-    <Box sx={{mt:2,display:"grid",gridTemplateColumns:{xs:"1fr",lg:"2fr 1fr"},gap:2}}>
-      <Card variant="outlined" sx={{borderRadius:3}}><CardContent>
-        <Stack direction={{xs:"column",md:"row"}} spacing={1}>
-          <TextField fullWidth value={query} onChange={e=>setQuery(e.target.value)} onKeyDown={e=>e.key==="Enter"&&void search()} placeholder="Ex.: Pedido de Compra, faturamento, ContainerRateio, saldo..." slotProps={{input:{startAdornment:<InputAdornment position="start"><SearchOutlined/></InputAdornment>}}}/>
-          <Button variant="contained" onClick={()=>void search()} disabled={loading} sx={{minWidth:130}}>Consultar</Button>
-        </Stack>
-        <Typography variant="caption" color="text.secondary">A busca considera rotina, objeto, classe, função e o caminho hierárquico do mapa.</Typography>
-      </CardContent></Card>
-      <Card variant="outlined" sx={{borderRadius:3}}><CardContent>
-        <Stack direction="row" spacing={1} alignItems="center"><AccountTreeOutlined sx={{color:aliareColors.green}}/><Box><Typography sx={{fontWeight:850}}>Builder API</Typography><Typography variant="caption" color="text.secondary">{summary?.builderApiUrl ?? "Configurando..."}</Typography></Box></Stack>
-        <Button component="a" href={summary?.builderApiUrl} target="_blank" rel="noreferrer" size="small" endIcon={<OpenInNewOutlined/>} sx={{mt:1}}>Abrir origem</Button>
-      </CardContent></Card>
-    </Box>
-    <Card variant="outlined" sx={{mt:2,borderRadius:3}}><CardContent>
-      <Stack direction={{xs:"column",md:"row"}} spacing={1} justifyContent="space-between" alignItems={{md:"center"}}>
-        <Box><Typography sx={{fontWeight:900}}>Base de mapas</Typography><Typography variant="body2" color="text.secondary">Importe os arquivos .mm extraídos do pacote de mapas. Reimportações substituem a versão anterior do mesmo arquivo.</Typography></Box>
-        <Button component="label" variant="outlined" startIcon={<UploadFileOutlined/>}>Importar .mm<input hidden type="file" multiple accept=".mm,text/xml,application/xml" onChange={e=>void importFiles(e.target.files)}/></Button>
-      </Stack>
-      {summary?.items?.length ? <Stack direction="row" spacing={.7} useFlexGap flexWrap="wrap" sx={{mt:1.5}}>{summary.items.slice(0,18).map(x=><Chip key={x.mapName} label={`${x.mapName} · ${x.total}`} onClick={()=>{setQuery(x.mapName);}}/>)}</Stack>:null}
-      {message&&<Alert severity={message.startsWith("Importação")?"success":"warning"} sx={{mt:1.5}}>{message}</Alert>}
-    </CardContent></Card>
-    <Box sx={{mt:2}}>
-      {loading?<Box sx={{py:6,textAlign:"center"}}><CircularProgress/></Box>:items.length?<Stack spacing={1}>{items.map(item=><Card key={item.id} variant="outlined" sx={{borderRadius:2.5,"&:hover":{borderColor:aliareColors.green,boxShadow:"0 10px 28px rgba(16,24,40,.07)"}}}><CardContent sx={{py:1.4,"&:last-child":{pb:1.4}}}><Stack direction="row" spacing={1} alignItems="center"><Chip size="small" label={item.mapName}/><Typography sx={{fontWeight:850}}>{item.nodeText}</Typography></Stack><Typography variant="body2" color="text.secondary" sx={{mt:.7}}>{item.path}</Typography><Typography variant="caption" color="text.disabled">{item.sourceFile} · nível {item.depth}</Typography></CardContent></Card>)}</Stack>:query&&<Alert severity="info">Nenhum ponto do mapa encontrado para esta consulta.</Alert>}
-    </Box>
-  </Box>;
+export function SimerMap(){
+ const[summary,setSummary]=useState<Summary|null>(null),[query,setQuery]=useState(""),[context,setContext]=useState(""),[items,setItems]=useState<Result[]>([]),[related,setRelated]=useState<Result[]>([]),[selected,setSelected]=useState<Result|null>(null),[loading,setLoading]=useState(false),[message,setMessage]=useState(""),[progress,setProgress]=useState<number|null>(null),[builder,setBuilder]=useState<Builder|null>(null);
+ const loadSummary=useCallback(async()=>{const r=await api.get<Summary>("/simer-map/summary");setSummary(r.data);},[]);
+ useEffect(()=>{void loadSummary();void api.get<Builder>("/simer-map/builder/status").then(r=>setBuilder(r.data)).catch(()=>setBuilder({reachable:false,status:null,latencyMs:0}));},[loadSummary]);
+ async function search(){if(!query.trim()){setItems([]);return;}setLoading(true);setMessage("");try{const r=await api.get<{items:Result[]}>("/simer-map/search",{params:{q:query.trim()}});setItems(r.data.items);}catch{setMessage("Não foi possível consultar o Mapa SIMER.");}finally{setLoading(false);}}
+ async function analyze(){if(!context.trim())return;setLoading(true);try{const r=await api.post<{items:Result[]}>("/simer-map/context",{text:context,limit:30});setItems(r.data.items);setMessage(r.data.items.length?"Pontos técnicos sugeridos a partir do contexto informado.":"Nenhuma correspondência relevante encontrada.");}finally{setLoading(false);}}
+ async function inspect(item:Result){setSelected(item);const r=await api.get<{items:Result[]}>(`/simer-map/nodes/${item.id}/related`);setRelated(r.data.items);}
+ async function importFiles(list:FileList|null){if(!list?.length)return;const files=Array.from(list).filter(f=>f.name.toLowerCase().endsWith(".mm"));if(!files.length){setMessage("Nenhum arquivo .mm encontrado.");return;}setLoading(true);setProgress(0);setMessage("");try{let nodes=0;for(let i=0;i<files.length;i+=8){const chunk=files.slice(i,i+8);const payload=await Promise.all(chunk.map(async file=>({sourceFile:(file as File&{webkitRelativePath?:string}).webkitRelativePath||file.name,content:await file.text()})));const r=await api.post<{nodes:number}>("/simer-map/import/batch",{files:payload});nodes+=r.data.nodes;setProgress(Math.round(Math.min(i+chunk.length,files.length)/files.length*100));}setMessage(`Base atualizada: ${files.length} mapa(s) e ${nodes.toLocaleString("pt-BR")} nó(s) processados.`);await loadSummary();}catch(e:unknown){setMessage((e as {response?:{data?:{message?:string}}}).response?.data?.message??"Falha ao importar os mapas.");}finally{setLoading(false);setProgress(null);}}
+ const cards=[["Mapas",summary?.maps??0],["Nós técnicos",summary?.total??0],["Relacionamentos",summary?.links??0],["Builder API",builder?.reachable?"Online":"Indisponível"]];
+ return <Box sx={{pb:4}}>
+  <PageHeader eyebrow="Liderança técnica" title="Mapa SIMER" description="Mapa técnico navegável para apoiar diagnóstico, investigação de atendimentos e abertura de Correções/Apoios." meta={summary?.importedAt?`Atualizado em ${new Date(summary.importedAt).toLocaleString("pt-BR")}`:"Base aguardando importação"}/>
+  <Box sx={{display:"grid",gridTemplateColumns:{xs:"1fr 1fr",lg:"repeat(4,1fr)"},gap:1.5,mt:2}}>{cards.map(([label,value])=><Card key={String(label)} variant="outlined" sx={{borderRadius:3,borderTop:"3px solid",borderTopColor:label==="Builder API"?(builder?.reachable?"success.main":"warning.main"):aliareColors.green}}><CardContent><Typography variant="caption" color="text.secondary">{label}</Typography><Typography variant="h5" sx={{fontWeight:900,mt:.3}}>{typeof value==="number"?value.toLocaleString("pt-BR"):value}</Typography></CardContent></Card>)}</Box>
+  <Box sx={{display:"grid",gridTemplateColumns:{xs:"1fr",xl:"1.35fr 1fr"},gap:2,mt:2}}>
+   <Card variant="outlined" sx={{borderRadius:3}}><CardContent><Stack direction="row" spacing={1} alignItems="center" mb={1}><SearchOutlined sx={{color:aliareColors.green}}/><Typography sx={{fontWeight:900}}>Consulta técnica</Typography></Stack><Stack direction={{xs:"column",md:"row"}} spacing={1}><TextField fullWidth value={query} onChange={e=>setQuery(e.target.value)} onKeyDown={e=>e.key==="Enter"&&void search()} placeholder="PedidoCompra, ContainerRateio, saldo, programação..." slotProps={{input:{startAdornment:<InputAdornment position="start"><AccountTreeOutlined/></InputAdornment>}}}/><Button variant="contained" onClick={()=>void search()} disabled={loading}>Consultar</Button></Stack></CardContent></Card>
+   <Card variant="outlined" sx={{borderRadius:3}}><CardContent><Stack direction="row" spacing={1} alignItems="center" mb={1}><PsychologyOutlined sx={{color:aliareColors.green}}/><Typography sx={{fontWeight:900}}>Analisar contexto do atendimento</Typography></Stack><Stack direction="row" spacing={1}><TextField fullWidth size="small" value={context} onChange={e=>setContext(e.target.value)} placeholder="Cole assunto, erro ou descrição do atendimento..."/><Button variant="outlined" onClick={()=>void analyze()} disabled={loading}>Sugerir</Button></Stack></CardContent></Card>
+  </Box>
+  <Card variant="outlined" sx={{mt:2,borderRadius:3}}><CardContent><Stack direction={{xs:"column",lg:"row"}} justifyContent="space-between" spacing={1.5} alignItems={{lg:"center"}}><Box><Typography sx={{fontWeight:900}}>Base técnica dos mapas</Typography><Typography variant="body2" color="text.secondary">Importe a pasta extraída de Mapas.zip. A estrutura relativa é preservada e arquivos existentes são atualizados.</Typography></Box><Stack direction="row" spacing={1}><Button component="label" variant="outlined" startIcon={<UploadFileOutlined/>}>Arquivos .mm<input hidden type="file" multiple accept=".mm" onChange={e=>void importFiles(e.target.files)}/></Button><Button component="label" variant="contained" startIcon={<FolderOpenOutlined/>}>Importar pasta<input hidden type="file" multiple {...folderProps} onChange={e=>void importFiles(e.target.files)}/></Button></Stack></Stack>{progress!==null&&<Box sx={{mt:1.5}}><LinearProgress variant="determinate" value={progress}/><Typography variant="caption">{progress}% processado</Typography></Box>}{summary?.kinds?.length?<Stack direction="row" spacing={.7} useFlexGap flexWrap="wrap" mt={1.5}>{summary.kinds.map(x=><Chip size="small" key={x.kind} label={`${x.kind} · ${x.total.toLocaleString("pt-BR")}`}/>)}</Stack>:null}{message&&<Alert severity={message.includes("Falha")||message.includes("Nenhum")?"warning":"success"} sx={{mt:1.5}}>{message}</Alert>}</CardContent></Card>
+  <Card variant="outlined" sx={{mt:2,borderRadius:3}}><CardContent><Stack direction="row" justifyContent="space-between" alignItems="center"><Box><Typography sx={{fontWeight:900}}>Builder API</Typography><Typography variant="caption" color="text.secondary">{summary?.builderApiUrl} {builder&&`· ${builder.reachable?"conectado":"sem resposta"} · ${builder.latencyMs} ms`}</Typography></Box><Button component="a" href={summary?.builderApiUrl} target="_blank" rel="noreferrer" size="small" endIcon={<OpenInNewOutlined/>}>Abrir</Button></Stack></CardContent></Card>
+  <Box sx={{mt:2}}>{loading&&progress===null?<Box sx={{py:5,textAlign:"center"}}><CircularProgress/></Box>:items.length?<Stack spacing={1}>{items.map(item=><Card key={item.id} variant="outlined" onClick={()=>void inspect(item)} sx={{borderRadius:2.5,cursor:"pointer","&:hover":{borderColor:aliareColors.green,transform:"translateY(-1px)",boxShadow:"0 10px 28px rgba(16,24,40,.07)"}}}><CardContent sx={{py:1.3,"&:last-child":{pb:1.3}}}><Stack direction="row" spacing={.8} useFlexGap flexWrap="wrap" alignItems="center"><Chip size="small" icon={<HubOutlined/>} label={item.nodeKind||"nó"}/><Chip size="small" variant="outlined" label={item.mapName}/>{item.score&&<Chip size="small" color="success" label={`relevância ${item.score}`}/>}<Typography sx={{fontWeight:850}}>{item.nodeText}</Typography></Stack><Typography variant="body2" color="text.secondary" mt={.6}>{item.path}</Typography>{item.link&&<Typography variant="caption" color="primary.main">↗ {item.link}</Typography>}</CardContent></Card>)}</Stack>:null}</Box>
+  <Dialog open={Boolean(selected)} onClose={()=>setSelected(null)} fullWidth maxWidth="md"><DialogTitle>{selected?.nodeText}</DialogTitle><DialogContent><Typography variant="body2" color="text.secondary" mb={2}>{selected?.path}</Typography><Typography sx={{fontWeight:850,mb:1}}>Contexto e relações próximas</Typography><Stack spacing={.8}>{related.map(x=><Box key={x.id} sx={{p:1.2,border:"1px solid",borderColor:"divider",borderRadius:2}}><Stack direction="row" spacing={.7}><Chip size="small" label={x.nodeKind||"nó"}/><Typography variant="body2" sx={{fontWeight:750}}>{x.nodeText}</Typography></Stack><Typography variant="caption" color="text.secondary">{x.path}</Typography></Box>)}</Stack></DialogContent></Dialog>
+ </Box>;
 }
