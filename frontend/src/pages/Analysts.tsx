@@ -276,6 +276,7 @@ type TimeProductivityResponse = {
   analysts: TimeProductivityAnalyst[];
   teams: Array<{ team: string; analysts: number; expectedHours: number; registeredHours: number; coverageRate: number | null }>;
   weekly: Array<{ week: string; expectedHours: number; registeredHours: number; coverageRate: number | null }>;
+  capacity: { hoursPerDay: number; configuredHolidays: string[] };
 };
 
 type ProductivityDrilldown = {
@@ -2308,6 +2309,7 @@ export function Analysts() {
           {timeProductivityError && <Alert severity="warning" sx={{ mt: 1.5 }}>{timeProductivityError}</Alert>}
           {timeProductivityLoading ? <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}><CircularProgress size={28}/></Box> : timeProductivity && <>
             <Alert severity="info" variant="outlined" sx={{ mt: 1.5 }}>{timeProductivity.definition.expectedHours} {timeProductivity.definition.coverageRate}</Alert>
+            <Stack direction="row" spacing={1} sx={{ mt: 1, flexWrap: "wrap" }}><Chip size="small" variant="outlined" label={`Jornada: ${timeProductivity.capacity.hoursPerDay}h/dia útil`}/><Chip size="small" variant="outlined" label={`Feriados configurados: ${timeProductivity.capacity.configuredHolidays.length}`}/></Stack>
             <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", xl: "1.15fr .85fr" }, gap: 2, mt: 2 }}>
               <Box sx={{ minWidth: 0 }}><Typography variant="subtitle2" sx={{ fontWeight: 800, mb: 1 }}>Evolução semanal · previstas × registradas</Typography><Box sx={{ height: 280 }}><ResponsiveContainer width="100%" height="100%"><BarChart data={timeProductivity.weekly}><CartesianGrid strokeDasharray="4 4" vertical={false}/><XAxis dataKey="week" tick={{ fontSize: 10 }}/><YAxis allowDecimals={false}/><Tooltip/><Legend/><Bar dataKey="expectedHours" name="Horas previstas" fill={aliareColors.info} radius={[4,4,0,0]}/><Bar dataKey="registeredHours" name="Horas registradas" fill={aliareColors.green} radius={[4,4,0,0]}/></BarChart></ResponsiveContainer></Box></Box>
               <Box><Typography variant="subtitle2" sx={{ fontWeight: 800, mb: 1 }}>Cobertura por equipe</Typography><Stack spacing={.7}>{timeProductivity.teams.map((item) => <Stack key={item.team} direction="row" spacing={1} sx={{ alignItems: "center", p: .8, border: "1px solid", borderColor: "divider", borderRadius: 1.5 }}><Box sx={{ flex: 1, minWidth: 0 }}><Typography variant="body2" sx={{ fontWeight: 700 }} noWrap>{item.team}</Typography><Typography variant="caption" color="text.secondary">{item.analysts} analista(s) · {item.registeredHours.toLocaleString("pt-BR")}h / {item.expectedHours.toLocaleString("pt-BR")}h</Typography></Box><Chip size="small" variant="outlined" label={item.coverageRate === null ? "—" : `${item.coverageRate.toLocaleString("pt-BR")}%`} color={item.coverageRate !== null && item.coverageRate >= 80 ? "success" : item.coverageRate !== null && item.coverageRate >= 60 ? "warning" : "default"}/></Stack>)}</Stack></Box>
