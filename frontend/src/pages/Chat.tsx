@@ -125,7 +125,7 @@ export function Chat() {
   const append = (value: string) => setContent((current) => current ? `${current} ${value}` : value);
 
   return <Stack spacing={1.5} sx={{ height: "calc(100vh - 86px)", minHeight: 0, overflow: "hidden" }}>
-    <PageHeader eyebrow="Colaboração" title="Chat interno" description="Converse com a equipe e mantenha o contexto operacional dentro do TechLead Hub." sx={{ py: 1.5 }} />
+    <PageHeader eyebrow="Colaboração" title="Chat interno" description="Converse com a equipe e mantenha o contexto operacional dentro do TechLead Hub." />
     <Alert icon={<ShieldOutlined />} severity="info" sx={{ py: 0 }}>Não envie senhas, tokens, chaves privadas ou strings de conexão.</Alert>
     {error && <Alert severity="error" onClose={() => setError("")}>{error}</Alert>}
     <Paper variant="outlined" sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "280px minmax(0,1fr)" }, minHeight: 0, flex: 1, overflow: "hidden", borderRadius: 3 }}>
