@@ -207,13 +207,13 @@ export function Chat() {
   const stickers = ["🎉 PARABÉNS!","🚀 VAMOS!","✅ RESOLVIDO","👏 BOA!","🎯 NA META","🔥 PRIORIDADE","💡 IDEIA","🤝 OBRIGADO","☕ CAFÉ?","😎 FECHOU!","🛠️ EM ANÁLISE","📣 ATENÇÃO"];
   const append = (value: string) => setContent((current) => current ? `${current} ${value}` : value);
 
-  return <Stack spacing={1} sx={{ height: "100%", maxHeight: "100%", minHeight: 0, overflow: "hidden" }}>
+  return <Stack spacing={0} sx={{ height: "100%", maxHeight: "100%", minHeight: 0, overflow: "hidden", p: { xs: 1, md: 1.5 }, boxSizing: "border-box" }}>
     <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ alignItems: { sm: "center" }, justifyContent: "space-between", flexShrink: 0 }}>
       <Box><Stack direction="row" spacing={1} sx={{ alignItems: "center" }}><Typography variant="h5" sx={{ fontWeight: 900, lineHeight: 1.05 }}>Chat interno</Typography><Chip size="small" label={{ ONLINE: "Online", AWAY: "Ausente", BUSY: "Ocupado" }[availability]} color={availability === "BUSY" ? "error" : availability === "AWAY" ? "warning" : "success"} onClick={() => { const next = availability === "ONLINE" ? "AWAY" : availability === "AWAY" ? "BUSY" : "ONLINE"; setAvailability(next); localStorage.setItem("techlead-chat-status", next); }} /></Stack><TextField variant="standard" size="small" value={statusMessage} onChange={(event) => { const value = event.target.value.slice(0,160); setStatusMessage(value); localStorage.setItem("techlead-chat-status-message", value); }} placeholder="Defina uma mensagem pessoal..." sx={{ width: 280, mt: .2 }} /></Box>
       <Alert icon={<ShieldOutlined />} severity="info" sx={{ py: 0, px: 1.2, "& .MuiAlert-message": { py: .45 }, fontSize: ".72rem" }}>Não compartilhe credenciais.</Alert>
     </Stack>
     {error && <Alert severity="error" onClose={() => setError("")}>{error}</Alert>}
-    <Paper variant="outlined" sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "280px minmax(0,1fr)" }, minHeight: 0, flex: 1, overflow: "hidden", borderRadius: 3 }}>
+    <Paper variant="outlined" sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "300px minmax(0,1fr)" }, minHeight: 0, flex: 1, overflow: "hidden", borderRadius: 3, maxHeight: "100%", height: "100%" }}>
       <Box sx={{ borderRight: { md: "1px solid" }, borderColor: "divider", minHeight: 0, overflowY: "auto", overscrollBehavior: "contain" }}>
         <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between", px: 1.5, py: 1.25 }}>
           <Box><Typography sx={{ fontWeight: 900 }}>Contatos</Typography><Typography variant="caption" color="text.secondary">{channels.length} conversa(s)</Typography></Box>
@@ -221,10 +221,10 @@ export function Chat() {
         </Stack>
         <Box sx={{ px: 1.25, pb: 1 }}><TextField size="small" fullWidth value={conversationSearch} onChange={(event) => setConversationSearch(event.target.value)} placeholder="Localizar contato..." slotProps={{ input: { startAdornment: <SearchOutlined sx={{ mr: .7, fontSize: 18, color: "text.secondary" }} /> } }} /></Box>
         <Divider />
-        <List disablePadding>{visibleChannels.map((channel) => <ListItemButton key={channel.id} selected={channel.id === selectedId} onClick={() => setSelectedId(channel.id)} sx={{ py: 1.5 }}>
-          <Box sx={{ position: "relative", mr: 1.2, width: 34, height: 34, borderRadius: "50%", bgcolor: channel.id === selectedId ? "primary.main" : "action.hover", display: "grid", placeItems: "center", fontWeight: 900 }}>{channel.name.slice(0,1).toUpperCase()}<Circle sx={{ position: "absolute", width: 9, height: 9, right: -1, bottom: 1, color: "success.main", stroke: "background.paper", strokeWidth: 4 }} /></Box>
-          <ListItemText primary={channel.name} secondary={channel.clientName || channel.description || "Canal da equipe"} slotProps={{ primary: { sx: { fontWeight: 750 } } }} />
-          <Stack direction="row" spacing={.4} sx={{ alignItems: "center" }}><Tooltip title={favorites.includes(channel.id) ? "Remover dos favoritos" : "Favoritar"}><IconButton size="small" onClick={(event) => { event.stopPropagation(); toggleFavorite(channel.id); }} sx={{ fontSize: 15 }}>{favorites.includes(channel.id) ? "★" : "☆"}</IconButton></Tooltip>{channel.unread > 0 && <Chip size="small" color="primary" label={channel.unread} />}</Stack>
+        <List disablePadding>{visibleChannels.map((channel) => <ListItemButton key={channel.id} selected={channel.id === selectedId} onClick={() => setSelectedId(channel.id)} sx={{ py: 1.05, px: 1.25, minHeight: 64 }}>
+          <Box sx={{ position: "relative", mr: 1.25, width: 40, height: 40, minWidth: 40, flex: "0 0 40px", borderRadius: "50%", bgcolor: channel.id === selectedId ? "primary.main" : "action.hover", display: "grid", placeItems: "center", fontWeight: 900 }}>{channel.name.slice(0,1).toUpperCase()}<Circle sx={{ position: "absolute", width: 10, height: 10, right: 0, bottom: 0, color: "success.main", stroke: "background.paper", strokeWidth: 4 }} /></Box>
+          <ListItemText primary={channel.name} secondary={channel.clientName || channel.description || "Canal da equipe"} slotProps={{ primary: { sx: { fontWeight: 750, fontSize: ".88rem", lineHeight: 1.25, overflow: "hidden", textOverflow: "ellipsis" } }, secondary: { sx: { fontSize: ".72rem", mt: .25, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } } }} />
+          <Stack direction="row" spacing={.4} sx={{ alignItems: "center" }}><Tooltip title={favorites.includes(channel.id) ? "Remover dos favoritos" : "Favoritar"}><IconButton size="small" onClick={(event) => { event.stopPropagation(); toggleFavorite(channel.id); }} sx={{ width: 28, height: 28, p: .5, fontSize: 16 }}>{favorites.includes(channel.id) ? "★" : "☆"}</IconButton></Tooltip>{channel.unread > 0 && <Chip size="small" color="primary" label={channel.unread} />}</Stack>
         </ListItemButton>)}</List>
         {!channels.length && !loading && <Box sx={{ p: 3, textAlign: "center" }}><Typography color="text.secondary" variant="body2">Crie o primeiro canal da equipe.</Typography></Box>}
       </Box>
