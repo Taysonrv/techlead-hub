@@ -2,13 +2,15 @@ import { AddCommentOutlined, ForumOutlined, SendRounded, ShieldOutlined, EmojiEm
 import { Alert, Box, Button, Checkbox, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Divider, FormControlLabel, IconButton, List, ListItemButton, ListItemText, Paper, Popover, Stack, TextField, Tooltip, Typography } from "@mui/material";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { api } from "../services/api";
+import { api, getAccessToken, getApiBaseUrl } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 
 
 type Person = { id: number; name: string; username: string; role: string };
 type Message = { id: number; content: string; createdAt: string; parentId?: number | null; author: Person };
-type Channel = { id: number; name: string; type: string; description?: string | null; clientName?: string | null; unread: number; messages: Message[] };
+type Channel = { id: number; name: string; type: string; description?: string | null; clientName?: string | null; unread: number; messages: Message[]; members?: Array<{ user: Person }> };
+type Presence = { userId: number; status: string; effectiveStatus: "ONLINE" | "AWAY" | "BUSY" | "OFFLINE"; statusMessage?: string | null; lastSeenAt: string; name: string; username: string };
+type RealtimeSnapshot = { presence: Presence[]; typing: Array<{ channelId: number; userId: number; name: string }>; latestMessage: { id: number; channelId: number; authorId: number } | null };
 
 export function Chat() {
   const { user } = useAuth();
@@ -37,8 +39,16 @@ export function Chat() {
   const [soundEnabled, setSoundEnabled] = useState(() => localStorage.getItem("techlead-chat-sound") !== "off");
   const [directOpen, setDirectOpen] = useState(false);
   const typingTimer = useRef<number | null>(null);
+  const lastRealtimeMessageId = useRef<number | null>(null);
+  const [presence, setPresence] = useState<Presence[]>([]);
+  const [remoteTyping, setRemoteTyping] = useState<RealtimeSnapshot["typing"]>([]);
+  const [availability, setAvailability] = useState<"ONLINE" | "AWAY" | "BUSY">(() => (localStorage.getItem("techlead-chat-status") as "ONLINE" | "AWAY" | "BUSY") || "ONLINE");
+  const [statusMessage, setStatusMessage] = useState(() => localStorage.getItem("techlead-chat-status-message") || "");
 
   const selected = useMemo(() => channels.find((channel) => channel.id === selectedId) ?? null, [channels, selectedId]);
+  const selectedPeer = useMemo(() => selected?.type === "DIRECT" ? selected.members?.map((member) => member.user).find((person) => person.id !== user?.id) : null, [selected, user?.id]);
+  const selectedPresence = selectedPeer ? presence.find((item) => item.userId === selectedPeer.id) : null;
+  const typingNames = remoteTyping.filter((item) => item.channelId === selectedId).map((item) => item.name);
   const visibleChannels = useMemo(() => channels.filter((channel) => [channel.name, channel.description, channel.clientName].some((value) => value?.toLowerCase().includes(conversationSearch.toLowerCase()))), [channels, conversationSearch]);
   const visibleMessages = useMemo(() => messages.filter((message) => !messageSearch.trim() || message.content.toLowerCase().includes(messageSearch.toLowerCase())), [messages, messageSearch]);
 
@@ -77,8 +87,6 @@ export function Chat() {
   useEffect(() => {
     if (!selectedId) { setLoading(false); return; }
     void loadMessages(selectedId);
-    const timer = window.setInterval(() => void loadMessages(selectedId, true), 5_000);
-    return () => window.clearInterval(timer);
   }, [loadMessages, selectedId]);
   useEffect(() => {
     const container = messagesRef.current;
@@ -99,9 +107,56 @@ export function Chat() {
   }, [channels, soundEnabled]);
 
   useEffect(() => {
-    const timer = window.setInterval(() => void loadChannels().catch(() => undefined), 8_000);
-    return () => window.clearInterval(timer);
-  }, [loadChannels]);
+    let stopped = false;
+    const controller = new AbortController();
+    const connect = async () => {
+      while (!stopped) {
+        try {
+          const token = getAccessToken();
+          const base = getApiBaseUrl();
+          const url = new URL(`${base.replace(/\/$/, "")}/chat/events`, window.location.origin);
+          const response = await fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : {}, signal: controller.signal });
+          if (!response.ok || !response.body) throw new Error("stream indisponível");
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = "";
+          while (!stopped) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const blocks = buffer.split("\n\n"); buffer = blocks.pop() ?? "";
+            for (const block of blocks) {
+              const dataLine = block.split("\n").find((line) => line.startsWith("data: "));
+              if (!dataLine) continue;
+              const snapshot = JSON.parse(dataLine.slice(6)) as RealtimeSnapshot;
+              setPresence(snapshot.presence);
+              setRemoteTyping(snapshot.typing);
+              const latestId = snapshot.latestMessage?.id ?? null;
+              if (lastRealtimeMessageId.current !== null && latestId !== lastRealtimeMessageId.current) {
+                void loadChannels().catch(() => undefined);
+                if (selectedId && snapshot.latestMessage?.channelId === selectedId) void loadMessages(selectedId, true);
+              }
+              lastRealtimeMessageId.current = latestId;
+            }
+          }
+        } catch {
+          if (!stopped) await new Promise((resolve) => window.setTimeout(resolve, 1800));
+        }
+      }
+    };
+    void connect();
+    return () => { stopped = true; controller.abort(); };
+  }, [loadChannels, loadMessages, selectedId]);
+
+  useEffect(() => {
+    const sendPresence = (status = document.visibilityState === "hidden" ? "AWAY" : availability) =>
+      api.post("/chat/presence", { status, statusMessage }).catch(() => undefined);
+    void sendPresence();
+    const timer = window.setInterval(() => void sendPresence(), 25_000);
+    const visibility = () => void sendPresence();
+    document.addEventListener("visibilitychange", visibility);
+    return () => { window.clearInterval(timer); document.removeEventListener("visibilitychange", visibility); };
+  }, [availability, statusMessage]);
 
   async function openDirect(person: Person) {
     try {
@@ -155,7 +210,7 @@ export function Chat() {
 
   return <Stack spacing={1} sx={{ height: "100%", maxHeight: "100%", minHeight: 0, overflow: "hidden" }}>
     <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ alignItems: { sm: "center" }, justifyContent: "space-between", flexShrink: 0 }}>
-      <Box><Typography variant="h5" sx={{ fontWeight: 900, lineHeight: 1.05 }}>Chat interno</Typography><Typography variant="caption" color="text.secondary">Colaboração da equipe em tempo real</Typography></Box>
+      <Box><Stack direction="row" spacing={1} sx={{ alignItems: "center" }}><Typography variant="h5" sx={{ fontWeight: 900, lineHeight: 1.05 }}>Chat interno</Typography><Chip size="small" label={{ ONLINE: "Online", AWAY: "Ausente", BUSY: "Ocupado" }[availability]} color={availability === "BUSY" ? "error" : availability === "AWAY" ? "warning" : "success"} onClick={() => { const next = availability === "ONLINE" ? "AWAY" : availability === "AWAY" ? "BUSY" : "ONLINE"; setAvailability(next); localStorage.setItem("techlead-chat-status", next); }} /></Stack><TextField variant="standard" size="small" value={statusMessage} onChange={(event) => { const value = event.target.value.slice(0,160); setStatusMessage(value); localStorage.setItem("techlead-chat-status-message", value); }} placeholder="Defina uma mensagem pessoal..." sx={{ width: 280, mt: .2 }} /></Box>
       <Alert icon={<ShieldOutlined />} severity="info" sx={{ py: 0, px: 1.2, "& .MuiAlert-message": { py: .45 }, fontSize: ".72rem" }}>Não compartilhe credenciais.</Alert>
     </Stack>
     {error && <Alert severity="error" onClose={() => setError("")}>{error}</Alert>}
@@ -175,7 +230,7 @@ export function Chat() {
         {!channels.length && !loading && <Box sx={{ p: 3, textAlign: "center" }}><Typography color="text.secondary" variant="body2">Crie o primeiro canal da equipe.</Typography></Box>}
       </Box>
       <Box sx={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
-        <Stack direction="row" spacing={1} sx={{ px: 1.5, py: 1, alignItems: "center", justifyContent: "space-between" }}><Box><Stack direction="row" spacing={.7} sx={{ alignItems: "center" }}><Typography sx={{ fontWeight: 900 }}>{selected?.name || "Selecione uma conversa"}</Typography>{selected && <Chip size="small" icon={<Circle sx={{ fontSize: "9px !important" }} />} label="Online" color="success" variant="outlined" />}</Stack><Typography variant="caption" color="text.secondary">Mensagens instantâneas · atualização automática</Typography></Box><Stack direction="row" spacing={.5}><TextField size="small" value={messageSearch} onChange={(event) => setMessageSearch(event.target.value)} placeholder="Buscar na conversa" sx={{ width: 210 }} slotProps={{ input: { startAdornment: <SearchOutlined sx={{ mr: .5, fontSize: 17, color: "text.secondary" }} /> } }} /><IconButton size="small"><MoreHorizOutlined /></IconButton></Stack></Stack>
+        <Stack direction="row" spacing={1} sx={{ px: 1.5, py: 1, alignItems: "center", justifyContent: "space-between" }}><Box><Stack direction="row" spacing={.7} sx={{ alignItems: "center" }}><Typography sx={{ fontWeight: 900 }}>{selected?.name || "Selecione uma conversa"}</Typography>{selected && <Chip size="small" icon={<Circle sx={{ fontSize: "9px !important" }} />} label={selected?.type === "DIRECT" ? ({ ONLINE: "Online", AWAY: "Ausente", BUSY: "Ocupado", OFFLINE: "Offline" }[selectedPresence?.effectiveStatus ?? "OFFLINE"]) : `${selected.members?.filter((member) => presence.find((item) => item.userId === member.user.id)?.effectiveStatus !== "OFFLINE").length ?? 0} online`} color={selectedPresence?.effectiveStatus === "BUSY" ? "error" : selectedPresence?.effectiveStatus === "AWAY" ? "warning" : selectedPresence?.effectiveStatus === "ONLINE" ? "success" : "default"} variant="outlined" />}</Stack><Typography variant="caption" color="text.secondary">{selectedPresence?.statusMessage || "Mensagens instantâneas · tempo real"}</Typography></Box><Stack direction="row" spacing={.5}><TextField size="small" value={messageSearch} onChange={(event) => setMessageSearch(event.target.value)} placeholder="Buscar na conversa" sx={{ width: 210 }} slotProps={{ input: { startAdornment: <SearchOutlined sx={{ mr: .5, fontSize: 17, color: "text.secondary" }} /> } }} /><IconButton size="small"><MoreHorizOutlined /></IconButton></Stack></Stack>
         <Divider />
         <Box ref={messagesRef} sx={{ flex: 1, minHeight: 0, overflowY: "auto", overscrollBehavior: "contain", p: 2.5, bgcolor: "background.default" }}>
           {loading ? <Box sx={{ display: "grid", placeItems: "center", minHeight: 160 }}><CircularProgress size={28} /></Box> : visibleMessages.map((message, messageIndex) => {
@@ -190,13 +245,13 @@ export function Chat() {
           <div ref={bottomRef} />
         </Box>
         <Divider />
-        {typing && content.trim() && <Typography variant="caption" color="text.secondary" sx={{ px: 1.6, pt: .45 }}>Você está digitando...</Typography>}
+        {typingNames.length > 0 && <Typography variant="caption" color="text.secondary" sx={{ px: 1.6, pt: .45 }}>{typingNames.join(", ")} {typingNames.length === 1 ? "está" : "estão"} digitando...</Typography>}
         {replyTo && <Stack direction="row" sx={{ px: 1.5, py: .7, alignItems: "center", justifyContent: "space-between", bgcolor: "action.hover", borderTop: "1px solid", borderColor: "divider" }}><Box><Typography variant="caption" sx={{ fontWeight: 850 }}>Respondendo a {replyTo.author.name}</Typography><Typography variant="caption" color="text.secondary" noWrap sx={{ display: "block", maxWidth: 620 }}>{replyTo.content}</Typography></Box><IconButton size="small" onClick={() => setReplyTo(null)}><CloseOutlined fontSize="small" /></IconButton></Stack>}
         <Stack direction="row" spacing={1} sx={{ p: 1.25, alignItems: "flex-end", bgcolor: "background.paper" }}>
           <Tooltip title="Emojis"><IconButton onClick={(event) => setEmojiAnchor(event.currentTarget)} disabled={!selectedId}><EmojiEmotionsOutlined /></IconButton></Tooltip>
           <Tooltip title="Figurinhas"><IconButton onClick={() => setStickersOpen(true)} disabled={!selectedId}><CelebrationOutlined /></IconButton></Tooltip>
           <Tooltip title={soundEnabled ? "Desativar som" : "Ativar som"}><IconButton color={soundEnabled ? "primary" : "default"} onClick={() => { const next = !soundEnabled; setSoundEnabled(next); localStorage.setItem("techlead-chat-sound", next ? "on" : "off"); if ("Notification" in window && Notification.permission === "default") void Notification.requestPermission(); }}><NotificationsActiveOutlined /></IconButton></Tooltip>
-          <TextField size="small" fullWidth multiline maxRows={5} value={content} disabled={!selectedId || sending} placeholder="Escreva uma mensagem; use @usuario para mencionar..." slotProps={{ htmlInput: { maxLength: 4000 } }} onChange={(event) => { setContent(event.target.value); setTyping(true); if (typingTimer.current) window.clearTimeout(typingTimer.current); typingTimer.current = window.setTimeout(() => setTyping(false), 1200); }} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void send(); } }} />
+          <TextField size="small" fullWidth multiline maxRows={5} value={content} disabled={!selectedId || sending} placeholder="Escreva uma mensagem; use @usuario para mencionar..." slotProps={{ htmlInput: { maxLength: 4000 } }} onChange={(event) => { setContent(event.target.value); setTyping(true); if (selectedId) void api.post(`/chat/channels/${selectedId}/typing`, { active: true }).catch(() => undefined); if (typingTimer.current) window.clearTimeout(typingTimer.current); typingTimer.current = window.setTimeout(() => { setTyping(false); if (selectedId) void api.post(`/chat/channels/${selectedId}/typing`, { active: false }).catch(() => undefined); }, 1200); }} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void send(); } }} />
           <Button variant="contained" endIcon={sending ? <CircularProgress size={16} color="inherit" /> : <SendRounded />} disabled={!selectedId || !content.trim() || sending} onClick={() => void send()}>Enviar</Button>
         </Stack>
       </Box>
