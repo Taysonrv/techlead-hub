@@ -299,8 +299,13 @@ export function Sidebar() {
           path: "/lideranca-tecnica",
           icon: <RadarOutlined fontSize="small" />,
         },
+        ...(user?.role === "ADMIN" || user?.role === "COORDENADOR" ? [{
+          label: "Serviços SIMER",
+          path: "/servicos",
+          icon: <InsightsOutlined fontSize="small" />,
+        }] : []),
       ],
-      [],
+      [user?.role],
     );
 
   /* =======================================================
