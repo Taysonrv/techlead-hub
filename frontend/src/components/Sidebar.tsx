@@ -119,6 +119,7 @@ export function Sidebar() {
     useAuth();
 
   const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [chatUnread, setChatUnread] = useState(0);
 
   const [
     appVersion,
@@ -165,6 +166,21 @@ export function Sidebar() {
 
   // O menu inicia recolhido. A navegação não força a abertura automática
   // de uma seção; o usuário decide quais grupos deseja expandir.
+
+  useEffect(() => {
+    if (!user) { setChatUnread(0); return; }
+    const loadChatUnread = async () => {
+      try {
+        const response = await api.get<Array<{ unread?: number }>>("/chat/channels");
+        setChatUnread(response.data.reduce((total, channel) => total + (channel.unread ?? 0), 0));
+      } catch { /* indicador não deve afetar a navegação */ }
+    };
+    void loadChatUnread();
+    const timer = window.setInterval(() => void loadChatUnread(), 12_000);
+    const refresh = () => void loadChatUnread();
+    window.addEventListener("techlead-hub:chat-read", refresh);
+    return () => { window.clearInterval(timer); window.removeEventListener("techlead-hub:chat-read", refresh); };
+  }, [user, location.pathname]);
 
   /* =======================================================
      VERSÃO DO APLICATIVO
@@ -878,7 +894,7 @@ export function Sidebar() {
             onClick={() => navigate("/chat")}
             sx={{ width: 46, height: 46, bgcolor: "background.paper", border: "1px solid", borderColor: location.pathname === "/chat" ? "rgba(24,199,122,.55)" : "divider", borderRadius: 2, boxShadow: "0 2px 10px rgba(0,0,0,.06)", color: location.pathname === "/chat" ? aliareColors.green : "text.primary", "&:hover": { bgcolor: "background.paper", borderColor: "rgba(24,199,122,.45)" } }}
           >
-            <ChatBubbleOutlineRounded />
+            <Badge badgeContent={location.pathname === "/chat" ? 0 : chatUnread} color="error" max={99} overlap="circular" sx={{ "& .MuiBadge-badge": { fontSize: ".62rem", minWidth: 18, height: 18, fontWeight: 900, boxShadow: "0 0 0 2px", boxShadowColor: "background.paper" } }}><ChatBubbleOutlineRounded /></Badge>
           </IconButton>
 
           <NotificationCenter />
