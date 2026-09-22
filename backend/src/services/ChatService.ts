@@ -5,6 +5,63 @@ import { dataProtectionService } from "./DataProtectionService";
 const memberUserSelect = { id: true, name: true, username: true, role: true, avatarUpdatedAt: true } as const;
 
 export class ChatService {
+  async updatePresence(userId: number, input: Record<string, unknown>) {
+    const requested = String(input.status ?? "ONLINE").toUpperCase();
+    const status = ["ONLINE", "AWAY", "BUSY"].includes(requested) ? requested : "ONLINE";
+    const statusMessage = dataProtectionService.normalizeText(input.statusMessage, 160) || null;
+    await prisma.$executeRawUnsafe(
+      `INSERT INTO "ChatPresence" ("userId","status","statusMessage","lastSeenAt","updatedAt")
+       VALUES ($1,$2,$3,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)
+       ON CONFLICT ("userId") DO UPDATE SET "status"=EXCLUDED."status","statusMessage"=EXCLUDED."statusMessage","lastSeenAt"=CURRENT_TIMESTAMP,"updatedAt"=CURRENT_TIMESTAMP`,
+      userId, status, statusMessage,
+    );
+    return { status, statusMessage };
+  }
+
+  async setTyping(userId: number, channelId: number, active: boolean) {
+    await this.assertMember(userId, channelId);
+    if (!active) {
+      await prisma.$executeRawUnsafe(`DELETE FROM "ChatTyping" WHERE "channelId"=$1 AND "userId"=$2`, channelId, userId);
+      return;
+    }
+    await prisma.$executeRawUnsafe(
+      `INSERT INTO "ChatTyping" ("channelId","userId","expiresAt") VALUES ($1,$2,CURRENT_TIMESTAMP + INTERVAL '4 seconds')
+       ON CONFLICT ("channelId","userId") DO UPDATE SET "expiresAt"=EXCLUDED."expiresAt"`,
+      channelId, userId,
+    );
+  }
+
+  async realtimeSnapshot(userId: number) {
+    const channels = await prisma.chatChannelMember.findMany({
+      where: { userId, channel: { archivedAt: null } },
+      select: { channelId: true },
+    });
+    const channelIds = channels.map(({ channelId }) => channelId);
+    const [presence, typing, latest] = await Promise.all([
+      prisma.$queryRawUnsafe<Array<{ userId: number; status: string; statusMessage: string | null; lastSeenAt: Date; name: string; username: string }>>(
+        `SELECT p."userId",p."status",p."statusMessage",p."lastSeenAt",u."name",u."username"
+         FROM "ChatPresence" p JOIN "User" u ON u."id"=p."userId"
+         WHERE u."active"=TRUE AND u."approvalStatus"='APPROVED'`,
+      ),
+      channelIds.length ? prisma.$queryRawUnsafe<Array<{ channelId: number; userId: number; name: string }>>(
+        `SELECT t."channelId",t."userId",u."name" FROM "ChatTyping" t JOIN "User" u ON u."id"=t."userId"
+         WHERE t."expiresAt">CURRENT_TIMESTAMP AND t."userId"<>$1 AND t."channelId" = ANY($2::int[])`,
+        userId, channelIds,
+      ) : Promise.resolve([]),
+      channelIds.length ? prisma.chatMessage.findFirst({
+        where: { channelId: { in: channelIds }, deletedAt: null },
+        orderBy: { id: "desc" },
+        select: { id: true, channelId: true, authorId: true },
+      }) : Promise.resolve(null),
+    ]);
+    const now = Date.now();
+    return {
+      presence: presence.map((item) => ({ ...item, effectiveStatus: now - new Date(item.lastSeenAt).getTime() > 90_000 ? "OFFLINE" : item.status })),
+      typing,
+      latestMessage: latest,
+    };
+  }
+
   async listParticipants() {
     return prisma.user.findMany({
       where: {
