@@ -1,5 +1,5 @@
-import { AddCommentOutlined, ForumOutlined, SendRounded, EmojiEmotionsOutlined, CelebrationOutlined, NotificationsActiveOutlined, ReplyOutlined, CloseOutlined, SearchOutlined, Circle, MoreHorizOutlined, EditOutlined } from "@mui/icons-material";
-import { Alert, Box, Button, Checkbox, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Divider, FormControlLabel, IconButton, List, ListItemButton, ListItemText, Paper, Popover, Stack, TextField, Tooltip, Typography } from "@mui/material";
+import { AddCommentOutlined, ForumOutlined, SendRounded, EmojiEmotionsOutlined, CelebrationOutlined, NotificationsActiveOutlined, ReplyOutlined, CloseOutlined, SearchOutlined, Circle, MoreHorizOutlined, EditOutlined, DeleteOutlineRounded, StarOutlineRounded, VolumeOffOutlined } from "@mui/icons-material";
+import { Alert, Box, Button, Checkbox, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Divider, FormControlLabel, IconButton, List, ListItemButton, ListItemIcon, ListItemText, Menu, MenuItem, Paper, Popover, Stack, TextField, Tooltip, Typography } from "@mui/material";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api, getAccessToken, getApiBaseUrl } from "../services/api";
@@ -43,6 +43,8 @@ export function Chat() {
   const [presence, setPresence] = useState<Presence[]>([]);
   const [remoteTyping, setRemoteTyping] = useState<RealtimeSnapshot["typing"]>([]);
   const [availability, setAvailability] = useState<"ONLINE" | "AWAY" | "BUSY">(() => (localStorage.getItem("techlead-chat-status") as "ONLINE" | "AWAY" | "BUSY") || "ONLINE");
+  const [conversationMenuAnchor, setConversationMenuAnchor] = useState<HTMLElement | null>(null);
+  const [deleteConversationOpen, setDeleteConversationOpen] = useState(false);
   const [statusMessage, setStatusMessage] = useState(() => localStorage.getItem("techlead-chat-status-message") || "");
 
   const selected = useMemo(() => channels.find((channel) => channel.id === selectedId) ?? null, [channels, selectedId]);
@@ -188,6 +190,21 @@ export function Chat() {
     } catch (requestError: any) { setError(requestError?.response?.data?.error || "Não foi possível criar o canal."); }
   }
 
+  async function deleteConversation() {
+    if (!selectedId) return;
+    try {
+      await api.delete(`/chat/channels/${selectedId}`);
+      setDeleteConversationOpen(false);
+      setConversationMenuAnchor(null);
+      setMessages([]);
+      setSelectedId(null);
+      await loadChannels();
+      window.dispatchEvent(new Event("techlead-hub:chat-read"));
+    } catch (requestError: any) {
+      setError(requestError?.response?.data?.error || "Não foi possível excluir a conversa.");
+    }
+  }
+
   async function send() {
     const text = content.trim();
     if (!selectedId || !text || sending) return;
@@ -212,14 +229,13 @@ export function Chat() {
         <Box sx={{ width: 42, height: 42, borderRadius: 2.5, display: "grid", placeItems: "center", flexShrink: 0, color: "primary.main", bgcolor: "background.paper", border: "1px solid rgba(24,199,122,.22)", boxShadow: "0 5px 16px rgba(24,199,122,.09)" }}><ForumOutlined /></Box>
         <Box sx={{ minWidth: 0, flex: 1 }}>
           <Stack direction="row" spacing={.8} sx={{ alignItems: "center" }}><Typography sx={{ fontWeight: 950, fontSize: "1.22rem", lineHeight: 1.05, letterSpacing: "-.025em", whiteSpace: "nowrap" }}>Chat interno</Typography><Chip size="small" label={{ ONLINE: "Online", AWAY: "Ausente", BUSY: "Ocupado" }[availability]} color={availability === "BUSY" ? "error" : availability === "AWAY" ? "warning" : "success"} onClick={() => { const next = availability === "ONLINE" ? "AWAY" : availability === "AWAY" ? "BUSY" : "ONLINE"; setAvailability(next); localStorage.setItem("techlead-chat-status", next); }} sx={{ height: 22, fontWeight: 850 }} /></Stack>
-          <Typography variant="caption" color="text.secondary" noWrap>Colaboração instantânea da equipe · presença sincronizada em tempo real</Typography>
+          <Stack direction="row" spacing={.7} sx={{ alignItems: "center", minWidth: 0 }}><Typography variant="caption" color="text.secondary" noWrap>Colaboração instantânea · presença em tempo real</Typography><Box sx={{ width: 1, height: 12, bgcolor: "divider" }} /><TextField variant="standard" value={statusMessage} onChange={(event) => { const value = event.target.value.slice(0,160); setStatusMessage(value); localStorage.setItem("techlead-chat-status-message", value); }} placeholder="Mensagem pessoal" sx={{ width: 220, "& .MuiInputBase-root": { fontSize: ".72rem" }, "& .MuiInput-underline:before": { borderBottomColor: "transparent" } }} slotProps={{ input: { startAdornment: <EditOutlined sx={{ mr: .5, fontSize: 13, color: "text.secondary" }} /> } }} /></Stack>
         </Box>
-        <TextField size="small" value={statusMessage} onChange={(event) => { const value = event.target.value.slice(0,160); setStatusMessage(value); localStorage.setItem("techlead-chat-status-message", value); }} placeholder="Mensagem pessoal" sx={{ width: { xs: 180, lg: 290 }, flexShrink: 0, "& .MuiOutlinedInput-root": { height: 36, borderRadius: 2.2, bgcolor: "background.paper", boxShadow: "0 3px 12px rgba(15,23,42,.04)" } }} slotProps={{ input: { startAdornment: <EditOutlined sx={{ mr: .65, fontSize: 15, color: "text.secondary" }} /> } }} />
       </Stack>
     </Paper>
     {error && <Alert severity="error" onClose={() => setError("")}>{error}</Alert>}
     <Paper elevation={0} sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "300px minmax(0,1fr)" }, minHeight: 0, flex: 1, overflow: "hidden", borderRadius: 3, maxHeight: "100%", height: "100%", border: "1px solid", borderColor: "divider", boxShadow: "0 14px 38px rgba(15,23,42,.07)", bgcolor: "background.paper" }}>
-      <Box sx={{ borderRight: { md: "1px solid" }, borderColor: "divider", minHeight: 0, overflowY: "auto", overscrollBehavior: "contain", bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(255,255,255,.018)" : "rgba(248,250,252,.72)" }}>
+      <Box sx={{ borderRight: { md: "none" }, borderColor: "divider", position: "relative", "&::after": { content: '""', position: "absolute", top: 14, bottom: 14, right: 0, width: "1px", background: "linear-gradient(180deg,transparent,rgba(24,199,122,.32) 18%,rgba(47,111,237,.18) 82%,transparent)" }, minHeight: 0, overflowY: "auto", overscrollBehavior: "contain", bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(255,255,255,.018)" : "rgba(248,250,252,.72)" }}>
         <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between", px: 1.75, py: 1.35, minHeight: 62 }}>
           <Box sx={{ minWidth: 0, pl: .25 }}><Typography sx={{ fontWeight: 900, lineHeight: 1.2 }}>Conversas</Typography><Typography variant="caption" color="text.secondary">{channels.length} conversa(s)</Typography></Box>
           <Stack direction="row"><Tooltip title="Conversa privada"><IconButton size="small" onClick={() => setDirectOpen(true)}><ForumOutlined /></IconButton></Tooltip><Tooltip title="Novo canal"><IconButton size="small" aria-label="Criar canal" onClick={() => setCreateOpen(true)}><AddCommentOutlined /></IconButton></Tooltip></Stack>
@@ -234,7 +250,7 @@ export function Chat() {
         {!channels.length && !loading && <Box sx={{ p: 3, textAlign: "center" }}><Typography color="text.secondary" variant="body2">Crie o primeiro canal da equipe.</Typography></Box>}
       </Box>
       <Box sx={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
-        <Stack direction="row" spacing={1} sx={{ px: 1.5, py: 1, alignItems: "center", justifyContent: "space-between" }}><Box><Stack direction="row" spacing={.7} sx={{ alignItems: "center" }}><Typography sx={{ fontWeight: 900 }}>{selected?.name || "Selecione uma conversa"}</Typography>{selected && <Chip size="small" icon={<Circle sx={{ fontSize: "9px !important" }} />} label={selected?.type === "DIRECT" ? ({ ONLINE: "Online", AWAY: "Ausente", BUSY: "Ocupado", OFFLINE: "Offline" }[selectedPresence?.effectiveStatus ?? "OFFLINE"]) : `${selected.members?.filter((member) => presence.find((item) => item.userId === member.user.id)?.effectiveStatus !== "OFFLINE").length ?? 0} online`} color={selectedPresence?.effectiveStatus === "BUSY" ? "error" : selectedPresence?.effectiveStatus === "AWAY" ? "warning" : selectedPresence?.effectiveStatus === "ONLINE" ? "success" : "default"} variant="outlined" />}</Stack><Typography variant="caption" color="text.secondary">{selectedPresence?.statusMessage || "Mensagens instantâneas · tempo real"}</Typography></Box><Stack direction="row" spacing={.5}><TextField size="small" value={messageSearch} onChange={(event) => setMessageSearch(event.target.value)} placeholder="Buscar na conversa" sx={{ width: 210 }} slotProps={{ input: { startAdornment: <SearchOutlined sx={{ mr: .5, fontSize: 17, color: "text.secondary" }} /> } }} /><IconButton size="small"><MoreHorizOutlined /></IconButton></Stack></Stack>
+        <Stack direction="row" spacing={1} sx={{ px: 1.5, py: 1, alignItems: "center", justifyContent: "space-between" }}><Box><Stack direction="row" spacing={.7} sx={{ alignItems: "center" }}><Typography sx={{ fontWeight: 900 }}>{selected?.name || "Selecione uma conversa"}</Typography>{selected && <Chip size="small" icon={<Circle sx={{ fontSize: "9px !important" }} />} label={selected?.type === "DIRECT" ? ({ ONLINE: "Online", AWAY: "Ausente", BUSY: "Ocupado", OFFLINE: "Offline" }[selectedPresence?.effectiveStatus ?? "OFFLINE"]) : `${selected.members?.filter((member) => presence.find((item) => item.userId === member.user.id)?.effectiveStatus !== "OFFLINE").length ?? 0} online`} color={selectedPresence?.effectiveStatus === "BUSY" ? "error" : selectedPresence?.effectiveStatus === "AWAY" ? "warning" : selectedPresence?.effectiveStatus === "ONLINE" ? "success" : "default"} variant="outlined" />}</Stack><Typography variant="caption" color="text.secondary">{selectedPresence?.statusMessage || "Mensagens instantâneas · tempo real"}</Typography></Box><Stack direction="row" spacing={.5}><TextField size="small" value={messageSearch} onChange={(event) => setMessageSearch(event.target.value)} placeholder="Buscar na conversa" sx={{ width: 210 }} slotProps={{ input: { startAdornment: <SearchOutlined sx={{ mr: .5, fontSize: 17, color: "text.secondary" }} /> } }} /><IconButton size="small" aria-label="Opções da conversa" onClick={(event) => setConversationMenuAnchor(event.currentTarget)}><MoreHorizOutlined /></IconButton></Stack></Stack>
         <Divider />
         <Box ref={messagesRef} sx={{ flex: 1, minHeight: 0, overflowY: "auto", overscrollBehavior: "contain", p: { xs: 1.5, md: 2.25 }, bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(255,255,255,.012)" : "#f8fafb", backgroundImage: (theme) => theme.palette.mode === "dark" ? "radial-gradient(circle at 50% 0%, rgba(24,199,122,.035), transparent 36%)" : "radial-gradient(circle at 50% 0%, rgba(24,199,122,.045), transparent 38%)" }}>
           {loading ? <Box sx={{ display: "grid", placeItems: "center", minHeight: 160 }}><CircularProgress size={28} /></Box> : visibleMessages.map((message, messageIndex) => {
@@ -260,6 +276,17 @@ export function Chat() {
         </Stack>
       </Box>
     </Paper>
+    <Menu anchorEl={conversationMenuAnchor} open={Boolean(conversationMenuAnchor)} onClose={() => setConversationMenuAnchor(null)} anchorOrigin={{ vertical: "bottom", horizontal: "right" }} transformOrigin={{ vertical: "top", horizontal: "right" }} slotProps={{ paper: { sx: { mt: .5, minWidth: 220, borderRadius: 2.5, border: "1px solid", borderColor: "divider", boxShadow: "0 12px 30px rgba(15,23,42,.14)" } } }}>
+      <MenuItem onClick={() => { if (selectedId) toggleFavorite(selectedId); setConversationMenuAnchor(null); }}><ListItemIcon><StarOutlineRounded fontSize="small" /></ListItemIcon>{selectedId && favorites.includes(selectedId) ? "Remover dos favoritos" : "Favoritar conversa"}</MenuItem>
+      <MenuItem onClick={() => { setSoundEnabled(false); localStorage.setItem("techlead-chat-sound", "off"); setConversationMenuAnchor(null); }}><ListItemIcon><VolumeOffOutlined fontSize="small" /></ListItemIcon>Silenciar notificações</MenuItem>
+      <Divider />
+      <MenuItem disabled={!selectedId} onClick={() => { setConversationMenuAnchor(null); setDeleteConversationOpen(true); }} sx={{ color: "error.main" }}><ListItemIcon><DeleteOutlineRounded fontSize="small" color="error" /></ListItemIcon>Excluir conversa</MenuItem>
+    </Menu>
+    <Dialog open={deleteConversationOpen} onClose={() => setDeleteConversationOpen(false)} maxWidth="xs" fullWidth>
+      <DialogTitle>Excluir conversa?</DialogTitle>
+      <DialogContent><Typography variant="body2" color="text.secondary">A conversa será removida da sua lista. Canais de equipe só podem ser excluídos por coordenação ou administração.</Typography></DialogContent>
+      <DialogActions><Button onClick={() => setDeleteConversationOpen(false)}>Cancelar</Button><Button color="error" variant="contained" onClick={() => void deleteConversation()}>Excluir</Button></DialogActions>
+    </Dialog>
     <Popover open={Boolean(emojiAnchor)} anchorEl={emojiAnchor} onClose={() => setEmojiAnchor(null)} anchorOrigin={{ vertical: "top", horizontal: "left" }} transformOrigin={{ vertical: "bottom", horizontal: "left" }}><Box sx={{ display: "grid", gridTemplateColumns: "repeat(5, 42px)", gap: .5, p: 1 }}>{emojis.map((emoji) => <IconButton key={emoji} onClick={() => { append(emoji); setEmojiAnchor(null); }} sx={{ fontSize: 22 }}>{emoji}</IconButton>)}</Box></Popover>
     <Dialog open={stickersOpen} onClose={() => setStickersOpen(false)} maxWidth="xs" fullWidth><DialogTitle>Figurinhas rápidas</DialogTitle><DialogContent><Box sx={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 1, pt: .5 }}>{stickers.map((sticker) => <Button key={sticker} variant="outlined" onClick={() => { append(sticker); setStickersOpen(false); }} sx={{ minHeight: 72, fontWeight: 850 }}>{sticker}</Button>)}</Box></DialogContent></Dialog>
     <Dialog open={directOpen} onClose={() => setDirectOpen(false)} fullWidth maxWidth="xs"><DialogTitle>Nova conversa privada</DialogTitle><DialogContent><List>{participants.filter((person) => person.id !== user?.id).map((person) => <ListItemButton key={person.id} onClick={() => void openDirect(person)} sx={{ borderRadius: 1.5 }}><Box sx={{ width: 34, height: 34, borderRadius: "50%", bgcolor: "action.hover", display: "grid", placeItems: "center", mr: 1.2, fontWeight: 900 }}>{person.name.slice(0,1)}</Box><ListItemText primary={person.name} secondary={`@${person.username} · ${person.role}`} /></ListItemButton>)}</List></DialogContent></Dialog>
