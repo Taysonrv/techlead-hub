@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api, getAccessToken, getApiBaseUrl } from "../services/api";
 import { useAuth } from "../context/AuthContext";
+import { playNotificationSound } from "../utils/notificationSound";
 
 
 type Person = { id: number; name: string; username: string; role: string };
@@ -69,6 +70,7 @@ export function Chat() {
       const response = await api.get<{ messages: Message[] }>(`/chat/channels/${channelId}/messages`);
       setMessages(response.data.messages);
       setChannels((current) => current.map((channel) => channel.id === channelId ? { ...channel, unread: 0 } : channel));
+      window.dispatchEvent(new Event("techlead-hub:chat-read"));
       setError("");
     } catch (requestError: any) {
       if (!quiet) setError(requestError?.response?.data?.error || "Não foi possível carregar a conversa.");
@@ -96,11 +98,8 @@ export function Chat() {
   useEffect(() => {
     const unread = channels.reduce((sum, channel) => sum + channel.unread, 0);
     if (unread > previousUnread.current && soundEnabled) {
-      try {
-        const audio = new Audio("data:audio/wav;base64,UklGRjQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YRAAAACAgJCQmJiQkICAgICAgA==");
-        audio.volume = .32; void audio.play().catch(() => undefined);
-        if (document.visibilityState !== "visible" && "Notification" in window && Notification.permission === "granted") new Notification("TechLead Hub", { body: "Você recebeu uma nova mensagem no chat." });
-      } catch {}
+      playNotificationSound("chat");
+      if (document.visibilityState !== "visible" && "Notification" in window && Notification.permission === "granted") new Notification("TechLead Hub", { body: "Você recebeu uma nova mensagem no chat." });
     }
     previousUnread.current = unread;
   }, [channels, soundEnabled]);
@@ -208,26 +207,26 @@ export function Chat() {
   const append = (value: string) => setContent((current) => current ? `${current} ${value}` : value);
 
   return <Stack spacing={1} sx={{ height: "100%", maxHeight: "100%", minHeight: 0, overflow: "hidden", p: { xs: 1, md: 1.25 }, boxSizing: "border-box", bgcolor: "background.default" }}>
-    <Paper elevation={0} sx={{ flexShrink: 0, px: 1.5, py: .85, minHeight: 58, borderRadius: 3, border: "1px solid", borderColor: "divider", bgcolor: "background.paper", boxShadow: "0 8px 24px rgba(15,23,42,.055)", overflow: "hidden" }}>
-      <Stack direction="row" spacing={1.25} sx={{ alignItems: "center", minWidth: 0, pr: { md: 29 } }}>
-        <Box sx={{ width: 38, height: 38, borderRadius: 2.2, display: "grid", placeItems: "center", flexShrink: 0, color: "primary.main", background: "linear-gradient(145deg,rgba(24,199,122,.16),rgba(47,111,237,.09))", border: "1px solid rgba(24,199,122,.22)" }}><ForumOutlined fontSize="small" /></Box>
+    <Paper elevation={0} sx={{ flexShrink: 0, minHeight: 76, px: 2, py: 1.15, borderRadius: 3.5, border: "1px solid", borderColor: "divider", borderLeft: "4px solid", borderLeftColor: "primary.main", overflow: "hidden", background: (theme) => theme.palette.mode === "dark" ? "linear-gradient(105deg,rgba(24,199,122,.12),rgba(47,111,237,.07),rgba(10,23,43,.94))" : "linear-gradient(105deg,rgba(24,199,122,.14),rgba(207,245,234,.72) 34%,rgba(224,236,252,.82) 70%,rgba(248,250,252,.96))", boxShadow: "0 8px 26px rgba(15,23,42,.055)" }}>
+      <Stack direction="row" spacing={1.35} sx={{ alignItems: "center", minWidth: 0, pr: { md: 29 } }}>
+        <Box sx={{ width: 42, height: 42, borderRadius: 2.5, display: "grid", placeItems: "center", flexShrink: 0, color: "primary.main", bgcolor: "background.paper", border: "1px solid rgba(24,199,122,.22)", boxShadow: "0 5px 16px rgba(24,199,122,.09)" }}><ForumOutlined /></Box>
         <Box sx={{ minWidth: 0, flex: 1 }}>
-          <Stack direction="row" spacing={.8} sx={{ alignItems: "center" }}><Typography sx={{ fontWeight: 950, fontSize: "1.08rem", lineHeight: 1.05, letterSpacing: "-.02em", whiteSpace: "nowrap" }}>Chat interno</Typography><Chip size="small" label={{ ONLINE: "Online", AWAY: "Ausente", BUSY: "Ocupado" }[availability]} color={availability === "BUSY" ? "error" : availability === "AWAY" ? "warning" : "success"} onClick={() => { const next = availability === "ONLINE" ? "AWAY" : availability === "AWAY" ? "BUSY" : "ONLINE"; setAvailability(next); localStorage.setItem("techlead-chat-status", next); }} sx={{ height: 21, fontWeight: 850, "& .MuiChip-label": { px: .9 } }} /></Stack>
-          <Typography variant="caption" color="text.secondary" noWrap>Comunicação instantânea da equipe</Typography>
+          <Stack direction="row" spacing={.8} sx={{ alignItems: "center" }}><Typography sx={{ fontWeight: 950, fontSize: "1.22rem", lineHeight: 1.05, letterSpacing: "-.025em", whiteSpace: "nowrap" }}>Chat interno</Typography><Chip size="small" label={{ ONLINE: "Online", AWAY: "Ausente", BUSY: "Ocupado" }[availability]} color={availability === "BUSY" ? "error" : availability === "AWAY" ? "warning" : "success"} onClick={() => { const next = availability === "ONLINE" ? "AWAY" : availability === "AWAY" ? "BUSY" : "ONLINE"; setAvailability(next); localStorage.setItem("techlead-chat-status", next); }} sx={{ height: 22, fontWeight: 850 }} /></Stack>
+          <Typography variant="caption" color="text.secondary" noWrap>Colaboração instantânea da equipe · presença sincronizada em tempo real</Typography>
         </Box>
-        <TextField size="small" value={statusMessage} onChange={(event) => { const value = event.target.value.slice(0,160); setStatusMessage(value); localStorage.setItem("techlead-chat-status-message", value); }} placeholder="Defina sua mensagem pessoal" sx={{ width: { xs: 190, lg: 300 }, flexShrink: 0, "& .MuiOutlinedInput-root": { height: 34, borderRadius: 999, bgcolor: "action.hover", "& fieldset": { borderColor: "transparent" }, "&:hover fieldset": { borderColor: "divider" }, "&.Mui-focused fieldset": { borderColor: "primary.main" } } }} slotProps={{ input: { startAdornment: <EditOutlined sx={{ mr: .65, fontSize: 14, color: "text.secondary" }} /> } }} />
+        <TextField size="small" value={statusMessage} onChange={(event) => { const value = event.target.value.slice(0,160); setStatusMessage(value); localStorage.setItem("techlead-chat-status-message", value); }} placeholder="Mensagem pessoal" sx={{ width: { xs: 180, lg: 290 }, flexShrink: 0, "& .MuiOutlinedInput-root": { height: 36, borderRadius: 2.2, bgcolor: "background.paper", boxShadow: "0 3px 12px rgba(15,23,42,.04)" } }} slotProps={{ input: { startAdornment: <EditOutlined sx={{ mr: .65, fontSize: 15, color: "text.secondary" }} /> } }} />
       </Stack>
     </Paper>
     {error && <Alert severity="error" onClose={() => setError("")}>{error}</Alert>}
-    <Paper elevation={0} sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "300px minmax(0,1fr)" }, minHeight: 0, flex: 1, overflow: "hidden", borderRadius: 3.5, maxHeight: "100%", height: "100%", border: "1px solid", borderColor: "divider", boxShadow: "0 14px 38px rgba(15,23,42,.07)", bgcolor: "background.paper" }}>
+    <Paper elevation={0} sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "300px minmax(0,1fr)" }, minHeight: 0, flex: 1, overflow: "hidden", borderRadius: 3, maxHeight: "100%", height: "100%", border: "1px solid", borderColor: "divider", boxShadow: "0 14px 38px rgba(15,23,42,.07)", bgcolor: "background.paper" }}>
       <Box sx={{ borderRight: { md: "1px solid" }, borderColor: "divider", minHeight: 0, overflowY: "auto", overscrollBehavior: "contain", bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(255,255,255,.018)" : "rgba(248,250,252,.72)" }}>
-        <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between", px: 1.5, py: 1.1 }}>
-          <Box><Typography sx={{ fontWeight: 900 }}>Contatos</Typography><Typography variant="caption" color="text.secondary">{channels.length} conversa(s)</Typography></Box>
+        <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between", px: 1.75, py: 1.35, minHeight: 62 }}>
+          <Box sx={{ minWidth: 0, pl: .25 }}><Typography sx={{ fontWeight: 900, lineHeight: 1.2 }}>Conversas</Typography><Typography variant="caption" color="text.secondary">{channels.length} conversa(s)</Typography></Box>
           <Stack direction="row"><Tooltip title="Conversa privada"><IconButton size="small" onClick={() => setDirectOpen(true)}><ForumOutlined /></IconButton></Tooltip><Tooltip title="Novo canal"><IconButton size="small" aria-label="Criar canal" onClick={() => setCreateOpen(true)}><AddCommentOutlined /></IconButton></Tooltip></Stack>
         </Stack>
         <Box sx={{ px: 1.25, pb: 1 }}><TextField size="small" fullWidth value={conversationSearch} onChange={(event) => setConversationSearch(event.target.value)} placeholder="Buscar conversa..." slotProps={{ input: { startAdornment: <SearchOutlined sx={{ mr: .7, fontSize: 18, color: "text.secondary" }} /> } }} /></Box>
         <Divider />
-        <List disablePadding>{visibleChannels.map((channel) => <ListItemButton key={channel.id} selected={channel.id === selectedId} onClick={() => setSelectedId(channel.id)} sx={{ py: 1.05, px: 1.25, mx: .75, my: .35, minHeight: 64, borderRadius: 2.2, transition: "background-color .18s ease, transform .18s ease", "&:hover": { transform: "translateX(2px)" }, "&.Mui-selected": { bgcolor: "rgba(24,199,122,.10)" }, "&.Mui-selected:hover": { bgcolor: "rgba(24,199,122,.14)" } }}>
+        <List disablePadding>{visibleChannels.map((channel) => <ListItemButton key={channel.id} selected={channel.id === selectedId} onClick={() => setSelectedId(channel.id)} sx={{ py: 1.05, px: 1.25, mx: 1, my: .4, minHeight: 66, borderRadius: 2, transition: "background-color .18s ease, transform .18s ease", "&:hover": { transform: "translateX(2px)" }, "&.Mui-selected": { bgcolor: "rgba(24,199,122,.10)" }, "&.Mui-selected:hover": { bgcolor: "rgba(24,199,122,.14)" } }}>
           <Box sx={{ position: "relative", mr: 1.25, width: 40, height: 40, minWidth: 40, flex: "0 0 40px", borderRadius: "50%", bgcolor: channel.id === selectedId ? "primary.main" : "action.hover", display: "grid", placeItems: "center", fontWeight: 900 }}>{channel.name.slice(0,1).toUpperCase()}<Circle sx={{ position: "absolute", width: 10, height: 10, right: 0, bottom: 0, color: "success.main", stroke: "background.paper", strokeWidth: 4 }} /></Box>
           <ListItemText primary={channel.name} secondary={channel.clientName || channel.description || "Canal da equipe"} slotProps={{ primary: { sx: { fontWeight: 750, fontSize: ".88rem", lineHeight: 1.25, overflow: "hidden", textOverflow: "ellipsis" } }, secondary: { sx: { fontSize: ".72rem", mt: .25, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } } }} />
           <Stack direction="row" spacing={.4} sx={{ alignItems: "center" }}><Tooltip title={favorites.includes(channel.id) ? "Remover dos favoritos" : "Favoritar"}><IconButton size="small" onClick={(event) => { event.stopPropagation(); toggleFavorite(channel.id); }} sx={{ width: 28, height: 28, p: .5, fontSize: 16 }}>{favorites.includes(channel.id) ? "★" : "☆"}</IconButton></Tooltip>{channel.unread > 0 && <Chip size="small" color="primary" label={channel.unread} />}</Stack>
@@ -256,7 +255,7 @@ export function Chat() {
           <Tooltip title="Emojis"><IconButton onClick={(event) => setEmojiAnchor(event.currentTarget)} disabled={!selectedId}><EmojiEmotionsOutlined /></IconButton></Tooltip>
           <Tooltip title="Figurinhas"><IconButton onClick={() => setStickersOpen(true)} disabled={!selectedId}><CelebrationOutlined /></IconButton></Tooltip>
           <Tooltip title={soundEnabled ? "Desativar som" : "Ativar som"}><IconButton color={soundEnabled ? "primary" : "default"} onClick={() => { const next = !soundEnabled; setSoundEnabled(next); localStorage.setItem("techlead-chat-sound", next ? "on" : "off"); if ("Notification" in window && Notification.permission === "default") void Notification.requestPermission(); }}><NotificationsActiveOutlined /></IconButton></Tooltip>
-          <TextField size="small" fullWidth multiline maxRows={4} sx={{ "& .MuiOutlinedInput-root": { borderRadius: 3, bgcolor: "action.hover", pr: .5 }, "& fieldset": { borderColor: "transparent" }, "& .Mui-focused fieldset": { borderColor: "primary.main" } }}  value={content} disabled={!selectedId || sending} placeholder="Escreva uma mensagem; use @usuario para mencionar..." slotProps={{ htmlInput: { maxLength: 4000 } }} onChange={(event) => { setContent(event.target.value); if (selectedId) void api.post(`/chat/channels/${selectedId}/typing`, { active: true }).catch(() => undefined); if (typingTimer.current) window.clearTimeout(typingTimer.current); typingTimer.current = window.setTimeout(() => { if (selectedId) void api.post(`/chat/channels/${selectedId}/typing`, { active: false }).catch(() => undefined); }, 1200); }} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void send(); } }} />
+          <TextField size="small" fullWidth multiline maxRows={4} sx={{ "& .MuiOutlinedInput-root": { borderRadius: 2.2, bgcolor: "action.hover", pr: .5 }, "& fieldset": { borderColor: "transparent" }, "& .Mui-focused fieldset": { borderColor: "primary.main" } }}  value={content} disabled={!selectedId || sending} placeholder="Escreva uma mensagem; use @usuario para mencionar..." slotProps={{ htmlInput: { maxLength: 4000 } }} onChange={(event) => { setContent(event.target.value); if (selectedId) void api.post(`/chat/channels/${selectedId}/typing`, { active: true }).catch(() => undefined); if (typingTimer.current) window.clearTimeout(typingTimer.current); typingTimer.current = window.setTimeout(() => { if (selectedId) void api.post(`/chat/channels/${selectedId}/typing`, { active: false }).catch(() => undefined); }, 1200); }} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void send(); } }} />
           <Button variant="contained" endIcon={sending ? <CircularProgress size={16} color="inherit" /> : <SendRounded />} disabled={!selectedId || !content.trim() || sending} onClick={() => void send()} sx={{ minWidth: 44, width: 44, height: 40, px: 0, borderRadius: 2.5, "& .MuiButton-endIcon": { m: 0 } }}><Box component="span" sx={{ display: "none" }}>Enviar</Box></Button>
         </Stack>
       </Box>
