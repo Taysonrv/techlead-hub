@@ -1,4 +1,4 @@
-import { CalendarMonthOutlined, ChevronLeft, ChevronRight, DarkModeOutlined, LightModeOutlined, SearchOutlined } from "@mui/icons-material";
+import { CalendarMonthOutlined, ChevronLeft, ChevronRight, DarkModeOutlined, LightModeOutlined, SearchOutlined, ChatBubbleOutlineOutlined } from "@mui/icons-material";
 import { Badge, Box, CircularProgress, IconButton, InputAdornment, List, ListItemButton, ListItemText, Paper, Popover, Stack, TextField, Typography } from "@mui/material";
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
 import { createPortal } from "react-dom";
@@ -26,6 +26,7 @@ export function GlobalTopBar() {
   const [calendarPortal, setCalendarPortal] = useState<HTMLElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const [visible, setVisible] = useState(() => window.scrollY < 24);
+  const [chatUnread, setChatUnread] = useState(0);
 
   useEffect(() => {
     setCalendarPortal(document.getElementById("global-calendar-slot"));
@@ -36,6 +37,13 @@ export function GlobalTopBar() {
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  useEffect(() => {
+    const loadUnread = () => api.get<{ channels: Array<{ unread: number }> }>("/chat/channels").then((response) => setChatUnread(response.data.channels.reduce((sum, channel) => sum + channel.unread, 0))).catch(() => undefined);
+    void loadUnread();
+    const timer = window.setInterval(loadUnread, 8_000);
+    return () => window.clearInterval(timer);
   }, []);
 
   useEffect(() => {
@@ -92,7 +100,8 @@ export function GlobalTopBar() {
         >
           {mode === "dark" ? <LightModeOutlined /> : <DarkModeOutlined />}
         </IconButton>
-        <IconButton title="Calendário operacional" onClick={(event: MouseEvent<HTMLElement>) => setCalendarAnchor(event.currentTarget)} sx={{ width: 46, height: 46, bgcolor: "background.paper", border: "1px solid", borderColor: "divider", borderRadius: 2, boxShadow: "0 2px 10px rgba(0,0,0,.06)", "&:hover": { bgcolor: "background.paper", borderColor: "rgba(24,199,122,.38)" } }}><Badge color="success" variant={events.length ? "dot" : "standard"}><CalendarMonthOutlined /></Badge></IconButton></>, calendarPortal)}
+        <IconButton title="Calendário operacional" onClick={(event: MouseEvent<HTMLElement>) => setCalendarAnchor(event.currentTarget)} sx={{ width: 46, height: 46, bgcolor: "background.paper", border: "1px solid", borderColor: "divider", borderRadius: 2, boxShadow: "0 2px 10px rgba(0,0,0,.06)", "&:hover": { bgcolor: "background.paper", borderColor: "rgba(24,199,122,.38)" } }}><Badge color="success" variant={events.length ? "dot" : "standard"}><CalendarMonthOutlined /></Badge></IconButton>
+        <IconButton title="Chat interno" onClick={() => navigate("/chat")} sx={{ width: 46, height: 46, bgcolor: "background.paper", border: "1px solid", borderColor: chatUnread ? "success.main" : "divider", borderRadius: 2, boxShadow: "0 2px 10px rgba(0,0,0,.06)" }}><Badge color="error" badgeContent={chatUnread} max={99}><ChatBubbleOutlineOutlined /></Badge></IconButton></>, calendarPortal)}
 
       <Popover open={Boolean(calendarAnchor)} anchorEl={calendarAnchor} onClose={() => setCalendarAnchor(null)} anchorOrigin={{ vertical: "bottom", horizontal: "right" }} transformOrigin={{ vertical: "top", horizontal: "right" }} slotProps={{ paper: { sx: { mt: 1, width: { xs: 340, sm: 420 }, maxWidth: "calc(100vw - 24px)", maxHeight: "calc(100vh - 90px)", borderRadius: 2 } } }}>
         <Box sx={{ p: 1.5 }}>
