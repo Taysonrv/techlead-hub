@@ -12,7 +12,7 @@ import { detailDrawerPaperSx } from "../theme/layoutTokens";
 type Ticket = { id: number; movideskId: number; subject: string; status: string; client: string | null; taskNumber: number | null; updatedAt: string };
 type WorkItem = { id: number; workItemType: string; title: string; state: string; client: string | null; participantClients?: string | string[] | null; assignedToName: string | null; prioritized: boolean | null; blockedProcess: boolean | null; registeredVersion: string | null; deliveredVersion: string | null; movideskTicket: number | null; participantMovideskTickets?: string | number[] | null; azureChangedAt: string | null };
 type VersionGroup = { channel: string; version: string; tasks: Array<Pick<WorkItem, "id" | "workItemType" | "title" | "state" | "deliveredVersion">> };
-type Data = { summary: { tickets: number; openWorkItems: number; concludedRecently: number; prioritized: number; blocked: number }; tickets: Ticket[]; workItems: WorkItem[]; latestVersions: VersionGroup[]; filters: { clients: string[]; types: string[] } };
+type Data = { summary: { tickets: number; openWorkItems: number; concludedRecently: number; prioritized: number; blocked: number }; tickets: Ticket[]; workItems: WorkItem[]; latestVersions: VersionGroup[]; filters: { clients: string[]; types: string[]; analysts: string[]; teams: Array<{ name: string; members: string[] }> } };
 type TicketDetail = { ticket: Ticket & Record<string, unknown>; relatedWorkItems: WorkItem[] };
 type KnowledgeItem = { id?: number | null; title: string; path?: string; excerpt: string; webUrl: string | null; score?: number; source?: "azure-wiki" | "sharepoint" | "bpmn" };
 type Unified = { key: string; source: "MOVIDESK" | "AZURE"; id: number; title: string; status: string; client: string | null; type: string; updatedAt: string | null; ticket?: Ticket; workItem?: WorkItem };
@@ -53,6 +53,8 @@ export function MyOperation() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [client, setClient] = useState("");
+  const [analyst, setAnalyst] = useState("");
+  const [team, setTeam] = useState("");
   const [type, setType] = useState("");
   const [search, setSearch] = useState("");
   const [metric, setMetric] = useState("");
@@ -76,10 +78,10 @@ export function MyOperation() {
   const load = useCallback(async () => {
     try {
       setLoading(true); setError("");
-      const response = await api.get<Data>("/workspace/my-operation", { params: { client: client || undefined, type: type || undefined, search: search || undefined } });
+      const response = await api.get<Data>("/workspace/my-operation", { params: { client: client || undefined, analyst: analyst || undefined, team: team || undefined, type: type || undefined, search: search || undefined } });
       setData(response.data);
     } catch { setError("Não foi possível carregar sua operação."); } finally { setLoading(false); }
-  }, [client, type, search]);
+  }, [client, analyst, team, type, search]);
   useEffect(() => { const timer = window.setTimeout(() => void load(), 250); return () => window.clearTimeout(timer); }, [load]);
   useEffect(() => {
     let active = true;
@@ -177,12 +179,14 @@ export function MyOperation() {
   return <Box sx={{ pb: 4, minHeight: 0 }}>
     <PageHeader eyebrow="Operação" title="Minha Operação" description="Seus atendimentos Movidesk e tarefas Azure em uma única experiência operacional." meta={`${items.length} registro(s) no recorte atual`} />
 
-    <Card variant="outlined" sx={{ mt: 2 }}><CardContent><Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "2fr 1fr 1fr 1fr auto auto" }, gap: 1.2 }}>
+    <Card variant="outlined" sx={{ mt: 2 }}><CardContent><Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "2fr repeat(5, minmax(150px, 1fr)) auto auto" }, gap: 1.2 }}>
       <TextField size="small" label="Pesquisar ticket, tarefa ou assunto" value={search} onChange={(event) => setSearch(event.target.value)} slotProps={{ input: { startAdornment: <SearchOutlined sx={{ mr: 1, color: "text.disabled" }} /> } }} />
       <Autocomplete size="small" options={data?.filters.clients ?? []} value={client || null} onChange={(_, value) => setClient(value ?? "")} renderInput={(params) => <TextField {...params} label="Cliente" />} />
+      <Autocomplete size="small" options={data?.filters.analysts ?? []} value={analyst || null} onChange={(_, value) => { setAnalyst(value ?? ""); if (value) setTeam(""); }} renderInput={(params) => <TextField {...params} label="Analista" />} />
+      <FormControl size="small"><InputLabel>Equipe</InputLabel><Select label="Equipe" value={team} onChange={(event) => { setTeam(event.target.value); if (event.target.value) setAnalyst(""); }}><MenuItem value="">Minha operação</MenuItem>{data?.filters.teams.map((item) => <MenuItem key={item.name} value={item.name}>{item.name}</MenuItem>)}</Select></FormControl>
       <FormControl size="small"><InputLabel>Conteúdo</InputLabel><Select label="Conteúdo" value={sourceView} onChange={(event) => setSourceView(event.target.value as SourceView)}><MenuItem value="tickets">Atendimentos</MenuItem><MenuItem value="tasks">Tarefas</MenuItem><MenuItem value="both">Ambos</MenuItem></Select></FormControl>
       <FormControl size="small"><InputLabel>Tipo de tarefa</InputLabel><Select label="Tipo de tarefa" value={type} onChange={(event) => setType(event.target.value)} disabled={sourceView === "tickets"}><MenuItem value="">Todas</MenuItem>{data?.filters.types.map((value) => <MenuItem key={value} value={value}>{value}</MenuItem>)}</Select></FormControl>
-      <Button onClick={() => { setClient(""); setType(""); setSearch(""); setMetric(""); setSort("priority"); }}>Limpar</Button>
+      <Button onClick={() => { setClient(""); setAnalyst(""); setTeam(""); setType(""); setSearch(""); setMetric(""); setSort("priority"); }}>Limpar</Button>
       <ToggleButtonGroup exclusive size="small" value={view} onChange={(_, value) => value && setView(value)}><ToggleButton value="kanban" aria-label="Kanban"><ViewColumnOutlined /></ToggleButton><ToggleButton value="list" aria-label="Lista"><ViewListOutlined /></ToggleButton></ToggleButtonGroup>
     </Box>
     <Stack direction={{ xs: "column", md: "row" }} spacing={1} useFlexGap sx={{ mt: 1.5, alignItems: { md: "center" }, flexWrap: "wrap" }}>
@@ -277,7 +281,16 @@ function OperationCard({ item, compact = false, draggable, onDragStart, onDragEn
 function operationPriority(a: Unified, b: Unified) { const weight = (item: Unified) => (item.workItem?.blockedProcess ? 4 : 0) + (item.workItem?.prioritized ? 2 : 0); const difference = weight(b) - weight(a); if (difference) return difference; return new Date(b.updatedAt ?? 0).getTime() - new Date(a.updatedAt ?? 0).getTime(); }
 function relativeDate(value: string) { const timestamp = new Date(value).getTime(); if (!Number.isFinite(timestamp)) return "Atualização recente"; const days = Math.max(0, Math.floor((Date.now() - timestamp) / 86_400_000)); if (days === 0) return "Hoje"; if (days === 1) return "Ontem"; return `${days}d atrás`; }
 function statusColor(status: string): "default" | "info" | "warning" | "success" | "secondary" { const currentLane = lane(status); if (currentLane === "Concluídos/Fechados") return "success"; if (currentLane === "Pausado" || currentLane === "Aguardando retorno") return "warning"; if (currentLane === "Em andamento") return "info"; if (currentLane === "Interno") return "secondary"; return "default"; }
-function lane(status: string) { const value = status.toLocaleLowerCase("pt-BR"); if (/(conclu|closed|done|resolv|fech|cancel)/.test(value)) return "Concluídos/Fechados"; if (/(paus|suspens)/.test(value)) return "Pausado"; if (/(retorno|cliente)/.test(value)) return "Aguardando retorno"; if (/(intern|desenvolv|qualifica)/.test(value)) return "Interno"; if (/(andamento|active|doing|progress)/.test(value)) return "Em andamento"; if (/(novo|new|atribu|assigned)/.test(value)) return "Aguardando atendimento"; return "Aguardando atendimento"; }
+function lane(status: string) {
+  const value = status.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR").trim();
+  if (/(conclu|closed|done|resolv|fech|cancel)/.test(value)) return "Concluídos/Fechados";
+  if (/aguardando.*retorno.*cliente|retorno.*cliente/.test(value)) return "Aguardando retorno";
+  if (/aguardando.*desenvolv|aguardando|intern|desenvolv|qualifica/.test(value)) return "Interno";
+  if (/(andamento|active|doing|progress)/.test(value)) return "Em andamento";
+  if (/(^|\b)(pausad|atribu|assigned|novo|new)(\b|$)/.test(value)) return "Aguardando atendimento";
+  if (/(paus|suspens)/.test(value)) return "Pausado";
+  return "Interno";
+}
 function statusForLane(targetLane: string) { if (targetLane === "Concluídos/Fechados") return "Fechado"; if (targetLane === "Aguardando atendimento") return "Atribuído"; return targetLane; }
 function route(type: string) { const value = type.toLocaleLowerCase("pt-BR"); return value.includes("apoio") ? "/apoios" : value.includes("evolu") ? "/evolucoes" : "/correcoes"; }
 function formatList(value: string | string[] | number[] | null | undefined) { if (Array.isArray(value)) return value.join(", ") || "Não informado"; return value?.replace(/^,|,$/g, "").replace(/\r?\n/g, ", ") || "Não informado"; }
