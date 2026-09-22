@@ -130,7 +130,7 @@ export function Chat() {
   const stickers = ["🎉 PARABÉNS!","🚀 VAMOS!","✅ RESOLVIDO","👏 BOA!","🎯 NA META","🔥 PRIORIDADE","💡 IDEIA","🤝 OBRIGADO"];
   const append = (value: string) => setContent((current) => current ? `${current} ${value}` : value);
 
-  return <Stack spacing={1} sx={{ height: "calc(100vh - 124px)", maxHeight: "calc(100vh - 124px)", minHeight: 0, overflow: "hidden" }}>
+  return <Stack spacing={1} sx={{ height: "100%", maxHeight: "100%", minHeight: 0, overflow: "hidden" }}>
     <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ alignItems: { sm: "center" }, justifyContent: "space-between", flexShrink: 0 }}>
       <Box><Typography variant="h5" sx={{ fontWeight: 900, lineHeight: 1.05 }}>Chat interno</Typography><Typography variant="caption" color="text.secondary">Colaboração da equipe em tempo real</Typography></Box>
       <Alert icon={<ShieldOutlined />} severity="info" sx={{ py: 0, px: 1.2, "& .MuiAlert-message": { py: .45 }, fontSize: ".72rem" }}>Não compartilhe credenciais.</Alert>
