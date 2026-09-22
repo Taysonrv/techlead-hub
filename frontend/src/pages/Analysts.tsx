@@ -258,6 +258,17 @@ type ProductivityResponse = {
   analysts: ProductivityAnalyst[];
 };
 
+type TimeProductivityAnalyst = {
+  analyst: string; businessDays: number; expectedHours: number; registeredHours: number;
+  coverageRate: number | null; ticketsWithTime: number; averageHoursPerTicket: number | null;
+  topTickets: Array<{ movideskId: number; subject: string; hours: number }>;
+};
+type TimeProductivityResponse = {
+  generatedAt: string; startDate: string; endDate: string;
+  definition: { expectedHours: string; registeredHours: string; coverageRate: string };
+  analysts: TimeProductivityAnalyst[];
+};
+
 type ProductivityDrilldown = {
   title: string;
   subtitle?: string;
@@ -371,6 +382,10 @@ export function Analysts() {
   ] =
     useState<string | null>(null);
 
+  const [timeProductivity, setTimeProductivity] = useState<TimeProductivityResponse | null>(null);
+  const [timeProductivityLoading, setTimeProductivityLoading] = useState(false);
+  const [timeProductivityError, setTimeProductivityError] = useState<string | null>(null);
+
   const [
     productivityDrilldown,
     setProductivityDrilldown,
@@ -463,6 +478,22 @@ export function Analysts() {
     effectiveStartDate,
     effectiveEndDate,
   ]);
+
+  useEffect(() => {
+    async function loadTimeProductivity() {
+      try {
+        setTimeProductivityLoading(true); setTimeProductivityError(null);
+        const response = await api.get<TimeProductivityResponse>("/workspace/analyst-time-productivity", {
+          params: { startDate: formatDateForApi(effectiveStartDate), endDate: formatDateForApi(effectiveEndDate), analyst: selectedAnalyst || undefined },
+        });
+        setTimeProductivity(response.data);
+      } catch (err) {
+        console.error("Erro ao carregar produtividade por horas:", err);
+        setTimeProductivityError("Não foi possível carregar a comparação entre jornada e horas registradas.");
+      } finally { setTimeProductivityLoading(false); }
+    }
+    void loadTimeProductivity();
+  }, [effectiveStartDate, effectiveEndDate, selectedAnalyst]);
 
   /* =====================================================
      PERÍODO GLOBAL
@@ -2255,6 +2286,24 @@ export function Analysts() {
               }
             />
           </Box>
+        </CardContent>
+      </Card>
+
+      <Card elevation={0} sx={{ mb: 2, border: "1px solid", borderColor: "divider", borderRadius: 2.25 }}>
+        <CardContent>
+          <Stack direction={{ xs: "column", lg: "row" }} spacing={1.5} sx={{ justifyContent: "space-between", alignItems: { lg: "flex-start" } }}>
+            <Box><Typography sx={{ fontWeight: 800, fontSize: "1.05rem" }}>Produtividade por horas registradas</Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: .35 }}>Compara a jornada prevista com os apontamentos de tempo disponíveis nos atendimentos do Movidesk. Use como indicador de cobertura de apontamento, em conjunto com volume, complexidade, SLA e entregas.</Typography></Box>
+            <Chip size="small" variant="outlined" label="Fonte: Movidesk" />
+          </Stack>
+          {timeProductivityError && <Alert severity="warning" sx={{ mt: 1.5 }}>{timeProductivityError}</Alert>}
+          {timeProductivityLoading ? <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}><CircularProgress size={28}/></Box> : timeProductivity && <>
+            <Alert severity="info" variant="outlined" sx={{ mt: 1.5 }}>{timeProductivity.definition.expectedHours} {timeProductivity.definition.coverageRate}</Alert>
+            <TableContainer sx={{ mt: 1.5 }}><Table size="small"><TableHead><TableRow><TableCell>Analista</TableCell><TableCell align="right">Dias úteis</TableCell><TableCell align="right">Horas previstas</TableCell><TableCell align="right">Horas registradas</TableCell><TableCell align="right">Cobertura</TableCell><TableCell align="right">Tickets apontados</TableCell><TableCell align="right">Média h/ticket</TableCell></TableRow></TableHead>
+              <TableBody>{timeProductivity.analysts.map((item) => <TableRow key={item.analyst} hover><TableCell><Typography variant="body2" sx={{ fontWeight: 700 }}>{item.analyst}</Typography></TableCell><TableCell align="right">{item.businessDays}</TableCell><TableCell align="right">{item.expectedHours.toLocaleString("pt-BR")}h</TableCell><TableCell align="right">{item.registeredHours.toLocaleString("pt-BR")}h</TableCell><TableCell align="right"><Chip size="small" label={item.coverageRate === null ? "—" : `${item.coverageRate.toLocaleString("pt-BR")}%`} color={item.coverageRate !== null && item.coverageRate >= 80 ? "success" : item.coverageRate !== null && item.coverageRate >= 60 ? "warning" : "default"} variant="outlined"/></TableCell><TableCell align="right">{item.ticketsWithTime}</TableCell><TableCell align="right">{item.averageHoursPerTicket === null ? "—" : `${item.averageHoursPerTicket.toLocaleString("pt-BR")}h`}</TableCell></TableRow>)}</TableBody>
+            </Table></TableContainer>
+            {timeProductivity.analysts.length === 1 && timeProductivity.analysts[0].topTickets.length > 0 && <Box sx={{ mt: 2 }}><Typography variant="subtitle2" sx={{ fontWeight: 800 }}>Atendimentos com maior tempo registrado</Typography><Stack spacing={.6} sx={{ mt: .75 }}>{timeProductivity.analysts[0].topTickets.map((ticket) => <Button key={ticket.movideskId} onClick={() => navigate(`/tickets?movidesk=${ticket.movideskId}`)} sx={{ justifyContent: "space-between", textTransform: "none", color: "text.primary", border: "1px solid", borderColor: "divider" }}><Typography variant="body2" noWrap sx={{ maxWidth: "80%" }}>#{ticket.movideskId} · {ticket.subject}</Typography><Chip size="small" label={`${ticket.hours.toLocaleString("pt-BR")}h`}/></Button>)}</Stack></Box>}
+          </>}
         </CardContent>
       </Card>
 
