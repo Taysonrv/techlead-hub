@@ -25,9 +25,17 @@ export function GlobalTopBar() {
   const [selectedDate, setSelectedDate] = useState(() => dateKey(new Date()));
   const [calendarPortal, setCalendarPortal] = useState<HTMLElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const [visible, setVisible] = useState(() => window.scrollY < 24);
 
   useEffect(() => {
     setCalendarPortal(document.getElementById("global-calendar-slot"));
+  }, []);
+
+  useEffect(() => {
+    const onScroll = () => setVisible(window.scrollY < 24);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
   useEffect(() => {
@@ -64,7 +72,7 @@ export function GlobalTopBar() {
   }
 
   return (
-    <Box sx={{ position: "sticky", top: 0, zIndex: (theme) => theme.zIndex.appBar, mb: 3, minHeight: 46, boxSizing: "border-box", bgcolor: "transparent", pointerEvents: "none" }}>
+    <Box sx={{ position: "relative", zIndex: (theme) => theme.zIndex.appBar, mb: visible ? 3 : 0, minHeight: visible ? 46 : 0, height: visible ? "auto" : 0, opacity: visible ? 1 : 0, transform: visible ? "translateY(0)" : "translateY(-12px)", overflow: "visible", boxSizing: "border-box", bgcolor: "transparent", pointerEvents: visible ? "none" : "none", transition: "opacity .16s ease, transform .16s ease, min-height .16s ease, margin .16s ease" }}>
       <Box sx={{ position: "relative", width: { xs: "calc(100% - 72px)", md: "calc(100% - 340px)" }, maxWidth: 620, minWidth: { md: 420 }, mr: "auto", minHeight: 44, pointerEvents: "auto" }}>
           <TextField inputRef={searchInputRef} fullWidth size="small" value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={handleSearchKeyDown} placeholder="Busque tickets, clientes, tarefas, assuntos ou versões..."
             slotProps={{ input: { startAdornment: <InputAdornment position="start"><SearchOutlined fontSize="small" /></InputAdornment>, endAdornment: searching ? <CircularProgress size={16} /> : undefined, sx: { height: 44, bgcolor: "background.paper", borderRadius: 2, boxShadow: "0 2px 10px rgba(0,0,0,.04)" } } }} />
@@ -75,7 +83,7 @@ export function GlobalTopBar() {
           )}
       </Box>
 
-      {calendarPortal && createPortal(<>
+      {visible && calendarPortal && createPortal(<>
         <IconButton
           title={mode === "dark" ? "Usar modo claro" : "Usar modo escuro"}
           aria-label={mode === "dark" ? "Ativar modo claro" : "Ativar modo escuro"}
