@@ -185,7 +185,9 @@ export class ChatService {
     if (!name || !data) throw Object.assign(new Error("Anexo inválido."), { statusCode: 400 });
     const match = data.match(/^data:([^;]+);base64,(.+)$/);
     if (!match) throw Object.assign(new Error("Formato do anexo inválido."), { statusCode: 400 });
-    const bytes = Buffer.from(match[2], "base64");
+    const encoded = match[2];
+    if (!encoded) throw Object.assign(new Error("Conteúdo do anexo inválido."), { statusCode: 400 });
+    const bytes = Buffer.from(encoded, "base64");
     if (!bytes.length || bytes.length > 8 * 1024 * 1024) throw Object.assign(new Error("O anexo deve ter no máximo 8 MB."), { statusCode: 400 });
     const blocked = ["application/x-msdownload", "application/x-msdos-program", "application/x-sh", "application/x-bat"];
     if (blocked.includes(mimeType)) throw Object.assign(new Error("Este tipo de arquivo não é permitido."), { statusCode: 400 });
