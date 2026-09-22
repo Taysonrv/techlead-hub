@@ -4,7 +4,7 @@ import {
 import type { Prisma } from "@prisma/client";
 import { SIMER_CLIENTS, SUPPORT_ANALYSTS, SUPPORT_COORDINATOR, SUPPORT_TEAMS, ticketOperationalScope, type SupportTeamName } from "../domain/OperationalScope";
 import { MovideskService } from "./MovideskService";
-import { analyzeMovideskIndicators } from "./MovideskPayloadAnalytics";
+import { analyzeMovideskIndicators, extractMovideskTimeEntries } from "./MovideskPayloadAnalytics";
 import { SIMER_SERVICE_CATALOG, suggestSimerService, type SimerServiceCatalogItem } from "../domain/SimerServiceCatalog";
 
 const TERMINAL = ["Concluído", "Concluido", "Closed", "Done", "Resolved", "Cancelado", "Canceled"];
@@ -229,6 +229,44 @@ export class WorkspaceService {
       data: { status, justification: justification ?? detail.ticket.justification },
     });
     return { ticket };
+  }
+
+  public async analystTimeProductivity(params: { startDate?: string | null; endDate?: string | null; analyst?: string | null } = {}) {
+    const end = params.endDate ? new Date(`${params.endDate}T23:59:59.999`) : new Date();
+    const start = params.startDate ? new Date(`${params.startDate}T00:00:00.000`) : new Date(end.getTime() - 27 * 86400000);
+    const analysts = params.analyst ? [params.analyst] : [...SUPPORT_ANALYSTS];
+    const tickets = await prisma.ticket.findMany({
+      where: { AND: [ticketOperationalScope(), { isDeleted: false }, { owner: { in: analysts, mode: "insensitive" } }] },
+      select: { movideskId: true, subject: true, owner: true, rawData: true },
+    });
+    const businessDays = (() => { let count = 0; const day = new Date(start); while (day <= end) { const weekDay = day.getDay(); if (weekDay !== 0 && weekDay !== 6) count += 1; day.setDate(day.getDate() + 1); } return count; })();
+    const expectedHours = businessDays * 8;
+    const same = (a: string | null, b: string) => Boolean(a && a.localeCompare(b, "pt-BR", { sensitivity: "base" }) === 0);
+    const result = analysts.map((analyst) => {
+      let registeredMinutes = 0; const ticketMinutes = new Map<number, number>();
+      for (const ticket of tickets) for (const entry of extractMovideskTimeEntries(ticket.rawData)) {
+        if (entry.date) { const entryDate = new Date(entry.date); if (entryDate < start || entryDate > end) continue; }
+        const belongs = entry.analyst ? same(entry.analyst, analyst) : same(ticket.owner, analyst);
+        if (!belongs) continue;
+        registeredMinutes += entry.minutes;
+        ticketMinutes.set(ticket.movideskId, (ticketMinutes.get(ticket.movideskId) ?? 0) + entry.minutes);
+      }
+      return {
+        analyst, businessDays, expectedHours, registeredHours: Number((registeredMinutes / 60).toFixed(2)),
+        coverageRate: expectedHours ? Number(((registeredMinutes / 60 / expectedHours) * 100).toFixed(1)) : null,
+        ticketsWithTime: ticketMinutes.size,
+        averageHoursPerTicket: ticketMinutes.size ? Number((registeredMinutes / 60 / ticketMinutes.size).toFixed(2)) : null,
+        topTickets: [...ticketMinutes.entries()].sort((a,b) => b[1]-a[1]).slice(0,10).map(([movideskId, minutes]) => {
+          const ticket = tickets.find((item) => item.movideskId === movideskId);
+          return { movideskId, subject: ticket?.subject ?? "", hours: Number((minutes / 60).toFixed(2)) };
+        }),
+      };
+    });
+    return {
+      generatedAt: new Date().toISOString(), startDate: start.toISOString(), endDate: end.toISOString(),
+      definition: { expectedHours: "8 horas por dia útil (segunda a sexta), sem desconto automático de feriados, férias, afastamentos ou jornada individual.", registeredHours: "Soma dos apontamentos de tempo disponíveis no payload sincronizado do Movidesk.", coverageRate: "Horas registradas ÷ horas previstas × 100. Indicador de cobertura de apontamento, não avaliação isolada de desempenho." },
+      analysts: result,
+    };
   }
 
   public async technicalLeadership(params: {
