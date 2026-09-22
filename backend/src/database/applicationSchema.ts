@@ -220,4 +220,19 @@ export async function ensureApplicationSchema() {
     CREATE INDEX IF NOT EXISTS "AzureWorkItemHistory_workItemId_changedAt_idx"
     ON "AzureWorkItemHistory" ("workItemId", "changedAt" DESC)
   `);
+  await prisma.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS "SimerMapNode" (
+      "id" SERIAL PRIMARY KEY,
+      "sourceFile" VARCHAR(260) NOT NULL,
+      "mapName" VARCHAR(260) NOT NULL,
+      "nodeText" TEXT NOT NULL,
+      "path" TEXT NOT NULL,
+      "depth" INTEGER NOT NULL DEFAULT 0,
+      "parentPath" TEXT,
+      "importedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "SimerMapNode_mapName_idx" ON "SimerMapNode" ("mapName")`);
+  await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "SimerMapNode_sourceFile_idx" ON "SimerMapNode" ("sourceFile")`);
+  await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "SimerMapNode_nodeText_idx" ON "SimerMapNode" ("nodeText")`);
 }
