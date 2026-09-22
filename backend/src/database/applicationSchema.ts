@@ -235,4 +235,12 @@ export async function ensureApplicationSchema() {
   await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "SimerMapNode_mapName_idx" ON "SimerMapNode" ("mapName")`);
   await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "SimerMapNode_sourceFile_idx" ON "SimerMapNode" ("sourceFile")`);
   await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "SimerMapNode_nodeText_idx" ON "SimerMapNode" ("nodeText")`);
+  await prisma.$executeRawUnsafe(`ALTER TABLE "SimerMapNode" ADD COLUMN IF NOT EXISTS "nodeId" VARCHAR(120)`);
+  await prisma.$executeRawUnsafe(`ALTER TABLE "SimerMapNode" ADD COLUMN IF NOT EXISTS "parentNodeId" VARCHAR(120)`);
+  await prisma.$executeRawUnsafe(`ALTER TABLE "SimerMapNode" ADD COLUMN IF NOT EXISTS "icon" VARCHAR(120)`);
+  await prisma.$executeRawUnsafe(`ALTER TABLE "SimerMapNode" ADD COLUMN IF NOT EXISTS "link" TEXT`);
+  await prisma.$executeRawUnsafe(`ALTER TABLE "SimerMapNode" ADD COLUMN IF NOT EXISTS "nodeKind" VARCHAR(80)`);
+  await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "SimerMapNode_nodeId_idx" ON "SimerMapNode" ("nodeId")`);
+  await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "SimerMapNode_kind_idx" ON "SimerMapNode" ("nodeKind")`);
+  await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "SimerMapNode_link_idx" ON "SimerMapNode" ("link")`);
 }
