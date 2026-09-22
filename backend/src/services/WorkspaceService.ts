@@ -405,16 +405,28 @@ export class WorkspaceService {
       return (/duvida|orientacao/.test(category) && /bug|erro|falha|configuracao|operacional/.test(cause))
         || (/problema|erro|incidente/.test(category) && /duvida|orientacao|treinamento/.test(cause));
     });
-    const auditSample = [
-      ...classificationAudit.map((ticket) => ({ ticket, reason: "Possível divergência entre categoria e causa", score: 4 })),
-      ...noMovement.map((ticket) => ({ ticket, reason: "Sem movimentação há mais de 72h", score: 3 })),
-      ...slaOverdue.map((ticket) => ({ ticket, reason: "SLA/prazo vencido", score: 5 })),
-      ...closedTicketActiveTask.map((ticket) => ({ ticket, reason: "Ticket encerrado com Task Azure ainda ativa", score: 7 })),
-      ...openTicketFinishedTask.map((ticket) => ({ ticket, reason: "Ticket aberto com Task Azure concluída", score: 6 })),
-    ].sort((a, b) => b.score - a.score)
-      .filter((item, index, all) => all.findIndex((other) => other.ticket.id === item.ticket.id) === index)
-      .slice(0, 10)
-      .map(({ ticket, reason }) => ({ ...ticket, reason }));
+    const auditSignals = [
+      ...classificationAudit.map((ticket) => ({ ticket, reason: "Possível divergência entre categoria e causa", score: 4, source: "Movidesk" })),
+      ...noMovement.map((ticket) => ({ ticket, reason: "Sem movimentação há mais de 72h", score: 3, source: "Movidesk" })),
+      ...slaOverdue.map((ticket) => ({ ticket, reason: "SLA/prazo vencido", score: 5, source: "Movidesk" })),
+      ...closedTicketActiveTask.map((ticket) => ({ ticket, reason: "Ticket encerrado com Task Azure ainda ativa", score: 7, source: "Movidesk + Azure" })),
+      ...openTicketFinishedTask.map((ticket) => ({ ticket, reason: "Ticket aberto com Task Azure concluída", score: 6, source: "Movidesk + Azure" })),
+    ];
+    const auditMap = new Map<number, { ticket: (typeof tickets)[number]; reasons: string[]; sources: Set<string>; score: number }>();
+    auditSignals.forEach(({ ticket, reason, score, source }) => {
+      const current = auditMap.get(ticket.id) ?? { ticket, reasons: [], sources: new Set<string>(), score: 0 };
+      if (!current.reasons.includes(reason)) current.reasons.push(reason);
+      current.sources.add(source);
+      current.score += score;
+      auditMap.set(ticket.id, current);
+    });
+    const auditSample = [...auditMap.values()]
+      .sort((a, b) => b.score - a.score || b.reasons.length - a.reasons.length)
+      .slice(0, 15)
+      .map(({ ticket, reasons, sources, score }) => ({
+        ...ticket, reason: reasons[0], reasons, evidenceCount: reasons.length, sources: [...sources], auditScore: score,
+        confidence: sources.has("Movidesk + Azure") || reasons.length >= 2 ? "ALTA" : "MÉDIA",
+      }));
 
     const recurrenceKey = (ticket: (typeof tickets)[number]) => {
       const generic = new Set(["simer", "siagri simer", "atendimento ao cliente", "outros", "outro", "nao informado", "sem classificacao"]);
@@ -452,7 +464,14 @@ export class WorkspaceService {
           : "Avaliar causa raiz e recorrência com Produto/Desenvolvimento.";
         const linkedExamples = value.examples.filter((ticket) => Boolean(linkedTask(ticket))).length;
         const confidence = value.count >= 5 && (value.clients.size >= 2 || value.analysts.size >= 2) ? "ALTA" : "MÉDIA";
-        return { topic, count: value.count, previous, changePct, clients: [...value.clients], analysts: [...value.analysts], action, examples: value.examples.slice(0, 3), linkedExamples, confidence };
+        const clientCounts = new Map<string, number>(); value.examples.forEach((ticket) => { if (ticket.client) clientCounts.set(ticket.client, (clientCounts.get(ticket.client) ?? 0) + 1); });
+        const topClient = [...clientCounts.entries()].sort((a,b) => b[1]-a[1])[0] ?? null;
+        const modules = value.examples.map((ticket) => linkedTask(ticket)?.module).filter((module): module is string => Boolean(module?.trim()));
+        const moduleCounts = new Map<string, number>(); modules.forEach((module) => moduleCounts.set(module, (moduleCounts.get(module) ?? 0) + 1));
+        const topModule = [...moduleCounts.entries()].sort((a,b) => b[1]-a[1])[0] ?? null;
+        return { topic, count: value.count, previous, changePct, clients: [...value.clients], analysts: [...value.analysts], action, examples: value.examples.slice(0, 3), linkedExamples, confidence,
+          concentration: { topClient: topClient?.[0] ?? null, topClientCount: topClient?.[1] ?? 0, topModule: topModule?.[0] ?? null, topModuleCount: topModule?.[1] ?? 0, clientSharePct: topClient ? Math.round(topClient[1] / Math.max(1, value.examples.length) * 100) : 0 }
+        };
       }).sort((a, b) => b.count - a.count).slice(0, 12);
 
     const analystDevelopment = SUPPORT_ANALYSTS.map((analyst) => {
@@ -478,7 +497,7 @@ export class WorkspaceService {
           impact: item.count >= 10 && confidence !== "Baixa" ? "Alto" : "Médio",
           action: item.action, status: confidence === "Baixa" ? "Validar evidências" : "Identificado",
           confidence, ticketCount: item.count, azureLinked: linked.length, blockedLinked, deliveredLinked,
-          examples: item.examples.slice(0, 3),
+          examples: item.examples.slice(0, 3), tasks: linked.map((entry) => entry.task).filter(Boolean).slice(0, 5),
         };
       }),
       ...(blocked.length ? [{
