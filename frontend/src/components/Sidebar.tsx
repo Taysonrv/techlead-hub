@@ -329,11 +329,6 @@ export function Sidebar() {
           path: "/lideranca-tecnica",
           icon: <RadarOutlined fontSize="small" />,
         },
-        {
-          label: "Mapa SIMER",
-          path: "/mapa-simer",
-          icon: <AccountTreeOutlined fontSize="small" />,
-        },
         ...(user?.role === "ADMIN" || user?.role === "COORDENADOR" ? [{
           label: "Serviços SIMER",
           path: "/servicos",
@@ -739,6 +734,12 @@ export function Sidebar() {
           <ListItemButton component={NavLink} to="/" end sx={{ minHeight: 40, px: 1.3, borderRadius: 1.2, color: "rgba(255,255,255,.72)", "&:hover": { bgcolor: "rgba(255,255,255,.05)", color: "#fff" }, "&.active": { bgcolor: "rgba(24,199,122,.10)", color: "#fff" }, "&.active .MuiListItemIcon-root": { color: aliareColors.green } }}>
             <ListItemIcon sx={{ minWidth: 32, color: "rgba(255,255,255,.50)" }}><HomeOutlined fontSize="small" /></ListItemIcon>
             <ListItemText primary="Página inicial" slotProps={{ primary: { sx: { fontSize: ".76rem", fontWeight: 800 } } }} />
+          </ListItemButton>
+        </Box>
+        <Box sx={{ px: 1.1, mb: .75 }}>
+          <ListItemButton component={NavLink} to="/mapa-simer" sx={{ minHeight: 40, px: 1.3, borderRadius: 1.2, color: "rgba(255,255,255,.72)", "&:hover": { bgcolor: "rgba(24,199,122,.08)", color: "#fff" }, "&.active": { bgcolor: "rgba(24,199,122,.13)", color: "#fff" }, "&.active .MuiListItemIcon-root": { color: aliareColors.green } }}>
+            <ListItemIcon sx={{ minWidth: 32, color: "rgba(255,255,255,.50)" }}><AccountTreeOutlined fontSize="small" /></ListItemIcon>
+            <ListItemText primary="Mapa SIMER" slotProps={{ primary: { sx: { fontSize: ".76rem", fontWeight: 800 } } }} />
           </ListItemButton>
         </Box>
 
