@@ -20,6 +20,41 @@ export type MovideskPayloadAnalytics = {
 
 export type MovideskPayloadIndicators = Omit<MovideskPayloadAnalytics, "timeline">;
 
+export type MovideskTimeEntry = {
+  date: string | null;
+  analyst: string | null;
+  minutes: number;
+};
+
+export function extractMovideskTimeEntries(rawData: Prisma.JsonValue | null | undefined): MovideskTimeEntry[] {
+  const root = object(rawData);
+  if (!root) return [];
+  const entries: MovideskTimeEntry[] = [];
+  const pushEntry = (source: JsonObject, fallbackAnalyst?: string | null, fallbackDate?: string | null) => {
+    const analyst = personName(source.createdBy) ?? personName(source.person) ?? personName(source.owner)
+      ?? text(source.createdByName) ?? text(source.personName) ?? fallbackAnalyst ?? null;
+    const entryDate = date(source.date) ?? date(source.createdDate) ?? date(source.startDate) ?? fallbackDate ?? null;
+    const directMinutes = [source.time, source.minutes, source.timeInMinutes, source.workedMinutes]
+      .map(Number).find((value) => Number.isFinite(value) && value > 0);
+    const hours = Number(source.hours ?? source.workedHours);
+    const duration = text(source.duration);
+    let minutes = directMinutes ?? (Number.isFinite(hours) && hours > 0 ? hours * 60 : 0);
+    if (!minutes && duration) {
+      const match = duration.match(/^(?:(\d+):)?(\d{1,2}):(\d{2})$/);
+      if (match) minutes = Number(match[1] ?? 0) * 60 + Number(match[2]);
+    }
+    if (minutes > 0) entries.push({ date: entryDate, analyst, minutes: Math.round(minutes) });
+  };
+  for (const appointment of items(root.timeAppointments)) pushEntry(appointment);
+  for (const action of items(root.actions)) {
+    const actionAnalyst = personName(action.createdBy);
+    const actionDate = date(action.createdDate);
+    for (const appointment of items(action.timeAppointments)) pushEntry(appointment, actionAnalyst, actionDate);
+    for (const appointment of items(action.times)) pushEntry(appointment, actionAnalyst, actionDate);
+  }
+  return entries;
+}
+
 function object(value: unknown): JsonObject | null {
   return typeof value === "object" && value !== null && !Array.isArray(value)
     ? value as JsonObject
