@@ -17,6 +17,13 @@ export class WorkspaceController {
     }));
   };
 
+  public analystTimeProductivity = async (request: AuthenticatedRequest, response: Response) =>
+    response.json(await this.service.analystTimeProductivity({
+      startDate: typeof request.query.startDate === "string" ? request.query.startDate.trim() : null,
+      endDate: typeof request.query.endDate === "string" ? request.query.endDate.trim() : null,
+      analyst: typeof request.query.analyst === "string" ? request.query.analyst.trim() : null,
+    }));
+
   public technicalLeadership = async (request: AuthenticatedRequest, response: Response) =>
     response.json(await this.service.technicalLeadership({
       client: typeof request.query.client === "string" ? request.query.client.trim() : null,
