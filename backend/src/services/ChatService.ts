@@ -215,6 +215,21 @@ export class ChatService {
     return { ...message, mentions };
   }
 
+  async deleteChannel(userId: number, role: string, channelId: number) {
+    const channel = await prisma.chatChannel.findUnique({
+      where: { id: channelId },
+      select: { id: true, name: true, type: true, members: { select: { userId: true } } },
+    });
+    if (!channel || !channel.members.some((member) => member.userId === userId)) {
+      throw Object.assign(new Error("Conversa não localizada ou acesso não autorizado."), { statusCode: 404 });
+    }
+    if (channel.type !== "DIRECT" && role === "ANALISTA") {
+      throw Object.assign(new Error("Somente coordenação ou administração pode excluir canais da equipe."), { statusCode: 403 });
+    }
+    await prisma.chatChannel.update({ where: { id: channelId }, data: { archivedAt: new Date() } });
+    await this.audit(userId, "CHAT_CHANNEL_DELETED", "ChatChannel", channelId, { type: channel.type, name: channel.name });
+  }
+
   async deleteMessage(userId: number, role: string, messageId: number) {
     const message = await prisma.chatMessage.findUnique({ where: { id: messageId }, select: { id: true, authorId: true, channelId: true } });
     if (!message) throw Object.assign(new Error("Mensagem não localizada."), { statusCode: 404 });
