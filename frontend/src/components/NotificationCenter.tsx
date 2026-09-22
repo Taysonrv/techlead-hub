@@ -190,13 +190,12 @@ export function NotificationCenter() {
 
   useEffect(() => {
     const newest = unread[0];
-    if (!newest || !preferences.desktopAlerts || Notification.permission !== "granted") return;
-    if (alertedKeys.current.has(newest.key)) return;
-
+    if (!newest || alertedKeys.current.has(newest.key)) return;
     const age = Date.now() - new Date(newest.occurredAt).getTime();
-    if (age < 10 * 60_000) {
-      alertedKeys.current.add(newest.key);
-      playNotificationSound(newest.kind === "CHAT_MENTION" ? "chat" : "system");
+    if (age >= 10 * 60_000) return;
+    alertedKeys.current.add(newest.key);
+    playNotificationSound(newest.kind === "CHAT_MENTION" ? "chat" : "system");
+    if (preferences.desktopAlerts && "Notification" in window && Notification.permission === "granted") {
       const alert = new Notification(newest.title, { body: newest.message });
       alert.onclick = () => navigate(newest.path);
     }
