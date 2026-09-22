@@ -34,6 +34,7 @@ import {
   OpenInNewOutlined,
   SearchOutlined,
   TuneOutlined,
+  AccountTreeOutlined,
 } from "@mui/icons-material";
 
 import {
@@ -2606,6 +2607,17 @@ export function Tickets() {
                   }
                 >
                   Abrir no Movidesk
+                </Button>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  startIcon={<AccountTreeOutlined />}
+                  onClick={() => {
+                    const context = [selectedTicket.subject, selectedTicket.category, selectedTicket.cause, selectedTicket.serviceFirstLevel, selectedTicket.serviceSecondLevel, selectedTicket.serviceThirdLevel, selectedTicket.justification].filter(Boolean).join(" ");
+                    navigate(`/mapa-simer?context=${encodeURIComponent(context)}&ticket=${selectedTicket.movideskId}`);
+                  }}
+                >
+                  Investigar no Mapa
                 </Button>
               </Stack>
 
