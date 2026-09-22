@@ -12,6 +12,8 @@ export class WorkspaceController {
       client: typeof request.query.client === "string" ? request.query.client.trim() : null,
       type: typeof request.query.type === "string" ? request.query.type.trim() : null,
       search: typeof request.query.search === "string" ? request.query.search.trim() : null,
+      analyst: typeof request.query.analyst === "string" ? request.query.analyst.trim() : null,
+      team: typeof request.query.team === "string" ? request.query.team.trim() : null,
     }));
   };
 
