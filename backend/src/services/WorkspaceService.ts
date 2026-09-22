@@ -239,8 +239,15 @@ export class WorkspaceService {
       where: { AND: [ticketOperationalScope(), { isDeleted: false }, { owner: { in: analysts, mode: "insensitive" } }] },
       select: { movideskId: true, subject: true, owner: true, rawData: true },
     });
-    const businessDays = (() => { let count = 0; const day = new Date(start); while (day <= end) { const weekDay = day.getDay(); if (weekDay !== 0 && weekDay !== 6) count += 1; day.setDate(day.getDate() + 1); } return count; })();
-    const expectedHours = businessDays * 8;
+    const holidays = new Set((process.env.PRODUCTIVITY_HOLIDAYS ?? "").split(",").map((value) => value.trim()).filter(Boolean));
+    const hoursPerDay = Math.min(Math.max(Number(process.env.PRODUCTIVITY_HOURS_PER_DAY ?? 8) || 8, 1), 24);
+    const dateKey = (value: Date) => {
+      const year = value.getFullYear(); const month = String(value.getMonth() + 1).padStart(2, "0"); const day = String(value.getDate()).padStart(2, "0");
+      return `${year}-${month}-${day}`;
+    };
+    const isBusinessDay = (value: Date) => value.getDay() !== 0 && value.getDay() !== 6 && !holidays.has(dateKey(value));
+    const businessDays = (() => { let count = 0; const day = new Date(start); while (day <= end) { if (isBusinessDay(day)) count += 1; day.setDate(day.getDate() + 1); } return count; })();
+    const expectedHours = businessDays * hoursPerDay;
     const same = (a: string | null, b: string) => Boolean(a && a.localeCompare(b, "pt-BR", { sensitivity: "base" }) === 0);
     const weekKey = (value: Date) => {
       const day = new Date(value); day.setHours(0, 0, 0, 0);
@@ -250,7 +257,7 @@ export class WorkspaceService {
     const weeks = new Map<string, { week: string; businessDays: number }>();
     for (const day = new Date(start); day <= end; day.setDate(day.getDate() + 1)) {
       const key = weekKey(day); const current = weeks.get(key) ?? { week: key, businessDays: 0 };
-      if (day.getDay() !== 0 && day.getDay() !== 6) current.businessDays += 1;
+      if (isBusinessDay(day)) current.businessDays += 1;
       weeks.set(key, current);
     }
     const result = analysts.map((analyst) => {
@@ -270,7 +277,7 @@ export class WorkspaceService {
         averageHoursPerTicket: ticketMinutes.size ? Number((registeredMinutes / 60 / ticketMinutes.size).toFixed(2)) : null,
         weekly: [...weeks.values()].map((week) => {
           const registeredHours = Number(((weeklyMinutes.get(week.week) ?? 0) / 60).toFixed(2));
-          const expected = week.businessDays * 8;
+          const expected = week.businessDays * hoursPerDay;
           return { week: week.week, businessDays: week.businessDays, expectedHours: expected, registeredHours, coverageRate: expected ? Number((registeredHours / expected * 100).toFixed(1)) : null };
         }),
         topTickets: [...ticketMinutes.entries()].sort((a,b) => b[1]-a[1]).slice(0,10).map(([movideskId, minutes]) => {
@@ -286,14 +293,14 @@ export class WorkspaceService {
       return { team, analysts: rows.length, expectedHours: teamExpected, registeredHours: teamRegistered, coverageRate: teamExpected ? Number((teamRegistered / teamExpected * 100).toFixed(1)) : null };
     });
     const weekly = [...weeks.values()].map((week) => {
-      const expectedHours = week.businessDays * 8 * result.length;
+      const expectedHours = week.businessDays * hoursPerDay * result.length;
       const registeredHours = Number(result.reduce((sum, row) => sum + (row.weekly.find((item) => item.week === week.week)?.registeredHours ?? 0), 0).toFixed(2));
       return { week: week.week, expectedHours, registeredHours, coverageRate: expectedHours ? Number((registeredHours / expectedHours * 100).toFixed(1)) : null };
     });
     return {
       generatedAt: new Date().toISOString(), startDate: start.toISOString(), endDate: end.toISOString(),
-      definition: { expectedHours: "8 horas por dia útil (segunda a sexta), sem desconto automático de feriados, férias, afastamentos ou jornada individual.", registeredHours: "Soma dos apontamentos de tempo disponíveis no payload sincronizado do Movidesk.", coverageRate: "Horas registradas ÷ horas previstas × 100. Indicador de cobertura de apontamento, não avaliação isolada de desempenho." },
-      analysts: result, teams, weekly,
+      definition: { expectedHours: `${hoursPerDay} horas por dia útil (segunda a sexta), descontando ${holidays.size} feriado(s) configurado(s) no período de referência. Férias, afastamentos e jornadas individuais ainda devem ser tratados como ajustes de capacidade.`, registeredHours: "Soma dos apontamentos de tempo disponíveis no payload sincronizado do Movidesk.", coverageRate: "Horas registradas ÷ horas previstas × 100. Indicador de cobertura de apontamento, não avaliação isolada de desempenho." },
+      analysts: result, teams, weekly, capacity: { hoursPerDay, configuredHolidays: [...holidays].sort() },
     };
   }
 
