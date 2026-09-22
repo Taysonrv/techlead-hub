@@ -39,6 +39,7 @@ chatRoutes.post("/direct/:userId", async (req: AuthenticatedRequest, res) => { t
 chatRoutes.post("/channels", async (req: AuthenticatedRequest, res) => { try { res.status(201).json(await chatService.createChannel(req.auth!.userId, req.auth!.role, req.body ?? {})); } catch (error) { fail(res, error); } });
 chatRoutes.get("/channels/:channelId/messages", async (req: AuthenticatedRequest, res) => { try { res.json({ messages: await chatService.listMessages(req.auth!.userId, id(req.params.channelId), req.query.beforeId ? id(String(req.query.beforeId)) : undefined) }); } catch (error) { fail(res, error); } });
 chatRoutes.post("/channels/:channelId/messages", async (req: AuthenticatedRequest, res) => { try { res.status(201).json(await chatService.sendMessage(req.auth!.userId, id(req.params.channelId), req.body ?? {})); } catch (error) { fail(res, error); } });
+chatRoutes.delete("/channels/:channelId", async (req: AuthenticatedRequest, res) => { try { await chatService.deleteChannel(req.auth!.userId, req.auth!.role, id(req.params.channelId)); res.status(204).send(); } catch (error) { fail(res, error); } });
 chatRoutes.delete("/messages/:messageId", async (req: AuthenticatedRequest, res) => { try { await chatService.deleteMessage(req.auth!.userId, req.auth!.role, id(req.params.messageId)); res.status(204).send(); } catch (error) { fail(res, error); } });
 
 export { chatRoutes };
