@@ -32,6 +32,29 @@ export async function ensureApplicationSchema() {
   `);
 
   await prisma.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS "ChatPresence" (
+      "userId" INTEGER PRIMARY KEY,
+      "status" VARCHAR(20) NOT NULL DEFAULT 'ONLINE',
+      "statusMessage" VARCHAR(160),
+      "lastSeenAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      CONSTRAINT "ChatPresence_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE
+    )
+  `);
+  await prisma.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS "ChatTyping" (
+      "channelId" INTEGER NOT NULL,
+      "userId" INTEGER NOT NULL,
+      "expiresAt" TIMESTAMP(3) NOT NULL,
+      CONSTRAINT "ChatTyping_pkey" PRIMARY KEY ("channelId", "userId"),
+      CONSTRAINT "ChatTyping_channelId_fkey" FOREIGN KEY ("channelId") REFERENCES "ChatChannel"("id") ON DELETE CASCADE ON UPDATE CASCADE,
+      CONSTRAINT "ChatTyping_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE
+    )
+  `);
+  await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "ChatPresence_lastSeenAt_idx" ON "ChatPresence" ("lastSeenAt" DESC)`);
+  await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "ChatTyping_expiresAt_idx" ON "ChatTyping" ("expiresAt")`);
+
+  await prisma.$executeRawUnsafe(`
     CREATE TABLE IF NOT EXISTS "AuditLog" (
       "id" SERIAL PRIMARY KEY,
       "userId" INTEGER,
