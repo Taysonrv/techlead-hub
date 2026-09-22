@@ -177,6 +177,30 @@ export class ChatService {
     return messages.reverse();
   }
 
+  async sendAttachment(userId: number, channelId: number, input: Record<string, unknown>) {
+    await this.assertMember(userId, channelId);
+    const name = dataProtectionService.normalizeText(input.name, 180);
+    const mimeType = dataProtectionService.normalizeText(input.mimeType, 100) || "application/octet-stream";
+    const data = String(input.data ?? "");
+    if (!name || !data) throw Object.assign(new Error("Anexo inválido."), { statusCode: 400 });
+    const match = data.match(/^data:([^;]+);base64,(.+)$/);
+    if (!match) throw Object.assign(new Error("Formato do anexo inválido."), { statusCode: 400 });
+    const bytes = Buffer.from(match[2], "base64");
+    if (!bytes.length || bytes.length > 8 * 1024 * 1024) throw Object.assign(new Error("O anexo deve ter no máximo 8 MB."), { statusCode: 400 });
+    const blocked = ["application/x-msdownload", "application/x-msdos-program", "application/x-sh", "application/x-bat"];
+    if (blocked.includes(mimeType)) throw Object.assign(new Error("Este tipo de arquivo não é permitido."), { statusCode: 400 });
+    const safeName = name.replace(/[\\/:*?"<>|\r\n]/g, "_");
+    const content = `[anexo] ${safeName}|${mimeType}|${bytes.length}|${match[2]}`;
+    if (content.length > 12_000_000) throw Object.assign(new Error("Anexo excede o limite permitido."), { statusCode: 400 });
+    const message = await prisma.chatMessage.create({
+      data: { channelId, authorId: userId, content },
+      include: { author: { select: memberUserSelect } },
+    });
+    await prisma.chatChannel.update({ where: { id: channelId }, data: { updatedAt: new Date() } });
+    await this.audit(userId, "CHAT_ATTACHMENT_CREATED", "ChatMessage", message.id, { channelId, name: safeName, mimeType, size: bytes.length });
+    return message;
+  }
+
   async sendMessage(userId: number, channelId: number, input: Record<string, unknown>) {
     await this.assertMember(userId, channelId);
     const content = dataProtectionService.normalizeText(input.content);
