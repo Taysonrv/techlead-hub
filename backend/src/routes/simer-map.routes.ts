@@ -4,6 +4,7 @@ const simerMapRoutes = Router();
 const controller = new SimerMapController();
 simerMapRoutes.get("/summary", controller.summary);
 simerMapRoutes.get("/search", controller.search);
+simerMapRoutes.get("/tree", controller.tree);
 simerMapRoutes.get("/builder/status", controller.builderStatus);
 simerMapRoutes.get("/nodes/:id/related", controller.related);
 simerMapRoutes.post("/context", controller.context);
