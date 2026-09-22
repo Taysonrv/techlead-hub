@@ -47,6 +47,7 @@ import {
 import {
   aliareColors,
 } from "../theme/theme";
+import { getLocalNotificationPreferences, saveLocalNotificationPreferences, playNotificationSound, type LocalNotificationPreferences } from "../utils/notificationSound";
 
 type NotificationKind =
   | "APP_VERSION"
@@ -102,6 +103,7 @@ export function NotificationCenter() {
   const [readKeys, setReadKeys] = useState<string[]>([]);
   const [preferences, setPreferences] = useState(DEFAULT_PREFERENCES);
   const [showPreferences, setShowPreferences] = useState(false);
+  const [localPreferences, setLocalPreferences] = useState<LocalNotificationPreferences>(() => getLocalNotificationPreferences());
   const alertedKeys = useRef(new Set<string>());
 
   const storageKey = `techlead-hub:notifications:read:${user?.id ?? "anonymous"}`;
@@ -180,9 +182,10 @@ export function NotificationCenter() {
     return updates.onStateChange(addDesktopUpdate);
   }, [addDesktopUpdate]);
 
+  const enabledForKind = useCallback((kind: NotificationKind) => kind === "CHAT_MENTION" ? localPreferences.chat : kind === "OPERATION_ALERT" ? localPreferences.operation : kind === "APP_VERSION" ? localPreferences.appVersion : kind === "SIMER_VERSION" ? localPreferences.simerVersion : kind === "AZURE_COMPLETED" ? localPreferences.azureCompleted : localPreferences.azureUpdated, [localPreferences]);
   const unread = useMemo(
-    () => items.filter((item) => !readKeys.includes(item.key)),
-    [items, readKeys],
+    () => items.filter((item) => enabledForKind(item.kind) && !readKeys.includes(item.key)),
+    [items, readKeys, enabledForKind],
   );
 
   useEffect(() => {
@@ -193,6 +196,7 @@ export function NotificationCenter() {
     const age = Date.now() - new Date(newest.occurredAt).getTime();
     if (age < 10 * 60_000) {
       alertedKeys.current.add(newest.key);
+      playNotificationSound(newest.kind === "CHAT_MENTION" ? "chat" : "system");
       const alert = new Notification(newest.title, { body: newest.message });
       alert.onclick = () => navigate(newest.path);
     }
@@ -218,6 +222,11 @@ export function NotificationCenter() {
   function markAllRead() {
     persistReadKeys([...readKeys, ...items.map((item) => item.key)]);
     void api.post("/notifications/read", { keys: items.map((item) => item.key) });
+  }
+
+  function changeLocalPreference(key: keyof LocalNotificationPreferences, checked: boolean) {
+    const next = { ...localPreferences, [key]: checked };
+    setLocalPreferences(next); saveLocalNotificationPreferences(next);
   }
 
   function changePreference(key: keyof NotificationPreferences, checked: boolean) {
@@ -348,6 +357,10 @@ export function NotificationCenter() {
         </Button>
         {showPreferences && (
           <Stack sx={{ px: 2, pb: 1.5 }}>
+            <Typography variant="caption" sx={{ fontWeight: 850, color: "text.secondary", mb: .5 }}>Canais e sons</Typography>
+            {([["sound","Som das notificações"],["chat","Chat e menções"],["operation","Alertas operacionais"]] as Array<[keyof LocalNotificationPreferences,string]>).map(([key,label]) => <FormControlLabel key={key} control={<Switch size="small" checked={localPreferences[key]} onChange={(_,checked)=>changeLocalPreference(key,checked)} />} label={label} sx={{ "& .MuiFormControlLabel-label": { fontSize: "0.76rem" } }} />)}
+            <Divider sx={{ my: .75 }} />
+            <Typography variant="caption" sx={{ fontWeight: 850, color: "text.secondary", mb: .5 }}>Sistema e desenvolvimento</Typography>
             {([
               ["appVersion", "Versões do TechLead Hub"],
               ["simerVersion", "Versões do SIMER"],
