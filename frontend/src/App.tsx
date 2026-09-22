@@ -110,13 +110,7 @@ function AuthenticatedLayout({
               transition: "background-color .2s ease, color .2s ease",
               overflowX: "hidden",
 
-              px: {
-                xs: 1.5,
-                sm: 2,
-                md: 2.5,
-                lg: 3,
-                xl: 4,
-              },
+              px: 0,
 
               py: {
                 xs: 1.5,
@@ -127,20 +121,21 @@ function AuthenticatedLayout({
               },
             }}
           >
-            <GlobalTopBar />
-            {backendUnavailable && <Alert severity="warning" sx={{ mb: 2 }}>O servidor central está temporariamente indisponível. Verifique a conexão e tente novamente; seus dados locais de navegação foram preservados.</Alert>}
+<Box sx={{ px: { xs: 1.5, sm: 2, md: 2.5, lg: 3, xl: 4 } }}><GlobalTopBar /></Box>
+            {backendUnavailable && <Alert severity="warning" sx={{ mx: { xs: 1.5, sm: 2, md: 2.5, lg: 3, xl: 4 }, mb: 2 }}>O servidor central está temporariamente indisponível. Verifique a conexão e tente novamente; seus dados locais de navegação foram preservados.</Alert>}
             <Box
               className="techlead-page-surface futuristic-page"
               sx={{
                 width: "100%",
                 maxWidth: "100%",
+                px: { xs: 1.5, sm: 2, md: 2.5, lg: 3, xl: 4 },
                 minHeight: "calc(100vh - 96px)",
                 position: "relative",
                 "&::before": (theme) => ({
                   content: '""',
                   position: "fixed",
                   pointerEvents: "none",
-                  inset: "96px 24px 24px 284px",
+                  inset: "96px 0 24px 0",
                   borderRadius: 28,
                   border: theme.palette.mode === "dark" ? "1px solid rgba(74,139,199,.055)" : "1px solid transparent",
                   background: theme.palette.mode === "dark" ? "linear-gradient(145deg,rgba(9,29,48,.16),rgba(10,23,43,.04))" : "transparent",
@@ -151,7 +146,7 @@ function AuthenticatedLayout({
                 "& .MuiCard-root:focus-within": (theme) => ({
                   borderColor: theme.palette.mode === "dark" ? "rgba(24,199,122,.24)" : "rgba(16,148,91,.18)",
                 }),
-                "& .MuiTableContainer-root": { overflow: "auto", overscrollBehavior: "contain" },
+                "& .MuiTableContainer-root": { overflowX: "auto", overflowY: "visible", overscrollBehaviorX: "contain" },
                 "& .MuiTableHead-root .MuiTableCell-root": {
                   letterSpacing: ".015em",
                   fontWeight: 800,
