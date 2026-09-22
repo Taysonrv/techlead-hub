@@ -242,30 +242,58 @@ export class WorkspaceService {
     const businessDays = (() => { let count = 0; const day = new Date(start); while (day <= end) { const weekDay = day.getDay(); if (weekDay !== 0 && weekDay !== 6) count += 1; day.setDate(day.getDate() + 1); } return count; })();
     const expectedHours = businessDays * 8;
     const same = (a: string | null, b: string) => Boolean(a && a.localeCompare(b, "pt-BR", { sensitivity: "base" }) === 0);
+    const weekKey = (value: Date) => {
+      const day = new Date(value); day.setHours(0, 0, 0, 0);
+      const mondayOffset = (day.getDay() + 6) % 7; day.setDate(day.getDate() - mondayOffset);
+      return day.toISOString().slice(0, 10);
+    };
+    const weeks = new Map<string, { week: string; businessDays: number }>();
+    for (const day = new Date(start); day <= end; day.setDate(day.getDate() + 1)) {
+      const key = weekKey(day); const current = weeks.get(key) ?? { week: key, businessDays: 0 };
+      if (day.getDay() !== 0 && day.getDay() !== 6) current.businessDays += 1;
+      weeks.set(key, current);
+    }
     const result = analysts.map((analyst) => {
-      let registeredMinutes = 0; const ticketMinutes = new Map<number, number>();
+      let registeredMinutes = 0; const ticketMinutes = new Map<number, number>(); const weeklyMinutes = new Map<string, number>();
       for (const ticket of tickets) for (const entry of extractMovideskTimeEntries(ticket.rawData)) {
         if (entry.date) { const entryDate = new Date(entry.date); if (entryDate < start || entryDate > end) continue; }
         const belongs = entry.analyst ? same(entry.analyst, analyst) : same(ticket.owner, analyst);
         if (!belongs) continue;
         registeredMinutes += entry.minutes;
         ticketMinutes.set(ticket.movideskId, (ticketMinutes.get(ticket.movideskId) ?? 0) + entry.minutes);
+        if (entry.date) { const key = weekKey(new Date(entry.date)); weeklyMinutes.set(key, (weeklyMinutes.get(key) ?? 0) + entry.minutes); }
       }
       return {
         analyst, businessDays, expectedHours, registeredHours: Number((registeredMinutes / 60).toFixed(2)),
         coverageRate: expectedHours ? Number(((registeredMinutes / 60 / expectedHours) * 100).toFixed(1)) : null,
         ticketsWithTime: ticketMinutes.size,
         averageHoursPerTicket: ticketMinutes.size ? Number((registeredMinutes / 60 / ticketMinutes.size).toFixed(2)) : null,
+        weekly: [...weeks.values()].map((week) => {
+          const registeredHours = Number(((weeklyMinutes.get(week.week) ?? 0) / 60).toFixed(2));
+          const expected = week.businessDays * 8;
+          return { week: week.week, businessDays: week.businessDays, expectedHours: expected, registeredHours, coverageRate: expected ? Number((registeredHours / expected * 100).toFixed(1)) : null };
+        }),
         topTickets: [...ticketMinutes.entries()].sort((a,b) => b[1]-a[1]).slice(0,10).map(([movideskId, minutes]) => {
           const ticket = tickets.find((item) => item.movideskId === movideskId);
           return { movideskId, subject: ticket?.subject ?? "", hours: Number((minutes / 60).toFixed(2)) };
         }),
       };
     });
+    const teams = Object.entries(SUPPORT_TEAMS).map(([team, members]) => {
+      const rows = result.filter((row) => members.some((member) => same(row.analyst, member)));
+      const teamExpected = rows.reduce((sum, row) => sum + row.expectedHours, 0);
+      const teamRegistered = Number(rows.reduce((sum, row) => sum + row.registeredHours, 0).toFixed(2));
+      return { team, analysts: rows.length, expectedHours: teamExpected, registeredHours: teamRegistered, coverageRate: teamExpected ? Number((teamRegistered / teamExpected * 100).toFixed(1)) : null };
+    });
+    const weekly = [...weeks.values()].map((week) => {
+      const expectedHours = week.businessDays * 8 * result.length;
+      const registeredHours = Number(result.reduce((sum, row) => sum + (row.weekly.find((item) => item.week === week.week)?.registeredHours ?? 0), 0).toFixed(2));
+      return { week: week.week, expectedHours, registeredHours, coverageRate: expectedHours ? Number((registeredHours / expectedHours * 100).toFixed(1)) : null };
+    });
     return {
       generatedAt: new Date().toISOString(), startDate: start.toISOString(), endDate: end.toISOString(),
       definition: { expectedHours: "8 horas por dia útil (segunda a sexta), sem desconto automático de feriados, férias, afastamentos ou jornada individual.", registeredHours: "Soma dos apontamentos de tempo disponíveis no payload sincronizado do Movidesk.", coverageRate: "Horas registradas ÷ horas previstas × 100. Indicador de cobertura de apontamento, não avaliação isolada de desempenho." },
-      analysts: result,
+      analysts: result, teams, weekly,
     };
   }
 
