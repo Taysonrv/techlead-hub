@@ -8,6 +8,7 @@ export class SimerMapController {
   search = async (req: AuthenticatedRequest, res: Response) => res.json({ items: await this.service.search(String(req.query.q ?? ""), Number(req.query.limit ?? 50)) });
   context = async (req: AuthenticatedRequest, res: Response) => res.json({ items: await this.service.context(String(req.body?.text ?? ""), Number(req.body?.limit ?? 20)) });
   related = async (req: AuthenticatedRequest, res: Response) => res.json({ items: await this.service.related(Number(req.params.id)) });
+  tree = async (req: AuthenticatedRequest, res: Response) => res.json({ items: await this.service.tree(String(req.query.map ?? "")) });
   builderStatus = async (_req: AuthenticatedRequest, res: Response) => res.json(await this.service.builderStatus());
   importBatch = async (req: AuthenticatedRequest, res: Response) => {
     try { const files = Array.isArray(req.body?.files) ? req.body.files : []; if (!files.length || files.length > 20) return res.status(400).json({ message: "Envie de 1 a 20 mapas por lote." }); return res.json(await this.service.importBatch(files)); }
