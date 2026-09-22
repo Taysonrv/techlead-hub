@@ -58,6 +58,7 @@ import type {
 
 import {
   useNavigate,
+  useSearchParams,
 } from "react-router-dom";
 
 import {
@@ -252,6 +253,7 @@ const EMPTY_SUMMARY:
 export function Versions() {
   const navigate =
     useNavigate();
+  const [searchParams] = useSearchParams();
 
   const [
     data,
@@ -572,6 +574,21 @@ export function Versions() {
       load,
     ],
   );
+
+  useEffect(() => {
+    const requestedVersion = searchParams.get("versao")?.trim();
+    if (!requestedVersion || !data?.items?.length) return;
+    const normalized = requestedVersion.toLocaleLowerCase("pt-BR");
+    const match = data.items.find((item) =>
+      item.version?.trim().toLocaleLowerCase("pt-BR") === normalized ||
+      item.label.trim().toLocaleLowerCase("pt-BR") === normalized
+    );
+    if (!match) return;
+    setVersionChannel("");
+    setActiveMetricFilter("all");
+    setVersionPage(0);
+    void openVersion(match, {}, `Versão ${match.label}`);
+  }, [data, searchParams]);
 
   const visibleVersions =
     useMemo(
