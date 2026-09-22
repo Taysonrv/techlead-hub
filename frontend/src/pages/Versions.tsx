@@ -1429,6 +1429,13 @@ export function Versions() {
             2,
           order:
             2,
+          backgroundColor: "background.paper",
+          color: "text.primary",
+          position: "relative",
+          zIndex: 1,
+          "& .MuiInputBase-root": { backgroundColor: "background.paper", color: "text.primary" },
+          "& .MuiInputLabel-root": { color: "text.secondary" },
+          "& .MuiOutlinedInput-notchedOutline": { borderColor: "divider" },
         }}
       >
         <CardContent>
