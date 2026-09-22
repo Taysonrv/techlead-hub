@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api } from "../services/api";
 import { useAuth } from "../context/AuthContext";
-import { PageHeader } from "../components/PageHeader";
+
 
 type Person = { id: number; name: string; username: string; role: string };
 type Message = { id: number; content: string; createdAt: string; parentId?: number | null; author: Person };
@@ -130,12 +130,14 @@ export function Chat() {
   const stickers = ["🎉 PARABÉNS!","🚀 VAMOS!","✅ RESOLVIDO","👏 BOA!","🎯 NA META","🔥 PRIORIDADE","💡 IDEIA","🤝 OBRIGADO"];
   const append = (value: string) => setContent((current) => current ? `${current} ${value}` : value);
 
-  return <Stack spacing={1.5} sx={{ height: "calc(100vh - 86px)", minHeight: 0, overflow: "hidden" }}>
-    <PageHeader eyebrow="Colaboração" title="Chat interno" description="Converse com a equipe e mantenha o contexto operacional dentro do TechLead Hub." />
-    <Alert icon={<ShieldOutlined />} severity="info" sx={{ py: 0 }}>Não envie senhas, tokens, chaves privadas ou strings de conexão.</Alert>
+  return <Stack spacing={1} sx={{ height: "calc(100vh - 124px)", maxHeight: "calc(100vh - 124px)", minHeight: 0, overflow: "hidden" }}>
+    <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ alignItems: { sm: "center" }, justifyContent: "space-between", flexShrink: 0 }}>
+      <Box><Typography variant="h5" sx={{ fontWeight: 900, lineHeight: 1.05 }}>Chat interno</Typography><Typography variant="caption" color="text.secondary">Colaboração da equipe em tempo real</Typography></Box>
+      <Alert icon={<ShieldOutlined />} severity="info" sx={{ py: 0, px: 1.2, "& .MuiAlert-message": { py: .45 }, fontSize: ".72rem" }}>Não compartilhe credenciais.</Alert>
+    </Stack>
     {error && <Alert severity="error" onClose={() => setError("")}>{error}</Alert>}
     <Paper variant="outlined" sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "280px minmax(0,1fr)" }, minHeight: 0, flex: 1, overflow: "hidden", borderRadius: 3 }}>
-      <Box sx={{ borderRight: { md: "1px solid" }, borderColor: "divider" }}>
+      <Box sx={{ borderRight: { md: "1px solid" }, borderColor: "divider", minHeight: 0, overflowY: "auto", overscrollBehavior: "contain" }}>
         <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between", p: 2 }}>
           <Typography sx={{ fontWeight: 850 }}>Conversas</Typography>
           <IconButton size="small" aria-label="Criar canal" onClick={() => setCreateOpen(true)}><AddCommentOutlined /></IconButton>
@@ -152,7 +154,7 @@ export function Chat() {
         <Box sx={{ p: 2 }}><Typography sx={{ fontWeight: 850 }}>{selected?.name || "Selecione uma conversa"}</Typography><Typography variant="caption" color="text.secondary">Atualização segura a cada 5 segundos</Typography></Box>
         <Divider />
         <Box ref={messagesRef} sx={{ flex: 1, minHeight: 0, overflowY: "auto", overscrollBehavior: "contain", p: 2.5, bgcolor: "background.default" }}>
-          {loading ? <Box sx={{ display: "grid", placeItems: "center", minHeight: 300 }}><CircularProgress size={28} /></Box> : messages.map((message) => {
+          {loading ? <Box sx={{ display: "grid", placeItems: "center", minHeight: 160 }}><CircularProgress size={28} /></Box> : messages.map((message) => {
             const mine = message.author.id === user?.id;
             const parent = message.parentId ? messages.find((item) => item.id === message.parentId) : null;
             const mentioned = Boolean(user?.username && message.content.toLowerCase().includes(`@${user.username.toLowerCase()}`));
