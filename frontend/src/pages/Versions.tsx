@@ -2530,8 +2530,13 @@ export function Versions() {
           >
             <TableHead
               sx={{
-                backgroundColor:
-                  "background.paper",
+                backgroundColor: "background.paper",
+                "& .MuiTableCell-head": {
+                  backgroundColor: "background.paper",
+                  color: "text.primary",
+                  fontWeight: 800,
+                },
+                "& .MuiTableCell-head strong": { color: "inherit" },
               }}
             >
               <TableRow>
