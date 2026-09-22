@@ -38,6 +38,7 @@ import {
   RadarOutlined,
   ChatBubbleOutlineRounded,
   HomeOutlined,
+  AccountTreeOutlined,
 } from "@mui/icons-material";
 
 import {
@@ -327,6 +328,11 @@ export function Sidebar() {
           label: "Central de Liderança",
           path: "/lideranca-tecnica",
           icon: <RadarOutlined fontSize="small" />,
+        },
+        {
+          label: "Mapa SIMER",
+          path: "/mapa-simer",
+          icon: <AccountTreeOutlined fontSize="small" />,
         },
         ...(user?.role === "ADMIN" || user?.role === "COORDENADOR" ? [{
           label: "Serviços SIMER",
