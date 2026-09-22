@@ -1,6 +1,7 @@
 import { Alert, Box, Button, Card, CardContent, Chip, CircularProgress, Dialog, DialogContent, DialogTitle, InputAdornment, LinearProgress, Stack, TextField, Typography } from "@mui/material";
 import { AccountTreeOutlined, SearchOutlined, UploadFileOutlined, OpenInNewOutlined, HubOutlined, PsychologyOutlined, FolderOpenOutlined } from "@mui/icons-material";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { PageHeader } from "../components/PageHeader";
 import { api } from "../services/api";
 import { aliareColors } from "../theme/theme";
@@ -11,9 +12,12 @@ type Builder={reachable:boolean;status:number|null;latencyMs:number};
 const folderProps={webkitdirectory:"",directory:""} as Record<string,string>;
 
 export function SimerMap(){
+ const [searchParams]=useSearchParams(); const autoContextDone=useRef(false);
  const[summary,setSummary]=useState<Summary|null>(null),[query,setQuery]=useState(""),[context,setContext]=useState(""),[items,setItems]=useState<Result[]>([]),[related,setRelated]=useState<Result[]>([]),[selected,setSelected]=useState<Result|null>(null),[loading,setLoading]=useState(false),[message,setMessage]=useState(""),[progress,setProgress]=useState<number|null>(null),[builder,setBuilder]=useState<Builder|null>(null);
  const loadSummary=useCallback(async()=>{const r=await api.get<Summary>("/simer-map/summary");setSummary(r.data);},[]);
  useEffect(()=>{void loadSummary();void api.get<Builder>("/simer-map/builder/status").then(r=>setBuilder(r.data)).catch(()=>setBuilder({reachable:false,status:null,latencyMs:0}));},[loadSummary]);
+ useEffect(()=>{const incoming=searchParams.get("context");if(!incoming||autoContextDone.current)return;autoContextDone.current=true;setContext(incoming);setLoading(true);void api.post<{items:Result[]}>("/simer-map/context",{text:incoming,limit:30}).then(r=>{setItems(r.data.items);setMessage(`Investigação sugerida para o atendimento #${searchParams.get("ticket")??""}.`);}).catch(()=>setMessage("Não foi possível analisar o contexto do atendimento.")).finally(()=>setLoading(false));},[searchParams]);
+
  async function search(){if(!query.trim()){setItems([]);return;}setLoading(true);setMessage("");try{const r=await api.get<{items:Result[]}>("/simer-map/search",{params:{q:query.trim()}});setItems(r.data.items);}catch{setMessage("Não foi possível consultar o Mapa SIMER.");}finally{setLoading(false);}}
  async function analyze(){if(!context.trim())return;setLoading(true);try{const r=await api.post<{items:Result[]}>("/simer-map/context",{text:context,limit:30});setItems(r.data.items);setMessage(r.data.items.length?"Pontos técnicos sugeridos a partir do contexto informado.":"Nenhuma correspondência relevante encontrada.");}finally{setLoading(false);}}
  async function inspect(item:Result){setSelected(item);const r=await api.get<{items:Result[]}>(`/simer-map/nodes/${item.id}/related`);setRelated(r.data.items);}
