@@ -134,6 +134,8 @@ export function Sidebar() {
   ] =
     useState(0);
 
+  const [topControlsVisible, setTopControlsVisible] = useState(() => window.scrollY < 24);
+
   const [
     profileAnchor,
     setProfileAnchor,
@@ -149,6 +151,13 @@ export function Sidebar() {
 
   const profileMenuOpen =
     Boolean(profileAnchor);
+
+  useEffect(() => {
+    const onScroll = () => setTopControlsVisible(window.scrollY < 24);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
 
   // O menu inicia recolhido. A navegação não força a abertura automática
   // de uma seção; o usuário decide quais grupos deseja expandir.
@@ -840,9 +849,8 @@ export function Sidebar() {
             position: "fixed",
             top: 14,
             right: 20,
-            zIndex: (theme) =>
-              theme.zIndex.drawer + 1,
-            display: "flex",
+            zIndex: (theme) => theme.zIndex.appBar,
+            display: topControlsVisible ? "flex" : "none",
             alignItems: "center",
             gap: 1,
           }}
