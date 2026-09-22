@@ -1,4 +1,4 @@
-import { AddCommentOutlined, ForumOutlined, SendRounded, ShieldOutlined, EmojiEmotionsOutlined, CelebrationOutlined, NotificationsActiveOutlined } from "@mui/icons-material";
+import { AddCommentOutlined, ForumOutlined, SendRounded, ShieldOutlined, EmojiEmotionsOutlined, CelebrationOutlined, NotificationsActiveOutlined, ReplyOutlined, CloseOutlined } from "@mui/icons-material";
 import { Alert, Box, Button, Checkbox, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Divider, FormControlLabel, IconButton, List, ListItemButton, ListItemText, Paper, Popover, Stack, TextField, Tooltip, Typography } from "@mui/material";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
@@ -7,7 +7,7 @@ import { useAuth } from "../context/AuthContext";
 import { PageHeader } from "../components/PageHeader";
 
 type Person = { id: number; name: string; username: string; role: string };
-type Message = { id: number; content: string; createdAt: string; author: Person };
+type Message = { id: number; content: string; createdAt: string; parentId?: number | null; author: Person };
 type Channel = { id: number; name: string; type: string; description?: string | null; clientName?: string | null; unread: number; messages: Message[] };
 
 export function Chat() {
@@ -29,6 +29,8 @@ export function Chat() {
   const [emojiAnchor, setEmojiAnchor] = useState<HTMLElement | null>(null);
   const [stickersOpen, setStickersOpen] = useState(false);
   const previousUnread = useRef(0);
+  const previousMessageIds = useRef<Set<number>>(new Set());
+  const [replyTo, setReplyTo] = useState<Message | null>(null);
 
   const selected = useMemo(() => channels.find((channel) => channel.id === selectedId) ?? null, [channels, selectedId]);
 
@@ -78,8 +80,12 @@ export function Chat() {
 
   useEffect(() => {
     const unread = channels.reduce((sum, channel) => sum + channel.unread, 0);
-    if (unread > previousUnread.current && document.visibilityState !== "visible") {
-      try { if ("Notification" in window && Notification.permission === "granted") new Notification("TechLead Hub", { body: "Você recebeu uma nova mensagem no chat." }); } catch {}
+    if (unread > previousUnread.current) {
+      try {
+        const audio = new Audio("data:audio/wav;base64,UklGRjQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YRAAAACAgJCQmJiQkICAgICAgA==");
+        audio.volume = .32; void audio.play().catch(() => undefined);
+        if (document.visibilityState !== "visible" && "Notification" in window && Notification.permission === "granted") new Notification("TechLead Hub", { body: "Você recebeu uma nova mensagem no chat." });
+      } catch {}
     }
     previousUnread.current = unread;
   }, [channels]);
@@ -112,9 +118,10 @@ export function Chat() {
     if (!selectedId || !text || sending) return;
     try {
       setSending(true);
-      const response = await api.post<Message>(`/chat/channels/${selectedId}/messages`, { content: text });
+      const response = await api.post<Message>(`/chat/channels/${selectedId}/messages`, { content: text, parentId: replyTo?.id ?? null });
       setMessages((current) => [...current, response.data]);
       setContent("");
+      setReplyTo(null);
       setError("");
     } catch (requestError: any) { setError(requestError?.response?.data?.error || "Não foi possível enviar a mensagem."); }
     finally { setSending(false); }
@@ -148,11 +155,15 @@ export function Chat() {
         <Box ref={messagesRef} sx={{ flex: 1, minHeight: 0, overflowY: "auto", overscrollBehavior: "contain", p: 2.5, bgcolor: "background.default" }}>
           {loading ? <Box sx={{ display: "grid", placeItems: "center", minHeight: 300 }}><CircularProgress size={28} /></Box> : messages.map((message) => {
             const mine = message.author.id === user?.id;
-            return <Box key={message.id} sx={{ display: "flex", justifyContent: mine ? "flex-end" : "flex-start", mb: 1.5 }}><Paper elevation={0} sx={{ maxWidth: "76%", p: 1.5, bgcolor: mine ? "primary.main" : "background.paper", color: mine ? "primary.contrastText" : "text.primary", border: mine ? 0 : "1px solid", borderColor: "divider", borderRadius: 2 }}><Typography variant="caption" sx={{ fontWeight: 800, opacity: .8 }}>{message.author.name}</Typography><Typography sx={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{message.content}</Typography><Typography variant="caption" sx={{ display: "block", textAlign: "right", opacity: .7 }}>{new Date(message.createdAt).toLocaleString("pt-BR")}</Typography></Paper></Box>;
+            const parent = message.parentId ? messages.find((item) => item.id === message.parentId) : null;
+            const mentioned = Boolean(user?.username && message.content.toLowerCase().includes(`@${user.username.toLowerCase()}`));
+            const renderContent = (value: string) => value.split(/(@[\\w.-]+)/g).map((part, index) => part.startsWith("@") ? <Box component="span" key={index} sx={{ fontWeight: 900, textDecoration: "underline" }}>{part}</Box> : part);
+            return <Box key={message.id} sx={{ display: "flex", justifyContent: mine ? "flex-end" : "flex-start", mb: .8 }}><Paper elevation={0} sx={{ maxWidth: "76%", p: 1.25, bgcolor: mine ? "primary.main" : mentioned ? "rgba(245,158,11,.10)" : "background.paper", color: mine ? "primary.contrastText" : "text.primary", border: mine ? 0 : "1px solid", borderColor: mentioned ? "warning.main" : "divider", borderRadius: 2 }}><Stack direction="row" spacing={1} sx={{ justifyContent: "space-between", alignItems: "center" }}><Typography variant="caption" sx={{ fontWeight: 800, opacity: .8 }}>{message.author.name}</Typography><Tooltip title="Responder"><IconButton size="small" onClick={() => setReplyTo(message)} sx={{ color: "inherit", opacity: .65 }}><ReplyOutlined sx={{ fontSize: 16 }} /></IconButton></Tooltip></Stack>{parent && <Box sx={{ px: 1, py: .6, mb: .6, borderLeft: "3px solid", borderColor: mine ? "rgba(255,255,255,.55)" : "primary.main", bgcolor: mine ? "rgba(255,255,255,.12)" : "action.hover", borderRadius: 1 }}><Typography variant="caption" sx={{ fontWeight: 800 }}>{parent.author.name}</Typography><Typography variant="caption" noWrap sx={{ display: "block", maxWidth: 420 }}>{parent.content}</Typography></Box>}<Typography sx={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{renderContent(message.content)}</Typography><Typography variant="caption" sx={{ display: "block", textAlign: "right", opacity: .7 }}>{new Date(message.createdAt).toLocaleString("pt-BR")}</Typography></Paper></Box>;
           })}
           <div ref={bottomRef} />
         </Box>
         <Divider />
+        {replyTo && <Stack direction="row" sx={{ px: 1.5, py: .7, alignItems: "center", justifyContent: "space-between", bgcolor: "action.hover", borderTop: "1px solid", borderColor: "divider" }}><Box><Typography variant="caption" sx={{ fontWeight: 850 }}>Respondendo a {replyTo.author.name}</Typography><Typography variant="caption" color="text.secondary" noWrap sx={{ display: "block", maxWidth: 620 }}>{replyTo.content}</Typography></Box><IconButton size="small" onClick={() => setReplyTo(null)}><CloseOutlined fontSize="small" /></IconButton></Stack>}
         <Stack direction="row" spacing={1} sx={{ p: 1.25, alignItems: "flex-end", bgcolor: "background.paper" }}>
           <Tooltip title="Emojis"><IconButton onClick={(event) => setEmojiAnchor(event.currentTarget)} disabled={!selectedId}><EmojiEmotionsOutlined /></IconButton></Tooltip>
           <Tooltip title="Figurinhas"><IconButton onClick={() => setStickersOpen(true)} disabled={!selectedId}><CelebrationOutlined /></IconButton></Tooltip>
