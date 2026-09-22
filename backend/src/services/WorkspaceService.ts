@@ -467,13 +467,34 @@ export class WorkspaceService {
     }).filter((item) => item.tickets > 0 || item.stale > 0);
 
     const gaps = [
-      ...recurrences.filter((item) => item.count >= 5).slice(0, 6).map((item, index) => ({
-        id: `GAP-R${String(index + 1).padStart(2, "0")}`, type: "Recorrência", title: item.topic,
-        evidence: `${item.count} tickets em ${days} dias`, impact: item.count >= 10 ? "Alto" : "Médio",
-        action: item.action, status: "Identificado",
-      })),
-      ...(blocked.length ? [{ id: "GAP-B01", type: "Fluxo", title: "Work Items bloqueados", evidence: `${blocked.length} itens ativos bloqueados`, impact: blocked.length >= 5 ? "Alto" : "Médio", action: "Revisar impedimentos e responsáveis com Produto/Desenvolvimento.", status: "Identificado" }] : []),
-      ...(classificationAudit.length ? [{ id: "GAP-Q01", type: "Qualidade", title: "Classificações para auditoria", evidence: `${classificationAudit.length} tickets candidatos`, impact: classificationAudit.length >= 10 ? "Alto" : "Médio", action: "Executar amostragem semanal e orientar ajustes confirmados.", status: "Identificado" }] : []),
+      ...recurrences.filter((item) => item.count >= 5).slice(0, 6).map((item, index) => {
+        const linked = item.examples.map((ticket) => ({ ticket, task: linkedTask(ticket) })).filter((entry) => Boolean(entry.task));
+        const blockedLinked = linked.filter((entry) => Boolean(entry.task?.blockedProcess)).length;
+        const deliveredLinked = linked.filter((entry) => Boolean(entry.task?.deliveredVersion?.trim())).length;
+        const confidence = item.confidence === "ALTA" && linked.length > 0 ? "Alta" : linked.length > 0 ? "Média" : "Baixa";
+        return {
+          id: `GAP-R${String(index + 1).padStart(2, "0")}`, type: "Recorrência", title: item.topic,
+          evidence: `${item.count} tickets em ${days} dias · ${linked.length} exemplo(s) vinculados ao Azure${blockedLinked ? ` · ${blockedLinked} bloqueado(s)` : ""}${deliveredLinked ? ` · ${deliveredLinked} com versão entregue` : ""}`,
+          impact: item.count >= 10 && confidence !== "Baixa" ? "Alto" : "Médio",
+          action: item.action, status: confidence === "Baixa" ? "Validar evidências" : "Identificado",
+          confidence, ticketCount: item.count, azureLinked: linked.length, blockedLinked, deliveredLinked,
+          examples: item.examples.slice(0, 3),
+        };
+      }),
+      ...(blocked.length ? [{
+        id: "GAP-B01", type: "Fluxo", title: "Work Items bloqueados",
+        evidence: `${blocked.length} item(ns) Azure ativo(s) bloqueado(s) · ${blocked.filter((task) => Boolean(task.movideskTicket || ticketByTask.has(task.id))).length} com vínculo de atendimento identificado`,
+        impact: blocked.length >= 5 ? "Alto" : "Médio", action: "Revisar impedimentos, responsável e atendimento relacionado antes de escalar para Produto/Desenvolvimento.", status: "Identificado",
+        confidence: "Alta", ticketCount: blocked.filter((task) => Boolean(task.movideskTicket || ticketByTask.has(task.id))).length, azureLinked: blocked.length,
+        blockedLinked: blocked.length, deliveredLinked: 0, examples: [] as typeof tickets,
+      }] : []),
+      ...(classificationAudit.length ? [{
+        id: "GAP-Q01", type: "Qualidade", title: "Classificações para auditoria",
+        evidence: `${classificationAudit.length} ticket(s) com ausência ou possível divergência entre categoria e causa; exige revisão humana antes de confirmar o gap`,
+        impact: classificationAudit.length >= 10 ? "Alto" : "Médio", action: "Revisar a amostra priorizada e confirmar somente divergências reais antes de orientar ajustes.", status: "Validar evidências",
+        confidence: "Média", ticketCount: classificationAudit.length, azureLinked: classificationAudit.filter((ticket) => Boolean(linkedTask(ticket))).length,
+        blockedLinked: 0, deliveredLinked: 0, examples: classificationAudit.slice(0, 3),
+      }] : []),
     ];
 
     const previousOpen = previousTickets.filter(openTicket).length;
