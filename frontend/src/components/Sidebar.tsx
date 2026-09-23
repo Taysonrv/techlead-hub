@@ -39,6 +39,12 @@ import {
   ChatBubbleOutlineRounded,
   HomeOutlined,
   AccountTreeOutlined,
+  BusinessOutlined,
+  GroupsOutlined,
+  WarningAmberOutlined,
+  FactCheckOutlined,
+  TrendingUpOutlined,
+  AssessmentOutlined,
 } from "@mui/icons-material";
 
 import {
@@ -148,11 +154,12 @@ export function Sidebar() {
   ] =
     useState<HTMLElement | null>(null);
 
-  const [openSections, setOpenSections] = useState<Record<"operation" | "leadership" | "development" | "management", boolean>>(() => ({
-    operation: false,
-    leadership: false,
+  const [openSections, setOpenSections] = useState<Record<"cadastros" | "movimentos" | "analises" | "development" | "gestao", boolean>>(() => ({
+    cadastros: false,
+    movimentos: false,
+    analises: false,
     development: false,
-    management: false,
+    gestao: false,
   }));
 
   const profileMenuOpen =
@@ -281,129 +288,57 @@ export function Sidebar() {
   ]);
 
   /* =======================================================
-     OPERAÇÃO
+     ROTINAS - MESMO AGRUPAMENTO DA CENTRAL DA COORDENAÇÃO
   ======================================================= */
 
-  const mainMenu =
-    useMemo<MenuItemData[]>(
-      () => [
-        {
-          label:
-            "Dashboard",
-          path:
-            "/",
-          icon:
-            <DashboardOutlined fontSize="small" />,
-        },
-        {
-          label: "Minha Operação",
-          path: "/minha-operacao",
-          icon: <WorkspacesOutlined fontSize="small" />,
-        },
-        ...(user?.role === "ADMIN" || user?.role === "COORDENADOR" ? [{
-          label: "Central da Coordenação",
-          path: "/coordenacao",
-          icon: <InsightsOutlined fontSize="small" />,
-        }] : []),
-        {
-          label:
-            "Tickets",
-          path:
-            "/tickets",
-          icon:
-            <ConfirmationNumberOutlined fontSize="small" />,
-        },
-      ],
-      [user?.role],
-    );
+  const registrationMenu = useMemo<MenuItemData[]>(
+    () => [
+      { label: "Analistas", path: "/analistas", icon: <GroupsOutlined fontSize="small" /> },
+      { label: "Clientes", path: "/clientes", icon: <BusinessOutlined fontSize="small" /> },
+    ],
+    [],
+  );
 
-  /* =======================================================
-     LIDERANÇA TÉCNICA
-  ======================================================= */
+  const movementMenu = useMemo<MenuItemData[]>(
+    () => [
+      { label: "Minha Operação", path: "/minha-operacao", icon: <WorkspacesOutlined fontSize="small" /> },
+      { label: "Tickets", path: "/tickets", icon: <ConfirmationNumberOutlined fontSize="small" /> },
+      { label: "Pontos de Atenção", path: "/atencao", icon: <WarningAmberOutlined fontSize="small" /> },
+      { label: "Pendências", path: "/qualidade-dados", icon: <FactCheckOutlined fontSize="small" /> },
+    ],
+    [],
+  );
 
-  const leadershipMenu =
-    useMemo<MenuItemData[]>(
-      () => [
-        {
-          label: "Central de Liderança",
-          path: "/lideranca-tecnica",
-          icon: <RadarOutlined fontSize="small" />,
-        },
-        ...(user?.role === "ADMIN" || user?.role === "COORDENADOR" ? [{
-          label: "Serviços SIMER",
-          path: "/servicos",
-          icon: <InsightsOutlined fontSize="small" />,
-        }] : []),
-      ],
-      [user?.role],
-    );
+  const analysisMenu = useMemo<MenuItemData[]>(
+    () => [
+      { label: "Dashboard", path: "/", icon: <DashboardOutlined fontSize="small" /> },
+      { label: "Desempenho", path: "/desempenho", icon: <TrendingUpOutlined fontSize="small" /> },
+      { label: "Relatórios", path: "/relatorios", icon: <AssessmentOutlined fontSize="small" /> },
+      ...(user?.role === "ADMIN" || user?.role === "COORDENADOR"
+        ? [{ label: "Serviços SIMER", path: "/servicos", icon: <FactCheckOutlined fontSize="small" /> }]
+        : []),
+      { label: "Central de Liderança", path: "/lideranca-tecnica", icon: <RadarOutlined fontSize="small" /> },
+    ],
+    [user?.role],
+  );
 
-  /* =======================================================
-     DESENVOLVIMENTO
-  ======================================================= */
+  const developmentMenu = useMemo<MenuItemData[]>(
+    () => [
+      { label: "Correções", path: "/correcoes", icon: <BugReportOutlined fontSize="small" /> },
+      { label: "Evoluções", path: "/evolucoes", icon: <AutoFixHighOutlined fontSize="small" /> },
+      { label: "Apoios", path: "/apoios", icon: <SupportAgentOutlined fontSize="small" /> },
+      { label: "Versões", path: "/versoes", icon: <Inventory2Outlined fontSize="small" /> },
+    ],
+    [],
+  );
 
-  const developmentMenu =
-    useMemo<MenuItemData[]>(
-      () => [
-        {
-          label:
-            "Correções",
-          path:
-            "/correcoes",
-          icon:
-            <BugReportOutlined fontSize="small" />,
-        },
-        {
-          label:
-            "Evoluções",
-          path:
-            "/evolucoes",
-          icon:
-            <AutoFixHighOutlined fontSize="small" />,
-        },
-        {
-          label:
-            "Apoios",
-          path:
-            "/apoios",
-          icon:
-            <SupportAgentOutlined fontSize="small" />,
-        },
-        {
-          label:
-            "Versões",
-          path:
-            "/versoes",
-          icon:
-            <Inventory2Outlined fontSize="small" />,
-        },
-      ],
-      [],
-    );
-
-  /* =======================================================
-     SISTEMA
-  ======================================================= */
-
-  const systemMenu =
-    useMemo<MenuItemData[]>(
-      () => [
-        {
-          label: "Base de Conhecimento",
-          path: "/conhecimento",
-          icon: <MenuBookOutlined fontSize="small" />,
-        },
-        {
-          label:
-            "Dados e Sincronizações",
-          path:
-            "/importar",
-          icon:
-            <UploadFileOutlined fontSize="small" />,
-        },
-      ],
-      [],
-    );
+  const managementMenu = useMemo<MenuItemData[]>(
+    () => [
+      { label: "Base de Conhecimento", path: "/conhecimento", icon: <MenuBookOutlined fontSize="small" /> },
+      { label: "Dados e Sincronizações", path: "/importar", icon: <UploadFileOutlined fontSize="small" /> },
+    ],
+    [],
+  );
 
   /* =======================================================
      USUÁRIO
@@ -742,34 +677,38 @@ export function Sidebar() {
             <ListItemText primary="Mapa SIMER" slotProps={{ primary: { sx: { fontSize: ".76rem", fontWeight: 800 } } }} />
           </ListItemButton>
         </Box>
-
-        {/* =================================================
-            OPERAÇÃO
-        ================================================= */}
-
-        <MenuSection
-          title="Operação"
-          ariaLabel="Navegação da operação"
-          items={mainMenu}
-          open={openSections.operation}
-          onToggle={() => setOpenSections((current) => ({ ...current, operation: !current.operation }))}
-        />
-
-        {/* =================================================
-            LIDERANÇA TÉCNICA
-        ================================================= */}
+        {(user?.role === "ADMIN" || user?.role === "COORDENADOR") && (
+          <Box sx={{ px: 1.1, mb: .75 }}>
+            <ListItemButton component={NavLink} to="/coordenacao" sx={{ minHeight: 40, px: 1.3, borderRadius: 1.2, color: "rgba(255,255,255,.72)", "&:hover": { bgcolor: "rgba(24,199,122,.08)", color: "#fff" }, "&.active": { bgcolor: "rgba(24,199,122,.13)", color: "#fff" }, "&.active .MuiListItemIcon-root": { color: aliareColors.green } }}>
+              <ListItemIcon sx={{ minWidth: 32, color: "rgba(255,255,255,.50)" }}><InsightsOutlined fontSize="small" /></ListItemIcon>
+              <ListItemText primary="Central da Coordenação" slotProps={{ primary: { sx: { fontSize: ".76rem", fontWeight: 800 } } }} />
+            </ListItemButton>
+          </Box>
+        )}
 
         <MenuSection
-          title="Liderança Técnica"
-          ariaLabel="Navegação de liderança técnica"
-          items={leadershipMenu}
-          open={openSections.leadership}
-          onToggle={() => setOpenSections((current) => ({ ...current, leadership: !current.leadership }))}
+          title="Cadastros"
+          ariaLabel="Navegação de cadastros"
+          items={registrationMenu}
+          open={openSections.cadastros}
+          onToggle={() => setOpenSections((current) => ({ ...current, cadastros: !current.cadastros }))}
         />
 
-        {/* =================================================
-            DESENVOLVIMENTO
-        ================================================= */}
+        <MenuSection
+          title="Movimentos"
+          ariaLabel="Navegação de movimentos"
+          items={movementMenu}
+          open={openSections.movimentos}
+          onToggle={() => setOpenSections((current) => ({ ...current, movimentos: !current.movimentos }))}
+        />
+
+        <MenuSection
+          title="Análises"
+          ariaLabel="Navegação de análises"
+          items={analysisMenu}
+          open={openSections.analises}
+          onToggle={() => setOpenSections((current) => ({ ...current, analises: !current.analises }))}
+        />
 
         <MenuSection
           title="Desenvolvimento"
@@ -779,16 +718,12 @@ export function Sidebar() {
           onToggle={() => setOpenSections((current) => ({ ...current, development: !current.development }))}
         />
 
-        {/* =================================================
-            SISTEMA
-        ================================================= */}
-
         <MenuSection
           title="Gestão"
-          ariaLabel="Navegação do sistema"
-          items={systemMenu}
-          open={openSections.management}
-          onToggle={() => setOpenSections((current) => ({ ...current, management: !current.management }))}
+          ariaLabel="Navegação de gestão"
+          items={managementMenu}
+          open={openSections.gestao}
+          onToggle={() => setOpenSections((current) => ({ ...current, gestao: !current.gestao }))}
         />
 
         <Box
