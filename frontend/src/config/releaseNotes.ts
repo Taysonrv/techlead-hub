@@ -9,9 +9,21 @@ export type ReleaseNote = {
   items: readonly ReleaseNoteItem[];
 };
 
-export const FALLBACK_APP_VERSION = "1.0.0-rc.8";
+export const FALLBACK_APP_VERSION = "1.0.0-rc.9";
 
 export const releaseNotes: Record<string, ReleaseNote> = {
+  "1.0.0-rc.9": {
+    version: "1.0.0-rc.9",
+    title: "Mapa SIMER, experiência unificada e Desktop mais leve",
+    items: [
+      { title: "Mapa e Fluxo SIMER", description: "Nova experiência integrada para navegar pela árvore do sistema, regras Bizagi, mapas técnicos, rotinas relacionadas e investigação contextual." },
+      { title: "Design System unificado", description: "Cards, cabeçalhos, botões, chips, abas, tabelas e superfícies passam a compartilhar o mesmo padrão visual moderno em toda a aplicação." },
+      { title: "Interface mais fluida", description: "Efeitos gráficos globais mais pesados foram removidos e o carregamento do frontend foi dividido em pacotes menores para reduzir trabalho desnecessário na abertura e navegação." },
+      { title: "Instalação e atualização otimizadas", description: "O runtime Desktop é higienizado antes do empacotamento, removendo dependências de desenvolvimento, caches e resíduos que não precisam acompanhar o instalador." },
+      { title: "Builds mais confiáveis", description: "Backend e Desktop passam a limpar saídas antigas antes da compilação, evitando arquivos obsoletos entre versões." },
+      { title: "Novidades após atualizar", description: "Ao abrir uma nova versão pela primeira vez, o TechLead Hub apresenta as principais mudanças e permite seguir para a aplicação ou consultar todos os detalhes." },
+    ],
+  },
   "1.0.0-rc.8": {
     version: "1.0.0-rc.8",
     title: "Colaboração operacional e menções",
