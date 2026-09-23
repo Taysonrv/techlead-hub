@@ -164,6 +164,11 @@ routes.get(
 );
 
 routes.get(
+  "/api/dashboard/pending-tickets",
+  dashboard.pendingTickets,
+);
+
+routes.get(
   "/api/dashboard/tickets/:id/analytics",
   dashboard.ticketAnalytics,
 );
