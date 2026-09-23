@@ -88,6 +88,17 @@ jobs:
           npm run build --prefix frontend
           npm test --prefix desktop
           npm run build:desktop --prefix desktop
+      - name: Preparar runtime enxuto
+        shell: pwsh
+        run: |
+          # O instalador precisa apenas das dependências de produção do backend.
+          # Remover toolchains/devDependencies antes do empacotamento reduz milhares
+          # de arquivos pequenos, que são o principal gargalo do NSIS na atualização.
+          npm prune --omit=dev --prefix backend
+          $cacheDirs = Get-ChildItem backend/node_modules -Directory -Recurse -Force -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -in @(".cache", ".vite", ".eslintcache", "coverage", "test", "tests", "__tests__") }
+          $cacheDirs | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+
       - name: Gerar instalador sem publicar
         shell: pwsh
         working-directory: desktop
