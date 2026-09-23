@@ -14,6 +14,8 @@ export class SimerMapController {
   related = async (req: AuthenticatedRequest, res: Response) => res.json({ items: await this.service.related(Number(req.params.id)) });
   tree = async (req: AuthenticatedRequest, res: Response) => res.json({ items: await this.service.tree(String(req.query.sourceFile ?? ""), Number(req.query.focusId ?? 0) || undefined) });
   ruleSummary = async (_req: AuthenticatedRequest, res: Response) => res.json(await this.rules.summary());
+  catalog = async (_req: AuthenticatedRequest, res: Response) => res.json(await this.rules.catalog());
+  investigate = async (req: AuthenticatedRequest, res: Response) => { const text=String(req.body?.text??""); const mapItems=await this.service.context(text,60); const [ruleItems,correlations]=await Promise.all([this.rules.search(text,30),this.rules.correlate(text,mapItems,20)]); return res.json({query:text,mapItems,ruleItems,correlations}); };
   ruleSearch = async (req: AuthenticatedRequest, res: Response) => res.json({ items: await this.rules.search(String(req.query.q ?? ""), Number(req.query.limit ?? 20)) });
   ruleFlow = async (req: AuthenticatedRequest, res: Response) => res.json(await this.rules.flow(Number(req.params.processId), Number(req.query.focusId ?? 0) || undefined));
   importRule = async (req: AuthenticatedRequest, res: Response) => {
