@@ -7,6 +7,8 @@ simerMapRoutes.get("/search", controller.search);
 simerMapRoutes.get("/tree", controller.tree);
 simerMapRoutes.get("/builder/status", controller.builderStatus);
 simerMapRoutes.get("/rules/summary", controller.ruleSummary);
+simerMapRoutes.get("/catalog", controller.catalog);
+simerMapRoutes.post("/investigate", controller.investigate);
 simerMapRoutes.get("/rules/search", controller.ruleSearch);
 simerMapRoutes.get("/rules/:processId/flow", controller.ruleFlow);
 simerMapRoutes.get("/nodes/:id/container", controller.resolveContainer);
