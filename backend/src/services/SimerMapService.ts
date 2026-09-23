@@ -59,14 +59,16 @@ export class SimerMapService {
     const rows=await prisma.$queryRawUnsafe<MapRow[]>(`WITH RECURSIVE ancestors AS (
       SELECT * FROM "SimerMapNode" WHERE id=$2 AND "sourceFile"=$1
       UNION ALL SELECT p.* FROM "SimerMapNode" p JOIN ancestors a ON a."parentNodeId"=p."nodeId" AND p."sourceFile"=a."sourceFile"
-    ), descendants AS (
-      SELECT * FROM "SimerMapNode" WHERE id=$2 AND "sourceFile"=$1
-      UNION ALL SELECT c.* FROM "SimerMapNode" c JOIN descendants d ON c."parentNodeId"=d."nodeId" AND c."sourceFile"=d."sourceFile" WHERE c.depth <= $3
-    ), siblings AS (
-      SELECT s.* FROM "SimerMapNode" s WHERE s."sourceFile"=$1 AND s."parentNodeId" IS NOT DISTINCT FROM $4
+    ), nearby AS (
+      SELECT s.* FROM "SimerMapNode" s WHERE s."sourceFile"=$1 AND (
+        s.id=$2 OR
+        s."parentNodeId" IS NOT DISTINCT FROM $3 OR
+        s."parentNodeId"=(SELECT "nodeId" FROM "SimerMapNode" WHERE id=$2)
+      )
     )
-    SELECT DISTINCT id,"sourceFile","mapName","nodeId","nodeText",path,depth,"parentPath","parentNodeId",icon,link,"nodeKind","importedAt" FROM (SELECT * FROM ancestors UNION ALL SELECT * FROM descendants UNION ALL SELECT * FROM siblings) scoped
-    WHERE ${SIMER_SCOPE_SQL} ORDER BY depth,id LIMIT 700`,source,focusId,focus.depth+3,focus.parentNodeId);
+    SELECT DISTINCT id,"sourceFile","mapName","nodeId","nodeText",path,depth,"parentPath","parentNodeId",icon,link,"nodeKind","importedAt"
+    FROM (SELECT * FROM ancestors UNION ALL SELECT * FROM nearby) scoped
+    WHERE ${SIMER_SCOPE_SQL} ORDER BY depth,id LIMIT 180`,source,focusId,focus.parentNodeId);
     return rows;
   }
   async followLink(id:number){
