@@ -445,16 +445,25 @@ export function TechnicalLeadership() {
 
       <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(3,1fr)" }, gap: 1.5 }}>
         {[
-          ["Tickets por categoria", data.analytics.categoryDistribution, aliareColors.purple],
-          ["Clientes no período", data.analytics.clientDistribution, aliareColors.cyan],
-          ["Solicitantes / contatos", data.analytics.contactDistribution, aliareColors.green],
-        ].map(([title, rows, accent]) => <Card key={String(title)}><CardContent>
-          <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "center", gap: 1 }}>
-            <Typography sx={{ fontWeight: 850 }}>{String(title)}</Typography>
-            <IndicatorPeriodFilter value={period} onChange={setPeriod} />
-          </Stack>
-          <Stack spacing={.8} sx={{ mt: 1.2 }}>{(rows as Array<{label:string;total:number}>).slice(0,8).map((row) => <Box key={row.label} sx={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 1, alignItems: "center" }}><Box sx={{ minWidth: 0 }}><Typography variant="body2" noWrap>{row.label}</Typography><Box sx={{ height: 5, borderRadius: 9, bgcolor: "action.hover", mt: .35, overflow: "hidden" }}><Box sx={{ width: `${Math.max(6, row.total / Math.max(...(rows as Array<{total:number}>).map((r) => r.total), 1) * 100)}%`, height: "100%", bgcolor: String(accent), borderRadius: 9 }} /></Box></Box><Typography variant="body2" sx={{ fontWeight: 850 }}>{row.total}</Typography></Box>)}</Stack>
-        </CardContent></Card>)}
+          ["Tickets por categoria", "categoryDistribution", data.analytics.categoryDistribution, aliareColors.purple],
+          ["Clientes no período", "clientDistribution", data.analytics.clientDistribution, aliareColors.cyan],
+          ["Solicitantes / contatos", "contactDistribution", data.analytics.contactDistribution, aliareColors.green],
+        ].map(([title, chartKey, rows, accent]) => {
+          const rankingRows = rows as Array<{label:string;total:number}>;
+          const visibleRows = rankingRows.filter((row) => isLeadershipSeriesVisible(String(chartKey), row.label));
+          const visibleTotal = visibleRows.reduce((sum, row) => sum + row.total, 0);
+          const maxVisible = Math.max(...visibleRows.map((row) => row.total), 1);
+          return <Card key={String(title)}><CardContent>
+            <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "center", gap: 1 }}>
+              <Box><Typography sx={{ fontWeight: 850 }}>{String(title)}</Typography><Typography variant="caption" color="text.secondary">{visibleTotal} itens visíveis · clique para exibir/ocultar</Typography></Box>
+              <IndicatorPeriodFilter value={period} onChange={setPeriod} />
+            </Stack>
+            <Stack spacing={.8} sx={{ mt: 1.2 }}>{rankingRows.slice(0,8).map((row) => {
+              const active = isLeadershipSeriesVisible(String(chartKey), row.label);
+              return <Box key={row.label} role="button" tabIndex={0} onClick={() => toggleLeadershipSeries(String(chartKey), row.label, Math.min(rankingRows.length, 8))} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") toggleLeadershipSeries(String(chartKey), row.label, Math.min(rankingRows.length, 8)); }} sx={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 1, alignItems: "center", cursor: "pointer", opacity: active ? 1 : .38, textDecoration: active ? "none" : "line-through", px: .5, py: .35, borderRadius: 1, transition: "all .2s ease", "&:hover": { bgcolor: "action.hover" } }}><Box sx={{ minWidth: 0 }}><Typography variant="body2" noWrap>{row.label}</Typography><Box sx={{ height: 5, borderRadius: 9, bgcolor: "action.hover", mt: .35, overflow: "hidden" }}><Box sx={{ width: active ? `${Math.max(6, row.total / maxVisible * 100)}%` : "0%", height: "100%", bgcolor: String(accent), borderRadius: 9, transition: "width .25s ease" }} /></Box></Box><Typography variant="body2" sx={{ fontWeight: 850 }}>{active ? row.total : "—"}</Typography></Box>;
+            })}</Stack>
+          </CardContent></Card>;
+        })}
       </Box>
     </Box>}
 
