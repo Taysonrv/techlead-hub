@@ -41,6 +41,7 @@ import { api } from "../services/api";
 import { PeriodFilter } from "../components/PeriodFilter";
 import { PageHeader } from "../components/PageHeader";
 import { KpiCard as ExecutiveKpiCard } from "../components/KpiCard";
+import { ExportTicketsButton } from "../components/ExportTicketsButton";
 import { useFilters } from "../context/FiltersContext";
 import { aliareColors } from "../theme/theme";
 import { calculateOfficialSla } from "../utils/officialSla";
@@ -1949,6 +1950,12 @@ export function Dashboard() {
                   size="small"
                   label={`${drilldown.tickets.length} ticket(s)`}
                   variant="outlined"
+                />
+
+                <ExportTicketsButton
+                  tickets={drilldown.tickets}
+                  title={drilldown.title}
+                  subtitle={drilldown.subtitle}
                 />
 
                 <Button
