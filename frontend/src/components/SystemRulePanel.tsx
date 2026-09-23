@@ -1,0 +1,41 @@
+import { useEffect, useMemo, useState } from "react";
+import { Alert, Box, Button, Card, CardContent, Chip, CircularProgress, Divider, Stack, TextField, Tooltip, Typography } from "@mui/material";
+import { AccountTreeOutlined, AltRouteOutlined, AutoAwesomeOutlined, DescriptionOutlined, RuleOutlined, SearchOutlined, UploadFileOutlined } from "@mui/icons-material";
+import { api } from "../services/api";
+
+type RuleResult={id:number;processId:number;name:string;kind:string;documentation:string|null;processName:string;sourceFile:string;score:number};
+type RuleNode={id:number;externalId:string;name:string;kind:string;documentation:string|null;x:number|null;y:number|null};
+type Transition={id:number;fromId:string;toId:string;name:string|null;condition:string|null};
+type Flow={process:{id:number;name:string;sourceFile:string}|null;nodes:RuleNode[];transitions:Transition[];focusId:number|null};
+type Summary={processes:number;nodes:number;transitions:number};
+
+function toBase64(file:File){return new Promise<string>((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(String(r.result).split(",")[1]??"");r.onerror=()=>reject(r.error);r.readAsDataURL(file);});}
+
+export function SystemRulePanel({initialQuery=""}:{initialQuery?:string}){
+ const[query,setQuery]=useState(initialQuery),[results,setResults]=useState<RuleResult[]>([]),[summary,setSummary]=useState<Summary|null>(null),[flow,setFlow]=useState<Flow|null>(null),[loading,setLoading]=useState(false),[message,setMessage]=useState("");
+ useEffect(()=>{setQuery(initialQuery);},[initialQuery]);
+ async function loadSummary(){try{setSummary((await api.get<Summary>("/simer-map/rules/summary")).data);}catch{/* base ainda não inicializada */}}
+ useEffect(()=>{void loadSummary();},[]);
+ async function search(){if(!query.trim())return;setLoading(true);setMessage("");try{const r=await api.get<{items:RuleResult[]}>("/simer-map/rules/search",{params:{q:query.trim(),limit:20}});setResults(r.data.items);if(!r.data.items.length)setMessage("Nenhuma Regra do Sistema relacionada foi localizada.");}catch{setMessage("Não foi possível consultar as Regras do Sistema.");}finally{setLoading(false);}}
+ async function open(item:RuleResult){setLoading(true);try{setFlow((await api.get<Flow>(`/simer-map/rules/${item.processId}/flow`,{params:{focusId:item.id}})).data);}finally{setLoading(false);}}
+ async function importFiles(list:FileList|null){if(!list?.length)return;const files=Array.from(list).filter(f=>f.name.toLowerCase().endsWith(".bpm"));if(!files.length){setMessage("Selecione arquivos .bpm exportados pelo Bizagi.");return;}setLoading(true);setMessage("");let p=0,n=0,t=0;try{for(const file of files){const r=await api.post<{processes:number;nodes:number;transitions:number}>("/simer-map/rules/import",{sourceFile:(file as File&{webkitRelativePath?:string}).webkitRelativePath||file.name,base64:await toBase64(file)});p+=r.data.processes;n+=r.data.nodes;t+=r.data.transitions;}setMessage(`Regra do Sistema atualizada: ${p} processo(s), ${n} etapa(s) e ${t} conexão(ões).`);await loadSummary();}catch(e:unknown){setMessage((e as {response?:{data?:{message?:string}}}).response?.data?.message??"Falha ao importar BPM.");}finally{setLoading(false);}}
+ const outgoing=useMemo(()=>{const m=new Map<string,Transition[]>();for(const x of flow?.transitions??[]){const a=m.get(x.fromId)??[];a.push(x);m.set(x.fromId,a);}return m;},[flow]);
+ return <Card variant="outlined" sx={{borderRadius:3,overflow:"hidden",background:"linear-gradient(145deg, rgba(17,24,39,.02), rgba(24,199,122,.045))"}}>
+  <CardContent>
+   <Stack direction={{xs:"column",lg:"row"}} spacing={1.5} sx={{alignItems:{lg:"center"},mb:1.5}}>
+    <Box sx={{display:"flex",gap:1.2,alignItems:"center",flex:1}}><Box sx={{width:42,height:42,borderRadius:2.2,display:"grid",placeItems:"center",bgcolor:"primary.main",color:"primary.contrastText"}}><RuleOutlined/></Box><Box><Typography sx={{fontWeight:950,fontSize:"1.05rem"}}>Regra do Sistema</Typography><Typography variant="body2" color="text.secondary">Consulte o comportamento esperado da rotina e confronte a regra funcional com o Mapa SIMER.</Typography></Box></Box>
+    <Stack direction="row" spacing={.7}>{summary&&<><Chip icon={<AccountTreeOutlined/>} label={`${summary.processes} processos`} size="small"/><Chip icon={<AltRouteOutlined/>} label={`${summary.nodes} etapas`} size="small"/></>}<Button component="label" size="small" variant="outlined" startIcon={<UploadFileOutlined/>}>Importar BPM<input hidden type="file" multiple accept=".bpm" onChange={e=>void importFiles(e.target.files)}/></Button></Stack>
+   </Stack>
+   <Stack direction={{xs:"column",md:"row"}} spacing={1}><TextField fullWidth size="small" value={query} onChange={e=>setQuery(e.target.value)} onKeyDown={e=>e.key==="Enter"&&void search()} placeholder="Campo, rotina ou regra. Ex.: lote no receituário, nota fiscal vinculada, responsável técnico..."/><Button variant="contained" startIcon={<SearchOutlined/>} onClick={()=>void search()} disabled={loading||!query.trim()}>Investigar regra</Button></Stack>
+   {message&&<Alert sx={{mt:1.5}} severity={message.startsWith("Falha")||message.startsWith("Não foi")?"warning":"success"}>{message}</Alert>}
+   {loading&&<Box sx={{py:3,textAlign:"center"}}><CircularProgress size={26}/></Box>}
+   {!loading&&results.length>0&&!flow&&<Box sx={{display:"grid",gridTemplateColumns:{xs:"1fr",lg:"repeat(2,1fr)"},gap:1,mt:1.5}}>{results.map(r=><Box key={r.id} onClick={()=>void open(r)} sx={{p:1.4,border:"1px solid",borderColor:"divider",borderRadius:2.5,cursor:"pointer",bgcolor:"background.paper","&:hover":{borderColor:"primary.main",boxShadow:"0 8px 28px rgba(16,24,40,.08)"}}}><Stack direction="row" spacing={.7} sx={{alignItems:"center"}}><Chip size="small" color={r.kind==="gateway"?"warning":"success"} variant="outlined" label={r.kind}/><Typography sx={{fontWeight:850}}>{r.name}</Typography></Stack><Typography variant="caption" color="primary.main">{r.processName}</Typography>{r.documentation&&<Typography variant="body2" color="text.secondary" sx={{mt:.5,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{r.documentation}</Typography>}</Box>)}</Box>}
+   {flow?.process&&<Box sx={{mt:1.5}}>
+    <Stack direction="row" spacing={1} sx={{alignItems:"center",mb:1}}><AutoAwesomeOutlined color="primary"/><Box sx={{flex:1}}><Typography sx={{fontWeight:900}}>{flow.process.name}</Typography><Typography variant="caption" color="text.secondary">{flow.process.sourceFile}</Typography></Box><Button size="small" onClick={()=>setFlow(null)}>Voltar aos resultados</Button></Stack>
+    <Divider sx={{mb:1.5}}/>
+    <Box sx={{display:"flex",gap:1,overflowX:"auto",pb:1.5,scrollSnapType:"x proximity"}}>{flow.nodes.map((n,i)=>{const links=outgoing.get(n.externalId)??[];const active=n.id===flow.focusId;return <Box key={n.id} sx={{display:"flex",alignItems:"center",flex:"0 0 auto"}}><Tooltip title={n.documentation||n.name} placement="top"><Box sx={{width:220,minHeight:116,p:1.4,border:"1px solid",borderColor:active?"primary.main":"divider",borderRadius:n.kind==="gateway"?5:2.5,bgcolor:active?"action.selected":"background.paper",boxShadow:active?"0 0 0 3px rgba(24,199,122,.10)":"none",scrollSnapAlign:"start"}}><Stack direction="row" spacing={.7} sx={{alignItems:"center",mb:.6}}>{n.kind==="gateway"?<AltRouteOutlined fontSize="small"/>:<DescriptionOutlined fontSize="small"/>}<Chip size="small" variant="outlined" label={n.kind}/></Stack><Typography variant="body2" sx={{fontWeight:850}}>{n.name}</Typography>{n.documentation&&<Typography variant="caption" color="text.secondary" sx={{mt:.5,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{n.documentation}</Typography>}{links.map(x=><Chip key={x.id} size="small" sx={{mt:.7,mr:.4}} label={x.condition||x.name||"próxima etapa"}/>)}</Box></Tooltip>{i<flow.nodes.length-1&&<Typography sx={{mx:.8,color:"text.disabled",fontWeight:900}}>→</Typography>}</Box>})}</Box>
+    <Alert icon={<AutoAwesomeOutlined/>} severity="info">Use este recorte como <b>comportamento esperado</b>. Compare a etapa selecionada com serviços, containers, campos e vínculos encontrados no Mapa SIMER antes de concluir a causa do atendimento.</Alert>
+   </Box>}
+  </CardContent>
+ </Card>;
+}
