@@ -542,46 +542,267 @@ export function SystemExplorer({
                   </CardContent>
                 </Card>
 
-                <Card variant="outlined" sx={{ borderRadius: 3 }}>
-                  <CardContent>
-                    <Stack direction="row" spacing={1} sx={{ alignItems: "center", mb: 1 }}>
-                      <RuleOutlined color="primary" />
-                      <Typography sx={{ fontWeight: 900 }}>Fluxo de Negócio (Bizagi)</Typography>
-                      <Chip size="small" label={`${detail.nodes.length} etapas`} />
+                <Card
+                  variant="outlined"
+                  sx={{
+                    borderRadius: 3,
+                    gridColumn: "1 / -1",
+                    borderColor: "rgba(0,196,118,.85)",
+                    boxShadow: "0 10px 30px rgba(15,23,42,.045)",
+                    overflow: "hidden",
+                  }}
+                >
+                  <CardContent sx={{ p: 1.8, "&:last-child": { pb: 1.8 } }}>
+                    <Stack
+                      direction={{ xs: "column", md: "row" }}
+                      spacing={1}
+                      sx={{ alignItems: { md: "center" }, mb: 1.1 }}
+                    >
+                      <Box
+                        sx={{
+                          width: 34,
+                          height: 34,
+                          borderRadius: 2,
+                          display: "grid",
+                          placeItems: "center",
+                          bgcolor: "rgba(0,196,118,.10)",
+                          color: "#00b86b",
+                        }}
+                      >
+                        <RuleOutlined fontSize="small" />
+                      </Box>
+                      <Box sx={{ flex: 1 }}>
+                        <Stack direction="row" spacing={0.8} sx={{ alignItems: "center" }}>
+                          <Typography sx={{ fontWeight: 950 }}>Fluxo de Negócio (Bizagi)</Typography>
+                          <Chip
+                            size="small"
+                            label={`${detail.nodes.length} etapas`}
+                            sx={{ height: 22, fontWeight: 800, bgcolor: "action.hover" }}
+                          />
+                        </Stack>
+                        <Typography variant="caption" color="text.secondary">
+                          Fluxo funcional importado do Bizagi para esta rotina.
+                        </Typography>
+                      </Box>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        startIcon={<OpenInNewOutlined />}
+                        onClick={() => setTab(1)}
+                        sx={{
+                          borderColor: "rgba(0,196,118,.45)",
+                          color: "#00a963",
+                          fontWeight: 800,
+                          textTransform: "none",
+                        }}
+                      >
+                        Abrir completo
+                      </Button>
                     </Stack>
-                    <Box sx={{ display: "flex", gap: 0.7, overflowX: "auto", pb: 1 }}>
-                      {detail.nodes.slice(0, 8).map((node, index) => (
-                        <Box
-                          key={node.id}
-                          sx={{ display: "flex", alignItems: "center", flex: "0 0 auto" }}
-                        >
-                          <Box
+
+                    <Box
+                      sx={{
+                        border: "1px solid",
+                        borderColor: "divider",
+                        borderRadius: 2,
+                        px: 1.2,
+                        py: 0.8,
+                        mb: 1.1,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 0.8,
+                        bgcolor: "background.paper",
+                      }}
+                    >
+                      <Typography variant="body2" sx={{ fontWeight: 850, flex: 1 }}>
+                        {detail.process.name}
+                      </Typography>
+                      <ChevronRight sx={{ fontSize: 18, color: "text.disabled", transform: "rotate(90deg)" }} />
+                    </Box>
+
+                    <Box
+                      sx={{
+                        position: "relative",
+                        minHeight: 220,
+                        border: "1px solid",
+                        borderColor: "divider",
+                        borderRadius: 2.2,
+                        bgcolor: "#fbfdff",
+                        overflow: "hidden",
+                      }}
+                    >
+                      <Box
+                        sx={{
+                          height: 174,
+                          px: 2,
+                          display: "flex",
+                          alignItems: "center",
+                          overflowX: "auto",
+                          overflowY: "hidden",
+                          scrollbarWidth: "thin",
+                        }}
+                      >
+                        {detail.nodes.slice(0, 7).map((node, index) => {
+                          const kind = String(node.kind || "").toLowerCase();
+                          const isStart = /start|inicio|início/.test(kind);
+                          const isEnd = /end|fim/.test(kind);
+                          const isGateway = /gateway/.test(kind);
+                          return (
+                            <Box
+                              key={node.id}
+                              sx={{ display: "flex", alignItems: "center", flex: "0 0 auto" }}
+                            >
+                              <Box
+                                sx={{
+                                  width: isStart || isEnd ? 58 : isGateway ? 72 : 150,
+                                  minHeight: isStart || isEnd ? 58 : isGateway ? 72 : 72,
+                                  px: isStart || isEnd || isGateway ? 0.6 : 1.1,
+                                  py: 0.8,
+                                  display: "grid",
+                                  placeItems: "center",
+                                  textAlign: "center",
+                                  border: "2px solid",
+                                  borderColor: isStart
+                                    ? "#20a52d"
+                                    : isEnd
+                                      ? "#e32222"
+                                      : isGateway
+                                        ? "#f2ad00"
+                                        : "#0879e8",
+                                  borderRadius: isStart || isEnd ? "50%" : isGateway ? 1 : 1.8,
+                                  transform: isGateway ? "rotate(45deg) scale(.72)" : "none",
+                                  bgcolor: isStart
+                                    ? "#e9f8df"
+                                    : isEnd
+                                      ? "#ffe1e1"
+                                      : isGateway
+                                        ? "#fff7d6"
+                                        : "#f4f9ff",
+                                  boxShadow: "0 2px 7px rgba(15,23,42,.08)",
+                                }}
+                              >
+                                <Box sx={{ transform: isGateway ? "rotate(-45deg) scale(1.15)" : "none" }}>
+                                  {!isStart && !isEnd && (
+                                    <Typography
+                                      variant="caption"
+                                      color="text.secondary"
+                                      sx={{ display: "block", fontSize: 10, lineHeight: 1.1, mb: 0.35 }}
+                                    >
+                                      {isGateway ? "decisão" : node.kind}
+                                    </Typography>
+                                  )}
+                                  <Typography
+                                    variant="body2"
+                                    sx={{
+                                      fontWeight: 850,
+                                      fontSize: isStart || isEnd ? 11 : 12,
+                                      lineHeight: 1.25,
+                                      maxWidth: 130,
+                                    }}
+                                  >
+                                    {node.name}
+                                  </Typography>
+                                </Box>
+                              </Box>
+                              {index < Math.min(detail.nodes.length, 7) - 1 && (
+                                <Box sx={{ width: 32, display: "flex", alignItems: "center" }}>
+                                  <Box sx={{ height: 1.5, bgcolor: "#31445b", flex: 1 }} />
+                                  <Box
+                                    sx={{
+                                      width: 0,
+                                      height: 0,
+                                      borderTop: "4px solid transparent",
+                                      borderBottom: "4px solid transparent",
+                                      borderLeft: "6px solid #31445b",
+                                    }}
+                                  />
+                                </Box>
+                              )}
+                            </Box>
+                          );
+                        })}
+                      </Box>
+
+                      <Stack
+                        direction="row"
+                        spacing={0.5}
+                        sx={{ position: "absolute", left: 10, bottom: 9 }}
+                      >
+                        {["+", "−", "↻"].map((label) => (
+                          <Button
+                            key={label}
+                            size="small"
+                            variant="outlined"
                             sx={{
-                              width: 145,
-                              minHeight: 74,
-                              p: 1,
-                              border: "1px solid",
-                              borderColor: node.kind === "gateway" ? "warning.main" : "divider",
-                              borderRadius: node.kind === "gateway" ? 5 : 2,
+                              minWidth: 30,
+                              width: 30,
+                              height: 30,
+                              p: 0,
+                              color: "text.primary",
+                              borderColor: "divider",
                               bgcolor: "background.paper",
                             }}
                           >
-                            <Typography variant="caption" color="text.secondary">
-                              {node.kind}
-                            </Typography>
-                            <Typography variant="body2" sx={{ fontWeight: 800 }}>
-                              {node.name}
-                            </Typography>
-                          </Box>
-                          {index < Math.min(detail.nodes.length, 8) - 1 && (
-                            <Typography sx={{ mx: 0.2, color: "text.disabled" }}>→</Typography>
-                          )}
-                        </Box>
-                      ))}
+                            {label}
+                          </Button>
+                        ))}
+                      </Stack>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        sx={{
+                          position: "absolute",
+                          right: 10,
+                          bottom: 9,
+                          minWidth: 30,
+                          width: 30,
+                          height: 30,
+                          p: 0,
+                          color: "text.primary",
+                          borderColor: "divider",
+                          bgcolor: "background.paper",
+                        }}
+                        onClick={() => setTab(1)}
+                      >
+                        ⛶
+                      </Button>
                     </Box>
-                    <Button size="small" onClick={() => setTab(1)}>
-                      Abrir fluxo completo
-                    </Button>
+
+                    <Box sx={{ mt: 1.1 }}>
+                      <Typography
+                        variant="caption"
+                        sx={{ fontWeight: 900, display: "block", mb: 0.55, color: "text.primary" }}
+                      >
+                        Etapas principais
+                      </Typography>
+                      <Stack spacing={0.45}>
+                        {detail.nodes
+                          .filter((node) => !/start|end|inicio|início|fim/i.test(String(node.kind)))
+                          .slice(0, 3)
+                          .map((node, index) => (
+                            <Stack key={node.id} direction="row" spacing={0.8} sx={{ alignItems: "center" }}>
+                              <Box
+                                sx={{
+                                  width: 23,
+                                  height: 23,
+                                  borderRadius: "50%",
+                                  display: "grid",
+                                  placeItems: "center",
+                                  bgcolor: "#eef3f8",
+                                  border: "1px solid #d7e0e8",
+                                  fontSize: 11,
+                                  fontWeight: 900,
+                                }}
+                              >
+                                {index + 1}
+                              </Box>
+                              <Typography variant="caption" color="text.secondary">
+                                {node.name}
+                              </Typography>
+                            </Stack>
+                          ))}
+                      </Stack>
+                    </Box>
                   </CardContent>
                 </Card>
 
