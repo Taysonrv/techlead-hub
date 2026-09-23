@@ -623,6 +623,7 @@ export class WorkspaceService {
       operational,
       samples: {
         opened: currentTickets.slice(0, 100),
+        backlog: openTickets.slice(0, 100),
         resolved: resolvedPeriod.slice(0, 100),
         reopened: tickets.filter((ticket) => inRange(ticket.reopenedDate)).slice(0, 100),
         responseOutside: responsePeriod.filter((ticket) => slaBucket(ticket.responseSlaIndicator) === "outside").slice(0, 100),
