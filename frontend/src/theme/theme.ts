@@ -95,7 +95,7 @@ export function createAppTheme(mode: PaletteMode = "light") {
       text: { primary: text, secondary: textSecondary },
       divider: border,
     },
-    shape: { borderRadius: 14 },
+    shape: { borderRadius: 12 },
     typography: {
       fontFamily: ["Inter", "Segoe UI", "Roboto", "Arial", "sans-serif"].join(","),
       h1: { fontWeight: 800 }, h2: { fontWeight: 800 },
@@ -125,8 +125,9 @@ export function createAppTheme(mode: PaletteMode = "light") {
           root: {
             position: "relative",
             border: `1px solid ${border}`,
-            boxShadow: dark ? "0 16px 42px rgba(0,0,0,.18), inset 0 1px rgba(255,255,255,.025)" : "0 6px 22px rgba(16,24,40,.045)",
-            borderRadius: 18,
+            boxShadow: dark ? "0 16px 42px rgba(0,0,0,.18), inset 0 1px rgba(255,255,255,.025)" : "0 8px 24px rgba(15,23,42,.055)",
+            borderRadius: 14,
+            overflow: "hidden",
             backdropFilter: dark ? "blur(16px)" : undefined,
             background: dark ? "linear-gradient(145deg, rgba(14,35,56,.96), rgba(8,24,41,.985))" : "linear-gradient(180deg,#FFFFFF,#FBFCFD)",
             backgroundColor: paper,
@@ -209,9 +210,10 @@ export function createAppTheme(mode: PaletteMode = "light") {
             "&:hover": { transform: "translateY(-1px)" },
             "&:focus-visible": { outline: `2px solid ${aliareColors.green}`, outlineOffset: 2 },
             "&.MuiButton-containedPrimary": {
-              backgroundColor: dark ? aliareColors.green : aliareColors.black,
-              color: dark ? "#071811" : "#FFFFFF",
-              "&:hover": { backgroundColor: dark ? "#22D98A" : aliareColors.graphiteSoft },
+              background: "linear-gradient(135deg,#18C77A 0%,#0FA968 100%)",
+              color: "#FFFFFF",
+              boxShadow: dark ? "0 7px 20px rgba(24,199,122,.16)" : "0 6px 16px rgba(16,148,91,.16)",
+              "&:hover": { background: "linear-gradient(135deg,#20D487 0%,#10945B 100%)", boxShadow: "0 9px 22px rgba(16,148,91,.20)" },
             },
           },
           outlined: { borderColor: dark ? "rgba(130,173,216,.28)" : undefined },
@@ -340,6 +342,7 @@ export function createAppTheme(mode: PaletteMode = "light") {
           },
         },
       },
+      MuiSvgIcon: { styleOverrides: { root: { transition: "transform .16s ease, filter .16s ease", filter: dark ? "drop-shadow(0 2px 5px rgba(0,0,0,.18))" : "drop-shadow(0 1px 1px rgba(15,23,42,.08))" } } },
       MuiTooltip: { styleOverrides: { tooltip: { backgroundColor: dark ? "#162D43" : aliareColors.graphite, fontSize: ".75rem", borderRadius: 7, border: dark ? "1px solid rgba(116,166,216,.20)" : undefined } } },
       MuiTabs: {
         styleOverrides: {
