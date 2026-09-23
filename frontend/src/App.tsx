@@ -79,6 +79,8 @@ function AuthenticatedLayout({
   const [backendUnavailable, setBackendUnavailable] = useState(false);
   const location = useLocation();
   const isChat = location.pathname === "/chat";
+  const isMap = location.pathname === "/mapa-simer";
+  const fixedWorkspace = isChat || isMap;
   useEffect(() => {
     const unavailable = () => setBackendUnavailable(true);
     const available = () => setBackendUnavailable(false);
@@ -97,8 +99,8 @@ function AuthenticatedLayout({
             display: "flex",
             width: "100%",
             minHeight: "100vh",
-            height: isChat ? "100dvh" : "auto",
-            overflow: isChat ? "hidden" : "visible",
+            height: fixedWorkspace ? "100dvh" : "auto",
+            overflow: fixedWorkspace ? "hidden" : "visible",
             backgroundColor: "background.default",
           }}
         >
@@ -109,10 +111,10 @@ function AuthenticatedLayout({
             sx={{
               flexGrow: 1,
               minWidth: 0,
-              minHeight: isChat ? 0 : "100vh",
-              height: isChat ? "100dvh" : "auto",
+              minHeight: fixedWorkspace ? 0 : "100vh",
+              height: fixedWorkspace ? "100dvh" : "auto",
               boxSizing: "border-box",
-              overflow: isChat ? "hidden" : undefined,
+              overflowY: fixedWorkspace ? "auto" : undefined,
               backgroundColor: "background.default",
               backgroundImage: (theme) => theme.palette.mode === "dark" ? "radial-gradient(circle at 88% 0%, rgba(84,73,255,.07), transparent 26%), linear-gradient(145deg,rgba(7,19,33,.98),rgba(9,25,43,.98))" : "none",
               color: "text.primary",
