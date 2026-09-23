@@ -339,7 +339,7 @@ export function TechnicalLeadership() {
             { name: "Fora do prazo", value: data.analytics.resolutionSla.outside },
             { name: "Sem medição", value: data.analytics.resolutionSla.unmeasured },
           ]} dataKey="value" nameKey="name" innerRadius={62} outerRadius={92} paddingAngle={3}>
-            {[aliareColors.green, aliareColors.error, aliareColors.info].map((fill, i) => <Cell key={fill} fill={fill} />)}
+            {[aliareColors.green, aliareColors.error, aliareColors.info].map((fill) => <Cell key={fill} fill={fill} />)}
           </Pie><ChartTooltip /><Legend /></PieChart></ResponsiveContainer></Box>
         </CardContent></Card>
         <Card><CardContent>
