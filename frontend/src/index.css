@@ -189,7 +189,30 @@ body {
 ========================================================= */
 
 .MuiCard-root {
-  background-image: none !important;
+  background-image: none;
+}
+
+.techlead-page-surface .MuiCard-root {
+  isolation: isolate;
+}
+
+.techlead-page-surface .MuiCard-root > .MuiCardContent-root {
+  min-width: 0;
+}
+
+.techlead-page-surface .MuiSvgIcon-root {
+  flex-shrink: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
 }
 
 /* =========================================================
@@ -246,13 +269,6 @@ svg {
     padding-right: 10px !important;
   }
 
-  .MuiCardContent-root {
-    padding: 16px !important;
-  }
-
-  .MuiCardContent-root:last-child {
-    padding-bottom: 16px !important;
-  }
 
   .MuiButton-root {
     min-height: 34px;
