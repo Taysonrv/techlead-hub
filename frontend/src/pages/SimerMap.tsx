@@ -10,15 +10,14 @@ import { aliareColors } from "../theme/theme";
 
 type Summary={total:number;maps:number;links:number;importedAt:string|null;builderApiUrl:string;items:Array<{mapName:string;total:number}>;kinds:Array<{kind:string;total:number}>};
 type Result={id:number;sourceFile:string;mapName:string;nodeId:string|null;nodeText:string;path:string;depth:number;parentPath:string|null;icon:string|null;link:string|null;nodeKind:string|null;score?:number;matchedTerms?:string[]};
-type Builder={reachable:boolean;status:number|null;latencyMs:number};
 const folderProps={webkitdirectory:"",directory:""} as Record<string,string>;
 
 export function SimerMap(){
  const [searchParams]=useSearchParams(); const autoContextDone=useRef(false);
  const[tree,setTree]=useState<SimerTreeNode[]>([]),[treeMap,setTreeMap]=useState(""),[treeLoading,setTreeLoading]=useState(false),[treeFocusId,setTreeFocusId]=useState<number|null>(null);
- const[summary,setSummary]=useState<Summary|null>(null),[query,setQuery]=useState(""),[context,setContext]=useState(""),[items,setItems]=useState<Result[]>([]),[loading,setLoading]=useState(false),[message,setMessage]=useState(""),[progress,setProgress]=useState<number|null>(null),[builder,setBuilder]=useState<Builder|null>(null);
+ const[summary,setSummary]=useState<Summary|null>(null),[query,setQuery]=useState(""),[context,setContext]=useState(""),[items,setItems]=useState<Result[]>([]),[loading,setLoading]=useState(false),[message,setMessage]=useState(""),[progress,setProgress]=useState<number|null>(null);
  const loadSummary=useCallback(async()=>{const r=await api.get<Summary>("/simer-map/summary");setSummary(r.data);},[]);
- useEffect(()=>{void loadSummary();void api.get<Builder>("/simer-map/builder/status").then(r=>setBuilder(r.data)).catch(()=>setBuilder({reachable:false,status:null,latencyMs:0}));},[loadSummary]);
+ useEffect(()=>{void loadSummary();},[loadSummary]);
  useEffect(()=>{const incoming=searchParams.get("context");if(!incoming||autoContextDone.current)return;autoContextDone.current=true;setContext(incoming);setLoading(true);void api.post<{items:Result[]}>("/simer-map/context",{text:incoming,limit:30}).then(r=>{setItems(r.data.items);setMessage(`Investigação sugerida para o atendimento #${searchParams.get("ticket")??""}.`);}).catch(()=>setMessage("Não foi possível analisar o contexto do atendimento.")).finally(()=>setLoading(false));},[searchParams]);
 
  async function search(){if(!query.trim()){setItems([]);return;}setLoading(true);setMessage("");try{const r=await api.get<{items:Result[]}>("/simer-map/search",{params:{q:query.trim()}});setItems(r.data.items);}catch{setMessage("Não foi possível consultar o Mapa SIMER.");}finally{setLoading(false);}}
