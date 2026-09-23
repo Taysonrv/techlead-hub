@@ -26,33 +26,34 @@ function parseMap(xml:string,sourceFile:string){
   return rows;
 }
 function terms(value:string){return [...new Set(value.toLocaleLowerCase("pt-BR").normalize("NFD").replace(/[\u0300-\u036f]/g,"").split(/[^a-z0-9_.]+/).filter(x=>x.length>=4))].slice(0,12);}
+const SIMER_SCOPE_SQL=`LOWER("sourceFile") NOT LIKE '%erpweb%' AND LOWER("sourceFile") NOT LIKE '%essencial%' AND LOWER(path) NOT LIKE '% › erpweb%' AND LOWER(path) NOT LIKE '% › essencial%'`;
 
 export class SimerMapService {
   async summary(){
     const [stats,maps,kinds,links]=await Promise.all([
-      prisma.$queryRaw<Array<{total:bigint;maps:bigint;importedAt:Date|null}>>`SELECT COUNT(*)::bigint total,COUNT(DISTINCT "sourceFile")::bigint maps,MAX("importedAt") "importedAt" FROM "SimerMapNode"`,
-      prisma.$queryRaw<Array<{mapName:string;total:bigint}>>`SELECT "mapName",COUNT(*)::bigint total FROM "SimerMapNode" GROUP BY "mapName" ORDER BY total DESC,"mapName" ASC LIMIT 30`,
-      prisma.$queryRaw<Array<{nodeKind:string;total:bigint}>>`SELECT COALESCE("nodeKind",'outro') "nodeKind",COUNT(*)::bigint total FROM "SimerMapNode" GROUP BY COALESCE("nodeKind",'outro') ORDER BY total DESC LIMIT 12`,
-      prisma.$queryRaw<Array<{total:bigint}>>`SELECT COUNT(*)::bigint total FROM "SimerMapNode" WHERE link IS NOT NULL AND link<>''`,
+      prisma.$queryRaw<Array<{total:bigint;maps:bigint;importedAt:Date|null}>>`SELECT COUNT(*)::bigint total,COUNT(DISTINCT "sourceFile")::bigint maps,MAX("importedAt") "importedAt" FROM "SimerMapNode" WHERE ${SIMER_SCOPE_SQL}`,
+      prisma.$queryRaw<Array<{mapName:string;total:bigint}>>`SELECT "mapName",COUNT(*)::bigint total FROM "SimerMapNode" WHERE ${SIMER_SCOPE_SQL} GROUP BY "mapName" ORDER BY total DESC,"mapName" ASC LIMIT 30`,
+      prisma.$queryRaw<Array<{nodeKind:string;total:bigint}>>`SELECT COALESCE("nodeKind",'outro') "nodeKind",COUNT(*)::bigint total FROM "SimerMapNode" WHERE ${SIMER_SCOPE_SQL} GROUP BY COALESCE("nodeKind",'outro') ORDER BY total DESC LIMIT 12`,
+      prisma.$queryRaw<Array<{total:bigint}>>`SELECT COUNT(*)::bigint total FROM "SimerMapNode" WHERE ${SIMER_SCOPE_SQL} AND link IS NOT NULL AND link<>''`,
     ]);
     return {total:Number(stats[0]?.total??0),maps:Number(stats[0]?.maps??0),links:Number(links[0]?.total??0),importedAt:stats[0]?.importedAt??null,builderApiUrl:process.env.SIMER_BUILDER_API_URL?.trim()||"http://appdev.siagri.com.br:8888",items:maps.map(x=>({mapName:x.mapName,total:Number(x.total)})),kinds:kinds.map(x=>({kind:x.nodeKind,total:Number(x.total)}))};
   }
   async builderStatus(){const url=process.env.SIMER_BUILDER_API_URL?.trim()||"http://appdev.siagri.com.br:8888";const started=Date.now();try{const r=await axios.get(url,{timeout:2500,validateStatus:()=>true});return{url,reachable:true,status:r.status,latencyMs:Date.now()-started};}catch{return{url,reachable:false,status:null,latencyMs:Date.now()-started};}}
   async search(query:string,limit=50){
     const q=query.trim();if(!q)return[];const safe=Math.max(1,Math.min(limit,100));
-    return prisma.$queryRawUnsafe<MapRow[]>(`SELECT id,"sourceFile","mapName","nodeId","nodeText",path,depth,"parentPath","parentNodeId",icon,link,"nodeKind","importedAt" FROM "SimerMapNode" WHERE "nodeText" ILIKE $1 OR path ILIKE $1 OR "mapName" ILIKE $1 OR COALESCE(link,'') ILIKE $1 ORDER BY CASE WHEN LOWER("nodeText")=LOWER($2) THEN 0 WHEN "nodeText" ILIKE $1 THEN 1 WHEN "mapName" ILIKE $1 THEN 2 ELSE 3 END,depth ASC LIMIT $3`,`%${q}%`,q,safe);
+    return prisma.$queryRawUnsafe<MapRow[]>(`SELECT id,"sourceFile","mapName","nodeId","nodeText",path,depth,"parentPath","parentNodeId",icon,link,"nodeKind","importedAt" FROM "SimerMapNode" WHERE ${SIMER_SCOPE_SQL} AND ("nodeText" ILIKE $1 OR path ILIKE $1 OR "mapName" ILIKE $1 OR COALESCE(link,'') ILIKE $1) ORDER BY CASE WHEN LOWER("nodeText")=LOWER($2) THEN 0 WHEN "nodeText" ILIKE $1 THEN 1 WHEN "mapName" ILIKE $1 THEN 2 ELSE 3 END,depth ASC LIMIT $3`,`%${q}%`,q,safe);
   }
   async context(text:string,limit=20){
     const ts=terms(text);if(!ts.length)return[];
-    const rows=await prisma.$queryRawUnsafe<MapRow[]>(`SELECT id,"sourceFile","mapName","nodeId","nodeText",path,depth,"parentPath","parentNodeId",icon,link,"nodeKind","importedAt" FROM "SimerMapNode" WHERE ${ts.map((_,i)=>`("nodeText" ILIKE $${i+1} OR path ILIKE $${i+1})`).join(" OR ")} LIMIT 500`,...ts.map(t=>`%${t}%`));
+    const rows=await prisma.$queryRawUnsafe<MapRow[]>(`SELECT id,"sourceFile","mapName","nodeId","nodeText",path,depth,"parentPath","parentNodeId",icon,link,"nodeKind","importedAt" FROM "SimerMapNode" WHERE ${SIMER_SCOPE_SQL} AND (${ts.map((_,i)=>`("nodeText" ILIKE $${i+1} OR path ILIKE $${i+1})`).join(" OR ")}) LIMIT 500`,...ts.map(t=>`%${t}%`));
     return rows.map(row=>{const hay=`${row.nodeText} ${row.path}`.toLocaleLowerCase("pt-BR").normalize("NFD").replace(/[\u0300-\u036f]/g,"");const matched=ts.filter(t=>hay.includes(t));return{...row,score:matched.length,matchedTerms:matched};}).filter(x=>x.score>0).sort((a,b)=>b.score-a.score||a.depth-b.depth).slice(0,Math.max(1,Math.min(limit,50)));
   }
   async tree(mapName:string){
     const name=mapName.trim(); if(!name)return[];
-    return prisma.$queryRawUnsafe<MapRow[]>(`SELECT id,"sourceFile","mapName","nodeId","nodeText",path,depth,"parentPath","parentNodeId",icon,link,"nodeKind","importedAt" FROM "SimerMapNode" WHERE "mapName"=$1 ORDER BY id ASC`,name);
+    return prisma.$queryRawUnsafe<MapRow[]>(`SELECT id,"sourceFile","mapName","nodeId","nodeText",path,depth,"parentPath","parentNodeId",icon,link,"nodeKind","importedAt" FROM "SimerMapNode" WHERE ${SIMER_SCOPE_SQL} AND "mapName"=$1 ORDER BY id ASC`,name);
   }
   async related(id:number){
-    const rows=await prisma.$queryRawUnsafe<MapRow[]>(`SELECT id,"sourceFile","mapName","nodeId","nodeText",path,depth,"parentPath","parentNodeId",icon,link,"nodeKind","importedAt" FROM "SimerMapNode" WHERE id=$1 OR "parentNodeId"=(SELECT "nodeId" FROM "SimerMapNode" WHERE id=$1) OR "nodeId"=(SELECT "parentNodeId" FROM "SimerMapNode" WHERE id=$1) OR ("sourceFile"=(SELECT "sourceFile" FROM "SimerMapNode" WHERE id=$1) AND link=(SELECT link FROM "SimerMapNode" WHERE id=$1) AND link IS NOT NULL) ORDER BY depth,path LIMIT 100`,id);return rows;
+    const rows=await prisma.$queryRawUnsafe<MapRow[]>(`SELECT id,"sourceFile","mapName","nodeId","nodeText",path,depth,"parentPath","parentNodeId",icon,link,"nodeKind","importedAt" FROM "SimerMapNode" WHERE ${SIMER_SCOPE_SQL} AND (id=$1 OR "parentNodeId"=(SELECT "nodeId" FROM "SimerMapNode" WHERE id=$1) OR "nodeId"=(SELECT "parentNodeId" FROM "SimerMapNode" WHERE id=$1) OR ("sourceFile"=(SELECT "sourceFile" FROM "SimerMapNode" WHERE id=$1) AND link=(SELECT link FROM "SimerMapNode" WHERE id=$1) AND link IS NOT NULL)) ORDER BY depth,path LIMIT 100`,id);return rows;
   }
   async importBatch(files:Array<{sourceFile:string;content:string}>){let nodes=0;const imported=[];for(const file of files){const result=await this.importMap(file.sourceFile,file.content);nodes+=result.total;imported.push(result);}return{files:imported.length,nodes,items:imported};}
   async importMap(sourceFile:string,content:string){
