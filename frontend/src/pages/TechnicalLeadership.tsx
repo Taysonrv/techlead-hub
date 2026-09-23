@@ -114,6 +114,26 @@ function AreaTitle({ title, info, icon }: { title: string; info: string; icon?: 
   </Stack>;
 }
 
+function IndicatorPeriodFilter({ value, onChange }: { value: PeriodPreset; onChange: (value: PeriodPreset) => void }) {
+  return <FormControl size="small" sx={{ minWidth: 126, "& .MuiSelect-select": { py: .65, fontSize: ".76rem", fontWeight: 750 } }}>
+    <Select
+      value={value}
+      onChange={(event) => onChange(event.target.value as PeriodPreset)}
+      onClick={(event) => event.stopPropagation()}
+      aria-label="Período do indicador"
+    >
+      <MenuItem value="7">7 dias</MenuItem>
+      <MenuItem value="30">30 dias</MenuItem>
+      <MenuItem value="60">60 dias</MenuItem>
+      <MenuItem value="90">90 dias</MenuItem>
+      <MenuItem value="month">Este mês</MenuItem>
+      <MenuItem value="semester">Este semestre</MenuItem>
+      <MenuItem value="year">Este ano</MenuItem>
+      <MenuItem value="custom">Personalizado</MenuItem>
+    </Select>
+  </FormControl>;
+}
+
 function Delta({ value }: { value: number | null }) {
   if (value === null) return <Chip size="small" label="Sem base anterior" variant="outlined" />;
   const Icon = value > 0 ? TrendingUpOutlined : TrendingDownOutlined;
@@ -306,7 +326,10 @@ export function TechnicalLeadership() {
 
       <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", xl: "1.55fr 1fr" }, gap: 1.5, mb: 1.5 }}>
         <Card><CardContent>
-          <AreaTitle title="Entradas, resoluções, reaberturas e backlog" info="Evolução diária do fluxo. O backlog histórico é reconstruído pelas datas de criação, resolução, fechamento e cancelamento disponíveis na base." />
+          <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "center", gap: 1 }}>
+            <AreaTitle title="Entradas, resoluções, reaberturas e backlog" info="Evolução diária do fluxo. O backlog histórico é reconstruído pelas datas de criação, resolução, fechamento e cancelamento disponíveis na base." />
+            <IndicatorPeriodFilter value={period} onChange={setPeriod} />
+          </Stack>
           <Box sx={{ height: 330, mt: 1.2 }}><ResponsiveContainer width="100%" height="100%"><LineChart data={data.analytics.daily}>
             <CartesianGrid strokeDasharray="4 5" vertical={false} stroke={mode === "dark" ? "rgba(148,163,184,.18)" : "rgba(15,23,42,.10)"} />
             <XAxis dataKey="date" tickFormatter={(v) => String(v).slice(5)} tick={{ fontSize: 10 }} minTickGap={20} />
@@ -321,7 +344,10 @@ export function TechnicalLeadership() {
         </CardContent></Card>
 
         <Card><CardContent>
-          <AreaTitle title="Aging do backlog" info="Distribui os atendimentos abertos por idade desde a criação para antecipar envelhecimento da fila." />
+          <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "center", gap: 1 }}>
+            <AreaTitle title="Aging do backlog" info="Distribui os atendimentos abertos por idade desde a criação para antecipar envelhecimento da fila." />
+            <IndicatorPeriodFilter value={period} onChange={setPeriod} />
+          </Stack>
           <Box sx={{ height: 330, mt: 1.2 }}><ResponsiveContainer width="100%" height="100%"><BarChart data={data.analytics.aging}>
             <CartesianGrid strokeDasharray="4 5" vertical={false} stroke={mode === "dark" ? "rgba(148,163,184,.18)" : "rgba(15,23,42,.10)"} />
             <XAxis dataKey="label" tick={{ fontSize: 11 }} /><YAxis allowDecimals={false} />
@@ -333,7 +359,10 @@ export function TechnicalLeadership() {
 
       <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "repeat(2,1fr)" }, gap: 1.5, mb: 1.5 }}>
         <Card><CardContent>
-          <AreaTitle title="SLA de solução" info="Versão moderna do indicador de tickets resolvidos por vencimento do Movidesk." />
+          <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "center", gap: 1 }}>
+            <AreaTitle title="SLA de solução" info="Versão moderna do indicador de tickets resolvidos por vencimento do Movidesk." />
+            <IndicatorPeriodFilter value={period} onChange={setPeriod} />
+          </Stack>
           <Box sx={{ height: 280 }}><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={[
             { name: "No prazo", value: data.analytics.resolutionSla.within },
             { name: "Fora do prazo", value: data.analytics.resolutionSla.outside },
@@ -343,7 +372,10 @@ export function TechnicalLeadership() {
           </Pie><ChartTooltip /><Legend /></PieChart></ResponsiveContainer></Box>
         </CardContent></Card>
         <Card><CardContent>
-          <AreaTitle title="SLA de primeira resposta" info="Consolida o indicador de primeira resposta, preservando também registros sem medição." />
+          <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "center", gap: 1 }}>
+            <AreaTitle title="SLA de primeira resposta" info="Consolida o indicador de primeira resposta, preservando também registros sem medição." />
+            <IndicatorPeriodFilter value={period} onChange={setPeriod} />
+          </Stack>
           <Box sx={{ height: 280 }}><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={[
             { name: "No prazo", value: data.analytics.responseSla.within },
             { name: "Fora do prazo", value: data.analytics.responseSla.outside },
@@ -356,7 +388,10 @@ export function TechnicalLeadership() {
 
       <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", xl: "repeat(2,1fr)" }, gap: 1.5, mb: 1.5 }}>
         <Card><CardContent>
-          <AreaTitle title="Resolução por analista" info="Volume resolvido, reaberto e situação de SLA por analista; substitui a leitura tabular isolada por uma visão comparável." />
+          <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "center", gap: 1 }}>
+            <AreaTitle title="Resolução por analista" info="Volume resolvido, reaberto e situação de SLA por analista; substitui a leitura tabular isolada por uma visão comparável." />
+            <IndicatorPeriodFilter value={period} onChange={setPeriod} />
+          </Stack>
           <Box sx={{ height: 340, mt: 1 }}><ResponsiveContainer width="100%" height="100%"><BarChart data={data.analytics.byOwner}>
             <CartesianGrid strokeDasharray="4 5" vertical={false} /><XAxis dataKey="analyst" tick={{ fontSize: 9 }} interval={0} angle={-15} textAnchor="end" height={62} /><YAxis allowDecimals={false} /><ChartTooltip /><Legend />
             <Bar dataKey="resolved" name="Resolvidos" fill={aliareColors.info} radius={[5,5,0,0]} />
@@ -365,7 +400,10 @@ export function TechnicalLeadership() {
           </BarChart></ResponsiveContainer></Box>
         </CardContent></Card>
         <Card><CardContent>
-          <AreaTitle title="Primeira resposta por analista" info="Compara volume de respostas dentro, fora e sem medição de SLA por analista." />
+          <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "center", gap: 1 }}>
+            <AreaTitle title="Primeira resposta por analista" info="Compara volume de respostas dentro, fora e sem medição de SLA por analista." />
+            <IndicatorPeriodFilter value={period} onChange={setPeriod} />
+          </Stack>
           <Box sx={{ height: 340, mt: 1 }}><ResponsiveContainer width="100%" height="100%"><BarChart data={data.analytics.responseByOwner}>
             <CartesianGrid strokeDasharray="4 5" vertical={false} /><XAxis dataKey="analyst" tick={{ fontSize: 9 }} interval={0} angle={-15} textAnchor="end" height={62} /><YAxis allowDecimals={false} /><ChartTooltip /><Legend />
             <Bar dataKey="within" name="No prazo" stackId="sla" fill={aliareColors.green} />
@@ -381,7 +419,10 @@ export function TechnicalLeadership() {
           ["Clientes no período", data.analytics.clientDistribution, aliareColors.cyan],
           ["Solicitantes / contatos", data.analytics.contactDistribution, aliareColors.green],
         ].map(([title, rows, accent]) => <Card key={String(title)}><CardContent>
-          <Typography sx={{ fontWeight: 850 }}>{String(title)}</Typography>
+          <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "center", gap: 1 }}>
+            <Typography sx={{ fontWeight: 850 }}>{String(title)}</Typography>
+            <IndicatorPeriodFilter value={period} onChange={setPeriod} />
+          </Stack>
           <Stack spacing={.8} sx={{ mt: 1.2 }}>{(rows as Array<{label:string;total:number}>).slice(0,8).map((row) => <Box key={row.label} sx={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 1, alignItems: "center" }}><Box sx={{ minWidth: 0 }}><Typography variant="body2" noWrap>{row.label}</Typography><Box sx={{ height: 5, borderRadius: 9, bgcolor: "action.hover", mt: .35, overflow: "hidden" }}><Box sx={{ width: `${Math.max(6, row.total / Math.max(...(rows as Array<{total:number}>).map((r) => r.total), 1) * 100)}%`, height: "100%", bgcolor: String(accent), borderRadius: 9 }} /></Box></Box><Typography variant="body2" sx={{ fontWeight: 850 }}>{row.total}</Typography></Box>)}</Stack>
         </CardContent></Card>)}
       </Box>
