@@ -249,10 +249,13 @@ export async function ensureApplicationSchema() {
       "id" SERIAL PRIMARY KEY,
       "sourceFile" VARCHAR(500) NOT NULL,
       "name" VARCHAR(300) NOT NULL,
+      "folderPath" VARCHAR(1000),
       "importedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
       CONSTRAINT "SystemRuleProcess_source_name_key" UNIQUE ("sourceFile","name")
     )
   `);
+  await prisma.$executeRawUnsafe(`ALTER TABLE "SystemRuleProcess" ADD COLUMN IF NOT EXISTS "folderPath" VARCHAR(1000)`);
+  await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "SystemRuleProcess_folderPath_idx" ON "SystemRuleProcess" ("folderPath")`);
   await prisma.$executeRawUnsafe(`
     CREATE TABLE IF NOT EXISTS "SystemRuleNode" (
       "id" SERIAL PRIMARY KEY,
