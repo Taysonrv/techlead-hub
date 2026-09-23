@@ -71,6 +71,15 @@ export class SimerMapService {
     WHERE ${SIMER_SCOPE_SQL} ORDER BY depth,id LIMIT 180`,source,focusId,focus.parentNodeId);
     return rows;
   }
+  async resolveContainer(id:number){
+    const rows=await prisma.$queryRawUnsafe<MapRow[]>(`SELECT id,"sourceFile","mapName","nodeId","nodeText",path,depth,"parentPath","parentNodeId",icon,link,"nodeKind","importedAt" FROM "SimerMapNode" WHERE id=$1 AND ${SIMER_SCOPE_SQL} LIMIT 1`,id);
+    const current=rows[0]; if(!current)return null;
+    const match=current.nodeText.match(/\$?container([A-Za-z0-9_]+)/i);
+    if(!match?.[1])return null;
+    const container=`Container${match[1]}`;
+    const candidates=await prisma.$queryRawUnsafe<MapRow[]>(`SELECT id,"sourceFile","mapName","nodeId","nodeText",path,depth,"parentPath","parentNodeId",icon,link,"nodeKind","importedAt" FROM "SimerMapNode" WHERE ${SIMER_SCOPE_SQL} AND (LOWER("mapName")=LOWER($1) OR LOWER("nodeText")=LOWER($1) OR LOWER("sourceFile") LIKE LOWER($2)) ORDER BY CASE WHEN LOWER("mapName")=LOWER($1) THEN 0 WHEN LOWER("nodeText")=LOWER($1) THEN 1 ELSE 2 END,depth ASC LIMIT 1`,container,`%${container}.mm`);
+    return candidates[0]??null;
+  }
   async followLink(id:number){
     const rows=await prisma.$queryRawUnsafe<MapRow[]>(`SELECT id,"sourceFile","mapName","nodeId","nodeText",path,depth,"parentPath","parentNodeId",icon,link,"nodeKind","importedAt" FROM "SimerMapNode" WHERE id=$1 LIMIT 1`,id);
     const current=rows[0]; if(!current?.link)return null;
