@@ -9,11 +9,11 @@ export type ReleaseNote = {
   items: readonly ReleaseNoteItem[];
 };
 
-export const FALLBACK_APP_VERSION = "1.0.0-rc.9";
+export const FALLBACK_APP_VERSION = "1.0.0-rc.14";
 
 export const releaseNotes: Record<string, ReleaseNote> = {
-  "1.0.0-rc.9": {
-    version: "1.0.0-rc.9",
+  "1.0.0-rc.14": {
+    version: "1.0.0-rc.14",
     title: "Mapa SIMER, experiência unificada e Desktop mais leve",
     items: [
       { title: "Mapa e Fluxo SIMER", description: "Nova experiência integrada para navegar pela árvore do sistema, regras Bizagi, mapas técnicos, rotinas relacionadas e investigação contextual." },
