@@ -243,4 +243,42 @@ export async function ensureApplicationSchema() {
   await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "SimerMapNode_nodeId_idx" ON "SimerMapNode" ("nodeId")`);
   await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "SimerMapNode_kind_idx" ON "SimerMapNode" ("nodeKind")`);
   await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "SimerMapNode_link_idx" ON "SimerMapNode" ("link")`);
+
+  await prisma.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS "SystemRuleProcess" (
+      "id" SERIAL PRIMARY KEY,
+      "sourceFile" VARCHAR(500) NOT NULL,
+      "name" VARCHAR(300) NOT NULL,
+      "importedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      CONSTRAINT "SystemRuleProcess_source_name_key" UNIQUE ("sourceFile","name")
+    )
+  `);
+  await prisma.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS "SystemRuleNode" (
+      "id" SERIAL PRIMARY KEY,
+      "processId" INTEGER NOT NULL REFERENCES "SystemRuleProcess"("id") ON DELETE CASCADE,
+      "externalId" VARCHAR(120) NOT NULL,
+      "name" TEXT NOT NULL,
+      "kind" VARCHAR(40) NOT NULL,
+      "documentation" TEXT,
+      "lane" VARCHAR(250),
+      "x" DOUBLE PRECISION,
+      "y" DOUBLE PRECISION,
+      CONSTRAINT "SystemRuleNode_process_external_key" UNIQUE ("processId","externalId")
+    )
+  `);
+  await prisma.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS "SystemRuleTransition" (
+      "id" SERIAL PRIMARY KEY,
+      "processId" INTEGER NOT NULL REFERENCES "SystemRuleProcess"("id") ON DELETE CASCADE,
+      "externalId" VARCHAR(120) NOT NULL,
+      "fromId" VARCHAR(120) NOT NULL,
+      "toId" VARCHAR(120) NOT NULL,
+      "name" TEXT,
+      "condition" TEXT
+    )
+  `);
+  await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "SystemRuleNode_name_idx" ON "SystemRuleNode" (name)`);
+  await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "SystemRuleNode_process_idx" ON "SystemRuleNode" ("processId")`);
+  await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "SystemRuleTransition_process_idx" ON "SystemRuleTransition" ("processId")`);
 }
