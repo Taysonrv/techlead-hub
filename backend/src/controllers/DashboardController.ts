@@ -848,6 +848,83 @@ export class DashboardController {
   }
 
   /* =========================================================
+     PENDÊNCIAS / PONTOS DE ATENÇÃO - PAYLOAD ENXUTO
+
+     A tela de Pendências não precisa carregar todo o histórico de tickets.
+     Restringimos no banco aos atendimentos abertos e retornamos somente
+     os campos utilizados pela análise de risco.
+  ========================================================= */
+
+  async pendingTickets(
+    _req: Request,
+    res: Response
+  ) {
+    try {
+      const snapshotWhere = await getLatestSnapshotWhere();
+      const tickets = await prisma.ticket.findMany({
+        where: {
+          ...snapshotWhere,
+          baseStatus: { in: ["New", "InAttendance", "Stopped"] },
+        },
+        select: {
+          id: true, movideskId: true, protocol: true, subject: true,
+          client: true, contact: true, owner: true, ownerTeam: true,
+          category: true, cause: true, urgency: true, status: true,
+          baseStatus: true, justification: true, service: true,
+          department: true, createdDate: true, dueDate: true,
+          firstResponseDueDate: true, firstResponseDate: true,
+          resolvedDate: true, closedDate: true, lifetimeMinutes: true,
+          stoppedMinutes: true, taskNumber: true, taskStatus: true,
+          deliveredVersion: true,
+        },
+        orderBy: { createdDate: "asc" },
+      });
+
+      const taskNumbers = Array.from(new Set(
+        tickets.map((ticket) => ticket.taskNumber)
+          .filter((value): value is number => typeof value === "number" && Number.isInteger(value) && value > 0)
+      ));
+      const movideskIds = tickets.map((ticket) => ticket.movideskId);
+
+      const directAzure = taskNumbers.length || movideskIds.length
+        ? await prisma.azureWorkItem.findMany({
+            where: {
+              OR: [
+                ...(taskNumbers.length ? [{ id: { in: taskNumbers } }] : []),
+                ...(movideskIds.length ? [{ movideskTicket: { in: movideskIds } }] : []),
+              ],
+            },
+            select: {
+              id: true, workItemType: true, title: true, state: true,
+              assignedToName: true, client: true, criticality: true,
+              module: true, process: true, movideskTicket: true,
+              deliveredVersion: true, prioritized: true, blockedProcess: true,
+              azureChangedAt: true, stateChangedAt: true, syncedAt: true,
+            },
+          })
+        : [];
+
+      const byId = new Map(directAzure.map((item) => [item.id, item]));
+      const byMovidesk = new Map<number, (typeof directAzure)[number]>();
+      directAzure.forEach((item) => {
+        if (item.movideskTicket) byMovidesk.set(item.movideskTicket, item);
+      });
+
+      return res.json(tickets.map((ticket) => ({
+        ...ticket,
+        team: ticket.ownerTeam,
+        azureWorkItem:
+          (ticket.taskNumber ? byId.get(ticket.taskNumber) : null) ??
+          byMovidesk.get(ticket.movideskId) ??
+          null,
+      })));
+    } catch (error) {
+      console.error("Erro ao buscar pendências:", error);
+      return res.status(500).json({ error: "Não foi possível buscar as pendências." });
+    }
+  }
+
+  /* =========================================================
      TODOS OS TICKETS
 
      id         = ID técnico do PostgreSQL
