@@ -64,14 +64,15 @@ app.use(
 
 app.use(
   express.json({
-    limit: "10mb",
+    // Publicações Web do Bizagi podem ultrapassar 100 MB em ZIP (base64 aumenta ~33%).
+    limit: "200mb",
   })
 );
 
 app.use(
   express.urlencoded({
     extended: true,
-    limit: "10mb",
+    limit: "200mb",
   })
 );
 
