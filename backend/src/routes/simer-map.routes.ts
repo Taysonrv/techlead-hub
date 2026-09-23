@@ -6,6 +6,7 @@ simerMapRoutes.get("/summary", controller.summary);
 simerMapRoutes.get("/search", controller.search);
 simerMapRoutes.get("/tree", controller.tree);
 simerMapRoutes.get("/builder/status", controller.builderStatus);
+simerMapRoutes.get("/nodes/:id/follow", controller.followLink);
 simerMapRoutes.get("/nodes/:id/related", controller.related);
 simerMapRoutes.post("/context", controller.context);
 simerMapRoutes.post("/import/batch", controller.importBatch);
