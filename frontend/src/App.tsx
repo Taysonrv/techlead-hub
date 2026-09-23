@@ -25,6 +25,7 @@ import {
   Sidebar,
 } from "./components/Sidebar";
 import { GlobalTopBar } from "./components/GlobalTopBar";
+import { ReleaseHighlights } from "./components/ReleaseHighlights";
 
 import {
   ProtectedRoute,
@@ -105,6 +106,7 @@ function AuthenticatedLayout({
           }}
         >
           <Sidebar />
+          <ReleaseHighlights />
 
           <Box
             component="main"
