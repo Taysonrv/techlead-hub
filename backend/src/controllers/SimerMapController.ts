@@ -7,6 +7,7 @@ export class SimerMapController {
   summary = async (_req: AuthenticatedRequest, res: Response) => res.json(await this.service.summary());
   search = async (req: AuthenticatedRequest, res: Response) => res.json({ items: await this.service.search(String(req.query.q ?? ""), Number(req.query.limit ?? 50)) });
   context = async (req: AuthenticatedRequest, res: Response) => res.json({ items: await this.service.context(String(req.body?.text ?? ""), Number(req.body?.limit ?? 20)) });
+  resolveContainer = async (req: AuthenticatedRequest, res: Response) => res.json({ item: await this.service.resolveContainer(Number(req.params.id)) });
   followLink = async (req: AuthenticatedRequest, res: Response) => res.json({ item: await this.service.followLink(Number(req.params.id)) });
   related = async (req: AuthenticatedRequest, res: Response) => res.json({ items: await this.service.related(Number(req.params.id)) });
   tree = async (req: AuthenticatedRequest, res: Response) => res.json({ items: await this.service.tree(String(req.query.sourceFile ?? ""), Number(req.query.focusId ?? 0) || undefined) });
