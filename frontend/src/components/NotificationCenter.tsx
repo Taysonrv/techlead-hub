@@ -245,8 +245,9 @@ export function NotificationCenter() {
           border: "1px solid",
           borderColor: "divider",
           backgroundColor: "background.paper",
+          borderRadius: "50%",
           boxShadow: "0 2px 10px rgba(0,0,0,0.06)",
-          "&:hover": { backgroundColor: "background.paper" },
+          "&:hover": { backgroundColor: "background.paper", borderColor: "rgba(24,199,122,.45)" },
         }}
       >
         <Badge badgeContent={unread.length} color="error" max={99}>
