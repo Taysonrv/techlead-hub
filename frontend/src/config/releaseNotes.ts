@@ -24,6 +24,8 @@ export const releaseNotes: Record<string, ReleaseNote> = {
       { title: "Aging e antecipação de risco", description: "O backlog é segmentado por idade, destacando atendimentos com mais de 15 dias e permitindo abrir diretamente as evidências." },
       { title: "Indicadores acionáveis", description: "Cards de backlog, SLA, bloqueios, reaberturas e aging abrem os atendimentos relacionados para investigação, reduzindo a distância entre indicador e ação." },
       { title: "Inteligência além do Movidesk", description: "Taxa de reabertura, resolução no primeiro contato e balanço entre entradas e resoluções complementam os relatórios tradicionais com sinais de saúde operacional." },
+      { title: "Cockpit como visão inicial", description: "A Central passa a abrir diretamente nos indicadores operacionais, priorizando leitura executiva e investigação antes das análises especializadas." },
+      { title: "Exportação das evidências", description: "Listagens abertas a partir dos indicadores da liderança podem ser exportadas para Excel para conciliação, acompanhamento e comparação com o Movidesk." },
     ],
   },
   "1.0.0-rc.14": {
