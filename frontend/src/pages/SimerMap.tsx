@@ -1,5 +1,5 @@
 import { Alert, Box, Button, Card, CardContent, Chip, CircularProgress, Divider, InputAdornment, LinearProgress, Stack, Tab, Tabs, TextField, Typography } from "@mui/material";
-import { AccountTreeOutlined, SearchOutlined, UploadFileOutlined, HubOutlined, PsychologyOutlined, FolderOpenOutlined, DashboardOutlined, RuleOutlined, SchemaOutlined, AltRouteOutlined, AssessmentOutlined } from "@mui/icons-material";
+import { AccountTreeOutlined, SearchOutlined, UploadFileOutlined, HubOutlined, PsychologyOutlined, FolderOpenOutlined, RuleOutlined, AltRouteOutlined, AssessmentOutlined } from "@mui/icons-material";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { SimerMapTree, type SimerTreeNode } from "../components/SimerMapTree";
