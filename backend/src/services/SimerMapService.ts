@@ -46,7 +46,7 @@ export class SimerMapService {
   async context(text:string,limit=20){
     const ts=terms(text);if(!ts.length)return[];
     const rows=await prisma.$queryRawUnsafe<MapRow[]>(`SELECT id,"sourceFile","mapName","nodeId","nodeText",path,depth,"parentPath","parentNodeId",icon,link,"nodeKind","importedAt" FROM "SimerMapNode" WHERE ${SIMER_SCOPE_SQL} AND (${ts.map((_,i)=>`("nodeText" ILIKE $${i+1} OR path ILIKE $${i+1})`).join(" OR ")}) LIMIT 500`,...ts.map(t=>`%${t}%`));
-    return rows.map(row=>{const hay=`${row.nodeText} ${row.path}`.toLocaleLowerCase("pt-BR").normalize("NFD").replace(/[\u0300-\u036f]/g,"");const matched=ts.filter(t=>hay.includes(t));return{...row,score:matched.length,matchedTerms:matched};}).filter(x=>x.score>0).sort((a,b)=>b.score-a.score||a.depth-b.depth).slice(0,Math.max(1,Math.min(limit,50)));
+    return rows.map(row=>{const hay=`${row.nodeText} ${row.path} ${row.mapName}`.toLocaleLowerCase("pt-BR").normalize("NFD").replace(/[\u0300-\u036f]/g,"");const node=row.nodeText.toLocaleLowerCase("pt-BR").normalize("NFD").replace(/[\u0300-\u036f]/g,"");const matched=ts.filter(t=>hay.includes(t));const nodeMatches=ts.filter(t=>node.includes(t)).length;const coverage=matched.length/ts.length;const score=(matched.length*10)+(nodeMatches*4)+(coverage===1?25:0)+Math.min(row.depth,8);return{...row,score,matchedTerms:matched,coverage};}).filter(x=>x.matchedTerms.length>0).sort((a,b)=>b.score-a.score||b.depth-a.depth).slice(0,Math.max(1,Math.min(limit,50)));
   }
   async tree(sourceFile:string){
     const source=sourceFile.trim(); if(!source)return[];
