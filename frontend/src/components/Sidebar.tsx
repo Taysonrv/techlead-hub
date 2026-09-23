@@ -155,11 +155,13 @@ export function Sidebar() {
     useState<HTMLElement | null>(null);
 
   const [openSections, setOpenSections] = useState<Record<"cadastros" | "movimentos" | "analises" | "development" | "gestao", boolean>>(() => ({
-    cadastros: false,
-    movimentos: false,
-    analises: false,
-    development: false,
-    gestao: false,
+    // As rotinas da Central também precisam ficar imediatamente visíveis no
+    // sidebar. O usuário ainda pode recolher qualquer grupo manualmente.
+    cadastros: true,
+    movimentos: true,
+    analises: true,
+    development: true,
+    gestao: true,
   }));
 
   const profileMenuOpen =
