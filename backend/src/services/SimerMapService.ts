@@ -45,12 +45,29 @@ export class SimerMapService {
   }
   async context(text:string,limit=20){
     const ts=terms(text);if(!ts.length)return[];
-    const rows=await prisma.$queryRawUnsafe<MapRow[]>(`SELECT id,"sourceFile","mapName","nodeId","nodeText",path,depth,"parentPath","parentNodeId",icon,link,"nodeKind","importedAt" FROM "SimerMapNode" WHERE ${SIMER_SCOPE_SQL} AND (${ts.map((_,i)=>`("nodeText" ILIKE $${i+1} OR path ILIKE $${i+1})`).join(" OR ")}) LIMIT 500`,...ts.map(t=>`%${t}%`));
-    return rows.map(row=>{const hay=`${row.nodeText} ${row.path} ${row.mapName}`.toLocaleLowerCase("pt-BR").normalize("NFD").replace(/[\u0300-\u036f]/g,"");const node=row.nodeText.toLocaleLowerCase("pt-BR").normalize("NFD").replace(/[\u0300-\u036f]/g,"");const matched=ts.filter(t=>hay.includes(t));const nodeMatches=ts.filter(t=>node.includes(t)).length;const coverage=matched.length/ts.length;const score=(matched.length*10)+(nodeMatches*4)+(coverage===1?25:0)+Math.min(row.depth,8);return{...row,score,matchedTerms:matched,coverage};}).filter(x=>x.matchedTerms.length>0).sort((a,b)=>b.score-a.score||b.depth-a.depth).slice(0,Math.max(1,Math.min(limit,50)));
+    const rows=await prisma.$queryRawUnsafe<MapRow[]>(`SELECT id,"sourceFile","mapName","nodeId","nodeText",path,depth,"parentPath","parentNodeId",icon,link,"nodeKind","importedAt" FROM "SimerMapNode" WHERE ${SIMER_SCOPE_SQL} AND (${ts.map((_,i)=>`("nodeText" ILIKE $${i+1} OR path ILIKE $${i+1} OR "mapName" ILIKE $${i+1})`).join(" OR ")}) LIMIT 900`,...ts.map(t=>`%${t}%`));
+    const links=await prisma.$queryRawUnsafe<MapRow[]>(`SELECT id,"sourceFile","mapName","nodeId","nodeText",path,depth,"parentPath","parentNodeId",icon,link,"nodeKind","importedAt" FROM "SimerMapNode" WHERE ${SIMER_SCOPE_SQL} AND link IS NOT NULL AND link<>'' LIMIT 2500`);
+    const linkedTerms=new Map<string,Set<string>>();
+    for(const link of links){const hay=`${link.nodeText} ${link.path} ${link.mapName}`.toLocaleLowerCase("pt-BR").normalize("NFD").replace(/[\u0300-\u036f]/g,"");const inherited=ts.filter(t=>hay.includes(t));if(!inherited.length)continue;const raw=(link.link??"").replace(/\\/g,"/").replace(/^file:\/\//i,"").split("#")[0]??"";let decoded="";try{decoded=decodeURIComponent(raw).replace(/^\.\//,"");}catch{decoded=raw.replace(/^\.\//,"");}const base=link.sourceFile.replace(/\\/g,"/").split("/").slice(0,-1).join("/");const target=path.posix.normalize(path.posix.join(base,decoded)).toLowerCase();const name=path.posix.basename(decoded).replace(/\.mm$/i,"").toLowerCase();for(const key of [target,name]){const set=linkedTerms.get(key)??new Set<string>();inherited.forEach(t=>set.add(t));linkedTerms.set(key,set);}}
+    return rows.map(row=>{const norm=(v:string)=>v.toLocaleLowerCase("pt-BR").normalize("NFD").replace(/[\u0300-\u036f]/g,"");const hay=norm(`${row.nodeText} ${row.path} ${row.mapName}`);const node=norm(row.nodeText);const direct=ts.filter(t=>hay.includes(t));const inherited=linkedTerms.get(row.sourceFile.replace(/\\/g,"/").toLowerCase())??linkedTerms.get(row.mapName.toLowerCase())??new Set<string>();const matched=[...new Set([...direct,...inherited])];const nodeMatches=ts.filter(t=>node.includes(t)).length;const coverage=matched.length/ts.length;const linkBonus=[...inherited].filter(t=>!direct.includes(t)).length*18;const score=(matched.length*10)+(nodeMatches*5)+(coverage===1?45:0)+linkBonus+Math.min(row.depth,10);return{...row,score,matchedTerms:matched,coverage};}).filter(x=>x.matchedTerms.length>0).sort((a,b)=>b.score-a.score||b.depth-a.depth).slice(0,Math.max(1,Math.min(limit,50)));
   }
-  async tree(sourceFile:string){
+  async tree(sourceFile:string,focusId?:number){
     const source=sourceFile.trim(); if(!source)return[];
-    return prisma.$queryRawUnsafe<MapRow[]>(`SELECT id,"sourceFile","mapName","nodeId","nodeText",path,depth,"parentPath","parentNodeId",icon,link,"nodeKind","importedAt" FROM "SimerMapNode" WHERE ${SIMER_SCOPE_SQL} AND "sourceFile"=$1 ORDER BY id ASC LIMIT 5000`,source);
+    if(!focusId)return prisma.$queryRawUnsafe<MapRow[]>(`SELECT id,"sourceFile","mapName","nodeId","nodeText",path,depth,"parentPath","parentNodeId",icon,link,"nodeKind","importedAt" FROM "SimerMapNode" WHERE ${SIMER_SCOPE_SQL} AND "sourceFile"=$1 ORDER BY id ASC LIMIT 1200`,source);
+    const focusRows=await prisma.$queryRawUnsafe<MapRow[]>(`SELECT id,"sourceFile","mapName","nodeId","nodeText",path,depth,"parentPath","parentNodeId",icon,link,"nodeKind","importedAt" FROM "SimerMapNode" WHERE ${SIMER_SCOPE_SQL} AND "sourceFile"=$1 AND id=$2 LIMIT 1`,source,focusId);
+    const focus=focusRows[0]; if(!focus)return[];
+    const rows=await prisma.$queryRawUnsafe<MapRow[]>(`WITH RECURSIVE ancestors AS (
+      SELECT * FROM "SimerMapNode" WHERE id=$2 AND "sourceFile"=$1
+      UNION ALL SELECT p.* FROM "SimerMapNode" p JOIN ancestors a ON a."parentNodeId"=p."nodeId" AND p."sourceFile"=a."sourceFile"
+    ), descendants AS (
+      SELECT * FROM "SimerMapNode" WHERE id=$2 AND "sourceFile"=$1
+      UNION ALL SELECT c.* FROM "SimerMapNode" c JOIN descendants d ON c."parentNodeId"=d."nodeId" AND c."sourceFile"=d."sourceFile" WHERE c.depth <= $3
+    ), siblings AS (
+      SELECT s.* FROM "SimerMapNode" s WHERE s."sourceFile"=$1 AND s."parentNodeId" IS NOT DISTINCT FROM $4
+    )
+    SELECT DISTINCT id,"sourceFile","mapName","nodeId","nodeText",path,depth,"parentPath","parentNodeId",icon,link,"nodeKind","importedAt" FROM (SELECT * FROM ancestors UNION ALL SELECT * FROM descendants UNION ALL SELECT * FROM siblings) scoped
+    WHERE ${SIMER_SCOPE_SQL} ORDER BY depth,id LIMIT 700`,source,focusId,focus.depth+3,focus.parentNodeId);
+    return rows;
   }
   async followLink(id:number){
     const rows=await prisma.$queryRawUnsafe<MapRow[]>(`SELECT id,"sourceFile","mapName","nodeId","nodeText",path,depth,"parentPath","parentNodeId",icon,link,"nodeKind","importedAt" FROM "SimerMapNode" WHERE id=$1 LIMIT 1`,id);
