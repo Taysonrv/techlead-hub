@@ -157,6 +157,28 @@ export function TechnicalLeadership() {
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState("");
   const [drawer, setDrawer] = useState<DrawerState>(null);
+  const [hiddenLeadershipSeries, setHiddenLeadershipSeries] = useState<Record<string, Set<string>>>({});
+
+  const toggleLeadershipSeries = (chart: string, key: string, total: number) => {
+    setHiddenLeadershipSeries((current) => {
+      const hidden = new Set(current[chart] ?? []);
+      if (hidden.has(key)) hidden.delete(key);
+      else if (total - hidden.size > 1) hidden.add(key);
+      return { ...current, [chart]: hidden };
+    });
+  };
+  const isLeadershipSeriesVisible = (chart: string, key: string) => !(hiddenLeadershipSeries[chart]?.has(key));
+  const interactiveLegend = (chart: string, total: number) => ({
+    onClick: (entry: { dataKey?: string | number; value?: string | number }) => {
+      const key = String(entry.dataKey ?? entry.value ?? "");
+      if (key) toggleLeadershipSeries(chart, key, total);
+    },
+    formatter: (value: string | number, entry: { dataKey?: string | number; value?: string | number }) => {
+      const key = String(entry.dataKey ?? entry.value ?? value);
+      const active = isLeadershipSeriesVisible(chart, key);
+      return <span style={{ opacity: active ? 1 : .38, textDecoration: active ? "none" : "line-through", cursor: "pointer" }}>{String(value)}</span>;
+    },
+  });
 
   useEffect(() => {
     let active = true;
@@ -335,11 +357,11 @@ export function TechnicalLeadership() {
             <XAxis dataKey="date" tickFormatter={(v) => String(v).slice(5)} tick={{ fontSize: 10 }} minTickGap={20} />
             <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
             <ChartTooltip contentStyle={{ borderRadius: 12, background: mode === "dark" ? "#0E2338" : "#fff" }} />
-            <Legend />
-            <Line type="monotone" dataKey="opened" name="Abertos" stroke={aliareColors.info} strokeWidth={2.4} dot={false} />
-            <Line type="monotone" dataKey="resolved" name="Resolvidos" stroke={aliareColors.green} strokeWidth={2.4} dot={false} />
-            <Line type="monotone" dataKey="reopened" name="Reabertos" stroke={aliareColors.warning} strokeWidth={2} dot={false} />
-            <Line type="monotone" dataKey="pending" name="Pendentes" stroke={aliareColors.purple} strokeWidth={2.4} dot={false} />
+            <Legend {...interactiveLegend("dailyFlow", 4)} />
+            {isLeadershipSeriesVisible("dailyFlow", "opened") && <Line type="monotone" dataKey="opened" name="Abertos" stroke={aliareColors.info} strokeWidth={2.4} dot={false} />}
+            {isLeadershipSeriesVisible("dailyFlow", "resolved") && <Line type="monotone" dataKey="resolved" name="Resolvidos" stroke={aliareColors.green} strokeWidth={2.4} dot={false} />}
+            {isLeadershipSeriesVisible("dailyFlow", "reopened") && <Line type="monotone" dataKey="reopened" name="Reabertos" stroke={aliareColors.warning} strokeWidth={2} dot={false} />}
+            {isLeadershipSeriesVisible("dailyFlow", "pending") && <Line type="monotone" dataKey="pending" name="Pendentes" stroke={aliareColors.purple} strokeWidth={2.4} dot={false} />}
           </LineChart></ResponsiveContainer></Box>
         </CardContent></Card>
 
@@ -364,12 +386,16 @@ export function TechnicalLeadership() {
             <IndicatorPeriodFilter value={period} onChange={setPeriod} />
           </Stack>
           <Box sx={{ height: 280 }}><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={[
-            { name: "No prazo", value: data.analytics.resolutionSla.within },
-            { name: "Fora do prazo", value: data.analytics.resolutionSla.outside },
-            { name: "Sem medição", value: data.analytics.resolutionSla.unmeasured },
-          ]} dataKey="value" nameKey="name" innerRadius={62} outerRadius={92} paddingAngle={3}>
-            {[aliareColors.green, aliareColors.error, aliareColors.info].map((fill) => <Cell key={fill} fill={fill} />)}
-          </Pie><ChartTooltip /><Legend /></PieChart></ResponsiveContainer></Box>
+            { name: "No prazo", value: data.analytics.resolutionSla.within, fill: aliareColors.green },
+            { name: "Fora do prazo", value: data.analytics.resolutionSla.outside, fill: aliareColors.error },
+            { name: "Sem medição", value: data.analytics.resolutionSla.unmeasured, fill: aliareColors.info },
+          ].filter((item) => isLeadershipSeriesVisible("resolutionSla", item.name))} dataKey="value" nameKey="name" innerRadius={62} outerRadius={92} paddingAngle={3}>
+            {[
+              { name: "No prazo", fill: aliareColors.green },
+              { name: "Fora do prazo", fill: aliareColors.error },
+              { name: "Sem medição", fill: aliareColors.info },
+            ].filter((item) => isLeadershipSeriesVisible("resolutionSla", item.name)).map((item) => <Cell key={item.name} fill={item.fill} />)}
+          </Pie><ChartTooltip /><Legend {...interactiveLegend("resolutionSla", 3)} /></PieChart></ResponsiveContainer></Box>
         </CardContent></Card>
         <Card><CardContent>
           <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "center", gap: 1 }}>
@@ -377,12 +403,16 @@ export function TechnicalLeadership() {
             <IndicatorPeriodFilter value={period} onChange={setPeriod} />
           </Stack>
           <Box sx={{ height: 280 }}><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={[
-            { name: "No prazo", value: data.analytics.responseSla.within },
-            { name: "Fora do prazo", value: data.analytics.responseSla.outside },
-            { name: "Sem medição", value: data.analytics.responseSla.unmeasured },
-          ]} dataKey="value" nameKey="name" innerRadius={62} outerRadius={92} paddingAngle={3}>
-            {[aliareColors.green, aliareColors.error, aliareColors.info].map((fill) => <Cell key={fill} fill={fill} />)}
-          </Pie><ChartTooltip /><Legend /></PieChart></ResponsiveContainer></Box>
+            { name: "No prazo", value: data.analytics.responseSla.within, fill: aliareColors.green },
+            { name: "Fora do prazo", value: data.analytics.responseSla.outside, fill: aliareColors.error },
+            { name: "Sem medição", value: data.analytics.responseSla.unmeasured, fill: aliareColors.info },
+          ].filter((item) => isLeadershipSeriesVisible("responseSla", item.name))} dataKey="value" nameKey="name" innerRadius={62} outerRadius={92} paddingAngle={3}>
+            {[
+              { name: "No prazo", fill: aliareColors.green },
+              { name: "Fora do prazo", fill: aliareColors.error },
+              { name: "Sem medição", fill: aliareColors.info },
+            ].filter((item) => isLeadershipSeriesVisible("responseSla", item.name)).map((item) => <Cell key={item.name} fill={item.fill} />)}
+          </Pie><ChartTooltip /><Legend {...interactiveLegend("responseSla", 3)} /></PieChart></ResponsiveContainer></Box>
         </CardContent></Card>
       </Box>
 
@@ -393,10 +423,10 @@ export function TechnicalLeadership() {
             <IndicatorPeriodFilter value={period} onChange={setPeriod} />
           </Stack>
           <Box sx={{ height: 340, mt: 1 }}><ResponsiveContainer width="100%" height="100%"><BarChart data={data.analytics.byOwner}>
-            <CartesianGrid strokeDasharray="4 5" vertical={false} /><XAxis dataKey="analyst" tick={{ fontSize: 9 }} interval={0} angle={-15} textAnchor="end" height={62} /><YAxis allowDecimals={false} /><ChartTooltip /><Legend />
-            <Bar dataKey="resolved" name="Resolvidos" fill={aliareColors.info} radius={[5,5,0,0]} />
-            <Bar dataKey="reopened" name="Reabertos" fill={aliareColors.warning} radius={[5,5,0,0]} />
-            <Bar dataKey="outside" name="Fora SLA" fill={aliareColors.error} radius={[5,5,0,0]} />
+            <CartesianGrid strokeDasharray="4 5" vertical={false} /><XAxis dataKey="analyst" tick={{ fontSize: 9 }} interval={0} angle={-15} textAnchor="end" height={62} /><YAxis allowDecimals={false} /><ChartTooltip /><Legend {...interactiveLegend("resolutionOwner", 3)} />
+            {isLeadershipSeriesVisible("resolutionOwner", "resolved") && <Bar dataKey="resolved" name="Resolvidos" fill={aliareColors.info} radius={[5,5,0,0]} />}
+            {isLeadershipSeriesVisible("resolutionOwner", "reopened") && <Bar dataKey="reopened" name="Reabertos" fill={aliareColors.warning} radius={[5,5,0,0]} />}
+            {isLeadershipSeriesVisible("resolutionOwner", "outside") && <Bar dataKey="outside" name="Fora SLA" fill={aliareColors.error} radius={[5,5,0,0]} />}
           </BarChart></ResponsiveContainer></Box>
         </CardContent></Card>
         <Card><CardContent>
@@ -405,10 +435,10 @@ export function TechnicalLeadership() {
             <IndicatorPeriodFilter value={period} onChange={setPeriod} />
           </Stack>
           <Box sx={{ height: 340, mt: 1 }}><ResponsiveContainer width="100%" height="100%"><BarChart data={data.analytics.responseByOwner}>
-            <CartesianGrid strokeDasharray="4 5" vertical={false} /><XAxis dataKey="analyst" tick={{ fontSize: 9 }} interval={0} angle={-15} textAnchor="end" height={62} /><YAxis allowDecimals={false} /><ChartTooltip /><Legend />
-            <Bar dataKey="within" name="No prazo" stackId="sla" fill={aliareColors.green} />
-            <Bar dataKey="outside" name="Fora do prazo" stackId="sla" fill={aliareColors.error} />
-            <Bar dataKey="unmeasured" name="Sem medição" stackId="sla" fill={aliareColors.info} />
+            <CartesianGrid strokeDasharray="4 5" vertical={false} /><XAxis dataKey="analyst" tick={{ fontSize: 9 }} interval={0} angle={-15} textAnchor="end" height={62} /><YAxis allowDecimals={false} /><ChartTooltip /><Legend {...interactiveLegend("responseOwner", 3)} />
+            {isLeadershipSeriesVisible("responseOwner", "within") && <Bar dataKey="within" name="No prazo" stackId="sla" fill={aliareColors.green} />}
+            {isLeadershipSeriesVisible("responseOwner", "outside") && <Bar dataKey="outside" name="Fora do prazo" stackId="sla" fill={aliareColors.error} />}
+            {isLeadershipSeriesVisible("responseOwner", "unmeasured") && <Bar dataKey="unmeasured" name="Sem medição" stackId="sla" fill={aliareColors.info} />}
           </BarChart></ResponsiveContainer></Box>
         </CardContent></Card>
       </Box>
