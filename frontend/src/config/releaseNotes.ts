@@ -9,9 +9,23 @@ export type ReleaseNote = {
   items: readonly ReleaseNoteItem[];
 };
 
-export const FALLBACK_APP_VERSION = "1.0.0-rc.14";
+export const FALLBACK_APP_VERSION = "1.0.0-rc.15";
 
 export const releaseNotes: Record<string, ReleaseNote> = {
+  "1.0.0-rc.15": {
+    version: "1.0.0-rc.15",
+    title: "Cockpit de Liderança e inteligência operacional",
+    items: [
+      { title: "Central de Liderança modernizada", description: "A visão executiva recebe cards padronizados, interativos e navegáveis, com acabamento visual mais moderno e consistente com o restante do TechLead Hub." },
+      { title: "Cockpit operacional", description: "Nova área consolida entradas, resoluções, reaberturas, backlog, aging e balanço de fluxo para leitura gerencial da operação." },
+      { title: "SLA de solução e primeira resposta", description: "Indicadores do Movidesk passam a ser apresentados em visualizações modernas, com percentuais, distribuição e recorte por analista." },
+      { title: "Resolução por analista", description: "Nova análise compara resoluções, reaberturas e ocorrências fora do SLA por responsável, sem depender dos painéis externos do Movidesk." },
+      { title: "Categorias, clientes e solicitantes", description: "Distribuições operacionais mostram concentração por categoria, cliente e contato no mesmo período e filtros da Central." },
+      { title: "Aging e antecipação de risco", description: "O backlog é segmentado por idade, destacando atendimentos com mais de 15 dias e permitindo abrir diretamente as evidências." },
+      { title: "Indicadores acionáveis", description: "Cards de backlog, SLA, bloqueios, reaberturas e aging abrem os atendimentos relacionados para investigação, reduzindo a distância entre indicador e ação." },
+      { title: "Inteligência além do Movidesk", description: "Taxa de reabertura, resolução no primeiro contato e balanço entre entradas e resoluções complementam os relatórios tradicionais com sinais de saúde operacional." },
+    ],
+  },
   "1.0.0-rc.14": {
     version: "1.0.0-rc.14",
     title: "Mapa SIMER, experiência unificada e Desktop mais leve",
