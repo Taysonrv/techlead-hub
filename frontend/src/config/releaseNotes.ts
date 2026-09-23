@@ -26,6 +26,7 @@ export const releaseNotes: Record<string, ReleaseNote> = {
       { title: "Inteligência além do Movidesk", description: "Taxa de reabertura, resolução no primeiro contato e balanço entre entradas e resoluções complementam os relatórios tradicionais com sinais de saúde operacional." },
       { title: "Cockpit como visão inicial", description: "A Central passa a abrir diretamente nos indicadores operacionais, priorizando leitura executiva e investigação antes das análises especializadas." },
       { title: "Exportação das evidências", description: "Listagens abertas a partir dos indicadores da liderança podem ser exportadas para Excel para conciliação, acompanhamento e comparação com o Movidesk." },
+      { title: "Relatórios interativos", description: "Séries, categorias e segmentos dos gráficos podem ser marcados ou desmarcados; o relatório recalcula e reorganiza automaticamente a visualização mantendo pelo menos uma dimensão ativa." },
     ],
   },
   "1.0.0-rc.14": {
