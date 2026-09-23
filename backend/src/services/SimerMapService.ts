@@ -52,6 +52,17 @@ export class SimerMapService {
     const source=sourceFile.trim(); if(!source)return[];
     return prisma.$queryRawUnsafe<MapRow[]>(`SELECT id,"sourceFile","mapName","nodeId","nodeText",path,depth,"parentPath","parentNodeId",icon,link,"nodeKind","importedAt" FROM "SimerMapNode" WHERE ${SIMER_SCOPE_SQL} AND "sourceFile"=$1 ORDER BY id ASC LIMIT 5000`,source);
   }
+  async followLink(id:number){
+    const rows=await prisma.$queryRawUnsafe<MapRow[]>(`SELECT id,"sourceFile","mapName","nodeId","nodeText",path,depth,"parentPath","parentNodeId",icon,link,"nodeKind","importedAt" FROM "SimerMapNode" WHERE id=$1 LIMIT 1`,id);
+    const current=rows[0]; if(!current?.link)return null;
+    const raw=current.link.replace(/\\/g,"/").replace(/^file:\/\//i,"").split("#")[0]??"";
+    const decoded=decodeURIComponent(raw).replace(/^\.\//,"");
+    const base=current.sourceFile.replace(/\\/g,"/").split("/").slice(0,-1).join("/");
+    const target=path.posix.normalize(path.posix.join(base,decoded));
+    const name=path.posix.basename(decoded).replace(/\.mm$/i,"");
+    const candidates=await prisma.$queryRawUnsafe<MapRow[]>(`SELECT id,"sourceFile","mapName","nodeId","nodeText",path,depth,"parentPath","parentNodeId",icon,link,"nodeKind","importedAt" FROM "SimerMapNode" WHERE ${SIMER_SCOPE_SQL} AND ("sourceFile"=$1 OR LOWER("mapName")=LOWER($2) OR LOWER("sourceFile") LIKE LOWER($3)) ORDER BY CASE WHEN "sourceFile"=$1 THEN 0 WHEN LOWER("mapName")=LOWER($2) THEN 1 ELSE 2 END,depth ASC LIMIT 1`,target,name,`%${decoded}`);
+    return candidates[0]??null;
+  }
   async related(id:number){
     const rows=await prisma.$queryRawUnsafe<MapRow[]>(`SELECT id,"sourceFile","mapName","nodeId","nodeText",path,depth,"parentPath","parentNodeId",icon,link,"nodeKind","importedAt" FROM "SimerMapNode" WHERE ${SIMER_SCOPE_SQL} AND (id=$1 OR "parentNodeId"=(SELECT "nodeId" FROM "SimerMapNode" WHERE id=$1) OR "nodeId"=(SELECT "parentNodeId" FROM "SimerMapNode" WHERE id=$1) OR ("sourceFile"=(SELECT "sourceFile" FROM "SimerMapNode" WHERE id=$1) AND link=(SELECT link FROM "SimerMapNode" WHERE id=$1) AND link IS NOT NULL)) ORDER BY depth,path LIMIT 100`,id);return rows;
   }
