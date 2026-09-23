@@ -11,7 +11,7 @@ function buildTree(items:SimerTreeNode[]){
  items.forEach((x,i)=>{const node=byId.get(x.nodeId||`row-${i}`)!;const parent=x.parentNodeId?byId.get(x.parentNodeId):undefined;if(parent)parent.children.push(node);else roots.push(node);});
  return roots;
 }
-function Branch({node,level=0,expanded,active,onToggle,onSelect}:{node:ViewNode;level?:number;expanded:Set<number>;active:number|null;onToggle:(id:number)=>void;onSelect:(n:SimerTreeNode)=>void;onFollowLink:(n:SimerTreeNode)=>void}){
+function Branch({node,level=0,expanded,active,onToggle,onSelect,onFollowLink}:{node:ViewNode;level?:number;expanded:Set<number>;active:number|null;onToggle:(id:number)=>void;onSelect:(n:SimerTreeNode)=>void;onFollowLink:(n:SimerTreeNode)=>void}){
  const open=expanded.has(node.id);const children=node.children.length>0;
  return <Box id={`simer-node-${node.id}`} sx={{position:"relative",pl:level?2.4:0,scrollMargin:80}}>
   {level>0&&<Box sx={{position:"absolute",left:7,top:0,bottom:"50%",borderLeft:"1px solid",borderBottom:"1px solid",borderColor:"divider",width:12,borderBottomLeftRadius:8}}/>}
