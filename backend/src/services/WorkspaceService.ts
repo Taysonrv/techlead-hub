@@ -354,7 +354,7 @@ export class WorkspaceService {
         status: true, baseStatus: true, client: true, owner: true, service: true,
         serviceFirstLevel: true, serviceSecondLevel: true, serviceThirdLevel: true,
         createdDate: true, dueDate: true, lastUpdate: true, lastActionDate: true,
-        resolvedDate: true, closedDate: true, reopenedDate: true, firstResponseDate: true,
+        resolvedDate: true, closedDate: true, canceledDate: true, reopenedDate: true, firstResponseDate: true,
         contact: true, resolvedInFirstCall: true, lifetimeMinutes: true, stoppedMinutes: true,
         taskNumber: true, solutionSlaIndicator: true, responseSlaIndicator: true,
       },
