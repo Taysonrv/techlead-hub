@@ -7,11 +7,12 @@
     "dev": "tsx watch src/server.ts",
     "seed": "tsx prisma/seed.ts",
     "start": "node dist/server.js",
-    "build": "tsc",
+    "build": "npm run clean && tsc",
     "test": "node --import tsx --test tests/*.test.ts",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
-    "prisma:studio": "prisma studio"
+    "prisma:studio": "prisma studio",
+    "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\""
   },
   "keywords": [
     "movidesk",
