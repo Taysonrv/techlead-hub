@@ -354,6 +354,8 @@ export class WorkspaceService {
         status: true, baseStatus: true, client: true, owner: true, service: true,
         serviceFirstLevel: true, serviceSecondLevel: true, serviceThirdLevel: true,
         createdDate: true, dueDate: true, lastUpdate: true, lastActionDate: true,
+        resolvedDate: true, closedDate: true, reopenedDate: true, firstResponseDate: true,
+        contact: true, resolvedInFirstCall: true, lifetimeMinutes: true, stoppedMinutes: true,
         taskNumber: true, solutionSlaIndicator: true, responseSlaIndicator: true,
       },
     });
@@ -517,6 +519,118 @@ export class WorkspaceService {
     ];
 
     const previousOpen = previousTickets.filter(openTicket).length;
+
+    // Indicadores gerenciais equivalentes aos painéis operacionais do Movidesk,
+    // calculados sobre a mesma base filtrada da Central de Liderança.
+    const inRange = (value: Date | null | undefined) => Boolean(value && value >= periodStart && value <= periodEnd);
+    const dateKey = (value: Date) => {
+      const y = value.getFullYear();
+      const m = String(value.getMonth() + 1).padStart(2, "0");
+      const d = String(value.getDate()).padStart(2, "0");
+      return `${y}-${m}-${d}`;
+    };
+    const daySeries: Array<{ date: string; opened: number; resolved: number; closed: number; reopened: number; pending: number }> = [];
+    for (let cursor = new Date(periodStart); cursor <= periodEnd; cursor.setDate(cursor.getDate() + 1)) {
+      const startDay = new Date(cursor); startDay.setHours(0, 0, 0, 0);
+      const endDay = new Date(cursor); endDay.setHours(23, 59, 59, 999);
+      const opened = tickets.filter((ticket) => ticket.createdDate >= startDay && ticket.createdDate <= endDay).length;
+      const resolved = tickets.filter((ticket) => Boolean(ticket.resolvedDate && ticket.resolvedDate >= startDay && ticket.resolvedDate <= endDay)).length;
+      const closed = tickets.filter((ticket) => Boolean(ticket.closedDate && ticket.closedDate >= startDay && ticket.closedDate <= endDay)).length;
+      const reopened = tickets.filter((ticket) => Boolean(ticket.reopenedDate && ticket.reopenedDate >= startDay && ticket.reopenedDate <= endDay)).length;
+      const pending = tickets.filter((ticket) =>
+        ticket.createdDate <= endDay
+        && (!ticket.resolvedDate || ticket.resolvedDate > endDay)
+        && (!ticket.closedDate || ticket.closedDate > endDay)
+        && (!ticket.canceledDate || ticket.canceledDate > endDay)
+      ).length;
+      daySeries.push({ date: dateKey(startDay), opened, resolved, closed, reopened, pending });
+    }
+
+    const slaBucket = (value: string | null | undefined): "within" | "outside" | "unmeasured" => {
+      const normalized = normalize(value);
+      if (!normalized || /sem sla|nao defin|nao med|n\/a/.test(normalized)) return "unmeasured";
+      if (/fora|venc|viol|estour|atras/.test(normalized)) return "outside";
+      return "within";
+    };
+    const resolvedPeriod = tickets.filter((ticket) => inRange(ticket.resolvedDate) || inRange(ticket.closedDate));
+    const resolutionSla = resolvedPeriod.reduce((acc, ticket) => {
+      acc[slaBucket(ticket.solutionSlaIndicator)] += 1; return acc;
+    }, { within: 0, outside: 0, unmeasured: 0 });
+    const responsePeriod = tickets.filter((ticket) => inRange(ticket.firstResponseDate) || (ticket.createdDate >= periodStart && ticket.createdDate <= periodEnd));
+    const responseSla = responsePeriod.reduce((acc, ticket) => {
+      acc[slaBucket(ticket.responseSlaIndicator)] += 1; return acc;
+    }, { within: 0, outside: 0, unmeasured: 0 });
+
+    const byOwner = [...SUPPORT_ANALYSTS].map((analyst) => {
+      const owned = resolvedPeriod.filter((ticket) => normalize(ticket.owner) === normalize(analyst));
+      const reopened = owned.filter((ticket) => inRange(ticket.reopenedDate)).length;
+      const accepted = owned.filter((ticket) => ticket.baseStatus === "Closed" || Boolean(ticket.closedDate)).length;
+      const within = owned.filter((ticket) => slaBucket(ticket.solutionSlaIndicator) === "within").length;
+      const outside = owned.filter((ticket) => slaBucket(ticket.solutionSlaIndicator) === "outside").length;
+      return { analyst, resolved: owned.length, reopened, accepted, within, outside };
+    }).filter((row) => row.resolved || row.reopened);
+
+    const responseByOwner = [...SUPPORT_ANALYSTS].map((analyst) => {
+      const owned = responsePeriod.filter((ticket) => normalize(ticket.owner) === normalize(analyst));
+      return {
+        analyst,
+        total: owned.length,
+        within: owned.filter((ticket) => slaBucket(ticket.responseSlaIndicator) === "within").length,
+        outside: owned.filter((ticket) => slaBucket(ticket.responseSlaIndicator) === "outside").length,
+        unmeasured: owned.filter((ticket) => slaBucket(ticket.responseSlaIndicator) === "unmeasured").length,
+      };
+    }).filter((row) => row.total);
+
+    const ranking = (values: Array<string | null>, fallback: string) => {
+      const map = new Map<string, number>();
+      values.forEach((value) => { const key = value?.trim() || fallback; map.set(key, (map.get(key) ?? 0) + 1); });
+      return [...map.entries()].map(([label, total]) => ({ label, total })).sort((a,b) => b.total - a.total).slice(0, 12);
+    };
+    const categoryDistribution = ranking(currentTickets.map((ticket) => ticket.category), "Sem categoria");
+    const contactDistribution = ranking(currentTickets.map((ticket) => ticket.contact), "Sem contato");
+    const clientDistribution = ranking(currentTickets.map((ticket) => ticket.client), "Sem cliente");
+
+    const ageHours = (ticket: (typeof tickets)[number]) => Math.max(0, (now.getTime() - ticket.createdDate.getTime()) / 3600000);
+    const aging = [
+      { label: "Até 24h", total: openTickets.filter((ticket) => ageHours(ticket) <= 24).length },
+      { label: "1–3 dias", total: openTickets.filter((ticket) => ageHours(ticket) > 24 && ageHours(ticket) <= 72).length },
+      { label: "4–7 dias", total: openTickets.filter((ticket) => ageHours(ticket) > 72 && ageHours(ticket) <= 168).length },
+      { label: "8–15 dias", total: openTickets.filter((ticket) => ageHours(ticket) > 168 && ageHours(ticket) <= 360).length },
+      { label: "+15 dias", total: openTickets.filter((ticket) => ageHours(ticket) > 360).length },
+    ];
+    const reopenedCount = resolvedPeriod.filter((ticket) => inRange(ticket.reopenedDate)).length;
+    const fcrCount = resolvedPeriod.filter((ticket) => ticket.resolvedInFirstCall).length;
+    const measuredResolution = resolutionSla.within + resolutionSla.outside;
+    const measuredResponse = responseSla.within + responseSla.outside;
+    const operational = {
+      reopenRate: resolvedPeriod.length ? Number((reopenedCount / resolvedPeriod.length * 100).toFixed(1)) : null,
+      firstContactResolutionRate: resolvedPeriod.length ? Number((fcrCount / resolvedPeriod.length * 100).toFixed(1)) : null,
+      resolutionSlaRate: measuredResolution ? Number((resolutionSla.within / measuredResolution * 100).toFixed(1)) : null,
+      responseSlaRate: measuredResponse ? Number((responseSla.within / measuredResponse * 100).toFixed(1)) : null,
+      flowBalance: currentTickets.length ? Number(((resolvedPeriod.length - currentTickets.length) / currentTickets.length * 100).toFixed(1)) : null,
+      criticalAging: aging.filter((item) => item.label === "+15 dias")[0]?.total ?? 0,
+    };
+    const analytics = {
+      daily: daySeries,
+      resolutionSla,
+      responseSla,
+      byOwner,
+      responseByOwner,
+      categoryDistribution,
+      contactDistribution,
+      clientDistribution,
+      aging,
+      operational,
+      samples: {
+        opened: currentTickets.slice(0, 100),
+        resolved: resolvedPeriod.slice(0, 100),
+        reopened: tickets.filter((ticket) => inRange(ticket.reopenedDate)).slice(0, 100),
+        responseOutside: responsePeriod.filter((ticket) => slaBucket(ticket.responseSlaIndicator) === "outside").slice(0, 100),
+        resolutionOutside: resolvedPeriod.filter((ticket) => slaBucket(ticket.solutionSlaIndicator) === "outside").slice(0, 100),
+        criticalAging: openTickets.filter((ticket) => ageHours(ticket) > 360).slice(0, 100),
+      },
+    };
+
     const weekly = {
       current: currentTickets.length,
       previous: previousTickets.length,
@@ -557,6 +671,7 @@ export class WorkspaceService {
       gaps,
       development: analystDevelopment,
       weekly,
+      analytics,
       recommendations,
       filters: { clients: [...SIMER_CLIENTS], users: [...SUPPORT_ANALYSTS] },
     };
