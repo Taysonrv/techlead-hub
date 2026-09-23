@@ -198,7 +198,7 @@ export function Attention() {
           await api.get<
             Ticket[]
           >(
-            "/dashboard/tickets"
+            "/dashboard/pending-tickets"
           );
 
         setTickets(response.data);
