@@ -18,7 +18,7 @@ function parseDiagram(xml:string,sourceFile:string){
  for(const t of block(xml,"Transition")){const h=t.match(/<Transition\b[^>]*>/i)?.[0]??"";const id=attr(h,"Id"),from=attr(h,"From"),to=attr(h,"To");if(!id||!from||!to)continue;const condition=clean(t.match(/<Condition[^>]*>([\s\S]*?)<\/Condition>/i)?.[1]??"");transitions.push({externalId:id,fromId:from,toId:to,name:attr(h,"Name"),condition:condition||null});}
  return{processName,nodes,transitions};
 }
-const normalizePath=(v:string)=>v.replace(/\\\\/g,"/").replace(/^\\/+|\\/+$/g,"");
+const normalizePath=(v:string)=>v.replace(/\\\\/g,"/").replace(/^\/+|\/+$/g,"");
 const folderOf=(v:string)=>{const p=normalizePath(v);const i=p.lastIndexOf("/");return i>0?p.slice(0,i):null;};
 export class SystemRuleService{
  async summary(){const [p,n,t]=await Promise.all([prisma.$queryRawUnsafe<Array<{c:bigint}>>('SELECT COUNT(*)::bigint c FROM "SystemRuleProcess"'),prisma.$queryRawUnsafe<Array<{c:bigint}>>('SELECT COUNT(*)::bigint c FROM "SystemRuleNode"'),prisma.$queryRawUnsafe<Array<{c:bigint}>>('SELECT COUNT(*)::bigint c FROM "SystemRuleTransition"')]);return{processes:Number(p[0]?.c??0),nodes:Number(n[0]?.c??0),transitions:Number(t[0]?.c??0)};}
