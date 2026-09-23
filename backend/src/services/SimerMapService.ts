@@ -48,9 +48,9 @@ export class SimerMapService {
     const rows=await prisma.$queryRawUnsafe<MapRow[]>(`SELECT id,"sourceFile","mapName","nodeId","nodeText",path,depth,"parentPath","parentNodeId",icon,link,"nodeKind","importedAt" FROM "SimerMapNode" WHERE ${SIMER_SCOPE_SQL} AND (${ts.map((_,i)=>`("nodeText" ILIKE $${i+1} OR path ILIKE $${i+1})`).join(" OR ")}) LIMIT 500`,...ts.map(t=>`%${t}%`));
     return rows.map(row=>{const hay=`${row.nodeText} ${row.path}`.toLocaleLowerCase("pt-BR").normalize("NFD").replace(/[\u0300-\u036f]/g,"");const matched=ts.filter(t=>hay.includes(t));return{...row,score:matched.length,matchedTerms:matched};}).filter(x=>x.score>0).sort((a,b)=>b.score-a.score||a.depth-b.depth).slice(0,Math.max(1,Math.min(limit,50)));
   }
-  async tree(mapName:string){
-    const name=mapName.trim(); if(!name)return[];
-    return prisma.$queryRawUnsafe<MapRow[]>(`SELECT id,"sourceFile","mapName","nodeId","nodeText",path,depth,"parentPath","parentNodeId",icon,link,"nodeKind","importedAt" FROM "SimerMapNode" WHERE ${SIMER_SCOPE_SQL} AND "mapName"=$1 ORDER BY id ASC`,name);
+  async tree(sourceFile:string){
+    const source=sourceFile.trim(); if(!source)return[];
+    return prisma.$queryRawUnsafe<MapRow[]>(`SELECT id,"sourceFile","mapName","nodeId","nodeText",path,depth,"parentPath","parentNodeId",icon,link,"nodeKind","importedAt" FROM "SimerMapNode" WHERE ${SIMER_SCOPE_SQL} AND "sourceFile"=$1 ORDER BY id ASC LIMIT 5000`,source);
   }
   async related(id:number){
     const rows=await prisma.$queryRawUnsafe<MapRow[]>(`SELECT id,"sourceFile","mapName","nodeId","nodeText",path,depth,"parentPath","parentNodeId",icon,link,"nodeKind","importedAt" FROM "SimerMapNode" WHERE ${SIMER_SCOPE_SQL} AND (id=$1 OR "parentNodeId"=(SELECT "nodeId" FROM "SimerMapNode" WHERE id=$1) OR "nodeId"=(SELECT "parentNodeId" FROM "SimerMapNode" WHERE id=$1) OR ("sourceFile"=(SELECT "sourceFile" FROM "SimerMapNode" WHERE id=$1) AND link=(SELECT link FROM "SimerMapNode" WHERE id=$1) AND link IS NOT NULL)) ORDER BY depth,path LIMIT 100`,id);return rows;
