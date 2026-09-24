@@ -82,7 +82,7 @@ export function MyOperation() {
       setData(response.data);
     } catch { setError("Não foi possível carregar sua operação."); } finally { setLoading(false); }
   }, [client, analyst, team, type, search]);
-  useEffect(() => { const timer = window.setTimeout(() => void load(), 250); return () => window.clearTimeout(timer); }, [load]);
+  useEffect(() => { const timer = window.setTimeout(() => void load(), search ? 550 : 180); return () => window.clearTimeout(timer); }, [load]);
   useEffect(() => {
     let active = true;
     setMicrosoftLoading(true);
@@ -179,16 +179,15 @@ export function MyOperation() {
   return <Box sx={{ pb: 4, minHeight: 0 }}>
     <PageHeader eyebrow="Operação" title="Minha Operação" description="Seus atendimentos Movidesk e tarefas Azure em uma única experiência operacional." meta={`${items.length} registro(s) no recorte atual`} />
 
-    <Card variant="outlined" sx={{ mt: 2 }}><CardContent><Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "2fr repeat(5, minmax(150px, 1fr)) auto auto" }, gap: 1.2 }}>
+    <Card variant="outlined" sx={{ mt: 2 }}><CardContent><Stack direction={{ xs: "column", md: "row" }} sx={{ justifyContent: "space-between", alignItems: { md: "center" }, mb: 1.5 }}><Box><Typography sx={{ fontWeight: 850 }}>Filtros da operação</Typography><Typography variant="caption" color="text.secondary">Combine o recorte e alterne entre Kanban e lista sem perder o contexto.</Typography></Box><Chip size="small" variant="outlined" label={`${items.length} registro(s)`} /></Stack><Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(2,minmax(0,1fr))", xl: "minmax(280px,1.6fr) repeat(5,minmax(150px,1fr))" }, gap: 1.2 }}>
       <TextField size="small" label="Pesquisar ticket, tarefa ou assunto" value={search} onChange={(event) => setSearch(event.target.value)} slotProps={{ input: { startAdornment: <SearchOutlined sx={{ mr: 1, color: "text.disabled" }} /> } }} />
       <Autocomplete size="small" options={data?.filters.clients ?? []} value={client || null} onChange={(_, value) => setClient(value ?? "")} renderInput={(params) => <TextField {...params} label="Cliente" />} />
       <Autocomplete size="small" options={data?.filters.analysts ?? []} value={analyst || null} onChange={(_, value) => { setAnalyst(value ?? ""); if (value) setTeam(""); }} renderInput={(params) => <TextField {...params} label="Analista" />} />
       <FormControl size="small"><InputLabel>Equipe</InputLabel><Select label="Equipe" value={team} onChange={(event) => { setTeam(event.target.value); if (event.target.value) setAnalyst(""); }}><MenuItem value="">Minha operação</MenuItem>{data?.filters.teams.map((item) => <MenuItem key={item.name} value={item.name}>{item.name}</MenuItem>)}</Select></FormControl>
       <FormControl size="small"><InputLabel>Conteúdo</InputLabel><Select label="Conteúdo" value={sourceView} onChange={(event) => setSourceView(event.target.value as SourceView)}><MenuItem value="tickets">Atendimentos</MenuItem><MenuItem value="tasks">Tarefas</MenuItem><MenuItem value="both">Ambos</MenuItem></Select></FormControl>
       <FormControl size="small"><InputLabel>Tipo de tarefa</InputLabel><Select label="Tipo de tarefa" value={type} onChange={(event) => setType(event.target.value)} disabled={sourceView === "tickets"}><MenuItem value="">Todas</MenuItem>{data?.filters.types.map((value) => <MenuItem key={value} value={value}>{value}</MenuItem>)}</Select></FormControl>
-      <Button onClick={() => { setClient(""); setAnalyst(""); setTeam(""); setType(""); setSearch(""); setMetric(""); setSort("priority"); }}>Limpar</Button>
-      <ToggleButtonGroup exclusive size="small" value={view} onChange={(_, value) => value && setView(value)}><ToggleButton value="kanban" aria-label="Kanban"><ViewColumnOutlined /></ToggleButton><ToggleButton value="list" aria-label="Lista"><ViewListOutlined /></ToggleButton></ToggleButtonGroup>
-    </Box>
+      </Box><Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ mt: 1.25, alignItems: { sm: "center" }, justifyContent: "space-between" }}><Button size="small" onClick={() => { setClient(""); setAnalyst(""); setTeam(""); setType(""); setSearch(""); setMetric(""); setSort("priority"); }}>Limpar filtros</Button>
+      <ToggleButtonGroup exclusive size="small" value={view} onChange={(_, value) => value && setView(value)}><ToggleButton value="kanban" aria-label="Kanban"><ViewColumnOutlined /></ToggleButton><ToggleButton value="list" aria-label="Lista"><ViewListOutlined /></ToggleButton></ToggleButtonGroup></Stack>
     <Stack direction={{ xs: "column", md: "row" }} spacing={1} useFlexGap sx={{ mt: 1.5, alignItems: { md: "center" }, flexWrap: "wrap" }}>
       <FormControl size="small" sx={{ minWidth: 170 }}><InputLabel>Ordenação</InputLabel><Select label="Ordenação" value={sort} onChange={(event) => setSort(event.target.value as SortMode)}><MenuItem value="priority">Prioridade operacional</MenuItem><MenuItem value="recent">Mais recentes</MenuItem><MenuItem value="oldest">Mais antigos</MenuItem></Select></FormControl>
       <Button size="small" variant="outlined" startIcon={<BookmarkAddOutlined />} onClick={saveCurrentView}>Salvar visão</Button>
