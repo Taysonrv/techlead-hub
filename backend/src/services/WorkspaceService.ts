@@ -1038,29 +1038,34 @@ export class WorkspaceService {
     }
     const serviceCatalog = [...dynamicServiceCatalog.values()];
 
+    const needsServiceSuggestion = params.issue === "suspectedServiceMismatch";
     const serviceSuggestionByTicketId = new Map(
-      scopedTickets.map((ticket) => [
-        ticket.id,
-        suggestSimerService({
-          subject: ticket.subject,
-          category: ticket.category,
-          cause: ticket.cause,
-          currentService: ticket.service,
-          serviceFirstLevel: ticket.serviceFirstLevel,
-          serviceSecondLevel: ticket.serviceSecondLevel,
-          serviceThirdLevel: ticket.serviceThirdLevel,
-        }, serviceCatalog),
-      ]),
+      needsServiceSuggestion
+        ? scopedTickets.map((ticket) => [
+            ticket.id,
+            suggestSimerService({
+              subject: ticket.subject,
+              category: ticket.category,
+              cause: ticket.cause,
+              currentService: ticket.service,
+              serviceFirstLevel: ticket.serviceFirstLevel,
+              serviceSecondLevel: ticket.serviceSecondLevel,
+              serviceThirdLevel: ticket.serviceThirdLevel,
+            }, serviceCatalog),
+          ] as const)
+        : [],
     );
 
-    const suspectedServiceMismatch = scopedTickets.filter((ticket) => {
-      if (!isTicketOpen(ticket)) return false;
-      const suggestion = serviceSuggestionByTicketId.get(ticket.id);
-      if (!suggestion || suggestion.confidence === "LOW") return false;
-      const current = normalizeStatus(ticketServicePath(ticket).join(" » ") || ticket.service || "");
-      const suggested = normalizeStatus(suggestion.path);
-      return Boolean(current && current !== suggested && !suggested.includes(current));
-    });
+    const suspectedServiceMismatch = needsServiceSuggestion
+      ? scopedTickets.filter((ticket) => {
+          if (!isTicketOpen(ticket)) return false;
+          const suggestion = serviceSuggestionByTicketId.get(ticket.id);
+          if (!suggestion || suggestion.confidence === "LOW") return false;
+          const current = normalizeStatus(ticketServicePath(ticket).join(" » ") || ticket.service || "");
+          const suggested = normalizeStatus(suggestion.path);
+          return Boolean(current && current !== suggested && !suggested.includes(current));
+        })
+      : [];
 
     const derivedTicketIssues = ["danglingTaskTickets", "ticketOpenTaskFinished", "ticketOpenTaskWithoutDelivery", "ticketClosedTaskOpen", "clientMismatch", "supportLinkDivergence", "awaitingReturnWithoutCause", "awaitingReturnOverdue", "reopenedTickets", "excessiveOwnerHandoffs", "lowSatisfaction", "suspectedClassification", "withoutService", "genericSimerService", "suspectedServiceMismatch"];
     const matchesAzureIssue = (item: (typeof linkedTasks)[number]) => {
@@ -1188,7 +1193,7 @@ export class WorkspaceService {
         suspectedClassification: suspectedClassification.length,
         withoutService: withoutService.length,
         genericSimerService: genericSimerService.length,
-        suspectedServiceMismatch: suspectedServiceMismatch.length,
+        suspectedServiceMismatch: needsServiceSuggestion ? suspectedServiceMismatch.length : 0,
         serviceCatalogSize: serviceCatalog.length,
         activeTaskWithVersion: activeLinkedTasks.filter((task) =>
           !isSupportTask(task) && Boolean(task.deliveredVersion?.trim()),
