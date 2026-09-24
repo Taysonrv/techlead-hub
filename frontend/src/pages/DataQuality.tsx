@@ -61,11 +61,9 @@ const coordinationMetricKeys = new Set([
   "awaitingReturnOverdue",
   "reopenedTickets",
   "excessiveOwnerHandoffs",
-  "lowSatisfaction",
   "ticketOpenTaskFinished",
   "ticketClosedTaskOpen",
   "danglingTaskTickets",
-  "versionMismatch",
 ]);
 const coordinationMetrics = metrics.filter(([key]) => coordinationMetricKeys.has(key));
 
@@ -190,7 +188,7 @@ export function DataQuality() {
   const title = useMemo(() => metrics.find(([key]) => key === issue)?.[1] ?? "Pendências encontradas", [issue]);
 
   return <Box sx={{ pb: 4 }}>
-    <PageHeader eyebrow="Governança" title="Pendências" description="Central de inconsistências cadastrais, vínculos e etapas divergentes entre atendimentos, Tarefas e versões." meta={`${data?.samples.length ?? 0} registro(s) no recorte atual`} />
+    <PageHeader eyebrow="Governança" title="Pendências" description="Visão executiva das pendências que exigem acompanhamento da coordenação: prazo, recorrência, continuidade e divergências entre atendimento e Tarefa." meta={`${data?.samples.length ?? 0} registro(s) no recorte atual`} />
 
     <Card variant="outlined" sx={{ mt: 2 }}><CardContent>
       <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "2fr repeat(3, minmax(170px, 1fr)) auto" }, gap: 1.2 }}>
@@ -209,8 +207,8 @@ export function DataQuality() {
 
     <Card variant="outlined" sx={{ mt: 2, overflow: "hidden" }}><CardContent>
       <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ justifyContent: "space-between", alignItems: { sm: "center" }, mb: 1.5 }}>
-        <Box><Typography variant="h6" sx={{ fontWeight: 850 }}>Mapa de pendências por grupo</Typography><Typography variant="body2" color="text.secondary">Concentração das inconsistências para orientar a atuação da equipe.</Typography></Box>
-        <Chip label="Clique nos cards acima para investigar" variant="outlined" />
+        <Box sx={{ flex: 1, textAlign: "center" }}><Typography variant="h6" sx={{ fontWeight: 850 }}>Prioridades por grupo</Typography><Typography variant="body2" color="text.secondary">Somente pendências com ação direta da coordenação.</Typography></Box>
+        <Chip label={`${coordinationMetrics.length} indicadores essenciais`} variant="outlined" />
       </Stack>
       <Box sx={{ width: "100%", height: 280 }}>
         <ResponsiveContainer width="100%" height="100%">
