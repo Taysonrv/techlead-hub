@@ -562,13 +562,14 @@ export class WorkspaceService {
       acc[slaBucket(ticket.responseSlaIndicator)] += 1; return acc;
     }, { within: 0, outside: 0, unmeasured: 0 });
 
+    const reopenedPeriod = tickets.filter((ticket) => inRange(ticket.reopenedDate));
     const byOwner = [...SUPPORT_ANALYSTS].map((analyst) => {
-      const owned = resolvedPeriod.filter((ticket) => normalize(ticket.owner) === normalize(analyst));
-      const reopened = owned.filter((ticket) => inRange(ticket.reopenedDate)).length;
-      const accepted = owned.filter((ticket) => ticket.baseStatus === "Closed" || Boolean(ticket.closedDate)).length;
-      const within = owned.filter((ticket) => slaBucket(ticket.solutionSlaIndicator) === "within").length;
-      const outside = owned.filter((ticket) => slaBucket(ticket.solutionSlaIndicator) === "outside").length;
-      return { analyst, resolved: owned.length, reopened, accepted, within, outside };
+      const ownedResolved = resolvedPeriod.filter((ticket) => normalize(ticket.owner) === normalize(analyst));
+      const ownedReopened = reopenedPeriod.filter((ticket) => normalize(ticket.owner) === normalize(analyst));
+      const accepted = ownedResolved.filter((ticket) => ticket.baseStatus === "Closed" || Boolean(ticket.closedDate)).length;
+      const within = ownedResolved.filter((ticket) => slaBucket(ticket.solutionSlaIndicator) === "within").length;
+      const outside = ownedResolved.filter((ticket) => slaBucket(ticket.solutionSlaIndicator) === "outside").length;
+      return { analyst, resolved: ownedResolved.length, reopened: ownedReopened.length, accepted, within, outside };
     }).filter((row) => row.resolved || row.reopened);
 
     const responseByOwner = [...SUPPORT_ANALYSTS].map((analyst) => {
@@ -599,7 +600,7 @@ export class WorkspaceService {
       { label: "8–15 dias", total: openTickets.filter((ticket) => ageHours(ticket) > 168 && ageHours(ticket) <= 360).length },
       { label: "+15 dias", total: openTickets.filter((ticket) => ageHours(ticket) > 360).length },
     ];
-    const reopenedCount = resolvedPeriod.filter((ticket) => inRange(ticket.reopenedDate)).length;
+    const reopenedCount = reopenedPeriod.length;
     const fcrCount = resolvedPeriod.filter((ticket) => ticket.resolvedInFirstCall).length;
     const measuredResolution = resolutionSla.within + resolutionSla.outside;
     const measuredResponse = responseSla.within + responseSla.outside;
