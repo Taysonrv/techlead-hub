@@ -1383,8 +1383,7 @@ export function Dashboard() {
             }}
           >
             <CardBase>
-              <Box sx={{ textAlign: "center" }}><Typography sx={{ fontWeight: 850, fontSize: "1.05rem" }}>Evolução dos Tickets</Typography>
-              <Typography variant="caption" color="text.secondary">Volume de abertura por dia • tendência do período</Typography></Box>
+              <CardPeriodHeader title="Evolução dos Tickets" subtitle="Volume de abertura por dia • tendência do período" value={evolutionPeriod} onChange={setEvolutionPeriod} />
               <Box sx={{ height: 290, mt: 1.5 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={trends} margin={{ top: 8, right: 12, left: 4, bottom: 4 }}>
@@ -1409,22 +1408,26 @@ export function Dashboard() {
               subtitle="Distribuição no período"
               data={categories.slice(0, 6)}
               colors={chartPalette}
-              onItemClick={showCategory}
+              onItemClick={(label) => showTickets(`Categoria: ${label}`, categoryTickets.filter((ticket) => (ticket.category || "Sem categoria") === label), periodLabel(categoryPeriod))}
+              period={categoryPeriod}
+              onPeriodChange={setCategoryPeriod}
             />
 
             <DonutAnalysisCard
               title="Status dos Tickets"
-              subtitle="Composição do backlog atual"
+              subtitle="Composição dos tickets abertos no período"
               data={backlogStatus}
               colors={[semanticChartColors.normal, semanticChartColors.positive, semanticChartColors.stopped]}
               onItemClick={(label) => {
                 const map: Record<string, Ticket[]> = {
-                  "Novos": newTickets,
-                  "Em atendimento": attendanceTickets,
-                  "Parados": stoppedTickets,
+                  "Novos": statusNewTickets,
+                  "Em atendimento": statusAttendanceTickets,
+                  "Parados": statusStoppedTickets,
                 };
-                showTickets(`Status: ${label}`, map[label] ?? []);
+                showTickets(`Status: ${label}`, map[label] ?? [], periodLabel(statusPeriod));
               }}
+              period={statusPeriod}
+              onPeriodChange={setStatusPeriod}
             />
           </Box>
 
@@ -3012,18 +3015,36 @@ function MonthlyCategoryEvolutionCard({
   );
 }
 
+function CardPeriodHeader({ title, subtitle, value, onChange }: { title: string; subtitle: string; value?: CardPeriod; onChange?: (value: CardPeriod) => void }) {
+  return <Box sx={{ position: "relative", minHeight: value ? 44 : "auto" }}>
+    <Box sx={{ textAlign: "center", px: value ? { xs: 0, md: 10 } : 0 }}>
+      <Typography sx={{ fontWeight: 850, fontSize: "1.05rem" }}>{title}</Typography>
+      <Typography variant="caption" color="text.secondary">{subtitle}</Typography>
+    </Box>
+    {value && onChange && <FormControl size="small" sx={{ position: { xs: "static", md: "absolute" }, right: 0, top: 0, minWidth: 112, mt: { xs: 1, md: 0 } }}>
+      <Select value={value} onChange={(event) => onChange(event.target.value as CardPeriod)} sx={{ height: 32, fontSize: ".75rem", fontWeight: 750 }}>
+        <MenuItem value="7d">7 dias</MenuItem><MenuItem value="30d">30 dias</MenuItem><MenuItem value="60d">60 dias</MenuItem><MenuItem value="90d">90 dias</MenuItem><MenuItem value="month">Este mês</MenuItem><MenuItem value="semester">Semestre</MenuItem><MenuItem value="year">Este ano</MenuItem>
+      </Select>
+    </FormControl>}
+  </Box>;
+}
+
 function DonutAnalysisCard({
   title,
   subtitle,
   data,
   colors,
   onItemClick,
+  period,
+  onPeriodChange,
 }: {
   title: string;
   subtitle: string;
   data: RankingItem[];
   colors: readonly string[];
   onItemClick?: (label: string) => void;
+  period?: CardPeriod;
+  onPeriodChange?: (period: CardPeriod) => void;
 }) {
   const theme = useTheme();
   const [hiddenItems, setHiddenItems] = useState<Set<string>>(() => new Set());
@@ -3038,8 +3059,7 @@ function DonutAnalysisCard({
 
   return (
     <CardBase>
-      <Typography sx={{ fontWeight: 850, fontSize: "1.05rem" }}>{title}</Typography>
-      <Typography variant="caption" color="text.secondary">{subtitle}</Typography>
+      <CardPeriodHeader title={title} subtitle={subtitle} value={period} onChange={onPeriodChange} />
       <Box sx={{ height: 190, mt: .8, position: "relative" }}>
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
