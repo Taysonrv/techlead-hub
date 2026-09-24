@@ -48,7 +48,9 @@ type ReportScope =
   | "sla"
   | "clients"
   | "development"
-  | "versions";
+  | "versions"
+  | "operational-causes"
+  | "operational-errors";
 
 type ReportFormat =
   | "xlsx"
@@ -66,6 +68,8 @@ const FILTERS_BY_REPORT: Record<ReportScope, ReportFilterKey[]> = {
   clients: ["client", "category", "ticketStatus"],
   development: ["client", "analyst", "workItemType", "azureState"],
   versions: ["version", "client", "workItemType", "azureState"],
+  "operational-causes": ["client", "analyst", "category", "ticketStatus"],
+  "operational-errors": ["client", "analyst", "ticketStatus"],
 };
 
 type ReportDefinition = {
@@ -84,6 +88,8 @@ const REPORT_ACCENTS: Record<ReportScope, string> = {
   clients: aliareColors.cyan,
   development: aliareColors.warning,
   versions: "#E85D75",
+  "operational-causes": "#F59E0B",
+  "operational-errors": "#EF4444",
 };
 
 const REPORTS:
@@ -160,6 +166,20 @@ const REPORTS:
     icon:
       SellOutlined,
   },
+  {
+    scope: "operational-causes",
+    title: "Causas e Soluções de Contorno",
+    description: "Acompanhamento gerencial das causas dos Problemas e sua evolução mensal para direcionar ações preventivas.",
+    contents: "Resumo das causas, evolução mensal, concentração por área/tema, Configuração, Erro operacional, SEFAZ/terceiros, Não identificada e Resolvido pelo usuário.",
+    icon: QueryStatsOutlined,
+  },
+  {
+    scope: "operational-errors",
+    title: "Erro Operacional por Área",
+    description: "Análise específica dos atendimentos classificados como Problema – Erro operacional.",
+    contents: "Volume no período, evolução mensal, incidência por área/tema, participação percentual e priorização para treinamento.",
+    icon: AssessmentOutlined,
+
 ];
 
 export function Reports() {
@@ -213,7 +233,7 @@ export function Reports() {
     );
 
   const [filterOptions, setFilterOptions] = useState<ReportFilterOptions>(EMPTY_OPTIONS);
-  const [reportFilters, setReportFilters] = useState<Record<ReportScope, ReportFilters>>({ executive: {}, analysts: {}, sla: {}, clients: {}, development: {}, versions: {} });
+  const [reportFilters, setReportFilters] = useState<Record<ReportScope, ReportFilters>>({ executive: {}, analysts: {}, sla: {}, clients: {}, development: {}, versions: {}, "operational-causes": {}, "operational-errors": {} });
 
   useEffect(() => {
     void api.get<ReportFilterOptions>("/reports/filters")
