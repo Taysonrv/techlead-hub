@@ -526,6 +526,7 @@ export function Performance() {
         eyebrow="Qualidade operacional"
         title="Desempenho do Atendimento"
         description="Prazos, risco operacional e desempenho da equipe em uma visão única"
+        meta="Indicadores oficiais de SLA separados do risco operacional calculado"
         action={<PeriodFilter />}
       />
 
