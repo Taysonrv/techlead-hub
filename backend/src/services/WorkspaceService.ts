@@ -400,7 +400,8 @@ export class WorkspaceService {
     const closedTicketActiveTask = tickets.filter((ticket) => !openTicket(ticket) && linkedTask(ticket) && !terminalTask(linkedTask(ticket)!.state));
     const openTicketFinishedTask = openTickets.filter((ticket) => linkedTask(ticket) && terminalTask(linkedTask(ticket)!.state));
 
-    const classificationAudit = tickets.filter((ticket) => {
+    const periodTickets = tickets.filter((ticket) => ticket.createdDate >= periodStart && ticket.createdDate <= periodEnd);
+    const classificationAudit = periodTickets.filter((ticket) => {
       const category = normalize(ticket.category);
       const cause = normalize(ticket.cause);
       if (!category || !cause || ["outros", "outro", "-", "nao informado"].includes(category) || ["outros", "outro", "-", "nao informado"].includes(cause)) return true;
@@ -437,7 +438,7 @@ export class WorkspaceService {
         .filter((value) => value.length >= 4 && !generic.has(value));
       return candidates[0] ?? "sem classificacao";
     };
-    const currentTickets = tickets.filter((ticket) => ticket.createdDate >= periodStart && ticket.createdDate <= periodEnd);
+    const currentTickets = periodTickets;
     const previousTickets = tickets.filter((ticket) => ticket.createdDate >= previousStart && ticket.createdDate < periodStart);
     const aggregate = (items: typeof tickets) => {
       const map = new Map<string, { count: number; clients: Set<string>; analysts: Set<string>; examples: typeof tickets }>();
@@ -447,7 +448,7 @@ export class WorkspaceService {
         entry.count += 1;
         if (ticket.client) entry.clients.add(ticket.client);
         if (ticket.owner) entry.analysts.add(ticket.owner);
-        if (entry.examples.length < 4) entry.examples.push(ticket);
+        if (entry.examples.length < 100) entry.examples.push(ticket);
         map.set(key, entry);
       });
       return map;
@@ -471,7 +472,7 @@ export class WorkspaceService {
         const modules = value.examples.map((ticket) => linkedTask(ticket)?.module).filter((module): module is string => Boolean(module?.trim()));
         const moduleCounts = new Map<string, number>(); modules.forEach((module) => moduleCounts.set(module, (moduleCounts.get(module) ?? 0) + 1));
         const topModule = [...moduleCounts.entries()].sort((a,b) => b[1]-a[1])[0] ?? null;
-        return { topic, count: value.count, previous, changePct, clients: [...value.clients], analysts: [...value.analysts], action, examples: value.examples.slice(0, 3), linkedExamples, confidence,
+        return { topic, count: value.count, previous, changePct, clients: [...value.clients], analysts: [...value.analysts], action, examples: value.examples.slice(0, 50), linkedExamples, confidence,
           concentration: { topClient: topClient?.[0] ?? null, topClientCount: topClient?.[1] ?? 0, topModule: topModule?.[0] ?? null, topModuleCount: topModule?.[1] ?? 0, clientSharePct: topClient ? Math.round(topClient[1] / Math.max(1, value.examples.length) * 100) : 0 }
         };
       }).sort((a, b) => b.count - a.count).slice(0, 12);
@@ -484,7 +485,7 @@ export class WorkspaceService {
       const linked = analystTickets.map(linkedTask).filter((task): task is NonNullable<ReturnType<typeof linkedTask>> => Boolean(task));
       const blockedTasks = linked.filter((task) => Boolean(task.blockedProcess)).length;
       const finishedTasks = linked.filter((task) => terminalTask(task.state)).length;
-      return { analyst, tickets: analystTickets.length, stale, themes, linkedTasks: linked.length, blockedTasks, finishedTasks };
+      return { analyst, tickets: analystTickets.length, stale, themes, linkedTasks: linked.length, blockedTasks, finishedTasks, examples: analystTickets.slice(0, 100) };
     }).filter((item) => item.tickets > 0 || item.stale > 0);
 
     const gaps = [
@@ -499,7 +500,7 @@ export class WorkspaceService {
           impact: item.count >= 10 && confidence !== "Baixa" ? "Alto" : "Médio",
           action: item.action, status: confidence === "Baixa" ? "Validar evidências" : "Identificado",
           confidence, ticketCount: item.count, azureLinked: linked.length, blockedLinked, deliveredLinked,
-          examples: item.examples.slice(0, 3), tasks: linked.map((entry) => entry.task).filter(Boolean).slice(0, 5),
+          examples: item.examples.slice(0, 25), tasks: linked.map((entry) => entry.task).filter(Boolean).slice(0, 25),
         };
       }),
       ...(blocked.length ? [{
@@ -629,6 +630,17 @@ export class WorkspaceService {
         responseOutside: responsePeriod.filter((ticket) => slaBucket(ticket.responseSlaIndicator) === "outside").slice(0, 100),
         resolutionOutside: resolvedPeriod.filter((ticket) => slaBucket(ticket.solutionSlaIndicator) === "outside").slice(0, 100),
         criticalAging: openTickets.filter((ticket) => ageHours(ticket) > 360).slice(0, 100),
+        firstContact: resolvedPeriod.filter((ticket) => ticket.resolvedInFirstCall).slice(0, 100),
+        aging: {
+          "Até 24h": openTickets.filter((ticket) => ageHours(ticket) <= 24).slice(0, 100),
+          "1–3 dias": openTickets.filter((ticket) => ageHours(ticket) > 24 && ageHours(ticket) <= 72).slice(0, 100),
+          "4–7 dias": openTickets.filter((ticket) => ageHours(ticket) > 72 && ageHours(ticket) <= 168).slice(0, 100),
+          "8–15 dias": openTickets.filter((ticket) => ageHours(ticket) > 168 && ageHours(ticket) <= 360).slice(0, 100),
+          "+15 dias": openTickets.filter((ticket) => ageHours(ticket) > 360).slice(0, 100),
+        },
+        categories: Object.fromEntries(categoryDistribution.map((row) => [row.label, currentTickets.filter((ticket) => (ticket.category?.trim() || "Sem categoria") === row.label).slice(0, 100)])),
+        clients: Object.fromEntries(clientDistribution.map((row) => [row.label, currentTickets.filter((ticket) => (ticket.client?.trim() || "Sem cliente") === row.label).slice(0, 100)])),
+        contacts: Object.fromEntries(contactDistribution.map((row) => [row.label, currentTickets.filter((ticket) => (ticket.contact?.trim() || "Sem contato") === row.label).slice(0, 100)])),
       },
     };
 
