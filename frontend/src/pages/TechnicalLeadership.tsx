@@ -118,8 +118,35 @@ function AreaTitle({ title, info, icon }: { title: string; info: string; icon?: 
   </Stack>;
 }
 
+function AnalystMultiSelect({ options, value, onChange, label }: { options: string[]; value: string[]; onChange: (value: string[]) => void; label: string }) {
+  const allSelected = value.length === 0;
+  const toggleAll = () => onChange([]);
+  return <FormControl size="small" sx={{ width: 168, minWidth: 168, "& .MuiSelect-select": { py: .65, fontSize: ".76rem", fontWeight: 750 } }}>
+    <Select
+      multiple
+      displayEmpty
+      value={value}
+      onChange={(event) => onChange(typeof event.target.value === "string" ? event.target.value.split(",") : event.target.value)}
+      renderValue={(selected) => !selected.length ? "Todos analistas" : selected.length === 1 ? abbreviateAnalystName(selected[0]) : `${selected.length} analistas`}
+      aria-label={label}
+      MenuProps={{ PaperProps: { sx: { maxHeight: 360, minWidth: 300 } } }}
+    >
+      <MenuItem onClick={(event) => { event.preventDefault(); event.stopPropagation(); toggleAll(); }}>
+        <Checkbox size="small" checked={allSelected} />Todos analistas
+      </MenuItem>
+      {options.map((analyst) => <MenuItem key={analyst} value={analyst}><Checkbox size="small" checked={value.includes(analyst)} />{analyst}</MenuItem>)}
+    </Select>
+  </FormControl>;
+}
+
+function abbreviateAnalystName(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length <= 2) return name;
+  return `${parts[0]} ${parts.slice(1).map((part) => `${part.charAt(0).toUpperCase()}.`).join(" ")}`;
+}
+
 function IndicatorPeriodFilter({ value, onChange }: { value: PeriodPreset; onChange: (value: PeriodPreset) => void }) {
-  return <FormControl size="small" sx={{ minWidth: 126, "& .MuiSelect-select": { py: .65, fontSize: ".76rem", fontWeight: 750 } }}>
+  return <FormControl size="small" sx={{ width: 126, minWidth: 126, "& .MuiSelect-select": { py: .65, fontSize: ".76rem", fontWeight: 750 } }}>
     <Select
       value={value}
       onChange={(event) => onChange(event.target.value as PeriodPreset)}
@@ -251,11 +278,6 @@ export function TechnicalLeadership() {
     return [];
   }, [drawer]);
 
-  const abbreviateAnalyst = (name: string) => {
-    const parts = name.trim().split(/\s+/).filter(Boolean);
-    if (parts.length <= 2) return name;
-    return `${parts[0]} ${parts.slice(1).map((part) => `${part.charAt(0).toUpperCase()}.`).join(" ")}`;
-  };
   const resolutionOwnerRows = analyticsFor("resolutionOwner")?.byOwner ?? [];
   const responseOwnerRows = analyticsFor("responseOwner")?.responseByOwner ?? [];
   const filteredResolutionOwners = resolutionOwnerRows.filter((row) => !resolutionOwnerFilter.length || resolutionOwnerFilter.includes(row.analyst));
@@ -495,11 +517,11 @@ export function TechnicalLeadership() {
           <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "center", gap: 1 }}>
             <Box sx={{ flex: 1, textAlign: "center", "& > *": { justifyContent: "center" } }}><AreaTitle title="Resolução por analista" info="Volume resolvido, reaberto e situação de SLA por analista. Use o filtro para isolar um analista sem alterar os demais indicadores da Central." /></Box>
             <Stack direction="row" spacing={.8}>
-              <FormControl size="small" sx={{ minWidth: 185 }}><Select multiple displayEmpty value={resolutionOwnerFilter} onChange={(e) => setResolutionOwnerFilter(typeof e.target.value === "string" ? e.target.value.split(",") : e.target.value)} renderValue={(selected) => !selected.length ? "Todos analistas" : selected.length === 1 ? selected[0] : `${selected.length} analistas`} aria-label="Filtrar analistas na resolução"><MenuItem disabled value="">Selecione um ou mais</MenuItem>{resolutionOwnerRows.map((row) => <MenuItem key={row.analyst} value={row.analyst}><Checkbox size="small" checked={resolutionOwnerFilter.includes(row.analyst)} />{row.analyst}</MenuItem>)}</Select></FormControl>
+              <AnalystMultiSelect options={resolutionOwnerRows.map((row) => row.analyst)} value={resolutionOwnerFilter} onChange={setResolutionOwnerFilter} label="Filtrar analistas na resolução" />
               <IndicatorPeriodFilter value={indicatorPeriod("resolutionOwner")} onChange={(value) => setIndicatorPeriod("resolutionOwner", value)} />
             </Stack>
           </Stack>
-          <Box sx={{ height: 340, mt: 1 }}><ResponsiveContainer width="100%" height="100%"><BarChart data={filteredResolutionOwners.map((row) => ({ ...row, analystLabel: abbreviateAnalyst(row.analyst) }))}>
+          <Box sx={{ height: 340, mt: 1 }}><ResponsiveContainer width="100%" height="100%"><BarChart data={filteredResolutionOwners.map((row) => ({ ...row, analystLabel: abbreviateAnalystName(row.analyst) }))}>
             <CartesianGrid strokeDasharray="4 5" vertical={false} /><XAxis dataKey="analystLabel" tick={{ fontSize: 10 }} interval={0} angle={0} textAnchor="middle" height={44} /><YAxis allowDecimals={false} /><ChartTooltip labelFormatter={(_, payload) => payload?.[0]?.payload?.analyst ?? ""} />
             {isLeadershipSeriesVisible("resolutionOwner", "resolved") && <Bar dataKey="resolved" name="Resolvidos" fill={aliareColors.info} radius={[5,5,0,0]} />}
             {isLeadershipSeriesVisible("resolutionOwner", "reopened") && <Bar dataKey="reopened" name="Reabertos" fill={aliareColors.warning} radius={[5,5,0,0]} />}
@@ -515,7 +537,7 @@ export function TechnicalLeadership() {
           <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "center", gap: 1 }}>
             <Box sx={{ flex: 1, textAlign: "center", "& > *": { justifyContent: "center" } }}><AreaTitle title="Primeira resposta por analista" info="Compara respostas dentro, fora e sem medição de SLA por analista. O filtro isola um analista apenas neste gráfico." /></Box>
             <Stack direction="row" spacing={.8}>
-              <FormControl size="small" sx={{ minWidth: 185 }}><Select multiple displayEmpty value={responseOwnerFilter} onChange={(e) => setResponseOwnerFilter(typeof e.target.value === "string" ? e.target.value.split(",") : e.target.value)} renderValue={(selected) => !selected.length ? "Todos analistas" : selected.length === 1 ? selected[0] : `${selected.length} analistas`} aria-label="Filtrar analistas na primeira resposta"><MenuItem disabled value="">Selecione um ou mais</MenuItem>{responseOwnerRows.map((row) => <MenuItem key={row.analyst} value={row.analyst}><Checkbox size="small" checked={responseOwnerFilter.includes(row.analyst)} />{row.analyst}</MenuItem>)}</Select></FormControl>
+              <AnalystMultiSelect options={responseOwnerRows.map((row) => row.analyst)} value={responseOwnerFilter} onChange={setResponseOwnerFilter} label="Filtrar analistas na primeira resposta" />
               <IndicatorPeriodFilter value={indicatorPeriod("responseOwner")} onChange={(value) => setIndicatorPeriod("responseOwner", value)} />
             </Stack>
           </Stack>
