@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 import {
@@ -195,6 +195,7 @@ export function Dashboard() {
 
   const [error, setError] =
     useState<string | null>(null);
+  const loadRequestRef = useRef<AbortController | null>(null);
 
   const [drilldown, setDrilldown] =
     useState<DrilldownState>(null);
@@ -219,31 +220,27 @@ export function Dashboard() {
   ======================================================= */
 
   useEffect(() => {
-    async function loadDashboard() {
+    const controller = new AbortController();
+    loadRequestRef.current?.abort();
+    loadRequestRef.current = controller;
+
+    async function loadTickets() {
       try {
         setLoading(true);
         setError(null);
-
-        const response = await api.get(
-          "/dashboard/tickets"
-        );
-
-        setTickets(response.data);
+        const response = await api.get<any>("/dashboard/tickets", { signal: controller.signal });
+        if (!controller.signal.aborted) setTickets(response.data);
       } catch (err) {
-        console.error(
-          "Erro ao carregar dashboard:",
-          err
-        );
-
-        setError(
-          "Não foi possível carregar os dados do Dashboard. Verifique se o backend está rodando."
-        );
+        if (controller.signal.aborted) return;
+        console.error("Erro ao carregar dashboard:", err);
+        setError("Não foi possível carregar os dados do Dashboard. Verifique se o backend está rodando.");
       } finally {
-        setLoading(false);
+        if (!controller.signal.aborted) setLoading(false);
       }
     }
 
-    loadDashboard();
+    void loadTickets();
+    return () => controller.abort();
   }, []);
 
   /* =======================================================
