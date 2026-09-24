@@ -735,6 +735,45 @@ export class WorkspaceService {
     const taskIds = scopedTickets.map((item) => item.taskNumber).filter((value): value is number => value !== null);
     const movideskIds = scopedTickets.map((item) => item.movideskId).filter((value): value is number => value !== null);
 
+    if (params.issue === "__coordinationOverview") {
+      const linked = taskIds.length ? await prisma.azureWorkItem.findMany({
+        where: { id: { in: taskIds } },
+        select: { id: true, workItemType: true, state: true, deliveredVersion: true },
+      }) : [];
+      const byId = new Map(linked.map((item) => [item.id, item]));
+      const normalize = (value: string | null | undefined) => (value ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR");
+      const open = (ticket: (typeof scopedTickets)[number]) => ["New", "InAttendance", "Stopped"].includes(ticket.baseStatus ?? "") && !/conclu|fechad|encerrad|resolvid|cancelad/.test(normalize(ticket.status));
+      const finalized = (ticket: (typeof scopedTickets)[number]) => ["Resolved", "Closed"].includes(ticket.baseStatus ?? "") || /conclu|fechad|encerrad|resolvid|cancelad/.test(normalize(ticket.status));
+      const terminal = (state: string) => TERMINAL.some((value) => normalize(value) === normalize(state));
+      const support = (type: string) => normalize(type).includes("apoio");
+      const staleThreshold = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
+      const analytics = new Map(scopedTickets.map((ticket) => [ticket.id, analyzeMovideskIndicators(ticket.rawData)]));
+      const awaitingReturnOverdue = scopedTickets.filter((ticket) => {
+        const movement = ticket.lastActionDate ?? ticket.lastUpdate;
+        return open(ticket) && (/aguardando.*retorno|retorno.*cliente/.test(normalize(ticket.status)) || /aguardando.*retorno|retorno.*cliente/.test(normalize(ticket.justification))) && Boolean(movement && movement < staleThreshold);
+      }).length;
+      const reopenedTickets = scopedTickets.filter((ticket) => open(ticket) && (analytics.get(ticket.id)?.reopenCount ?? 0) > 0).length;
+      const excessiveOwnerHandoffs = scopedTickets.filter((ticket) => open(ticket) && (analytics.get(ticket.id)?.ownerHandoffs ?? 0) >= 3).length;
+      const danglingTaskTickets = scopedTickets.filter((ticket) => ticket.taskNumber !== null && !byId.has(ticket.taskNumber)).length;
+      const ticketOpenTaskFinished = scopedTickets.filter((ticket) => {
+        if (!open(ticket) || !ticket.taskNumber) return false;
+        const task = byId.get(ticket.taskNumber);
+        return Boolean(task && !support(task.workItemType) && terminal(task.state) && task.deliveredVersion?.trim());
+      }).length;
+      const ticketClosedTaskOpen = scopedTickets.filter((ticket) => {
+        if (!finalized(ticket) || !ticket.taskNumber) return false;
+        const task = byId.get(ticket.taskNumber);
+        return Boolean(task && !support(task.workItemType) && !terminal(task.state));
+      }).length;
+      const result = {
+        summary: { awaitingReturnOverdue, reopenedTickets, excessiveOwnerHandoffs, ticketOpenTaskFinished, ticketClosedTaskOpen, danglingTaskTickets },
+        samples: [],
+        filters: { clients: [...SIMER_CLIENTS], users: [...SUPPORT_ANALYSTS], types: ["Correção Clientes", "Evolução", "APOIO"] },
+      };
+      dataQualityCache.set(cacheKey, { expiresAt: Date.now() + 120_000, value: result });
+      return result;
+    }
+
     const scope: Prisma.AzureWorkItemWhereInput = {
       AND: [
         {
