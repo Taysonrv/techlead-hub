@@ -1064,7 +1064,7 @@ export function Attention() {
               <Typography sx={{ fontWeight: 850 }}>Recorte de atenção</Typography>
               <Typography variant="caption" color="text.secondary">Combine prazo, responsável e cliente para investigar somente os riscos relevantes.</Typography>
             </Box>
-            {(level.length > 0 || owner.length > 0 || client.length > 0 || risk) && <Chip size="small" variant="outlined" label="Filtros ativos" />}
+            {(level.length > 0 || owner.length > 0 || client.length > 0 || riskFilter) && <Chip size="small" variant="outlined" label="Filtros ativos" />}
           </Stack>
           <Stack
             direction={{
