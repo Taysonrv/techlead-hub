@@ -156,8 +156,10 @@ export function TechnicalLeadership() {
   const [user, setUser] = useState("");
   const [period, setPeriod] = useState<PeriodPreset>("30");
   const [indicatorPeriods, setIndicatorPeriods] = useState<Record<string, PeriodPreset>>({});
+  const [indicatorData, setIndicatorData] = useState<Record<string, Data["analytics"]>>({});
   const indicatorPeriod = (key: string) => indicatorPeriods[key] ?? period;
   const setIndicatorPeriod = (key: string, value: PeriodPreset) => setIndicatorPeriods((current) => ({ ...current, [key]: value }));
+  const analyticsFor = (key: string) => indicatorData[key] ?? data?.analytics;
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState("");
   const [drawer, setDrawer] = useState<DrawerState>(null);
@@ -188,7 +190,26 @@ export function TechnicalLeadership() {
       const active = isLeadershipSeriesVisible(chart, key);
       return <span style={{ opacity: active ? 1 : .38, textDecoration: active ? "none" : "line-through", cursor: "pointer" }}>{String(value)}</span>;
     },
+    wrapperStyle: { cursor: "pointer" },
   });
+
+  useEffect(() => {
+    const entries = Object.entries(indicatorPeriods);
+    if (!entries.length) return;
+    let active = true;
+    const requests = entries.map(async ([key, preset]) => {
+      if (preset === "custom" && (!customStart || !customEnd)) return;
+      const range = resolvePeriod(preset, customStart, customEnd);
+      const response = await api.get<Data>("/workspace/technical-leadership", { params: { client: client || undefined, user: user || undefined, ...range } });
+      if (active) setIndicatorData((current) => ({ ...current, [key]: response.data.analytics }));
+    });
+    void Promise.allSettled(requests);
+    return () => { active = false; };
+  }, [indicatorPeriods, client, user, customStart, customEnd]);
+
+  useEffect(() => {
+    setIndicatorData({});
+  }, [period]);
 
   useEffect(() => {
     let active = true;
@@ -362,7 +383,7 @@ export function TechnicalLeadership() {
             <AreaTitle title="Entradas, resoluções, reaberturas e backlog" info="Evolução diária do fluxo. O backlog histórico é reconstruído pelas datas de criação, resolução, fechamento e cancelamento disponíveis na base." />
             <IndicatorPeriodFilter value={indicatorPeriod("dailyFlow")} onChange={(value) => setIndicatorPeriod("dailyFlow", value)} />
           </Stack>
-          <Box sx={{ height: 330, mt: 1.2 }}><ResponsiveContainer width="100%" height="100%"><LineChart data={data.analytics.daily}>
+          <Box sx={{ height: 330, mt: 1.2 }}><ResponsiveContainer width="100%" height="100%"><LineChart data={analyticsFor("dailyFlow")?.daily ?? []}>
             <CartesianGrid strokeDasharray="4 5" vertical={false} stroke={mode === "dark" ? "rgba(148,163,184,.18)" : "rgba(15,23,42,.10)"} />
             <XAxis dataKey="date" tickFormatter={(v) => String(v).slice(5)} tick={{ fontSize: 10 }} minTickGap={20} />
             <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
@@ -388,7 +409,7 @@ export function TechnicalLeadership() {
             <AreaTitle title="Aging do backlog" info="Distribui os atendimentos abertos por idade desde a criação para antecipar envelhecimento da fila." />
             <IndicatorPeriodFilter value={indicatorPeriod("aging")} onChange={(value) => setIndicatorPeriod("aging", value)} />
           </Stack>
-          <Box sx={{ height: 330, mt: 1.2 }}><ResponsiveContainer width="100%" height="100%"><BarChart data={data.analytics.aging}>
+          <Box sx={{ height: 330, mt: 1.2 }}><ResponsiveContainer width="100%" height="100%"><BarChart data={analyticsFor("aging")?.aging ?? []}>
             <CartesianGrid strokeDasharray="4 5" vertical={false} stroke={mode === "dark" ? "rgba(148,163,184,.18)" : "rgba(15,23,42,.10)"} />
             <XAxis dataKey="label" tick={{ fontSize: 11 }} /><YAxis allowDecimals={false} />
             <ChartTooltip contentStyle={{ borderRadius: 12, background: mode === "dark" ? "#0E2338" : "#fff" }} />
@@ -404,9 +425,9 @@ export function TechnicalLeadership() {
             <IndicatorPeriodFilter value={indicatorPeriod("resolutionSla")} onChange={(value) => setIndicatorPeriod("resolutionSla", value)} />
           </Stack>
           <Box sx={{ height: 280 }}><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={[
-            { name: "No prazo", value: data.analytics.resolutionSla.within, fill: aliareColors.green },
-            { name: "Fora do prazo", value: data.analytics.resolutionSla.outside, fill: aliareColors.error },
-            { name: "Sem medição", value: data.analytics.resolutionSla.unmeasured, fill: aliareColors.info },
+            { name: "No prazo", value: analyticsFor("resolutionSla")?.resolutionSla.within ?? 0, fill: aliareColors.green },
+            { name: "Fora do prazo", value: analyticsFor("resolutionSla")?.resolutionSla.outside ?? 0, fill: aliareColors.error },
+            { name: "Sem medição", value: analyticsFor("resolutionSla")?.resolutionSla.unmeasured ?? 0, fill: aliareColors.info },
           ].filter((item) => isLeadershipSeriesVisible("resolutionSla", item.name))} dataKey="value" nameKey="name" innerRadius={62} outerRadius={92} paddingAngle={3}>
             {[
               { name: "No prazo", fill: aliareColors.green },
@@ -425,9 +446,9 @@ export function TechnicalLeadership() {
             <IndicatorPeriodFilter value={indicatorPeriod("responseSla")} onChange={(value) => setIndicatorPeriod("responseSla", value)} />
           </Stack>
           <Box sx={{ height: 280 }}><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={[
-            { name: "No prazo", value: data.analytics.responseSla.within, fill: aliareColors.green },
-            { name: "Fora do prazo", value: data.analytics.responseSla.outside, fill: aliareColors.error },
-            { name: "Sem medição", value: data.analytics.responseSla.unmeasured, fill: aliareColors.info },
+            { name: "No prazo", value: analyticsFor("responseSla")?.responseSla.within ?? 0, fill: aliareColors.green },
+            { name: "Fora do prazo", value: analyticsFor("responseSla")?.responseSla.outside ?? 0, fill: aliareColors.error },
+            { name: "Sem medição", value: analyticsFor("responseSla")?.responseSla.unmeasured ?? 0, fill: aliareColors.info },
           ].filter((item) => isLeadershipSeriesVisible("responseSla", item.name))} dataKey="value" nameKey="name" innerRadius={62} outerRadius={92} paddingAngle={3}>
             {[
               { name: "No prazo", fill: aliareColors.green },
@@ -448,7 +469,7 @@ export function TechnicalLeadership() {
             <AreaTitle title="Resolução por analista" info="Volume resolvido, reaberto e situação de SLA por analista; substitui a leitura tabular isolada por uma visão comparável." />
             <IndicatorPeriodFilter value={indicatorPeriod("resolutionOwner")} onChange={(value) => setIndicatorPeriod("resolutionOwner", value)} />
           </Stack>
-          <Box sx={{ height: 340, mt: 1 }}><ResponsiveContainer width="100%" height="100%"><BarChart data={data.analytics.byOwner}>
+          <Box sx={{ height: 340, mt: 1 }}><ResponsiveContainer width="100%" height="100%"><BarChart data={analyticsFor("resolutionOwner")?.byOwner ?? []}>
             <CartesianGrid strokeDasharray="4 5" vertical={false} /><XAxis dataKey="analyst" tick={{ fontSize: 9 }} interval={0} angle={-15} textAnchor="end" height={62} /><YAxis allowDecimals={false} /><ChartTooltip /><Legend payload={[
               { value: "Resolvidos", dataKey: "resolved", color: aliareColors.info, type: "rect" },
               { value: "Reabertos", dataKey: "reopened", color: aliareColors.warning, type: "rect" },
@@ -464,7 +485,7 @@ export function TechnicalLeadership() {
             <AreaTitle title="Primeira resposta por analista" info="Compara volume de respostas dentro, fora e sem medição de SLA por analista." />
             <IndicatorPeriodFilter value={indicatorPeriod("responseOwner")} onChange={(value) => setIndicatorPeriod("responseOwner", value)} />
           </Stack>
-          <Box sx={{ height: 340, mt: 1 }}><ResponsiveContainer width="100%" height="100%"><BarChart data={data.analytics.responseByOwner}>
+          <Box sx={{ height: 340, mt: 1 }}><ResponsiveContainer width="100%" height="100%"><BarChart data={analyticsFor("responseOwner")?.responseByOwner ?? []}>
             <CartesianGrid strokeDasharray="4 5" vertical={false} /><XAxis dataKey="analyst" tick={{ fontSize: 9 }} interval={0} angle={-15} textAnchor="end" height={62} /><YAxis allowDecimals={false} /><ChartTooltip /><Legend payload={[
               { value: "No prazo", dataKey: "within", color: aliareColors.green, type: "rect" },
               { value: "Fora do prazo", dataKey: "outside", color: aliareColors.error, type: "rect" },
@@ -479,9 +500,9 @@ export function TechnicalLeadership() {
 
       <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(3,1fr)" }, gap: 1.5 }}>
         {[
-          ["Tickets por categoria", "categoryDistribution", data.analytics.categoryDistribution, aliareColors.purple],
-          ["Clientes no período", "clientDistribution", data.analytics.clientDistribution, aliareColors.cyan],
-          ["Solicitantes / contatos", "contactDistribution", data.analytics.contactDistribution, aliareColors.green],
+          ["Tickets por categoria", "categoryDistribution", analyticsFor("categoryDistribution")?.categoryDistribution ?? [], aliareColors.purple],
+          ["Clientes no período", "clientDistribution", analyticsFor("clientDistribution")?.clientDistribution ?? [], aliareColors.cyan],
+          ["Solicitantes / contatos", "contactDistribution", analyticsFor("contactDistribution")?.contactDistribution ?? [], aliareColors.green],
         ].map(([title, chartKey, rows, accent]) => {
           const rankingRows = rows as Array<{label:string;total:number}>;
           const visibleRows = rankingRows.filter((row) => isLeadershipSeriesVisible(String(chartKey), row.label));
