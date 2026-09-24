@@ -155,6 +155,9 @@ export function TechnicalLeadership() {
   const [client, setClient] = useState("");
   const [user, setUser] = useState("");
   const [period, setPeriod] = useState<PeriodPreset>("30");
+  const [indicatorPeriods, setIndicatorPeriods] = useState<Record<string, PeriodPreset>>({});
+  const indicatorPeriod = (key: string) => indicatorPeriods[key] ?? period;
+  const setIndicatorPeriod = (key: string, value: PeriodPreset) => setIndicatorPeriods((current) => ({ ...current, [key]: value }));
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState("");
   const [drawer, setDrawer] = useState<DrawerState>(null);
@@ -357,14 +360,22 @@ export function TechnicalLeadership() {
         <Card><CardContent>
           <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "center", gap: 1 }}>
             <AreaTitle title="Entradas, resoluções, reaberturas e backlog" info="Evolução diária do fluxo. O backlog histórico é reconstruído pelas datas de criação, resolução, fechamento e cancelamento disponíveis na base." />
-            <IndicatorPeriodFilter value={period} onChange={setPeriod} />
+            <IndicatorPeriodFilter value={indicatorPeriod("dailyFlow")} onChange={(value) => setIndicatorPeriod("dailyFlow", value)} />
           </Stack>
           <Box sx={{ height: 330, mt: 1.2 }}><ResponsiveContainer width="100%" height="100%"><LineChart data={data.analytics.daily}>
             <CartesianGrid strokeDasharray="4 5" vertical={false} stroke={mode === "dark" ? "rgba(148,163,184,.18)" : "rgba(15,23,42,.10)"} />
             <XAxis dataKey="date" tickFormatter={(v) => String(v).slice(5)} tick={{ fontSize: 10 }} minTickGap={20} />
             <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
             <ChartTooltip contentStyle={{ borderRadius: 12, background: mode === "dark" ? "#0E2338" : "#fff" }} />
-            <Legend {...interactiveLegend("dailyFlow", 4)} />
+            <Legend
+              payload={[
+                { value: "Abertos", dataKey: "opened", color: aliareColors.info, type: "line" },
+                { value: "Resolvidos", dataKey: "resolved", color: aliareColors.green, type: "line" },
+                { value: "Reabertos", dataKey: "reopened", color: aliareColors.warning, type: "line" },
+                { value: "Pendentes", dataKey: "pending", color: aliareColors.purple, type: "line" },
+              ]}
+              {...interactiveLegend("dailyFlow", 4)}
+            />
             {isLeadershipSeriesVisible("dailyFlow", "opened") && <Line type="monotone" dataKey="opened" name="Abertos" stroke={aliareColors.info} strokeWidth={2.4} dot={false} />}
             {isLeadershipSeriesVisible("dailyFlow", "resolved") && <Line type="monotone" dataKey="resolved" name="Resolvidos" stroke={aliareColors.green} strokeWidth={2.4} dot={false} />}
             {isLeadershipSeriesVisible("dailyFlow", "reopened") && <Line type="monotone" dataKey="reopened" name="Reabertos" stroke={aliareColors.warning} strokeWidth={2} dot={false} />}
@@ -375,7 +386,7 @@ export function TechnicalLeadership() {
         <Card><CardContent>
           <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "center", gap: 1 }}>
             <AreaTitle title="Aging do backlog" info="Distribui os atendimentos abertos por idade desde a criação para antecipar envelhecimento da fila." />
-            <IndicatorPeriodFilter value={period} onChange={setPeriod} />
+            <IndicatorPeriodFilter value={indicatorPeriod("aging")} onChange={(value) => setIndicatorPeriod("aging", value)} />
           </Stack>
           <Box sx={{ height: 330, mt: 1.2 }}><ResponsiveContainer width="100%" height="100%"><BarChart data={data.analytics.aging}>
             <CartesianGrid strokeDasharray="4 5" vertical={false} stroke={mode === "dark" ? "rgba(148,163,184,.18)" : "rgba(15,23,42,.10)"} />
@@ -390,7 +401,7 @@ export function TechnicalLeadership() {
         <Card><CardContent>
           <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "center", gap: 1 }}>
             <AreaTitle title="SLA de solução" info="Versão moderna do indicador de tickets resolvidos por vencimento do Movidesk." />
-            <IndicatorPeriodFilter value={period} onChange={setPeriod} />
+            <IndicatorPeriodFilter value={indicatorPeriod("resolutionSla")} onChange={(value) => setIndicatorPeriod("resolutionSla", value)} />
           </Stack>
           <Box sx={{ height: 280 }}><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={[
             { name: "No prazo", value: data.analytics.resolutionSla.within, fill: aliareColors.green },
@@ -402,12 +413,16 @@ export function TechnicalLeadership() {
               { name: "Fora do prazo", fill: aliareColors.error },
               { name: "Sem medição", fill: aliareColors.info },
             ].filter((item) => isLeadershipSeriesVisible("resolutionSla", item.name)).map((item) => <Cell key={item.name} fill={item.fill} />)}
-          </Pie><ChartTooltip /><Legend {...interactiveLegend("resolutionSla", 3)} /></PieChart></ResponsiveContainer></Box>
+          </Pie><ChartTooltip /><Legend payload={[
+            { value: "No prazo", dataKey: "No prazo", color: aliareColors.green, type: "circle" },
+            { value: "Fora do prazo", dataKey: "Fora do prazo", color: aliareColors.error, type: "circle" },
+            { value: "Sem medição", dataKey: "Sem medição", color: aliareColors.info, type: "circle" },
+          ]} {...interactiveLegend("resolutionSla", 3)} /></PieChart></ResponsiveContainer></Box>
         </CardContent></Card>
         <Card><CardContent>
           <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "center", gap: 1 }}>
             <AreaTitle title="SLA de primeira resposta" info="Consolida o indicador de primeira resposta, preservando também registros sem medição." />
-            <IndicatorPeriodFilter value={period} onChange={setPeriod} />
+            <IndicatorPeriodFilter value={indicatorPeriod("responseSla")} onChange={(value) => setIndicatorPeriod("responseSla", value)} />
           </Stack>
           <Box sx={{ height: 280 }}><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={[
             { name: "No prazo", value: data.analytics.responseSla.within, fill: aliareColors.green },
@@ -419,7 +434,11 @@ export function TechnicalLeadership() {
               { name: "Fora do prazo", fill: aliareColors.error },
               { name: "Sem medição", fill: aliareColors.info },
             ].filter((item) => isLeadershipSeriesVisible("responseSla", item.name)).map((item) => <Cell key={item.name} fill={item.fill} />)}
-          </Pie><ChartTooltip /><Legend {...interactiveLegend("responseSla", 3)} /></PieChart></ResponsiveContainer></Box>
+          </Pie><ChartTooltip /><Legend payload={[
+            { value: "No prazo", dataKey: "No prazo", color: aliareColors.green, type: "circle" },
+            { value: "Fora do prazo", dataKey: "Fora do prazo", color: aliareColors.error, type: "circle" },
+            { value: "Sem medição", dataKey: "Sem medição", color: aliareColors.info, type: "circle" },
+          ]} {...interactiveLegend("responseSla", 3)} /></PieChart></ResponsiveContainer></Box>
         </CardContent></Card>
       </Box>
 
@@ -427,10 +446,14 @@ export function TechnicalLeadership() {
         <Card><CardContent>
           <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "center", gap: 1 }}>
             <AreaTitle title="Resolução por analista" info="Volume resolvido, reaberto e situação de SLA por analista; substitui a leitura tabular isolada por uma visão comparável." />
-            <IndicatorPeriodFilter value={period} onChange={setPeriod} />
+            <IndicatorPeriodFilter value={indicatorPeriod("resolutionOwner")} onChange={(value) => setIndicatorPeriod("resolutionOwner", value)} />
           </Stack>
           <Box sx={{ height: 340, mt: 1 }}><ResponsiveContainer width="100%" height="100%"><BarChart data={data.analytics.byOwner}>
-            <CartesianGrid strokeDasharray="4 5" vertical={false} /><XAxis dataKey="analyst" tick={{ fontSize: 9 }} interval={0} angle={-15} textAnchor="end" height={62} /><YAxis allowDecimals={false} /><ChartTooltip /><Legend {...interactiveLegend("resolutionOwner", 3)} />
+            <CartesianGrid strokeDasharray="4 5" vertical={false} /><XAxis dataKey="analyst" tick={{ fontSize: 9 }} interval={0} angle={-15} textAnchor="end" height={62} /><YAxis allowDecimals={false} /><ChartTooltip /><Legend payload={[
+              { value: "Resolvidos", dataKey: "resolved", color: aliareColors.info, type: "rect" },
+              { value: "Reabertos", dataKey: "reopened", color: aliareColors.warning, type: "rect" },
+              { value: "Fora SLA", dataKey: "outside", color: aliareColors.error, type: "rect" },
+            ]} {...interactiveLegend("resolutionOwner", 3)} />
             {isLeadershipSeriesVisible("resolutionOwner", "resolved") && <Bar dataKey="resolved" name="Resolvidos" fill={aliareColors.info} radius={[5,5,0,0]} />}
             {isLeadershipSeriesVisible("resolutionOwner", "reopened") && <Bar dataKey="reopened" name="Reabertos" fill={aliareColors.warning} radius={[5,5,0,0]} />}
             {isLeadershipSeriesVisible("resolutionOwner", "outside") && <Bar dataKey="outside" name="Fora SLA" fill={aliareColors.error} radius={[5,5,0,0]} />}
@@ -439,10 +462,14 @@ export function TechnicalLeadership() {
         <Card><CardContent>
           <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "center", gap: 1 }}>
             <AreaTitle title="Primeira resposta por analista" info="Compara volume de respostas dentro, fora e sem medição de SLA por analista." />
-            <IndicatorPeriodFilter value={period} onChange={setPeriod} />
+            <IndicatorPeriodFilter value={indicatorPeriod("responseOwner")} onChange={(value) => setIndicatorPeriod("responseOwner", value)} />
           </Stack>
           <Box sx={{ height: 340, mt: 1 }}><ResponsiveContainer width="100%" height="100%"><BarChart data={data.analytics.responseByOwner}>
-            <CartesianGrid strokeDasharray="4 5" vertical={false} /><XAxis dataKey="analyst" tick={{ fontSize: 9 }} interval={0} angle={-15} textAnchor="end" height={62} /><YAxis allowDecimals={false} /><ChartTooltip /><Legend {...interactiveLegend("responseOwner", 3)} />
+            <CartesianGrid strokeDasharray="4 5" vertical={false} /><XAxis dataKey="analyst" tick={{ fontSize: 9 }} interval={0} angle={-15} textAnchor="end" height={62} /><YAxis allowDecimals={false} /><ChartTooltip /><Legend payload={[
+              { value: "No prazo", dataKey: "within", color: aliareColors.green, type: "rect" },
+              { value: "Fora do prazo", dataKey: "outside", color: aliareColors.error, type: "rect" },
+              { value: "Sem medição", dataKey: "unmeasured", color: aliareColors.info, type: "rect" },
+            ]} {...interactiveLegend("responseOwner", 3)} />
             {isLeadershipSeriesVisible("responseOwner", "within") && <Bar dataKey="within" name="No prazo" stackId="sla" fill={aliareColors.green} />}
             {isLeadershipSeriesVisible("responseOwner", "outside") && <Bar dataKey="outside" name="Fora do prazo" stackId="sla" fill={aliareColors.error} />}
             {isLeadershipSeriesVisible("responseOwner", "unmeasured") && <Bar dataKey="unmeasured" name="Sem medição" stackId="sla" fill={aliareColors.info} />}
@@ -463,7 +490,7 @@ export function TechnicalLeadership() {
           return <Card key={String(title)}><CardContent>
             <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "center", gap: 1 }}>
               <Box><Typography sx={{ fontWeight: 850 }}>{String(title)}</Typography><Typography variant="caption" color="text.secondary">{visibleTotal} itens visíveis · clique para exibir/ocultar</Typography></Box>
-              <IndicatorPeriodFilter value={period} onChange={setPeriod} />
+              <IndicatorPeriodFilter value={indicatorPeriod(String(chartKey))} onChange={(value) => setIndicatorPeriod(String(chartKey), value)} />
             </Stack>
             <Stack spacing={.8} sx={{ mt: 1.2 }}>{rankingRows.slice(0,8).map((row) => {
               const active = isLeadershipSeriesVisible(String(chartKey), row.label);
