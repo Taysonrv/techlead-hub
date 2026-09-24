@@ -1456,6 +1456,13 @@ export function Versions() {
         }}
       >
         <CardContent>
+          <Stack direction={{ xs: "column", md: "row" }} spacing={1} sx={{ mb: 1.5, justifyContent: "space-between", alignItems: { md: "center" } }}>
+            <Box>
+              <Typography sx={{ fontWeight: 850 }}>Filtros de versões</Typography>
+              <Typography variant="caption" color="text.secondary">Use o recorte principal e abra filtros avançados somente quando necessário.</Typography>
+            </Box>
+            {hasAnyFilter && <Chip size="small" variant="outlined" label="Recorte personalizado" />}
+          </Stack>
           <Box
             sx={{
               display:
