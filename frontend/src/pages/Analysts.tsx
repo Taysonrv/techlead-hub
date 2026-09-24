@@ -48,6 +48,7 @@ import { api } from "../services/api";
 import { useFilters } from "../context/FiltersContext";
 import { PeriodFilter } from "../components/PeriodFilter";
 import { PageHeader } from "../components/PageHeader";
+import { detailDrawerPaperSx } from "../theme/layoutTokens";
 import { KpiCard as ExecutiveKpiCard } from "../components/KpiCard";
 import { ExecutiveSection } from "../components/ExecutiveSection";
 import { aliareColors } from "../theme/theme";
@@ -3872,6 +3873,7 @@ export function Analysts() {
         onClose={() =>
           setDrilldown(null)
         }
+      slotProps={{ paper: { sx: detailDrawerPaperSx } }}
       >
         <Box
           sx={{
@@ -4136,6 +4138,7 @@ export function Analysts() {
             null
           )
         }
+      slotProps={{ paper: { sx: detailDrawerPaperSx } }}
       >
         <Box
           sx={{
@@ -4445,6 +4448,7 @@ export function Analysts() {
         onClose={() =>
           setAzureDrilldown(null)
         }
+      slotProps={{ paper: { sx: detailDrawerPaperSx } }}
       >
         <Box
           sx={{
@@ -4591,6 +4595,7 @@ export function Analysts() {
             null
           )
         }
+      slotProps={{ paper: { sx: detailDrawerPaperSx } }}
       >
         <Box
           sx={{
