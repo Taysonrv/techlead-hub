@@ -1,5 +1,5 @@
 import {
-  Alert, Autocomplete, Box, Button, Card, CardContent, Chip, CircularProgress,
+  Alert, Autocomplete, Box, Button, Card, CardContent, Checkbox, Chip, CircularProgress,
   Drawer, FormControl, InputLabel, MenuItem, Select, Stack,
   TextField, Typography, useTheme,
 } from "@mui/material";
@@ -64,9 +64,9 @@ export function DataQuality() {
   const [data, setData] = useState<Data | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
-  const [type, setType] = useState("");
-  const [client, setClient] = useState("");
-  const [user, setUser] = useState("");
+  const [type, setType] = useState<string[]>([]);
+  const [client, setClient] = useState<string[]>([]);
+  const [user, setUser] = useState<string[]>([]);
   const [search, setSearch] = useState("");
   const [issue, setIssue] = useState(() => searchParams.get("issue") ?? "");
   const [selected, setSelected] = useState<Sample | null>(null);
@@ -76,7 +76,7 @@ export function DataQuality() {
     try {
       setLoading(true); setError(false);
       const response = await api.get<Data>("/workspace/data-quality", { params: {
-        type: type || undefined, client: client || undefined, user: user || undefined,
+        type: type.length ? type.join("|||") : undefined, client: client.length ? client.join("|||") : undefined, user: user.length ? user.join("|||") : undefined,
         issue: issue || undefined, search: search || undefined,
       }, signal, timeout: 45_000 });
       if (signal?.aborted) return;
@@ -174,7 +174,7 @@ export function DataQuality() {
     URL.revokeObjectURL(url);
   }
 
-  const hasFilters = Boolean(type || client || user || search || issue);
+  const hasFilters = Boolean(type.length || client.length || user.length || search || issue);
   const title = useMemo(() => metrics.find(([key]) => key === issue)?.[1] ?? "Pendências encontradas", [issue]);
 
   return <Box sx={{ pb: 4 }}>
@@ -183,10 +183,10 @@ export function DataQuality() {
     <Card variant="outlined" sx={{ mt: 2 }}><CardContent>
       <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "2fr repeat(3, minmax(170px, 1fr)) auto" }, gap: 1.2 }}>
         <TextField size="small" label="Pesquisar ID ou título" value={search} onChange={(e) => setSearch(e.target.value)} slotProps={{ input: { startAdornment: <SearchOutlined sx={{ mr: 1, color: "text.disabled" }} /> } }} />
-        <FormControl size="small"><InputLabel>Tipo</InputLabel><Select label="Tipo" value={type} onChange={(e) => setType(e.target.value)}><MenuItem value="">Todos</MenuItem>{data?.filters.types.map((value) => <MenuItem key={value} value={value}>{value}</MenuItem>)}</Select></FormControl>
-        <Autocomplete size="small" options={data?.filters.clients ?? []} value={client || null} onChange={(_, value) => setClient(value ?? "")} renderInput={(params) => <TextField {...params} label="Cliente" />} />
-        <Autocomplete size="small" options={data?.filters.users ?? []} value={user || null} onChange={(_, value) => setUser(value ?? "")} renderInput={(params) => <TextField {...params} label="Usuário do suporte" />} />
-        <Button disabled={!hasFilters} onClick={() => { setType(""); setClient(""); setUser(""); setSearch(""); setIssue(""); }}>Limpar</Button>
+        <FormControl size="small"><InputLabel>Tipo</InputLabel><Select multiple displayEmpty label="Tipo" value={type} onChange={(e) => setType(typeof e.target.value === "string" ? e.target.value.split(",") : e.target.value)} renderValue={(selected) => !selected.length ? "Todos" : selected.length === 1 ? selected[0] : `${selected.length} tipos`}><MenuItem onClick={(e) => { e.preventDefault(); e.stopPropagation(); setType([]); }}><Checkbox size="small" checked={!type.length} />Todos</MenuItem>{data?.filters.types.map((value) => <MenuItem key={value} value={value}><Checkbox size="small" checked={type.includes(value)} />{value}</MenuItem>)}</Select></FormControl>
+        <Autocomplete multiple size="small" options={data?.filters.clients ?? []} value={client} onChange={(_, value) => setClient(value)} renderInput={(params) => <TextField {...params} label="Cliente" />} limitTags={1} />
+        <Autocomplete multiple size="small" options={data?.filters.users ?? []} value={user} onChange={(_, value) => setUser(value)} renderInput={(params) => <TextField {...params} label="Usuário do suporte" />} limitTags={1} />
+        <Button disabled={!hasFilters} onClick={() => { setType([]); setClient([]); setUser([]); setSearch(""); setIssue(""); }}>Limpar</Button>
       </Box>
     </CardContent></Card>
 
