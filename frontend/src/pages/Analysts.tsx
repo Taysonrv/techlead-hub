@@ -396,7 +396,7 @@ export function Analysts() {
   const [timeProductivity, setTimeProductivity] = useState<TimeProductivityResponse | null>(null);
   const [timeProductivityLoading, setTimeProductivityLoading] = useState(false);
   const [timeProductivityError, setTimeProductivityError] = useState<string | null>(null);
-  const [timeProductivityLoadedKey, setTimeProductivityLoadedKey] = useState("");
+  const timeProductivityRequestKey = useRef("");
 
   const [
     productivityDrilldown,
@@ -493,7 +493,8 @@ export function Analysts() {
 
   useEffect(() => {
     const requestKey = [formatDateForApi(effectiveStartDate), formatDateForApi(effectiveEndDate), selectedAnalyst].join("|");
-    if (requestKey === timeProductivityLoadedKey) return;
+    if (requestKey === timeProductivityRequestKey.current) return;
+    timeProductivityRequestKey.current = requestKey;
 
     const controller = new AbortController();
     async function loadTimeProductivity() {
@@ -505,7 +506,6 @@ export function Analysts() {
           signal: controller.signal,
         });
         setTimeProductivity(response.data);
-        setTimeProductivityLoadedKey(requestKey);
       } catch (err) {
         if (controller.signal.aborted) return;
         console.error("Erro ao carregar produtividade por horas:", err);
@@ -516,7 +516,7 @@ export function Analysts() {
     }
     void loadTimeProductivity();
     return () => controller.abort();
-  }, [effectiveStartDate, effectiveEndDate, selectedAnalyst, timeProductivityLoadedKey]);
+  }, [effectiveStartDate, effectiveEndDate, selectedAnalyst]);
 
   /* =====================================================
      PERÍODO GLOBAL
