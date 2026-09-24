@@ -9,6 +9,7 @@ import {
 } from "@mui/icons-material";
 import { useEffect, useMemo, useState } from "react";
 import type { ReactElement, ReactNode } from "react";
+import type { LegendPayload } from "recharts/types/component/DefaultLegendContent";
 import { useNavigate } from "react-router-dom";
 import { api } from "../services/api";
 import { PageHeader } from "../components/PageHeader";
@@ -168,13 +169,19 @@ export function TechnicalLeadership() {
     });
   };
   const isLeadershipSeriesVisible = (chart: string, key: string) => !(hiddenLeadershipSeries[chart]?.has(key));
+  const legendKey = (entry: LegendPayload, fallback?: string | number) => {
+    const dataKey = entry.dataKey;
+    if (typeof dataKey === "string" || typeof dataKey === "number") return String(dataKey);
+    if (typeof entry.value === "string" || typeof entry.value === "number") return String(entry.value);
+    return fallback === undefined ? "" : String(fallback);
+  };
   const interactiveLegend = (chart: string, total: number) => ({
-    onClick: (entry: { dataKey?: string | number; value?: string | number }) => {
-      const key = String(entry.dataKey ?? entry.value ?? "");
+    onClick: (entry: LegendPayload) => {
+      const key = legendKey(entry);
       if (key) toggleLeadershipSeries(chart, key, total);
     },
-    formatter: (value: string | number, entry: { dataKey?: string | number; value?: string | number }) => {
-      const key = String(entry.dataKey ?? entry.value ?? value);
+    formatter: (value: string | number, entry: LegendPayload) => {
+      const key = legendKey(entry, value);
       const active = isLeadershipSeriesVisible(chart, key);
       return <span style={{ opacity: active ? 1 : .38, textDecoration: active ? "none" : "line-through", cursor: "pointer" }}>{String(value)}</span>;
     },
