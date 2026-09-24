@@ -9,6 +9,9 @@ import {
   CardContent,
   Chip,
   CircularProgress,
+  FormControl,
+  MenuItem,
+  Select,
   Divider,
   Drawer,
   IconButton,
@@ -141,6 +144,8 @@ type AttentionLevel =
   | "medio";
 
 
+type CardPeriod = "7d" | "30d" | "60d" | "90d" | "month" | "semester" | "year";
+
 type Severity =
   | "default"
   | "error"
@@ -198,6 +203,9 @@ export function Dashboard() {
 
   const [copyMessage, setCopyMessage] =
     useState("");
+  const [evolutionPeriod, setEvolutionPeriod] = useState<CardPeriod>("30d");
+  const [categoryPeriod, setCategoryPeriod] = useState<CardPeriod>("30d");
+  const [statusPeriod, setStatusPeriod] = useState<CardPeriod>("30d");
 
   const {
     period,
