@@ -1056,12 +1056,16 @@ export function Attention() {
           sx={{
             py: 1.5,
             px: 2,
-
-            "&:last-child": {
-              pb: 1.5,
-            },
+            "&:last-child": { pb: 1.5 },
           }}
         >
+          <Stack direction={{ xs: "column", md: "row" }} spacing={1} sx={{ mb: 1.5, justifyContent: "space-between", alignItems: { md: "center" } }}>
+            <Box>
+              <Typography sx={{ fontWeight: 850 }}>Recorte de atenção</Typography>
+              <Typography variant="caption" color="text.secondary">Combine prazo, responsável e cliente para investigar somente os riscos relevantes.</Typography>
+            </Box>
+            {(level.length > 0 || owner.length > 0 || client.length > 0 || risk) && <Chip size="small" variant="outlined" label="Filtros ativos" />}
+          </Stack>
           <Stack
             direction={{
               xs: "column",
