@@ -378,6 +378,26 @@ export function Dashboard() {
     };
   }, [azureWorkItems]);
 
+  const cardPeriodBounds = (value: CardPeriod) => {
+    const now = new Date();
+    const end = endOfDay(now);
+    let start = startOfDay(now);
+    if (value === "7d") start.setDate(start.getDate() - 7);
+    if (value === "30d") start.setDate(start.getDate() - 30);
+    if (value === "60d") start.setDate(start.getDate() - 60);
+    if (value === "90d") start.setDate(start.getDate() - 90);
+    if (value === "month") start = new Date(now.getFullYear(), now.getMonth(), 1);
+    if (value === "semester") start = new Date(now.getFullYear(), now.getMonth() < 6 ? 0 : 6, 1);
+    if (value === "year") start = new Date(now.getFullYear(), 0, 1);
+    return { start: startOfDay(start), end };
+  };
+  const evolutionBounds = cardPeriodBounds(evolutionPeriod);
+  const evolutionTickets = useMemo(() => tickets.filter((ticket) => isDateInPeriod(ticket.createdDate, evolutionBounds.start, evolutionBounds.end)), [tickets, evolutionPeriod]);
+  const categoryBounds = cardPeriodBounds(categoryPeriod);
+  const categoryTickets = useMemo(() => tickets.filter((ticket) => isDateInPeriod(ticket.createdDate, categoryBounds.start, categoryBounds.end)), [tickets, categoryPeriod]);
+  const statusBounds = cardPeriodBounds(statusPeriod);
+  const statusTickets = useMemo(() => tickets.filter((ticket) => isOpen(ticket) && isDateInPeriod(ticket.createdDate, statusBounds.start, statusBounds.end)), [tickets, statusPeriod]);
+
   /* =======================================================
      CATEGORIAS
   ======================================================= */
@@ -386,11 +406,11 @@ export function Dashboard() {
     useMemo(
       () =>
         groupByField(
-          filteredTickets,
+          categoryTickets,
           "category",
           "Sem categoria"
         ),
-      [filteredTickets]
+      [categoryTickets]
     );
 
   /* =======================================================
@@ -435,7 +455,7 @@ export function Dashboard() {
           number
         >();
 
-      filteredTickets.forEach(
+      evolutionTickets.forEach(
         (ticket) => {
           const date =
             new Date(
@@ -473,12 +493,12 @@ export function Dashboard() {
 
       const cursor =
         startOfDay(
-          effectiveStartDate
+          evolutionBounds.start
         );
 
       const lastDay =
         endOfDay(
-          effectiveEndDate
+          evolutionBounds.end
         );
 
       while (
@@ -510,9 +530,9 @@ export function Dashboard() {
 
       return result;
     }, [
-      filteredTickets,
-      effectiveStartDate,
-      effectiveEndDate,
+      evolutionTickets,
+      evolutionBounds.start,
+      evolutionBounds.end,
     ]);
 
   /* =======================================================
@@ -566,11 +586,14 @@ export function Dashboard() {
     [filteredTickets]
   );
 
+  const statusNewTickets = useMemo(() => statusTickets.filter((ticket) => ticket.baseStatus === "New"), [statusTickets]);
+  const statusAttendanceTickets = useMemo(() => statusTickets.filter((ticket) => ticket.baseStatus === "InAttendance"), [statusTickets]);
+  const statusStoppedTickets = useMemo(() => statusTickets.filter((ticket) => ticket.baseStatus === "Stopped"), [statusTickets]);
   const backlogStatus = useMemo(() => [
-    { label: "Novos", total: newTickets.length },
-    { label: "Em atendimento", total: attendanceTickets.length },
-    { label: "Parados", total: stoppedTickets.length },
-  ], [newTickets, attendanceTickets, stoppedTickets]);
+    { label: "Novos", total: statusNewTickets.length },
+    { label: "Em atendimento", total: statusAttendanceTickets.length },
+    { label: "Parados", total: statusStoppedTickets.length },
+  ], [statusNewTickets, statusAttendanceTickets, statusStoppedTickets]);
 
   /* =======================================================
      PONTOS DE ATENÇÃO
