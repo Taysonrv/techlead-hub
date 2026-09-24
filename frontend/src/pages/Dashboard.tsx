@@ -43,6 +43,7 @@ import { useNavigate } from "react-router-dom";
 import { api } from "../services/api";
 import { PeriodFilter } from "../components/PeriodFilter";
 import { PageHeader } from "../components/PageHeader";
+import { detailDrawerPaperSx } from "../theme/layoutTokens";
 import { KpiCard as ExecutiveKpiCard } from "../components/KpiCard";
 import { ExportTicketsButton } from "../components/ExportTicketsButton";
 import { useFilters } from "../context/FiltersContext";
@@ -1896,6 +1897,7 @@ export function Dashboard() {
         onClose={() =>
           setDrilldown(null)
         }
+      slotProps={{ paper: { sx: detailDrawerPaperSx } }}
       >
         <Box
           sx={{
@@ -2177,6 +2179,7 @@ export function Dashboard() {
             null
           )
         }
+      slotProps={{ paper: { sx: detailDrawerPaperSx } }}
       >
         <Box
           sx={{
