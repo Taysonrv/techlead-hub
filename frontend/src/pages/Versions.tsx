@@ -459,7 +459,9 @@ export function Versions() {
       activeMetricFilter !== "all",
     );
 
-  const [referenceDataLoaded, setReferenceDataLoaded] = useState(false);\n\n  const load =
+  const [referenceDataLoaded, setReferenceDataLoaded] = useState(false);
+
+  const load =
     useCallback(
       async () => {
         try {
