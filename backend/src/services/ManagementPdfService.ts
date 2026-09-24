@@ -630,6 +630,19 @@ export class ManagementPdfService {
         "states",
         "development",
       ],
+      "operational-causes": [
+        "situationEvolution",
+        "insights",
+        "categories",
+        "clients",
+        "tickets",
+      ],
+      "operational-errors": [
+        "situationEvolution",
+        "insights",
+        "categories",
+        "tickets",
+      ],
     };
 
     const sections =
@@ -742,6 +755,10 @@ function reportTitle(
       "Correções de Suporte",
     versions:
       "Análise por Versões",
+    "operational-causes":
+      "Causas e Soluções de Contorno",
+    "operational-errors":
+      "Erro Operacional por Área",
   };
 
   return titles[
