@@ -19,6 +19,7 @@ import {
   CardContent,
   Chip,
   CircularProgress,
+  Collapse,
   Divider,
   FormControlLabel,
   LinearProgress,
@@ -214,6 +215,7 @@ export function Import() {
     );
 
   const [syncHealth, setSyncHealth] = useState<SyncCenterSummary | null>(null);
+  const [historyExpanded, setHistoryExpanded] = useState(false);
 
   const fileSize =
     useMemo(
@@ -586,12 +588,6 @@ export function Import() {
 
       <PageHeader eyebrow="Gestão" title="Importar e Sincronizar Dados" description="Importe planilhas ou payloads JSON do Movidesk e acompanhe a sincronização automática do Azure DevOps." />
 
-      {/* =====================================================
-          HISTÓRICO CONSOLIDADO
-      ===================================================== */}
-
-      <SyncHistory />
-
       {syncHealth && (
         <Card elevation={0} sx={{ mb: 3, border: "1px solid", borderColor: syncHealth.health === "critical" ? "error.main" : syncHealth.health === "attention" ? "warning.main" : "divider", borderRadius: 2.5 }}>
           <CardContent sx={{ p: { xs: 2, md: 2.5 }, "&:last-child": { pb: { xs: 2, md: 2.5 } } }}>
@@ -614,6 +610,19 @@ export function Import() {
           </CardContent>
         </Card>
       )}
+
+      <Card elevation={0} sx={{ mb: 2, border: "1px solid", borderColor: "divider", borderRadius: 2.25 }}>
+        <CardContent sx={{ py: 1.25, "&:last-child": { pb: 1.25 } }}>
+          <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ alignItems: { sm: "center" }, justifyContent: "space-between" }}>
+            <Box>
+              <Typography sx={{ fontWeight: 800 }}>Histórico consolidado</Typography>
+              <Typography variant="caption" color="text.secondary">Últimas execuções Movidesk e Azure. Abra somente quando precisar auditar sincronizações.</Typography>
+            </Box>
+            <Button size="small" variant="outlined" onClick={() => setHistoryExpanded((value) => !value)}>{historyExpanded ? "Ocultar histórico" : "Ver histórico"}</Button>
+          </Stack>
+          <Collapse in={historyExpanded} unmountOnExit><Box sx={{ mt: 1.25 }}><SyncHistory /></Box></Collapse>
+        </CardContent>
+      </Card>
 
       <EmailRecoveryConfiguration />
 
