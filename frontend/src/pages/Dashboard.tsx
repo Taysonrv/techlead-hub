@@ -2826,20 +2826,16 @@ function MonthlyCategoryEvolutionCard({
 
   const visibleCategories = categories.filter((category) => !hiddenCategories.has(category));
 
-  const data = useMemo(() => {
+  const periods = useMemo(() => {
     const now = new Date();
     const anchor = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const periods: Array<{ key: string; label: string; start: Date; end: Date }> = [];
+    const result: Array<{ key: string; label: string; start: Date; end: Date }> = [];
 
     if (granularity === "month") {
       for (let offset = 5; offset >= 0; offset -= 1) {
         const start = new Date(anchor.getFullYear(), anchor.getMonth() - offset, 1);
         const end = new Date(start.getFullYear(), start.getMonth() + 1, 0, 23, 59, 59, 999);
-        periods.push({
-          key: `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}`,
-          label: start.toLocaleDateString("pt-BR", { month: "short", year: "2-digit" }).replace(".", ""),
-          start, end,
-        });
+        result.push({ key: `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}`, label: start.toLocaleDateString("pt-BR", { month: "short", year: "2-digit" }).replace(".", ""), start, end });
       }
     } else if (granularity === "week") {
       const currentMonday = new Date(anchor);
@@ -2852,11 +2848,7 @@ function MonthlyCategoryEvolutionCard({
         const end = new Date(start);
         end.setDate(end.getDate() + 6);
         end.setHours(23, 59, 59, 999);
-        periods.push({
-          key: start.toISOString().slice(0, 10),
-          label: `Sem. ${start.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}`,
-          start, end,
-        });
+        result.push({ key: start.toISOString().slice(0, 10), label: `Sem. ${start.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}`, start, end });
       }
     } else {
       for (let offset = 29; offset >= 0; offset -= 1) {
@@ -2865,14 +2857,13 @@ function MonthlyCategoryEvolutionCard({
         start.setHours(0, 0, 0, 0);
         const end = new Date(start);
         end.setHours(23, 59, 59, 999);
-        periods.push({
-          key: start.toISOString().slice(0, 10),
-          label: start.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }),
-          start, end,
-        });
+        result.push({ key: start.toISOString().slice(0, 10), label: start.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }), start, end });
       }
     }
+    return result;
+  }, [granularity]);
 
+  const data = useMemo(() => {
     const rows = periods.map((period) => {
       const row: Record<string, string | number> = { periodKey: period.key, period: period.label };
       categories.forEach((category) => { row[category] = 0; });
@@ -2889,7 +2880,7 @@ function MonthlyCategoryEvolutionCard({
     });
 
     return rows;
-  }, [tickets, categories, granularity]);
+  }, [tickets, categories, periods]);
 
   const total = data.reduce((sum, row) => sum + visibleCategories.reduce((acc, category) => acc + Number(row[category] ?? 0), 0), 0);
   const average = data.length ? Math.round(total / data.length) : 0;
