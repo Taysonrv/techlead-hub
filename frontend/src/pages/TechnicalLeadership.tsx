@@ -317,7 +317,7 @@ export function TechnicalLeadership() {
         </Stack>}
 
         {data && <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2,1fr)", lg: "repeat(4,1fr)" }, gap: 1.25, mt: 2 }}>
-          <KpiCard title="Atendimentos no período" value={data.weekly.current} subtitle="Abrir indicadores operacionais" info="Tickets criados no período selecionado." accent={aliareColors.info} onClick={() => setTab("indicators")} />
+          <KpiCard title="Atendimentos no período" value={data.weekly.current} subtitle="Clique para ver os atendimentos" info="Tickets criados no período selecionado." accent={aliareColors.info} onClick={() => setDrawer({ kind: "radar", key: "opened", title: "Atendimentos no período", items: (data.analytics.samples.opened as Ticket[]) ?? [] })} />
           <KpiCard title="Backlog aberto" value={data.weekly.open} subtitle="Clique para investigar" info="Atendimentos ainda abertos no recorte atual." accent={aliareColors.cyan} onClick={() => setDrawer({ kind: "radar", key: "backlog", title: "Backlog aberto", items: data.analytics.samples.backlog ?? [] })} />
           <KpiCard title="SLA vencido" value={data.weekly.overdue} subtitle="Clique para investigar" info="Atendimentos abertos com prazo ou indicador de solução vencido." accent={aliareColors.error} onClick={() => setDrawer({ kind: "radar", key: "slaOverdue", title: "SLA vencido", items: data.radarSamples.slaOverdue ?? [] })} />
           <KpiCard title="Tasks bloqueadas" value={data.weekly.blocked} subtitle="Clique para investigar" info="Work Items ativos com bloqueio de processo." accent={aliareColors.purple} onClick={() => setDrawer({ kind: "radar", key: "blocked", title: "Tasks bloqueadas", items: data.radarSamples.blocked ?? [] })} />
@@ -541,7 +541,10 @@ export function TechnicalLeadership() {
     </Box>}
 
     {data && tab === "radar" && <Box>
-      <AreaTitle title="Radar operacional" info={tabInfo.radar} icon={<RadarOutlined color="primary" />} />
+      <Stack direction={{ xs: "column", sm: "row" }} sx={{ justifyContent: "space-between", alignItems: { sm: "center" }, gap: 1 }}>
+        <AreaTitle title="Radar operacional" info={tabInfo.radar} icon={<RadarOutlined color="primary" />} />
+        <Chip size="small" variant="outlined" label="Snapshot atual · cliente/analista" />
+      </Stack>
       <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2,1fr)", lg: "repeat(5,1fr)" }, gap: 1.5, mt: 1.2 }}>
         {radarMeta.map(([key, title, info, accent]) => <KpiCard key={key} title={title} value={data.radar[key] ?? 0} subtitle="Clique para investigar" info={info} accent={accent} onClick={() => setDrawer({ kind: "radar", key, title, items: data.radarSamples[key] ?? [] })} />)}
       </Box>
