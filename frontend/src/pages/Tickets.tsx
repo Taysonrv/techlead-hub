@@ -4,6 +4,7 @@ import {
   Button,
   Card,
   CardContent,
+  Checkbox,
   Chip,
   CircularProgress,
   Divider,
@@ -191,14 +192,7 @@ type QuickFilter =
   | "unassigned"
   | null;
 
-type FilterSelectProps = {
-  label: string;
-  value: string;
-  options: string[];
-  onChange: (
-    value: string
-  ) => void;
-};
+type FilterSelectProps = { label: string; value: string[]; options: string[]; onChange: (value: string[]) => void; };
 
 type KpiCardProps = {
   title: string;
@@ -267,47 +261,19 @@ export function Tickets() {
   ] =
     useState("");
 
-  const [
-    status,
-    setStatus,
-  ] =
-    useState("");
+  const [status, setStatus] = useState<string[]>([]);
 
-  const [
-    urgency,
-    setUrgency,
-  ] =
-    useState("");
+  const [urgency, setUrgency] = useState<string[]>([]);
 
-  const [
-    category,
-    setCategory,
-  ] =
-    useState("");
+  const [category, setCategory] = useState<string[]>([]);
 
-  const [
-    owner,
-    setOwner,
-  ] =
-    useState("");
+  const [owner, setOwner] = useState<string[]>([]);
 
-  const [
-    client,
-    setClient,
-  ] =
-    useState("");
+  const [client, setClient] = useState<string[]>([]);
 
-  const [
-    team,
-    setTeam,
-  ] =
-    useState("");
+  const [team, setTeam] = useState<string[]>([]);
 
-  const [
-    service,
-    setService,
-  ] =
-    useState("");
+  const [service, setService] = useState<string[]>([]);
 
   const [
     showMoreFilters,
@@ -745,40 +711,13 @@ export function Tickets() {
               normalizedSearch
             );
 
-          const matchesStatus =
-            status === "" ||
-            ticket.status ===
-              status;
-
-          const matchesUrgency =
-            urgency === "" ||
-            ticket.urgency ===
-              urgency;
-
-          const matchesCategory =
-            category === "" ||
-            ticket.category ===
-              category;
-
-          const matchesOwner =
-            owner === "" ||
-            ticket.owner ===
-              owner;
-
-          const matchesClient =
-            client === "" ||
-            ticket.client ===
-              client;
-
-          const matchesTeam =
-            team === "" ||
-            ticket.team ===
-              team;
-
-          const matchesService =
-            service === "" ||
-            ticket.service ===
-              service;
+          const matchesStatus = !status.length || status.includes(ticket.status);
+          const matchesUrgency = !urgency.length || Boolean(ticket.urgency && urgency.includes(ticket.urgency));
+          const matchesCategory = !category.length || Boolean(ticket.category && category.includes(ticket.category));
+          const matchesOwner = !owner.length || Boolean(ticket.owner && owner.includes(ticket.owner));
+          const matchesClient = !client.length || Boolean(ticket.client && client.includes(ticket.client));
+          const matchesTeam = !team.length || Boolean(ticket.team && team.includes(ticket.team));
+          const matchesService = !service.length || Boolean(ticket.service && service.includes(ticket.service));
 
           const attention =
             getAttentionLevel(
@@ -838,13 +777,13 @@ export function Tickets() {
     }, [
       periodTickets,
       search,
-      status,
-      urgency,
-      category,
-      owner,
-      client,
-      team,
-      service,
+      status.length,
+      urgency.length,
+      category.length,
+      owner.length,
+      client.length,
+      team.length,
+      service.length,
       quickFilter,
     ]);
 
@@ -909,13 +848,13 @@ export function Tickets() {
 
   function clearFilters() {
     setSearch("");
-    setStatus("");
-    setUrgency("");
-    setCategory("");
-    setOwner("");
-    setClient("");
-    setTeam("");
-    setService("");
+    setStatus([]);
+    setUrgency([]);
+    setCategory([]);
+    setOwner([]);
+    setClient([]);
+    setTeam([]);
+    setService([]);
     setQuickFilter(
       null
     );
@@ -935,13 +874,13 @@ export function Tickets() {
      * à quantidade apresentada na tabela.
      */
     setSearch("");
-    setStatus("");
-    setUrgency("");
-    setCategory("");
-    setOwner("");
-    setClient("");
-    setTeam("");
-    setService("");
+    setStatus([]);
+    setUrgency([]);
+    setCategory([]);
+    setOwner([]);
+    setClient([]);
+    setTeam([]);
+    setService([]);
 
     setQuickFilter(
       filter
@@ -3139,60 +3078,15 @@ function KpiCard({
    SELECT
 ========================================================= */
 
-function FilterSelect({
-  label,
-  value,
-  options,
-  onChange,
-}: FilterSelectProps) {
-  return (
-    <FormControl
-      fullWidth
-      size="small"
-    >
-      <InputLabel>
-        {label}
-      </InputLabel>
-
-      <Select
-        value={
-          value
-        }
-        label={
-          label
-        }
-        onChange={(
-          event
-        ) =>
-          onChange(
-            event.target
-              .value
-          )
-        }
-      >
-        <MenuItem value="">
-          Todos
-        </MenuItem>
-
-        {options.map(
-          (
-            option
-          ) => (
-            <MenuItem
-              key={
-                option
-              }
-              value={
-                option
-              }
-            >
-              {option}
-            </MenuItem>
-          )
-        )}
-      </Select>
-    </FormControl>
-  );
+function FilterSelect({ label, value, options, onChange }: FilterSelectProps) {
+  return <FormControl fullWidth size="small"><InputLabel>{label}</InputLabel>
+    <Select multiple displayEmpty value={value} label={label}
+      onChange={(event) => onChange(typeof event.target.value === "string" ? event.target.value.split(",") : event.target.value)}
+      renderValue={(selected) => !selected.length ? "Todos" : selected.length === 1 ? selected[0] : `${selected.length} selecionados`}>
+      <MenuItem onClick={(event) => { event.preventDefault(); event.stopPropagation(); onChange([]); }}><Checkbox size="small" checked={!value.length} />Todos</MenuItem>
+      {options.map((option) => <MenuItem key={option} value={option}><Checkbox size="small" checked={value.includes(option)} />{option}</MenuItem>)}
+    </Select>
+  </FormControl>;
 }
 
 /* =========================================================
