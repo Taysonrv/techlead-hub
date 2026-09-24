@@ -396,6 +396,7 @@ export function Analysts() {
   const [timeProductivity, setTimeProductivity] = useState<TimeProductivityResponse | null>(null);
   const [timeProductivityLoading, setTimeProductivityLoading] = useState(false);
   const [timeProductivityError, setTimeProductivityError] = useState<string | null>(null);
+  const [timeProductivityLoadedKey, setTimeProductivityLoadedKey] = useState("");
 
   const [
     productivityDrilldown,
@@ -491,20 +492,31 @@ export function Analysts() {
   ]);
 
   useEffect(() => {
+    const requestKey = [formatDateForApi(effectiveStartDate), formatDateForApi(effectiveEndDate), selectedAnalyst].join("|");
+    if (requestKey === timeProductivityLoadedKey) return;
+
+    const controller = new AbortController();
     async function loadTimeProductivity() {
       try {
-        setTimeProductivityLoading(true); setTimeProductivityError(null);
+        setTimeProductivityLoading(true);
+        setTimeProductivityError(null);
         const response = await api.get<TimeProductivityResponse>("/workspace/analyst-time-productivity", {
           params: { startDate: formatDateForApi(effectiveStartDate), endDate: formatDateForApi(effectiveEndDate), analyst: selectedAnalyst || undefined },
+          signal: controller.signal,
         });
         setTimeProductivity(response.data);
+        setTimeProductivityLoadedKey(requestKey);
       } catch (err) {
+        if (controller.signal.aborted) return;
         console.error("Erro ao carregar produtividade por horas:", err);
         setTimeProductivityError("Não foi possível carregar a comparação entre jornada e horas registradas.");
-      } finally { setTimeProductivityLoading(false); }
+      } finally {
+        if (!controller.signal.aborted) setTimeProductivityLoading(false);
+      }
     }
     void loadTimeProductivity();
-  }, [effectiveStartDate, effectiveEndDate, selectedAnalyst]);
+    return () => controller.abort();
+  }, [effectiveStartDate, effectiveEndDate, selectedAnalyst, timeProductivityLoadedKey]);
 
   /* =====================================================
      PERÍODO GLOBAL
@@ -2308,7 +2320,7 @@ export function Analysts() {
             <Chip size="small" variant="outlined" label="Fonte: Movidesk" />
           </Stack>
           {timeProductivityError && <Alert severity="warning" sx={{ mt: 1.5 }}>{timeProductivityError}</Alert>}
-          {timeProductivityLoading ? <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}><CircularProgress size={28}/></Box> : timeProductivity && <>
+          {timeProductivityLoading ? <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}><CircularProgress size={28}/></Box> : !timeProductivity ? <Alert severity="info" variant="outlined" sx={{ mt: 1.5 }}>Sem dados de horas registradas para o recorte atual.</Alert> : timeProductivity.analysts.length === 0 ? <Alert severity="info" variant="outlined" sx={{ mt: 1.5 }}>Nenhum analista possui apontamentos de tempo no período e filtro selecionados.</Alert> : <>
             <Alert severity="info" variant="outlined" sx={{ mt: 1.5 }}>{timeProductivity.definition.expectedHours} {timeProductivity.definition.coverageRate}</Alert>
             <Stack direction="row" spacing={1} sx={{ mt: 1, flexWrap: "wrap" }}><Chip size="small" variant="outlined" label={`Jornada: ${timeProductivity.capacity.hoursPerDay}h/dia útil`}/><Chip size="small" variant="outlined" label={`Feriados configurados: ${timeProductivity.capacity.configuredHolidays.length}`}/></Stack>
             <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", xl: "1.15fr .85fr" }, gap: 2, mt: 2 }}>
