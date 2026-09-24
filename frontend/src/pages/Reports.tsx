@@ -10,6 +10,7 @@ import {
   Stack,
   TextField,
   Typography,
+  useTheme,
 } from "@mui/material";
 
 import {
@@ -523,6 +524,8 @@ function ReportCard({
   const Icon =
     report.icon;
   const accent = REPORT_ACCENTS[report.scope];
+  const theme = useTheme();
+  const isDark = theme.palette.mode === "dark";
 
   const excelLoading =
     downloading ===
@@ -545,7 +548,10 @@ function ReportCard({
         borderRadius:
           2.5,
         overflow: "hidden",
-        background: `linear-gradient(145deg, color-mix(in srgb, ${accent} 7%, white), #FFFFFF 46%)`,
+        background: isDark
+          ? `linear-gradient(145deg, color-mix(in srgb, ${accent} 9%, #0B2338), #07192B 48%, #081D30)`
+          : `linear-gradient(145deg, color-mix(in srgb, ${accent} 7%, white), #FFFFFF 46%)`,
+        color: "text.primary",
         position: "relative",
         "&::before": { content: '""', position: "absolute", inset: "0 0 auto", height: 5, backgroundColor: accent },
         transition:
@@ -591,7 +597,7 @@ function ReportCard({
               flexShrink:
                 0,
               backgroundColor:
-                `color-mix(in srgb, ${accent} 14%, white)`,
+                isDark ? `color-mix(in srgb, ${accent} 18%, #0B2338)` : `color-mix(in srgb, ${accent} 14%, white)`,
               color:
                 accent,
             }}
@@ -652,7 +658,7 @@ function ReportCard({
         <Box sx={{ mt: 2.25, pt: 2, borderTop: "1px solid", borderColor: "divider", flex: 1 }}>
           <Typography variant="overline" sx={{ color: accent, fontWeight: 850 }}>Conteúdo executivo</Typography>
           <Stack direction="row" useFlexGap spacing={0.75} sx={{ mt: 0.75, flexWrap: "wrap" }}>
-            {report.contents.split(",").map((content) => <Chip key={content} size="small" label={content.trim().replace(/\.$/, "")} sx={{ backgroundColor: `color-mix(in srgb, ${accent} 10%, white)`, color: "text.primary", border: `1px solid color-mix(in srgb, ${accent} 25%, white)` }} />)}
+            {report.contents.split(",").map((content) => <Chip key={content} size="small" label={content.trim().replace(/\.$/, "")} sx={{ backgroundColor: isDark ? `color-mix(in srgb, ${accent} 12%, #0B2338)` : `color-mix(in srgb, ${accent} 10%, white)`, color: "text.primary", border: `1px solid color-mix(in srgb, ${accent} 28%, ${isDark ? "#183A54" : "white"})` }} />)}
           </Stack>
         </Box>
 
