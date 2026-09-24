@@ -34,7 +34,7 @@ type Recurrence = {
   concentration?: { topClient: string | null; topClientCount: number; topModule: string | null; topModuleCount: number; clientSharePct: number };
 };
 type Gap = { id: string; type: string; title: string; evidence: string; impact: string; action: string; status: string; confidence?: string; ticketCount?: number; azureLinked?: number; blockedLinked?: number; deliveredLinked?: number; examples?: Ticket[]; tasks?: Task[] };
-type Development = { analyst: string; tickets: number; stale: number; linkedTasks?: number; blockedTasks?: number; finishedTasks?: number; themes: Array<{ topic: string; count: number }> };
+type Development = { analyst: string; tickets: number; stale: number; linkedTasks?: number; blockedTasks?: number; finishedTasks?: number; themes: Array<{ topic: string; count: number }>; examples?: Ticket[] };
 type Data = {
   generatedAt: string; periodDays: number; periodStart?: string; periodEnd?: string;
   radar: Record<string, number>;
@@ -53,7 +53,11 @@ type Data = {
     clientDistribution: Array<{ label: string; total: number }>;
     aging: Array<{ label: string; total: number }>;
     operational: { reopenRate: number | null; firstContactResolutionRate: number | null; resolutionSlaRate: number | null; responseSlaRate: number | null; flowBalance: number | null; criticalAging: number };
-    samples: Record<string, Ticket[]>;
+    samples: Record<string, Ticket[] | Record<string, Ticket[]>> & {
+      opened: Ticket[]; backlog: Ticket[]; resolved: Ticket[]; reopened: Ticket[];
+      responseOutside: Ticket[]; resolutionOutside: Ticket[]; criticalAging: Ticket[]; firstContact: Ticket[];
+      aging: Record<string, Ticket[]>; categories: Record<string, Ticket[]>; clients: Record<string, Ticket[]>; contacts: Record<string, Ticket[]>;
+    };
   };
   recommendations: string[];
   filters: { clients: string[]; users: string[] };
@@ -163,6 +167,10 @@ export function TechnicalLeadership() {
   const [customEnd, setCustomEnd] = useState("");
   const [drawer, setDrawer] = useState<DrawerState>(null);
   const [hiddenLeadershipSeries, setHiddenLeadershipSeries] = useState<Record<string, Set<string>>>({});
+  const [auditReason, setAuditReason] = useState("");
+  const [recurrenceConfidence, setRecurrenceConfidence] = useState("");
+  const [gapImpact, setGapImpact] = useState("");
+  const [gapStatus, setGapStatus] = useState("");
 
   const toggleLeadershipSeries = (chart: string, key: string, total: number) => {
     setHiddenLeadershipSeries((current) => {
@@ -237,8 +245,14 @@ export function TechnicalLeadership() {
     if (drawer.kind === "audit") return drawer.items;
     if (drawer.kind === "recurrence") return drawer.recurrence.examples;
     if (drawer.kind === "gap") return drawer.gap.examples ?? [];
+    if (drawer.kind === "development") return drawer.development.examples ?? [];
     return [];
   }, [drawer]);
+
+  const auditReasons = useMemo(() => data ? [...new Set(data.audit.sample.map((ticket) => ticket.reason))].sort() : [], [data]);
+  const filteredAudit = useMemo(() => data ? data.audit.sample.filter((ticket) => !auditReason || ticket.reason === auditReason) : [], [data, auditReason]);
+  const filteredRecurrences = useMemo(() => data ? data.recurrences.filter((item) => !recurrenceConfidence || item.confidence === recurrenceConfidence) : [], [data, recurrenceConfidence]);
+  const filteredGaps = useMemo(() => data ? data.gaps.filter((gap) => (!gapImpact || gap.impact === gapImpact) && (!gapStatus || gap.status === gapStatus)) : [], [data, gapImpact, gapStatus]);
 
   const openItem = (item: Ticket | Task) => {
     if (isTask(item)) {
@@ -374,7 +388,7 @@ export function TechnicalLeadership() {
         <KpiCard title="SLA solução" value={data.analytics.operational.resolutionSlaRate === null ? "—" : `${data.analytics.operational.resolutionSlaRate}%`} subtitle="Resolvidos no prazo" accent={aliareColors.green} onClick={() => setDrawer({ kind: "radar", key: "resolutionOutside", title: "Solução fora do SLA", items: data.analytics.samples.resolutionOutside ?? [] })} />
         <KpiCard title="SLA 1ª resposta" value={data.analytics.operational.responseSlaRate === null ? "—" : `${data.analytics.operational.responseSlaRate}%`} subtitle="Primeiras respostas no prazo" accent={aliareColors.info} onClick={() => setDrawer({ kind: "radar", key: "responseOutside", title: "Primeira resposta fora do SLA", items: data.analytics.samples.responseOutside ?? [] })} />
         <KpiCard title="Reabertura" value={data.analytics.operational.reopenRate === null ? "—" : `${data.analytics.operational.reopenRate}%`} subtitle="Resolvidos que reabriram" accent={aliareColors.warning} onClick={() => setDrawer({ kind: "radar", key: "reopened", title: "Atendimentos reabertos", items: data.analytics.samples.reopened ?? [] })} />
-        <KpiCard title="1º contato" value={data.analytics.operational.firstContactResolutionRate === null ? "—" : `${data.analytics.operational.firstContactResolutionRate}%`} subtitle="Resolução no primeiro contato" accent={aliareColors.cyan} onClick={() => setTab("audit")} />
+        <KpiCard title="1º contato" value={data.analytics.operational.firstContactResolutionRate === null ? "—" : `${data.analytics.operational.firstContactResolutionRate}%`} subtitle="Resolução no primeiro contato" accent={aliareColors.cyan} onClick={() => setDrawer({ kind: "radar", key: "firstContact", title: "Resolvidos no primeiro contato", items: (data.analytics.samples.firstContact as Ticket[]) ?? [] })} />
         <KpiCard title="Balanço de fluxo" value={data.analytics.operational.flowBalance === null ? "—" : `${data.analytics.operational.flowBalance > 0 ? "+" : ""}${data.analytics.operational.flowBalance}%`} subtitle="Resolvidos − entradas / entradas" accent={data.analytics.operational.flowBalance !== null && data.analytics.operational.flowBalance >= 0 ? aliareColors.green : aliareColors.error} onClick={() => setDrawer({ kind: "radar", key: "opened", title: "Entradas do período", items: data.analytics.samples.opened ?? [] })} />
         <KpiCard title="Aging crítico" value={data.analytics.operational.criticalAging} subtitle="Backlog aberto há +15 dias" accent={aliareColors.error} onClick={() => setDrawer({ kind: "radar", key: "criticalAging", title: "Backlog com mais de 15 dias", items: data.analytics.samples.criticalAging ?? [] })} />
       </Box>
@@ -407,7 +421,7 @@ export function TechnicalLeadership() {
         <Card><CardContent>
           <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "center", gap: 1 }}>
             <Box sx={{ flex: 1, textAlign: "center", "& > *": { justifyContent: "center" } }}><AreaTitle title="Aging do backlog" info="Distribui os atendimentos abertos por idade desde a criação para antecipar envelhecimento da fila." /></Box>
-            <IndicatorPeriodFilter value={indicatorPeriod("aging")} onChange={(value) => setIndicatorPeriod("aging", value)} />
+            <Chip size="small" variant="outlined" label="Snapshot atual" />
           </Stack>
           <Box sx={{ height: 330, mt: 1.2 }}><ResponsiveContainer width="100%" height="100%"><BarChart data={analyticsFor("aging")?.aging ?? []}>
             <CartesianGrid strokeDasharray="4 5" vertical={false} stroke={mode === "dark" ? "rgba(148,163,184,.18)" : "rgba(15,23,42,.10)"} />
@@ -519,7 +533,7 @@ export function TechnicalLeadership() {
             </Stack>
             <Stack spacing={.8} sx={{ mt: 1.2 }}>{rankingRows.slice(0,8).map((row) => {
               const active = isLeadershipSeriesVisible(String(chartKey), row.label);
-              return <Box key={row.label} role="button" tabIndex={0} onClick={() => toggleLeadershipSeries(String(chartKey), row.label, Math.min(rankingRows.length, 8))} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") toggleLeadershipSeries(String(chartKey), row.label, Math.min(rankingRows.length, 8)); }} sx={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 1, alignItems: "center", cursor: "pointer", opacity: active ? 1 : .38, textDecoration: active ? "none" : "line-through", px: .5, py: .35, borderRadius: 1, transition: "all .2s ease", "&:hover": { bgcolor: "action.hover" } }}><Box sx={{ minWidth: 0 }}><Typography variant="body2" noWrap>{row.label}</Typography><Box sx={{ height: 5, borderRadius: 9, bgcolor: "action.hover", mt: .35, overflow: "hidden" }}><Box sx={{ width: active ? `${Math.max(6, row.total / maxVisible * 100)}%` : "0%", height: "100%", bgcolor: String(accent), borderRadius: 9, transition: "width .25s ease" }} /></Box></Box><Typography variant="body2" sx={{ fontWeight: 850 }}>{active ? row.total : "—"}</Typography></Box>;
+              return <Box key={row.label} role="button" tabIndex={0} onClick={() => toggleLeadershipSeries(String(chartKey), row.label, Math.min(rankingRows.length, 8))} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") toggleLeadershipSeries(String(chartKey), row.label, Math.min(rankingRows.length, 8)); }} sx={{ display: "grid", gridTemplateColumns: "1fr auto auto", gap: 1, alignItems: "center", cursor: "pointer", opacity: active ? 1 : .38, textDecoration: active ? "none" : "line-through", px: .5, py: .35, borderRadius: 1, transition: "all .2s ease", "&:hover": { bgcolor: "action.hover" } }}><Box sx={{ minWidth: 0 }}><Typography variant="body2" noWrap>{row.label}</Typography><Box sx={{ height: 5, borderRadius: 9, bgcolor: "action.hover", mt: .35, overflow: "hidden" }}><Box sx={{ width: active ? `${Math.max(6, row.total / maxVisible * 100)}%` : "0%", height: "100%", bgcolor: String(accent), borderRadius: 9, transition: "width .25s ease" }} /></Box></Box><Typography variant="body2" sx={{ fontWeight: 850 }}>{active ? row.total : "—"}</Typography><Button size="small" variant="text" onClick={(event) => { event.stopPropagation(); const sampleKey = String(chartKey) === "categoryDistribution" ? "categories" : String(chartKey) === "clientDistribution" ? "clients" : "contacts"; const groups = data.analytics.samples[sampleKey] as Record<string, Ticket[]> | undefined; setDrawer({ kind: "radar", key: `${String(chartKey)}-${row.label}`, title: `${String(title)} · ${row.label}`, items: groups?.[row.label] ?? [] }); }}>Ver</Button></Box>;
             })}</Stack>
           </CardContent></Card>;
         })}
