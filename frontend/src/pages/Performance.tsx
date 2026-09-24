@@ -48,6 +48,7 @@ import { api } from "../services/api";
 import { useFilters } from "../context/FiltersContext";
 import { PeriodFilter } from "../components/PeriodFilter";
 import { PageHeader } from "../components/PageHeader";
+import { detailDrawerPaperSx } from "../theme/layoutTokens";
 import { useTheme } from "@mui/material/styles";
 import { ExecutiveSection } from "../components/ExecutiveSection";
 
@@ -1287,6 +1288,7 @@ export function Performance() {
         anchor="right"
         open={Boolean(drilldown)}
         onClose={() => setDrilldown(null)}
+      slotProps={{ paper: { sx: detailDrawerPaperSx } }}
       >
         <Box sx={{ width: { xs: 330, sm: 580 }, p: 2.5 }}>
           {drilldown && (
