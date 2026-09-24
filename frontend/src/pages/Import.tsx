@@ -1051,7 +1051,7 @@ export function Import() {
                         1.5,
                     }}
                   >
-                    Últimas 10 execuções registradas.
+                    Últimas 5 execuções registradas.
                   </Typography>
 
                   <Stack
@@ -1061,6 +1061,7 @@ export function Import() {
                   >
                     {azureStatus
                       .recentRuns
+                      .slice(0, 5)
                       .map(
                         (
                           run,
