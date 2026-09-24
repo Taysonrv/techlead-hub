@@ -1800,7 +1800,7 @@ export function Analysts() {
                 variant="caption"
                 color="text.secondary"
               >
-                Filtre por squad ou analista
+                Recorte gerencial por squad e analista
               </Typography>
             </Box>
 
