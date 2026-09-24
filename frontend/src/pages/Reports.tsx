@@ -179,7 +179,7 @@ const REPORTS:
     description: "Análise específica dos atendimentos classificados como Problema – Erro operacional.",
     contents: "Volume no período, evolução mensal, incidência por área/tema, participação percentual e priorização para treinamento.",
     icon: AssessmentOutlined,
-
+  },
 ];
 
 export function Reports() {
