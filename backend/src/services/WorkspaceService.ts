@@ -742,7 +742,7 @@ export class WorkspaceService {
             { participantMovideskTickets: { not: null } },
           ],
         },
-        ...(params.type ? [{ workItemType: { equals: params.type, mode: "insensitive" as const } }] : []),
+        ...(types.length ? [{ workItemType: { in: types, mode: "insensitive" as const } }] : []),
         ...(clients.length ? [{ OR: [
           { client: { in: clients, mode: "insensitive" as const } },
           ...clients.map((client) => ({ participantClients: { contains: client, mode: "insensitive" as const } })),
