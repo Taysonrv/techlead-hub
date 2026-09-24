@@ -225,6 +225,7 @@ export function Clients() {
 
   const [error, setError] =
     useState<string | null>(null);
+  const loadRequestRef = useRef<AbortController | null>(null);
 
   /* Filtros locais */
 
@@ -265,13 +266,27 @@ export function Clients() {
   } = useFilters();
 
   useEffect(() => {
-    const handleFullscreen = () => {
-      const active = document.fullscreenElement === presentationRef.current;
-      setIsPresenting(active);
-      if (!active) setPresentationPage(0);
-    };
-    document.addEventListener("fullscreenchange", handleFullscreen);
-    return () => document.removeEventListener("fullscreenchange", handleFullscreen);
+    const controller = new AbortController();
+    loadRequestRef.current?.abort();
+    loadRequestRef.current = controller;
+
+    async function loadTickets() {
+      try {
+        setLoading(true);
+        setError(null);
+        const response = await api.get<any>("/dashboard/tickets", { signal: controller.signal });
+        if (!controller.signal.aborted) setTickets(response.data);
+      } catch (err) {
+        if (controller.signal.aborted) return;
+        console.error("Erro ao carregar indicadores dos clientes:", err);
+        setError("Não foi possível carregar os indicadores dos clientes.");
+      } finally {
+        if (!controller.signal.aborted) setLoading(false);
+      }
+    }
+
+    void loadTickets();
+    return () => controller.abort();
   }, []);
 
   async function startPresentation() {
