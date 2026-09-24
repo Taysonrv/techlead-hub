@@ -91,7 +91,7 @@ export class WorkspaceService {
             { participantClients: { contains: params.client, mode: "insensitive" as const } },
             ...(taskIds.length ? [{ id: { in: taskIds } }] : []),
           ] }] : []),
-          ...(params.type ? [{ workItemType: { equals: params.type, mode: "insensitive" as const } }] : []),
+          ...(types.length ? [{ workItemType: { in: types, mode: "insensitive" as const } }] : []),
           ...(params.search ? [{ OR: [
             { title: { contains: params.search, mode: "insensitive" as const } },
             ...(Number.isSafeInteger(Number(params.search)) ? [{ id: Number(params.search) }] : []),
@@ -700,6 +700,10 @@ export class WorkspaceService {
     issue?: string | null;
     search?: string | null;
   } = {}) {
+    const multi = (value?: string | null) => (value ?? "").split("|||").map((item) => item.trim()).filter(Boolean);
+    const types = multi(params.type);
+    const clients = multi(params.client);
+    const users = multi(params.user);
     const cacheKey = JSON.stringify(params);
     const cached = dataQualityCache.get(cacheKey);
     if (cached && cached.expiresAt > Date.now()) return cached.value;
@@ -709,8 +713,8 @@ export class WorkspaceService {
       where: {
         AND: [
           ticketOperationalScope(),
-          ...(params.client ? [{ client: { equals: params.client, mode: "insensitive" as const } }] : []),
-          ...(params.user ? [{ owner: { equals: params.user, mode: "insensitive" as const } }] : []),
+          ...(clients.length ? [{ client: { in: clients, mode: "insensitive" as const } }] : []),
+          ...(users.length ? [{ owner: { in: users, mode: "insensitive" as const } }] : []),
         ],
       },
       select: {
@@ -739,14 +743,14 @@ export class WorkspaceService {
           ],
         },
         ...(params.type ? [{ workItemType: { equals: params.type, mode: "insensitive" as const } }] : []),
-        ...(params.client ? [{ OR: [
-          { client: { equals: params.client, mode: "insensitive" as const } },
-          { participantClients: { contains: params.client, mode: "insensitive" as const } },
+        ...(clients.length ? [{ OR: [
+          { client: { in: clients, mode: "insensitive" as const } },
+          ...clients.map((client) => ({ participantClients: { contains: client, mode: "insensitive" as const } })),
           ...(taskIds.length ? [{ id: { in: taskIds } }] : []),
         ] }] : []),
-        ...(params.user ? [{ OR: [
-          { createdByName: { equals: params.user, mode: "insensitive" as const } },
-          { assignedToName: { equals: params.user, mode: "insensitive" as const } },
+        ...(users.length ? [{ OR: [
+          { createdByName: { in: users, mode: "insensitive" as const } },
+          { assignedToName: { in: users, mode: "insensitive" as const } },
           ...(taskIds.length ? [{ id: { in: taskIds } }] : []),
         ] }] : []),
         ...(params.search ? [{ OR: [
