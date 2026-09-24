@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Button, Tooltip } from "@mui/material";
+import { Box, Button, Tooltip } from "@mui/material";
 import { DownloadOutlined } from "@mui/icons-material";
 
 export type TicketExportRow = {
@@ -97,19 +97,21 @@ export function exportTicketsToExcel(tickets: TicketExportRow[], title: string, 
 
 export function ExportTicketsButton({ tickets, title, subtitle, startIcon }: Props) {
   return (
-    <Tooltip title={tickets.length ? "Exportar exatamente os atendimentos desta listagem para Excel" : "Nenhum atendimento para exportar"}>
-      <span>
-        <Button
-          size="small"
-          variant="outlined"
-          startIcon={startIcon ?? <DownloadOutlined />}
-          disabled={!tickets.length}
-          onClick={() => exportTicketsToExcel(tickets, title, subtitle)}
-          sx={{ textTransform: "none", fontWeight: 800 }}
-        >
-          Exportar Excel
-        </Button>
-      </span>
-    </Tooltip>
+    <Box sx={{ width: "100%", display: "flex", justifyContent: "flex-end" }}>
+      <Tooltip title={tickets.length ? `Exportar ${tickets.length} registro(s) desta listagem para Excel` : "Nenhum registro para exportar"}>
+        <span>
+          <Button
+            size="small"
+            variant="outlined"
+            startIcon={startIcon ?? <DownloadOutlined />}
+            disabled={!tickets.length}
+            onClick={() => exportTicketsToExcel(tickets, title, subtitle)}
+            sx={{ textTransform: "none", fontWeight: 800 }}
+          >
+            Exportar Excel
+          </Button>
+        </span>
+      </Tooltip>
+    </Box>
   );
 }
