@@ -1352,8 +1352,8 @@ export function Dashboard() {
             }}
           >
             <CardBase>
-              <Typography sx={{ fontWeight: 850, fontSize: "1.05rem" }}>Evolução dos Tickets</Typography>
-              <Typography variant="caption" color="text.secondary">Volume de abertura por dia • tendência do período</Typography>
+              <Box sx={{ textAlign: "center" }}><Typography sx={{ fontWeight: 850, fontSize: "1.05rem" }}>Evolução dos Tickets</Typography>
+              <Typography variant="caption" color="text.secondary">Volume de abertura por dia • tendência do período</Typography></Box>
               <Box sx={{ height: 290, mt: 1.5 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={trends} margin={{ top: 8, right: 12, left: 4, bottom: 4 }}>
@@ -1419,8 +1419,8 @@ export function Dashboard() {
             }}
           >
             <CardBase>
-              <Stack direction={{ xs: "column", sm: "row" }} sx={{ justifyContent: "space-between", gap: 1 }}>
-                <Box>
+              <Stack direction={{ xs: "column", sm: "row" }} sx={{ justifyContent: "center", alignItems: "center", gap: 1 }}>
+                <Box sx={{ textAlign: "center" }}>
                   <Typography sx={{ fontWeight: 850, fontSize: "1.05rem" }}>
                     Abertos x Resolvidos
                   </Typography>
@@ -1428,10 +1428,6 @@ export function Dashboard() {
                     Fluxo diário no período • identifica entrada acima da capacidade de resolução
                   </Typography>
                 </Box>
-                <Stack direction="row" spacing={.7}>
-                  <Chip size="small" variant="outlined" label={`${openedInPeriod.length} abertos`} />
-                  <Chip size="small" variant="outlined" label={`${resolvedInPeriod.length} resolvidos`} />
-                </Stack>
               </Stack>
               <Box sx={{ height: 255, mt: 1.5 }}>
                 <ResponsiveContainer width="100%" height="100%">
@@ -1455,19 +1451,19 @@ export function Dashboard() {
                   </AreaChart>
                 </ResponsiveContainer>
               </Box>
-              <Stack direction="row" spacing={2} sx={{ mt: .5 }}>
+              <Stack direction="row" spacing={2} sx={{ mt: .5, justifyContent: "center", alignItems: "center" }}>
                 <Typography variant="caption" sx={{ color: semanticChartColors.normal, fontWeight: 800 }}>● Abertos</Typography>
                 <Typography variant="caption" sx={{ color: semanticChartColors.positive, fontWeight: 800 }}>● Resolvidos</Typography>
               </Stack>
             </CardBase>
 
             <CardBase>
-              <Typography sx={{ fontWeight: 850, fontSize: "1.05rem" }}>
+              <Box sx={{ textAlign: "center" }}><Typography sx={{ fontWeight: 850, fontSize: "1.05rem" }}>
                 Principais causas
               </Typography>
               <Typography variant="caption" color="text.secondary">
                 Causas mais frequentes • clique na leitura para direcionar ação preventiva
-              </Typography>
+              </Typography></Box>
               <Box sx={{ height: 285, mt: 1.25 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={causes.slice(0, 6)} layout="vertical" margin={{ left: 18, right: 18, top: 4, bottom: 4 }}>
@@ -2975,7 +2971,7 @@ function MonthlyCategoryEvolutionCard({
         </ResponsiveContainer>
       </Box>
 
-      <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap", mt: .75 }}>
+      <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap", mt: .75, justifyContent: "center", alignItems: "center" }}>
         {categories.map((category, index) => {
           const active = !hiddenCategories.has(category);
           return <Chip key={category} size="small" label={category} onClick={() => toggleCategory(category)}
