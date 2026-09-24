@@ -1578,7 +1578,7 @@ export function Clients() {
                 variant="caption"
                 color="text.secondary"
               >
-                Refine a carteira analisada
+                Cliente, categoria, status e responsável
               </Typography>
             </Box>
 
