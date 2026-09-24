@@ -260,6 +260,18 @@ export function TechnicalLeadership() {
   const responseOwnerRows = analyticsFor("responseOwner")?.responseByOwner ?? [];
   const filteredResolutionOwners = resolutionOwnerRows.filter((row) => !resolutionOwnerFilter || row.analyst === resolutionOwnerFilter);
   const filteredResponseOwners = responseOwnerRows.filter((row) => !responseOwnerFilter || row.analyst === responseOwnerFilter);
+  const resolutionSlaRows = [
+    { name: "No prazo", value: analyticsFor("resolutionSla")?.resolutionSla.within ?? 0, fill: aliareColors.green },
+    { name: "Fora do prazo", value: analyticsFor("resolutionSla")?.resolutionSla.outside ?? 0, fill: aliareColors.error },
+    { name: "Sem medição", value: analyticsFor("resolutionSla")?.resolutionSla.unmeasured ?? 0, fill: aliareColors.info },
+  ];
+  const responseSlaRows = [
+    { name: "No prazo", value: analyticsFor("responseSla")?.responseSla.within ?? 0, fill: aliareColors.green },
+    { name: "Fora do prazo", value: analyticsFor("responseSla")?.responseSla.outside ?? 0, fill: aliareColors.error },
+    { name: "Sem medição", value: analyticsFor("responseSla")?.responseSla.unmeasured ?? 0, fill: aliareColors.info },
+  ];
+  const slaTotal = (rows: Array<{ value: number }>) => rows.reduce((sum, row) => sum + row.value, 0);
+  const slaPct = (value: number, total: number) => total ? Math.round((value / total) * 1000) / 10 : 0;
 
   const auditReasons = useMemo(() => data ? [...new Set(data.audit.sample.map((ticket) => ticket.reason))].sort() : [], [data]);
   const filteredAudit = useMemo(() => data ? data.audit.sample.filter((ticket) => !auditReason || ticket.reason === auditReason) : [], [data, auditReason]);
@@ -455,44 +467,26 @@ export function TechnicalLeadership() {
             <Box sx={{ flex: 1, textAlign: "center", "& > *": { justifyContent: "center" } }}><AreaTitle title="SLA de solução" info="Versão moderna do indicador de tickets resolvidos por vencimento do Movidesk." /></Box>
             <IndicatorPeriodFilter value={indicatorPeriod("resolutionSla")} onChange={(value) => setIndicatorPeriod("resolutionSla", value)} />
           </Stack>
-          <Box sx={{ height: 280 }}><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={[
-            { name: "No prazo", value: analyticsFor("resolutionSla")?.resolutionSla.within ?? 0, fill: aliareColors.green },
-            { name: "Fora do prazo", value: analyticsFor("resolutionSla")?.resolutionSla.outside ?? 0, fill: aliareColors.error },
-            { name: "Sem medição", value: analyticsFor("resolutionSla")?.resolutionSla.unmeasured ?? 0, fill: aliareColors.info },
-          ].filter((item) => isLeadershipSeriesVisible("resolutionSla", item.name))} dataKey="value" nameKey="name" innerRadius={62} outerRadius={92} paddingAngle={3}>
-            {[
-              { name: "No prazo", fill: aliareColors.green },
-              { name: "Fora do prazo", fill: aliareColors.error },
-              { name: "Sem medição", fill: aliareColors.info },
-            ].filter((item) => isLeadershipSeriesVisible("resolutionSla", item.name)).map((item) => <Cell key={item.name} fill={item.fill} />)}
-          </Pie><ChartTooltip /></PieChart></ResponsiveContainer></Box>
-          <SeriesSelector chart="resolutionSla" items={[
-            { key: "No prazo", label: "No prazo", color: aliareColors.green },
-            { key: "Fora do prazo", label: "Fora do prazo", color: aliareColors.error },
-            { key: "Sem medição", label: "Sem medição", color: aliareColors.info },
-          ]} />
+          <Box sx={{ height: 280, position: "relative" }}><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={resolutionSlaRows.filter((item) => isLeadershipSeriesVisible("resolutionSla", item.name))} dataKey="value" nameKey="name" innerRadius={62} outerRadius={92} paddingAngle={3}>
+            {resolutionSlaRows.filter((item) => isLeadershipSeriesVisible("resolutionSla", item.name)).map((item) => <Cell key={item.name} fill={item.fill} />)}
+          </Pie><ChartTooltip formatter={(value, name) => [`${Number(value)} · ${slaPct(Number(value), slaTotal(resolutionSlaRows))}%`, String(name)]} /></PieChart></ResponsiveContainer>
+          <Box sx={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", pointerEvents: "none" }}><Box sx={{ textAlign: "center" }}><Typography sx={{ fontSize: "1.45rem", fontWeight: 900 }}>{slaTotal(resolutionSlaRows)}</Typography><Typography variant="caption" color="text.secondary">medidos</Typography></Box></Box>
+          </Box>
+          <Stack direction="row" spacing={1} useFlexGap sx={{ justifyContent: "center", flexWrap: "wrap", mb: .8 }}>{resolutionSlaRows.map((row) => <Chip key={row.name} size="small" variant="outlined" label={`${row.name}: ${row.value} (${slaPct(row.value, slaTotal(resolutionSlaRows))}%)`} sx={{ fontWeight: 750 }} />)}</Stack>
+          <SeriesSelector chart="resolutionSla" items={resolutionSlaRows.map((row) => ({ key: row.name, label: row.name, color: row.fill }))} />
         </CardContent></Card>
         <Card><CardContent>
           <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "center", gap: 1 }}>
             <Box sx={{ flex: 1, textAlign: "center", "& > *": { justifyContent: "center" } }}><AreaTitle title="SLA de primeira resposta" info="Consolida o indicador de primeira resposta, preservando também registros sem medição." /></Box>
             <IndicatorPeriodFilter value={indicatorPeriod("responseSla")} onChange={(value) => setIndicatorPeriod("responseSla", value)} />
           </Stack>
-          <Box sx={{ height: 280 }}><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={[
-            { name: "No prazo", value: analyticsFor("responseSla")?.responseSla.within ?? 0, fill: aliareColors.green },
-            { name: "Fora do prazo", value: analyticsFor("responseSla")?.responseSla.outside ?? 0, fill: aliareColors.error },
-            { name: "Sem medição", value: analyticsFor("responseSla")?.responseSla.unmeasured ?? 0, fill: aliareColors.info },
-          ].filter((item) => isLeadershipSeriesVisible("responseSla", item.name))} dataKey="value" nameKey="name" innerRadius={62} outerRadius={92} paddingAngle={3}>
-            {[
-              { name: "No prazo", fill: aliareColors.green },
-              { name: "Fora do prazo", fill: aliareColors.error },
-              { name: "Sem medição", fill: aliareColors.info },
-            ].filter((item) => isLeadershipSeriesVisible("responseSla", item.name)).map((item) => <Cell key={item.name} fill={item.fill} />)}
-          </Pie><ChartTooltip /></PieChart></ResponsiveContainer></Box>
-          <SeriesSelector chart="responseSla" items={[
-            { key: "No prazo", label: "No prazo", color: aliareColors.green },
-            { key: "Fora do prazo", label: "Fora do prazo", color: aliareColors.error },
-            { key: "Sem medição", label: "Sem medição", color: aliareColors.info },
-          ]} />
+          <Box sx={{ height: 280, position: "relative" }}><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={responseSlaRows.filter((item) => isLeadershipSeriesVisible("responseSla", item.name))} dataKey="value" nameKey="name" innerRadius={62} outerRadius={92} paddingAngle={3}>
+            {responseSlaRows.filter((item) => isLeadershipSeriesVisible("responseSla", item.name)).map((item) => <Cell key={item.name} fill={item.fill} />)}
+          </Pie><ChartTooltip formatter={(value, name) => [`${Number(value)} · ${slaPct(Number(value), slaTotal(responseSlaRows))}%`, String(name)]} /></PieChart></ResponsiveContainer>
+          <Box sx={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", pointerEvents: "none" }}><Box sx={{ textAlign: "center" }}><Typography sx={{ fontSize: "1.45rem", fontWeight: 900 }}>{slaTotal(responseSlaRows)}</Typography><Typography variant="caption" color="text.secondary">medidos</Typography></Box></Box>
+          </Box>
+          <Stack direction="row" spacing={1} useFlexGap sx={{ justifyContent: "center", flexWrap: "wrap", mb: .8 }}>{responseSlaRows.map((row) => <Chip key={row.name} size="small" variant="outlined" label={`${row.name}: ${row.value} (${slaPct(row.value, slaTotal(responseSlaRows))}%)`} sx={{ fontWeight: 750 }} />)}</Stack>
+          <SeriesSelector chart="responseSla" items={responseSlaRows.map((row) => ({ key: row.name, label: row.name, color: row.fill }))} />
         </CardContent></Card>
       </Box>
 
