@@ -57,6 +57,18 @@ const metrics = [
   ["withoutClient", "Tarefa sem cliente", "Work Item sem cliente principal e sem clientes participantes identificados.", "Cadastro"],
 ] as const;
 
+const coordinationMetricKeys = new Set([
+  "awaitingReturnOverdue",
+  "reopenedTickets",
+  "excessiveOwnerHandoffs",
+  "lowSatisfaction",
+  "ticketOpenTaskFinished",
+  "ticketClosedTaskOpen",
+  "danglingTaskTickets",
+  "versionMismatch",
+]);
+const coordinationMetrics = metrics.filter(([key]) => coordinationMetricKeys.has(key));
+
 export function DataQuality() {
   const theme = useTheme();
   const navigate = useNavigate();
@@ -92,7 +104,7 @@ export function DataQuality() {
 
   useEffect(() => {
     const controller = new AbortController();
-    const timer = window.setTimeout(() => void load(controller.signal), 250);
+    const timer = window.setTimeout(() => void load(controller.signal), search ? 650 : 120);
     return () => {
       window.clearTimeout(timer);
       controller.abort();
@@ -191,8 +203,8 @@ export function DataQuality() {
     </CardContent></Card>
 
     {error && <Alert severity="error" sx={{ mt: 2 }}>Não foi possível analisar a qualidade dos dados.</Alert>}
-    <Box sx={{ mt: 2, display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2,1fr)", lg: "repeat(4,1fr)" }, gap: 2 }}>
-      {metrics.map(([key, label, info, group]) => <KpiCard key={key} title={label} value={data?.summary[key] ?? 0} subtitle={group} info={info} accent={issue === key ? aliareColors.green : group === "Fluxo" ? "#ef4444" : group === "Versão" ? "#8b5cf6" : group === "Vínculo" ? "#f59e0b" : group === "APOIO" ? "#0891b2" : "#2676b9"} active={issue === key} onClick={() => setIssue(issue === key ? "" : key)} />)}
+    <Box sx={{ mt: 2, display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2,1fr)", xl: "repeat(4,1fr)" }, gap: 2 }}>
+      {coordinationMetrics.map(([key, label, info, group]) => <KpiCard key={key} title={label} value={data?.summary[key] ?? 0} subtitle={group} info={info} accent={issue === key ? aliareColors.green : group === "Fluxo" ? "#ef4444" : group === "Versão" ? "#8b5cf6" : group === "Vínculo" ? "#f59e0b" : group === "APOIO" ? "#0891b2" : "#2676b9"} active={issue === key} onClick={() => setIssue(issue === key ? "" : key)} />)}
     </Box>
 
     <Card variant="outlined" sx={{ mt: 2, overflow: "hidden" }}><CardContent>
@@ -202,7 +214,7 @@ export function DataQuality() {
       </Stack>
       <Box sx={{ width: "100%", height: 280 }}>
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={Array.from(new Set(metrics.map(([, , , group]) => group))).map((group) => ({ group, total: metrics.filter(([, , , itemGroup]) => itemGroup === group).reduce((sum, [key]) => sum + Number(data?.summary[key] ?? 0), 0) }))} margin={{ top: 8, right: 12, left: -10, bottom: 4 }}>
+          <BarChart data={Array.from(new Set(coordinationMetrics.map(([, , , group]) => group))).map((group) => ({ group, total: coordinationMetrics.filter(([, , , itemGroup]) => itemGroup === group).reduce((sum, [key]) => sum + Number(data?.summary[key] ?? 0), 0) }))} margin={{ top: 8, right: 12, left: -10, bottom: 4 }}>
             <CartesianGrid stroke={theme.palette.divider} strokeDasharray="4 4" vertical={false} opacity={0.55} />
             <XAxis dataKey="group" tick={{ fontSize: 11, fill: theme.palette.text.secondary }} axisLine={false} tickLine={false} />
             <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: theme.palette.text.secondary }} axisLine={false} tickLine={false} />
