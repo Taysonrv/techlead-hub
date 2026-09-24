@@ -41,6 +41,7 @@ import {
 import {
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 
@@ -157,6 +158,7 @@ export function Performance() {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const loadRequestRef = useRef<AbortController | null>(null);
   const [drilldown, setDrilldown] = useState<DrilldownState | null>(null);
 
   const {
@@ -165,22 +167,27 @@ export function Performance() {
   } = useFilters();
 
   useEffect(() => {
+    const controller = new AbortController();
+    loadRequestRef.current?.abort();
+    loadRequestRef.current = controller;
+
     async function loadTickets() {
       try {
         setLoading(true);
         setError(null);
-
-        const response = await api.get<Ticket[]>("/dashboard/tickets");
-        setTickets(response.data);
+        const response = await api.get<Ticket[]>("/dashboard/tickets", { signal: controller.signal });
+        if (!controller.signal.aborted) setTickets(response.data);
       } catch (requestError) {
+        if (controller.signal.aborted) return;
         console.error("Erro ao carregar desempenho:", requestError);
         setError("Não foi possível carregar os indicadores de desempenho.");
       } finally {
-        setLoading(false);
+        if (!controller.signal.aborted) setLoading(false);
       }
     }
 
     void loadTickets();
+    return () => controller.abort();
   }, []);
 
   const periodTickets = useMemo(() => {
