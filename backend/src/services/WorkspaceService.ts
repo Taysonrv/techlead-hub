@@ -448,7 +448,7 @@ export class WorkspaceService {
         entry.count += 1;
         if (ticket.client) entry.clients.add(ticket.client);
         if (ticket.owner) entry.analysts.add(ticket.owner);
-        if (entry.examples.length < 100) entry.examples.push(ticket);
+        entry.examples.push(ticket);
         map.set(key, entry);
       });
       return map;
