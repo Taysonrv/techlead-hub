@@ -91,7 +91,7 @@ export class WorkspaceService {
             { participantClients: { contains: params.client, mode: "insensitive" as const } },
             ...(taskIds.length ? [{ id: { in: taskIds } }] : []),
           ] }] : []),
-          ...(types.length ? [{ workItemType: { in: types, mode: "insensitive" as const } }] : []),
+          ...(params.type ? [{ workItemType: { equals: params.type, mode: "insensitive" as const } }] : []),
           ...(params.search ? [{ OR: [
             { title: { contains: params.search, mode: "insensitive" as const } },
             ...(Number.isSafeInteger(Number(params.search)) ? [{ id: Number(params.search) }] : []),
