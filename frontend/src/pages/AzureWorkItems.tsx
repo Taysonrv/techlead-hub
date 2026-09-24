@@ -1595,7 +1595,6 @@ export function AzureWorkItems({
 
           await Promise.all([
             loadSummary(),
-            loadFilters(),
             loadList(),
           ]);
         } catch (
@@ -1616,7 +1615,6 @@ export function AzureWorkItems({
         }
       },
       [
-        loadFilters,
         loadList,
         loadSummary,
       ],
@@ -1627,6 +1625,10 @@ export function AzureWorkItems({
   }, [
     loadAll,
   ]);
+
+  useEffect(() => {
+    void loadFilters();
+  }, [loadFilters]);
 
   useEffect(() => {
     const timeout =
