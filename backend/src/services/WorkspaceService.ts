@@ -709,7 +709,8 @@ export class WorkspaceService {
     if (cached && cached.expiresAt > Date.now()) return cached.value;
     if (dataQualityCache.size > 40) dataQualityCache.clear();
 
-    const scopedTickets = await prisma.ticket.findMany({
+    const [scopedTickets, allTicketLinks] = await Promise.all([
+      prisma.ticket.findMany({
       where: {
         AND: [
           ticketOperationalScope(),
@@ -725,7 +726,12 @@ export class WorkspaceService {
         deliveredVersion: true, lastActionDate: true, lastUpdate: true,
         reopenedDate: true, resolvedInFirstCall: true, rawData: true,
       },
-    });
+    }),
+      prisma.ticket.findMany({
+        where: { taskNumber: { not: null } },
+        select: { taskNumber: true },
+      }),
+    ]);
     const taskIds = scopedTickets.map((item) => item.taskNumber).filter((value): value is number => value !== null);
     const movideskIds = scopedTickets.map((item) => item.movideskId).filter((value): value is number => value !== null);
 
@@ -765,10 +771,6 @@ export class WorkspaceService {
      * AzureWorkItem.movideskTicket ou Ticket.taskNumber. Para qualidade dos
      * dados, ambos são vínculos válidos, inclusive para Correção, Evolução e APOIO.
      */
-    const allTicketLinks = await prisma.ticket.findMany({
-      where: { taskNumber: { not: null } },
-      select: { taskNumber: true },
-    });
     const linkedTaskIds = [...new Set(allTicketLinks
       .map((item) => item.taskNumber)
       .filter((value): value is number => value !== null))];
@@ -1207,7 +1209,7 @@ export class WorkspaceService {
         types: ["Correção Clientes", "Evolução", "APOIO"],
       },
     };
-    dataQualityCache.set(cacheKey, { expiresAt: Date.now() + 30_000, value: result });
+    dataQualityCache.set(cacheKey, { expiresAt: Date.now() + 120_000, value: result });
     return result;
   }
 }
