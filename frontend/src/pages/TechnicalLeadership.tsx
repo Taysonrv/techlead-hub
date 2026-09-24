@@ -171,6 +171,8 @@ export function TechnicalLeadership() {
   const [recurrenceConfidence, setRecurrenceConfidence] = useState("");
   const [gapImpact, setGapImpact] = useState("");
   const [gapStatus, setGapStatus] = useState("");
+  const [resolutionOwnerFilter, setResolutionOwnerFilter] = useState("");
+  const [responseOwnerFilter, setResponseOwnerFilter] = useState("");
 
   const toggleLeadershipSeries = (chart: string, key: string, total: number) => {
     setHiddenLeadershipSeries((current) => {
@@ -248,6 +250,16 @@ export function TechnicalLeadership() {
     if (drawer.kind === "development") return drawer.development.examples ?? [];
     return [];
   }, [drawer]);
+
+  const abbreviateAnalyst = (name: string) => {
+    const parts = name.trim().split(/\s+/).filter(Boolean);
+    if (parts.length <= 2) return name;
+    return `${parts[0]} ${parts.slice(1).map((part) => `${part.charAt(0).toUpperCase()}.`).join(" ")}`;
+  };
+  const resolutionOwnerRows = analyticsFor("resolutionOwner")?.byOwner ?? [];
+  const responseOwnerRows = analyticsFor("responseOwner")?.responseByOwner ?? [];
+  const filteredResolutionOwners = resolutionOwnerRows.filter((row) => !resolutionOwnerFilter || row.analyst === resolutionOwnerFilter);
+  const filteredResponseOwners = responseOwnerRows.filter((row) => !responseOwnerFilter || row.analyst === responseOwnerFilter);
 
   const auditReasons = useMemo(() => data ? [...new Set(data.audit.sample.map((ticket) => ticket.reason))].sort() : [], [data]);
   const filteredAudit = useMemo(() => data ? data.audit.sample.filter((ticket) => !auditReason || ticket.reason === auditReason) : [], [data, auditReason]);
@@ -487,11 +499,14 @@ export function TechnicalLeadership() {
       <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", xl: "repeat(2,1fr)" }, gap: 1.5, mb: 1.5 }}>
         <Card><CardContent>
           <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "center", gap: 1 }}>
-            <Box sx={{ flex: 1, textAlign: "center", "& > *": { justifyContent: "center" } }}><AreaTitle title="Resolução por analista" info="Volume resolvido, reaberto e situação de SLA por analista; substitui a leitura tabular isolada por uma visão comparável." /></Box>
-            <IndicatorPeriodFilter value={indicatorPeriod("resolutionOwner")} onChange={(value) => setIndicatorPeriod("resolutionOwner", value)} />
+            <Box sx={{ flex: 1, textAlign: "center", "& > *": { justifyContent: "center" } }}><AreaTitle title="Resolução por analista" info="Volume resolvido, reaberto e situação de SLA por analista. Use o filtro para isolar um analista sem alterar os demais indicadores da Central." /></Box>
+            <Stack direction="row" spacing={.8}>
+              <FormControl size="small" sx={{ minWidth: 155 }}><Select displayEmpty value={resolutionOwnerFilter} onChange={(e) => setResolutionOwnerFilter(e.target.value)} aria-label="Filtrar analista na resolução"><MenuItem value="">Todos analistas</MenuItem>{resolutionOwnerRows.map((row) => <MenuItem key={row.analyst} value={row.analyst}>{row.analyst}</MenuItem>)}</Select></FormControl>
+              <IndicatorPeriodFilter value={indicatorPeriod("resolutionOwner")} onChange={(value) => setIndicatorPeriod("resolutionOwner", value)} />
+            </Stack>
           </Stack>
-          <Box sx={{ height: 340, mt: 1 }}><ResponsiveContainer width="100%" height="100%"><BarChart data={analyticsFor("resolutionOwner")?.byOwner ?? []}>
-            <CartesianGrid strokeDasharray="4 5" vertical={false} /><XAxis dataKey="analyst" tick={{ fontSize: 9 }} interval={0} angle={-15} textAnchor="end" height={62} /><YAxis allowDecimals={false} /><ChartTooltip />
+          <Box sx={{ height: 340, mt: 1 }}><ResponsiveContainer width="100%" height="100%"><BarChart data={filteredResolutionOwners.map((row) => ({ ...row, analystLabel: abbreviateAnalyst(row.analyst) }))}>
+            <CartesianGrid strokeDasharray="4 5" vertical={false} /><XAxis dataKey="analystLabel" tick={{ fontSize: 10 }} interval={0} angle={0} textAnchor="middle" height={44} /><YAxis allowDecimals={false} /><ChartTooltip labelFormatter={(_, payload) => payload?.[0]?.payload?.analyst ?? ""} />
             {isLeadershipSeriesVisible("resolutionOwner", "resolved") && <Bar dataKey="resolved" name="Resolvidos" fill={aliareColors.info} radius={[5,5,0,0]} />}
             {isLeadershipSeriesVisible("resolutionOwner", "reopened") && <Bar dataKey="reopened" name="Reabertos" fill={aliareColors.warning} radius={[5,5,0,0]} />}
             {isLeadershipSeriesVisible("resolutionOwner", "outside") && <Bar dataKey="outside" name="Fora SLA" fill={aliareColors.error} radius={[5,5,0,0]} />}
@@ -504,11 +519,14 @@ export function TechnicalLeadership() {
         </CardContent></Card>
         <Card><CardContent>
           <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "center", gap: 1 }}>
-            <Box sx={{ flex: 1, textAlign: "center", "& > *": { justifyContent: "center" } }}><AreaTitle title="Primeira resposta por analista" info="Compara volume de respostas dentro, fora e sem medição de SLA por analista." /></Box>
-            <IndicatorPeriodFilter value={indicatorPeriod("responseOwner")} onChange={(value) => setIndicatorPeriod("responseOwner", value)} />
+            <Box sx={{ flex: 1, textAlign: "center", "& > *": { justifyContent: "center" } }}><AreaTitle title="Primeira resposta por analista" info="Compara respostas dentro, fora e sem medição de SLA por analista. O filtro isola um analista apenas neste gráfico." /></Box>
+            <Stack direction="row" spacing={.8}>
+              <FormControl size="small" sx={{ minWidth: 155 }}><Select displayEmpty value={responseOwnerFilter} onChange={(e) => setResponseOwnerFilter(e.target.value)} aria-label="Filtrar analista na primeira resposta"><MenuItem value="">Todos analistas</MenuItem>{responseOwnerRows.map((row) => <MenuItem key={row.analyst} value={row.analyst}>{row.analyst}</MenuItem>)}</Select></FormControl>
+              <IndicatorPeriodFilter value={indicatorPeriod("responseOwner")} onChange={(value) => setIndicatorPeriod("responseOwner", value)} />
+            </Stack>
           </Stack>
-          <Box sx={{ height: 340, mt: 1 }}><ResponsiveContainer width="100%" height="100%"><BarChart data={analyticsFor("responseOwner")?.responseByOwner ?? []}>
-            <CartesianGrid strokeDasharray="4 5" vertical={false} /><XAxis dataKey="analyst" tick={{ fontSize: 9 }} interval={0} angle={-15} textAnchor="end" height={62} /><YAxis allowDecimals={false} /><ChartTooltip />
+          <Box sx={{ height: 340, mt: 1 }}><ResponsiveContainer width="100%" height="100%"><BarChart data={filteredResponseOwners.map((row) => ({ ...row, analystLabel: abbreviateAnalyst(row.analyst) }))}>
+            <CartesianGrid strokeDasharray="4 5" vertical={false} /><XAxis dataKey="analystLabel" tick={{ fontSize: 10 }} interval={0} angle={0} textAnchor="middle" height={44} /><YAxis allowDecimals={false} /><ChartTooltip labelFormatter={(_, payload) => payload?.[0]?.payload?.analyst ?? ""} />
             {isLeadershipSeriesVisible("responseOwner", "within") && <Bar dataKey="within" name="No prazo" stackId="sla" fill={aliareColors.green} />}
             {isLeadershipSeriesVisible("responseOwner", "outside") && <Bar dataKey="outside" name="Fora do prazo" stackId="sla" fill={aliareColors.error} />}
             {isLeadershipSeriesVisible("responseOwner", "unmeasured") && <Bar dataKey="unmeasured" name="Sem medição" stackId="sla" fill={aliareColors.info} />}
