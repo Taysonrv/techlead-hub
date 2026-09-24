@@ -14,6 +14,7 @@ import { api } from "../services/api";
 import { PageHeader } from "../components/PageHeader";
 import { KpiCard } from "../components/KpiCard";
 import { ExportTicketsButton } from "../components/ExportTicketsButton";
+import type { TicketExportRow } from "../components/ExportTicketsButton";
 import { DetailFieldGrid, DetailPanelHeader, DetailSection } from "../components/DetailPanel";
 import { detailDrawerPaperSx } from "../theme/layoutTokens";
 import { aliareColors } from "../theme/theme";
@@ -267,12 +268,15 @@ export function TechnicalLeadership() {
     data.radar.closedTicketActiveTask, data.radar.openTicketFinishedTask,
   ].reduce((sum, value) => sum + (value ?? 0), 0) : 0, [data]);
 
-  const drawerTickets = useMemo(() => {
-    if (!drawer) return [] as Ticket[];
-    if (drawer.kind === "radar") return drawer.items.filter((item): item is Ticket => !isTask(item));
+  const drawerExportRows = useMemo<TicketExportRow[]>(() => {
+    if (!drawer) return [];
+    const mapItem = (item: Ticket | Task): TicketExportRow => isTask(item)
+      ? { taskNumber: item.id, subject: item.title, status: item.state, taskStatus: item.state, client: item.client, owner: item.assignedToName }
+      : item;
+    if (drawer.kind === "radar") return drawer.items.map(mapItem);
     if (drawer.kind === "audit") return drawer.items;
     if (drawer.kind === "recurrence") return drawer.recurrence.examples;
-    if (drawer.kind === "gap") return drawer.gap.examples ?? [];
+    if (drawer.kind === "gap") return [...(drawer.gap.examples ?? []), ...(drawer.gap.tasks ?? []).map(mapItem)];
     if (drawer.kind === "development") return drawer.development.examples ?? [];
     return [];
   }, [drawer]);
@@ -705,7 +709,7 @@ export function TechnicalLeadership() {
     <Drawer anchor="right" open={Boolean(drawer)} onClose={() => setDrawer(null)} slotProps={{ paper: { sx: detailDrawerPaperSx } }}>
       {drawer && <DetailPanelHeader eyebrow="Liderança técnica" title={drawer.title} onClose={() => setDrawer(null)} />}
       {drawer && <Box sx={{ px: 2, pt: 1.5 }}>
-        <ExportTicketsButton tickets={drawerTickets} title={drawer.title} subtitle="Central de Liderança Técnica" />
+        <ExportTicketsButton tickets={drawerExportRows} title={drawer.title} subtitle="Central de Liderança Técnica" />
       </Box>}
       {drawer?.kind === "radar" && <DetailSection title="Itens para investigação">
         <Stack spacing={1}>{drawer.items.map((item) => <Button key={isTask(item) ? `task-${item.id}` : `ticket-${item.id}`} variant="outlined" endIcon={<OpenInNewOutlined />} onClick={() => openItem(item)} sx={{ justifyContent: "space-between", textAlign: "left", textTransform: "none" }}>
