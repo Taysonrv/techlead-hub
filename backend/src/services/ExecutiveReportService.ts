@@ -25,7 +25,9 @@ export type ReportScope =
   | "sla"
   | "clients"
   | "development"
-  | "versions";
+  | "versions"
+  | "operational-causes"
+  | "operational-errors";
 
 export type ReportFilters = {
   client?: string;
@@ -760,6 +762,13 @@ export class ExecutiveReportService {
       generatedBy,
     );
 
+    this.addOperationalCauseSheets(
+      workbook,
+      ticketTimeline,
+      options,
+      generatedBy,
+    );
+
     this.addTicketDetailsSheet(
       workbook,
       ticketDetails,
@@ -1231,11 +1240,80 @@ export class ExecutiveReportService {
       clients: ["Resumo Executivo", "Evolução Categorias", "Clientes", "Categorias", "SLA", "Atendimentos"],
       development: ["Resumo Executivo", "Evolução Categorias", "Correções", "Atendimentos"],
       versions: ["Resumo Executivo", "Evolução Categorias", "Correções", "Atendimentos"],
+      "operational-causes": ["Resumo Causas", "Evolução Causas", "Áreas por Causa", "Atendimentos"],
+      "operational-errors": ["Resumo Erro Operacional", "Áreas Erro Operacional", "Atendimentos"],
     };
     const allowed = new Set(sheets[scope]);
     workbook.worksheets
       .filter((sheet) => !allowed.has(sheet.name))
       .forEach((sheet) => workbook.removeWorksheet(sheet.id));
+  }
+
+  private addOperationalCauseSheets(
+    workbook: ExcelJS.Workbook,
+    tickets: Array<{ createdDate: Date; category: string | null; cause: string | null; serviceSecondLevel: string | null }>,
+    options: ExecutiveReportOptions,
+    generatedBy: string,
+  ) {
+    const normalize = (value: string | null) => (value ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLocaleLowerCase("pt-BR");
+    const area = (ticket: (typeof tickets)[number]) => ticket.serviceSecondLevel?.trim() || "Outros processos";
+    const problemTickets = tickets.filter((ticket) => /problema/.test(normalize(ticket.category)));
+    const causes = ["Configuração", "Erro operacional", "SEFAZ ou aplicativo de terceiros", "Não identificada", "Resolvido pelo usuário"];
+    const monthKey = (date: Date) => date.toISOString().slice(0, 7);
+    const months = [...new Set(tickets.map((ticket) => monthKey(ticket.createdDate)))].sort();
+
+    const summary = workbook.addWorksheet("Resumo Causas");
+    this.configureSheet(summary, [38, 16, 16, 20, 64]);
+    summary.mergeCells("A1:E1");
+    summary.getCell("A1").value = "ACOMPANHAMENTO DE CAUSAS DOS PROBLEMAS";
+    this.styleTitle(summary.getCell("A1"));
+    summary.getCell("A2").value = "Período"; summary.getCell("B2").value = this.periodLabel(options.from, options.to);
+    summary.getCell("D2").value = "Gerado por"; summary.getCell("E2").value = generatedBy;
+    const h = summary.addRow(["Causa", "Quantidade", "% dos problemas", "Principal área", "Direcionamento"]); this.styleHeader(h);
+    const directions: Record<string,string> = {
+      "Configuração": "Revisar parametrização e criar checklist por processo.",
+      "Erro operacional": "Direcionar treinamento, roteiro operacional e validações preventivas.",
+      "SEFAZ ou aplicativo de terceiros": "Separar dependência externa de produto e registrar evidências.",
+      "Não identificada": "Investigar e classificar uma causa acionável antes do encerramento.",
+      "Resolvido pelo usuário": "Converter a solução aplicada pelo usuário em orientação preventiva.",
+    };
+    for (const cause of causes) {
+      const rows = problemTickets.filter((ticket) => normalize(ticket.cause) === normalize(cause));
+      const grouped = new Map<string,number>(); rows.forEach((ticket) => grouped.set(area(ticket),(grouped.get(area(ticket))??0)+1));
+      const top = [...grouped.entries()].sort((a,b)=>b[1]-a[1])[0];
+      const row=summary.addRow([cause, rows.length, problemTickets.length ? rows.length/problemTickets.length : 0, top ? `${top[0]} (${top[1]})` : "Sem ocorrências", directions[cause]]);
+      row.getCell(3).numFmt="0.0%"; row.alignment={vertical:"top",wrapText:true};
+    }
+
+    const evolution = workbook.addWorksheet("Evolução Causas");
+    this.configureSheet(evolution, [16, ...causes.map(()=>18)]);
+    evolution.mergeCells(1,1,1,causes.length+1); evolution.getCell("A1").value="EVOLUÇÃO MENSAL DAS CAUSAS"; this.styleTitle(evolution.getCell("A1"));
+    const eh=evolution.addRow(["Mês",...causes]); this.styleHeader(eh);
+    months.forEach((month)=>evolution.addRow([month.split("-").reverse().join("/"),...causes.map((cause)=>problemTickets.filter((ticket)=>monthKey(ticket.createdDate)===month&&normalize(ticket.cause)===normalize(cause)).length)]));
+
+    const areas = workbook.addWorksheet("Áreas por Causa");
+    this.configureSheet(areas,[34,48,16,18]); areas.mergeCells("A1:D1"); areas.getCell("A1").value="CONCENTRAÇÃO POR CAUSA E ÁREA"; this.styleTitle(areas.getCell("A1"));
+    const ah=areas.addRow(["Causa","Área/Tema","Quantidade","Prioridade"]); this.styleHeader(ah);
+    causes.forEach((cause)=>{
+      const grouped=new Map<string,number>(); problemTickets.filter((ticket)=>normalize(ticket.cause)===normalize(cause)).forEach((ticket)=>grouped.set(area(ticket),(grouped.get(area(ticket))??0)+1));
+      [...grouped.entries()].sort((a,b)=>b[1]-a[1]).forEach(([label,total],index)=>areas.addRow([cause,label,total,index<2?"Priorizar":"Monitorar"]));
+    });
+
+    const errors = problemTickets.filter((ticket)=>normalize(ticket.cause)==="erro operacional");
+    const errorSummary=workbook.addWorksheet("Resumo Erro Operacional"); this.configureSheet(errorSummary,[32,18,22,56]);
+    errorSummary.mergeCells("A1:D1"); errorSummary.getCell("A1").value="PROBLEMA – ERRO OPERACIONAL"; this.styleTitle(errorSummary.getCell("A1"));
+    errorSummary.getCell("A2").value="Período"; errorSummary.getCell("B2").value=this.periodLabel(options.from,options.to);
+    const groupedErrors=new Map<string,number>(); errors.forEach((ticket)=>groupedErrors.set(area(ticket),(groupedErrors.get(area(ticket))??0)+1));
+    const topError=[...groupedErrors.entries()].sort((a,b)=>b[1]-a[1])[0];
+    const erh=errorSummary.addRow(["Indicador","Resultado","Leitura","Direcionamento"]); this.styleHeader(erh);
+    errorSummary.addRow(["Total de erros operacionais",errors.length,"Base exclusiva da causa Erro operacional","Treinamento e prevenção operacional"]);
+    errorSummary.addRow(["Maior área",topError?.[1]??0,topError?.[0]??"Sem ocorrências","Priorizar revisão dos casos e orientação"]);
+    months.forEach((month)=>errorSummary.addRow([month.split("-").reverse().join("/"),errors.filter((ticket)=>monthKey(ticket.createdDate)===month).length,"Evolução mensal","Acompanhar tendência"]));
+
+    const errorAreas=workbook.addWorksheet("Áreas Erro Operacional"); this.configureSheet(errorAreas,[48,16,18,22]);
+    errorAreas.mergeCells("A1:D1"); errorAreas.getCell("A1").value="INCIDÊNCIA DE ERRO OPERACIONAL POR ÁREA"; this.styleTitle(errorAreas.getCell("A1"));
+    const eah=errorAreas.addRow(["Área/Tema","Qtd.","% do total","Prioridade"]); this.styleHeader(eah);
+    [...groupedErrors.entries()].sort((a,b)=>b[1]-a[1]).forEach(([label,total],index)=>{const row=errorAreas.addRow([label,total,errors.length?total/errors.length:0,index<3?"Alta":index<6?"Média":"Monitorar"]);row.getCell(3).numFmt="0.0%";});
   }
 
   private addSection(
