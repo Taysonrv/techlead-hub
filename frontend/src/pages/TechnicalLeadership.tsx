@@ -550,10 +550,14 @@ export function TechnicalLeadership() {
     {data && tab === "audit" && <Box>
       <Stack direction={{ xs: "column", md: "row" }} sx={{ justifyContent: "space-between", alignItems: { md: "center" }, gap: 1 }}>
         <AreaTitle title="Auditoria inteligente" info={tabInfo.audit} icon={<AssignmentTurnedInOutlined color="primary" />} />
-        <Chip label={`${data.audit.candidates} candidato(s) · amostra de ${data.audit.sample.length}`} />
+        <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap", alignItems: "center" }}>
+          <FormControl size="small" sx={{ minWidth: 220 }}><InputLabel>Sinal de auditoria</InputLabel><Select value={auditReason} label="Sinal de auditoria" onChange={(e) => setAuditReason(e.target.value)}><MenuItem value="">Todos</MenuItem>{auditReasons.map((reason) => <MenuItem key={reason} value={reason}>{reason}</MenuItem>)}</Select></FormControl>
+          <Chip label={`${filteredAudit.length} de ${data.audit.sample.length} na amostra · ${data.audit.candidates} candidato(s)`} />
+          <ExportTicketsButton tickets={filteredAudit} title="Auditoria inteligente" subtitle="Central de Liderança Técnica" />
+        </Stack>
       </Stack>
       <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(2,1fr)" }, gap: 1.5, mt: 1.2 }}>
-        {data.audit.sample.map((ticket) => <Card key={ticket.id} onClick={() => setDrawer({ kind: "audit", title: "Auditoria semanal", items: [ticket] })} sx={{ cursor: "pointer", background: mode === "dark" ? "linear-gradient(145deg, rgba(17,45,67,.96), rgba(12,29,49,.96)) !important" : "linear-gradient(145deg,#FFFFFF,#F4FAF8) !important", "&:hover": { borderColor: `${aliareColors.green} !important`, transform: "translateY(-2px)", boxShadow: "0 14px 34px rgba(0,199,142,.10)" }, transition: ".15s" }}><CardContent>
+        {filteredAudit.map((ticket) => <Card key={ticket.id} onClick={() => setDrawer({ kind: "audit", title: "Auditoria semanal", items: [ticket] })} sx={{ cursor: "pointer", background: mode === "dark" ? "linear-gradient(145deg, rgba(17,45,67,.96), rgba(12,29,49,.96)) !important" : "linear-gradient(145deg,#FFFFFF,#F4FAF8) !important", "&:hover": { borderColor: `${aliareColors.green} !important`, transform: "translateY(-2px)", boxShadow: "0 14px 34px rgba(0,199,142,.10)" }, transition: ".15s" }}><CardContent>
           <Stack direction="row" sx={{ justifyContent: "space-between", gap: 1 }}><Typography sx={{ fontWeight: 850 }}>#{ticket.movideskId}</Typography><Tooltip title="Candidato selecionado por heurísticas operacionais. A confirmação depende de análise humana."><InfoOutlined sx={{ fontSize: 17, color: "text.secondary" }} /></Tooltip></Stack>
           <Typography variant="body2" sx={{ mt: .5, fontWeight: 700 }}>{ticket.subject}</Typography>
           <Chip size="small" color="warning" label={ticket.reason} sx={{ mt: 1, maxWidth: "100%" }} />
@@ -562,20 +566,29 @@ export function TechnicalLeadership() {
     </Box>}
 
     {data && tab === "recurrences" && <Box>
-      <AreaTitle title="Radar de recorrências" info={tabInfo.recurrences} icon={<TrackChangesOutlined color="primary" />} />
+      <Stack direction={{ xs: "column", md: "row" }} sx={{ justifyContent: "space-between", alignItems: { md: "center" }, gap: 1 }}>
+        <AreaTitle title="Radar de recorrências" info={tabInfo.recurrences} icon={<TrackChangesOutlined color="primary" />} />
+        <FormControl size="small" sx={{ minWidth: 170 }}><InputLabel>Confiança</InputLabel><Select value={recurrenceConfidence} label="Confiança" onChange={(e) => setRecurrenceConfidence(e.target.value)}><MenuItem value="">Todas</MenuItem><MenuItem value="ALTA">Alta</MenuItem><MenuItem value="MÉDIA">Média</MenuItem></Select></FormControl>
+      </Stack>
       <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(2,1fr)", xl: "repeat(3,1fr)" }, gap: 1.5, mt: 1.2 }}>
-        {data.recurrences.map((item) => <Card key={item.topic} onClick={() => setDrawer({ kind: "recurrence", title: item.topic, recurrence: item })} sx={{ cursor: "pointer", background: mode === "dark" ? "linear-gradient(145deg, rgba(12,48,70,.96), rgba(14,28,53,.96)) !important" : "linear-gradient(145deg,#FFFFFF,#F3FAFC) !important", "&:hover": { borderColor: `${aliareColors.cyan} !important`, boxShadow: "0 12px 30px rgba(47,208,255,.10)" } }}><CardContent>
+        {filteredRecurrences.map((item) => <Card key={item.topic} onClick={() => setDrawer({ kind: "recurrence", title: item.topic, recurrence: item })} sx={{ cursor: "pointer", background: mode === "dark" ? "linear-gradient(145deg, rgba(12,48,70,.96), rgba(14,28,53,.96)) !important" : "linear-gradient(145deg,#FFFFFF,#F3FAFC) !important", "&:hover": { borderColor: `${aliareColors.cyan} !important`, boxShadow: "0 12px 30px rgba(47,208,255,.10)" } }}><CardContent>
           <Stack direction="row" sx={{ justifyContent: "space-between", gap: 1 }}><Typography sx={{ fontWeight: 850, textTransform: "capitalize" }}>{item.topic}</Typography><Tooltip title="Tema agrupado por classificação/serviço dos tickets do período. Clique para ver evidências e ação sugerida."><InfoOutlined sx={{ fontSize: 17, color: "text.secondary" }} /></Tooltip></Stack>
           <Typography sx={{ fontWeight: 900, fontSize: "1.7rem", color: aliareColors.cyan, mt: .7 }}>{item.count}</Typography>
           <Typography variant="caption" color="text.secondary">{item.clients.length} cliente(s) · {item.analysts.length} analista(s) · {item.linkedExamples ?? 0} evidência(s) com Azure</Typography>{item.concentration && <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: .35 }}>Concentração: {item.concentration.topClient ?? "sem cliente dominante"}{item.concentration.topClient ? ` (${item.concentration.clientSharePct}%)` : ""} · Módulo Azure: {item.concentration.topModule ?? "não identificado"}</Typography>}
           <Stack direction="row" spacing={.7} sx={{ mt: 1, flexWrap: "wrap" }}><Delta value={item.changePct} />{item.confidence && <Chip size="small" variant="outlined" color={item.confidence === "ALTA" ? "success" : "warning"} label={`Confiança ${item.confidence.toLowerCase()}`} />}</Stack>
         </CardContent></Card>)}
-        {!data.recurrences.length && <Alert severity="success">Nenhuma recorrência relevante detectada neste período.</Alert>}
+        {!filteredRecurrences.length && <Alert severity="success">Nenhuma recorrência encontrada para os filtros selecionados.</Alert>}
       </Box>
     </Box>}
 
     {data && tab === "gaps" && <Box>
-      <AreaTitle title="Pontos de atenção técnicos" info={tabInfo.gaps} icon={<ErrorOutlineOutlined color="primary" />} />
+      <Stack direction={{ xs: "column", md: "row" }} sx={{ justifyContent: "space-between", alignItems: { md: "center" }, gap: 1 }}>
+        <AreaTitle title="Pontos de atenção técnicos" info={tabInfo.gaps} icon={<ErrorOutlineOutlined color="primary" />} />
+        <Stack direction="row" spacing={1}>
+          <FormControl size="small" sx={{ minWidth: 145 }}><InputLabel>Prioridade</InputLabel><Select value={gapImpact} label="Prioridade" onChange={(e) => setGapImpact(e.target.value)}><MenuItem value="">Todas</MenuItem><MenuItem value="Alto">Alta</MenuItem><MenuItem value="Médio">Média</MenuItem></Select></FormControl>
+          <FormControl size="small" sx={{ minWidth: 175 }}><InputLabel>Status</InputLabel><Select value={gapStatus} label="Status" onChange={(e) => setGapStatus(e.target.value)}><MenuItem value="">Todos</MenuItem>{[...new Set(data.gaps.map((gap) => gap.status))].map((status) => <MenuItem key={status} value={status}>{status}</MenuItem>)}</Select></FormControl>
+        </Stack>
+      </Stack>
 
       <Alert severity="info" sx={{ mt: 1.2, mb: 1.5 }}>
         Esta visão transforma sinais encontrados nos tickets em pontos de investigação. Um gap não significa, por si só, um erro do sistema:
@@ -584,9 +597,9 @@ export function TechnicalLeadership() {
 
       <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(3,1fr)" }, gap: 1.2, mb: 1.5 }}>
         {[
-          ["Pontos identificados", data.gaps.length],
-          ["Prioridade alta", data.gaps.filter((gap) => gap.impact === "Alto").length],
-          ["Demais prioridades", data.gaps.filter((gap) => gap.impact !== "Alto").length],
+          ["Pontos identificados", filteredGaps.length],
+          ["Prioridade alta", filteredGaps.filter((gap) => gap.impact === "Alto").length],
+          ["Demais prioridades", filteredGaps.filter((gap) => gap.impact !== "Alto").length],
         ].map(([label, value]) => <Box key={String(label)} sx={{ p: 1.35, borderRadius: 2, border: "1px solid", borderColor: "divider", bgcolor: mode === "dark" ? "rgba(15,36,58,.72)" : "background.paper" }}>
           <Typography variant="caption" color="text.secondary">{label}</Typography>
           <Typography sx={{ fontWeight: 900, fontSize: "1.45rem", mt: .15 }}>{value}</Typography>
@@ -594,7 +607,7 @@ export function TechnicalLeadership() {
       </Box>
 
       <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "repeat(2,1fr)" }, gap: 1.5 }}>
-        {data.gaps.map((gap) => <Card key={gap.id} onClick={() => setDrawer({ kind: "gap", title: gap.title, gap })} sx={{ cursor: "pointer", background: mode === "dark" ? "linear-gradient(145deg, rgba(29,32,72,.96), rgba(13,28,49,.96)) !important" : "linear-gradient(145deg,#FFFFFF,#F7F5FF) !important", "&:hover": { borderColor: `${aliareColors.purple} !important`, boxShadow: "0 12px 30px rgba(124,92,255,.11)", transform: "translateY(-2px)" }, transition: ".15s" }}>
+        {filteredGaps.map((gap) => <Card key={gap.id} onClick={() => setDrawer({ kind: "gap", title: gap.title, gap })} sx={{ cursor: "pointer", background: mode === "dark" ? "linear-gradient(145deg, rgba(29,32,72,.96), rgba(13,28,49,.96)) !important" : "linear-gradient(145deg,#FFFFFF,#F7F5FF) !important", "&:hover": { borderColor: `${aliareColors.purple} !important`, boxShadow: "0 12px 30px rgba(124,92,255,.11)", transform: "translateY(-2px)" }, transition: ".15s" }}>
           <CardContent>
             <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "flex-start", gap: 1 }}>
               <Box>
@@ -625,7 +638,7 @@ export function TechnicalLeadership() {
             </Typography>
           </CardContent>
         </Card>)}
-        {!data.gaps.length && <Alert severity="success">Nenhum ponto de atenção técnico foi identificado neste período.</Alert>}
+        {!filteredGaps.length && <Alert severity="success">Nenhum ponto de atenção técnico encontrado para os filtros selecionados.</Alert>}
       </Box>
     </Box>}
 
@@ -643,7 +656,7 @@ export function TechnicalLeadership() {
 
     <Drawer anchor="right" open={Boolean(drawer)} onClose={() => setDrawer(null)} slotProps={{ paper: { sx: detailDrawerPaperSx } }}>
       {drawer && <DetailPanelHeader eyebrow="Liderança técnica" title={drawer.title} onClose={() => setDrawer(null)} />}
-      {drawer && drawer.kind !== "development" && <Box sx={{ px: 2, pt: 1.5 }}>
+      {drawer && <Box sx={{ px: 2, pt: 1.5 }}>
         <ExportTicketsButton tickets={drawerTickets} title={drawer.title} subtitle="Central de Liderança Técnica" />
       </Box>}
       {drawer?.kind === "radar" && <DetailSection title="Itens para investigação">
@@ -655,7 +668,7 @@ export function TechnicalLeadership() {
       {drawer?.kind === "audit" && <DetailSection title="Revisão humana recomendada"><Stack spacing={1}>{drawer.items.map((ticket) => <Card key={ticket.id} variant="outlined"><CardContent><Typography sx={{ fontWeight: 850 }}>#{ticket.movideskId} · {ticket.subject}</Typography><Typography variant="body2" color="text.secondary" sx={{ mt: .5 }}>{ticket.reason}</Typography><DetailFieldGrid fields={[["Categoria", ticket.category ?? "Não informado"], ["Causa", ticket.cause ?? "Não informado"], ["Responsável", ticket.owner ?? "Não informado"], ["Cliente", ticket.client ?? "Não informado"]]} /><Button sx={{ mt: 1 }} endIcon={<OpenInNewOutlined />} onClick={() => openItem(ticket)}>Abrir atendimento</Button></CardContent></Card>)}</Stack></DetailSection>}
       {drawer?.kind === "recurrence" && <><DetailSection title="Diagnóstico"><DetailFieldGrid fields={[["Ocorrências", drawer.recurrence.count], ["Período anterior", drawer.recurrence.previous], ["Clientes", drawer.recurrence.clients.join(", ") || "—"], ["Analistas", drawer.recurrence.analysts.join(", ") || "—"]]} /></DetailSection><DetailSection title="Ação sugerida"><Alert severity="info">{drawer.recurrence.action}</Alert></DetailSection><DetailSection title="Evidências"><Stack spacing={1}>{drawer.recurrence.examples.map((ticket) => <Button key={ticket.id} variant="outlined" onClick={() => openItem(ticket)} endIcon={<OpenInNewOutlined />} sx={{ justifyContent: "space-between" }}>#{ticket.movideskId} · {ticket.subject}</Button>)}</Stack></DetailSection></>}
       {drawer?.kind === "gap" && <><DetailSection title="Diagnóstico do ponto de atenção"><Alert severity={drawer.gap.confidence === "Alta" ? "success" : "info"} sx={{ mb: 1.5 }}>O nível de confiança representa a quantidade de evidências independentes encontradas. A decisão final continua dependendo de validação da liderança.</Alert><DetailFieldGrid fields={[["Identificador", drawer.gap.id], ["Origem do sinal", drawer.gap.type], ["Prioridade", drawer.gap.impact], ["Status da análise", drawer.gap.status], ["Confiança", drawer.gap.confidence ?? "—"], ["Tickets relacionados", drawer.gap.ticketCount ?? 0], ["Vínculos Azure", drawer.gap.azureLinked ?? 0], ["Tasks bloqueadas", drawer.gap.blockedLinked ?? 0]]} /></DetailSection><DetailSection title="Evidências cruzadas"><Typography variant="body2">{drawer.gap.evidence}</Typography>{Boolean(drawer.gap.examples?.length) && <Stack spacing={.8} sx={{ mt: 1.2 }}>{drawer.gap.examples!.map((ticket) => <Button key={ticket.id} variant="outlined" endIcon={<OpenInNewOutlined />} onClick={() => openItem(ticket)} sx={{ justifyContent: "space-between", textAlign: "left", textTransform: "none" }}>#{ticket.movideskId} · {ticket.subject}</Button>)}</Stack>}</DetailSection>{Boolean(drawer.gap.tasks?.length) && <DetailSection title="Tasks Azure relacionadas"><Stack spacing={.8}>{drawer.gap.tasks!.map((task) => <Button key={task.id} variant="outlined" onClick={() => openItem(task)} sx={{ justifyContent: "space-between", textTransform: "none" }}>Task #{task.id} · {task.title}<Chip size="small" label={task.state} /></Button>)}</Stack></DetailSection>}<DetailSection title="Próxima ação sugerida"><Alert severity="info">{drawer.gap.action}</Alert></DetailSection></>}
-      {drawer?.kind === "development" && <><DetailSection title="Visão técnica"><DetailFieldGrid fields={[["Analista", drawer.development.analyst], ["Tickets no período", drawer.development.tickets], ["Sem movimento", drawer.development.stale], ["Tasks vinculadas", drawer.development.linkedTasks ?? 0], ["Tasks concluídas", drawer.development.finishedTasks ?? 0], ["Tasks bloqueadas", drawer.development.blockedTasks ?? 0]]} /></DetailSection><DetailSection title="Temas mais frequentes"><Stack spacing={.8}>{drawer.development.themes.map((theme) => <Box key={theme.topic} sx={{ p: 1, borderRadius: 1.5, bgcolor: "background.default" }}><Typography variant="body2"><b>{theme.topic}</b> · {theme.count}</Typography></Box>)}</Stack></DetailSection></>}
+      {drawer?.kind === "development" && <><DetailSection title="Visão técnica"><DetailFieldGrid fields={[["Analista", drawer.development.analyst], ["Tickets no período", drawer.development.tickets], ["Sem movimento", drawer.development.stale], ["Tasks vinculadas", drawer.development.linkedTasks ?? 0], ["Tasks concluídas", drawer.development.finishedTasks ?? 0], ["Tasks bloqueadas", drawer.development.blockedTasks ?? 0]]} /></DetailSection><DetailSection title="Temas mais frequentes"><Stack spacing={.8}>{drawer.development.themes.map((theme) => <Box key={theme.topic} sx={{ p: 1, borderRadius: 1.5, bgcolor: "background.default" }}><Typography variant="body2"><b>{theme.topic}</b> · {theme.count}</Typography></Box>)}</Stack></DetailSection>{Boolean(drawer.development.examples?.length) && <DetailSection title="Atendimentos do período"><Stack spacing={.8}>{drawer.development.examples!.map((ticket) => <Button key={ticket.id} variant="outlined" endIcon={<OpenInNewOutlined />} onClick={() => openItem(ticket)} sx={{ justifyContent: "space-between", textTransform: "none" }}>#{ticket.movideskId} · {ticket.subject}</Button>)}</Stack></DetailSection>}</>}
     </Drawer>
   </Box>;
 }
