@@ -87,7 +87,7 @@ export function DataQuality() {
       setLoading(true); setError(false);
       const response = await api.get<Data>("/workspace/data-quality", { params: {
         type: type.length ? type.join("|||") : undefined, client: client.length ? client.join("|||") : undefined, user: user.length ? user.join("|||") : undefined,
-        issue: issue || undefined, search: search || undefined,
+        issue: issue || "__coordinationOverview", search: search || undefined,
       }, signal, timeout: 45_000 });
       if (signal?.aborted) return;
       setData(response.data);
@@ -191,9 +191,9 @@ export function DataQuality() {
     <PageHeader eyebrow="Governança" title="Pendências" description="Visão executiva das pendências que exigem acompanhamento da coordenação: prazo, recorrência, continuidade e divergências entre atendimento e Tarefa." meta={`${data?.samples.length ?? 0} registro(s) no recorte atual`} />
 
     <Card variant="outlined" sx={{ mt: 2 }}><CardContent>
-      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "2fr repeat(3, minmax(170px, 1fr)) auto" }, gap: 1.2 }}>
+      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "minmax(280px, 1.7fr) repeat(3, minmax(190px, 1fr)) auto" }, gap: 1.2 }}>
         <TextField size="small" label="Pesquisar ID ou título" value={search} onChange={(e) => setSearch(e.target.value)} slotProps={{ input: { startAdornment: <SearchOutlined sx={{ mr: 1, color: "text.disabled" }} /> } }} />
-        <FormControl size="small"><InputLabel>Tipo</InputLabel><Select multiple displayEmpty label="Tipo" value={type} onChange={(e) => setType(typeof e.target.value === "string" ? e.target.value.split(",") : e.target.value)} renderValue={(selected) => !selected.length ? "Todos" : selected.length === 1 ? selected[0] : `${selected.length} tipos`}><MenuItem onClick={(e) => { e.preventDefault(); e.stopPropagation(); setType([]); }}><Checkbox size="small" checked={!type.length} />Todos</MenuItem>{data?.filters.types.map((value) => <MenuItem key={value} value={value}><Checkbox size="small" checked={type.includes(value)} />{value}</MenuItem>)}</Select></FormControl>
+        <FormControl size="small"><InputLabel shrink>Tipo</InputLabel><Select multiple displayEmpty label="Tipo" value={type} onChange={(e) => setType(typeof e.target.value === "string" ? e.target.value.split(",") : e.target.value)} renderValue={(selected) => !selected.length ? "Todos" : selected.length === 1 ? selected[0] : `${selected.length} tipos`}><MenuItem onClick={(e) => { e.preventDefault(); e.stopPropagation(); setType([]); }}><Checkbox size="small" checked={!type.length} />Todos</MenuItem>{data?.filters.types.map((value) => <MenuItem key={value} value={value}><Checkbox size="small" checked={type.includes(value)} />{value}</MenuItem>)}</Select></FormControl>
         <Autocomplete multiple size="small" options={data?.filters.clients ?? []} value={client} onChange={(_, value) => setClient(value)} renderInput={(params) => <TextField {...params} label="Cliente" />} limitTags={1} />
         <Autocomplete multiple size="small" options={data?.filters.users ?? []} value={user} onChange={(_, value) => setUser(value)} renderInput={(params) => <TextField {...params} label="Usuário do suporte" />} limitTags={1} />
         <Button disabled={!hasFilters} onClick={() => { setType([]); setClient([]); setUser([]); setSearch(""); setIssue(""); }}>Limpar</Button>
