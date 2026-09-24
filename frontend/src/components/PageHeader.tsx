@@ -6,8 +6,8 @@ export function PageHeader({ eyebrow, title, description, meta, action }: { eyeb
   const theme = useTheme();
   const dark = theme.palette.mode === "dark";
   return <Stack direction={{ xs: "column", lg: "row" }} sx={{ justifyContent: "space-between", alignItems: { xs: "stretch", lg: "center" }, gap: 2, mb: { xs: 2, md: 2.75 }, position: "relative", overflow: "hidden", p: { xs: 1.75, sm: 2, md: 2.2 }, borderRadius: { xs: 2, md: 2.5 }, isolation: "isolate", border: "1px solid", borderColor: dark ? "rgba(76,190,230,.20)" : "rgba(15,118,110,.13)", background: dark ? "radial-gradient(circle at 8% 0%, rgba(24,199,122,.12), transparent 34%), linear-gradient(125deg, rgba(9,39,59,.98), rgba(13,31,57,.98) 62%, rgba(18,34,60,.97))" : "linear-gradient(120deg, #F3FCF8 0%, #F7FBFA 48%, #F4F8FC 100%)", boxShadow: dark ? "inset 3px 0 0 #18C77A, 0 16px 38px rgba(0,0,0,.18), inset 0 1px rgba(255,255,255,.035)" : "inset 3px 0 0 #18C77A, 0 8px 22px rgba(16,24,40,.045)", "&::after": { display: "none" } }}>
-    <Box sx={{ position: "relative", zIndex: 1, minWidth: 0 }}>
-      <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
+    <Box sx={{ position: "relative", zIndex: 1, minWidth: 0, flex: 1, textAlign: { xs: "left", md: action ? "left" : "center" } }}>
+      <Stack direction="row" spacing={1} sx={{ alignItems: "center", justifyContent: { xs: "flex-start", md: action ? "flex-start" : "center" } }}>
         <Box sx={{ width: 34, height: 3, borderRadius: 99, bgcolor: aliareColors.green, boxShadow: dark ? "0 0 12px rgba(24,199,122,.35)" : "none" }} />
         <Typography variant="caption" sx={{ fontWeight: 800, letterSpacing: ".08em", textTransform: "uppercase", color: dark ? "#42E6C1" : aliareColors.greenDark }}>{eyebrow}</Typography>
       </Stack>
