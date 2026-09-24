@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   Alert,
@@ -156,6 +156,7 @@ export function Attention() {
 
   const [error, setError] =
     useState<string | null>(null);
+  const loadRequestRef = useRef<AbortController | null>(null);
 
   const [level, setLevel] = useState<AttentionLevel[]>([]);
 
@@ -188,34 +189,27 @@ export function Attention() {
   ===================================================== */
 
   useEffect(() => {
+    const controller = new AbortController();
+    loadRequestRef.current?.abort();
+    loadRequestRef.current = controller;
+
     async function loadTickets() {
       try {
         setLoading(true);
         setError(null);
-
-        const response =
-          await api.get<
-            Ticket[]
-          >(
-            "/dashboard/pending-tickets"
-          );
-
-        setTickets(response.data);
+        const response = await api.get<Ticket[]>("/dashboard/pending-tickets", { signal: controller.signal });
+        if (!controller.signal.aborted) setTickets(response.data);
       } catch (err) {
-        console.error(
-          "Erro ao carregar pontos de atenção:",
-          err
-        );
-
-        setError(
-          "Não foi possível carregar os pontos de atenção."
-        );
+        if (controller.signal.aborted) return;
+        console.error("Erro ao carregar pontos de atenção:", err);
+        setError("Não foi possível carregar os pontos de atenção.");
       } finally {
-        setLoading(false);
+        if (!controller.signal.aborted) setLoading(false);
       }
     }
 
-    loadTickets();
+    void loadTickets();
+    return () => controller.abort();
   }, []);
 
   /* =====================================================
