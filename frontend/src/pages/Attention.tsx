@@ -554,13 +554,8 @@ export function Attention() {
     useMemo(() => {
       return attentionTickets.filter(
         (ticket) => {
-          const matchesOwner =
-            owner === "" ||
-            ticket.owner === owner;
-
-          const matchesClient =
-            client === "" ||
-            ticket.client === client;
+          const matchesOwner = !owner.length || Boolean(ticket.owner && owner.includes(ticket.owner));
+          const matchesClient = !client.length || Boolean(ticket.client && client.includes(ticket.client));
 
           return (
             matchesOwner &&
