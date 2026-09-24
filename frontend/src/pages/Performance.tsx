@@ -2113,14 +2113,7 @@ function CardSectionHeader({
   info: CardInfo;
 }) {
   return (
-    <Stack
-      direction="row"
-      sx={{
-        justifyContent: "space-between",
-        alignItems: "flex-start",
-        gap: 1,
-      }}
-    >
+    <Box sx={{ position: "relative", textAlign: "center", minHeight: 42 }}>
       <Box>
         <Typography sx={{ fontWeight: 800, fontSize: "1rem" }}>
           {title}
@@ -2131,8 +2124,8 @@ function CardSectionHeader({
         </Typography>
       </Box>
 
-      <CardInfoButton info={info} />
-    </Stack>
+      <Box sx={{ position: "absolute", right: 0, top: 0 }}><CardInfoButton info={info} /></Box>
+    </Box>
   );
 }
 
