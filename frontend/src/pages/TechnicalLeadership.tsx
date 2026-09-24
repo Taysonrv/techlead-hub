@@ -18,7 +18,7 @@ import { DetailFieldGrid, DetailPanelHeader, DetailSection } from "../components
 import { detailDrawerPaperSx } from "../theme/layoutTokens";
 import { aliareColors } from "../theme/theme";
 import { useColorMode } from "../context/ColorModeContext";
-import { Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip as ChartTooltip, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip as ChartTooltip, XAxis, YAxis } from "recharts";
 
 type Ticket = {
   id: number; movideskId: number; subject: string; status: string; client: string | null; owner: string | null;
@@ -174,7 +174,7 @@ export function TechnicalLeadership() {
   };
   const isLeadershipSeriesVisible = (chart: string, key: string) => !(hiddenLeadershipSeries[chart]?.has(key));
   const SeriesSelector = ({ chart, items }: { chart: string; items: Array<{ key: string; label: string; color: string }> }) => (
-    <Stack direction="row" spacing={.7} useFlexGap sx={{ flexWrap: "wrap", mt: .9 }}>
+    <Stack direction="row" spacing={.7} useFlexGap sx={{ flexWrap: "wrap", mt: .9, justifyContent: "center", alignItems: "center" }}>
       {items.map((item) => {
         const active = isLeadershipSeriesVisible(chart, item.key);
         return <Chip
@@ -382,7 +382,7 @@ export function TechnicalLeadership() {
       <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", xl: "1.55fr 1fr" }, gap: 1.5, mb: 1.5 }}>
         <Card><CardContent>
           <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "center", gap: 1 }}>
-            <AreaTitle title="Entradas, resoluções, reaberturas e backlog" info="Evolução diária do fluxo. O backlog histórico é reconstruído pelas datas de criação, resolução, fechamento e cancelamento disponíveis na base." />
+            <Box sx={{ flex: 1, textAlign: "center", "& > *": { justifyContent: "center" } }}><AreaTitle title="Entradas, resoluções, reaberturas e backlog" info="Evolução diária do fluxo. O backlog histórico é reconstruído pelas datas de criação, resolução, fechamento e cancelamento disponíveis na base." /></Box>
             <IndicatorPeriodFilter value={indicatorPeriod("dailyFlow")} onChange={(value) => setIndicatorPeriod("dailyFlow", value)} />
           </Stack>
           <Box sx={{ height: 330, mt: 1.2 }}><ResponsiveContainer width="100%" height="100%"><LineChart data={analyticsFor("dailyFlow")?.daily ?? []}>
@@ -390,7 +390,6 @@ export function TechnicalLeadership() {
             <XAxis dataKey="date" tickFormatter={(v) => String(v).slice(5)} tick={{ fontSize: 10 }} minTickGap={20} />
             <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
             <ChartTooltip contentStyle={{ borderRadius: 12, background: mode === "dark" ? "#0E2338" : "#fff" }} />
-            <Legend />
 
             {isLeadershipSeriesVisible("dailyFlow", "opened") && <Line type="monotone" dataKey="opened" name="Abertos" stroke={aliareColors.info} strokeWidth={2.4} dot={false} />}
             {isLeadershipSeriesVisible("dailyFlow", "resolved") && <Line type="monotone" dataKey="resolved" name="Resolvidos" stroke={aliareColors.green} strokeWidth={2.4} dot={false} />}
@@ -407,7 +406,7 @@ export function TechnicalLeadership() {
 
         <Card><CardContent>
           <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "center", gap: 1 }}>
-            <AreaTitle title="Aging do backlog" info="Distribui os atendimentos abertos por idade desde a criação para antecipar envelhecimento da fila." />
+            <Box sx={{ flex: 1, textAlign: "center", "& > *": { justifyContent: "center" } }}><AreaTitle title="Aging do backlog" info="Distribui os atendimentos abertos por idade desde a criação para antecipar envelhecimento da fila." /></Box>
             <IndicatorPeriodFilter value={indicatorPeriod("aging")} onChange={(value) => setIndicatorPeriod("aging", value)} />
           </Stack>
           <Box sx={{ height: 330, mt: 1.2 }}><ResponsiveContainer width="100%" height="100%"><BarChart data={analyticsFor("aging")?.aging ?? []}>
@@ -427,7 +426,7 @@ export function TechnicalLeadership() {
       <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "repeat(2,1fr)" }, gap: 1.5, mb: 1.5 }}>
         <Card><CardContent>
           <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "center", gap: 1 }}>
-            <AreaTitle title="SLA de solução" info="Versão moderna do indicador de tickets resolvidos por vencimento do Movidesk." />
+            <Box sx={{ flex: 1, textAlign: "center", "& > *": { justifyContent: "center" } }}><AreaTitle title="SLA de solução" info="Versão moderna do indicador de tickets resolvidos por vencimento do Movidesk." /></Box>
             <IndicatorPeriodFilter value={indicatorPeriod("resolutionSla")} onChange={(value) => setIndicatorPeriod("resolutionSla", value)} />
           </Stack>
           <Box sx={{ height: 280 }}><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={[
@@ -449,7 +448,7 @@ export function TechnicalLeadership() {
         </CardContent></Card>
         <Card><CardContent>
           <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "center", gap: 1 }}>
-            <AreaTitle title="SLA de primeira resposta" info="Consolida o indicador de primeira resposta, preservando também registros sem medição." />
+            <Box sx={{ flex: 1, textAlign: "center", "& > *": { justifyContent: "center" } }}><AreaTitle title="SLA de primeira resposta" info="Consolida o indicador de primeira resposta, preservando também registros sem medição." /></Box>
             <IndicatorPeriodFilter value={indicatorPeriod("responseSla")} onChange={(value) => setIndicatorPeriod("responseSla", value)} />
           </Stack>
           <Box sx={{ height: 280 }}><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={[
@@ -474,7 +473,7 @@ export function TechnicalLeadership() {
       <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", xl: "repeat(2,1fr)" }, gap: 1.5, mb: 1.5 }}>
         <Card><CardContent>
           <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "center", gap: 1 }}>
-            <AreaTitle title="Resolução por analista" info="Volume resolvido, reaberto e situação de SLA por analista; substitui a leitura tabular isolada por uma visão comparável." />
+            <Box sx={{ flex: 1, textAlign: "center", "& > *": { justifyContent: "center" } }}><AreaTitle title="Resolução por analista" info="Volume resolvido, reaberto e situação de SLA por analista; substitui a leitura tabular isolada por uma visão comparável." /></Box>
             <IndicatorPeriodFilter value={indicatorPeriod("resolutionOwner")} onChange={(value) => setIndicatorPeriod("resolutionOwner", value)} />
           </Stack>
           <Box sx={{ height: 340, mt: 1 }}><ResponsiveContainer width="100%" height="100%"><BarChart data={analyticsFor("resolutionOwner")?.byOwner ?? []}>
@@ -491,7 +490,7 @@ export function TechnicalLeadership() {
         </CardContent></Card>
         <Card><CardContent>
           <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "center", gap: 1 }}>
-            <AreaTitle title="Primeira resposta por analista" info="Compara volume de respostas dentro, fora e sem medição de SLA por analista." />
+            <Box sx={{ flex: 1, textAlign: "center", "& > *": { justifyContent: "center" } }}><AreaTitle title="Primeira resposta por analista" info="Compara volume de respostas dentro, fora e sem medição de SLA por analista." /></Box>
             <IndicatorPeriodFilter value={indicatorPeriod("responseOwner")} onChange={(value) => setIndicatorPeriod("responseOwner", value)} />
           </Stack>
           <Box sx={{ height: 340, mt: 1 }}><ResponsiveContainer width="100%" height="100%"><BarChart data={analyticsFor("responseOwner")?.responseByOwner ?? []}>
@@ -515,7 +514,7 @@ export function TechnicalLeadership() {
           const maxVisible = Math.max(...visibleRows.map((row) => row.total), 1);
           return <Card key={String(title)}><CardContent>
             <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "center", gap: 1 }}>
-              <Box><Typography sx={{ fontWeight: 850 }}>{String(title)}</Typography><Typography variant="caption" color="text.secondary">{visibleTotal} itens visíveis · clique para exibir/ocultar</Typography></Box>
+              <Box sx={{ flex: 1, textAlign: "center" }}><Typography sx={{ fontWeight: 850 }}>{String(title)}</Typography><Typography variant="caption" color="text.secondary">{visibleTotal} itens visíveis · clique para exibir/ocultar</Typography></Box>
               <IndicatorPeriodFilter value={indicatorPeriod(String(chartKey))} onChange={(value) => setIndicatorPeriod(String(chartKey), value)} />
             </Stack>
             <Stack spacing={.8} sx={{ mt: 1.2 }}>{rankingRows.slice(0,8).map((row) => {
