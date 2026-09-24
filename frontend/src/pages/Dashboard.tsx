@@ -1408,6 +1408,7 @@ export function Dashboard() {
             isDark={isDark}
             chartGrid={chartGrid}
             chartTooltipStyle={chartTooltipStyle}
+            onDrilldown={(title, list, subtitle) => showTickets(title, list, subtitle)}
           />
 
           <Box
@@ -1446,8 +1447,8 @@ export function Dashboard() {
                     <XAxis dataKey="date" tick={{ fontSize: 10 }} minTickGap={24} interval="preserveStartEnd" tickMargin={8} />
                     <YAxis allowDecimals={false} tick={{ fontSize: 10 }} width={42} />
                     <Tooltip contentStyle={chartTooltipStyle} />
-                    <Area type="monotone" dataKey="opened" name="Abertos" stroke={semanticChartColors.normal} strokeWidth={2.4} fill="url(#openedFlow)" />
-                    <Area type="monotone" dataKey="resolved" name="Resolvidos" stroke={semanticChartColors.positive} strokeWidth={2.4} fill="url(#resolvedFlow)" />
+                    <Area type="monotone" dataKey="opened" name="Abertos" stroke={semanticChartColors.normal} strokeWidth={2.4} fill="url(#openedFlow)" activeDot={{ r: 6, cursor: "pointer", onClick: (_event, payload: any) => { const day = payload?.payload?.sortDate; if (day) showTickets(`Abertos em ${formatShortDate(day)}`, openedInPeriod.filter((ticket) => formatIsoDate(new Date(ticket.createdDate)) === day), "Tickets abertos no dia selecionado"); } }} />
+                    <Area type="monotone" dataKey="resolved" name="Resolvidos" stroke={semanticChartColors.positive} strokeWidth={2.4} fill="url(#resolvedFlow)" activeDot={{ r: 6, cursor: "pointer", onClick: (_event, payload: any) => { const day = payload?.payload?.sortDate; if (day) showTickets(`Resolvidos em ${formatShortDate(day)}`, resolvedInPeriod.filter((ticket) => Boolean(ticket.resolvedDate) && formatIsoDate(new Date(ticket.resolvedDate!)) === day), "Tickets resolvidos no dia selecionado"); } }} />
                   </AreaChart>
                 </ResponsiveContainer>
               </Box>
@@ -1471,7 +1472,10 @@ export function Dashboard() {
                     <XAxis type="number" allowDecimals={false} tick={{ fontSize: 10 }} />
                     <YAxis type="category" dataKey="label" width={118} tick={{ fontSize: 10 }} />
                     <Tooltip contentStyle={chartTooltipStyle} cursor={{ fill: isDark ? "rgba(255,183,3,.05)" : "rgba(15,23,42,.035)" }} />
-                    <Bar dataKey="total" name="Tickets" fill={semanticChartColors.attention} radius={[0, 7, 7, 0]} barSize={18} />
+                    <Bar dataKey="total" name="Tickets" fill={semanticChartColors.attention} radius={[0, 7, 7, 0]} barSize={18} cursor="pointer" onClick={(entry: any) => {
+                      const cause = entry?.label ?? entry?.payload?.label;
+                      if (cause) showTickets(`Causa: ${cause}`, filteredTickets.filter((ticket) => (ticket.cause ?? "Sem causa") === cause), "Tickets classificados com a causa selecionada");
+                    }} />
                   </BarChart>
                 </ResponsiveContainer>
               </Box>
@@ -2800,6 +2804,7 @@ function MonthlyCategoryEvolutionCard({
   isDark,
   chartGrid,
   chartTooltipStyle,
+  onDrilldown,
 }: {
   tickets: Ticket[];
   categories: string[];
@@ -2807,6 +2812,7 @@ function MonthlyCategoryEvolutionCard({
   isDark: boolean;
   chartGrid: string;
   chartTooltipStyle: Record<string, string | number>;
+  onDrilldown: (title: string, tickets: Ticket[], subtitle?: string) => void;
 }) {
   type Granularity = "month" | "week" | "day";
   const [granularity, setGranularity] = useState<Granularity>("month");
@@ -2965,7 +2971,7 @@ function MonthlyCategoryEvolutionCard({
             <Tooltip contentStyle={chartTooltipStyle} cursor={{ fill: isDark ? "rgba(56,189,248,.045)" : "rgba(15,23,42,.035)" }} formatter={(value, name) => [Number(value).toLocaleString("pt-BR"), String(name)]} labelFormatter={(label) => `${meta[granularity].label}: ${String(label)}`} />
             {visibleCategories.map((category) => {
               const index = categories.indexOf(category);
-              return <Bar key={category} dataKey={category} name={category} stackId="categories" fill={colors[index % colors.length]} maxBarSize={granularity === "day" ? 42 : granularity === "week" ? 72 : 110} radius={category === visibleCategories[visibleCategories.length - 1] ? [5, 5, 0, 0] : 0} animationDuration={520} animationBegin={Math.max(index, 0) * 45} />;
+              return <Bar key={category} dataKey={category} name={category} stackId="categories" fill={colors[index % colors.length]} maxBarSize={granularity === "day" ? 42 : granularity === "week" ? 72 : 110} radius={category === visibleCategories[visibleCategories.length - 1] ? [5, 5, 0, 0] : 0} animationDuration={520} animationBegin={Math.max(index, 0) * 45} cursor="pointer" onClick={(entry: any) => { const periodKey = entry?.periodKey ?? entry?.payload?.periodKey; const rowIndex = data.findIndex((row) => row.periodKey === periodKey); const period = periods[rowIndex]; if (!period) return; onDrilldown(`${category} · ${meta[granularity].label}`, tickets.filter((ticket) => { const date = new Date(ticket.createdDate); return (ticket.category ?? "Sem categoria") === category && date >= period.start && date <= period.end; }), `Tickets da categoria no período ${entry?.period ?? entry?.payload?.period ?? ""}`); }} />;
             })}
           </BarChart>
         </ResponsiveContainer>
