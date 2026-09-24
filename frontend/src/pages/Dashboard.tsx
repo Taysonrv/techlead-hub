@@ -1377,14 +1377,14 @@ export function Dashboard() {
           <Box
             sx={{
               display: "grid",
-              gridTemplateColumns: { xs: "1fr", xl: "1.65fr 1fr 1fr" },
+              gridTemplateColumns: { xs: "1fr", lg: "repeat(3, minmax(0, 1fr))" },
               gap: 2,
               mb: 2,
             }}
           >
             <CardBase>
               <CardPeriodHeader title="Evolução dos Tickets" subtitle="Volume de abertura por dia • tendência do período" value={evolutionPeriod} onChange={setEvolutionPeriod} />
-              <Box sx={{ height: 290, mt: 1.5 }}>
+              <Box sx={{ height: 260, mt: 1.5 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={trends} margin={{ top: 8, right: 12, left: 4, bottom: 4 }}>
                     <defs>
@@ -2809,6 +2809,7 @@ function CardBase({
           : "0 4px 18px rgba(16,24,40,.055)",
 
         overflow: "hidden",
+        height: "100%",
         transition: "border-color .18s ease, box-shadow .18s ease, transform .18s ease",
         "&:hover": {
           borderColor: isDark ? "rgba(47,208,255,.34)" : "rgba(24,199,122,.32)",
@@ -3016,13 +3017,13 @@ function MonthlyCategoryEvolutionCard({
 }
 
 function CardPeriodHeader({ title, subtitle, value, onChange }: { title: string; subtitle: string; value?: CardPeriod; onChange?: (value: CardPeriod) => void }) {
-  return <Box sx={{ position: "relative", minHeight: value ? 44 : "auto" }}>
-    <Box sx={{ textAlign: "center", px: value ? { xs: 0, md: 10 } : 0 }}>
-      <Typography sx={{ fontWeight: 850, fontSize: "1.05rem" }}>{title}</Typography>
-      <Typography variant="caption" color="text.secondary">{subtitle}</Typography>
+  return <Box sx={{ display: "grid", gridTemplateRows: "auto auto", justifyItems: "center", gap: .75, minHeight: value ? 76 : "auto" }}>
+    <Box sx={{ textAlign: "center", minWidth: 0 }}>
+      <Typography sx={{ fontWeight: 850, fontSize: "1.05rem", lineHeight: 1.25 }}>{title}</Typography>
+      <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: .35 }}>{subtitle}</Typography>
     </Box>
-    {value && onChange && <FormControl size="small" sx={{ position: { xs: "static", md: "absolute" }, right: 0, top: 0, minWidth: 112, mt: { xs: 1, md: 0 } }}>
-      <Select value={value} onChange={(event) => onChange(event.target.value as CardPeriod)} sx={{ height: 32, fontSize: ".75rem", fontWeight: 750 }}>
+    {value && onChange && <FormControl size="small" sx={{ width: 126 }}>
+      <Select value={value} onChange={(event) => onChange(event.target.value as CardPeriod)} sx={{ height: 32, fontSize: ".75rem", fontWeight: 750, textAlign: "center" }}>
         <MenuItem value="7d">7 dias</MenuItem><MenuItem value="30d">30 dias</MenuItem><MenuItem value="60d">60 dias</MenuItem><MenuItem value="90d">90 dias</MenuItem><MenuItem value="month">Este mês</MenuItem><MenuItem value="semester">Semestre</MenuItem><MenuItem value="year">Este ano</MenuItem>
       </Select>
     </FormControl>}
@@ -3060,7 +3061,7 @@ function DonutAnalysisCard({
   return (
     <CardBase>
       <CardPeriodHeader title={title} subtitle={subtitle} value={period} onChange={onPeriodChange} />
-      <Box sx={{ height: 190, mt: .8, position: "relative" }}>
+      <Box sx={{ height: 180, mt: .8, position: "relative" }}>
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
             <Pie
