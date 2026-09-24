@@ -3266,9 +3266,14 @@ export function AzureWorkItems({
           }}
         >
           <CardContent>
-            <Stack
-              spacing={2}
-            >
+            <Stack spacing={2}>
+              <Stack direction={{ xs: "column", md: "row" }} spacing={1} sx={{ justifyContent: "space-between", alignItems: { md: "center" } }}>
+                <Box>
+                  <Typography sx={{ fontWeight: 850 }}>Filtros dos Work Items</Typography>
+                  <Typography variant="caption" color="text.secondary">Priorize busca, estado e criticidade; mantenha critérios específicos em Mais filtros.</Typography>
+                </Box>
+                {advancedFilterCount > 0 && <Chip size="small" variant="outlined" label={`${advancedFilterCount} filtro(s) avançado(s)`} />}
+              </Stack>
               <Box
                 sx={{
                   display:
