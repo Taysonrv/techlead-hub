@@ -459,7 +459,7 @@ export function Versions() {
       activeMetricFilter !== "all",
     );
 
-  const load =
+  const [referenceDataLoaded, setReferenceDataLoaded] = useState(false);\n\n  const load =
     useCallback(
       async () => {
         try {
@@ -511,33 +511,25 @@ export function Versions() {
               blockedProcess;
           }
 
-          const [
-            summaryResponse,
-            filtersResponse,
-            azureStatusResponse,
-          ] =
-            await Promise.all([
-              api.get<VersionsResponse>(
-                "/azure-work-items/versions/summary",
-                {
-                  params,
-                },
-              ),
+          const summaryRequest = api.get<VersionsResponse>(
+            "/azure-work-items/versions/summary",
+            { params },
+          );
 
-              api.get<FiltersResponse>(
-                "/azure-work-items/filters",
-              ),
+          if (!referenceDataLoaded) {
+            const [summaryResponse, filtersResponse, azureStatusResponse] = await Promise.all([
+              summaryRequest,
+              api.get<FiltersResponse>("/azure-work-items/filters"),
               api.get("/azure-devops/status"),
             ]);
-
-          setData(
-            summaryResponse.data,
-          );
-
-          setFilters(
-            filtersResponse.data,
-          );
-          setAzureStatus(azureStatusResponse.data);
+            setData(summaryResponse.data);
+            setFilters(filtersResponse.data);
+            setAzureStatus(azureStatusResponse.data);
+            setReferenceDataLoaded(true);
+          } else {
+            const summaryResponse = await summaryRequest;
+            setData(summaryResponse.data);
+          }
         } catch (
           currentError
         ) {
@@ -563,6 +555,7 @@ export function Versions() {
         criticality,
         prioritized,
         blockedProcess,
+        referenceDataLoaded,
       ],
     );
 
