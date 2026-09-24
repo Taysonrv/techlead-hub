@@ -799,21 +799,6 @@ export function Dashboard() {
     });
   }
 
-  function showCategory(
-    category: string
-  ) {
-    showTickets(
-      `Categoria: ${category}`,
-      filteredTickets.filter(
-        (ticket) =>
-          (ticket.category ??
-            "Sem categoria") ===
-          category
-      ),
-      "Tickets desta categoria no período selecionado"
-    );
-  }
-
   function showOwner(
     owner: string
   ) {
