@@ -26,6 +26,8 @@ const REPORT_SCOPES:
   "clients",
   "development",
   "versions",
+  "operational-causes",
+  "operational-errors",
 ];
 
 export class ReportController {
