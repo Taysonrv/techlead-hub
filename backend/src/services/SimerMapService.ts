@@ -26,15 +26,15 @@ function parseMap(xml:string,sourceFile:string){
   return rows;
 }
 function terms(value:string){return [...new Set(value.toLocaleLowerCase("pt-BR").normalize("NFD").replace(/[\u0300-\u036f]/g,"").split(/[^a-z0-9_.]+/).filter(x=>x.length>=4))].slice(0,12);}
-const SIMER_SCOPE_SQL=`LOWER("sourceFile") NOT LIKE '%erpweb%' AND LOWER("sourceFile") NOT LIKE '%essencial%' AND LOWER(path) NOT LIKE '% › erpweb%' AND LOWER(path) NOT LIKE '% › essencial%'`;
+const SIMER_SCOPE_SQL='LOWER("sourceFile") NOT LIKE \'%erpweb%\' AND LOWER("sourceFile") NOT LIKE \'%essencial%\' AND LOWER(path) NOT LIKE \'% › erpweb%\' AND LOWER(path) NOT LIKE \'% › essencial%\'';
 
 export class SimerMapService {
   async summary(){
     const [stats,maps,kinds,links]=await Promise.all([
-      prisma.$queryRaw<Array<{total:bigint;maps:bigint;importedAt:Date|null}>>`SELECT COUNT(*)::bigint total,COUNT(DISTINCT "sourceFile")::bigint maps,MAX("importedAt") "importedAt" FROM "SimerMapNode" WHERE ${SIMER_SCOPE_SQL}`,
-      prisma.$queryRaw<Array<{mapName:string;total:bigint}>>`SELECT "mapName",COUNT(*)::bigint total FROM "SimerMapNode" WHERE ${SIMER_SCOPE_SQL} GROUP BY "mapName" ORDER BY total DESC,"mapName" ASC LIMIT 30`,
-      prisma.$queryRaw<Array<{nodeKind:string;total:bigint}>>`SELECT COALESCE("nodeKind",'outro') "nodeKind",COUNT(*)::bigint total FROM "SimerMapNode" WHERE ${SIMER_SCOPE_SQL} GROUP BY COALESCE("nodeKind",'outro') ORDER BY total DESC LIMIT 12`,
-      prisma.$queryRaw<Array<{total:bigint}>>`SELECT COUNT(*)::bigint total FROM "SimerMapNode" WHERE ${SIMER_SCOPE_SQL} AND link IS NOT NULL AND link<>''`,
+      prisma.$queryRawUnsafe<Array<{total:bigint;maps:bigint;importedAt:Date|null}>>(`SELECT COUNT(*)::bigint total,COUNT(DISTINCT "sourceFile")::bigint maps,MAX("importedAt") "importedAt" FROM "SimerMapNode" WHERE ${SIMER_SCOPE_SQL}`),
+      prisma.$queryRawUnsafe<Array<{mapName:string;total:bigint}>>(`SELECT "mapName",COUNT(*)::bigint total FROM "SimerMapNode" WHERE ${SIMER_SCOPE_SQL} GROUP BY "mapName" ORDER BY total DESC,"mapName" ASC LIMIT 30`),
+      prisma.$queryRawUnsafe<Array<{nodeKind:string;total:bigint}>>(`SELECT COALESCE("nodeKind",'outro') "nodeKind",COUNT(*)::bigint total FROM "SimerMapNode" WHERE ${SIMER_SCOPE_SQL} GROUP BY COALESCE("nodeKind",'outro') ORDER BY total DESC LIMIT 12`),
+      prisma.$queryRawUnsafe<Array<{total:bigint}>>(`SELECT COUNT(*)::bigint total FROM "SimerMapNode" WHERE ${SIMER_SCOPE_SQL} AND link IS NOT NULL AND link<>''`),
     ]);
     return {total:Number(stats[0]?.total??0),maps:Number(stats[0]?.maps??0),links:Number(links[0]?.total??0),importedAt:stats[0]?.importedAt??null,builderApiUrl:process.env.SIMER_BUILDER_API_URL?.trim()||"http://appdev.siagri.com.br:8888",items:maps.map(x=>({mapName:x.mapName,total:Number(x.total)})),kinds:kinds.map(x=>({kind:x.nodeKind,total:Number(x.total)}))};
   }
