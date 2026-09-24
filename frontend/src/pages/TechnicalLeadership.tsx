@@ -1,5 +1,5 @@
 import {
-  Alert, Box, Button, Card, CardContent, Chip, CircularProgress, Drawer,
+  Alert, Box, Button, Card, CardContent, Checkbox, Chip, CircularProgress, Drawer,
   FormControl, IconButton, InputLabel, MenuItem, Select, Stack, Tab, Tabs, Tooltip, Typography,
 } from "@mui/material";
 import {
@@ -129,7 +129,6 @@ function AnalystMultiSelect({ options, value, onChange, label }: { options: stri
       onChange={(event) => onChange(typeof event.target.value === "string" ? event.target.value.split(",") : event.target.value)}
       renderValue={(selected) => !selected.length ? "Todos analistas" : selected.length === 1 ? abbreviateAnalystName(selected[0]) : `${selected.length} analistas`}
       aria-label={label}
-      MenuProps={{ PaperProps: { sx: { maxHeight: 360, minWidth: 300 } } }}
     >
       <MenuItem onClick={(event) => { event.preventDefault(); event.stopPropagation(); toggleAll(); }}>
         <Checkbox size="small" checked={allSelected} />Todos analistas
@@ -541,7 +540,7 @@ export function TechnicalLeadership() {
               <IndicatorPeriodFilter value={indicatorPeriod("responseOwner")} onChange={(value) => setIndicatorPeriod("responseOwner", value)} />
             </Stack>
           </Stack>
-          <Box sx={{ height: 340, mt: 1 }}><ResponsiveContainer width="100%" height="100%"><BarChart data={filteredResponseOwners.map((row) => ({ ...row, analystLabel: abbreviateAnalyst(row.analyst) }))}>
+          <Box sx={{ height: 340, mt: 1 }}><ResponsiveContainer width="100%" height="100%"><BarChart data={filteredResponseOwners.map((row) => ({ ...row, analystLabel: abbreviateAnalystName(row.analyst) }))}>
             <CartesianGrid strokeDasharray="4 5" vertical={false} /><XAxis dataKey="analystLabel" tick={{ fontSize: 10 }} interval={0} angle={0} textAnchor="middle" height={44} /><YAxis allowDecimals={false} /><ChartTooltip labelFormatter={(_, payload) => payload?.[0]?.payload?.analyst ?? ""} />
             {isLeadershipSeriesVisible("responseOwner", "within") && <Bar dataKey="within" name="No prazo" stackId="sla" fill={aliareColors.green} />}
             {isLeadershipSeriesVisible("responseOwner", "outside") && <Bar dataKey="outside" name="Fora do prazo" stackId="sla" fill={aliareColors.error} />}
