@@ -171,8 +171,8 @@ export function TechnicalLeadership() {
   const [recurrenceConfidence, setRecurrenceConfidence] = useState("");
   const [gapImpact, setGapImpact] = useState("");
   const [gapStatus, setGapStatus] = useState("");
-  const [resolutionOwnerFilter, setResolutionOwnerFilter] = useState("");
-  const [responseOwnerFilter, setResponseOwnerFilter] = useState("");
+  const [resolutionOwnerFilter, setResolutionOwnerFilter] = useState<string[]>([]);
+  const [responseOwnerFilter, setResponseOwnerFilter] = useState<string[]>([]);
 
   const toggleLeadershipSeries = (chart: string, key: string, total: number) => {
     setHiddenLeadershipSeries((current) => {
@@ -258,8 +258,8 @@ export function TechnicalLeadership() {
   };
   const resolutionOwnerRows = analyticsFor("resolutionOwner")?.byOwner ?? [];
   const responseOwnerRows = analyticsFor("responseOwner")?.responseByOwner ?? [];
-  const filteredResolutionOwners = resolutionOwnerRows.filter((row) => !resolutionOwnerFilter || row.analyst === resolutionOwnerFilter);
-  const filteredResponseOwners = responseOwnerRows.filter((row) => !responseOwnerFilter || row.analyst === responseOwnerFilter);
+  const filteredResolutionOwners = resolutionOwnerRows.filter((row) => !resolutionOwnerFilter.length || resolutionOwnerFilter.includes(row.analyst));
+  const filteredResponseOwners = responseOwnerRows.filter((row) => !responseOwnerFilter.length || responseOwnerFilter.includes(row.analyst));
   const resolutionSlaRows = [
     { name: "No prazo", value: analyticsFor("resolutionSla")?.resolutionSla.within ?? 0, fill: aliareColors.green },
     { name: "Fora do prazo", value: analyticsFor("resolutionSla")?.resolutionSla.outside ?? 0, fill: aliareColors.error },
@@ -495,7 +495,7 @@ export function TechnicalLeadership() {
           <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "center", gap: 1 }}>
             <Box sx={{ flex: 1, textAlign: "center", "& > *": { justifyContent: "center" } }}><AreaTitle title="Resolução por analista" info="Volume resolvido, reaberto e situação de SLA por analista. Use o filtro para isolar um analista sem alterar os demais indicadores da Central." /></Box>
             <Stack direction="row" spacing={.8}>
-              <FormControl size="small" sx={{ minWidth: 155 }}><Select displayEmpty value={resolutionOwnerFilter} onChange={(e) => setResolutionOwnerFilter(e.target.value)} aria-label="Filtrar analista na resolução"><MenuItem value="">Todos analistas</MenuItem>{resolutionOwnerRows.map((row) => <MenuItem key={row.analyst} value={row.analyst}>{row.analyst}</MenuItem>)}</Select></FormControl>
+              <FormControl size="small" sx={{ minWidth: 185 }}><Select multiple displayEmpty value={resolutionOwnerFilter} onChange={(e) => setResolutionOwnerFilter(typeof e.target.value === "string" ? e.target.value.split(",") : e.target.value)} renderValue={(selected) => !selected.length ? "Todos analistas" : selected.length === 1 ? selected[0] : `${selected.length} analistas`} aria-label="Filtrar analistas na resolução"><MenuItem disabled value="">Selecione um ou mais</MenuItem>{resolutionOwnerRows.map((row) => <MenuItem key={row.analyst} value={row.analyst}><Checkbox size="small" checked={resolutionOwnerFilter.includes(row.analyst)} />{row.analyst}</MenuItem>)}</Select></FormControl>
               <IndicatorPeriodFilter value={indicatorPeriod("resolutionOwner")} onChange={(value) => setIndicatorPeriod("resolutionOwner", value)} />
             </Stack>
           </Stack>
@@ -515,7 +515,7 @@ export function TechnicalLeadership() {
           <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "center", gap: 1 }}>
             <Box sx={{ flex: 1, textAlign: "center", "& > *": { justifyContent: "center" } }}><AreaTitle title="Primeira resposta por analista" info="Compara respostas dentro, fora e sem medição de SLA por analista. O filtro isola um analista apenas neste gráfico." /></Box>
             <Stack direction="row" spacing={.8}>
-              <FormControl size="small" sx={{ minWidth: 155 }}><Select displayEmpty value={responseOwnerFilter} onChange={(e) => setResponseOwnerFilter(e.target.value)} aria-label="Filtrar analista na primeira resposta"><MenuItem value="">Todos analistas</MenuItem>{responseOwnerRows.map((row) => <MenuItem key={row.analyst} value={row.analyst}>{row.analyst}</MenuItem>)}</Select></FormControl>
+              <FormControl size="small" sx={{ minWidth: 185 }}><Select multiple displayEmpty value={responseOwnerFilter} onChange={(e) => setResponseOwnerFilter(typeof e.target.value === "string" ? e.target.value.split(",") : e.target.value)} renderValue={(selected) => !selected.length ? "Todos analistas" : selected.length === 1 ? selected[0] : `${selected.length} analistas`} aria-label="Filtrar analistas na primeira resposta"><MenuItem disabled value="">Selecione um ou mais</MenuItem>{responseOwnerRows.map((row) => <MenuItem key={row.analyst} value={row.analyst}><Checkbox size="small" checked={responseOwnerFilter.includes(row.analyst)} />{row.analyst}</MenuItem>)}</Select></FormControl>
               <IndicatorPeriodFilter value={indicatorPeriod("responseOwner")} onChange={(value) => setIndicatorPeriod("responseOwner", value)} />
             </Stack>
           </Stack>
