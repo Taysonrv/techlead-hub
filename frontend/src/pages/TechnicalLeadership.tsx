@@ -113,7 +113,7 @@ const tabInfo: Record<TabKey, string> = {
 };
 
 function AreaTitle({ title, info, icon }: { title: string; info: string; icon?: ReactNode }) {
-  return <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
+  return <Stack direction="row" spacing={1} sx={{ alignItems: "center", justifyContent: "center", width: "100%", textAlign: "center" }}>
     {icon}<Typography sx={{ fontWeight: 850 }}>{title}</Typography>
     <Tooltip title={info}><IconButton size="small" aria-label={`Informações sobre ${title}`}><InfoOutlined sx={{ fontSize: 16 }} /></IconButton></Tooltip>
   </Stack>;
@@ -357,10 +357,10 @@ export function TechnicalLeadership() {
           <Box>
             <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
               <BoltOutlined sx={{ color: aliareColors.green }} />
-              <Typography sx={{ fontWeight: 900, fontSize: "1.05rem" }}>Briefing executivo da operação</Typography>
+              <Typography sx={{ fontWeight: 900, fontSize: "1.05rem", textAlign: "center" }}>Briefing executivo da operação</Typography>
               <Tooltip title="Resume os sinais que merecem leitura de liderança. Recomendações são apoio à decisão e devem ser validadas antes de qualquer ação."><IconButton size="small" sx={{ color: mode === "dark" ? "rgba(255,255,255,.65)" : "text.secondary" }}><InfoOutlined sx={{ fontSize: 16 }} /></IconButton></Tooltip>
             </Stack>
-            <Typography variant="body2" sx={{ color: mode === "dark" ? "rgba(255,255,255,.62)" : "text.secondary", mt: .5 }}>Indicadores → desvios → investigação → gap → ação → acompanhamento.</Typography>
+            <Typography variant="body2" sx={{ color: mode === "dark" ? "rgba(255,255,255,.62)" : "text.secondary", mt: .5, textAlign: "center" }}>Indicadores → desvios → investigação → gap → ação → acompanhamento.</Typography>
           </Box>
           <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
             <FormControl size="small" sx={{ minWidth: 180, bgcolor: mode === "dark" ? "rgba(7,20,35,.72)" : "rgba(255,255,255,.76)", borderRadius: 1.5, "& .MuiInputLabel-root": { color: mode === "dark" ? "rgba(215,229,246,.68)" : "text.secondary" }, "& .MuiOutlinedInput-root": { color: mode === "dark" ? "#F3F8FF" : "text.primary", "& fieldset": { borderColor: mode === "dark" ? "rgba(131,175,220,.30)" : "rgba(15,23,42,.16)" }, "&:hover fieldset": { borderColor: "rgba(47,208,255,.55)" } }, "& .MuiSvgIcon-root": { color: mode === "dark" ? "rgba(215,229,246,.72)" : "text.secondary" } }}><InputLabel>Cliente</InputLabel><Select value={client} label="Cliente" onChange={(e) => setClient(e.target.value)}><MenuItem value="">Todos</MenuItem>{data?.filters.clients.map((v) => <MenuItem key={v} value={v}>{v}</MenuItem>)}</Select></FormControl>
