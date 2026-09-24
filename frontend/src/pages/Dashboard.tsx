@@ -3754,8 +3754,20 @@ function periodLabel(
     case "30d":
       return "Últimos 30 dias";
 
+    case "60d":
+      return "Últimos 60 dias";
+
+    case "90d":
+      return "Últimos 90 dias";
+
     case "month":
       return "Este mês";
+
+    case "semester":
+      return "Este semestre";
+
+    case "year":
+      return "Este ano";
 
     case "custom":
       return "Período personalizado";
