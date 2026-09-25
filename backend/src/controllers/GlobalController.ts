@@ -80,6 +80,67 @@ export class GlobalController {
     ] });
   };
 
+  investigate = async (req: Request, res: Response) => {
+    const raw = typeof req.query.q === "string" ? req.query.q.trim() : "";
+    const numeric = Number(raw.replace(/^#/, ""));
+    if (!raw || !Number.isSafeInteger(numeric)) return res.status(400).json({ message: "Informe o número do atendimento Movidesk." });
+
+    const ticket = await prisma.ticket.findUnique({
+      where: { movideskId: numeric },
+      select: {
+        movideskId: true, subject: true, status: true, baseStatus: true, category: true, cause: true, urgency: true,
+        client: true, owner: true, service: true, serviceFirstLevel: true, serviceSecondLevel: true, serviceThirdLevel: true,
+        createdDate: true, lastUpdate: true, resolvedDate: true, taskNumber: true, taskStatus: true, taskTitle: true,
+        registeredVersion: true, deliveredVersion: true,
+      },
+    });
+    if (!ticket) return res.status(404).json({ message: "Atendimento não encontrado na base local." });
+
+    const serviceValues = [ticket.serviceThirdLevel, ticket.serviceSecondLevel, ticket.serviceFirstLevel, ticket.service].filter((v): v is string => Boolean(v?.trim()));
+    const words = ticket.subject.normalize("NFD").replace(/[\u0300-\u036f]/g, "").split(/\W+/).filter((w) => w.length >= 5).slice(0, 5);
+    const similarOr: any[] = [
+      ...(ticket.client ? [{ client: { equals: ticket.client, mode: "insensitive" as const } }] : []),
+      ...(serviceValues.length ? serviceValues.map((value) => ({ serviceThirdLevel: { equals: value, mode: "insensitive" as const } })) : []),
+      ...words.map((word) => ({ subject: { contains: word, mode: "insensitive" as const } })),
+    ];
+    const candidates = similarOr.length ? await prisma.ticket.findMany({
+      where: { AND: [{ movideskId: { not: ticket.movideskId } }, { isDeleted: false }, { OR: similarOr }] },
+      select: { movideskId: true, subject: true, client: true, category: true, cause: true, status: true, service: true, serviceThirdLevel: true, taskNumber: true, deliveredVersion: true, createdDate: true },
+      orderBy: { createdDate: "desc" }, take: 80,
+    }) : [];
+
+    const norm=(v:string|null|undefined)=>String(v??"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().trim();
+    const targetWords=new Set(words.map(norm));
+    const similar=candidates.map((item)=>{
+      let score=0; const reasons:string[]=[];
+      if(ticket.client&&norm(item.client)===norm(ticket.client)){score+=15;reasons.push("mesmo cliente");}
+      const targetService=norm(serviceValues[0]); const itemService=norm(item.serviceThirdLevel||item.service);
+      if(targetService&&itemService===targetService){score+=30;reasons.push("mesmo serviço");}
+      if(ticket.category&&norm(item.category)===norm(ticket.category)){score+=15;reasons.push("mesma categoria");}
+      if(ticket.cause&&norm(item.cause)===norm(ticket.cause)){score+=10;reasons.push("mesma causa");}
+      if(ticket.deliveredVersion&&norm(item.deliveredVersion)===norm(ticket.deliveredVersion)){score+=10;reasons.push("mesma versão");}
+      const common=[...targetWords].filter((word)=>norm(item.subject).includes(word)).length;
+      if(common){const pts=Math.min(20,common*5);score+=pts;reasons.push(`${common} termo(s) do assunto`);}
+      return {...item,score,reasons};
+    }).filter((item)=>item.score>=15).sort((a,b)=>b.score-a.score||b.createdDate.getTime()-a.createdDate.getTime()).slice(0,12);
+
+    const workItemIds=[ticket.taskNumber,...similar.map((x)=>x.taskNumber)].filter((v):v is number=>Number.isInteger(v));
+    const workItems=workItemIds.length?await prisma.azureWorkItem.findMany({where:{id:{in:[...new Set(workItemIds)]}},select:{id:true,title:true,workItemType:true,state:true,client:true,module:true,process:true,registeredVersion:true,deliveredVersion:true,azureChangedAt:true,remoteUrl:true}}):[];
+    const timeline=[
+      {date:ticket.createdDate,kind:"ticket",title:`Atendimento #${ticket.movideskId} aberto`},
+      ...(ticket.lastUpdate?[{date:ticket.lastUpdate,kind:"update",title:"Última atualização do atendimento"}]:[]),
+      ...(ticket.resolvedDate?[{date:ticket.resolvedDate,kind:"resolved",title:"Atendimento resolvido"}]:[]),
+      ...workItems.filter(x=>x.azureChangedAt).map(x=>({date:x.azureChangedAt!,kind:"azure",title:`${x.workItemType} #${x.id} atualizada`})),
+    ].sort((a,b)=>b.date.getTime()-a.date.getTime());
+
+    const completeness=[ticket.client,ticket.category,ticket.owner,serviceValues[0],ticket.taskNumber||"no-task"].filter(Boolean).length;
+    return res.json({
+      ticket, workItems, similar, timeline,
+      quality: { score: Math.round((completeness/5)*100), checks: { client:Boolean(ticket.client), category:Boolean(ticket.category), owner:Boolean(ticket.owner), service:Boolean(serviceValues[0]), developmentLink:Boolean(ticket.taskNumber) } },
+      summary: { similarCases: similar.length, relatedWorkItems: workItems.length, service: serviceValues[0]??null, version: ticket.deliveredVersion??ticket.registeredVersion??null },
+    });
+  };
+
   calendar = async (req: Request, res: Response) => {
     const start = new Date(String(req.query.start ?? ""));
     const end = new Date(String(req.query.end ?? ""));
