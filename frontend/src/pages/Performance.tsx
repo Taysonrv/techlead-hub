@@ -95,6 +95,7 @@ type Ticket = {
   closedDate: string | null;
   lifetimeMinutes: number | null;
   stoppedMinutes: number | null;
+  stoppedWorkingMinutes?: number | null;
   taskNumber: number | null;
   taskStatus: string | null;
   deliveredVersion: string | null;
@@ -233,6 +234,7 @@ export function Performance() {
         resolvedDate: ticket.resolvedDate,
         closedDate: ticket.closedDate,
         stoppedMinutes: ticket.stoppedMinutes,
+        stoppedWorkingMinutes: ticket.stoppedWorkingMinutes,
         // Até o perfil VIP existir no banco, usamos STANDARD.
         profile: "STANDARD",
       }),
