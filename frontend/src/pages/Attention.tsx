@@ -1086,7 +1086,7 @@ export function Attention() {
                 },
               }}
             >
-              <InputLabel>
+              <InputLabel shrink>
                 Situação do prazo
               </InputLabel>
 
@@ -1109,7 +1109,7 @@ export function Attention() {
                 },
               }}
             >
-              <InputLabel>
+              <InputLabel shrink>
                 Responsável
               </InputLabel>
 
@@ -1132,7 +1132,7 @@ export function Attention() {
                 },
               }}
             >
-              <InputLabel>
+              <InputLabel shrink>
                 Cliente
               </InputLabel>
 
@@ -1155,7 +1155,7 @@ export function Attention() {
                 },
               }}
             >
-              <InputLabel>
+              <InputLabel shrink>
                 Origem do risco
               </InputLabel>
 
