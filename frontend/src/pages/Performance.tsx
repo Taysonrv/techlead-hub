@@ -1554,6 +1554,7 @@ function DonutCard({
   const [hiddenItems, setHiddenItems] = useState<Set<string>>(() => new Set());
   const visibleData = data.filter((item) => !hiddenItems.has(item.name));
   const visibleTotal = visibleData.reduce((sum, item) => sum + item.value, 0);
+  const chartData = visibleData.length > 0 ? visibleData : data;
   const toggleItem = (name: string) => setHiddenItems((current) => {
     const next = new Set(current);
     if (next.has(name)) next.delete(name);
@@ -1588,7 +1589,7 @@ function DonutCard({
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
-                  data={data}
+                  data={chartData}
                   dataKey="value"
                   nameKey="name"
                   innerRadius={62}
@@ -1614,13 +1615,8 @@ function DonutCard({
                     }
                   }}
                 >
-                  {data.map((item) => (
-                    <Cell
-                      key={item.name}
-                      fill={item.color}
-                      fillOpacity={hiddenItems.has(item.name) ? 0 : 1}
-                      strokeOpacity={hiddenItems.has(item.name) ? 0 : 1}
-                    />
+                  {chartData.map((item) => (
+                    <Cell key={item.name} fill={item.color} />
                   ))}
                 </Pie>
 
