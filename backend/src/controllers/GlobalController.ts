@@ -1,5 +1,7 @@
 import type { Request, Response } from "express";
 import { prisma } from "../database/prisma";
+import { SimerMapService } from "../services/SimerMapService";
+import { SystemRuleService } from "../services/SystemRuleService";
 
 
 const normalizeSearch = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR");
@@ -134,10 +136,23 @@ export class GlobalController {
     ].sort((a,b)=>b.date.getTime()-a.date.getTime());
 
     const completeness=[ticket.client,ticket.category,ticket.owner,serviceValues[0],ticket.taskNumber||"no-task"].filter(Boolean).length;
+    const technicalText=[ticket.subject,ticket.category,ticket.cause,...serviceValues,...workItems.map(x=>x.title)].filter(Boolean).join(" ");
+    const mapService=new SimerMapService(); const ruleService=new SystemRuleService();
+    const [mapItems,ruleItems]=await Promise.all([mapService.context(technicalText,18),ruleService.search(technicalText,18)]);
+    const correlations=await ruleService.correlate(technicalText,mapItems,12);
+    const evidence=correlations.slice(0,10).map((item:any)=>({
+      id:item.id, title:item.nodeText??item.name??item.path, path:item.path??null, mapName:item.mapName??null,
+      score:item.correlationScore??item.score??0, kind:item.nodeKind??"regra",
+    }));
+    const anomalies:string[]=[];
+    if(similar.filter(x=>x.score>=45).length>=3) anomalies.push(`${similar.filter(x=>x.score>=45).length} casos possuem correlação forte com este atendimento.`);
+    if(ticket.taskNumber&&!workItems.some(x=>x.id===ticket.taskNumber)) anomalies.push("O atendimento possui número de Task, mas o Work Item não foi localizado na base Azure.");
+    if(!serviceValues[0]) anomalies.push("Serviço não classificado; a investigação técnica pode perder precisão.");
+    if(mapItems.length&&!ruleItems.length) anomalies.push("Há evidências no Mapa SIMER, mas nenhuma Regra do Sistema foi correlacionada.");
     return res.json({
-      ticket, workItems, similar, timeline,
+      ticket, workItems, similar, timeline, evidence, ruleItems:ruleItems.slice(0,10), anomalies,
       quality: { score: Math.round((completeness/5)*100), checks: { client:Boolean(ticket.client), category:Boolean(ticket.category), owner:Boolean(ticket.owner), service:Boolean(serviceValues[0]), developmentLink:Boolean(ticket.taskNumber) } },
-      summary: { similarCases: similar.length, relatedWorkItems: workItems.length, service: serviceValues[0]??null, version: ticket.deliveredVersion??ticket.registeredVersion??null },
+      summary: { similarCases: similar.length, relatedWorkItems: workItems.length, technicalEvidence:evidence.length, rules:ruleItems.length, service: serviceValues[0]??null, version: ticket.deliveredVersion??ticket.registeredVersion??null },
     });
   };
 
