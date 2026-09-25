@@ -1297,7 +1297,14 @@ export function Dashboard() {
                     <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={chartGrid} />
                     <XAxis type="number" allowDecimals={false} tick={{ fontSize: 10, fill: isDark ? "rgba(226,232,240,.72)" : "rgba(51,65,85,.72)" }} axisLine={{ stroke: chartGrid }} tickLine={false} />
                     <YAxis type="category" dataKey="label" width={142} tick={{ fontSize: 10, fill: isDark ? "rgba(226,232,240,.76)" : "rgba(51,65,85,.76)" }} axisLine={false} tickLine={false} />
-                    <Tooltip contentStyle={chartTooltipStyle} cursor={{ fill: isDark ? "rgba(255,183,3,.05)" : "rgba(15,23,42,.035)" }} formatter={(value: number) => [`${value} ticket${value === 1 ? "" : "s"}`, "Volume"]} />
+                    <Tooltip
+                      contentStyle={chartTooltipStyle}
+                      cursor={{ fill: isDark ? "rgba(255,183,3,.05)" : "rgba(15,23,42,.035)" }}
+                      formatter={(value) => {
+                        const total = typeof value === "number" ? value : Number(value ?? 0);
+                        return [`${total} ticket${total === 1 ? "" : "s"}`, "Volume"];
+                      }}
+                    />
                     <Bar dataKey="total" name="Tickets" fill={semanticChartColors.attention} radius={[0, 7, 7, 0]} barSize={18} cursor="pointer" minPointSize={3}
                       label={{ position: "right", fontSize: 10, fontWeight: 800, fill: isDark ? "rgba(226,232,240,.86)" : "rgba(30,41,59,.86)" }}
                       onClick={(_, index) => {
