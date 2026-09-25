@@ -51,6 +51,7 @@ import { ExportTicketsButton } from "../components/ExportTicketsButton";
 import { useFilters } from "../context/FiltersContext";
 import { aliareColors } from "../theme/theme";
 import { calculateOfficialSla } from "../utils/officialSla";
+import { calculateServiceLevel } from "../utils/serviceLevel";
 import {
   chartPalette,
   semanticChartColors,
@@ -115,6 +116,7 @@ type Ticket = {
 
   lifetimeMinutes: number | null;
   stoppedMinutes: number | null;
+  stoppedWorkingMinutes?: number | null;
 
   taskNumber: number | null;
   taskStatus: string | null;
@@ -542,25 +544,34 @@ export function Dashboard() {
             );
           }
 
-          if (
-            ticket.dueDate &&
-            new Date(ticket.dueDate) < now
-          ) {
-            reasons.push(
-              "Prazo vencido"
-            );
-          }
+          const deadline = calculateServiceLevel({
+            urgency: ticket.urgency,
+            category: ticket.category,
+            cause: ticket.cause,
+            subject: ticket.subject,
+            createdDate: ticket.createdDate,
+            dueDate: ticket.dueDate,
+            baseStatus: ticket.baseStatus,
+            firstResponseDate: ticket.firstResponseDate,
+            firstResponseDueDate: ticket.firstResponseDueDate,
+            resolvedDate: ticket.resolvedDate,
+            closedDate: ticket.closedDate,
+            stoppedMinutes: ticket.stoppedMinutes,
+            stoppedWorkingMinutes: ticket.stoppedWorkingMinutes,
+            profile: "STANDARD",
+          }, now);
 
-          if (
-            ticket.firstResponseDueDate &&
-            !ticket.firstResponseDate &&
-            new Date(
-              ticket.firstResponseDueDate
-            ) < now
-          ) {
-            reasons.push(
-              "Primeira resposta vencida"
-            );
+          if (deadline.applicable) {
+            if (!deadline.firstResponse.completed && deadline.firstResponse.level === "OVERDUE") {
+              reasons.push("Primeira resposta vencida");
+            }
+            if (deadline.resolution.level === "OVERDUE") {
+              reasons.push("Prazo vencido");
+            } else if (deadline.resolution.level === "CRITICAL") {
+              reasons.push("Prazo de solução crítico");
+            } else if (deadline.resolution.level === "ATTENTION") {
+              reasons.push("Prazo de solução em atenção");
+            }
           }
 
           let level:
