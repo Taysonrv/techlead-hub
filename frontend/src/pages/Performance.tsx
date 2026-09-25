@@ -234,6 +234,7 @@ export function Performance() {
         resolvedDate: ticket.resolvedDate,
         closedDate: ticket.closedDate,
         stoppedMinutes: ticket.stoppedMinutes,
+    stoppedWorkingMinutes: ticket.stoppedWorkingMinutes,
         stoppedWorkingMinutes: ticket.stoppedWorkingMinutes,
         // Até o perfil VIP existir no banco, usamos STANDARD.
         profile: "STANDARD",
@@ -1830,6 +1831,7 @@ function getDeadlineBucketFromTicket(ticket: Ticket): DeadlineBucket {
     resolvedDate: ticket.resolvedDate,
     closedDate: ticket.closedDate,
     stoppedMinutes: ticket.stoppedMinutes,
+    stoppedWorkingMinutes: ticket.stoppedWorkingMinutes,
     profile: "STANDARD",
   });
 
@@ -1898,6 +1900,7 @@ function formatRemainingTime(ticket: Ticket) {
     resolvedDate: ticket.resolvedDate,
     closedDate: ticket.closedDate,
     stoppedMinutes: ticket.stoppedMinutes,
+    stoppedWorkingMinutes: ticket.stoppedWorkingMinutes,
     profile: "STANDARD",
   });
 
