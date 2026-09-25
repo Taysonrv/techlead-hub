@@ -6,6 +6,7 @@ import type { AuthenticatedRequest } from "../middlewares/authMiddleware";
 const globalRoutes = Router();
 const controller = new GlobalController();
 globalRoutes.get("/search", controller.search);
+globalRoutes.get("/investigate", controller.investigate);
 globalRoutes.get("/calendar", controller.calendar);
 globalRoutes.post("/feedback", async (req: AuthenticatedRequest, res) => {
   const type = req.body?.type === "IMPROVEMENT" ? "IMPROVEMENT" : "BUG";
