@@ -1,0 +1,4 @@
+export const CAUSE_NOT_APPLICABLE_CATEGORIES = ["bug","solucao de contorno","solicitacao de servico","adequacao"] as const;
+export function normalizeClassification(value: string | null | undefined) { return String(value ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLocaleLowerCase("pt-BR"); }
+export function isCauseApplicable(category: string | null | undefined) { const normalized=normalizeClassification(category); return Boolean(normalized) && !CAUSE_NOT_APPLICABLE_CATEGORIES.includes(normalized as typeof CAUSE_NOT_APPLICABLE_CATEGORIES[number]); }
+export function classificationQuality(category:string|null|undefined,cause:string|null|undefined){const causeApplicable=isCauseApplicable(category);return {causeApplicable,causeMissing:causeApplicable&&!String(cause??"").trim()};}
