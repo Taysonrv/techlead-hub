@@ -237,74 +237,19 @@ export function Coordination() {
 
       <Card variant="outlined" sx={{ overflow: "hidden", borderRadius: 2.5, backgroundColor: "background.paper", mb: 2 }}>
         <Box sx={{ p: { xs: 1.5, md: 2 }, borderBottom: "1px solid", borderColor: "divider", background: theme.palette.mode === "dark" ? "linear-gradient(110deg,rgba(24,199,122,.055),rgba(47,111,237,.035),transparent)" : "linear-gradient(110deg,rgba(24,199,122,.045),rgba(47,111,237,.025),transparent)" }}>
-          <Stack direction={{ xs: "column", md: "row" }} spacing={1.25} sx={{ justifyContent: "space-between", alignItems: { md: "center" } }}>
+          <Stack direction={{ xs: "column", lg: "row" }} spacing={1.25} sx={{ justifyContent: "space-between", alignItems: { lg: "center" } }}>
             <Box>
-              <Typography sx={{ fontWeight: 900, fontSize: "1rem" }}>Navegador de rotinas</Typography>
-              <Typography variant="body2" color="text.secondary">Localize rapidamente qualquer rotina da coordenação por área, nome ou finalidade.</Typography>
+              <Typography sx={{ fontWeight: 900, fontSize: "1rem" }}>Cockpit da coordenação</Typography>
+              <Typography variant="body2" color="text.secondary">Prioridades, capacidade e governança em um único ponto. A navegação principal permanece no menu lateral.</Typography>
             </Box>
-            <TextField
-              size="small"
-              value={routineSearch}
-              onChange={(event) => setRoutineSearch(event.target.value)}
-              placeholder="Buscar rotina, ação ou assunto..."
-              sx={{ width: { xs: "100%", md: 360 } }}
-              slotProps={{ input: { startAdornment: <InputAdornment position="start"><SearchOutlined fontSize="small" /></InputAdornment> } }}
-            />
+            <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap" }}>
+              <Button size="small" variant="outlined" onClick={() => navigate("/atencao")}>Riscos</Button>
+              <Button size="small" variant="outlined" onClick={() => navigate("/qualidade-dados")}>Pendências</Button>
+              <Button size="small" variant="outlined" onClick={() => navigate("/desempenho")}>Desempenho</Button>
+              <Button size="small" variant="outlined" onClick={() => navigate("/lideranca-tecnica")}>Liderança</Button>
+            </Stack>
           </Stack>
         </Box>
-
-        {normalizedRoutineSearch ? (
-          <Box sx={{ p: { xs: 1.5, md: 2 } }}>
-            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 800 }}>{matchingRoutines.length} ROTINA(S) ENCONTRADA(S)</Typography>
-            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(2,1fr)", xl: "repeat(3,1fr)" }, gap: 1, mt: 1 }}>
-              {matchingRoutines.map((routine) => (
-                <Button key={routine.path} onClick={() => openRoutine(routine)} sx={{ justifyContent: "flex-start", textAlign: "left", textTransform: "none", p: 1.25, border: "1px solid", borderColor: "divider", borderRadius: 1.75 }}>
-                  <Stack direction="row" spacing={1.1} sx={{ alignItems: "center", minWidth: 0 }}>
-                    <Box sx={{ display: "grid", placeItems: "center", width: 36, height: 36, borderRadius: 1.4, bgcolor: "action.hover", color: "primary.main", flexShrink: 0 }}>{createElement(routine.icon, { fontSize: "small" })}</Box>
-                    <Box sx={{ minWidth: 0 }}><Typography sx={{ fontWeight: 800, color: "text.primary" }}>{routine.label}</Typography><Typography variant="caption" color="text.secondary">{routine.groupLabel} · {routine.description}</Typography></Box>
-                  </Stack>
-                </Button>
-              ))}
-            </Box>
-            {!matchingRoutines.length && <Alert severity="info" sx={{ mt: 1.5 }}>Nenhuma rotina corresponde à pesquisa. Tente pelo nome da tela, processo ou ação desejada.</Alert>}
-          </Box>
-        ) : (
-          <>
-            <Tabs value={tab} onChange={(_, value: MainTab) => changeTab(value)} variant="scrollable" scrollButtons="auto" sx={{ minHeight: 58, borderBottom: "1px solid", borderColor: "divider", "& .MuiTab-root": { minHeight: 58, fontWeight: 800, px: { xs: 2, md: 2.5 } }, "& .Mui-selected": { color: `${aliareColors.info} !important` }, "& .MuiTabs-indicator": { height: 3, backgroundColor: aliareColors.info } }}>
-              {mainTabs.map((item) => <Tab key={item.key} value={item.key} label={<Stack direction="row" spacing={0.5} sx={{ alignItems: "center" }}><span>{item.label}</span><Tooltip title={item.info}><InfoOutlined onClick={(event) => event.stopPropagation()} sx={{ fontSize: 15, color: "text.secondary" }} /></Tooltip></Stack>} icon={createElement(item.icon, { fontSize: "small" })} iconPosition="start" />)}
-            </Tabs>
-
-            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "minmax(0,1fr) 250px" }, minHeight: 220 }}>
-              <Box sx={{ p: { xs: 1.5, md: 2 }, borderRight: { lg: "1px solid" }, borderColor: "divider" }}>
-                <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 850 }}>{mainTabs.find((item) => item.key === tab)?.label}</Typography>
-                <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2,minmax(0,1fr))" }, gap: 1, mt: .75 }}>
-                  {routines[tab].map((routine) => (
-                    <Box key={routine.path} sx={{ position: "relative", border: "1px solid", borderColor: "divider", borderRadius: 2, overflow: "hidden", transition: ".16s", "&:hover": { borderColor: "primary.main", transform: "translateY(-1px)", boxShadow: "0 10px 26px rgba(16,24,40,.08)" } }}>
-                      <Button onClick={() => openRoutine(routine)} sx={{ width: "100%", minHeight: 82, justifyContent: "flex-start", textAlign: "left", textTransform: "none", p: 1.35, pr: 5 }}>
-                        <Stack direction="row" spacing={1.2} sx={{ alignItems: "flex-start" }}>
-                          <Box sx={{ display: "grid", placeItems: "center", width: 38, height: 38, borderRadius: 1.5, bgcolor: theme.palette.mode === "dark" ? "rgba(24,199,122,.09)" : "rgba(24,199,122,.065)", color: "primary.main", flexShrink: 0 }}>{createElement(routine.icon, { fontSize: "small" })}</Box>
-                          <Box><Typography sx={{ fontWeight: 850, color: "text.primary" }}>{routine.label}</Typography><Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: .25, lineHeight: 1.35 }}>{routine.description}</Typography></Box>
-                        </Stack>
-                      </Button>
-                      <Tooltip title={favoriteRoutines.includes(routine.path) ? "Remover dos favoritos" : "Adicionar aos favoritos"}><IconButton size="small" onClick={() => toggleFavorite(routine.path)} sx={{ position: "absolute", top: 8, right: 8 }}>{favoriteRoutines.includes(routine.path) ? <StarRounded sx={{ color: aliareColors.warning }} fontSize="small" /> : <StarBorderOutlined fontSize="small" />}</IconButton></Tooltip>
-                    </Box>
-                  ))}
-                </Box>
-              </Box>
-              <Box sx={{ p: { xs: 1.5, md: 2 }, bgcolor: theme.palette.mode === "dark" ? "rgba(7,20,35,.22)" : "rgba(248,250,252,.7)" }}>
-                <Typography sx={{ fontWeight: 850, fontSize: ".82rem" }}>Acesso rápido</Typography>
-                <Typography variant="caption" color="text.secondary">Favoritos e rotinas utilizadas recentemente.</Typography>
-                <Stack spacing={.5} sx={{ mt: 1.25 }}>
-                  {[...favoriteRoutines, ...recentRoutines].filter((path, index, values) => values.indexOf(path) === index).slice(0, 6).map((path) => {
-                    const routine = allRoutines.find((item) => item.path === path);
-                    return routine ? <Button key={path} size="small" onClick={() => openRoutine(routine)} startIcon={createElement(routine.icon, { fontSize: "small" })} sx={{ justifyContent: "flex-start", textTransform: "none", color: "text.primary" }}>{routine.label}</Button> : null;
-                  })}
-                  {!favoriteRoutines.length && !recentRoutines.length && <Typography variant="caption" color="text.secondary" sx={{ py: 1 }}>Abra ou favorite uma rotina para criar seus atalhos.</Typography>}
-                </Stack>
-              </Box>
-            </Box>
-          </>
-        )}
 
         <CardContent sx={{ p: { xs: 1.5, md: 2.25 } }}>
           <Alert
