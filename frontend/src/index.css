@@ -293,3 +293,32 @@ svg {
     padding-right: 8px !important;
   }
 }
+
+/* =========================================================
+   GRÁFICOS / CARDS INTERATIVOS
+
+   Recharts torna setores, barras e superfícies focáveis após
+   o clique. O foco nativo do SVG desenha um contorno branco
+   no gráfico, especialmente visível no modo escuro.
+   Mantemos o foco acessível nos controles HTML e removemos
+   apenas o outline nativo dos elementos SVG do Recharts.
+========================================================= */
+
+.recharts-wrapper,
+.recharts-wrapper *,
+.recharts-surface,
+.recharts-surface * {
+  outline: none !important;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.recharts-wrapper svg:focus,
+.recharts-wrapper svg *:focus,
+.recharts-wrapper [tabindex]:focus {
+  outline: none !important;
+}
+
+.MuiCard-root:focus,
+.MuiCard-root:focus-visible {
+  outline: none;
+}
