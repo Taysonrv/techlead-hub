@@ -300,7 +300,17 @@ export class WorkspaceService {
     return {
       generatedAt: new Date().toISOString(), startDate: start.toISOString(), endDate: end.toISOString(),
       definition: { expectedHours: `${hoursPerDay} horas por dia útil (segunda a sexta), descontando ${holidays.size} feriado(s) configurado(s) no período de referência. Férias, afastamentos e jornadas individuais ainda devem ser tratados como ajustes de capacidade.`, registeredHours: "Soma dos apontamentos de tempo disponíveis no payload sincronizado do Movidesk.", coverageRate: "Horas registradas ÷ horas previstas × 100. Indicador de cobertura de apontamento, não avaliação isolada de desempenho." },
-      analysts: result, teams, weekly, capacity: { hoursPerDay, configuredHolidays: [...holidays].sort() },
+      analysts: result, teams, weekly,
+      insights: {
+        expectedHours: Number(result.reduce((sum,row)=>sum+row.expectedHours,0).toFixed(2)),
+        registeredHours: Number(result.reduce((sum,row)=>sum+row.registeredHours,0).toFixed(2)),
+        coverageRate: result.reduce((sum,row)=>sum+row.expectedHours,0) ? Number((result.reduce((sum,row)=>sum+row.registeredHours,0)/result.reduce((sum,row)=>sum+row.expectedHours,0)*100).toFixed(1)) : null,
+        ticketsWithTime: result.reduce((sum,row)=>sum+row.ticketsWithTime,0),
+        analystsWithoutTime: result.filter(row=>row.registeredHours===0).map(row=>row.analyst),
+        lowCoverageAnalysts: result.filter(row=>row.coverageRate!==null&&row.coverageRate<60).map(row=>({analyst:row.analyst,coverageRate:row.coverageRate})),
+        weeklyTrend: weekly.length>=2 ? Number((weekly.at(-1)!.coverageRate??0)-(weekly.at(-2)!.coverageRate??0)).toFixed(1) : null,
+      },
+      capacity: { hoursPerDay, configuredHolidays: [...holidays].sort() },
     };
   }
 
