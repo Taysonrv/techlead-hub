@@ -1,19 +1,6 @@
 import {
-  BusinessOutlined,
-  FactCheckOutlined,
   GroupsOutlined,
-  InsightsOutlined,
-  IntegrationInstructionsOutlined,
-  TrendingUpOutlined,
-  WarningAmberOutlined,
   InfoOutlined,
-  BugReportOutlined,
-  AutoFixHighOutlined,
-  SupportAgentOutlined,
-  Inventory2Outlined,
-  ConfirmationNumberOutlined,
-  MenuBookOutlined,
-  UploadFileOutlined,
   RadarOutlined,
 } from "@mui/icons-material";
 import {
@@ -88,9 +75,6 @@ export function Coordination() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailTitle, setDetailTitle] = useState("");
   const [details, setDetails] = useState<DetailData | null>(null);
-  const [recentRoutines, setRecentRoutines] = useState<string[]>(() => {
-    try { return JSON.parse(localStorage.getItem("coordination-recent-routines") || "[]"); } catch { return []; }
-  });
 
   const load = useCallback(async () => {
     try {
@@ -261,7 +245,7 @@ export function Coordination() {
                     key={label}
                     title={label}
                     value={value}
-                    subtitle={tab === "analises" ? "Análise gerencial" : "Operação atual"}
+                    subtitle="Operação atual"
                     info={info}
                     onClick={() => void openDetails(kind, label)}
                     accent={
