@@ -1,6 +1,33 @@
 import type { Request, Response } from "express";
 import { prisma } from "../database/prisma";
 
+
+const normalizeSearch = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR");
+
+type NavigationItem = { id: string; type: "Tela" | "Rotina" | "Card"; title: string; subtitle: string; path: string; keywords: string[] };
+const navigationItems: NavigationItem[] = [
+  { id: "screen-dashboard", type: "Tela", title: "Dashboard", subtitle: "Visão executiva da operação", path: "/", keywords: ["dashboard","indicadores","executivo","saude da operacao"] },
+  { id: "screen-my-operation", type: "Tela", title: "Minha Operação", subtitle: "Fila operacional, tickets e tarefas em execução", path: "/minha-operacao", keywords: ["minha operacao","kanban","fila","trabalho"] },
+  { id: "screen-tickets", type: "Tela", title: "Tickets", subtitle: "Consulta e investigação de atendimentos Movidesk", path: "/tickets", keywords: ["tickets","atendimentos","movidesk"] },
+  { id: "screen-attention", type: "Tela", title: "Pontos de Atenção", subtitle: "Riscos e criticidades da operação", path: "/atencao", keywords: ["atencao","riscos","criticos","sla"] },
+  { id: "screen-quality", type: "Tela", title: "Pendências", subtitle: "Qualidade, vínculos e divergências entre fontes", path: "/qualidade-dados", keywords: ["pendencias","qualidade dos dados","governanca","inconsistencias"] },
+  { id: "screen-performance", type: "Tela", title: "Desempenho", subtitle: "Produtividade e SLA", path: "/desempenho", keywords: ["desempenho","performance","produtividade","sla"] },
+  { id: "screen-services", type: "Tela", title: "Serviços SIMER", subtitle: "Classificação e demanda por serviços", path: "/servicos", keywords: ["servicos","simer","classificacao","modulos"] },
+  { id: "screen-coordination", type: "Tela", title: "Central da Coordenação", subtitle: "Cockpit operacional da coordenação", path: "/coordenacao", keywords: ["coordenacao","cockpit","gestao"] },
+  { id: "screen-leadership", type: "Tela", title: "Central de Liderança Técnica", subtitle: "Recorrências, gaps, auditoria e desenvolvimento", path: "/lideranca-tecnica", keywords: ["lideranca tecnica","recorrencias","gaps","auditoria"] },
+  { id: "screen-versions", type: "Tela", title: "Versões", subtitle: "Entregas e cobertura por versão", path: "/versoes", keywords: ["versoes","release","lte","lts","rc"] },
+  { id: "screen-analysts", type: "Tela", title: "Analistas", subtitle: "Análise da equipe", path: "/analistas", keywords: ["analistas","equipe","responsaveis"] },
+  { id: "screen-clients", type: "Tela", title: "Clientes", subtitle: "Análise por cliente", path: "/clientes", keywords: ["clientes","cooperativas","carteira"] },
+  { id: "card-service-quality", type: "Card", title: "Qualidade da classificação por Serviço", subtitle: "Central da Coordenação · classificação dos atendimentos", path: "/coordenacao", keywords: ["qualidade da classificacao por servico","classificacao por servico","servicos classificados","servico generico"] },
+  { id: "card-operational-load", type: "Card", title: "Distribuição da carga operacional", subtitle: "Central da Coordenação · carga por analista", path: "/coordenacao", keywords: ["distribuicao da carga operacional","carga operacional","carga por analista","capacidade"] },
+  { id: "card-priorities", type: "Card", title: "Prioridades de atuação", subtitle: "Central da Coordenação · sinais que exigem atuação", path: "/coordenacao", keywords: ["prioridades de atuacao","prioridades","acao imediata"] },
+  { id: "routine-corrections", type: "Rotina", title: "Correções", subtitle: "Bugs e correções no Azure DevOps", path: "/correcoes", keywords: ["correcoes","bugs","azure"] },
+  { id: "routine-evolutions", type: "Rotina", title: "Evoluções", subtitle: "Melhorias e evoluções funcionais", path: "/evolucoes", keywords: ["evolucoes","melhorias","produto"] },
+  { id: "routine-support", type: "Rotina", title: "Apoios", subtitle: "APOIOs vinculados à sustentação", path: "/apoios", keywords: ["apoios","apoio","azure"] },
+  { id: "routine-knowledge", type: "Rotina", title: "Base de Conhecimento", subtitle: "Wiki, procedimentos e conhecimento operacional", path: "/conhecimento", keywords: ["conhecimento","wiki","procedimentos","regra do sistema"] },
+  { id: "routine-sync", type: "Rotina", title: "Dados e Sincronizações", subtitle: "Sincronizações e cargas de dados", path: "/importar", keywords: ["dados","sincronizacoes","importar","azure","movidesk"] },
+];
+
 const workItemPath = (type: string) => {
   const value = type.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
   if (value.includes("apoio")) return "/apoios";
@@ -13,6 +40,8 @@ export class GlobalController {
     const query = typeof req.query.q === "string" ? req.query.q.trim() : "";
     if (query.length < 2) return res.json({ items: [] });
     const numeric = Number(query);
+    const normalizedQuery = normalizeSearch(query);
+    const navigation = navigationItems.filter((item) => normalizeSearch([item.title, item.subtitle, ...item.keywords].join(" ")).includes(normalizedQuery)).slice(0, 10);
     const [tickets, workItems, versions] = await Promise.all([
       prisma.ticket.findMany({
         where: { OR: [
@@ -43,6 +72,7 @@ export class GlobalController {
     ]);
 
     return res.json({ items: [
+      ...navigation,
       ...tickets.map((item) => ({ id: `ticket-${item.movideskId}`, type: "Ticket", title: `#${item.movideskId} · ${item.subject}`, subtitle: [item.client, item.status].filter(Boolean).join(" · "), path: `/tickets?movidesk=${item.movideskId}` })),
       ...workItems.map((item) => ({ id: `task-${item.id}`, type: item.workItemType, title: `#${item.id} · ${item.title}`, subtitle: [item.client, item.state].filter(Boolean).join(" · "), path: `${workItemPath(item.workItemType)}?task=${item.id}` })),
       ...versions.filter((item) => item.deliveredVersion).map((item) => ({ id: `version-${item.deliveredVersion}`, type: "Versão", title: item.deliveredVersion!, subtitle: "Versão entregue em Work Items", path: `/versoes?search=${encodeURIComponent(item.deliveredVersion!)}` })),
