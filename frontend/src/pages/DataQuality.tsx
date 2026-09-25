@@ -3,7 +3,7 @@ import {
   Drawer, FormControl, InputLabel, MenuItem, Select, Stack,
   TextField, Typography, useTheme,
 } from "@mui/material";
-import { DownloadOutlined, SearchOutlined } from "@mui/icons-material";
+import { DownloadOutlined, FilterAltOutlined, SearchOutlined } from "@mui/icons-material";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "../services/api";
@@ -185,20 +185,34 @@ export function DataQuality() {
   }
 
   const hasFilters = Boolean(type.length || client.length || user.length || search || issue);
+  const filterCount = type.length + client.length + user.length + (search ? 1 : 0);
   const title = useMemo(() => metrics.find(([key]) => key === issue)?.[1] ?? "Pendências encontradas", [issue]);
 
   return <Box sx={{ pb: 4 }}>
     <PageHeader eyebrow="Governança" title="Pendências" description="Visão executiva das pendências que exigem acompanhamento da coordenação: prazo, recorrência, continuidade e divergências entre atendimento e Tarefa." meta={issue ? `${data?.samples.length ?? 0} evidência(s) no recorte selecionado` : `${coordinationMetrics.reduce((total, [key]) => total + (data?.summary[key] ?? 0), 0)} ocorrência(s) prioritária(s)`} />
 
-    <Card variant="outlined" sx={{ mt: 2 }}><CardContent>\n      <Stack direction={{ xs: "column", md: "row" }} spacing={1} sx={{ mb: 1.5, justifyContent: "space-between", alignItems: { md: "center" } }}><Box><Typography sx={{ fontWeight: 850 }}>Recorte das pendências</Typography><Typography variant="caption" color="text.secondary">Restrinja os indicadores essenciais somente quando precisar investigar um grupo específico.</Typography></Box>{issue && <Chip size="small" variant="outlined" label="Drill-down ativo" />}</Stack>\n      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "minmax(280px, 1.7fr) repeat(3, minmax(190px, 1fr)) auto" }, gap: 1.2 }}>
-        <TextField size="small" label="Pesquisar ID ou título" value={search} onChange={(e) => setSearch(e.target.value)} slotProps={{ input: { startAdornment: <SearchOutlined sx={{ mr: 1, color: "text.disabled" }} /> } }} />
-        <FormControl size="small"><InputLabel shrink>Tipo</InputLabel><Select multiple displayEmpty label="Tipo" value={type} onChange={(e) => setType(typeof e.target.value === "string" ? e.target.value.split(",") : e.target.value)} renderValue={(selected) => !selected.length ? "Todos" : selected.length === 1 ? selected[0] : `${selected.length} tipos`}><MenuItem onClick={(e) => { e.preventDefault(); e.stopPropagation(); setType([]); }}><Checkbox size="small" checked={!type.length} />Todos</MenuItem>{data?.filters.types.map((value) => <MenuItem key={value} value={value}><Checkbox size="small" checked={type.includes(value)} />{value}</MenuItem>)}</Select></FormControl>
-        <Autocomplete multiple size="small" options={data?.filters.clients ?? []} value={client} onChange={(_, value) => setClient(value)} renderInput={(params) => <TextField {...params} label="Cliente" />} limitTags={1} />
-        <Autocomplete multiple size="small" options={data?.filters.users ?? []} value={user} onChange={(_, value) => setUser(value)} renderInput={(params) => <TextField {...params} label="Usuário do suporte" />} limitTags={1} />
-        <Button disabled={!hasFilters} onClick={() => { setType([]); setClient([]); setUser([]); setSearch(""); setIssue(""); }}>Limpar</Button>
+    <Card variant="outlined" sx={{ mt: 2, overflow: "visible" }}><CardContent sx={{ p: { xs: 2, md: 2.25 }, "&:last-child": { pb: { xs: 2, md: 2.25 } } }}>
+      <Stack direction={{ xs: "column", md: "row" }} spacing={1.25} sx={{ mb: 1.75, justifyContent: "space-between", alignItems: { md: "center" } }}>
+        <Box>
+          <Stack direction="row" spacing={.75} sx={{ alignItems: "center" }}>
+            <FilterAltOutlined fontSize="small" color="primary" />
+            <Typography sx={{ fontWeight: 850 }}>Recorte das pendências</Typography>
+            {filterCount > 0 && <Chip size="small" color="primary" variant="outlined" label={`${filterCount} filtro(s)`} />}
+          </Stack>
+          <Typography variant="caption" color="text.secondary">Pesquise e combine tipo, cliente e analista para investigar somente o recorte necessário.</Typography>
+        </Box>
+        <Stack direction="row" spacing={.75} useFlexGap sx={{ flexWrap: "wrap" }}>
+          {issue && <Chip size="small" color="warning" variant="outlined" label={`Drill-down · ${title}`} />}
+          <Button size="small" disabled={!hasFilters} onClick={() => { setType([]); setClient([]); setUser([]); setSearch(""); setIssue(""); }}>Limpar filtros</Button>
+        </Stack>
+      </Stack>
+      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "minmax(260px, 1.5fr) minmax(150px,.75fr)", xl: "minmax(320px,1.7fr) repeat(3,minmax(190px,1fr))" }, gap: 1.2, alignItems: "start" }}>
+        <TextField fullWidth size="small" label="Pesquisar" placeholder="ID, título, assunto ou vínculo..." value={search} onChange={(e) => setSearch(e.target.value)} slotProps={{ inputLabel: { shrink: true }, input: { startAdornment: <SearchOutlined sx={{ mr: 1, color: "text.disabled" }} /> } }} />
+        <FormControl fullWidth size="small"><InputLabel shrink>Tipo</InputLabel><Select multiple displayEmpty label="Tipo" value={type} onChange={(e) => setType(typeof e.target.value === "string" ? e.target.value.split(",") : e.target.value)} renderValue={(selected) => !selected.length ? "Todos os tipos" : selected.length === 1 ? selected[0] : `${selected.length} tipos`}><MenuItem onClick={(e) => { e.preventDefault(); e.stopPropagation(); setType([]); }}><Checkbox size="small" checked={!type.length} />Todos os tipos</MenuItem>{data?.filters.types.map((value) => <MenuItem key={value} value={value}><Checkbox size="small" checked={type.includes(value)} />{value}</MenuItem>)}</Select></FormControl>
+        <Autocomplete multiple fullWidth size="small" options={data?.filters.clients ?? []} value={client} onChange={(_, value) => setClient(value)} renderInput={(params) => <TextField {...params} label="Cliente" placeholder={!client.length ? "Todos os clientes" : undefined} slotProps={{ inputLabel: { shrink: true } }} />} limitTags={1} />
+        <Autocomplete multiple fullWidth size="small" options={data?.filters.users ?? []} value={user} onChange={(_, value) => setUser(value)} renderInput={(params) => <TextField {...params} label="Analista" placeholder={!user.length ? "Todos os analistas" : undefined} slotProps={{ inputLabel: { shrink: true } }} />} limitTags={1} />
       </Box>
     </CardContent></Card>
-
     {error && <Alert severity="error" sx={{ mt: 2 }}>Não foi possível analisar a qualidade dos dados.</Alert>}
     <Box sx={{ mt: 2, display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2,1fr)", xl: "repeat(4,1fr)" }, gap: 2 }}>
       {coordinationMetrics.map(([key, label, info, group]) => <KpiCard key={key} title={label} value={data?.summary[key] ?? 0} subtitle={group} info={info} accent={issue === key ? aliareColors.green : group === "Fluxo" ? "#ef4444" : group === "Versão" ? "#8b5cf6" : group === "Vínculo" ? "#f59e0b" : group === "APOIO" ? "#0891b2" : "#2676b9"} active={issue === key} onClick={() => setIssue(issue === key ? "" : key)} />)}
@@ -215,7 +229,7 @@ export function DataQuality() {
             <CartesianGrid stroke={theme.palette.divider} strokeDasharray="4 4" vertical={false} opacity={0.55} />
             <XAxis dataKey="group" tick={{ fontSize: 11, fill: theme.palette.text.secondary }} axisLine={false} tickLine={false} />
             <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: theme.palette.text.secondary }} axisLine={false} tickLine={false} />
-            <ChartTooltip contentStyle={{ borderRadius: 12, border: `1px solid ${theme.palette.divider}`, background: theme.palette.background.paper, boxShadow: "0 14px 36px rgba(0,0,0,.18)" }} cursor={{ fill: theme.palette.action.hover }} />
+            <ChartTooltip contentStyle={{ borderRadius: 12, border: `1px solid ${theme.palette.divider}`, background: theme.palette.background.paper, color: theme.palette.text.primary, boxShadow: "0 14px 36px rgba(0,0,0,.18)" }} labelStyle={{ color: theme.palette.text.primary, fontWeight: 800 }} itemStyle={{ color: theme.palette.text.primary }} cursor={false} />
             <Bar dataKey="total" name="Pendências" fill={aliareColors.info} radius={[7, 7, 2, 2]} />
           </BarChart>
         </ResponsiveContainer>
@@ -229,7 +243,7 @@ export function DataQuality() {
           <Typography variant="caption" color="text.secondary">{data?.samples.length ?? 0} registro(s) no recorte atual</Typography>
         </Box>
         <Button variant="outlined" startIcon={<DownloadOutlined />} disabled={!data?.samples.length} onClick={exportPendingList}>
-          Exportar lista{user ? " do analista" : ""}
+          Exportar lista{user.length ? " do analista" : ""}
         </Button>
       </Stack>
       {loading ? <Box sx={{ py: 8, textAlign: "center" }}><CircularProgress /></Box> : <Stack spacing={1} sx={{ mt: 2 }}>{data?.samples.map((item) => <Button key={`${item.source}-${item.id}`} onClick={() => void open(item)} sx={{ justifyContent: "flex-start", textTransform: "none", border: "1px solid", borderColor: "divider", p: 1.3, borderRadius: 1.5 }}><Box sx={{ textAlign: "left", minWidth: 0 }}><Stack direction="row" spacing={1} sx={{ alignItems: "center" }}><Chip size="small" label={item.workItemType} /><Typography sx={{ fontWeight: 750 }}>#{item.source === "MOVIDESK" ? item.movideskTicket ?? item.id : item.id} · {item.title}</Typography></Stack><Typography variant="caption" color="text.secondary">{[item.state, item.client ?? "Sem cliente", item.category ? `Categoria ${item.category}` : "Sem categoria", item.cause ? `Causa ${item.cause}` : "Sem causa", item.servicePath ? `Serviço ${item.servicePath}` : "Sem serviço", item.serviceSuggestion ? `Sugestão ${item.serviceSuggestion.service} · ${item.serviceSuggestion.confidence}` : null, item.module ?? "Sem módulo", item.assignedToName ?? "Sem responsável", item.movideskTicket ? `Ticket ${item.movideskTicket}` : "Sem ticket", item.taskNumber ? `Tarefa #${item.taskNumber}` : "Sem Tarefa", item.taskState ?? null, item.registeredVersion ? `Cadastro ${item.registeredVersion}` : null, item.deliveredVersion ? `Entrega ${item.deliveredVersion}` : "Sem versão entregue"].filter(Boolean).join(" · ")}</Typography></Box></Button>)}</Stack>}
