@@ -205,7 +205,6 @@ export function Dashboard() {
 
   const [copyMessage, setCopyMessage] =
     useState("");
-  const [evolutionPeriod, setEvolutionPeriod] = useState<CardPeriod>("30d");
   const [categoryPeriod, setCategoryPeriod] = useState<CardPeriod>("30d");
   const [statusPeriod, setStatusPeriod] = useState<CardPeriod>("30d");
 
@@ -389,8 +388,6 @@ export function Dashboard() {
     if (value === "year") start = new Date(now.getFullYear(), 0, 1);
     return { start: startOfDay(start), end };
   };
-  const evolutionBounds = cardPeriodBounds(evolutionPeriod);
-  const evolutionTickets = useMemo(() => tickets.filter((ticket) => isDateInPeriod(ticket.createdDate, evolutionBounds.start, evolutionBounds.end)), [tickets, evolutionPeriod]);
   const categoryBounds = cardPeriodBounds(categoryPeriod);
   const categoryTickets = useMemo(() => tickets.filter((ticket) => isDateInPeriod(ticket.createdDate, categoryBounds.start, categoryBounds.end)), [tickets, categoryPeriod]);
   const statusBounds = cardPeriodBounds(statusPeriod);
@@ -412,135 +409,8 @@ export function Dashboard() {
     );
 
   /* =======================================================
-     ANALISTAS
-  ======================================================= */
-
-  const owners =
-    useMemo(
-      () =>
-        groupByField(
-          filteredTickets,
-          "owner",
-          "Sem responsável"
-        ),
-      [filteredTickets]
-    );
-
-  /* =======================================================
-     CLIENTES
-  ======================================================= */
-
-  const clients =
-    useMemo(
-      () =>
-        groupByField(
-          filteredTickets,
-          "client",
-          "Sem cliente"
-        ),
-      [filteredTickets]
-    );
-
-  /* =======================================================
-     TENDÊNCIA
-  ======================================================= */
-
-  const trends =
-    useMemo(() => {
-      const grouped =
-        new Map<
-          string,
-          number
-        >();
-
-      evolutionTickets.forEach(
-        (ticket) => {
-          const date =
-            new Date(
-              ticket.createdDate
-            );
-
-          if (
-            Number.isNaN(
-              date.getTime()
-            )
-          ) {
-            return;
-          }
-
-          const key =
-            formatIsoDate(date);
-
-          grouped.set(
-            key,
-            (grouped.get(key) ??
-              0) + 1
-          );
-        }
-      );
-
-      /*
-       * Mantemos todos os dias do período no gráfico,
-       * inclusive dias sem abertura de tickets.
-       *
-       * Isso evita que a linha "pule" datas e deixa a
-       * evolução operacional mais fiel.
-       */
-      const result:
-        TrendItem[] = [];
-
-      const cursor =
-        startOfDay(
-          evolutionBounds.start
-        );
-
-      const lastDay =
-        endOfDay(
-          evolutionBounds.end
-        );
-
-      while (
-        cursor <= lastDay
-      ) {
-        const sortDate =
-          formatIsoDate(
-            cursor
-          );
-
-        result.push({
-          sortDate,
-
-          date:
-            formatShortDate(
-              sortDate
-            ),
-
-          total:
-            grouped.get(
-              sortDate
-            ) ?? 0,
-        });
-
-        cursor.setDate(
-          cursor.getDate() + 1
-        );
-      }
-
-      return result;
-    }, [
-      evolutionTickets,
-      evolutionBounds.start,
-      evolutionBounds.end,
-    ]);
-
-  /* =======================================================
      ANÁLISES GERENCIAIS
   ======================================================= */
-
-  const topCategoryLabels = useMemo(
-    () => categories.slice(0, 6).map((item) => item.label),
-    [categories]
-  );
 
   const dailyFlow = useMemo(() => {
     const opened = new Map<string, number>();
@@ -795,36 +665,6 @@ export function Dashboard() {
       subtitle,
       tickets: list,
     });
-  }
-
-  function showOwner(
-    owner: string
-  ) {
-    showTickets(
-      `Analista: ${owner}`,
-      filteredTickets.filter(
-        (ticket) =>
-          (ticket.owner ??
-            "Sem responsável") ===
-          owner
-      ),
-      "Carteira do responsável no período"
-    );
-  }
-
-  function showClient(
-    client: string
-  ) {
-    showTickets(
-      `Cliente: ${client}`,
-      filteredTickets.filter(
-        (ticket) =>
-          (ticket.client ??
-            "Sem cliente") ===
-          client
-      ),
-      "Chamados relacionados ao cliente"
-    );
   }
 
   async function copyTicketNumber(
