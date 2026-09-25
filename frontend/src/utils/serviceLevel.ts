@@ -79,6 +79,9 @@ export type ServiceLevelTicket = {
   stoppedMinutes?:
     number | null;
 
+  stoppedWorkingMinutes?:
+    number | null;
+
   /*
    * Por enquanto informado externamente.
    * Quando tivermos essa informação no banco,
@@ -643,6 +646,7 @@ export function calculateServiceLevel(
   const pausedMinutes =
     Math.max(
       0,
+      ticket.stoppedWorkingMinutes ??
       ticket.stoppedMinutes ??
         0
     );
