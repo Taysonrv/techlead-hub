@@ -327,6 +327,17 @@ export function Coordination() {
                       <Chip label="Escopo: clientes ou analistas da squad" variant="outlined" />
                     </Stack>
                   </Stack>
+                  <Stack direction={{ xs: "column", md: "row" }} spacing={1} sx={{ justifyContent: "space-between", alignItems: { md: "center" }, mb: 1.5 }}>
+                    <Box>
+                      <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 800 }}>Período dos atendimentos abertos</Typography>
+                      <Typography variant="body2" color="text.secondary">Aplicado aos indicadores, ranking, detalhamento e exportação.</Typography>
+                    </Box>
+                    <Stack direction="row" spacing={0.6} useFlexGap sx={{ flexWrap: "wrap" }}>
+                      {[{ v: 30, l: "30 dias" }, { v: 90, l: "90 dias" }, { v: 180, l: "6 meses" }, { v: 365, l: "12 meses" }, { v: 0, l: "Todo período" }].map((period) => (
+                        <Chip key={period.v} label={period.l} clickable color={serviceDays === period.v ? "primary" : "default"} variant={serviceDays === period.v ? "filled" : "outlined"} onClick={() => setServiceDays(period.v)} />
+                      ))}
+                    </Stack>
+                  </Stack>
                   <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2,1fr)", xl: "repeat(4,1fr)" }, gap: 1.25, mb: 2 }}>
                     <KpiCard title="Com serviço específico" value={data.serviceAnalytics.specificServices} subtitle="Atendimentos abertos" info="Tickets com Serviço preenchido além dos níveis genéricos do SIMER." accent={aliareColors.green} />
                     <KpiCard title="Sem serviço" value={data.serviceAnalytics.withoutService} subtitle="Requer classificação" info="Atendimentos abertos sem Serviço identificado." onClick={() => navigate("/qualidade-dados?issue=withoutService")} accent={aliareColors.error} />
