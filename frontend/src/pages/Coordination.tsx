@@ -40,6 +40,7 @@ type Data = {
     totalOpenTickets: number; classifiedServices: number; specificServices: number; withoutService: number;
     genericService: number; suspectedMismatch: number; classificationRate: number; catalogSize: number;
     ranking: Array<{ service: string; count: number }>;
+    genericRanking?: Array<{ service: string; count: number }>;
     moduleRanking: Array<{ module: string; count: number }>;
     clientQuality: Array<{ client: string; total: number; issues: number; rate: number }>;
     analystQuality: Array<{ analyst: string; total: number; issues: number; rate: number }>;
@@ -316,11 +317,12 @@ export function Coordination() {
                   <Stack direction={{ xs: "column", lg: "row" }} spacing={1.5} sx={{ justifyContent: "space-between", alignItems: { lg: "center" }, mb: 1.5 }}>
                     <Box>
                       <Typography variant="h6" sx={{ fontWeight: 850 }}>Qualidade da classificação por Serviço</Typography>
-                      <Typography variant="body2" color="text.secondary">Leitura dos atendimentos abertos SIMER e da especificidade do Serviço informado no Movidesk.</Typography>
+                      <Typography variant="body2" color="text.secondary">Atendimentos abertos da carteira da squad (cliente ou analista da squad) e qualidade do Serviço informado no Movidesk.</Typography>
                     </Box>
                     <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap" }}>
                       <Chip label={`${data.serviceAnalytics.classificationRate}% específicos`} color={data.serviceAnalytics.classificationRate >= 90 ? "success" : data.serviceAnalytics.classificationRate >= 75 ? "warning" : "error"} variant="outlined" />
                       <Chip label={`${data.serviceAnalytics.catalogSize} serviços conhecidos`} variant="outlined" />
+                      <Chip label="Escopo: clientes ou analistas da squad" variant="outlined" />
                     </Stack>
                   </Stack>
                   <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2,1fr)", xl: "repeat(4,1fr)" }, gap: 1.25, mb: 2 }}>
@@ -329,15 +331,16 @@ export function Coordination() {
                     <KpiCard title="SIMER genérico" value={data.serviceAnalytics.genericService} subtitle="Requer revisão" info="Tickets classificados apenas como SIMER, sem rotina específica." onClick={() => navigate("/qualidade-dados?issue=genericSimerService")} accent={aliareColors.warning} />
                     <KpiCard title="Possível incorreto" value={data.serviceAnalytics.suspectedMismatch} subtitle="Sugestão assistiva" info="Serviço atual diverge de uma sugestão com evidência suficiente. Exige validação humana." onClick={() => navigate("/qualidade-dados?issue=suspectedServiceMismatch")} accent={aliareColors.info} />
                   </Box>
+                  {data.serviceAnalytics.genericService > 0 && <Alert severity="warning" sx={{mb:1.5}}><strong>{data.serviceAnalytics.genericService}</strong> atendimento(s) estão apenas em níveis genéricos do SIMER e foram retirados do ranking abaixo para não distorcer a leitura das rotinas específicas. Use o card “SIMER genérico” para revisar esses casos.</Alert>}
                   {data.serviceAnalytics.ranking.length ? (
-                    <Box sx={{ width: "100%", height: Math.max(260, data.serviceAnalytics.ranking.length * 38) }}>
+                    <Box sx={{ width: "100%", height: Math.max(220, Math.min(420, data.serviceAnalytics.ranking.length * 42 + 30)) }}>
                       <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={data.serviceAnalytics.ranking} layout="vertical" margin={{ top: 4, right: 18, left: 12, bottom: 4 }}>
+                        <BarChart data={data.serviceAnalytics.ranking} layout="vertical" margin={{ top: 4, right: 52, left: 8, bottom: 4 }}>
                           <CartesianGrid stroke={theme.palette.divider} strokeDasharray="4 4" horizontal={false} opacity={0.55} />
                           <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11, fill: theme.palette.text.secondary }} axisLine={false} tickLine={false} />
-                          <YAxis type="category" dataKey="service" width={260} tick={{ fontSize: 10, fill: theme.palette.text.secondary }} axisLine={false} tickLine={false} tickFormatter={(value: string) => value.split("»").at(-1)?.trim() ?? value} />
+                          <YAxis type="category" dataKey="service" width={210} tick={{ fontSize: 10, fill: theme.palette.text.secondary }} axisLine={false} tickLine={false} tickFormatter={(value: string) => { const label=value.split("»").at(-1)?.trim() ?? value; return label.length>28?`${label.slice(0,27)}…`:label; } />
                           <ChartTooltip contentStyle={{ borderRadius: 12, border: `1px solid ${theme.palette.divider}`, backgroundColor: theme.palette.background.paper, color: theme.palette.text.primary, boxShadow: "0 14px 36px rgba(0,0,0,.24)" }} wrapperStyle={{ outline: "none" }} cursor={{ fill: theme.palette.action.hover }} formatter={(value) => [value, "Atendimentos"]} labelFormatter={(value) => String(value)} />
-                          <Bar dataKey="count" name="Atendimentos" fill={aliareColors.info} radius={[0, 6, 6, 0]} cursor="pointer" onClick={(_, index) => { const service = data.serviceAnalytics.ranking[index]?.service; if (service) void openDetails("service", `Serviço · ${service.split("»").at(-1)?.trim() ?? service}`, undefined, undefined, undefined, service); }} />
+                          <Bar dataKey="count" name="Atendimentos" fill={aliareColors.info} radius={[0, 6, 6, 0]} maxBarSize={28} label={{position:"right",fill:theme.palette.text.secondary,fontSize:11,fontWeight:800}} cursor="pointer" onClick={(_, index) => { const service = data.serviceAnalytics.ranking[index]?.service; if (service) void openDetails("service", `Serviço · ${service.split("»").at(-1)?.trim() ?? service}`, undefined, undefined, undefined, service); }} />
                         </BarChart>
                       </ResponsiveContainer>
                     </Box>
