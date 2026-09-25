@@ -447,7 +447,7 @@ export function Dashboard() {
   const ticketsEligibleForCause = useMemo(
     () => filteredTickets.filter((ticket) => {
       const category = normalizeComparableText(ticket.category);
-      return category !== "bug" && category !== "solucao de contorno";
+      return !["bug", "solucao de contorno", "solicitacao de servico", "adequacao"].includes(category);
     }),
     [filteredTickets]
   );
