@@ -2372,7 +2372,7 @@ export function Dashboard() {
                 onClick={() => {
                   if (!selectedTicket) return;
                   navigate(`/tickets?movidesk=${selectedTicket.movideskId}`);
-                }
+                }}
               >
                 Abrir tela de Tickets
               </Button>
