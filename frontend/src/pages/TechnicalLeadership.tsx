@@ -119,12 +119,6 @@ function AreaTitle({ title, info, icon }: { title: string; info: string; icon?: 
   </Stack>;
 }
 
-function abbreviateAnalystName(name: string) {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length <= 2) return name;
-  return `${parts[0]} ${parts.slice(1).map((part) => `${part.charAt(0).toUpperCase()}.`).join(" ")}`;
-}
-
 function IndicatorPeriodFilter({ value, onChange }: { value: PeriodPreset; onChange: (value: PeriodPreset) => void }) {
   return <FormControl size="small" sx={{ width: 126, minWidth: 126, "& .MuiSelect-select": { py: .65, fontSize: ".76rem", fontWeight: 750 } }}>
     <Select
