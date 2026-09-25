@@ -8,12 +8,14 @@ const OPEN_TICKET_STATES = ["New", "InAttendance", "Stopped"];
 const CLOSED_WORK_ITEM_STATES = ["Closed", "Resolved", "Concluído", "Concluido", "Done", "Removed"];
 
 export class CoordinationService {
-  async details(kind: string, analyst?: string, limit = 50, serviceModule?: string, serviceClient?: string, serviceName?: string) {
+  async details(kind: string, analyst?: string, limit = 50, serviceModule?: string, serviceClient?: string, serviceName?: string, serviceDays = 0) {
     const now = new Date();
     const staleBefore = new Date(now.getTime() - 72 * 60 * 60 * 1_000);
     const nextSevenDays = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1_000);
-    const safeLimit = Math.min(Math.max(limit, 1), 100);
+    const safeLimit = Math.min(Math.max(limit, 1), 500);
+    const serviceSince = serviceDays > 0 ? new Date(now.getTime() - Math.min(serviceDays, 730) * 86400000) : null;
     const ticketScope = ticketOperationalScope();
+    const serviceSince = serviceDays > 0 ? new Date(now.getTime() - Math.min(serviceDays, 730) * 86400000) : null;
     const azureScope = coordinationAzureScope();
 
     const ticketExtra: Record<string, unknown> =
@@ -41,12 +43,7 @@ export class CoordinationService {
                 ticketExtra,
                 ...(analyst ? [{ owner: { equals: analyst, mode: "insensitive" as const } }] : []),
                 ...(serviceClient ? [{ client: { equals: serviceClient, mode: "insensitive" as const } }] : []),
-                ...(serviceName ? [{ OR: [
-                  { service: { equals: serviceName, mode: "insensitive" as const } },
-                  { serviceFirstLevel: { equals: serviceName, mode: "insensitive" as const } },
-                  { serviceSecondLevel: { equals: serviceName, mode: "insensitive" as const } },
-                  { serviceThirdLevel: { equals: serviceName, mode: "insensitive" as const } },
-                ] }] : []),
+                ...(serviceSince && ["service","serviceModule","serviceClient","serviceAnalyst"].includes(kind) ? [{ createdDate: { gte: serviceSince } }] : []),
                 ...(serviceModule ? [{
                   OR: [
                     { service: { contains: serviceModule, mode: "insensitive" as const } },
@@ -90,15 +87,22 @@ export class CoordinationService {
         : Promise.resolve([]),
     ]);
 
+    const normalizeService = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR").trim();
+    const ticketServicePath = (ticket: (typeof tickets)[number]) =>
+      [ticket.serviceFirstLevel, ticket.serviceSecondLevel, ticket.serviceThirdLevel].map((v) => v?.trim()).filter(Boolean).join(" » ") || ticket.service?.trim() || "";
+    const filteredTickets = serviceName
+      ? tickets.filter((ticket) => normalizeService(ticketServicePath(ticket)) === normalizeService(serviceName))
+      : tickets;
+
     return {
       kind,
       analyst: analyst ?? null,
       serviceModule: serviceModule ?? null,
       serviceClient: serviceClient ?? null,
       serviceName: serviceName ?? null,
-      total: tickets.length + workItems.length,
-      truncated: tickets.length === safeLimit || workItems.length === safeLimit,
-      tickets,
+      total: filteredTickets.length + workItems.length,
+      truncated: filteredTickets.length === safeLimit || workItems.length === safeLimit,
+      tickets: filteredTickets,
       workItems,
     };
   }
@@ -262,7 +266,7 @@ export class CoordinationService {
     return { days, businessDays, hoursPerDay, expectedHours, registeredHours, coverageRate: expectedHours ? Number((registeredHours/expectedHours*100).toFixed(1)) : null, analysts };
   }
 
-  async summary(userId: number) {
+  async summary(userId: number, serviceDays = 0) {
     const now = new Date();
     const staleBefore = new Date(now.getTime() - 72 * 60 * 60 * 1_000);
     const nextSevenDays = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1_000);
@@ -362,6 +366,7 @@ export class CoordinationService {
         // de um cliente da squad OU estar com um analista da squad.
         where: { AND: [
           { isDeleted: false, baseStatus: { in: OPEN_TICKET_STATES } },
+          ...(serviceSince ? [{ createdDate: { gte: serviceSince } }] : []),
           { OR: [
             { client: { in: [...SIMER_CLIENTS], mode: "insensitive" } },
             { owner: { in: [...SUPPORT_ANALYSTS], mode: "insensitive" } },
@@ -600,6 +605,7 @@ export class CoordinationService {
         suspectedMismatch,
         classificationRate,
         catalogSize: serviceCatalog.length,
+        periodDays: serviceDays,
         ranking: specificRanking,
         genericRanking,
         moduleRanking,
