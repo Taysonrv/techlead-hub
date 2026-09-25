@@ -133,11 +133,6 @@ type RankingItem = {
   total: number;
 };
 
-type TrendItem = {
-  date: string;
-  sortDate: string;
-  total: number;
-};
 
 type AttentionLevel =
   | "critico"
@@ -3140,39 +3135,6 @@ function formatShortDate(
     2,
     "0"
   )}`;
-}
-
-function formatFullIsoDate(
-  isoDate: string
-) {
-  const [
-    year,
-    month,
-    day,
-  ] =
-    isoDate
-      .split("-")
-      .map(Number);
-
-  if (
-    !year ||
-    !month ||
-    !day
-  ) {
-    return isoDate;
-  }
-
-  return `${String(
-    day
-  ).padStart(
-    2,
-    "0"
-  )}/${String(
-    month
-  ).padStart(
-    2,
-    "0"
-  )}/${year}`;
 }
 
 function formatDateTime(
