@@ -498,72 +498,15 @@ export function TechnicalLeadership() {
         </CardContent></Card>
       </Box>
 
-      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "repeat(2,1fr)" }, gap: 1.5, mb: 1.5 }}>
-        <Card><CardContent>
-          <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "center", gap: 1 }}>
-            <Box sx={{ flex: 1, textAlign: "center", "& > *": { justifyContent: "center" } }}><AreaTitle title="SLA de solução" info="Versão moderna do indicador de tickets resolvidos por vencimento do Movidesk." /></Box>
-            <IndicatorPeriodFilter value={indicatorPeriod("resolutionSla")} onChange={(value) => setIndicatorPeriod("resolutionSla", value)} />
-          </Stack>
-          <Box sx={{ height: 280, position: "relative" }}><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={resolutionSlaRows.filter((item) => isLeadershipSeriesVisible("resolutionSla", item.name))} dataKey="value" nameKey="name" innerRadius={62} outerRadius={92} paddingAngle={3}>
-            {resolutionSlaRows.filter((item) => isLeadershipSeriesVisible("resolutionSla", item.name)).map((item) => <Cell key={item.name} fill={item.fill} />)}
-          </Pie><ChartTooltip {...chartTooltipProps} formatter={(value, name) => [`${Number(value)} · ${slaPct(Number(value), slaTotal(resolutionSlaRows))}%`, String(name)]} /></PieChart></ResponsiveContainer>
-          <Box sx={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", pointerEvents: "none" }}><Box sx={{ textAlign: "center" }}><Typography sx={{ fontSize: "1.45rem", fontWeight: 900 }}>{slaTotal(resolutionSlaRows)}</Typography><Typography variant="caption" color="text.secondary">medidos</Typography></Box></Box>
+      <Card sx={{ mb: 1.5 }}><CardContent>
+        <Stack direction={{ xs: "column", md: "row" }} spacing={1.25} sx={{ alignItems: { md: "center" }, justifyContent: "space-between" }}>
+          <Box>
+            <Typography sx={{ fontWeight: 850 }}>Performance operacional centralizada</Typography>
+            <Typography variant="body2" color="text.secondary">SLA detalhado e comparativos por analista foram concentrados em Desempenho. A Liderança permanece focada em recorrências, gaps, auditoria e desenvolvimento técnico.</Typography>
           </Box>
-          <Stack direction="row" spacing={1} useFlexGap sx={{ justifyContent: "center", flexWrap: "wrap", mb: .8 }}>{resolutionSlaRows.map((row) => <Chip key={row.name} size="small" variant="outlined" label={`${row.name}: ${row.value} (${slaPct(row.value, slaTotal(resolutionSlaRows))}%)`} sx={{ fontWeight: 750 }} />)}</Stack>
-          <SeriesSelector chart="resolutionSla" items={resolutionSlaRows.map((row) => ({ key: row.name, label: row.name, color: row.fill }))} />
-        </CardContent></Card>
-        <Card><CardContent>
-          <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "center", gap: 1 }}>
-            <Box sx={{ flex: 1, textAlign: "center", "& > *": { justifyContent: "center" } }}><AreaTitle title="SLA de primeira resposta" info="Consolida o indicador de primeira resposta, preservando também registros sem medição." /></Box>
-            <IndicatorPeriodFilter value={indicatorPeriod("responseSla")} onChange={(value) => setIndicatorPeriod("responseSla", value)} />
-          </Stack>
-          <Box sx={{ height: 280, position: "relative" }}><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={responseSlaRows.filter((item) => isLeadershipSeriesVisible("responseSla", item.name))} dataKey="value" nameKey="name" innerRadius={62} outerRadius={92} paddingAngle={3}>
-            {responseSlaRows.filter((item) => isLeadershipSeriesVisible("responseSla", item.name)).map((item) => <Cell key={item.name} fill={item.fill} />)}
-          </Pie><ChartTooltip {...chartTooltipProps} formatter={(value, name) => [`${Number(value)} · ${slaPct(Number(value), slaTotal(responseSlaRows))}%`, String(name)]} /></PieChart></ResponsiveContainer>
-          <Box sx={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", pointerEvents: "none" }}><Box sx={{ textAlign: "center" }}><Typography sx={{ fontSize: "1.45rem", fontWeight: 900 }}>{slaTotal(responseSlaRows)}</Typography><Typography variant="caption" color="text.secondary">medidos</Typography></Box></Box>
-          </Box>
-          <Stack direction="row" spacing={1} useFlexGap sx={{ justifyContent: "center", flexWrap: "wrap", mb: .8 }}>{responseSlaRows.map((row) => <Chip key={row.name} size="small" variant="outlined" label={`${row.name}: ${row.value} (${slaPct(row.value, slaTotal(responseSlaRows))}%)`} sx={{ fontWeight: 750 }} />)}</Stack>
-          <SeriesSelector chart="responseSla" items={responseSlaRows.map((row) => ({ key: row.name, label: row.name, color: row.fill }))} />
-        </CardContent></Card>
-      </Box>
-
-      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", xl: "repeat(2,1fr)" }, gap: 1.5, mb: 1.5 }}>
-        <Card><CardContent>
-          <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "center", gap: 1 }}>
-            <Box sx={{ flex: 1, textAlign: "center", "& > *": { justifyContent: "center" } }}><AreaTitle title="Resolução por analista" info="Volume resolvido, reaberto e situação de SLA por analista. Use o filtro para isolar um analista sem alterar os demais indicadores da Central." /></Box>
-            <Stack direction="row" spacing={.8}>
-              <AnalystMultiSelect options={resolutionOwnerRows.map((row) => row.analyst)} value={resolutionOwnerFilter} onChange={setResolutionOwnerFilter} label="Filtrar analistas na resolução" />
-              <IndicatorPeriodFilter value={indicatorPeriod("resolutionOwner")} onChange={(value) => setIndicatorPeriod("resolutionOwner", value)} />
-            </Stack>
-          </Stack>
-          <Box sx={{ height: 340, mt: 1 }}><ResponsiveContainer width="100%" height="100%"><BarChart data={filteredResolutionOwners.map((row) => ({ ...row, analystLabel: abbreviateAnalystName(row.analyst) }))}>
-            <CartesianGrid strokeDasharray="4 5" vertical={false} /><XAxis dataKey="analystLabel" tick={{ fontSize: 10 }} interval={0} angle={0} textAnchor="middle" height={44} /><YAxis allowDecimals={false} /><ChartTooltip {...chartTooltipProps} labelFormatter={(_, payload) => payload?.[0]?.payload?.analyst ?? ""} />
-            {isLeadershipSeriesVisible("resolutionOwner", "resolved") && <Bar dataKey="resolved" name="Resolvidos" fill={aliareColors.info} radius={[5,5,0,0]} />}
-            {isLeadershipSeriesVisible("resolutionOwner", "reopened") && <Bar dataKey="reopened" name="Reabertos" fill={aliareColors.warning} radius={[5,5,0,0]} />}
-            {isLeadershipSeriesVisible("resolutionOwner", "outside") && <Bar dataKey="outside" name="Fora SLA" fill={aliareColors.error} radius={[5,5,0,0]} />}
-          </BarChart></ResponsiveContainer></Box>
-          <SeriesSelector chart="resolutionOwner" items={[
-            { key: "resolved", label: "Resolvidos", color: aliareColors.info },
-            { key: "reopened", label: "Reabertos", color: aliareColors.warning },
-            { key: "outside", label: "Fora SLA", color: aliareColors.error },
-          ]} />
-        </CardContent></Card>
-        <Card><CardContent>
-          <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "center", gap: 1 }}>
-            <Box sx={{ flex: 1, textAlign: "center", "& > *": { justifyContent: "center" } }}><AreaTitle title="Primeira resposta por analista" info="Compara respostas dentro, fora e sem medição de SLA por analista. O filtro isola um analista apenas neste gráfico." /></Box>
-            <Stack direction="row" spacing={.8}>
-              <AnalystMultiSelect options={responseOwnerRows.map((row) => row.analyst)} value={responseOwnerFilter} onChange={setResponseOwnerFilter} label="Filtrar analistas na primeira resposta" />
-              <IndicatorPeriodFilter value={indicatorPeriod("responseOwner")} onChange={(value) => setIndicatorPeriod("responseOwner", value)} />
-            </Stack>
-          </Stack>
-          <Box sx={{ height: 340, mt: 1 }}><ResponsiveContainer width="100%" height="100%"><BarChart data={filteredResponseOwners.map((row) => ({ ...row, analystLabel: abbreviateAnalystName(row.analyst) }))}>
-            <CartesianGrid strokeDasharray="4 5" vertical={false} /><XAxis dataKey="analystLabel" tick={{ fontSize: 10 }} interval={0} angle={0} textAnchor="middle" height={44} /><YAxis allowDecimals={false} /><ChartTooltip {...chartTooltipProps} labelFormatter={(_, payload) => payload?.[0]?.payload?.analyst ?? ""} />
-            {isLeadershipSeriesVisible("responseOwner", "within") && <Bar dataKey="within" name="No prazo" stackId="sla" fill={aliareColors.green} />}
-            {isLeadershipSeriesVisible("responseOwner", "outside") && <Bar dataKey="outside" name="Fora do prazo" stackId="sla" fill={aliareColors.error} />}
-            {isLeadershipSeriesVisible("responseOwner", "unmeasured") && <Bar dataKey="unmeasured" name="Sem medição" stackId="sla" fill={aliareColors.info} />}
-          </BarChart></ResponsiveContainer></Box>
-        </CardContent></Card>
-      </Box>
+          <Button variant="outlined" onClick={() => navigate("/desempenho")}>Abrir Desempenho</Button>
+        </Stack>
+      </CardContent></Card>
 
       <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(3,1fr)" }, gap: 1.5 }}>
         {[
