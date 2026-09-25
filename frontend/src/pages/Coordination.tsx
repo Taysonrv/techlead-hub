@@ -43,6 +43,7 @@ import { createElement, useCallback, useEffect, useMemo, useState } from "react"
 import type { ElementType } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { KpiCard } from "../components/KpiCard";
+import { ExportTicketsButton } from "../components/ExportTicketsButton";
 import { DetailFieldGrid, DetailPanelHeader, DetailSection } from "../components/DetailPanel";
 import { detailDrawerPaperSx } from "../theme/layoutTokens";
 import { PageHeader } from "../components/PageHeader";
@@ -81,7 +82,7 @@ type Data = {
 
 type MainTab = "cadastros" | "movimentos" | "analises" | "desenvolvimento" | "gestao";
 type Routine = { label: string; path: string; icon: ElementType; description: string; keywords?: string[] };
-type DetailKind = "backlog" | "critical" | "stale" | "dueSoon" | "overdue" | "blocked" | "unassigned" | "analyst" | "serviceModule" | "serviceClient" | "serviceAnalyst";
+type DetailKind = "backlog" | "critical" | "stale" | "dueSoon" | "overdue" | "blocked" | "unassigned" | "analyst" | "service" | "serviceModule" | "serviceClient" | "serviceAnalyst";
 type DetailData = {
   kind: DetailKind; analyst: string | null; total: number; truncated: boolean;
   tickets: Array<{ movideskId: number; subject: string; status: string; urgency: string | null; client: string | null; owner: string | null; lastUpdate: string | null; dueDate: string | null; taskNumber: number | null; registeredVersion: string | null; deliveredVersion: string | null; service: string | null; serviceFirstLevel: string | null; serviceSecondLevel: string | null; serviceThirdLevel: string | null; category: string | null; cause: string | null }>;
@@ -191,10 +192,10 @@ export function Coordination() {
       ]
     : [];
 
-  async function openDetails(kind: DetailKind, title: string, analyst?: string, serviceModule?: string, serviceClient?: string) {
+  async function openDetails(kind: DetailKind, title: string, analyst?: string, serviceModule?: string, serviceClient?: string, serviceName?: string) {
     try {
       setDetailTitle(title); setDetails(null); setDetailLoading(true);
-      const response = await api.get<DetailData>("/coordination/details", { params: { kind, analyst, serviceModule, serviceClient, limit: 50 } });
+      const response = await api.get<DetailData>("/coordination/details", { params: { kind, analyst, serviceModule, serviceClient, serviceName, limit: 100 } });
       setDetails(response.data);
     } catch {
       setError("Não foi possível carregar os detalhes da coordenação.");
@@ -383,8 +384,8 @@ export function Coordination() {
                           <CartesianGrid stroke={theme.palette.divider} strokeDasharray="4 4" horizontal={false} opacity={0.55} />
                           <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11, fill: theme.palette.text.secondary }} axisLine={false} tickLine={false} />
                           <YAxis type="category" dataKey="service" width={260} tick={{ fontSize: 10, fill: theme.palette.text.secondary }} axisLine={false} tickLine={false} tickFormatter={(value: string) => value.split("»").at(-1)?.trim() ?? value} />
-                          <ChartTooltip contentStyle={{ borderRadius: 12, border: `1px solid ${theme.palette.divider}`, background: theme.palette.background.paper }} formatter={(value) => [value, "Atendimentos"]} labelFormatter={(value) => String(value)} />
-                          <Bar dataKey="count" name="Atendimentos" fill={aliareColors.info} radius={[0, 6, 6, 0]} />
+                          <ChartTooltip contentStyle={{ borderRadius: 12, border: `1px solid ${theme.palette.divider}`, backgroundColor: theme.palette.background.paper, color: theme.palette.text.primary, boxShadow: "0 14px 36px rgba(0,0,0,.24)" }} wrapperStyle={{ outline: "none" }} cursor={{ fill: theme.palette.action.hover }} formatter={(value) => [value, "Atendimentos"]} labelFormatter={(value) => String(value)} />
+                          <Bar dataKey="count" name="Atendimentos" fill={aliareColors.info} radius={[0, 6, 6, 0]} cursor="pointer" onClick={(entry) => { const service = String(entry?.service ?? ""); if (service) void openDetails("service", `Serviço · ${service.split("»").at(-1)?.trim() ?? service}`, undefined, undefined, undefined, service); }} />
                         </BarChart>
                       </ResponsiveContainer>
                     </Box>
@@ -465,8 +466,8 @@ export function Coordination() {
                         <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11, fill: theme.palette.text.secondary }} axisLine={false} tickLine={false} />
                         <YAxis type="category" dataKey="analyst" width={118} tick={{ fontSize: 11, fill: theme.palette.text.secondary }} axisLine={false} tickLine={false} />
                         <ChartTooltip contentStyle={{ borderRadius: 12, border: `1px solid ${theme.palette.divider}`, background: theme.palette.background.paper, boxShadow: "0 14px 36px rgba(0,0,0,.18)" }} cursor={{ fill: theme.palette.action.hover }} />
-                        <Bar dataKey="tickets" name="Tickets" stackId="load" fill={aliareColors.info} radius={[0, 0, 0, 0]} />
-                        <Bar dataKey="workItems" name="Azure" stackId="load" fill={aliareColors.green} radius={[0, 6, 6, 0]} />
+                        <Bar dataKey="tickets" name="Tickets" stackId="load" fill={aliareColors.info} radius={[0, 0, 0, 0]} cursor="pointer" onClick={(entry) => { const analyst = String(entry?.analyst ?? ""); if (analyst) void openDetails("analyst", `Carga de ${analyst}`, analyst); }} />
+                        <Bar dataKey="workItems" name="Azure" stackId="load" fill={aliareColors.green} radius={[0, 6, 6, 0]} cursor="pointer" onClick={(entry) => { const analyst = String(entry?.analyst ?? ""); if (analyst) void openDetails("analyst", `Carga de ${analyst}`, analyst); }} />
                       </BarChart>
                     </ResponsiveContainer>
                   </Box> : <Typography color="text.secondary">Nenhuma carga pendente localizada para os analistas da equipe.</Typography>}
@@ -531,37 +532,6 @@ export function Coordination() {
                 </CardContent>
               </Card>
 
-              <Card variant="outlined">
-                <CardContent>
-                  <Typography variant="h6" sx={{ fontWeight: 850, mb: 0.4 }}>
-                    Integrações Microsoft 365
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-                    Planner, Outlook e Teams vinculados à conta conectada.
-                  </Typography>
-                  <Stack direction={{ xs: "column", sm: "row" }} spacing={1} useFlexGap sx={{ flexWrap: "wrap" }}>
-                    {Object.entries(data.integrations).map(([name, integration]) => (
-                      <Chip
-                        key={name}
-                        label={`${name}: ${
-                          integration.connected
-                            ? `${integration.items} item(ns)`
-                            : integration.configured
-                              ? "conecte sua conta"
-                              : "aguardando configuração"
-                        }`}
-                        color={integration.connected ? "success" : "default"}
-                        variant="outlined"
-                      />
-                    ))}
-                  </Stack>
-                  {data.microsoft.warnings.map((warning) => (
-                    <Alert key={warning} severity="warning" sx={{ mt: 1.5 }}>
-                      {warning}
-                    </Alert>
-                  ))}
-                </CardContent>
-              </Card>
             </Stack>
           )}
         </CardContent>
@@ -570,7 +540,8 @@ export function Coordination() {
         <DetailPanelHeader eyebrow="Coordenação" title={detailTitle || "Detalhes"} identifier={details ? `${details.total} item(ns) carregado(s)` : undefined} onClose={() => { setDetailTitle(""); setDetails(null); }} />
         {detailLoading ? <Box sx={{ py: 8, display: "grid", placeItems: "center" }}><CircularProgress /></Box> : details ? (
           <Stack spacing={2}>
-            {details.truncated && <Alert severity="info">Exibindo os primeiros 50 registros do recorte.</Alert>}
+            {details.truncated && <Alert severity="info">Exibindo os primeiros 100 registros do recorte.</Alert>}
+            {details.tickets.length > 0 && <ExportTicketsButton tickets={details.tickets.map((ticket) => ({ ...ticket, service: [ticket.serviceFirstLevel, ticket.serviceSecondLevel, ticket.serviceThirdLevel].filter(Boolean).join(" » ") || ticket.service }))} title={detailTitle || "Recorte operacional"} subtitle="Central da Coordenação · recorte para análise" />}
             {details.tickets.length > 0 && <DetailSection title="Atendimentos Movidesk"><Stack spacing={1}>{details.tickets.map((ticket) => (
               <Button key={ticket.movideskId} variant="outlined" onClick={() => navigate(`/tickets?movidesk=${ticket.movideskId}`)} sx={{ justifyContent: "flex-start", textTransform: "none", textAlign: "left", p: 1.25 }}>
                 <Box sx={{ minWidth: 0 }}><Typography sx={{ fontWeight: 800 }}>#{ticket.movideskId} · {ticket.subject}</Typography><Typography variant="caption" color="text.secondary">{[ticket.status, ticket.urgency, ticket.client, ticket.owner].filter(Boolean).join(" · ")}</Typography>
