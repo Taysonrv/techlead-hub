@@ -358,7 +358,15 @@ export class CoordinationService {
         _count: { id: true },
       }),
       prisma.ticket.findMany({
-        where: { AND: [ticketScope, { isDeleted: false, baseStatus: { in: OPEN_TICKET_STATES } }] },
+        // Qualidade de Serviço pertence à carteira da squad: basta o ticket ser
+        // de um cliente da squad OU estar com um analista da squad.
+        where: { AND: [
+          { isDeleted: false, baseStatus: { in: OPEN_TICKET_STATES } },
+          { OR: [
+            { client: { in: [...SIMER_CLIENTS], mode: "insensitive" } },
+            { owner: { in: [...SUPPORT_ANALYSTS], mode: "insensitive" } },
+          ] },
+        ] },
         select: {
           id: true, subject: true, category: true, cause: true, service: true, client: true, owner: true,
           serviceFirstLevel: true, serviceSecondLevel: true, serviceThirdLevel: true,
@@ -447,6 +455,8 @@ export class CoordinationService {
       .map(([service, count]) => ({ service, count }))
       .sort((a, b) => b.count - a.count || a.service.localeCompare(b.service, "pt-BR"))
       .slice(0, 10);
+    const genericRanking = serviceRanking.filter((item) => isGenericService(item.service));
+    const specificRanking = serviceRanking.filter((item) => !isGenericService(item.service));
     const serviceModuleCounts = new Map<string, number>();
     const serviceClientIssues = new Map<string, { total: number; issues: number }>();
     const serviceAnalystIssues = new Map<string, { total: number; issues: number }>();
@@ -590,7 +600,8 @@ export class CoordinationService {
         suspectedMismatch,
         classificationRate,
         catalogSize: serviceCatalog.length,
-        ranking: serviceRanking,
+        ranking: specificRanking,
+        genericRanking,
         moduleRanking,
         clientQuality,
         analystQuality,
