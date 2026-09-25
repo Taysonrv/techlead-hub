@@ -1365,27 +1365,6 @@ export function Dashboard() {
               mb: 2,
             }}
           >
-            <CardBase>
-              <CardPeriodHeader title="Evolução dos Tickets" subtitle="Volume de abertura por dia • tendência do período" value={evolutionPeriod} onChange={setEvolutionPeriod} />
-              <Box sx={{ height: 260, mt: 1.5 }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={trends} margin={{ top: 8, right: 12, left: 4, bottom: 4 }}>
-                    <defs>
-                      <linearGradient id="ticketArea" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor={aliareColors.green} stopOpacity={0.42} />
-                        <stop offset="95%" stopColor={aliareColors.green} stopOpacity={0.015} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={chartGrid} />
-                    <XAxis dataKey="date" tick={{ fontSize: 11 }} minTickGap={22} interval="preserveStartEnd" tickMargin={8} />
-                    <YAxis allowDecimals={false} tick={{ fontSize: 11 }} width={42} />
-                    <Tooltip content={<TrendTooltip />} />
-                    <Area type="monotone" dataKey="total" name="Tickets" stroke={aliareColors.green} strokeWidth={3} fill="url(#ticketArea)" activeDot={{ r: 5, fill: aliareColors.green, stroke: "#FFFFFF", strokeWidth: 2 }} />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </Box>
-            </CardBase>
-
             <DonutAnalysisCard
               title="Tickets por Categoria"
               subtitle="Distribuição no período"
@@ -1417,16 +1396,6 @@ export function Dashboard() {
           {/* =============================================
               EVOLUÇÃO MENSAL POR CATEGORIA
           ============================================== */}
-
-          <MonthlyCategoryEvolutionCard
-            tickets={tickets}
-            categories={topCategoryLabels}
-            colors={chartPalette}
-            isDark={isDark}
-            chartGrid={chartGrid}
-            chartTooltipStyle={chartTooltipStyle}
-            onDrilldown={(title, list, subtitle) => showTickets(title, list, subtitle)}
-          />
 
           <Box
             sx={{
@@ -1499,14 +1468,19 @@ export function Dashboard() {
             </CardBase>
           </Box>
 
-          {/* =============================================
-              RANKINGS EXECUTIVOS
-          ============================================== */}
-
-          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "1fr 1fr" }, gap: 2, mb: 2 }}>
-            <RankingCard title="TOP 5 - Clientes" subtitle="Clientes com maior volume de tickets" data={clients} onItemClick={showClient} />
-            <RankingCard title="TOP 5 - Analistas" subtitle="Volume de tickets por responsável" data={owners} onItemClick={showOwner} />
-          </Box>
+          <CardBase>
+            <Stack direction={{ xs: "column", md: "row" }} spacing={1.5} sx={{ alignItems: { md: "center" }, justifyContent: "space-between" }}>
+              <Box>
+                <Typography sx={{ fontWeight: 850, fontSize: "1.05rem" }}>Análises especializadas</Typography>
+                <Typography variant="caption" color="text.secondary">O Dashboard mantém somente a leitura executiva. Rankings e análises detalhadas ficam nas visões próprias.</Typography>
+              </Box>
+              <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap" }}>
+                <Button size="small" variant="outlined" onClick={() => navigate("/clientes")}>Analisar clientes</Button>
+                <Button size="small" variant="outlined" onClick={() => navigate("/analistas")}>Analisar analistas</Button>
+                <Button size="small" variant="outlined" onClick={() => navigate("/desempenho")}>Abrir desempenho</Button>
+              </Stack>
+            </Stack>
+          </CardBase>
 
           {/* =============================================
               PONTOS DE ATENÇÃO
