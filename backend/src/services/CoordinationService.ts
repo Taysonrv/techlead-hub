@@ -15,7 +15,6 @@ export class CoordinationService {
     const safeLimit = Math.min(Math.max(limit, 1), 500);
     const serviceSince = serviceDays > 0 ? new Date(now.getTime() - Math.min(serviceDays, 730) * 86400000) : null;
     const ticketScope = ticketOperationalScope();
-    const serviceSince = serviceDays > 0 ? new Date(now.getTime() - Math.min(serviceDays, 730) * 86400000) : null;
     const azureScope = coordinationAzureScope();
 
     const ticketExtra: Record<string, unknown> =
@@ -272,6 +271,7 @@ export class CoordinationService {
     const nextSevenDays = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1_000);
 
     const ticketScope = ticketOperationalScope();
+    const serviceSince = serviceDays > 0 ? new Date(now.getTime() - Math.min(serviceDays, 730) * 86400000) : null;
     const azureScope = coordinationAzureScope();
 
     const [
