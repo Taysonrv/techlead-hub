@@ -901,7 +901,7 @@ export function Performance() {
                     }}
                   />
 
-                  {!hiddenTrendSeries.has("firstResponse") && <Line
+                  <Line
                     type="monotone"
                     dataKey="firstResponse"
                     name="Primeira resposta"
@@ -910,9 +910,10 @@ export function Performance() {
                     dot={false}
                     activeDot={{ r: 5 }}
                     animationDuration={500}
-                  />}
+                    hide={hiddenTrendSeries.has("firstResponse")}
+                  />
 
-                  {!hiddenTrendSeries.has("resolution") && <Line
+                  <Line
                     type="monotone"
                     dataKey="resolution"
                     name="Resolução"
@@ -921,7 +922,8 @@ export function Performance() {
                     dot={false}
                     activeDot={{ r: 5 }}
                     animationDuration={500}
-                  />}
+                    hide={hiddenTrendSeries.has("resolution")}
+                  />
                 </LineChart>
               </ResponsiveContainer>
             ) : (
@@ -1586,7 +1588,7 @@ function DonutCard({
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
-                  data={visibleData}
+                  data={data}
                   dataKey="value"
                   nameKey="name"
                   innerRadius={62}
@@ -1612,8 +1614,13 @@ function DonutCard({
                     }
                   }}
                 >
-                  {visibleData.map((item) => (
-                    <Cell key={item.name} fill={item.color} />
+                  {data.map((item) => (
+                    <Cell
+                      key={item.name}
+                      fill={item.color}
+                      fillOpacity={hiddenItems.has(item.name) ? 0 : 1}
+                      strokeOpacity={hiddenItems.has(item.name) ? 0 : 1}
+                    />
                   ))}
                 </Pie>
 
