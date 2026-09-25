@@ -445,7 +445,7 @@ export function Dashboard() {
   }, [openedInPeriod, resolvedInPeriod, effectiveStartDate, effectiveEndDate]);
 
   const ticketsEligibleForCause = useMemo(
-    () => filteredTickets.filter((ticket) => normalizeText(ticket.category) !== "bug"),
+    () => filteredTickets.filter((ticket) => normalizeComparableText(ticket.category) !== "bug"),
     [filteredTickets]
   );
 
@@ -2845,6 +2845,14 @@ function TicketField({
 /* =========================================================
    AGRUPAMENTO
 ========================================================= */
+
+function normalizeComparableText(value: string | null | undefined) {
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLocaleLowerCase("pt-BR");
+}
 
 function groupByField(
   tickets: Ticket[],
