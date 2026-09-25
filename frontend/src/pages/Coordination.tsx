@@ -70,6 +70,7 @@ export function Coordination() {
   const theme = useTheme();
   const [data, setData] = useState<Data | null>(null);
   const [slaFlow, setSlaFlow] = useState<any | null>(null);
+  const [slaDrilldown, setSlaDrilldown] = useState<{title:string;ids:number[]}|null>(null);
   const [capacity, setCapacity] = useState<{ days: number; businessDays: number; hoursPerDay: number; expectedHours: number; registeredHours: number; coverageRate: number | null; analysts: Array<{ analyst: string; expectedHours: number; registeredHours: number; coverageRate: number | null }> } | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -187,6 +188,15 @@ export function Coordination() {
                   ["SLA total",slaFlow.summary.totalWithinSla,slaFlow.summary.concluded],
                 ].map(([label,value,total])=><Box key={String(label)} sx={{p:1.25,border:"1px solid",borderColor:"divider",borderRadius:2}}><Typography variant="caption" color="text.secondary">{label}</Typography><Typography sx={{fontWeight:900,fontSize:"1.2rem"}}>{Number(total)?Math.round(Number(value)/Number(total)*1000)/10:0}%</Typography><Typography variant="caption" color="text.secondary">{value}/{total} no prazo</Typography></Box>)}
               </Box>
+              <Typography sx={{fontWeight:850,mt:2,mb:1}}>Consumo por prioridade</Typography>
+              <Box sx={{display:"grid",gridTemplateColumns:{xs:"1fr",md:"repeat(2,1fr)",xl:"repeat(4,1fr)"},gap:1}}>
+                {(slaFlow.byPriority??[]).map((p:any)=><Card key={p.priority} variant="outlined" sx={{cursor:p.total?"pointer":"default"}} onClick={()=>p.total&&setSlaDrilldown({title:`${p.priority} · SLA × OLA`,ids:p.rows})}><CardContent sx={{p:"12px !important"}}><Stack direction="row" sx={{justifyContent:"space-between",alignItems:"center"}}><Typography sx={{fontWeight:900}}>{p.priority}</Typography><Chip size="small" label={p.total}/></Stack><Typography variant="caption" color="text.secondary">Suporte {formatMinutes(p.avgSupportMinutes)} · Fábrica {formatMinutes(p.avgFactoryMinutes)}</Typography><Box sx={{mt:1}}><Typography variant="caption">OLA Suporte: {p.total?Math.round(p.supportWithinOla/p.total*1000)/10:0}%</Typography><br/><Typography variant="caption">OLA Fábrica: {p.concluded?Math.round(p.factoryWithinOla/p.concluded*1000)/10:0}%</Typography><br/><Typography variant="caption">SLA total: {p.concluded?Math.round(p.totalWithinSla/p.concluded*1000)/10:0}%</Typography></Box><Chip sx={{mt:1}} size="small" variant="outlined" label={p.factoryBottleneck>p.supportBottleneck?"Maior consumo: Fábrica":"Maior consumo: Suporte"}/></CardContent></Card>)}
+              </Box>
+              <Typography sx={{fontWeight:850,mt:2,mb:1}}>Consumo por analista</Typography>
+              <Box sx={{overflowX:"auto"}}><Box sx={{minWidth:760,display:"grid",gridTemplateColumns:"1.4fr .55fr .8fr .8fr .8fr .8fr",gap:1,alignItems:"center"}}>
+                {["Analista","Bugs","Até Task","Fábrica","SLA","Maior consumo"].map(h=><Typography key={h} variant="caption" color="text.secondary" sx={{fontWeight:800}}>{h}</Typography>)}
+                {(slaFlow.owners??[]).map((o:any)=><Box key={o.owner} sx={{display:"contents",cursor:"pointer"}} onClick={()=>setSlaDrilldown({title:`${o.owner} · SLA × OLA`,ids:o.rows})}><Typography sx={{fontWeight:750,py:.7}}>{o.owner}</Typography><Typography>{o.total}</Typography><Typography>{formatMinutes(o.avgSupportMinutes)}</Typography><Typography>{formatMinutes(o.avgFactoryMinutes)}</Typography><Typography>{o.concluded?Math.round(o.totalWithinSla/o.concluded*1000)/10:0}%</Typography><Chip size="small" variant="outlined" label={o.factoryBottleneck>o.supportBottleneck?"Fábrica":"Suporte"}/></Box>)}
+              </Box></Box>
               <Box sx={{mt:2,height:Math.max(220,Math.min(420,(slaFlow.rows?.length??0)*30))}}>
                 <ResponsiveContainer width="100%" height="100%"><BarChart data={(slaFlow.rows??[]).slice(0,12)} layout="vertical" margin={{left:10,right:18}}><CartesianGrid strokeDasharray="3 3" opacity={.18}/><XAxis type="number" tickFormatter={(v)=>`${Math.round(v/60)}h`}/><YAxis type="category" dataKey="movideskId" width={70}/><ChartTooltip formatter={(v:any,n:any)=>[formatMinutes(Number(v)),n==="supportMinutes"?"Suporte":"Fábrica"]}/><Bar dataKey="supportMinutes" name="Suporte"/><Bar dataKey="factoryMinutes" name="Fábrica"/></BarChart></ResponsiveContainer>
               </Box>
@@ -467,6 +477,7 @@ export function Coordination() {
           )}
         </CardContent>
       </Card>
+      <Drawer anchor="right" open={Boolean(slaDrilldown)} onClose={()=>setSlaDrilldown(null)} PaperProps={{sx:{width:{xs:"100%",sm:560},p:2}}}><Stack direction="row" sx={{justifyContent:"space-between",alignItems:"center",mb:1}}><Box><Typography variant="h6" sx={{fontWeight:900}}>{slaDrilldown?.title}</Typography><Typography variant="body2" color="text.secondary">Atendimentos responsáveis pelo indicador selecionado.</Typography></Box><IconButton onClick={()=>setSlaDrilldown(null)}><CloseOutlined/></IconButton></Stack><Divider sx={{mb:1}}>{false}</Divider>{(slaFlow?.rows??[]).filter((r:any)=>slaDrilldown?.ids.includes(r.movideskId)).map((r:any)=><Box key={r.movideskId} onClick={()=>navigate(`/tickets?movidesk=${r.movideskId}`)} sx={{p:1.25,borderRadius:2,cursor:"pointer","&:hover":{bgcolor:"action.hover"}}}><Stack direction="row" spacing={1} sx={{alignItems:"center"}}><Chip size="small" label={r.urgency}/><Typography sx={{fontWeight:800}}>#{r.movideskId} · {r.subject}</Typography></Stack><Typography variant="caption" color="text.secondary">{r.client} · {r.owner} · Suporte {formatMinutes(r.supportMinutes)} · Fábrica {formatMinutes(r.factoryMinutes??0)} · {r.bottleneck}</Typography></Box>)}</Drawer>
       <Drawer anchor="right" open={Boolean(detailTitle)} onClose={() => { setDetailTitle(""); setDetails(null); }} slotProps={{ paper: { sx: detailDrawerPaperSx } }}>
         <DetailPanelHeader eyebrow="Coordenação" title={detailTitle || "Detalhes"} identifier={details ? `${details.total} item(ns) carregado(s)` : undefined} onClose={() => { setDetailTitle(""); setDetails(null); }} />
         {detailLoading ? <Box sx={{ py: 8, display: "grid", placeItems: "center" }}><CircularProgress /></Box> : details ? (
