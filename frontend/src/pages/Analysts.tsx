@@ -1710,6 +1710,8 @@ export function Analysts() {
 
   const visibleAnalystPieData = analystPieData.filter((item) => !hiddenAnalystSlices.has(item.name));
   const visibleStatusPieData = statusPieData.filter((item) => !hiddenStatusSlices.has(item.name));
+  const analystChartData = visibleAnalystPieData.length > 0 ? visibleAnalystPieData : analystPieData;
+  const statusChartData = visibleStatusPieData.length > 0 ? visibleStatusPieData : statusPieData;
 
   const togglePieSlice = (setter: React.Dispatch<React.SetStateAction<Set<string>>>, data: PieDataItem[], name: string) => {
     setter((current) => {
@@ -3024,7 +3026,7 @@ export function Analysts() {
                 >
                   <PieChart>
                     <Pie
-                      data={visibleAnalystPieData}
+                      data={analystChartData}
                       dataKey="value"
                       nameKey="name"
                       cx="50%"
@@ -3059,7 +3061,7 @@ export function Analysts() {
                           "pointer",
                       }}
                     >
-                      {visibleAnalystPieData.map(
+                      {analystChartData.map(
                         (
                           _,
                           index
@@ -3148,7 +3150,7 @@ export function Analysts() {
                 >
                   <PieChart>
                     <Pie
-                      data={visibleStatusPieData}
+                      data={statusChartData}
                       dataKey="value"
                       nameKey="name"
                       cx="50%"
@@ -3210,7 +3212,7 @@ export function Analysts() {
                         }
                       }}
                     >
-                      {visibleStatusPieData.map(
+                      {statusChartData.map(
                         (
                           _,
                           index
