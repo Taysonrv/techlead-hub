@@ -1,5 +1,5 @@
 import {
-  Alert, Box, Button, Card, CardContent, Checkbox, Chip, CircularProgress, Drawer,
+  Alert, Box, Button, Card, CardContent, Chip, CircularProgress, Drawer,
   FormControl, IconButton, InputLabel, MenuItem, Select, Stack, Tab, Tabs, Tooltip, Typography,
 } from "@mui/material";
 import {
@@ -19,7 +19,7 @@ import { DetailFieldGrid, DetailPanelHeader, DetailSection } from "../components
 import { detailDrawerPaperSx } from "../theme/layoutTokens";
 import { aliareColors } from "../theme/theme";
 import { useColorMode } from "../context/ColorModeContext";
-import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip as ChartTooltip, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, ResponsiveContainer, Tooltip as ChartTooltip, XAxis, YAxis } from "recharts";
 
 type Ticket = {
   id: number; movideskId: number; subject: string; status: string; client: string | null; owner: string | null;
@@ -119,26 +119,6 @@ function AreaTitle({ title, info, icon }: { title: string; info: string; icon?: 
   </Stack>;
 }
 
-function AnalystMultiSelect({ options, value, onChange, label }: { options: string[]; value: string[]; onChange: (value: string[]) => void; label: string }) {
-  const allSelected = value.length === 0;
-  const toggleAll = () => onChange([]);
-  return <FormControl size="small" sx={{ width: 168, minWidth: 168, "& .MuiSelect-select": { py: .65, fontSize: ".76rem", fontWeight: 750 } }}>
-    <Select
-      multiple
-      displayEmpty
-      value={value}
-      onChange={(event) => onChange(typeof event.target.value === "string" ? event.target.value.split(",") : event.target.value)}
-      renderValue={(selected) => !selected.length ? "Todos analistas" : selected.length === 1 ? abbreviateAnalystName(selected[0]) : `${selected.length} analistas`}
-      aria-label={label}
-    >
-      <MenuItem onClick={(event) => { event.preventDefault(); event.stopPropagation(); toggleAll(); }}>
-        <Checkbox size="small" checked={allSelected} />Todos analistas
-      </MenuItem>
-      {options.map((analyst) => <MenuItem key={analyst} value={analyst}><Checkbox size="small" checked={value.includes(analyst)} />{analyst}</MenuItem>)}
-    </Select>
-  </FormControl>;
-}
-
 function abbreviateAnalystName(name: string) {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   if (parts.length <= 2) return name;
@@ -198,8 +178,6 @@ export function TechnicalLeadership() {
   const [recurrenceConfidence, setRecurrenceConfidence] = useState("");
   const [gapImpact, setGapImpact] = useState("");
   const [gapStatus, setGapStatus] = useState("");
-  const [resolutionOwnerFilter, setResolutionOwnerFilter] = useState<string[]>([]);
-  const [responseOwnerFilter, setResponseOwnerFilter] = useState<string[]>([]);
 
   const toggleLeadershipSeries = (chart: string, key: string, total: number) => {
     setHiddenLeadershipSeries((current) => {
@@ -281,34 +259,6 @@ export function TechnicalLeadership() {
     return [];
   }, [drawer]);
 
-  const resolutionOwnerRows = analyticsFor("resolutionOwner")?.byOwner ?? [];
-  const responseOwnerRows = analyticsFor("responseOwner")?.responseByOwner ?? [];
-  const filteredResolutionOwners = resolutionOwnerRows.filter((row) => !resolutionOwnerFilter.length || resolutionOwnerFilter.includes(row.analyst));
-  const filteredResponseOwners = responseOwnerRows.filter((row) => !responseOwnerFilter.length || responseOwnerFilter.includes(row.analyst));
-  const resolutionSlaRows = [
-    { name: "No prazo", value: analyticsFor("resolutionSla")?.resolutionSla.within ?? 0, fill: aliareColors.green },
-    { name: "Fora do prazo", value: analyticsFor("resolutionSla")?.resolutionSla.outside ?? 0, fill: aliareColors.error },
-    { name: "Sem medição", value: analyticsFor("resolutionSla")?.resolutionSla.unmeasured ?? 0, fill: aliareColors.info },
-  ];
-  const responseSlaRows = [
-    { name: "No prazo", value: analyticsFor("responseSla")?.responseSla.within ?? 0, fill: aliareColors.green },
-    { name: "Fora do prazo", value: analyticsFor("responseSla")?.responseSla.outside ?? 0, fill: aliareColors.error },
-    { name: "Sem medição", value: analyticsFor("responseSla")?.responseSla.unmeasured ?? 0, fill: aliareColors.info },
-  ];
-  const slaTotal = (rows: Array<{ value: number }>) => rows.reduce((sum, row) => sum + row.value, 0);
-  const slaPct = (value: number, total: number) => total ? Math.round((value / total) * 1000) / 10 : 0;
-  const chartTooltipProps = {
-    contentStyle: {
-      backgroundColor: mode === "dark" ? "#10263A" : "#FFFFFF",
-      border: mode === "dark" ? "1px solid rgba(131,175,220,.34)" : "1px solid rgba(15,23,42,.14)",
-      borderRadius: 10,
-      color: mode === "dark" ? "#F3F8FF" : "#172033",
-      boxShadow: mode === "dark" ? "0 12px 30px rgba(0,0,0,.34)" : "0 12px 30px rgba(15,23,42,.12)",
-    },
-    labelStyle: { color: mode === "dark" ? "#D7E5F6" : "#172033", fontWeight: 800 },
-    itemStyle: { fontWeight: 700 },
-    cursor: { fill: mode === "dark" ? "rgba(47,208,255,.08)" : "rgba(15,23,42,.045)" },
-  };
 
   const auditReasons = useMemo(() => data ? [...new Set(data.audit.sample.map((ticket) => ticket.reason))].sort() : [], [data]);
   const filteredAudit = useMemo(() => data ? data.audit.sample.filter((ticket) => !auditReason || ticket.reason === auditReason) : [], [data, auditReason]);
