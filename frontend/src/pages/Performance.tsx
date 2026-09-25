@@ -1295,9 +1295,17 @@ export function Performance() {
         anchor="right"
         open={Boolean(drilldown)}
         onClose={() => setDrilldown(null)}
-      slotProps={{ paper: { sx: detailDrawerPaperSx } }}
+        slotProps={{
+          paper: {
+            sx: {
+              ...detailDrawerPaperSx,
+              p: 0,
+              overflow: "hidden",
+            },
+          },
+        }}
       >
-        <Box sx={{ width: { xs: 330, sm: 580 }, p: 2.5 }}>
+        <Box sx={{ width: "100%", maxWidth: "100%", height: "100%", overflowY: "auto", overflowX: "hidden", p: { xs: 1.75, sm: 2.5 }, boxSizing: "border-box" }}>
           {drilldown && (
             <>
               <Stack
