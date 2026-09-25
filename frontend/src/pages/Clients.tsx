@@ -289,6 +289,17 @@ export function Clients() {
     return () => controller.abort();
   }, []);
 
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      const active = document.fullscreenElement === presentationRef.current;
+      setIsPresenting(active);
+      if (!active) setPresentationPage(0);
+    };
+
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+    return () => document.removeEventListener("fullscreenchange", handleFullscreenChange);
+  }, []);
+
   async function startPresentation() {
     setPresentationPage(0);
     await presentationRef.current?.requestFullscreen?.();
