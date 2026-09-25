@@ -82,6 +82,7 @@ export function Coordination() {
   const [detailTitle, setDetailTitle] = useState("");
   const [details, setDetails] = useState<DetailData | null>(null);
   const [serviceDays, setServiceDays] = useState(0);
+  const [slaDays, setSlaDays] = useState(180);
 
   const load = useCallback(async () => {
     try {
@@ -107,10 +108,10 @@ export function Coordination() {
   }, []);
 
   useEffect(() => {
-    api.get("/coordination/sla-development", { params: { days: 180 } })
+    api.get("/coordination/sla-development", { params: { days: slaDays } })
       .then((response) => setSlaFlow(response.data))
       .catch(() => setSlaFlow(null));
-  }, []);
+  }, [slaDays]);
 
   const maximum = useMemo(
     () => Math.max(...(data?.workload.map((item) => item.total) ?? [1]), 1),
@@ -178,8 +179,11 @@ export function Coordination() {
           {slaFlow && <Card variant="outlined" sx={{mb:2}}>
             <CardContent>
               <Stack direction={{xs:"column",md:"row"}} spacing={1} sx={{justifyContent:"space-between",mb:1.5}}>
-                <Box><Typography sx={{fontWeight:900}}>SLA × OLA · Suporte x Desenvolvimento</Typography><Typography variant="body2" color="text.secondary">Bugs com Task · abertura do atendimento → criação da Task → status Concluida. Janela de 180 dias.</Typography></Box>
-                <Chip label={`${slaFlow.summary.bugsWithTask} bugs com Task`} />
+                <Box><Typography sx={{fontWeight:900}}>SLA × OLA · Suporte x Desenvolvimento</Typography><Typography variant="body2" color="text.secondary">Bugs com Task · atendimento → abertura da Task → conclusão no Azure. Os tempos usam somente horas úteis.</Typography></Box>
+                <Stack direction="row" spacing={.6} useFlexGap sx={{flexWrap:"wrap",justifyContent:"flex-end"}}>
+                  {[{v:30,l:"30 dias"},{v:90,l:"90 dias"},{v:180,l:"6 meses"},{v:365,l:"12 meses"}].map(p=><Chip key={p.v} clickable label={p.l} color={slaDays===p.v?"primary":"default"} variant={slaDays===p.v?"filled":"outlined"} onClick={()=>setSlaDays(p.v)}/>)}
+                  <Chip label={`${slaFlow.summary.bugsWithTask} bugs com Task`} />
+                </Stack>
               </Stack>
               <Box sx={{display:"grid",gridTemplateColumns:{xs:"1fr 1fr",lg:"repeat(6,1fr)"},gap:1}}>
                 {[
@@ -195,24 +199,24 @@ export function Coordination() {
               </Box>
               {slaFlow.summary.bugsWithTask===0 && <Alert severity="info" sx={{mt:1.5}}>Nenhum Bug pôde ser correlacionado completamente entre Movidesk e Azure no período. Os indicadores de qualidade acima mostram se o bloqueio está no vínculo da Task, na data de criação do Azure ou na prioridade necessária para aplicar a regra P1–P4.</Alert>}
               <Typography sx={{fontWeight:850,mt:2,mb:.25}}>Tendência mensal · SLA × OLA</Typography>
-              <Typography variant="body2" color="text.secondary" sx={{mb:1.25}}>Evolução do tempo útil médio consumido antes da Task e na Fábrica, agrupada pelo mês de abertura da Task.</Typography>
+              <Typography variant="body2" color="text.secondary" sx={{mb:1.25}}>Cada ponto representa a média mensal em horas úteis: <strong>Suporte</strong> = abertura do atendimento até criação da Task; <strong>Fábrica</strong> = criação da Task até conclusão; <strong>Total</strong> = soma das duas etapas. O mês é o da criação da Task.</Typography>
               <Box sx={{height:280}}>
-                <ResponsiveContainer width="100%" height="100%"><LineChart data={slaFlow.monthly??[]} margin={{left:4,right:18,top:8,bottom:4}}><CartesianGrid strokeDasharray="3 3" opacity={.18}/><XAxis dataKey="label"/><YAxis tickFormatter={(v)=>`${Math.round(v/60)}h`}/><ChartTooltip formatter={(v:any,n:any)=>[formatMinutes(Number(v)),n==="avgSupportMinutes"?"Até abertura da Task":n==="avgFactoryMinutes"?"Fábrica":"SLA total"]}/><Line type="monotone" dataKey="avgSupportMinutes" name="Até abertura da Task" strokeWidth={2}/><Line type="monotone" dataKey="avgFactoryMinutes" name="Fábrica" strokeWidth={2}/><Line type="monotone" dataKey="avgTotalMinutes" name="SLA total" strokeWidth={2}/></LineChart></ResponsiveContainer>
+                <ResponsiveContainer width="100%" height="100%"><LineChart data={slaFlow.monthly??[]} margin={{left:4,right:18,top:8,bottom:4}}><CartesianGrid stroke={theme.palette.divider} strokeDasharray="3 3" opacity={.35}/><XAxis dataKey="label" tick={{fill:theme.palette.text.secondary}}/><YAxis tick={{fill:theme.palette.text.secondary}} tickFormatter={(v)=>`${Math.round(v/60)}h`}/><ChartTooltip contentStyle={{backgroundColor:theme.palette.background.paper,border:`1px solid ${theme.palette.divider}`,borderRadius:10,color:theme.palette.text.primary}} labelStyle={{color:theme.palette.text.primary,fontWeight:800}} formatter={(v:any,n:any)=>[formatMinutes(Number(v)),n==="avgSupportMinutes"?"Suporte · até Task":n==="avgFactoryMinutes"?"Fábrica · Task até conclusão":"Total · atendimento até conclusão"]} cursor={{stroke:theme.palette.divider}}/><Line type="monotone" dataKey="avgSupportMinutes" name="Até abertura da Task" strokeWidth={2}/><Line type="monotone" dataKey="avgFactoryMinutes" name="Fábrica" strokeWidth={2}/><Line type="monotone" dataKey="avgTotalMinutes" name="SLA total" strokeWidth={2}/></LineChart></ResponsiveContainer>
               </Box>
               <Box sx={{display:"grid",gridTemplateColumns:{xs:"1fr",md:"repeat(3,1fr)"},gap:1,mt:1}}>
                 {(slaFlow.monthly??[]).slice(-3).map((m:any)=><Box key={m.month} sx={{p:1.2,border:"1px solid",borderColor:"divider",borderRadius:2}}><Typography sx={{fontWeight:850}}>{m.label}</Typography><Typography variant="caption" color="text.secondary">{m.total} Bug(s) · {m.concluded} concluído(s)</Typography><Stack direction="row" spacing={.7} useFlexGap sx={{flexWrap:"wrap",mt:.8}}><Chip size="small" variant="outlined" label={`OLA Sup. ${m.supportWithinPct}%`}/><Chip size="small" variant="outlined" label={`OLA Fáb. ${m.factoryWithinPct}%`}/><Chip size="small" variant="outlined" label={`SLA ${m.totalWithinPct}%`}/></Stack></Box>)}
               </Box>
-              <Typography sx={{fontWeight:850,mt:2,mb:1}}>Consumo por prioridade</Typography>
+              <Typography sx={{fontWeight:850,mt:2,mb:.5}}>Consumo por prioridade</Typography><Typography variant="body2" color="text.secondary" sx={{mb:1}}>P1 = Crítica · P2 = Alta · P3 = Média · P4 = Baixa. Cada prioridade possui limites próprios de OLA/SLA; clique em um card para ver os Bugs responsáveis pelo consumo.</Typography>
               <Box sx={{display:"grid",gridTemplateColumns:{xs:"1fr",md:"repeat(2,1fr)",xl:"repeat(4,1fr)"},gap:1}}>
                 {(slaFlow.byPriority??[]).map((p:any)=><Card key={p.priority} variant="outlined" sx={{cursor:p.total?"pointer":"default"}} onClick={()=>p.total&&setSlaDrilldown({title:`${p.priority} · SLA × OLA`,ids:p.rows})}><CardContent sx={{p:"12px !important"}}><Stack direction="row" sx={{justifyContent:"space-between",alignItems:"center"}}><Typography sx={{fontWeight:900}}>{p.priority}</Typography><Chip size="small" label={p.total}/></Stack><Typography variant="caption" color="text.secondary">Suporte {formatMinutes(p.avgSupportMinutes)} · Fábrica {formatMinutes(p.avgFactoryMinutes)}</Typography><Box sx={{mt:1}}><Typography variant="caption">OLA Suporte: {p.total?Math.round(p.supportWithinOla/p.total*1000)/10:0}%</Typography><br/><Typography variant="caption">OLA Fábrica: {p.concluded?Math.round(p.factoryWithinOla/p.concluded*1000)/10:0}%</Typography><br/><Typography variant="caption">SLA total: {p.concluded?Math.round(p.totalWithinSla/p.concluded*1000)/10:0}%</Typography></Box><Chip sx={{mt:1}} size="small" variant="outlined" label={p.factoryBottleneck>p.supportBottleneck?"Maior consumo: Fábrica":"Maior consumo: Suporte"}/></CardContent></Card>)}
               </Box>
-              <Typography sx={{fontWeight:850,mt:2,mb:1}}>Consumo por analista</Typography>
+              <Typography sx={{fontWeight:850,mt:2,mb:.5}}>Consumo por analista</Typography><Typography variant="body2" color="text.secondary" sx={{mb:1}}>Compara o tempo médio consumido no Suporte e na Fábrica por responsável. O SLA considera somente Tasks concluídas; clique na linha para detalhar os atendimentos.</Typography>
               <Box sx={{overflowX:"auto"}}><Box sx={{minWidth:760,display:"grid",gridTemplateColumns:"1.4fr .55fr .8fr .8fr .8fr .8fr",gap:1,alignItems:"center"}}>
                 {["Analista","Bugs","Até Task","Fábrica","SLA","Maior consumo"].map(h=><Typography key={h} variant="caption" color="text.secondary" sx={{fontWeight:800}}>{h}</Typography>)}
                 {(slaFlow.owners??[]).map((o:any)=><Box key={o.owner} sx={{display:"contents",cursor:"pointer"}} onClick={()=>setSlaDrilldown({title:`${o.owner} · SLA × OLA`,ids:o.rows})}><Typography sx={{fontWeight:750,py:.7}}>{o.owner}</Typography><Typography>{o.total}</Typography><Typography>{formatMinutes(o.avgSupportMinutes)}</Typography><Typography>{formatMinutes(o.avgFactoryMinutes)}</Typography><Typography>{o.concluded?Math.round(o.totalWithinSla/o.concluded*1000)/10:0}%</Typography><Chip size="small" variant="outlined" label={o.factoryBottleneck>o.supportBottleneck?"Fábrica":"Suporte"}/></Box>)}
               </Box></Box>
-              <Box sx={{mt:2,height:Math.max(220,Math.min(420,(slaFlow.rows?.length??0)*30))}}>
-                <ResponsiveContainer width="100%" height="100%"><BarChart data={(slaFlow.rows??[]).slice(0,12)} layout="vertical" margin={{left:10,right:18}}><CartesianGrid strokeDasharray="3 3" opacity={.18}/><XAxis type="number" tickFormatter={(v)=>`${Math.round(v/60)}h`}/><YAxis type="category" dataKey="movideskId" width={70}/><ChartTooltip formatter={(v:any,n:any)=>[formatMinutes(Number(v)),n==="supportMinutes"?"Suporte":"Fábrica"]}/><Bar dataKey="supportMinutes" name="Suporte"/><Bar dataKey="factoryMinutes" name="Fábrica"/></BarChart></ResponsiveContainer>
+              <Typography sx={{fontWeight:850,mt:2,mb:.25}}>Tempo por Bug e Task</Typography><Typography variant="body2" color="text.secondary" sx={{mb:1}}>O eixo vertical mostra o número do atendimento Movidesk. As barras mostram o tempo útil consumido em Suporte e Fábrica; passe o mouse para identificar a etapa e a Task vinculada. Clique em uma barra para abrir o detalhamento do atendimento.</Typography><Box sx={{mt:1,height:Math.max(220,Math.min(420,(slaFlow.rows?.length??0)*30))}}>
+                <ResponsiveContainer width="100%" height="100%"><BarChart data={(slaFlow.rows??[]).slice(0,12)} layout="vertical" margin={{left:10,right:18}}><CartesianGrid strokeDasharray="3 3" opacity={.18}/><XAxis type="number" tickFormatter={(v)=>`${Math.round(v/60)}h`}/><YAxis type="category" dataKey="movideskId" width={70}/><ChartTooltip contentStyle={{backgroundColor:theme.palette.background.paper,border:`1px solid ${theme.palette.divider}`,borderRadius:10,color:theme.palette.text.primary}} labelStyle={{color:theme.palette.text.primary,fontWeight:800}} formatter={(v:any,n:any,p:any)=>[formatMinutes(Number(v)),`${n==="supportMinutes"?"Suporte":"Fábrica"} · Task #${p?.payload?.taskNumber??"—"}`]}/><Bar dataKey="supportMinutes" name="Suporte" cursor="pointer" onClick={(r:any)=>setSlaDrilldown({title:`Atendimento #${r.movideskId} · Task #${r.taskNumber}`,ids:[r.movideskId]})}/><Bar dataKey="factoryMinutes" name="Fábrica" cursor="pointer" onClick={(r:any)=>setSlaDrilldown({title:`Atendimento #${r.movideskId} · Task #${r.taskNumber}`,ids:[r.movideskId]})}/></BarChart></ResponsiveContainer>
               </Box>
               <Typography variant="caption" color="text.secondary">A medição usa horas úteis de Bug (seg–sex, 08:00–18:00). A Fábrica só é encerrada quando o Work Item está no status “Concluida”; itens ainda em desenvolvimento não entram no percentual concluído da Fábrica/SLA total.</Typography>
             </CardContent>
