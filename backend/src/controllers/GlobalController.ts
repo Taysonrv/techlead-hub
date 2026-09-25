@@ -26,6 +26,7 @@ const navigationItems: NavigationItem[] = [
   { id: "routine-support", type: "Rotina", title: "Apoios", subtitle: "APOIOs vinculados à sustentação", path: "/apoios", keywords: ["apoios","apoio","azure"] },
   { id: "routine-knowledge", type: "Rotina", title: "Base de Conhecimento", subtitle: "Wiki, procedimentos e conhecimento operacional", path: "/conhecimento", keywords: ["conhecimento","wiki","procedimentos","regra do sistema"] },
   { id: "routine-sync", type: "Rotina", title: "Dados e Sincronizações", subtitle: "Sincronizações e cargas de dados", path: "/importar", keywords: ["dados","sincronizacoes","importar","azure","movidesk"] },
+  { id: "screen-investigation", type: "Tela", title: "Central de Investigação", subtitle: "Correlação de tickets, Azure, versões, regras e conhecimento", path: "/investigacao", keywords: ["investigacao","diagnostico","correlacao","casos semelhantes","anomalias","regra evidencia"] },
 ];
 
 const workItemPath = (type: string) => {
