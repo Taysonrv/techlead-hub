@@ -337,26 +337,6 @@ export function Settings() {
           </CardContent>
         </Card>}
 
-        <Card elevation={0} sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2.5 }}>
-          <CardContent sx={{ p: { xs: 2, md: 2.5 } }}>
-            <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5} sx={{ alignItems: { sm: "center" }, justifyContent: "space-between" }}>
-              <Box>
-                <Typography sx={{ fontWeight: 800 }}>Microsoft 365, SharePoint e BPMN</Typography>
-                <Typography variant="body2" color="text.secondary">Credenciais públicas do aplicativo corporativo. A senha do usuário nunca é armazenada.</Typography>
-              </Box>
-              <Chip icon={configuration?.microsoftConfigured ? <CloudDoneOutlined /> : <CloudOffOutlined />} label={configuration?.microsoftConfigured ? "Pronto para conectar" : "Aguardando Tenant e Client ID"} color={configuration?.microsoftConfigured ? "success" : "default"} variant="outlined" />
-            </Stack>
-            <Divider sx={{ my: 2 }} />
-            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(2, minmax(0, 1fr))" }, gap: 2 }}>
-              <TextField label="Tenant ID" value={form.tenantId} onChange={(event) => updateField("tenantId", event.target.value)} helperText="Diretório Microsoft Entra da Aliare." />
-              <TextField label="Client ID" value={form.clientId} onChange={(event) => updateField("clientId", event.target.value)} helperText="Aplicativo desktop registrado pelo time de TI." />
-              <TextField label="Site SharePoint do time" value={form.sharePointSiteUrl} onChange={(event) => updateField("sharePointSiteUrl", event.target.value)} />
-              <TextField label="Site dos fluxos BPMN" value={form.bpmnSiteUrl} onChange={(event) => updateField("bpmnSiteUrl", event.target.value)} />
-            </Box>
-            <Alert severity="info" sx={{ mt: 2 }}>Depois de salvar e reiniciar, conecte sua conta Microsoft na Base de Conhecimento. Os resultados respeitarão as permissões do usuário autenticado.</Alert>
-          </CardContent>
-        </Card>
-
         <Card
           elevation={0}
           sx={{
