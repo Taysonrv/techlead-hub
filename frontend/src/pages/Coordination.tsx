@@ -38,7 +38,7 @@ type Data = {
   workload: Array<{ analyst: string; tickets: number; workItems: number; total: number }>;
   serviceAnalytics: {
     totalOpenTickets: number; classifiedServices: number; specificServices: number; withoutService: number;
-    genericService: number; suspectedMismatch: number; classificationRate: number; catalogSize: number;
+    genericService: number; suspectedMismatch: number; classificationRate: number; catalogSize: number; periodDays?: number;
     ranking: Array<{ service: string; count: number }>;
     genericRanking?: Array<{ service: string; count: number }>;
     moduleRanking: Array<{ module: string; count: number }>;
@@ -81,19 +81,20 @@ export function Coordination() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailTitle, setDetailTitle] = useState("");
   const [details, setDetails] = useState<DetailData | null>(null);
+  const [serviceDays, setServiceDays] = useState(0);
 
   const load = useCallback(async () => {
     try {
       setLoading(true);
       setError("");
-      const response = await api.get<Data>("/coordination/summary");
+      const response = await api.get<Data>("/coordination/summary", { params: { serviceDays } });
       setData(response.data);
     } catch (requestError: any) {
       setError(requestError?.response?.data?.error || "Não foi possível carregar a central.");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [serviceDays]);
 
   useEffect(() => {
     void load();
@@ -131,7 +132,7 @@ export function Coordination() {
   async function openDetails(kind: DetailKind, title: string, analyst?: string, serviceModule?: string, serviceClient?: string, serviceName?: string) {
     try {
       setDetailTitle(title); setDetails(null); setDetailLoading(true);
-      const response = await api.get<DetailData>("/coordination/details", { params: { kind, analyst, serviceModule, serviceClient, serviceName, limit: 100 } });
+      const response = await api.get<DetailData>("/coordination/details", { params: { kind, analyst, serviceModule, serviceClient, serviceName, serviceDays, limit: 500 } });
       setDetails(response.data);
     } catch {
       setError("Não foi possível carregar os detalhes da coordenação.");
