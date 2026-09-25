@@ -445,7 +445,10 @@ export function Dashboard() {
   }, [openedInPeriod, resolvedInPeriod, effectiveStartDate, effectiveEndDate]);
 
   const ticketsEligibleForCause = useMemo(
-    () => filteredTickets.filter((ticket) => normalizeComparableText(ticket.category) !== "bug"),
+    () => filteredTickets.filter((ticket) => {
+      const category = normalizeComparableText(ticket.category);
+      return category !== "bug" && category !== "solucao de contorno";
+    }),
     [filteredTickets]
   );
 
