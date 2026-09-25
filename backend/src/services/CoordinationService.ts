@@ -114,14 +114,20 @@ export class CoordinationService {
         { client: { in: [...SIMER_CLIENTS], mode: "insensitive" } },
         { owner: { in: [...SUPPORT_ANALYSTS], mode: "insensitive" } },
       ] }] },
-      select: { movideskId:true, subject:true, category:true, client:true, owner:true, urgency:true, createdDate:true, taskNumber:true, taskStatus:true, taskTitle:true, solutionSlaIndicator:true }
+      select: { movideskId:true, subject:true, category:true, client:true, owner:true, urgency:true, createdDate:true, taskNumber:true, taskStatus:true, taskTitle:true, taskType:true, solutionSlaIndicator:true }
     });
-    const bugTickets=tickets.filter(t=>norm(t.category)==="bug");
+    const bugTickets=tickets.filter(t=> {
+      const category = norm(t.category);
+      const taskType = norm(t.taskType);
+      // O Movidesk pode classificar o atendimento como "Problema - Bug",
+      // enquanto o vínculo de desenvolvimento identifica explicitamente o tipo da Task.
+      return category === "bug" || category.includes("bug") || taskType === "bug";
+    });
     const ids=[...new Set(bugTickets.map(t=>t.taskNumber).filter((x):x is number=>Boolean(x)))];
     const movideskIds=bugTickets.map(t=>t.movideskId);
     const items=await prisma.azureWorkItem.findMany({
       where:{OR:[...(ids.length?[{id:{in:ids}}]:[]),...(movideskIds.length?[{movideskTicket:{in:movideskIds}}]:[])]},
-      select:{id:true,state:true,azureCreatedAt:true,stateChangedAt:true,azureChangedAt:true,azureClosedAt:true,title:true,movideskTicket:true}
+      select:{id:true,state:true,azureCreatedAt:true,stateChangedAt:true,azureChangedAt:true,azureClosedAt:true,title:true,movideskTicket:true,criticality:true}
     });
     const byId=new Map(items.map(x=>[x.id,x]));
     const byTicket=new Map(items.filter(x=>x.movideskTicket).map(x=>[x.movideskTicket!,x]));
@@ -129,7 +135,7 @@ export class CoordinationService {
     const targets:any={P1:{support:660,factory:480,total:1140},P2:{support:1320,factory:3360,total:4680},P3:{support:1980,factory:9600,total:11580},P4:{support:2640,factory:21600,total:24240}};
     const urgency=(v?:string|null)=>{const n=norm(v);if(n.includes("critica")||n==="p1")return"P1";if(n.includes("alta")||n==="p2")return"P2";if(n.includes("media")||n==="p3")return"P3";if(n.includes("baixa")||n==="p4")return"P4";return null};
     let missingAzure=0,missingTaskCreatedAt=0,missingPriority=0;
-    const rows=bugTickets.flatMap(t=>{const w=(t.taskNumber?byId.get(t.taskNumber):undefined)??byTicket.get(t.movideskId);if(!w){missingAzure++;return[]}if(!w.azureCreatedAt){missingTaskCreatedAt++;return[]}const p=urgency(t.urgency);if(!p){missingPriority++;return[]}const concluded=norm(w.state)==="concluida"||norm(t.taskStatus)==="concluida";const end=concluded?(w.stateChangedAt??w.azureClosedAt??w.azureChangedAt):null;const support=businessMinutes(t.createdDate,w.azureCreatedAt);const factory=end?businessMinutes(w.azureCreatedAt,end):null;const total=end?businessMinutes(t.createdDate,end):null;const tg=targets[p];const supportPct=Math.round(support/tg.support*1000)/10;const factoryPct=factory===null?null:Math.round(factory/tg.factory*1000)/10;const totalPct=total===null?null:Math.round(total/tg.total*1000)/10;const bottleneck=factoryPct!==null&&factoryPct>supportPct?"Fábrica":"Suporte";return[{movideskId:t.movideskId,subject:t.subject,client:t.client,owner:t.owner??"Sem responsável",taskNumber:w.id,taskTitle:w.title??t.taskTitle,taskState:w.state??t.taskStatus,urgency:p,taskCreatedAt:w.azureCreatedAt,taskConcludedAt:end,supportMinutes:support,factoryMinutes:factory,totalMinutes:total,supportTargetMinutes:tg.support,factoryTargetMinutes:tg.factory,totalTargetMinutes:tg.total,supportPct,factoryPct,totalPct,bottleneck,officialSla:t.solutionSlaIndicator}]} );
+    const rows=bugTickets.flatMap(t=>{const w=(t.taskNumber?byId.get(t.taskNumber):undefined)??byTicket.get(t.movideskId);if(!w){missingAzure++;return[]}if(!w.azureCreatedAt){missingTaskCreatedAt++;return[]}const p=urgency(t.urgency) ?? urgency(w.criticality);if(!p){missingPriority++;return[]}const concluded=norm(w.state)==="concluida"||norm(t.taskStatus)==="concluida";const end=concluded?(w.stateChangedAt??w.azureClosedAt??w.azureChangedAt):null;const support=businessMinutes(t.createdDate,w.azureCreatedAt);const factory=end?businessMinutes(w.azureCreatedAt,end):null;const total=end?businessMinutes(t.createdDate,end):null;const tg=targets[p];const supportPct=Math.round(support/tg.support*1000)/10;const factoryPct=factory===null?null:Math.round(factory/tg.factory*1000)/10;const totalPct=total===null?null:Math.round(total/tg.total*1000)/10;const bottleneck=factoryPct!==null&&factoryPct>supportPct?"Fábrica":"Suporte";return[{movideskId:t.movideskId,subject:t.subject,client:t.client,owner:t.owner??"Sem responsável",taskNumber:w.id,taskTitle:w.title??t.taskTitle,taskState:w.state??t.taskStatus,urgency:p,taskCreatedAt:w.azureCreatedAt,taskConcludedAt:end,supportMinutes:support,factoryMinutes:factory,totalMinutes:total,supportTargetMinutes:tg.support,factoryTargetMinutes:tg.factory,totalTargetMinutes:tg.total,supportPct,factoryPct,totalPct,bottleneck,officialSla:t.solutionSlaIndicator}]} );
     const done=rows.filter(r=>r.taskConcludedAt);
     const avg=(xs:number[])=>xs.length?Math.round(xs.reduce((a,b)=>a+b,0)/xs.length):0;
     const summarize=(group:any[])=>{const completed=group.filter(r=>r.taskConcludedAt);return{total:group.length,concluded:completed.length,openDevelopment:group.length-completed.length,avgSupportMinutes:avg(group.map(r=>r.supportMinutes)),avgFactoryMinutes:avg(completed.map(r=>r.factoryMinutes!)),avgTotalMinutes:avg(completed.map(r=>r.totalMinutes!)),supportWithinOla:group.filter(r=>r.supportPct<=100).length,factoryWithinOla:completed.filter(r=>(r.factoryPct??Infinity)<=100).length,totalWithinSla:completed.filter(r=>(r.totalPct??Infinity)<=100).length,supportBottleneck:group.filter(r=>r.bottleneck==="Suporte").length,factoryBottleneck:completed.filter(r=>r.bottleneck==="Fábrica").length}};
