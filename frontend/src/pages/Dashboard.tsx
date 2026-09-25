@@ -3036,6 +3036,7 @@ function DonutAnalysisCard({
   const [hiddenItems, setHiddenItems] = useState<Set<string>>(() => new Set());
   const visibleData = data.filter((item) => !hiddenItems.has(item.label));
   const total = visibleData.reduce((sum, item) => sum + item.total, 0);
+  const chartData = visibleData.length > 0 ? visibleData : data;
   const toggleItem = (label: string) => setHiddenItems((current) => {
     const next = new Set(current);
     if (next.has(label)) next.delete(label);
@@ -3050,7 +3051,7 @@ function DonutAnalysisCard({
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
             <Pie
-              data={visibleData}
+              data={chartData}
               dataKey="total"
               nameKey="label"
               cx="50%"
@@ -3060,12 +3061,12 @@ function DonutAnalysisCard({
               paddingAngle={2}
               stroke="none"
               onClick={(_entry, index) => {
-                const item = visibleData[index];
+                const item = chartData[index];
                 if (item) onItemClick?.(item.label);
               }}
               style={{ cursor: onItemClick ? "pointer" : "default" }}
             >
-              {visibleData.map((item) => {
+              {chartData.map((item) => {
                 const index = data.findIndex((row) => row.label === item.label);
                 return (
                 <Cell key={item.label} fill={colors[index % colors.length]} />
