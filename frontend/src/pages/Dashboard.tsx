@@ -444,9 +444,14 @@ export function Dashboard() {
     return result;
   }, [openedInPeriod, resolvedInPeriod, effectiveStartDate, effectiveEndDate]);
 
-  const causes = useMemo(
-    () => groupByField(filteredTickets, "cause", "Sem causa").slice(0, 8),
+  const ticketsEligibleForCause = useMemo(
+    () => filteredTickets.filter((ticket) => normalizeText(ticket.category) !== "bug"),
     [filteredTickets]
+  );
+
+  const causes = useMemo(
+    () => groupByField(ticketsEligibleForCause, "cause", "Sem causa").slice(0, 8),
+    [ticketsEligibleForCause]
   );
 
   const statusNewTickets = useMemo(() => statusTickets.filter((ticket) => ticket.baseStatus === "New"), [statusTickets]);
@@ -1297,7 +1302,7 @@ export function Dashboard() {
                       label={{ position: "right", fontSize: 10, fontWeight: 800, fill: isDark ? "rgba(226,232,240,.86)" : "rgba(30,41,59,.86)" }}
                       onClick={(_, index) => {
                         const cause = causes.slice(0, 6)[index]?.label;
-                        if (cause) showTickets(`Causa: ${cause}`, filteredTickets.filter((ticket) => (ticket.cause ?? "Sem causa") === cause), "Tickets classificados com a causa selecionada");
+                        if (cause) showTickets(`Causa: ${cause}`, ticketsEligibleForCause.filter((ticket) => (ticket.cause ?? "Sem causa") === cause), "Tickets classificados com a causa selecionada");
                       }} />
                   </BarChart>
                 </ResponsiveContainer>
