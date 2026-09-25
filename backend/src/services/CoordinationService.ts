@@ -110,14 +110,17 @@ export class CoordinationService {
     const since = new Date(Date.now() - Math.min(Math.max(days, 30), 730) * 86400000);
     const norm=(v?:string|null)=>(v??"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").trim().toLowerCase();
     const tickets = await prisma.ticket.findMany({
-      where: { AND: [ticketOperationalScope(), { isDeleted: false, createdDate: { gte: since } }] },
+      where: { AND: [{ isDeleted: false, createdDate: { gte: since } }, { OR: [
+        { client: { in: [...SIMER_CLIENTS], mode: "insensitive" } },
+        { owner: { in: [...SUPPORT_ANALYSTS], mode: "insensitive" } },
+      ] }] },
       select: { movideskId:true, subject:true, category:true, client:true, owner:true, urgency:true, createdDate:true, taskNumber:true, taskStatus:true, taskTitle:true, solutionSlaIndicator:true }
     });
     const bugTickets=tickets.filter(t=>norm(t.category)==="bug");
     const ids=[...new Set(bugTickets.map(t=>t.taskNumber).filter((x):x is number=>Boolean(x)))];
     const movideskIds=bugTickets.map(t=>t.movideskId);
     const items=await prisma.azureWorkItem.findMany({
-      where:{AND:[coordinationAzureScope(),{OR:[...(ids.length?[{id:{in:ids}}]:[]),...(movideskIds.length?[{movideskTicket:{in:movideskIds}}]:[])]}]},
+      where:{OR:[...(ids.length?[{id:{in:ids}}]:[]),...(movideskIds.length?[{movideskTicket:{in:movideskIds}}]:[])]},
       select:{id:true,state:true,azureCreatedAt:true,stateChangedAt:true,azureChangedAt:true,azureClosedAt:true,title:true,movideskTicket:true}
     });
     const byId=new Map(items.map(x=>[x.id,x]));
