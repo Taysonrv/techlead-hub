@@ -2369,10 +2369,9 @@ export function Dashboard() {
                 sx={{
                   mt: 3,
                 }}
-                onClick={() =>
-                  navigate(
-                    "/tickets"
-                  )
+                onClick={() => {
+                  if (!selectedTicket) return;
+                  navigate(`/tickets?movidesk=${selectedTicket.movideskId}`);
                 }
               >
                 Abrir tela de Tickets
