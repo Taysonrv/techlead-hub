@@ -1286,20 +1286,24 @@ export function Dashboard() {
               <Typography variant="caption" color="text.secondary">
                 Causas mais frequentes • clique na leitura para direcionar ação preventiva
               </Typography></Box>
-              <Box sx={{ height: 285, mt: 1.25 }}>
+              {causes.length ? <Box sx={{ height: Math.max(250, Math.min(330, causes.slice(0, 6).length * 44 + 64)), mt: 1.25 }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={causes.slice(0, 6)} layout="vertical" margin={{ left: 18, right: 18, top: 4, bottom: 4 }}>
+                  <BarChart data={causes.slice(0, 6)} layout="vertical" margin={{ left: 10, right: 34, top: 4, bottom: 4 }}>
                     <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={chartGrid} />
-                    <XAxis type="number" allowDecimals={false} tick={{ fontSize: 10 }} />
-                    <YAxis type="category" dataKey="label" width={118} tick={{ fontSize: 10 }} />
-                    <Tooltip contentStyle={chartTooltipStyle} cursor={{ fill: isDark ? "rgba(255,183,3,.05)" : "rgba(15,23,42,.035)" }} />
-                    <Bar dataKey="total" name="Tickets" fill={semanticChartColors.attention} radius={[0, 7, 7, 0]} barSize={18} cursor="pointer" onClick={(entry: any) => {
-                      const cause = entry?.label ?? entry?.payload?.label;
-                      if (cause) showTickets(`Causa: ${cause}`, filteredTickets.filter((ticket) => (ticket.cause ?? "Sem causa") === cause), "Tickets classificados com a causa selecionada");
-                    }} />
+                    <XAxis type="number" allowDecimals={false} tick={{ fontSize: 10, fill: isDark ? "rgba(226,232,240,.72)" : "rgba(51,65,85,.72)" }} axisLine={{ stroke: chartGrid }} tickLine={false} />
+                    <YAxis type="category" dataKey="label" width={142} tick={{ fontSize: 10, fill: isDark ? "rgba(226,232,240,.76)" : "rgba(51,65,85,.76)" }} axisLine={false} tickLine={false} />
+                    <Tooltip contentStyle={chartTooltipStyle} cursor={{ fill: isDark ? "rgba(255,183,3,.05)" : "rgba(15,23,42,.035)" }} formatter={(value: number) => [`${value} ticket${value === 1 ? "" : "s"}`, "Volume"]} />
+                    <Bar dataKey="total" name="Tickets" fill={semanticChartColors.attention} radius={[0, 7, 7, 0]} barSize={18} cursor="pointer" minPointSize={3}
+                      label={{ position: "right", fontSize: 10, fontWeight: 800, fill: isDark ? "rgba(226,232,240,.86)" : "rgba(30,41,59,.86)" }}
+                      onClick={(_, index) => {
+                        const cause = causes.slice(0, 6)[index]?.label;
+                        if (cause) showTickets(`Causa: ${cause}`, filteredTickets.filter((ticket) => (ticket.cause ?? "Sem causa") === cause), "Tickets classificados com a causa selecionada");
+                      }} />
                   </BarChart>
                 </ResponsiveContainer>
-              </Box>
+              </Box> : <Box sx={{ minHeight: 250, display: "grid", placeItems: "center", px: 2 }}>
+                <Typography variant="body2" color="text.secondary" sx={{ textAlign: "center" }}>Nenhuma causa registrada para os filtros selecionados.</Typography>
+              </Box>}
             </CardBase>
           </Box>
 
