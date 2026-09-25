@@ -2,6 +2,7 @@ import {
   GroupsOutlined,
   InfoOutlined,
   RadarOutlined,
+  CloseOutlined,
 } from "@mui/icons-material";
 import {
   Alert,
@@ -12,6 +13,8 @@ import {
   CircularProgress,
   Drawer,
   Button,
+  Divider,
+  IconButton,
   LinearProgress,
   useTheme,
   Tooltip,
@@ -27,7 +30,7 @@ import { detailDrawerPaperSx } from "../theme/layoutTokens";
 import { PageHeader } from "../components/PageHeader";
 import { api } from "../services/api";
 import { aliareColors } from "../theme/theme";
-import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip as ChartTooltip, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip as ChartTooltip, XAxis, YAxis } from "recharts";
 
 type Data = {
   generatedAt: string;
@@ -485,7 +488,7 @@ export function Coordination() {
           )}
         </CardContent>
       </Card>
-      <Drawer anchor="right" open={Boolean(slaDrilldown)} onClose={()=>setSlaDrilldown(null)} PaperProps={{sx:{width:{xs:"100%",sm:560},p:2}}}><Stack direction="row" sx={{justifyContent:"space-between",alignItems:"center",mb:1}}><Box><Typography variant="h6" sx={{fontWeight:900}}>{slaDrilldown?.title}</Typography><Typography variant="body2" color="text.secondary">Atendimentos responsáveis pelo indicador selecionado.</Typography></Box><IconButton onClick={()=>setSlaDrilldown(null)}><CloseOutlined/></IconButton></Stack><Divider sx={{mb:1}}>{false}</Divider>{(slaFlow?.rows??[]).filter((r:any)=>slaDrilldown?.ids.includes(r.movideskId)).map((r:any)=><Box key={r.movideskId} onClick={()=>navigate(`/tickets?movidesk=${r.movideskId}`)} sx={{p:1.25,borderRadius:2,cursor:"pointer","&:hover":{bgcolor:"action.hover"}}}><Stack direction="row" spacing={1} sx={{alignItems:"center"}}><Chip size="small" label={r.urgency}/><Typography sx={{fontWeight:800}}>#{r.movideskId} · {r.subject}</Typography></Stack><Typography variant="caption" color="text.secondary">{r.client} · {r.owner} · Suporte {formatMinutes(r.supportMinutes)} · Fábrica {formatMinutes(r.factoryMinutes??0)} · {r.bottleneck}</Typography></Box>)}</Drawer>
+      <Drawer anchor="right" open={Boolean(slaDrilldown)} onClose={()=>setSlaDrilldown(null)} slotProps={{paper:{sx:{width:{xs:"100%",sm:560},p:2}}}}><Stack direction="row" sx={{justifyContent:"space-between",alignItems:"center",mb:1}}><Box><Typography variant="h6" sx={{fontWeight:900}}>{slaDrilldown?.title}</Typography><Typography variant="body2" color="text.secondary">Atendimentos responsáveis pelo indicador selecionado.</Typography></Box><IconButton onClick={()=>setSlaDrilldown(null)}><CloseOutlined/></IconButton></Stack><Divider sx={{mb:1}} />{(slaFlow?.rows??[]).filter((r:any)=>slaDrilldown?.ids.includes(r.movideskId)).map((r:any)=><Box key={r.movideskId} onClick={()=>navigate(`/tickets?movidesk=${r.movideskId}`)} sx={{p:1.25,borderRadius:2,cursor:"pointer","&:hover":{bgcolor:"action.hover"}}}><Stack direction="row" spacing={1} sx={{alignItems:"center"}}><Chip size="small" label={r.urgency}/><Typography sx={{fontWeight:800}}>#{r.movideskId} · {r.subject}</Typography></Stack><Typography variant="caption" color="text.secondary">{r.client} · {r.owner} · Suporte {formatMinutes(r.supportMinutes)} · Fábrica {formatMinutes(r.factoryMinutes??0)} · {r.bottleneck}</Typography></Box>)}</Drawer>
       <Drawer anchor="right" open={Boolean(detailTitle)} onClose={() => { setDetailTitle(""); setDetails(null); }} slotProps={{ paper: { sx: detailDrawerPaperSx } }}>
         <DetailPanelHeader eyebrow="Coordenação" title={detailTitle || "Detalhes"} identifier={details ? `${details.total} item(ns) carregado(s)` : undefined} onClose={() => { setDetailTitle(""); setDetails(null); }} />
         {detailLoading ? <Box sx={{ py: 8, display: "grid", placeItems: "center" }}><CircularProgress /></Box> : details ? (
