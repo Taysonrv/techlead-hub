@@ -234,7 +234,6 @@ export function Performance() {
         resolvedDate: ticket.resolvedDate,
         closedDate: ticket.closedDate,
         stoppedMinutes: ticket.stoppedMinutes,
-    stoppedWorkingMinutes: ticket.stoppedWorkingMinutes,
         stoppedWorkingMinutes: ticket.stoppedWorkingMinutes,
         // Até o perfil VIP existir no banco, usamos STANDARD.
         profile: "STANDARD",
