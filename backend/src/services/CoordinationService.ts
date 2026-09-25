@@ -1,5 +1,5 @@
 import { prisma } from "../database/prisma";
-import { SIMER_CLIENTS, SUPPORT_ANALYSTS, SUPPORT_COORDINATOR, azureOperationalScope, ticketOperationalScope } from "../domain/OperationalScope";
+import { SIMER_CLIENTS, SUPPORT_ANALYSTS, SUPPORT_COORDINATOR, coordinationAzureScope, ticketOperationalScope } from "../domain/OperationalScope";
 import { microsoftKnowledgeService } from "./MicrosoftKnowledgeService";
 import { SIMER_SERVICE_CATALOG, suggestSimerService, type SimerServiceCatalogItem } from "../domain/SimerServiceCatalog";
 import { extractMovideskTimeEntries } from "./MovideskPayloadAnalytics";
@@ -14,7 +14,7 @@ export class CoordinationService {
     const nextSevenDays = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1_000);
     const safeLimit = Math.min(Math.max(limit, 1), 100);
     const ticketScope = ticketOperationalScope();
-    const azureScope = azureOperationalScope();
+    const azureScope = coordinationAzureScope();
 
     const ticketExtra: Record<string, unknown> =
       kind === "critical" ? { urgency: "Crítica" } :
@@ -240,7 +240,7 @@ export class CoordinationService {
     const nextSevenDays = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1_000);
 
     const ticketScope = ticketOperationalScope();
-    const azureScope = azureOperationalScope();
+    const azureScope = coordinationAzureScope();
 
     const [
       openTickets,
