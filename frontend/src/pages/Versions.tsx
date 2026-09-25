@@ -3547,6 +3547,7 @@ function DonutCard({
   const [hiddenItems, setHiddenItems] = useState<Set<string>>(() => new Set());
   const visibleData = data.filter((item) => !hiddenItems.has(item.name));
   const visibleTotal = visibleData.reduce((sum, item) => sum + item.value, 0);
+  const chartData = visibleData.length > 0 ? visibleData : data;
   const toggleItem = (name: string) => setHiddenItems((current) => {
     const next = new Set(current);
     if (next.has(name)) next.delete(name);
@@ -3657,7 +3658,7 @@ function DonutCard({
                     }
                   }}
                 >
-                  {visibleData.map(
+                  {chartData.map(
                     (
                       item,
                     ) => (
