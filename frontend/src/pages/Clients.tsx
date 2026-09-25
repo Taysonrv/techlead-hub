@@ -1020,6 +1020,8 @@ export function Clients() {
 
   const visibleClientPieData = useMemo(() => clientPieData.filter((item) => !hiddenClientSlices.has(item.name)), [clientPieData, hiddenClientSlices]);
   const visibleCategoryPieData = useMemo(() => categoryPieData.filter((item) => !hiddenCategorySlices.has(item.name)), [categoryPieData, hiddenCategorySlices]);
+  const clientChartData = visibleClientPieData.length > 0 ? visibleClientPieData : clientPieData;
+  const categoryChartData = visibleCategoryPieData.length > 0 ? visibleCategoryPieData : categoryPieData;
 
   const togglePieSlice = (setter: React.Dispatch<React.SetStateAction<Set<string>>>, data: PieDataItem[], name: string) => {
     setter((current) => {
@@ -1160,6 +1162,7 @@ export function Clients() {
     }, [scopedTickets]);
 
   const visibleStatusPieData = useMemo(() => statusPieData.filter((item) => !hiddenStatusSlices.has(item.name)), [statusPieData, hiddenStatusSlices]);
+  const statusChartData = visibleStatusPieData.length > 0 ? visibleStatusPieData : statusPieData;
 
   /* =======================================================
      DRILL-DOWN
@@ -2133,7 +2136,7 @@ export function Clients() {
                 >
                   <PieChart>
                     <Pie
-                      data={visibleClientPieData}
+                      data={clientChartData}
                       dataKey="value"
                       nameKey="name"
                       cx="50%"
@@ -2181,7 +2184,7 @@ export function Clients() {
                         );
                       }}
                     >
-                      {visibleClientPieData.map(
+                      {clientChartData.map(
                         (
                           _,
                           index
@@ -2257,12 +2260,12 @@ export function Clients() {
               <Box sx={{ height: 235, minWidth: 0 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
-                    <Pie data={visibleCategoryPieData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={76} innerRadius={44} paddingAngle={2} cursor="pointer"
+                    <Pie data={categoryChartData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={76} innerRadius={44} paddingAngle={2} cursor="pointer"
                       onClick={(data) => {
                         const name = String((data as { payload?: { name?: unknown } }).payload?.name ?? "");
                         if (name && name !== "Outros") showTickets(`Categoria: ${name}`, scopedTickets.filter((ticket) => (ticket.category?.trim() || "Sem categoria") === name));
                       }}>
-                      {visibleCategoryPieData.map((item, index) => <Cell key={`${item.name}-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />)}
+                      {categoryChartData.map((item, index) => <Cell key={`${item.name}-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />)}
                     </Pie>
                     <Tooltip content={<CompactPieTooltip valueLabel="ticket(s)" />} />
                   </PieChart>
@@ -2313,7 +2316,7 @@ export function Clients() {
                 >
                   <PieChart>
                     <Pie
-                      data={visibleStatusPieData}
+                      data={statusChartData}
                       dataKey="value"
                       nameKey="name"
                       cx="50%"
@@ -2372,7 +2375,7 @@ export function Clients() {
                         }
                       }}
                     >
-                      {visibleStatusPieData.map(
+                      {statusChartData.map(
                         (
                           _,
                           index
