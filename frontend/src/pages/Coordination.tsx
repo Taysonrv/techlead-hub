@@ -7,7 +7,6 @@ import {
   TrendingUpOutlined,
   WarningAmberOutlined,
   InfoOutlined,
-  SearchOutlined,
   BugReportOutlined,
   AutoFixHighOutlined,
   SupportAgentOutlined,
@@ -16,8 +15,6 @@ import {
   MenuBookOutlined,
   UploadFileOutlined,
   RadarOutlined,
-  StarBorderOutlined,
-  StarRounded,
 } from "@mui/icons-material";
 import {
   Alert,
@@ -29,19 +26,13 @@ import {
   Drawer,
   Button,
   LinearProgress,
-  IconButton,
   useTheme,
   Tooltip,
   Stack,
-  Tab,
-  Tabs,
   Typography,
-  TextField,
-  InputAdornment,
 } from "@mui/material";
-import { createElement, useCallback, useEffect, useMemo, useState } from "react";
-import type { ElementType } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { KpiCard } from "../components/KpiCard";
 import { ExportTicketsButton } from "../components/ExportTicketsButton";
 import { DetailFieldGrid, DetailPanelHeader, DetailSection } from "../components/DetailPanel";
@@ -80,8 +71,6 @@ type Data = {
   };
 };
 
-type MainTab = "cadastros" | "movimentos" | "analises" | "desenvolvimento" | "gestao";
-type Routine = { label: string; path: string; icon: ElementType; description: string; keywords?: string[] };
 type DetailKind = "backlog" | "critical" | "stale" | "dueSoon" | "overdue" | "blocked" | "unassigned" | "analyst" | "service" | "serviceModule" | "serviceClient" | "serviceAnalyst";
 type DetailData = {
   kind: DetailKind; analyst: string | null; total: number; truncated: boolean;
@@ -89,54 +78,9 @@ type DetailData = {
   workItems: Array<{ id: number; workItemType: string; title: string; state: string; client: string | null; assignedToName: string | null; createdByName: string | null; criticality: string | null; blockedProcess: boolean | null; movideskTicket: number | null; registeredVersion: string | null; deliveredVersion: string | null; azureChangedAt: string | null; remoteUrl: string | null }>;
 };
 
-const mainTabs: Array<{ key: MainTab; label: string; icon: ElementType; info: string }> = [
-  { key: "cadastros", label: "Cadastros", icon: GroupsOutlined, info: "Acessos rápidos para equipe e clientes do escopo operacional." },
-  { key: "movimentos", label: "Movimentos", icon: InsightsOutlined, info: "Rotinas para acompanhar execução, atenção e pendências da operação." },
-  { key: "analises", label: "Análises", icon: TrendingUpOutlined, info: "Visões gerenciais de desempenho, relatórios e liderança." },
-  { key: "desenvolvimento", label: "Desenvolvimento", icon: IntegrationInstructionsOutlined, info: "Correções, evoluções, apoios e versões do produto." },
-  { key: "gestao", label: "Gestão", icon: FactCheckOutlined, info: "Conhecimento, sincronizações e governança da operação." },
-];
-
-const routines: Record<MainTab, Routine[]> = {
-  cadastros: [
-    { label: "Analistas", path: "/analistas", icon: GroupsOutlined, description: "Equipe oficial de suporte e sustentação.", keywords: ["equipe", "usuários", "responsáveis"] },
-    { label: "Clientes", path: "/clientes", icon: BusinessOutlined, description: "Clientes cooperativas do escopo SIMER.", keywords: ["cooperativas", "carteira"] },
-  ],
-  movimentos: [
-    { label: "Minha Operação", path: "/minha-operacao", icon: InsightsOutlined, description: "Fila operacional, tarefas e atendimentos em execução.", keywords: ["kanban", "fila", "trabalho"] },
-    { label: "Tickets", path: "/tickets", icon: ConfirmationNumberOutlined, description: "Atendimentos Movidesk e seus vínculos operacionais.", keywords: ["movidesk", "atendimentos"] },
-    { label: "Pontos de Atenção", path: "/atencao", icon: WarningAmberOutlined, description: "Riscos, criticidades e itens que exigem atuação.", keywords: ["risco", "crítico", "sla"] },
-    { label: "Pendências", path: "/qualidade-dados", icon: FactCheckOutlined, description: "Qualidade, vínculos e divergências entre fontes.", keywords: ["qualidade", "dados", "divergências"] },
-  ],
-  analises: [
-    { label: "Dashboard", path: "/", icon: InsightsOutlined, description: "Visão executiva consolidada da operação.", keywords: ["indicadores", "kpi", "executivo"] },
-    { label: "Desempenho", path: "/desempenho", icon: TrendingUpOutlined, description: "Produtividade, SLA e acompanhamento de performance.", keywords: ["performance", "produtividade", "sla"] },
-    { label: "Relatórios", path: "/relatorios", icon: InsightsOutlined, description: "Relatórios gerenciais e executivos.", keywords: ["excel", "pdf", "gerencial"] },
-    { label: "Serviços SIMER", path: "/servicos", icon: FactCheckOutlined, description: "Inteligência histórica da classificação e demanda por Serviços.", keywords: ["serviço", "movidesk", "módulos", "classificação"] },
-    { label: "Central de Liderança", path: "/lideranca-tecnica", icon: RadarOutlined, description: "Radar executivo, recorrências, gaps e desenvolvimento técnico.", keywords: ["liderança", "radar", "recorrências", "gaps"] },
-  ],
-  desenvolvimento: [
-    { label: "Correções", path: "/correcoes", icon: BugReportOutlined, description: "Bugs e correções acompanhadas no Azure DevOps.", keywords: ["bug", "task", "azure"] },
-    { label: "Evoluções", path: "/evolucoes", icon: AutoFixHighOutlined, description: "Melhorias e evoluções funcionais do produto.", keywords: ["melhoria", "produto", "azure"] },
-    { label: "Apoios", path: "/apoios", icon: SupportAgentOutlined, description: "APOIOs vinculados aos atendimentos e à sustentação.", keywords: ["apoio", "azure", "atendimento"] },
-    { label: "Versões", path: "/versoes", icon: Inventory2Outlined, description: "Entregas, cobertura e distribuição por versão.", keywords: ["lte", "lts", "rc", "release"] },
-  ],
-  gestao: [
-    { label: "Base de Conhecimento", path: "/conhecimento", icon: MenuBookOutlined, description: "Wiki, procedimentos e conhecimento operacional.", keywords: ["wiki", "procedimento", "sharepoint"] },
-    { label: "Dados e Sincronizações", path: "/importar", icon: UploadFileOutlined, description: "Sincronizações, integrações e cargas de dados.", keywords: ["sincronizar", "azure", "movidesk", "importar"] },
-  ],
-};
-
-const allRoutines = mainTabs.flatMap((group) => routines[group.key].map((routine) => ({ ...routine, group: group.key, groupLabel: group.label })));
-
 export function Coordination() {
   const navigate = useNavigate();
   const theme = useTheme();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const requestedTab = searchParams.get("aba") as MainTab | null;
-  const [tab, setTab] = useState<MainTab>(
-    requestedTab && mainTabs.some((item) => item.key === requestedTab) ? requestedTab : "movimentos",
-  );
   const [data, setData] = useState<Data | null>(null);
   const [capacity, setCapacity] = useState<{ days: number; businessDays: number; hoursPerDay: number; expectedHours: number; registeredHours: number; coverageRate: number | null; analysts: Array<{ analyst: string; expectedHours: number; registeredHours: number; coverageRate: number | null }> } | null>(null);
   const [error, setError] = useState("");
@@ -144,10 +88,6 @@ export function Coordination() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailTitle, setDetailTitle] = useState("");
   const [details, setDetails] = useState<DetailData | null>(null);
-  const [routineSearch, setRoutineSearch] = useState("");
-  const [favoriteRoutines, setFavoriteRoutines] = useState<string[]>(() => {
-    try { return JSON.parse(localStorage.getItem("coordination-favorite-routines") || "[]"); } catch { return []; }
-  });
   const [recentRoutines, setRecentRoutines] = useState<string[]>(() => {
     try { return JSON.parse(localStorage.getItem("coordination-recent-routines") || "[]"); } catch { return []; }
   });
@@ -202,30 +142,6 @@ export function Coordination() {
     } finally { setDetailLoading(false); }
   }
 
-  const normalizedRoutineSearch = routineSearch.trim().toLocaleLowerCase("pt-BR");
-  const matchingRoutines = normalizedRoutineSearch
-    ? allRoutines.filter((routine) => [routine.label, routine.description, routine.groupLabel, ...(routine.keywords ?? [])].join(" ").toLocaleLowerCase("pt-BR").includes(normalizedRoutineSearch))
-    : [];
-
-  function openRoutine(routine: Routine) {
-    const next = [routine.path, ...recentRoutines.filter((path) => path !== routine.path)].slice(0, 5);
-    setRecentRoutines(next);
-    localStorage.setItem("coordination-recent-routines", JSON.stringify(next));
-    navigate(routine.path);
-  }
-
-  function toggleFavorite(path: string) {
-    const next = favoriteRoutines.includes(path) ? favoriteRoutines.filter((item) => item !== path) : [...favoriteRoutines, path];
-    setFavoriteRoutines(next);
-    localStorage.setItem("coordination-favorite-routines", JSON.stringify(next));
-  }
-
-  function changeTab(value: MainTab) {
-    setTab(value);
-    const next = new URLSearchParams(searchParams);
-    next.set("aba", value);
-    setSearchParams(next, { replace: true });
-  }
 
   return (
     <Box sx={{ pb: 4 }}>
@@ -385,7 +301,7 @@ export function Coordination() {
                           <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11, fill: theme.palette.text.secondary }} axisLine={false} tickLine={false} />
                           <YAxis type="category" dataKey="service" width={260} tick={{ fontSize: 10, fill: theme.palette.text.secondary }} axisLine={false} tickLine={false} tickFormatter={(value: string) => value.split("»").at(-1)?.trim() ?? value} />
                           <ChartTooltip contentStyle={{ borderRadius: 12, border: `1px solid ${theme.palette.divider}`, backgroundColor: theme.palette.background.paper, color: theme.palette.text.primary, boxShadow: "0 14px 36px rgba(0,0,0,.24)" }} wrapperStyle={{ outline: "none" }} cursor={{ fill: theme.palette.action.hover }} formatter={(value) => [value, "Atendimentos"]} labelFormatter={(value) => String(value)} />
-                          <Bar dataKey="count" name="Atendimentos" fill={aliareColors.info} radius={[0, 6, 6, 0]} cursor="pointer" onClick={(entry) => { const service = String(entry?.service ?? ""); if (service) void openDetails("service", `Serviço · ${service.split("»").at(-1)?.trim() ?? service}`, undefined, undefined, undefined, service); }} />
+                          <Bar dataKey="count" name="Atendimentos" fill={aliareColors.info} radius={[0, 6, 6, 0]} cursor="pointer" onClick={(_, index) => { const service = data.serviceAnalytics.ranking[index]?.service; if (service) void openDetails("service", `Serviço · ${service.split("»").at(-1)?.trim() ?? service}`, undefined, undefined, undefined, service); }} />
                         </BarChart>
                       </ResponsiveContainer>
                     </Box>
@@ -466,8 +382,8 @@ export function Coordination() {
                         <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11, fill: theme.palette.text.secondary }} axisLine={false} tickLine={false} />
                         <YAxis type="category" dataKey="analyst" width={118} tick={{ fontSize: 11, fill: theme.palette.text.secondary }} axisLine={false} tickLine={false} />
                         <ChartTooltip contentStyle={{ borderRadius: 12, border: `1px solid ${theme.palette.divider}`, background: theme.palette.background.paper, boxShadow: "0 14px 36px rgba(0,0,0,.18)" }} cursor={{ fill: theme.palette.action.hover }} />
-                        <Bar dataKey="tickets" name="Tickets" stackId="load" fill={aliareColors.info} radius={[0, 0, 0, 0]} cursor="pointer" onClick={(entry) => { const analyst = String(entry?.analyst ?? ""); if (analyst) void openDetails("analyst", `Carga de ${analyst}`, analyst); }} />
-                        <Bar dataKey="workItems" name="Azure" stackId="load" fill={aliareColors.green} radius={[0, 6, 6, 0]} cursor="pointer" onClick={(entry) => { const analyst = String(entry?.analyst ?? ""); if (analyst) void openDetails("analyst", `Carga de ${analyst}`, analyst); }} />
+                        <Bar dataKey="tickets" name="Tickets" stackId="load" fill={aliareColors.info} radius={[0, 0, 0, 0]} cursor="pointer" onClick={(_, index) => { const analyst = data.workload[index]?.analyst; if (analyst) void openDetails("analyst", `Carga de ${analyst}`, analyst); }} />
+                        <Bar dataKey="workItems" name="Azure" stackId="load" fill={aliareColors.green} radius={[0, 6, 6, 0]} cursor="pointer" onClick={(_, index) => { const analyst = data.workload[index]?.analyst; if (analyst) void openDetails("analyst", `Carga de ${analyst}`, analyst); }} />
                       </BarChart>
                     </ResponsiveContainer>
                   </Box> : <Typography color="text.secondary">Nenhuma carga pendente localizada para os analistas da equipe.</Typography>}
