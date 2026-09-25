@@ -1,3 +1,5 @@
+import { isCauseApplicable } from "../domain/ticket/classificationRules";
+
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
@@ -445,10 +447,7 @@ export function Dashboard() {
   }, [openedInPeriod, resolvedInPeriod, effectiveStartDate, effectiveEndDate]);
 
   const ticketsEligibleForCause = useMemo(
-    () => filteredTickets.filter((ticket) => {
-      const category = normalizeComparableText(ticket.category);
-      return !["bug", "solucao de contorno", "solicitacao de servico", "adequacao"].includes(category);
-    }),
+    () => filteredTickets.filter((ticket) => isCauseApplicable(ticket.category)),
     [filteredTickets]
   );
 
@@ -2855,13 +2854,6 @@ function TicketField({
    AGRUPAMENTO
 ========================================================= */
 
-function normalizeComparableText(value: string | null | undefined) {
-  return String(value ?? "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .trim()
-    .toLocaleLowerCase("pt-BR");
-}
 
 function groupByField(
   tickets: Ticket[],
