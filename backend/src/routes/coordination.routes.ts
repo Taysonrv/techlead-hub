@@ -44,6 +44,16 @@ coordinationRoutes.get("/services", async (req: AuthenticatedRequest, res) => {
   }
 });
 
+coordinationRoutes.get("/sla-development", async (req: AuthenticatedRequest, res) => {
+  try {
+    const days = Number(req.query.days ?? 180);
+    res.json(await coordinationService.slaDevelopmentFlow(Number.isFinite(days) ? days : 180));
+  } catch (error) {
+    console.error("[coordination] Falha na análise SLA x desenvolvimento:", error);
+    res.status(500).json({ error: "Não foi possível gerar a análise SLA x desenvolvimento." });
+  }
+});
+
 coordinationRoutes.get("/summary", async (req: AuthenticatedRequest, res) => {
   try { res.json(await coordinationService.summary(req.auth!.userId)); }
   catch (error) { console.error("[coordination] Falha ao montar visão:", error); res.status(500).json({ error: "Não foi possível gerar a visão de coordenação." }); }
