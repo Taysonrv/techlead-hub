@@ -103,6 +103,25 @@ export class CoordinationService {
     };
   }
 
+  async slaDevelopmentFlow(days = 180) {
+    const since = new Date(Date.now() - Math.min(Math.max(days, 30), 730) * 86400000);
+    const tickets = await prisma.ticket.findMany({
+      where: { AND: [ticketOperationalScope(), { isDeleted: false, category: { equals: "Bug", mode: "insensitive" }, createdDate: { gte: since }, taskNumber: { not: null } }] },
+      select: { movideskId:true, subject:true, client:true, urgency:true, createdDate:true, taskNumber:true, solutionSlaIndicator:true }
+    });
+    const ids=tickets.map(t=>t.taskNumber).filter((x):x is number=>Boolean(x));
+    const items=ids.length?await prisma.azureWorkItem.findMany({where:{AND:[coordinationAzureScope(),{id:{in:ids}}]},select:{id:true,state:true,azureCreatedAt:true,stateChangedAt:true,azureChangedAt:true,azureClosedAt:true,title:true}}):[];
+    const byId=new Map(items.map(x=>[x.id,x]));
+    const norm=(v?:string|null)=>(v??"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").trim().toLowerCase();
+    const businessMinutes=(a:Date,b:Date)=>{let total=0,c=new Date(a); c.setHours(0,0,0,0); while(c<=b){const d=c.getDay();if(d>=1&&d<=5){const x=new Date(c);x.setHours(8,0,0,0);const y=new Date(c);y.setHours(18,0,0,0);total+=Math.max(0,(Math.min(y.getTime(),b.getTime())-Math.max(x.getTime(),a.getTime()))/60000)}c.setDate(c.getDate()+1)}return Math.round(total)};
+    const targets:any={P1:{support:660,factory:480,total:1140},P2:{support:1320,factory:3360,total:4680},P3:{support:1980,factory:9600,total:11580},P4:{support:2640,factory:21600,total:24240}};
+    const urgency=(v?:string|null)=>{const n=norm(v);if(n.includes("critica")||n==="p1")return"P1";if(n.includes("alta")||n==="p2")return"P2";if(n.includes("media")||n==="p3")return"P3";if(n.includes("baixa")||n==="p4")return"P4";return null};
+    const rows=tickets.flatMap(t=>{const w=t.taskNumber?byId.get(t.taskNumber):undefined;const p=urgency(t.urgency);if(!w||!w.azureCreatedAt||!p)return[];const concluded=norm(w.state)==="concluida";const end=concluded?(w.stateChangedAt??w.azureClosedAt??w.azureChangedAt):null;const support=businessMinutes(t.createdDate,w.azureCreatedAt);const factory=end?businessMinutes(w.azureCreatedAt,end):null;const total=end?businessMinutes(t.createdDate,end):null;const tg=targets[p];return[{movideskId:t.movideskId,subject:t.subject,client:t.client,taskNumber:t.taskNumber,taskTitle:w.title,taskState:w.state,urgency:p,taskCreatedAt:w.azureCreatedAt,taskConcludedAt:end,supportMinutes:support,factoryMinutes:factory,totalMinutes:total,supportTargetMinutes:tg.support,factoryTargetMinutes:tg.factory,totalTargetMinutes:tg.total,supportPct:Math.round(support/tg.support*1000)/10,factoryPct:factory===null?null:Math.round(factory/tg.factory*1000)/10,totalPct:total===null?null:Math.round(total/tg.total*1000)/10,officialSla:t.solutionSlaIndicator}]} );
+    const done=rows.filter(r=>r.taskConcludedAt);
+    const avg=(xs:number[])=>xs.length?Math.round(xs.reduce((a,b)=>a+b,0)/xs.length):0;
+    return { rule:{taskEndState:"Concluida",schedule:"Seg-Sex 08:00-18:00",profile:"PADRAO"}, summary:{bugsWithTask:rows.length,concluded:done.length,openDevelopment:rows.length-done.length,avgSupportMinutes:avg(rows.map(r=>r.supportMinutes)),avgFactoryMinutes:avg(done.map(r=>r.factoryMinutes!)),avgTotalMinutes:avg(done.map(r=>r.totalMinutes!)),supportWithinOla:rows.filter(r=>r.supportPct<=100).length,factoryWithinOla:done.filter(r=>(r.factoryPct??Infinity)<=100).length,totalWithinSla:done.filter(r=>(r.totalPct??Infinity)<=100).length}, rows };
+  }
+
   async serviceIntelligence(filters: { client?: string; analyst?: string; months?: number } = {}) {
     const months = Math.min(Math.max(filters.months ?? 6, 3), 12);
     const since = new Date();
