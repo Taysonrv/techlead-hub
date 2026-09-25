@@ -116,6 +116,25 @@ export function azureOperationalScope():
   };
 }
 
+/**
+ * Escopo estrito da Central da Coordenação.
+ * Diferente do escopo geral do Azure, aqui um Work Item só participa
+ * dos indicadores quando o Cliente Principal pertence à carteira da squad.
+ */
+export function coordinationAzureScope(): Prisma.AzureWorkItemWhereInput {
+  return {
+    AND: [
+      azureOperationalScope(),
+      {
+        client: {
+          in: [...SIMER_CLIENTS],
+          mode: "insensitive",
+        },
+      },
+    ],
+  };
+}
+
 export function isSupportAnalyst(
   value:
     string |
