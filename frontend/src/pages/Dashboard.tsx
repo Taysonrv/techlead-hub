@@ -1360,7 +1360,7 @@ export function Dashboard() {
           <Box
             sx={{
               display: "grid",
-              gridTemplateColumns: { xs: "1fr", lg: "repeat(3, minmax(0, 1fr))" },
+              gridTemplateColumns: { xs: "1fr", lg: "repeat(2, minmax(0, 1fr))" },
               gap: 2,
               mb: 2,
             }}
