@@ -114,6 +114,7 @@ type Ticket = {
 
   lifetimeMinutes: number | null;
   stoppedMinutes: number | null;
+  stoppedWorkingMinutes?: number | null;
 
   taskNumber: number | null;
   taskStatus: string | null;
@@ -2709,6 +2710,15 @@ function getOfficialServiceLevel(
 
     stoppedMinutes:
       ticket.stoppedMinutes,
+
+    stoppedWorkingMinutes:
+      ticket.stoppedWorkingMinutes,
+
+    dueDate:
+      ticket.dueDate,
+
+    firstResponseDueDate:
+      ticket.firstResponseDueDate,
 
     profile:
       "STANDARD",
