@@ -193,6 +193,7 @@ export function Coordination() {
                   ["SLA total",slaFlow.summary.totalWithinSla,slaFlow.summary.concluded],
                 ].map(([label,value,total])=><Box key={String(label)} sx={{p:1.25,border:"1px solid",borderColor:"divider",borderRadius:2}}><Typography variant="caption" color="text.secondary">{label}</Typography><Typography sx={{fontWeight:900,fontSize:"1.2rem"}}>{Number(total)?Math.round(Number(value)/Number(total)*1000)/10:0}%</Typography><Typography variant="caption" color="text.secondary">{value}/{total} no prazo</Typography></Box>)}
               </Box>
+              {slaFlow.summary.bugsWithTask===0 && <Alert severity="info" sx={{mt:1.5}}>Nenhum Bug pôde ser correlacionado completamente entre Movidesk e Azure no período. Os indicadores de qualidade acima mostram se o bloqueio está no vínculo da Task, na data de criação do Azure ou na prioridade necessária para aplicar a regra P1–P4.</Alert>}
               <Typography sx={{fontWeight:850,mt:2,mb:.25}}>Tendência mensal · SLA × OLA</Typography>
               <Typography variant="body2" color="text.secondary" sx={{mb:1.25}}>Evolução do tempo útil médio consumido antes da Task e na Fábrica, agrupada pelo mês de abertura da Task.</Typography>
               <Box sx={{height:280}}>
