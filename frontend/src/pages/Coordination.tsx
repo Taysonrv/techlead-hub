@@ -69,6 +69,7 @@ export function Coordination() {
   const navigate = useNavigate();
   const theme = useTheme();
   const [data, setData] = useState<Data | null>(null);
+  const [slaFlow, setSlaFlow] = useState<any | null>(null);
   const [capacity, setCapacity] = useState<{ days: number; businessDays: number; hoursPerDay: number; expectedHours: number; registeredHours: number; coverageRate: number | null; analysts: Array<{ analyst: string; expectedHours: number; registeredHours: number; coverageRate: number | null }> } | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -97,6 +98,12 @@ export function Coordination() {
     api.get("/coordination/productivity-capacity", { params: { days: 28 } })
       .then((response) => setCapacity(response.data))
       .catch(() => setCapacity(null));
+  }, []);
+
+  useEffect(() => {
+    api.get("/coordination/sla-development", { params: { days: 180 } })
+      .then((response) => setSlaFlow(response.data))
+      .catch(() => setSlaFlow(null));
   }, []);
 
   const maximum = useMemo(
@@ -162,6 +169,30 @@ export function Coordination() {
           </Alert>
 
           {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+          {slaFlow && <Card variant="outlined" sx={{mb:2}}>
+            <CardContent>
+              <Stack direction={{xs:"column",md:"row"}} spacing={1} sx={{justifyContent:"space-between",mb:1.5}}>
+                <Box><Typography sx={{fontWeight:900}}>SLA × OLA · Suporte x Desenvolvimento</Typography><Typography variant="body2" color="text.secondary">Bugs com Task · abertura do atendimento → criação da Task → status Concluida. Janela de 180 dias.</Typography></Box>
+                <Chip label={`${slaFlow.summary.bugsWithTask} bugs com Task`} />
+              </Stack>
+              <Box sx={{display:"grid",gridTemplateColumns:{xs:"1fr 1fr",lg:"repeat(6,1fr)"},gap:1}}>
+                {[
+                  ["Tempo médio até Task",slaFlow.summary.avgSupportMinutes],
+                  ["Tempo médio Fábrica",slaFlow.summary.avgFactoryMinutes],
+                  ["Tempo médio total",slaFlow.summary.avgTotalMinutes],
+                ].map(([label,value])=><Box key={String(label)} sx={{p:1.25,border:"1px solid",borderColor:"divider",borderRadius:2}}><Typography variant="caption" color="text.secondary">{label}</Typography><Typography sx={{fontWeight:900,fontSize:"1.2rem"}}>{formatMinutes(Number(value))}</Typography></Box>)}
+                {[
+                  ["OLA Suporte",slaFlow.summary.supportWithinOla,slaFlow.summary.bugsWithTask],
+                  ["OLA Fábrica",slaFlow.summary.factoryWithinOla,slaFlow.summary.concluded],
+                  ["SLA total",slaFlow.summary.totalWithinSla,slaFlow.summary.concluded],
+                ].map(([label,value,total])=><Box key={String(label)} sx={{p:1.25,border:"1px solid",borderColor:"divider",borderRadius:2}}><Typography variant="caption" color="text.secondary">{label}</Typography><Typography sx={{fontWeight:900,fontSize:"1.2rem"}}>{Number(total)?Math.round(Number(value)/Number(total)*1000)/10:0}%</Typography><Typography variant="caption" color="text.secondary">{value}/{total} no prazo</Typography></Box>)}
+              </Box>
+              <Box sx={{mt:2,height:Math.max(220,Math.min(420,(slaFlow.rows?.length??0)*30))}}>
+                <ResponsiveContainer width="100%" height="100%"><BarChart data={(slaFlow.rows??[]).slice(0,12)} layout="vertical" margin={{left:10,right:18}}><CartesianGrid strokeDasharray="3 3" opacity={.18}/><XAxis type="number" tickFormatter={(v)=>`${Math.round(v/60)}h`}/><YAxis type="category" dataKey="movideskId" width={70}/><ChartTooltip formatter={(v:any,n:any)=>[formatMinutes(Number(v)),n==="supportMinutes"?"Suporte":"Fábrica"]}/><Bar dataKey="supportMinutes" name="Suporte"/><Bar dataKey="factoryMinutes" name="Fábrica"/></BarChart></ResponsiveContainer>
+              </Box>
+              <Typography variant="caption" color="text.secondary">A medição usa horas úteis de Bug (seg–sex, 08:00–18:00). A Fábrica só é encerrada quando o Work Item está no status “Concluida”; itens ainda em desenvolvimento não entram no percentual concluído da Fábrica/SLA total.</Typography>
+            </CardContent>
+          </Card>}
 
           {loading || !data ? (
             <Box sx={{ minHeight: 320, display: "grid", placeItems: "center" }}>
@@ -462,3 +493,5 @@ export function Coordination() {
     </Box>
   );
 }
+
+function formatMinutes(value:number){if(!Number.isFinite(value)||value<=0)return "0h";const h=Math.floor(value/60),m=Math.round(value%60);return m?`${h}h ${m}min`:`${h}h`;}
