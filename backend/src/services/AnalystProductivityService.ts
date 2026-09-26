@@ -17,16 +17,10 @@ export class AnalystProductivityService {
       where: { AND: [ticketOperationalScope(), { isDeleted: false }, { owner: { in: analysts, mode: "insensitive" } }] },
       select: { movideskId: true, subject: true, owner: true, rawData: true },
     });
-    const holidays = new Set((process.env.PRODUCTIVITY_HOLIDAYS ?? "").split(",").map((value) => value.trim()).filter(Boolean));
-    const hoursPerDay = Math.min(Math.max(Number(process.env.PRODUCTIVITY_HOURS_PER_DAY ?? 8) || 8, 1), 24);
-    const dateKey = (value: Date) => {
-      const year = value.getFullYear(); const month = String(value.getMonth() + 1).padStart(2, "0"); const day = String(value.getDate()).padStart(2, "0");
-      return `${year}-${month}-${day}`;
-    };
-    const isBusinessDay = (value: Date) => value.getDay() !== 0 && value.getDay() !== 6 && !holidays.has(dateKey(value));
-    const businessDays = (() => { let count = 0; const day = new Date(start); while (day <= end) { if (isBusinessDay(day)) count += 1; day.setDate(day.getDate() + 1); } return count; })();
-    const expectedHours = businessDays * hoursPerDay;
-    const same = (a: string | null, b: string) => Boolean(a && a.localeCompare(b, "pt-BR", { sensitivity: "base" }) === 0);
+    const holidays = productivityHolidays();
+    const { businessDays, hoursPerDay, expectedHours } = productivityExpectedHours(start, end);
+    const isBusinessDay = (value: Date) => isProductivityBusinessDay(value, holidays);
+    const same = sameOperationalPerson;
     const weekKey = (value: Date) => {
       const day = new Date(value); day.setHours(0, 0, 0, 0);
       const mondayOffset = (day.getDay() + 6) % 7; day.setDate(day.getDate() - mondayOffset);
