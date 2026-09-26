@@ -149,8 +149,15 @@ export class GlobalController {
     if(ticket.taskNumber&&!workItems.some(x=>x.id===ticket.taskNumber)) anomalies.push("O atendimento possui número de Task, mas o Work Item não foi localizado na base Azure.");
     if(!serviceValues[0]) anomalies.push("Serviço não classificado; a investigação técnica pode perder precisão.");
     if(mapItems.length&&!ruleItems.length) anomalies.push("Há evidências no Mapa SIMER, mas nenhuma Regra do Sistema foi correlacionada.");
+    const diagnosticPlan=[
+      {key:"classification",title:"Validar classificação",status:ticket.category&&serviceValues[0]?"ready":"attention",detail:ticket.category&&serviceValues[0]?"Categoria e Serviço disponíveis para confronto.":"Categoria ou Serviço incompleto; revisar antes de concluir a causa."},
+      {key:"rule",title:"Confrontar Regra do Sistema",status:ruleItems.length||evidence.length?"ready":"attention",detail:ruleItems.length||evidence.length?`${ruleItems.length} regra(s) e ${evidence.length} evidência(s) técnica(s) correlacionadas.`:"Nenhuma regra/evidência correlacionada automaticamente."},
+      {key:"history",title:"Comparar recorrências",status:similar.length?"ready":"neutral",detail:similar.length?`${similar.length} caso(s) semelhante(s) localizado(s).`:"Sem recorrência relevante no recorte atual."},
+      {key:"development",title:"Validar desenvolvimento",status:ticket.taskNumber?"ready":"neutral",detail:ticket.taskNumber?`Task #${ticket.taskNumber} vinculada ao atendimento.`:"Atendimento sem Task vinculada."},
+      {key:"data",title:"Validar dados no banco",status:"neutral",detail:"Use consultas somente leitura e parametrizadas para confirmar a evidência funcional antes de qualquer intervenção."},
+    ];
     return res.json({
-      ticket, workItems, similar, timeline, evidence, ruleItems:ruleItems.slice(0,10), anomalies,
+      ticket, workItems, similar, timeline, evidence, ruleItems:ruleItems.slice(0,10), anomalies, diagnosticPlan,
       quality: { score: Math.round((completeness/5)*100), checks: { client:Boolean(ticket.client), category:Boolean(ticket.category), owner:Boolean(ticket.owner), service:Boolean(serviceValues[0]), developmentLink:Boolean(ticket.taskNumber) } },
       summary: { similarCases: similar.length, relatedWorkItems: workItems.length, technicalEvidence:evidence.length, rules:ruleItems.length, service: serviceValues[0]??null, version: ticket.deliveredVersion??ticket.registeredVersion??null },
     });
