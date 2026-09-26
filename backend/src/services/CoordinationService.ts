@@ -22,8 +22,8 @@ export class CoordinationService {
     const ticketExtra: Record<string, unknown> =
       kind === "critical" ? { urgency: "Crítica" } :
       kind === "stale" ? { OR: [{ lastUpdate: { lt: staleBefore } }, { lastUpdate: null }] } :
-      kind === "dueSoon" ? { dueDate: { gte: now, lte: nextSevenDays }, NOT: { baseStatus: "Stopped" } } :
-      kind === "overdue" ? { dueDate: { lt: now }, NOT: { baseStatus: "Stopped" } } :
+      kind === "dueSoon" ? { dueDate: { gte: now, lte: nextSevenDays } } :
+      kind === "overdue" ? { dueDate: { lt: now } } :
       {};
 
     const azureExtra: Record<string, unknown> =
