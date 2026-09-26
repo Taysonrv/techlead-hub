@@ -1,6 +1,6 @@
 import { prisma } from "../database/prisma";
 import type { Prisma } from "@prisma/client";
-import { SUPPORT_ANALYSTS, ticketOperationalScope } from "../domain/OperationalScope";
+import { SIMER_CLIENTS, SUPPORT_ANALYSTS, ticketOperationalScope } from "../domain/OperationalScope";
 import { analyzeMovideskIndicators } from "./MovideskPayloadAnalytics";
 import { SIMER_SERVICE_CATALOG, suggestSimerService, type SimerServiceCatalogItem } from "../domain/SimerServiceCatalog";
 
