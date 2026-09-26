@@ -115,16 +115,18 @@ export class GlobalController {
     const norm=(v:string|null|undefined)=>String(v??"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().trim();
     const targetWords=new Set(words.map(norm));
     const similar=candidates.map((item)=>{
-      let score=0; const reasons:string[]=[];
-      if(ticket.client&&norm(item.client)===norm(ticket.client)){score+=15;reasons.push("mesmo cliente");}
+      let score=0; const reasons:string[]=[]; const signals:Array<{key:string;label:string;weight:number;matched:boolean;detail?:string}>=[];
+      const add=(key:string,label:string,weight:number,matched:boolean,detail?:string)=>{signals.push({key,label,weight,matched,detail});if(matched){score+=weight;reasons.push(label.toLowerCase());}};
+      add("client","Mesmo cliente",15,Boolean(ticket.client&&norm(item.client)===norm(ticket.client)),item.client??undefined);
       const targetService=norm(serviceValues[0]); const itemService=norm(item.serviceThirdLevel||item.service);
-      if(targetService&&itemService===targetService){score+=30;reasons.push("mesmo serviço");}
-      if(ticket.category&&norm(item.category)===norm(ticket.category)){score+=15;reasons.push("mesma categoria");}
-      if(ticket.cause&&norm(item.cause)===norm(ticket.cause)){score+=10;reasons.push("mesma causa");}
-      if(ticket.deliveredVersion&&norm(item.deliveredVersion)===norm(ticket.deliveredVersion)){score+=10;reasons.push("mesma versão");}
+      add("service","Mesmo serviço",30,Boolean(targetService&&itemService===targetService),item.serviceThirdLevel||item.service||undefined);
+      add("category","Mesma categoria",15,Boolean(ticket.category&&norm(item.category)===norm(ticket.category)),item.category??undefined);
+      add("cause","Mesma causa",10,Boolean(ticket.cause&&norm(item.cause)===norm(ticket.cause)),item.cause??undefined);
+      add("version","Mesma versão",10,Boolean(ticket.deliveredVersion&&norm(item.deliveredVersion)===norm(ticket.deliveredVersion)),item.deliveredVersion??undefined);
       const common=[...targetWords].filter((word)=>norm(item.subject).includes(word)).length;
-      if(common){const pts=Math.min(20,common*5);score+=pts;reasons.push(`${common} termo(s) do assunto`);}
-      return {...item,score,reasons};
+      const subjectWeight=Math.min(20,common*5); signals.push({key:"subject",label:"Termos do assunto",weight:subjectWeight,matched:common>0,detail:common?`${common} termo(s) em comum`:undefined}); if(common){score+=subjectWeight;reasons.push(`${common} termo(s) do assunto`);}
+      const matchedWeight=signals.filter(x=>x.matched).reduce((sum,x)=>sum+x.weight,0);
+      return {...item,score,reasons,signals,explanation:{matchedSignals:signals.filter(x=>x.matched).length,matchedWeight,maxWeight:100}};
     }).filter((item)=>item.score>=15).sort((a,b)=>b.score-a.score||b.createdDate.getTime()-a.createdDate.getTime()).slice(0,12);
 
     const workItemIds=[ticket.taskNumber,...similar.map((x)=>x.taskNumber)].filter((v):v is number=>Number.isInteger(v));
