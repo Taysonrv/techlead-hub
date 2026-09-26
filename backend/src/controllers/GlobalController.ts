@@ -2,6 +2,7 @@ import type { Request, Response } from "express";
 import { prisma } from "../database/prisma";
 import { SimerMapService } from "../services/SimerMapService";
 import { SystemRuleService } from "../services/SystemRuleService";
+import { investigationIntelligenceService } from "../services/InvestigationIntelligenceService";
 
 
 const normalizeSearch = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR");
@@ -149,6 +150,8 @@ export class GlobalController {
     if(ticket.taskNumber&&!workItems.some(x=>x.id===ticket.taskNumber)) anomalies.push("O atendimento possui número de Task, mas o Work Item não foi localizado na base Azure.");
     if(!serviceValues[0]) anomalies.push("Serviço não classificado; a investigação técnica pode perder precisão.");
     if(mapItems.length&&!ruleItems.length) anomalies.push("Há evidências no Mapa SIMER, mas nenhuma Regra do Sistema foi correlacionada.");
+    const intelligence=await investigationIntelligenceService.analyze(ticket,similar);
+    intelligence.signals.forEach(signal=>{if(signal.severity==="warning"&&!anomalies.includes(signal.detail))anomalies.push(signal.detail)});
     const diagnosticPlan=[
       {key:"classification",title:"Validar classificação",status:ticket.category&&serviceValues[0]?"ready":"attention",detail:ticket.category&&serviceValues[0]?"Categoria e Serviço disponíveis para confronto.":"Categoria ou Serviço incompleto; revisar antes de concluir a causa."},
       {key:"rule",title:"Confrontar Regra do Sistema",status:ruleItems.length||evidence.length?"ready":"attention",detail:ruleItems.length||evidence.length?`${ruleItems.length} regra(s) e ${evidence.length} evidência(s) técnica(s) correlacionadas.`:"Nenhuma regra/evidência correlacionada automaticamente."},
@@ -157,7 +160,7 @@ export class GlobalController {
       {key:"data",title:"Validar dados no banco",status:"neutral",detail:"Use consultas somente leitura e parametrizadas para confirmar a evidência funcional antes de qualquer intervenção."},
     ];
     return res.json({
-      ticket, workItems, similar, timeline, evidence, ruleItems:ruleItems.slice(0,10), anomalies, diagnosticPlan,
+      ticket, workItems, similar, timeline, evidence, ruleItems:ruleItems.slice(0,10), anomalies, diagnosticPlan, intelligence,
       quality: { score: Math.round((completeness/5)*100), checks: { client:Boolean(ticket.client), category:Boolean(ticket.category), owner:Boolean(ticket.owner), service:Boolean(serviceValues[0]), developmentLink:Boolean(ticket.taskNumber) } },
       summary: { similarCases: similar.length, relatedWorkItems: workItems.length, technicalEvidence:evidence.length, rules:ruleItems.length, service: serviceValues[0]??null, version: ticket.deliveredVersion??ticket.registeredVersion??null },
     });
