@@ -1,7 +1,7 @@
 import { prisma } from "../database/prisma";
 import type { Prisma } from "@prisma/client";
 import { SIMER_CLIENTS, SUPPORT_ANALYSTS, ticketOperationalScope } from "../domain/OperationalScope";
-import { isOperationalTicketOpen, isTerminalWorkItemState, normalizeOperationalText } from "../domain/OperationalLifecycleRules";
+import { OPERATIONAL_AGING, daysBefore, hoursBefore, isOperationalTicketOpen, isTerminalWorkItemState, normalizeOperationalText, ticketLastMovement, workItemLastMovement } from "../domain/OperationalLifecycleRules";
 
 const technicalLeadershipCache = new Map<string, { expiresAt: number; value: unknown }>();
 
@@ -35,9 +35,9 @@ export class TechnicalLeadershipService {
     const periodEnd = customRange ? parsedEnd! : now;
     const days = Math.max(1, Math.ceil((periodEnd.getTime() - periodStart.getTime()) / 86400000));
     const previousStart = new Date(periodStart.getTime() - days * 86400000);
-    const stale3d = new Date(now.getTime() - 3 * 86400000);
-    const stale5d = new Date(now.getTime() - 5 * 86400000);
-    const stale7d = new Date(now.getTime() - 7 * 86400000);
+    const stale3d = hoursBefore(now, OPERATIONAL_AGING.ticketStaleHours);
+    const stale5d = daysBefore(now, OPERATIONAL_AGING.pausedTicketDays);
+    const stale7d = daysBefore(now, OPERATIONAL_AGING.newTicketDays);
     const stale30d = new Date(now.getTime() - 30 * 86400000);
     const normalize = normalizeOperationalText;
     // Wrapper de um argumento evita que Array.filter repasse index/array
@@ -90,7 +90,7 @@ export class TechnicalLeadershipService {
     });
     const openTickets = tickets.filter(openTicket);
     const openTasks = tasks.filter((task) => !terminalTask(task.state));
-    const movement = (ticket: (typeof tickets)[number]) => ticket.lastActionDate ?? ticket.lastUpdate ?? ticket.createdDate;
+    const movement = (ticket: (typeof tickets)[number]) => ticketLastMovement(ticket) ?? ticket.createdDate;
     const newTooLong = openTickets.filter((ticket) => /novo|new/.test(normalize(ticket.status)) && ticket.createdDate < stale7d);
     const pausedTooLong = openTickets.filter((ticket) => /paus|parad|stopped/.test(normalize(ticket.status)) && movement(ticket) < stale5d);
     const noMovement = openTickets.filter((ticket) => movement(ticket) < stale3d);
@@ -100,7 +100,7 @@ export class TechnicalLeadershipService {
     );
     const slaSoon = openTickets.filter((ticket) => ticket.dueDate && ticket.dueDate >= now && ticket.dueDate <= new Date(now.getTime() + 86400000));
     const blocked = openTasks.filter((task) => task.blockedProcess);
-    const taskStale = openTasks.filter((task) => (task.azureChangedAt ?? task.azureCreatedAt ?? now) < stale5d);
+    const taskStale = openTasks.filter((task) => (workItemLastMovement(task) ?? now) < daysBefore(now, OPERATIONAL_AGING.workItemStaleDays));
     const unassigned = openTasks.filter((task) => !task.assignedToName);
     const ticketByTask = new Map(tickets.filter((t) => t.taskNumber).map((t) => [t.taskNumber!, t]));
     const taskByTicket = new Map(tasks.filter((t) => t.movideskTicket).map((t) => [t.movideskTicket!, t]));
