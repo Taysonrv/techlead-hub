@@ -3,15 +3,12 @@ import { prisma } from "../database/prisma";
 import { SIMER_CLIENTS, SUPPORT_ANALYSTS, SUPPORT_COORDINATOR, coordinationAzureScope, ticketOperationalScope } from "../domain/OperationalScope";
 import { SIMER_SERVICE_CATALOG, suggestSimerService, type SimerServiceCatalogItem } from "../domain/SimerServiceCatalog";
 import { extractMovideskTimeEntries } from "./MovideskPayloadAnalytics";
+import { coordinationAzurePriorityPredicate, coordinationOpenAzurePredicate, coordinationOpenTicketPredicate, coordinationTicketPriorityPredicate, type CoordinationPriorityKind } from "../domain/CoordinationPredicates";
 
-const OPEN_TICKET_STATES = ["New", "InAttendance", "Stopped"];
-const CLOSED_WORK_ITEM_STATES = ["Closed", "Resolved", "Concluído", "Concluido", "Done", "Removed"];
 
 export class CoordinationService {
   async details(kind: string, analyst?: string, limit = 50, serviceModule?: string, serviceClient?: string, serviceName?: string, serviceDays = 0) {
     const now = new Date();
-    const staleBefore = new Date(now.getTime() - 72 * 60 * 60 * 1_000);
-    const nextSevenDays = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1_000);
     const safeLimit = Math.min(Math.max(limit, 1), 500);
     // Busca um registro adicional para informar truncamento sem confundir "quantidade carregada" com total real.
     const fetchLimit = Math.min(safeLimit + 1, 501);
@@ -19,17 +16,13 @@ export class CoordinationService {
     const ticketScope = ticketOperationalScope();
     const azureScope = coordinationAzureScope();
 
-    const ticketExtra: Record<string, unknown> =
-      kind === "critical" ? { urgency: "Crítica" } :
-      kind === "stale" ? { OR: [{ lastUpdate: { lt: staleBefore } }, { lastUpdate: null }] } :
-      kind === "dueSoon" ? { dueDate: { gte: now, lte: nextSevenDays } } :
-      kind === "overdue" ? { dueDate: { lt: now } } :
-      {};
-
-    const azureExtra: Record<string, unknown> =
-      kind === "blocked" ? { blockedProcess: true } :
-      kind === "unassigned" ? { assignedToName: null } :
-      {};
+    const priorityKinds: CoordinationPriorityKind[] = ["backlog", "critical", "stale", "dueSoon", "overdue"];
+    const ticketPriority = priorityKinds.includes(kind as CoordinationPriorityKind)
+      ? coordinationTicketPriorityPredicate(kind as CoordinationPriorityKind, now)
+      : coordinationOpenTicketPredicate();
+    const azurePriority = kind === "blocked" || kind === "unassigned"
+      ? coordinationAzurePriorityPredicate(kind)
+      : coordinationOpenAzurePredicate();
 
     const wantsTickets = ["backlog", "critical", "stale", "dueSoon", "overdue", "analyst", "service", "serviceModule", "serviceClient", "serviceAnalyst"].includes(kind);
     const wantsAzure = ["blocked", "unassigned", "analyst"].includes(kind);
@@ -40,8 +33,7 @@ export class CoordinationService {
             where: {
               AND: [
                 ticketScope,
-                { isDeleted: false, baseStatus: { in: OPEN_TICKET_STATES } },
-                ticketExtra,
+                ticketPriority,
                 ...(analyst ? [{ owner: { equals: analyst, mode: "insensitive" as const } }] : []),
                 ...(serviceClient ? [{ client: { equals: serviceClient, mode: "insensitive" as const } }] : []),
                 ...(serviceSince && ["service","serviceModule","serviceClient","serviceAnalyst"].includes(kind) ? [{ createdDate: { gte: serviceSince } }] : []),
@@ -71,8 +63,7 @@ export class CoordinationService {
             where: {
               AND: [
                 azureScope,
-                { state: { notIn: CLOSED_WORK_ITEM_STATES } },
-                azureExtra,
+                azurePriority,
                 ...(analyst ? [{ createdByName: { equals: analyst, mode: "insensitive" as const } }] : []),
               ],
             },
@@ -103,7 +94,7 @@ export class CoordinationService {
     // permanecem consistentes mesmo quando a lista é paginada/limitada.
     const [ticketTotal, workItemTotal] = await Promise.all([
       wantsTickets ? prisma.ticket.count({ where: { AND: [
-        ticketScope, { isDeleted:false, baseStatus:{in:OPEN_TICKET_STATES} }, ticketExtra,
+        ticketScope, ticketPriority,
         ...(analyst?[{owner:{equals:analyst,mode:"insensitive" as const}}]:[]),
         ...(serviceClient?[{client:{equals:serviceClient,mode:"insensitive" as const}}]:[]),
         ...(serviceSince&&["service","serviceModule","serviceClient","serviceAnalyst"].includes(kind)?[{createdDate:{gte:serviceSince}}]:[]),
@@ -115,7 +106,7 @@ export class CoordinationService {
         ]}]:[]),
       ] } }) : Promise.resolve(0),
       wantsAzure ? prisma.azureWorkItem.count({ where: { AND: [
-        azureScope, {state:{notIn:CLOSED_WORK_ITEM_STATES}}, azureExtra,
+        azureScope, azurePriority,
         ...(analyst?[{createdByName:{equals:analyst,mode:"insensitive" as const}}]:[]),
       ] } }) : Promise.resolve(0),
     ]);
