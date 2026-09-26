@@ -40,7 +40,10 @@ export class TechnicalLeadershipService {
     const stale7d = new Date(now.getTime() - 7 * 86400000);
     const stale30d = new Date(now.getTime() - 30 * 86400000);
     const normalize = normalizeOperationalText;
-    const openTicket = isOperationalTicketOpen;
+    // Wrapper de um argumento evita que Array.filter repasse index/array
+    // para o segundo parâmetro opcional de isOperationalTicketOpen.
+    const openTicket = (ticket: { baseStatus: string | null; status: string }) =>
+      isOperationalTicketOpen(ticket);
     const terminalTask = isTerminalWorkItemState;
     const ticketWhere: Prisma.TicketWhereInput = {
       AND: [
