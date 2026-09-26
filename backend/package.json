@@ -7,7 +7,7 @@
     "dev": "tsx watch src/server.ts",
     "seed": "tsx prisma/seed.ts",
     "start": "node dist/server.js",
-    "build": "npm run clean && tsc",
+    "build": "npm run prisma:generate && npm run clean && tsc",
     "test": "node --import tsx --test tests/*.test.ts",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
