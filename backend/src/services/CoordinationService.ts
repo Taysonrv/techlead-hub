@@ -124,10 +124,7 @@ export class CoordinationService {
   async slaDevelopmentFlow(days = 180) {
     const since = new Date(Date.now() - Math.min(Math.max(days, 30), 730) * 86400000);
     const tickets = await prisma.ticket.findMany({
-      where: { AND: [{ isDeleted: false, createdDate: { gte: since } }, { OR: [
-        { client: { in: [...SIMER_CLIENTS], mode: "insensitive" } },
-        { owner: { in: [...SUPPORT_ANALYSTS], mode: "insensitive" } },
-      ] }] },
+      where: { AND: [{ isDeleted: false, createdDate: { gte: since } }, coordinationTicketScope()] },
       select: { movideskId:true, subject:true, category:true, client:true, owner:true, urgency:true, createdDate:true, taskNumber:true, taskStatus:true, taskTitle:true, taskType:true, solutionSlaIndicator:true }
     });
     const bugTickets=tickets.filter(t=>isBug(t.category,t.taskType));
@@ -371,10 +368,7 @@ export class CoordinationService {
         where: { AND: [
           coordinationOpenTicketPredicate(),
           ...(serviceSince ? [{ createdDate: { gte: serviceSince } }] : []),
-          { OR: [
-            { client: { in: [...SIMER_CLIENTS], mode: "insensitive" } },
-            { owner: { in: [...SUPPORT_ANALYSTS], mode: "insensitive" } },
-          ] },
+          coordinationTicketScope(),
         ] },
         select: {
           id: true, subject: true, category: true, cause: true, service: true, client: true, owner: true,
