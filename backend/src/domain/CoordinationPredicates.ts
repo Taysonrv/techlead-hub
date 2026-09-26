@@ -1,4 +1,5 @@
 import type { Prisma } from "@prisma/client";
+import { OPERATIONAL_AGING, hoursBefore } from "./OperationalLifecycleRules";
 
 export const COORDINATION_OPEN_TICKET_STATES = ["New", "InAttendance", "Stopped"] as const;
 export const COORDINATION_CLOSED_WORK_ITEM_STATES = ["Closed", "Resolved", "Concluído", "Concluido", "Done", "Removed"] as const;
@@ -17,7 +18,7 @@ export function coordinationTicketPriorityPredicate(
   kind: CoordinationPriorityKind,
   now = new Date(),
 ): Prisma.TicketWhereInput {
-  const staleBefore = new Date(now.getTime() - 72 * 60 * 60 * 1_000);
+  const staleBefore = hoursBefore(now, OPERATIONAL_AGING.ticketStaleHours);
   const nextSevenDays = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1_000);
 
   const extra: Prisma.TicketWhereInput =
