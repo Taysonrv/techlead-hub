@@ -1,3 +1,4 @@
+import { businessMinutes, isBug, isConcluded, mapPriority, normalizeDomainText, SLA_PRIORITY } from "../domain/TicketClassificationRules";
 import { prisma } from "../database/prisma";
 import { SIMER_CLIENTS, SUPPORT_ANALYSTS, SUPPORT_COORDINATOR, coordinationAzureScope, ticketOperationalScope } from "../domain/OperationalScope";
 import { microsoftKnowledgeService } from "./MicrosoftKnowledgeService";
@@ -108,7 +109,6 @@ export class CoordinationService {
 
   async slaDevelopmentFlow(days = 180) {
     const since = new Date(Date.now() - Math.min(Math.max(days, 30), 730) * 86400000);
-    const norm=(v?:string|null)=>(v??"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").trim().toLowerCase();
     const tickets = await prisma.ticket.findMany({
       where: { AND: [{ isDeleted: false, createdDate: { gte: since } }, { OR: [
         { client: { in: [...SIMER_CLIENTS], mode: "insensitive" } },
@@ -116,13 +116,7 @@ export class CoordinationService {
       ] }] },
       select: { movideskId:true, subject:true, category:true, client:true, owner:true, urgency:true, createdDate:true, taskNumber:true, taskStatus:true, taskTitle:true, taskType:true, solutionSlaIndicator:true }
     });
-    const bugTickets=tickets.filter(t=> {
-      const category = norm(t.category);
-      const taskType = norm(t.taskType);
-      // O Movidesk pode classificar o atendimento como "Problema - Bug",
-      // enquanto o vínculo de desenvolvimento identifica explicitamente o tipo da Task.
-      return category === "bug" || category.includes("bug") || taskType === "bug";
-    });
+    const bugTickets=tickets.filter(t=>isBug(t.category,t.taskType));
     const ids=[...new Set(bugTickets.map(t=>t.taskNumber).filter((x):x is number=>Boolean(x)))];
     const movideskIds=bugTickets.map(t=>t.movideskId);
     const items=await prisma.azureWorkItem.findMany({
@@ -131,13 +125,10 @@ export class CoordinationService {
     });
     const byId=new Map(items.map(x=>[x.id,x]));
     const byTicket=new Map(items.filter(x=>x.movideskTicket).map(x=>[x.movideskTicket!,x]));
-    const businessMinutes=(a:Date,b:Date)=>{if(b<=a)return 0;let total=0,c=new Date(a);c.setHours(0,0,0,0);while(c<=b){const d=c.getDay();if(d>=1&&d<=5){const x=new Date(c);x.setHours(8,0,0,0);const y=new Date(c);y.setHours(18,0,0,0);total+=Math.max(0,(Math.min(y.getTime(),b.getTime())-Math.max(x.getTime(),a.getTime()))/60000)}c.setDate(c.getDate()+1)}return Math.round(total)};
-    const targets:any={P1:{support:660,factory:480,total:1140},P2:{support:1320,factory:3360,total:4680},P3:{support:1980,factory:9600,total:11580},P4:{support:2640,factory:21600,total:24240}};
-    const urgency=(v?:string|null)=>{const n=norm(v);if(n.includes("critica")||n==="p1")return"P1";if(n.includes("alta")||n==="p2")return"P2";if(n.includes("media")||n==="p3")return"P3";if(n.includes("baixa")||n==="p4")return"P4";return null};
     let missingAzure=0,missingTaskCreatedAt=0,missingPriority=0;
-    const rows=bugTickets.flatMap(t=>{const w=(t.taskNumber?byId.get(t.taskNumber):undefined)??byTicket.get(t.movideskId);if(!w){missingAzure++;return[]}if(!w.azureCreatedAt){missingTaskCreatedAt++;return[]}const p=urgency(t.urgency) ?? urgency(w.criticality);if(!p){missingPriority++;return[]}const concluded=norm(w.state)==="concluida"||norm(w.state)==="concluido"||norm(t.taskStatus)==="concluida"||norm(t.taskStatus)==="concluido";// Para o estado atual Concluída, stateChangedAt representa a transição que encerrou a Task.
+    const rows=bugTickets.flatMap(t=>{const w=(t.taskNumber?byId.get(t.taskNumber):undefined)??byTicket.get(t.movideskId);if(!w){missingAzure++;return[]}if(!w.azureCreatedAt){missingTaskCreatedAt++;return[]}const p=mapPriority(t.urgency,w.criticality);if(!p){missingPriority++;return[]}const concluded=isConcluded(w.state,t.taskStatus);// Para o estado atual Concluída, stateChangedAt representa a transição que encerrou a Task.
       // azureClosedAt fica como fallback porque pode refletir outro marco de fechamento do Work Item.
-      const end=concluded?(w.stateChangedAt??w.azureClosedAt??w.azureChangedAt):null;const support=businessMinutes(t.createdDate,w.azureCreatedAt);const factory=end?businessMinutes(w.azureCreatedAt,end):null;const total=factory===null?null:support+factory;const tg=targets[p];const supportPct=Math.round(support/tg.support*1000)/10;const factoryPct=factory===null?null:Math.round(factory/tg.factory*1000)/10;const totalPct=total===null?null:Math.round(total/tg.total*1000)/10;const bottleneck=factoryPct!==null&&factoryPct>supportPct?"Fábrica":"Suporte";return[{movideskId:t.movideskId,subject:t.subject,client:t.client,owner:t.owner??"Sem responsável",taskNumber:w.id,taskTitle:w.title??t.taskTitle,taskState:w.state??t.taskStatus,urgency:p,taskCreatedAt:w.azureCreatedAt,taskConcludedAt:end,supportMinutes:support,factoryMinutes:factory,totalMinutes:total,supportTargetMinutes:tg.support,factoryTargetMinutes:tg.factory,totalTargetMinutes:tg.total,supportPct,factoryPct,totalPct,bottleneck,officialSla:t.solutionSlaIndicator}]} );
+      const end=concluded?(w.stateChangedAt??w.azureClosedAt??w.azureChangedAt):null;const support=businessMinutes(t.createdDate,w.azureCreatedAt);const factory=end?businessMinutes(w.azureCreatedAt,end):null;const total=factory===null?null:support+factory;const rule=SLA_PRIORITY[p];const tg={support:rule.supportMinutes,factory:rule.factoryMinutes,total:rule.totalMinutes};const supportPct=Math.round(support/tg.support*1000)/10;const factoryPct=factory===null?null:Math.round(factory/tg.factory*1000)/10;const totalPct=total===null?null:Math.round(total/tg.total*1000)/10;const bottleneck=factoryPct!==null&&factoryPct>supportPct?"Fábrica":"Suporte";return[{movideskId:t.movideskId,subject:t.subject,client:t.client,owner:t.owner??"Sem responsável",taskNumber:w.id,taskTitle:w.title??t.taskTitle,taskState:w.state??t.taskStatus,urgency:p,taskCreatedAt:w.azureCreatedAt,taskConcludedAt:end,supportMinutes:support,factoryMinutes:factory,totalMinutes:total,supportTargetMinutes:tg.support,factoryTargetMinutes:tg.factory,totalTargetMinutes:tg.total,supportPct,factoryPct,totalPct,bottleneck,officialSla:t.solutionSlaIndicator}]} );
     const done=rows.filter(r=>r.taskConcludedAt);
     const avg=(xs:number[])=>xs.length?Math.round(xs.reduce((a,b)=>a+b,0)/xs.length):0;
     const summarize=(group:any[])=>{const completed=group.filter(r=>r.taskConcludedAt);return{total:group.length,concluded:completed.length,openDevelopment:group.length-completed.length,avgSupportMinutes:avg(group.map(r=>r.supportMinutes)),avgFactoryMinutes:avg(completed.map(r=>r.factoryMinutes!)),avgTotalMinutes:avg(completed.map(r=>r.totalMinutes!)),supportWithinOla:group.filter(r=>r.supportPct<=100).length,factoryWithinOla:completed.filter(r=>(r.factoryPct??Infinity)<=100).length,totalWithinSla:completed.filter(r=>(r.totalPct??Infinity)<=100).length,supportBottleneck:group.filter(r=>r.bottleneck==="Suporte").length,factoryBottleneck:completed.filter(r=>r.bottleneck==="Fábrica").length}};
