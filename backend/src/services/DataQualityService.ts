@@ -3,7 +3,7 @@ import type { Prisma } from "@prisma/client";
 import { SIMER_CLIENTS, SUPPORT_ANALYSTS, ticketOperationalScope } from "../domain/OperationalScope";
 import { analyzeMovideskIndicators } from "./MovideskPayloadAnalytics";
 import { SIMER_SERVICE_CATALOG, suggestSimerService, type SimerServiceCatalogItem } from "../domain/SimerServiceCatalog";
-import { isOperationalTicketFinalized, isOperationalTicketOpen, isTerminalWorkItemState, normalizeOperationalText } from "../domain/OperationalLifecycleRules";
+import { OPERATIONAL_AGING, hoursBefore, isOperationalTicketFinalized, isOperationalTicketOpen, isTerminalWorkItemState, normalizeOperationalText, ticketLastMovement } from "../domain/OperationalLifecycleRules";
 
 const dataQualityCache = new Map<string, { expiresAt: number; value: unknown }>();
 
@@ -72,7 +72,7 @@ export class DataQualityService {
       const finalized = isOperationalTicketFinalized;
       const terminal = isTerminalWorkItemState;
       const support = (type: string) => normalize(type).includes("apoio");
-      const staleThreshold = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
+      const staleThreshold = hoursBefore(new Date(), OPERATIONAL_AGING.ticketStaleHours);
       const analytics = new Map(scopedTickets.map((ticket) => [ticket.id, analyzeMovideskIndicators(ticket.rawData)]));
       const awaitingReturnOverdue = scopedTickets.filter((ticket) => {
         const movement = ticket.lastActionDate ?? ticket.lastUpdate;
@@ -313,9 +313,8 @@ export class DataQualityService {
       ticket.id,
       analyzeMovideskIndicators(ticket.rawData),
     ]));
-    const staleThreshold = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
-    const lastMovement = (ticket: (typeof scopedTickets)[number]) =>
-      ticket.lastActionDate ?? ticket.lastUpdate;
+    const staleThreshold = hoursBefore(new Date(), OPERATIONAL_AGING.ticketStaleHours);
+    const lastMovement = (ticket: (typeof scopedTickets)[number]) => ticketLastMovement(ticket);
     const awaitingReturnWithoutCause = scopedTickets.filter((ticket) =>
       isTicketOpen(ticket) && isAwaitingReturn(ticket) && isMissingClassification(ticket.cause),
     );
