@@ -1,7 +1,6 @@
-import { businessMinutes, isBug, isConcluded, mapPriority, normalizeDomainText, SLA_PRIORITY } from "../domain/TicketClassificationRules";
+import { businessMinutes, isBug, isConcluded, mapPriority, SLA_PRIORITY } from "../domain/TicketClassificationRules";
 import { prisma } from "../database/prisma";
 import { SIMER_CLIENTS, SUPPORT_ANALYSTS, SUPPORT_COORDINATOR, coordinationAzureScope, ticketOperationalScope } from "../domain/OperationalScope";
-import { microsoftKnowledgeService } from "./MicrosoftKnowledgeService";
 import { SIMER_SERVICE_CATALOG, suggestSimerService, type SimerServiceCatalogItem } from "../domain/SimerServiceCatalog";
 import { extractMovideskTimeEntries } from "./MovideskPayloadAnalytics";
 
@@ -271,7 +270,7 @@ export class CoordinationService {
     return { days, businessDays, hoursPerDay, expectedHours, registeredHours, coverageRate: expectedHours ? Number((registeredHours/expectedHours*100).toFixed(1)) : null, analysts };
   }
 
-  async summary(userId: number, serviceDays = 0) {
+  async summary(_userId: number, serviceDays = 0) {
     const now = new Date();
     const staleBefore = new Date(now.getTime() - 72 * 60 * 60 * 1_000);
     const nextSevenDays = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1_000);
@@ -580,15 +579,6 @@ export class CoordinationService {
       },
     ].filter((item) => item.count > 0);
 
-    const microsoft = await microsoftKnowledgeService
-      .coordinationSnapshot(userId)
-      .catch(() => ({
-        connected: false,
-        plannerTasks: [],
-        events: [],
-        teams: [],
-        warnings: ["Microsoft 365 temporariamente indisponível."],
-      }));
 
     return {
       generatedAt: now,
@@ -632,25 +622,7 @@ export class CoordinationService {
         coordinator: SUPPORT_COORDINATOR,
         analysts: [...SUPPORT_ANALYSTS],
         clients: [...SIMER_CLIENTS],
-      },
-      integrations: {
-        planner: {
-          configured: Boolean(process.env.MICROSOFT_TENANT_ID && process.env.MICROSOFT_CLIENT_ID),
-          connected: microsoft.connected,
-          items: microsoft.plannerTasks.length,
-        },
-        outlook: {
-          configured: Boolean(process.env.MICROSOFT_TENANT_ID && process.env.MICROSOFT_CLIENT_ID),
-          connected: microsoft.connected,
-          items: microsoft.events.length,
-        },
-        teams: {
-          configured: Boolean(process.env.MICROSOFT_TENANT_ID && process.env.MICROSOFT_CLIENT_ID),
-          connected: microsoft.connected,
-          items: microsoft.teams.length,
-        },
-      },
-      microsoft,
+      }
     };
   }
 }
