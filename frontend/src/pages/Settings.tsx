@@ -33,11 +33,6 @@ type ConfigurationState = {
   project: string;
   wiki: string;
   patConfigured: boolean;
-  tenantId: string;
-  clientId: string;
-  sharePointSiteUrl: string;
-  bpmnSiteUrl: string;
-  microsoftConfigured: boolean;
   runtime?: string;
 };
 
@@ -62,10 +57,6 @@ const EMPTY_FORM: ConfigurationForm = {
   project: "",
   wiki: "",
   pat: "",
-  tenantId: "",
-  clientId: "",
-  sharePointSiteUrl: "https://siagri365.sharepoint.com/sites/cooperativas-agroindustrias-simer",
-  bpmnSiteUrl: "https://siagri365.sharepoint.com/sites/FluxoBPMNSimer",
 };
 
 export function Settings() {
@@ -108,10 +99,6 @@ export function Settings() {
         organization: current.organization ?? "",
         project: current.project ?? "",
         wiki: current.wiki ?? "",
-        tenantId: current.tenantId ?? "",
-        clientId: current.clientId ?? "",
-        sharePointSiteUrl: current.sharePointSiteUrl ?? "",
-        bpmnSiteUrl: current.bpmnSiteUrl ?? "",
       }));
     } catch (loadError) {
       setError(
@@ -165,10 +152,6 @@ export function Settings() {
       setForm({
         ...EMPTY_FORM,
         ...imported,
-        tenantId: imported.tenantId ?? "",
-        clientId: imported.clientId ?? "",
-        sharePointSiteUrl: imported.sharePointSiteUrl ?? EMPTY_FORM.sharePointSiteUrl,
-        bpmnSiteUrl: imported.bpmnSiteUrl ?? EMPTY_FORM.bpmnSiteUrl,
       });
       setSuccess(
         "Arquivo carregado. Revise os dados e clique em Salvar configurações.",
@@ -195,10 +178,6 @@ export function Settings() {
           project: form.project,
           wiki: form.wiki,
           pat: form.pat,
-          tenantId: form.tenantId,
-          clientId: form.clientId,
-          sharePointSiteUrl: form.sharePointSiteUrl,
-          bpmnSiteUrl: form.bpmnSiteUrl,
         },
       );
 
