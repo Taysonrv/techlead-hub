@@ -1,6 +1,6 @@
 import { businessMinutes, isBug, isConcluded, mapPriority, SLA_PRIORITY } from "../domain/TicketClassificationRules";
 import { prisma } from "../database/prisma";
-import { SIMER_CLIENTS, SUPPORT_ANALYSTS, SUPPORT_COORDINATOR, coordinationAzureScope, ticketOperationalScope } from "../domain/OperationalScope";
+import { SIMER_CLIENTS, SUPPORT_ANALYSTS, SUPPORT_COORDINATOR, coordinationAzureScope, coordinationTicketScope, ticketOperationalScope } from "../domain/OperationalScope";
 import { SIMER_SERVICE_CATALOG, suggestSimerService, type SimerServiceCatalogItem } from "../domain/SimerServiceCatalog";
 import { extractMovideskTimeEntries } from "./MovideskPayloadAnalytics";
 import { coordinationAzurePriorityPredicate, coordinationOpenAzurePredicate, coordinationOpenTicketPredicate, coordinationTicketPriorityPredicate, type CoordinationPriorityKind } from "../domain/CoordinationPredicates";
@@ -13,7 +13,7 @@ export class CoordinationService {
     // Busca um registro adicional para informar truncamento sem confundir "quantidade carregada" com total real.
     const fetchLimit = Math.min(safeLimit + 1, 501);
     const serviceSince = serviceDays > 0 ? new Date(now.getTime() - Math.min(serviceDays, 730) * 86400000) : null;
-    const ticketScope = ticketOperationalScope();
+    const ticketScope = coordinationTicketScope();
     const azureScope = coordinationAzureScope();
 
     const priorityKinds: CoordinationPriorityKind[] = ["backlog", "critical", "stale", "dueSoon", "overdue"];
@@ -296,7 +296,7 @@ export class CoordinationService {
 
   async summary(_userId: number, serviceDays = 0) {
     const now = new Date();
-    const ticketScope = ticketOperationalScope();
+    const ticketScope = coordinationTicketScope();
     const serviceSince = serviceDays > 0 ? new Date(now.getTime() - Math.min(serviceDays, 730) * 86400000) : null;
     const azureScope = coordinationAzureScope();
 
