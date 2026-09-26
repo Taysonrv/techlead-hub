@@ -64,7 +64,7 @@ type Data = {
 
 type DetailKind = "backlog" | "critical" | "stale" | "dueSoon" | "overdue" | "blocked" | "unassigned" | "analyst" | "service" | "serviceModule" | "serviceClient" | "serviceAnalyst";
 type DetailData = {
-  kind: DetailKind; analyst: string | null; total: number; truncated: boolean;
+  kind: DetailKind; analyst: string | null; total: number; loaded?: number; truncated: boolean;
   tickets: Array<{ movideskId: number; subject: string; status: string; urgency: string | null; client: string | null; owner: string | null; lastUpdate: string | null; dueDate: string | null; taskNumber: number | null; registeredVersion: string | null; deliveredVersion: string | null; service: string | null; serviceFirstLevel: string | null; serviceSecondLevel: string | null; serviceThirdLevel: string | null; category: string | null; cause: string | null }>;
   workItems: Array<{ id: number; workItemType: string; title: string; state: string; client: string | null; assignedToName: string | null; createdByName: string | null; criticality: string | null; blockedProcess: boolean | null; movideskTicket: number | null; registeredVersion: string | null; deliveredVersion: string | null; azureChangedAt: string | null; remoteUrl: string | null }>;
 };
@@ -84,6 +84,7 @@ export function Coordination() {
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailTitle, setDetailTitle] = useState("");
+  const [detailError, setDetailError] = useState("");
   const [details, setDetails] = useState<DetailData | null>(null);
   const [serviceDays, setServiceDays] = useState(0);
   const [slaDays, setSlaDays] = useState(180);
@@ -137,11 +138,11 @@ export function Coordination() {
 
   async function openDetails(kind: DetailKind, title: string, analyst?: string, serviceModule?: string, serviceClient?: string, serviceName?: string) {
     try {
-      setDetailTitle(title); setDetails(null); setDetailLoading(true);
+      setDetailTitle(title); setDetails(null); setDetailError(""); setDetailLoading(true);
       const response = await api.get<DetailData>("/coordination/details", { params: { kind, analyst, serviceModule, serviceClient, serviceName, serviceDays, limit: 500 } });
       setDetails(response.data);
     } catch {
-      setError("Não foi possível carregar os detalhes da coordenação.");
+      setDetailError("Não foi possível carregar este recorte. Tente novamente.");
     } finally { setDetailLoading(false); }
   }
 
@@ -518,11 +519,11 @@ export function Coordination() {
         </CardContent>
       </Card>
       <Drawer anchor="right" open={Boolean(slaDrilldown)} onClose={()=>setSlaDrilldown(null)} slotProps={{paper:{sx:{width:{xs:"100%",sm:560},p:2}}}}><Stack direction="row" sx={{justifyContent:"space-between",alignItems:"center",mb:1}}><Box><Typography variant="h6" sx={{fontWeight:900}}>{slaDrilldown?.title}</Typography><Typography variant="body2" color="text.secondary">Atendimentos responsáveis pelo indicador selecionado.</Typography></Box><IconButton onClick={()=>setSlaDrilldown(null)}><CloseOutlined/></IconButton></Stack><Divider sx={{mb:1}} />{(slaFlow?.rows??[]).filter((r:any)=>slaDrilldown?.ids.includes(r.movideskId)).map((r:any)=><Box key={r.movideskId} onClick={()=>navigate(`/tickets?movidesk=${r.movideskId}`)} sx={{p:1.25,borderRadius:2,cursor:"pointer","&:hover":{bgcolor:"action.hover"}}}><Stack direction="row" spacing={1} sx={{alignItems:"center"}}><Chip size="small" label={r.urgency}/><Typography sx={{fontWeight:800}}>#{r.movideskId} · {r.subject}</Typography></Stack><Typography variant="caption" color="text.secondary">{r.client} · {r.owner} · Suporte {formatMinutes(r.supportMinutes)} · Fábrica {formatMinutes(r.factoryMinutes??0)} · {r.bottleneck}</Typography></Box>)}</Drawer>
-      <Drawer anchor="right" open={Boolean(detailTitle)} onClose={() => { setDetailTitle(""); setDetails(null); }} slotProps={{ paper: { sx: detailDrawerPaperSx } }}>
-        <DetailPanelHeader eyebrow="Coordenação" title={detailTitle || "Detalhes"} identifier={details ? `${details.total} item(ns) carregado(s)` : undefined} onClose={() => { setDetailTitle(""); setDetails(null); }} />
-        {detailLoading ? <Box sx={{ py: 8, display: "grid", placeItems: "center" }}><CircularProgress /></Box> : details ? (
+      <Drawer anchor="right" open={Boolean(detailTitle)} onClose={() => { setDetailTitle(""); setDetails(null); setDetailError(""); }} slotProps={{ paper: { sx: detailDrawerPaperSx } }}>
+        <DetailPanelHeader eyebrow="Coordenação" title={detailTitle || "Detalhes"} identifier={details ? `${details.total} item(ns) no recorte · ${details.loaded ?? (details.tickets.length + details.workItems.length)} carregado(s)` : undefined} onClose={() => { setDetailTitle(""); setDetails(null); setDetailError(""); }} />
+        {detailLoading ? <Box sx={{ py: 8, display: "grid", placeItems: "center" }}><CircularProgress /></Box> : detailError ? <Alert severity="error" sx={{m:2}}>{detailError}</Alert> : details ? (
           <Stack spacing={2}>
-            {details.truncated && <Alert severity="info">Exibindo os primeiros 100 registros do recorte.</Alert>}
+            {details.truncated && <Alert severity="info">Este recorte possui {details.total} item(ns). Exibindo {details.loaded ?? (details.tickets.length + details.workItems.length)} registro(s) carregado(s).</Alert>}
             {details.tickets.length > 0 && <ExportTicketsButton tickets={details.tickets.map((ticket) => ({ ...ticket, service: [ticket.serviceFirstLevel, ticket.serviceSecondLevel, ticket.serviceThirdLevel].filter(Boolean).join(" » ") || ticket.service }))} title={detailTitle || "Recorte operacional"} subtitle="Central da Coordenação · recorte para análise" />}
             {details.tickets.length > 0 && <DetailSection title="Atendimentos Movidesk"><Stack spacing={1}>{details.tickets.map((ticket) => (
               <Button key={ticket.movideskId} variant="outlined" onClick={() => navigate(`/tickets?movidesk=${ticket.movideskId}`)} sx={{ justifyContent: "flex-start", textTransform: "none", textAlign: "left", p: 1.25 }}>
