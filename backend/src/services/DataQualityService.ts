@@ -3,8 +3,8 @@ import type { Prisma } from "@prisma/client";
 import { SIMER_CLIENTS, SUPPORT_ANALYSTS, ticketOperationalScope } from "../domain/OperationalScope";
 import { analyzeMovideskIndicators } from "./MovideskPayloadAnalytics";
 import { SIMER_SERVICE_CATALOG, suggestSimerService, type SimerServiceCatalogItem } from "../domain/SimerServiceCatalog";
+import { isOperationalTicketFinalized, isOperationalTicketOpen, isTerminalWorkItemState, normalizeOperationalText } from "../domain/OperationalLifecycleRules";
 
-const TERMINAL = ["Concluído", "Concluido", "Closed", "Done", "Resolved", "Cancelado", "Canceled"];
 const dataQualityCache = new Map<string, { expiresAt: number; value: unknown }>();
 
 export type DataQualityParams = {
@@ -64,10 +64,13 @@ export class DataQualityService {
         select: { id: true, workItemType: true, state: true, deliveredVersion: true },
       }) : [];
       const byId = new Map(linked.map((item) => [item.id, item]));
-      const normalize = (value: string | null | undefined) => (value ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR");
-      const open = (ticket: (typeof scopedTickets)[number]) => ["New", "InAttendance", "Stopped"].includes(ticket.baseStatus ?? "") && !/conclu|fechad|encerrad|resolvid|cancelad/.test(normalize(ticket.status));
-      const finalized = (ticket: (typeof scopedTickets)[number]) => ["Resolved", "Closed"].includes(ticket.baseStatus ?? "") || /conclu|fechad|encerrad|resolvid|cancelad/.test(normalize(ticket.status));
-      const terminal = (state: string) => TERMINAL.some((value) => normalize(value) === normalize(state));
+      const normalize = normalizeOperationalText;
+      // O overview histórico usava baseStatus estrito para "aberto"; preserve esse recorte aqui.
+      const open = (ticket: (typeof scopedTickets)[number]) =>
+        ["New", "InAttendance", "Stopped"].includes(ticket.baseStatus ?? "")
+        && isOperationalTicketOpen(ticket);
+      const finalized = isOperationalTicketFinalized;
+      const terminal = isTerminalWorkItemState;
       const support = (type: string) => normalize(type).includes("apoio");
       const staleThreshold = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
       const analytics = new Map(scopedTickets.map((ticket) => [ticket.id, analyzeMovideskIndicators(ticket.rawData)]));
@@ -187,16 +190,9 @@ export class DataQualityService {
     const withoutModule = linkedTasks.filter((item) => !item.module).length;
     const withoutOwner = linkedTasks.filter((item) => !item.assignedToName).length;
 
-    const normalizeStatus = (value: string) => value
-      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-      .trim().toLocaleLowerCase("pt-BR");
-    const isTicketOpen = (ticket: { baseStatus: string | null; status: string }) => {
-      const status = normalizeStatus(ticket.status);
-      if (status === "aguardando validar versao") return false;
-      if (/conclu|fechad|encerrad|resolvid|cancelad/.test(status)) return false;
-      return ["New", "InAttendance", "Stopped"].includes(ticket.baseStatus ?? "") ||
-        /novo|desenvolvimento|andamento|aguard|paus|parad/.test(status);
-    };
+    const normalizeStatus = (value: string) => normalizeOperationalText(value);
+    const isTicketOpen = (ticket: { baseStatus: string | null; status: string }) =>
+      isOperationalTicketOpen(ticket, { excludeNormalizedStatuses: ["aguardando validar versao"] });
     const isAwaitingReturn = (ticket: { status: string; justification?: string | null }) => {
       const status = normalizeStatus(ticket.status);
       const justification = normalizeStatus(ticket.justification ?? "");
@@ -232,7 +228,7 @@ export class DataQualityService {
     };
     const isSupportTask = (task: { workItemType: string }) => normalizeStatus(task.workItemType).includes("apoio");
     const isCanceledTask = (state: string) => /cancelad|canceled/.test(normalizeStatus(state));
-    const isTerminalTask = (state: string) => TERMINAL.some((value) => normalizeStatus(value) === normalizeStatus(state));
+    const isTerminalTask = isTerminalWorkItemState;
     const finishedLinkedTasks = linkedTasks.filter((item) => isTerminalTask(item.state));
     const activeLinkedTasks = linkedTasks.filter((item) => !isTerminalTask(item.state));
     const completedWithoutVersionTasks = finishedLinkedTasks.filter((item) =>
