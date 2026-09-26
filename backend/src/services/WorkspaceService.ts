@@ -14,6 +14,16 @@ const normalizedWords = (value: string) => value
 
 const technicalLeadershipCache = new Map<string, { expiresAt: number; value: unknown }>();
 
+function compareVersions(left: string, right: string) {
+  const leftParts = left.match(/\\d+/g)?.map(Number) ?? [];
+  const rightParts = right.match(/\\d+/g)?.map(Number) ?? [];
+  for (let index = 0; index < Math.max(leftParts.length, rightParts.length); index += 1) {
+    const difference = (leftParts[index] ?? 0) - (rightParts[index] ?? 0);
+    if (difference !== 0) return difference;
+  }
+  return left.localeCompare(right, "pt-BR", { numeric: true });
+}
+
 export class WorkspaceService {
   public async myOperation(userId: number, params: {
     client?: string | null; type?: string | null; search?: string | null;
