@@ -114,6 +114,7 @@ type Ticket = {
 
   lifetimeMinutes: number | null;
   stoppedMinutes: number | null;
+  stoppedWorkingMinutes?: number | null;
 
   taskNumber: number | null;
   taskStatus: string | null;
@@ -1085,7 +1086,7 @@ export function Attention() {
                 },
               }}
             >
-              <InputLabel>
+              <InputLabel shrink>
                 Situação do prazo
               </InputLabel>
 
@@ -1108,7 +1109,7 @@ export function Attention() {
                 },
               }}
             >
-              <InputLabel>
+              <InputLabel shrink>
                 Responsável
               </InputLabel>
 
@@ -1131,7 +1132,7 @@ export function Attention() {
                 },
               }}
             >
-              <InputLabel>
+              <InputLabel shrink>
                 Cliente
               </InputLabel>
 
@@ -1154,7 +1155,7 @@ export function Attention() {
                 },
               }}
             >
-              <InputLabel>
+              <InputLabel shrink>
                 Origem do risco
               </InputLabel>
 
@@ -2709,6 +2710,15 @@ function getOfficialServiceLevel(
 
     stoppedMinutes:
       ticket.stoppedMinutes,
+
+    stoppedWorkingMinutes:
+      ticket.stoppedWorkingMinutes,
+
+    dueDate:
+      ticket.dueDate,
+
+    firstResponseDueDate:
+      ticket.firstResponseDueDate,
 
     profile:
       "STANDARD",

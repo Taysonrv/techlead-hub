@@ -94,18 +94,6 @@ export async function ensureApplicationSchema() {
     )
   `);
 
-  await prisma.$executeRawUnsafe(`
-    CREATE TABLE IF NOT EXISTS "MicrosoftUserConnection" (
-      "userId" INTEGER PRIMARY KEY,
-      "refreshToken" TEXT NOT NULL,
-      "account" TEXT,
-      "connectedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      CONSTRAINT "MicrosoftUserConnection_userId_fkey"
-        FOREIGN KEY ("userId") REFERENCES "User"("id")
-        ON DELETE CASCADE ON UPDATE CASCADE
-    )
-  `);
 
 
   /*

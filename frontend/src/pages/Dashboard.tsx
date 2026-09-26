@@ -1,3 +1,5 @@
+import { isCauseApplicable } from "../domain/ticket/classificationRules";
+
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
@@ -49,6 +51,7 @@ import { ExportTicketsButton } from "../components/ExportTicketsButton";
 import { useFilters } from "../context/FiltersContext";
 import { aliareColors } from "../theme/theme";
 import { calculateOfficialSla } from "../utils/officialSla";
+import { calculateServiceLevel } from "../utils/serviceLevel";
 import {
   chartPalette,
   semanticChartColors,
@@ -113,6 +116,7 @@ type Ticket = {
 
   lifetimeMinutes: number | null;
   stoppedMinutes: number | null;
+  stoppedWorkingMinutes?: number | null;
 
   taskNumber: number | null;
   taskStatus: string | null;
@@ -133,11 +137,6 @@ type RankingItem = {
   total: number;
 };
 
-type TrendItem = {
-  date: string;
-  sortDate: string;
-  total: number;
-};
 
 type AttentionLevel =
   | "critico"
@@ -205,7 +204,6 @@ export function Dashboard() {
 
   const [copyMessage, setCopyMessage] =
     useState("");
-  const [evolutionPeriod, setEvolutionPeriod] = useState<CardPeriod>("30d");
   const [categoryPeriod, setCategoryPeriod] = useState<CardPeriod>("30d");
   const [statusPeriod, setStatusPeriod] = useState<CardPeriod>("30d");
 
@@ -389,8 +387,6 @@ export function Dashboard() {
     if (value === "year") start = new Date(now.getFullYear(), 0, 1);
     return { start: startOfDay(start), end };
   };
-  const evolutionBounds = cardPeriodBounds(evolutionPeriod);
-  const evolutionTickets = useMemo(() => tickets.filter((ticket) => isDateInPeriod(ticket.createdDate, evolutionBounds.start, evolutionBounds.end)), [tickets, evolutionPeriod]);
   const categoryBounds = cardPeriodBounds(categoryPeriod);
   const categoryTickets = useMemo(() => tickets.filter((ticket) => isDateInPeriod(ticket.createdDate, categoryBounds.start, categoryBounds.end)), [tickets, categoryPeriod]);
   const statusBounds = cardPeriodBounds(statusPeriod);
@@ -412,135 +408,8 @@ export function Dashboard() {
     );
 
   /* =======================================================
-     ANALISTAS
-  ======================================================= */
-
-  const owners =
-    useMemo(
-      () =>
-        groupByField(
-          filteredTickets,
-          "owner",
-          "Sem responsável"
-        ),
-      [filteredTickets]
-    );
-
-  /* =======================================================
-     CLIENTES
-  ======================================================= */
-
-  const clients =
-    useMemo(
-      () =>
-        groupByField(
-          filteredTickets,
-          "client",
-          "Sem cliente"
-        ),
-      [filteredTickets]
-    );
-
-  /* =======================================================
-     TENDÊNCIA
-  ======================================================= */
-
-  const trends =
-    useMemo(() => {
-      const grouped =
-        new Map<
-          string,
-          number
-        >();
-
-      evolutionTickets.forEach(
-        (ticket) => {
-          const date =
-            new Date(
-              ticket.createdDate
-            );
-
-          if (
-            Number.isNaN(
-              date.getTime()
-            )
-          ) {
-            return;
-          }
-
-          const key =
-            formatIsoDate(date);
-
-          grouped.set(
-            key,
-            (grouped.get(key) ??
-              0) + 1
-          );
-        }
-      );
-
-      /*
-       * Mantemos todos os dias do período no gráfico,
-       * inclusive dias sem abertura de tickets.
-       *
-       * Isso evita que a linha "pule" datas e deixa a
-       * evolução operacional mais fiel.
-       */
-      const result:
-        TrendItem[] = [];
-
-      const cursor =
-        startOfDay(
-          evolutionBounds.start
-        );
-
-      const lastDay =
-        endOfDay(
-          evolutionBounds.end
-        );
-
-      while (
-        cursor <= lastDay
-      ) {
-        const sortDate =
-          formatIsoDate(
-            cursor
-          );
-
-        result.push({
-          sortDate,
-
-          date:
-            formatShortDate(
-              sortDate
-            ),
-
-          total:
-            grouped.get(
-              sortDate
-            ) ?? 0,
-        });
-
-        cursor.setDate(
-          cursor.getDate() + 1
-        );
-      }
-
-      return result;
-    }, [
-      evolutionTickets,
-      evolutionBounds.start,
-      evolutionBounds.end,
-    ]);
-
-  /* =======================================================
      ANÁLISES GERENCIAIS
   ======================================================= */
-
-  const topCategoryLabels = useMemo(
-    () => categories.slice(0, 6).map((item) => item.label),
-    [categories]
-  );
 
   const dailyFlow = useMemo(() => {
     const opened = new Map<string, number>();
@@ -579,9 +448,14 @@ export function Dashboard() {
     return result;
   }, [openedInPeriod, resolvedInPeriod, effectiveStartDate, effectiveEndDate]);
 
-  const causes = useMemo(
-    () => groupByField(filteredTickets, "cause", "Sem causa").slice(0, 8),
+  const ticketsEligibleForCause = useMemo(
+    () => filteredTickets.filter((ticket) => isCauseApplicable(ticket.category)),
     [filteredTickets]
+  );
+
+  const causes = useMemo(
+    () => groupByField(ticketsEligibleForCause, "cause", "Sem causa").slice(0, 8),
+    [ticketsEligibleForCause]
   );
 
   const statusNewTickets = useMemo(() => statusTickets.filter((ticket) => ticket.baseStatus === "New"), [statusTickets]);
@@ -670,25 +544,34 @@ export function Dashboard() {
             );
           }
 
-          if (
-            ticket.dueDate &&
-            new Date(ticket.dueDate) < now
-          ) {
-            reasons.push(
-              "Prazo vencido"
-            );
-          }
+          const deadline = calculateServiceLevel({
+            urgency: ticket.urgency,
+            category: ticket.category,
+            cause: ticket.cause,
+            subject: ticket.subject,
+            createdDate: ticket.createdDate,
+            dueDate: ticket.dueDate,
+            baseStatus: ticket.baseStatus,
+            firstResponseDate: ticket.firstResponseDate,
+            firstResponseDueDate: ticket.firstResponseDueDate,
+            resolvedDate: ticket.resolvedDate,
+            closedDate: ticket.closedDate,
+            stoppedMinutes: ticket.stoppedMinutes,
+            stoppedWorkingMinutes: ticket.stoppedWorkingMinutes,
+            profile: "STANDARD",
+          }, now);
 
-          if (
-            ticket.firstResponseDueDate &&
-            !ticket.firstResponseDate &&
-            new Date(
-              ticket.firstResponseDueDate
-            ) < now
-          ) {
-            reasons.push(
-              "Primeira resposta vencida"
-            );
+          if (deadline.applicable) {
+            if (!deadline.firstResponse.completed && deadline.firstResponse.level === "OVERDUE") {
+              reasons.push("Primeira resposta vencida");
+            }
+            if (deadline.resolution.level === "OVERDUE") {
+              reasons.push("Prazo vencido");
+            } else if (deadline.resolution.level === "CRITICAL") {
+              reasons.push("Prazo de solução crítico");
+            } else if (deadline.resolution.level === "ATTENTION") {
+              reasons.push("Prazo de solução em atenção");
+            }
           }
 
           let level:
@@ -795,36 +678,6 @@ export function Dashboard() {
       subtitle,
       tickets: list,
     });
-  }
-
-  function showOwner(
-    owner: string
-  ) {
-    showTickets(
-      `Analista: ${owner}`,
-      filteredTickets.filter(
-        (ticket) =>
-          (ticket.owner ??
-            "Sem responsável") ===
-          owner
-      ),
-      "Carteira do responsável no período"
-    );
-  }
-
-  function showClient(
-    client: string
-  ) {
-    showTickets(
-      `Cliente: ${client}`,
-      filteredTickets.filter(
-        (ticket) =>
-          (ticket.client ??
-            "Sem cliente") ===
-          client
-      ),
-      "Chamados relacionados ao cliente"
-    );
   }
 
   async function copyTicketNumber(
@@ -1360,32 +1213,11 @@ export function Dashboard() {
           <Box
             sx={{
               display: "grid",
-              gridTemplateColumns: { xs: "1fr", lg: "repeat(3, minmax(0, 1fr))" },
+              gridTemplateColumns: { xs: "1fr", lg: "repeat(2, minmax(0, 1fr))" },
               gap: 2,
               mb: 2,
             }}
           >
-            <CardBase>
-              <CardPeriodHeader title="Evolução dos Tickets" subtitle="Volume de abertura por dia • tendência do período" value={evolutionPeriod} onChange={setEvolutionPeriod} />
-              <Box sx={{ height: 260, mt: 1.5 }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={trends} margin={{ top: 8, right: 12, left: 4, bottom: 4 }}>
-                    <defs>
-                      <linearGradient id="ticketArea" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor={aliareColors.green} stopOpacity={0.42} />
-                        <stop offset="95%" stopColor={aliareColors.green} stopOpacity={0.015} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={chartGrid} />
-                    <XAxis dataKey="date" tick={{ fontSize: 11 }} minTickGap={22} interval="preserveStartEnd" tickMargin={8} />
-                    <YAxis allowDecimals={false} tick={{ fontSize: 11 }} width={42} />
-                    <Tooltip content={<TrendTooltip />} />
-                    <Area type="monotone" dataKey="total" name="Tickets" stroke={aliareColors.green} strokeWidth={3} fill="url(#ticketArea)" activeDot={{ r: 5, fill: aliareColors.green, stroke: "#FFFFFF", strokeWidth: 2 }} />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </Box>
-            </CardBase>
-
             <DonutAnalysisCard
               title="Tickets por Categoria"
               subtitle="Distribuição no período"
@@ -1417,16 +1249,6 @@ export function Dashboard() {
           {/* =============================================
               EVOLUÇÃO MENSAL POR CATEGORIA
           ============================================== */}
-
-          <MonthlyCategoryEvolutionCard
-            tickets={tickets}
-            categories={topCategoryLabels}
-            colors={chartPalette}
-            isDark={isDark}
-            chartGrid={chartGrid}
-            chartTooltipStyle={chartTooltipStyle}
-            onDrilldown={(title, list, subtitle) => showTickets(title, list, subtitle)}
-          />
 
           <Box
             sx={{
@@ -1482,31 +1304,47 @@ export function Dashboard() {
               <Typography variant="caption" color="text.secondary">
                 Causas mais frequentes • clique na leitura para direcionar ação preventiva
               </Typography></Box>
-              <Box sx={{ height: 285, mt: 1.25 }}>
+              {causes.length ? <Box sx={{ height: Math.max(250, Math.min(330, causes.slice(0, 6).length * 44 + 64)), mt: 1.25 }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={causes.slice(0, 6)} layout="vertical" margin={{ left: 18, right: 18, top: 4, bottom: 4 }}>
+                  <BarChart data={causes.slice(0, 6)} layout="vertical" margin={{ left: 10, right: 34, top: 4, bottom: 4 }}>
                     <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={chartGrid} />
-                    <XAxis type="number" allowDecimals={false} tick={{ fontSize: 10 }} />
-                    <YAxis type="category" dataKey="label" width={118} tick={{ fontSize: 10 }} />
-                    <Tooltip contentStyle={chartTooltipStyle} cursor={{ fill: isDark ? "rgba(255,183,3,.05)" : "rgba(15,23,42,.035)" }} />
-                    <Bar dataKey="total" name="Tickets" fill={semanticChartColors.attention} radius={[0, 7, 7, 0]} barSize={18} cursor="pointer" onClick={(entry: any) => {
-                      const cause = entry?.label ?? entry?.payload?.label;
-                      if (cause) showTickets(`Causa: ${cause}`, filteredTickets.filter((ticket) => (ticket.cause ?? "Sem causa") === cause), "Tickets classificados com a causa selecionada");
-                    }} />
+                    <XAxis type="number" allowDecimals={false} tick={{ fontSize: 10, fill: isDark ? "rgba(226,232,240,.72)" : "rgba(51,65,85,.72)" }} axisLine={{ stroke: chartGrid }} tickLine={false} />
+                    <YAxis type="category" dataKey="label" width={142} tick={{ fontSize: 10, fill: isDark ? "rgba(226,232,240,.76)" : "rgba(51,65,85,.76)" }} axisLine={false} tickLine={false} />
+                    <Tooltip
+                      contentStyle={chartTooltipStyle}
+                      cursor={{ fill: isDark ? "rgba(255,183,3,.05)" : "rgba(15,23,42,.035)" }}
+                      formatter={(value) => {
+                        const total = typeof value === "number" ? value : Number(value ?? 0);
+                        return [`${total} ticket${total === 1 ? "" : "s"}`, "Volume"];
+                      }}
+                    />
+                    <Bar dataKey="total" name="Tickets" fill={semanticChartColors.attention} radius={[0, 7, 7, 0]} barSize={18} cursor="pointer" minPointSize={3}
+                      label={{ position: "right", fontSize: 10, fontWeight: 800, fill: isDark ? "rgba(226,232,240,.86)" : "rgba(30,41,59,.86)" }}
+                      onClick={(_, index) => {
+                        const cause = causes.slice(0, 6)[index]?.label;
+                        if (cause) showTickets(`Causa: ${cause}`, ticketsEligibleForCause.filter((ticket) => (ticket.cause ?? "Sem causa") === cause), "Tickets classificados com a causa selecionada");
+                      }} />
                   </BarChart>
                 </ResponsiveContainer>
-              </Box>
+              </Box> : <Box sx={{ minHeight: 250, display: "grid", placeItems: "center", px: 2 }}>
+                <Typography variant="body2" color="text.secondary" sx={{ textAlign: "center" }}>Nenhuma causa registrada para os filtros selecionados.</Typography>
+              </Box>}
             </CardBase>
           </Box>
 
-          {/* =============================================
-              RANKINGS EXECUTIVOS
-          ============================================== */}
-
-          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "1fr 1fr" }, gap: 2, mb: 2 }}>
-            <RankingCard title="TOP 5 - Clientes" subtitle="Clientes com maior volume de tickets" data={clients} onItemClick={showClient} />
-            <RankingCard title="TOP 5 - Analistas" subtitle="Volume de tickets por responsável" data={owners} onItemClick={showOwner} />
-          </Box>
+          <CardBase>
+            <Stack direction={{ xs: "column", md: "row" }} spacing={1.5} sx={{ alignItems: { md: "center" }, justifyContent: "space-between" }}>
+              <Box>
+                <Typography sx={{ fontWeight: 850, fontSize: "1.05rem" }}>Análises especializadas</Typography>
+                <Typography variant="caption" color="text.secondary">O Dashboard mantém somente a leitura executiva. Rankings e análises detalhadas ficam nas visões próprias.</Typography>
+              </Box>
+              <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap" }}>
+                <Button size="small" variant="outlined" onClick={() => navigate("/clientes")}>Analisar clientes</Button>
+                <Button size="small" variant="outlined" onClick={() => navigate("/analistas")}>Analisar analistas</Button>
+                <Button size="small" variant="outlined" onClick={() => navigate("/desempenho")}>Abrir desempenho</Button>
+              </Stack>
+            </Stack>
+          </CardBase>
 
           {/* =============================================
               PONTOS DE ATENÇÃO
@@ -2541,11 +2379,10 @@ export function Dashboard() {
                 sx={{
                   mt: 3,
                 }}
-                onClick={() =>
-                  navigate(
-                    "/tickets"
-                  )
-                }
+                onClick={() => {
+                  if (!selectedTicket) return;
+                  navigate(`/tickets?movidesk=${selectedTicket.movideskId}`);
+                }}
               >
                 Abrir tela de Tickets
               </Button>
@@ -2562,97 +2399,6 @@ export function Dashboard() {
         }
         message={copyMessage}
       />
-    </Box>
-  );
-}
-
-/* =========================================================
-   TOOLTIP - EVOLUÇÃO DOS TICKETS
-========================================================= */
-
-function TrendTooltip({
-  active,
-  payload,
-}: {
-  active?:
-    boolean;
-
-  payload?:
-    Array<{
-      payload?:
-        TrendItem;
-    }>;
-}) {
-  if (
-    !active ||
-    !payload ||
-    payload.length === 0
-  ) {
-    return null;
-  }
-
-  const item =
-    payload[0]
-      ?.payload;
-
-  if (!item) {
-    return null;
-  }
-
-  return (
-    <Box
-      sx={{
-        minWidth: 150,
-
-        px: 1.5,
-        py: 1.25,
-
-        border:
-          "1px solid",
-
-        borderColor:
-          "divider",
-
-        borderRadius:
-          1.5,
-
-        backgroundColor:
-          "background.paper",
-
-        boxShadow:
-          "0 10px 28px rgba(16,24,40,0.12)",
-
-        borderTop:
-          `3px solid ${aliareColors.green}`,
-      }}
-    >
-      <Typography
-        variant="caption"
-        color="text.secondary"
-        sx={{
-          display:
-            "block",
-
-          mb: 0.35,
-        }}
-      >
-        {formatFullIsoDate(
-          item.sortDate
-        )}
-      </Typography>
-
-      <Typography
-        variant="body2"
-        sx={{
-          fontWeight:
-            800,
-        }}
-      >
-        {item.total}{" "}
-        {item.total === 1
-          ? "ticket aberto"
-          : "tickets abertos"}
-      </Typography>
     </Box>
   );
 }
@@ -2817,190 +2563,6 @@ function CardBase({
   );
 }
 
-function MonthlyCategoryEvolutionCard({
-  tickets,
-  categories,
-  colors,
-  isDark,
-  chartGrid,
-  chartTooltipStyle,
-  onDrilldown,
-}: {
-  tickets: Ticket[];
-  categories: string[];
-  colors: readonly string[];
-  isDark: boolean;
-  chartGrid: string;
-  chartTooltipStyle: Record<string, string | number>;
-  onDrilldown: (title: string, tickets: Ticket[], subtitle?: string) => void;
-}) {
-  type Granularity = "month" | "week" | "day";
-  const [granularity, setGranularity] = useState<Granularity>("month");
-  const [hiddenCategories, setHiddenCategories] = useState<Set<string>>(() => new Set());
-
-  const meta: Record<Granularity, { label: string; average: string; helper: string }> = {
-    month: { label: "Mensal", average: "Média mensal", helper: "Últimos 6 meses consolidados" },
-    week: { label: "Semanal", average: "Média semanal", helper: "Últimas 12 semanas consolidadas" },
-    day: { label: "Diário", average: "Média diária", helper: "Últimos 30 dias consolidados" },
-  };
-
-  const visibleCategories = categories.filter((category) => !hiddenCategories.has(category));
-
-  const periods = useMemo(() => {
-    const now = new Date();
-    const anchor = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const result: Array<{ key: string; label: string; start: Date; end: Date }> = [];
-
-    if (granularity === "month") {
-      for (let offset = 5; offset >= 0; offset -= 1) {
-        const start = new Date(anchor.getFullYear(), anchor.getMonth() - offset, 1);
-        const end = new Date(start.getFullYear(), start.getMonth() + 1, 0, 23, 59, 59, 999);
-        result.push({ key: `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}`, label: start.toLocaleDateString("pt-BR", { month: "short", year: "2-digit" }).replace(".", ""), start, end });
-      }
-    } else if (granularity === "week") {
-      const currentMonday = new Date(anchor);
-      const day = currentMonday.getDay();
-      currentMonday.setDate(currentMonday.getDate() + (day === 0 ? -6 : 1 - day));
-      currentMonday.setHours(0, 0, 0, 0);
-      for (let offset = 11; offset >= 0; offset -= 1) {
-        const start = new Date(currentMonday);
-        start.setDate(start.getDate() - offset * 7);
-        const end = new Date(start);
-        end.setDate(end.getDate() + 6);
-        end.setHours(23, 59, 59, 999);
-        result.push({ key: start.toISOString().slice(0, 10), label: `Sem. ${start.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}`, start, end });
-      }
-    } else {
-      for (let offset = 29; offset >= 0; offset -= 1) {
-        const start = new Date(anchor);
-        start.setDate(start.getDate() - offset);
-        start.setHours(0, 0, 0, 0);
-        const end = new Date(start);
-        end.setHours(23, 59, 59, 999);
-        result.push({ key: start.toISOString().slice(0, 10), label: start.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }), start, end });
-      }
-    }
-    return result;
-  }, [granularity]);
-
-  const data = useMemo(() => {
-    const rows = periods.map((period) => {
-      const row: Record<string, string | number> = { periodKey: period.key, period: period.label };
-      categories.forEach((category) => { row[category] = 0; });
-      return row;
-    });
-
-    tickets.forEach((ticket) => {
-      const date = new Date(ticket.createdDate);
-      if (Number.isNaN(date.getTime())) return;
-      const category = ticket.category ?? "Sem categoria";
-      if (!categories.includes(category)) return;
-      const index = periods.findIndex((period) => date >= period.start && date <= period.end);
-      if (index >= 0) rows[index][category] = Number(rows[index][category] ?? 0) + 1;
-    });
-
-    return rows;
-  }, [tickets, categories, periods]);
-
-  const total = data.reduce((sum, row) => sum + visibleCategories.reduce((acc, category) => acc + Number(row[category] ?? 0), 0), 0);
-  const average = data.length ? Math.round(total / data.length) : 0;
-  const maxTotal = Math.max(0, ...data.map((row) => visibleCategories.reduce((sum, category) => sum + Number(row[category] ?? 0), 0)));
-
-  const toggleCategory = (category: string) => {
-    setHiddenCategories((current) => {
-      const next = new Set(current);
-      if (next.has(category)) next.delete(category);
-      else if (categories.length - next.size > 1) next.add(category);
-      return next;
-    });
-  };
-
-  return (
-    <Card elevation={0} sx={{
-      mb: 2, p: { xs: 1.5, md: 2.25 }, borderRadius: 3, border: "1px solid",
-      borderColor: isDark ? "rgba(22,178,229,.30)" : "divider",
-      background: isDark ? "radial-gradient(circle at 55% 48%, rgba(18,111,190,.12), transparent 36%), linear-gradient(145deg, rgba(5,29,48,.99), rgba(4,22,38,.99))" : "background.paper",
-      boxShadow: isDark ? "0 18px 44px rgba(0,0,0,.22), inset 0 1px rgba(255,255,255,.025)" : "0 5px 20px rgba(16,24,40,.06)",
-      overflow: "hidden",
-    }}>
-      <Stack direction={{ xs: "column", lg: "row" }} spacing={1.5} sx={{ justifyContent: "space-between", alignItems: { lg: "flex-start" } }}>
-        <Stack direction="row" spacing={1.4} sx={{ alignItems: "center" }}>
-          <Box sx={{ width: 48, height: 48, borderRadius: 2, display: "grid", placeItems: "center", border: "1px solid rgba(0,229,170,.38)", bgcolor: "rgba(0,229,170,.07)", boxShadow: "0 0 24px rgba(0,229,170,.08)" }}>
-            <Box sx={{ display: "flex", gap: .35, alignItems: "flex-end", height: 24 }}>
-              {[13, 23, 17].map((height, index) => <Box key={height} sx={{ width: 6, height, borderRadius: 1, bgcolor: index === 1 ? "#36F0C0" : "#00D99C", boxShadow: "0 0 8px rgba(0,229,170,.35)" }} />)}
-            </Box>
-          </Box>
-          <Box>
-            <Typography sx={{ fontWeight: 900, fontSize: { xs: "1.08rem", md: "1.28rem" } }}>Evolução {meta[granularity].label.toLowerCase()} por categoria</Typography>
-            <Typography variant="body2" color="text.secondary">{meta[granularity].helper} • clique nas categorias para exibir/ocultar</Typography>
-          </Box>
-        </Stack>
-        <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap" }}>
-          <Box sx={{ display: "flex", p: .35, gap: .3, border: "1px solid", borderColor: isDark ? "rgba(56,189,248,.25)" : "divider", borderRadius: 2.2, bgcolor: isDark ? "rgba(3,20,35,.72)" : "background.default" }}>
-            {(["month", "week", "day"] as Granularity[]).map((value) => {
-              const selected = granularity === value;
-              return <Box component="button" type="button" key={value} aria-pressed={selected} onClick={() => setGranularity(value)} sx={{
-                appearance: "none", border: selected ? "1px solid #00E0A4" : "1px solid transparent", outline: 0, cursor: "pointer",
-                px: { xs: 1.25, sm: 2 }, py: .72, borderRadius: 1.65, fontFamily: "inherit", fontSize: 13, fontWeight: selected ? 900 : 700,
-                color: selected ? (isDark ? "#E8FFF8" : "#087A5A") : "text.secondary",
-                bgcolor: selected ? (isDark ? "rgba(0,199,142,.18)" : "rgba(0,199,142,.10)") : "transparent",
-                boxShadow: selected ? "0 0 20px rgba(0,224,164,.13), inset 0 0 16px rgba(0,224,164,.05)" : "none",
-                transition: "all .24s cubic-bezier(.2,.8,.2,1)", "&:hover": { bgcolor: selected ? undefined : "action.hover" },
-                "&:focus-visible": { boxShadow: "0 0 0 3px rgba(0,224,164,.22)" },
-              }}>{meta[value].label}</Box>;
-            })}
-          </Box>
-          <Chip size="medium" variant="outlined" label={`${visibleCategories.length}/${categories.length} categorias ativas`} sx={{ height: 38, fontWeight: 800 }} />
-        </Stack>
-      </Stack>
-
-      <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5} sx={{ mt: 2 }}>
-        {[
-          ["Total visível", total.toLocaleString("pt-BR")],
-          [meta[granularity].average, average.toLocaleString("pt-BR")],
-          ["Pico no intervalo", maxTotal.toLocaleString("pt-BR")],
-        ].map(([label, value], index) => <Box key={label} sx={{
-          minWidth: { sm: 210 }, px: 2, py: 1.25, borderRadius: 2, border: "1px solid",
-          borderColor: isDark ? "rgba(56,189,248,.25)" : "divider", borderLeft: `2px solid ${index === 2 ? "#2F6FED" : "#00C78E"}`,
-          bgcolor: isDark ? "rgba(5,31,51,.66)" : "background.default", transition: "all .25s ease",
-        }}>
-          <Typography variant="caption" color="text.secondary">{label}</Typography>
-          <Typography sx={{ fontSize: "1.65rem", lineHeight: 1.2, fontWeight: 900, mt: .25 }}>{value}</Typography>
-        </Box>)}
-      </Stack>
-
-      <Box key={granularity + visibleCategories.join("|")} sx={{
-        height: { xs: 350, md: granularity === "day" ? 430 : 390 }, mt: 2,
-        animation: "categoryChartIn .34s cubic-bezier(.2,.8,.2,1)",
-        "@keyframes categoryChartIn": { from: { opacity: 0, transform: "translateY(8px)", filter: "blur(3px)" }, to: { opacity: 1, transform: "translateY(0)", filter: "blur(0)" } },
-      }}>
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={data} margin={{ top: 8, right: 16, left: 8, bottom: granularity === "day" ? 18 : 8 }} barCategoryGap={granularity === "day" ? "18%" : "32%"}>
-            <CartesianGrid strokeDasharray="4 5" vertical={false} stroke={chartGrid} />
-            <XAxis dataKey="period" tick={{ fontSize: granularity === "day" ? 10 : 12 }} tickMargin={10} minTickGap={granularity === "day" ? 18 : 8} interval="preserveStartEnd" axisLine={{ stroke: isDark ? "rgba(148,163,184,.42)" : "#D0D5DD" }} />
-            <YAxis allowDecimals={false} tick={{ fontSize: 11 }} width={44} axisLine={{ stroke: isDark ? "rgba(148,163,184,.42)" : "#D0D5DD" }} label={{ value: "Tickets", angle: -90, position: "insideLeft", style: { fill: isDark ? "#B9C9D9" : "#667085", fontSize: 12 } }} />
-            <Tooltip contentStyle={chartTooltipStyle} cursor={{ fill: isDark ? "rgba(56,189,248,.045)" : "rgba(15,23,42,.035)" }} formatter={(value, name) => [Number(value).toLocaleString("pt-BR"), String(name)]} labelFormatter={(label) => `${meta[granularity].label}: ${String(label)}`} />
-            {visibleCategories.map((category) => {
-              const index = categories.indexOf(category);
-              return <Bar key={category} dataKey={category} name={category} stackId="categories" fill={colors[index % colors.length]} maxBarSize={granularity === "day" ? 42 : granularity === "week" ? 72 : 110} radius={category === visibleCategories[visibleCategories.length - 1] ? [5, 5, 0, 0] : 0} animationDuration={520} animationBegin={Math.max(index, 0) * 45} cursor="pointer" onClick={(entry: any) => { const periodKey = entry?.periodKey ?? entry?.payload?.periodKey; const rowIndex = data.findIndex((row) => row.periodKey === periodKey); const period = periods[rowIndex]; if (!period) return; onDrilldown(`${category} · ${meta[granularity].label}`, tickets.filter((ticket) => { const date = new Date(ticket.createdDate); return (ticket.category ?? "Sem categoria") === category && date >= period.start && date <= period.end; }), `Tickets da categoria no período ${entry?.period ?? entry?.payload?.period ?? ""}`); }} />;
-            })}
-          </BarChart>
-        </ResponsiveContainer>
-      </Box>
-
-      <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap", mt: .75, justifyContent: "center", alignItems: "center" }}>
-        {categories.map((category, index) => {
-          const active = !hiddenCategories.has(category);
-          return <Chip key={category} size="small" label={category} onClick={() => toggleCategory(category)}
-            icon={<Box component="span" sx={{ width: 9, height: 9, borderRadius: "50%", bgcolor: active ? colors[index % colors.length] : "text.disabled", boxShadow: active ? `0 0 8px ${colors[index % colors.length]}88` : "none" }} />}
-            sx={{ height: 31, fontWeight: 750, opacity: active ? 1 : .42, cursor: "pointer", textDecoration: active ? "none" : "line-through", border: "1px solid", borderColor: active ? (isDark ? "rgba(56,189,248,.32)" : "divider") : "divider", bgcolor: active && isDark ? "rgba(6,30,49,.74)" : "background.paper", transition: "all .2s ease", "&:hover": { transform: "translateY(-1px)" }, "& .MuiChip-icon": { ml: 1 } }}
-            variant="outlined" />;
-        })}
-      </Stack>
-    </Card>
-  );
-}
-
 function CardPeriodHeader({ title, subtitle, value, onChange }: { title: string; subtitle: string; value?: CardPeriod; onChange?: (value: CardPeriod) => void }) {
   return <Box sx={{ display: "grid", gridTemplateRows: "auto auto", justifyItems: "center", gap: .75, minHeight: value ? 76 : "auto" }}>
     <Box sx={{ textAlign: "center", minWidth: 0 }}>
@@ -3098,78 +2660,6 @@ function DonutAnalysisCard({
             <Typography variant="caption" sx={{ fontWeight: 850 }}>{item.total}</Typography>
           </Box>
         )})}
-      </Stack>
-    </CardBase>
-  );
-}
-
-/* =========================================================
-   RANKING INTERATIVO
-========================================================= */
-
-function RankingCard({
-  title,
-  subtitle,
-  data,
-  onItemClick,
-}: {
-  title: string;
-  subtitle: string;
-  data: RankingItem[];
-  onItemClick: (
-    value: string
-  ) => void;
-}) {
-  return (
-    <CardBase>
-      <Typography
-        sx={{
-          fontWeight: 800,
-          fontSize:
-            "1.05rem",
-        }}
-      >
-        {title}
-      </Typography>
-
-      <Typography
-        variant="caption"
-        color="text.secondary"
-        sx={{
-          display: "block",
-          mb: 1.25,
-        }}
-      >
-        {subtitle}
-      </Typography>
-
-      <Stack spacing={1.15}>
-        {data.slice(0, 5).map((item, index) => {
-          const max = Math.max(...data.slice(0, 5).map((row) => row.total), 1);
-          const pct = Math.max(6, (item.total / max) * 100);
-          const color = chartPalette[index % chartPalette.length];
-
-          return (
-            <Box
-              key={`${item.label}-${index}`}
-              role="button"
-              tabIndex={0}
-              onClick={() => onItemClick(item.label)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" || event.key === " ") onItemClick(item.label);
-              }}
-              sx={{ cursor: "pointer", px: .25 }}
-            >
-              <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "center", mb: .45 }}>
-                <Typography variant="body2" sx={{ fontWeight: 700 }} noWrap>{item.label}</Typography>
-                <Typography variant="caption" sx={{ fontWeight: 900, ml: 1 }}>{item.total}</Typography>
-              </Stack>
-              <Box sx={{ height: 10, borderRadius: 99, bgcolor: "rgba(72,115,154,.16)", overflow: "hidden" }}>
-                <Box sx={{ width: `${pct}%`, height: "100%", borderRadius: 99, background: `linear-gradient(90deg, ${color}, ${color}CC)`, boxShadow: `0 0 14px ${color}55`, transition: "width .35s ease" }} />
-              </Box>
-            </Box>
-          );
-        })}
       </Stack>
     </CardBase>
   );
@@ -3374,6 +2864,7 @@ function TicketField({
 /* =========================================================
    AGRUPAMENTO
 ========================================================= */
+
 
 function groupByField(
   tickets: Ticket[],
@@ -3601,39 +3092,6 @@ function formatShortDate(
     2,
     "0"
   )}`;
-}
-
-function formatFullIsoDate(
-  isoDate: string
-) {
-  const [
-    year,
-    month,
-    day,
-  ] =
-    isoDate
-      .split("-")
-      .map(Number);
-
-  if (
-    !year ||
-    !month ||
-    !day
-  ) {
-    return isoDate;
-  }
-
-  return `${String(
-    day
-  ).padStart(
-    2,
-    "0"
-  )}/${String(
-    month
-  ).padStart(
-    2,
-    "0"
-  )}/${year}`;
 }
 
 function formatDateTime(

@@ -1,34 +1,31 @@
+import { businessMinutes, isBug, isConcluded, mapPriority, SLA_PRIORITY } from "../domain/TicketClassificationRules";
 import { prisma } from "../database/prisma";
-import { SIMER_CLIENTS, SUPPORT_ANALYSTS, SUPPORT_COORDINATOR, azureOperationalScope, ticketOperationalScope } from "../domain/OperationalScope";
-import { microsoftKnowledgeService } from "./MicrosoftKnowledgeService";
+import { SIMER_CLIENTS, SUPPORT_ANALYSTS, SUPPORT_COORDINATOR, coordinationAzureScope, coordinationTicketScope, ticketOperationalScope } from "../domain/OperationalScope";
 import { SIMER_SERVICE_CATALOG, suggestSimerService, type SimerServiceCatalogItem } from "../domain/SimerServiceCatalog";
 import { extractMovideskTimeEntries } from "./MovideskPayloadAnalytics";
+import { coordinationAzurePriorityPredicate, coordinationOpenAzurePredicate, coordinationOpenTicketPredicate, coordinationTicketPriorityPredicate, type CoordinationPriorityKind } from "../domain/CoordinationPredicates";
+import { productivityExpectedHours, sameOperationalPerson } from "../domain/ProductivityRules";
 
-const OPEN_TICKET_STATES = ["New", "InAttendance", "Stopped"];
-const CLOSED_WORK_ITEM_STATES = ["Closed", "Resolved", "Concluído", "Concluido", "Done", "Removed"];
 
 export class CoordinationService {
-  async details(kind: string, analyst?: string, limit = 50, serviceModule?: string, serviceClient?: string) {
+  async details(kind: string, analyst?: string, limit = 50, serviceModule?: string, serviceClient?: string, serviceName?: string, serviceDays = 0) {
     const now = new Date();
-    const staleBefore = new Date(now.getTime() - 72 * 60 * 60 * 1_000);
-    const nextSevenDays = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1_000);
-    const safeLimit = Math.min(Math.max(limit, 1), 100);
-    const ticketScope = ticketOperationalScope();
-    const azureScope = azureOperationalScope();
+    const safeLimit = Math.min(Math.max(limit, 1), 500);
+    // Busca um registro adicional para informar truncamento sem confundir "quantidade carregada" com total real.
+    const fetchLimit = Math.min(safeLimit + 1, 501);
+    const serviceSince = serviceDays > 0 ? new Date(now.getTime() - Math.min(serviceDays, 730) * 86400000) : null;
+    const ticketScope = coordinationTicketScope();
+    const azureScope = coordinationAzureScope();
 
-    const ticketExtra: Record<string, unknown> =
-      kind === "critical" ? { urgency: "Crítica" } :
-      kind === "stale" ? { OR: [{ lastUpdate: { lt: staleBefore } }, { lastUpdate: null }] } :
-      kind === "dueSoon" ? { dueDate: { gte: now, lte: nextSevenDays } } :
-      kind === "overdue" ? { dueDate: { lt: now } } :
-      {};
+    const priorityKinds: CoordinationPriorityKind[] = ["backlog", "critical", "stale", "dueSoon", "overdue"];
+    const ticketPriority = priorityKinds.includes(kind as CoordinationPriorityKind)
+      ? coordinationTicketPriorityPredicate(kind as CoordinationPriorityKind, now)
+      : coordinationOpenTicketPredicate();
+    const azurePriority = kind === "blocked" || kind === "unassigned"
+      ? coordinationAzurePriorityPredicate(kind)
+      : coordinationOpenAzurePredicate();
 
-    const azureExtra: Record<string, unknown> =
-      kind === "blocked" ? { blockedProcess: true } :
-      kind === "unassigned" ? { assignedToName: null } :
-      {};
-
-    const wantsTickets = ["backlog", "critical", "stale", "dueSoon", "overdue", "analyst", "serviceModule", "serviceClient", "serviceAnalyst"].includes(kind);
+    const wantsTickets = ["backlog", "critical", "stale", "dueSoon", "overdue", "analyst", "service", "serviceModule", "serviceClient", "serviceAnalyst"].includes(kind);
     const wantsAzure = ["blocked", "unassigned", "analyst"].includes(kind);
 
     const [tickets, workItems] = await Promise.all([
@@ -37,10 +34,10 @@ export class CoordinationService {
             where: {
               AND: [
                 ticketScope,
-                { isDeleted: false, baseStatus: { in: OPEN_TICKET_STATES } },
-                ticketExtra,
+                ticketPriority,
                 ...(analyst ? [{ owner: { equals: analyst, mode: "insensitive" as const } }] : []),
                 ...(serviceClient ? [{ client: { equals: serviceClient, mode: "insensitive" as const } }] : []),
+                ...(serviceSince && ["service","serviceModule","serviceClient","serviceAnalyst"].includes(kind) ? [{ createdDate: { gte: serviceSince } }] : []),
                 ...(serviceModule ? [{
                   OR: [
                     { service: { contains: serviceModule, mode: "insensitive" as const } },
@@ -52,7 +49,7 @@ export class CoordinationService {
               ],
             },
             orderBy: [{ urgency: "desc" }, { lastUpdate: "asc" }],
-            take: safeLimit,
+            take: fetchLimit,
             select: {
               movideskId: true, subject: true, status: true, urgency: true, client: true,
               owner: true, lastUpdate: true, dueDate: true, taskNumber: true,
@@ -67,13 +64,12 @@ export class CoordinationService {
             where: {
               AND: [
                 azureScope,
-                { state: { notIn: CLOSED_WORK_ITEM_STATES } },
-                azureExtra,
+                azurePriority,
                 ...(analyst ? [{ createdByName: { equals: analyst, mode: "insensitive" as const } }] : []),
               ],
             },
             orderBy: [{ azureChangedAt: "asc" }],
-            take: safeLimit,
+            take: fetchLimit,
             select: {
               id: true, workItemType: true, title: true, state: true, client: true,
               assignedToName: true, createdByName: true, criticality: true, blockedProcess: true,
@@ -84,16 +80,85 @@ export class CoordinationService {
         : Promise.resolve([]),
     ]);
 
+    const normalizeService = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR").trim();
+    const ticketServicePath = (ticket: (typeof tickets)[number]) =>
+      [ticket.serviceFirstLevel, ticket.serviceSecondLevel, ticket.serviceThirdLevel].map((v) => v?.trim()).filter(Boolean).join(" » ") || ticket.service?.trim() || "";
+    const serviceFilteredTickets = serviceName
+      ? tickets.filter((ticket) => normalizeService(ticketServicePath(ticket)) === normalizeService(serviceName))
+      : tickets;
+    const ticketTruncated = serviceFilteredTickets.length > safeLimit;
+    const workItemTruncated = workItems.length > safeLimit;
+    const filteredTickets = serviceFilteredTickets.slice(0, safeLimit);
+    const filteredWorkItems = workItems.slice(0, safeLimit);
+
+    // O mesmo predicado usado no summary calcula o total do recorte. Assim o card e o drawer
+    // permanecem consistentes mesmo quando a lista é paginada/limitada.
+    const [ticketTotal, workItemTotal] = await Promise.all([
+      wantsTickets ? prisma.ticket.count({ where: { AND: [
+        ticketScope, ticketPriority,
+        ...(analyst?[{owner:{equals:analyst,mode:"insensitive" as const}}]:[]),
+        ...(serviceClient?[{client:{equals:serviceClient,mode:"insensitive" as const}}]:[]),
+        ...(serviceSince&&["service","serviceModule","serviceClient","serviceAnalyst"].includes(kind)?[{createdDate:{gte:serviceSince}}]:[]),
+        ...(serviceModule?[{OR:[
+          {service:{contains:serviceModule,mode:"insensitive" as const}},
+          {serviceFirstLevel:{contains:serviceModule,mode:"insensitive" as const}},
+          {serviceSecondLevel:{contains:serviceModule,mode:"insensitive" as const}},
+          {serviceThirdLevel:{contains:serviceModule,mode:"insensitive" as const}},
+        ]}]:[]),
+      ] } }) : Promise.resolve(0),
+      wantsAzure ? prisma.azureWorkItem.count({ where: { AND: [
+        azureScope, azurePriority,
+        ...(analyst?[{createdByName:{equals:analyst,mode:"insensitive" as const}}]:[]),
+      ] } }) : Promise.resolve(0),
+    ]);
+    // Para Serviço exato o filtro é pós-query; nesse caso o total conhecido é o conjunto filtrado carregado.
+    const total = serviceName ? serviceFilteredTickets.length + workItemTotal : ticketTotal + workItemTotal;
+
     return {
-      kind,
-      analyst: analyst ?? null,
-      serviceModule: serviceModule ?? null,
-      serviceClient: serviceClient ?? null,
-      total: tickets.length + workItems.length,
-      truncated: tickets.length === safeLimit || workItems.length === safeLimit,
-      tickets,
-      workItems,
+      kind, analyst:analyst??null, serviceModule:serviceModule??null, serviceClient:serviceClient??null, serviceName:serviceName??null,
+      total, loaded:filteredTickets.length+filteredWorkItems.length,
+      truncated:ticketTruncated||workItemTruncated||total>filteredTickets.length+filteredWorkItems.length,
+      tickets:filteredTickets, workItems:filteredWorkItems,
     };
+  }
+
+  async slaDevelopmentFlow(days = 180) {
+    const since = new Date(Date.now() - Math.min(Math.max(days, 30), 730) * 86400000);
+    const tickets = await prisma.ticket.findMany({
+      where: { AND: [{ isDeleted: false, createdDate: { gte: since } }, coordinationTicketScope()] },
+      select: { movideskId:true, subject:true, category:true, client:true, owner:true, urgency:true, createdDate:true, taskNumber:true, taskStatus:true, taskTitle:true, taskType:true, solutionSlaIndicator:true }
+    });
+    const bugTickets=tickets.filter(t=>isBug(t.category,t.taskType));
+    const ids=[...new Set(bugTickets.map(t=>t.taskNumber).filter((x):x is number=>Boolean(x)))];
+    const movideskIds=bugTickets.map(t=>t.movideskId);
+    const items=await prisma.azureWorkItem.findMany({
+      where:{OR:[...(ids.length?[{id:{in:ids}}]:[]),...(movideskIds.length?[{movideskTicket:{in:movideskIds}}]:[])]},
+      select:{id:true,state:true,azureCreatedAt:true,stateChangedAt:true,azureChangedAt:true,azureClosedAt:true,title:true,movideskTicket:true,criticality:true}
+    });
+    const byId=new Map(items.map(x=>[x.id,x]));
+    const byTicket=new Map(items.filter(x=>x.movideskTicket).map(x=>[x.movideskTicket!,x]));
+    let missingAzure=0,missingTaskCreatedAt=0,missingPriority=0;
+    const rows=bugTickets.flatMap(t=>{const w=(t.taskNumber?byId.get(t.taskNumber):undefined)??byTicket.get(t.movideskId);if(!w){missingAzure++;return[]}if(!w.azureCreatedAt){missingTaskCreatedAt++;return[]}const p=mapPriority(t.urgency,w.criticality);if(!p){missingPriority++;return[]}const concluded=isConcluded(w.state,t.taskStatus);// Para o estado atual Concluída, stateChangedAt representa a transição que encerrou a Task.
+      // azureClosedAt fica como fallback porque pode refletir outro marco de fechamento do Work Item.
+      const end=concluded?(w.stateChangedAt??w.azureClosedAt??w.azureChangedAt):null;const support=businessMinutes(t.createdDate,w.azureCreatedAt);const factory=end?businessMinutes(w.azureCreatedAt,end):null;const total=factory===null?null:support+factory;const rule=SLA_PRIORITY[p];const tg={support:rule.supportMinutes,factory:rule.factoryMinutes,total:rule.totalMinutes};const supportPct=Math.round(support/tg.support*1000)/10;const factoryPct=factory===null?null:Math.round(factory/tg.factory*1000)/10;const totalPct=total===null?null:Math.round(total/tg.total*1000)/10;const bottleneck=factoryPct!==null&&factoryPct>supportPct?"Fábrica":"Suporte";return[{movideskId:t.movideskId,subject:t.subject,client:t.client,owner:t.owner??"Sem responsável",taskNumber:w.id,taskTitle:w.title??t.taskTitle,taskState:w.state??t.taskStatus,urgency:p,taskCreatedAt:w.azureCreatedAt,taskConcludedAt:end,supportMinutes:support,factoryMinutes:factory,totalMinutes:total,supportTargetMinutes:tg.support,factoryTargetMinutes:tg.factory,totalTargetMinutes:tg.total,supportPct,factoryPct,totalPct,bottleneck,officialSla:t.solutionSlaIndicator}]} );
+    const done=rows.filter(r=>r.taskConcludedAt);
+    const avg=(xs:number[])=>xs.length?Math.round(xs.reduce((a,b)=>a+b,0)/xs.length):0;
+    const summarize=(group:any[])=>{const completed=group.filter(r=>r.taskConcludedAt);return{total:group.length,concluded:completed.length,openDevelopment:group.length-completed.length,avgSupportMinutes:avg(group.map(r=>r.supportMinutes)),avgFactoryMinutes:avg(completed.map(r=>r.factoryMinutes!)),avgTotalMinutes:avg(completed.map(r=>r.totalMinutes!)),supportWithinOla:group.filter(r=>r.supportPct<=100).length,factoryWithinOla:completed.filter(r=>(r.factoryPct??Infinity)<=100).length,totalWithinSla:completed.filter(r=>(r.totalPct??Infinity)<=100).length,supportBottleneck:group.filter(r=>r.bottleneck==="Suporte").length,factoryBottleneck:completed.filter(r=>r.bottleneck==="Fábrica").length}};
+    const outlierRows=rows.map(r=>{const supportOver=Math.max(0,r.supportPct-100);const factoryOver=r.factoryPct===null?0:Math.max(0,r.factoryPct-100);const totalOver=r.totalPct===null?0:Math.max(0,r.totalPct-100);const severity=Math.max(supportOver,factoryOver,totalOver);return{...r,severity,outlierStage:totalOver>=factoryOver&&totalOver>=supportOver?"SLA total":factoryOver>supportOver?"Fábrica":"Suporte"}}).filter(r=>r.severity>0).sort((a,b)=>b.severity-a.severity);
+    const outliers={
+      total:outlierRows.length,
+      support:rows.filter(r=>r.supportPct>100).length,
+      factory:done.filter(r=>(r.factoryPct??0)>100).length,
+      totalSla:done.filter(r=>(r.totalPct??0)>100).length,
+      critical:outlierRows.filter(r=>r.severity>=100).length,
+      top:outlierRows.slice(0,15).map(r=>({movideskId:r.movideskId,subject:r.subject,client:r.client,owner:r.owner,taskNumber:r.taskNumber,urgency:r.urgency,supportPct:r.supportPct,factoryPct:r.factoryPct,totalPct:r.totalPct,severity:r.severity,outlierStage:r.outlierStage,supportMinutes:r.supportMinutes,factoryMinutes:r.factoryMinutes,totalMinutes:r.totalMinutes}))
+    };
+    const byPriority=["P1","P2","P3","P4"].map(priority=>({priority,...summarize(rows.filter(r=>r.urgency===priority)),rows:rows.filter(r=>r.urgency===priority).map(r=>r.movideskId)}));
+    const owners=[...new Set(rows.map(r=>r.owner))].map(owner=>({owner,...summarize(rows.filter(r=>r.owner===owner)),rows:rows.filter(r=>r.owner===owner).map(r=>r.movideskId)})).sort((a,b)=>b.total-a.total);
+    const monthKey=(date:Date)=>date.toISOString().slice(0,7);
+    const monthLabel=(key:string)=>{const [year,month]=key.split("-");return new Intl.DateTimeFormat("pt-BR",{month:"short",year:"2-digit",timeZone:"UTC"}).format(new Date(Date.UTC(Number(year),Number(month)-1,1))).replace(".","");};
+    const monthly=[...new Set(rows.map(r=>monthKey(r.taskCreatedAt)))].sort().map(month=>{const group=rows.filter(r=>monthKey(r.taskCreatedAt)===month);const completed=group.filter(r=>r.taskConcludedAt);return{month,label:monthLabel(month),total:group.length,concluded:completed.length,avgSupportMinutes:avg(group.map(r=>r.supportMinutes)),avgFactoryMinutes:avg(completed.map(r=>r.factoryMinutes!)),avgTotalMinutes:avg(completed.map(r=>r.totalMinutes!)),supportWithinPct:group.length?Math.round(group.filter(r=>r.supportPct<=100).length/group.length*1000)/10:0,factoryWithinPct:completed.length?Math.round(completed.filter(r=>(r.factoryPct??Infinity)<=100).length/completed.length*1000)/10:0,totalWithinPct:completed.length?Math.round(completed.filter(r=>(r.totalPct??Infinity)<=100).length/completed.length*1000)/10:0}});
+    return { periodDays: days, rule:{taskEndState:"Concluida",schedule:"Seg-Sex 08:00-18:00",profile:"PADRAO"}, dataQuality:{bugsInPeriod:bugTickets.length,linked:rows.length,missingAzure,missingTaskCreatedAt,missingPriority}, summary:{bugsWithTask:rows.length,concluded:done.length,openDevelopment:rows.length-done.length,avgSupportMinutes:avg(rows.map(r=>r.supportMinutes)),avgFactoryMinutes:avg(done.map(r=>r.factoryMinutes!)),avgTotalMinutes:avg(done.map(r=>r.totalMinutes!)),supportWithinOla:rows.filter(r=>r.supportPct<=100).length,factoryWithinOla:done.filter(r=>(r.factoryPct??Infinity)<=100).length,totalWithinSla:done.filter(r=>(r.totalPct??Infinity)<=100).length}, byPriority, owners, monthly, outliers, rows };
   }
 
   async serviceIntelligence(filters: { client?: string; analyst?: string; months?: number } = {}) {
@@ -203,21 +268,16 @@ export class CoordinationService {
     const now = new Date();
     const start = new Date(now.getTime() - (Math.min(Math.max(days, 7), 90) - 1) * 86400000);
     start.setHours(0, 0, 0, 0);
-    const holidays = new Set((process.env.PRODUCTIVITY_HOLIDAYS ?? "").split(",").map((value) => value.trim()).filter(Boolean));
-    const hoursPerDay = Math.min(Math.max(Number(process.env.PRODUCTIVITY_HOURS_PER_DAY ?? 8) || 8, 1), 24);
-    const dateKey = (value: Date) => `${value.getFullYear()}-${String(value.getMonth()+1).padStart(2,"0")}-${String(value.getDate()).padStart(2,"0")}`;
-    const isBusiness = (value: Date) => value.getDay() !== 0 && value.getDay() !== 6 && !holidays.has(dateKey(value));
-    let businessDays = 0; for (const day = new Date(start); day <= now; day.setDate(day.getDate()+1)) if (isBusiness(day)) businessDays += 1;
+    const { businessDays, hoursPerDay } = productivityExpectedHours(start, now);
     const tickets = await prisma.ticket.findMany({
       where: { AND: [ticketOperationalScope(), { isDeleted: false }, { owner: { in: [...SUPPORT_ANALYSTS], mode: "insensitive" } }] },
       select: { owner: true, rawData: true },
     });
-    const same = (a: string | null, b: string) => Boolean(a && a.localeCompare(b, "pt-BR", { sensitivity: "base" }) === 0);
     const analysts = SUPPORT_ANALYSTS.map((analyst) => {
       let minutes = 0;
       for (const ticket of tickets) for (const entry of extractMovideskTimeEntries(ticket.rawData)) {
         if (entry.date) { const date = new Date(entry.date); if (date < start || date > now) continue; }
-        if (entry.analyst ? same(entry.analyst, analyst) : same(ticket.owner, analyst)) minutes += entry.minutes;
+        if (entry.analyst ? sameOperationalPerson(entry.analyst, analyst) : sameOperationalPerson(ticket.owner, analyst)) minutes += entry.minutes;
       }
       const expectedHours = businessDays * hoursPerDay, registeredHours = Number((minutes/60).toFixed(2));
       return { analyst, expectedHours, registeredHours, coverageRate: expectedHours ? Number((registeredHours/expectedHours*100).toFixed(1)) : null };
@@ -227,13 +287,11 @@ export class CoordinationService {
     return { days, businessDays, hoursPerDay, expectedHours, registeredHours, coverageRate: expectedHours ? Number((registeredHours/expectedHours*100).toFixed(1)) : null, analysts };
   }
 
-  async summary(userId: number) {
+  async summary(_userId: number, serviceDays = 0) {
     const now = new Date();
-    const staleBefore = new Date(now.getTime() - 72 * 60 * 60 * 1_000);
-    const nextSevenDays = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1_000);
-
-    const ticketScope = ticketOperationalScope();
-    const azureScope = azureOperationalScope();
+    const ticketScope = coordinationTicketScope();
+    const serviceSince = serviceDays > 0 ? new Date(now.getTime() - Math.min(serviceDays, 730) * 86400000) : null;
+    const azureScope = coordinationAzureScope();
 
     const [
       openTickets,
@@ -248,52 +306,31 @@ export class CoordinationService {
       serviceTickets,
     ] = await Promise.all([
       prisma.ticket.count({
-        where: { AND: [ticketScope, { isDeleted: false, baseStatus: { in: OPEN_TICKET_STATES } }] },
+        where: { AND: [ticketScope, coordinationTicketPriorityPredicate("backlog", now)] },
       }),
       prisma.ticket.count({
-        where: { AND: [ticketScope, { isDeleted: false, urgency: "Crítica", baseStatus: { in: OPEN_TICKET_STATES } }] },
+        where: { AND: [ticketScope, coordinationTicketPriorityPredicate("critical", now)] },
       }),
       prisma.ticket.count({
         where: {
-          AND: [
-            ticketScope,
-            {
-              isDeleted: false,
-              baseStatus: { in: OPEN_TICKET_STATES },
-              OR: [{ lastUpdate: { lt: staleBefore } }, { lastUpdate: null }],
-            },
-          ],
+          AND: [ticketScope, coordinationTicketPriorityPredicate("stale", now)],
         },
       }),
       prisma.ticket.count({
         where: {
-          AND: [
-            ticketScope,
-            {
-              isDeleted: false,
-              baseStatus: { in: OPEN_TICKET_STATES },
-              dueDate: { gte: now, lte: nextSevenDays },
-            },
-          ],
+          AND: [ticketScope, coordinationTicketPriorityPredicate("dueSoon", now)],
         },
       }),
       prisma.ticket.count({
         where: {
-          AND: [
-            ticketScope,
-            {
-              isDeleted: false,
-              baseStatus: { in: OPEN_TICKET_STATES },
-              dueDate: { lt: now },
-            },
-          ],
+          AND: [ticketScope, coordinationTicketPriorityPredicate("overdue", now)],
         },
       }),
       prisma.azureWorkItem.count({
-        where: { AND: [azureScope, { blockedProcess: true, state: { notIn: CLOSED_WORK_ITEM_STATES } }] },
+        where: { AND: [azureScope, coordinationAzurePriorityPredicate("blocked")] },
       }),
       prisma.azureWorkItem.count({
-        where: { AND: [azureScope, { assignedToName: null, state: { notIn: CLOSED_WORK_ITEM_STATES } }] },
+        where: { AND: [azureScope, coordinationAzurePriorityPredicate("unassigned")] },
       }),
       prisma.ticket.groupBy({
         by: ["owner"],
@@ -301,8 +338,7 @@ export class CoordinationService {
           AND: [
             ticketScope,
             {
-              isDeleted: false,
-              baseStatus: { in: OPEN_TICKET_STATES },
+              AND: [coordinationOpenTicketPredicate()],
               owner: { in: [...SUPPORT_ANALYSTS], mode: "insensitive" },
             },
           ],
@@ -315,7 +351,7 @@ export class CoordinationService {
           AND: [
             azureScope,
             {
-              state: { notIn: CLOSED_WORK_ITEM_STATES },
+              AND: [coordinationOpenAzurePredicate()],
               createdByName: { in: [...SUPPORT_ANALYSTS], mode: "insensitive" },
             },
           ],
@@ -323,7 +359,13 @@ export class CoordinationService {
         _count: { id: true },
       }),
       prisma.ticket.findMany({
-        where: { AND: [ticketScope, { isDeleted: false, baseStatus: { in: OPEN_TICKET_STATES } }] },
+        // Qualidade de Serviço pertence à carteira da squad: basta o ticket ser
+        // de um cliente da squad OU estar com um analista da squad.
+        where: { AND: [
+          coordinationOpenTicketPredicate(),
+          ...(serviceSince ? [{ createdDate: { gte: serviceSince } }] : []),
+          coordinationTicketScope(),
+        ] },
         select: {
           id: true, subject: true, category: true, cause: true, service: true, client: true, owner: true,
           serviceFirstLevel: true, serviceSecondLevel: true, serviceThirdLevel: true,
@@ -412,6 +454,8 @@ export class CoordinationService {
       .map(([service, count]) => ({ service, count }))
       .sort((a, b) => b.count - a.count || a.service.localeCompare(b.service, "pt-BR"))
       .slice(0, 10);
+    const genericRanking = serviceRanking.filter((item) => isGenericService(item.service));
+    const specificRanking = serviceRanking.filter((item) => !isGenericService(item.service));
     const serviceModuleCounts = new Map<string, number>();
     const serviceClientIssues = new Map<string, { total: number; issues: number }>();
     const serviceAnalystIssues = new Map<string, { total: number; issues: number }>();
@@ -524,15 +568,6 @@ export class CoordinationService {
       },
     ].filter((item) => item.count > 0);
 
-    const microsoft = await microsoftKnowledgeService
-      .coordinationSnapshot(userId)
-      .catch(() => ({
-        connected: false,
-        plannerTasks: [],
-        events: [],
-        teams: [],
-        warnings: ["Microsoft 365 temporariamente indisponível."],
-      }));
 
     return {
       generatedAt: now,
@@ -555,7 +590,9 @@ export class CoordinationService {
         suspectedMismatch,
         classificationRate,
         catalogSize: serviceCatalog.length,
-        ranking: serviceRanking,
+        periodDays: serviceDays,
+        ranking: specificRanking,
+        genericRanking,
         moduleRanking,
         clientQuality,
         analystQuality,
@@ -574,25 +611,7 @@ export class CoordinationService {
         coordinator: SUPPORT_COORDINATOR,
         analysts: [...SUPPORT_ANALYSTS],
         clients: [...SIMER_CLIENTS],
-      },
-      integrations: {
-        planner: {
-          configured: Boolean(process.env.MICROSOFT_TENANT_ID && process.env.MICROSOFT_CLIENT_ID),
-          connected: microsoft.connected,
-          items: microsoft.plannerTasks.length,
-        },
-        outlook: {
-          configured: Boolean(process.env.MICROSOFT_TENANT_ID && process.env.MICROSOFT_CLIENT_ID),
-          connected: microsoft.connected,
-          items: microsoft.events.length,
-        },
-        teams: {
-          configured: Boolean(process.env.MICROSOFT_TENANT_ID && process.env.MICROSOFT_CLIENT_ID),
-          connected: microsoft.connected,
-          items: microsoft.teams.length,
-        },
-      },
-      microsoft,
+      }
     };
   }
 }

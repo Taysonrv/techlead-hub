@@ -1,23 +1,8 @@
 import {
-  BusinessOutlined,
-  FactCheckOutlined,
   GroupsOutlined,
-  InsightsOutlined,
-  IntegrationInstructionsOutlined,
-  TrendingUpOutlined,
-  WarningAmberOutlined,
   InfoOutlined,
-  SearchOutlined,
-  BugReportOutlined,
-  AutoFixHighOutlined,
-  SupportAgentOutlined,
-  Inventory2Outlined,
-  ConfirmationNumberOutlined,
-  MenuBookOutlined,
-  UploadFileOutlined,
   RadarOutlined,
-  StarBorderOutlined,
-  StarRounded,
+  CloseOutlined,
 } from "@mui/icons-material";
 import {
   Alert,
@@ -28,27 +13,24 @@ import {
   CircularProgress,
   Drawer,
   Button,
-  LinearProgress,
+  Divider,
   IconButton,
+  LinearProgress,
   useTheme,
   Tooltip,
   Stack,
-  Tab,
-  Tabs,
   Typography,
-  TextField,
-  InputAdornment,
 } from "@mui/material";
-import { createElement, useCallback, useEffect, useMemo, useState } from "react";
-import type { ElementType } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { KpiCard } from "../components/KpiCard";
+import { ExportTicketsButton } from "../components/ExportTicketsButton";
 import { DetailFieldGrid, DetailPanelHeader, DetailSection } from "../components/DetailPanel";
 import { detailDrawerPaperSx } from "../theme/layoutTokens";
 import { PageHeader } from "../components/PageHeader";
 import { api } from "../services/api";
 import { aliareColors } from "../theme/theme";
-import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip as ChartTooltip, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip as ChartTooltip, XAxis, YAxis } from "recharts";
 
 type Data = {
   generatedAt: string;
@@ -56,8 +38,9 @@ type Data = {
   workload: Array<{ analyst: string; tickets: number; workItems: number; total: number }>;
   serviceAnalytics: {
     totalOpenTickets: number; classifiedServices: number; specificServices: number; withoutService: number;
-    genericService: number; suspectedMismatch: number; classificationRate: number; catalogSize: number;
+    genericService: number; suspectedMismatch: number; classificationRate: number; catalogSize: number; periodDays?: number;
     ranking: Array<{ service: string; count: number }>;
+    genericRanking?: Array<{ service: string; count: number }>;
     moduleRanking: Array<{ module: string; count: number }>;
     clientQuality: Array<{ client: string; total: number; issues: number; rate: number }>;
     analystQuality: Array<{ analyst: string; total: number; issues: number; rate: number }>;
@@ -79,90 +62,46 @@ type Data = {
   };
 };
 
-type MainTab = "cadastros" | "movimentos" | "analises" | "desenvolvimento" | "gestao";
-type Routine = { label: string; path: string; icon: ElementType; description: string; keywords?: string[] };
-type DetailKind = "backlog" | "critical" | "stale" | "dueSoon" | "overdue" | "blocked" | "unassigned" | "analyst" | "serviceModule" | "serviceClient" | "serviceAnalyst";
+type DetailKind = "backlog" | "critical" | "stale" | "dueSoon" | "overdue" | "blocked" | "unassigned" | "analyst" | "service" | "serviceModule" | "serviceClient" | "serviceAnalyst";
 type DetailData = {
-  kind: DetailKind; analyst: string | null; total: number; truncated: boolean;
+  kind: DetailKind; analyst: string | null; total: number; loaded?: number; truncated: boolean;
   tickets: Array<{ movideskId: number; subject: string; status: string; urgency: string | null; client: string | null; owner: string | null; lastUpdate: string | null; dueDate: string | null; taskNumber: number | null; registeredVersion: string | null; deliveredVersion: string | null; service: string | null; serviceFirstLevel: string | null; serviceSecondLevel: string | null; serviceThirdLevel: string | null; category: string | null; cause: string | null }>;
   workItems: Array<{ id: number; workItemType: string; title: string; state: string; client: string | null; assignedToName: string | null; createdByName: string | null; criticality: string | null; blockedProcess: boolean | null; movideskTicket: number | null; registeredVersion: string | null; deliveredVersion: string | null; azureChangedAt: string | null; remoteUrl: string | null }>;
 };
 
-const mainTabs: Array<{ key: MainTab; label: string; icon: ElementType; info: string }> = [
-  { key: "cadastros", label: "Cadastros", icon: GroupsOutlined, info: "Acessos rápidos para equipe e clientes do escopo operacional." },
-  { key: "movimentos", label: "Movimentos", icon: InsightsOutlined, info: "Rotinas para acompanhar execução, atenção e pendências da operação." },
-  { key: "analises", label: "Análises", icon: TrendingUpOutlined, info: "Visões gerenciais de desempenho, relatórios e liderança." },
-  { key: "desenvolvimento", label: "Desenvolvimento", icon: IntegrationInstructionsOutlined, info: "Correções, evoluções, apoios e versões do produto." },
-  { key: "gestao", label: "Gestão", icon: FactCheckOutlined, info: "Conhecimento, sincronizações e governança da operação." },
-];
-
-const routines: Record<MainTab, Routine[]> = {
-  cadastros: [
-    { label: "Analistas", path: "/analistas", icon: GroupsOutlined, description: "Equipe oficial de suporte e sustentação.", keywords: ["equipe", "usuários", "responsáveis"] },
-    { label: "Clientes", path: "/clientes", icon: BusinessOutlined, description: "Clientes cooperativas do escopo SIMER.", keywords: ["cooperativas", "carteira"] },
-  ],
-  movimentos: [
-    { label: "Minha Operação", path: "/minha-operacao", icon: InsightsOutlined, description: "Fila operacional, tarefas e atendimentos em execução.", keywords: ["kanban", "fila", "trabalho"] },
-    { label: "Tickets", path: "/tickets", icon: ConfirmationNumberOutlined, description: "Atendimentos Movidesk e seus vínculos operacionais.", keywords: ["movidesk", "atendimentos"] },
-    { label: "Pontos de Atenção", path: "/atencao", icon: WarningAmberOutlined, description: "Riscos, criticidades e itens que exigem atuação.", keywords: ["risco", "crítico", "sla"] },
-    { label: "Pendências", path: "/qualidade-dados", icon: FactCheckOutlined, description: "Qualidade, vínculos e divergências entre fontes.", keywords: ["qualidade", "dados", "divergências"] },
-  ],
-  analises: [
-    { label: "Dashboard", path: "/", icon: InsightsOutlined, description: "Visão executiva consolidada da operação.", keywords: ["indicadores", "kpi", "executivo"] },
-    { label: "Desempenho", path: "/desempenho", icon: TrendingUpOutlined, description: "Produtividade, SLA e acompanhamento de performance.", keywords: ["performance", "produtividade", "sla"] },
-    { label: "Relatórios", path: "/relatorios", icon: InsightsOutlined, description: "Relatórios gerenciais e executivos.", keywords: ["excel", "pdf", "gerencial"] },
-    { label: "Serviços SIMER", path: "/servicos", icon: FactCheckOutlined, description: "Inteligência histórica da classificação e demanda por Serviços.", keywords: ["serviço", "movidesk", "módulos", "classificação"] },
-    { label: "Central de Liderança", path: "/lideranca-tecnica", icon: RadarOutlined, description: "Radar executivo, recorrências, gaps e desenvolvimento técnico.", keywords: ["liderança", "radar", "recorrências", "gaps"] },
-  ],
-  desenvolvimento: [
-    { label: "Correções", path: "/correcoes", icon: BugReportOutlined, description: "Bugs e correções acompanhadas no Azure DevOps.", keywords: ["bug", "task", "azure"] },
-    { label: "Evoluções", path: "/evolucoes", icon: AutoFixHighOutlined, description: "Melhorias e evoluções funcionais do produto.", keywords: ["melhoria", "produto", "azure"] },
-    { label: "Apoios", path: "/apoios", icon: SupportAgentOutlined, description: "APOIOs vinculados aos atendimentos e à sustentação.", keywords: ["apoio", "azure", "atendimento"] },
-    { label: "Versões", path: "/versoes", icon: Inventory2Outlined, description: "Entregas, cobertura e distribuição por versão.", keywords: ["lte", "lts", "rc", "release"] },
-  ],
-  gestao: [
-    { label: "Base de Conhecimento", path: "/conhecimento", icon: MenuBookOutlined, description: "Wiki, procedimentos e conhecimento operacional.", keywords: ["wiki", "procedimento", "sharepoint"] },
-    { label: "Dados e Sincronizações", path: "/importar", icon: UploadFileOutlined, description: "Sincronizações, integrações e cargas de dados.", keywords: ["sincronizar", "azure", "movidesk", "importar"] },
-  ],
-};
-
-const allRoutines = mainTabs.flatMap((group) => routines[group.key].map((routine) => ({ ...routine, group: group.key, groupLabel: group.label })));
+function MetricInfo({ title, text }: { title: string; text: string }) {
+  return <Tooltip title={<Box><Typography variant="caption" sx={{fontWeight:900,display:"block",mb:.4}}>{title}</Typography><Typography variant="caption">{text}</Typography></Box>} arrow placement="top"><IconButton size="small" aria-label={`Como é calculado: ${title}`} sx={{p:.25,color:"text.secondary"}}><InfoOutlined sx={{fontSize:16}} /></IconButton></Tooltip>;
+}
 
 export function Coordination() {
   const navigate = useNavigate();
   const theme = useTheme();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const requestedTab = searchParams.get("aba") as MainTab | null;
-  const [tab, setTab] = useState<MainTab>(
-    requestedTab && mainTabs.some((item) => item.key === requestedTab) ? requestedTab : "movimentos",
-  );
   const [data, setData] = useState<Data | null>(null);
+  const [slaFlow, setSlaFlow] = useState<any | null>(null);
+  const [slaDrilldown, setSlaDrilldown] = useState<{title:string;ids:number[]}|null>(null);
   const [capacity, setCapacity] = useState<{ days: number; businessDays: number; hoursPerDay: number; expectedHours: number; registeredHours: number; coverageRate: number | null; analysts: Array<{ analyst: string; expectedHours: number; registeredHours: number; coverageRate: number | null }> } | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailTitle, setDetailTitle] = useState("");
+  const [detailError, setDetailError] = useState("");
   const [details, setDetails] = useState<DetailData | null>(null);
-  const [routineSearch, setRoutineSearch] = useState("");
-  const [favoriteRoutines, setFavoriteRoutines] = useState<string[]>(() => {
-    try { return JSON.parse(localStorage.getItem("coordination-favorite-routines") || "[]"); } catch { return []; }
-  });
-  const [recentRoutines, setRecentRoutines] = useState<string[]>(() => {
-    try { return JSON.parse(localStorage.getItem("coordination-recent-routines") || "[]"); } catch { return []; }
-  });
+  const [serviceDays, setServiceDays] = useState(0);
+  const [slaDays, setSlaDays] = useState(180);
+  const [slaChartMode, setSlaChartMode] = useState<"hours" | "compliance">("hours");
 
   const load = useCallback(async () => {
     try {
       setLoading(true);
       setError("");
-      const response = await api.get<Data>("/coordination/summary");
+      const response = await api.get<Data>("/coordination/summary", { params: { serviceDays } });
       setData(response.data);
     } catch (requestError: any) {
       setError(requestError?.response?.data?.error || "Não foi possível carregar a central.");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [serviceDays]);
 
   useEffect(() => {
     void load();
@@ -173,6 +112,12 @@ export function Coordination() {
       .then((response) => setCapacity(response.data))
       .catch(() => setCapacity(null));
   }, []);
+
+  useEffect(() => {
+    api.get("/coordination/sla-development", { params: { days: slaDays } })
+      .then((response) => setSlaFlow(response.data))
+      .catch(() => setSlaFlow(null));
+  }, [slaDays]);
 
   const maximum = useMemo(
     () => Math.max(...(data?.workload.map((item) => item.total) ?? [1]), 1),
@@ -191,40 +136,16 @@ export function Coordination() {
       ]
     : [];
 
-  async function openDetails(kind: DetailKind, title: string, analyst?: string, serviceModule?: string, serviceClient?: string) {
+  async function openDetails(kind: DetailKind, title: string, analyst?: string, serviceModule?: string, serviceClient?: string, serviceName?: string) {
     try {
-      setDetailTitle(title); setDetails(null); setDetailLoading(true);
-      const response = await api.get<DetailData>("/coordination/details", { params: { kind, analyst, serviceModule, serviceClient, limit: 50 } });
+      setDetailTitle(title); setDetails(null); setDetailError(""); setDetailLoading(true);
+      const response = await api.get<DetailData>("/coordination/details", { params: { kind, analyst, serviceModule, serviceClient, serviceName, serviceDays, limit: 500 } });
       setDetails(response.data);
     } catch {
-      setError("Não foi possível carregar os detalhes da coordenação.");
+      setDetailError("Não foi possível carregar este recorte. Tente novamente.");
     } finally { setDetailLoading(false); }
   }
 
-  const normalizedRoutineSearch = routineSearch.trim().toLocaleLowerCase("pt-BR");
-  const matchingRoutines = normalizedRoutineSearch
-    ? allRoutines.filter((routine) => [routine.label, routine.description, routine.groupLabel, ...(routine.keywords ?? [])].join(" ").toLocaleLowerCase("pt-BR").includes(normalizedRoutineSearch))
-    : [];
-
-  function openRoutine(routine: Routine) {
-    const next = [routine.path, ...recentRoutines.filter((path) => path !== routine.path)].slice(0, 5);
-    setRecentRoutines(next);
-    localStorage.setItem("coordination-recent-routines", JSON.stringify(next));
-    navigate(routine.path);
-  }
-
-  function toggleFavorite(path: string) {
-    const next = favoriteRoutines.includes(path) ? favoriteRoutines.filter((item) => item !== path) : [...favoriteRoutines, path];
-    setFavoriteRoutines(next);
-    localStorage.setItem("coordination-favorite-routines", JSON.stringify(next));
-  }
-
-  function changeTab(value: MainTab) {
-    setTab(value);
-    const next = new URLSearchParams(searchParams);
-    next.set("aba", value);
-    setSearchParams(next, { replace: true });
-  }
 
   return (
     <Box sx={{ pb: 4 }}>
@@ -237,74 +158,19 @@ export function Coordination() {
 
       <Card variant="outlined" sx={{ overflow: "hidden", borderRadius: 2.5, backgroundColor: "background.paper", mb: 2 }}>
         <Box sx={{ p: { xs: 1.5, md: 2 }, borderBottom: "1px solid", borderColor: "divider", background: theme.palette.mode === "dark" ? "linear-gradient(110deg,rgba(24,199,122,.055),rgba(47,111,237,.035),transparent)" : "linear-gradient(110deg,rgba(24,199,122,.045),rgba(47,111,237,.025),transparent)" }}>
-          <Stack direction={{ xs: "column", md: "row" }} spacing={1.25} sx={{ justifyContent: "space-between", alignItems: { md: "center" } }}>
+          <Stack direction={{ xs: "column", lg: "row" }} spacing={1.25} sx={{ justifyContent: "space-between", alignItems: { lg: "center" } }}>
             <Box>
-              <Typography sx={{ fontWeight: 900, fontSize: "1rem" }}>Navegador de rotinas</Typography>
-              <Typography variant="body2" color="text.secondary">Localize rapidamente qualquer rotina da coordenação por área, nome ou finalidade.</Typography>
+              <Typography sx={{ fontWeight: 900, fontSize: "1rem" }}>Cockpit da coordenação</Typography>
+              <Typography variant="body2" color="text.secondary">Prioridades, capacidade e governança em um único ponto. A navegação principal permanece no menu lateral.</Typography>
             </Box>
-            <TextField
-              size="small"
-              value={routineSearch}
-              onChange={(event) => setRoutineSearch(event.target.value)}
-              placeholder="Buscar rotina, ação ou assunto..."
-              sx={{ width: { xs: "100%", md: 360 } }}
-              slotProps={{ input: { startAdornment: <InputAdornment position="start"><SearchOutlined fontSize="small" /></InputAdornment> } }}
-            />
+            <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap" }}>
+              <Button size="small" variant="outlined" onClick={() => navigate("/atencao")}>Riscos</Button>
+              <Button size="small" variant="outlined" onClick={() => navigate("/qualidade-dados")}>Pendências</Button>
+              <Button size="small" variant="outlined" onClick={() => navigate("/desempenho")}>Desempenho</Button>
+              <Button size="small" variant="outlined" onClick={() => navigate("/lideranca-tecnica")}>Liderança</Button>
+            </Stack>
           </Stack>
         </Box>
-
-        {normalizedRoutineSearch ? (
-          <Box sx={{ p: { xs: 1.5, md: 2 } }}>
-            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 800 }}>{matchingRoutines.length} ROTINA(S) ENCONTRADA(S)</Typography>
-            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(2,1fr)", xl: "repeat(3,1fr)" }, gap: 1, mt: 1 }}>
-              {matchingRoutines.map((routine) => (
-                <Button key={routine.path} onClick={() => openRoutine(routine)} sx={{ justifyContent: "flex-start", textAlign: "left", textTransform: "none", p: 1.25, border: "1px solid", borderColor: "divider", borderRadius: 1.75 }}>
-                  <Stack direction="row" spacing={1.1} sx={{ alignItems: "center", minWidth: 0 }}>
-                    <Box sx={{ display: "grid", placeItems: "center", width: 36, height: 36, borderRadius: 1.4, bgcolor: "action.hover", color: "primary.main", flexShrink: 0 }}>{createElement(routine.icon, { fontSize: "small" })}</Box>
-                    <Box sx={{ minWidth: 0 }}><Typography sx={{ fontWeight: 800, color: "text.primary" }}>{routine.label}</Typography><Typography variant="caption" color="text.secondary">{routine.groupLabel} · {routine.description}</Typography></Box>
-                  </Stack>
-                </Button>
-              ))}
-            </Box>
-            {!matchingRoutines.length && <Alert severity="info" sx={{ mt: 1.5 }}>Nenhuma rotina corresponde à pesquisa. Tente pelo nome da tela, processo ou ação desejada.</Alert>}
-          </Box>
-        ) : (
-          <>
-            <Tabs value={tab} onChange={(_, value: MainTab) => changeTab(value)} variant="scrollable" scrollButtons="auto" sx={{ minHeight: 58, borderBottom: "1px solid", borderColor: "divider", "& .MuiTab-root": { minHeight: 58, fontWeight: 800, px: { xs: 2, md: 2.5 } }, "& .Mui-selected": { color: `${aliareColors.info} !important` }, "& .MuiTabs-indicator": { height: 3, backgroundColor: aliareColors.info } }}>
-              {mainTabs.map((item) => <Tab key={item.key} value={item.key} label={<Stack direction="row" spacing={0.5} sx={{ alignItems: "center" }}><span>{item.label}</span><Tooltip title={item.info}><InfoOutlined onClick={(event) => event.stopPropagation()} sx={{ fontSize: 15, color: "text.secondary" }} /></Tooltip></Stack>} icon={createElement(item.icon, { fontSize: "small" })} iconPosition="start" />)}
-            </Tabs>
-
-            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "minmax(0,1fr) 250px" }, minHeight: 220 }}>
-              <Box sx={{ p: { xs: 1.5, md: 2 }, borderRight: { lg: "1px solid" }, borderColor: "divider" }}>
-                <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 850 }}>{mainTabs.find((item) => item.key === tab)?.label}</Typography>
-                <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2,minmax(0,1fr))" }, gap: 1, mt: .75 }}>
-                  {routines[tab].map((routine) => (
-                    <Box key={routine.path} sx={{ position: "relative", border: "1px solid", borderColor: "divider", borderRadius: 2, overflow: "hidden", transition: ".16s", "&:hover": { borderColor: "primary.main", transform: "translateY(-1px)", boxShadow: "0 10px 26px rgba(16,24,40,.08)" } }}>
-                      <Button onClick={() => openRoutine(routine)} sx={{ width: "100%", minHeight: 82, justifyContent: "flex-start", textAlign: "left", textTransform: "none", p: 1.35, pr: 5 }}>
-                        <Stack direction="row" spacing={1.2} sx={{ alignItems: "flex-start" }}>
-                          <Box sx={{ display: "grid", placeItems: "center", width: 38, height: 38, borderRadius: 1.5, bgcolor: theme.palette.mode === "dark" ? "rgba(24,199,122,.09)" : "rgba(24,199,122,.065)", color: "primary.main", flexShrink: 0 }}>{createElement(routine.icon, { fontSize: "small" })}</Box>
-                          <Box><Typography sx={{ fontWeight: 850, color: "text.primary" }}>{routine.label}</Typography><Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: .25, lineHeight: 1.35 }}>{routine.description}</Typography></Box>
-                        </Stack>
-                      </Button>
-                      <Tooltip title={favoriteRoutines.includes(routine.path) ? "Remover dos favoritos" : "Adicionar aos favoritos"}><IconButton size="small" onClick={() => toggleFavorite(routine.path)} sx={{ position: "absolute", top: 8, right: 8 }}>{favoriteRoutines.includes(routine.path) ? <StarRounded sx={{ color: aliareColors.warning }} fontSize="small" /> : <StarBorderOutlined fontSize="small" />}</IconButton></Tooltip>
-                    </Box>
-                  ))}
-                </Box>
-              </Box>
-              <Box sx={{ p: { xs: 1.5, md: 2 }, bgcolor: theme.palette.mode === "dark" ? "rgba(7,20,35,.22)" : "rgba(248,250,252,.7)" }}>
-                <Typography sx={{ fontWeight: 850, fontSize: ".82rem" }}>Acesso rápido</Typography>
-                <Typography variant="caption" color="text.secondary">Favoritos e rotinas utilizadas recentemente.</Typography>
-                <Stack spacing={.5} sx={{ mt: 1.25 }}>
-                  {[...favoriteRoutines, ...recentRoutines].filter((path, index, values) => values.indexOf(path) === index).slice(0, 6).map((path) => {
-                    const routine = allRoutines.find((item) => item.path === path);
-                    return routine ? <Button key={path} size="small" onClick={() => openRoutine(routine)} startIcon={createElement(routine.icon, { fontSize: "small" })} sx={{ justifyContent: "flex-start", textTransform: "none", color: "text.primary" }}>{routine.label}</Button> : null;
-                  })}
-                  {!favoriteRoutines.length && !recentRoutines.length && <Typography variant="caption" color="text.secondary" sx={{ py: 1 }}>Abra ou favorite uma rotina para criar seus atalhos.</Typography>}
-                </Stack>
-              </Box>
-            </Box>
-          </>
-        )}
 
         <CardContent sx={{ p: { xs: 1.5, md: 2.25 } }}>
           <Alert
@@ -316,6 +182,55 @@ export function Coordination() {
           </Alert>
 
           {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+          {slaFlow && <Card variant="outlined" sx={{mb:2}}>
+            <CardContent>
+              <Stack direction={{xs:"column",md:"row"}} spacing={1} sx={{justifyContent:"space-between",mb:1.5}}>
+                <Box><Typography sx={{fontWeight:900}}>SLA × OLA · Suporte x Desenvolvimento</Typography><Typography variant="body2" color="text.secondary">Bugs com Task · atendimento → abertura da Task → conclusão no Azure. Os tempos usam somente horas úteis.</Typography></Box>
+                <Stack direction="row" spacing={.6} useFlexGap sx={{flexWrap:"wrap",justifyContent:"flex-end"}}>
+                  {[{v:30,l:"30 dias"},{v:90,l:"90 dias"},{v:180,l:"6 meses"},{v:365,l:"12 meses"}].map(p=><Chip key={p.v} clickable label={p.l} color={slaDays===p.v?"primary":"default"} variant={slaDays===p.v?"filled":"outlined"} onClick={()=>setSlaDays(p.v)}/>)}
+                  <Chip label={`${slaFlow.summary.bugsWithTask} bugs com Task`} />
+                </Stack>
+              </Stack>
+              <Box sx={{display:"grid",gridTemplateColumns:{xs:"1fr 1fr",lg:"repeat(6,1fr)"},gap:1}}>
+                {[
+                  ["Tempo médio até Task",slaFlow.summary.avgSupportMinutes,"Média de horas úteis entre a abertura do atendimento Movidesk e a criação da Task no Azure."],
+                  ["Tempo médio Fábrica",slaFlow.summary.avgFactoryMinutes,"Média de horas úteis entre a criação da Task e sua conclusão no Azure. Considera somente Tasks concluídas."],
+                  ["Tempo médio total",slaFlow.summary.avgTotalMinutes,"Média de horas úteis da abertura do atendimento até a conclusão da Task. Considera somente Tasks concluídas."],
+                ].map(([label,value,info])=><Box key={String(label)} sx={{p:1.25,border:"1px solid",borderColor:"divider",borderRadius:2,backgroundColor:"background.paper"}}><Stack direction="row" sx={{alignItems:"center",justifyContent:"space-between"}}><Typography variant="caption" color="text.secondary">{label}</Typography><MetricInfo title={String(label)} text={String(info)}/></Stack><Typography sx={{fontWeight:900,fontSize:"1.2rem"}}>{formatMinutes(Number(value))}</Typography></Box>)}
+                {[
+                  ["OLA Suporte",slaFlow.summary.supportWithinOla,slaFlow.summary.bugsWithTask],
+                  ["OLA Fábrica",slaFlow.summary.factoryWithinOla,slaFlow.summary.concluded],
+                  ["SLA total",slaFlow.summary.totalWithinSla,slaFlow.summary.concluded],
+                ].map(([label,value,total])=><Box key={String(label)} sx={{p:1.25,border:"1px solid",borderColor:"divider",borderRadius:2,backgroundColor:"background.paper"}}><Stack direction="row" sx={{alignItems:"center",justifyContent:"space-between"}}><Typography variant="caption" color="text.secondary">{label}</Typography><MetricInfo title={String(label)} text={label==="OLA Suporte"?"Percentual de Bugs cuja etapa atendimento → criação da Task ficou dentro do limite operacional da prioridade.":label==="OLA Fábrica"?"Percentual de Tasks concluídas cuja etapa criação → conclusão ficou dentro do limite da prioridade.":"Percentual de Tasks concluídas cujo tempo total atendimento → conclusão ficou dentro do SLA da prioridade."}/></Stack><Typography sx={{fontWeight:900,fontSize:"1.2rem"}}>{Number(total)?Math.round(Number(value)/Number(total)*1000)/10:0}%</Typography><Typography variant="caption" color="text.secondary">{value}/{total} no prazo</Typography></Box>)}
+              </Box>
+              {slaFlow.summary.bugsWithTask===0 && <Alert severity="info" sx={{mt:1.5}}>Nenhum Bug pôde ser correlacionado completamente entre Movidesk e Azure no período. Os indicadores de qualidade acima mostram se o bloqueio está no vínculo da Task, na data de criação do Azure ou na prioridade necessária para aplicar a regra P1–P4.</Alert>}
+              <Stack direction={{xs:"column",md:"row"}} spacing={1} sx={{alignItems:{md:"center"},justifyContent:"space-between",mt:2,mb:.5}}>
+                <Box><Stack direction="row" spacing={.5} sx={{alignItems:"center"}}><Typography sx={{fontWeight:850}}>Evolução mensal · Suporte × Fábrica</Typography><MetricInfo title="Evolução mensal" text="Agrupa os Bugs pelo mês em que a Task foi criada. Alterne entre horas consumidas e percentual dentro do prazo."/></Stack><Typography variant="body2" color="text.secondary">Compare as duas etapas do fluxo sem misturar tempo com percentual.</Typography></Box>
+                <Stack direction="row" spacing={.6}><Chip clickable label="Horas consumidas" color={slaChartMode==="hours"?"primary":"default"} variant={slaChartMode==="hours"?"filled":"outlined"} onClick={()=>setSlaChartMode("hours")}/><Chip clickable label="% dentro do prazo" color={slaChartMode==="compliance"?"primary":"default"} variant={slaChartMode==="compliance"?"filled":"outlined"} onClick={()=>setSlaChartMode("compliance")}/></Stack>
+              </Stack>
+              <Stack direction="row" spacing={1.5} useFlexGap sx={{flexWrap:"wrap",mb:1}}><Stack direction="row" spacing={.6} sx={{alignItems:"center"}}><Box sx={{width:10,height:10,borderRadius:"50%",bgcolor:aliareColors.info}}/><Typography variant="caption"><strong>Suporte</strong> · atendimento → Task</Typography></Stack><Stack direction="row" spacing={.6} sx={{alignItems:"center"}}><Box sx={{width:10,height:10,borderRadius:"50%",bgcolor:aliareColors.green}}/><Typography variant="caption"><strong>Fábrica</strong> · Task → conclusão</Typography></Stack></Stack>
+              <Box sx={{height:300,p:1,border:"1px solid",borderColor:"divider",borderRadius:2,backgroundColor:"background.paper"}}>
+                <ResponsiveContainer width="100%" height="100%"><LineChart data={slaFlow.monthly??[]} margin={{left:4,right:18,top:8,bottom:4}}><CartesianGrid stroke={theme.palette.divider} strokeDasharray="3 3" opacity={.28}/><XAxis dataKey="label" tick={{fill:theme.palette.text.secondary}}/><YAxis domain={slaChartMode==="compliance"?[0,100]:undefined} tick={{fill:theme.palette.text.secondary}} tickFormatter={(v)=>slaChartMode==="compliance"?`${v}%`:`${Math.round(v/60)}h`}/><ChartTooltip cursor={false} contentStyle={{backgroundColor:theme.palette.background.paper,border:`1px solid ${theme.palette.divider}`,borderRadius:10,color:theme.palette.text.primary,boxShadow:theme.shadows[8]}} labelStyle={{color:theme.palette.text.primary,fontWeight:800}} itemStyle={{color:theme.palette.text.primary}} formatter={(v:any,n:any)=>[slaChartMode==="compliance"?`${Number(v).toFixed(1)}%`:formatMinutes(Number(v)),String(n)]}/>{slaChartMode==="hours"?<><Line type="monotone" dataKey="avgSupportMinutes" name="Suporte · média" stroke={aliareColors.info} strokeWidth={3} dot={{r:3,fill:aliareColors.info}} activeDot={{r:6}}/><Line type="monotone" dataKey="avgFactoryMinutes" name="Fábrica · média" stroke={aliareColors.green} strokeWidth={3} dot={{r:3,fill:aliareColors.green}} activeDot={{r:6}}/></>:<><Line type="monotone" dataKey="supportWithinPct" name="OLA Suporte" stroke={aliareColors.info} strokeWidth={3} dot={{r:3,fill:aliareColors.info}}/><Line type="monotone" dataKey="factoryWithinPct" name="OLA Fábrica" stroke={aliareColors.green} strokeWidth={3} dot={{r:3,fill:aliareColors.green}}/><Line type="monotone" dataKey="totalWithinPct" name="SLA total" stroke={aliareColors.warning} strokeWidth={2} strokeDasharray="6 4"/></>}</LineChart></ResponsiveContainer>
+              </Box>
+              <Box sx={{display:"grid",gridTemplateColumns:{xs:"1fr",md:"repeat(3,1fr)"},gap:1,mt:1}}>
+                {(slaFlow.monthly??[]).slice(-3).map((m:any)=><Box key={m.month} sx={{p:1.2,border:"1px solid",borderColor:"divider",borderRadius:2}}><Typography sx={{fontWeight:850}}>{m.label}</Typography><Typography variant="caption" color="text.secondary">{m.total} Bug(s) · {m.concluded} concluído(s)</Typography><Stack direction="row" spacing={.7} useFlexGap sx={{flexWrap:"wrap",mt:.8}}><Chip size="small" variant="outlined" label={`OLA Sup. ${m.supportWithinPct}%`}/><Chip size="small" variant="outlined" label={`OLA Fáb. ${m.factoryWithinPct}%`}/><Chip size="small" variant="outlined" label={`SLA ${m.totalWithinPct}%`}/></Stack></Box>)}
+              </Box>
+              <Typography sx={{fontWeight:850,mt:2,mb:.5}}>Consumo por prioridade</Typography><Typography variant="body2" color="text.secondary" sx={{mb:1}}>Prioridades: Crítica (P1) · Alta (P2) · Média (P3) · Baixa (P4). Quanto menor o número, maior a urgência. Cada nível possui limites próprios de OLA/SLA; clique em um card para ver os Bugs responsáveis pelo consumo.</Typography>
+              <Box sx={{display:"grid",gridTemplateColumns:{xs:"1fr",md:"repeat(2,1fr)",xl:"repeat(4,1fr)"},gap:1}}>
+                {(slaFlow.byPriority??[]).map((p:any)=><Card key={p.priority} variant="outlined" sx={{cursor:p.total?"pointer":"default"}} onClick={()=>p.total&&setSlaDrilldown({title:`${p.priority} · SLA × OLA`,ids:p.rows})}><CardContent sx={{p:"12px !important"}}><Stack direction="row" sx={{justifyContent:"space-between",alignItems:"center"}}><Stack direction="row" spacing={.5} sx={{alignItems:"center"}}><Typography sx={{fontWeight:900}}>{p.priority==="P1"?"Crítica · P1":p.priority==="P2"?"Alta · P2":p.priority==="P3"?"Média · P3":"Baixa · P4"}</Typography><MetricInfo title={p.priority} text={p.priority==="P1"?"Prioridade crítica, com os menores limites de atendimento e desenvolvimento.":p.priority==="P2"?"Prioridade alta, para impactos relevantes que exigem resposta rápida.":p.priority==="P3"?"Prioridade média, para impactos moderados.":"Prioridade baixa, para impactos menores e maior janela de atendimento."}/></Stack><Chip size="small" label={p.total}/></Stack><Typography variant="caption" color="text.secondary">Suporte {formatMinutes(p.avgSupportMinutes)} · Fábrica {formatMinutes(p.avgFactoryMinutes)}</Typography><Box sx={{mt:1}}><Typography variant="caption">OLA Suporte: {p.total?Math.round(p.supportWithinOla/p.total*1000)/10:0}%</Typography><br/><Typography variant="caption">OLA Fábrica: {p.concluded?Math.round(p.factoryWithinOla/p.concluded*1000)/10:0}%</Typography><br/><Typography variant="caption">SLA total: {p.concluded?Math.round(p.totalWithinSla/p.concluded*1000)/10:0}%</Typography></Box><Chip sx={{mt:1}} size="small" variant="outlined" label={p.factoryBottleneck>p.supportBottleneck?"Maior consumo: Fábrica":"Maior consumo: Suporte"}/></CardContent></Card>)}
+              </Box>
+              <Typography sx={{fontWeight:850,mt:2,mb:.5}}>Consumo por analista</Typography><Typography variant="body2" color="text.secondary" sx={{mb:1}}>Compara o tempo médio consumido no Suporte e na Fábrica por responsável. O SLA considera somente Tasks concluídas; clique na linha para detalhar os atendimentos.</Typography>
+              <Box sx={{overflowX:"auto"}}><Box sx={{minWidth:760,display:"grid",gridTemplateColumns:"1.4fr .55fr .8fr .8fr .8fr .8fr",gap:1,alignItems:"center"}}>
+                {["Analista","Bugs","Até Task","Fábrica","SLA","Maior consumo"].map(h=><Typography key={h} variant="caption" color="text.secondary" sx={{fontWeight:800}}>{h}</Typography>)}
+                {(slaFlow.owners??[]).map((o:any)=><Box key={o.owner} sx={{display:"contents",cursor:"pointer"}} onClick={()=>setSlaDrilldown({title:`${o.owner} · SLA × OLA`,ids:o.rows})}><Typography sx={{fontWeight:750,py:.7}}>{o.owner}</Typography><Typography>{o.total}</Typography><Typography>{formatMinutes(o.avgSupportMinutes)}</Typography><Typography>{formatMinutes(o.avgFactoryMinutes)}</Typography><Typography>{o.concluded?Math.round(o.totalWithinSla/o.concluded*1000)/10:0}%</Typography><Chip size="small" variant="outlined" label={o.factoryBottleneck>o.supportBottleneck?"Fábrica":"Suporte"}/></Box>)}
+              </Box></Box>
+              {slaFlow.outliers&&<Card variant="outlined" sx={{mt:2,borderColor:slaFlow.outliers.critical?"error.light":"divider"}}><CardContent><Stack direction={{xs:"column",md:"row"}} spacing={1} sx={{justifyContent:"space-between",alignItems:{md:"center"}}}><Box><Stack direction="row" spacing={.5} sx={{alignItems:"center"}}><Typography sx={{fontWeight:850}}>Outliers · SLA × OLA</Typography><MetricInfo title="Outliers" text="Destaca Bugs que ultrapassaram pelo menos um limite da prioridade. Severidade representa o maior percentual excedente acima de 100%, sem inferir causa."/></Stack><Typography variant="body2" color="text.secondary">Priorize a investigação pelos maiores desvios, preservando a separação entre Suporte, Fábrica e SLA total.</Typography></Box><Stack direction="row" spacing={.7} useFlexGap sx={{flexWrap:"wrap"}}><Chip size="small" label={`${slaFlow.outliers.total} fora de algum limite`}/><Chip size="small" color={slaFlow.outliers.critical?"error":"default"} label={`${slaFlow.outliers.critical} acima de 2× do limite`}/></Stack></Stack><Box sx={{display:"grid",gridTemplateColumns:{xs:"1fr 1fr",md:"repeat(4,1fr)"},gap:1,mt:1.5}}>{[["OLA Suporte",slaFlow.outliers.support],["OLA Fábrica",slaFlow.outliers.factory],["SLA total",slaFlow.outliers.totalSla],["Críticos",slaFlow.outliers.critical]].map(([label,value])=><Box key={label} sx={{p:1.1,border:"1px solid",borderColor:"divider",borderRadius:2}}><Typography variant="caption" color="text.secondary">{label}</Typography><Typography variant="h6" sx={{fontWeight:900}}>{value}</Typography></Box>)}</Box><Stack spacing={.5} sx={{mt:1.5}}>{(slaFlow.outliers.top??[]).slice(0,8).map((r:any)=><Box key={r.movideskId} onClick={()=>setSlaDrilldown({title:`Outlier #${r.movideskId} · ${r.outlierStage}`,ids:[r.movideskId]})} sx={{display:"grid",gridTemplateColumns:{xs:"1fr",md:"110px minmax(0,1fr) 120px 100px"},gap:1,alignItems:"center",p:1,borderRadius:1.5,cursor:"pointer","&:hover":{bgcolor:"action.hover"}}}><Chip size="small" color={r.severity>=100?"error":"warning"} label={`+${Math.round(r.severity)}%`}/><Box sx={{minWidth:0}}><Typography noWrap sx={{fontWeight:800}}>#{r.movideskId} · {r.subject}</Typography><Typography noWrap variant="caption" color="text.secondary">{r.client} · Task #{r.taskNumber}</Typography></Box><Chip size="small" variant="outlined" label={r.outlierStage}/><Typography variant="caption" color="text.secondary">{r.urgency}</Typography></Box>)}</Stack></CardContent></Card>}
+              <Stack direction="row" spacing={.5} sx={{alignItems:"center",mt:2,mb:.25}}><Typography sx={{fontWeight:850}}>Tempo por Bug e Task</Typography><MetricInfo title="Tempo por Bug e Task" text="Azul representa o tempo útil do Suporte entre atendimento e Task. Verde representa o tempo útil da Fábrica entre Task e conclusão. Clique em qualquer barra para abrir o atendimento."/></Stack><Typography variant="body2" color="text.secondary" sx={{mb:1}}>Os números à esquerda são os <strong>IDs dos atendimentos Movidesk</strong>. Cada linha corresponde a um Bug vinculado a uma Task Azure. As barras comparam o tempo útil de Suporte e Fábrica; passe o mouse para ver a Task e clique na barra para abrir o detalhamento.</Typography><Stack direction="row" spacing={1.5} useFlexGap sx={{flexWrap:"wrap",my:1}}><Chip size="small" sx={{"& .MuiChip-icon":{color:`${aliareColors.info} !important`}}} icon={<Box sx={{width:9,height:9,borderRadius:"50%",bgcolor:aliareColors.info}}/>} label="Suporte · Atendimento → Task"/><Chip size="small" sx={{"& .MuiChip-icon":{color:`${aliareColors.green} !important`}}} icon={<Box sx={{width:9,height:9,borderRadius:"50%",bgcolor:aliareColors.green}}/>} label="Fábrica · Task → Conclusão"/></Stack><Box sx={{mt:1,height:Math.max(220,Math.min(420,(slaFlow.rows?.length??0)*30))}}>
+                <ResponsiveContainer width="100%" height="100%"><BarChart data={(slaFlow.rows??[]).slice(0,12)} layout="vertical" margin={{left:10,right:18}}><CartesianGrid stroke={theme.palette.divider} strokeDasharray="3 3" opacity={.35}/><XAxis type="number" tick={{fill:theme.palette.text.secondary}} tickFormatter={(v)=>`${Math.round(v/60)}h`}/><YAxis type="category" dataKey="movideskId" width={78} tick={{fill:theme.palette.text.secondary,fontWeight:700}}/><ChartTooltip cursor={false} contentStyle={{backgroundColor:theme.palette.background.paper,border:`1px solid ${theme.palette.divider}`,borderRadius:10,color:theme.palette.text.primary,boxShadow:theme.shadows[8]}} labelStyle={{color:theme.palette.text.primary,fontWeight:800}} itemStyle={{color:theme.palette.text.primary}} formatter={(v:any,n:any,p:any)=>[formatMinutes(Number(v)),`${String(n)} · Task #${p?.payload?.taskNumber??"—"}`]}/><Bar dataKey="supportMinutes" name="Suporte · Atendimento → Task" fill={aliareColors.info} radius={[0,5,5,0]} maxBarSize={16} cursor="pointer" onClick={(r:any)=>setSlaDrilldown({title:`Atendimento #${r.movideskId} · Task #${r.taskNumber}`,ids:[r.movideskId]})}/><Bar dataKey="factoryMinutes" name="Fábrica · Task → Conclusão" fill={aliareColors.green} radius={[0,5,5,0]} maxBarSize={16} cursor="pointer" onClick={(r:any)=>setSlaDrilldown({title:`Atendimento #${r.movideskId} · Task #${r.taskNumber}`,ids:[r.movideskId]})}/></BarChart></ResponsiveContainer>
+              </Box>
+              <Typography variant="caption" color="text.secondary">A medição usa horas úteis de Bug (seg–sex, 08:00–18:00). A Fábrica só é encerrada quando o Work Item está no status “Concluida”; itens ainda em desenvolvimento não entram no percentual concluído da Fábrica/SLA total.</Typography>
+            </CardContent>
+          </Card>}
 
           {loading || !data ? (
             <Box sx={{ minHeight: 320, display: "grid", placeItems: "center" }}>
@@ -399,7 +314,7 @@ export function Coordination() {
                     key={label}
                     title={label}
                     value={value}
-                    subtitle={tab === "analises" ? "Análise gerencial" : "Operação atual"}
+                    subtitle="Operação atual"
                     info={info}
                     onClick={() => void openDetails(kind, label)}
                     accent={
@@ -418,11 +333,23 @@ export function Coordination() {
                   <Stack direction={{ xs: "column", lg: "row" }} spacing={1.5} sx={{ justifyContent: "space-between", alignItems: { lg: "center" }, mb: 1.5 }}>
                     <Box>
                       <Typography variant="h6" sx={{ fontWeight: 850 }}>Qualidade da classificação por Serviço</Typography>
-                      <Typography variant="body2" color="text.secondary">Leitura dos atendimentos abertos SIMER e da especificidade do Serviço informado no Movidesk.</Typography>
+                      <Typography variant="body2" color="text.secondary">Atendimentos abertos da carteira da squad (cliente ou analista da squad) e qualidade do Serviço informado no Movidesk.</Typography>
                     </Box>
                     <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap" }}>
                       <Chip label={`${data.serviceAnalytics.classificationRate}% específicos`} color={data.serviceAnalytics.classificationRate >= 90 ? "success" : data.serviceAnalytics.classificationRate >= 75 ? "warning" : "error"} variant="outlined" />
                       <Chip label={`${data.serviceAnalytics.catalogSize} serviços conhecidos`} variant="outlined" />
+                      <Chip label="Escopo: clientes ou analistas da squad" variant="outlined" />
+                    </Stack>
+                  </Stack>
+                  <Stack direction={{ xs: "column", md: "row" }} spacing={1} sx={{ justifyContent: "space-between", alignItems: { md: "center" }, mb: 1.5 }}>
+                    <Box>
+                      <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 800 }}>Período dos atendimentos abertos</Typography>
+                      <Typography variant="body2" color="text.secondary">Aplicado aos indicadores, ranking, detalhamento e exportação.</Typography>
+                    </Box>
+                    <Stack direction="row" spacing={0.6} useFlexGap sx={{ flexWrap: "wrap" }}>
+                      {[{ v: 30, l: "30 dias" }, { v: 90, l: "90 dias" }, { v: 180, l: "6 meses" }, { v: 365, l: "12 meses" }, { v: 0, l: "Todo período" }].map((period) => (
+                        <Chip key={period.v} label={period.l} clickable color={serviceDays === period.v ? "primary" : "default"} variant={serviceDays === period.v ? "filled" : "outlined"} onClick={() => setServiceDays(period.v)} />
+                      ))}
                     </Stack>
                   </Stack>
                   <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2,1fr)", xl: "repeat(4,1fr)" }, gap: 1.25, mb: 2 }}>
@@ -431,15 +358,16 @@ export function Coordination() {
                     <KpiCard title="SIMER genérico" value={data.serviceAnalytics.genericService} subtitle="Requer revisão" info="Tickets classificados apenas como SIMER, sem rotina específica." onClick={() => navigate("/qualidade-dados?issue=genericSimerService")} accent={aliareColors.warning} />
                     <KpiCard title="Possível incorreto" value={data.serviceAnalytics.suspectedMismatch} subtitle="Sugestão assistiva" info="Serviço atual diverge de uma sugestão com evidência suficiente. Exige validação humana." onClick={() => navigate("/qualidade-dados?issue=suspectedServiceMismatch")} accent={aliareColors.info} />
                   </Box>
+                  {data.serviceAnalytics.genericService > 0 && <Alert severity="warning" sx={{mb:1.5}}><strong>{data.serviceAnalytics.genericService}</strong> atendimento(s) estão apenas em níveis genéricos do SIMER e foram retirados do ranking abaixo para não distorcer a leitura das rotinas específicas. Use o card “SIMER genérico” para revisar esses casos.</Alert>}
                   {data.serviceAnalytics.ranking.length ? (
-                    <Box sx={{ width: "100%", height: Math.max(260, data.serviceAnalytics.ranking.length * 38) }}>
+                    <Box sx={{ width: "100%", height: Math.max(220, Math.min(420, data.serviceAnalytics.ranking.length * 42 + 30)) }}>
                       <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={data.serviceAnalytics.ranking} layout="vertical" margin={{ top: 4, right: 18, left: 12, bottom: 4 }}>
+                        <BarChart data={data.serviceAnalytics.ranking} layout="vertical" margin={{ top: 4, right: 52, left: 8, bottom: 4 }}>
                           <CartesianGrid stroke={theme.palette.divider} strokeDasharray="4 4" horizontal={false} opacity={0.55} />
                           <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11, fill: theme.palette.text.secondary }} axisLine={false} tickLine={false} />
-                          <YAxis type="category" dataKey="service" width={260} tick={{ fontSize: 10, fill: theme.palette.text.secondary }} axisLine={false} tickLine={false} tickFormatter={(value: string) => value.split("»").at(-1)?.trim() ?? value} />
-                          <ChartTooltip contentStyle={{ borderRadius: 12, border: `1px solid ${theme.palette.divider}`, background: theme.palette.background.paper }} formatter={(value) => [value, "Atendimentos"]} labelFormatter={(value) => String(value)} />
-                          <Bar dataKey="count" name="Atendimentos" fill={aliareColors.info} radius={[0, 6, 6, 0]} />
+                          <YAxis type="category" dataKey="service" width={210} tick={{ fontSize: 10, fill: theme.palette.text.secondary }} axisLine={false} tickLine={false} tickFormatter={(value: string) => { const label = value.split("»").at(-1)?.trim() ?? value; return label.length > 28 ? `${label.slice(0, 27)}…` : label; }} />
+                          <ChartTooltip contentStyle={{ borderRadius: 12, border: `1px solid ${theme.palette.divider}`, backgroundColor: theme.palette.background.paper, color: theme.palette.text.primary, boxShadow: "0 14px 36px rgba(0,0,0,.24)" }} wrapperStyle={{ outline: "none" }} cursor={{ fill: theme.palette.action.hover }} formatter={(value) => [value, "Atendimentos"]} labelFormatter={(value) => String(value)} />
+                          <Bar dataKey="count" name="Atendimentos" fill={aliareColors.info} radius={[0, 6, 6, 0]} maxBarSize={28} label={{position:"right",fill:theme.palette.text.secondary,fontSize:11,fontWeight:800}} cursor="pointer" onClick={(_, index) => { const service = data.serviceAnalytics.ranking[index]?.service; if (service) void openDetails("service", `Serviço · ${service.split("»").at(-1)?.trim() ?? service}`, undefined, undefined, undefined, service); }} />
                         </BarChart>
                       </ResponsiveContainer>
                     </Box>
@@ -520,8 +448,8 @@ export function Coordination() {
                         <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11, fill: theme.palette.text.secondary }} axisLine={false} tickLine={false} />
                         <YAxis type="category" dataKey="analyst" width={118} tick={{ fontSize: 11, fill: theme.palette.text.secondary }} axisLine={false} tickLine={false} />
                         <ChartTooltip contentStyle={{ borderRadius: 12, border: `1px solid ${theme.palette.divider}`, background: theme.palette.background.paper, boxShadow: "0 14px 36px rgba(0,0,0,.18)" }} cursor={{ fill: theme.palette.action.hover }} />
-                        <Bar dataKey="tickets" name="Tickets" stackId="load" fill={aliareColors.info} radius={[0, 0, 0, 0]} />
-                        <Bar dataKey="workItems" name="Azure" stackId="load" fill={aliareColors.green} radius={[0, 6, 6, 0]} />
+                        <Bar dataKey="tickets" name="Tickets" stackId="load" fill={aliareColors.info} radius={[0, 0, 0, 0]} cursor="pointer" onClick={(_, index) => { const analyst = data.workload[index]?.analyst; if (analyst) void openDetails("analyst", `Carga de ${analyst}`, analyst); }} />
+                        <Bar dataKey="workItems" name="Azure" stackId="load" fill={aliareColors.green} radius={[0, 6, 6, 0]} cursor="pointer" onClick={(_, index) => { const analyst = data.workload[index]?.analyst; if (analyst) void openDetails("analyst", `Carga de ${analyst}`, analyst); }} />
                       </BarChart>
                     </ResponsiveContainer>
                   </Box> : <Typography color="text.secondary">Nenhuma carga pendente localizada para os analistas da equipe.</Typography>}
@@ -586,46 +514,17 @@ export function Coordination() {
                 </CardContent>
               </Card>
 
-              <Card variant="outlined">
-                <CardContent>
-                  <Typography variant="h6" sx={{ fontWeight: 850, mb: 0.4 }}>
-                    Integrações Microsoft 365
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-                    Planner, Outlook e Teams vinculados à conta conectada.
-                  </Typography>
-                  <Stack direction={{ xs: "column", sm: "row" }} spacing={1} useFlexGap sx={{ flexWrap: "wrap" }}>
-                    {Object.entries(data.integrations).map(([name, integration]) => (
-                      <Chip
-                        key={name}
-                        label={`${name}: ${
-                          integration.connected
-                            ? `${integration.items} item(ns)`
-                            : integration.configured
-                              ? "conecte sua conta"
-                              : "aguardando configuração"
-                        }`}
-                        color={integration.connected ? "success" : "default"}
-                        variant="outlined"
-                      />
-                    ))}
-                  </Stack>
-                  {data.microsoft.warnings.map((warning) => (
-                    <Alert key={warning} severity="warning" sx={{ mt: 1.5 }}>
-                      {warning}
-                    </Alert>
-                  ))}
-                </CardContent>
-              </Card>
             </Stack>
           )}
         </CardContent>
       </Card>
-      <Drawer anchor="right" open={Boolean(detailTitle)} onClose={() => { setDetailTitle(""); setDetails(null); }} slotProps={{ paper: { sx: detailDrawerPaperSx } }}>
-        <DetailPanelHeader eyebrow="Coordenação" title={detailTitle || "Detalhes"} identifier={details ? `${details.total} item(ns) carregado(s)` : undefined} onClose={() => { setDetailTitle(""); setDetails(null); }} />
-        {detailLoading ? <Box sx={{ py: 8, display: "grid", placeItems: "center" }}><CircularProgress /></Box> : details ? (
+      <Drawer anchor="right" open={Boolean(slaDrilldown)} onClose={()=>setSlaDrilldown(null)} slotProps={{paper:{sx:{width:{xs:"100%",sm:560},p:2}}}}><Stack direction="row" sx={{justifyContent:"space-between",alignItems:"center",mb:1}}><Box><Typography variant="h6" sx={{fontWeight:900}}>{slaDrilldown?.title}</Typography><Typography variant="body2" color="text.secondary">Atendimentos responsáveis pelo indicador selecionado.</Typography></Box><IconButton onClick={()=>setSlaDrilldown(null)}><CloseOutlined/></IconButton></Stack><Divider sx={{mb:1}} />{(slaFlow?.rows??[]).filter((r:any)=>slaDrilldown?.ids.includes(r.movideskId)).map((r:any)=><Box key={r.movideskId} onClick={()=>navigate(`/tickets?movidesk=${r.movideskId}`)} sx={{p:1.25,borderRadius:2,cursor:"pointer","&:hover":{bgcolor:"action.hover"}}}><Stack direction="row" spacing={1} sx={{alignItems:"center"}}><Chip size="small" label={r.urgency}/><Typography sx={{fontWeight:800}}>#{r.movideskId} · {r.subject}</Typography></Stack><Typography variant="caption" color="text.secondary">{r.client} · {r.owner} · Suporte {formatMinutes(r.supportMinutes)} · Fábrica {formatMinutes(r.factoryMinutes??0)} · {r.bottleneck}</Typography></Box>)}</Drawer>
+      <Drawer anchor="right" open={Boolean(detailTitle)} onClose={() => { setDetailTitle(""); setDetails(null); setDetailError(""); }} slotProps={{ paper: { sx: detailDrawerPaperSx } }}>
+        <DetailPanelHeader eyebrow="Coordenação" title={detailTitle || "Detalhes"} identifier={details ? `${details.total} item(ns) no recorte · ${details.loaded ?? (details.tickets.length + details.workItems.length)} carregado(s)` : undefined} onClose={() => { setDetailTitle(""); setDetails(null); setDetailError(""); }} />
+        {detailLoading ? <Box sx={{ py: 8, display: "grid", placeItems: "center" }}><CircularProgress /></Box> : detailError ? <Alert severity="error" sx={{m:2}}>{detailError}</Alert> : details ? (
           <Stack spacing={2}>
-            {details.truncated && <Alert severity="info">Exibindo os primeiros 50 registros do recorte.</Alert>}
+            {details.truncated && <Alert severity="info">Este recorte possui {details.total} item(ns). Exibindo {details.loaded ?? (details.tickets.length + details.workItems.length)} registro(s) carregado(s).</Alert>}
+            {details.tickets.length > 0 && <ExportTicketsButton tickets={details.tickets.map((ticket) => ({ ...ticket, service: [ticket.serviceFirstLevel, ticket.serviceSecondLevel, ticket.serviceThirdLevel].filter(Boolean).join(" » ") || ticket.service }))} title={detailTitle || "Recorte operacional"} subtitle="Central da Coordenação · recorte para análise" />}
             {details.tickets.length > 0 && <DetailSection title="Atendimentos Movidesk"><Stack spacing={1}>{details.tickets.map((ticket) => (
               <Button key={ticket.movideskId} variant="outlined" onClick={() => navigate(`/tickets?movidesk=${ticket.movideskId}`)} sx={{ justifyContent: "flex-start", textTransform: "none", textAlign: "left", p: 1.25 }}>
                 <Box sx={{ minWidth: 0 }}><Typography sx={{ fontWeight: 800 }}>#{ticket.movideskId} · {ticket.subject}</Typography><Typography variant="caption" color="text.secondary">{[ticket.status, ticket.urgency, ticket.client, ticket.owner].filter(Boolean).join(" · ")}</Typography>
@@ -646,3 +545,5 @@ export function Coordination() {
     </Box>
   );
 }
+
+function formatMinutes(value:number){if(!Number.isFinite(value)||value<=0)return "0h";const h=Math.floor(value/60),m=Math.round(value%60);return m?`${h}h ${m}min`:`${h}h`;}

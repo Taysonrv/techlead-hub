@@ -7,16 +7,19 @@ flowchart TD
   UI[React Web / Electron] -->|HTTPS + Bearer| API[Express API]
   API --> DB[(PostgreSQL)]
   API --> MOV[Movidesk]
-  API --> AZ[Azure DevOps]
-  API --> MS[Microsoft Graph]
+  API --> AZ[Azure DevOps / Wiki]
+  API --> MAP[Mapa SIMER / Regras do Sistema]
   API --> SMTP[SMTP corporativo]
 ```
 
-- `frontend`: React, Material UI, Vite e carregamento sob demanda.
-- `backend`: Express, Prisma, serviços de domínio e schedulers.
+- `frontend`: React, Material UI, Vite, Recharts e carregamento sob demanda.
+- `backend`: Express, Prisma, serviços de domínio, inteligência e schedulers.
 - `desktop`: Electron; inicia o backend embarcado e gerencia atualização.
-- `PostgreSQL`: usuários, sessões, tickets, Work Items, sincronizações, chat, configurações e auditoria.
-- `Microsoft Graph`: SharePoint/BPMN e fundação para Planner, Outlook e Teams.
+- `PostgreSQL`: usuários, sessões, tickets, Work Items, sincronizações, chat, configurações, mapas/regras e auditoria.
+- `Azure DevOps`: Work Items, correlação com atendimentos e Wiki usada pela Base de Conhecimento.
+- `Mapa SIMER / Regras do Sistema`: fontes internas usadas para investigação técnica e confronto entre implementação, fluxo e evidências.
+
+As integrações Microsoft 365/SharePoint não fazem parte da arquitetura ativa desta versão.
 
 ## Limites de confiança
 
@@ -26,6 +29,7 @@ flowchart TD
 4. Canais do chat são filtrados por associação do usuário.
 5. A Central de Coordenação exige `ADMIN` ou `COORDENADOR`.
 6. Integrações externas utilizam timeouts e não devem bloquear a API indefinidamente.
+7. Sinais de recorrência, versão, mapa e regra são evidências de investigação; não constituem conclusão automática de causa ou Bug.
 
 ## Atualização Desktop
 

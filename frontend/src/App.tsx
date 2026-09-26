@@ -63,6 +63,7 @@ const Chat = lazy(() => import("./pages/Chat").then((module) => ({ default: modu
 const Coordination = lazy(() => import("./pages/Coordination").then((module) => ({ default: module.Coordination })));
 const TechnicalLeadership = lazy(() => import("./pages/TechnicalLeadership").then((module) => ({ default: module.TechnicalLeadership })));
 const SimerMap = lazy(() => import("./pages/SimerMap").then((module) => ({ default: module.SimerMap })));
+const Investigation = lazy(() => import("./pages/Investigation").then((module) => ({ default: module.Investigation })));
 
 import {
   aliareColors,
@@ -285,6 +286,7 @@ function App() {
           <Route path="/servicos" element={<AuthenticatedLayout><Services /></AuthenticatedLayout>} />
           <Route path="/lideranca-tecnica" element={<AuthenticatedLayout><TechnicalLeadership /></AuthenticatedLayout>} />
           <Route path="/mapa-simer" element={<AuthenticatedLayout><SimerMap /></AuthenticatedLayout>} />
+          <Route path="/investigacao" element={<AuthenticatedLayout><Investigation /></AuthenticatedLayout>} />
 
           <Route
             path="/analistas"

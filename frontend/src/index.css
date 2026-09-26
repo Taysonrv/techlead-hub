@@ -293,3 +293,93 @@ svg {
     padding-right: 8px !important;
   }
 }
+
+/* =========================================================
+   GRÁFICOS / CARDS INTERATIVOS
+
+   Recharts torna setores, barras e superfícies focáveis após
+   o clique. O foco nativo do SVG desenha um contorno branco
+   no gráfico, especialmente visível no modo escuro.
+   Mantemos o foco acessível nos controles HTML e removemos
+   apenas o outline nativo dos elementos SVG do Recharts.
+========================================================= */
+
+.recharts-wrapper,
+.recharts-wrapper *,
+.recharts-surface,
+.recharts-surface * {
+  outline: none !important;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.recharts-wrapper svg:focus,
+.recharts-wrapper svg *:focus,
+.recharts-wrapper [tabindex]:focus {
+  outline: none !important;
+}
+
+.MuiCard-root:focus,
+.MuiCard-root:focus-visible {
+  outline: none;
+}
+
+
+/* =========================================================
+   MATERIAL UI - FILTROS / SELECTS
+   Mantém labels e valores em faixas distintas em todos os
+   formulários compactos, inclusive selects múltiplos.
+========================================================= */
+
+.techlead-page-surface .MuiFormControl-root .MuiInputLabel-root {
+  max-width: calc(100% - 42px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.techlead-page-surface .MuiFormControl-root .MuiInputLabel-root.MuiInputLabel-shrink {
+  transform: translate(14px, -9px) scale(0.75);
+}
+
+.techlead-page-surface .MuiFormControl-root .MuiOutlinedInput-root {
+  min-height: 42px;
+}
+
+.techlead-page-surface .MuiFormControl-root .MuiSelect-select {
+  min-width: 0;
+  padding-top: 11px !important;
+  padding-bottom: 11px !important;
+  padding-right: 36px !important;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Select com displayEmpty: o label precisa permanecer recolhido.
+   Sem isso, "Todos" é desenhado exatamente sobre o label. */
+.techlead-page-surface .MuiFormControl-root:has(.MuiSelect-select) .MuiInputLabel-root {
+  transform: translate(14px, -9px) scale(0.75);
+  background: var(--techlead-filter-label-bg, transparent);
+  padding-inline: 4px;
+  margin-left: -4px;
+  pointer-events: none;
+}
+
+/* Autocomplete e campos com chips nunca devem invadir a linha do label. */
+.techlead-page-surface .MuiAutocomplete-root .MuiOutlinedInput-root {
+  min-height: 42px;
+  padding-top: 7px !important;
+  padding-bottom: 7px !important;
+}
+
+.techlead-page-surface .MuiAutocomplete-root .MuiInputLabel-root {
+  max-width: calc(100% - 44px);
+}
+
+@media (max-width: 900px) {
+  .techlead-page-surface .MuiFormControl-root,
+  .techlead-page-surface .MuiAutocomplete-root {
+    min-width: 0 !important;
+    width: 100%;
+  }
+}
