@@ -37,3 +37,31 @@ export function isOperationalTicketFinalized(ticket: { baseStatus: string | null
     || ticket.baseStatus === "Closed"
     || CLOSED_TICKET_STATUS_PATTERN.test(status);
 }
+
+
+export const OPERATIONAL_AGING = {
+  ticketStaleHours: 72,
+  pausedTicketDays: 5,
+  newTicketDays: 7,
+  workItemStaleDays: 5,
+} as const;
+
+export function hoursBefore(now: Date, hours: number) {
+  return new Date(now.getTime() - hours * 60 * 60 * 1_000);
+}
+
+export function daysBefore(now: Date, days: number) {
+  return hoursBefore(now, days * 24);
+}
+
+export function ticketLastMovement(
+  ticket: { lastActionDate?: Date | null; lastUpdate?: Date | null; createdDate?: Date | null },
+) {
+  return ticket.lastActionDate ?? ticket.lastUpdate ?? ticket.createdDate ?? null;
+}
+
+export function workItemLastMovement(
+  item: { azureChangedAt?: Date | null; azureCreatedAt?: Date | null },
+) {
+  return item.azureChangedAt ?? item.azureCreatedAt ?? null;
+}
