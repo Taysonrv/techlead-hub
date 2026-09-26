@@ -296,9 +296,6 @@ export class CoordinationService {
 
   async summary(_userId: number, serviceDays = 0) {
     const now = new Date();
-    const staleBefore = new Date(now.getTime() - 72 * 60 * 60 * 1_000);
-    const nextSevenDays = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1_000);
-
     const ticketScope = ticketOperationalScope();
     const serviceSince = serviceDays > 0 ? new Date(now.getTime() - Math.min(serviceDays, 730) * 86400000) : null;
     const azureScope = coordinationAzureScope();
@@ -316,52 +313,31 @@ export class CoordinationService {
       serviceTickets,
     ] = await Promise.all([
       prisma.ticket.count({
-        where: { AND: [ticketScope, { isDeleted: false, baseStatus: { in: OPEN_TICKET_STATES } }] },
+        where: { AND: [ticketScope, coordinationTicketPriorityPredicate("backlog", now)] },
       }),
       prisma.ticket.count({
-        where: { AND: [ticketScope, { isDeleted: false, urgency: "Crítica", baseStatus: { in: OPEN_TICKET_STATES } }] },
+        where: { AND: [ticketScope, coordinationTicketPriorityPredicate("critical", now)] },
       }),
       prisma.ticket.count({
         where: {
-          AND: [
-            ticketScope,
-            {
-              isDeleted: false,
-              baseStatus: { in: OPEN_TICKET_STATES },
-              OR: [{ lastUpdate: { lt: staleBefore } }, { lastUpdate: null }],
-            },
-          ],
+          AND: [ticketScope, coordinationTicketPriorityPredicate("stale", now)],
         },
       }),
       prisma.ticket.count({
         where: {
-          AND: [
-            ticketScope,
-            {
-              isDeleted: false,
-              baseStatus: { in: OPEN_TICKET_STATES },
-              dueDate: { gte: now, lte: nextSevenDays },
-            },
-          ],
+          AND: [ticketScope, coordinationTicketPriorityPredicate("dueSoon", now)],
         },
       }),
       prisma.ticket.count({
         where: {
-          AND: [
-            ticketScope,
-            {
-              isDeleted: false,
-              baseStatus: { in: OPEN_TICKET_STATES },
-              dueDate: { lt: now },
-            },
-          ],
+          AND: [ticketScope, coordinationTicketPriorityPredicate("overdue", now)],
         },
       }),
       prisma.azureWorkItem.count({
-        where: { AND: [azureScope, { blockedProcess: true, state: { notIn: CLOSED_WORK_ITEM_STATES } }] },
+        where: { AND: [azureScope, coordinationAzurePriorityPredicate("blocked")] },
       }),
       prisma.azureWorkItem.count({
-        where: { AND: [azureScope, { assignedToName: null, state: { notIn: CLOSED_WORK_ITEM_STATES } }] },
+        where: { AND: [azureScope, coordinationAzurePriorityPredicate("unassigned")] },
       }),
       prisma.ticket.groupBy({
         by: ["owner"],
@@ -369,8 +345,7 @@ export class CoordinationService {
           AND: [
             ticketScope,
             {
-              isDeleted: false,
-              baseStatus: { in: OPEN_TICKET_STATES },
+              AND: [coordinationOpenTicketPredicate()],
               owner: { in: [...SUPPORT_ANALYSTS], mode: "insensitive" },
             },
           ],
@@ -383,7 +358,7 @@ export class CoordinationService {
           AND: [
             azureScope,
             {
-              state: { notIn: CLOSED_WORK_ITEM_STATES },
+              AND: [coordinationOpenAzurePredicate()],
               createdByName: { in: [...SUPPORT_ANALYSTS], mode: "insensitive" },
             },
           ],
@@ -394,7 +369,7 @@ export class CoordinationService {
         // Qualidade de Serviço pertence à carteira da squad: basta o ticket ser
         // de um cliente da squad OU estar com um analista da squad.
         where: { AND: [
-          { isDeleted: false, baseStatus: { in: OPEN_TICKET_STATES } },
+          coordinationOpenTicketPredicate(),
           ...(serviceSince ? [{ createdDate: { gte: serviceSince } }] : []),
           { OR: [
             { client: { in: [...SIMER_CLIENTS], mode: "insensitive" } },
