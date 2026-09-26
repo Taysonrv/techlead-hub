@@ -4,17 +4,14 @@ import {
 import type { Prisma } from "@prisma/client";
 import { SIMER_CLIENTS, SUPPORT_ANALYSTS, SUPPORT_COORDINATOR, SUPPORT_TEAMS, ticketOperationalScope, type SupportTeamName } from "../domain/OperationalScope";
 import { MovideskService } from "./MovideskService";
-import { analyzeMovideskIndicators } from "./MovideskPayloadAnalytics";
 import { AnalystProductivityService } from "./AnalystProductivityService";
 import { DataQualityService } from "./DataQualityService";
-import { SIMER_SERVICE_CATALOG, suggestSimerService, type SimerServiceCatalogItem } from "../domain/SimerServiceCatalog";
 
 const TERMINAL = ["Concluído", "Concluido", "Closed", "Done", "Resolved", "Cancelado", "Canceled"];
 const normalizedWords = (value: string) => value
   .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
   .toLocaleUpperCase("pt-BR").split(/\s+/).filter((word) => word.length > 2);
 
-const dataQualityCache = new Map<string, { expiresAt: number; value: unknown }>();
 const technicalLeadershipCache = new Map<string, { expiresAt: number; value: unknown }>();
 
 export class WorkspaceService {
