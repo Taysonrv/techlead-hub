@@ -28,6 +28,7 @@ export class InvestigationIntelligenceService {
     const anomalyRatio=avg?current/avg:null;
 
     const versions=count(similar.map(x=>x.deliveredVersion).filter(Boolean));
+    const versionDistribution=versions.slice(0,8).map(([version,total])=>({version,total}));
     const versionSignal=versions[0]&&versions[0][1]>=3?{version:versions[0][0],cases:versions[0][1],text:`${versions[0][1]} casos correlacionados compartilham a versão ${versions[0][0]}.`}:null;
 
     const strong=similar.filter(x=>x.score>=45);
@@ -47,8 +48,8 @@ export class InvestigationIntelligenceService {
     if(serviceCases.length>=5)signals.push({severity:"info",title:"Serviço recorrente no cliente",detail:`${serviceCases.length} tickets do cliente no recorte pertencem a ${service}.`});
 
     return {
-      clientDna:{client,totalTickets:clientTickets.length,taskRate,topServices,topCategories,serviceCases:serviceCases.length,periodStart:since,periodEnd:until},
-      recurrence,versionSignal,signals,
+      clientDna:{client,totalTickets:clientTickets.length,taskRate,topServices,topCategories,serviceCases:serviceCases.length,periodStart:since,periodEnd:until,monthly},
+      recurrence,versionSignal,versionDistribution,signals,
       confidence:{score:Math.min(100,Math.round((ticket.client?20:0)+(service?25:0)+(ticket.category?15:0)+(ticket.taskNumber?15:0)+(similar.length?25:0))),basis:["cliente","serviço","categoria","vínculo Azure","casos correlacionados"].filter((_,i)=>[ticket.client,service,ticket.category,ticket.taskNumber,similar.length][i])}
     };
   }
