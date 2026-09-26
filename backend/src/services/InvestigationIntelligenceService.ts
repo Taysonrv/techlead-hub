@@ -40,6 +40,9 @@ export class InvestigationIntelligenceService {
       concentration:strong.length?Math.round(strong.filter(x=>norm(x.client)===norm(client)).length/strong.length*1000)/10:0,
     };
 
+    const clusterMap=new Map<string,{service:string;category:string;version:string;cases:number;clients:Set<string>;tickets:number[]}>();
+    similar.forEach((x:any)=>{const svc=String(x.serviceThirdLevel||x.service||"Sem serviço");const cat=String(x.category||"Sem categoria");const ver=String(x.deliveredVersion||"Sem versão");const key=[norm(svc),norm(cat),norm(ver)].join("|");const c=clusterMap.get(key)??{service:svc,category:cat,version:ver,cases:0,clients:new Set<string>(),tickets:[]};c.cases++;if(x.client)c.clients.add(x.client);c.tickets.push(x.movideskId);clusterMap.set(key,c)});
+    const clusters=[...clusterMap.values()].map(c=>({service:c.service,category:c.category,version:c.version,cases:c.cases,clients:c.clients.size,tickets:c.tickets,scope:c.clients.size>=2?"transversal":"cliente"})).filter(c=>c.cases>=2).sort((a,b)=>b.cases-a.cases||b.clients-a.clients).slice(0,8);
     const signals:Array<{severity:"info"|"warning"|"success";title:string;detail:string}>=[];
     if(strong.length>=3)signals.push({severity:"warning",title:"Recorrência forte",detail:`${strong.length} casos atingem score de correlação ≥45.`});
     if(crossClients>=2)signals.push({severity:"warning",title:"Recorrência transversal",detail:`O padrão forte aparece em ${crossClients} clientes distintos; investigar regra/versão antes de tratar como cenário isolado.`});
@@ -49,7 +52,7 @@ export class InvestigationIntelligenceService {
 
     return {
       clientDna:{client,totalTickets:clientTickets.length,taskRate,topServices,topCategories,serviceCases:serviceCases.length,periodStart:since,periodEnd:until,monthly},
-      recurrence,versionSignal,versionDistribution,signals,
+      recurrence,versionSignal,versionDistribution,clusters,signals,
       confidence:{score:Math.min(100,Math.round((ticket.client?20:0)+(service?25:0)+(ticket.category?15:0)+(ticket.taskNumber?15:0)+(similar.length?25:0))),basis:["cliente","serviço","categoria","vínculo Azure","casos correlacionados"].filter((_,i)=>[ticket.client,service,ticket.category,ticket.taskNumber,similar.length][i])}
     };
   }
