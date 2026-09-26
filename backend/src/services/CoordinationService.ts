@@ -13,6 +13,8 @@ export class CoordinationService {
     const staleBefore = new Date(now.getTime() - 72 * 60 * 60 * 1_000);
     const nextSevenDays = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1_000);
     const safeLimit = Math.min(Math.max(limit, 1), 500);
+    // Busca um registro adicional para informar truncamento sem confundir "quantidade carregada" com total real.
+    const fetchLimit = Math.min(safeLimit + 1, 501);
     const serviceSince = serviceDays > 0 ? new Date(now.getTime() - Math.min(serviceDays, 730) * 86400000) : null;
     const ticketScope = ticketOperationalScope();
     const azureScope = coordinationAzureScope();
@@ -54,7 +56,7 @@ export class CoordinationService {
               ],
             },
             orderBy: [{ urgency: "desc" }, { lastUpdate: "asc" }],
-            take: safeLimit,
+            take: fetchLimit,
             select: {
               movideskId: true, subject: true, status: true, urgency: true, client: true,
               owner: true, lastUpdate: true, dueDate: true, taskNumber: true,
@@ -75,7 +77,7 @@ export class CoordinationService {
               ],
             },
             orderBy: [{ azureChangedAt: "asc" }],
-            take: safeLimit,
+            take: fetchLimit,
             select: {
               id: true, workItemType: true, title: true, state: true, client: true,
               assignedToName: true, createdByName: true, criticality: true, blockedProcess: true,
@@ -89,20 +91,42 @@ export class CoordinationService {
     const normalizeService = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR").trim();
     const ticketServicePath = (ticket: (typeof tickets)[number]) =>
       [ticket.serviceFirstLevel, ticket.serviceSecondLevel, ticket.serviceThirdLevel].map((v) => v?.trim()).filter(Boolean).join(" » ") || ticket.service?.trim() || "";
-    const filteredTickets = serviceName
+    const serviceFilteredTickets = serviceName
       ? tickets.filter((ticket) => normalizeService(ticketServicePath(ticket)) === normalizeService(serviceName))
       : tickets;
+    const ticketTruncated = serviceFilteredTickets.length > safeLimit;
+    const workItemTruncated = workItems.length > safeLimit;
+    const filteredTickets = serviceFilteredTickets.slice(0, safeLimit);
+    const filteredWorkItems = workItems.slice(0, safeLimit);
+
+    // O mesmo predicado usado no summary calcula o total do recorte. Assim o card e o drawer
+    // permanecem consistentes mesmo quando a lista é paginada/limitada.
+    const [ticketTotal, workItemTotal] = await Promise.all([
+      wantsTickets ? prisma.ticket.count({ where: { AND: [
+        ticketScope, { isDeleted:false, baseStatus:{in:OPEN_TICKET_STATES} }, ticketExtra,
+        ...(analyst?[{owner:{equals:analyst,mode:"insensitive" as const}}]:[]),
+        ...(serviceClient?[{client:{equals:serviceClient,mode:"insensitive" as const}}]:[]),
+        ...(serviceSince&&["service","serviceModule","serviceClient","serviceAnalyst"].includes(kind)?[{createdDate:{gte:serviceSince}}]:[]),
+        ...(serviceModule?[{OR:[
+          {service:{contains:serviceModule,mode:"insensitive" as const}},
+          {serviceFirstLevel:{contains:serviceModule,mode:"insensitive" as const}},
+          {serviceSecondLevel:{contains:serviceModule,mode:"insensitive" as const}},
+          {serviceThirdLevel:{contains:serviceModule,mode:"insensitive" as const}},
+        ]}]:[]),
+      ] } }) : Promise.resolve(0),
+      wantsAzure ? prisma.azureWorkItem.count({ where: { AND: [
+        azureScope, {state:{notIn:CLOSED_WORK_ITEM_STATES}}, azureExtra,
+        ...(analyst?[{createdByName:{equals:analyst,mode:"insensitive" as const}}]:[]),
+      ] } }) : Promise.resolve(0),
+    ]);
+    // Para Serviço exato o filtro é pós-query; nesse caso o total conhecido é o conjunto filtrado carregado.
+    const total = serviceName ? serviceFilteredTickets.length + workItemTotal : ticketTotal + workItemTotal;
 
     return {
-      kind,
-      analyst: analyst ?? null,
-      serviceModule: serviceModule ?? null,
-      serviceClient: serviceClient ?? null,
-      serviceName: serviceName ?? null,
-      total: filteredTickets.length + workItems.length,
-      truncated: filteredTickets.length === safeLimit || workItems.length === safeLimit,
-      tickets: filteredTickets,
-      workItems,
+      kind, analyst:analyst??null, serviceModule:serviceModule??null, serviceClient:serviceClient??null, serviceName:serviceName??null,
+      total, loaded:filteredTickets.length+filteredWorkItems.length,
+      truncated:ticketTruncated||workItemTruncated||total>filteredTickets.length+filteredWorkItems.length,
+      tickets:filteredTickets, workItems:filteredWorkItems,
     };
   }
 
