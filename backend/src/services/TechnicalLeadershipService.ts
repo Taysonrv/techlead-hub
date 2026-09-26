@@ -1,8 +1,8 @@
 import { prisma } from "../database/prisma";
 import type { Prisma } from "@prisma/client";
 import { SIMER_CLIENTS, SUPPORT_ANALYSTS, ticketOperationalScope } from "../domain/OperationalScope";
+import { isOperationalTicketOpen, isTerminalWorkItemState, normalizeOperationalText } from "../domain/OperationalLifecycleRules";
 
-const TERMINAL = ["Concluído", "Concluido", "Closed", "Done", "Resolved", "Cancelado", "Canceled"];
 const technicalLeadershipCache = new Map<string, { expiresAt: number; value: unknown }>();
 
 export type TechnicalLeadershipParams = {
@@ -39,14 +39,9 @@ export class TechnicalLeadershipService {
     const stale5d = new Date(now.getTime() - 5 * 86400000);
     const stale7d = new Date(now.getTime() - 7 * 86400000);
     const stale30d = new Date(now.getTime() - 30 * 86400000);
-    const normalize = (value: string | null | undefined) => (value ?? "")
-      .normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLocaleLowerCase("pt-BR");
-    const openTicket = (ticket: { baseStatus: string | null; status: string }) => {
-      const status = normalize(ticket.status);
-      return !/conclu|fechad|encerrad|resolvid|cancelad/.test(status)
-        && (["New", "InAttendance", "Stopped"].includes(ticket.baseStatus ?? "") || /novo|andamento|aguard|paus|parad|desenvolvimento/.test(status));
-    };
-    const terminalTask = (state: string) => TERMINAL.some((value) => normalize(value) === normalize(state));
+    const normalize = normalizeOperationalText;
+    const openTicket = isOperationalTicketOpen;
+    const terminalTask = isTerminalWorkItemState;
     const ticketWhere: Prisma.TicketWhereInput = {
       AND: [
         ticketOperationalScope(),
