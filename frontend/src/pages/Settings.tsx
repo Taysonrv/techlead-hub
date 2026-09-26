@@ -42,10 +42,6 @@ type ConfigurationForm = {
   project: string;
   wiki: string;
   pat: string;
-  tenantId: string;
-  clientId: string;
-  sharePointSiteUrl: string;
-  bpmnSiteUrl: string;
 };
 
 type ActiveSession = { id: number; clientType: string; deviceName: string | null; appVersion: string | null; ipAddress: string | null; createdAt: string; lastActivityAt: string; user: { id: number; name: string; username: string } };
