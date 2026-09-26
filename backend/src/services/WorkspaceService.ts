@@ -4,7 +4,8 @@ import {
 import type { Prisma } from "@prisma/client";
 import { SIMER_CLIENTS, SUPPORT_ANALYSTS, SUPPORT_COORDINATOR, SUPPORT_TEAMS, ticketOperationalScope, type SupportTeamName } from "../domain/OperationalScope";
 import { MovideskService } from "./MovideskService";
-import { analyzeMovideskIndicators, extractMovideskTimeEntries } from "./MovideskPayloadAnalytics";
+import { analyzeMovideskIndicators } from "./MovideskPayloadAnalytics";
+import { AnalystProductivityService } from "./AnalystProductivityService";
 import { SIMER_SERVICE_CATALOG, suggestSimerService, type SimerServiceCatalogItem } from "../domain/SimerServiceCatalog";
 
 const TERMINAL = ["Concluído", "Concluido", "Closed", "Done", "Resolved", "Cancelado", "Canceled"];
