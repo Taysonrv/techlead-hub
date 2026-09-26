@@ -21,7 +21,7 @@ export class InvestigationIntelligenceService {
     const taskRate=clientTickets.length?Math.round(clientTickets.filter(x=>x.taskNumber).length/clientTickets.length*1000)/10:0;
     const serviceCases=service?clientTickets.filter(x=>norm(serviceOf(x))===norm(service)):[];
 
-    const monthly=count(clientTickets.map(x=>month(x.createdDate))).map(([key,total])=>({month:key,total})).sort((a,b)=>a.month.localeCompare(b.month));
+    const monthly=[...clientTickets.reduce((m,x)=>{const key=month(x.createdDate);m.set(key,(m.get(key)??0)+1);return m},new Map<string,number>()).entries()].map(([key,total])=>({month:key,total})).sort((a,b)=>a.month.localeCompare(b.month));
     const baseline=monthly.slice(0,-1).map(x=>x.total);
     const current=monthly.at(-1)?.total??0;
     const avg=baseline.length?baseline.reduce((a,b)=>a+b,0)/baseline.length:0;
