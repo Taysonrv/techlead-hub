@@ -1,8 +1,7 @@
 import {
   prisma,
 } from "../database/prisma";
-import type { Prisma } from "@prisma/client";
-import { SIMER_CLIENTS, SUPPORT_ANALYSTS, SUPPORT_COORDINATOR, SUPPORT_TEAMS, ticketOperationalScope, type SupportTeamName } from "../domain/OperationalScope";
+import { SUPPORT_ANALYSTS, SUPPORT_COORDINATOR, SUPPORT_TEAMS, type SupportTeamName } from "../domain/OperationalScope";
 import { MovideskService } from "./MovideskService";
 import { AnalystProductivityService } from "./AnalystProductivityService";
 import { DataQualityService } from "./DataQualityService";
@@ -12,8 +11,6 @@ const TERMINAL = ["Concluído", "Concluido", "Closed", "Done", "Resolved", "Canc
 const normalizedWords = (value: string) => value
   .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
   .toLocaleUpperCase("pt-BR").split(/\s+/).filter((word) => word.length > 2);
-
-const technicalLeadershipCache = new Map<string, { expiresAt: number; value: unknown }>();
 
 function compareVersions(left: string, right: string) {
   const leftParts = left.match(/\\d+/g)?.map(Number) ?? [];
