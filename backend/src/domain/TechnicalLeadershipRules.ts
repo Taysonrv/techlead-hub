@@ -122,3 +122,36 @@ export function recurrenceTrend(input: {
   if (changePct <= -30) return "DECLINING";
   return "STABLE";
 }
+
+export type RecurrenceReading =
+  | "EMERGING_TRANSVERSAL"
+  | "GROWING_TRANSVERSAL"
+  | "CLIENT_CONCENTRATED"
+  | "DECLINING"
+  | "STABLE_PATTERN";
+
+export function recurrenceReading(input: {
+  trend: RecurrenceTrend;
+  pattern: RecurrencePattern;
+}): RecurrenceReading {
+  if (input.trend === "DECLINING") return "DECLINING";
+  if (input.pattern === "CONCENTRATED") return "CLIENT_CONCENTRATED";
+  if (input.pattern === "TRANSVERSAL" && input.trend === "EMERGING") return "EMERGING_TRANSVERSAL";
+  if (input.pattern === "TRANSVERSAL" && input.trend === "GROWING") return "GROWING_TRANSVERSAL";
+  return "STABLE_PATTERN";
+}
+
+export function recurrenceReadingAction(reading: RecurrenceReading, fallback: string) {
+  switch (reading) {
+    case "EMERGING_TRANSVERSAL":
+      return "Investigar causa raiz e mudanças recentes; o tema surgiu no período e já aparece entre clientes.";
+    case "GROWING_TRANSVERSAL":
+      return "Priorizar análise de causa raiz e padrão sistêmico; a recorrência cresce entre clientes.";
+    case "CLIENT_CONCENTRATED":
+      return "Validar processo, configuração e necessidade de orientação direcionada ao cliente predominante.";
+    case "DECLINING":
+      return "Acompanhar a redução e validar se ações anteriores explicam a queda antes de encerrar o acompanhamento.";
+    default:
+      return fallback;
+  }
+}
