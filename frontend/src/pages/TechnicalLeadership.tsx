@@ -106,7 +106,7 @@ const radarMeta: Array<[string, string, string, string]> = [
 const tabInfo: Record<TabKey, string> = {
   indicators: "Leitura operacional de volume, SLA, resoluções, backlog e distribuição. Comparativos detalhados de desempenho permanecem na tela Desempenho.",
   radar: "Destaca situações operacionais que merecem intervenção antes de virarem recorrência ou estouro. Não representa prioridade formal do atendimento ou do Azure.",
-  audit: "Seleciona candidatos para revisão humana. O sistema sinaliza indícios; não altera classificações automaticamente.",
+  audit: "Seleciona candidatos para revisão humana a partir de evidências ponderadas. A ordenação indica força dos sinais encontrados, não prioridade, severidade ou SLA do atendimento.",
   recurrences: "Agrupa temas repetidos e compara o período atual com o anterior para sugerir investigação, treinamento ou causa raiz.",
   gaps: "Transforma sinais recorrentes da operação em pontos de atenção técnicos, explicando evidência, impacto e próxima ação sugerida. Não altera prioridade formal do atendimento ou do Azure.",
   development: "Mostra concentração de temas e pontos de apoio por analista para orientar desenvolvimento técnico, sem ranking.",
@@ -499,7 +499,7 @@ export function TechnicalLeadership() {
         {filteredAudit.map((ticket) => <Card key={ticket.id} onClick={() => setDrawer({ kind: "audit", title: "Auditoria semanal", items: [ticket] })} sx={{ cursor: "pointer", background: mode === "dark" ? "linear-gradient(145deg, rgba(17,45,67,.96), rgba(12,29,49,.96)) !important" : "linear-gradient(145deg,#FFFFFF,#F4FAF8) !important", "&:hover": { borderColor: `${aliareColors.green} !important`, transform: "translateY(-2px)", boxShadow: "0 14px 34px rgba(0,199,142,.10)" }, transition: ".15s" }}><CardContent>
           <Stack direction="row" sx={{ justifyContent: "space-between", gap: 1 }}><Typography sx={{ fontWeight: 850 }}>#{ticket.movideskId}</Typography><Tooltip title="Candidato selecionado por heurísticas operacionais. A confirmação depende de análise humana."><InfoOutlined sx={{ fontSize: 17, color: "text.secondary" }} /></Tooltip></Stack>
           <Typography variant="body2" sx={{ mt: .5, fontWeight: 700 }}>{ticket.subject}</Typography>
-          <Chip size="small" color="warning" label={ticket.reason} sx={{ mt: 1, maxWidth: "100%" }} />
+          <Stack direction="row" spacing={.7} useFlexGap sx={{ mt: 1, flexWrap: "wrap" }}><Chip size="small" color="warning" label={ticket.reason} sx={{ maxWidth: "100%" }} />{Boolean(ticket.evidenceCount) && <Chip size="small" variant="outlined" label={`${ticket.evidenceCount} evidência(s)`} />}{ticket.confidence && <Chip size="small" variant="outlined" color={ticket.confidence === "ALTA" ? "success" : "default"} label={`Confiança ${ticket.confidence.toLowerCase()}`} />}</Stack>
         </CardContent></Card>)}
       </Box>
     </Box>}
