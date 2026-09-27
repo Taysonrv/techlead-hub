@@ -6,6 +6,7 @@ import {
   prisma,
 } from "../database/prisma";
 import { isTerminalWorkItemState } from "../domain/OperationalLifecycleRules";
+import { HIGH_AZURE_CRITICALITIES, isHighAzureCriticality } from "../domain/AzureWorkItemRules";
 
 
 export type AzureWorkItemListParams = {
@@ -76,11 +77,6 @@ const EVOLUTION_TYPE =
 
 const SUPPORT_TYPE =
   "APOIO";
-
-const HIGH_CRITICALITIES = [
-  "Crítica",
-  "Alta",
-] as const;
 
 const INVALID_VERSION_VALUES = new Set([
   "",
@@ -504,7 +500,7 @@ export class AzureWorkItemService {
               {
                 criticality: {
                   in: [
-                    ...HIGH_CRITICALITIES,
+                    ...HIGH_AZURE_CRITICALITIES,
                   ],
                 },
               },
@@ -3023,17 +3019,7 @@ export class AzureWorkItemService {
       null |
       undefined,
   ): boolean {
-    const normalized =
-      this.normalizeComparable(
-        value,
-      );
-
-    return (
-      normalized ===
-        "alta" ||
-      normalized ===
-        "critica"
-    );
+    return isHighAzureCriticality(value);
   }
 
   private latestDate(
