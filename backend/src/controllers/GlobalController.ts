@@ -47,7 +47,7 @@ export class GlobalController {
     const normalizedQuery = normalizeSearch(query);
     const client = typeof req.query.client === "string" ? req.query.client.trim() : "";
     const clientScope = req.query.clientScope === "predominant" || req.query.clientScope === "others" ? req.query.clientScope : "all";
-    const clientFilter = client && clientScope !== "all" ? { client: clientScope === "predominant" ? { equals: client, mode: "insensitive" as const } : { not: { equals: client, mode: "insensitive" as const } } } : {};
+    const clientFilter = client && clientScope !== "all" ? (clientScope === "predominant" ? { client: { equals: client, mode: "insensitive" as const } } : { NOT: { client: { equals: client, mode: "insensitive" as const } } }) : {};
     const navigation = navigationItems.filter((item) => normalizeSearch([item.title, item.subtitle, ...item.keywords].join(" ")).includes(normalizedQuery)).slice(0, 10);
     const [tickets, workItems, versions] = await Promise.all([
       prisma.ticket.findMany({
