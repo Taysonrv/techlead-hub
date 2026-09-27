@@ -169,7 +169,7 @@ export class CoordinationService {
     since.setDate(1); since.setHours(0, 0, 0, 0);
     const previousSince = new Date(since);
     previousSince.setMonth(previousSince.getMonth() - months);
-    const scope = ticketOperationalScope();
+    const scope = coordinationTicketScope();
     const allTickets = await prisma.ticket.findMany({
       where: {
         AND: [
