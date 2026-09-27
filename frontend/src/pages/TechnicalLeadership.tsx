@@ -5,7 +5,7 @@ import {
 import {
   AssignmentTurnedInOutlined, AutoGraphOutlined, BoltOutlined,
   ErrorOutlineOutlined, GroupsOutlined, InfoOutlined, OpenInNewOutlined, RadarOutlined,
-  SchoolOutlined, TrackChangesOutlined, TrendingDownOutlined, TrendingUpOutlined, InsightsOutlined,
+  SchoolOutlined, SearchOutlined, TrackChangesOutlined, TrendingDownOutlined, TrendingUpOutlined, InsightsOutlined,
 } from "@mui/icons-material";
 import { useEffect, useMemo, useState } from "react";
 import type { ReactElement, ReactNode } from "react";
