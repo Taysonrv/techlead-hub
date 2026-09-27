@@ -271,7 +271,7 @@ export class CoordinationService {
     start.setHours(0, 0, 0, 0);
     const { businessDays, hoursPerDay } = productivityExpectedHours(start, now);
     const tickets = await prisma.ticket.findMany({
-      where: { AND: [ticketOperationalScope(), { isDeleted: false }, { owner: { in: [...SUPPORT_ANALYSTS], mode: "insensitive" } }] },
+      where: { AND: [coordinationTicketScope(), { isDeleted: false }] },
       select: { owner: true, rawData: true },
     });
     const analysts = SUPPORT_ANALYSTS.map((analyst) => {
