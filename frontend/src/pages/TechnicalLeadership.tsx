@@ -32,7 +32,7 @@ type Task = {
 type Recurrence = {
   topic: string; count: number; previous: number; changePct: number | null; clients: string[]; analysts: string[];
   action: string; examples: Ticket[]; linkedExamples?: number; confidence?: "ALTA" | "MÉDIA";
-  concentration?: { topClient: string | null; topClientCount: number; topModule: string | null; topModuleCount: number; clientSharePct: number };
+  concentration?: { topClient: string | null; topClientCount: number; topModule: string | null; topModuleCount: number; clientSharePct: number; pattern?: "CONCENTRATED" | "TRANSVERSAL" | "DISTRIBUTED" };
 };
 type Gap = { id: string; type: string; title: string; evidence: string; impact: string; action: string; status: string; confidence?: string; ticketCount?: number; azureLinked?: number; blockedLinked?: number; deliveredLinked?: number; examples?: Ticket[]; tasks?: Task[] };
 type Development = { analyst: string; tickets: number; stale: number; linkedTasks?: number; blockedTasks?: number; finishedTasks?: number; themes: Array<{ topic: string; count: number }>; examples?: Ticket[] };
@@ -514,7 +514,7 @@ export function TechnicalLeadership() {
           <Stack direction="row" sx={{ justifyContent: "space-between", gap: 1 }}><Typography sx={{ fontWeight: 850, textTransform: "capitalize" }}>{item.topic}</Typography><Tooltip title="Tema agrupado por classificação/serviço dos tickets do período. Clique para ver evidências e ação sugerida."><InfoOutlined sx={{ fontSize: 17, color: "text.secondary" }} /></Tooltip></Stack>
           <Typography sx={{ fontWeight: 900, fontSize: "1.7rem", color: aliareColors.cyan, mt: .7 }}>{item.count}</Typography>
           <Typography variant="caption" color="text.secondary">{item.clients.length} cliente(s) · {item.analysts.length} analista(s) · {item.linkedExamples ?? 0} evidência(s) com Azure</Typography>{item.concentration && <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: .35 }}>Concentração: {item.concentration.topClient ?? "sem cliente dominante"}{item.concentration.topClient ? ` (${item.concentration.clientSharePct}%)` : ""} · Módulo Azure: {item.concentration.topModule ?? "não identificado"}</Typography>}
-          <Stack direction="row" spacing={.7} sx={{ mt: 1, flexWrap: "wrap" }}><Delta value={item.changePct} />{item.confidence && <Chip size="small" variant="outlined" color={item.confidence === "ALTA" ? "success" : "warning"} label={`Confiança ${item.confidence.toLowerCase()}`} />}</Stack>
+          <Stack direction="row" spacing={.7} useFlexGap sx={{ mt: 1, flexWrap: "wrap" }}><Delta value={item.changePct} />{item.concentration?.pattern && <Chip size="small" variant="outlined" color={item.concentration.pattern === "TRANSVERSAL" ? "info" : item.concentration.pattern === "CONCENTRATED" ? "warning" : "default"} label={item.concentration.pattern === "TRANSVERSAL" ? "Transversal entre clientes" : item.concentration.pattern === "CONCENTRATED" ? "Concentrado em cliente" : "Distribuído"} />}{Boolean(item.linkedExamples) && <Chip size="small" variant="outlined" label="Evidência Azure" />}{item.confidence && <Chip size="small" variant="outlined" color={item.confidence === "ALTA" ? "success" : "warning"} label={`Confiança ${item.confidence.toLowerCase()}`} />}</Stack>
         </CardContent></Card>)}
         {!filteredRecurrences.length && <Alert severity="success">Nenhuma recorrência encontrada para os filtros selecionados.</Alert>}
       </Box>
