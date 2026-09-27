@@ -40,7 +40,7 @@ type Data = {
   generatedAt: string; periodDays: number; periodStart?: string; periodEnd?: string;
   radar: Record<string, number>;
   radarSamples: Record<string, Array<Ticket | Task>>;
-  audit: { candidates: number; sample: Array<Ticket & { reason: string }> };
+  audit: { candidates: number; sample: Array<Ticket & { reason: string; reasons: string[]; evidenceCount: number; sources: string[]; auditScore: number; confidence: "ALTA" | "MÉDIA" }> };
   recurrences: Recurrence[]; gaps: Gap[]; development: Development[];
   weekly: { current: number; previous: number; changePct: number | null; open: number; previousOpen: number; overdue: number; paused: number; stale: number; blocked: number };
   analytics: {
