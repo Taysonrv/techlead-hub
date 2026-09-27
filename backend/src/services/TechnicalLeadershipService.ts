@@ -2,7 +2,7 @@ import { prisma } from "../database/prisma";
 import type { Prisma } from "@prisma/client";
 import { SIMER_CLIENTS, SUPPORT_ANALYSTS, coordinationAzureScope, coordinationTicketScope } from "../domain/OperationalScope";
 import { OPERATIONAL_AGING, daysBefore, hoursBefore, isOperationalTicketOpen, isTerminalWorkItemState, normalizeOperationalText, ticketLastMovement, workItemLastMovement } from "../domain/OperationalLifecycleRules";
-import { TECHNICAL_LEADERSHIP_THRESHOLDS, recurrenceAction, recurrenceConfidence, recurrenceGapConfidence, recurrenceGapImpact, volumeGapImpact } from "../domain/TechnicalLeadershipRules";
+import { TECHNICAL_LEADERSHIP_AUDIT_SIGNALS, TECHNICAL_LEADERSHIP_THRESHOLDS, leadershipAuditConfidence, recurrenceAction, recurrenceConfidence, recurrenceGapConfidence, recurrenceGapImpact, volumeGapImpact } from "../domain/TechnicalLeadershipRules";
 
 const technicalLeadershipCache = new Map<string, { expiresAt: number; value: unknown }>();
 
@@ -123,12 +123,16 @@ export class TechnicalLeadershipService {
       return (/duvida|orientacao/.test(category) && /bug|erro|falha|configuracao|operacional/.test(cause))
         || (/problema|erro|incidente/.test(category) && /duvida|orientacao|treinamento/.test(cause));
     });
+    const auditSignal = <T,>(ticket: T, key: keyof typeof TECHNICAL_LEADERSHIP_AUDIT_SIGNALS) => {
+      const rule = TECHNICAL_LEADERSHIP_AUDIT_SIGNALS[key];
+      return { ticket, reason: rule.reason, score: rule.weight, source: rule.source };
+    };
     const auditSignals = [
-      ...classificationAudit.map((ticket) => ({ ticket, reason: "Possível divergência entre categoria e causa", score: 4, source: "Movidesk" })),
-      ...noMovement.map((ticket) => ({ ticket, reason: "Sem movimentação há mais de 72h", score: 3, source: "Movidesk" })),
-      ...riskOverdue.map((ticket) => ({ ticket, reason: "Prazo vencido ou SLA de solução violado", score: 5, source: "Movidesk" })),
-      ...closedTicketActiveTask.map((ticket) => ({ ticket, reason: "Ticket encerrado com Task Azure ainda ativa", score: 7, source: "Movidesk + Azure" })),
-      ...openTicketFinishedTask.map((ticket) => ({ ticket, reason: "Ticket aberto com Task Azure concluída", score: 6, source: "Movidesk + Azure" })),
+      ...classificationAudit.map((ticket) => auditSignal(ticket, "CLASSIFICATION_DIVERGENCE")),
+      ...noMovement.map((ticket) => auditSignal(ticket, "NO_MOVEMENT")),
+      ...riskOverdue.map((ticket) => auditSignal(ticket, "DEADLINE_OR_SLA")),
+      ...closedTicketActiveTask.map((ticket) => auditSignal(ticket, "CLOSED_TICKET_ACTIVE_TASK")),
+      ...openTicketFinishedTask.map((ticket) => auditSignal(ticket, "OPEN_TICKET_FINISHED_TASK")),
     ];
     const auditMap = new Map<number, { ticket: (typeof tickets)[number]; reasons: string[]; sources: Set<string>; score: number }>();
     auditSignals.forEach(({ ticket, reason, score, source }) => {
@@ -143,7 +147,7 @@ export class TechnicalLeadershipService {
       .slice(0, 15)
       .map(({ ticket, reasons, sources, score }) => ({
         ...ticket, reason: reasons[0], reasons, evidenceCount: reasons.length, sources: [...sources], auditScore: score,
-        confidence: sources.has("Movidesk + Azure") || reasons.length >= 2 ? "ALTA" : "MÉDIA",
+        confidence: leadershipAuditConfidence({ sources, evidenceCount: reasons.length }),
       }));
 
     const recurrenceKey = (ticket: (typeof tickets)[number]) => {
