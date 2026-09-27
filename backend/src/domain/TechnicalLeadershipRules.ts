@@ -98,3 +98,14 @@ export function leadershipAuditConfidence(input: {
   const sources = new Set(input.sources);
   return sources.has("Movidesk + Azure") || input.evidenceCount >= 2 ? "ALTA" : "MÉDIA";
 }
+
+export type RecurrencePattern = "CONCENTRATED" | "TRANSVERSAL" | "DISTRIBUTED";
+
+export function recurrencePattern(input: {
+  clientCount: number;
+  topClientSharePct: number;
+}): RecurrencePattern {
+  if (input.clientCount <= 1 || input.topClientSharePct >= 70) return "CONCENTRATED";
+  if (input.clientCount >= 2 && input.topClientSharePct <= 60) return "TRANSVERSAL";
+  return "DISTRIBUTED";
+}
