@@ -45,27 +45,30 @@ export class GlobalController {
     if (query.length < 2) return res.json({ items: [] });
     const numeric = Number(query);
     const normalizedQuery = normalizeSearch(query);
+    const client = typeof req.query.client === "string" ? req.query.client.trim() : "";
+    const clientScope = req.query.clientScope === "predominant" || req.query.clientScope === "others" ? req.query.clientScope : "all";
+    const clientFilter = client && clientScope !== "all" ? { client: clientScope === "predominant" ? { equals: client, mode: "insensitive" as const } : { not: { equals: client, mode: "insensitive" as const } } } : {};
     const navigation = navigationItems.filter((item) => normalizeSearch([item.title, item.subtitle, ...item.keywords].join(" ")).includes(normalizedQuery)).slice(0, 10);
     const [tickets, workItems, versions] = await Promise.all([
       prisma.ticket.findMany({
-        where: { OR: [
+        where: { AND: [clientFilter, { OR: [
           { subject: { contains: query, mode: "insensitive" } },
           { client: { contains: query, mode: "insensitive" } },
           { category: { contains: query, mode: "insensitive" } },
           { service: { contains: query, mode: "insensitive" } },
           ...(Number.isSafeInteger(numeric) ? [{ movideskId: numeric }] : []),
-        ] },
+        ] }] },
         select: { movideskId: true, subject: true, client: true, status: true },
         orderBy: { createdDate: "desc" }, take: 8,
       }),
       prisma.azureWorkItem.findMany({
-        where: { OR: [
+        where: { AND: [clientFilter, { OR: [
           { title: { contains: query, mode: "insensitive" } },
           { client: { contains: query, mode: "insensitive" } },
           { module: { contains: query, mode: "insensitive" } },
           { process: { contains: query, mode: "insensitive" } },
           ...(Number.isSafeInteger(numeric) ? [{ id: numeric }] : []),
-        ] },
+        ] }] },
         select: { id: true, title: true, workItemType: true, state: true, client: true },
         orderBy: { azureChangedAt: "desc" }, take: 8,
       }),
