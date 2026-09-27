@@ -1,5 +1,5 @@
 import type { Prisma } from "@prisma/client";
-import { OPERATIONAL_AGING, hoursBefore, isTerminalWorkItemState } from "./OperationalLifecycleRules";
+import { OPERATIONAL_AGING, hoursBefore } from "./OperationalLifecycleRules";
 
 export const COORDINATION_OPEN_TICKET_STATES = ["New", "InAttendance", "Stopped"] as const;
 
