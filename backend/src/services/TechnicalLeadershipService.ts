@@ -96,10 +96,14 @@ export class TechnicalLeadershipService {
     const newTooLong = openTickets.filter((ticket) => /novo|new/.test(normalize(ticket.status)) && ticket.createdDate < stale7d);
     const pausedTooLong = openTickets.filter((ticket) => /paus|parad|stopped/.test(normalize(ticket.status)) && movement(ticket) < stale5d);
     const noMovement = openTickets.filter((ticket) => movement(ticket) < stale3d);
-    const slaOverdue = openTickets.filter((ticket) =>
-      Boolean(ticket.dueDate && ticket.dueDate < now)
-      || /venc|viol|fora|estour/.test(normalize(ticket.solutionSlaIndicator)),
+    // Prazo operacional (dueDate) e violação de SLA são sinais distintos.
+    // Mantê-los separados evita comparar o card "Prazos vencidos" da Coordenação
+    // com um indicador híbrido de prazo + SLA na Liderança Técnica.
+    const overdue = openTickets.filter((ticket) => Boolean(ticket.dueDate && ticket.dueDate < now));
+    const slaViolated = openTickets.filter((ticket) =>
+      /venc|viol|fora|estour|atras/.test(normalize(ticket.solutionSlaIndicator)),
     );
+    const riskOverdue = openTickets.filter((ticket) => overdue.includes(ticket) || slaViolated.includes(ticket));
     const slaSoon = openTickets.filter((ticket) => ticket.dueDate && ticket.dueDate >= now && ticket.dueDate <= new Date(now.getTime() + 86400000));
     const blocked = openTasks.filter((task) => task.blockedProcess);
     const taskStale = openTasks.filter((task) => (workItemLastMovement(task) ?? now) < daysBefore(now, OPERATIONAL_AGING.workItemStaleDays));
@@ -121,7 +125,7 @@ export class TechnicalLeadershipService {
     const auditSignals = [
       ...classificationAudit.map((ticket) => ({ ticket, reason: "Possível divergência entre categoria e causa", score: 4, source: "Movidesk" })),
       ...noMovement.map((ticket) => ({ ticket, reason: "Sem movimentação há mais de 72h", score: 3, source: "Movidesk" })),
-      ...slaOverdue.map((ticket) => ({ ticket, reason: "SLA/prazo vencido", score: 5, source: "Movidesk" })),
+      ...riskOverdue.map((ticket) => ({ ticket, reason: "Prazo vencido ou SLA de solução violado", score: 5, source: "Movidesk" })),
       ...closedTicketActiveTask.map((ticket) => ({ ticket, reason: "Ticket encerrado com Task Azure ainda ativa", score: 7, source: "Movidesk + Azure" })),
       ...openTicketFinishedTask.map((ticket) => ({ ticket, reason: "Ticket aberto com Task Azure concluída", score: 6, source: "Movidesk + Azure" })),
     ];
@@ -361,13 +365,13 @@ export class TechnicalLeadershipService {
       changePct: previousTickets.length ? Math.round(((currentTickets.length - previousTickets.length) / previousTickets.length) * 100) : null,
       open: openTickets.length,
       previousOpen,
-      overdue: slaOverdue.length,
+      overdue: overdue.length,
       paused: pausedTooLong.length,
       stale: noMovement.length,
       blocked: blocked.length,
     };
     const recommendations = [
-      ...(slaOverdue.length ? [`Priorizar revisão de ${slaOverdue.length} atendimento(s) com SLA/prazo vencido.`] : []),
+      ...(riskOverdue.length ? [`Priorizar revisão de ${riskOverdue.length} atendimento(s) com prazo vencido ou SLA de solução violado.`] : []),
       ...(newTooLong.length ? [`Direcionar ${newTooLong.length} atendimento(s) ainda como Novo há mais de 7 dias.`] : []),
       ...(pausedTooLong.length ? [`Revisar motivo e próximo passo de ${pausedTooLong.length} atendimento(s) pausado(s) há mais de 5 dias.`] : []),
       ...(classificationAudit.length ? [`Auditar a amostra semanal de ${Math.min(10, auditSample.length)} ticket(s) com maior sinal de inconsistência.`] : []),
@@ -380,17 +384,17 @@ export class TechnicalLeadershipService {
       periodDays: days,
       radar: {
         newTooLong: newTooLong.length, pausedTooLong: pausedTooLong.length, noMovement: noMovement.length,
-        slaOverdue: slaOverdue.length, slaSoon: slaSoon.length, blocked: blocked.length,
+        slaOverdue: riskOverdue.length, overdue: overdue.length, slaViolated: slaViolated.length, slaSoon: slaSoon.length, blocked: blocked.length,
         taskStale: taskStale.length, unassigned: unassigned.length,
         closedTicketActiveTask: closedTicketActiveTask.length, openTicketFinishedTask: openTicketFinishedTask.length,
       },
       radarSamples: {
         newTooLong: newTooLong.slice(0, 50), pausedTooLong: pausedTooLong.slice(0, 50), noMovement: noMovement.slice(0, 50),
-        slaOverdue: slaOverdue.slice(0, 50), slaSoon: slaSoon.slice(0, 50),
+        slaOverdue: riskOverdue.slice(0, 50), overdue: overdue.slice(0, 50), slaViolated: slaViolated.slice(0, 50), slaSoon: slaSoon.slice(0, 50),
         closedTicketActiveTask: closedTicketActiveTask.slice(0, 50), openTicketFinishedTask: openTicketFinishedTask.slice(0, 50),
         blocked: blocked.slice(0, 50), taskStale: taskStale.slice(0, 50), unassigned: unassigned.slice(0, 50),
       },
-      audit: { candidates: new Set([...classificationAudit, ...noMovement, ...slaOverdue, ...closedTicketActiveTask, ...openTicketFinishedTask].map((ticket) => ticket.id)).size, sample: auditSample },
+      audit: { candidates: new Set([...classificationAudit, ...noMovement, ...riskOverdue, ...closedTicketActiveTask, ...openTicketFinishedTask].map((ticket) => ticket.id)).size, sample: auditSample },
       recurrences,
       gaps,
       development: analystDevelopment,
