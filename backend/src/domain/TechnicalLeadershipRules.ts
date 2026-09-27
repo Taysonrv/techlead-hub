@@ -51,3 +51,50 @@ export function recurrenceGapImpact(count: number, confidence: LeadershipGapConf
 export function volumeGapImpact(count: number, highImpactMinimum: number): LeadershipGapImpact {
   return count >= highImpactMinimum ? "Alto" : "Médio";
 }
+
+export type LeadershipAuditSignalKey =
+  | "CLASSIFICATION_DIVERGENCE"
+  | "NO_MOVEMENT"
+  | "DEADLINE_OR_SLA"
+  | "CLOSED_TICKET_ACTIVE_TASK"
+  | "OPEN_TICKET_FINISHED_TASK";
+
+export const TECHNICAL_LEADERSHIP_AUDIT_SIGNALS: Record<LeadershipAuditSignalKey, {
+  weight: number;
+  reason: string;
+  source: "Movidesk" | "Movidesk + Azure";
+}> = {
+  CLASSIFICATION_DIVERGENCE: {
+    weight: 4,
+    reason: "Possível divergência entre categoria e causa",
+    source: "Movidesk",
+  },
+  NO_MOVEMENT: {
+    weight: 3,
+    reason: "Sem ação registrada há mais de 72h",
+    source: "Movidesk",
+  },
+  DEADLINE_OR_SLA: {
+    weight: 5,
+    reason: "Prazo vencido ou SLA de solução violado",
+    source: "Movidesk",
+  },
+  CLOSED_TICKET_ACTIVE_TASK: {
+    weight: 7,
+    reason: "Ticket encerrado com Task Azure ainda ativa",
+    source: "Movidesk + Azure",
+  },
+  OPEN_TICKET_FINISHED_TASK: {
+    weight: 6,
+    reason: "Ticket aberto com Task Azure concluída",
+    source: "Movidesk + Azure",
+  },
+};
+
+export function leadershipAuditConfidence(input: {
+  sources: Iterable<string>;
+  evidenceCount: number;
+}): LeadershipConfidence {
+  const sources = new Set(input.sources);
+  return sources.has("Movidesk + Azure") || input.evidenceCount >= 2 ? "ALTA" : "MÉDIA";
+}
