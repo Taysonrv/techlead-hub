@@ -1,6 +1,6 @@
 import { prisma } from "../database/prisma";
 import type { Prisma } from "@prisma/client";
-import { SIMER_CLIENTS, SUPPORT_ANALYSTS, ticketOperationalScope } from "../domain/OperationalScope";
+import { SIMER_CLIENTS, SUPPORT_ANALYSTS, coordinationTicketScope } from "../domain/OperationalScope";
 import { OPERATIONAL_AGING, daysBefore, hoursBefore, isOperationalTicketOpen, isTerminalWorkItemState, normalizeOperationalText, ticketLastMovement, workItemLastMovement } from "../domain/OperationalLifecycleRules";
 
 const technicalLeadershipCache = new Map<string, { expiresAt: number; value: unknown }>();
@@ -47,7 +47,7 @@ export class TechnicalLeadershipService {
     const terminalTask = isTerminalWorkItemState;
     const ticketWhere: Prisma.TicketWhereInput = {
       AND: [
-        ticketOperationalScope(),
+        coordinationTicketScope(),
         { isDeleted: false },
         ...(params.client ? [{ client: { equals: params.client, mode: "insensitive" as const } }] : []),
         ...(params.user ? [{ owner: { equals: params.user, mode: "insensitive" as const } }] : []),
