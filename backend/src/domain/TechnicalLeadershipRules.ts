@@ -109,3 +109,16 @@ export function recurrencePattern(input: {
   if (input.clientCount >= 2 && input.topClientSharePct <= 60) return "TRANSVERSAL";
   return "DISTRIBUTED";
 }
+
+export type RecurrenceTrend = "EMERGING" | "GROWING" | "STABLE" | "DECLINING";
+
+export function recurrenceTrend(input: {
+  current: number;
+  previous: number;
+}): RecurrenceTrend {
+  if (input.previous <= 0) return input.current >= TECHNICAL_LEADERSHIP_THRESHOLDS.recurrenceMinimum ? "EMERGING" : "STABLE";
+  const changePct = ((input.current - input.previous) / input.previous) * 100;
+  if (changePct >= 30) return "GROWING";
+  if (changePct <= -30) return "DECLINING";
+  return "STABLE";
+}
