@@ -2,7 +2,7 @@ export const TERMINAL_WORK_ITEM_STATES = [
   "Concluído", "Concluido", "Closed", "Done", "Resolved", "Cancelado", "Canceled", "Removed",
 ] as const;
 
-const OPEN_TICKET_BASE_STATES = ["New", "InAttendance", "Stopped"] as const;
+export const OPEN_TICKET_BASE_STATES = ["New", "InAttendance", "Stopped"] as const;
 const CLOSED_TICKET_STATUS_PATTERN = /conclu|fechad|encerrad|resolvid|cancelad/;
 const OPEN_TICKET_STATUS_PATTERN = /novo|desenvolvimento|andamento|aguard|paus|parad/;
 
