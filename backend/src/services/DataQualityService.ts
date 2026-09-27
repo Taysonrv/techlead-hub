@@ -3,7 +3,7 @@ import type { Prisma } from "@prisma/client";
 import { SIMER_CLIENTS, SUPPORT_ANALYSTS, ticketOperationalScope } from "../domain/OperationalScope";
 import { analyzeMovideskIndicators } from "./MovideskPayloadAnalytics";
 import { SIMER_SERVICE_CATALOG, suggestSimerService, type SimerServiceCatalogItem } from "../domain/SimerServiceCatalog";
-import { OPERATIONAL_AGING, hoursBefore, isOperationalTicketFinalized, isOperationalTicketOpen, isTerminalWorkItemState, normalizeOperationalText, ticketLastMovement } from "../domain/OperationalLifecycleRules";
+import { OPERATIONAL_AGING, hoursBefore, isOperationalTicketFinalized, isOperationalTicketOpen, isTerminalWorkItemState, normalizeOperationalText, ticketLastRecordedMovement } from "../domain/OperationalLifecycleRules";
 
 const dataQualityCache = new Map<string, { expiresAt: number; value: unknown }>();
 
@@ -314,7 +314,7 @@ export class DataQualityService {
       analyzeMovideskIndicators(ticket.rawData),
     ]));
     const staleThreshold = hoursBefore(new Date(), OPERATIONAL_AGING.ticketStaleHours);
-    const lastMovement = (ticket: (typeof scopedTickets)[number]) => ticketLastMovement(ticket);
+    const lastMovement = (ticket: (typeof scopedTickets)[number]) => ticketLastRecordedMovement(ticket);
     const awaitingReturnWithoutCause = scopedTickets.filter((ticket) =>
       isTicketOpen(ticket) && isAwaitingReturn(ticket) && isMissingClassification(ticket.cause),
     );

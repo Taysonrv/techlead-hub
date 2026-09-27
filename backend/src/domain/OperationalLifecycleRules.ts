@@ -54,10 +54,16 @@ export function daysBefore(now: Date, days: number) {
   return hoursBefore(now, days * 24);
 }
 
+export function ticketLastRecordedMovement(
+  ticket: { lastActionDate?: Date | null; lastUpdate?: Date | null },
+) {
+  return ticket.lastActionDate ?? ticket.lastUpdate ?? null;
+}
+
 export function ticketLastMovement(
   ticket: { lastActionDate?: Date | null; lastUpdate?: Date | null; createdDate?: Date | null },
 ) {
-  return ticket.lastActionDate ?? ticket.lastUpdate ?? ticket.createdDate ?? null;
+  return ticketLastRecordedMovement(ticket) ?? ticket.createdDate ?? null;
 }
 
 export function workItemLastMovement(
