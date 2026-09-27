@@ -2,7 +2,7 @@ import { prisma } from "../database/prisma";
 import type { Prisma } from "@prisma/client";
 import { SIMER_CLIENTS, SUPPORT_ANALYSTS, coordinationAzureScope, coordinationTicketScope } from "../domain/OperationalScope";
 import { OPERATIONAL_AGING, daysBefore, hoursBefore, isOperationalTicketOpen, isTerminalWorkItemState, normalizeOperationalText, ticketLastMovement, workItemLastMovement } from "../domain/OperationalLifecycleRules";
-import { TECHNICAL_LEADERSHIP_AUDIT_SIGNALS, TECHNICAL_LEADERSHIP_THRESHOLDS, leadershipAuditConfidence, recurrenceAction, recurrenceConfidence, recurrenceGapConfidence, recurrenceGapImpact, recurrencePattern, volumeGapImpact } from "../domain/TechnicalLeadershipRules";
+import { TECHNICAL_LEADERSHIP_AUDIT_SIGNALS, TECHNICAL_LEADERSHIP_THRESHOLDS, leadershipAuditConfidence, recurrenceAction, recurrenceConfidence, recurrenceGapConfidence, recurrenceGapImpact, recurrencePattern, recurrenceTrend, volumeGapImpact } from "../domain/TechnicalLeadershipRules";
 
 const technicalLeadershipCache = new Map<string, { expiresAt: number; value: unknown }>();
 
@@ -191,7 +191,8 @@ export class TechnicalLeadershipService {
         const modules = value.examples.map((ticket) => linkedTask(ticket)?.module).filter((module): module is string => Boolean(module?.trim()));
         const moduleCounts = new Map<string, number>(); modules.forEach((module) => moduleCounts.set(module, (moduleCounts.get(module) ?? 0) + 1));
         const topModule = [...moduleCounts.entries()].sort((a,b) => b[1]-a[1])[0] ?? null;
-        return { topic, count: value.count, previous, changePct, clients: [...value.clients], analysts: [...value.analysts], action, examples: value.examples.slice(0, 50), linkedExamples, confidence,
+        const trend = recurrenceTrend({ current: value.count, previous });
+        return { topic, count: value.count, previous, changePct, trend, clients: [...value.clients], analysts: [...value.analysts], action, examples: value.examples.slice(0, 50), linkedExamples, confidence,
           concentration: { topClient: topClient?.[0] ?? null, topClientCount: topClient?.[1] ?? 0, topModule: topModule?.[0] ?? null, topModuleCount: topModule?.[1] ?? 0, clientSharePct: topClient ? Math.round(topClient[1] / Math.max(1, value.examples.length) * 100) : 0, pattern: recurrencePattern({ clientCount: value.clients.size, topClientSharePct: topClient ? Math.round(topClient[1] / Math.max(1, value.examples.length) * 100) : 0 }) }
         };
       }).sort((a, b) => b.count - a.count).slice(0, 12);
