@@ -5,6 +5,7 @@ import {
 import {
   prisma,
 } from "../database/prisma";
+import { isTerminalWorkItemState } from "../domain/OperationalLifecycleRules";
 
 
 export type AzureWorkItemListParams = {
@@ -3013,17 +3014,7 @@ export class AzureWorkItemService {
       null |
       undefined,
   ): boolean {
-    const normalized =
-      this.normalizeComparable(
-        value,
-      );
-
-    return (
-      normalized ===
-        "concluido" ||
-      normalized ===
-        "cancelado"
-    );
+    return isTerminalWorkItemState(value);
   }
 
   private isHighCriticality(
