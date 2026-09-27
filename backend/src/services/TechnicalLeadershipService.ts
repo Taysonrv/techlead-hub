@@ -1,6 +1,6 @@
 import { prisma } from "../database/prisma";
 import type { Prisma } from "@prisma/client";
-import { SIMER_CLIENTS, SUPPORT_ANALYSTS, coordinationTicketScope } from "../domain/OperationalScope";
+import { SIMER_CLIENTS, SUPPORT_ANALYSTS, coordinationAzureScope, coordinationTicketScope } from "../domain/OperationalScope";
 import { OPERATIONAL_AGING, daysBefore, hoursBefore, isOperationalTicketOpen, isTerminalWorkItemState, normalizeOperationalText, ticketLastMovement, workItemLastMovement } from "../domain/OperationalLifecycleRules";
 
 const technicalLeadershipCache = new Map<string, { expiresAt: number; value: unknown }>();
@@ -72,9 +72,11 @@ export class TechnicalLeadershipService {
     const tasks = await prisma.azureWorkItem.findMany({
       where: {
         OR: [
-          { createdByName: { in: [...SUPPORT_ANALYSTS], mode: "insensitive" } },
-          { assignedToName: { in: [...SUPPORT_ANALYSTS], mode: "insensitive" } },
-          { client: { in: [...SIMER_CLIENTS], mode: "insensitive" } },
+          // Carteira Azure da Coordenação: Work Items do portfólio SIMER.
+          coordinationAzureScope(),
+          // Evidência técnica relacionada: preserva Tasks vinculadas aos tickets
+          // já selecionados pela Liderança, mesmo quando o Cliente Principal no
+          // Azure não está preenchido ou diverge da carteira.
           ...(taskIds.length ? [{ id: { in: taskIds } }] : []),
           ...(ticketIds.length ? [{ movideskTicket: { in: ticketIds } }] : []),
         ],
