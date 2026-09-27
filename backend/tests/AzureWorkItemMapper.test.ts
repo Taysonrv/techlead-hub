@@ -50,3 +50,25 @@ test("não confunde o campo de cadastro com a entrega", () => {
     null,
   );
 });
+
+test("mantém criticidade, priorização e bloqueio como campos Azure distintos", () => {
+  assert.equal(AZURE_WORK_ITEM_FIELDS.criticality, "Custom.Criticidade");
+  assert.equal(AZURE_WORK_ITEM_FIELDS.prioritized, "Custom.Priorizada");
+  assert.equal(AZURE_WORK_ITEM_FIELDS.blockedProcess, "Custom.ProcessoBloqueado");
+
+  const mapped = mapAzureWorkItem({
+    id: 30001,
+    fields: {
+      "System.WorkItemType": "Correção Clientes",
+      "System.Title": "Cenário de auditoria semântica",
+      "System.State": "Ativo",
+      [AZURE_WORK_ITEM_FIELDS.criticality]: "Alta",
+      [AZURE_WORK_ITEM_FIELDS.prioritized]: true,
+      [AZURE_WORK_ITEM_FIELDS.blockedProcess]: false,
+    },
+  });
+
+  assert.equal(mapped.criticality, "Alta");
+  assert.equal(mapped.prioritized, true);
+  assert.equal(mapped.blockedProcess, false);
+});
