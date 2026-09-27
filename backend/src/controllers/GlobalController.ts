@@ -78,7 +78,29 @@ export class GlobalController {
       }),
     ]);
 
-    return res.json({ items: [
+    const comparison = client ? await Promise.all([
+      prisma.ticket.count({ where: { AND: [{ client: { equals: client, mode: "insensitive" } }, { OR: [
+        { subject: { contains: query, mode: "insensitive" } },
+        { category: { contains: query, mode: "insensitive" } },
+        { service: { contains: query, mode: "insensitive" } },
+      ] }] } }),
+      prisma.ticket.count({ where: { AND: [{ NOT: { client: { equals: client, mode: "insensitive" } } }, { OR: [
+        { subject: { contains: query, mode: "insensitive" } },
+        { category: { contains: query, mode: "insensitive" } },
+        { service: { contains: query, mode: "insensitive" } },
+      ] }] } }),
+      prisma.ticket.findMany({ where: { AND: [{ NOT: { client: { equals: client, mode: "insensitive" } } }, { OR: [
+        { subject: { contains: query, mode: "insensitive" } },
+        { category: { contains: query, mode: "insensitive" } },
+        { service: { contains: query, mode: "insensitive" } },
+      ] }] }, select: { client: true }, distinct: ["client"], take: 100 }),
+    ]) : null;
+
+    return res.json({ comparison: comparison ? {
+      predominantTickets: comparison[0],
+      otherTickets: comparison[1],
+      otherClients: comparison[2].filter((item) => Boolean(item.client)).length,
+    } : null, items: [
       ...navigation,
       ...tickets.map((item) => ({ id: `ticket-${item.movideskId}`, type: "Ticket", title: `#${item.movideskId} · ${item.subject}`, subtitle: [item.client, item.status].filter(Boolean).join(" · "), path: `/tickets?movidesk=${item.movideskId}` })),
       ...workItems.map((item) => ({ id: `task-${item.id}`, type: item.workItemType, title: `#${item.id} · ${item.title}`, subtitle: [item.client, item.state].filter(Boolean).join(" · "), path: `${workItemPath(item.workItemType)}?task=${item.id}` })),
