@@ -91,7 +91,7 @@ type DrawerState =
   | null;
 
 const radarMeta: Array<[string, string, string, string]> = [
-  ["slaOverdue", "SLA vencido", "Atendimentos com prazo vencido ou indicador de SLA violado.", aliareColors.error],
+  ["slaOverdue", "Risco de prazo / SLA", "Atendimentos com prazo operacional vencido ou indicador de SLA de solução violado.", aliareColors.error],
   ["slaSoon", "SLA próximo", "Atendimentos com prazo previsto nas próximas 24 horas.", aliareColors.warning],
   ["newTooLong", "Novo há +7 dias", "Tickets ainda como Novo há mais de sete dias.", aliareColors.error],
   ["pausedTooLong", "Pausado há +5 dias", "Tickets pausados ou parados sem avanço há mais de cinco dias.", aliareColors.warning],
@@ -324,7 +324,7 @@ export function TechnicalLeadership() {
         {data && <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2,1fr)", lg: "repeat(4,1fr)" }, gap: 1.25, mt: 2 }}>
           <KpiCard title="Atendimentos no período" value={data.weekly.current} subtitle="Clique para ver os atendimentos" info="Tickets criados no período selecionado." accent={aliareColors.info} onClick={() => setDrawer({ kind: "radar", key: "opened", title: "Atendimentos no período", items: (data.analytics.samples.opened as Ticket[]) ?? [] })} />
           <KpiCard title="Backlog aberto" value={data.weekly.open} subtitle="Clique para investigar" info="Atendimentos ainda abertos no recorte atual." accent={aliareColors.cyan} onClick={() => setDrawer({ kind: "radar", key: "backlog", title: "Backlog aberto", items: data.analytics.samples.backlog ?? [] })} />
-          <KpiCard title="SLA vencido" value={data.weekly.overdue} subtitle="Clique para investigar" info="Atendimentos abertos com prazo ou indicador de solução vencido." accent={aliareColors.error} onClick={() => setDrawer({ kind: "radar", key: "slaOverdue", title: "SLA vencido", items: data.radarSamples.slaOverdue ?? [] })} />
+          <KpiCard title="Prazos vencidos" value={data.weekly.overdue} subtitle="Clique para investigar" info="Atendimentos abertos cujo prazo operacional (dueDate) já foi ultrapassado. Mesmo conceito usado na Coordenação." accent={aliareColors.error} onClick={() => setDrawer({ kind: "radar", key: "overdue", title: "Prazos vencidos", items: data.radarSamples.overdue ?? [] })} />
           <KpiCard title="Tasks bloqueadas" value={data.weekly.blocked} subtitle="Clique para investigar" info="Work Items ativos com bloqueio de processo." accent={aliareColors.purple} onClick={() => setDrawer({ kind: "radar", key: "blocked", title: "Tasks bloqueadas", items: data.radarSamples.blocked ?? [] })} />
         </Box>}
       </CardContent>
