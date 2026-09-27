@@ -128,7 +128,7 @@ export function Coordination() {
     ? [
         ["backlog", "Backlog atual", data.indicators.openTickets, "Atendimentos abertos do escopo cooperativas."],
         ["critical", "Críticos", data.indicators.criticalTickets, "Atendimentos críticos em aberto."],
-        ["stale", "Sem movimento 72h", data.indicators.staleTickets, "Tickets sem atualização há pelo menos 72 horas."],
+        ["stale", "Sem atualização 72h", data.indicators.staleTickets, "Tickets cujo lastUpdate do Movidesk não é atualizado há pelo menos 72 horas."],
         ["overdue", "Prazos vencidos", data.indicators.overdueTickets, "Atendimentos abertos com prazo já ultrapassado."],
         ["dueSoon", "Vencem em 7 dias", data.indicators.dueSoon, "Itens com prazo nos próximos sete dias."],
         ["blocked", "Itens bloqueados", data.indicators.blockedItems, "Tarefas Azure bloqueadas no escopo da operação."],
@@ -318,7 +318,7 @@ export function Coordination() {
                     info={info}
                     onClick={() => void openDetails(kind, label)}
                     accent={
-                      label === "Críticos" || label === "Sem movimento 72h"
+                      label === "Críticos" || label === "Sem atualização 72h"
                         ? aliareColors.error
                         : label === "Vencem em 7 dias"
                           ? aliareColors.warning
