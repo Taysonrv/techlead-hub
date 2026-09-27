@@ -2,6 +2,7 @@ import { prisma } from "../database/prisma";
 import type { Prisma } from "@prisma/client";
 import { SIMER_CLIENTS, SUPPORT_ANALYSTS, coordinationAzureScope, coordinationTicketScope } from "../domain/OperationalScope";
 import { OPERATIONAL_AGING, daysBefore, hoursBefore, isOperationalTicketOpen, isTerminalWorkItemState, normalizeOperationalText, ticketLastMovement, workItemLastMovement } from "../domain/OperationalLifecycleRules";
+import { TECHNICAL_LEADERSHIP_THRESHOLDS, recurrenceAction, recurrenceConfidence, recurrenceGapConfidence, recurrenceGapImpact, volumeGapImpact } from "../domain/TechnicalLeadershipRules";
 
 const technicalLeadershipCache = new Map<string, { expiresAt: number; value: unknown }>();
 
@@ -170,17 +171,17 @@ export class TechnicalLeadershipService {
     const currentAgg = aggregate(currentTickets);
     const previousAgg = aggregate(previousTickets);
     const recurrences = [...currentAgg.entries()]
-      .filter(([topic, value]) => topic !== "sem classificacao" && value.count >= 3)
+      .filter(([topic, value]) => topic !== "sem classificacao" && value.count >= TECHNICAL_LEADERSHIP_THRESHOLDS.recurrenceMinimum)
       .map(([topic, value]) => {
         const previous = previousAgg.get(topic)?.count ?? 0;
         const changePct = previous > 0 ? Math.round(((value.count - previous) / previous) * 100) : null;
-        const action = value.analysts.size >= 2
-          ? "Avaliar treinamento interno e padronização do diagnóstico."
-          : value.clients.size === 1 && value.count >= 5
-          ? "Avaliar orientação ou treinamento direcionado ao cliente."
-          : "Avaliar causa raiz e recorrência com Produto/Desenvolvimento.";
+        const action = recurrenceAction({
+          count: value.count,
+          clientCount: value.clients.size,
+          analystCount: value.analysts.size,
+        });
         const linkedExamples = value.examples.filter((ticket) => Boolean(linkedTask(ticket))).length;
-        const confidence = value.count >= 5 && (value.clients.size >= 2 || value.analysts.size >= 2) ? "ALTA" : "MÉDIA";
+        const confidence = recurrenceConfidence({ count: value.count, clientCount: value.clients.size, analystCount: value.analysts.size });
         const clientCounts = new Map<string, number>(); value.examples.forEach((ticket) => { if (ticket.client) clientCounts.set(ticket.client, (clientCounts.get(ticket.client) ?? 0) + 1); });
         const topClient = [...clientCounts.entries()].sort((a,b) => b[1]-a[1])[0] ?? null;
         const modules = value.examples.map((ticket) => linkedTask(ticket)?.module).filter((module): module is string => Boolean(module?.trim()));
@@ -203,15 +204,15 @@ export class TechnicalLeadershipService {
     }).filter((item) => item.tickets > 0 || item.stale > 0);
 
     const gaps = [
-      ...recurrences.filter((item) => item.count >= 5).slice(0, 6).map((item, index) => {
+      ...recurrences.filter((item) => item.count >= TECHNICAL_LEADERSHIP_THRESHOLDS.recurrenceGapMinimum).slice(0, 6).map((item, index) => {
         const linked = item.examples.map((ticket) => ({ ticket, task: linkedTask(ticket) })).filter((entry) => Boolean(entry.task));
         const blockedLinked = linked.filter((entry) => Boolean(entry.task?.blockedProcess)).length;
         const deliveredLinked = linked.filter((entry) => Boolean(entry.task?.deliveredVersion?.trim())).length;
-        const confidence = item.confidence === "ALTA" && linked.length > 0 ? "Alta" : linked.length > 0 ? "Média" : "Baixa";
+        const confidence = recurrenceGapConfidence({ recurrenceConfidence: item.confidence, azureLinked: linked.length });
         return {
           id: `GAP-R${String(index + 1).padStart(2, "0")}`, type: "Recorrência", title: item.topic,
           evidence: `${item.count} tickets em ${days} dias · ${linked.length} exemplo(s) vinculados ao Azure${blockedLinked ? ` · ${blockedLinked} bloqueado(s)` : ""}${deliveredLinked ? ` · ${deliveredLinked} com versão entregue` : ""}`,
-          impact: item.count >= 10 && confidence !== "Baixa" ? "Alto" : "Médio",
+          impact: recurrenceGapImpact(item.count, confidence),
           action: item.action, status: confidence === "Baixa" ? "Validar evidências" : "Identificado",
           confidence, ticketCount: item.count, azureLinked: linked.length, blockedLinked, deliveredLinked,
           examples: item.examples.slice(0, 25), tasks: linked.map((entry) => entry.task).filter(Boolean).slice(0, 25),
@@ -220,14 +221,14 @@ export class TechnicalLeadershipService {
       ...(blocked.length ? [{
         id: "GAP-B01", type: "Fluxo", title: "Work Items bloqueados",
         evidence: `${blocked.length} item(ns) Azure ativo(s) bloqueado(s) · ${blocked.filter((task) => Boolean(task.movideskTicket || ticketByTask.has(task.id))).length} com vínculo de atendimento identificado`,
-        impact: blocked.length >= 5 ? "Alto" : "Médio", action: "Revisar impedimentos, responsável e atendimento relacionado antes de escalar para Produto/Desenvolvimento.", status: "Identificado",
+        impact: volumeGapImpact(blocked.length, TECHNICAL_LEADERSHIP_THRESHOLDS.blockedHighImpactMinimum), action: "Revisar impedimentos, responsável e atendimento relacionado antes de escalar para Produto/Desenvolvimento.", status: "Identificado",
         confidence: "Alta", ticketCount: blocked.filter((task) => Boolean(task.movideskTicket || ticketByTask.has(task.id))).length, azureLinked: blocked.length,
         blockedLinked: blocked.length, deliveredLinked: 0, examples: [] as typeof tickets,
       }] : []),
       ...(classificationAudit.length ? [{
         id: "GAP-Q01", type: "Qualidade", title: "Classificações para auditoria",
         evidence: `${classificationAudit.length} ticket(s) com ausência ou possível divergência entre categoria e causa; exige revisão humana antes de confirmar o gap`,
-        impact: classificationAudit.length >= 10 ? "Alto" : "Médio", action: "Revisar a amostra priorizada e confirmar somente divergências reais antes de orientar ajustes.", status: "Validar evidências",
+        impact: volumeGapImpact(classificationAudit.length, TECHNICAL_LEADERSHIP_THRESHOLDS.classificationHighImpactMinimum), action: "Revisar a amostra priorizada e confirmar somente divergências reais antes de orientar ajustes.", status: "Validar evidências",
         confidence: "Média", ticketCount: classificationAudit.length, azureLinked: classificationAudit.filter((ticket) => Boolean(linkedTask(ticket))).length,
         blockedLinked: 0, deliveredLinked: 0, examples: classificationAudit.slice(0, 3),
       }] : []),
