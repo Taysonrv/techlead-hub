@@ -1,8 +1,7 @@
 import type { Prisma } from "@prisma/client";
-import { OPERATIONAL_AGING, hoursBefore } from "./OperationalLifecycleRules";
+import { OPERATIONAL_AGING, hoursBefore, isTerminalWorkItemState } from "./OperationalLifecycleRules";
 
 export const COORDINATION_OPEN_TICKET_STATES = ["New", "InAttendance", "Stopped"] as const;
-export const COORDINATION_CLOSED_WORK_ITEM_STATES = ["Closed", "Resolved", "Concluído", "Concluido", "Done", "Removed"] as const;
 
 export type CoordinationPriorityKind = "backlog" | "critical" | "stale" | "dueSoon" | "overdue";
 export type CoordinationAzureKind = "blocked" | "unassigned";
@@ -32,7 +31,10 @@ export function coordinationTicketPriorityPredicate(
 }
 
 export function coordinationOpenAzurePredicate(): Prisma.AzureWorkItemWhereInput {
-  return { state: { notIn: [...COORDINATION_CLOSED_WORK_ITEM_STATES] } };
+  // Prisma precisa de uma lista concreta para filtrar no banco. A lista abaixo
+  // deriva da mesma regra de domínio usada nas análises em memória.
+  const terminalStates = ["Concluído", "Concluido", "Closed", "Done", "Resolved", "Cancelado", "Canceled"] as const;
+  return { state: { notIn: [...terminalStates] } };
 }
 
 export function coordinationAzurePriorityPredicate(kind: CoordinationAzureKind): Prisma.AzureWorkItemWhereInput {
