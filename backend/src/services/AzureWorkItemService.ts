@@ -7,6 +7,7 @@ import {
 } from "../database/prisma";
 import { isTerminalWorkItemState } from "../domain/OperationalLifecycleRules";
 import { HIGH_AZURE_CRITICALITIES, isHighAzureCriticality } from "../domain/AzureWorkItemRules";
+import { AZURE_PRODUCTIVITY_TYPES, classifyAzureProductivityOutcome, isAzureProductiveOutcome, isAzureProductivityConcluded, isAzureProductivityTerminalOutcome, type AzureProductivityOutcome } from "../domain/AzureProductivityRules";
 
 
 export type AzureWorkItemListParams = {
@@ -69,14 +70,11 @@ const DEFAULT_PAGE = 1;
 const DEFAULT_PAGE_SIZE = 25;
 const MAX_PAGE_SIZE = 100;
 
-const CORRECTION_TYPE =
-  "Correção Clientes";
+const CORRECTION_TYPE = AZURE_PRODUCTIVITY_TYPES.correction;
 
-const EVOLUTION_TYPE =
-  "Evolução";
+const EVOLUTION_TYPE = AZURE_PRODUCTIVITY_TYPES.evolution;
 
-const SUPPORT_TYPE =
-  "APOIO";
+const SUPPORT_TYPE = AZURE_PRODUCTIVITY_TYPES.support;
 
 const INVALID_VERSION_VALUES = new Set([
   "",
@@ -1353,12 +1351,7 @@ export class AzureWorkItemService {
           azureChangedAt: Date | null;
           azureClosedAt: Date | null;
           stateChangedAt: Date | null;
-          outcome:
-            "DELIVERED" |
-            "SUPPORT_CONCLUDED" |
-            "CONCLUDED_WITHOUT_VERSION" |
-            "CANCELLED" |
-            "IN_PROGRESS";
+          outcome: AzureProductivityOutcome;
         }>;
     };
 
@@ -1467,124 +1460,43 @@ export class AzureWorkItemService {
           1;
       }
 
-      const state =
-        this.normalizeComparable(
-          item.state,
-        );
-
       const isConcluded =
-        state ===
-        "concluido";
-
-      const isCancelled =
-        state ===
-        "cancelado";
+        isAzureProductivityConcluded(item.state);
 
       const version =
         this.normalizeVersion(
           item.deliveredVersion,
         );
 
-      let outcome:
-        "DELIVERED" |
-        "SUPPORT_CONCLUDED" |
-        "CONCLUDED_WITHOUT_VERSION" |
-        "CANCELLED" |
-        "IN_PROGRESS";
+      const outcome = classifyAzureProductivityOutcome({
+        state: item.state,
+        workItemType: item.workItemType,
+        hasDeliveredVersion: Boolean(version),
+      });
 
-      if (isCancelled) {
-        outcome =
-          "CANCELLED";
-
-        metric.cancelled +=
-          1;
-
-        metric.terminalOutcomes +=
-          1;
-
-        const cancellationReason =
-          item.reason?.trim() ||
-          "Sem motivo informado";
-
+      if (outcome === "CANCELLED") {
+        metric.cancelled += 1;
+        const cancellationReason = item.reason?.trim() || "Sem motivo informado";
         metric.cancellationReasons.set(
           cancellationReason,
-          (
-            metric.cancellationReasons.get(
-              cancellationReason,
-            ) ??
-            0
-          ) +
-            1,
+          (metric.cancellationReasons.get(cancellationReason) ?? 0) + 1,
         );
-      } else if (
-        isConcluded &&
-        item.workItemType ===
-        SUPPORT_TYPE
-      ) {
-        outcome =
-          "SUPPORT_CONCLUDED";
-
-        metric.concluded +=
-          1;
-
-        metric.supportsConcluded +=
-          1;
-
-        metric.productiveOutcomes +=
-          1;
-
-        metric.terminalOutcomes +=
-          1;
-      } else if (
-        isConcluded &&
-        version
-      ) {
-        outcome =
-          "DELIVERED";
-
-        metric.concluded +=
-          1;
-
-        metric.concludedWithVersion +=
-          1;
-
-        metric.productiveOutcomes +=
-          1;
-
-        metric.terminalOutcomes +=
-          1;
-
-        metric.versions.set(
-          version,
-          (
-            metric.versions.get(
-              version,
-            ) ??
-            0
-          ) +
-            1,
-        );
-      } else if (
-        isConcluded
-      ) {
-        outcome =
-          "CONCLUDED_WITHOUT_VERSION";
-
-        metric.concluded +=
-          1;
-
-        metric.concludedWithoutVersion +=
-          1;
-
-        metric.terminalOutcomes +=
-          1;
+      } else if (outcome === "SUPPORT_CONCLUDED") {
+        metric.concluded += 1;
+        metric.supportsConcluded += 1;
+      } else if (outcome === "DELIVERED") {
+        metric.concluded += 1;
+        metric.concludedWithVersion += 1;
+        metric.versions.set(version!, (metric.versions.get(version!) ?? 0) + 1);
+      } else if (outcome === "CONCLUDED_WITHOUT_VERSION") {
+        metric.concluded += 1;
+        metric.concludedWithoutVersion += 1;
       } else {
-        outcome =
-          "IN_PROGRESS";
-
-        metric.inProgress +=
-          1;
+        metric.inProgress += 1;
       }
+
+      if (isAzureProductiveOutcome(outcome)) metric.productiveOutcomes += 1;
+      if (isAzureProductivityTerminalOutcome(outcome)) metric.terminalOutcomes += 1;
 
       if (
         isConcluded &&
