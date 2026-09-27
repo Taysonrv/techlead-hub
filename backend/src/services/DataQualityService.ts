@@ -3,7 +3,7 @@ import type { Prisma } from "@prisma/client";
 import { SIMER_CLIENTS, SUPPORT_ANALYSTS, ticketOperationalScope } from "../domain/OperationalScope";
 import { analyzeMovideskIndicators } from "./MovideskPayloadAnalytics";
 import { SIMER_SERVICE_CATALOG, suggestSimerService, type SimerServiceCatalogItem } from "../domain/SimerServiceCatalog";
-import { OPERATIONAL_AGING, hoursBefore, isOperationalTicketFinalized, isOperationalTicketOpen, isTerminalWorkItemState, normalizeOperationalText, ticketLastRecordedMovement } from "../domain/OperationalLifecycleRules";
+import { OPEN_TICKET_BASE_STATES, OPERATIONAL_AGING, hoursBefore, isOperationalTicketFinalized, isOperationalTicketOpen, isTerminalWorkItemState, normalizeOperationalText, ticketLastRecordedMovement } from "../domain/OperationalLifecycleRules";
 
 const dataQualityCache = new Map<string, { expiresAt: number; value: unknown }>();
 
@@ -67,7 +67,7 @@ export class DataQualityService {
       const normalize = normalizeOperationalText;
       // O overview histórico usava baseStatus estrito para "aberto"; preserve esse recorte aqui.
       const open = (ticket: (typeof scopedTickets)[number]) =>
-        ["New", "InAttendance", "Stopped"].includes(ticket.baseStatus ?? "")
+        OPEN_TICKET_BASE_STATES.includes((ticket.baseStatus ?? "") as typeof OPEN_TICKET_BASE_STATES[number])
         && isOperationalTicketOpen(ticket);
       const finalized = isOperationalTicketFinalized;
       const terminal = isTerminalWorkItemState;
