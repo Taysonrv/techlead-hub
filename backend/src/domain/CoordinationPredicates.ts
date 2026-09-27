@@ -1,7 +1,6 @@
 import type { Prisma } from "@prisma/client";
-import { OPERATIONAL_AGING, TERMINAL_WORK_ITEM_STATES, hoursBefore } from "./OperationalLifecycleRules";
+import { OPEN_TICKET_BASE_STATES, OPERATIONAL_AGING, TERMINAL_WORK_ITEM_STATES, hoursBefore } from "./OperationalLifecycleRules";
 
-export const COORDINATION_OPEN_TICKET_STATES = ["New", "InAttendance", "Stopped"] as const;
 
 export type CoordinationPriorityKind = "backlog" | "critical" | "stale" | "dueSoon" | "overdue";
 export type CoordinationAzureKind = "blocked" | "unassigned";
@@ -9,7 +8,7 @@ export type CoordinationAzureKind = "blocked" | "unassigned";
 export function coordinationOpenTicketPredicate(): Prisma.TicketWhereInput {
   return {
     isDeleted: false,
-    baseStatus: { in: [...COORDINATION_OPEN_TICKET_STATES] },
+    baseStatus: { in: [...OPEN_TICKET_BASE_STATES] },
   };
 }
 
