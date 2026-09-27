@@ -1,4 +1,5 @@
 import type { Prisma } from "@prisma/client";
+import { SLA_PRIORITY } from "./TicketClassificationRules";
 import { OPEN_TICKET_BASE_STATES, OPERATIONAL_AGING, TERMINAL_WORK_ITEM_STATES, hoursBefore } from "./OperationalLifecycleRules";
 
 
@@ -20,7 +21,7 @@ export function coordinationTicketPriorityPredicate(
   const nextSevenDays = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1_000);
 
   const extra: Prisma.TicketWhereInput =
-    kind === "critical" ? { urgency: "Crítica" } :
+    kind === "critical" ? { urgency: SLA_PRIORITY.P1.label } :
     kind === "stale" ? { OR: [{ lastUpdate: { lt: staleBefore } }, { lastUpdate: null }] } :
     kind === "dueSoon" ? { dueDate: { gte: now, lte: nextSevenDays } } :
     kind === "overdue" ? { dueDate: { lt: now } } :
