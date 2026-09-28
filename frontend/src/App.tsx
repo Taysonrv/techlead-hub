@@ -170,6 +170,47 @@ function AuthenticatedLayout({
                 },
                 "& .MuiDrawer-paperAnchorRight": { contain: "paint" },
                 "& .MuiAlert-root": { contain: "paint" },
+                "& .recharts-wrapper, & .recharts-surface": {
+                  textRendering: "geometricPrecision",
+                  shapeRendering: "geometricPrecision",
+                },
+                "& .recharts-surface": {
+                  overflow: "visible",
+                },
+                "& .recharts-cartesian-axis-tick-value": {
+                  fill: "currentColor",
+                  fontFamily: "Inter, Segoe UI, Roboto, Arial, sans-serif",
+                  fontWeight: 650,
+                  fontSize: "11px",
+                  letterSpacing: ".005em",
+                },
+                "& .recharts-cartesian-grid line": (theme) => ({
+                  stroke: theme.palette.mode === "dark" ? "rgba(157,176,199,.20)" : "rgba(71,85,105,.14)",
+                  strokeDasharray: "3 5",
+                }),
+                "& .recharts-legend-item-text": (theme) => ({
+                  color: `${theme.palette.text.secondary} !important`,
+                  fontWeight: 700,
+                  fontSize: "12px",
+                }),
+                "& .recharts-default-tooltip": (theme) => ({
+                  background: `${theme.palette.background.paper} !important`,
+                  border: `1px solid ${theme.palette.divider} !important`,
+                  borderRadius: "12px !important",
+                  boxShadow: theme.palette.mode === "dark" ? "0 14px 34px rgba(0,0,0,.32)" : "0 12px 30px rgba(15,23,42,.12)",
+                  color: `${theme.palette.text.primary} !important`,
+                  backdropFilter: "blur(14px)",
+                }),
+                "& .recharts-tooltip-label": {
+                  fontWeight: "800 !important",
+                  marginBottom: "4px !important",
+                },
+                "& .recharts-sector, & .recharts-rectangle, & .recharts-curve": {
+                  transition: "opacity .16s ease, filter .16s ease",
+                },
+                "& .recharts-sector:hover, & .recharts-rectangle:hover": {
+                  filter: "brightness(1.08) drop-shadow(0 5px 10px rgba(0,0,0,.16))",
+                },
                 "& .MuiTableRow-root": { transition: "background-color .14s ease, box-shadow .14s ease" },
                 "& .MuiTableCell-root": { verticalAlign: "middle" },
                 "& .MuiChip-root": { maxWidth: "100%" },
