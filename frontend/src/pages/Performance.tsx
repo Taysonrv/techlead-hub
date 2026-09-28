@@ -1597,7 +1597,7 @@ function DonutCard({
                   innerRadius={62}
                   outerRadius={88}
                   paddingAngle={2}
-                  cornerRadius={4}
+                  cornerRadius={5}
                   stroke={theme.palette.background.paper}
                   strokeWidth={1.5}
                   cursor={onSliceClick ? "pointer" : "default"}
