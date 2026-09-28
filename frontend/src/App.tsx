@@ -340,18 +340,14 @@ function App() {
           <Route
             path="/"
             element={
-              <AuthenticatedLayout>
-                <Dashboard />
-              </AuthenticatedLayout>
+              <RoutineAccess permission="dashboard"><AuthenticatedLayout><Dashboard /></AuthenticatedLayout></RoutineAccess>
             }
           />
 
           <Route
             path="/tickets"
             element={
-              <AuthenticatedLayout>
-                <Tickets />
-              </AuthenticatedLayout>
+              <RoutineAccess permission="tickets"><AuthenticatedLayout><Tickets /></AuthenticatedLayout></RoutineAccess>
             }
           />
 
@@ -366,38 +362,28 @@ function App() {
           <Route
             path="/analistas"
             element={
-              <CoordinationOnly>
-                <AuthenticatedLayout>
-                  <Analysts />
-                </AuthenticatedLayout>
-              </CoordinationOnly>
+              <RoutineAccess permission="analysts"><AuthenticatedLayout><Analysts /></AuthenticatedLayout></RoutineAccess>
             }
           />
 
           <Route
             path="/clientes"
             element={
-              <AuthenticatedLayout>
-                <Clients />
-              </AuthenticatedLayout>
+              <RoutineAccess permission="clients"><AuthenticatedLayout><Clients /></AuthenticatedLayout></RoutineAccess>
             }
           />
 
           <Route
             path="/desempenho"
             element={
-              <AuthenticatedLayout>
-                <Performance />
-              </AuthenticatedLayout>
+              <RoutineAccess permission="performance"><AuthenticatedLayout><Performance /></AuthenticatedLayout></RoutineAccess>
             }
           />
 
           <Route
             path="/atencao"
             element={
-              <AuthenticatedLayout>
-                <Attention />
-              </AuthenticatedLayout>
+              <RoutineAccess permission="attention"><AuthenticatedLayout><Attention /></AuthenticatedLayout></RoutineAccess>
             }
           />
 
@@ -408,78 +394,58 @@ function App() {
           <Route
             path="/correcoes"
             element={
-              <AuthenticatedLayout>
-                <AzureWorkItems
-                  type="Correção Clientes"
-                />
-              </AuthenticatedLayout>
+              <RoutineAccess permission="corrections"><AuthenticatedLayout><AzureWorkItems type="Correção Clientes" /></AuthenticatedLayout></RoutineAccess>
             }
           />
 
           <Route
             path="/evolucoes"
             element={
-              <AuthenticatedLayout>
-                <AzureWorkItems
-                  type="Evolução"
-                />
-              </AuthenticatedLayout>
+              <RoutineAccess permission="evolutions"><AuthenticatedLayout><AzureWorkItems type="Evolução" /></AuthenticatedLayout></RoutineAccess>
             }
           />
 
           <Route
             path="/apoios"
             element={
-              <AuthenticatedLayout>
-                <AzureWorkItems
-                  type="APOIO"
-                />
-              </AuthenticatedLayout>
+              <RoutineAccess permission="support"><AuthenticatedLayout><AzureWorkItems type="APOIO" /></AuthenticatedLayout></RoutineAccess>
             }
           />
 
           <Route
             path="/versoes"
             element={
-              <AuthenticatedLayout>
-                <Versions />
-              </AuthenticatedLayout>
+              <RoutineAccess permission="versions"><AuthenticatedLayout><Versions /></AuthenticatedLayout></RoutineAccess>
             }
           />
 
           <Route
             path="/conhecimento"
-            element={<AuthenticatedLayout><Knowledge /></AuthenticatedLayout>}
+            element={<RoutineAccess permission="knowledge"><AuthenticatedLayout><Knowledge /></AuthenticatedLayout></RoutineAccess>}
           />
 
           <Route
             path="/importar"
             element={
-              <CoordinationOnly>
-                <AuthenticatedLayout>
-                  <Import />
-                </AuthenticatedLayout>
-              </CoordinationOnly>
+              <RoutineAccess permission="imports"><AuthenticatedLayout><Import /></AuthenticatedLayout></RoutineAccess>
             }
           />
 
           <Route
             path="/relatorios"
             element={
-              <AuthenticatedLayout>
-                <Reports />
-              </AuthenticatedLayout>
+              <RoutineAccess permission="reports"><AuthenticatedLayout><Reports /></AuthenticatedLayout></RoutineAccess>
             }
           />
 
           <Route
             path="/minha-operacao"
-            element={<AuthenticatedLayout><MyOperation /></AuthenticatedLayout>}
+            element={<RoutineAccess permission="my-operation"><AuthenticatedLayout><MyOperation /></AuthenticatedLayout></RoutineAccess>}
           />
 
           <Route
             path="/qualidade-dados"
-            element={<AuthenticatedLayout><DataQuality /></AuthenticatedLayout>}
+            element={<RoutineAccess permission="data-quality"><AuthenticatedLayout><DataQuality /></AuthenticatedLayout></RoutineAccess>}
           />
 
           {/* =================================================
