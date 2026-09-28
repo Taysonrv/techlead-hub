@@ -112,7 +112,7 @@ export function NotificationCenter() {
 
   const storageKey = `techlead-hub:notifications:read:${user?.id ?? "anonymous"}`;
 
-  useEffect(() => {
+  useEffect(() => {\n    const syncPreferences = () => setLocalPreferences(getLocalNotificationPreferences());\n    window.addEventListener("techlead-hub:notification-preferences", syncPreferences);\n    window.addEventListener("storage", syncPreferences);\n    return () => { window.removeEventListener("techlead-hub:notification-preferences", syncPreferences); window.removeEventListener("storage", syncPreferences); };\n  }, []);\n\n  useEffect(() => {
     try {
       const stored = JSON.parse(localStorage.getItem(storageKey) ?? "[]");
       setReadKeys(Array.isArray(stored) ? stored : []);
@@ -174,7 +174,7 @@ export function NotificationCenter() {
 
   useEffect(() => {
     void load();
-    const timer = window.setInterval(() => void load(), 60_000);
+    const timer = window.setInterval(() => void load(), 15_000);
     return () => window.clearInterval(timer);
   }, [load]);
 
