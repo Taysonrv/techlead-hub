@@ -289,10 +289,12 @@ export function Sidebar() {
 
   const registrationMenu = useMemo<MenuItemData[]>(
     () => [
-      { label: "Analistas", path: "/analistas", icon: <GroupsOutlined fontSize="small" /> },
+      ...(user?.role === "ADMIN" || user?.role === "COORDENADOR"
+        ? [{ label: "Analistas", path: "/analistas", icon: <GroupsOutlined fontSize="small" /> }]
+        : []),
       { label: "Clientes", path: "/clientes", icon: <BusinessOutlined fontSize="small" /> },
     ],
-    [],
+    [user?.role],
   );
 
   const movementMenu = useMemo<MenuItemData[]>(
@@ -335,9 +337,11 @@ export function Sidebar() {
   const managementMenu = useMemo<MenuItemData[]>(
     () => [
       { label: "Base de Conhecimento", path: "/conhecimento", icon: <MenuBookOutlined fontSize="small" /> },
-      { label: "Dados e Sincronizações", path: "/importar", icon: <UploadFileOutlined fontSize="small" /> },
+      ...(user?.role === "ADMIN" || user?.role === "COORDENADOR"
+        ? [{ label: "Dados e Sincronizações", path: "/importar", icon: <UploadFileOutlined fontSize="small" /> }]
+        : []),
     ],
-    [],
+    [user?.role],
   );
 
   /* =======================================================
