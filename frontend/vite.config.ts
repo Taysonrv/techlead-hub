@@ -13,11 +13,18 @@ export default defineConfig({
       output: {
         manualChunks(id) {
           if (!id.includes("node_modules")) return undefined;
-          if (id.includes("@mui") || id.includes("@emotion")) return "ui";
+
+          /*
+           * Não separamos React/MUI/Axios em chunks manuais.
+           * O Rollup pode criar dependências circulares entre chunks vendor
+           * quando bibliotecas compartilham runtime/helpers. Em produção isso
+           * pode resultar em "x is not a function" antes do React montar.
+           *
+           * Mantemos somente gráficos isolados, que são pesados e independentes,
+           * e deixamos o Rollup decidir o grafo seguro para o restante.
+           */
           if (id.includes("chart.js") || id.includes("recharts")) return "charts";
-          if (id.includes("react")) return "react";
-          if (id.includes("axios")) return "http";
-          return "vendor";
+          return undefined;
         },
       },
     },
