@@ -87,7 +87,7 @@ export function Settings() {
   const [startupEnabled, setStartupEnabled] = useState(false);
   const [startupSaving, setStartupSaving] = useState(false);
   const [permissionUsers,setPermissionUsers]=useState<PermissionUser[]>([]);
-  const [permissionUserId,setPermissionUserId]=useState<number|="">("");
+  const [permissionUserId,setPermissionUserId]=useState<number | "">("");
   const [permissionSaving,setPermissionSaving]=useState(false);
   const [notificationPreferences,setNotificationPreferences]=useState<LocalNotificationPreferences>(()=>getLocalNotificationPreferences());
 
