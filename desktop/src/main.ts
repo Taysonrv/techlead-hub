@@ -790,6 +790,15 @@ function registerIpcHandlers() {
   ipcMain.removeHandler("configuration:get");
   ipcMain.removeHandler("configuration:import-env");
   ipcMain.removeHandler("configuration:save");
+  ipcMain.removeHandler("startup:get");
+  ipcMain.removeHandler("startup:set");
+
+  ipcMain.handle("startup:get", () => ({ enabled: app.getLoginItemSettings().openAtLogin }));
+  ipcMain.handle("startup:set", (_event, enabled: unknown) => {
+    const openAtLogin = Boolean(enabled);
+    app.setLoginItemSettings({ openAtLogin, path: process.execPath });
+    return { enabled: app.getLoginItemSettings().openAtLogin };
+  });
 
   ipcMain.handle(
     "app:get-version",
