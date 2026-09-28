@@ -74,6 +74,11 @@ userRoutes.patch(
 );
 
 userRoutes.patch(
+  "/:id/permissions",
+  users.updatePermissions.bind(users)
+);
+
+userRoutes.patch(
   "/:id/role",
   users.updateRole.bind(
     users
