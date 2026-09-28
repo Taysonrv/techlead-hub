@@ -1,8 +1,10 @@
 import { Router } from "express";
 import type { AuthenticatedRequest } from "../middlewares/authMiddleware";
 import { prisma } from "../database/prisma";
+import { requirePermission } from "../middlewares/roleMiddleware";
 
 export const knownProblemRoutes = Router();
+knownProblemRoutes.use(requirePermission("known-problems"));
 
 const clean = (value: unknown, max = 4000) => typeof value === "string" ? value.trim().slice(0, max) : "";
 const optional = (value: unknown, max = 1000) => clean(value, max) || null;
