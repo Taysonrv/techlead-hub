@@ -103,6 +103,7 @@ const USER_PUBLIC_SELECT = {
   username: true,
   email: true,
   role: true,
+  permissions: true,
   active: true,
 
   approvalStatus: true,
