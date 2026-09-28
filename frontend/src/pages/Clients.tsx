@@ -2141,9 +2141,12 @@ export function Clients() {
                       nameKey="name"
                       cx="50%"
                       cy="50%"
-                      outerRadius={78}
-                      innerRadius={46}
+                      outerRadius={82}
+                      innerRadius={52}
                       paddingAngle={2}
+                      cornerRadius={4}
+                      stroke={theme.palette.background.paper}
+                      strokeWidth={1.5}
                       cursor="pointer"
                       onClick={(data) => {
                         const name =
@@ -2260,7 +2263,7 @@ export function Clients() {
               <Box sx={{ height: 235, minWidth: 0 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
-                    <Pie data={categoryChartData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={76} innerRadius={44} paddingAngle={2} cursor="pointer"
+                    <Pie data={categoryChartData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} innerRadius={50} paddingAngle={2} cornerRadius={4} stroke={theme.palette.background.paper} strokeWidth={1.5} cursor="pointer"
                       onClick={(data) => {
                         const name = String((data as { payload?: { name?: unknown } }).payload?.name ?? "");
                         if (name && name !== "Outros") showTickets(`Categoria: ${name}`, scopedTickets.filter((ticket) => (ticket.category?.trim() || "Sem categoria") === name));
@@ -2321,9 +2324,12 @@ export function Clients() {
                       nameKey="name"
                       cx="50%"
                       cy="50%"
-                      outerRadius={78}
-                      innerRadius={46}
+                      outerRadius={82}
+                      innerRadius={52}
                       paddingAngle={2}
+                      cornerRadius={4}
+                      stroke={theme.palette.background.paper}
+                      strokeWidth={1.5}
                       cursor="pointer"
                       onClick={(data) => {
                         const name =
