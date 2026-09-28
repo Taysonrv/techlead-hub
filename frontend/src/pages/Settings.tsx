@@ -226,6 +226,12 @@ export function Settings() {
   return (
     <Box>
       <PageHeader eyebrow="Sistema" title="Configurações" description="Configuração administrativa central. As integrações são protegidas no banco compartilhado e valem para todos os usuários Web e Desktop." />
+      <Card variant="outlined" sx={{ mb: 2 }}><CardContent>
+        <Typography sx={{fontWeight:850}}>Notificações</Typography>
+        <Typography variant="body2" color="text.secondary" sx={{mt:.4,mb:1.5}}>Escolha quais eventos podem gerar avisos. Estas preferências também controlam os alertas rápidos no canto inferior direito.</Typography>
+        <Stack>{([["sound","Som das notificações"],["chat","Chat e menções"],["operation","Alertas operacionais e problemas conhecidos"],["appVersion","Novas versões do TechLead Hub"],["simerVersion","Novas versões do SIMER"],["azureCompleted","Correções, Evoluções e APOIOs concluídos"],["azureUpdated","Alterações em Correções, Evoluções e APOIOs"]] as Array<[keyof LocalNotificationPreferences,string]>).map(([key,label])=><Stack key={key} direction="row" sx={{py:.75,alignItems:"center",justifyContent:"space-between",borderBottom:"1px solid",borderColor:"divider"}}><Typography variant="body2">{label}</Typography><Switch size="small" checked={notificationPreferences[key]} onChange={(_,enabled)=>changeNotificationPreference(key,enabled)}/></Stack>)}</Stack>
+      </CardContent></Card>
+
 
       {error && (
         <Alert severity="error" sx={{ mb: 2 }}>
