@@ -793,8 +793,9 @@ function registerIpcHandlers() {
   ipcMain.removeHandler("startup:get");
   ipcMain.removeHandler("startup:set");
 
-  ipcMain.handle("startup:get", () => ({ enabled: app.getLoginItemSettings().openAtLogin }));
+  ipcMain.handle("startup:get", () => ({ enabled: process.platform === "win32" && app.getLoginItemSettings().openAtLogin }));
   ipcMain.handle("startup:set", (_event, enabled: unknown) => {
+    if (process.platform !== "win32") return { enabled: false };
     const openAtLogin = Boolean(enabled);
     app.setLoginItemSettings({ openAtLogin, path: process.execPath });
     return { enabled: app.getLoginItemSettings().openAtLogin };
