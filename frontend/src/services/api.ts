@@ -157,6 +157,16 @@ api.interceptors.response.use(
         "/auth/login"
       );
 
+    if (status === 403) {
+      const payload = error.response?.data as { permission?: string; message?: string } | undefined;
+      window.dispatchEvent(new CustomEvent("techlead-hub:forbidden", {
+        detail: {
+          permission: payload?.permission,
+          message: payload?.message || "Você não possui permissão para acessar esta rotina. Procure um administrador para solicitar a liberação do acesso.",
+        },
+      }));
+    }
+
     if (
       status === 401 &&
       !isLoginRequest
