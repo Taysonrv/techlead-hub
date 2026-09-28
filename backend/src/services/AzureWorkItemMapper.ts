@@ -12,6 +12,7 @@ export const AZURE_WORK_ITEM_FIELDS = {
   workaround: "Custom.250bc342-0d60-4543-89ce-cd25338209da",
   correctionType: "Custom.362d5b2b-02aa-4283-8897-5f04c8e0a52b",
   technicalSolution: "Custom.a3c2ec46-d02c-4249-9a5c-b70c66f8de84",
+  releaseNotes: "Custom.ReleaseNotes",
   module: "Custom.d18cb8ca-251f-43d4-8d6b-08767bb26ac8",
   process: "Custom.ed12cd53-be03-4ba3-a29a-d7c17d98221c",
   movideskTicket: "Custom.fc7510e1-3e57-49e4-9980-828b506c14ee",
