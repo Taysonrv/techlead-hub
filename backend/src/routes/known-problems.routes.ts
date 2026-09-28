@@ -69,7 +69,7 @@ knownProblemRoutes.get("/sources", async (req: AuthenticatedRequest,res) => {
         {module:{contains:term,mode:"insensitive"}},{process:{contains:term,mode:"insensitive"}},
         {workItemType:{contains:term,mode:"insensitive"}},{state:{contains:term,mode:"insensitive"}},
         {registeredVersion:{contains:term,mode:"insensitive"}},{deliveredVersion:{contains:term,mode:"insensitive"}},
-        {description:{contains:term,mode:"insensitive"}},{workaround:{contains:term,mode:"insensitive"}}
+        {workaround:{contains:term,mode:"insensitive"}},{technicalSolution:{contains:term,mode:"insensitive"}}
       ]};
     })};
     const [tickets,workItems]=await Promise.all([
@@ -79,7 +79,7 @@ knownProblemRoutes.get("/sources", async (req: AuthenticatedRequest,res) => {
       }),
       prisma.azureWorkItem.findMany({
         where:workItemWhere,orderBy:{azureChangedAt:"desc"},take:16,
-        select:{id:true,workItemType:true,title:true,state:true,reason:true,client:true,criticality:true,module:true,process:true,movideskTicket:true,deliveredVersion:true,registeredVersion:true,workaround:true,description:true,technicalSolution:true,remoteUrl:true}
+        select:{id:true,workItemType:true,title:true,state:true,reason:true,client:true,criticality:true,module:true,process:true,movideskTicket:true,deliveredVersion:true,registeredVersion:true,workaround:true,technicalSolution:true,remoteUrl:true}
       })
     ]);
     res.json({tickets,workItems});
