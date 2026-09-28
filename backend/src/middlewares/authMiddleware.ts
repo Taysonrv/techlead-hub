@@ -33,6 +33,9 @@ export type AuthenticatedRequest =
 
       role:
         AuthenticatedUserRole;
+
+      permissions:
+        string[] | null;
     };
   };
 
@@ -180,6 +183,8 @@ export async function authMiddleware(
 
               role: true,
 
+              permissions: true,
+
               active: true,
 
               approvalStatus:
@@ -299,6 +304,11 @@ export async function authMiddleware(
 
       role:
         session.user.role,
+
+      permissions:
+        Array.isArray(session.user.permissions)
+          ? session.user.permissions.filter((item): item is string => typeof item === "string")
+          : null,
     };
 
     return next();
