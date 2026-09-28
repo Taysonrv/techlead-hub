@@ -3041,9 +3041,12 @@ export function Analysts() {
                       nameKey="name"
                       cx="50%"
                       cy="50%"
-                      outerRadius={78}
-                      innerRadius={46}
+                      outerRadius={82}
+                      innerRadius={52}
                       paddingAngle={2}
+                      cornerRadius={4}
+                      stroke={theme.palette.background.paper}
+                      strokeWidth={1.5}
                       onClick={(data) => {
                         const name =
                           (
@@ -3165,9 +3168,12 @@ export function Analysts() {
                       nameKey="name"
                       cx="50%"
                       cy="50%"
-                      outerRadius={78}
-                      innerRadius={46}
+                      outerRadius={82}
+                      innerRadius={52}
                       paddingAngle={2}
+                      cornerRadius={4}
+                      stroke={theme.palette.background.paper}
+                      strokeWidth={1.5}
                       style={{
                         cursor:
                           "pointer",
