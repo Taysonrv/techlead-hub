@@ -282,6 +282,12 @@ export async function ensureApplicationSchema() {
       "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
     )
   `);
+  await prisma.$executeRawUnsafe(`ALTER TABLE "KnownProblem" ADD COLUMN IF NOT EXISTS "cause" TEXT`);
+  await prisma.$executeRawUnsafe(`ALTER TABLE "KnownProblem" ADD COLUMN IF NOT EXISTS "workaround" TEXT`);
+  await prisma.$executeRawUnsafe(`ALTER TABLE "KnownProblem" ADD COLUMN IF NOT EXISTS "technicalSolution" TEXT`);
+  await prisma.$executeRawUnsafe(`ALTER TABLE "KnownProblem" ADD COLUMN IF NOT EXISTS "comment" TEXT`);
+  await prisma.$executeRawUnsafe(`ALTER TABLE "KnownProblem" ADD COLUMN IF NOT EXISTS "azureWorkItemType" VARCHAR(80)`);
+  await prisma.$executeRawUnsafe(`ALTER TABLE "KnownProblem" ADD COLUMN IF NOT EXISTS "azureUrl" TEXT`);
   await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "KnownProblem_status_updatedAt_idx" ON "KnownProblem" ("status","updatedAt" DESC)`);
   await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "KnownProblem_service_idx" ON "KnownProblem" ("service")`);
   await prisma.$executeRawUnsafe(`
