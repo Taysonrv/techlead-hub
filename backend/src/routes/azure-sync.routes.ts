@@ -5,6 +5,7 @@ import {
 import {
   AzureSyncController,
 } from "../controllers/AzureSyncController";
+import { requirePermission } from "../middlewares/roleMiddleware";
 
 /* =========================================================
    ROUTER
@@ -12,6 +13,8 @@ import {
 
 const azureSyncRoutes =
   Router();
+
+azureSyncRoutes.use(requirePermission("imports"));
 
 const controller =
   new AzureSyncController();
