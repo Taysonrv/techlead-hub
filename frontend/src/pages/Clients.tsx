@@ -1578,7 +1578,7 @@ export function Clients() {
                 xs: "minmax(0, 1fr)",
                 md: "repeat(2, minmax(0, 1fr))",
                 lg: "repeat(3, minmax(0, 1fr))",
-                xl: "190px minmax(245px, 1.35fr) repeat(4, minmax(175px, 1fr))",
+                xl: "190px repeat(5, minmax(0, 1fr))",
               },
               gap: 1.5,
               alignItems: {
@@ -1620,9 +1620,7 @@ export function Clients() {
                 minWidth: 0,
               }}
             >
-              <InputLabel>
-                Cliente
-              </InputLabel>
+              <InputLabel shrink>Cliente</InputLabel>
 
               <Select
                 value={
@@ -1669,9 +1667,7 @@ export function Clients() {
                 minWidth: 0,
               }}
             >
-              <InputLabel>
-                Categoria
-              </InputLabel>
+              <InputLabel shrink>Categoria</InputLabel>
 
               <Select
                 value={
@@ -1705,7 +1701,7 @@ export function Clients() {
             </FormControl>
 
             <FormControl size="small" sx={{ minWidth: 0 }}>
-              <InputLabel>Status</InputLabel>
+              <InputLabel shrink>Status</InputLabel>
               <Select value={status} label="Status" onChange={(event) => setStatus(event.target.value)}>
                 <MenuItem value="">Todos os status</MenuItem>
                 {statuses.map((item) => <MenuItem key={item} value={item}>{item}</MenuItem>)}
@@ -1713,7 +1709,7 @@ export function Clients() {
             </FormControl>
 
             <FormControl size="small" sx={{ minWidth: 0 }}>
-              <InputLabel>Responsável</InputLabel>
+              <InputLabel shrink>Responsável</InputLabel>
               <Select value={owner} label="Responsável" onChange={(event) => setOwner(event.target.value)}>
                 <MenuItem value="">Todos os responsáveis</MenuItem>
                 {owners.map((item) => <MenuItem key={item} value={item}>{item}</MenuItem>)}
@@ -1721,7 +1717,7 @@ export function Clients() {
             </FormControl>
 
             <FormControl size="small" sx={{ minWidth: 0 }}>
-              <InputLabel>Frente de atendimento</InputLabel>
+              <InputLabel shrink>Frente de atendimento</InputLabel>
               <Select value={executiveArea} label="Frente de atendimento" onChange={(event) => setExecutiveArea(event.target.value)}>
                 <MenuItem value="">Todas as frentes</MenuItem>
                 {executiveAreas.map((item) => <MenuItem key={item} value={item}>{item}</MenuItem>)}
