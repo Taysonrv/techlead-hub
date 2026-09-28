@@ -108,16 +108,26 @@ export function Coordination() {
   }, [load]);
 
   useEffect(() => {
-    api.get("/coordination/productivity-capacity", { params: { days: 28 } })
-      .then((response) => setCapacity(response.data))
-      .catch(() => setCapacity(null));
-  }, []);
+    if (!data) return;
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      api.get("/coordination/productivity-capacity", { params: { days: 28 }, signal: controller.signal })
+        .then((response) => setCapacity(response.data))
+        .catch(() => { if (!controller.signal.aborted) setCapacity(null); });
+    }, 120);
+    return () => { window.clearTimeout(timer); controller.abort(); };
+  }, [Boolean(data)]);
 
   useEffect(() => {
-    api.get("/coordination/sla-development", { params: { days: slaDays } })
-      .then((response) => setSlaFlow(response.data))
-      .catch(() => setSlaFlow(null));
-  }, [slaDays]);
+    if (!data) return;
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      api.get("/coordination/sla-development", { params: { days: slaDays }, signal: controller.signal })
+        .then((response) => setSlaFlow(response.data))
+        .catch(() => { if (!controller.signal.aborted) setSlaFlow(null); });
+    }, 220);
+    return () => { window.clearTimeout(timer); controller.abort(); };
+  }, [Boolean(data), slaDays]);
 
   const maximum = useMemo(
     () => Math.max(...(data?.workload.map((item) => item.total) ?? [1]), 1),
@@ -152,7 +162,7 @@ export function Coordination() {
       <PageHeader
         eyebrow="Coordenação"
         title="Central da Coordenação"
-        description="Gestão operacional da equipe e dos clientes cooperativas em um único ponto."
+        description="Prioridades, capacidade, qualidade e desenvolvimento da operação em uma visão executiva."
         meta={data ? `Coordenação: ${data.scope.coordinator} · ${data.scope.analysts.length} analistas · ${data.scope.clients.length} clientes cooperativas` : undefined}
       />
 
@@ -161,7 +171,7 @@ export function Coordination() {
           <Stack direction={{ xs: "column", lg: "row" }} spacing={1.25} sx={{ justifyContent: "space-between", alignItems: { lg: "center" } }}>
             <Box>
               <Typography sx={{ fontWeight: 900, fontSize: "1rem" }}>Cockpit da coordenação</Typography>
-              <Typography variant="body2" color="text.secondary">Prioridades, capacidade e governança em um único ponto. A navegação principal permanece no menu lateral.</Typography>
+              <Typography variant="body2" color="text.secondary">Leitura rápida para decidir onde atuar primeiro, com acesso direto aos recortes operacionais.</Typography>
             </Box>
             <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap" }}>
               <Button size="small" variant="outlined" onClick={() => navigate("/atencao")}>Riscos</Button>
