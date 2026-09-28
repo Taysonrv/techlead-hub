@@ -354,9 +354,11 @@ function App() {
           <Route
             path="/analistas"
             element={
-              <AuthenticatedLayout>
-                <Analysts />
-              </AuthenticatedLayout>
+              <CoordinationOnly>
+                <AuthenticatedLayout>
+                  <Analysts />
+                </AuthenticatedLayout>
+              </CoordinationOnly>
             }
           />
 
@@ -441,9 +443,11 @@ function App() {
           <Route
             path="/importar"
             element={
-              <AuthenticatedLayout>
-                <Import />
-              </AuthenticatedLayout>
+              <CoordinationOnly>
+                <AuthenticatedLayout>
+                  <Import />
+                </AuthenticatedLayout>
+              </CoordinationOnly>
             }
           />
 
