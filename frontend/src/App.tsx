@@ -211,6 +211,19 @@ function AuthenticatedLayout({
                 "& .recharts-sector:hover, & .recharts-rectangle:hover": {
                   filter: "brightness(1.08) drop-shadow(0 5px 10px rgba(0,0,0,.16))",
                 },
+                "& .recharts-line-curve, & .recharts-area-curve": {
+                  strokeLinecap: "round",
+                  strokeLinejoin: "round",
+                },
+                "& .recharts-bar-rectangle path": {
+                  shapeRendering: "geometricPrecision",
+                },
+                "& .recharts-cartesian-axis-line, & .recharts-cartesian-axis-tick-line": (theme) => ({
+                  stroke: theme.palette.mode === "dark" ? "rgba(157,176,199,.24)" : "rgba(71,85,105,.18)",
+                }),
+                "& .recharts-reference-line line": (theme) => ({
+                  strokeOpacity: theme.palette.mode === "dark" ? .65 : .5,
+                }),
                 "& .MuiTableRow-root": { transition: "background-color .14s ease, box-shadow .14s ease" },
                 "& .MuiTableCell-root": { verticalAlign: "middle" },
                 "& .MuiChip-root": { maxWidth: "100%" },
