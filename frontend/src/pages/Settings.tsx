@@ -10,6 +10,10 @@ import {
   Stack,
   Switch,
   TextField,
+  FormControl,
+  InputLabel,
+  MenuItem,
+  Select,
   Typography,
 } from "@mui/material";
 
@@ -47,6 +51,14 @@ type ConfigurationForm = {
 };
 
 type ActiveSession = { id: number; clientType: string; deviceName: string | null; appVersion: string | null; ipAddress: string | null; createdAt: string; lastActivityAt: string; user: { id: number; name: string; username: string } };
+type PermissionUser = { id:number; name:string; username:string; role:"ADMIN"|"COORDENADOR"|"ANALISTA"; permissions?: string[] | null };
+const ROUTINE_PERMISSIONS = [
+  ["dashboard","Dashboard"],["tickets","Tickets"],["my-operation","Minha Operação"],["known-problems","Problemas Conhecidos"],
+  ["attention","Pontos de Atenção"],["data-quality","Pendências"],["clients","Clientes"],["analysts","Analistas"],
+  ["simer-map","Mapa SIMER"],["performance","Desempenho"],["reports","Relatórios"],["corrections","Correções"],
+  ["evolutions","Evoluções"],["support","Apoios"],["versions","Versões"],["knowledge","Base de Conhecimento"],
+  ["services","Serviços SIMER"],["technical-leadership","Central de Liderança"],["coordination","Central da Coordenação"],["imports","Dados e Sincronizações"],
+] as const;
 type Diagnostics = { status: string; appVersion: string; runtime: string; nodeVersion: string; database: { status: string; latencyMs: number }; sessionPolicy: { exclusiveAcrossPlatforms: boolean; idleTimeoutMinutes: number }; checkedAt: string };
 
 const EMPTY_FORM: ConfigurationForm = {
@@ -74,13 +86,26 @@ export function Settings() {
   const [diagnostics, setDiagnostics] = useState<Diagnostics | null>(null);
   const [startupEnabled, setStartupEnabled] = useState(false);
   const [startupSaving, setStartupSaving] = useState(false);
+  const [permissionUsers,setPermissionUsers]=useState<PermissionUser[]>([]);
+  const [permissionUserId,setPermissionUserId]=useState<number|="">("");
+  const [permissionSaving,setPermissionSaving]=useState(false);
   const [notificationPreferences,setNotificationPreferences]=useState<LocalNotificationPreferences>(()=>getLocalNotificationPreferences());
 
   useEffect(() => {
     void loadConfiguration();
+    void api.get<{users:PermissionUser[]}>("/users").then(r=>setPermissionUsers(r.data.users)).catch(()=>setPermissionUsers([]));
     if (window.techLeadHub?.platform === "win32" && window.techLeadHub.startup) void window.techLeadHub.startup.get().then((state) => setStartupEnabled(state.enabled)).catch(() => undefined);
   }, []);
 
+  async function saveUserPermissions(userId:number, permissions:string[]) {
+    try {
+      setPermissionSaving(true); setError(null);
+      const response=await api.patch<{user:PermissionUser}>(`/users/${userId}/permissions`,{permissions});
+      setPermissionUsers(current=>current.map(user=>user.id===userId?{...user,...response.data.user}:user));
+      setSuccess("Permissões do usuário atualizadas.");
+    } catch { setError("Não foi possível atualizar as permissões do usuário."); }
+    finally { setPermissionSaving(false); }
+  }
   function changeNotificationPreference(key:keyof LocalNotificationPreferences,enabled:boolean){const next={...notificationPreferences,[key]:enabled};setNotificationPreferences(next);saveLocalNotificationPreferences(next)}
   async function changeStartup(enabled: boolean) {
     if (!window.techLeadHub?.startup) return;
@@ -226,6 +251,13 @@ export function Settings() {
   return (
     <Box>
       <PageHeader eyebrow="Sistema" title="Configurações" description="Configuração administrativa central. As integrações são protegidas no banco compartilhado e valem para todos os usuários Web e Desktop." />
+      <Card variant="outlined" sx={{ mb: 2 }}><CardContent>
+        <Typography sx={{fontWeight:850}}>Permissões por usuário</Typography>
+        <Typography variant="body2" color="text.secondary" sx={{mt:.4,mb:1.5}}>Defina exatamente quais rotinas cada usuário pode acessar. Administradores permanecem com acesso integral.</Typography>
+        <FormControl fullWidth size="small" sx={{mb:1.5}}><InputLabel shrink>Usuário</InputLabel><Select label="Usuário" value={permissionUserId} onChange={e=>setPermissionUserId(Number(e.target.value))} displayEmpty><MenuItem value=""><em>Selecione um usuário</em></MenuItem>{permissionUsers.map(user=><MenuItem key={user.id} value={user.id}>{user.name} · {user.role}</MenuItem>)}</Select></FormControl>
+        {permissionUserId!=="" && (()=>{const selected=permissionUsers.find(user=>user.id===permissionUserId);if(!selected)return null;if(selected.role==="ADMIN")return <Alert severity="info">Administradores possuem acesso integral a todas as rotinas.</Alert>;const explicit=Array.isArray(selected.permissions);const defaults=selected.role==="COORDENADOR"?ROUTINE_PERMISSIONS.map(([key])=>key):["dashboard","tickets","my-operation","known-problems","attention","data-quality","clients","simer-map","performance","reports","corrections","evolutions","support","versions","knowledge"];const active=explicit?selected.permissions!:defaults;return <Box sx={{display:"grid",gridTemplateColumns:{xs:"1fr",md:"repeat(2,minmax(0,1fr))"},gap:.5}}>{ROUTINE_PERMISSIONS.map(([key,label])=><Stack key={key} direction="row" sx={{alignItems:"center",justifyContent:"space-between",borderBottom:"1px solid",borderColor:"divider",py:.55}}><Typography variant="body2">{label}</Typography><Switch size="small" disabled={permissionSaving} checked={active.includes(key)} onChange={(_,checked)=>{const next=checked?[...active,key]:active.filter(item=>item!==key);void saveUserPermissions(selected.id,next)}}/></Stack>)}</Box>})()}
+      </CardContent></Card>
+
       <Card variant="outlined" sx={{ mb: 2 }}><CardContent>
         <Typography sx={{fontWeight:850}}>Notificações</Typography>
         <Typography variant="body2" color="text.secondary" sx={{mt:.4,mb:1.5}}>Escolha quais eventos podem gerar avisos. Estas preferências também controlam os alertas rápidos no canto inferior direito.</Typography>
