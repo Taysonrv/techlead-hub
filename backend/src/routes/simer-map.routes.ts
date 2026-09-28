@@ -1,7 +1,9 @@
 import { Router } from "express";
 import { SimerMapController } from "../controllers/SimerMapController";
+import { requirePermission } from "../middlewares/roleMiddleware";
 const simerMapRoutes = Router();
 const controller = new SimerMapController();
+simerMapRoutes.use(requirePermission("simer-map"));
 simerMapRoutes.get("/summary", controller.summary);
 simerMapRoutes.get("/search", controller.search);
 simerMapRoutes.get("/tree", controller.tree);
