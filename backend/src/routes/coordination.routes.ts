@@ -1,10 +1,13 @@
 import { Router } from "express";
-import { requireRoles } from "../middlewares/roleMiddleware";
+import { requirePermission } from "../middlewares/roleMiddleware";
 import { coordinationService } from "../services/CoordinationService";
 import type { AuthenticatedRequest } from "../middlewares/authMiddleware";
 
 const coordinationRoutes = Router();
-coordinationRoutes.use(requireRoles("ADMIN", "COORDENADOR"));
+coordinationRoutes.use((req, res, next) => {
+  const permission = req.path.startsWith("/services") ? "services" : "coordination";
+  return requirePermission(permission)(req as AuthenticatedRequest, res, next);
+});
 coordinationRoutes.get("/details", async (req: AuthenticatedRequest, res) => {
   try {
     const kind = String(req.query.kind ?? "backlog");
