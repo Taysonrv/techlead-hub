@@ -246,6 +246,13 @@ function AuthenticatedLayout({
    ROTA EXCLUSIVA ADMIN
 ========================================================= */
 
+function CoordinationOnly({ children }: { children: ReactNode }) {
+  const { user, loading } = useAuth();
+  if (loading) return <Box sx={{ minHeight: "100vh", display: "grid", placeItems: "center" }}><CircularProgress size={30} sx={{ color: aliareColors.green }} /></Box>;
+  if (!user || (user.role !== "ADMIN" && user.role !== "COORDENADOR")) return <Navigate to="/" replace />;
+  return children;
+}
+
 function AdminOnly({
   children,
 }: {
@@ -337,9 +344,9 @@ function App() {
           />
 
           <Route path="/chat" element={<AuthenticatedLayout><Chat /></AuthenticatedLayout>} />
-          <Route path="/coordenacao" element={<AuthenticatedLayout><Coordination /></AuthenticatedLayout>} />
-          <Route path="/servicos" element={<AuthenticatedLayout><Services /></AuthenticatedLayout>} />
-          <Route path="/lideranca-tecnica" element={<AuthenticatedLayout><TechnicalLeadership /></AuthenticatedLayout>} />
+          <Route path="/coordenacao" element={<CoordinationOnly><AuthenticatedLayout><Coordination /></AuthenticatedLayout></CoordinationOnly>} />
+          <Route path="/servicos" element={<CoordinationOnly><AuthenticatedLayout><Services /></AuthenticatedLayout></CoordinationOnly>} />
+          <Route path="/lideranca-tecnica" element={<CoordinationOnly><AuthenticatedLayout><TechnicalLeadership /></AuthenticatedLayout></CoordinationOnly>} />
           <Route path="/mapa-simer" element={<AuthenticatedLayout><SimerMap /></AuthenticatedLayout>} />
           <Route path="/investigacao" element={<AuthenticatedLayout><Investigation /></AuthenticatedLayout>} />
           <Route path="/problemas-conhecidos" element={<AuthenticatedLayout><KnownProblems /></AuthenticatedLayout>} />
