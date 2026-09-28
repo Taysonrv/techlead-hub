@@ -107,6 +107,11 @@ declare global {
         }>;
       };
 
+      startup: {
+        get: () => Promise<{ enabled: boolean }>;
+        set: (enabled: boolean) => Promise<{ enabled: boolean }>;
+      };
+
       updates: {
         getState: () =>
           Promise<UpdateState>;
