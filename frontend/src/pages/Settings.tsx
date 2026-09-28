@@ -260,7 +260,7 @@ export function Settings() {
           <CardContent sx={{ p: { xs: 2, md: 2.5 } }}>
             <Stack direction={{xs:"column",sm:"row"}} spacing={2} sx={{alignItems:{sm:"center"},justifyContent:"space-between"}}>
               <Box><Typography sx={{fontWeight:850}}>Inicialização com o Windows</Typography><Typography variant="body2" color="text.secondary">Mantenha o TechLead Hub disponível desde o início da sessão para receber atualizações e avisos operacionais.</Typography></Box>
-              <Stack direction="row" spacing={1} sx={{alignItems:"center"}}><Chip size="small" color={startupEnabled?"success":"default"} variant="outlined" label={startupEnabled?"Automático":"Manual"}/><Switch checked={startupEnabled} disabled={startupSaving} onChange={(_,checked)=>void changeStartup(checked)} inputProps={{"aria-label":"Iniciar TechLead Hub com o Windows"}}/></Stack>
+              <Stack direction="row" spacing={1} sx={{alignItems:"center"}}><Chip size="small" color={startupEnabled?"success":"default"} variant="outlined" label={startupEnabled?"Automático":"Manual"}/><Switch checked={startupEnabled} disabled={startupSaving} onChange={(_,checked)=>void changeStartup(checked)} slotProps={{input:{"aria-label":"Iniciar TechLead Hub com o Windows"}}}/></Stack>
             </Stack>
           </CardContent>
         </Card>}
