@@ -11,6 +11,7 @@ const USER_ADMIN_SELECT = {
   username: true,
   email: true,
   role: true,
+  permissions: true,
   active: true,
   approvalStatus: true,
   approvedAt: true,
@@ -70,6 +71,23 @@ export class UserService {
     }
 
     return user;
+  }
+
+  async updateUserPermissions(adminUserId: number, targetUserId: number, permissions: unknown) {
+    await this.ensureAdmin(adminUserId);
+    const targetUser = await this.getTargetUser(targetUserId);
+    if (targetUser.role === "ADMIN") {
+      throw new AuthError("Administradores possuem acesso integral e não usam restrições por rotina.", 400);
+    }
+    if (!Array.isArray(permissions) || permissions.some((item) => typeof item !== "string")) {
+      throw new AuthError("Lista de permissões inválida.", 400);
+    }
+    const normalized = [...new Set(permissions.map((item) => item.trim()).filter(Boolean))];
+    return prisma.user.update({
+      where: { id: targetUserId },
+      data: { permissions: normalized },
+      select: USER_ADMIN_SELECT,
+    });
   }
 
   /* =======================================================
