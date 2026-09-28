@@ -61,6 +61,7 @@ model User {
   role         UserRole @default(ANALISTA)
 
   // Controle de acesso
+  permissions        Json?
   active             Boolean @default(false)
   mustChangePassword Boolean @default(false)
 
