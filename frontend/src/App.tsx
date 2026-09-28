@@ -258,13 +258,6 @@ function RoutineAccess({ permission, children }: { permission: string; children:
   return allowed ? children : <Navigate to="/" replace />;
 }
 
-function CoordinationOnly({ children }: { children: ReactNode }) {
-  const { user, loading } = useAuth();
-  if (loading) return <Box sx={{ minHeight: "100vh", display: "grid", placeItems: "center" }}><CircularProgress size={30} sx={{ color: aliareColors.green }} /></Box>;
-  if (!user || (user.role !== "ADMIN" && user.role !== "COORDENADOR")) return <Navigate to="/" replace />;
-  return children;
-}
-
 function AdminOnly({
   children,
 }: {
