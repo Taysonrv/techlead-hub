@@ -64,6 +64,7 @@ const Coordination = lazy(() => import("./pages/Coordination").then((module) => 
 const TechnicalLeadership = lazy(() => import("./pages/TechnicalLeadership").then((module) => ({ default: module.TechnicalLeadership })));
 const SimerMap = lazy(() => import("./pages/SimerMap").then((module) => ({ default: module.SimerMap })));
 const Investigation = lazy(() => import("./pages/Investigation").then((module) => ({ default: module.Investigation })));
+const KnownProblems = lazy(() => import("./pages/KnownProblems").then((module) => ({ default: module.KnownProblems })));
 
 import {
   aliareColors,
@@ -341,6 +342,7 @@ function App() {
           <Route path="/lideranca-tecnica" element={<AuthenticatedLayout><TechnicalLeadership /></AuthenticatedLayout>} />
           <Route path="/mapa-simer" element={<AuthenticatedLayout><SimerMap /></AuthenticatedLayout>} />
           <Route path="/investigacao" element={<AuthenticatedLayout><Investigation /></AuthenticatedLayout>} />
+          <Route path="/problemas-conhecidos" element={<AuthenticatedLayout><KnownProblems /></AuthenticatedLayout>} />
 
           <Route
             path="/analistas"
