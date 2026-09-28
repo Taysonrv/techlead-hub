@@ -272,4 +272,24 @@ export async function ensureApplicationSchema() {
   await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "SystemRuleNode_name_idx" ON "SystemRuleNode" (name)`);
   await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "SystemRuleNode_process_idx" ON "SystemRuleNode" ("processId")`);
   await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "SystemRuleTransition_process_idx" ON "SystemRuleTransition" ("processId")`);
+  await prisma.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS "KnownProblem" (
+      "id" SERIAL PRIMARY KEY, "title" VARCHAR(220) NOT NULL, "symptom" TEXT NOT NULL, "solution" TEXT NOT NULL,
+      "service" VARCHAR(500), "client" VARCHAR(300), "movideskTicket" VARCHAR(80), "azureWorkItem" VARCHAR(120), "version" VARCHAR(120),
+      "status" VARCHAR(40) NOT NULL DEFAULT 'ATIVO', "severity" VARCHAR(20) NOT NULL DEFAULT 'MEDIA', "tags" VARCHAR(800),
+      "pinned" BOOLEAN NOT NULL DEFAULT FALSE, "archived" BOOLEAN NOT NULL DEFAULT FALSE,
+      "createdById" INTEGER REFERENCES "User"("id") ON DELETE SET NULL, "updatedById" INTEGER REFERENCES "User"("id") ON DELETE SET NULL,
+      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "KnownProblem_status_updatedAt_idx" ON "KnownProblem" ("status","updatedAt" DESC)`);
+  await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "KnownProblem_service_idx" ON "KnownProblem" ("service")`);
+  await prisma.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS "KnownProblemRead" (
+      "problemId" INTEGER NOT NULL REFERENCES "KnownProblem"("id") ON DELETE CASCADE,
+      "userId" INTEGER NOT NULL REFERENCES "User"("id") ON DELETE CASCADE,
+      "readAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      CONSTRAINT "KnownProblemRead_pkey" PRIMARY KEY ("problemId","userId")
+    )
+  `);
 }
