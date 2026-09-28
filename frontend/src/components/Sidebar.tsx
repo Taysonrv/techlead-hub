@@ -45,6 +45,7 @@ import {
   FactCheckOutlined,
   TrendingUpOutlined,
   AssessmentOutlined,
+  CampaignOutlined,
 } from "@mui/icons-material";
 
 import {
@@ -305,6 +306,7 @@ export function Sidebar() {
     () => [
       { label: "Minha Operação", path: "/minha-operacao", icon: <WorkspacesOutlined fontSize="small" /> },
       { label: "Tickets", path: "/tickets", icon: <ConfirmationNumberOutlined fontSize="small" /> },
+      { label: "Problemas Conhecidos", path: "/problemas-conhecidos", icon: <CampaignOutlined fontSize="small" /> },
       { label: "Pontos de Atenção", path: "/atencao", icon: <WarningAmberOutlined fontSize="small" /> },
       { label: "Pendências", path: "/qualidade-dados", icon: <FactCheckOutlined fontSize="small" /> },
     ],
