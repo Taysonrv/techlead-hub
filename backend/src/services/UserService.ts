@@ -82,7 +82,16 @@ export class UserService {
     if (!Array.isArray(permissions) || permissions.some((item) => typeof item !== "string")) {
       throw new AuthError("Lista de permissões inválida.", 400);
     }
+    const allowedPermissions = new Set([
+      "dashboard","tickets","my-operation","known-problems","attention","data-quality","clients","analysts",
+      "simer-map","performance","reports","corrections","evolutions","support","versions","knowledge",
+      "services","technical-leadership","coordination","imports",
+    ]);
     const normalized = [...new Set(permissions.map((item) => item.trim()).filter(Boolean))];
+    const invalid = normalized.filter((item) => !allowedPermissions.has(item));
+    if (invalid.length) {
+      throw new AuthError(`Permissões inválidas: ${invalid.join(", ")}.`, 400);
+    }
     return prisma.user.update({
       where: { id: targetUserId },
       data: { permissions: normalized },
