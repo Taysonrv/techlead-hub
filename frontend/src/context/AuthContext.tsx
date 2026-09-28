@@ -39,6 +39,7 @@ export type AuthUser = {
   email: string | null;
 
   role: UserRole;
+  permissions?: string[] | null;
 
   active: boolean;
 
