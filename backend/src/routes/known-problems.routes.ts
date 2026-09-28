@@ -79,7 +79,7 @@ knownProblemRoutes.get("/sources", async (req: AuthenticatedRequest,res) => {
       }),
       prisma.azureWorkItem.findMany({
         where:workItemWhere,orderBy:{azureChangedAt:"desc"},take:16,
-        select:{id:true,workItemType:true,title:true,state:true,client:true,criticality:true,module:true,process:true,movideskTicket:true,deliveredVersion:true,registeredVersion:true,workaround:true,description:true,technicalSolution:true,remoteUrl:true}
+        select:{id:true,workItemType:true,title:true,state:true,reason:true,client:true,criticality:true,module:true,process:true,movideskTicket:true,deliveredVersion:true,registeredVersion:true,workaround:true,description:true,technicalSolution:true,remoteUrl:true}
       })
     ]);
     res.json({tickets,workItems});
