@@ -1,5 +1,5 @@
 import { Alert, Autocomplete, Box, Button, Card, CardContent, Chip, CircularProgress, FormControl, InputLabel, MenuItem, Select, Stack, TextField, Typography, useTheme } from "@mui/material";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip as ChartTooltip, XAxis, YAxis } from "recharts";
 import { PageHeader } from "../components/PageHeader";
 import { KpiCard } from "../components/KpiCard";
@@ -24,8 +24,9 @@ export function Services() {
   const theme = useTheme(); const navigate = useNavigate();
   const [data,setData]=useState<Data|null>(null); const [loading,setLoading]=useState(true); const [error,setError]=useState("");
   const [client,setClient]=useState(""); const [analyst,setAnalyst]=useState(""); const [months,setMonths]=useState(6);
-  const load=useCallback(async()=>{try{setLoading(true);setError("");const r=await api.get<Data>("/coordination/services",{params:{client:client||undefined,analyst:analyst||undefined,months}});setData(r.data);}catch(e:any){setError(e?.response?.data?.error||"Não foi possível carregar a inteligência de Serviços.");}finally{setLoading(false)}},[client,analyst,months]);
-  useEffect(()=>{void load()},[load]);
+  const requestRef=useRef<AbortController|null>(null);
+  const load=useCallback(async()=>{const controller=new AbortController();requestRef.current?.abort();requestRef.current=controller;try{setLoading(true);setError("");const r=await api.get<Data>("/coordination/services",{params:{client:client||undefined,analyst:analyst||undefined,months},signal:controller.signal});if(!controller.signal.aborted)setData(r.data);}catch(e:any){if(!controller.signal.aborted)setError(e?.response?.data?.error||"Não foi possível carregar a inteligência de Serviços.");}finally{if(!controller.signal.aborted)setLoading(false)}},[client,analyst,months]);
+  useEffect(()=>{const timer=window.setTimeout(()=>{void load()},180);return()=>{window.clearTimeout(timer);requestRef.current?.abort()}},[load]);
   const tooltip={borderRadius:12,border:`1px solid ${theme.palette.divider}`,background:theme.palette.background.paper};
   return <Box sx={{pb:4}}>
     <PageHeader eyebrow="Inteligência operacional" title="Serviços SIMER" description="Análise histórica da classificação de Serviços no Movidesk, demanda por módulo e oportunidades de melhoria na qualidade dos atendimentos." meta={data?`${data.total} atendimento(s) · últimos ${data.periodMonths} meses · ${data.catalogSize} serviços conhecidos`:undefined}/>
