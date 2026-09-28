@@ -17,6 +17,7 @@ import {
 import {
   authMiddleware,
 } from "../middlewares/authMiddleware";
+import { requireAnyPermission } from "../middlewares/routinePermissionMiddleware";
 
 import importRoutes from "./import.routes";
 
@@ -132,46 +133,55 @@ routes.use(
 
 routes.get(
   "/api/dashboard/summary",
+  requireAnyPermission("dashboard", "tickets", "attention", "clients", "performance", "coordination"),
   dashboard.summary,
 );
 
 routes.get(
   "/api/dashboard/categories",
+  requireAnyPermission("dashboard", "tickets", "attention", "clients", "performance", "coordination"),
   dashboard.categories,
 );
 
 routes.get(
   "/api/dashboard/attention",
+  requireAnyPermission("dashboard", "tickets", "attention", "clients", "performance", "coordination"),
   dashboard.attention,
 );
 
 routes.get(
   "/api/dashboard/owners",
+  requireAnyPermission("dashboard", "tickets", "attention", "clients", "performance", "coordination"),
   dashboard.owners,
 );
 
 routes.get(
   "/api/dashboard/clients",
+  requireAnyPermission("dashboard", "tickets", "attention", "clients", "performance", "coordination"),
   dashboard.clients,
 );
 
 routes.get(
   "/api/dashboard/trends",
+  requireAnyPermission("dashboard", "tickets", "attention", "clients", "performance", "coordination"),
   dashboard.trends,
 );
 
 routes.get(
   "/api/dashboard/tickets",
+  requireAnyPermission("dashboard", "tickets", "attention", "clients", "performance", "coordination"),
   dashboard.tickets,
 );
 
 routes.get(
   "/api/dashboard/pending-tickets",
+  requireAnyPermission("dashboard", "tickets", "attention", "clients", "performance", "coordination"),
   dashboard.pendingTickets,
 );
 
 routes.get(
   "/api/dashboard/tickets/:id/analytics",
+  requireAnyPermission("dashboard", "tickets", "attention", "clients", "performance", "coordination"),
   dashboard.ticketAnalytics,
 );
 
