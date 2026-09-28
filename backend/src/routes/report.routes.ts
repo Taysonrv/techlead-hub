@@ -5,12 +5,15 @@ import {
 import {
   ReportController,
 } from "../controllers/ReportController";
+import { requirePermission } from "../middlewares/roleMiddleware";
 
 const reportRoutes =
   Router();
 
 const controller =
   new ReportController();
+
+reportRoutes.use(requirePermission("reports"));
 
 reportRoutes.get(
   "/filters",
