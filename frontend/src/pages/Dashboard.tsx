@@ -2618,10 +2618,12 @@ function DonutAnalysisCard({
               nameKey="label"
               cx="50%"
               cy="50%"
-              innerRadius={54}
-              outerRadius={76}
+              innerRadius={56}
+              outerRadius={80}
               paddingAngle={2}
-              stroke="none"
+              cornerRadius={4}
+              stroke={theme.palette.background.paper}
+              strokeWidth={1.5}
               onClick={(_entry, index) => {
                 const item = chartData[index];
                 if (item) onItemClick?.(item.label);
