@@ -5,7 +5,7 @@ import {
 import multer from "multer";
 
 import { ImportController } from "../controllers/ImportController";
-import { requireRoles } from "../middlewares/roleMiddleware";
+import { requirePermission } from "../middlewares/roleMiddleware";
 
 const router =
   Router();
@@ -28,14 +28,14 @@ const upload =
 
 router.post(
   "/import/tickets/preview",
-  requireRoles("ADMIN", "COORDENADOR"),
+  requirePermission("imports"),
   upload.single("file"),
   (req, res) => controller.preview(req, res),
 );
 
 router.post(
   "/import/tickets",
-  requireRoles("ADMIN", "COORDENADOR"),
+  requirePermission("imports"),
   upload.single(
     "file"
   ),
