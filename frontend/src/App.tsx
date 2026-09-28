@@ -246,6 +246,18 @@ function AuthenticatedLayout({
    ROTA EXCLUSIVA ADMIN
 ========================================================= */
 
+const DEFAULT_ANALYST_PERMISSIONS = ["dashboard","tickets","my-operation","known-problems","attention","data-quality","clients","simer-map","performance","reports","corrections","evolutions","support","versions","knowledge"];
+function RoutineAccess({ permission, children }: { permission: string; children: ReactNode }) {
+  const { user, loading } = useAuth();
+  if (loading) return <Box sx={{ minHeight: "100vh", display: "grid", placeItems: "center" }}><CircularProgress size={30} sx={{ color: aliareColors.green }} /></Box>;
+  if (!user) return <Navigate to="/login" replace />;
+  if (user.role === "ADMIN") return children;
+  const allowed = Array.isArray(user.permissions)
+    ? user.permissions.includes(permission)
+    : user.role === "COORDENADOR" || DEFAULT_ANALYST_PERMISSIONS.includes(permission);
+  return allowed ? children : <Navigate to="/" replace />;
+}
+
 function CoordinationOnly({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth();
   if (loading) return <Box sx={{ minHeight: "100vh", display: "grid", placeItems: "center" }}><CircularProgress size={30} sx={{ color: aliareColors.green }} /></Box>;
@@ -344,12 +356,12 @@ function App() {
           />
 
           <Route path="/chat" element={<AuthenticatedLayout><Chat /></AuthenticatedLayout>} />
-          <Route path="/coordenacao" element={<CoordinationOnly><AuthenticatedLayout><Coordination /></AuthenticatedLayout></CoordinationOnly>} />
-          <Route path="/servicos" element={<CoordinationOnly><AuthenticatedLayout><Services /></AuthenticatedLayout></CoordinationOnly>} />
-          <Route path="/lideranca-tecnica" element={<CoordinationOnly><AuthenticatedLayout><TechnicalLeadership /></AuthenticatedLayout></CoordinationOnly>} />
-          <Route path="/mapa-simer" element={<AuthenticatedLayout><SimerMap /></AuthenticatedLayout>} />
+          <Route path="/coordenacao" element={<RoutineAccess permission="coordination"><AuthenticatedLayout><Coordination /></AuthenticatedLayout></RoutineAccess>} />
+          <Route path="/servicos" element={<RoutineAccess permission="services"><AuthenticatedLayout><Services /></AuthenticatedLayout></RoutineAccess>} />
+          <Route path="/lideranca-tecnica" element={<RoutineAccess permission="technical-leadership"><AuthenticatedLayout><TechnicalLeadership /></AuthenticatedLayout></RoutineAccess>} />
+          <Route path="/mapa-simer" element={<RoutineAccess permission="simer-map"><AuthenticatedLayout><SimerMap /></AuthenticatedLayout></RoutineAccess>} />
           <Route path="/investigacao" element={<AuthenticatedLayout><Investigation /></AuthenticatedLayout>} />
-          <Route path="/problemas-conhecidos" element={<AuthenticatedLayout><KnownProblems /></AuthenticatedLayout>} />
+          <Route path="/problemas-conhecidos" element={<RoutineAccess permission="known-problems"><AuthenticatedLayout><KnownProblems /></AuthenticatedLayout></RoutineAccess>} />
 
           <Route
             path="/analistas"
