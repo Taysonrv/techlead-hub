@@ -27,6 +27,7 @@ import {
 } from "react";
 import { PageHeader } from "../components/PageHeader";
 import { api } from "../services/api";
+import { getLocalNotificationPreferences, saveLocalNotificationPreferences, type LocalNotificationPreferences } from "../utils/notificationSound";
 
 type ConfigurationState = {
   databaseConfigured: boolean;
@@ -73,12 +74,14 @@ export function Settings() {
   const [diagnostics, setDiagnostics] = useState<Diagnostics | null>(null);
   const [startupEnabled, setStartupEnabled] = useState(false);
   const [startupSaving, setStartupSaving] = useState(false);
+  const [notificationPreferences,setNotificationPreferences]=useState<LocalNotificationPreferences>(()=>getLocalNotificationPreferences());
 
   useEffect(() => {
     void loadConfiguration();
     if (window.techLeadHub?.startup) void window.techLeadHub.startup.get().then((state) => setStartupEnabled(state.enabled)).catch(() => undefined);
   }, []);
 
+  function changeNotificationPreference(key:keyof LocalNotificationPreferences,enabled:boolean){const next={...notificationPreferences,[key]:enabled};setNotificationPreferences(next);saveLocalNotificationPreferences(next)}
   async function changeStartup(enabled: boolean) {
     if (!window.techLeadHub?.startup) return;
     try { setStartupSaving(true); setError(null); const state=await window.techLeadHub.startup.set(enabled); setStartupEnabled(state.enabled); setSuccess(state.enabled ? "TechLead Hub será iniciado automaticamente com o Windows." : "Inicialização automática com o Windows desativada."); }
