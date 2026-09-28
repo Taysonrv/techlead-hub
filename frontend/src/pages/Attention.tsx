@@ -1062,17 +1062,16 @@ export function Attention() {
             </Box>
             {(level.length > 0 || owner.length > 0 || client.length > 0 || riskFilter) && <Chip size="small" variant="outlined" label="Filtros ativos" />}
           </Stack>
-          <Stack
-            direction={{
-              xs: "column",
-              md: "row",
-            }}
-            spacing={1.5}
+          <Box
             sx={{
-              alignItems: {
-                xs: "stretch",
-                md: "center",
+              display: "grid",
+              gridTemplateColumns: {
+                xs: "1fr",
+                sm: "repeat(2, minmax(0, 1fr))",
+                xl: "repeat(4, minmax(0, 1fr)) auto",
               },
+              gap: 1.25,
+              alignItems: "center",
             }}
           >
             <FormControl
@@ -1194,7 +1193,7 @@ export function Attention() {
                 Limpar filtros
               </Button>
             )}
-          </Stack>
+          </Box>
         </CardContent>
       </Card>
 
