@@ -243,6 +243,13 @@ export class CoordinationService {
     }
     const causes = [...causesMap].map(([cause, count]) => ({ cause, count })).sort((a,b) => b.count-a.count).slice(0,10);
     const categories = [...categoriesMap].map(([category, count]) => ({ category, count })).sort((a,b) => b.count-a.count).slice(0,10);
+    const categoryServiceMap = new Map<string,{category:string;service:string;count:number}>();
+    for (const ticket of tickets) {
+      const category=ticket.category?.trim()||"Sem categoria"; const service=pathOf(ticket)||"Sem serviço";
+      const key=`${category}::${service}`; const current=categoryServiceMap.get(key);
+      categoryServiceMap.set(key,{category,service,count:(current?.count??0)+1});
+    }
+    const categoryServices=[...categoryServiceMap.values()].sort((a,b)=>b.count-a.count).slice(0,60);
     const previousTotal = previousTickets.length;
     const volumeDelta = previousTotal ? Math.round(((tickets.length - previousTotal) / previousTotal) * 100) : tickets.length ? 100 : 0;
     const previousSpecific = previousTickets.filter((ticket) => {
@@ -257,7 +264,7 @@ export class CoordinationService {
       catalogSize: catalog.length,
       comparison: { previousTotal, volumeDelta, previousClassificationRate: previousRate, classificationDelta },
       trend: [...monthsMap.values()].sort((a,b) => a.month.localeCompare(b.month)),
-      ranking, modules, causes, categories, samples,
+      ranking, modules, causes, categories, categoryServices, samples,
       filters: {
         clients: [...new Set(tickets.map((t) => t.client).filter((v): v is string => Boolean(v)))].sort((a,b) => a.localeCompare(b,"pt-BR")),
         analysts: [...SUPPORT_ANALYSTS],
