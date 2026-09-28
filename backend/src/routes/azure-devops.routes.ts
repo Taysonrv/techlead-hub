@@ -5,7 +5,7 @@ import {
 import {
   AzureDevOpsController,
 } from "../controllers/AzureDevOpsController";
-import { requireRoles } from "../middlewares/roleMiddleware";
+import { requirePermission } from "../middlewares/roleMiddleware";
 
 const azureDevOpsRoutes =
   Router();
@@ -19,6 +19,7 @@ const azureDevOpsController =
 
 azureDevOpsRoutes.get(
   "/status",
+  requirePermission("imports"),
   azureDevOpsController.status,
 );
 
@@ -33,7 +34,7 @@ azureDevOpsRoutes.get(
 
 azureDevOpsRoutes.post(
   "/work-items/batch",
-  requireRoles("ADMIN", "COORDENADOR"),
+  requirePermission("imports"),
   azureDevOpsController.batchWorkItems,
 );
 
@@ -48,19 +49,19 @@ azureDevOpsRoutes.get(
 
 azureDevOpsRoutes.post(
   "/sync/work-items",
-  requireRoles("ADMIN", "COORDENADOR"),
+  requirePermission("imports"),
   azureDevOpsController.syncWorkItems,
 );
 
 azureDevOpsRoutes.post(
   "/sync/full",
-  requireRoles("ADMIN", "COORDENADOR"),
+  requirePermission("imports"),
   azureDevOpsController.syncFull,
 );
 
 azureDevOpsRoutes.post(
   "/sync/incremental",
-  requireRoles("ADMIN", "COORDENADOR"),
+  requirePermission("imports"),
   azureDevOpsController.syncIncremental,
 );
 
@@ -70,16 +71,19 @@ azureDevOpsRoutes.post(
 
 azureDevOpsRoutes.get(
   "/wiki",
+  requirePermission("knowledge"),
   azureDevOpsController.wikiList,
 );
 
 azureDevOpsRoutes.get(
   "/wiki/search",
+  requirePermission("knowledge"),
   azureDevOpsController.wikiSearch,
 );
 
 azureDevOpsRoutes.get(
   "/wiki/pages/:pageId",
+  requirePermission("knowledge"),
   azureDevOpsController.wikiPage,
 );
 
