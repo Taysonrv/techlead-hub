@@ -94,6 +94,14 @@ knownProblemRoutes.put("/:id", async (req: AuthenticatedRequest,res) => {
     const id=Number(req.params.id); if(!Number.isInteger(id)) return res.status(400).json({error:"Registro inválido."});
     const title=clean(req.body?.title,220), symptom=clean(req.body?.symptom), solution=clean(req.body?.solution,8000);
     if(!title||!symptom||!solution) return res.status(400).json({error:"Título, sintoma e solução são obrigatórios."});
+    const duplicate=await prisma.$queryRawUnsafe<any[]>(`
+      SELECT "id","title" FROM "KnownProblem" WHERE "archived"=FALSE AND "id"<>$1 AND (
+        ($2::text IS NOT NULL AND "movideskTicket"=$2) OR
+        ($3::text IS NOT NULL AND "azureWorkItem"=$3) OR
+        (LOWER(TRIM("title"))=LOWER(TRIM($4)) AND COALESCE(LOWER(TRIM("service")),'')=COALESCE(LOWER(TRIM($5)),''))
+      ) LIMIT 1
+    `,id,optional(req.body?.movideskTicket,80),optional(req.body?.azureWorkItem,120),title,optional(req.body?.service,500));
+    if(duplicate.length) return res.status(409).json({error:`Já existe outra publicação semelhante (#${duplicate[0].id} · ${duplicate[0].title}).`});
     const status=allowedStatus.has(req.body?.status)?req.body.status:"ATIVO";
     const severity=allowedSeverity.has(req.body?.severity)?req.body.severity:"MEDIA";
     const rows=await prisma.$queryRawUnsafe<any[]>(`
