@@ -78,7 +78,7 @@ export function Settings() {
 
   useEffect(() => {
     void loadConfiguration();
-    if (window.techLeadHub?.startup) void window.techLeadHub.startup.get().then((state) => setStartupEnabled(state.enabled)).catch(() => undefined);
+    if (window.techLeadHub?.platform === "win32" && window.techLeadHub.startup) void window.techLeadHub.startup.get().then((state) => setStartupEnabled(state.enabled)).catch(() => undefined);
   }, []);
 
   function changeNotificationPreference(key:keyof LocalNotificationPreferences,enabled:boolean){const next={...notificationPreferences,[key]:enabled};setNotificationPreferences(next);saveLocalNotificationPreferences(next)}
@@ -265,7 +265,7 @@ export function Settings() {
           </CardContent>
         </Card>
 
-        {window.techLeadHub?.startup && <Card elevation={0} sx={{ border: "1px solid", borderColor: startupEnabled ? "rgba(24,199,122,.28)" : "divider", borderRadius: 2.5, background: startupEnabled ? "linear-gradient(120deg,rgba(24,199,122,.055),transparent)" : undefined }}>
+        {window.techLeadHub?.platform === "win32" && window.techLeadHub.startup && <Card elevation={0} sx={{ border: "1px solid", borderColor: startupEnabled ? "rgba(24,199,122,.28)" : "divider", borderRadius: 2.5, background: startupEnabled ? "linear-gradient(120deg,rgba(24,199,122,.055),transparent)" : undefined }}>
           <CardContent sx={{ p: { xs: 2, md: 2.5 } }}>
             <Stack direction={{xs:"column",sm:"row"}} spacing={2} sx={{alignItems:{sm:"center"},justifyContent:"space-between"}}>
               <Box><Typography sx={{fontWeight:850}}>Inicialização com o Windows</Typography><Typography variant="body2" color="text.secondary">Mantenha o TechLead Hub disponível desde o início da sessão para receber atualizações e avisos operacionais.</Typography></Box>
