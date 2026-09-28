@@ -75,11 +75,11 @@ knownProblemRoutes.get("/sources", async (req: AuthenticatedRequest,res) => {
     const [tickets,workItems]=await Promise.all([
       prisma.ticket.findMany({
         where:ticketWhere,orderBy:{lastUpdate:"desc"},take:16,
-        select:{movideskId:true,subject:true,client:true,category:true,cause:true,serviceFirstLevel:true,serviceSecondLevel:true,serviceThirdLevel:true,taskNumber:true,taskType:true,registeredVersion:true,deliveredVersion:true}
+        select:{movideskId:true,subject:true,client:true,category:true,cause:true,serviceFirstLevel:true,serviceSecondLevel:true,serviceThirdLevel:true,taskNumber:true,taskType:true,registeredVersion:true,deliveredVersion:true,causeDetail:true,taskUrl:true}
       }),
       prisma.azureWorkItem.findMany({
         where:workItemWhere,orderBy:{azureChangedAt:"desc"},take:16,
-        select:{id:true,workItemType:true,title:true,state:true,client:true,criticality:true,module:true,process:true,movideskTicket:true,deliveredVersion:true,registeredVersion:true,workaround:true,description:true}
+        select:{id:true,workItemType:true,title:true,state:true,client:true,criticality:true,module:true,process:true,movideskTicket:true,deliveredVersion:true,registeredVersion:true,workaround:true,description:true,technicalSolution:true,remoteUrl:true}
       })
     ]);
     res.json({tickets,workItems});
@@ -101,9 +101,9 @@ knownProblemRoutes.post("/", async (req: AuthenticatedRequest,res) => {
     const status=allowedStatus.has(req.body?.status)?req.body.status:"ATIVO";
     const severity=allowedSeverity.has(req.body?.severity)?req.body.severity:"MEDIA";
     const rows=await prisma.$queryRawUnsafe<any[]>(`
-      INSERT INTO "KnownProblem" ("title","symptom","solution","service","client","movideskTicket","azureWorkItem","version","status","severity","tags","pinned","createdById","updatedById")
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$13) RETURNING *
-    `,title,symptom,solution,optional(req.body?.service,500),optional(req.body?.client,300),optional(req.body?.movideskTicket,80),optional(req.body?.azureWorkItem,120),optional(req.body?.version,120),status,severity,optional(req.body?.tags,800),Boolean(req.body?.pinned),req.auth!.userId);
+      INSERT INTO "KnownProblem" ("title","symptom","solution","service","client","movideskTicket","azureWorkItem","version","status","severity","tags","pinned","cause","workaround","technicalSolution","comment","azureWorkItemType","azureUrl","createdById","updatedById")
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$19) RETURNING *
+    `,title,symptom,solution,optional(req.body?.service,500),optional(req.body?.client,300),optional(req.body?.movideskTicket,80),optional(req.body?.azureWorkItem,120),optional(req.body?.version,120),status,severity,optional(req.body?.tags,800),Boolean(req.body?.pinned),optional(req.body?.cause,8000),optional(req.body?.workaround,8000),optional(req.body?.technicalSolution,8000),optional(req.body?.comment,4000),optional(req.body?.azureWorkItemType,80),optional(req.body?.azureUrl,4000),req.auth!.userId);
     res.status(201).json(rows[0]);
   } catch(error){console.error("[known-problems] create",error);res.status(500).json({error:"Não foi possível publicar o problema conhecido."});}
 });
@@ -126,8 +126,8 @@ knownProblemRoutes.put("/:id", async (req: AuthenticatedRequest,res) => {
     const rows=await prisma.$queryRawUnsafe<any[]>(`
       UPDATE "KnownProblem" SET "title"=$1,"symptom"=$2,"solution"=$3,"service"=$4,"client"=$5,
       "movideskTicket"=$6,"azureWorkItem"=$7,"version"=$8,"status"=$9,"severity"=$10,"tags"=$11,
-      "pinned"=$12,"updatedById"=$13,"updatedAt"=CURRENT_TIMESTAMP WHERE "id"=$14 AND "archived"=FALSE RETURNING *
-    `,title,symptom,solution,optional(req.body?.service,500),optional(req.body?.client,300),optional(req.body?.movideskTicket,80),optional(req.body?.azureWorkItem,120),optional(req.body?.version,120),status,severity,optional(req.body?.tags,800),Boolean(req.body?.pinned),req.auth!.userId,id);
+      "pinned"=$12,"cause"=$13,"workaround"=$14,"technicalSolution"=$15,"comment"=$16,"azureWorkItemType"=$17,"azureUrl"=$18,"updatedById"=$19,"updatedAt"=CURRENT_TIMESTAMP WHERE "id"=$20 AND "archived"=FALSE RETURNING *
+    `,title,symptom,solution,optional(req.body?.service,500),optional(req.body?.client,300),optional(req.body?.movideskTicket,80),optional(req.body?.azureWorkItem,120),optional(req.body?.version,120),status,severity,optional(req.body?.tags,800),Boolean(req.body?.pinned),optional(req.body?.cause,8000),optional(req.body?.workaround,8000),optional(req.body?.technicalSolution,8000),optional(req.body?.comment,4000),optional(req.body?.azureWorkItemType,80),optional(req.body?.azureUrl,4000),req.auth!.userId,id);
     if(!rows.length) return res.status(404).json({error:"Problema conhecido não encontrado."}); res.json(rows[0]);
   } catch(error){console.error("[known-problems] update",error);res.status(500).json({error:"Não foi possível atualizar o problema conhecido."});}
 });
