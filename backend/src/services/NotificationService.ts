@@ -198,7 +198,13 @@ export class NotificationService {
             author: { select: { name: true } },
           },
         }),
-        prisma.$queryRaw<Array<{ id: number; title: string; updatedAt: Date }>>`\n          SELECT "id", "title", "updatedAt"\n          FROM "KnownProblem"\n          WHERE "archived" = FALSE AND "updatedAt" >= ${since}\n          ORDER BY "updatedAt" DESC\n          LIMIT 30\n        `,
+        prisma.$queryRaw<Array<{ id: number; title: string; updatedAt: Date }>>`
+          SELECT "id", "title", "updatedAt"
+          FROM "KnownProblem"
+          WHERE "archived" = FALSE AND "updatedAt" >= ${since}
+          ORDER BY "updatedAt" DESC
+          LIMIT 30
+        `,
       ]);
 
     const itemNotifications = workItems.map((item) => {
@@ -246,7 +252,16 @@ export class NotificationService {
       path: `/chat?channel=${item.channelId}`,
     }));
 
-    const knownProblemNotifications: AppNotification[] = knownProblems.map((item) => ({\n      key: `known-problem:${item.id}:${item.updatedAt.toISOString()}`,\n      kind: "KNOWN_PROBLEM",\n      title: "Problema conhecido atualizado",\n      message: item.title,\n      occurredAt: item.updatedAt,\n      path: "/problemas-conhecidos",\n    }));\n\n    const now = new Date();
+    const knownProblemNotifications: AppNotification[] = knownProblems.map((item) => ({
+      key: `known-problem:${item.id}:${item.updatedAt.toISOString()}`,
+      kind: "KNOWN_PROBLEM",
+      title: "Problema conhecido atualizado",
+      message: item.title,
+      occurredAt: item.updatedAt,
+      path: "/problemas-conhecidos",
+    }));
+
+    const now = new Date();
     const staleBefore = new Date(now.getTime() - 72 * 60 * 60 * 1_000);
     const operationalAlerts: AppNotification[] = relatedTickets.flatMap((ticket) => {
       const alerts: AppNotification[] = [];
