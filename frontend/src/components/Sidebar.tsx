@@ -287,61 +287,66 @@ export function Sidebar() {
      ROTINAS - MESMO AGRUPAMENTO DA CENTRAL DA COORDENAÇÃO
   ======================================================= */
 
+  const canAccess = (permission: string) =>
+    user?.role === "ADMIN" ||
+    (Array.isArray(user?.permissions)
+      ? user.permissions.includes(permission)
+      : user?.role === "COORDENADOR" ||
+        ["dashboard","tickets","my-operation","known-problems","attention","data-quality","clients","simer-map","performance","reports","corrections","evolutions","support","versions","knowledge"].includes(permission));
+
   const registrationMenu = useMemo<MenuItemData[]>(
     () => [
-      ...(user?.role === "ADMIN" || user?.role === "COORDENADOR"
-        ? [{ label: "Analistas", path: "/analistas", icon: <GroupsOutlined fontSize="small" /> }]
-        : []),
-      { label: "Clientes", path: "/clientes", icon: <BusinessOutlined fontSize="small" /> },
+      ...(canAccess("analysts") ? [{ label: "Analistas", path: "/analistas", icon: <GroupsOutlined fontSize="small" /> }] : []),
+      ...(canAccess("clients") ? [{ label: "Clientes", path: "/clientes", icon: <BusinessOutlined fontSize="small" /> }] : []),
     ],
-    [user?.role],
+    [user?.role, user?.permissions],
   );
 
   const movementMenu = useMemo<MenuItemData[]>(
     () => [
-      { label: "Minha Operação", path: "/minha-operacao", icon: <WorkspacesOutlined fontSize="small" /> },
-      { label: "Tickets", path: "/tickets", icon: <ConfirmationNumberOutlined fontSize="small" /> },
-      { label: "Problemas Conhecidos", path: "/problemas-conhecidos", icon: <CampaignOutlined fontSize="small" /> },
-      { label: "Pontos de Atenção", path: "/atencao", icon: <WarningAmberOutlined fontSize="small" /> },
-      { label: "Pendências", path: "/qualidade-dados", icon: <FactCheckOutlined fontSize="small" /> },
+      ...(canAccess("my-operation") ? [{ label: "Minha Operação", path: "/minha-operacao", icon: <WorkspacesOutlined fontSize="small" /> }] : []),
+      ...(canAccess("tickets") ? [{ label: "Tickets", path: "/tickets", icon: <ConfirmationNumberOutlined fontSize="small" /> }] : []),
+      ...(canAccess("known-problems") ? [{ label: "Problemas Conhecidos", path: "/problemas-conhecidos", icon: <CampaignOutlined fontSize="small" /> }] : []),
+      ...(canAccess("attention") ? [{ label: "Pontos de Atenção", path: "/atencao", icon: <WarningAmberOutlined fontSize="small" /> }] : []),
+      ...(canAccess("data-quality") ? [{ label: "Pendências", path: "/qualidade-dados", icon: <FactCheckOutlined fontSize="small" /> }] : []),
     ],
     [],
   );
 
   const analysisMenu = useMemo<MenuItemData[]>(
     () => [
-      { label: "Dashboard", path: "/", icon: <DashboardOutlined fontSize="small" /> },
-      { label: "Mapa SIMER", path: "/mapa-simer", icon: <AccountTreeOutlined fontSize="small" /> },
-      { label: "Desempenho", path: "/desempenho", icon: <TrendingUpOutlined fontSize="small" /> },
-      { label: "Relatórios", path: "/relatorios", icon: <AssessmentOutlined fontSize="small" /> },
-      ...(user?.role === "ADMIN" || user?.role === "COORDENADOR"
+      ...(canAccess("dashboard") ? [{ label: "Dashboard", path: "/", icon: <DashboardOutlined fontSize="small" /> }] : []),
+      ...(canAccess("simer-map") ? [{ label: "Mapa SIMER", path: "/mapa-simer", icon: <AccountTreeOutlined fontSize="small" /> }] : []),
+      ...(canAccess("performance") ? [{ label: "Desempenho", path: "/desempenho", icon: <TrendingUpOutlined fontSize="small" /> }] : []),
+      ...(canAccess("reports") ? [{ label: "Relatórios", path: "/relatorios", icon: <AssessmentOutlined fontSize="small" /> }] : []),
+      ...(canAccess("services")
         ? [{ label: "Serviços SIMER", path: "/servicos", icon: <FactCheckOutlined fontSize="small" /> }]
         : []),
-      ...(user?.role === "ADMIN" || user?.role === "COORDENADOR"
+      ...(canAccess("services")
         ? [{ label: "Central de Liderança", path: "/lideranca-tecnica", icon: <RadarOutlined fontSize="small" /> }]
         : []),
     ],
-    [user?.role],
+    [user?.role, user?.permissions],
   );
 
   const developmentMenu = useMemo<MenuItemData[]>(
     () => [
-      { label: "Correções", path: "/correcoes", icon: <BugReportOutlined fontSize="small" /> },
-      { label: "Evoluções", path: "/evolucoes", icon: <AutoFixHighOutlined fontSize="small" /> },
-      { label: "Apoios", path: "/apoios", icon: <SupportAgentOutlined fontSize="small" /> },
-      { label: "Versões", path: "/versoes", icon: <Inventory2Outlined fontSize="small" /> },
+      ...(canAccess("corrections") ? [{ label: "Correções", path: "/correcoes", icon: <BugReportOutlined fontSize="small" /> }] : []),
+      ...(canAccess("evolutions") ? [{ label: "Evoluções", path: "/evolucoes", icon: <AutoFixHighOutlined fontSize="small" /> }] : []),
+      ...(canAccess("support") ? [{ label: "Apoios", path: "/apoios", icon: <SupportAgentOutlined fontSize="small" /> }] : []),
+      ...(canAccess("versions") ? [{ label: "Versões", path: "/versoes", icon: <Inventory2Outlined fontSize="small" /> }] : []),
     ],
     [],
   );
 
   const managementMenu = useMemo<MenuItemData[]>(
     () => [
-      { label: "Base de Conhecimento", path: "/conhecimento", icon: <MenuBookOutlined fontSize="small" /> },
-      ...(user?.role === "ADMIN" || user?.role === "COORDENADOR"
+      ...(canAccess("knowledge") ? [{ label: "Base de Conhecimento", path: "/conhecimento", icon: <MenuBookOutlined fontSize="small" /> }] : []),
+      ...(canAccess("services")
         ? [{ label: "Dados e Sincronizações", path: "/importar", icon: <UploadFileOutlined fontSize="small" /> }]
         : []),
     ],
-    [user?.role],
+    [user?.role, user?.permissions],
   );
 
   /* =======================================================
@@ -675,7 +680,7 @@ export function Sidebar() {
             <ListItemText primary="Página inicial" slotProps={{ primary: { sx: { fontSize: ".76rem", fontWeight: 800 } } }} />
           </ListItemButton>
         </Box>
-        {(user?.role === "ADMIN" || user?.role === "COORDENADOR") && (
+        {(canAccess("services")) && (
           <Box sx={{ px: 1.1, mb: .75 }}>
             <ListItemButton component={NavLink} to="/coordenacao" sx={{ minHeight: 40, px: 1.3, borderRadius: 1.2, color: "rgba(255,255,255,.72)", "&:hover": { bgcolor: "rgba(24,199,122,.08)", color: "#fff" }, "&.active": { bgcolor: "rgba(24,199,122,.13)", color: "#fff" }, "&.active .MuiListItemIcon-root": { color: aliareColors.green } }}>
               <ListItemIcon sx={{ minWidth: 32, color: "rgba(255,255,255,.50)" }}><InsightsOutlined fontSize="small" /></ListItemIcon>
