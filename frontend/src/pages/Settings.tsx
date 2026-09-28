@@ -8,6 +8,7 @@ import {
   CircularProgress,
   Divider,
   Stack,
+  Switch,
   TextField,
   Typography,
 } from "@mui/material";
@@ -70,10 +71,20 @@ export function Settings() {
     useState<string | null>(null);
   const [sessions, setSessions] = useState<ActiveSession[]>([]);
   const [diagnostics, setDiagnostics] = useState<Diagnostics | null>(null);
+  const [startupEnabled, setStartupEnabled] = useState(false);
+  const [startupSaving, setStartupSaving] = useState(false);
 
   useEffect(() => {
     void loadConfiguration();
+    if (window.techLeadHub?.startup) void window.techLeadHub.startup.get().then((state) => setStartupEnabled(state.enabled)).catch(() => undefined);
   }, []);
+
+  async function changeStartup(enabled: boolean) {
+    if (!window.techLeadHub?.startup) return;
+    try { setStartupSaving(true); setError(null); const state=await window.techLeadHub.startup.set(enabled); setStartupEnabled(state.enabled); setSuccess(state.enabled ? "TechLead Hub será iniciado automaticamente com o Windows." : "Inicialização automática com o Windows desativada."); }
+    catch { setError("Não foi possível alterar a inicialização com o Windows."); }
+    finally { setStartupSaving(false); }
+  }
 
   async function loadConfiguration() {
     try {
@@ -244,6 +255,15 @@ export function Settings() {
             <Stack spacing={1}>{sessions.map((session) => <Box key={session.id} sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 2, p: 1.25, border: "1px solid", borderColor: "divider", borderRadius: 1.5 }}><Box sx={{ minWidth: 0 }}><Stack direction="row" spacing={1} sx={{ alignItems: "center", flexWrap: "wrap" }}><Typography sx={{ fontWeight: 800 }}>{session.user.name}</Typography><Chip size="small" label={session.clientType === "DESKTOP" ? "Desktop" : "Web"} /><Chip size="small" variant="outlined" label={session.appVersion || "Versão não informada"} /></Stack><Typography variant="caption" color="text.secondary">{session.deviceName || session.user.username} · atividade {new Date(session.lastActivityAt).toLocaleString("pt-BR")}</Typography></Box><Button size="small" color="error" onClick={() => void revokeSession(session.id)}>Encerrar</Button></Box>)}{!sessions.length && <Typography variant="body2" color="text.secondary">Nenhuma sessão ativa.</Typography>}</Stack>
           </CardContent>
         </Card>
+
+        {window.techLeadHub?.startup && <Card elevation={0} sx={{ border: "1px solid", borderColor: startupEnabled ? "rgba(24,199,122,.28)" : "divider", borderRadius: 2.5, background: startupEnabled ? "linear-gradient(120deg,rgba(24,199,122,.055),transparent)" : undefined }}>
+          <CardContent sx={{ p: { xs: 2, md: 2.5 } }}>
+            <Stack direction={{xs:"column",sm:"row"}} spacing={2} sx={{alignItems:{sm:"center"},justifyContent:"space-between"}}>
+              <Box><Typography sx={{fontWeight:850}}>Inicialização com o Windows</Typography><Typography variant="body2" color="text.secondary">Mantenha o TechLead Hub disponível desde o início da sessão para receber atualizações e avisos operacionais.</Typography></Box>
+              <Stack direction="row" spacing={1} sx={{alignItems:"center"}}><Chip size="small" color={startupEnabled?"success":"default"} variant="outlined" label={startupEnabled?"Automático":"Manual"}/><Switch checked={startupEnabled} disabled={startupSaving} onChange={(_,checked)=>void changeStartup(checked)} inputProps={{"aria-label":"Iniciar TechLead Hub com o Windows"}}/></Stack>
+            </Stack>
+          </CardContent>
+        </Card>}
 
         {window.techLeadHub && configuration?.runtime !== "web" && <Card
           elevation={0}
