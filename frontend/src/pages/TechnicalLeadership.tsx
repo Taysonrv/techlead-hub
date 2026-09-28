@@ -412,7 +412,7 @@ export function TechnicalLeadership() {
 
             {isLeadershipSeriesVisible("dailyFlow", "opened") && <Line type="monotone" dataKey="opened" name="Abertos" stroke={aliareColors.info} strokeWidth={2.4} dot={false} />}
             {isLeadershipSeriesVisible("dailyFlow", "resolved") && <Line type="monotone" dataKey="resolved" name="Resolvidos" stroke={aliareColors.green} strokeWidth={2.4} dot={false} />}
-            {isLeadershipSeriesVisible("dailyFlow", "reopened") && <Line type="monotone" dataKey="reopened" name="Reabertos" stroke={aliareColors.warning} strokeWidth={2} dot={false} />}
+            {isLeadershipSeriesVisible("dailyFlow", "reopened") && <Line type="monotone" dataKey="reopened" name="Reabertos" stroke={aliareColors.warning} strokeWidth={2.4} dot={false} />}
             {isLeadershipSeriesVisible("dailyFlow", "pending") && <Line type="monotone" dataKey="pending" name="Pendentes" stroke={aliareColors.purple} strokeWidth={2.4} dot={false} />}
           </LineChart></ResponsiveContainer></Box>
           <SeriesSelector chart="dailyFlow" items={[
