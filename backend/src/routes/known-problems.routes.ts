@@ -61,7 +61,7 @@ knownProblemRoutes.get("/sources", async (req: AuthenticatedRequest,res) => {
         ...(Number.isFinite(numeric)&&numeric>0?[{id:numeric},{movideskTicket:numeric}]:[]),
         {title:{contains:q,mode:"insensitive"}},{client:{contains:q,mode:"insensitive"}},{module:{contains:q,mode:"insensitive"}},{process:{contains:q,mode:"insensitive"}}
       ]},orderBy:{azureChangedAt:"desc"},take:12,
-      select:{id:true,workItemType:true,title:true,state:true,client:true,criticality:true,module:true,process:true,movideskTicket:true,deliveredVersion:true,registeredVersion:true,workaroundText:true,descriptionText:true}
+      select:{id:true,workItemType:true,title:true,state:true,client:true,criticality:true,module:true,process:true,movideskTicket:true,deliveredVersion:true,registeredVersion:true,workaround:true,description:true}
     });
     res.json({tickets,workItems});
   } catch(error){console.error("[known-problems] sources",error);res.status(500).json({error:"Não foi possível pesquisar tickets e tarefas."});}
