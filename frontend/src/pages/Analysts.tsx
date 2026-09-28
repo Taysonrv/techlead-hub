@@ -1778,19 +1778,7 @@ export function Analysts() {
             },
           }}
         >
-          <Stack
-            direction={{
-              xs: "column",
-              md: "row",
-            }}
-            spacing={1.5}
-            sx={{
-              alignItems: {
-                xs: "stretch",
-                md: "center",
-              },
-            }}
-          >
+          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "180px repeat(2, minmax(220px, 1fr)) auto" }, gap: 1.25, alignItems: "center" }}>
             <Box
               sx={{
                 minWidth: {
@@ -1832,9 +1820,7 @@ export function Analysts() {
                 },
               }}
             >
-              <InputLabel>
-                Squad
-              </InputLabel>
+              <InputLabel shrink>Squad</InputLabel>
 
               <Select
                 value={
@@ -1878,9 +1864,7 @@ export function Analysts() {
                 },
               }}
             >
-              <InputLabel>
-                Analista
-              </InputLabel>
+              <InputLabel shrink>Analista</InputLabel>
 
               <Select
                 value={
@@ -1934,7 +1918,7 @@ export function Analysts() {
                 Limpar filtros
               </Button>
             )}
-          </Stack>
+          </Box>
         </CardContent>
       </Card>
 
