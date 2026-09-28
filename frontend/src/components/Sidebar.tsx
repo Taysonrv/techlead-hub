@@ -315,7 +315,9 @@ export function Sidebar() {
       ...(user?.role === "ADMIN" || user?.role === "COORDENADOR"
         ? [{ label: "Serviços SIMER", path: "/servicos", icon: <FactCheckOutlined fontSize="small" /> }]
         : []),
-      { label: "Central de Liderança", path: "/lideranca-tecnica", icon: <RadarOutlined fontSize="small" /> },
+      ...(user?.role === "ADMIN" || user?.role === "COORDENADOR"
+        ? [{ label: "Central de Liderança", path: "/lideranca-tecnica", icon: <RadarOutlined fontSize="small" /> }]
+        : []),
     ],
     [user?.role],
   );
