@@ -2609,60 +2609,89 @@ function DonutAnalysisCard({
   return (
     <CardBase>
       <CardPeriodHeader title={title} subtitle={subtitle} value={period} onChange={onPeriodChange} />
-      <Box sx={{ height: 180, mt: .8, position: "relative" }}>
-        <ResponsiveContainer width="100%" height="100%">
-          <PieChart>
-            <Pie
-              data={chartData}
-              dataKey="total"
-              nameKey="label"
-              cx="50%"
-              cy="50%"
-              innerRadius={56}
-              outerRadius={80}
-              paddingAngle={2}
-              cornerRadius={4}
-              stroke={theme.palette.background.paper}
-              strokeWidth={1.5}
-              onClick={(_entry, index) => {
-                const item = chartData[index];
-                if (item) onItemClick?.(item.label);
-              }}
-              style={{ cursor: onItemClick ? "pointer" : "default" }}
-            >
-              {chartData.map((item) => {
-                const index = data.findIndex((row) => row.label === item.label);
-                return (
-                <Cell key={item.label} fill={colors[index % colors.length]} />
-              )})}
-            </Pie>
-            <Tooltip
-              contentStyle={{
-                borderRadius: 12,
-                border: `1px solid ${theme.palette.divider}`,
-                background: theme.palette.background.paper,
-                boxShadow: "0 14px 36px rgba(0,0,0,.18)",
-              }}
-              cursor={false}
-            />
-          </PieChart>
-        </ResponsiveContainer>
-        <Box sx={{ position: "absolute", inset: 0, display: "grid", placeContent: "center", pointerEvents: "none", textAlign: "center" }}>
-          <Typography sx={{ fontSize: "1.45rem", fontWeight: 900, lineHeight: 1 }}>{total}</Typography>
-          <Typography variant="caption" color="text.secondary">tickets</Typography>
+      <Box sx={{
+        display: "grid",
+        gridTemplateColumns: { xs: "1fr", sm: "minmax(220px, .88fr) minmax(240px, 1.12fr)" },
+        gap: { xs: 1, sm: 2 },
+        alignItems: "center",
+        mt: 1.25,
+        minHeight: { xs: 0, sm: 220 },
+      }}>
+        <Box sx={{ height: { xs: 210, sm: 220 }, minWidth: 0, position: "relative" }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie
+                data={chartData}
+                dataKey="total"
+                nameKey="label"
+                cx="50%"
+                cy="50%"
+                innerRadius={62}
+                outerRadius={92}
+                paddingAngle={2}
+                cornerRadius={5}
+                stroke={theme.palette.background.paper}
+                strokeWidth={1.5}
+                onClick={(_entry, index) => {
+                  const item = chartData[index];
+                  if (item) onItemClick?.(item.label);
+                }}
+                style={{ cursor: onItemClick ? "pointer" : "default" }}
+              >
+                {chartData.map((item) => {
+                  const index = data.findIndex((row) => row.label === item.label);
+                  return <Cell key={item.label} fill={colors[index % colors.length]} />;
+                })}
+              </Pie>
+              <Tooltip cursor={false} />
+            </PieChart>
+          </ResponsiveContainer>
+          <Box sx={{ position: "absolute", inset: 0, display: "grid", placeContent: "center", pointerEvents: "none", textAlign: "center" }}>
+            <Typography sx={{ fontSize: "1.55rem", fontWeight: 900, lineHeight: 1 }}>{total}</Typography>
+            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>tickets</Typography>
+          </Box>
+        </Box>
+
+        <Box sx={{
+          display: "grid",
+          gridTemplateColumns: { xs: "1fr", md: data.length > 4 ? "repeat(2, minmax(0, 1fr))" : "1fr" },
+          columnGap: 1.25,
+          rowGap: .45,
+          alignContent: "center",
+          minWidth: 0,
+        }}>
+          {data.map((item, index) => {
+            const active = !hiddenItems.has(item.label);
+            const percentage = total > 0 && active ? Math.round((item.total / total) * 100) : 0;
+            return (
+              <Box
+                key={item.label}
+                onClick={() => toggleItem(item.label)}
+                sx={{
+                  display: "grid",
+                  gridTemplateColumns: "10px minmax(0,1fr) auto",
+                  alignItems: "center",
+                  gap: .8,
+                  cursor: "pointer",
+                  px: .8,
+                  py: .65,
+                  borderRadius: 1.5,
+                  opacity: active ? 1 : .38,
+                  transition: "background-color .16s ease, opacity .16s ease",
+                  "&:hover": { bgcolor: "action.hover" },
+                }}
+              >
+                <Box sx={{ width: 8, height: 8, borderRadius: "50%", bgcolor: colors[index % colors.length], boxShadow: `0 0 8px ${colors[index % colors.length]}` }} />
+                <Typography variant="caption" noWrap title={item.label} sx={{ fontWeight: 650 }}>{item.label}</Typography>
+                <Stack direction="row" spacing={.7} sx={{ alignItems: "baseline" }}>
+                  <Typography variant="caption" sx={{ fontWeight: 900 }}>{item.total}</Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ minWidth: 28, textAlign: "right" }}>{percentage}%</Typography>
+                </Stack>
+              </Box>
+            );
+          })}
         </Box>
       </Box>
-      <Stack spacing={.55}>
-        {data.map((item, index) => {
-          const active = !hiddenItems.has(item.label);
-          return (
-          <Box key={item.label} onClick={() => toggleItem(item.label)} sx={{ display: "grid", gridTemplateColumns: "10px 1fr auto", alignItems: "center", gap: .8, cursor: "pointer", px: .6, py: .35, borderRadius: 1, opacity: active ? 1 : .4, textDecoration: active ? "none" : "line-through", transition: "all .2s ease", "&:hover": { bgcolor: "action.hover" } }}>
-            <Box sx={{ width: 8, height: 8, borderRadius: "50%", bgcolor: colors[index % colors.length], boxShadow: `0 0 10px ${colors[index % colors.length]}` }} />
-            <Typography variant="caption" noWrap>{item.label}</Typography>
-            <Typography variant="caption" sx={{ fontWeight: 850 }}>{item.total}</Typography>
-          </Box>
-        )})}
-      </Stack>
     </CardBase>
   );
 }
