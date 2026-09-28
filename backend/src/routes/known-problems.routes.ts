@@ -43,10 +43,42 @@ knownProblemRoutes.get("/", async (req: AuthenticatedRequest,res) => {
   } catch(error){console.error("[known-problems] list",error);res.status(500).json({error:"Não foi possível carregar os problemas conhecidos."});}
 });
 
+
+knownProblemRoutes.get("/sources", async (req: AuthenticatedRequest,res) => {
+  try {
+    const q=clean(req.query.q,120); if(q.length<2) return res.json({tickets:[],workItems:[]});
+    const numeric=Number(q.replace(/\D/g,""));
+    const tickets=await prisma.ticket.findMany({
+      where:{isDeleted:false,OR:[
+        ...(Number.isFinite(numeric)&&numeric>0?[{movideskId:numeric},{taskNumber:numeric}]:[]),
+        {subject:{contains:q,mode:"insensitive"}},{client:{contains:q,mode:"insensitive"}},
+        {serviceFirstLevel:{contains:q,mode:"insensitive"}},{serviceSecondLevel:{contains:q,mode:"insensitive"}},{serviceThirdLevel:{contains:q,mode:"insensitive"}}
+      ]},orderBy:{lastUpdate:"desc"},take:12,
+      select:{movideskId:true,subject:true,client:true,category:true,cause:true,serviceFirstLevel:true,serviceSecondLevel:true,serviceThirdLevel:true,taskNumber:true,taskType:true,registeredVersion:true,deliveredVersion:true}
+    });
+    const workItems=await prisma.azureWorkItem.findMany({
+      where:{OR:[
+        ...(Number.isFinite(numeric)&&numeric>0?[{id:numeric},{movideskTicket:numeric}]:[]),
+        {title:{contains:q,mode:"insensitive"}},{client:{contains:q,mode:"insensitive"}},{module:{contains:q,mode:"insensitive"}},{process:{contains:q,mode:"insensitive"}}
+      ]},orderBy:{azureChangedAt:"desc"},take:12,
+      select:{id:true,workItemType:true,title:true,state:true,client:true,criticality:true,module:true,process:true,movideskTicket:true,deliveredVersion:true,registeredVersion:true,workaroundText:true,descriptionText:true}
+    });
+    res.json({tickets,workItems});
+  } catch(error){console.error("[known-problems] sources",error);res.status(500).json({error:"Não foi possível pesquisar tickets e tarefas."});}
+});
+
 knownProblemRoutes.post("/", async (req: AuthenticatedRequest,res) => {
   try {
     const title=clean(req.body?.title,220), symptom=clean(req.body?.symptom), solution=clean(req.body?.solution,8000);
     if(!title||!symptom||!solution) return res.status(400).json({error:"Título, sintoma e solução são obrigatórios."});
+    const duplicate=await prisma.$queryRawUnsafe<any[]>(`
+      SELECT "id","title" FROM "KnownProblem" WHERE "archived"=FALSE AND (
+        ($1::text IS NOT NULL AND "movideskTicket"=$1) OR
+        ($2::text IS NOT NULL AND "azureWorkItem"=$2) OR
+        (LOWER(TRIM("title"))=LOWER(TRIM($3)) AND COALESCE(LOWER(TRIM("service")),'')=COALESCE(LOWER(TRIM($4)),''))
+      ) LIMIT 1
+    `,optional(req.body?.movideskTicket,80),optional(req.body?.azureWorkItem,120),title,optional(req.body?.service,500));
+    if(duplicate.length) return res.status(409).json({error:`Já existe uma publicação semelhante (#${duplicate[0].id} · ${duplicate[0].title}). Atualize o cadastro existente em vez de duplicá-lo.`});
     const status=allowedStatus.has(req.body?.status)?req.body.status:"ATIVO";
     const severity=allowedSeverity.has(req.body?.severity)?req.body.severity:"MEDIA";
     const rows=await prisma.$queryRawUnsafe<any[]>(`
