@@ -80,6 +80,7 @@ function AuthenticatedLayout({
   children: ReactNode;
 }) {
   const [backendUnavailable, setBackendUnavailable] = useState(false);
+  const [forbiddenMessage, setForbiddenMessage] = useState<string | null>(null);
   const location = useLocation();
   const isChat = location.pathname === "/chat";
   const isMap = location.pathname === "/mapa-simer";
@@ -87,11 +88,18 @@ function AuthenticatedLayout({
   useEffect(() => {
     const unavailable = () => setBackendUnavailable(true);
     const available = () => setBackendUnavailable(false);
+    const forbidden = (event: Event) => {
+      const detail = (event as CustomEvent<{ message?: string }>).detail;
+      setForbiddenMessage(detail?.message || "Você não possui permissão para acessar esta rotina. Procure um administrador para solicitar a liberação do acesso.");
+      window.setTimeout(() => setForbiddenMessage(null), 7000);
+    };
     window.addEventListener("techlead-hub:backend-unavailable", unavailable);
     window.addEventListener("techlead-hub:backend-available", available);
+    window.addEventListener("techlead-hub:forbidden", forbidden);
     return () => {
       window.removeEventListener("techlead-hub:backend-unavailable", unavailable);
       window.removeEventListener("techlead-hub:backend-available", available);
+      window.removeEventListener("techlead-hub:forbidden", forbidden);
     };
   }, []);
   return (
@@ -137,6 +145,7 @@ function AuthenticatedLayout({
             }}
           >
 {!isChat && <Box sx={{ px: { xs: 1.5, sm: 2, md: 2.5, lg: 3, xl: 4 } }}><GlobalTopBar /></Box>}
+            {forbiddenMessage && <Alert severity="warning" sx={{ mx: { xs: 1.5, sm: 2, md: 2.5, lg: 3, xl: 4 }, mb: 2, borderRadius: 2.5 }} onClose={() => setForbiddenMessage(null)}>{forbiddenMessage}</Alert>}
             {backendUnavailable && <Alert severity="warning" sx={{ mx: { xs: 1.5, sm: 2, md: 2.5, lg: 3, xl: 4 }, mb: 2 }}>O servidor central está temporariamente indisponível. Verifique a conexão e tente novamente; seus dados locais de navegação foram preservados.</Alert>}
             <Box
               className="techlead-page-surface futuristic-page"
