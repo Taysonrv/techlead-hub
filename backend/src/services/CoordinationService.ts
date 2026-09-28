@@ -180,7 +180,7 @@ export class CoordinationService {
   async serviceIntelligence(filters: { client?: string; analyst?: string; months?: number } = {}) {
     const months = Math.min(Math.max(filters.months ?? 6, 3), 12);
     const cacheKey = `services:${months}:${filters.client?.toLocaleLowerCase("pt-BR") ?? ""}:${filters.analyst?.toLocaleLowerCase("pt-BR") ?? ""}`;
-    const cached = cacheGet<Awaited<ReturnType<CoordinationService["serviceIntelligence"]>>>(cacheKey);
+    const cached = cacheGet<any>(cacheKey);
     if (cached) return cached;
     const since = new Date();
     since.setMonth(since.getMonth() - months + 1);
