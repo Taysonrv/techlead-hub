@@ -7,6 +7,21 @@ import { extractMovideskTimeEntries } from "./MovideskPayloadAnalytics";
 import { coordinationAzurePriorityPredicate, coordinationOpenAzurePredicate, coordinationOpenTicketPredicate, coordinationTicketPriorityPredicate, type CoordinationPriorityKind } from "../domain/CoordinationPredicates";
 import { productivityExpectedHours, sameOperationalPerson } from "../domain/ProductivityRules";
 
+type CoordinationCacheEntry = { expiresAt: number; value: unknown };
+const coordinationCache = new Map<string, CoordinationCacheEntry>();
+const cacheGet = <T>(key: string): T | null => {
+  const entry = coordinationCache.get(key);
+  if (!entry) return null;
+  if (entry.expiresAt <= Date.now()) { coordinationCache.delete(key); return null; }
+  return entry.value as T;
+};
+const cacheSet = <T>(key: string, value: T, ttlMs = 45_000): T => {
+  coordinationCache.set(key, { value, expiresAt: Date.now() + ttlMs });
+  if (coordinationCache.size > 40) {
+    for (const [cacheKey, entry] of coordinationCache) if (entry.expiresAt <= Date.now()) coordinationCache.delete(cacheKey);
+  }
+  return value;
+};
 
 export class CoordinationService {
   async details(kind: string, analyst?: string, limit = 50, serviceModule?: string, serviceClient?: string, serviceName?: string, serviceDays = 0) {
@@ -164,6 +179,9 @@ export class CoordinationService {
 
   async serviceIntelligence(filters: { client?: string; analyst?: string; months?: number } = {}) {
     const months = Math.min(Math.max(filters.months ?? 6, 3), 12);
+    const cacheKey = `services:${months}:${filters.client?.toLocaleLowerCase("pt-BR") ?? ""}:${filters.analyst?.toLocaleLowerCase("pt-BR") ?? ""}`;
+    const cached = cacheGet<Awaited<ReturnType<CoordinationService["serviceIntelligence"]>>>(cacheKey);
+    if (cached) return cached;
     const since = new Date();
     since.setMonth(since.getMonth() - months + 1);
     since.setDate(1); since.setHours(0, 0, 0, 0);
@@ -258,7 +276,7 @@ export class CoordinationService {
     const previousRate = previousTotal ? Math.round((previousSpecific / previousTotal) * 100) : 0;
     const currentRate = tickets.length ? Math.round((specific / tickets.length) * 100) : 0;
     const classificationDelta = currentRate - previousRate;
-    return {
+    return cacheSet(cacheKey, {
       periodMonths: months, total: tickets.length, specific, generic: genericCount, withoutService, suspected,
       classificationRate: currentRate,
       catalogSize: catalog.length,
@@ -269,10 +287,13 @@ export class CoordinationService {
         clients: [...new Set(tickets.map((t) => t.client).filter((v): v is string => Boolean(v)))].sort((a,b) => a.localeCompare(b,"pt-BR")),
         analysts: [...SUPPORT_ANALYSTS],
       },
-    };
+    }, 60_000);
   }
 
   async productivityCapacity(days = 28) {
+    const cacheKey = `capacity:${Math.min(Math.max(days, 7), 90)}`;
+    const cached = cacheGet<any>(cacheKey);
+    if (cached) return cached;
     const now = new Date();
     const start = new Date(now.getTime() - (Math.min(Math.max(days, 7), 90) - 1) * 86400000);
     start.setHours(0, 0, 0, 0);
@@ -292,10 +313,13 @@ export class CoordinationService {
     });
     const expectedHours = analysts.reduce((sum,row)=>sum+row.expectedHours,0);
     const registeredHours = Number(analysts.reduce((sum,row)=>sum+row.registeredHours,0).toFixed(2));
-    return { days, businessDays, hoursPerDay, expectedHours, registeredHours, coverageRate: expectedHours ? Number((registeredHours/expectedHours*100).toFixed(1)) : null, analysts };
+    return cacheSet(cacheKey, { days, businessDays, hoursPerDay, expectedHours, registeredHours, coverageRate: expectedHours ? Number((registeredHours/expectedHours*100).toFixed(1)) : null, analysts }, 60_000);
   }
 
   async summary(_userId: number, serviceDays = 0) {
+    const cacheKey = `summary:${serviceDays}`;
+    const cached = cacheGet<any>(cacheKey);
+    if (cached) return cached;
     const now = new Date();
     const ticketScope = coordinationTicketScope();
     const serviceSince = serviceDays > 0 ? new Date(now.getTime() - Math.min(serviceDays, 730) * 86400000) : null;
