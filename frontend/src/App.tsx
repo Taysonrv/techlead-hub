@@ -255,7 +255,22 @@ function RoutineAccess({ permission, children }: { permission: string; children:
   const allowed = Array.isArray(user.permissions)
     ? user.permissions.includes(permission)
     : user.role === "COORDENADOR" || DEFAULT_ANALYST_PERMISSIONS.includes(permission);
-  return allowed ? children : <Navigate to="/" replace />;
+  if (allowed) return children;
+  return (
+    <Box sx={{ minHeight: "100vh", display: "grid", placeItems: "center", p: 3, bgcolor: "background.default" }}>
+      <Box sx={{ width: "100%", maxWidth: 560 }}>
+        <Alert severity="warning" variant="outlined" sx={{ borderRadius: 3, alignItems: "flex-start" }}>
+          <Typography sx={{ fontWeight: 850, mb: .5 }}>Acesso não autorizado</Typography>
+          <Typography variant="body2">
+            Você não possui permissão para acessar esta rotina. Procure um administrador para solicitar a liberação do acesso.
+          </Typography>
+        </Alert>
+        <Box sx={{ mt: 2 }}>
+          <a href="/" style={{ color: "inherit", fontWeight: 700 }}>Voltar para o início</a>
+        </Box>
+      </Box>
+    </Box>
+  );
 }
 
 function AdminOnly({
