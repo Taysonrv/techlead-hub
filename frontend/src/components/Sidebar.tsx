@@ -310,7 +310,7 @@ export function Sidebar() {
       ...(canAccess("attention") ? [{ label: "Pontos de Atenção", path: "/atencao", icon: <WarningAmberOutlined fontSize="small" /> }] : []),
       ...(canAccess("data-quality") ? [{ label: "Pendências", path: "/qualidade-dados", icon: <FactCheckOutlined fontSize="small" /> }] : []),
     ],
-    [],
+    [user?.role, user?.permissions],
   );
 
   const analysisMenu = useMemo<MenuItemData[]>(
@@ -322,7 +322,7 @@ export function Sidebar() {
       ...(canAccess("services")
         ? [{ label: "Serviços SIMER", path: "/servicos", icon: <FactCheckOutlined fontSize="small" /> }]
         : []),
-      ...(canAccess("services")
+      ...(canAccess("technical-leadership")
         ? [{ label: "Central de Liderança", path: "/lideranca-tecnica", icon: <RadarOutlined fontSize="small" /> }]
         : []),
     ],
@@ -336,13 +336,13 @@ export function Sidebar() {
       ...(canAccess("support") ? [{ label: "Apoios", path: "/apoios", icon: <SupportAgentOutlined fontSize="small" /> }] : []),
       ...(canAccess("versions") ? [{ label: "Versões", path: "/versoes", icon: <Inventory2Outlined fontSize="small" /> }] : []),
     ],
-    [],
+    [user?.role, user?.permissions],
   );
 
   const managementMenu = useMemo<MenuItemData[]>(
     () => [
       ...(canAccess("knowledge") ? [{ label: "Base de Conhecimento", path: "/conhecimento", icon: <MenuBookOutlined fontSize="small" /> }] : []),
-      ...(canAccess("services")
+      ...(canAccess("imports")
         ? [{ label: "Dados e Sincronizações", path: "/importar", icon: <UploadFileOutlined fontSize="small" /> }]
         : []),
     ],
@@ -680,7 +680,7 @@ export function Sidebar() {
             <ListItemText primary="Página inicial" slotProps={{ primary: { sx: { fontSize: ".76rem", fontWeight: 800 } } }} />
           </ListItemButton>
         </Box>
-        {(canAccess("services")) && (
+        {canAccess("coordination") && (
           <Box sx={{ px: 1.1, mb: .75 }}>
             <ListItemButton component={NavLink} to="/coordenacao" sx={{ minHeight: 40, px: 1.3, borderRadius: 1.2, color: "rgba(255,255,255,.72)", "&:hover": { bgcolor: "rgba(24,199,122,.08)", color: "#fff" }, "&.active": { bgcolor: "rgba(24,199,122,.13)", color: "#fff" }, "&.active .MuiListItemIcon-root": { color: aliareColors.green } }}>
               <ListItemIcon sx={{ minWidth: 32, color: "rgba(255,255,255,.50)" }}><InsightsOutlined fontSize="small" /></ListItemIcon>
