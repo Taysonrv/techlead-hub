@@ -1,5 +1,34 @@
 # Changelog
 
+## 1.0.0-rc.16 — 2026-09-28
+
+### Inteligência colaborativa
+- Nova central de Problemas Conhecidos para compartilhamento operacional entre os analistas.
+- Cadastro e edição com criticidade, status, cliente, serviço/rotina, versão, causa, solução, paliativo, tags e comentário interno.
+- Busca contextual de Tickets Movidesk e Work Items Azure por múltiplos termos, sem exigir correspondência exata.
+- Preenchimento assistido a partir de Ticket, Correção, Evolução ou APOIO e proteção contra cadastros duplicados.
+- Navegação direta dos cards para o Ticket ou Work Item relacionado.
+
+### Notificações e Desktop
+- Preferências individuais de notificações e avisos operacionais no aplicativo.
+- Indicador de notificações não visualizadas e notificações transitórias no canto inferior direito.
+- Opção de iniciar automaticamente o TechLead Hub com o Windows.
+- Correção do flicker dos controles de perfil, chat, calendário e notificações durante a rolagem.
+
+### Análises e interface
+- Mapa SIMER reorganizado dentro de Análises.
+- Nova análise de demanda por categoria × serviço para identificar concentração de Bugs e demandas recorrentes.
+- Refinamento visual global dos gráficos, com maior nitidez, proporção, legendas, tooltips e consistência entre temas.
+- Padronizações adicionais de filtros, cards e navegação.
+
+### Qualidade e integração
+- Persistência idempotente dos novos dados de Problemas Conhecidos.
+- Sincronização enriquecida com dados operacionais do Azure, evitando importar a descrição geral extensa da tarefa.
+- Validação de duplicidade também durante a edição.
+- Ajustes de compatibilidade do Desktop e inicialização automática restrita ao Windows.
+
+> Release Candidate: publicar no canal beta após validação automatizada do workflow de release.
+
 ## 1.0.0-rc.9 — 2026-09-20
 
 ### Interface e experiência

@@ -11,6 +11,8 @@ import {
   Stack,
   Switch,
   Typography,
+  Snackbar,
+  Alert,
 } from "@mui/material";
 
 import {
@@ -55,7 +57,8 @@ type NotificationKind =
   | "AZURE_COMPLETED"
   | "AZURE_UPDATED"
   | "CHAT_MENTION"
-  | "OPERATION_ALERT";
+  | "OPERATION_ALERT"
+  | "KNOWN_PROBLEM";
 
 type HubNotification = {
   key: string;
@@ -97,6 +100,7 @@ type DesktopUpdateState = {
 export function NotificationCenter() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const [toast, setToast] = useState<HubNotification | null>(null);
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const [loading, setLoading] = useState(false);
   const [items, setItems] = useState<HubNotification[]>([]);
@@ -107,6 +111,13 @@ export function NotificationCenter() {
   const alertedKeys = useRef(new Set<string>());
 
   const storageKey = `techlead-hub:notifications:read:${user?.id ?? "anonymous"}`;
+
+  useEffect(() => {
+    const syncPreferences = () => setLocalPreferences(getLocalNotificationPreferences());
+    window.addEventListener("techlead-hub:notification-preferences", syncPreferences);
+    window.addEventListener("storage", syncPreferences);
+    return () => { window.removeEventListener("techlead-hub:notification-preferences", syncPreferences); window.removeEventListener("storage", syncPreferences); };
+  }, []);
 
   useEffect(() => {
     try {
@@ -170,7 +181,7 @@ export function NotificationCenter() {
 
   useEffect(() => {
     void load();
-    const timer = window.setInterval(() => void load(), 60_000);
+    const timer = window.setInterval(() => void load(), 15_000);
     return () => window.clearInterval(timer);
   }, [load]);
 
@@ -182,7 +193,7 @@ export function NotificationCenter() {
     return updates.onStateChange(addDesktopUpdate);
   }, [addDesktopUpdate]);
 
-  const enabledForKind = useCallback((kind: NotificationKind) => kind === "CHAT_MENTION" ? localPreferences.chat : kind === "OPERATION_ALERT" ? localPreferences.operation : kind === "APP_VERSION" ? localPreferences.appVersion : kind === "SIMER_VERSION" ? localPreferences.simerVersion : kind === "AZURE_COMPLETED" ? localPreferences.azureCompleted : localPreferences.azureUpdated, [localPreferences]);
+  const enabledForKind = useCallback((kind: NotificationKind) => kind === "CHAT_MENTION" ? localPreferences.chat : (kind === "OPERATION_ALERT" || kind === "KNOWN_PROBLEM") ? localPreferences.operation : kind === "APP_VERSION" ? localPreferences.appVersion : kind === "SIMER_VERSION" ? localPreferences.simerVersion : kind === "AZURE_COMPLETED" ? localPreferences.azureCompleted : localPreferences.azureUpdated, [localPreferences]);
   const unread = useMemo(
     () => items.filter((item) => enabledForKind(item.kind) && !readKeys.includes(item.key)),
     [items, readKeys, enabledForKind],
@@ -194,6 +205,7 @@ export function NotificationCenter() {
     const age = Date.now() - new Date(newest.occurredAt).getTime();
     if (age >= 10 * 60_000) return;
     alertedKeys.current.add(newest.key);
+    setToast(newest);
     playNotificationSound(newest.kind === "CHAT_MENTION" ? "chat" : "system");
     if (preferences.desktopAlerts && "Notification" in window && Notification.permission === "granted") {
       const alert = new Notification(newest.title, { body: newest.message });
@@ -310,7 +322,7 @@ export function NotificationCenter() {
               ? OpenInNewOutlined
               : item.kind === "CHAT_MENTION"
                 ? AlternateEmailOutlined
-                : item.kind === "OPERATION_ALERT"
+                : (item.kind === "OPERATION_ALERT" || item.kind === "KNOWN_PROBLEM")
                   ? WarningAmberOutlined
               : item.kind === "AZURE_COMPLETED"
                 ? CheckCircleOutlined
@@ -329,7 +341,7 @@ export function NotificationCenter() {
                 backgroundColor: isUnread ? "rgba(24,199,122,0.07)" : "transparent",
               }}
             >
-              <Icon sx={{ mt: 0.2, color: item.kind === "OPERATION_ALERT" ? "warning.main" : isUnread ? aliareColors.green : "text.secondary" }} />
+              <Icon sx={{ mt: 0.2, color: (item.kind === "OPERATION_ALERT" || item.kind === "KNOWN_PROBLEM") ? "warning.main" : isUnread ? aliareColors.green : "text.secondary" }} />
               <Box sx={{ minWidth: 0, flex: 1 }}>
                 <Typography sx={{ fontSize: "0.82rem", fontWeight: isUnread ? 800 : 650 }}>
                   {item.title}
@@ -384,6 +396,12 @@ export function NotificationCenter() {
           </Stack>
         )}
       </Menu>
+      <Snackbar open={Boolean(toast)} autoHideDuration={6500} onClose={()=>setToast(null)} anchorOrigin={{vertical:"bottom",horizontal:"right"}}>
+        <Alert severity="info" variant="filled" onClose={()=>setToast(null)} onClick={()=>{if(toast){const item=toast;setToast(null);openNotification(item)}}} sx={{cursor:"pointer",minWidth:{sm:360},boxShadow:"0 16px 42px rgba(0,0,0,.28)"}}>
+          <Typography sx={{fontWeight:850,fontSize:".82rem"}}>{toast?.title}</Typography>
+          <Typography sx={{fontSize:".76rem",opacity:.92}}>{toast?.message}</Typography>
+        </Alert>
+      </Snackbar>
     </>
   );
 }

@@ -2141,9 +2141,12 @@ export function Clients() {
                       nameKey="name"
                       cx="50%"
                       cy="50%"
-                      outerRadius={78}
-                      innerRadius={46}
+                      outerRadius={92}
+                      innerRadius={62}
                       paddingAngle={2}
+                      cornerRadius={5}
+                      stroke={theme.palette.background.paper}
+                      strokeWidth={1.5}
                       cursor="pointer"
                       onClick={(data) => {
                         const name =
@@ -2260,7 +2263,7 @@ export function Clients() {
               <Box sx={{ height: 235, minWidth: 0 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
-                    <Pie data={categoryChartData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={76} innerRadius={44} paddingAngle={2} cursor="pointer"
+                    <Pie data={categoryChartData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={90} innerRadius={60} paddingAngle={2} cornerRadius={5} stroke={theme.palette.background.paper} strokeWidth={1.5} cursor="pointer"
                       onClick={(data) => {
                         const name = String((data as { payload?: { name?: unknown } }).payload?.name ?? "");
                         if (name && name !== "Outros") showTickets(`Categoria: ${name}`, scopedTickets.filter((ticket) => (ticket.category?.trim() || "Sem categoria") === name));
@@ -2321,9 +2324,12 @@ export function Clients() {
                       nameKey="name"
                       cx="50%"
                       cy="50%"
-                      outerRadius={78}
-                      innerRadius={46}
+                      outerRadius={92}
+                      innerRadius={62}
                       paddingAngle={2}
+                      cornerRadius={5}
+                      stroke={theme.palette.background.paper}
+                      strokeWidth={1.5}
                       cursor="pointer"
                       onClick={(data) => {
                         const name =
@@ -2462,22 +2468,31 @@ export function Clients() {
       </Box>
 
       <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "1.35fr .65fr" }, gap: 2, mb: 2 }}>
-        <ChartCard title="Volume por Responsável" subtitle="Distribuição da demanda entre os analistas no recorte">
+        <ChartCard title="Volume por Responsável" subtitle="Distribuição da demanda entre os analistas no recorte · clique para investigar">
           {ownerChartData.length ? (
-            <Box sx={{ height: 290, mt: 1 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={ownerChartData} layout="vertical" margin={{ top: 8, right: 24, bottom: 8, left: 18 }}>
-                  <CartesianGrid strokeDasharray="4 6" horizontal={false} stroke={theme.palette.divider} opacity={0.55} />
-                  <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11, fill: theme.palette.text.secondary }} axisLine={false} tickLine={false} />
-                  <YAxis type="category" dataKey="name" width={135} tick={{ fontSize: 11, fill: theme.palette.text.secondary }} axisLine={false} tickLine={false} tickFormatter={(value) => abbreviate(String(value), 20)} />
-                  <Tooltip contentStyle={{ borderRadius: 12, border: `1px solid ${theme.palette.divider}`, background: theme.palette.background.paper, boxShadow: "0 12px 32px rgba(0,0,0,.16)" }} cursor={{ fill: theme.palette.action.hover }} />
-                  <Bar dataKey="value" name="Tickets" fill={aliareColors.green} radius={[0, 6, 6, 0]} cursor="pointer"
-                    onClick={(data) => {
-                      const name = String((data as { name?: unknown }).name ?? "");
-                      if (name && name !== "Outros") showTickets(`Responsável: ${name}`, scopedTickets.filter((ticket) => (ticket.owner?.trim() || "Sem responsável") === name));
-                    }} />
-                </BarChart>
-              </ResponsiveContainer>
+            <Box sx={{ mt: 1 }}>
+              <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap", mb: 1.25 }}>
+                <Chip size="small" variant="outlined" label={`${ownerChartData.length} responsável(is)`} />
+                <Chip size="small" variant="outlined" label={`${ownerChartData.reduce((sum, item) => sum + Number(item.value || 0), 0)} tickets distribuídos`} />
+                <Chip size="small" variant="outlined" label={`Maior carteira: ${ownerChartData[0]?.name ?? "—"} · ${ownerChartData[0]?.value ?? 0}`} />
+              </Stack>
+              <Box sx={{ height: Math.max(250, Math.min(390, ownerChartData.length * 43 + 52)) }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={ownerChartData} layout="vertical" barCategoryGap="28%" margin={{ top: 6, right: 54, bottom: 4, left: 8 }}>
+                    <CartesianGrid strokeDasharray="4 6" horizontal={false} stroke={theme.palette.divider} opacity={0.4} />
+                    <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11, fill: theme.palette.text.secondary }} axisLine={false} tickLine={false} />
+                    <YAxis type="category" dataKey="name" width={185} tick={{ fontSize: 11, fill: theme.palette.text.secondary }} axisLine={false} tickLine={false} tickFormatter={(value) => abbreviate(String(value), 27)} />
+                    <Tooltip formatter={(value) => [`${Number(value)} ticket(s)`, "Volume"]} labelFormatter={(label) => `Responsável: ${label}`} contentStyle={{ borderRadius: 12, border: `1px solid ${theme.palette.divider}`, background: theme.palette.background.paper, color: theme.palette.text.primary, boxShadow: "0 12px 32px rgba(0,0,0,.16)" }} labelStyle={{ color: theme.palette.text.primary, fontWeight: 800 }} cursor={{ fill: theme.palette.action.hover }} />
+                    <Bar dataKey="value" name="Tickets" fill={aliareColors.green} radius={[0, 7, 7, 0]} maxBarSize={28} cursor="pointer"
+                      label={{ position: "right", fill: theme.palette.text.secondary, fontSize: 11, fontWeight: 800 }}
+                      onClick={(data) => {
+                        const name = String((data as { name?: unknown }).name ?? "");
+                        if (name && name !== "Outros") showTickets(`Responsável: ${name}`, scopedTickets.filter((ticket) => (ticket.owner?.trim() || "Sem responsável") === name));
+                      }} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </Box>
+              <Typography variant="caption" color="text.secondary">Ordenado por volume no período. O número ao final de cada barra representa a quantidade de tickets da carteira do responsável.</Typography>
             </Box>
           ) : <EmptyChart />}
         </ChartCard>

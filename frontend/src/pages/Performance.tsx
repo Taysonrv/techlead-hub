@@ -95,6 +95,7 @@ type Ticket = {
   closedDate: string | null;
   lifetimeMinutes: number | null;
   stoppedMinutes: number | null;
+  stoppedWorkingMinutes?: number | null;
   taskNumber: number | null;
   taskStatus: string | null;
   deliveredVersion: string | null;
@@ -233,6 +234,7 @@ export function Performance() {
         resolvedDate: ticket.resolvedDate,
         closedDate: ticket.closedDate,
         stoppedMinutes: ticket.stoppedMinutes,
+        stoppedWorkingMinutes: ticket.stoppedWorkingMinutes,
         // Até o perfil VIP existir no banco, usamos STANDARD.
         profile: "STANDARD",
       }),
@@ -1595,7 +1597,9 @@ function DonutCard({
                   innerRadius={62}
                   outerRadius={88}
                   paddingAngle={2}
-                  stroke="none"
+                  cornerRadius={5}
+                  stroke={theme.palette.background.paper}
+                  strokeWidth={1.5}
                   cursor={onSliceClick ? "pointer" : "default"}
                   onClick={(entry) => {
                     const candidate = entry as {
@@ -1828,6 +1832,7 @@ function getDeadlineBucketFromTicket(ticket: Ticket): DeadlineBucket {
     resolvedDate: ticket.resolvedDate,
     closedDate: ticket.closedDate,
     stoppedMinutes: ticket.stoppedMinutes,
+    stoppedWorkingMinutes: ticket.stoppedWorkingMinutes,
     profile: "STANDARD",
   });
 
@@ -1896,6 +1901,7 @@ function formatRemainingTime(ticket: Ticket) {
     resolvedDate: ticket.resolvedDate,
     closedDate: ticket.closedDate,
     stoppedMinutes: ticket.stoppedMinutes,
+    stoppedWorkingMinutes: ticket.stoppedWorkingMinutes,
     profile: "STANDARD",
   });
 

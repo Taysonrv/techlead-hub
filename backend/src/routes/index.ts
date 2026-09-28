@@ -59,6 +59,7 @@ import { movideskRoutes } from "./movidesk.routes";
 import { chatRoutes } from "./chat.routes";
 import { coordinationRoutes } from "./coordination.routes";
 import { simerMapRoutes } from "./simer-map.routes";
+import { knownProblemRoutes } from "./known-problems.routes";
 
 /* =========================================================
    ROUTER
@@ -114,6 +115,7 @@ routes.use("/api/sessions", sessionRoutes);
 routes.use("/api/chat", chatRoutes);
 routes.use("/api/coordination", coordinationRoutes);
 routes.use("/api/simer-map", simerMapRoutes);
+routes.use("/api/known-problems", knownProblemRoutes);
 
 /* =========================================================
    ADMINISTRAÇÃO DE USUÁRIOS

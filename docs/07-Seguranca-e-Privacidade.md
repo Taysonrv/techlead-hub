@@ -18,7 +18,7 @@
 1. Não enviar dados de clientes, credenciais ou documentos fiscais em canais não autorizados.
 2. Não registrar payloads completos em logs de aplicação.
 3. Usar segredos do orquestrador para `JWT_SECRET`, `SYSTEM_CONFIG_KEY` e `DATABASE_URL`.
-4. Conceder permissões Microsoft Graph por menor privilégio e revisar consentimentos trimestralmente.
+4. PATs e credenciais do Azure DevOps devem seguir menor privilégio, armazenamento criptografado e rotação conforme política corporativa.
 5. Revogar imediatamente sessões e credenciais após desligamento ou suspeita de incidente.
 6. Aplicar retenção ao chat e à auditoria conforme política corporativa e LGPD.
 

@@ -15,13 +15,14 @@ Centralizar a operação de suporte e sustentação SIMER, correlacionando atend
 1. Autenticar usuários aprovados e ativos.
 2. Manter somente uma sessão operacional por usuário entre Web e Desktop.
 3. Importar e sincronizar dados Movidesk e Azure DevOps com histórico auditável.
-4. Apresentar dashboards, SLA, clientes, analistas, versões e pontos de atenção.
+4. Apresentar dashboards, SLA/OLA, clientes, analistas, versões e pontos de atenção.
 5. Oferecer chat interno com canais, membros, histórico e vínculos contextuais.
 6. Bloquear envio de padrões reconhecíveis de credenciais no chat.
 7. Disponibilizar Central de Coordenação apenas para Administrador e Coordenador.
-8. Integrar Microsoft 365 por consentimento delegado e escopos mínimos.
-9. Preservar segredos criptografados e nunca devolvê-los pela API.
-10. Produzir relatórios e manter trilha de auditoria das operações críticas.
+8. Consultar conhecimento operacional publicado na Wiki Azure DevOps.
+9. Correlacionar Mapa SIMER e Regras do Sistema/BPMN na Central de Investigação sem concluir causalidade automaticamente.
+10. Preservar segredos criptografados e nunca devolvê-los pela API.
+11. Produzir relatórios e manter trilha de auditoria das operações críticas.
 
 ## Requisitos não funcionais
 

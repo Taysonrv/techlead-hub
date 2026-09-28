@@ -98,6 +98,11 @@ const techLeadHubApi = {
       ipcRenderer.invoke("configuration:save", input),
   },
 
+  startup: {
+    get: async (): Promise<{ enabled: boolean }> => ipcRenderer.invoke("startup:get"),
+    set: async (enabled: boolean): Promise<{ enabled: boolean }> => ipcRenderer.invoke("startup:set", enabled),
+  },
+
   /* =======================================================
      ATUALIZAÇÕES
   ======================================================= */

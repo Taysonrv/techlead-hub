@@ -6,10 +6,6 @@ const SETTING_ENV = {
   project: "AZURE_DEVOPS_PROJECT",
   wiki: "AZURE_DEVOPS_WIKI",
   pat: "AZURE_DEVOPS_PAT",
-  tenantId: "MICROSOFT_TENANT_ID",
-  clientId: "MICROSOFT_CLIENT_ID",
-  sharePointSiteUrl: "SHAREPOINT_SITE_URL",
-  bpmnSiteUrl: "SHAREPOINT_BPMN_SITE_URL",
 } as const;
 
 export type SystemConfigurationInput = Partial<Record<keyof typeof SETTING_ENV, string>>;
@@ -56,11 +52,6 @@ class SystemConfigurationService {
       project: process.env.AZURE_DEVOPS_PROJECT ?? "",
       wiki: process.env.AZURE_DEVOPS_WIKI ?? "",
       patConfigured: Boolean(process.env.AZURE_DEVOPS_PAT),
-      tenantId: process.env.MICROSOFT_TENANT_ID ?? "",
-      clientId: process.env.MICROSOFT_CLIENT_ID ?? "",
-      sharePointSiteUrl: process.env.SHAREPOINT_SITE_URL ?? "",
-      bpmnSiteUrl: process.env.SHAREPOINT_BPMN_SITE_URL ?? "",
-      microsoftConfigured: Boolean(process.env.MICROSOFT_TENANT_ID && process.env.MICROSOFT_CLIENT_ID),
       runtime: process.env.APP_RUNTIME?.trim() || "desktop",
     };
   }

@@ -4,7 +4,7 @@ import {
 
 export type AppNotification = {
   key: string;
-  kind: "SIMER_VERSION" | "AZURE_COMPLETED" | "AZURE_UPDATED" | "CHAT_MENTION" | "OPERATION_ALERT";
+  kind: "SIMER_VERSION" | "AZURE_COMPLETED" | "AZURE_UPDATED" | "CHAT_MENTION" | "OPERATION_ALERT" | "KNOWN_PROBLEM";
   title: string;
   message: string;
   occurredAt: Date;
@@ -132,7 +132,7 @@ export class NotificationService {
       })),
     ];
 
-    const [workItems, versions, chatMentions] =
+    const [workItems, versions, chatMentions, knownProblems] =
       await Promise.all([
         prisma.azureWorkItem.findMany({
           where: {
@@ -198,6 +198,13 @@ export class NotificationService {
             author: { select: { name: true } },
           },
         }),
+        prisma.$queryRaw<Array<{ id: number; title: string; updatedAt: Date }>>`
+          SELECT "id", "title", "updatedAt"
+          FROM "KnownProblem"
+          WHERE "archived" = FALSE AND "updatedAt" >= ${since}
+          ORDER BY "updatedAt" DESC
+          LIMIT 30
+        `,
       ]);
 
     const itemNotifications = workItems.map((item) => {
@@ -245,6 +252,15 @@ export class NotificationService {
       path: `/chat?channel=${item.channelId}`,
     }));
 
+    const knownProblemNotifications: AppNotification[] = knownProblems.map((item) => ({
+      key: `known-problem:${item.id}:${item.updatedAt.toISOString()}`,
+      kind: "KNOWN_PROBLEM",
+      title: "Problema conhecido atualizado",
+      message: item.title,
+      occurredAt: item.updatedAt,
+      path: "/problemas-conhecidos",
+    }));
+
     const now = new Date();
     const staleBefore = new Date(now.getTime() - 72 * 60 * 60 * 1_000);
     const operationalAlerts: AppNotification[] = relatedTickets.flatMap((ticket) => {
@@ -283,9 +299,9 @@ export class NotificationService {
     `;
     const readKeys = new Set(readRows.map((row) => row.notificationKey));
 
-    const notifications = [...operationalAlerts, ...mentionNotifications, ...itemNotifications, ...versionNotifications]
+    const notifications = [...knownProblemNotifications, ...operationalAlerts, ...mentionNotifications, ...itemNotifications, ...versionNotifications]
       .filter((item) =>
-        item.kind === "CHAT_MENTION" || item.kind === "OPERATION_ALERT"
+        item.kind === "CHAT_MENTION" || item.kind === "OPERATION_ALERT" || item.kind === "KNOWN_PROBLEM"
           ? true
           : item.kind === "SIMER_VERSION"
           ? preferences.simerVersion

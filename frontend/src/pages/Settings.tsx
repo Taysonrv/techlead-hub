@@ -8,6 +8,7 @@ import {
   CircularProgress,
   Divider,
   Stack,
+  Switch,
   TextField,
   Typography,
 } from "@mui/material";
@@ -26,6 +27,7 @@ import {
 } from "react";
 import { PageHeader } from "../components/PageHeader";
 import { api } from "../services/api";
+import { getLocalNotificationPreferences, saveLocalNotificationPreferences, type LocalNotificationPreferences } from "../utils/notificationSound";
 
 type ConfigurationState = {
   databaseConfigured: boolean;
@@ -33,11 +35,6 @@ type ConfigurationState = {
   project: string;
   wiki: string;
   patConfigured: boolean;
-  tenantId: string;
-  clientId: string;
-  sharePointSiteUrl: string;
-  bpmnSiteUrl: string;
-  microsoftConfigured: boolean;
   runtime?: string;
 };
 
@@ -47,10 +44,6 @@ type ConfigurationForm = {
   project: string;
   wiki: string;
   pat: string;
-  tenantId: string;
-  clientId: string;
-  sharePointSiteUrl: string;
-  bpmnSiteUrl: string;
 };
 
 type ActiveSession = { id: number; clientType: string; deviceName: string | null; appVersion: string | null; ipAddress: string | null; createdAt: string; lastActivityAt: string; user: { id: number; name: string; username: string } };
@@ -62,10 +55,6 @@ const EMPTY_FORM: ConfigurationForm = {
   project: "",
   wiki: "",
   pat: "",
-  tenantId: "",
-  clientId: "",
-  sharePointSiteUrl: "https://siagri365.sharepoint.com/sites/cooperativas-agroindustrias-simer",
-  bpmnSiteUrl: "https://siagri365.sharepoint.com/sites/FluxoBPMNSimer",
 };
 
 export function Settings() {
@@ -83,10 +72,22 @@ export function Settings() {
     useState<string | null>(null);
   const [sessions, setSessions] = useState<ActiveSession[]>([]);
   const [diagnostics, setDiagnostics] = useState<Diagnostics | null>(null);
+  const [startupEnabled, setStartupEnabled] = useState(false);
+  const [startupSaving, setStartupSaving] = useState(false);
+  const [notificationPreferences,setNotificationPreferences]=useState<LocalNotificationPreferences>(()=>getLocalNotificationPreferences());
 
   useEffect(() => {
     void loadConfiguration();
+    if (window.techLeadHub?.platform === "win32" && window.techLeadHub.startup) void window.techLeadHub.startup.get().then((state) => setStartupEnabled(state.enabled)).catch(() => undefined);
   }, []);
+
+  function changeNotificationPreference(key:keyof LocalNotificationPreferences,enabled:boolean){const next={...notificationPreferences,[key]:enabled};setNotificationPreferences(next);saveLocalNotificationPreferences(next)}
+  async function changeStartup(enabled: boolean) {
+    if (!window.techLeadHub?.startup) return;
+    try { setStartupSaving(true); setError(null); const state=await window.techLeadHub.startup.set(enabled); setStartupEnabled(state.enabled); setSuccess(state.enabled ? "TechLead Hub será iniciado automaticamente com o Windows." : "Inicialização automática com o Windows desativada."); }
+    catch { setError("Não foi possível alterar a inicialização com o Windows."); }
+    finally { setStartupSaving(false); }
+  }
 
   async function loadConfiguration() {
     try {
@@ -108,10 +109,6 @@ export function Settings() {
         organization: current.organization ?? "",
         project: current.project ?? "",
         wiki: current.wiki ?? "",
-        tenantId: current.tenantId ?? "",
-        clientId: current.clientId ?? "",
-        sharePointSiteUrl: current.sharePointSiteUrl ?? "",
-        bpmnSiteUrl: current.bpmnSiteUrl ?? "",
       }));
     } catch (loadError) {
       setError(
@@ -165,10 +162,6 @@ export function Settings() {
       setForm({
         ...EMPTY_FORM,
         ...imported,
-        tenantId: imported.tenantId ?? "",
-        clientId: imported.clientId ?? "",
-        sharePointSiteUrl: imported.sharePointSiteUrl ?? EMPTY_FORM.sharePointSiteUrl,
-        bpmnSiteUrl: imported.bpmnSiteUrl ?? EMPTY_FORM.bpmnSiteUrl,
       });
       setSuccess(
         "Arquivo carregado. Revise os dados e clique em Salvar configurações.",
@@ -195,10 +188,6 @@ export function Settings() {
           project: form.project,
           wiki: form.wiki,
           pat: form.pat,
-          tenantId: form.tenantId,
-          clientId: form.clientId,
-          sharePointSiteUrl: form.sharePointSiteUrl,
-          bpmnSiteUrl: form.bpmnSiteUrl,
         },
       );
 
@@ -237,6 +226,12 @@ export function Settings() {
   return (
     <Box>
       <PageHeader eyebrow="Sistema" title="Configurações" description="Configuração administrativa central. As integrações são protegidas no banco compartilhado e valem para todos os usuários Web e Desktop." />
+      <Card variant="outlined" sx={{ mb: 2 }}><CardContent>
+        <Typography sx={{fontWeight:850}}>Notificações</Typography>
+        <Typography variant="body2" color="text.secondary" sx={{mt:.4,mb:1.5}}>Escolha quais eventos podem gerar avisos. Estas preferências também controlam os alertas rápidos no canto inferior direito.</Typography>
+        <Stack>{([["sound","Som das notificações"],["chat","Chat e menções"],["operation","Alertas operacionais e problemas conhecidos"],["appVersion","Novas versões do TechLead Hub"],["simerVersion","Novas versões do SIMER"],["azureCompleted","Correções, Evoluções e APOIOs concluídos"],["azureUpdated","Alterações em Correções, Evoluções e APOIOs"]] as Array<[keyof LocalNotificationPreferences,string]>).map(([key,label])=><Stack key={key} direction="row" sx={{py:.75,alignItems:"center",justifyContent:"space-between",borderBottom:"1px solid",borderColor:"divider"}}><Typography variant="body2">{label}</Typography><Switch size="small" checked={notificationPreferences[key]} onChange={(_,enabled)=>changeNotificationPreference(key,enabled)}/></Stack>)}</Stack>
+      </CardContent></Card>
+
 
       {error && (
         <Alert severity="error" sx={{ mb: 2 }}>
@@ -269,6 +264,15 @@ export function Settings() {
             <Stack spacing={1}>{sessions.map((session) => <Box key={session.id} sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 2, p: 1.25, border: "1px solid", borderColor: "divider", borderRadius: 1.5 }}><Box sx={{ minWidth: 0 }}><Stack direction="row" spacing={1} sx={{ alignItems: "center", flexWrap: "wrap" }}><Typography sx={{ fontWeight: 800 }}>{session.user.name}</Typography><Chip size="small" label={session.clientType === "DESKTOP" ? "Desktop" : "Web"} /><Chip size="small" variant="outlined" label={session.appVersion || "Versão não informada"} /></Stack><Typography variant="caption" color="text.secondary">{session.deviceName || session.user.username} · atividade {new Date(session.lastActivityAt).toLocaleString("pt-BR")}</Typography></Box><Button size="small" color="error" onClick={() => void revokeSession(session.id)}>Encerrar</Button></Box>)}{!sessions.length && <Typography variant="body2" color="text.secondary">Nenhuma sessão ativa.</Typography>}</Stack>
           </CardContent>
         </Card>
+
+        {window.techLeadHub?.platform === "win32" && window.techLeadHub.startup && <Card elevation={0} sx={{ border: "1px solid", borderColor: startupEnabled ? "rgba(24,199,122,.28)" : "divider", borderRadius: 2.5, background: startupEnabled ? "linear-gradient(120deg,rgba(24,199,122,.055),transparent)" : undefined }}>
+          <CardContent sx={{ p: { xs: 2, md: 2.5 } }}>
+            <Stack direction={{xs:"column",sm:"row"}} spacing={2} sx={{alignItems:{sm:"center"},justifyContent:"space-between"}}>
+              <Box><Typography sx={{fontWeight:850}}>Inicialização com o Windows</Typography><Typography variant="body2" color="text.secondary">Mantenha o TechLead Hub disponível desde o início da sessão para receber atualizações e avisos operacionais.</Typography></Box>
+              <Stack direction="row" spacing={1} sx={{alignItems:"center"}}><Chip size="small" color={startupEnabled?"success":"default"} variant="outlined" label={startupEnabled?"Automático":"Manual"}/><Switch checked={startupEnabled} disabled={startupSaving} onChange={(_,checked)=>void changeStartup(checked)} slotProps={{input:{"aria-label":"Iniciar TechLead Hub com o Windows"}}}/></Stack>
+            </Stack>
+          </CardContent>
+        </Card>}
 
         {window.techLeadHub && configuration?.runtime !== "web" && <Card
           elevation={0}
@@ -336,26 +340,6 @@ export function Settings() {
             />
           </CardContent>
         </Card>}
-
-        <Card elevation={0} sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2.5 }}>
-          <CardContent sx={{ p: { xs: 2, md: 2.5 } }}>
-            <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5} sx={{ alignItems: { sm: "center" }, justifyContent: "space-between" }}>
-              <Box>
-                <Typography sx={{ fontWeight: 800 }}>Microsoft 365, SharePoint e BPMN</Typography>
-                <Typography variant="body2" color="text.secondary">Credenciais públicas do aplicativo corporativo. A senha do usuário nunca é armazenada.</Typography>
-              </Box>
-              <Chip icon={configuration?.microsoftConfigured ? <CloudDoneOutlined /> : <CloudOffOutlined />} label={configuration?.microsoftConfigured ? "Pronto para conectar" : "Aguardando Tenant e Client ID"} color={configuration?.microsoftConfigured ? "success" : "default"} variant="outlined" />
-            </Stack>
-            <Divider sx={{ my: 2 }} />
-            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(2, minmax(0, 1fr))" }, gap: 2 }}>
-              <TextField label="Tenant ID" value={form.tenantId} onChange={(event) => updateField("tenantId", event.target.value)} helperText="Diretório Microsoft Entra da Aliare." />
-              <TextField label="Client ID" value={form.clientId} onChange={(event) => updateField("clientId", event.target.value)} helperText="Aplicativo desktop registrado pelo time de TI." />
-              <TextField label="Site SharePoint do time" value={form.sharePointSiteUrl} onChange={(event) => updateField("sharePointSiteUrl", event.target.value)} />
-              <TextField label="Site dos fluxos BPMN" value={form.bpmnSiteUrl} onChange={(event) => updateField("bpmnSiteUrl", event.target.value)} />
-            </Box>
-            <Alert severity="info" sx={{ mt: 2 }}>Depois de salvar e reiniciar, conecte sua conta Microsoft na Base de Conhecimento. Os resultados respeitarão as permissões do usuário autenticado.</Alert>
-          </CardContent>
-        </Card>
 
         <Card
           elevation={0}

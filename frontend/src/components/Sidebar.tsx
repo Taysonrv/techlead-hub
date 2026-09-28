@@ -45,6 +45,7 @@ import {
   FactCheckOutlined,
   TrendingUpOutlined,
   AssessmentOutlined,
+  CampaignOutlined,
 } from "@mui/icons-material";
 
 import {
@@ -146,7 +147,7 @@ export function Sidebar() {
   ] =
     useState(0);
 
-  const [topControlsVisible, setTopControlsVisible] = useState(() => window.scrollY < 24);
+
 
   const [
     profileAnchor,
@@ -155,24 +156,17 @@ export function Sidebar() {
     useState<HTMLElement | null>(null);
 
   const [openSections, setOpenSections] = useState<Record<"cadastros" | "movimentos" | "analises" | "development" | "gestao", boolean>>(() => ({
-    // As rotinas da Central também precisam ficar imediatamente visíveis no
-    // sidebar. O usuário ainda pode recolher qualquer grupo manualmente.
-    cadastros: true,
-    movimentos: true,
-    analises: true,
-    development: true,
-    gestao: true,
+    // O sidebar sempre inicia com os grupos de rotinas recolhidos.
+    // A expansão passa a ser uma ação explícita do usuário durante a sessão.
+    cadastros: false,
+    movimentos: false,
+    analises: false,
+    development: false,
+    gestao: false,
   }));
 
   const profileMenuOpen =
     Boolean(profileAnchor);
-
-  useEffect(() => {
-    const onScroll = () => setTopControlsVisible(window.scrollY < 24);
-    onScroll();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
 
   // O menu inicia recolhido. A navegação não força a abertura automática
   // de uma seção; o usuário decide quais grupos deseja expandir.
@@ -305,6 +299,7 @@ export function Sidebar() {
     () => [
       { label: "Minha Operação", path: "/minha-operacao", icon: <WorkspacesOutlined fontSize="small" /> },
       { label: "Tickets", path: "/tickets", icon: <ConfirmationNumberOutlined fontSize="small" /> },
+      { label: "Problemas Conhecidos", path: "/problemas-conhecidos", icon: <CampaignOutlined fontSize="small" /> },
       { label: "Pontos de Atenção", path: "/atencao", icon: <WarningAmberOutlined fontSize="small" /> },
       { label: "Pendências", path: "/qualidade-dados", icon: <FactCheckOutlined fontSize="small" /> },
     ],
@@ -314,6 +309,7 @@ export function Sidebar() {
   const analysisMenu = useMemo<MenuItemData[]>(
     () => [
       { label: "Dashboard", path: "/", icon: <DashboardOutlined fontSize="small" /> },
+      { label: "Mapa SIMER", path: "/mapa-simer", icon: <AccountTreeOutlined fontSize="small" /> },
       { label: "Desempenho", path: "/desempenho", icon: <TrendingUpOutlined fontSize="small" /> },
       { label: "Relatórios", path: "/relatorios", icon: <AssessmentOutlined fontSize="small" /> },
       ...(user?.role === "ADMIN" || user?.role === "COORDENADOR"
@@ -673,12 +669,6 @@ export function Sidebar() {
             <ListItemText primary="Página inicial" slotProps={{ primary: { sx: { fontSize: ".76rem", fontWeight: 800 } } }} />
           </ListItemButton>
         </Box>
-        <Box sx={{ px: 1.1, mb: .75 }}>
-          <ListItemButton component={NavLink} to="/mapa-simer" sx={{ minHeight: 40, px: 1.3, borderRadius: 1.2, color: "rgba(255,255,255,.72)", "&:hover": { bgcolor: "rgba(24,199,122,.08)", color: "#fff" }, "&.active": { bgcolor: "rgba(24,199,122,.13)", color: "#fff" }, "&.active .MuiListItemIcon-root": { color: aliareColors.green } }}>
-            <ListItemIcon sx={{ minWidth: 32, color: "rgba(255,255,255,.50)" }}><AccountTreeOutlined fontSize="small" /></ListItemIcon>
-            <ListItemText primary="Mapa SIMER" slotProps={{ primary: { sx: { fontSize: ".76rem", fontWeight: 800 } } }} />
-          </ListItemButton>
-        </Box>
         {(user?.role === "ADMIN" || user?.role === "COORDENADOR") && (
           <Box sx={{ px: 1.1, mb: .75 }}>
             <ListItemButton component={NavLink} to="/coordenacao" sx={{ minHeight: 40, px: 1.3, borderRadius: 1.2, color: "rgba(255,255,255,.72)", "&:hover": { bgcolor: "rgba(24,199,122,.08)", color: "#fff" }, "&.active": { bgcolor: "rgba(24,199,122,.13)", color: "#fff" }, "&.active .MuiListItemIcon-root": { color: aliareColors.green } }}>
@@ -825,7 +815,7 @@ export function Sidebar() {
             top: 14,
             right: 20,
             zIndex: (theme) => theme.zIndex.appBar,
-            display: topControlsVisible ? "flex" : "none",
+            display: "flex",
             alignItems: "center",
             gap: 1,
           }}

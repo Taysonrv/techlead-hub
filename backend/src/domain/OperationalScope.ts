@@ -75,6 +75,31 @@ export function ticketOperationalScope():
 }
 
 /**
+ * Escopo da carteira da squad para indicadores de Coordenação.
+ * Um ticket pertence ao recorte quando o cliente OU o analista responsável
+ * pertence à squad. Mantido separado do ticketOperationalScope(), que é
+ * intencionalmente mais estrito (cliente E analista).
+ */
+export function coordinationTicketScope(): Prisma.TicketWhereInput {
+  return {
+    OR: [
+      {
+        client: {
+          in: [...SIMER_CLIENTS],
+          mode: "insensitive",
+        },
+      },
+      {
+        owner: {
+          in: [...SUPPORT_ANALYSTS],
+          mode: "insensitive",
+        },
+      },
+    ],
+  };
+}
+
+/**
  * No Azure, Cliente Principal pode representar o cliente final da
  * ocorrência, e Assigned To normalmente é um desenvolvedor.
  * O campo confiável para delimitar a origem da demanda é Created By.
@@ -110,6 +135,25 @@ export function azureOperationalScope():
       {
         participantMovideskTickets: {
           not: null,
+        },
+      },
+    ],
+  };
+}
+
+/**
+ * Escopo estrito da Central da Coordenação.
+ * Diferente do escopo geral do Azure, aqui um Work Item só participa
+ * dos indicadores quando o Cliente Principal pertence à carteira da squad.
+ */
+export function coordinationAzureScope(): Prisma.AzureWorkItemWhereInput {
+  return {
+    AND: [
+      azureOperationalScope(),
+      {
+        client: {
+          in: [...SIMER_CLIENTS],
+          mode: "insensitive",
         },
       },
     ],

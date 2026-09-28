@@ -3079,7 +3079,7 @@ function KpiCard({
 ========================================================= */
 
 function FilterSelect({ label, value, options, onChange }: FilterSelectProps) {
-  return <FormControl fullWidth size="small"><InputLabel>{label}</InputLabel>
+  return <FormControl fullWidth size="small"><InputLabel shrink>{label}</InputLabel>
     <Select multiple displayEmpty value={value} label={label}
       onChange={(event) => onChange(typeof event.target.value === "string" ? event.target.value.split(",") : event.target.value)}
       renderValue={(selected) => !selected.length ? "Todos" : selected.length === 1 ? selected[0] : `${selected.length} selecionados`}>

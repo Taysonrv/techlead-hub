@@ -11,9 +11,11 @@ coordinationRoutes.get("/details", async (req: AuthenticatedRequest, res) => {
     const analyst = typeof req.query.analyst === "string" ? req.query.analyst : undefined;
     const serviceModule = typeof req.query.serviceModule === "string" ? req.query.serviceModule : undefined;
     const serviceClient = typeof req.query.serviceClient === "string" ? req.query.serviceClient : undefined;
+    const serviceName = typeof req.query.serviceName === "string" ? req.query.serviceName : undefined;
     const parsedLimit = Number(req.query.limit ?? 50);
     const limit = Number.isFinite(parsedLimit) ? parsedLimit : 50;
-    res.json(await coordinationService.details(kind, analyst, limit, serviceModule, serviceClient));
+    const serviceDays = Number(req.query.serviceDays ?? 0);
+    res.json(await coordinationService.details(kind, analyst, limit, serviceModule, serviceClient, serviceName, Number.isFinite(serviceDays) ? serviceDays : 0));
   } catch (error) {
     console.error("[coordination] Falha ao carregar detalhes:", error);
     res.status(500).json({ error: "Não foi possível carregar os detalhes da coordenação." });
@@ -43,8 +45,21 @@ coordinationRoutes.get("/services", async (req: AuthenticatedRequest, res) => {
   }
 });
 
+coordinationRoutes.get("/sla-development", async (req: AuthenticatedRequest, res) => {
+  try {
+    const days = Number(req.query.days ?? 180);
+    res.json(await coordinationService.slaDevelopmentFlow(Number.isFinite(days) ? days : 180));
+  } catch (error) {
+    console.error("[coordination] Falha na análise SLA x desenvolvimento:", error);
+    res.status(500).json({ error: "Não foi possível gerar a análise SLA x desenvolvimento." });
+  }
+});
+
 coordinationRoutes.get("/summary", async (req: AuthenticatedRequest, res) => {
-  try { res.json(await coordinationService.summary(req.auth!.userId)); }
+  try {
+    const serviceDays = Number(req.query.serviceDays ?? 0);
+    res.json(await coordinationService.summary(req.auth!.userId, Number.isFinite(serviceDays) ? serviceDays : 0));
+  }
   catch (error) { console.error("[coordination] Falha ao montar visão:", error); res.status(500).json({ error: "Não foi possível gerar a visão de coordenação." }); }
 });
 export { coordinationRoutes };

@@ -1,11 +1,11 @@
 import {
-  Alert, Box, Button, Card, CardContent, Checkbox, Chip, CircularProgress, Drawer,
+  Alert, Box, Button, Card, CardContent, Chip, CircularProgress, Drawer,
   FormControl, IconButton, InputLabel, MenuItem, Select, Stack, Tab, Tabs, Tooltip, Typography,
 } from "@mui/material";
 import {
   AssignmentTurnedInOutlined, AutoGraphOutlined, BoltOutlined,
   ErrorOutlineOutlined, GroupsOutlined, InfoOutlined, OpenInNewOutlined, RadarOutlined,
-  SchoolOutlined, TrackChangesOutlined, TrendingDownOutlined, TrendingUpOutlined, InsightsOutlined,
+  SchoolOutlined, SearchOutlined, TrackChangesOutlined, TrendingDownOutlined, TrendingUpOutlined, InsightsOutlined,
 } from "@mui/icons-material";
 import { useEffect, useMemo, useState } from "react";
 import type { ReactElement, ReactNode } from "react";
@@ -19,7 +19,7 @@ import { DetailFieldGrid, DetailPanelHeader, DetailSection } from "../components
 import { detailDrawerPaperSx } from "../theme/layoutTokens";
 import { aliareColors } from "../theme/theme";
 import { useColorMode } from "../context/ColorModeContext";
-import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip as ChartTooltip, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, ResponsiveContainer, Tooltip as ChartTooltip, XAxis, YAxis } from "recharts";
 
 type Ticket = {
   id: number; movideskId: number; subject: string; status: string; client: string | null; owner: string | null;
@@ -30,9 +30,9 @@ type Task = {
   blockedProcess?: boolean | null; remoteUrl?: string | null;
 };
 type Recurrence = {
-  topic: string; count: number; previous: number; changePct: number | null; clients: string[]; analysts: string[];
+  topic: string; count: number; previous: number; changePct: number | null; trend?: "EMERGING" | "GROWING" | "STABLE" | "DECLINING"; reading?: "EMERGING_TRANSVERSAL" | "GROWING_TRANSVERSAL" | "CLIENT_CONCENTRATED" | "DECLINING" | "STABLE_PATTERN"; clients: string[]; analysts: string[];
   action: string; examples: Ticket[]; linkedExamples?: number; confidence?: "ALTA" | "MÉDIA";
-  concentration?: { topClient: string | null; topClientCount: number; topModule: string | null; topModuleCount: number; clientSharePct: number };
+  concentration?: { topClient: string | null; topClientCount: number; topModule: string | null; topModuleCount: number; clientSharePct: number; pattern?: "CONCENTRATED" | "TRANSVERSAL" | "DISTRIBUTED" };
 };
 type Gap = { id: string; type: string; title: string; evidence: string; impact: string; action: string; status: string; confidence?: string; ticketCount?: number; azureLinked?: number; blockedLinked?: number; deliveredLinked?: number; examples?: Ticket[]; tasks?: Task[] };
 type Development = { analyst: string; tickets: number; stale: number; linkedTasks?: number; blockedTasks?: number; finishedTasks?: number; themes: Array<{ topic: string; count: number }>; examples?: Ticket[] };
@@ -40,7 +40,7 @@ type Data = {
   generatedAt: string; periodDays: number; periodStart?: string; periodEnd?: string;
   radar: Record<string, number>;
   radarSamples: Record<string, Array<Ticket | Task>>;
-  audit: { candidates: number; sample: Array<Ticket & { reason: string }> };
+  audit: { candidates: number; sample: Array<Ticket & { reason: string; reasons: string[]; evidenceCount: number; sources: string[]; auditScore: number; confidence: "ALTA" | "MÉDIA" }> };
   recurrences: Recurrence[]; gaps: Gap[]; development: Development[];
   weekly: { current: number; previous: number; changePct: number | null; open: number; previousOpen: number; overdue: number; paused: number; stale: number; blocked: number };
   analytics: {
@@ -91,11 +91,11 @@ type DrawerState =
   | null;
 
 const radarMeta: Array<[string, string, string, string]> = [
-  ["slaOverdue", "SLA vencido", "Atendimentos com prazo vencido ou indicador de SLA violado.", aliareColors.error],
+  ["slaOverdue", "Risco de prazo / SLA", "Atendimentos com prazo operacional vencido ou indicador de SLA de solução violado.", aliareColors.error],
   ["slaSoon", "SLA próximo", "Atendimentos com prazo previsto nas próximas 24 horas.", aliareColors.warning],
   ["newTooLong", "Novo há +7 dias", "Tickets ainda como Novo há mais de sete dias.", aliareColors.error],
   ["pausedTooLong", "Pausado há +5 dias", "Tickets pausados ou parados sem avanço há mais de cinco dias.", aliareColors.warning],
-  ["noMovement", "Sem movimento 72h", "Atendimentos abertos sem ação recente há pelo menos 72 horas.", aliareColors.cyan],
+  ["noMovement", "Sem ação 72h", "Atendimentos abertos sem ação registrada há pelo menos 72 horas. Usa a última ação; quando inexistente, considera a atualização e depois a criação do ticket.", aliareColors.cyan],
   ["blocked", "Tasks bloqueadas", "Work Items ativos sinalizados com bloqueio de processo.", aliareColors.purple],
   ["taskStale", "Task sem evolução", "Work Items ativos sem atualização há mais de cinco dias.", aliareColors.info],
   ["unassigned", "Sem responsável", "Work Items ativos sem responsável identificado no Azure.", aliareColors.warning],
@@ -104,11 +104,11 @@ const radarMeta: Array<[string, string, string, string]> = [
 ];
 
 const tabInfo: Record<TabKey, string> = {
-  indicators: "Consolida os relatórios operacionais do Movidesk em uma leitura moderna de volume, SLA, resoluções, backlog e distribuição.",
-  radar: "Prioriza situações operacionais que merecem intervenção antes de virarem recorrência ou estouro.",
-  audit: "Seleciona candidatos para revisão humana. O sistema sinaliza indícios; não altera classificações automaticamente.",
+  indicators: "Leitura operacional de volume, SLA, resoluções, backlog e distribuição. Comparativos detalhados de desempenho permanecem na tela Desempenho.",
+  radar: "Destaca situações operacionais que merecem intervenção antes de virarem recorrência ou estouro. Não representa prioridade formal do atendimento ou do Azure.",
+  audit: "Seleciona candidatos para revisão humana a partir de evidências ponderadas. A ordenação indica força dos sinais encontrados, não prioridade, severidade ou SLA do atendimento.",
   recurrences: "Agrupa temas repetidos e compara o período atual com o anterior para sugerir investigação, treinamento ou causa raiz.",
-  gaps: "Transforma sinais recorrentes da operação em pontos de atenção técnicos, explicando o motivo, a prioridade e a próxima ação sugerida.",
+  gaps: "Transforma sinais recorrentes da operação em pontos de atenção técnicos, explicando evidência, impacto e próxima ação sugerida. Não altera prioridade formal do atendimento ou do Azure.",
   development: "Mostra concentração de temas e pontos de apoio por analista para orientar desenvolvimento técnico, sem ranking.",
 };
 
@@ -117,32 +117,6 @@ function AreaTitle({ title, info, icon }: { title: string; info: string; icon?: 
     {icon}<Typography sx={{ fontWeight: 850 }}>{title}</Typography>
     <Tooltip title={info}><IconButton size="small" aria-label={`Informações sobre ${title}`}><InfoOutlined sx={{ fontSize: 16 }} /></IconButton></Tooltip>
   </Stack>;
-}
-
-function AnalystMultiSelect({ options, value, onChange, label }: { options: string[]; value: string[]; onChange: (value: string[]) => void; label: string }) {
-  const allSelected = value.length === 0;
-  const toggleAll = () => onChange([]);
-  return <FormControl size="small" sx={{ width: 168, minWidth: 168, "& .MuiSelect-select": { py: .65, fontSize: ".76rem", fontWeight: 750 } }}>
-    <Select
-      multiple
-      displayEmpty
-      value={value}
-      onChange={(event) => onChange(typeof event.target.value === "string" ? event.target.value.split(",") : event.target.value)}
-      renderValue={(selected) => !selected.length ? "Todos analistas" : selected.length === 1 ? abbreviateAnalystName(selected[0]) : `${selected.length} analistas`}
-      aria-label={label}
-    >
-      <MenuItem onClick={(event) => { event.preventDefault(); event.stopPropagation(); toggleAll(); }}>
-        <Checkbox size="small" checked={allSelected} />Todos analistas
-      </MenuItem>
-      {options.map((analyst) => <MenuItem key={analyst} value={analyst}><Checkbox size="small" checked={value.includes(analyst)} />{analyst}</MenuItem>)}
-    </Select>
-  </FormControl>;
-}
-
-function abbreviateAnalystName(name: string) {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length <= 2) return name;
-  return `${parts[0]} ${parts.slice(1).map((part) => `${part.charAt(0).toUpperCase()}.`).join(" ")}`;
 }
 
 function IndicatorPeriodFilter({ value, onChange }: { value: PeriodPreset; onChange: (value: PeriodPreset) => void }) {
@@ -198,8 +172,6 @@ export function TechnicalLeadership() {
   const [recurrenceConfidence, setRecurrenceConfidence] = useState("");
   const [gapImpact, setGapImpact] = useState("");
   const [gapStatus, setGapStatus] = useState("");
-  const [resolutionOwnerFilter, setResolutionOwnerFilter] = useState<string[]>([]);
-  const [responseOwnerFilter, setResponseOwnerFilter] = useState<string[]>([]);
 
   const toggleLeadershipSeries = (chart: string, key: string, total: number) => {
     setHiddenLeadershipSeries((current) => {
@@ -281,34 +253,6 @@ export function TechnicalLeadership() {
     return [];
   }, [drawer]);
 
-  const resolutionOwnerRows = analyticsFor("resolutionOwner")?.byOwner ?? [];
-  const responseOwnerRows = analyticsFor("responseOwner")?.responseByOwner ?? [];
-  const filteredResolutionOwners = resolutionOwnerRows.filter((row) => !resolutionOwnerFilter.length || resolutionOwnerFilter.includes(row.analyst));
-  const filteredResponseOwners = responseOwnerRows.filter((row) => !responseOwnerFilter.length || responseOwnerFilter.includes(row.analyst));
-  const resolutionSlaRows = [
-    { name: "No prazo", value: analyticsFor("resolutionSla")?.resolutionSla.within ?? 0, fill: aliareColors.green },
-    { name: "Fora do prazo", value: analyticsFor("resolutionSla")?.resolutionSla.outside ?? 0, fill: aliareColors.error },
-    { name: "Sem medição", value: analyticsFor("resolutionSla")?.resolutionSla.unmeasured ?? 0, fill: aliareColors.info },
-  ];
-  const responseSlaRows = [
-    { name: "No prazo", value: analyticsFor("responseSla")?.responseSla.within ?? 0, fill: aliareColors.green },
-    { name: "Fora do prazo", value: analyticsFor("responseSla")?.responseSla.outside ?? 0, fill: aliareColors.error },
-    { name: "Sem medição", value: analyticsFor("responseSla")?.responseSla.unmeasured ?? 0, fill: aliareColors.info },
-  ];
-  const slaTotal = (rows: Array<{ value: number }>) => rows.reduce((sum, row) => sum + row.value, 0);
-  const slaPct = (value: number, total: number) => total ? Math.round((value / total) * 1000) / 10 : 0;
-  const chartTooltipProps = {
-    contentStyle: {
-      backgroundColor: mode === "dark" ? "#10263A" : "#FFFFFF",
-      border: mode === "dark" ? "1px solid rgba(131,175,220,.34)" : "1px solid rgba(15,23,42,.14)",
-      borderRadius: 10,
-      color: mode === "dark" ? "#F3F8FF" : "#172033",
-      boxShadow: mode === "dark" ? "0 12px 30px rgba(0,0,0,.34)" : "0 12px 30px rgba(15,23,42,.12)",
-    },
-    labelStyle: { color: mode === "dark" ? "#D7E5F6" : "#172033", fontWeight: 800 },
-    itemStyle: { fontWeight: 700 },
-    cursor: { fill: mode === "dark" ? "rgba(47,208,255,.08)" : "rgba(15,23,42,.045)" },
-  };
 
   const auditReasons = useMemo(() => data ? [...new Set(data.audit.sample.map((ticket) => ticket.reason))].sort() : [], [data]);
   const filteredAudit = useMemo(() => data ? data.audit.sample.filter((ticket) => !auditReason || ticket.reason === auditReason) : [], [data, auditReason]);
@@ -380,7 +324,7 @@ export function TechnicalLeadership() {
         {data && <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2,1fr)", lg: "repeat(4,1fr)" }, gap: 1.25, mt: 2 }}>
           <KpiCard title="Atendimentos no período" value={data.weekly.current} subtitle="Clique para ver os atendimentos" info="Tickets criados no período selecionado." accent={aliareColors.info} onClick={() => setDrawer({ kind: "radar", key: "opened", title: "Atendimentos no período", items: (data.analytics.samples.opened as Ticket[]) ?? [] })} />
           <KpiCard title="Backlog aberto" value={data.weekly.open} subtitle="Clique para investigar" info="Atendimentos ainda abertos no recorte atual." accent={aliareColors.cyan} onClick={() => setDrawer({ kind: "radar", key: "backlog", title: "Backlog aberto", items: data.analytics.samples.backlog ?? [] })} />
-          <KpiCard title="SLA vencido" value={data.weekly.overdue} subtitle="Clique para investigar" info="Atendimentos abertos com prazo ou indicador de solução vencido." accent={aliareColors.error} onClick={() => setDrawer({ kind: "radar", key: "slaOverdue", title: "SLA vencido", items: data.radarSamples.slaOverdue ?? [] })} />
+          <KpiCard title="Prazos vencidos" value={data.weekly.overdue} subtitle="Clique para investigar" info="Atendimentos abertos cujo prazo operacional (dueDate) já foi ultrapassado. Mesmo conceito usado na Coordenação." accent={aliareColors.error} onClick={() => setDrawer({ kind: "radar", key: "overdue", title: "Prazos vencidos", items: data.radarSamples.overdue ?? [] })} />
           <KpiCard title="Tasks bloqueadas" value={data.weekly.blocked} subtitle="Clique para investigar" info="Work Items ativos com bloqueio de processo." accent={aliareColors.purple} onClick={() => setDrawer({ kind: "radar", key: "blocked", title: "Tasks bloqueadas", items: data.radarSamples.blocked ?? [] })} />
         </Box>}
       </CardContent>
@@ -468,7 +412,7 @@ export function TechnicalLeadership() {
 
             {isLeadershipSeriesVisible("dailyFlow", "opened") && <Line type="monotone" dataKey="opened" name="Abertos" stroke={aliareColors.info} strokeWidth={2.4} dot={false} />}
             {isLeadershipSeriesVisible("dailyFlow", "resolved") && <Line type="monotone" dataKey="resolved" name="Resolvidos" stroke={aliareColors.green} strokeWidth={2.4} dot={false} />}
-            {isLeadershipSeriesVisible("dailyFlow", "reopened") && <Line type="monotone" dataKey="reopened" name="Reabertos" stroke={aliareColors.warning} strokeWidth={2} dot={false} />}
+            {isLeadershipSeriesVisible("dailyFlow", "reopened") && <Line type="monotone" dataKey="reopened" name="Reabertos" stroke={aliareColors.warning} strokeWidth={2.4} dot={false} />}
             {isLeadershipSeriesVisible("dailyFlow", "pending") && <Line type="monotone" dataKey="pending" name="Pendentes" stroke={aliareColors.purple} strokeWidth={2.4} dot={false} />}
           </LineChart></ResponsiveContainer></Box>
           <SeriesSelector chart="dailyFlow" items={[
@@ -498,72 +442,15 @@ export function TechnicalLeadership() {
         </CardContent></Card>
       </Box>
 
-      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "repeat(2,1fr)" }, gap: 1.5, mb: 1.5 }}>
-        <Card><CardContent>
-          <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "center", gap: 1 }}>
-            <Box sx={{ flex: 1, textAlign: "center", "& > *": { justifyContent: "center" } }}><AreaTitle title="SLA de solução" info="Versão moderna do indicador de tickets resolvidos por vencimento do Movidesk." /></Box>
-            <IndicatorPeriodFilter value={indicatorPeriod("resolutionSla")} onChange={(value) => setIndicatorPeriod("resolutionSla", value)} />
-          </Stack>
-          <Box sx={{ height: 280, position: "relative" }}><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={resolutionSlaRows.filter((item) => isLeadershipSeriesVisible("resolutionSla", item.name))} dataKey="value" nameKey="name" innerRadius={62} outerRadius={92} paddingAngle={3}>
-            {resolutionSlaRows.filter((item) => isLeadershipSeriesVisible("resolutionSla", item.name)).map((item) => <Cell key={item.name} fill={item.fill} />)}
-          </Pie><ChartTooltip {...chartTooltipProps} formatter={(value, name) => [`${Number(value)} · ${slaPct(Number(value), slaTotal(resolutionSlaRows))}%`, String(name)]} /></PieChart></ResponsiveContainer>
-          <Box sx={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", pointerEvents: "none" }}><Box sx={{ textAlign: "center" }}><Typography sx={{ fontSize: "1.45rem", fontWeight: 900 }}>{slaTotal(resolutionSlaRows)}</Typography><Typography variant="caption" color="text.secondary">medidos</Typography></Box></Box>
+      <Card sx={{ mb: 1.5 }}><CardContent>
+        <Stack direction={{ xs: "column", md: "row" }} spacing={1.25} sx={{ alignItems: { md: "center" }, justifyContent: "space-between" }}>
+          <Box>
+            <Typography sx={{ fontWeight: 850 }}>Performance operacional centralizada</Typography>
+            <Typography variant="body2" color="text.secondary">SLA detalhado e comparativos por analista foram concentrados em Desempenho. A Liderança permanece focada em recorrências, gaps, auditoria e desenvolvimento técnico.</Typography>
           </Box>
-          <Stack direction="row" spacing={1} useFlexGap sx={{ justifyContent: "center", flexWrap: "wrap", mb: .8 }}>{resolutionSlaRows.map((row) => <Chip key={row.name} size="small" variant="outlined" label={`${row.name}: ${row.value} (${slaPct(row.value, slaTotal(resolutionSlaRows))}%)`} sx={{ fontWeight: 750 }} />)}</Stack>
-          <SeriesSelector chart="resolutionSla" items={resolutionSlaRows.map((row) => ({ key: row.name, label: row.name, color: row.fill }))} />
-        </CardContent></Card>
-        <Card><CardContent>
-          <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "center", gap: 1 }}>
-            <Box sx={{ flex: 1, textAlign: "center", "& > *": { justifyContent: "center" } }}><AreaTitle title="SLA de primeira resposta" info="Consolida o indicador de primeira resposta, preservando também registros sem medição." /></Box>
-            <IndicatorPeriodFilter value={indicatorPeriod("responseSla")} onChange={(value) => setIndicatorPeriod("responseSla", value)} />
-          </Stack>
-          <Box sx={{ height: 280, position: "relative" }}><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={responseSlaRows.filter((item) => isLeadershipSeriesVisible("responseSla", item.name))} dataKey="value" nameKey="name" innerRadius={62} outerRadius={92} paddingAngle={3}>
-            {responseSlaRows.filter((item) => isLeadershipSeriesVisible("responseSla", item.name)).map((item) => <Cell key={item.name} fill={item.fill} />)}
-          </Pie><ChartTooltip {...chartTooltipProps} formatter={(value, name) => [`${Number(value)} · ${slaPct(Number(value), slaTotal(responseSlaRows))}%`, String(name)]} /></PieChart></ResponsiveContainer>
-          <Box sx={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", pointerEvents: "none" }}><Box sx={{ textAlign: "center" }}><Typography sx={{ fontSize: "1.45rem", fontWeight: 900 }}>{slaTotal(responseSlaRows)}</Typography><Typography variant="caption" color="text.secondary">medidos</Typography></Box></Box>
-          </Box>
-          <Stack direction="row" spacing={1} useFlexGap sx={{ justifyContent: "center", flexWrap: "wrap", mb: .8 }}>{responseSlaRows.map((row) => <Chip key={row.name} size="small" variant="outlined" label={`${row.name}: ${row.value} (${slaPct(row.value, slaTotal(responseSlaRows))}%)`} sx={{ fontWeight: 750 }} />)}</Stack>
-          <SeriesSelector chart="responseSla" items={responseSlaRows.map((row) => ({ key: row.name, label: row.name, color: row.fill }))} />
-        </CardContent></Card>
-      </Box>
-
-      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", xl: "repeat(2,1fr)" }, gap: 1.5, mb: 1.5 }}>
-        <Card><CardContent>
-          <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "center", gap: 1 }}>
-            <Box sx={{ flex: 1, textAlign: "center", "& > *": { justifyContent: "center" } }}><AreaTitle title="Resolução por analista" info="Volume resolvido, reaberto e situação de SLA por analista. Use o filtro para isolar um analista sem alterar os demais indicadores da Central." /></Box>
-            <Stack direction="row" spacing={.8}>
-              <AnalystMultiSelect options={resolutionOwnerRows.map((row) => row.analyst)} value={resolutionOwnerFilter} onChange={setResolutionOwnerFilter} label="Filtrar analistas na resolução" />
-              <IndicatorPeriodFilter value={indicatorPeriod("resolutionOwner")} onChange={(value) => setIndicatorPeriod("resolutionOwner", value)} />
-            </Stack>
-          </Stack>
-          <Box sx={{ height: 340, mt: 1 }}><ResponsiveContainer width="100%" height="100%"><BarChart data={filteredResolutionOwners.map((row) => ({ ...row, analystLabel: abbreviateAnalystName(row.analyst) }))}>
-            <CartesianGrid strokeDasharray="4 5" vertical={false} /><XAxis dataKey="analystLabel" tick={{ fontSize: 10 }} interval={0} angle={0} textAnchor="middle" height={44} /><YAxis allowDecimals={false} /><ChartTooltip {...chartTooltipProps} labelFormatter={(_, payload) => payload?.[0]?.payload?.analyst ?? ""} />
-            {isLeadershipSeriesVisible("resolutionOwner", "resolved") && <Bar dataKey="resolved" name="Resolvidos" fill={aliareColors.info} radius={[5,5,0,0]} />}
-            {isLeadershipSeriesVisible("resolutionOwner", "reopened") && <Bar dataKey="reopened" name="Reabertos" fill={aliareColors.warning} radius={[5,5,0,0]} />}
-            {isLeadershipSeriesVisible("resolutionOwner", "outside") && <Bar dataKey="outside" name="Fora SLA" fill={aliareColors.error} radius={[5,5,0,0]} />}
-          </BarChart></ResponsiveContainer></Box>
-          <SeriesSelector chart="resolutionOwner" items={[
-            { key: "resolved", label: "Resolvidos", color: aliareColors.info },
-            { key: "reopened", label: "Reabertos", color: aliareColors.warning },
-            { key: "outside", label: "Fora SLA", color: aliareColors.error },
-          ]} />
-        </CardContent></Card>
-        <Card><CardContent>
-          <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "center", gap: 1 }}>
-            <Box sx={{ flex: 1, textAlign: "center", "& > *": { justifyContent: "center" } }}><AreaTitle title="Primeira resposta por analista" info="Compara respostas dentro, fora e sem medição de SLA por analista. O filtro isola um analista apenas neste gráfico." /></Box>
-            <Stack direction="row" spacing={.8}>
-              <AnalystMultiSelect options={responseOwnerRows.map((row) => row.analyst)} value={responseOwnerFilter} onChange={setResponseOwnerFilter} label="Filtrar analistas na primeira resposta" />
-              <IndicatorPeriodFilter value={indicatorPeriod("responseOwner")} onChange={(value) => setIndicatorPeriod("responseOwner", value)} />
-            </Stack>
-          </Stack>
-          <Box sx={{ height: 340, mt: 1 }}><ResponsiveContainer width="100%" height="100%"><BarChart data={filteredResponseOwners.map((row) => ({ ...row, analystLabel: abbreviateAnalystName(row.analyst) }))}>
-            <CartesianGrid strokeDasharray="4 5" vertical={false} /><XAxis dataKey="analystLabel" tick={{ fontSize: 10 }} interval={0} angle={0} textAnchor="middle" height={44} /><YAxis allowDecimals={false} /><ChartTooltip {...chartTooltipProps} labelFormatter={(_, payload) => payload?.[0]?.payload?.analyst ?? ""} />
-            {isLeadershipSeriesVisible("responseOwner", "within") && <Bar dataKey="within" name="No prazo" stackId="sla" fill={aliareColors.green} />}
-            {isLeadershipSeriesVisible("responseOwner", "outside") && <Bar dataKey="outside" name="Fora do prazo" stackId="sla" fill={aliareColors.error} />}
-            {isLeadershipSeriesVisible("responseOwner", "unmeasured") && <Bar dataKey="unmeasured" name="Sem medição" stackId="sla" fill={aliareColors.info} />}
-          </BarChart></ResponsiveContainer></Box>
-        </CardContent></Card>
-      </Box>
+          <Button variant="outlined" onClick={() => navigate("/desempenho")}>Abrir Desempenho</Button>
+        </Stack>
+      </CardContent></Card>
 
       <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(3,1fr)" }, gap: 1.5 }}>
         {[
@@ -612,7 +499,7 @@ export function TechnicalLeadership() {
         {filteredAudit.map((ticket) => <Card key={ticket.id} onClick={() => setDrawer({ kind: "audit", title: "Auditoria semanal", items: [ticket] })} sx={{ cursor: "pointer", background: mode === "dark" ? "linear-gradient(145deg, rgba(17,45,67,.96), rgba(12,29,49,.96)) !important" : "linear-gradient(145deg,#FFFFFF,#F4FAF8) !important", "&:hover": { borderColor: `${aliareColors.green} !important`, transform: "translateY(-2px)", boxShadow: "0 14px 34px rgba(0,199,142,.10)" }, transition: ".15s" }}><CardContent>
           <Stack direction="row" sx={{ justifyContent: "space-between", gap: 1 }}><Typography sx={{ fontWeight: 850 }}>#{ticket.movideskId}</Typography><Tooltip title="Candidato selecionado por heurísticas operacionais. A confirmação depende de análise humana."><InfoOutlined sx={{ fontSize: 17, color: "text.secondary" }} /></Tooltip></Stack>
           <Typography variant="body2" sx={{ mt: .5, fontWeight: 700 }}>{ticket.subject}</Typography>
-          <Chip size="small" color="warning" label={ticket.reason} sx={{ mt: 1, maxWidth: "100%" }} />
+          <Stack direction="row" spacing={.7} useFlexGap sx={{ mt: 1, flexWrap: "wrap" }}><Chip size="small" color="warning" label={ticket.reason} sx={{ maxWidth: "100%" }} />{Boolean(ticket.evidenceCount) && <Chip size="small" variant="outlined" label={`${ticket.evidenceCount} evidência(s)`} />}{ticket.confidence && <Chip size="small" variant="outlined" color={ticket.confidence === "ALTA" ? "success" : "default"} label={`Confiança ${ticket.confidence.toLowerCase()}`} />}</Stack>
         </CardContent></Card>)}
       </Box>
     </Box>}
@@ -626,8 +513,8 @@ export function TechnicalLeadership() {
         {filteredRecurrences.map((item) => <Card key={item.topic} onClick={() => setDrawer({ kind: "recurrence", title: item.topic, recurrence: item })} sx={{ cursor: "pointer", background: mode === "dark" ? "linear-gradient(145deg, rgba(12,48,70,.96), rgba(14,28,53,.96)) !important" : "linear-gradient(145deg,#FFFFFF,#F3FAFC) !important", "&:hover": { borderColor: `${aliareColors.cyan} !important`, boxShadow: "0 12px 30px rgba(47,208,255,.10)" } }}><CardContent>
           <Stack direction="row" sx={{ justifyContent: "space-between", gap: 1 }}><Typography sx={{ fontWeight: 850, textTransform: "capitalize" }}>{item.topic}</Typography><Tooltip title="Tema agrupado por classificação/serviço dos tickets do período. Clique para ver evidências e ação sugerida."><InfoOutlined sx={{ fontSize: 17, color: "text.secondary" }} /></Tooltip></Stack>
           <Typography sx={{ fontWeight: 900, fontSize: "1.7rem", color: aliareColors.cyan, mt: .7 }}>{item.count}</Typography>
-          <Typography variant="caption" color="text.secondary">{item.clients.length} cliente(s) · {item.analysts.length} analista(s) · {item.linkedExamples ?? 0} evidência(s) com Azure</Typography>{item.concentration && <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: .35 }}>Concentração: {item.concentration.topClient ?? "sem cliente dominante"}{item.concentration.topClient ? ` (${item.concentration.clientSharePct}%)` : ""} · Módulo Azure: {item.concentration.topModule ?? "não identificado"}</Typography>}
-          <Stack direction="row" spacing={.7} sx={{ mt: 1, flexWrap: "wrap" }}><Delta value={item.changePct} />{item.confidence && <Chip size="small" variant="outlined" color={item.confidence === "ALTA" ? "success" : "warning"} label={`Confiança ${item.confidence.toLowerCase()}`} />}</Stack>
+          <Typography variant="caption" color="text.secondary">{item.clients.length} cliente(s) · {item.analysts.length} analista(s) · {item.linkedExamples ?? 0} evidência(s) com Azure</Typography>{item.reading && <Typography variant="body2" sx={{ mt: .65, fontWeight: 750 }}>{item.reading === "EMERGING_TRANSVERSAL" ? "Leitura: tema emergente e transversal entre clientes." : item.reading === "GROWING_TRANSVERSAL" ? "Leitura: recorrência em crescimento entre clientes." : item.reading === "CLIENT_CONCENTRATED" ? "Leitura: recorrência concentrada no cliente predominante." : item.reading === "DECLINING" ? "Leitura: recorrência em redução no período." : "Leitura: padrão recorrente sem mudança temporal relevante."}</Typography>}{item.concentration && <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: .35 }}>Concentração: {item.concentration.topClient ?? "sem cliente dominante"}{item.concentration.topClient ? ` (${item.concentration.clientSharePct}%)` : ""} · Módulo Azure: {item.concentration.topModule ?? "não identificado"}</Typography>}
+          <Stack direction="row" spacing={.7} useFlexGap sx={{ mt: 1, flexWrap: "wrap" }}><Delta value={item.changePct} />{item.trend && <Chip size="small" variant="outlined" color={item.trend === "EMERGING" || item.trend === "GROWING" ? "warning" : item.trend === "DECLINING" ? "success" : "default"} label={item.trend === "EMERGING" ? "Tema emergente" : item.trend === "GROWING" ? "Em crescimento" : item.trend === "DECLINING" ? "Em redução" : "Estável"} />}{item.concentration?.pattern && <Chip size="small" variant="outlined" color={item.concentration.pattern === "TRANSVERSAL" ? "info" : item.concentration.pattern === "CONCENTRATED" ? "warning" : "default"} label={item.concentration.pattern === "TRANSVERSAL" ? "Transversal entre clientes" : item.concentration.pattern === "CONCENTRATED" ? "Concentrado em cliente" : "Distribuído"} />}{Boolean(item.linkedExamples) && <Chip size="small" variant="outlined" label="Evidência Azure" />}{item.confidence && <Chip size="small" variant="outlined" color={item.confidence === "ALTA" ? "success" : "warning"} label={`Confiança ${item.confidence.toLowerCase()}`} />}</Stack>
         </CardContent></Card>)}
         {!filteredRecurrences.length && <Alert severity="success">Nenhuma recorrência encontrada para os filtros selecionados.</Alert>}
       </Box>
@@ -637,7 +524,7 @@ export function TechnicalLeadership() {
       <Stack direction={{ xs: "column", md: "row" }} sx={{ justifyContent: "space-between", alignItems: { md: "center" }, gap: 1 }}>
         <AreaTitle title="Pontos de atenção técnicos" info={tabInfo.gaps} icon={<ErrorOutlineOutlined color="primary" />} />
         <Stack direction="row" spacing={1}>
-          <FormControl size="small" sx={{ minWidth: 145 }}><InputLabel>Prioridade</InputLabel><Select value={gapImpact} label="Prioridade" onChange={(e) => setGapImpact(e.target.value)}><MenuItem value="">Todas</MenuItem><MenuItem value="Alto">Alta</MenuItem><MenuItem value="Médio">Média</MenuItem></Select></FormControl>
+          <FormControl size="small" sx={{ minWidth: 145 }}><InputLabel>Impacto</InputLabel><Select value={gapImpact} label="Impacto" onChange={(e) => setGapImpact(e.target.value)}><MenuItem value="">Todas</MenuItem><MenuItem value="Alto">Alta</MenuItem><MenuItem value="Médio">Média</MenuItem></Select></FormControl>
           <FormControl size="small" sx={{ minWidth: 175 }}><InputLabel>Status</InputLabel><Select value={gapStatus} label="Status" onChange={(e) => setGapStatus(e.target.value)}><MenuItem value="">Todos</MenuItem>{[...new Set(data.gaps.map((gap) => gap.status))].map((status) => <MenuItem key={status} value={status}>{status}</MenuItem>)}</Select></FormControl>
         </Stack>
       </Stack>
@@ -650,8 +537,8 @@ export function TechnicalLeadership() {
       <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(3,1fr)" }, gap: 1.2, mb: 1.5 }}>
         {[
           ["Pontos identificados", filteredGaps.length],
-          ["Prioridade alta", filteredGaps.filter((gap) => gap.impact === "Alto").length],
-          ["Demais prioridades", filteredGaps.filter((gap) => gap.impact !== "Alto").length],
+          ["Impacto alto", filteredGaps.filter((gap) => gap.impact === "Alto").length],
+          ["Demais impactos", filteredGaps.filter((gap) => gap.impact !== "Alto").length],
         ].map(([label, value]) => <Box key={String(label)} sx={{ p: 1.35, borderRadius: 2, border: "1px solid", borderColor: "divider", bgcolor: mode === "dark" ? "rgba(15,36,58,.72)" : "background.paper" }}>
           <Typography variant="caption" color="text.secondary">{label}</Typography>
           <Typography sx={{ fontWeight: 900, fontSize: "1.45rem", mt: .15 }}>{value}</Typography>
@@ -670,7 +557,7 @@ export function TechnicalLeadership() {
             </Stack>
 
             <Stack direction="row" spacing={1} sx={{ mt: 1.1, flexWrap: "wrap", rowGap: .7 }}>
-              <Chip size="small" label={`Prioridade: ${gap.impact}`} color={gap.impact === "Alto" ? "error" : "warning"} />
+              <Chip size="small" label={`Impacto: ${gap.impact}`} color={gap.impact === "Alto" ? "error" : "warning"} />
               <Chip size="small" label={`Status: ${gap.status}`} variant="outlined" />
               {gap.confidence && <Chip size="small" label={`Confiança: ${gap.confidence}`} color={gap.confidence === "Alta" ? "success" : gap.confidence === "Média" ? "warning" : "default"} variant="outlined" />}
             </Stack>
@@ -700,7 +587,7 @@ export function TechnicalLeadership() {
       <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(2,1fr)", xl: "repeat(3,1fr)" }, gap: 1.5 }}>
         {data.development.map((item) => <Card key={item.analyst} onClick={() => setDrawer({ kind: "development", title: item.analyst, development: item })} sx={{ cursor: "pointer", background: mode === "dark" ? "linear-gradient(145deg, rgba(12,51,60,.96), rgba(12,29,49,.96)) !important" : "linear-gradient(145deg,#FFFFFF,#F2FBF7) !important", "&:hover": { borderColor: `${aliareColors.green} !important`, boxShadow: "0 12px 30px rgba(0,199,142,.10)" } }}><CardContent>
           <Stack direction="row" sx={{ justifyContent: "space-between", gap: 1 }}><Typography sx={{ fontWeight: 850 }}>{item.analyst}</Typography><Tooltip title="Mostra volume e temas do período para orientar apoio técnico e compartilhamento de conhecimento."><InfoOutlined sx={{ fontSize: 17, color: "text.secondary" }} /></Tooltip></Stack>
-          <Stack direction="row" spacing={1} sx={{ mt: 1, flexWrap: "wrap", rowGap: .6 }}><Chip size="small" label={`${item.tickets} tickets`} /><Chip size="small" color={item.stale ? "warning" : "success"} label={`${item.stale} sem movimento`} /><Chip size="small" variant="outlined" label={`${item.linkedTasks ?? 0} Tasks vinculadas`} />{Boolean(item.blockedTasks) && <Chip size="small" color="warning" label={`${item.blockedTasks} bloqueadas`} />}</Stack>
+          <Stack direction="row" spacing={1} sx={{ mt: 1, flexWrap: "wrap", rowGap: .6 }}><Chip size="small" label={`${item.tickets} tickets`} /><Chip size="small" color={item.stale ? "warning" : "success"} label={`${item.stale} sem ação 72h`} /><Chip size="small" variant="outlined" label={`${item.linkedTasks ?? 0} Tasks vinculadas`} />{Boolean(item.blockedTasks) && <Chip size="small" color="warning" label={`${item.blockedTasks} bloqueadas`} />}</Stack>
           <Stack spacing={.4} sx={{ mt: 1.2 }}>{item.themes.map((theme) => <Typography key={theme.topic} variant="caption" color="text.secondary">• {theme.topic}: <b>{theme.count}</b></Typography>)}</Stack>
         </CardContent></Card>)}
       </Box>
@@ -718,9 +605,9 @@ export function TechnicalLeadership() {
         {!drawer.items.length && <Alert severity="success">Nenhum item neste recorte.</Alert>}
       </DetailSection>}
       {drawer?.kind === "audit" && <DetailSection title="Revisão humana recomendada"><Stack spacing={1}>{drawer.items.map((ticket) => <Card key={ticket.id} variant="outlined"><CardContent><Typography sx={{ fontWeight: 850 }}>#{ticket.movideskId} · {ticket.subject}</Typography><Typography variant="body2" color="text.secondary" sx={{ mt: .5 }}>{ticket.reason}</Typography><DetailFieldGrid fields={[["Categoria", ticket.category ?? "Não informado"], ["Causa", ticket.cause ?? "Não informado"], ["Responsável", ticket.owner ?? "Não informado"], ["Cliente", ticket.client ?? "Não informado"]]} /><Button sx={{ mt: 1 }} endIcon={<OpenInNewOutlined />} onClick={() => openItem(ticket)}>Abrir atendimento</Button></CardContent></Card>)}</Stack></DetailSection>}
-      {drawer?.kind === "recurrence" && <><DetailSection title="Diagnóstico"><DetailFieldGrid fields={[["Ocorrências", drawer.recurrence.count], ["Período anterior", drawer.recurrence.previous], ["Clientes", drawer.recurrence.clients.join(", ") || "—"], ["Analistas", drawer.recurrence.analysts.join(", ") || "—"]]} /></DetailSection><DetailSection title="Ação sugerida"><Alert severity="info">{drawer.recurrence.action}</Alert></DetailSection><DetailSection title="Evidências"><Stack spacing={1}>{drawer.recurrence.examples.map((ticket) => <Button key={ticket.id} variant="outlined" onClick={() => openItem(ticket)} endIcon={<OpenInNewOutlined />} sx={{ justifyContent: "space-between" }}>#{ticket.movideskId} · {ticket.subject}</Button>)}</Stack></DetailSection></>}
-      {drawer?.kind === "gap" && <><DetailSection title="Diagnóstico do ponto de atenção"><Alert severity={drawer.gap.confidence === "Alta" ? "success" : "info"} sx={{ mb: 1.5 }}>O nível de confiança representa a quantidade de evidências independentes encontradas. A decisão final continua dependendo de validação da liderança.</Alert><DetailFieldGrid fields={[["Identificador", drawer.gap.id], ["Origem do sinal", drawer.gap.type], ["Prioridade", drawer.gap.impact], ["Status da análise", drawer.gap.status], ["Confiança", drawer.gap.confidence ?? "—"], ["Tickets relacionados", drawer.gap.ticketCount ?? 0], ["Vínculos Azure", drawer.gap.azureLinked ?? 0], ["Tasks bloqueadas", drawer.gap.blockedLinked ?? 0]]} /></DetailSection><DetailSection title="Evidências cruzadas"><Typography variant="body2">{drawer.gap.evidence}</Typography>{Boolean(drawer.gap.examples?.length) && <Stack spacing={.8} sx={{ mt: 1.2 }}>{drawer.gap.examples!.map((ticket) => <Button key={ticket.id} variant="outlined" endIcon={<OpenInNewOutlined />} onClick={() => openItem(ticket)} sx={{ justifyContent: "space-between", textAlign: "left", textTransform: "none" }}>#{ticket.movideskId} · {ticket.subject}</Button>)}</Stack>}</DetailSection>{Boolean(drawer.gap.tasks?.length) && <DetailSection title="Tasks Azure relacionadas"><Stack spacing={.8}>{drawer.gap.tasks!.map((task) => <Button key={task.id} variant="outlined" onClick={() => openItem(task)} sx={{ justifyContent: "space-between", textTransform: "none" }}>Task #{task.id} · {task.title}<Chip size="small" label={task.state} /></Button>)}</Stack></DetailSection>}<DetailSection title="Próxima ação sugerida"><Alert severity="info">{drawer.gap.action}</Alert></DetailSection></>}
-      {drawer?.kind === "development" && <><DetailSection title="Visão técnica"><DetailFieldGrid fields={[["Analista", drawer.development.analyst], ["Tickets no período", drawer.development.tickets], ["Sem movimento", drawer.development.stale], ["Tasks vinculadas", drawer.development.linkedTasks ?? 0], ["Tasks concluídas", drawer.development.finishedTasks ?? 0], ["Tasks bloqueadas", drawer.development.blockedTasks ?? 0]]} /></DetailSection><DetailSection title="Temas mais frequentes"><Stack spacing={.8}>{drawer.development.themes.map((theme) => <Box key={theme.topic} sx={{ p: 1, borderRadius: 1.5, bgcolor: "background.default" }}><Typography variant="body2"><b>{theme.topic}</b> · {theme.count}</Typography></Box>)}</Stack></DetailSection>{Boolean(drawer.development.examples?.length) && <DetailSection title="Atendimentos do período"><Stack spacing={.8}>{drawer.development.examples!.map((ticket) => <Button key={ticket.id} variant="outlined" endIcon={<OpenInNewOutlined />} onClick={() => openItem(ticket)} sx={{ justifyContent: "space-between", textTransform: "none" }}>#{ticket.movideskId} · {ticket.subject}</Button>)}</Stack></DetailSection>}</>}
+      {drawer?.kind === "recurrence" && <><DetailSection title="Leitura do padrão"><Alert severity={drawer.recurrence.trend === "GROWING" || drawer.recurrence.trend === "EMERGING" ? "warning" : drawer.recurrence.trend === "DECLINING" ? "success" : "info"} sx={{ mb: 1.5 }}>{drawer.recurrence.reading === "EMERGING_TRANSVERSAL" ? "Tema emergente e transversal entre clientes." : drawer.recurrence.reading === "GROWING_TRANSVERSAL" ? "Recorrência em crescimento entre clientes." : drawer.recurrence.reading === "CLIENT_CONCENTRATED" ? "Recorrência concentrada no cliente predominante." : drawer.recurrence.reading === "DECLINING" ? "Recorrência em redução no período." : "Padrão recorrente sem mudança temporal relevante."}</Alert><DetailFieldGrid fields={[["Ocorrências", drawer.recurrence.count], ["Período anterior", drawer.recurrence.previous], ["Variação", drawer.recurrence.changePct === null ? "Novo no período" : `${drawer.recurrence.changePct > 0 ? "+" : ""}${drawer.recurrence.changePct}%`], ["Tendência", drawer.recurrence.trend === "EMERGING" ? "Tema emergente" : drawer.recurrence.trend === "GROWING" ? "Em crescimento" : drawer.recurrence.trend === "DECLINING" ? "Em redução" : "Estável"], ["Padrão", drawer.recurrence.concentration?.pattern === "TRANSVERSAL" ? "Transversal entre clientes" : drawer.recurrence.concentration?.pattern === "CONCENTRATED" ? "Concentrado em cliente" : "Distribuído"], ["Confiança", drawer.recurrence.confidence ?? "—"], ["Evidências Azure", drawer.recurrence.linkedExamples ?? 0], ["Cliente predominante", drawer.recurrence.concentration?.topClient ?? "—"], ["Concentração no cliente", drawer.recurrence.concentration?.topClient ? `${drawer.recurrence.concentration.clientSharePct}%` : "—"], ["Módulo Azure predominante", drawer.recurrence.concentration?.topModule ?? "—"]]} /></DetailSection><DetailSection title="Abrangência"><DetailFieldGrid fields={[["Clientes", drawer.recurrence.clients.join(", ") || "—"], ["Analistas", drawer.recurrence.analysts.join(", ") || "—"]]} /></DetailSection><DetailSection title="Ação sugerida"><Alert severity="info">{drawer.recurrence.action}</Alert><Button variant="contained" startIcon={<SearchOutlined />} sx={{ mt: 1.2 }} onClick={() => { const p = new URLSearchParams({ q: drawer.recurrence.topic, source: "leadership", origin: "recurrence" }); if (drawer.recurrence.concentration?.topClient) p.set("client", drawer.recurrence.concentration.topClient); if (drawer.recurrence.trend) p.set("trend", drawer.recurrence.trend); if (drawer.recurrence.concentration?.pattern) p.set("pattern", drawer.recurrence.concentration.pattern); if (drawer.recurrence.confidence) p.set("confidence", drawer.recurrence.confidence); navigate(`/investigacao?${p.toString()}`); }}>Investigar este padrão</Button></DetailSection><DetailSection title="Evidências"><Stack spacing={1}>{drawer.recurrence.examples.map((ticket) => <Button key={ticket.id} variant="outlined" onClick={() => openItem(ticket)} endIcon={<OpenInNewOutlined />} sx={{ justifyContent: "space-between", textAlign: "left", textTransform: "none" }}>#{ticket.movideskId} · {ticket.subject}</Button>)}</Stack></DetailSection></>}
+      {drawer?.kind === "gap" && <><DetailSection title="Diagnóstico do ponto de atenção"><Alert severity={drawer.gap.confidence === "Alta" ? "success" : "info"} sx={{ mb: 1.5 }}>O nível de confiança representa a quantidade de evidências independentes encontradas. A decisão final continua dependendo de validação da liderança.</Alert><DetailFieldGrid fields={[["Identificador", drawer.gap.id], ["Origem do sinal", drawer.gap.type], ["Impacto", drawer.gap.impact], ["Status da análise", drawer.gap.status], ["Confiança", drawer.gap.confidence ?? "—"], ["Tickets relacionados", drawer.gap.ticketCount ?? 0], ["Vínculos Azure", drawer.gap.azureLinked ?? 0], ["Tasks bloqueadas", drawer.gap.blockedLinked ?? 0]]} /></DetailSection><DetailSection title="Evidências cruzadas"><Typography variant="body2">{drawer.gap.evidence}</Typography>{Boolean(drawer.gap.examples?.length) && <Stack spacing={.8} sx={{ mt: 1.2 }}>{drawer.gap.examples!.map((ticket) => <Button key={ticket.id} variant="outlined" endIcon={<OpenInNewOutlined />} onClick={() => openItem(ticket)} sx={{ justifyContent: "space-between", textAlign: "left", textTransform: "none" }}>#{ticket.movideskId} · {ticket.subject}</Button>)}</Stack>}</DetailSection>{Boolean(drawer.gap.tasks?.length) && <DetailSection title="Tasks Azure relacionadas"><Stack spacing={.8}>{drawer.gap.tasks!.map((task) => <Button key={task.id} variant="outlined" onClick={() => openItem(task)} sx={{ justifyContent: "space-between", textTransform: "none" }}>Task #{task.id} · {task.title}<Chip size="small" label={task.state} /></Button>)}</Stack></DetailSection>}<DetailSection title="Próxima ação sugerida"><Alert severity="info">{drawer.gap.action}</Alert></DetailSection></>}
+      {drawer?.kind === "development" && <><DetailSection title="Visão técnica"><DetailFieldGrid fields={[["Analista", drawer.development.analyst], ["Tickets no período", drawer.development.tickets], ["Sem ação 72h", drawer.development.stale], ["Tasks vinculadas", drawer.development.linkedTasks ?? 0], ["Tasks concluídas", drawer.development.finishedTasks ?? 0], ["Tasks bloqueadas", drawer.development.blockedTasks ?? 0]]} /></DetailSection><DetailSection title="Temas mais frequentes"><Stack spacing={.8}>{drawer.development.themes.map((theme) => <Box key={theme.topic} sx={{ p: 1, borderRadius: 1.5, bgcolor: "background.default" }}><Typography variant="body2"><b>{theme.topic}</b> · {theme.count}</Typography></Box>)}</Stack></DetailSection>{Boolean(drawer.development.examples?.length) && <DetailSection title="Atendimentos do período"><Stack spacing={.8}>{drawer.development.examples!.map((ticket) => <Button key={ticket.id} variant="outlined" endIcon={<OpenInNewOutlined />} onClick={() => openItem(ticket)} sx={{ justifyContent: "space-between", textTransform: "none" }}>#{ticket.movideskId} · {ticket.subject}</Button>)}</Stack></DetailSection>}</>}
     </Drawer>
   </Box>;
 }
