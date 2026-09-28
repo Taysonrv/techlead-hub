@@ -383,3 +383,96 @@ svg {
     width: 100%;
   }
 }
+
+
+/* =========================================================
+   RECHARTS - PADRÃO VISUAL PREMIUM GLOBAL
+   Mantém nitidez, proporção e legibilidade consistentes em
+   Dashboard, Analistas, Clientes, Desempenho, Coordenação,
+   Qualidade, Liderança Técnica e Versões.
+========================================================= */
+
+.techlead-page-surface .recharts-responsive-container {
+  min-width: 0;
+}
+
+.techlead-page-surface .recharts-wrapper,
+.techlead-page-surface .recharts-surface {
+  overflow: visible;
+  shape-rendering: geometricPrecision;
+  text-rendering: geometricPrecision;
+}
+
+.techlead-page-surface .recharts-cartesian-grid line {
+  stroke-opacity: .62;
+  stroke-width: 1;
+}
+
+.techlead-page-surface .recharts-cartesian-axis-tick text,
+.techlead-page-surface .recharts-label,
+.techlead-page-surface .recharts-text {
+  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-weight: 600;
+  letter-spacing: .005em;
+}
+
+.techlead-page-surface .recharts-cartesian-axis-line,
+.techlead-page-surface .recharts-cartesian-axis-tick-line {
+  stroke-opacity: .32;
+}
+
+.techlead-page-surface .recharts-bar-rectangle path,
+.techlead-page-surface .recharts-sector,
+.techlead-page-surface .recharts-line-curve,
+.techlead-page-surface .recharts-area-curve {
+  vector-effect: non-scaling-stroke;
+}
+
+.techlead-page-surface .recharts-sector {
+  transition: opacity .16s ease, filter .16s ease;
+}
+
+.techlead-page-surface .recharts-pie-sector:hover .recharts-sector {
+  filter: brightness(1.08) drop-shadow(0 4px 8px rgba(15, 23, 42, .14));
+}
+
+.techlead-page-surface .recharts-bar-rectangle {
+  transition: opacity .16s ease, filter .16s ease;
+}
+
+.techlead-page-surface .recharts-bar-rectangle:hover {
+  filter: brightness(1.06) drop-shadow(0 3px 6px rgba(15, 23, 42, .12));
+}
+
+.techlead-page-surface .recharts-default-tooltip {
+  border-radius: 12px !important;
+  padding: 10px 12px !important;
+  box-shadow: 0 14px 34px rgba(15, 23, 42, .14) !important;
+  backdrop-filter: blur(10px);
+  font-size: .82rem;
+}
+
+.techlead-page-surface .recharts-tooltip-label {
+  margin-bottom: 4px !important;
+  font-weight: 800 !important;
+}
+
+.techlead-page-surface .recharts-legend-wrapper {
+  font-size: .78rem !important;
+  line-height: 1.35;
+}
+
+.techlead-page-surface .recharts-legend-item {
+  margin-right: 14px !important;
+  margin-bottom: 5px !important;
+}
+
+@media (max-width: 600px) {
+  .techlead-page-surface .recharts-cartesian-axis-tick text {
+    font-size: 9px;
+  }
+
+  .techlead-page-surface .recharts-legend-wrapper {
+    font-size: .72rem !important;
+  }
+}
