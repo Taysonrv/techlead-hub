@@ -3623,7 +3623,7 @@ function DonutCard({
                   paddingAngle={
                     2
                   }
-                  cornerRadius={4}
+                  cornerRadius={5}
                   stroke={theme.palette.background.paper}
                   strokeWidth={1.5}
                   cursor={
