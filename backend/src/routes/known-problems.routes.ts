@@ -47,22 +47,41 @@ knownProblemRoutes.get("/", async (req: AuthenticatedRequest,res) => {
 knownProblemRoutes.get("/sources", async (req: AuthenticatedRequest,res) => {
   try {
     const q=clean(req.query.q,120); if(q.length<2) return res.json({tickets:[],workItems:[]});
-    const numeric=Number(q.replace(/\D/g,""));
-    const tickets=await prisma.ticket.findMany({
-      where:{isDeleted:false,OR:[
+    // Busca contextual: cada termo digitado pode aparecer em qualquer uma das dimensões
+    // pesquisáveis. Assim "coap fixacao saldo", por exemplo, não precisa existir como
+    // uma frase exata em um único campo para localizar o atendimento ou Work Item.
+    const terms=[...new Set(q.split(/\\s+/).map(term=>term.trim()).filter(term=>term.length>=2))].slice(0,8);
+    const ticketWhere:any={isDeleted:false,AND:terms.map(term=>{
+      const numeric=Number(term.replace(/\\D/g,""));
+      return {OR:[
         ...(Number.isFinite(numeric)&&numeric>0?[{movideskId:numeric},{taskNumber:numeric}]:[]),
-        {subject:{contains:q,mode:"insensitive"}},{client:{contains:q,mode:"insensitive"}},
-        {serviceFirstLevel:{contains:q,mode:"insensitive"}},{serviceSecondLevel:{contains:q,mode:"insensitive"}},{serviceThirdLevel:{contains:q,mode:"insensitive"}}
-      ]},orderBy:{lastUpdate:"desc"},take:12,
-      select:{movideskId:true,subject:true,client:true,category:true,cause:true,serviceFirstLevel:true,serviceSecondLevel:true,serviceThirdLevel:true,taskNumber:true,taskType:true,registeredVersion:true,deliveredVersion:true}
-    });
-    const workItems=await prisma.azureWorkItem.findMany({
-      where:{OR:[
+        {subject:{contains:term,mode:"insensitive"}},{client:{contains:term,mode:"insensitive"}},
+        {category:{contains:term,mode:"insensitive"}},{cause:{contains:term,mode:"insensitive"}},
+        {serviceFirstLevel:{contains:term,mode:"insensitive"}},{serviceSecondLevel:{contains:term,mode:"insensitive"}},{serviceThirdLevel:{contains:term,mode:"insensitive"}},
+        {taskType:{contains:term,mode:"insensitive"}},{registeredVersion:{contains:term,mode:"insensitive"}},{deliveredVersion:{contains:term,mode:"insensitive"}}
+      ]};
+    })};
+    const workItemWhere:any={AND:terms.map(term=>{
+      const numeric=Number(term.replace(/\\D/g,""));
+      return {OR:[
         ...(Number.isFinite(numeric)&&numeric>0?[{id:numeric},{movideskTicket:numeric}]:[]),
-        {title:{contains:q,mode:"insensitive"}},{client:{contains:q,mode:"insensitive"}},{module:{contains:q,mode:"insensitive"}},{process:{contains:q,mode:"insensitive"}}
-      ]},orderBy:{azureChangedAt:"desc"},take:12,
-      select:{id:true,workItemType:true,title:true,state:true,client:true,criticality:true,module:true,process:true,movideskTicket:true,deliveredVersion:true,registeredVersion:true,workaround:true,description:true}
-    });
+        {title:{contains:term,mode:"insensitive"}},{client:{contains:term,mode:"insensitive"}},
+        {module:{contains:term,mode:"insensitive"}},{process:{contains:term,mode:"insensitive"}},
+        {workItemType:{contains:term,mode:"insensitive"}},{state:{contains:term,mode:"insensitive"}},
+        {registeredVersion:{contains:term,mode:"insensitive"}},{deliveredVersion:{contains:term,mode:"insensitive"}},
+        {description:{contains:term,mode:"insensitive"}},{workaround:{contains:term,mode:"insensitive"}}
+      ]};
+    })};
+    const [tickets,workItems]=await Promise.all([
+      prisma.ticket.findMany({
+        where:ticketWhere,orderBy:{lastUpdate:"desc"},take:16,
+        select:{movideskId:true,subject:true,client:true,category:true,cause:true,serviceFirstLevel:true,serviceSecondLevel:true,serviceThirdLevel:true,taskNumber:true,taskType:true,registeredVersion:true,deliveredVersion:true}
+      }),
+      prisma.azureWorkItem.findMany({
+        where:workItemWhere,orderBy:{azureChangedAt:"desc"},take:16,
+        select:{id:true,workItemType:true,title:true,state:true,client:true,criticality:true,module:true,process:true,movideskTicket:true,deliveredVersion:true,registeredVersion:true,workaround:true,description:true}
+      })
+    ]);
     res.json({tickets,workItems});
   } catch(error){console.error("[known-problems] sources",error);res.status(500).json({error:"Não foi possível pesquisar tickets e tarefas."});}
 });
