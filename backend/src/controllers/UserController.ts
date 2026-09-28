@@ -254,6 +254,17 @@ export class UserController {
     }
   }
 
+  async updatePermissions(request: AuthenticatedRequest, response: Response) {
+    try {
+      const adminUserId = getAuthenticatedUserId(request);
+      const targetUserId = getUserIdFromParams(request.params.id);
+      const user = await userService.updateUserPermissions(adminUserId, targetUserId, request.body?.permissions);
+      return response.status(200).json({ message: "Permissões atualizadas com sucesso.", user });
+    } catch (error) {
+      return handleUserError(error, response);
+    }
+  }
+
   /* =======================================================
      ALTERAR PERFIL
      PATCH /api/users/:id/role
