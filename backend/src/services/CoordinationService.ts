@@ -601,7 +601,7 @@ export class CoordinationService {
     ].filter((item) => item.count > 0);
 
 
-    return {
+    return cacheSet(cacheKey, {
       generatedAt: now,
       indicators: {
         openTickets,
@@ -644,7 +644,7 @@ export class CoordinationService {
         analysts: [...SUPPORT_ANALYSTS],
         clients: [...SIMER_CLIENTS],
       }
-    };
+    }, 30_000);
   }
 }
 
