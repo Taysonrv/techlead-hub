@@ -176,7 +176,13 @@ if (frontendAvailable) {
       frontendDistPath,
       {
         index: false,
-        maxAge: "1h",
+        /*
+         * index.html nunca é servido pelo express.static (index:false), mas os
+         * chunks também não devem ficar presos em cache durante uma atualização
+         * local/desktop. Os nomes possuem hash, portanto immutable é seguro.
+         */
+        maxAge: "1y",
+        immutable: true,
       }
     )
   );
@@ -203,6 +209,14 @@ if (frontendAvailable) {
   app.get(
     /^\/(?!api(?:\/|$)|health(?:\/|$)).*/,
     (_req, res) => {
+      /*
+       * O shell da SPA precisa ser sempre revalidado. Sem isso, uma atualização
+       * pode manter um index.html antigo apontando para chunks removidos ou para
+       * um grafo de bundles de uma versão anterior.
+       */
+      res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+      res.setHeader("Pragma", "no-cache");
+      res.setHeader("Expires", "0");
       res.sendFile(
         frontendIndexPath
       );
