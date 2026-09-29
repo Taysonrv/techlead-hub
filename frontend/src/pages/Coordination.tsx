@@ -11,7 +11,7 @@ import {
   CircularProgress,
   Drawer,
   Button,
-  Divider,  LinearProgress,
+  LinearProgress,
   useTheme,
   Tooltip,
   Stack,
