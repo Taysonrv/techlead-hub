@@ -1,9 +1,7 @@
 import {
   GroupsOutlined,
   InfoOutlined,
-  RadarOutlined,
-  CloseOutlined,
-} from "@mui/icons-material";
+  RadarOutlined,} from "@mui/icons-material";
 import {
   Alert,
   Box,
@@ -13,9 +11,7 @@ import {
   CircularProgress,
   Drawer,
   Button,
-  Divider,
-  IconButton,
-  LinearProgress,
+  Divider,  LinearProgress,
   useTheme,
   Tooltip,
   Stack,
@@ -73,8 +69,6 @@ export function Coordination() {
   const navigate = useNavigate();
   const theme = useTheme();
   const [data, setData] = useState<Data | null>(null);
-  const [slaFlow, setSlaFlow] = useState<any | null>(null);
-  const [slaDrilldown, setSlaDrilldown] = useState<{title:string;ids:number[]}|null>(null);
   const [capacity, setCapacity] = useState<{ days: number; businessDays: number; hoursPerDay: number; expectedHours: number; registeredHours: number; coverageRate: number | null; analysts: Array<{ analyst: string; expectedHours: number; registeredHours: number; coverageRate: number | null }> } | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -83,7 +77,6 @@ export function Coordination() {
   const [detailError, setDetailError] = useState("");
   const [details, setDetails] = useState<DetailData | null>(null);
   const [serviceDays, setServiceDays] = useState(0);
-  const slaDays = 180;
 
   const load = useCallback(async () => {
     try {
@@ -112,17 +105,6 @@ export function Coordination() {
     }, 120);
     return () => { window.clearTimeout(timer); controller.abort(); };
   }, [Boolean(data)]);
-
-  useEffect(() => {
-    if (!data) return;
-    const controller = new AbortController();
-    const timer = window.setTimeout(() => {
-      api.get("/coordination/sla-development", { params: { days: slaDays }, signal: controller.signal })
-        .then((response) => setSlaFlow(response.data))
-        .catch(() => { if (!controller.signal.aborted) setSlaFlow(null); });
-    }, 220);
-    return () => { window.clearTimeout(timer); controller.abort(); };
-  }, [Boolean(data), slaDays]);
 
   const maximum = useMemo(
     () => Math.max(...(data?.workload.map((item) => item.total) ?? [1]), 1),
@@ -187,7 +169,7 @@ export function Coordination() {
           </Alert>
 
           {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-          {slaFlow && <Card variant="outlined" sx={{mb:2}}>
+          <Card variant="outlined" sx={{mb:2}}>
 <CardContent>
 <Stack direction={{xs:"column",md:"row"}} spacing={1.5} sx={{alignItems:{md:"center"},justifyContent:"space-between"}}>
 <Box>
@@ -200,7 +182,7 @@ export function Coordination() {
 Os indicadores, cards e gráficos de SLA/OLA desta seção dependem de dados que ainda não estão disponíveis de forma completa no TechLead Hub. A visualização ficará indisponível até a integração com o PSG, evitando apresentar métricas parciais ou potencialmente incorretas.
 </Alert>
 </CardContent>
-</Card>}
+</Card>
 
           {loading || !data ? (
             <Box sx={{ minHeight: 320, display: "grid", placeItems: "center" }}>
@@ -488,7 +470,6 @@ Os indicadores, cards e gráficos de SLA/OLA desta seção dependem de dados que
           )}
         </CardContent>
       </Card>
-      <Drawer anchor="right" open={Boolean(slaDrilldown)} onClose={()=>setSlaDrilldown(null)} slotProps={{paper:{sx:{width:{xs:"100%",sm:560},p:2}}}}><Stack direction="row" sx={{justifyContent:"space-between",alignItems:"center",mb:1}}><Box><Typography variant="h6" sx={{fontWeight:900}}>{slaDrilldown?.title}</Typography><Typography variant="body2" color="text.secondary">Atendimentos responsáveis pelo indicador selecionado.</Typography></Box><IconButton onClick={()=>setSlaDrilldown(null)}><CloseOutlined/></IconButton></Stack><Divider sx={{mb:1}} />{(slaFlow?.rows??[]).filter((r:any)=>slaDrilldown?.ids.includes(r.movideskId)).map((r:any)=><Box key={r.movideskId} onClick={()=>navigate(`/tickets?movidesk=${r.movideskId}`)} sx={{p:1.25,borderRadius:2,cursor:"pointer","&:hover":{bgcolor:"action.hover"}}}><Stack direction="row" spacing={1} sx={{alignItems:"center"}}><Chip size="small" label={r.urgency}/><Typography sx={{fontWeight:800}}>#{r.movideskId} · {r.subject}</Typography></Stack><Typography variant="caption" color="text.secondary">{r.client} · {r.owner} · Suporte {formatMinutes(r.supportMinutes)} · Fábrica {formatMinutes(r.factoryMinutes??0)} · {r.bottleneck}</Typography></Box>)}</Drawer>
       <Drawer anchor="right" open={Boolean(detailTitle)} onClose={() => { setDetailTitle(""); setDetails(null); setDetailError(""); }} slotProps={{ paper: { sx: detailDrawerPaperSx } }}>
         <DetailPanelHeader eyebrow="Coordenação" title={detailTitle || "Detalhes"} identifier={details ? `${details.total} item(ns) no recorte · ${details.loaded ?? (details.tickets.length + details.workItems.length)} carregado(s)` : undefined} onClose={() => { setDetailTitle(""); setDetails(null); setDetailError(""); }} />
         {detailLoading ? <Box sx={{ py: 8, display: "grid", placeItems: "center" }}><CircularProgress /></Box> : detailError ? <Alert severity="error" sx={{m:2}}>{detailError}</Alert> : details ? (
@@ -515,5 +496,3 @@ Os indicadores, cards e gráficos de SLA/OLA desta seção dependem de dados que
     </Box>
   );
 }
-
-function formatMinutes(value:number){if(!Number.isFinite(value)||value<=0)return "0h";const h=Math.floor(value/60),m=Math.round(value%60);return m?`${h}h ${m}min`:`${h}h`;}
