@@ -46,6 +46,7 @@ import {
   TrendingUpOutlined,
   AssessmentOutlined,
   CampaignOutlined,
+  OpenInNewRounded,
 } from "@mui/icons-material";
 
 import {
@@ -1128,6 +1129,15 @@ function MenuSection({
   );
 }
 
+
+function openRoutineInNewTab(event: MouseEvent<HTMLElement>, path: string) {
+  // No Web, um clique comum em uma rotina preserva o contexto atual abrindo uma nova aba.
+  // Ctrl/Cmd/Shift/clique do meio continuam sob controle nativo do navegador.
+  if (window.techLeadHub?.desktop || event.ctrlKey || event.metaKey || event.shiftKey || event.button !== 0) return;
+  event.preventDefault();
+  window.open(new URL(path, window.location.origin).toString(), "_blank", "noopener,noreferrer");
+}
+
 /* =========================================================
    ITEM DO MENU
 ========================================================= */
@@ -1154,6 +1164,8 @@ function MenuItem({
         NavLink
       }
       to={path}
+      onClick={(event) => openRoutineInNewTab(event, path)}
+      title={window.techLeadHub?.desktop ? label : `${label} · abrir em nova aba`}
       end={
         path === "/"
       }
@@ -1327,6 +1339,8 @@ function MenuItem({
             },
         }}
       />
+
+      {!window.techLeadHub?.desktop && !hasBadge && <OpenInNewRounded sx={{ ml: .5, fontSize: 14, color: "rgba(255,255,255,.28)" }} />}
 
       {hasBadge && (
         <Box
