@@ -278,6 +278,42 @@ export class GlobalController {
     if(mapItems.length&&!ruleItems.length) anomalies.push("Há evidências no Mapa SIMER, mas nenhuma Regra do Sistema foi correlacionada.");
     const intelligence=await investigationIntelligenceService.analyze(ticket,similar);
     intelligence.signals.forEach(signal=>{if(signal.severity==="warning"&&!anomalies.includes(signal.detail))anomalies.push(signal.detail)});
+    const strongCases=similar.filter(x=>x.score>=45);
+    const strongClients=new Set(strongCases.map(x=>norm(x.client)).filter(Boolean));
+    const knownProblemCandidate={
+      eligible:strongCases.length>=3,
+      level:strongCases.length>=6&&strongClients.size>=2?"high":strongCases.length>=3?"medium":"low",
+      strongCases:strongCases.length,
+      clients:strongClients.size,
+      rationale:strongCases.length>=3
+        ? `${strongCases.length} caso(s) com correlação forte${strongClients.size>=2?` em ${strongClients.size} clientes`:""}; recomenda-se revisão humana antes de registrar como Problema Conhecido.`
+        : "A recorrência atual ainda não atingiu o critério mínimo de 3 casos com correlação forte.",
+      suggestedTitle:ticket.subject,
+      path:`/problemas-conhecidos?q=${encodeURIComponent(ticket.subject)}`,
+    };
+    const anomalyRadar=[
+      {key:"recurrence",label:"Recorrência forte",value:strongCases.length,status:strongCases.length>=3?"attention":"normal",detail:"Casos semelhantes com score de correlação ≥45."},
+      {key:"cross-client",label:"Transversalidade",value:strongClients.size,status:strongClients.size>=2?"attention":"normal",detail:"Quantidade de clientes distintos nos casos de correlação forte."},
+      {key:"version",label:"Concentração por versão",value:intelligence.versionSignal?.cases??0,status:intelligence.versionSignal?"attention":"normal",detail:intelligence.versionSignal?.text??"Sem concentração de versão suficiente no recorte."},
+      {key:"client-volume",label:"Pulso do cliente",value:intelligence.clientDna.serviceCases,status:intelligence.clientDna.serviceCases>=5?"attention":"normal",detail:`${intelligence.clientDna.serviceCases} ticket(s) do cliente no serviço atual no recorte analisado.`},
+      {key:"data-quality",label:"Qualidade do contexto",value:Math.round((completeness/5)*100),status:completeness<4?"attention":"normal",detail:"Completude de cliente, categoria, responsável, serviço e vínculo de desenvolvimento."},
+    ];
+    const technicalDna={
+      product:"SIMER",
+      client:ticket.client??null,
+      category:ticket.category??null,
+      cause:ticket.cause??null,
+      service:serviceValues[0]??null,
+      subject:ticket.subject,
+      version:ticket.deliveredVersion??ticket.registeredVersion??null,
+      task:ticket.taskNumber??null,
+      taskStatus:ticket.taskStatus??null,
+      recurrence:strongCases.length>=6?"alta":strongCases.length>=3?"moderada":strongCases.length?"baixa":"não detectada",
+      crossClient:strongClients.size>=2,
+      knownProblemCandidate:knownProblemCandidate.eligible,
+      evidenceCount:evidence.length,
+      ruleCount:ruleItems.length,
+    };
     const diagnosticPlan=[
       {key:"classification",title:"Validar classificação",status:ticket.category&&serviceValues[0]?"ready":"attention",detail:ticket.category&&serviceValues[0]?"Categoria e Serviço disponíveis para confronto.":"Categoria ou Serviço incompleto; revisar antes de concluir a causa."},
       {key:"rule",title:"Confrontar Regra do Sistema",status:ruleItems.length||evidence.length?"ready":"attention",detail:ruleItems.length||evidence.length?`${ruleItems.length} regra(s) e ${evidence.length} evidência(s) técnica(s) correlacionadas.`:"Nenhuma regra/evidência correlacionada automaticamente."},
@@ -286,7 +322,7 @@ export class GlobalController {
       {key:"data",title:"Validar dados no banco",status:"neutral",detail:"Use consultas somente leitura e parametrizadas para confirmar a evidência funcional antes de qualquer intervenção."},
     ];
     return res.json({
-      ticket, workItems, similar, timeline, evidence, ruleItems:ruleItems.slice(0,10), anomalies, diagnosticPlan, intelligence,
+      ticket, workItems, similar, timeline, evidence, ruleItems:ruleItems.slice(0,10), anomalies, diagnosticPlan, intelligence, technicalDna, knownProblemCandidate, anomalyRadar,
       quality: { score: Math.round((completeness/5)*100), checks: { client:Boolean(ticket.client), category:Boolean(ticket.category), owner:Boolean(ticket.owner), service:Boolean(serviceValues[0]), developmentLink:Boolean(ticket.taskNumber) } },
       summary: { similarCases: similar.length, relatedWorkItems: workItems.length, technicalEvidence:evidence.length, rules:ruleItems.length, service: serviceValues[0]??null, version: ticket.deliveredVersion??ticket.registeredVersion??null },
     });
