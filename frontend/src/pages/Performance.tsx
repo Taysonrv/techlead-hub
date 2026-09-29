@@ -49,6 +49,7 @@ import { api } from "../services/api";
 import { useFilters } from "../context/FiltersContext";
 import { PeriodFilter } from "../components/PeriodFilter";
 import { PageHeader } from "../components/PageHeader";
+import { ExportTicketsButton } from "../components/ExportTicketsButton";
 import { detailDrawerPaperSx } from "../theme/layoutTokens";
 import { useTheme } from "@mui/material/styles";
 import { ExecutiveSection } from "../components/ExecutiveSection";
@@ -1345,6 +1346,8 @@ export function Performance() {
                   }}
                 />
               </Stack>
+
+              <Box sx={{ mt: 1.5 }}><ExportTicketsButton tickets={drilldown.tickets} title={drilldown.title} subtitle={drilldown.subtitle ?? "Análise de desempenho"} /></Box>
 
               <Divider sx={{ my: 2 }} />
 
