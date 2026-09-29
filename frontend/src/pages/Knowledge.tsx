@@ -2,7 +2,7 @@ import { Alert,Box,Button,Card,CardContent,Chip,CircularProgress,Divider,MenuIte
 import { OpenInNewOutlined,SearchOutlined } from "@mui/icons-material";
 import { useEffect,useState } from "react";
 import { PageHeader } from "../components/PageHeader";
-import { api } from "../services/api";
+import { api, getApiErrorMessage } from "../services/api";
 
 type Status={azure:{configured:boolean;wiki:string|null;wikiAvailable:boolean}};
 type Hit={source:"azure-wiki";title:string;excerpt:string;path?:string;webUrl:string|null;modifiedAt?:string|null};
@@ -10,7 +10,7 @@ type Hit={source:"azure-wiki";title:string;excerpt:string;path?:string;webUrl:st
 export function Knowledge(){
  const [status,setStatus]=useState<Status|null>(null),[query,setQuery]=useState(""),[items,setItems]=useState<Hit[]>([]),[warnings,setWarnings]=useState<string[]>([]),[loading,setLoading]=useState(false),[message,setMessage]=useState<string|null>(null);
  useEffect(()=>{void api.get<Status>("/knowledge/status").then(r=>setStatus(r.data)).catch(()=>setMessage("Não foi possível consultar o status da Wiki Azure."))},[]);
- async function search(){if(query.trim().length<3){setMessage("Informe ao menos 3 caracteres para pesquisar.");return}try{setLoading(true);setMessage(null);const r=await api.get("/knowledge/search",{params:{q:query.trim(),source:"azure-wiki"},timeout:60000});setItems(r.data.items??[]);setWarnings(r.data.warnings??[])}catch(e:any){setMessage(e?.response?.data?.message||e?.message||"Não foi possível pesquisar.")}finally{setLoading(false)}}
+ async function search(){if(query.trim().length<3){setMessage("Informe ao menos 3 caracteres para pesquisar.");return}try{setLoading(true);setMessage(null);const r=await api.get("/knowledge/search",{params:{q:query.trim(),source:"azure-wiki"},timeout:60000});setItems(r.data.items??[]);setWarnings(r.data.warnings??[])}catch(e:unknown){setMessage(getApiErrorMessage(e,"Não foi possível pesquisar."))}finally{setLoading(false)}}
  return <Box><PageHeader eyebrow="Conhecimento" title="Base de Conhecimento" description="Consulte procedimentos e documentação operacional publicados na Wiki Azure. Regras BPMN e Mapa SIMER permanecem na Central de Investigação."/>
  {message&&<Alert severity="info" sx={{mb:2}}>{message}</Alert>}
  <Card variant="outlined" sx={{mb:2}}><CardContent><Stack direction={{xs:"column",md:"row"}} spacing={1.5} sx={{alignItems:{md:"center"}}}><TextField fullWidth label="Rotina, mensagem de erro, módulo ou assunto" value={query} onChange={e=>setQuery(e.target.value)} onKeyDown={e=>e.key==="Enter"&&void search()}/><TextField select disabled label="Fonte" value="azure-wiki" sx={{minWidth:210}}><MenuItem value="azure-wiki">Wiki Azure</MenuItem></TextField><Button variant="contained" startIcon={<SearchOutlined/>} onClick={()=>void search()} disabled={loading} sx={{minWidth:130,height:56}}>{loading?<CircularProgress size={20} color="inherit"/>:"Pesquisar"}</Button></Stack><Divider sx={{my:2}}/><Chip color={status?.azure.wikiAvailable?"success":"warning"} variant="outlined" label={status?.azure.wikiAvailable?`Wiki Azure conectada: ${status.azure.wiki}`:status?.azure.configured?"Wiki Azure indisponível":"Wiki Azure não configurada"}/></CardContent></Card>
