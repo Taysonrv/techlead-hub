@@ -2550,6 +2550,14 @@ export function Tickets() {
                 <Button
                   size="small"
                   variant="outlined"
+                  startIcon={<SearchOutlined />}
+                  onClick={() => navigate(`/investigacao?q=${selectedTicket.movideskId}`)}
+                >
+                  Investigar este atendimento
+                </Button>
+                <Button
+                  size="small"
+                  variant="outlined"
                   startIcon={<AccountTreeOutlined />}
                   onClick={() => {
                     const context = [selectedTicket.subject, selectedTicket.category, selectedTicket.cause, selectedTicket.serviceFirstLevel, selectedTicket.serviceSecondLevel, selectedTicket.serviceThirdLevel, selectedTicket.justification].filter(Boolean).join(" ");
