@@ -526,6 +526,8 @@ export function About() {
             </Typography>
             <InfoRow label="Aplicação" value="TechLead Hub" />
             <Divider />
+            <InfoRow label="Criado por" value="Tayson" />
+            <Divider />
             <InfoRow label="Versão instalada" value={appVersion} />
             <Divider />
             <InfoRow label="Canal" value="Beta" />
