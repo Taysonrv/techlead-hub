@@ -53,6 +53,7 @@ import { ExportTicketsButton } from "../components/ExportTicketsButton";
 import { detailDrawerPaperSx } from "../theme/layoutTokens";
 import { KpiCard as ExecutiveKpiCard } from "../components/KpiCard";
 import { ExecutiveSection } from "../components/ExecutiveSection";
+import { ExportTicketsButton } from "../components/ExportTicketsButton";
 import { aliareColors } from "../theme/theme";
 import {
   chartPalette,
@@ -4507,6 +4508,7 @@ export function Analysts() {
                 </IconButton>
               </Stack>
 
+              <ExportTicketsButton tickets={azureDrilldown.items.map((item) => ({ ...item, taskNumber: item.id, taskStatus: item.state }))} title={azureDrilldown.title} subtitle={azureDrilldown.subtitle ?? "Tasks Azure por analista"} />
               <Divider sx={{ my: 2 }} />
 
               <Stack spacing={1}>
@@ -4681,11 +4683,8 @@ export function Analysts() {
                 </IconButton>
               </Stack>
 
-              <Divider
-                sx={{
-                  my: 2,
-                }}
-              />
+              <ExportTicketsButton tickets={productivityDrilldown.items.map((item) => ({ ...item, taskNumber: item.id, taskStatus: item.state }))} title={productivityDrilldown.title} subtitle={productivityDrilldown.subtitle ?? "Produtividade Azure"} />
+              <Divider sx={{ my: 2 }} />
 
               <Stack
                 spacing={1}
