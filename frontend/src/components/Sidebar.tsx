@@ -76,6 +76,7 @@ import { BugReportDialog } from "./BugReportDialog";
 
 import {
   api,
+  getAccessToken,
 } from "../services/api";
 
 import {
@@ -676,16 +677,18 @@ export function Sidebar() {
         </Box>
 
         <Box sx={{ px: 1.1, mb: .5 }}>
-          <ListItemButton component={NavLink} to="/" end onClick={(event) => openRoutineInNewTab(event, "/")} title={window.techLeadHub?.desktop ? "Página inicial" : "Página inicial · abrir em nova aba"} sx={{ minHeight: 40, px: 1.3, borderRadius: 1.2, color: "rgba(255,255,255,.72)", "&:hover": { bgcolor: "rgba(255,255,255,.05)", color: "#fff" }, "&.active": { bgcolor: "rgba(24,199,122,.10)", color: "#fff" }, "&.active .MuiListItemIcon-root": { color: aliareColors.green } }}>
+          <ListItemButton component={NavLink} to="/" end title="Página inicial" sx={{ minHeight: 40, px: 1.3, borderRadius: 1.2, color: "rgba(255,255,255,.72)", "&:hover": { bgcolor: "rgba(255,255,255,.05)", color: "#fff" }, "&.active": { bgcolor: "rgba(24,199,122,.10)", color: "#fff" }, "&.active .MuiListItemIcon-root": { color: aliareColors.green } }}>
             <ListItemIcon sx={{ minWidth: 32, color: "rgba(255,255,255,.50)" }}><HomeOutlined fontSize="small" /></ListItemIcon>
             <ListItemText primary="Página inicial" slotProps={{ primary: { sx: { fontSize: ".76rem", fontWeight: 800 } } }} />
+            {!window.techLeadHub?.desktop && <RoutineNewTabButton path="/" label="Página inicial" />}
           </ListItemButton>
         </Box>
         {canAccess("coordination") && (
           <Box sx={{ px: 1.1, mb: .75 }}>
-            <ListItemButton component={NavLink} to="/coordenacao" onClick={(event) => openRoutineInNewTab(event, "/coordenacao")} title={window.techLeadHub?.desktop ? "Central da Coordenação" : "Central da Coordenação · abrir em nova aba"} sx={{ minHeight: 40, px: 1.3, borderRadius: 1.2, color: "rgba(255,255,255,.72)", "&:hover": { bgcolor: "rgba(24,199,122,.08)", color: "#fff" }, "&.active": { bgcolor: "rgba(24,199,122,.13)", color: "#fff" }, "&.active .MuiListItemIcon-root": { color: aliareColors.green } }}>
+            <ListItemButton component={NavLink} to="/coordenacao" title="Central da Coordenação" sx={{ minHeight: 40, px: 1.3, borderRadius: 1.2, color: "rgba(255,255,255,.72)", "&:hover": { bgcolor: "rgba(24,199,122,.08)", color: "#fff" }, "&.active": { bgcolor: "rgba(24,199,122,.13)", color: "#fff" }, "&.active .MuiListItemIcon-root": { color: aliareColors.green } }}>
               <ListItemIcon sx={{ minWidth: 32, color: "rgba(255,255,255,.50)" }}><InsightsOutlined fontSize="small" /></ListItemIcon>
               <ListItemText primary="Central da Coordenação" slotProps={{ primary: { sx: { fontSize: ".76rem", fontWeight: 800 } } }} />
+              {!window.techLeadHub?.desktop && <RoutineNewTabButton path="/coordenacao" label="Central da Coordenação" />}
             </ListItemButton>
           </Box>
         )}
@@ -1130,12 +1133,37 @@ function MenuSection({
 }
 
 
-function openRoutineInNewTab(event: MouseEvent<HTMLElement>, path: string) {
-  // No Web, um clique comum em uma rotina preserva o contexto atual abrindo uma nova aba.
-  // Ctrl/Cmd/Shift/clique do meio continuam sob controle nativo do navegador.
-  if (window.techLeadHub?.desktop || event.ctrlKey || event.metaKey || event.shiftKey || event.button !== 0) return;
+const ACCESS_TOKEN_KEY = "techlead-hub.access-token";
+
+function openRoutineInNewTab(event: MouseEvent<HTMLElement>, path: string, label: string) {
   event.preventDefault();
-  window.open(new URL(path, window.location.origin).toString(), "_blank", "noopener,noreferrer");
+  event.stopPropagation();
+
+  const child = window.open("about:blank", "_blank");
+  if (!child) return;
+
+  const token = getAccessToken();
+  try {
+    if (token) child.sessionStorage.setItem(ACCESS_TOKEN_KEY, token);
+    child.document.title = label;
+    child.location.replace(new URL(path, window.location.origin).toString());
+  } catch {
+    child.close();
+  }
+}
+
+function RoutineNewTabButton({ path, label }: { path: string; label: string }) {
+  return (
+    <IconButton
+      size="small"
+      aria-label={`Abrir ${label} em nova aba`}
+      title={`Abrir ${label} em nova aba`}
+      onClick={(event) => openRoutineInNewTab(event, path, label)}
+      sx={{ ml: .35, p: .45, color: "rgba(255,255,255,.34)", "&:hover": { color: aliareColors.green, bgcolor: "rgba(24,199,122,.10)" } }}
+    >
+      <OpenInNewRounded sx={{ fontSize: 14 }} />
+    </IconButton>
+  );
 }
 
 /* =========================================================
@@ -1164,8 +1192,7 @@ function MenuItem({
         NavLink
       }
       to={path}
-      onClick={(event) => openRoutineInNewTab(event, path)}
-      title={window.techLeadHub?.desktop ? label : `${label} · abrir em nova aba`}
+      title={label}
       end={
         path === "/"
       }
@@ -1340,7 +1367,7 @@ function MenuItem({
         }}
       />
 
-      {!window.techLeadHub?.desktop && !hasBadge && <OpenInNewRounded sx={{ ml: .5, fontSize: 14, color: "rgba(255,255,255,.28)" }} />}
+      {!window.techLeadHub?.desktop && <RoutineNewTabButton path={path} label={label} />}
 
       {hasBadge && (
         <Box
