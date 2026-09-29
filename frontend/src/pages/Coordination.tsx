@@ -30,7 +30,7 @@ import { detailDrawerPaperSx } from "../theme/layoutTokens";
 import { PageHeader } from "../components/PageHeader";
 import { api } from "../services/api";
 import { aliareColors } from "../theme/theme";
-import { Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip as ChartTooltip, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip as ChartTooltip, XAxis, YAxis } from "recharts";
 
 type Data = {
   generatedAt: string;
@@ -69,10 +69,6 @@ type DetailData = {
   workItems: Array<{ id: number; workItemType: string; title: string; state: string; client: string | null; assignedToName: string | null; createdByName: string | null; criticality: string | null; blockedProcess: boolean | null; movideskTicket: number | null; registeredVersion: string | null; deliveredVersion: string | null; azureChangedAt: string | null; remoteUrl: string | null }>;
 };
 
-function MetricInfo({ title, text }: { title: string; text: string }) {
-  return <Tooltip title={<Box><Typography variant="caption" sx={{fontWeight:900,display:"block",mb:.4}}>{title}</Typography><Typography variant="caption">{text}</Typography></Box>} arrow placement="top"><IconButton size="small" aria-label={`Como é calculado: ${title}`} sx={{p:.25,color:"text.secondary"}}><InfoOutlined sx={{fontSize:16}} /></IconButton></Tooltip>;
-}
-
 export function Coordination() {
   const navigate = useNavigate();
   const theme = useTheme();
@@ -87,8 +83,7 @@ export function Coordination() {
   const [detailError, setDetailError] = useState("");
   const [details, setDetails] = useState<DetailData | null>(null);
   const [serviceDays, setServiceDays] = useState(0);
-  const [slaDays, setSlaDays] = useState(180);
-  const [slaChartMode, setSlaChartMode] = useState<"hours" | "compliance">("hours");
+  const slaDays = 180;
 
   const load = useCallback(async () => {
     try {
