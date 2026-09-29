@@ -2,7 +2,7 @@ import { Alert, Autocomplete, Box, Button, Card, CardContent, Chip, CircularProg
 import { BookmarkAddOutlined, DeleteOutlined, DragIndicatorOutlined, FilterAltOutlined, InfoOutlined, OpenInNewOutlined, ScheduleOutlined, SearchOutlined, ViewColumnOutlined, ViewListOutlined } from "@mui/icons-material";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { api } from "../services/api";
+import { api, getApiErrorMessage } from "../services/api";
 import { aliareColors } from "../theme/theme";
 import { PageHeader } from "../components/PageHeader";
 import { KpiCard } from "../components/KpiCard";
@@ -154,7 +154,7 @@ export function MyOperation() {
       await api.patch(`/workspace/my-operation/tickets/${dragged.id}/status`, { status });
       await load();
     } catch (requestError: unknown) {
-      setError((requestError as { response?: { data?: { message?: string } } }).response?.data?.message ?? "Não foi possível salvar a mudança de status.");
+      setError(getApiErrorMessage(requestError, "Não foi possível salvar a mudança de status."));
     } finally { setSavingStatus(false); setDragged(null); }
   };
 
