@@ -205,6 +205,7 @@ export function Coordination() {
 Os indicadores, cards e gráficos de SLA/OLA desta seção dependem de dados que ainda não estão disponíveis de forma completa no TechLead Hub. A visualização ficará indisponível até a integração com o PSG, evitando apresentar métricas parciais ou potencialmente incorretas.
 </Alert>
 </CardContent>
+</Card>}
 
           {loading || !data ? (
             <Box sx={{ minHeight: 320, display: "grid", placeItems: "center" }}>
