@@ -53,7 +53,6 @@ import { ExportTicketsButton } from "../components/ExportTicketsButton";
 import { detailDrawerPaperSx } from "../theme/layoutTokens";
 import { KpiCard as ExecutiveKpiCard } from "../components/KpiCard";
 import { ExecutiveSection } from "../components/ExecutiveSection";
-import { ExportTicketsButton } from "../components/ExportTicketsButton";
 import { aliareColors } from "../theme/theme";
 import {
   chartPalette,
