@@ -106,6 +106,10 @@ app.use("/api", (req, res, next) => {
    API
 ========================================================= */
 
+app.get("/health/live", (_req, res) => {
+  res.status(200).json({ status: "alive", version: process.env.APP_VERSION?.trim() || "development", runtime: process.env.APP_RUNTIME?.trim() || "desktop", timestamp: new Date().toISOString() });
+});
+
 app.get("/health", (_req, res) => {
   const databaseReady = process.env.APP_DATABASE_READY !== "false";
 
@@ -170,6 +174,14 @@ if (frontendAvailable) {
    * /assets/index-xxxxx.js
    * /assets/index-xxxxx.css
    */
+
+  app.use(
+    "/assets",
+    express.static(
+      path.join(frontendDistPath, "assets"),
+      { maxAge: "1y", immutable: true, index: false }
+    )
+  );
 
   app.use(
     express.static(
