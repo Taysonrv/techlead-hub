@@ -9,9 +9,22 @@ export type ReleaseNote = {
   items: readonly ReleaseNoteItem[];
 };
 
-export const FALLBACK_APP_VERSION = "1.0.0-rc.15";
+export const FALLBACK_APP_VERSION = "1.0.0-rc.16";
 
 export const releaseNotes: Record<string, ReleaseNote> = {
+  "1.0.0-rc.16": {
+    version: "1.0.0-rc.16",
+    title: "Web Production Readiness e experiência multiaba",
+    items: [
+      { title: "Implantação Web via Docker", description: "Stack oficial com aplicação, PostgreSQL persistente, migrations controladas, health checks e runbook de implantação para infraestrutura." },
+      { title: "Prontidão e diagnóstico", description: "Liveness e readiness separados, diagnóstico ampliado e feedback global de indisponibilidade e reconexão." },
+      { title: "Navegação multiaba", description: "Na versão Web, as rotinas da navegação principal podem ser abertas em novas abas, preservando o contexto de trabalho do analista." },
+      { title: "Segurança de autenticação", description: "O fluxo de login reduz diferenças temporais na validação de credenciais e mantém mensagens de autenticação uniformes." },
+      { title: "Erros de API padronizados", description: "Mensagens de erro do frontend passam a utilizar tratamento compartilhado para respostas mais consistentes." },
+      { title: "SLA × OLA preparado para PSG", description: "Indicadores ainda sem fonte completa deixam de apresentar métricas parciais e sinalizam explicitamente a dependência da integração PSG." },
+      { title: "Autoria", description: "O sistema passa a identificar Tayson como criador do TechLead Hub." },
+    ],
+  },
   "1.0.0-rc.15": {
     version: "1.0.0-rc.15",
     title: "Cockpit de Liderança e inteligência operacional",
