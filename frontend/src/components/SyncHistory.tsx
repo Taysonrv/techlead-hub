@@ -37,6 +37,7 @@ import {
 
 import {
   api,
+  getApiErrorMessage,
 } from "../services/api";
 
 type SyncProvider =
@@ -322,10 +323,7 @@ export function SyncHistory() {
       setPage(1);
       await loadHistory();
     } catch (runError: unknown) {
-      const message = typeof runError === "object" && runError !== null && "response" in runError
-        ? (runError as { response?: { data?: { message?: string } } }).response?.data?.message
-        : null;
-      setError(message ?? "Não foi possível sincronizar o Movidesk.");
+      setError(getApiErrorMessage(runError, "Não foi possível sincronizar o Movidesk."));
     } finally {
       setExecuting(null);
     }

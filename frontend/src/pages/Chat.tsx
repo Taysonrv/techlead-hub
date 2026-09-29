@@ -2,7 +2,7 @@ import { AddCommentOutlined, ForumOutlined, SendRounded, EmojiEmotionsOutlined, 
 import { Alert, Box, Button, Checkbox, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Divider, FormControlLabel, IconButton, List, ListItemButton, ListItemIcon, ListItemText, Menu, MenuItem, Paper, Popover, Stack, TextField, Tooltip, Typography } from "@mui/material";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { api, getAccessToken, getApiBaseUrl } from "../services/api";
+import { api, getAccessToken, getApiBaseUrl, getApiErrorMessage } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { playNotificationSound } from "../utils/notificationSound";
 
@@ -77,7 +77,7 @@ export function Chat() {
       window.dispatchEvent(new Event("techlead-hub:chat-read"));
       setError("");
     } catch (requestError: any) {
-      if (!quiet) setError(requestError?.response?.data?.error || "Não foi possível carregar a conversa.");
+      if (!quiet) setError(getApiErrorMessage(requestError, "Não foi possível carregar a conversa."));
     } finally {
       if (!quiet) setLoading(false);
     }
@@ -166,7 +166,7 @@ export function Chat() {
       await loadChannels();
       setSelectedId(response.data.id);
       setDirectOpen(false);
-    } catch (requestError: any) { setError(requestError?.response?.data?.error || "Não foi possível iniciar a conversa privada."); }
+    } catch (requestError: any) { setError(getApiErrorMessage(requestError, "Não foi possível iniciar a conversa privada.")); }
   }
 
   const toggleFavorite = (channelId: number) => setFavorites((current) => {
@@ -189,7 +189,7 @@ export function Chat() {
       setCreateOpen(false);
       setChannelName("");
       setMemberIds([]);
-    } catch (requestError: any) { setError(requestError?.response?.data?.error || "Não foi possível criar o canal."); }
+    } catch (requestError: any) { setError(getApiErrorMessage(requestError, "Não foi possível criar o canal.")); }
   }
 
   async function sendAttachment(file: File) {
@@ -202,7 +202,7 @@ export function Chat() {
       });
       await api.post(`/chat/channels/${selectedId}/attachments`, { name: file.name, mimeType: file.type || "application/octet-stream", data });
       await loadMessages(selectedId);
-    } catch (requestError: any) { setError(requestError?.response?.data?.error || "Não foi possível enviar o anexo."); }
+    } catch (requestError: any) { setError(getApiErrorMessage(requestError, "Não foi possível enviar o anexo.")); }
     finally { setUploadingAttachment(false); if (attachmentInputRef.current) attachmentInputRef.current.value = ""; }
   }
 
@@ -224,7 +224,7 @@ export function Chat() {
       await loadChannels();
       window.dispatchEvent(new Event("techlead-hub:chat-read"));
     } catch (requestError: any) {
-      setError(requestError?.response?.data?.error || "Não foi possível excluir a conversa.");
+      setError(getApiErrorMessage(requestError, "Não foi possível excluir a conversa."));
     }
   }
 
@@ -238,7 +238,7 @@ export function Chat() {
       setContent("");
       setReplyTo(null);
       setError("");
-    } catch (requestError: any) { setError(requestError?.response?.data?.error || "Não foi possível enviar a mensagem."); }
+    } catch (requestError: any) { setError(getApiErrorMessage(requestError, "Não foi possível enviar a mensagem.")); }
     finally { setSending(false); }
   }
 

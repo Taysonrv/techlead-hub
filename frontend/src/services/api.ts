@@ -200,6 +200,55 @@ export function getApiBaseUrl() {
   return API_URL;
 }
 
+/*
+ * Extrai uma mensagem de erro amigável de uma resposta de API.
+ *
+ * Antes reimplementada de forma independente (com pequenas variações)
+ * em pelo menos 10 arquivos do frontend (Import, Login, Chat,
+ * Knowledge, KnownProblems, Coordination, MyOperation, SimerMap,
+ * Services, SyncHistory); centralizada aqui para evitar divergência
+ * de comportamento entre elas.
+ *
+ * Ordem de prioridade: campo `error` da API -> campo `message` da
+ * API -> `message` nativo do erro JS (ex.: falha de rede, timeout)
+ * -> fallback fornecido pelo chamador.
+ */
+export function getApiErrorMessage(
+  error: unknown,
+  fallback: string
+): string {
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "response" in error
+  ) {
+    const response = (
+      error as {
+        response?: {
+          data?: {
+            error?: string;
+            message?: string;
+          };
+        };
+      }
+    ).response;
+
+    const apiMessage =
+      response?.data?.error ??
+      response?.data?.message;
+
+    if (apiMessage) {
+      return apiMessage;
+    }
+  }
+
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  return fallback;
+}
+
 function cryptoRequestId() {
   try {
     return globalThis.crypto.randomUUID();

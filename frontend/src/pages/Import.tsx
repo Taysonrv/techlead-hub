@@ -29,7 +29,7 @@ import {
   Typography,
 } from "@mui/material";
 
-import { api } from "../services/api";
+import { api, getApiErrorMessage } from "../services/api";
 
 import {
   useAuth,
@@ -2632,38 +2632,4 @@ function formatSource(
   }
 }
 
-function getApiErrorMessage(
-  error:
-    unknown,
-  fallback:
-    string,
-): string {
-  if (
-    typeof error ===
-      "object" &&
-    error !==
-      null &&
-    "response" in
-      error
-  ) {
-    const response =
-      (
-        error as {
-          response?: {
-            data?: {
-              error?: string;
-              message?: string;
-            };
-          };
-        }
-      ).response;
 
-    return (
-      response?.data?.error ??
-      response?.data?.message ??
-      fallback
-    );
-  }
-
-  return fallback;
-}
