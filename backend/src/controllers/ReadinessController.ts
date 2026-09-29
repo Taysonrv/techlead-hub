@@ -55,6 +55,7 @@ export class ReadinessController {
             finishedAt: latestSync.finishedAt,
             ageMinutes: Math.max(0, Math.round((Date.now() - latestSync.startedAt.getTime()) / 60_000)),
           } : null,
+          uptimeSeconds: Math.round(process.uptime()),
           checkedAt: new Date().toISOString(),
         });
     } catch {
