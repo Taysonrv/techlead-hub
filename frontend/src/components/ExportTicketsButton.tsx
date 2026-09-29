@@ -24,6 +24,15 @@ export type TicketExportRow = {
   taskNumber?: number | null;
   taskStatus?: string | null;
   deliveredVersion?: string | null;
+  workItemType?: string | null;
+  title?: string | null;
+  state?: string | null;
+  assignedToName?: string | null;
+  client?: string | null;
+  criticality?: string | null;
+  module?: string | null;
+  process?: string | null;
+  id?: number | null;
 };
 
 type Props = {
@@ -37,7 +46,8 @@ const headers = [
   "Ticket Movidesk", "Protocolo", "Assunto", "Cliente", "Contato", "Responsável",
   "Equipe", "Categoria", "Causa", "Urgência", "Status", "Status Base", "Serviço",
   "Departamento", "Data Abertura", "Vencimento", "Resolvido em", "Encerrado em",
-  "Task Azure", "Status Task", "Versão Entregue",
+  "Task Azure", "Status Task", "Versão Entregue", "Tipo Work Item", "Título Task",
+  "Estado Azure", "Responsável Azure", "Criticidade", "Módulo", "Processo",
 ];
 
 function excelDate(value?: string | null) {
@@ -65,13 +75,15 @@ export function exportTicketsToExcel(tickets: TicketExportRow[], title: string, 
     ticket.owner, ticket.team, ticket.category, ticket.cause, ticket.urgency, ticket.status,
     ticket.baseStatus, ticket.service, ticket.department, excelDate(ticket.createdDate),
     excelDate(ticket.dueDate), excelDate(ticket.resolvedDate), excelDate(ticket.closedDate),
-    ticket.taskNumber, ticket.taskStatus, ticket.deliveredVersion,
+    ticket.taskNumber ?? ticket.id, ticket.taskStatus ?? ticket.state, ticket.deliveredVersion,
+    ticket.workItemType, ticket.title, ticket.state, ticket.assignedToName,
+    ticket.criticality, ticket.module, ticket.process,
   ]);
 
   const tableRows = [
     `<Row><Cell ss:MergeAcross="${headers.length - 1}"><Data ss:Type="String">${xml(title)}</Data></Cell></Row>`,
     ...(subtitle ? [`<Row><Cell ss:MergeAcross="${headers.length - 1}"><Data ss:Type="String">${xml(subtitle)}</Data></Cell></Row>`] : []),
-    `<Row><Cell ss:MergeAcross="${headers.length - 1}"><Data ss:Type="String">Exportado em ${xml(new Date().toLocaleString("pt-BR"))} · ${tickets.length} atendimento(s)</Data></Cell></Row>`,
+    `<Row><Cell ss:MergeAcross="${headers.length - 1}"><Data ss:Type="String">Exportado em ${xml(new Date().toLocaleString("pt-BR"))} · ${tickets.length} registro(s)</Data></Cell></Row>`,
     `<Row>${headers.map((header) => `<Cell ss:StyleID="Header"><Data ss:Type="String">${xml(header)}</Data></Cell>`).join("")}</Row>`,
     ...rows.map((row) => `<Row>${row.map((value) => `<Cell><Data ss:Type="String">${xml(value)}</Data></Cell>`).join("")}</Row>`),
   ].join("");
