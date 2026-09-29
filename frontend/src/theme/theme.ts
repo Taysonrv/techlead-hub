@@ -225,14 +225,12 @@ export function createAppTheme(mode: PaletteMode = "light") {
           root: {
             "& .MuiInputLabel-root": {
               ...(dark ? { color: "#8FA7C1" } : {}),
-              backgroundColor: paper,
-              paddingInline: 4,
-              marginLeft: -4,
               lineHeight: 1.15,
               zIndex: 1,
+              pointerEvents: "none",
             },
             "& .MuiInputLabel-root.MuiInputLabel-shrink": {
-              transform: "translate(14px, -8px) scale(0.75)",
+              transform: "translate(14px, -9px) scale(0.75)",
               transformOrigin: "top left",
             },
           },
@@ -255,8 +253,8 @@ export function createAppTheme(mode: PaletteMode = "light") {
             borderRadius: 8,
             backgroundColor: dark ? "rgba(7,20,35,.56)" : undefined,
             "& .MuiOutlinedInput-notchedOutline": { borderColor: dark ? "rgba(131,175,220,.30)" : undefined },
-            "& legend": { maxWidth: 0, transition: "none" },
-            "& legend > span": { padding: 0 },
+            "& legend": { transition: "width .16s ease, max-width .16s ease" },
+            "& legend > span": { paddingLeft: 5, paddingRight: 5 },
             "&:hover .MuiOutlinedInput-notchedOutline": { borderColor: dark ? "rgba(47,208,255,.50)" : undefined },
             "&.Mui-focused .MuiOutlinedInput-notchedOutline": { borderColor: aliareColors.green },
             "&.Mui-focused": dark ? { boxShadow: "0 0 0 3px rgba(24,199,122,.08)", backgroundColor: "rgba(7,20,35,.72)" } : undefined,
