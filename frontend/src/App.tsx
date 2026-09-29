@@ -80,6 +80,7 @@ function AuthenticatedLayout({
   children: ReactNode;
 }) {
   const [backendUnavailable, setBackendUnavailable] = useState(false);
+  const [reconnected, setReconnected] = useState(false);
   const [forbiddenMessage, setForbiddenMessage] = useState<string | null>(null);
   const location = useLocation();
   const isChat = location.pathname === "/chat";
@@ -87,7 +88,15 @@ function AuthenticatedLayout({
   const fixedWorkspace = isChat || isMap;
   useEffect(() => {
     const unavailable = () => setBackendUnavailable(true);
-    const available = () => setBackendUnavailable(false);
+    const available = () => {
+      setBackendUnavailable((current) => {
+        if (current) {
+          setReconnected(true);
+          window.setTimeout(() => setReconnected(false), 3500);
+        }
+        return false;
+      });
+    };
     const forbidden = (event: Event) => {
       const detail = (event as CustomEvent<{ message?: string }>).detail;
       setForbiddenMessage(detail?.message || "Você não possui permissão para acessar esta rotina. Procure um administrador para solicitar a liberação do acesso.");
@@ -146,7 +155,8 @@ function AuthenticatedLayout({
           >
 {!isChat && <Box sx={{ px: { xs: 1.5, sm: 2, md: 2.5, lg: 3, xl: 4 } }}><GlobalTopBar /></Box>}
             {forbiddenMessage && <Alert severity="warning" sx={{ mx: { xs: 1.5, sm: 2, md: 2.5, lg: 3, xl: 4 }, mb: 2, borderRadius: 2.5 }} onClose={() => setForbiddenMessage(null)}>{forbiddenMessage}</Alert>}
-            {backendUnavailable && <Alert severity="warning" sx={{ mx: { xs: 1.5, sm: 2, md: 2.5, lg: 3, xl: 4 }, mb: 2 }}>O servidor central está temporariamente indisponível. Verifique a conexão e tente novamente; seus dados locais de navegação foram preservados.</Alert>}
+            {backendUnavailable && <Alert severity="warning" icon={<CircularProgress size={18} />} sx={{ mx: { xs: 1.5, sm: 2, md: 2.5, lg: 3, xl: 4 }, mb: 2 }}>Conexão com o TechLead Hub temporariamente indisponível. O sistema continuará tentando reconectar automaticamente; seus dados locais de navegação foram preservados.</Alert>}
+            {reconnected && <Alert severity="success" sx={{ mx: { xs: 1.5, sm: 2, md: 2.5, lg: 3, xl: 4 }, mb: 2 }}>Conexão restabelecida com o TechLead Hub.</Alert>}
             <Box
               className="techlead-page-surface futuristic-page"
               sx={{
