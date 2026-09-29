@@ -73,6 +73,7 @@ import { PageHeader } from "../components/PageHeader";
 import { useTheme } from "@mui/material/styles";
 import { ExecutiveSection } from "../components/ExecutiveSection";
 import { KpiCard as ExecutiveKpiCard } from "../components/KpiCard";
+import { ExportTicketsButton } from "../components/ExportTicketsButton";
 
 function Stack(
   props:
@@ -3004,6 +3005,14 @@ export function Versions() {
                 ✕
               </IconButton>
             </Stack>
+
+            <Box sx={{ mt: 2 }}>
+              <ExportTicketsButton
+                tickets={versionItems.map((item) => ({ ...item, taskNumber: item.id, taskStatus: item.state }))}
+                title={detailContext.title}
+                subtitle={detailContext.subtitle ?? "Detalhamento de tarefas por versão"}
+              />
+            </Box>
 
             {selectedVersion && (
               <>
