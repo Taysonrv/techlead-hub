@@ -9,9 +9,19 @@ export type ReleaseNote = {
   items: readonly ReleaseNoteItem[];
 };
 
-export const FALLBACK_APP_VERSION = "1.0.0-rc.16";
+export const FALLBACK_APP_VERSION = "1.0.0-rc.17";
 
 export const releaseNotes: Record<string, ReleaseNote> = {
+  "1.0.0-rc.17": {
+    version: "1.0.0-rc.17",
+    title: "Identidade do produto e entrega Web para infraestrutura",
+    items: [
+      { title: "Autoria do TechLead Hub", description: "A aplicação passa a exibir de forma permanente a identificação Criado por Tayson na interface e nas informações do sistema." },
+      { title: "Imagem Web versionada", description: "A publicação gera uma imagem Docker imutável da RC.17 para implantação controlada pelo time de infraestrutura e BDs." },
+      { title: "Implantação rastreável", description: "A versão Web mantém health checks, migrations controladas e documentação operacional, permitindo implantação e rollback por versão." },
+      { title: "Experiência Web multiaba", description: "A navegação Web mantém a abertura das rotinas em novas abas para preservar o contexto de trabalho durante análises simultâneas." },
+    ],
+  },
   "1.0.0-rc.16": {
     version: "1.0.0-rc.16",
     title: "Web Production Readiness e experiência multiaba",
