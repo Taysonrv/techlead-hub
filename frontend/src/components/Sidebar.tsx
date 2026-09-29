@@ -794,7 +794,7 @@ export function Sidebar() {
                   "0.63rem",
               }}
             >
-              TechLead Hub
+              Criado por Tayson
             </Typography>
 
             <Typography
