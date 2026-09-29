@@ -197,7 +197,8 @@ export class GlobalController {
     if(recurrence>=3)signals.push(`${recurrence} tickets possuem aderência de 50% ou mais aos termos investigados.`);
     if(clients.size>1)signals.push(`O assunto aparece em ${clients.size} clientes no recorte encontrado.`);
     if(knownProblems.length)signals.push(`${knownProblems.length} problema(s) conhecido(s) possuem termos relacionados ao assunto.`);
-    if(topVersions[0]?.total>=2)signals.push(`A versão ${topVersions[0].version} aparece em ${topVersions[0].total} evidências relacionadas.`);
+    const leadingVersion=topVersions[0];
+    if(leadingVersion && leadingVersion.total>=2)signals.push(`A versão ${leadingVersion.version} aparece em ${leadingVersion.total} evidências relacionadas.`);
 
     return res.json({
       query:raw,terms,
