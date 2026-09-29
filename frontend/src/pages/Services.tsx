@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip as ChartTooltip, XAxis, YAxis } from "recharts";
 import { PageHeader } from "../components/PageHeader";
 import { KpiCard } from "../components/KpiCard";
-import { api } from "../services/api";
+import { api, getApiErrorMessage } from "../services/api";
 import { aliareColors } from "../theme/theme";
 import { useNavigate } from "react-router-dom";
 
@@ -25,7 +25,7 @@ export function Services() {
   const [data,setData]=useState<Data|null>(null); const [loading,setLoading]=useState(true); const [error,setError]=useState("");
   const [client,setClient]=useState(""); const [analyst,setAnalyst]=useState(""); const [months,setMonths]=useState(6);
   const requestRef=useRef<AbortController|null>(null);
-  const load=useCallback(async()=>{const controller=new AbortController();requestRef.current?.abort();requestRef.current=controller;try{setLoading(true);setError("");const r=await api.get<Data>("/coordination/services",{params:{client:client||undefined,analyst:analyst||undefined,months},signal:controller.signal});if(!controller.signal.aborted)setData(r.data);}catch(e:any){if(!controller.signal.aborted)setError(e?.response?.data?.error||"Não foi possível carregar a inteligência de Serviços.");}finally{if(!controller.signal.aborted)setLoading(false)}},[client,analyst,months]);
+  const load=useCallback(async()=>{const controller=new AbortController();requestRef.current?.abort();requestRef.current=controller;try{setLoading(true);setError("");const r=await api.get<Data>("/coordination/services",{params:{client:client||undefined,analyst:analyst||undefined,months},signal:controller.signal});if(!controller.signal.aborted)setData(r.data);}catch(e:unknown){if(!controller.signal.aborted)setError(getApiErrorMessage(e,"Não foi possível carregar a inteligência de Serviços."));}finally{if(!controller.signal.aborted)setLoading(false)}},[client,analyst,months]);
   useEffect(()=>{const timer=window.setTimeout(()=>{void load()},180);return()=>{window.clearTimeout(timer);requestRef.current?.abort()}},[load]);
   const tooltip={borderRadius:12,border:`1px solid ${theme.palette.divider}`,background:theme.palette.background.paper};
   return <Box sx={{pb:4}}>
