@@ -108,6 +108,104 @@ export class GlobalController {
     ] });
   };
 
+  investigateTopic = async (req: Request, res: Response) => {
+    const raw = typeof req.query.q === "string" ? req.query.q.trim().slice(0, 240) : "";
+    if (raw.length < 2) return res.status(400).json({ message: "Informe um assunto para investigação." });
+
+    const terms = [...new Set(normalizeSearch(raw).split(/[^a-z0-9]+/).filter((term) => term.length >= 3))].slice(0, 8);
+    const scoreText = (values: Array<string | null | undefined>) => {
+      const haystack = normalizeSearch(values.filter(Boolean).join(" "));
+      const matched = terms.filter((term) => haystack.includes(term));
+      return { matched, score: Math.round((matched.length / Math.max(terms.length, 1)) * 100) };
+    };
+
+    const ticketOr: any[] = terms.flatMap((term) => [
+      { subject: { contains: term, mode: "insensitive" as const } },
+      { client: { contains: term, mode: "insensitive" as const } },
+      { category: { contains: term, mode: "insensitive" as const } },
+      { cause: { contains: term, mode: "insensitive" as const } },
+      { causeDetail: { contains: term, mode: "insensitive" as const } },
+      { service: { contains: term, mode: "insensitive" as const } },
+      { serviceFirstLevel: { contains: term, mode: "insensitive" as const } },
+      { serviceSecondLevel: { contains: term, mode: "insensitive" as const } },
+      { serviceThirdLevel: { contains: term, mode: "insensitive" as const } },
+    ]);
+    const workItemOr: any[] = terms.flatMap((term) => [
+      { title: { contains: term, mode: "insensitive" as const } },
+      { client: { contains: term, mode: "insensitive" as const } },
+      { module: { contains: term, mode: "insensitive" as const } },
+      { process: { contains: term, mode: "insensitive" as const } },
+      { reason: { contains: term, mode: "insensitive" as const } },
+      { description: { contains: term, mode: "insensitive" as const } },
+      { workaround: { contains: term, mode: "insensitive" as const } },
+      { technicalSolution: { contains: term, mode: "insensitive" as const } },
+      { tags: { contains: term, mode: "insensitive" as const } },
+    ]);
+
+    const [ticketRows, workItemRows, knownRows] = await Promise.all([
+      prisma.ticket.findMany({
+        where: { isDeleted: false, OR: ticketOr },
+        select: { movideskId:true,subject:true,client:true,status:true,category:true,cause:true,causeDetail:true,service:true,serviceFirstLevel:true,serviceSecondLevel:true,serviceThirdLevel:true,taskNumber:true,taskType:true,deliveredVersion:true,registeredVersion:true,createdDate:true,lastUpdate:true },
+        orderBy: { lastUpdate: "desc" }, take: 120,
+      }),
+      prisma.azureWorkItem.findMany({
+        where: { OR: workItemOr },
+        select: { id:true,title:true,workItemType:true,state:true,client:true,module:true,process:true,reason:true,description:true,workaround:true,technicalSolution:true,tags:true,movideskTicket:true,deliveredVersion:true,registeredVersion:true,azureChangedAt:true,remoteUrl:true },
+        orderBy: { azureChangedAt: "desc" }, take: 100,
+      }),
+      prisma.$queryRawUnsafe<any[]>(`
+        SELECT * FROM "KnownProblem"
+        WHERE "archived"=FALSE AND (
+          LOWER(COALESCE("title",'')) LIKE ANY($1::text[]) OR
+          LOWER(COALESCE("symptom",'')) LIKE ANY($1::text[]) OR
+          LOWER(COALESCE("solution",'')) LIKE ANY($1::text[]) OR
+          LOWER(COALESCE("cause",'')) LIKE ANY($1::text[]) OR
+          LOWER(COALESCE("workaround",'')) LIKE ANY($1::text[]) OR
+          LOWER(COALESCE("technicalSolution",'')) LIKE ANY($1::text[]) OR
+          LOWER(COALESCE("service",'')) LIKE ANY($1::text[]) OR
+          LOWER(COALESCE("tags",'')) LIKE ANY($1::text[])
+        )
+        ORDER BY "pinned" DESC, "updatedAt" DESC LIMIT 40
+      `, terms.map((term) => `%${term}%`)),
+    ]);
+
+    const tickets = ticketRows.map((item) => {
+      const match=scoreText([item.subject,item.client,item.category,item.cause,item.causeDetail,item.service,item.serviceFirstLevel,item.serviceSecondLevel,item.serviceThirdLevel]);
+      return {...item,score:match.score,matchedTerms:match.matched};
+    }).sort((a,b)=>b.score-a.score||b.createdDate.getTime()-a.createdDate.getTime()).slice(0,24);
+    const workItems = workItemRows.map((item) => {
+      const match=scoreText([item.title,item.client,item.module,item.process,item.reason,item.description,item.workaround,item.technicalSolution,item.tags]);
+      return {...item,score:match.score,matchedTerms:match.matched};
+    }).sort((a,b)=>b.score-a.score).slice(0,24);
+    const knownProblems = knownRows.map((item) => {
+      const match=scoreText([item.title,item.symptom,item.solution,item.cause,item.workaround,item.technicalSolution,item.service,item.tags]);
+      return {...item,score:match.score,matchedTerms:match.matched};
+    }).sort((a,b)=>b.score-a.score).slice(0,16);
+
+    const technicalText=[raw,...tickets.slice(0,8).map(x=>x.subject),...workItems.slice(0,8).map(x=>x.title)].join(" ");
+    const mapService=new SimerMapService(); const ruleService=new SystemRuleService();
+    const [mapItems,ruleItems]=await Promise.all([mapService.context(technicalText,18),ruleService.search(technicalText,18)]);
+    const correlations=await ruleService.correlate(technicalText,mapItems,12);
+    const evidence=correlations.slice(0,12).map((item:any)=>({id:item.id,title:item.nodeText??item.name??item.path,path:item.path??null,mapName:item.mapName??null,score:item.correlationScore??item.score??0,kind:item.nodeKind??"regra"}));
+
+    const clients=new Set(tickets.map(x=>x.client).filter(Boolean));
+    const versions=new Map<string,number>();
+    [...tickets,...workItems].forEach((item:any)=>{const version=item.deliveredVersion??item.registeredVersion;if(version)versions.set(version,(versions.get(version)??0)+1)});
+    const topVersions=[...versions.entries()].sort((a,b)=>b[1]-a[1]).slice(0,6).map(([version,total])=>({version,total}));
+    const recurrence=tickets.filter(x=>x.score>=50).length;
+    const signals:string[]=[];
+    if(recurrence>=3)signals.push(`${recurrence} tickets possuem aderência de 50% ou mais aos termos investigados.`);
+    if(clients.size>1)signals.push(`O assunto aparece em ${clients.size} clientes no recorte encontrado.`);
+    if(knownProblems.length)signals.push(`${knownProblems.length} problema(s) conhecido(s) possuem termos relacionados ao assunto.`);
+    if(topVersions[0]?.total>=2)signals.push(`A versão ${topVersions[0].version} aparece em ${topVersions[0].total} evidências relacionadas.`);
+
+    return res.json({
+      query:raw,terms,
+      summary:{tickets:tickets.length,workItems:workItems.length,knownProblems:knownProblems.length,evidence:evidence.length,rules:ruleItems.length,clients:clients.size,strongRecurrence:recurrence},
+      tickets,workItems,knownProblems,evidence,ruleItems:ruleItems.slice(0,12),topVersions,signals,
+    });
+  };
+
   investigate = async (req: Request, res: Response) => {
     const raw = typeof req.query.q === "string" ? req.query.q.trim() : "";
     const numeric = Number(raw.replace(/^#/, ""));
