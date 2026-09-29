@@ -87,6 +87,37 @@ function AuthenticatedLayout({
   const isMap = location.pathname === "/mapa-simer";
   const fixedWorkspace = isChat || isMap;
   useEffect(() => {
+    const routineTitles: Record<string, string> = {
+      "/": "Página inicial",
+      "/tickets": "Tickets",
+      "/chat": "Chat",
+      "/coordenacao": "Central da Coordenação",
+      "/servicos": "Serviços SIMER",
+      "/lideranca-tecnica": "Central de Liderança",
+      "/mapa-simer": "Mapa SIMER",
+      "/investigacao": "Central de Investigação",
+      "/problemas-conhecidos": "Problemas Conhecidos",
+      "/analistas": "Analistas",
+      "/clientes": "Clientes",
+      "/desempenho": "Desempenho",
+      "/atencao": "Pontos de Atenção",
+      "/correcoes": "Correções",
+      "/evolucoes": "Evoluções",
+      "/apoios": "Apoios",
+      "/versoes": "Versões",
+      "/conhecimento": "Base de Conhecimento",
+      "/importar": "Dados e Sincronizações",
+      "/relatorios": "Relatórios",
+      "/minha-operacao": "Minha Operação",
+      "/qualidade-dados": "Pendências",
+      "/usuarios": "Usuários",
+      "/configuracoes": "Configurações",
+      "/sobre": "Sobre",
+      "/perfil": "Perfil",
+    };
+    document.title = routineTitles[location.pathname] ?? "TechLead Hub";
+  }, [location.pathname]);
+  useEffect(() => {
     const unavailable = () => setBackendUnavailable(true);
     const available = () => {
       setBackendUnavailable((current) => {
