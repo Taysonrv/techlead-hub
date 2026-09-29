@@ -28,7 +28,6 @@ export type TicketExportRow = {
   title?: string | null;
   state?: string | null;
   assignedToName?: string | null;
-  client?: string | null;
   criticality?: string | null;
   module?: string | null;
   process?: string | null;
