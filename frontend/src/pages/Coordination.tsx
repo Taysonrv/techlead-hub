@@ -24,7 +24,7 @@ import { ExportTicketsButton } from "../components/ExportTicketsButton";
 import { DetailFieldGrid, DetailPanelHeader, DetailSection } from "../components/DetailPanel";
 import { detailDrawerPaperSx } from "../theme/layoutTokens";
 import { PageHeader } from "../components/PageHeader";
-import { api } from "../services/api";
+import { api, getApiErrorMessage } from "../services/api";
 import { aliareColors } from "../theme/theme";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip as ChartTooltip, XAxis, YAxis } from "recharts";
 
@@ -84,8 +84,8 @@ export function Coordination() {
       setError("");
       const response = await api.get<Data>("/coordination/summary", { params: { serviceDays } });
       setData(response.data);
-    } catch (requestError: any) {
-      setError(requestError?.response?.data?.error || "Não foi possível carregar a central.");
+    } catch (requestError: unknown) {
+      setError(getApiErrorMessage(requestError, "Não foi possível carregar a central."));
     } finally {
       setLoading(false);
     }
