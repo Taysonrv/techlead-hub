@@ -93,6 +93,10 @@ const MIN_PASSWORD_LENGTH =
 const DEFAULT_PASSWORD_RESET_EXPIRES_MINUTES =
   30;
 
+// Hash isca com o mesmo custo das senhas reais para reduzir enumeração por tempo de resposta.
+const DUMMY_PASSWORD_HASH =
+  "$2a$12$CwTycUXWue0Thq9StjUM0uJ8gTaLbroFrCbxnNzXOZdWi9fCbFm.q";
+
 /* =========================================================
    SELECT PADRÃO DO USUÁRIO
 ========================================================= */
@@ -477,26 +481,14 @@ export class AuthService {
         },
       });
 
-    if (!user) {
-      throw new AuthError(
-        "Usuário ou senha inválidos.",
-        401
-      );
-    }
-
-    /*
-     * Primeiro validamos a senha.
-     *
-     * Assim não revelamos o estado de uma conta para alguém
-     * que não conhece suas credenciais.
-     */
+    /* Sempre executa bcrypt.compare, inclusive quando o usuário não existe. */
     const passwordMatches =
       await bcrypt.compare(
         password,
-        user.passwordHash
+        user?.passwordHash ?? DUMMY_PASSWORD_HASH
       );
 
-    if (!passwordMatches) {
+    if (!user || !passwordMatches) {
       throw new AuthError(
         "Usuário ou senha inválidos.",
         401
