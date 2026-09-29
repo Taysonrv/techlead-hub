@@ -57,6 +57,7 @@ import { calculateOfficialSla } from "../utils/officialSla";
 import { useFilters } from "../context/FiltersContext";
 import { PeriodFilter } from "../components/PeriodFilter";
 import { PageHeader } from "../components/PageHeader";
+import { ExportTicketsButton } from "../components/ExportTicketsButton";
 import { detailDrawerPaperSx } from "../theme/layoutTokens";
 import { KpiCard as ExecutiveKpiCard } from "../components/KpiCard";
 import { ExecutiveSection } from "../components/ExecutiveSection";
@@ -3098,7 +3099,9 @@ export function Clients() {
                 </Button>
               </Stack>
 
-              <Divider />
+              <ExportTicketsButton tickets={drilldown.tickets} title={drilldown.title} subtitle={drilldown.subtitle ?? "Análise por cliente"} />
+
+              <Divider sx={{ mt: 1 }} />
 
               {drilldown.tickets.length ===
                 0 && (
