@@ -202,6 +202,13 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ github.token }}
+      - name: Validar builds e testes Web
+        run: |
+          npm ci --prefix backend
+          npm ci --prefix frontend
+          npm run build --prefix backend
+          npm run build --prefix frontend
+          npm test --prefix backend
       - uses: docker/build-push-action@v6
         with:
           context: .
