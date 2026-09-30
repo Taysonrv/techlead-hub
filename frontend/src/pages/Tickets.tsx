@@ -89,7 +89,8 @@ type Ticket = {
   cause: string | null;
   causeDetail?: string | null;
   urgency: string | null;
-  origin?: string | null;
+  origin?: number | null;
+  createdBy?: string | null;
 
   status: string;
   baseStatus: string | null;
@@ -279,6 +280,11 @@ export function Tickets() {
   const [team, setTeam] = useState<string[]>([]);
 
   const [service, setService] = useState<string[]>([]);
+
+  const [businessArea, setBusinessArea] = useState<string[]>([]);
+  const [serviceLevel1, setServiceLevel1] = useState<string[]>([]);
+  const [serviceLevel3, setServiceLevel3] = useState<string[]>([]);
+  const [origin, setOrigin] = useState<string[]>([]);
 
   const [
     showMoreFilters,
@@ -568,6 +574,14 @@ export function Tickets() {
       ]
     );
 
+  const businessAreas = useMemo(() => uniqueValues(periodTickets, "businessArea"), [periodTickets]);
+  const serviceLevel1Options = useMemo(() => uniqueValues(periodTickets, "serviceFirstLevel"), [periodTickets]);
+  const serviceLevel3Options = useMemo(() => uniqueValues(periodTickets, "serviceThirdLevel"), [periodTickets]);
+  const originOptions = useMemo(
+    () => Array.from(new Set(periodTickets.map((ticket) => ticket.origin).filter((value): value is number => typeof value === "number"))).sort((a, b) => a - b).map(String),
+    [periodTickets],
+  );
+
   /* =======================================================
      FILTROS LOCAIS
   ======================================================= */
@@ -639,7 +653,8 @@ export function Tickets() {
               normalizedSearch
             ) ||
             normalize(ticket.causeDetail).includes(normalizedSearch) ||
-            normalize(ticket.origin).includes(normalizedSearch) ||
+            normalize(ticket.origin != null ? String(ticket.origin) : null).includes(normalizedSearch) ||
+            normalize(ticket.createdBy).includes(normalizedSearch) ||
             normalize(
               ticket.service
             ).includes(
@@ -721,6 +736,10 @@ export function Tickets() {
           const ticketTeam = ticket.ownerTeam ?? ticket.team;
           const matchesTeam = !team.length || Boolean(ticketTeam && team.includes(ticketTeam));
           const matchesService = !service.length || Boolean(ticket.service && service.includes(ticket.service));
+          const matchesBusinessArea = !businessArea.length || Boolean(ticket.businessArea && businessArea.includes(ticket.businessArea));
+          const matchesServiceLevel1 = !serviceLevel1.length || Boolean(ticket.serviceFirstLevel && serviceLevel1.includes(ticket.serviceFirstLevel));
+          const matchesServiceLevel3 = !serviceLevel3.length || Boolean(ticket.serviceThirdLevel && serviceLevel3.includes(ticket.serviceThirdLevel));
+          const matchesOrigin = !origin.length || (ticket.origin != null && origin.includes(String(ticket.origin)));
 
           const attention =
             getAttentionLevel(
@@ -773,6 +792,10 @@ export function Tickets() {
             matchesClient &&
             matchesTeam &&
             matchesService &&
+            matchesBusinessArea &&
+            matchesServiceLevel1 &&
+            matchesServiceLevel3 &&
+            matchesOrigin &&
             matchesQuickFilter
           );
         }
@@ -787,6 +810,10 @@ export function Tickets() {
       client.length,
       team.length,
       service.length,
+      businessArea.length,
+      serviceLevel1.length,
+      serviceLevel3.length,
+      origin.length,
       quickFilter,
     ]);
 
@@ -828,7 +855,7 @@ export function Tickets() {
 
   useEffect(() => {
     setPage(0);
-  }, [search, status, urgency, category, owner, client, team, service, quickFilter, sortMode, effectiveStartDate, effectiveEndDate]);
+  }, [search, status, urgency, category, owner, client, team, service, businessArea, serviceLevel1, serviceLevel3, origin, quickFilter, sortMode, effectiveStartDate, effectiveEndDate]);
 
   /* =======================================================
      FILTROS ATIVOS
@@ -844,6 +871,10 @@ export function Tickets() {
       client,
       team,
       service,
+      businessArea,
+      serviceLevel1,
+      serviceLevel3,
+      origin,
       quickFilter,
     ].filter(
       Boolean
@@ -858,6 +889,10 @@ export function Tickets() {
     setClient([]);
     setTeam([]);
     setService([]);
+    setBusinessArea([]);
+    setServiceLevel1([]);
+    setServiceLevel3([]);
+    setOrigin([]);
     setQuickFilter(
       null
     );
@@ -884,6 +919,10 @@ export function Tickets() {
     setClient([]);
     setTeam([]);
     setService([]);
+    setBusinessArea([]);
+    setServiceLevel1([]);
+    setServiceLevel3([]);
+    setOrigin([]);
 
     setQuickFilter(
       filter
@@ -1648,6 +1687,14 @@ export function Tickets() {
                   setService
                 }
               />
+
+              <FilterSelect label="Área de negócio" value={businessArea} options={businessAreas} onChange={setBusinessArea} />
+
+              <FilterSelect label="Serviço N1" value={serviceLevel1} options={serviceLevel1Options} onChange={setServiceLevel1} />
+
+              <FilterSelect label="Serviço N3" value={serviceLevel3} options={serviceLevel3Options} onChange={setServiceLevel3} />
+
+              <FilterSelect label="Origem" value={origin} options={originOptions} onChange={setOrigin} />
             </Box>
           )}
 
@@ -4610,6 +4657,9 @@ function uniqueValues(
     | "ownerTeam"
     | "team"
     | "service"
+    | "businessArea"
+    | "serviceFirstLevel"
+    | "serviceThirdLevel"
 ) {
   return Array.from(
     new Set(
