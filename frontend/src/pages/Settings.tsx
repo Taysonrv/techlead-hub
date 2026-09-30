@@ -64,6 +64,7 @@ const ROUTINE_PERMISSIONS = [
   ["services","Serviços SIMER"],["technical-leadership","Central de Liderança"],["coordination","Central da Coordenação"],["imports","Dados e Sincronizações"],
 ] as const;
 type Diagnostics = { status: string; appVersion: string; runtime: string; nodeVersion: string; database: { status: string; latencyMs: number }; sessionPolicy: { exclusiveAcrossPlatforms: boolean; idleTimeoutMinutes: number }; checkedAt: string };
+type MovideskPreview = { readOnly: boolean; sampleSize: number; requested: number; validForImport: boolean; requiredFields: string[]; coverage: Record<string, number>; issues: Array<{ row: number; id: unknown; fields: string[] }>; examples: Array<{ id: unknown; subject: unknown; createdDate: unknown; lastUpdate: unknown; status: unknown; ownerTeam: unknown; serviceFirstLevel: unknown; serviceSecondLevel: unknown }> };
 
 const EMPTY_FORM: ConfigurationForm = {
   databaseUrl: "",
@@ -96,6 +97,8 @@ export function Settings() {
   const [permissionUserId,setPermissionUserId]=useState<number | "">("");
   const [permissionSaving,setPermissionSaving]=useState(false);
   const [notificationPreferences,setNotificationPreferences]=useState<LocalNotificationPreferences>(()=>getLocalNotificationPreferences());
+  const [movideskPreview, setMovideskPreview] = useState<MovideskPreview | null>(null);
+  const [previewingMovidesk, setPreviewingMovidesk] = useState(false);
 
   useEffect(() => {
     void loadConfiguration();
@@ -239,6 +242,26 @@ export function Settings() {
       );
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function previewMovidesk() {
+    try {
+      setPreviewingMovidesk(true);
+      setError(null);
+      setSuccess(null);
+      const response = await api.get<MovideskPreview>("/movidesk/preview?limit=25");
+      setMovideskPreview(response.data);
+      setSuccess(
+        response.data.validForImport
+          ? `Amostra Movidesk validada: ${response.data.sampleSize} ticket(s), sem incompatibilidades obrigatórias.`
+          : `Amostra analisada com ${response.data.issues.length} incompatibilidade(s). Revise antes da carga FULL.`,
+      );
+    } catch (previewError: any) {
+      setMovideskPreview(null);
+      setError(previewError?.response?.data?.message ?? (previewError instanceof Error ? previewError.message : "Não foi possível validar a amostra Movidesk."));
+    } finally {
+      setPreviewingMovidesk(false);
     }
   }
 
@@ -533,8 +556,20 @@ export function Settings() {
               <TextField type="password" label="Novo token Movidesk" value={form.movideskToken} onChange={(event) => updateField("movideskToken", event.target.value)} autoComplete="new-password" placeholder={configuration?.movideskConfigured ? "Deixe vazio para manter o token atual" : "Cole o token recebido"} helperText="O token atual nunca é exibido e fica criptografado no banco." />
             </Box>
             <Stack direction="row" spacing={1} sx={{ mt: 2, justifyContent: "flex-end" }}>
-              <Button variant="contained" disabled={saving || (!configuration?.movideskConfigured && !form.movideskToken.trim())} onClick={() => void saveAndTestMovidesk()}>{saving ? "Salvando e testando..." : form.movideskToken.trim() ? "Salvar e testar" : "Testar conexão salva"}</Button>
+              <Button variant="outlined" disabled={saving || previewingMovidesk || !configuration?.movideskConfigured || Boolean(form.movideskToken.trim())} onClick={() => void previewMovidesk()}>{previewingMovidesk ? "Validando amostra..." : "Validar amostra (25)"}</Button>
+              <Button variant="contained" disabled={saving || previewingMovidesk || (!configuration?.movideskConfigured && !form.movideskToken.trim())} onClick={() => void saveAndTestMovidesk()}>{saving ? "Salvando e testando..." : form.movideskToken.trim() ? "Salvar e testar" : "Testar conexão salva"}</Button>
             </Stack>
+            {movideskPreview && <Box sx={{ mt: 2, p: 1.5, border: "1px solid", borderColor: movideskPreview.validForImport ? "success.main" : "warning.main", borderRadius: 1.5 }}>
+              <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ alignItems: { sm: "center" }, justifyContent: "space-between", mb: 1 }}>
+                <Typography sx={{ fontWeight: 800 }}>Pré-validação da API · somente leitura</Typography>
+                <Chip size="small" color={movideskPreview.validForImport ? "success" : "warning"} label={movideskPreview.validForImport ? "Apto para importação" : "Revisão necessária"} />
+              </Stack>
+              <Typography variant="body2" color="text.secondary">{movideskPreview.sampleSize} ticket(s) analisados · {movideskPreview.issues.length} incompatibilidade(s) obrigatória(s) · nenhum dado gravado.</Typography>
+              <Box sx={{ mt: 1.25, display: "grid", gridTemplateColumns: { xs: "repeat(2,1fr)", md: "repeat(4,1fr)" }, gap: 1 }}>
+                {["owner","clients","category","serviceFirstLevel","serviceSecondLevel","status","slaAgreement","customFieldValues"].map((field) => <Box key={field}><Typography variant="caption" color="text.secondary">{field}</Typography><Typography variant="body2" sx={{ fontWeight: 750 }}>{movideskPreview.coverage[field] ?? 0}/{movideskPreview.sampleSize}</Typography></Box>)}
+              </Box>
+              {movideskPreview.issues.length > 0 && <Alert severity="warning" sx={{ mt: 1.5 }}>Há tickets sem {movideskPreview.requiredFields.join(", ")}. A carga FULL deve permanecer bloqueada até revisão.</Alert>}
+            </Box>}
           </CardContent>
         </Card>
 
