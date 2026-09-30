@@ -58,6 +58,12 @@ export class MovideskSyncScheduler {
     this.running = true;
     const started = Date.now();
     try {
+      const service = new MovideskService();
+      if (!(await service.hasCompletedBaseline())) {
+        console.log("[movidesk-sync] Ciclo aguardando baseline FULL manual; nenhuma carga automática foi executada.");
+        return;
+      }
+
       const result = await prisma.$transaction(async (tx) => {
         const rows = await tx.$queryRaw<LockRow[]>(Prisma.sql`
           SELECT pg_try_advisory_xact_lock(
@@ -66,7 +72,7 @@ export class MovideskSyncScheduler {
           ) AS acquired
         `);
         if (rows[0]?.acquired !== true) return { acquired: false as const, sync: null };
-        const sync = await new MovideskService().syncTickets(null, false);
+        const sync = await service.syncTickets(null, false);
         return { acquired: true as const, sync };
       }, { maxWait: 5_000, timeout: 55 * 60 * 1000 });
 
