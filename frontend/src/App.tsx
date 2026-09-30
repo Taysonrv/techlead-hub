@@ -182,6 +182,7 @@ function AuthenticatedLayout({
                 width: "100%",
                 maxWidth: "100%",
                 px: isChat ? 0 : { xs: 1.5, sm: 2, md: 2.5, lg: 3, xl: 4 },
+                pb: isChat ? 0 : { xs: 3, md: 4 },
                 minHeight: isChat ? 0 : "calc(100vh - 96px)",
                 height: isChat ? "100dvh" : "auto",
                 overflow: isChat ? "hidden" : "visible",
@@ -199,6 +200,10 @@ function AuthenticatedLayout({
                 }),
                 "& > *": { position: "relative", zIndex: 1 },
                 "& .MuiCard-root": { contain: "paint" },
+                "& .MuiCardContent-root": { minWidth: 0 },
+                "& .MuiCard-root + .MuiCard-root": { scrollMarginTop: 96 },
+                "& .MuiButton-root": { whiteSpace: "nowrap" },
+                "& .MuiTypography-root": { textWrap: "pretty" },
                 "& .MuiCard-root:focus-within": (theme) => ({
                   borderColor: theme.palette.mode === "dark" ? "rgba(24,199,122,.24)" : "rgba(16,148,91,.18)",
                 }),
@@ -212,7 +217,9 @@ function AuthenticatedLayout({
                 "& .recharts-wrapper, & .recharts-surface": {
                   textRendering: "geometricPrecision",
                   shapeRendering: "geometricPrecision",
+                  outline: "none !important",
                 },
+                "& .recharts-wrapper *:focus, & .recharts-surface *:focus": { outline: "none !important" },
                 "& .recharts-surface": {
                   overflow: "visible",
                 },
@@ -265,6 +272,8 @@ function AuthenticatedLayout({
                 }),
                 "& .MuiTableRow-root": { transition: "background-color .14s ease, box-shadow .14s ease" },
                 "& .MuiTableCell-root": { verticalAlign: "middle" },
+                "& .MuiTableCell-head": { whiteSpace: "nowrap" },
+                "& .MuiTableBody-root .MuiTableRow-root:last-of-type .MuiTableCell-root": { borderBottom: 0 },
                 "& .MuiChip-root": { maxWidth: "100%" },
                 "& .MuiInputBase-root, & .MuiButton-root, & .MuiChip-root": {
                   transition: "border-color .16s ease, background-color .16s ease, box-shadow .16s ease, transform .16s ease",
