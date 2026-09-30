@@ -184,8 +184,15 @@ export class GlobalController {
 
     const technicalText=[raw,...tickets.slice(0,8).map(x=>x.subject),...workItems.slice(0,8).map(x=>x.title)].join(" ");
     const mapService=new SimerMapService(); const ruleService=new SystemRuleService();
-    const [mapItems,ruleItems]=await Promise.all([mapService.context(technicalText,18),ruleService.search(technicalText,18)]);
-    const correlations=await ruleService.correlate(technicalText,mapItems,12);
+    const withTimeout=<T>(promise:Promise<T>,ms:number,fallback:T)=>Promise.race<T>([
+      promise.catch(()=>fallback),
+      new Promise<T>((resolve)=>setTimeout(()=>resolve(fallback),ms)),
+    ]);
+    const [mapItems,ruleItems]=await Promise.all([
+      withTimeout(mapService.context(technicalText,18),2500,[]),
+      withTimeout(ruleService.search(technicalText,18),2500,[]),
+    ]);
+    const correlations=await withTimeout(ruleService.correlate(technicalText,mapItems,12),2500,[]);
     const evidence=correlations.slice(0,12).map((item:any)=>({id:item.id,title:item.nodeText??item.name??item.path,path:item.path??null,mapName:item.mapName??null,score:item.correlationScore??item.score??0,kind:item.nodeKind??"regra"}));
 
     const clients=new Set(tickets.map(x=>x.client).filter(Boolean));
