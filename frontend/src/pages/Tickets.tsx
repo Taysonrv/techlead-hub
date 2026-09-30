@@ -3091,7 +3091,7 @@ function FilterSelect({ label, value, options, onChange }: FilterSelectProps) {
     <Select multiple displayEmpty value={value} label={label}
       onChange={(event) => onChange(typeof event.target.value === "string" ? event.target.value.split(",") : event.target.value)}
       renderValue={(selected) => !selected.length ? "Todos" : selected.length === 1 ? selected[0] : `${selected.length} selecionados`}>
-      <MenuItem onClick={(event) => { event.preventDefault(); event.stopPropagation(); onChange([]); }}><Checkbox size="small" checked={!value.length} />Todos</MenuItem>
+      <MenuItem value="__all__"><Checkbox size="small" checked={!value.length} />Todos</MenuItem>
       {options.map((option) => <MenuItem key={option} value={option}><Checkbox size="small" checked={value.includes(option)} />{option}</MenuItem>)}
     </Select>
   </FormControl>;
