@@ -601,15 +601,16 @@ export function Settings() {
               <Button variant="outlined" disabled={saving || previewingMovidesk || !configuration?.movideskConfigured || Boolean(form.movideskToken.trim())} onClick={() => void previewMovidesk()}>{previewingMovidesk ? "Validando amostra..." : "Validar amostra (25)"}</Button>
               <Button variant="contained" disabled={saving || previewingMovidesk || (!configuration?.movideskConfigured && !form.movideskToken.trim())} onClick={() => void saveAndTestMovidesk()}>{saving ? "Salvando e testando..." : form.movideskToken.trim() ? "Salvar e testar" : "Testar conexão salva"}</Button>
             </Stack>
-            {movideskPreview?.validForImport && <Box sx={{ mt: 2, p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: 1.5 }}>
+            <Box sx={{ mt: 2, p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: 1.5 }}>
               <Stack direction={{ xs: "column", md: "row" }} spacing={1} sx={{ alignItems: { md: "center" }, justifyContent: "space-between" }}>
                 <Box>
                   <Typography sx={{ fontWeight: 800 }}>Baseline Movidesk</Typography>
                   <Typography variant="body2" color="text.secondary">{movideskBaseline?.completed ? `Concluído · ${movideskBaseline.database.tickets} tickets na base` : movideskBaseline?.status === "RUNNING" ? "Carga FULL em execução em segundo plano." : "Pronto para a primeira carga completa."}</Typography>
                 </Box>
-                <Button variant="contained" disabled={baselineBusy || movideskBaseline?.status === "RUNNING" || movideskBaseline?.completed} onClick={() => void startMovideskBaseline()}>{movideskBaseline?.status === "RUNNING" ? "FULL em execução" : movideskBaseline?.completed ? "Baseline concluído" : "Iniciar carga FULL"}</Button>
+                <Button variant="contained" disabled={baselineBusy || movideskBaseline?.status === "RUNNING" || movideskBaseline?.completed || !movideskPreview?.validForImport} onClick={() => void startMovideskBaseline()}>{movideskBaseline?.status === "RUNNING" ? "FULL em execução" : movideskBaseline?.completed ? "Baseline concluído" : "Iniciar carga FULL"}</Button>
               </Stack>
               {movideskBaseline?.result && <Typography variant="body2" sx={{ mt: 1 }}>Páginas: <b>{movideskBaseline.result.pages}</b> · Lidos: <b>{movideskBaseline.result.totalRows}</b> · Novos: <b>{movideskBaseline.result.created}</b> · Atualizados: <b>{movideskBaseline.result.updated}</b> · Erros: <b>{movideskBaseline.result.errors}</b></Typography>}
+              {!movideskPreview?.validForImport && !movideskBaseline?.completed && <Alert severity="info" sx={{ mt: 1 }}>Valide a amostra da API para liberar a primeira carga FULL.</Alert>}
               {movideskBaseline?.error && <Alert severity="error" sx={{ mt: 1 }}>{movideskBaseline.error}</Alert>}
               {movideskCoverage && <Box sx={{ mt: 1.5 }}>
                 <Typography variant="body2" sx={{ fontWeight: 800 }}>Cobertura pós-carga · payload bruto {movideskCoverage.withRawData}/{movideskCoverage.total}</Typography>
@@ -617,7 +618,7 @@ export function Settings() {
                   {Object.entries(movideskCoverage.coverage).map(([field,count]) => <Box key={field}><Typography variant="caption" color="text.secondary">{field}</Typography><Typography variant="body2" sx={{ fontWeight: 750 }}>{count}/{movideskCoverage.total}</Typography></Box>)}
                 </Box>
               </Box>}
-            </Box>}
+            </Box>
             {movideskPreview && <Box sx={{ mt: 2, p: 1.5, border: "1px solid", borderColor: movideskPreview.validForImport ? "success.main" : "warning.main", borderRadius: 1.5 }}>
               <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ alignItems: { sm: "center" }, justifyContent: "space-between", mb: 1 }}>
                 <Typography sx={{ fontWeight: 800 }}>Pré-validação da API · somente leitura</Typography>
