@@ -23,11 +23,7 @@ function normalizeMovideskToken(raw?: string | null) {
     value = value.slice(1, -1).trim();
   }
 
-  try {
-    return decodeURIComponent(value);
-  } catch {
-    return value;
-  }
+  return value;
 }
 
 const TICKET_SELECT = [
@@ -68,8 +64,12 @@ export class MovideskService {
 
   async testConnection() {
     try {
-      const response = await axios.get(`${this.url}/tickets`, {
-        params: { token: this.token(), $select: "id,lastUpdate", $top: 1 },
+      const token = this.token();
+      const query = new URLSearchParams();
+      query.set("token", token);
+      query.set("$select", "id,lastUpdate");
+      query.set("$top", "1");
+      const response = await axios.get(`${this.url}/tickets?${query.toString()}`, {
         timeout: 30_000,
       });
       return { ok: true, endpoint: this.url, sampleCount: Array.isArray(response.data) ? response.data.length : 0 };
