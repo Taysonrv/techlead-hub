@@ -113,7 +113,7 @@ function AuthenticatedLayout({
       "/sobre": "Sobre",
       "/perfil": "Perfil",
     };
-    document.title = routineTitles[location.pathname] ?? "TechLead Hub";
+    document.title = routineTitles[location.pathname] ?? "Hub Suporte Simer";
   }, [location.pathname]);
   useEffect(() => {
     const unavailable = () => {};
