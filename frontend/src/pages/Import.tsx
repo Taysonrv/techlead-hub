@@ -2557,7 +2557,7 @@ function EmailRecoveryConfiguration() {
                   event.target.value
                 )
               }
-              placeholder="TechLead Hub <techlead@empresa.com.br>"
+              placeholder="Hub Suporte Simer <techlead@empresa.com.br>"
               fullWidth
             />
 
