@@ -220,19 +220,34 @@ export function createAppTheme(mode: PaletteMode = "light") {
         },
       },
       MuiTextField: { defaultProps: { size: "small" } },
+      MuiInputLabel: {
+        styleOverrides: {
+          root: {
+            color: textSecondary,
+            lineHeight: 1,
+            pointerEvents: "none",
+            zIndex: 2,
+            "&.MuiInputLabel-outlined": {
+              transform: "translate(14px, 14px) scale(1)",
+            },
+            "&.MuiInputLabel-outlined.MuiInputLabel-shrink": {
+              transform: "translate(12px, -7px) scale(0.75)",
+              transformOrigin: "top left",
+              padding: "2px 6px",
+              marginLeft: -2,
+              borderRadius: 6,
+              backgroundColor: paper,
+              boxShadow: dark ? "0 0 0 2px rgba(13,33,54,.96)" : "0 0 0 2px #FFFFFF",
+            },
+            "&.Mui-focused": { color: aliareColors.green },
+            "&.Mui-disabled": { color: dark ? "#60758C" : "#98A2B3" },
+          },
+        },
+      },
       MuiFormControl: {
         styleOverrides: {
           root: {
-            "& .MuiInputLabel-root": {
-              ...(dark ? { color: "#8FA7C1" } : {}),
-              lineHeight: 1.15,
-              zIndex: 1,
-              pointerEvents: "none",
-            },
-            "& .MuiInputLabel-root.MuiInputLabel-shrink": {
-              transform: "translate(14px, -9px) scale(0.75)",
-              transformOrigin: "top left",
-            },
+            minWidth: 0,
           },
         },
       },
@@ -253,8 +268,15 @@ export function createAppTheme(mode: PaletteMode = "light") {
             borderRadius: 8,
             backgroundColor: dark ? "rgba(7,20,35,.56)" : undefined,
             "& .MuiOutlinedInput-notchedOutline": { borderColor: dark ? "rgba(131,175,220,.30)" : undefined },
-            "& legend": { transition: "width .16s ease, max-width .16s ease" },
-            "& legend > span": { paddingLeft: 5, paddingRight: 5 },
+            "& .MuiOutlinedInput-notchedOutline legend": {
+              maxWidth: 0,
+              width: 0,
+              padding: 0,
+              transition: "none",
+            },
+            "& .MuiOutlinedInput-notchedOutline legend > span": {
+              padding: 0,
+            },
             "&:hover .MuiOutlinedInput-notchedOutline": { borderColor: dark ? "rgba(47,208,255,.50)" : undefined },
             "&.Mui-focused .MuiOutlinedInput-notchedOutline": { borderColor: aliareColors.green },
             "&.Mui-focused": dark ? { boxShadow: "0 0 0 3px rgba(24,199,122,.08)", backgroundColor: "rgba(7,20,35,.72)" } : undefined,
