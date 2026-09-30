@@ -260,7 +260,7 @@ export function Profile() {
           CABEÇALHO
       =================================================== */}
 
-      <PageHeader eyebrow="Perfil" title="Meu Perfil" description="Informações da sua conta no TechLead Hub." />
+      <PageHeader eyebrow="Perfil" title="Meu Perfil" description="Informações da sua conta no Hub Suporte Simer." />
 
       {/* ===================================================
           IDENTIDADE
@@ -486,7 +486,7 @@ export function Profile() {
               mt: 0.25,
             }}
           >
-            Altere sua senha de acesso ao TechLead Hub.
+            Altere sua senha de acesso ao Hub Suporte Simer.
           </Typography>
 
           <Divider
