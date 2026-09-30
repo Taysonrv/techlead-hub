@@ -1,5 +1,5 @@
 import { prisma } from "../database/prisma";
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { dataProtectionService } from "./DataProtectionService";
 
 const memberUserSelect = { id: true, name: true, username: true, role: true, avatarUpdatedAt: true } as const;
