@@ -250,7 +250,7 @@ export function Settings() {
       setPreviewingMovidesk(true);
       setError(null);
       setSuccess(null);
-      const response = await api.get<MovideskPreview>("/movidesk/preview?limit=25");
+      const response = await api.get<MovideskPreview>("/movidesk/preview?limit=25", { timeout: 120_000 });
       setMovideskPreview(response.data);
       setSuccess(
         response.data.validForImport
