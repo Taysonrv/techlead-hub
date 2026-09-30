@@ -1092,7 +1092,7 @@ export function Attention() {
               <Select multiple displayEmpty value={level} label="Situação do prazo"
                 onChange={(event) => setLevel(typeof event.target.value === "string" ? event.target.value.split(",") as any : event.target.value as any)}
                 renderValue={(selected) => !selected.length ? "Todos" : selected.length === 1 ? selected[0] : `${selected.length} selecionados`}>
-                <MenuItem onClick={(event) => { event.preventDefault(); event.stopPropagation(); setLevel([]); }}><Checkbox size="small" checked={!level.length} />Todos</MenuItem>
+                <MenuItem value="__all__"><Checkbox size="small" checked={!level.length} />Todos</MenuItem>
                 {[["vencido","Vencido"],["critico","Crítico"],["atencao","Atenção"]].map(([key,label]) => <MenuItem key={key} value={key}><Checkbox size="small" checked={level.includes(key as AttentionLevel)} />{label}</MenuItem>)}
               </Select>
             </FormControl>
@@ -1115,7 +1115,7 @@ export function Attention() {
               <Select multiple displayEmpty value={owner} label="Responsável"
                 onChange={(event) => setOwner(typeof event.target.value === "string" ? event.target.value.split(",") as any : event.target.value as any)}
                 renderValue={(selected) => !selected.length ? "Todos" : selected.length === 1 ? selected[0] : `${selected.length} selecionados`}>
-                <MenuItem onClick={(event) => { event.preventDefault(); event.stopPropagation(); setOwner([]); }}><Checkbox size="small" checked={!owner.length} />Todos</MenuItem>
+                <MenuItem value="__all__"><Checkbox size="small" checked={!owner.length} />Todos</MenuItem>
                 {owners.map((item) => <MenuItem key={item} value={item}><Checkbox size="small" checked={owner.includes(item)} />{item}</MenuItem>)}
               </Select>
             </FormControl>
@@ -1138,7 +1138,7 @@ export function Attention() {
               <Select multiple displayEmpty value={client} label="Cliente"
                 onChange={(event) => setClient(typeof event.target.value === "string" ? event.target.value.split(",") as any : event.target.value as any)}
                 renderValue={(selected) => !selected.length ? "Todos" : selected.length === 1 ? selected[0] : `${selected.length} selecionados`}>
-                <MenuItem onClick={(event) => { event.preventDefault(); event.stopPropagation(); setClient([]); }}><Checkbox size="small" checked={!client.length} />Todos</MenuItem>
+                <MenuItem value="__all__"><Checkbox size="small" checked={!client.length} />Todos</MenuItem>
                 {clients.map((item) => <MenuItem key={item} value={item}><Checkbox size="small" checked={client.includes(item)} />{item}</MenuItem>)}
               </Select>
             </FormControl>
