@@ -9,6 +9,7 @@ const REQUEST_INTERVAL_MS = 6_200;
 const INCREMENTAL_OVERLAP_MINUTES = 10;
 const REQUEST_RETRY_ATTEMPTS = 6;
 const REQUEST_RETRY_BASE_MS = 2_000;
+const OFFSET_TO_CURSOR_THRESHOLD = 9_000;
 const BASELINE_CHECKPOINT_ACTION = "MOVIDESK_BASELINE_CHECKPOINT";
 const BASELINE_FAILED_ACTION = "MOVIDESK_BASELINE_FAILED";
 
@@ -335,10 +336,12 @@ export class MovideskService {
       updated: numberValue("updated"),
       ignored: numberValue("ignored"),
       errors: numberValue("errors"),
+      cursorLastUpdate: typeof value.cursorLastUpdate === "string" ? value.cursorLastUpdate : null,
+      cursorId: Number.isSafeInteger(Number(value.cursorId)) ? Number(value.cursorId) : null,
     };
   }
 
-  private async saveBaselineCheckpoint(userId: number | null, summary: SyncSummary, nextSkip: number) {
+  private async saveBaselineCheckpoint(userId: number | null, summary: SyncSummary, nextSkip: number, cursor?: { lastUpdate: string; id: number } | null) {
     await prisma.auditLog.create({
       data: {
         userId,
@@ -352,6 +355,8 @@ export class MovideskService {
           updated: summary.updated,
           ignored: summary.ignored,
           errors: summary.errors,
+          cursorLastUpdate: cursor?.lastUpdate ?? null,
+          cursorId: cursor?.id ?? null,
           savedAt: new Date().toISOString(),
         },
       },
@@ -367,8 +372,16 @@ export class MovideskService {
     return Boolean(baseline);
   }
 
-  private async getPage(skip: number, since?: Date | null) {
-    const filter = since ? `lastUpdate gt ${since.toISOString()}` : undefined;
+  private async getPage(
+    skip: number,
+    since?: Date | null,
+    cursor?: { lastUpdate: string; id: number } | null,
+  ) {
+    const filter = cursor
+      ? `(lastUpdate gt ${cursor.lastUpdate}) or (lastUpdate eq ${cursor.lastUpdate} and id gt ${cursor.id})`
+      : since
+        ? `lastUpdate gt ${since.toISOString()}`
+        : undefined;
     const response = await this.getWithRetry(`${this.url}/tickets`, {
       params: {
         token: this.token(),
@@ -376,13 +389,38 @@ export class MovideskService {
         $expand: TICKET_EXPAND,
         $orderby: "lastUpdate asc,id asc",
         $top: PAGE_SIZE,
-        $skip: skip,
+        ...(cursor ? {} : { $skip: skip }),
         ...(filter ? { $filter: filter } : {}),
       },
       timeout: 120_000,
-    }, `página skip=${skip}`);
+    }, cursor ? `página cursor após id=${cursor.id}` : `página skip=${skip}`);
     if (!Array.isArray(response.data)) throw new Error("Resposta inesperada da API Movidesk.");
     return response.data as unknown[];
+  }
+
+  private async reconstructFullCursor(nextSkip: number) {
+    if (nextSkip <= 0) return null;
+    const anchorSkip = Math.max(0, nextSkip - PAGE_SIZE);
+    const response = await this.getWithRetry(`${this.url}/tickets`, {
+      params: {
+        token: this.token(),
+        $select: "id,lastUpdate",
+        $orderby: "lastUpdate asc,id asc",
+        $top: PAGE_SIZE,
+        $skip: anchorSkip,
+      },
+      timeout: 120_000,
+    }, `reconstrução do cursor skip=${anchorSkip}`);
+    if (!Array.isArray(response.data) || response.data.length === 0) {
+      throw new Error(`Não foi possível reconstruir o cursor do FULL antes do skip=${nextSkip}.`);
+    }
+    const last = response.data[response.data.length - 1] as { id?: unknown; lastUpdate?: unknown };
+    const id = Number(last.id);
+    const lastUpdate = typeof last.lastUpdate === "string" ? last.lastUpdate : "";
+    if (!Number.isSafeInteger(id) || !lastUpdate) {
+      throw new Error(`Cursor inválido ao reconstruir o FULL antes do skip=${nextSkip}.`);
+    }
+    return { id, lastUpdate };
   }
 
   private async latestSuccessfulSyncDate() {
@@ -419,12 +457,20 @@ export class MovideskService {
       since: since?.toISOString() ?? null,
     };
     const initialSkip = checkpoint?.nextSkip ?? 0;
+    let fullCursor = mode === "FULL" && checkpoint?.cursorLastUpdate && checkpoint?.cursorId
+      ? { lastUpdate: checkpoint.cursorLastUpdate, id: checkpoint.cursorId }
+      : null;
+    if (mode === "FULL" && initialSkip >= OFFSET_TO_CURSOR_THRESHOLD && !fullCursor) {
+      fullCursor = await this.reconstructFullCursor(initialSkip);
+      console.info(`[movidesk-sync] Cursor FULL reconstruído no checkpoint skip=${initialSkip} | id=${fullCursor.id}.`);
+    }
     if (mode === "FULL" && initialSkip > 0) {
       console.info(`[movidesk-sync] Retomando baseline FULL do checkpoint skip=${initialSkip} | páginas=${summary.pages} | processados=${summary.totalRows}.`);
     }
 
     for (let skip = initialSkip; ; skip += PAGE_SIZE) {
-      const rows = await this.getPage(skip, since);
+      const useCursor = mode === "FULL" && (skip >= OFFSET_TO_CURSOR_THRESHOLD || Boolean(fullCursor));
+      const rows = await this.getPage(skip, since, useCursor ? fullCursor : null);
       if (!rows.length) break;
 
       const result = await new MovideskJsonImportService().execute(
@@ -440,7 +486,13 @@ export class MovideskService {
 
       if (mode === "FULL") {
         const nextSkip = skip + rows.length;
-        await this.saveBaselineCheckpoint(userId ?? null, summary, nextSkip);
+        const lastRow = rows[rows.length - 1] as { id?: unknown; lastUpdate?: unknown };
+        const lastId = Number(lastRow.id);
+        const lastUpdate = typeof lastRow.lastUpdate === "string" ? lastRow.lastUpdate : "";
+        if (Number.isSafeInteger(lastId) && lastUpdate) {
+          fullCursor = { id: lastId, lastUpdate };
+        }
+        await this.saveBaselineCheckpoint(userId ?? null, summary, nextSkip, fullCursor);
         baselineState.progress = {
           nextSkip,
           pages: summary.pages,
