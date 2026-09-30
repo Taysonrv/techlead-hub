@@ -39,7 +39,7 @@ const TICKET_SELECT = [
   "ownerTeam", "serviceFirstLevel", "serviceSecondLevel", "serviceThirdLevel",
   "slaAgreement", "slaAgreementRule", "slaSolutionTime", "slaResponseTime",
   "slaSolutionDate", "slaResponseDate", "slaRealResponseDate",
-  "slaSolutionDateIsPaused", "solutionSlaIndicator", "responseSlaIndicator", "lifeTimeWorkingTime", "stoppedTime",
+  "slaSolutionDateIsPaused", "lifeTimeWorkingTime", "stoppedTime",
   "stoppedTimeWorkingTime", "origin", "isDeleted"
 ].join(",");
 
