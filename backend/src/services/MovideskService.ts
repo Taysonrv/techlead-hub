@@ -461,8 +461,12 @@ export class MovideskService {
       ? { lastUpdate: checkpoint.cursorLastUpdate, id: checkpoint.cursorId }
       : null;
     if (mode === "FULL" && initialSkip >= OFFSET_TO_CURSOR_THRESHOLD && !fullCursor) {
-      fullCursor = await this.reconstructFullCursor(initialSkip);
-      console.info(`[movidesk-sync] Cursor FULL reconstruído no checkpoint skip=${initialSkip} | id=${fullCursor.id}.`);
+      const reconstructedCursor = await this.reconstructFullCursor(initialSkip);
+      if (!reconstructedCursor) {
+        throw new Error(`Não foi possível reconstruir o cursor do FULL no checkpoint skip=${initialSkip}.`);
+      }
+      fullCursor = reconstructedCursor;
+      console.info(`[movidesk-sync] Cursor FULL reconstruído no checkpoint skip=${initialSkip} | id=${reconstructedCursor.id}.`);
     }
     if (mode === "FULL" && initialSkip > 0) {
       console.info(`[movidesk-sync] Retomando baseline FULL do checkpoint skip=${initialSkip} | páginas=${summary.pages} | processados=${summary.totalRows}.`);
