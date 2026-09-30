@@ -204,7 +204,10 @@ export class GlobalController {
       withTimeout(ruleService.search(technicalText,18),2500,[]),
     ]);
     const correlations=await withTimeout(ruleService.correlate(technicalText,mapItems,12),2500,[]);
-    const evidence=correlations.slice(0,12).map((item:any)=>({id:item.id,title:item.nodeText??item.name??item.path,path:item.path??null,mapName:item.mapName??null,score:item.correlationScore??item.score??0,kind:item.nodeKind??"regra"}));
+    const correlatedEvidence=correlations.slice(0,12).map((item:any)=>({id:item.id,title:item.nodeText??item.name??item.path,path:item.path??null,mapName:item.mapName??null,score:item.correlationScore??item.score??0,kind:item.nodeKind??"mapa"}));
+    const ruleEvidence=ruleItems.slice(0,12).map((item:any)=>({id:item.id,title:item.name??item.processName??"Regra do sistema",path:item.folderPath??item.sourceFile??null,mapName:item.processName??null,score:item.score??0,kind:"regra"}));
+    const mapEvidence=mapItems.slice(0,12).map((item:any)=>({id:item.id,title:item.nodeText??item.path??item.mapName??"Evidência do mapa",path:item.path??null,mapName:item.mapName??null,score:item.score??0,kind:item.nodeKind??"mapa"}));
+    const evidence=[...correlatedEvidence,...ruleEvidence,...mapEvidence].filter((item,index,list)=>list.findIndex(x=>`${x.kind}:${x.id}`===`${item.kind}:${item.id}`)===index).sort((a,b)=>Number(b.score)-Number(a.score)).slice(0,12);
 
     const clients=new Set(tickets.map(x=>x.client).filter(Boolean));
     const versions=new Map<string,number>();
