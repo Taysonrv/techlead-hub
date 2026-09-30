@@ -69,13 +69,22 @@ export class MovideskService {
   }
 
   private async latestSuccessfulSyncDate() {
-    const last = await prisma.importRun.findFirst({
-      where: { source: "MOVIDESK_API", status: { in: ["SUCCESS", "PARTIAL"] } },
-      orderBy: { finishedAt: "desc" },
-      select: { finishedAt: true },
+    // Só habilitamos incremental depois que uma carga FULL terminou por inteiro.
+    // Assim, uma interrupção no meio do baseline nunca faz o próximo ciclo
+    // saltar os tickets das páginas que ainda não foram importadas.
+    const baseline = await prisma.auditLog.findFirst({
+      where: { action: "MOVIDESK_BASELINE_COMPLETED" },
+      orderBy: { createdAt: "desc" },
+      select: { id: true },
     });
-    if (!last?.finishedAt) return null;
-    return new Date(last.finishedAt.getTime() - INCREMENTAL_OVERLAP_MINUTES * 60_000);
+    if (!baseline) return null;
+
+    // O cursor deve seguir o relógio do dado remoto (lastUpdate), e não o
+    // horário local em que a importação terminou.
+    const latest = await prisma.ticket.aggregate({ _max: { lastUpdate: true } });
+    const cursor = latest._max.lastUpdate;
+    if (!cursor) return null;
+    return new Date(cursor.getTime() - INCREMENTAL_OVERLAP_MINUTES * 60_000);
   }
 
   async syncTickets(userId?: number | null, forceFull = false): Promise<SyncSummary> {
@@ -100,6 +109,17 @@ export class MovideskService {
 
       if (rows.length < PAGE_SIZE) break;
       await new Promise((resolve) => setTimeout(resolve, REQUEST_INTERVAL_MS));
+    }
+
+    if (mode === "FULL") {
+      await prisma.auditLog.create({
+        data: {
+          userId: userId ?? null,
+          action: "MOVIDESK_BASELINE_COMPLETED",
+          entity: "Ticket",
+          metadata: { pages: summary.pages, totalRows: summary.totalRows, errors: summary.errors },
+        },
+      });
     }
 
     return summary;
