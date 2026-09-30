@@ -3089,9 +3089,9 @@ function KpiCard({
 function FilterSelect({ label, value, options, onChange }: FilterSelectProps) {
   return <FormControl fullWidth size="small"><InputLabel shrink>{label}</InputLabel>
     <Select multiple displayEmpty value={value} label={label}
-      onChange={(event) => onChange(typeof event.target.value === "string" ? event.target.value.split(",") : event.target.value)}
+      onChange={(event) => { const next = typeof event.target.value === "string" ? event.target.value.split(",") : event.target.value; onChange(next.includes("__all__") ? [...options] : next.filter((item) => item !== "__all__")); }}
       renderValue={(selected) => !selected.length ? "Todos" : selected.length === 1 ? selected[0] : `${selected.length} selecionados`}>
-      <MenuItem value="__all__"><Checkbox size="small" checked={!value.length} />Todos</MenuItem>
+      <MenuItem value="__all__"><Checkbox size="small" checked={options.length > 0 && value.length === options.length} indeterminate={value.length > 0 && value.length < options.length} />Todos</MenuItem>
       {options.map((option) => <MenuItem key={option} value={option}><Checkbox size="small" checked={value.includes(option)} />{option}</MenuItem>)}
     </Select>
   </FormControl>;
