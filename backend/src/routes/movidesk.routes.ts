@@ -9,3 +9,4 @@ movideskRoutes.post("/sync", requirePermission("imports"), controller.sync.bind(
 
 movideskRoutes.post("/sync/full", requirePermission("imports"), controller.fullSync.bind(controller));
 movideskRoutes.get("/test", requirePermission("imports"), controller.test.bind(controller));
+movideskRoutes.get("/preview", requirePermission("imports"), controller.preview.bind(controller));
