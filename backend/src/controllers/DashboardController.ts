@@ -1009,7 +1009,6 @@ export class DashboardController {
                 OR: [
                   ...(taskNumbers.length ? [{ id: { in: taskNumbers } }] : []),
                   ...(ticketMovideskIds.length ? [{ movideskTicket: { in: ticketMovideskIds } }] : []),
-                  { participantMovideskTickets: { not: null } },
                 ],
               },
               select: {
@@ -1025,8 +1024,6 @@ export class DashboardController {
                   true,
                 client:
                   true,
-                participantClients:
-                  true,
                 criticality:
                   true,
                 module:
@@ -1034,8 +1031,6 @@ export class DashboardController {
                 process:
                   true,
                 movideskTicket:
-                  true,
-                participantMovideskTickets:
                   true,
                 deliveredVersion:
                   true,
@@ -1065,8 +1060,6 @@ export class DashboardController {
       const azureByMovideskId = new Map<number, (typeof azureWorkItems)[number]>();
       azureWorkItems.forEach((workItem) => {
         if (workItem.movideskTicket) azureByMovideskId.set(workItem.movideskTicket, workItem);
-        (workItem.participantMovideskTickets?.match(/\d+/g) ?? []).map(Number)
-          .forEach((id) => azureByMovideskId.set(id, workItem));
       });
 
       const result =
