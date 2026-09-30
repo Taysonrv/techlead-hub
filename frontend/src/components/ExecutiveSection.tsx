@@ -11,9 +11,9 @@ export function ExecutiveSection({ title, subtitle, icon, action, children, acce
     {(title || subtitle || action) && <Box sx={{ px: { xs: 1.75, md: 2.1 }, pt: { xs: 1.65, md: 1.9 }, pb: 1.35, borderBottom: "1px solid", borderColor: "divider", background: dark ? "linear-gradient(90deg, rgba(20,53,78,.48), rgba(8,24,41,.12))" : "linear-gradient(90deg, rgba(8,145,178,.035), transparent)" }}>
       <Stack direction={{ xs: "column", sm: "row" }} spacing={1.25} sx={{ alignItems: { xs: "stretch", sm: "center" }, justifyContent: "space-between" }}>
         <Stack direction="row" spacing={1.1} sx={{ alignItems: "center", minWidth: 0 }}>
-          {icon && <Box sx={{ display: "grid", placeItems: "center", width: 34, height: 34, flexShrink: 0, borderRadius: 2, color: accent, border: "1px solid", borderColor: `color-mix(in srgb, ${accent} 34%, transparent)`, backgroundColor: `color-mix(in srgb, ${accent} 9%, transparent)` }}>{icon}</Box>}
+          {icon && <Box sx={{ display: "grid", placeItems: "center", width: 36, height: 36, flexShrink: 0, borderRadius: 2, color: accent, border: "1px solid", borderColor: `color-mix(in srgb, ${accent} 34%, transparent)`, backgroundColor: `color-mix(in srgb, ${accent} 9%, transparent)` }}>{icon}</Box>}
           <Box sx={{ minWidth: 0 }}>
-            {title && <Typography sx={{ fontWeight: 850, fontSize: "1.02rem", letterSpacing: "-.01em" }}>{title}</Typography>}
+            {title && <Typography sx={{ fontWeight: 750, fontSize: "1rem", letterSpacing: "-.01em" }}>{title}</Typography>}
             {subtitle && <Typography variant="caption" color="text.secondary">{subtitle}</Typography>}
           </Box>
         </Stack>
