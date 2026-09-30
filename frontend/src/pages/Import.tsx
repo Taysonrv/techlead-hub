@@ -80,6 +80,18 @@ type ImportPreview = {
   };
 };
 
+type MovideskBaselineStatus = {
+  status: "IDLE" | "RUNNING" | "SUCCESS" | "ERROR";
+  startedAt: string | null;
+  finishedAt: string | null;
+  completed: boolean;
+  result: { mode: string; pages: number; totalRows: number; created: number; updated: number; ignored: number; errors: number } | null;
+  error: string | null;
+  database: { tickets: number; linkedTasks: number };
+  lastImport: { status: string; totalRows: number; insertedRows: number; updatedRows: number; skippedRows: number; errorRows: number; startedAt: string; finishedAt: string | null; message: string | null } | null;
+  scheduler: { enabled: boolean; intervalMinutes: number; overlapMinutes: number; pageSize: number; phase: "WAITING_BASELINE" | "BASELINE_RUNNING" | "INCREMENTAL"; nextEstimatedAt: string | null };
+};
+
 /* =========================================================
    TIPOS - AZURE
 ========================================================= */
@@ -185,6 +197,9 @@ export function Import() {
 
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [movideskStatus, setMovideskStatus] = useState<MovideskBaselineStatus | null>(null);
+  const [movideskStatusLoading, setMovideskStatusLoading] = useState(false);
+  const [movideskFullStarting, setMovideskFullStarting] = useState(false);
 
   /* =======================================================
      AZURE
@@ -580,6 +595,37 @@ export function Import() {
     URL.revokeObjectURL(anchor.href);
   }
 
+  const loadMovideskStatus = useCallback(async (showLoading = false) => {
+    try {
+      if (showLoading) setMovideskStatusLoading(true);
+      const response = await api.get<MovideskBaselineStatus>("/movidesk/baseline/status", { timeout: 30_000 });
+      setMovideskStatus(response.data);
+    } catch (err: unknown) {
+      setError(getApiErrorMessage(err, "Não foi possível consultar o scheduler Movidesk."));
+    } finally {
+      setMovideskStatusLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadMovideskStatus(true);
+    const timer = window.setInterval(() => { void loadMovideskStatus(false); }, 15_000);
+    return () => window.clearInterval(timer);
+  }, [loadMovideskStatus]);
+
+  async function startMovideskFull() {
+    try {
+      setMovideskFullStarting(true);
+      setError(null);
+      const response = await api.post<{ accepted: boolean; reason?: string; state: MovideskBaselineStatus }>("/movidesk/baseline/start", {}, { timeout: 30_000 });
+      setMovideskStatus(response.data.state);
+    } catch (err: unknown) {
+      setError(getApiErrorMessage(err, "Não foi possível iniciar a carga FULL do Movidesk."));
+    } finally {
+      setMovideskFullStarting(false);
+    }
+  }
+
   return (
     <>
       {/* =====================================================
@@ -625,6 +671,53 @@ export function Import() {
       </Card>
 
       <EmailRecoveryConfiguration />
+
+      <SectionHeader
+        title="Movidesk"
+        description="Carga inicial completa e acompanhamento da sincronização incremental automática dos tickets."
+      />
+
+      <Card elevation={0} sx={{ mb: 3, border: "1px solid", borderColor: "divider", borderRadius: 2.5 }}>
+        {movideskStatusLoading && !movideskStatus && <LinearProgress />}
+        <CardContent sx={{ p: { xs: 2, md: 2.5 } }}>
+          <Stack direction={{ xs: "column", md: "row" }} spacing={2} sx={{ justifyContent: "space-between", alignItems: { md: "center" } }}>
+            <Box>
+              <Stack direction="row" spacing={1} useFlexGap sx={{ alignItems: "center", flexWrap: "wrap" }}>
+                <Typography sx={{ fontWeight: 800, fontSize: "1.05rem" }}>Sincronização Movidesk</Typography>
+                {movideskStatus && <Chip size="small" color={movideskStatus.scheduler.enabled ? "success" : "default"} label={movideskStatus.scheduler.enabled ? "Scheduler ativo" : "Scheduler desativado"} />}
+                {movideskStatus?.status === "RUNNING" && <Chip size="small" color="info" label="FULL em execução" />}
+              </Stack>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: .75 }}>
+                {movideskStatus
+                  ? `Incremental a cada ${movideskStatus.scheduler.intervalMinutes} min • overlap ${movideskStatus.scheduler.overlapMinutes} min • lote ${movideskStatus.scheduler.pageSize} tickets • ${movideskStatus.scheduler.phase === "INCREMENTAL" ? "baseline concluído" : movideskStatus.scheduler.phase === "BASELINE_RUNNING" ? "baseline em execução" : "aguardando baseline FULL"}`
+                  : "Consultando o sincronizador Movidesk..."}
+              </Typography>
+            </Box>
+            <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
+              <Button variant="outlined" disabled={movideskStatusLoading} onClick={() => void loadMovideskStatus(true)}>
+                {movideskStatusLoading ? "Atualizando..." : "Atualizar status"}
+              </Button>
+              <Button variant="contained" disabled={movideskFullStarting || movideskStatus?.status === "RUNNING" || movideskStatus?.completed} onClick={() => void startMovideskFull()}>
+                {movideskFullStarting ? "Iniciando..." : movideskStatus?.status === "RUNNING" ? "FULL em execução" : movideskStatus?.completed ? "Baseline concluído" : "Iniciar FULL"}
+              </Button>
+            </Stack>
+          </Stack>
+
+          {movideskStatus && <>
+            <Divider sx={{ my: 2 }} />
+            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr 1fr", lg: "repeat(4,1fr)" }, gap: 1.5 }}>
+              <InfoCard label="Tickets na base" value={String(movideskStatus.database.tickets)} />
+              <InfoCard label="Tickets com Task" value={String(movideskStatus.database.linkedTasks)} />
+              <InfoCard label="Última execução" value={formatDateTime(movideskStatus.lastImport?.finishedAt ?? movideskStatus.lastImport?.startedAt)} />
+              <InfoCard label="Próxima incremental" value={formatDateTime(movideskStatus.scheduler.nextEstimatedAt)} />
+            </Box>
+            {movideskStatus.result && <Alert severity={movideskStatus.result.errors ? "warning" : "success"} sx={{ mt: 2 }}>
+              FULL: {movideskStatus.result.pages} página(s) • {movideskStatus.result.totalRows} lidos • {movideskStatus.result.created} novos • {movideskStatus.result.updated} atualizados • {movideskStatus.result.ignored} ignorados • {movideskStatus.result.errors} erros.
+            </Alert>}
+            {movideskStatus.error && <Alert severity="error" sx={{ mt: 2 }}>{movideskStatus.error}</Alert>}
+          </>}
+        </CardContent>
+      </Card>
 
       {/* =====================================================
           AZURE DEVOPS
