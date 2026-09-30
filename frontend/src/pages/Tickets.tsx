@@ -862,23 +862,10 @@ export function Tickets() {
   ======================================================= */
 
   const activeFilterCount =
-    [
-      search,
-      status,
-      urgency,
-      category,
-      owner,
-      client,
-      team,
-      service,
-      businessArea,
-      serviceLevel1,
-      serviceLevel3,
-      origin,
-      quickFilter,
-    ].filter(
-      Boolean
-    ).length;
+    (search.trim() ? 1 : 0) +
+    [status, urgency, category, owner, client, team, service, businessArea, serviceLevel1, serviceLevel3, origin]
+      .filter((values) => values.length > 0).length +
+    (quickFilter ? 1 : 0);
 
   function clearFilters() {
     setSearch("");
@@ -2809,7 +2796,8 @@ export function Tickets() {
                 <TicketField label="Serviço principal" value={selectedTicket.serviceFirstLevel ?? selectedTicket.department} />
                 <TicketField label="Serviço secundário" value={selectedTicket.serviceSecondLevel ?? selectedTicket.service} />
                 <TicketField label="Serviço detalhado" value={selectedTicket.serviceThirdLevel} />
-                <TicketField label="Área do cliente" value={selectedTicket.businessArea} />
+                <TicketField label="Área de negócio" value={selectedTicket.businessArea} />
+                <TicketField label="Criado por" value={selectedTicket.createdBy} />
 
                 <TicketField
                   label="Solicitante"
@@ -2917,6 +2905,8 @@ export function Tickets() {
                 <TicketField label="Quantidade de reaberturas" value={selectedTicket.reopenCount} />
                 <TicketField label="Resolvido no primeiro contato" value={selectedTicket.resolvedInFirstCall === null ? "Não informado" : selectedTicket.resolvedInFirstCall ? "Sim" : "Não"} />
                 <TicketField label="Satisfação" value={selectedTicket.satisfactionScore != null ? `${selectedTicket.satisfactionScore}/5` : null} />
+                <TicketField label="Fonte da importação" value={selectedTicket.importSource} />
+                <TicketField label="Importado em" value={formatDate(selectedTicket.importedAt ?? null)} />
               </Box>
 
               {/* JUSTIFICATIVA */}
