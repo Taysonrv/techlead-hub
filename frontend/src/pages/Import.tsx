@@ -659,7 +659,7 @@ export function Import() {
 
       <SectionHeader
         title="Movidesk"
-        description="Carga inicial completa e acompanhamento da sincronização incremental automática dos tickets."
+        description="Operação centralizada da API, carga FULL, sincronização incremental e importações manuais de contingência."
       />
 
       <Card elevation={0} sx={{ mb: 3, border: "1px solid", borderColor: "divider", borderRadius: 3, overflow: "hidden", bgcolor: "background.paper" }}>
@@ -705,6 +705,370 @@ export function Import() {
       </Card>
 
       {/* =====================================================
+          MOVIDESK
+      ===================================================== */}
+
+      <SectionHeader
+        title="Carga manual"
+        description="Canal complementar para cargas controladas por Excel ou JSON. A sincronização via API permanece como fonte automática principal."
+      />
+
+      <Alert
+        severity="info"
+        sx={{
+          mb:
+            2,
+          borderRadius:
+            2,
+        }}
+      >
+        Use a importação manual para cargas pontuais ou conferências. Tickets existentes são atualizados pelo número do atendimento e novos registros são incluídos sem substituir a rotina automática da API.
+      </Alert>
+
+      <Card
+        elevation={0}
+        sx={{
+          border:
+            "1px solid",
+          borderColor:
+            "divider",
+          borderRadius:
+            3,
+          overflow:
+            "hidden",
+        }}
+      >
+        <CardContent
+          sx={{
+            p: {
+              xs:
+                2,
+              md:
+                2.5,
+            },
+            "&:last-child": {
+              pb: {
+                xs:
+                  2,
+                md:
+                  2.5,
+              },
+            },
+          }}
+        >
+          <Box
+            onDragOver={
+              handleDragOver
+            }
+            onDragLeave={
+              handleDragLeave
+            }
+            onDrop={
+              handleDrop
+            }
+            onClick={() => {
+              if (
+                !loading
+              ) {
+                inputRef.current?.click();
+              }
+            }}
+            role="button"
+            tabIndex={
+              0
+            }
+            onKeyDown={(event) => {
+              if (
+                !loading &&
+                (
+                  event.key ===
+                    "Enter" ||
+                  event.key ===
+                    " "
+                )
+              ) {
+                inputRef.current?.click();
+              }
+            }}
+            sx={{
+              minHeight:
+                168,
+              display:
+                "flex",
+              alignItems:
+                "center",
+              justifyContent:
+                "center",
+              textAlign:
+                "center",
+              border:
+                "1px dashed",
+              borderColor:
+                dragging
+                  ? "primary.main"
+                  : file
+                  ? "success.main"
+                  : "divider",
+              backgroundColor:
+                dragging
+                  ? "action.hover"
+                  : file
+                  ? "rgba(46, 125, 50, 0.03)"
+                  : "background.default",
+              borderRadius:
+                2.5,
+              cursor:
+                loading
+                  ? "default"
+                  : "pointer",
+              transition:
+                "border-color 0.15s ease, background-color 0.15s ease",
+            }}
+          >
+            <input
+              ref={
+                inputRef
+              }
+              type="file"
+              accept=".xlsx,.json,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/json"
+              hidden
+              onChange={
+                handleFileChange
+              }
+            />
+
+            {!file ? (
+              <Box
+                sx={{
+                  px:
+                    2,
+                }}
+              >
+                <Typography
+                  sx={{
+                    fontWeight:
+                      800,
+                    fontSize:
+                      "1.05rem",
+                  }}
+                >
+                  Arraste o Excel ou JSON do Movidesk para cá
+                </Typography>
+
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{
+                    mt:
+                      0.75,
+                  }}
+                >
+                  ou clique para selecionar o arquivo
+                </Typography>
+
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{
+                    display:
+                      "block",
+                    mt:
+                      0.75,
+                  }}
+                >
+                  Formatos .xlsx e .json • Máximo 50 MB
+                </Typography>
+
+                <Button
+                  variant="outlined"
+                  size="small"
+                  disabled={
+                    loading
+                  }
+                  sx={{
+                    mt:
+                      2,
+                  }}
+                >
+                  Selecionar arquivo
+                </Button>
+              </Box>
+            ) : (
+              <Box
+                sx={{
+                  px:
+                    2,
+                }}
+              >
+                <Chip
+                  label={previewLoading ? "Validando arquivo" : "Arquivo validado"}
+                  color="success"
+                  size="small"
+                  sx={{
+                    mb:
+                      1.5,
+                  }}
+                />
+
+                <Typography
+                  sx={{
+                    fontWeight:
+                      800,
+                  }}
+                >
+                  {file.name}
+                </Typography>
+
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{
+                    mt:
+                      0.5,
+                  }}
+                >
+                  {fileSize}
+                </Typography>
+
+                {preview && (
+                  <Stack direction="row" spacing={1} useFlexGap sx={{ mt: 1, justifyContent: "center", flexWrap: "wrap" }}>
+                    <Chip size="small" variant="outlined" label={preview.format} />
+                    <Chip size="small" variant="outlined" label={`${preview.totalRows.toLocaleString("pt-BR")} registros`} />
+                  </Stack>
+                )}
+
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{
+                    display:
+                      "block",
+                    mt:
+                      1,
+                  }}
+                >
+                  Clique na área para selecionar outro arquivo
+                </Typography>
+              </Box>
+            )}
+          </Box>
+
+          {loading && (
+            <Box
+              sx={{
+                mt:
+                  2,
+              }}
+            >
+              <LinearProgress />
+
+              <Stack
+                direction="row"
+                spacing={
+                  1
+                }
+                sx={{
+                  mt:
+                    1,
+                  alignItems:
+                    "center",
+                }}
+              >
+                <CircularProgress
+                  size={
+                    16
+                  }
+                />
+
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                >
+                  Processando arquivo e atualizando a base...
+                </Typography>
+              </Stack>
+            </Box>
+          )}
+
+          {error && (
+            <Alert
+              severity="error"
+              sx={{
+                mt:
+                  2,
+              }}
+            >
+              {error}
+            </Alert>
+          )}
+
+          {preview?.duplicate && (
+            <Alert severity="warning" sx={{ mt: 2 }}>
+              Este mesmo arquivo já foi processado em {new Date(preview.duplicate.startedAt).toLocaleString("pt-BR")} no lote {preview.duplicate.batchId}. Você ainda pode reprocessá-lo para atualizar os dados.
+            </Alert>
+          )}
+
+          <Stack
+            direction={{
+              xs:
+                "column",
+              sm:
+                "row",
+            }}
+            spacing={
+              1
+            }
+            sx={{
+              mt:
+                2,
+              justifyContent:
+                "flex-end",
+            }}
+          >
+            {file && (
+              <Button
+                variant="text"
+                disabled={
+                  loading
+                }
+                onClick={(event) => {
+                  event.stopPropagation();
+
+                  removeFile();
+                }}
+              >
+                Remover arquivo
+              </Button>
+            )}
+
+            <Button
+              variant="contained"
+              disabled={
+                !file ||
+                loading ||
+                previewLoading ||
+                !preview
+              }
+              onClick={
+                importFile
+              }
+              sx={{
+                minWidth:
+                  160,
+              }}
+            >
+              {loading
+                ? "Importando..."
+                : previewLoading
+                  ? "Validando..."
+                  : "Confirmar importação"}
+            </Button>
+          </Stack>
+        </CardContent>
+      </Card>
+
+
+      {/* =====================================================
           AZURE DEVOPS
       ===================================================== */}
 
@@ -721,7 +1085,7 @@ export function Import() {
           borderColor:
             "divider",
           borderRadius:
-            2.5,
+            3,
           overflow:
             "hidden",
           mb:
@@ -1230,369 +1594,6 @@ export function Import() {
         </CardContent>
       </Card>
 
-      {/* =====================================================
-          MOVIDESK
-      ===================================================== */}
-
-      <SectionHeader
-        title="Importação manual Movidesk"
-        description="Canal complementar para cargas controladas por Excel ou JSON. A sincronização via API permanece como fonte automática principal."
-      />
-
-      <Alert
-        severity="info"
-        sx={{
-          mb:
-            2,
-          borderRadius:
-            2,
-        }}
-      >
-        Use a importação manual para cargas pontuais ou conferências. Tickets existentes são atualizados pelo número do atendimento e novos registros são incluídos sem substituir a rotina automática da API.
-      </Alert>
-
-      <Card
-        elevation={0}
-        sx={{
-          border:
-            "1px solid",
-          borderColor:
-            "divider",
-          borderRadius:
-            2.5,
-          overflow:
-            "hidden",
-        }}
-      >
-        <CardContent
-          sx={{
-            p: {
-              xs:
-                2,
-              md:
-                2.5,
-            },
-            "&:last-child": {
-              pb: {
-                xs:
-                  2,
-                md:
-                  2.5,
-              },
-            },
-          }}
-        >
-          <Box
-            onDragOver={
-              handleDragOver
-            }
-            onDragLeave={
-              handleDragLeave
-            }
-            onDrop={
-              handleDrop
-            }
-            onClick={() => {
-              if (
-                !loading
-              ) {
-                inputRef.current?.click();
-              }
-            }}
-            role="button"
-            tabIndex={
-              0
-            }
-            onKeyDown={(event) => {
-              if (
-                !loading &&
-                (
-                  event.key ===
-                    "Enter" ||
-                  event.key ===
-                    " "
-                )
-              ) {
-                inputRef.current?.click();
-              }
-            }}
-            sx={{
-              minHeight:
-                168,
-              display:
-                "flex",
-              alignItems:
-                "center",
-              justifyContent:
-                "center",
-              textAlign:
-                "center",
-              border:
-                "1px dashed",
-              borderColor:
-                dragging
-                  ? "primary.main"
-                  : file
-                  ? "success.main"
-                  : "divider",
-              backgroundColor:
-                dragging
-                  ? "action.hover"
-                  : file
-                  ? "rgba(46, 125, 50, 0.03)"
-                  : "background.default",
-              borderRadius:
-                2.5,
-              cursor:
-                loading
-                  ? "default"
-                  : "pointer",
-              transition:
-                "border-color 0.15s ease, background-color 0.15s ease",
-            }}
-          >
-            <input
-              ref={
-                inputRef
-              }
-              type="file"
-              accept=".xlsx,.json,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/json"
-              hidden
-              onChange={
-                handleFileChange
-              }
-            />
-
-            {!file ? (
-              <Box
-                sx={{
-                  px:
-                    2,
-                }}
-              >
-                <Typography
-                  sx={{
-                    fontWeight:
-                      800,
-                    fontSize:
-                      "1.05rem",
-                  }}
-                >
-                  Arraste o Excel ou JSON do Movidesk para cá
-                </Typography>
-
-                <Typography
-                  variant="body2"
-                  color="text.secondary"
-                  sx={{
-                    mt:
-                      0.75,
-                  }}
-                >
-                  ou clique para selecionar o arquivo
-                </Typography>
-
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  sx={{
-                    display:
-                      "block",
-                    mt:
-                      0.75,
-                  }}
-                >
-                  Formatos .xlsx e .json • Máximo 50 MB
-                </Typography>
-
-                <Button
-                  variant="outlined"
-                  size="small"
-                  disabled={
-                    loading
-                  }
-                  sx={{
-                    mt:
-                      2,
-                  }}
-                >
-                  Selecionar arquivo
-                </Button>
-              </Box>
-            ) : (
-              <Box
-                sx={{
-                  px:
-                    2,
-                }}
-              >
-                <Chip
-                  label={previewLoading ? "Validando arquivo" : "Arquivo validado"}
-                  color="success"
-                  size="small"
-                  sx={{
-                    mb:
-                      1.5,
-                  }}
-                />
-
-                <Typography
-                  sx={{
-                    fontWeight:
-                      800,
-                  }}
-                >
-                  {file.name}
-                </Typography>
-
-                <Typography
-                  variant="body2"
-                  color="text.secondary"
-                  sx={{
-                    mt:
-                      0.5,
-                  }}
-                >
-                  {fileSize}
-                </Typography>
-
-                {preview && (
-                  <Stack direction="row" spacing={1} useFlexGap sx={{ mt: 1, justifyContent: "center", flexWrap: "wrap" }}>
-                    <Chip size="small" variant="outlined" label={preview.format} />
-                    <Chip size="small" variant="outlined" label={`${preview.totalRows.toLocaleString("pt-BR")} registros`} />
-                  </Stack>
-                )}
-
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  sx={{
-                    display:
-                      "block",
-                    mt:
-                      1,
-                  }}
-                >
-                  Clique na área para selecionar outro arquivo
-                </Typography>
-              </Box>
-            )}
-          </Box>
-
-          {loading && (
-            <Box
-              sx={{
-                mt:
-                  2,
-              }}
-            >
-              <LinearProgress />
-
-              <Stack
-                direction="row"
-                spacing={
-                  1
-                }
-                sx={{
-                  mt:
-                    1,
-                  alignItems:
-                    "center",
-                }}
-              >
-                <CircularProgress
-                  size={
-                    16
-                  }
-                />
-
-                <Typography
-                  variant="body2"
-                  color="text.secondary"
-                >
-                  Processando arquivo e atualizando a base...
-                </Typography>
-              </Stack>
-            </Box>
-          )}
-
-          {error && (
-            <Alert
-              severity="error"
-              sx={{
-                mt:
-                  2,
-              }}
-            >
-              {error}
-            </Alert>
-          )}
-
-          {preview?.duplicate && (
-            <Alert severity="warning" sx={{ mt: 2 }}>
-              Este mesmo arquivo já foi processado em {new Date(preview.duplicate.startedAt).toLocaleString("pt-BR")} no lote {preview.duplicate.batchId}. Você ainda pode reprocessá-lo para atualizar os dados.
-            </Alert>
-          )}
-
-          <Stack
-            direction={{
-              xs:
-                "column",
-              sm:
-                "row",
-            }}
-            spacing={
-              1
-            }
-            sx={{
-              mt:
-                2,
-              justifyContent:
-                "flex-end",
-            }}
-          >
-            {file && (
-              <Button
-                variant="text"
-                disabled={
-                  loading
-                }
-                onClick={(event) => {
-                  event.stopPropagation();
-
-                  removeFile();
-                }}
-              >
-                Remover arquivo
-              </Button>
-            )}
-
-            <Button
-              variant="contained"
-              disabled={
-                !file ||
-                loading ||
-                previewLoading ||
-                !preview
-              }
-              onClick={
-                importFile
-              }
-              sx={{
-                minWidth:
-                  160,
-              }}
-            >
-              {loading
-                ? "Importando..."
-                : previewLoading
-                  ? "Validando..."
-                  : "Confirmar importação"}
-            </Button>
-          </Stack>
-        </CardContent>
-      </Card>
-
       <Card elevation={0} sx={{ mt: 3, mb: 2, border: "1px solid", borderColor: "divider", borderRadius: 3, bgcolor: "background.paper" }}>
         <CardContent sx={{ p: 2, "&:last-child": { pb: 2 } }}>
           <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5} sx={{ alignItems: { sm: "center" }, justifyContent: "space-between" }}>
@@ -1898,7 +1899,7 @@ function IntegrationHealthCard({ title, configured, health }: { title: string; c
   const color = !configured ? "default" : health.state === "critical" ? "error" : health.state === "attention" || health.state === "unknown" ? "warning" : "success";
   const label = !configured ? "Não configurado" : health.state === "critical" ? "Crítico" : health.state === "attention" ? "Atenção" : health.state === "unknown" ? "Sem histórico" : "Saudável";
   const age = health.ageMinutes == null ? "Sem execução registrada" : health.ageMinutes < 60 ? `Atualizado há ${health.ageMinutes} min` : health.ageMinutes < 1440 ? `Atualizado há ${Math.round(health.ageMinutes / 60)} h` : `Atualizado há ${Math.round(health.ageMinutes / 1440)} dia(s)`;
-  return <Box sx={{ p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: 2 }}>
+  return <Box sx={{ p: 1.75, minHeight: 78, height: "100%", border: "1px solid", borderColor: "divider", borderRadius: 2.5, bgcolor: "background.paper" }}>
     <Stack direction="row" spacing={1} sx={{ justifyContent: "space-between", alignItems: "center" }}><Typography sx={{ fontWeight: 800 }}>{title}</Typography><Chip size="small" color={color} variant="outlined" label={label} /></Stack>
     <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: .6 }}>{age}</Typography>
   </Box>;
