@@ -670,8 +670,10 @@ export function Login() {
         display:
           "flex",
 
-        backgroundColor:
-          "background.default",
+        background:
+          colorMode === "dark"
+            ? "radial-gradient(circle at 78% 18%, rgba(24,199,122,.08), transparent 30%), #061421"
+            : "radial-gradient(circle at 78% 18%, rgba(24,199,122,.08), transparent 28%), #F6F8F7",
       }}
     >
       {/* ===================================================
@@ -710,8 +712,11 @@ export function Login() {
             lg: 7,
           },
 
-          backgroundColor:
-            aliareColors.black,
+          background:
+            "radial-gradient(circle at 18% 22%, rgba(24,199,122,.14), transparent 30%), linear-gradient(145deg,#050706 0%,#0C1210 58%,#101A16 100%)",
+
+          borderRight:
+            "1px solid rgba(255,255,255,.07)",
 
           color:
             "#FFFFFF",
@@ -730,16 +735,16 @@ export function Login() {
               -110,
 
             width:
-              300,
+              360,
 
             height:
-              300,
+              360,
 
             borderRadius:
               "36% 64% 58% 42% / 48% 45% 55% 52%",
 
             border:
-              "1px solid rgba(24,199,122,0.28)",
+              "1px solid rgba(24,199,122,0.22)",
 
             transform:
               "rotate(-16deg)",
@@ -840,10 +845,10 @@ export function Login() {
                 1.08,
 
               fontWeight:
-                800,
+                760,
 
               letterSpacing:
-                "-0.035em",
+                "-0.04em",
             }}
           >
             Hub Suporte Simer
@@ -891,22 +896,27 @@ export function Login() {
             }}
           />
 
-          <Box key={workMessage} sx={{ minHeight: 158, animation: "workMessageIn .55s ease both", "@keyframes workMessageIn": { from: { opacity: 0, transform: "translateY(8px)" }, to: { opacity: 1, transform: "translateY(0)" } } }}>
+          <Box key={workMessage} sx={{ minHeight: 190, p: 2.25, borderRadius: 3, border: "1px solid rgba(255,255,255,.08)", background: "linear-gradient(135deg,rgba(255,255,255,.055),rgba(255,255,255,.018))", backdropFilter: "blur(10px)", boxShadow: "0 18px 50px rgba(0,0,0,.16)", animation: "workMessageIn .55s ease both", "@keyframes workMessageIn": { from: { opacity: 0, transform: "translateY(8px)" }, to: { opacity: 1, transform: "translateY(0)" } } }}>
             <Stack direction="row" spacing={1} sx={{ alignItems: "center", mb: 1.2 }}>
               <AutoGraphOutlined sx={{ color: aliareColors.green, fontSize: 19 }} />
-              <Typography variant="caption" sx={{ color: aliareColors.green, fontWeight: 850, letterSpacing: ".08em", textTransform: "uppercase" }}>
+              <Typography variant="caption" sx={{ color: aliareColors.green, fontWeight: 700, letterSpacing: ".085em", textTransform: "uppercase" }}>
                 {workMessages[workMessage].category}
               </Typography>
             </Stack>
-            <Typography sx={{ fontSize: { md: "1.4rem", lg: "1.65rem" }, lineHeight: 1.35, fontWeight: 700, letterSpacing: "-0.02em" }}>
+            <Typography sx={{ fontSize: { md: "1.4rem", lg: "1.65rem" }, lineHeight: 1.35, fontWeight: 650, letterSpacing: "-0.022em" }}>
               {workMessages[workMessage].title}
             </Typography>
             <Typography sx={{ mt: 1.4, maxWidth: 430, lineHeight: 1.7, color: "rgba(255,255,255,0.56)" }}>
               {workMessages[workMessage].description}
             </Typography>
           </Box>
-          <Stack direction="row" spacing={0.7} sx={{ mt: 1.5 }}>
-            {workMessages.map((_, index) => <Box key={index} sx={{ width: index === workMessage ? 24 : 7, height: 4, borderRadius: 99, bgcolor: index === workMessage ? aliareColors.green : "rgba(255,255,255,.16)", transition: "all .3s ease" }} />)}
+          <Stack direction="row" spacing={1.2} sx={{ mt: 1.5, alignItems: "center" }}>
+            <Box sx={{ width: 72, height: 3, borderRadius: 99, overflow: "hidden", bgcolor: "rgba(255,255,255,.12)" }}>
+              <Box sx={{ height: "100%", width: `${((workMessage + 1) / workMessages.length) * 100}%`, bgcolor: aliareColors.green, borderRadius: 99, transition: "width .35s ease" }} />
+            </Box>
+            <Typography variant="caption" sx={{ color: "rgba(255,255,255,.42)", fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>
+              {String(workMessage + 1).padStart(2, "0")} / {String(workMessages.length).padStart(2, "0")}
+            </Typography>
           </Stack>
 
           <Stack
@@ -922,9 +932,9 @@ export function Login() {
             }}
           >
             {[
-              "Operação",
-              "Desempenho",
-              "Qualidade",
+              "Suporte N3",
+              "ERP SIMER",
+              "Inteligência operacional",
             ].map(
               (label) => (
                 <Box
@@ -1026,8 +1036,8 @@ export function Login() {
             maxWidth:
               mode ===
               "REGISTER"
-                ? 500
-                : 430,
+                ? 520
+                : 448,
           }}
         >
           {/* MOBILE */}
@@ -1046,7 +1056,9 @@ export function Login() {
               variant="h5"
               sx={{
                 fontWeight:
-                  800,
+                  760,
+                letterSpacing:
+                  "-.025em",
               }}
             >
               Hub Suporte Simer
@@ -1070,21 +1082,22 @@ export function Login() {
                 "divider",
 
               borderRadius:
-                2.5,
+                3.5,
 
               overflow:
                 "hidden",
 
-              boxShadow: colorMode === "dark" ? "0 22px 60px rgba(0,0,0,.28)" : "0 18px 50px rgba(16,24,40,0.07)",
-              background: colorMode === "dark" ? "linear-gradient(145deg,#0D2439,#0A1C2F)" : "background.paper",
+              boxShadow: colorMode === "dark" ? "0 28px 80px rgba(0,0,0,.34)" : "0 24px 70px rgba(16,24,40,0.10)",
+              backdropFilter: "blur(18px)",
+              background: colorMode === "dark" ? "linear-gradient(145deg,rgba(13,36,57,.96),rgba(8,27,44,.96))" : "rgba(255,255,255,.94)",
             }}
           >
             <Box
               sx={{
-                height: 4,
+                height: 3,
 
-                backgroundColor:
-                  aliareColors.green,
+                background:
+                  "linear-gradient(90deg, transparent 0%, #18C77A 28%, #4CE6A7 70%, transparent 100%)",
               }}
             />
 
@@ -1330,8 +1343,7 @@ export function Login() {
                 1.5,
             }}
           >
-            Utilize somente credenciais autorizadas para
-            acessar os dados da operação.
+            Acesso corporativo protegido · Utilize somente credenciais autorizadas.
           </Typography>
         </Box>
       </Box>
@@ -1383,10 +1395,10 @@ function LoginForm({
         variant="h5"
         sx={{
           fontWeight:
-            800,
+            760,
 
           letterSpacing:
-            "-0.025em",
+            "-0.03em",
         }}
       >
         Bem-vindo
@@ -1397,7 +1409,7 @@ function LoginForm({
         color="text.secondary"
         sx={{
           mt: 0.7,
-          mb: 3,
+          mb: 3.25,
 
           lineHeight:
             1.65,
@@ -1447,7 +1459,7 @@ function LoginForm({
             submitting
           }
           sx={{
-            "& .MuiOutlinedInput-root": { backgroundColor: colorMode === "dark" ? "#081A2B" : "background.paper" },
+            "& .MuiOutlinedInput-root": { minHeight: 52, borderRadius: 2, backgroundColor: colorMode === "dark" ? "#081A2B" : "rgba(248,250,249,.88)", transition: "box-shadow .18s ease, background-color .18s ease", "&.Mui-focused": { boxShadow: "0 0 0 3px rgba(24,199,122,.10)" } },
             "& .MuiInputBase-input": { backgroundColor: "transparent !important", color: "text.primary", WebkitTextFillColor: "currentColor" },
             "& input:-webkit-autofill": { WebkitBoxShadow: colorMode === "dark" ? "0 0 0 1000px #081A2B inset" : undefined, WebkitTextFillColor: colorMode === "dark" ? "#E8F1FF" : undefined, caretColor: colorMode === "dark" ? "#E8F1FF" : undefined },
           }}
@@ -1571,7 +1583,8 @@ function LoginForm({
         }
         sx={{
           minHeight: 44,
-          borderRadius: 1.5,
+          borderRadius: 2,
+          minHeight: 48,
 
           borderColor:
             "divider",
