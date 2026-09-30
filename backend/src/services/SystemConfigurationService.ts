@@ -6,6 +6,8 @@ const SETTING_ENV = {
   project: "AZURE_DEVOPS_PROJECT",
   wiki: "AZURE_DEVOPS_WIKI",
   pat: "AZURE_DEVOPS_PAT",
+  movideskToken: "MOVIDESK_TOKEN",
+  movideskUrl: "MOVIDESK_URL",
 } as const;
 
 export type SystemConfigurationInput = Partial<Record<keyof typeof SETTING_ENV, string>>;
@@ -52,6 +54,8 @@ class SystemConfigurationService {
       project: process.env.AZURE_DEVOPS_PROJECT ?? "",
       wiki: process.env.AZURE_DEVOPS_WIKI ?? "",
       patConfigured: Boolean(process.env.AZURE_DEVOPS_PAT),
+      movideskConfigured: Boolean(process.env.MOVIDESK_TOKEN),
+      movideskUrl: process.env.MOVIDESK_URL?.trim() || "https://api.movidesk.com/public/v1",
       runtime: process.env.APP_RUNTIME?.trim() || "desktop",
     };
   }
