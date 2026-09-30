@@ -334,38 +334,6 @@ export function Clients() {
 
 
   /* =======================================================
-     CARREGAMENTO
-  ======================================================= */
-
-  useEffect(() => {
-    async function loadTickets() {
-      try {
-        setLoading(true);
-        setError(null);
-
-        const response = await api.get(
-          "/dashboard/tickets"
-        );
-
-        setTickets(response.data);
-      } catch (err) {
-        console.error(
-          "Erro ao carregar indicadores dos clientes:",
-          err
-        );
-
-        setError(
-          "Não foi possível carregar os indicadores dos clientes."
-        );
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    loadTickets();
-  }, []);
-
-  /* =======================================================
      PERÍODO GLOBAL
   ======================================================= */
 
