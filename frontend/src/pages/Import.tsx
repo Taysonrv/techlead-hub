@@ -87,6 +87,7 @@ type MovideskBaselineStatus = {
   completed: boolean;
   result: { mode: string; pages: number; totalRows: number; created: number; updated: number; ignored: number; errors: number } | null;
   error: string | null;
+  progress: { nextSkip: number; pages: number; processedRows: number; created: number; updated: number; ignored: number; errors: number; resumed: boolean } | null;
   database: { tickets: number; linkedTasks: number };
   lastImport: { status: string; totalRows: number; insertedRows: number; updatedRows: number; skippedRows: number; errorRows: number; startedAt: string; finishedAt: string | null; message: string | null } | null;
   scheduler: { enabled: boolean; intervalMinutes: number; overlapMinutes: number; pageSize: number; phase: "WAITING_BASELINE" | "BASELINE_RUNNING" | "INCREMENTAL"; nextEstimatedAt: string | null };
@@ -683,7 +684,7 @@ export function Import() {
                 {movideskStatusLoading ? "Atualizando..." : "Atualizar status"}
               </Button>
               <Button variant="contained" disabled={movideskFullStarting || movideskStatus?.status === "RUNNING" || movideskStatus?.completed} onClick={() => void startMovideskFull()}>
-                {movideskFullStarting ? "Iniciando..." : movideskStatus?.status === "RUNNING" ? "FULL em execução" : movideskStatus?.completed ? "Baseline concluído" : "Iniciar FULL"}
+                {movideskFullStarting ? "Iniciando..." : movideskStatus?.status === "RUNNING" ? "FULL em execução" : movideskStatus?.completed ? "Baseline concluído" : movideskStatus?.progress?.nextSkip ? "Retomar FULL" : "Iniciar FULL"}
               </Button>
             </Stack>
           </Stack>
@@ -696,6 +697,21 @@ export function Import() {
               <InfoCard label="Última execução" value={formatDateTime(movideskStatus.lastImport?.finishedAt ?? movideskStatus.lastImport?.startedAt)} />
               <InfoCard label="Próxima incremental" value={formatDateTime(movideskStatus.scheduler.nextEstimatedAt)} />
             </Box>
+            {movideskStatus.progress && !movideskStatus.completed && <Box sx={{ mt: 2, p: 1.75, border: "1px solid", borderColor: movideskStatus.status === "ERROR" ? "warning.main" : "divider", borderRadius: 2.5, bgcolor: "background.default" }}>
+              <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ justifyContent: "space-between", alignItems: { sm: "center" }, mb: 1 }}>
+                <Typography variant="body2" sx={{ fontWeight: 750 }}>
+                  {movideskStatus.status === "RUNNING" ? "Progresso do FULL" : movideskStatus.progress.nextSkip > 0 ? "Checkpoint disponível para retomada" : "Carga FULL preparada"}
+                </Typography>
+                <Chip size="small" variant="outlined" label={`${movideskStatus.progress.pages} página(s) concluída(s)`} />
+              </Stack>
+              <Box sx={{ display: "grid", gridTemplateColumns: { xs: "repeat(2,1fr)", md: "repeat(4,1fr)" }, gap: 1 }}>
+                <InfoCard label="Processados" value={String(movideskStatus.progress.processedRows)} />
+                <InfoCard label="Próximo skip" value={String(movideskStatus.progress.nextSkip)} />
+                <InfoCard label="Novos" value={String(movideskStatus.progress.created)} />
+                <InfoCard label="Atualizados" value={String(movideskStatus.progress.updated)} />
+              </Box>
+              {movideskStatus.status === "RUNNING" && <LinearProgress sx={{ mt: 1.5, borderRadius: 99 }} />}
+            </Box>}
             {movideskStatus.result && <Alert severity={movideskStatus.result.errors ? "warning" : "success"} sx={{ mt: 2 }}>
               FULL: {movideskStatus.result.pages} página(s) • {movideskStatus.result.totalRows} lidos • {movideskStatus.result.created} novos • {movideskStatus.result.updated} atualizados • {movideskStatus.result.ignored} ignorados • {movideskStatus.result.errors} erros.
             </Alert>}
