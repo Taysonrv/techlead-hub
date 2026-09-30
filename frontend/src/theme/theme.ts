@@ -219,7 +219,12 @@ export function createAppTheme(mode: PaletteMode = "light") {
           outlined: { borderColor: dark ? "rgba(130,173,216,.28)" : undefined },
         },
       },
-      MuiTextField: { defaultProps: { size: "small" } },
+      MuiTextField: {
+        defaultProps: {
+          size: "small",
+          slotProps: { inputLabel: { shrink: true } },
+        },
+      },
       MuiInputLabel: {
         styleOverrides: {
           root: {
@@ -228,12 +233,13 @@ export function createAppTheme(mode: PaletteMode = "light") {
             pointerEvents: "none",
             zIndex: 2,
             "&.MuiInputLabel-outlined": {
-              transform: "translate(14px, 14px) scale(1)",
+              transform: "translate(12px, -7px) scale(0.75)",
+              transformOrigin: "top left",
+              padding: 0,
             },
             "&.MuiInputLabel-outlined.MuiInputLabel-shrink": {
               transform: "translate(12px, -7px) scale(0.75)",
               transformOrigin: "top left",
-              padding: 0,
             },
             "&.Mui-focused": { color: aliareColors.green },
             "&.Mui-disabled": { color: dark ? "#60758C" : "#98A2B3" },
@@ -284,7 +290,10 @@ export function createAppTheme(mode: PaletteMode = "light") {
           },
         },
       },
-      MuiSelect: { styleOverrides: { select: { backgroundColor: dark ? "rgba(7,20,35,.34)" : undefined } } },
+      MuiSelect: {
+        defaultProps: { notched: true },
+        styleOverrides: { select: { backgroundColor: dark ? "rgba(7,20,35,.34)" : undefined } },
+      },
       MuiChip: {
         styleOverrides: {
           root: {
