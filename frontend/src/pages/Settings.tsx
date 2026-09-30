@@ -207,6 +207,41 @@ export function Settings() {
     }
   }
 
+  async function saveAndTestMovidesk() {
+    try {
+      setSaving(true);
+      setError(null);
+      setSuccess(null);
+
+      const token = form.movideskToken.trim();
+      if (!configuration?.movideskConfigured && !token) {
+        throw new Error("Informe o token Movidesk antes de salvar e testar.");
+      }
+
+      const saved = await api.put<ConfigurationState & { restartRequired: boolean }>(
+        "/system-settings",
+        {
+          movideskToken: token,
+          movideskUrl: form.movideskUrl,
+        },
+      );
+      setConfiguration((current) => ({ ...(current ?? saved.data), ...saved.data }));
+      setForm((current) => ({ ...current, movideskToken: "" }));
+
+      const response = await api.get<{ ok: boolean }>("/movidesk/test");
+      if (!response.data.ok) throw new Error("O Movidesk não confirmou a conexão.");
+
+      setSuccess("Credencial Movidesk salva e conexão validada com sucesso.");
+    } catch (testError: any) {
+      setError(
+        testError?.response?.data?.message ??
+          (testError instanceof Error ? testError.message : "Não foi possível salvar e validar o Movidesk."),
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function saveConfiguration() {
     try {
       setSaving(true);
@@ -498,7 +533,7 @@ export function Settings() {
               <TextField type="password" label="Novo token Movidesk" value={form.movideskToken} onChange={(event) => updateField("movideskToken", event.target.value)} autoComplete="new-password" placeholder={configuration?.movideskConfigured ? "Deixe vazio para manter o token atual" : "Cole o token recebido"} helperText="O token atual nunca é exibido e fica criptografado no banco." />
             </Box>
             <Stack direction="row" spacing={1} sx={{ mt: 2, justifyContent: "flex-end" }}>
-              <Button variant="outlined" disabled={!configuration?.movideskConfigured} onClick={async () => { try { setError(null); setSuccess(null); const response = await api.get<{ok:boolean}>("/movidesk/test"); if (response.data.ok) setSuccess("Conexão com o Movidesk validada com sucesso."); } catch (testError: any) { setError(testError?.response?.data?.message ?? (testError instanceof Error ? testError.message : "Não foi possível validar o Movidesk.")); } }}>Testar conexão</Button>
+              <Button variant="contained" disabled={saving || (!configuration?.movideskConfigured && !form.movideskToken.trim())} onClick={() => void saveAndTestMovidesk()}>{saving ? "Salvando e testando..." : form.movideskToken.trim() ? "Salvar e testar" : "Testar conexão salva"}</Button>
             </Stack>
           </CardContent>
         </Card>
