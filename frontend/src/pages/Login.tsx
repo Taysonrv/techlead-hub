@@ -670,10 +670,23 @@ export function Login() {
         display:
           "flex",
 
+        position: "relative",
+        overflow: "hidden",
         background:
           colorMode === "dark"
-            ? "radial-gradient(circle at 78% 18%, rgba(24,199,122,.08), transparent 30%), #061421"
-            : "radial-gradient(circle at 78% 18%, rgba(24,199,122,.08), transparent 28%), #F6F8F7",
+            ? "radial-gradient(circle at 12% 18%, rgba(24,199,122,.11), transparent 30%), radial-gradient(circle at 84% 22%, rgba(39,139,199,.10), transparent 32%), linear-gradient(135deg,#06110E 0%,#071823 48%,#061522 100%)"
+            : "radial-gradient(circle at 12% 18%, rgba(24,199,122,.10), transparent 30%), radial-gradient(circle at 84% 22%, rgba(39,139,199,.08), transparent 32%), linear-gradient(135deg,#F3F8F5 0%,#F5F9FB 52%,#F2F7F6 100%)",
+        "&::before": {
+          content: '""',
+          position: "absolute",
+          inset: 0,
+          pointerEvents: "none",
+          backgroundImage: colorMode === "dark"
+            ? "linear-gradient(rgba(255,255,255,.018) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.018) 1px, transparent 1px)"
+            : "linear-gradient(rgba(7,31,43,.025) 1px, transparent 1px), linear-gradient(90deg, rgba(7,31,43,.025) 1px, transparent 1px)",
+          backgroundSize: "48px 48px",
+          maskImage: "linear-gradient(to bottom, rgba(0,0,0,.55), transparent 85%)",
+        },
       }}
     >
       {/* ===================================================
@@ -688,8 +701,8 @@ export function Login() {
           },
 
           width: {
-            md: "43%",
-            lg: "46%",
+            md: "48%",
+            lg: "50%",
           },
 
           minHeight:
@@ -713,13 +726,10 @@ export function Login() {
           },
 
           background:
-            "radial-gradient(circle at 18% 22%, rgba(24,199,122,.14), transparent 30%), linear-gradient(145deg,#050706 0%,#0C1210 58%,#101A16 100%)",
-
-          borderRight:
-            "1px solid rgba(255,255,255,.07)",
+            "transparent",
 
           color:
-            "#FFFFFF",
+            colorMode === "dark" ? "#FFFFFF" : "#10211B",
 
           "&::after": {
             content:
@@ -744,7 +754,7 @@ export function Login() {
               "36% 64% 58% 42% / 48% 45% 55% 52%",
 
             border:
-              "1px solid rgba(24,199,122,0.22)",
+              colorMode === "dark" ? "1px solid rgba(24,199,122,0.18)" : "1px solid rgba(24,199,122,0.12)",
 
             transform:
               "rotate(-16deg)",
@@ -773,7 +783,7 @@ export function Login() {
               "50%",
 
             backgroundColor:
-              "rgba(24,199,122,0.07)",
+              colorMode === "dark" ? "rgba(24,199,122,0.055)" : "rgba(24,199,122,0.035)",
           },
         }}
       >
@@ -825,7 +835,7 @@ export function Login() {
                   "uppercase",
 
                 color:
-                  "rgba(255,255,255,0.72)",
+                  colorMode === "dark" ? "rgba(255,255,255,0.72)" : "rgba(16,33,27,.62)",
               }}
             >
               aliare
@@ -862,7 +872,7 @@ export function Login() {
                 "0.95rem",
 
               color:
-                "rgba(255,255,255,0.56)",
+                colorMode === "dark" ? "rgba(255,255,255,0.56)" : "rgba(16,33,27,.58)",
             }}
           >
             Inteligência para Suporte SIMER
@@ -896,7 +906,7 @@ export function Login() {
             }}
           />
 
-          <Box key={workMessage} sx={{ minHeight: 190, p: 2.25, borderRadius: 3, border: "1px solid rgba(255,255,255,.08)", background: "linear-gradient(135deg,rgba(255,255,255,.055),rgba(255,255,255,.018))", backdropFilter: "blur(10px)", boxShadow: "0 18px 50px rgba(0,0,0,.16)", animation: "workMessageIn .55s ease both", "@keyframes workMessageIn": { from: { opacity: 0, transform: "translateY(8px)" }, to: { opacity: 1, transform: "translateY(0)" } } }}>
+          <Box key={workMessage} sx={{ minHeight: 190, p: 2.25, borderRadius: 3, border: "1px solid", borderColor: colorMode === "dark" ? "rgba(255,255,255,.08)" : "rgba(16,33,27,.09)", background: colorMode === "dark" ? "linear-gradient(135deg,rgba(255,255,255,.05),rgba(255,255,255,.015))" : "linear-gradient(135deg,rgba(255,255,255,.70),rgba(255,255,255,.42))", backdropFilter: "blur(10px)", boxShadow: "0 18px 50px rgba(0,0,0,.16)", animation: "workMessageIn .55s ease both", "@keyframes workMessageIn": { from: { opacity: 0, transform: "translateY(8px)" }, to: { opacity: 1, transform: "translateY(0)" } } }}>
             <Stack direction="row" spacing={1} sx={{ alignItems: "center", mb: 1.2 }}>
               <AutoGraphOutlined sx={{ color: aliareColors.green, fontSize: 19 }} />
               <Typography variant="caption" sx={{ color: aliareColors.green, fontWeight: 700, letterSpacing: ".085em", textTransform: "uppercase" }}>
@@ -906,69 +916,20 @@ export function Login() {
             <Typography sx={{ fontSize: { md: "1.4rem", lg: "1.65rem" }, lineHeight: 1.35, fontWeight: 650, letterSpacing: "-0.022em" }}>
               {workMessages[workMessage].title}
             </Typography>
-            <Typography sx={{ mt: 1.4, maxWidth: 430, lineHeight: 1.7, color: "rgba(255,255,255,0.56)" }}>
+            <Typography sx={{ mt: 1.4, maxWidth: 430, lineHeight: 1.7, color: colorMode === "dark" ? "rgba(255,255,255,0.58)" : "rgba(16,33,27,.62)" }}>
               {workMessages[workMessage].description}
             </Typography>
           </Box>
           <Stack direction="row" spacing={1.2} sx={{ mt: 1.5, alignItems: "center" }}>
-            <Box sx={{ width: 72, height: 3, borderRadius: 99, overflow: "hidden", bgcolor: "rgba(255,255,255,.12)" }}>
+            <Box sx={{ width: 72, height: 3, borderRadius: 99, overflow: "hidden", bgcolor: colorMode === "dark" ? "rgba(255,255,255,.12)" : "rgba(16,33,27,.10)" }}>
               <Box sx={{ height: "100%", width: `${((workMessage + 1) / workMessages.length) * 100}%`, bgcolor: aliareColors.green, borderRadius: 99, transition: "width .35s ease" }} />
             </Box>
-            <Typography variant="caption" sx={{ color: "rgba(255,255,255,.42)", fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>
+            <Typography variant="caption" sx={{ color: colorMode === "dark" ? "rgba(255,255,255,.42)" : "rgba(16,33,27,.46)", fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>
               {String(workMessage + 1).padStart(2, "0")} / {String(workMessages.length).padStart(2, "0")}
             </Typography>
           </Stack>
 
-          <Stack
-            direction="row"
-            spacing={1}
-            sx={{
-              mt: 3,
 
-              flexWrap:
-                "wrap",
-
-              gap: 1,
-            }}
-          >
-            {[
-              "Suporte N3",
-              "ERP SIMER",
-              "Inteligência operacional",
-            ].map(
-              (label) => (
-                <Box
-                  key={label}
-                  sx={{
-                    px: 1.1,
-                    py: 0.55,
-
-                    borderRadius:
-                      99,
-
-                    border:
-                      "1px solid rgba(255,255,255,0.10)",
-
-                    backgroundColor:
-                      "rgba(255,255,255,0.04)",
-                  }}
-                >
-                  <Typography
-                    variant="caption"
-                    sx={{
-                      color:
-                        "rgba(255,255,255,0.64)",
-
-                      fontWeight:
-                        650,
-                    }}
-                  >
-                    {label}
-                  </Typography>
-                </Box>
-              )
-            )}
-          </Stack>
         </Box>
 
         <Box
@@ -985,7 +946,7 @@ export function Login() {
               mb: 1.75,
 
               borderColor:
-                "rgba(255,255,255,0.09)",
+                colorMode === "dark" ? "rgba(255,255,255,0.09)" : "rgba(16,33,27,.10)",
             }}
           />
 
@@ -993,7 +954,7 @@ export function Login() {
             variant="caption"
             sx={{
               color:
-                "rgba(255,255,255,0.38)",
+                colorMode === "dark" ? "rgba(255,255,255,0.38)" : "rgba(16,33,27,.45)",
             }}
           >
             Aliare · Suporte e Sustentação · SIMER
@@ -1026,6 +987,8 @@ export function Login() {
           },
 
           py: 4,
+          position: "relative",
+          zIndex: 1,
         }}
       >
         <Box
@@ -1087,9 +1050,10 @@ export function Login() {
               overflow:
                 "hidden",
 
-              boxShadow: colorMode === "dark" ? "0 28px 80px rgba(0,0,0,.34)" : "0 24px 70px rgba(16,24,40,0.10)",
-              backdropFilter: "blur(18px)",
-              background: colorMode === "dark" ? "linear-gradient(145deg,rgba(13,36,57,.96),rgba(8,27,44,.96))" : "rgba(255,255,255,.94)",
+              boxShadow: colorMode === "dark" ? "0 30px 90px rgba(0,0,0,.30)" : "0 24px 70px rgba(16,24,40,.10)",
+              backdropFilter: "blur(24px)",
+              borderColor: colorMode === "dark" ? "rgba(92,164,188,.20)" : "rgba(16,72,82,.12)",
+              background: colorMode === "dark" ? "linear-gradient(145deg,rgba(11,35,52,.82),rgba(8,28,42,.72))" : "rgba(255,255,255,.68)",
             }}
           >
             <Box
