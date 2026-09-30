@@ -7,8 +7,10 @@ import { MovideskJsonImportService } from "./MovideskJsonImportService";
 const PAGE_SIZE = 50;
 const REQUEST_INTERVAL_MS = 6_200;
 const INCREMENTAL_OVERLAP_MINUTES = 10;
-const REQUEST_RETRY_ATTEMPTS = 4;
+const REQUEST_RETRY_ATTEMPTS = 6;
 const REQUEST_RETRY_BASE_MS = 2_000;
+const BASELINE_CHECKPOINT_ACTION = "MOVIDESK_BASELINE_CHECKPOINT";
+const BASELINE_FAILED_ACTION = "MOVIDESK_BASELINE_FAILED";
 
 function normalizeMovideskToken(raw?: string | null) {
   if (!raw) return "";
@@ -37,7 +39,7 @@ const TICKET_SELECT = [
   "ownerTeam", "serviceFirstLevel", "serviceSecondLevel", "serviceThirdLevel",
   "slaAgreement", "slaAgreementRule", "slaSolutionTime", "slaResponseTime",
   "slaSolutionDate", "slaResponseDate", "slaRealResponseDate",
-  "slaSolutionDateIsPaused", "lifeTimeWorkingTime", "stoppedTime",
+  "slaSolutionDateIsPaused", "solutionSlaIndicator", "responseSlaIndicator", "lifeTimeWorkingTime", "stoppedTime",
   "stoppedTimeWorkingTime", "origin", "isDeleted"
 ].join(",");
 
@@ -65,6 +67,16 @@ type BaselineState = {
   finishedAt: string | null;
   result: SyncSummary | null;
   error: string | null;
+  progress: {
+    nextSkip: number;
+    pages: number;
+    processedRows: number;
+    created: number;
+    updated: number;
+    ignored: number;
+    errors: number;
+    resumed: boolean;
+  } | null;
 };
 
 let baselineState: BaselineState = {
@@ -73,6 +85,7 @@ let baselineState: BaselineState = {
   finishedAt: null,
   result: null,
   error: null,
+  progress: null,
 };
 let baselinePromise: Promise<void> | null = null;
 
@@ -95,7 +108,16 @@ export class MovideskService {
         const status = axios.isAxiosError(error) ? error.response?.status : undefined;
         const code = axios.isAxiosError(error) ? error.code : undefined;
         const retryable = code === "ECONNRESET" || code === "ETIMEDOUT" || code === "ECONNABORTED" || status === 429 || (typeof status === "number" && status >= 500);
-        if (!retryable || attempt === REQUEST_RETRY_ATTEMPTS) throw error;
+        if (!retryable || attempt === REQUEST_RETRY_ATTEMPTS) {
+          const remoteMessage = axios.isAxiosError(error)
+            ? typeof error.response?.data === "string"
+              ? error.response.data.slice(0, 300)
+              : error.response?.data
+                ? JSON.stringify(error.response.data).slice(0, 300)
+                : error.message
+            : error instanceof Error ? error.message : "falha desconhecida";
+          throw new Error(`${context}: falha após ${attempt} tentativa(s) (${code ?? status ?? "rede"}). ${remoteMessage}`);
+        }
         const retryAfterSeconds = axios.isAxiosError(error) ? Number(error.response?.headers?.["retry-after"]) : NaN;
         const delay = Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0
           ? retryAfterSeconds * 1000
@@ -251,13 +273,25 @@ export class MovideskService {
       return { accepted: false, reason: "COMPLETED", state: await this.baselineStatus() };
     }
 
-    baselineState = { status: "RUNNING", startedAt: new Date().toISOString(), finishedAt: null, result: null, error: null };
+    const checkpoint = await this.loadBaselineCheckpoint();
+    baselineState = {
+      status: "RUNNING",
+      startedAt: new Date().toISOString(),
+      finishedAt: null,
+      result: null,
+      error: null,
+      progress: checkpoint
+        ? { nextSkip: checkpoint.nextSkip, pages: checkpoint.pages, processedRows: checkpoint.totalRows, created: checkpoint.created, updated: checkpoint.updated, ignored: checkpoint.ignored, errors: checkpoint.errors, resumed: checkpoint.nextSkip > 0 }
+        : { nextSkip: 0, pages: 0, processedRows: 0, created: 0, updated: 0, ignored: 0, errors: 0, resumed: false },
+    };
     baselinePromise = this.syncTickets(userId ?? null, true)
       .then((result) => {
         baselineState = { ...baselineState, status: result.errors === 0 ? "SUCCESS" : "ERROR", finishedAt: new Date().toISOString(), result, error: result.errors === 0 ? null : `Carga concluída com ${result.errors} erro(s).` };
       })
       .catch((error) => {
-        baselineState = { ...baselineState, status: "ERROR", finishedAt: new Date().toISOString(), result: null, error: error instanceof Error ? error.message : "Falha desconhecida na carga FULL." };
+        const message = error instanceof Error ? error.message : "Falha desconhecida na carga FULL.";
+        baselineState = { ...baselineState, status: "ERROR", finishedAt: new Date().toISOString(), result: null, error: message };
+        void prisma.auditLog.create({ data: { userId: userId ?? null, action: BASELINE_FAILED_ACTION, entity: "Ticket", metadata: { message, progress: baselineState.progress ?? undefined } } }).catch(() => undefined);
       })
       .finally(() => { baselinePromise = null; });
 
@@ -281,6 +315,47 @@ export class MovideskService {
       prisma.ticket.count({ where: { rawData: { not: Prisma.DbNull } } }),
     ]);
     return { total, coverage, deleted, withRawData, generatedAt: new Date().toISOString() };
+  }
+
+  private async loadBaselineCheckpoint() {
+    const checkpoint = await prisma.auditLog.findFirst({
+      where: { action: BASELINE_CHECKPOINT_ACTION },
+      orderBy: { createdAt: "desc" },
+      select: { metadata: true },
+    });
+    const metadata = checkpoint?.metadata;
+    if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return null;
+    const value = metadata as Record<string, unknown>;
+    const numberValue = (key: string) => Number.isSafeInteger(Number(value[key])) ? Number(value[key]) : 0;
+    return {
+      nextSkip: numberValue("nextSkip"),
+      pages: numberValue("pages"),
+      totalRows: numberValue("totalRows"),
+      created: numberValue("created"),
+      updated: numberValue("updated"),
+      ignored: numberValue("ignored"),
+      errors: numberValue("errors"),
+    };
+  }
+
+  private async saveBaselineCheckpoint(userId: number | null, summary: SyncSummary, nextSkip: number) {
+    await prisma.auditLog.create({
+      data: {
+        userId,
+        action: BASELINE_CHECKPOINT_ACTION,
+        entity: "Ticket",
+        metadata: {
+          nextSkip,
+          pages: summary.pages,
+          totalRows: summary.totalRows,
+          created: summary.created,
+          updated: summary.updated,
+          ignored: summary.ignored,
+          errors: summary.errors,
+          savedAt: new Date().toISOString(),
+        },
+      },
+    });
   }
 
   async hasCompletedBaseline() {
@@ -332,9 +407,23 @@ export class MovideskService {
   async syncTickets(userId?: number | null, forceFull = false): Promise<SyncSummary> {
     const since = forceFull ? null : await this.latestSuccessfulSyncDate();
     const mode: SyncSummary["mode"] = since ? "INCREMENTAL" : "FULL";
-    const summary: SyncSummary = { mode, pages: 0, totalRows: 0, created: 0, updated: 0, ignored: 0, errors: 0, since: since?.toISOString() ?? null };
+    const checkpoint = mode === "FULL" ? await this.loadBaselineCheckpoint() : null;
+    const summary: SyncSummary = {
+      mode,
+      pages: checkpoint?.pages ?? 0,
+      totalRows: checkpoint?.totalRows ?? 0,
+      created: checkpoint?.created ?? 0,
+      updated: checkpoint?.updated ?? 0,
+      ignored: checkpoint?.ignored ?? 0,
+      errors: checkpoint?.errors ?? 0,
+      since: since?.toISOString() ?? null,
+    };
+    const initialSkip = checkpoint?.nextSkip ?? 0;
+    if (mode === "FULL" && initialSkip > 0) {
+      console.info(`[movidesk-sync] Retomando baseline FULL do checkpoint skip=${initialSkip} | páginas=${summary.pages} | processados=${summary.totalRows}.`);
+    }
 
-    for (let skip = 0; ; skip += PAGE_SIZE) {
+    for (let skip = initialSkip; ; skip += PAGE_SIZE) {
       const rows = await this.getPage(skip, since);
       if (!rows.length) break;
 
@@ -349,6 +438,22 @@ export class MovideskService {
       summary.ignored += result.ignored;
       summary.errors += result.errors;
 
+      if (mode === "FULL") {
+        const nextSkip = skip + rows.length;
+        await this.saveBaselineCheckpoint(userId ?? null, summary, nextSkip);
+        baselineState.progress = {
+          nextSkip,
+          pages: summary.pages,
+          processedRows: summary.totalRows,
+          created: summary.created,
+          updated: summary.updated,
+          ignored: summary.ignored,
+          errors: summary.errors,
+          resumed: initialSkip > 0,
+        };
+        console.info(`[movidesk-sync] FULL página ${summary.pages} concluída | skip=${skip} | linhas=${rows.length} | próximo=${nextSkip} | processados=${summary.totalRows} | novos=${summary.created} | atualizados=${summary.updated} | erros=${summary.errors}.`);
+      }
+
       if (rows.length < PAGE_SIZE) break;
       await new Promise((resolve) => setTimeout(resolve, REQUEST_INTERVAL_MS));
     }
@@ -362,6 +467,9 @@ export class MovideskService {
           metadata: { pages: summary.pages, totalRows: summary.totalRows, errors: summary.errors },
         },
       });
+      baselineState.progress = baselineState.progress
+        ? { ...baselineState.progress, nextSkip: summary.totalRows, processedRows: summary.totalRows }
+        : null;
     }
 
     return summary;
