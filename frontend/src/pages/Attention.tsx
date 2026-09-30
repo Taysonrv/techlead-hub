@@ -1090,9 +1090,9 @@ export function Attention() {
               </InputLabel>
 
               <Select multiple displayEmpty value={level} label="Situação do prazo"
-                onChange={(event) => setLevel(typeof event.target.value === "string" ? event.target.value.split(",") as any : event.target.value as any)}
+                onChange={(event) => { const next = typeof event.target.value === "string" ? event.target.value.split(",") : event.target.value as string[]; setLevel((next.includes("__all__") ? ["vencido","critico","atencao"] : next.filter((item) => item !== "__all__")) as AttentionLevel[]); }}
                 renderValue={(selected) => !selected.length ? "Todos" : selected.length === 1 ? selected[0] : `${selected.length} selecionados`}>
-                <MenuItem value="__all__"><Checkbox size="small" checked={!level.length} />Todos</MenuItem>
+                <MenuItem value="__all__"><Checkbox size="small" checked={level.length === 3} indeterminate={level.length > 0 && level.length < 3} />Todos</MenuItem>
                 {[["vencido","Vencido"],["critico","Crítico"],["atencao","Atenção"]].map(([key,label]) => <MenuItem key={key} value={key}><Checkbox size="small" checked={level.includes(key as AttentionLevel)} />{label}</MenuItem>)}
               </Select>
             </FormControl>
@@ -1113,9 +1113,9 @@ export function Attention() {
               </InputLabel>
 
               <Select multiple displayEmpty value={owner} label="Responsável"
-                onChange={(event) => setOwner(typeof event.target.value === "string" ? event.target.value.split(",") as any : event.target.value as any)}
+                onChange={(event) => { const next = typeof event.target.value === "string" ? event.target.value.split(",") : event.target.value as string[]; setOwner(next.includes("__all__") ? [...owners] : next.filter((item) => item !== "__all__")); }}
                 renderValue={(selected) => !selected.length ? "Todos" : selected.length === 1 ? selected[0] : `${selected.length} selecionados`}>
-                <MenuItem value="__all__"><Checkbox size="small" checked={!owner.length} />Todos</MenuItem>
+                <MenuItem value="__all__"><Checkbox size="small" checked={owners.length > 0 && owner.length === owners.length} indeterminate={owner.length > 0 && owner.length < owners.length} />Todos</MenuItem>
                 {owners.map((item) => <MenuItem key={item} value={item}><Checkbox size="small" checked={owner.includes(item)} />{item}</MenuItem>)}
               </Select>
             </FormControl>
@@ -1136,9 +1136,9 @@ export function Attention() {
               </InputLabel>
 
               <Select multiple displayEmpty value={client} label="Cliente"
-                onChange={(event) => setClient(typeof event.target.value === "string" ? event.target.value.split(",") as any : event.target.value as any)}
+                onChange={(event) => { const next = typeof event.target.value === "string" ? event.target.value.split(",") : event.target.value as string[]; setClient(next.includes("__all__") ? [...clients] : next.filter((item) => item !== "__all__")); }}
                 renderValue={(selected) => !selected.length ? "Todos" : selected.length === 1 ? selected[0] : `${selected.length} selecionados`}>
-                <MenuItem value="__all__"><Checkbox size="small" checked={!client.length} />Todos</MenuItem>
+                <MenuItem value="__all__"><Checkbox size="small" checked={clients.length > 0 && client.length === clients.length} indeterminate={client.length > 0 && client.length < clients.length} />Todos</MenuItem>
                 {clients.map((item) => <MenuItem key={item} value={item}><Checkbox size="small" checked={client.includes(item)} />{item}</MenuItem>)}
               </Select>
             </FormControl>
