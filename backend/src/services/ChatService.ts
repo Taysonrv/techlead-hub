@@ -86,18 +86,27 @@ export class ChatService {
         },
       },
     });
-    return Promise.all(memberships.map(async ({ channel, lastReadAt, joinedAt }) => ({
+    if (!memberships.length) return [];
+
+    const unreadRows = await prisma.$queryRaw<Array<{ channelId: number; unread: bigint }>>`
+      SELECT m."channelId", COUNT(msg."id")::bigint AS unread
+      FROM "ChatChannelMember" m
+      LEFT JOIN "ChatMessage" msg
+        ON msg."channelId" = m."channelId"
+       AND msg."deletedAt" IS NULL
+       AND msg."authorId" <> ${userId}
+       AND msg."createdAt" > COALESCE(m."lastReadAt", m."joinedAt")
+      WHERE m."userId" = ${userId}
+        AND m."channelId" IN (${Prisma.join(memberships.map(({ channel }) => channel.id))})
+      GROUP BY m."channelId"
+    `;
+    const unreadByChannel = new Map(unreadRows.map((row) => [row.channelId, Number(row.unread)]));
+
+    return memberships.map(({ channel, lastReadAt }) => ({
       ...channel,
       lastReadAt,
-      unread: await prisma.chatMessage.count({
-        where: {
-          channelId: channel.id,
-          deletedAt: null,
-          authorId: { not: userId },
-          createdAt: { gt: lastReadAt ?? joinedAt },
-        },
-      }),
-    })));
+      unread: unreadByChannel.get(channel.id) ?? 0,
+    }));
   }
 
   async openDirectChannel(userId: number, targetUserId: number) {
