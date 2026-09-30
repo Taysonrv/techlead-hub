@@ -76,11 +76,11 @@ export const aliareColors = {
 
 export function createAppTheme(mode: PaletteMode = "light") {
   const dark = mode === "dark";
-  const background = dark ? "#071321" : aliareColors.background;
-  const paper = dark ? "#0D2136" : aliareColors.paper;
-  const border = dark ? "rgba(116,166,216,.18)" : aliareColors.border;
-  const text = dark ? "#E8F1FF" : aliareColors.text;
-  const textSecondary = dark ? "#9DB0C7" : aliareColors.textSecondary;
+  const background = dark ? "#061522" : aliareColors.background;
+  const paper = dark ? "#0A2030" : aliareColors.paper;
+  const border = dark ? "rgba(92,164,188,.20)" : aliareColors.border;
+  const text = dark ? "#EAF6F4" : aliareColors.text;
+  const textSecondary = dark ? "#9BB8BC" : aliareColors.textSecondary;
 
   return createTheme({
     palette: {
@@ -117,13 +117,13 @@ export function createAppTheme(mode: PaletteMode = "light") {
             margin: 0,
             backgroundColor: background,
             backgroundImage: dark
-              ? "radial-gradient(circle at 18% 0%, rgba(0,199,142,.10), transparent 28%), radial-gradient(circle at 90% 8%, rgba(84,73,255,.11), transparent 30%), linear-gradient(145deg,#071321 0%,#09192B 48%,#07111F 100%)"
+              ? "radial-gradient(circle at 12% 0%, rgba(24,199,122,.13), transparent 30%), radial-gradient(circle at 88% 8%, rgba(41,126,163,.14), transparent 32%), linear-gradient(135deg,#06110E 0%,#071823 48%,#061522 100%)"
               : "radial-gradient(circle at 92% 0%, rgba(24,199,122,.075), transparent 28%), linear-gradient(180deg, #F8FAFB 0%, #F3F5F6 100%)",
             backgroundAttachment: "fixed",
             color: text,
           },
           "*": { boxSizing: "border-box" },
-          "*:focus-visible": { outlineColor: aliareColors.green, outlineOffset: 2 },
+          "*:focus-visible": { outline: "none" },
           "button, a, [role='button']": { WebkitTapHighlightColor: "transparent" },
           "::selection": { backgroundColor: dark ? "rgba(24,199,122,.32)" : aliareColors.greenLight, color: dark ? "#FFFFFF" : aliareColors.black },
         },
@@ -137,12 +137,12 @@ export function createAppTheme(mode: PaletteMode = "light") {
             borderRadius: 16,
             overflow: "hidden",
             backdropFilter: dark ? "blur(16px)" : undefined,
-            background: dark ? "linear-gradient(145deg, rgba(14,35,56,.96), rgba(8,24,41,.985))" : "linear-gradient(180deg,#FFFFFF,#FBFCFD)",
+            background: dark ? "linear-gradient(145deg, rgba(10,35,45,.94), rgba(7,27,39,.97))" : "linear-gradient(180deg,#FFFFFF,#FBFCFD)",
             backgroundColor: paper,
             transition: "border-color .18s ease, box-shadow .18s ease, transform .18s ease, background-color .18s ease",
             "&::after": dark ? { content: '""', position: "absolute", inset: "0 0 auto", height: 1, background: "linear-gradient(90deg, rgba(24,199,122,.30), rgba(47,141,255,.16), transparent 72%)", pointerEvents: "none" } : undefined,
             "&:hover": dark ? {
-              borderColor: "rgba(74,178,211,.28)",
+              borderColor: "rgba(70,194,163,.28)",
               boxShadow: "0 18px 46px rgba(0,0,0,.22), inset 0 1px rgba(255,255,255,.035)",
             } : undefined,
           },
@@ -193,7 +193,7 @@ export function createAppTheme(mode: PaletteMode = "light") {
       MuiDrawer: {
         styleOverrides: {
           paper: {
-            background: dark ? "linear-gradient(180deg,#0B1C2E,#081725)" : paper,
+            background: dark ? "linear-gradient(180deg,#081D27,#061722)" : paper,
             borderColor: border,
             "&.MuiDrawer-paperAnchorRight": {
               width: "min(560px, 92vw)", maxWidth: "100vw", boxSizing: "border-box",
@@ -216,7 +216,7 @@ export function createAppTheme(mode: PaletteMode = "light") {
             letterSpacing: ".005em",
             transition: "transform .16s ease, box-shadow .16s ease, background-color .16s ease, border-color .16s ease",
             "&:hover": { transform: "translateY(-1px)" },
-            "&:focus-visible": { outline: `2px solid ${aliareColors.green}`, outlineOffset: 2 },
+            "&:focus-visible": { outline: "none", boxShadow: dark ? "0 0 0 3px rgba(24,199,122,.14)" : "0 0 0 3px rgba(24,199,122,.12)" },
             "&.MuiButton-containedPrimary": {
               background: "linear-gradient(135deg,#18C77A 0%,#0FA968 100%)",
               color: "#FFFFFF",
@@ -283,7 +283,7 @@ export function createAppTheme(mode: PaletteMode = "light") {
             transition: "border-color .16s ease, box-shadow .16s ease, background-color .16s ease",
             borderRadius: 8,
             "&.MuiInputBase-sizeSmall": { minHeight: 42 },
-            backgroundColor: dark ? "rgba(7,20,35,.56)" : undefined,
+            backgroundColor: dark ? "rgba(5,25,34,.62)" : undefined,
             "& .MuiOutlinedInput-notchedOutline": { borderColor: dark ? "rgba(131,175,220,.30)" : undefined },
             "& .MuiOutlinedInput-notchedOutline legend": {
               fontSize: "0.75em",
@@ -319,7 +319,7 @@ export function createAppTheme(mode: PaletteMode = "light") {
       MuiTableHead: {
         styleOverrides: {
           root: {
-            background: dark ? "linear-gradient(180deg,#12304A,#0E263C)" : aliareColors.graphite,
+            background: dark ? "linear-gradient(180deg,#0D3440,#0A2935)" : aliareColors.graphite,
             "& .MuiTableCell-head": { color: "#FFFFFF", fontWeight: 750, fontSize: ".76rem", letterSpacing: ".035em", textTransform: "uppercase", borderBottomColor: dark ? "rgba(116,166,216,.18)" : aliareColors.graphite },
           },
         },
@@ -333,7 +333,7 @@ export function createAppTheme(mode: PaletteMode = "light") {
             "&::-webkit-scrollbar-thumb": { background: dark ? "#31516E" : "#C7CDD3", borderRadius: 99 },
             borderRadius: 14,
             border: `1px solid ${border}`,
-            ...(dark && { background: "linear-gradient(145deg,rgba(13,33,54,.94),rgba(8,24,41,.96))", boxShadow: "inset 0 1px rgba(255,255,255,.025), 0 12px 28px rgba(0,0,0,.10)" }),
+            ...(dark && { background: "linear-gradient(145deg,rgba(9,34,44,.94),rgba(6,25,36,.97))", boxShadow: "inset 0 1px rgba(255,255,255,.025), 0 12px 28px rgba(0,0,0,.10)" }),
           },
         },
       },
@@ -390,7 +390,7 @@ export function createAppTheme(mode: PaletteMode = "light") {
           root: {
             minHeight: 52,
             borderTop: `1px solid ${border}`,
-            ...(dark && { backgroundColor: "rgba(8,24,41,.78)", color: textSecondary }),
+            ...(dark && { backgroundColor: "rgba(6,25,36,.82)", color: textSecondary }),
           },
         },
       },
@@ -398,7 +398,7 @@ export function createAppTheme(mode: PaletteMode = "light") {
         styleOverrides: {
           root: {
             borderRadius: 12,
-            ...(dark && { background: "linear-gradient(145deg,#102B42,#0A1B2D)", border: `1px solid ${border}` }),
+            ...(dark && { background: "linear-gradient(145deg,#0C3340,#081F2C)", border: `1px solid ${border}` }),
           },
         },
       },
