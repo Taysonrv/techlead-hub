@@ -251,6 +251,7 @@ export function Clients() {
   const [status, setStatus] = useState("");
   const [owner, setOwner] = useState("");
   const [executiveArea, setExecutiveArea] = useState("");
+  const [businessArea, setBusinessArea] = useState("");
 
   /* Drill-down */
 
@@ -463,6 +464,10 @@ export function Clients() {
     clientScopedTickets.map(classifyExecutiveArea)
   )).sort((a, b) => a.localeCompare(b, "pt-BR")), [clientScopedTickets]);
 
+  const businessAreas = useMemo(() => Array.from(new Set(
+    clientScopedTickets.map((ticket) => ticket.businessArea?.trim()).filter((value): value is string => Boolean(value))
+  )).sort((a, b) => a.localeCompare(b, "pt-BR")), [clientScopedTickets]);
+
   /*
    * Caso mude de cliente e a categoria atual
    * não exista para ele, limpamos automaticamente.
@@ -497,6 +502,7 @@ export function Clients() {
         (ticket) => (!category || ticket.category === category) &&
           (!status || ticket.status === status) &&
           (!owner || ticket.owner === owner) &&
+          (!businessArea || ticket.businessArea === businessArea) &&
           (!executiveArea || classifyExecutiveArea(ticket) === executiveArea)
       );
     }, [
@@ -504,6 +510,7 @@ export function Clients() {
       category,
       status,
       owner,
+      businessArea,
       executiveArea,
     ]);
 
@@ -1287,6 +1294,7 @@ export function Clients() {
     setStatus("");
     setOwner("");
     setExecutiveArea("");
+    setBusinessArea("");
   }
 
   async function copyTicketNumber(
@@ -1694,6 +1702,14 @@ export function Clients() {
             </FormControl>
 
             <FormControl size="small" sx={{ minWidth: 0 }}>
+              <InputLabel shrink>Área de negócio</InputLabel>
+              <Select value={businessArea} label="Área de negócio" onChange={(event) => setBusinessArea(event.target.value)}>
+                <MenuItem value="">Todas as áreas</MenuItem>
+                {businessAreas.map((item) => <MenuItem key={item} value={item}>{item}</MenuItem>)}
+              </Select>
+            </FormControl>
+
+            <FormControl size="small" sx={{ minWidth: 0 }}>
               <InputLabel shrink>Frente de atendimento</InputLabel>
               <Select value={executiveArea} label="Frente de atendimento" onChange={(event) => setExecutiveArea(event.target.value)}>
                 <MenuItem value="">Todas as frentes</MenuItem>
@@ -1702,7 +1718,7 @@ export function Clients() {
             </FormControl>
 
             {(selectedClient ||
-              category || status || owner || executiveArea) && (
+              category || status || owner || businessArea || executiveArea) && (
               <Button
                 size="small"
                 variant="outlined"
