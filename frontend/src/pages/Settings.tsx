@@ -65,6 +65,8 @@ const ROUTINE_PERMISSIONS = [
 ] as const;
 type Diagnostics = { status: string; appVersion: string; runtime: string; nodeVersion: string; database: { status: string; latencyMs: number }; sessionPolicy: { exclusiveAcrossPlatforms: boolean; idleTimeoutMinutes: number }; checkedAt: string };
 type MovideskPreview = { readOnly: boolean; sampleSize: number; requested: number; validForImport: boolean; requiredFields: string[]; coverage: Record<string, number>; issues: Array<{ row: number; id: unknown; fields: string[] }>; examples: Array<{ id: unknown; subject: unknown; createdDate: unknown; lastUpdate: unknown; status: unknown; ownerTeam: unknown; serviceFirstLevel: unknown; serviceSecondLevel: unknown }> };
+type MovideskBaselineStatus = { status: "IDLE" | "RUNNING" | "SUCCESS" | "ERROR"; startedAt: string | null; finishedAt: string | null; completed: boolean; result: { mode: string; pages: number; totalRows: number; created: number; updated: number; ignored: number; errors: number } | null; error: string | null; database: { tickets: number; linkedTasks: number }; lastImport: { status: string; totalRows: number; insertedRows: number; updatedRows: number; skippedRows: number; errorRows: number; message: string | null } | null };
+type MovideskCoverage = { total: number; coverage: Record<string, number>; deleted: number; withRawData: number; generatedAt: string };
 
 const EMPTY_FORM: ConfigurationForm = {
   databaseUrl: "",
@@ -99,12 +101,26 @@ export function Settings() {
   const [notificationPreferences,setNotificationPreferences]=useState<LocalNotificationPreferences>(()=>getLocalNotificationPreferences());
   const [movideskPreview, setMovideskPreview] = useState<MovideskPreview | null>(null);
   const [previewingMovidesk, setPreviewingMovidesk] = useState(false);
+  const [movideskBaseline, setMovideskBaseline] = useState<MovideskBaselineStatus | null>(null);
+  const [movideskCoverage, setMovideskCoverage] = useState<MovideskCoverage | null>(null);
+  const [baselineBusy, setBaselineBusy] = useState(false);
 
   useEffect(() => {
     void loadConfiguration();
     void api.get<{users:PermissionUser[]}>("/users").then(r=>setPermissionUsers(r.data.users)).catch(()=>setPermissionUsers([]));
     if (window.techLeadHub?.platform === "win32" && window.techLeadHub.startup) void window.techLeadHub.startup.get().then((state) => setStartupEnabled(state.enabled)).catch(() => undefined);
   }, []);
+
+  useEffect(() => {
+    if (!configuration?.movideskConfigured) return;
+    void refreshMovideskBaseline();
+  }, [configuration?.movideskConfigured]);
+
+  useEffect(() => {
+    if (movideskBaseline?.status !== "RUNNING") return;
+    const timer = window.setInterval(() => { void refreshMovideskBaseline(); }, 5000);
+    return () => window.clearInterval(timer);
+  }, [movideskBaseline?.status]);
 
   async function saveUserPermissions(userId:number, permissions:string[]) {
     try {
@@ -263,6 +279,32 @@ export function Settings() {
     } finally {
       setPreviewingMovidesk(false);
     }
+  }
+
+  async function refreshMovideskBaseline() {
+    try {
+      const response = await api.get<MovideskBaselineStatus>("/movidesk/baseline/status", { timeout: 30_000 });
+      setMovideskBaseline(response.data);
+      if (response.data.completed) {
+        const coverage = await api.get<MovideskCoverage>("/movidesk/coverage", { timeout: 60_000 });
+        setMovideskCoverage(coverage.data);
+      }
+      return response.data;
+    } catch (statusError: any) {
+      setError(statusError?.response?.data?.message ?? "Não foi possível consultar o baseline Movidesk.");
+      return null;
+    }
+  }
+
+  async function startMovideskBaseline() {
+    try {
+      setBaselineBusy(true); setError(null); setSuccess(null);
+      const response = await api.post<{ accepted: boolean; reason?: string; state: MovideskBaselineStatus }>("/movidesk/baseline/start", {}, { timeout: 30_000 });
+      setMovideskBaseline(response.data.state);
+      setSuccess(response.data.accepted ? "Carga FULL iniciada em segundo plano. O progresso será atualizado automaticamente." : response.data.reason === "COMPLETED" ? "O baseline Movidesk já foi concluído." : "A carga FULL já está em execução.");
+    } catch (baselineError: any) {
+      setError(baselineError?.response?.data?.message ?? "Não foi possível iniciar a carga FULL.");
+    } finally { setBaselineBusy(false); }
   }
 
   async function saveConfiguration() {
@@ -559,6 +601,23 @@ export function Settings() {
               <Button variant="outlined" disabled={saving || previewingMovidesk || !configuration?.movideskConfigured || Boolean(form.movideskToken.trim())} onClick={() => void previewMovidesk()}>{previewingMovidesk ? "Validando amostra..." : "Validar amostra (25)"}</Button>
               <Button variant="contained" disabled={saving || previewingMovidesk || (!configuration?.movideskConfigured && !form.movideskToken.trim())} onClick={() => void saveAndTestMovidesk()}>{saving ? "Salvando e testando..." : form.movideskToken.trim() ? "Salvar e testar" : "Testar conexão salva"}</Button>
             </Stack>
+            {movideskPreview?.validForImport && <Box sx={{ mt: 2, p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: 1.5 }}>
+              <Stack direction={{ xs: "column", md: "row" }} spacing={1} sx={{ alignItems: { md: "center" }, justifyContent: "space-between" }}>
+                <Box>
+                  <Typography sx={{ fontWeight: 800 }}>Baseline Movidesk</Typography>
+                  <Typography variant="body2" color="text.secondary">{movideskBaseline?.completed ? `Concluído · ${movideskBaseline.database.tickets} tickets na base` : movideskBaseline?.status === "RUNNING" ? "Carga FULL em execução em segundo plano." : "Pronto para a primeira carga completa."}</Typography>
+                </Box>
+                <Button variant="contained" disabled={baselineBusy || movideskBaseline?.status === "RUNNING" || movideskBaseline?.completed} onClick={() => void startMovideskBaseline()}>{movideskBaseline?.status === "RUNNING" ? "FULL em execução" : movideskBaseline?.completed ? "Baseline concluído" : "Iniciar carga FULL"}</Button>
+              </Stack>
+              {movideskBaseline?.result && <Typography variant="body2" sx={{ mt: 1 }}>Páginas: <b>{movideskBaseline.result.pages}</b> · Lidos: <b>{movideskBaseline.result.totalRows}</b> · Novos: <b>{movideskBaseline.result.created}</b> · Atualizados: <b>{movideskBaseline.result.updated}</b> · Erros: <b>{movideskBaseline.result.errors}</b></Typography>}
+              {movideskBaseline?.error && <Alert severity="error" sx={{ mt: 1 }}>{movideskBaseline.error}</Alert>}
+              {movideskCoverage && <Box sx={{ mt: 1.5 }}>
+                <Typography variant="body2" sx={{ fontWeight: 800 }}>Cobertura pós-carga · payload bruto {movideskCoverage.withRawData}/{movideskCoverage.total}</Typography>
+                <Box sx={{ mt: 1, display: "grid", gridTemplateColumns: { xs: "repeat(2,1fr)", md: "repeat(4,1fr)" }, gap: 1 }}>
+                  {Object.entries(movideskCoverage.coverage).map(([field,count]) => <Box key={field}><Typography variant="caption" color="text.secondary">{field}</Typography><Typography variant="body2" sx={{ fontWeight: 750 }}>{count}/{movideskCoverage.total}</Typography></Box>)}
+                </Box>
+              </Box>}
+            </Box>}
             {movideskPreview && <Box sx={{ mt: 2, p: 1.5, border: "1px solid", borderColor: movideskPreview.validForImport ? "success.main" : "warning.main", borderRadius: 1.5 }}>
               <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ alignItems: { sm: "center" }, justifyContent: "space-between", mb: 1 }}>
                 <Typography sx={{ fontWeight: 800 }}>Pré-validação da API · somente leitura</Typography>
