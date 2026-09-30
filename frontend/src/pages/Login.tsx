@@ -1582,9 +1582,8 @@ function LoginForm({
           submitting
         }
         sx={{
-          minHeight: 44,
-          borderRadius: 2,
           minHeight: 48,
+          borderRadius: 2,
 
           borderColor:
             "divider",
