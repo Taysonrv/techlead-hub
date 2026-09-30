@@ -45,6 +45,7 @@ import {
 } from "react";
 
 import { api } from "../services/api";
+import { getTicketSnapshot } from "../services/ticketSnapshot";
 import { useFilters } from "../context/FiltersContext";
 import { PeriodFilter } from "../components/PeriodFilter";
 import { PageHeader } from "../components/PageHeader";
@@ -327,15 +328,10 @@ export function Tickets() {
           null
         );
 
-        const response =
-          await api.get<
-            Ticket[]
-          >(
-            "/dashboard/tickets"
-          );
+        const snapshot = await getTicketSnapshot<Ticket>();
 
         setTickets(
-          response.data
+          snapshot
         );
       } catch (
         requestError
