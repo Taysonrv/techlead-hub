@@ -89,6 +89,7 @@ type Ticket = {
 
   client: string | null;
   contact: string | null;
+  createdBy?: string | null;
 
   owner: string | null;
   ownerTeam?: string | null;
@@ -98,7 +99,7 @@ type Ticket = {
   cause: string | null;
   causeDetail?: string | null;
   urgency: string | null;
-  origin?: string | null;
+  origin?: number | null;
 
   status: string;
   baseStatus: string | null;
