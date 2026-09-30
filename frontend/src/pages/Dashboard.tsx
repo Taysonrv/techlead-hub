@@ -466,6 +466,16 @@ export function Dashboard() {
     [ticketsEligibleForCause]
   );
 
+  const businessAreas = useMemo(
+    () => groupByField(filteredTickets, "businessArea", "Sem área de negócio").slice(0, 6),
+    [filteredTickets],
+  );
+
+  const serviceDistribution = useMemo(
+    () => groupByField(filteredTickets, "serviceSecondLevel", "Sem serviço").slice(0, 6),
+    [filteredTickets],
+  );
+
   const statusNewTickets = useMemo(() => statusTickets.filter((ticket) => ticket.baseStatus === "New"), [statusTickets]);
   const statusAttendanceTickets = useMemo(() => statusTickets.filter((ticket) => ticket.baseStatus === "InAttendance"), [statusTickets]);
   const statusStoppedTickets = useMemo(() => statusTickets.filter((ticket) => ticket.baseStatus === "Stopped"), [statusTickets]);
@@ -1338,6 +1348,31 @@ export function Dashboard() {
                 <Typography variant="body2" color="text.secondary" sx={{ textAlign: "center" }}>Nenhuma causa registrada para os filtros selecionados.</Typography>
               </Box>}
             </CardBase>
+          </Box>
+
+          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", xl: "1fr 1fr" }, gap: 1.5 }}>
+            <OperationalRankingCard
+              title="Áreas de negócio"
+              subtitle="Distribuição dos tickets abertos no período pelos dados normalizados do Movidesk"
+              data={businessAreas}
+              emptyMessage="Nenhuma área de negócio informada no período."
+              onItemClick={(label) => showTickets(
+                `Área de negócio: ${label}`,
+                filteredTickets.filter((ticket) => (ticket.businessArea ?? "Sem área de negócio") === label),
+                "Tickets da área de negócio selecionada",
+              )}
+            />
+            <OperationalRankingCard
+              title="Serviços mais acionados"
+              subtitle="Serviço N2 do Movidesk • clique para abrir os tickets relacionados"
+              data={serviceDistribution}
+              emptyMessage="Nenhum serviço informado no período."
+              onItemClick={(label) => showTickets(
+                `Serviço: ${label}`,
+                filteredTickets.filter((ticket) => (ticket.serviceSecondLevel ?? "Sem serviço") === label),
+                "Tickets do serviço selecionado",
+              )}
+            />
           </Box>
 
           <CardBase>
@@ -2585,6 +2620,53 @@ function CardPeriodHeader({ title, subtitle, value, onChange }: { title: string;
   </Box>;
 }
 
+function OperationalRankingCard({
+  title,
+  subtitle,
+  data,
+  emptyMessage,
+  onItemClick,
+}: {
+  title: string;
+  subtitle: string;
+  data: RankingItem[];
+  emptyMessage: string;
+  onItemClick: (label: string) => void;
+}) {
+  const theme = useTheme();
+  const dark = theme.palette.mode === "dark";
+  return (
+    <CardBase>
+      <Box sx={{ textAlign: "center" }}>
+        <Typography sx={{ fontWeight: 850, fontSize: "1.05rem" }}>{title}</Typography>
+        <Typography variant="caption" color="text.secondary">{subtitle}</Typography>
+      </Box>
+      {data.length ? (
+        <Box sx={{ height: Math.max(250, Math.min(330, data.length * 44 + 64)), mt: 1.25 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={data} layout="vertical" margin={{ left: 10, right: 34, top: 4, bottom: 4 }}>
+              <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={dark ? "rgba(148,163,184,.16)" : "#E4E7EC"} />
+              <XAxis type="number" allowDecimals={false} tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
+              <YAxis type="category" dataKey="label" width={150} tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
+              <Tooltip cursor={false} />
+              <Bar dataKey="total" name="Tickets" fill={aliareColors.green} radius={[0, 7, 7, 0]} barSize={18} cursor="pointer" minPointSize={3}
+                onClick={(_, index) => {
+                  const item = data[index];
+                  if (item) onItemClick(item.label);
+                }}
+              />
+            </BarChart>
+          </ResponsiveContainer>
+        </Box>
+      ) : (
+        <Box sx={{ minHeight: 250, display: "grid", placeItems: "center", px: 2 }}>
+          <Typography variant="body2" color="text.secondary" sx={{ textAlign: "center" }}>{emptyMessage}</Typography>
+        </Box>
+      )}
+    </CardBase>
+  );
+}
+
 function DonutAnalysisCard({
   title,
   subtitle,
@@ -2912,7 +2994,9 @@ function groupByField(
     | "category"
     | "owner"
     | "client"
-    | "cause",
+    | "cause"
+    | "businessArea"
+    | "serviceSecondLevel",
 
   fallback: string
 ): RankingItem[] {
