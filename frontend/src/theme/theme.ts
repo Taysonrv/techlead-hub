@@ -249,6 +249,12 @@ export function createAppTheme(mode: PaletteMode = "light") {
       },
       MuiAutocomplete: {
         styleOverrides: {
+          root: {
+            minWidth: 0,
+            "& .MuiOutlinedInput-root.MuiInputBase-sizeSmall": { minHeight: 42 },
+            "& .MuiAutocomplete-input": { minWidth: 0 },
+          },
+          tagSizeSmall: { height: 24, maxWidth: 180 },
           paper: {
             border: `1px solid ${border}`,
             borderRadius: 12,
@@ -262,6 +268,7 @@ export function createAppTheme(mode: PaletteMode = "light") {
           root: {
             transition: "border-color .16s ease, box-shadow .16s ease, background-color .16s ease",
             borderRadius: 8,
+            "&.MuiInputBase-sizeSmall": { minHeight: 42 },
             backgroundColor: dark ? "rgba(7,20,35,.56)" : undefined,
             "& .MuiOutlinedInput-notchedOutline": { borderColor: dark ? "rgba(131,175,220,.30)" : undefined },
             "& .MuiOutlinedInput-notchedOutline legend": {
