@@ -1,4 +1,5 @@
 import axios from "axios";
+import crypto from "node:crypto";
 import { prisma } from "../database/prisma";
 import { MovideskJsonImportService } from "./MovideskJsonImportService";
 
@@ -64,6 +65,10 @@ export class MovideskService {
 
   async testConnection() {
     const token = this.token();
+    const tokenDiagnostic = {
+      length: token.length,
+      fingerprint: crypto.createHash("sha256").update(token, "utf8").digest("hex").slice(0, 12),
+    };
     const request = async (mode: "BEARER" | "QUERY") => {
       const query = new URLSearchParams();
       query.set("$select", "id,lastUpdate");
@@ -98,7 +103,7 @@ export class MovideskService {
               ? JSON.stringify(remote).slice(0, 500)
               : error.message;
         if (status === 401 && axios.isAxiosError(bearerError) && bearerError.response?.status === 401) {
-          throw new Error("Movidesk rejeitou a credencial nos dois formatos suportados (Bearer e parâmetro token), ambos com HTTP 401. Como a mesma URL funciona no navegador, valide se o valor salvo corresponde exatamente ao token usado no link funcional.");
+          throw new Error(`Movidesk rejeitou a credencial nos dois formatos suportados (Bearer e parâmetro token), ambos com HTTP 401. Token carregado pelo backend: comprimento ${tokenDiagnostic.length}, fingerprint SHA-256 ${tokenDiagnostic.fingerprint}. Nenhum caractere do token foi exposto.`);
         }
         throw new Error(`Movidesk respondeu${status ? ` HTTP ${status}` : ""}: ${remoteMessage}`);
       }
