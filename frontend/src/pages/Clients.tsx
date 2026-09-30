@@ -52,7 +52,6 @@ import {
 
 import { useNavigate } from "react-router-dom";
 
-import { api } from "../services/api";
 import { getTicketSnapshot } from "../services/ticketSnapshot";
 import { calculateOfficialSla } from "../utils/officialSla";
 import { useFilters } from "../context/FiltersContext";
