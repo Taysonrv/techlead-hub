@@ -206,7 +206,23 @@ export function DataQuality() {
           <Button size="small" disabled={!hasFilters} onClick={() => { setType([]); setClient([]); setUser([]); setSearch(""); setIssue(""); }}>Limpar filtros</Button>
         </Stack>
       </Stack>
-      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(2, minmax(0, 1fr))", xl: "repeat(4, minmax(0, 1fr))" }, gap: 1.2, alignItems: "start" }}>
+      <Box
+        sx={{
+          display: "grid",
+          gridTemplateColumns: { xs: "1fr", md: "repeat(2, minmax(0, 1fr))", xl: "repeat(4, minmax(0, 1fr))" },
+          gap: 1.2,
+          alignItems: "start",
+          "& .MuiInputBase-root": { minHeight: 42, height: 42 },
+          "& .MuiAutocomplete-inputRoot": {
+            minHeight: "42px !important",
+            height: "42px !important",
+            flexWrap: "nowrap",
+            py: "0 !important",
+          },
+          "& .MuiAutocomplete-input": { minWidth: "0 !important" },
+          "& .MuiAutocomplete-tag": { maxWidth: 150 },
+        }}
+      >
         <TextField fullWidth size="small" label="Pesquisar" placeholder="ID, título, assunto ou vínculo..." value={search} onChange={(e) => setSearch(e.target.value)} slotProps={{ inputLabel: { shrink: true }, input: { startAdornment: <SearchOutlined sx={{ mr: 1, color: "text.disabled" }} /> } }} />
         <FormControl fullWidth size="small"><InputLabel shrink>Tipo</InputLabel><Select multiple displayEmpty label="Tipo" value={type} onChange={(e) => setType(typeof e.target.value === "string" ? e.target.value.split(",") : e.target.value)} renderValue={(selected) => !selected.length ? "Todos os tipos" : selected.length === 1 ? selected[0] : `${selected.length} tipos`}><MenuItem onClick={(e) => { e.preventDefault(); e.stopPropagation(); setType([]); }}><Checkbox size="small" checked={!type.length} />Todos os tipos</MenuItem>{data?.filters.types.map((value) => <MenuItem key={value} value={value}><Checkbox size="small" checked={type.includes(value)} />{value}</MenuItem>)}</Select></FormControl>
         <Autocomplete multiple fullWidth size="small" options={data?.filters.clients ?? []} value={client} onChange={(_, value) => setClient(value)} renderInput={(params) => <TextField {...params} label="Cliente" placeholder={!client.length ? "Todos os clientes" : undefined} slotProps={{ inputLabel: { shrink: true } }} />} limitTags={1} />
