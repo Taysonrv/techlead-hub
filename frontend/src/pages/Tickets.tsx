@@ -718,7 +718,8 @@ export function Tickets() {
           const matchesCategory = !category.length || Boolean(ticket.category && category.includes(ticket.category));
           const matchesOwner = !owner.length || Boolean(ticket.owner && owner.includes(ticket.owner));
           const matchesClient = !client.length || Boolean(ticket.client && client.includes(ticket.client));
-          const matchesTeam = !team.length || Boolean((ticket.ownerTeam ?? ticket.team ?? null) && team.includes((ticket.ownerTeam ?? ticket.team ?? null)));
+          const ticketTeam = ticket.ownerTeam ?? ticket.team;
+          const matchesTeam = !team.length || Boolean(ticketTeam && team.includes(ticketTeam));
           const matchesService = !service.length || Boolean(ticket.service && service.includes(ticket.service));
 
           const attention =
@@ -999,7 +1000,7 @@ export function Tickets() {
         `Cliente: ${ticket.client ?? "—"}`,
         `Solicitante: ${ticket.contact ?? "—"}`,
         `Responsável: ${ticket.owner ?? "—"}`,
-        `Squad: ${(ticket.ownerTeam ?? ticket.team ?? null) ?? "—"}`,
+        `Squad: ${ticket.ownerTeam ?? ticket.team ?? "—"}`,
         `Categoria: ${ticket.category ?? "—"}`,
         `Causa: ${ticket.cause ?? "—"}`,
         `Serviço: ${ticket.service ?? "—"}`,
@@ -2250,8 +2251,7 @@ export function Tickets() {
                               "nowrap",
                           }}
                         >
-                          {(ticket.ownerTeam ?? ticket.team ?? null) ??
-                            "Sem squad"}
+                          {ticket.ownerTeam ?? ticket.team ?? "Sem squad"}
                         </Typography>
                       </TableCell>
 
@@ -4607,6 +4607,7 @@ function uniqueValues(
     | "category"
     | "owner"
     | "client"
+    | "ownerTeam"
     | "team"
     | "service"
 ) {
