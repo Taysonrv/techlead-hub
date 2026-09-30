@@ -281,8 +281,6 @@ export class MovideskJsonImportService {
         typeof row.slaSolutionDateIsPaused === "boolean"
           ? row.slaSolutionDateIsPaused
           : null,
-      solutionSlaIndicator: this.toText(row.solutionSlaIndicator),
-      responseSlaIndicator: this.toText(row.responseSlaIndicator),
       taskNumber: this.toInteger(this.customValue(customFields, CUSTOM_FIELDS.taskNumber)),
       taskStatus: this.customValue(customFields, CUSTOM_FIELDS.taskStatus),
       taskTitle: this.customValue(customFields, CUSTOM_FIELDS.taskTitle),
