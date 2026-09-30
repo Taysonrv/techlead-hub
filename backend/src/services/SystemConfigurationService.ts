@@ -14,6 +14,18 @@ export type SystemConfigurationInput = Partial<Record<keyof typeof SETTING_ENV, 
 
 type SettingRow = { key: string; value: string };
 
+function normalizeMovideskToken(raw: string) {
+  let value = raw.trim();
+  const urlToken = value.match(/[?&]token=([^&#\s]+)/i)?.[1];
+  if (urlToken) value = urlToken;
+  value = value.replace(/^token\s*=\s*/i, "").trim();
+  if (
+    (value.startsWith('"') && value.endsWith('"')) ||
+    (value.startsWith("'") && value.endsWith("'"))
+  ) value = value.slice(1, -1).trim();
+  try { return decodeURIComponent(value); } catch { return value; }
+}
+
 class SystemConfigurationService {
   private encryptionKey() {
     const secret = process.env.SYSTEM_CONFIG_KEY?.trim() || process.env.JWT_SECRET?.trim();
@@ -63,7 +75,9 @@ class SystemConfigurationService {
   async save(input: SystemConfigurationInput, updatedById: number) {
     const changedKeys: string[] = [];
     for (const key of Object.keys(SETTING_ENV) as Array<keyof typeof SETTING_ENV>) {
-      const value = input[key]?.trim();
+      const rawValue = input[key]?.trim();
+      if (!rawValue) continue;
+      const value = key === "movideskToken" ? normalizeMovideskToken(rawValue) : rawValue;
       if (!value) continue;
       const encrypted = this.encrypt(value);
       await prisma.$executeRaw`
