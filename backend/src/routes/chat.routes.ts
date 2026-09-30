@@ -29,7 +29,9 @@ chatRoutes.get("/events", async (req: AuthenticatedRequest, res) => {
     } catch {
       res.write("event: error\ndata: {}\n\n");
     }
-    await new Promise((resolve) => setTimeout(resolve, 1200));
+    // Evita pressionar o pool do Prisma: cada snapshot consulta presença, digitação e última mensagem.
+    // Cinco segundos mantém a experiência de chat responsiva sem competir com Dashboard/Clientes.
+    await new Promise((resolve) => setTimeout(resolve, 5000));
   }
   res.end();
 });
