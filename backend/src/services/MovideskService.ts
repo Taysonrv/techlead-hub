@@ -6,6 +6,30 @@ const PAGE_SIZE = 100;
 const REQUEST_INTERVAL_MS = 6_200;
 const INCREMENTAL_OVERLAP_MINUTES = 10;
 
+function normalizeMovideskToken(raw?: string | null) {
+  if (!raw) return "";
+  let value = raw.trim();
+
+  // Aceita tanto o token puro quanto valores copiados como "token=..." ou
+  // a URL completa de uma chamada da API. O segredo nunca é registrado.
+  const urlToken = value.match(/[?&]token=([^&#\s]+)/i)?.[1];
+  if (urlToken) value = urlToken;
+
+  value = value.replace(/^token\s*=\s*/i, "").trim();
+  if (
+    (value.startsWith('"') && value.endsWith('"')) ||
+    (value.startsWith("'") && value.endsWith("'"))
+  ) {
+    value = value.slice(1, -1).trim();
+  }
+
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
 const TICKET_SELECT = [
   "id", "protocol", "subject", "category", "urgency", "status", "baseStatus",
   "justification", "createdDate", "lastUpdate", "lastActionDate", "resolvedIn",
@@ -37,7 +61,7 @@ export class MovideskService {
   private readonly url = process.env.MOVIDESK_URL?.trim() || "https://api.movidesk.com/public/v1";
 
   private token() {
-    const token = process.env.MOVIDESK_TOKEN?.trim();
+    const token = normalizeMovideskToken(process.env.MOVIDESK_TOKEN);
     if (!token) throw new Error("Movidesk não configurado. Informe o token em Configurações > Movidesk.");
     return token;
   }
@@ -59,6 +83,9 @@ export class MovideskService {
             : remote && typeof remote === "object"
               ? JSON.stringify(remote).slice(0, 500)
               : error.message;
+        if (status === 401) {
+          throw new Error("Movidesk rejeitou a credencial (HTTP 401). Revise o token salvo em Configurações > Movidesk; o endpoint respondeu normalmente, mas não autorizou a credencial enviada.");
+        }
         throw new Error(`Movidesk respondeu${status ? ` HTTP ${status}` : ""}: ${remoteMessage}`);
       }
       throw error;
