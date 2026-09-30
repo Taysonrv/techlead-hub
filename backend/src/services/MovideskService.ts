@@ -43,11 +43,35 @@ export class MovideskService {
   }
 
   async testConnection() {
-    const response = await axios.get(`${this.url}/tickets`, {
-      params: { token: this.token(), $select: "id,lastUpdate", $orderby: "id desc", $top: 1 },
-      timeout: 30_000,
+    try {
+      const response = await axios.get(`${this.url}/tickets`, {
+        params: { token: this.token(), $select: "id,lastUpdate", $top: 1 },
+        timeout: 30_000,
+      });
+      return { ok: true, endpoint: this.url, sampleCount: Array.isArray(response.data) ? response.data.length : 0 };
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        const status = error.response?.status;
+        const remote = error.response?.data;
+        const remoteMessage =
+          typeof remote === "string"
+            ? remote.slice(0, 500)
+            : remote && typeof remote === "object"
+              ? JSON.stringify(remote).slice(0, 500)
+              : error.message;
+        throw new Error(`Movidesk respondeu${status ? ` HTTP ${status}` : ""}: ${remoteMessage}`);
+      }
+      throw error;
+    }
+  }
+
+  async hasCompletedBaseline() {
+    const baseline = await prisma.auditLog.findFirst({
+      where: { action: "MOVIDESK_BASELINE_COMPLETED" },
+      orderBy: { createdAt: "desc" },
+      select: { id: true },
     });
-    return { ok: true, endpoint: this.url, sampleCount: Array.isArray(response.data) ? response.data.length : 0 };
+    return Boolean(baseline);
   }
 
   private async getPage(skip: number, since?: Date | null) {
