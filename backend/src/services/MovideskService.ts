@@ -1,5 +1,6 @@
 import axios from "axios";
 import crypto from "node:crypto";
+import { Prisma } from "@prisma/client";
 import { prisma } from "../database/prisma";
 import { MovideskJsonImportService } from "./MovideskJsonImportService";
 
@@ -53,6 +54,23 @@ type SyncSummary = {
   errors: number;
   since: string | null;
 };
+
+type BaselineState = {
+  status: "IDLE" | "RUNNING" | "SUCCESS" | "ERROR";
+  startedAt: string | null;
+  finishedAt: string | null;
+  result: SyncSummary | null;
+  error: string | null;
+};
+
+let baselineState: BaselineState = {
+  status: "IDLE",
+  startedAt: null,
+  finishedAt: null,
+  result: null,
+  error: null,
+};
+let baselinePromise: Promise<void> | null = null;
 
 export class MovideskService {
   private readonly url = process.env.MOVIDESK_URL?.trim() || "https://api.movidesk.com/public/v1";
@@ -163,6 +181,60 @@ export class MovideskService {
         serviceSecondLevel: row.serviceSecondLevel ?? null,
       })),
     };
+  }
+
+  async baselineStatus() {
+    const completed = await this.hasCompletedBaseline();
+    const [tickets, linkedTasks, lastImport] = await Promise.all([
+      prisma.ticket.count(),
+      prisma.ticket.count({ where: { taskNumber: { not: null } } }),
+      prisma.importRun.findFirst({
+        where: { source: "MOVIDESK_API" },
+        orderBy: { startedAt: "desc" },
+        select: { id: true, status: true, totalRows: true, insertedRows: true, updatedRows: true, skippedRows: true, errorRows: true, startedAt: true, finishedAt: true, message: true },
+      }),
+    ]);
+    return { ...baselineState, completed, database: { tickets, linkedTasks }, lastImport };
+  }
+
+  async startBaseline(userId?: number | null) {
+    if (baselinePromise || baselineState.status === "RUNNING") {
+      return { accepted: false, reason: "RUNNING", state: await this.baselineStatus() };
+    }
+    if (await this.hasCompletedBaseline()) {
+      return { accepted: false, reason: "COMPLETED", state: await this.baselineStatus() };
+    }
+
+    baselineState = { status: "RUNNING", startedAt: new Date().toISOString(), finishedAt: null, result: null, error: null };
+    baselinePromise = this.syncTickets(userId ?? null, true)
+      .then((result) => {
+        baselineState = { ...baselineState, status: result.errors === 0 ? "SUCCESS" : "ERROR", finishedAt: new Date().toISOString(), result, error: result.errors === 0 ? null : `Carga concluída com ${result.errors} erro(s).` };
+      })
+      .catch((error) => {
+        baselineState = { ...baselineState, status: "ERROR", finishedAt: new Date().toISOString(), result: null, error: error instanceof Error ? error.message : "Falha desconhecida na carga FULL." };
+      })
+      .finally(() => { baselinePromise = null; });
+
+    return { accepted: true, state: await this.baselineStatus() };
+  }
+
+  async dataCoverage() {
+    const total = await prisma.ticket.count();
+    const fields = [
+      "client", "contact", "owner", "ownerTeam", "category", "cause", "urgency",
+      "serviceFirstLevel", "serviceSecondLevel", "serviceThirdLevel", "businessArea",
+      "lastUpdate", "dueDate", "firstResponseDate", "resolvedDate", "closedDate",
+      "slaAgreement", "taskNumber", "registeredVersion", "deliveredVersion",
+    ] as const;
+    const coverage: Record<string, number> = {};
+    for (const field of fields) {
+      coverage[field] = await prisma.ticket.count({ where: { [field]: { not: null } } });
+    }
+    const [deleted, withRawData] = await Promise.all([
+      prisma.ticket.count({ where: { isDeleted: true } }),
+      prisma.ticket.count({ where: { rawData: { not: Prisma.DbNull } } }),
+    ]);
+    return { total, coverage, deleted, withRawData, generatedAt: new Date().toISOString() };
   }
 
   async hasCompletedBaseline() {
