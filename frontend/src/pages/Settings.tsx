@@ -498,7 +498,7 @@ export function Settings() {
               <TextField type="password" label="Novo token Movidesk" value={form.movideskToken} onChange={(event) => updateField("movideskToken", event.target.value)} autoComplete="new-password" placeholder={configuration?.movideskConfigured ? "Deixe vazio para manter o token atual" : "Cole o token recebido"} helperText="O token atual nunca é exibido e fica criptografado no banco." />
             </Box>
             <Stack direction="row" spacing={1} sx={{ mt: 2, justifyContent: "flex-end" }}>
-              <Button variant="outlined" disabled={!configuration?.movideskConfigured} onClick={async () => { try { setError(null); const response = await api.get<{ok:boolean}>("/movidesk/test"); if (response.data.ok) setSuccess("Conexão com o Movidesk validada com sucesso."); } catch (testError) { setError(testError instanceof Error ? testError.message : "Não foi possível validar o Movidesk."); } }}>Testar conexão</Button>
+              <Button variant="outlined" disabled={!configuration?.movideskConfigured} onClick={async () => { try { setError(null); setSuccess(null); const response = await api.get<{ok:boolean}>("/movidesk/test"); if (response.data.ok) setSuccess("Conexão com o Movidesk validada com sucesso."); } catch (testError: any) { setError(testError?.response?.data?.message ?? (testError instanceof Error ? testError.message : "Não foi possível validar o Movidesk.")); } }}>Testar conexão</Button>
             </Stack>
           </CardContent>
         </Card>
