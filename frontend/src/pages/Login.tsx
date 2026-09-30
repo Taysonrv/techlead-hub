@@ -67,12 +67,31 @@ type ScreenMode =
   | "FORGOT_PASSWORD"
   | "RESET_PASSWORD";
 
-const leadershipMessages = [
-  { title: "Liderar é transformar sinais em direção.", description: "Antecipe desvios, priorize o que exige atenção e transforme dados da operação em ações objetivas." },
-  { title: "Conhecimento que fica no time escala a operação.", description: "Identifique recorrências, compartilhe contexto e converta resoluções individuais em capacidade coletiva." },
-  { title: "Indicador sem ação é apenas informação.", description: "Use evidências para investigar causas, definir responsáveis e acompanhar o resultado das decisões." },
-  { title: "A melhor intervenção acontece antes do estouro.", description: "Observe SLA, pausas, bloqueios e falta de movimento para apoiar o time no momento certo." },
-  { title: "Liderança técnica conecta operação e evolução.", description: "Aproxime suporte, produto e desenvolvimento com contexto, evidência e acompanhamento contínuo." },
+const workMessages = [
+  { category: "Suporte", title: "Cada atendimento bem investigado reduz o próximo incidente.", description: "Registre contexto, evidências e solução. Uma boa análise resolve o caso atual e fortalece toda a operação." },
+  { category: "ERP", title: "No ERP, entender o processo vem antes de alterar o dado.", description: "Siga o fluxo de negócio, valide configurações e relações entre módulos antes de concluir a causa de uma inconsistência." },
+  { category: "Agronegócio", title: "Tecnologia no agro conecta o campo à decisão.", description: "Da entrada de insumos à comercialização de grãos, dados confiáveis sustentam uma operação cada vez mais integrada." },
+  { category: "Cooperativismo", title: "Cooperativas transformam escala em força coletiva.", description: "Processos bem estruturados ajudam unidades, associados e equipes a trabalharem com informação consistente em toda a cadeia." },
+  { category: "Análise de Sistemas", title: "Investigue o comportamento, não apenas a mensagem de erro.", description: "Logs, banco de dados, integrações e regras de negócio contam partes diferentes da mesma história." },
+  { category: "Trabalho", title: "Consistência supera pressa quando o problema é complexo.", description: "Organize as evidências, teste hipóteses e avance com método. Velocidade sustentável nasce de um processo confiável." },
+  { category: "Suporte N3", title: "Um bom diagnóstico separa sintoma, causa e impacto.", description: "Reproduza o cenário, delimite a origem e entregue ao próximo nível informações suficientes para agir sem retrabalho." },
+  { category: "Conhecimento", title: "Conhecimento compartilhado reduz dependências.", description: "Documentar uma solução transforma experiência individual em capacidade disponível para todo o time." },
+  { category: "ERP", title: "Uma rotina raramente termina no módulo em que começou.", description: "Financeiro, fiscal, estoque, contratos e faturamento se conectam. Analise também os efeitos antes e depois da operação." },
+  { category: "Agronegócio", title: "Safra, armazenagem e comercialização exigem informação no tempo certo.", description: "No agro, qualidade de dados e continuidade operacional ajudam a transformar eventos do campo em decisões de negócio." },
+  { category: "Qualidade", title: "Correção duradoura começa com uma causa bem definida.", description: "Quando possível, diferencie configuração, operação, integração, dado e defeito de produto antes de escolher o tratamento." },
+  { category: "Cooperativismo", title: "Cada unidade faz parte de uma operação maior.", description: "Padronização e rastreabilidade permitem que a cooperativa cresça sem perder controle sobre processos, dados e atendimento." },
+  { category: "Desenvolvimento", title: "Código resolve melhor quando chega acompanhado de contexto.", description: "Cenário reproduzível, resultado esperado, evidência e impacto tornam a comunicação entre suporte e desenvolvimento mais eficiente." },
+  { category: "Foco", title: "Problemas grandes ficam menores quando quebrados em evidências.", description: "Comece pelo que é observável, elimine hipóteses e mantenha o histórico da investigação organizado." },
+  { category: "Dados", title: "Indicadores são pontos de partida para perguntas melhores.", description: "Use métricas para localizar padrões, depois volte ao processo e aos dados para compreender o que realmente está acontecendo." },
+  { category: "Atendimento", title: "Clareza técnica também faz parte da experiência do cliente.", description: "Explique o que foi validado, o próximo passo e as limitações conhecidas sem transferir a complexidade interna para quem precisa da solução." },
+  { category: "Evolução", title: "Melhorar um processo é remover atrito de forma repetível.", description: "Automatize o que é recorrente, documente o que é crítico e preserve espaço para análise onde julgamento técnico é necessário." },
+  { category: "Integrações", title: "Entre dois sistemas, o contrato de dados é tão importante quanto o código.", description: "Valide origem, formato, identificadores, estados e retentativas antes de atribuir uma falha a apenas um dos lados." },
+  { category: "Equipe", title: "Pedir contexto cedo pode economizar horas de investigação.", description: "Compartilhe o que já foi testado e envolva as pessoas certas quando o problema atravessar domínio, produto ou integração." },
+  { category: "Operação", title: "Estabilidade é construída antes do incidente.", description: "Monitoramento, histórico e processos de contingência tornam o suporte mais previsível quando a operação é pressionada." },
+  { category: "Aprendizado", title: "Cada caso difícil amplia o repertório do próximo diagnóstico.", description: "Revise o que funcionou, o que confundiu a investigação e quais sinais poderiam ter antecipado a solução." },
+  { category: "Agronegócio", title: "Do recebimento de grãos ao financeiro, rastreabilidade importa.", description: "Uma cadeia integrada depende de cadastros, documentos e movimentos coerentes para manter confiança no resultado final." },
+  { category: "Analista", title: "Ferramentas aceleram; raciocínio técnico direciona.", description: "SQL, logs, APIs e dashboards entregam sinais. O valor do analista está em conectá-los ao processo e testar a hipótese correta." },
+  { category: "Trabalho", title: "Priorizar é escolher conscientemente onde colocar atenção.", description: "Impacto, urgência, dependências e prazo ajudam a ordenar a fila sem perder de vista a qualidade da entrega." },
 ] as const;
 
 /* =========================================================
@@ -96,7 +115,7 @@ export function Login() {
     useLocation();
 
   const { mode: colorMode } = useColorMode();
-  const [leadershipMessage, setLeadershipMessage] = useState(0);
+  const [workMessage, setLeadershipMessage] = useState(0);
 
   const [
     mode,
@@ -379,7 +398,7 @@ export function Login() {
 
   useEffect(() => {
     const timer = window.setInterval(() => {
-      setLeadershipMessage((current) => (current + 1) % leadershipMessages.length);
+      setLeadershipMessage((current) => (current + 1) % workMessages.length);
     }, 5200);
     return () => window.clearInterval(timer);
   }, []);
@@ -827,7 +846,7 @@ export function Login() {
                 "-0.035em",
             }}
           >
-            TechLead Hub
+            Hub Suporte Simer
           </Typography>
 
           <Typography
@@ -841,7 +860,7 @@ export function Login() {
                 "rgba(255,255,255,0.56)",
             }}
           >
-            Support Intelligence
+            Inteligência para Suporte SIMER
           </Typography>
         </Box>
 
@@ -872,22 +891,22 @@ export function Login() {
             }}
           />
 
-          <Box key={leadershipMessage} sx={{ minHeight: 158, animation: "leadershipMessageIn .55s ease both", "@keyframes leadershipMessageIn": { from: { opacity: 0, transform: "translateY(8px)" }, to: { opacity: 1, transform: "translateY(0)" } } }}>
+          <Box key={workMessage} sx={{ minHeight: 158, animation: "workMessageIn .55s ease both", "@keyframes workMessageIn": { from: { opacity: 0, transform: "translateY(8px)" }, to: { opacity: 1, transform: "translateY(0)" } } }}>
             <Stack direction="row" spacing={1} sx={{ alignItems: "center", mb: 1.2 }}>
               <AutoGraphOutlined sx={{ color: aliareColors.green, fontSize: 19 }} />
               <Typography variant="caption" sx={{ color: aliareColors.green, fontWeight: 850, letterSpacing: ".08em", textTransform: "uppercase" }}>
-                Liderança em foco
+                {workMessages[workMessage].category}
               </Typography>
             </Stack>
             <Typography sx={{ fontSize: { md: "1.4rem", lg: "1.65rem" }, lineHeight: 1.35, fontWeight: 700, letterSpacing: "-0.02em" }}>
-              {leadershipMessages[leadershipMessage].title}
+              {workMessages[workMessage].title}
             </Typography>
             <Typography sx={{ mt: 1.4, maxWidth: 430, lineHeight: 1.7, color: "rgba(255,255,255,0.56)" }}>
-              {leadershipMessages[leadershipMessage].description}
+              {workMessages[workMessage].description}
             </Typography>
           </Box>
           <Stack direction="row" spacing={0.7} sx={{ mt: 1.5 }}>
-            {leadershipMessages.map((_, index) => <Box key={index} sx={{ width: index === leadershipMessage ? 24 : 7, height: 4, borderRadius: 99, bgcolor: index === leadershipMessage ? aliareColors.green : "rgba(255,255,255,.16)", transition: "all .3s ease" }} />)}
+            {workMessages.map((_, index) => <Box key={index} sx={{ width: index === workMessage ? 24 : 7, height: 4, borderRadius: 99, bgcolor: index === workMessage ? aliareColors.green : "rgba(255,255,255,.16)", transition: "all .3s ease" }} />)}
           </Stack>
 
           <Stack
@@ -1030,14 +1049,14 @@ export function Login() {
                   800,
               }}
             >
-              TechLead Hub
+              Hub Suporte Simer
             </Typography>
 
             <Typography
               variant="body2"
               color="text.secondary"
             >
-              Support Intelligence
+              Inteligência para Suporte SIMER
             </Typography>
           </Box>
 
@@ -1385,7 +1404,7 @@ function LoginForm({
         }}
       >
         Entre com suas credenciais para acessar
-        o TechLead Hub.
+        o Hub Suporte Simer.
       </Typography>
 
       {error && (
@@ -2257,7 +2276,7 @@ function RegisterSuccess({
         >
           Sua solicitação foi registrada com sucesso.
           Aguarde a aprovação de um administrador para
-          acessar o TechLead Hub.
+          acessar o Hub Suporte Simer.
         </Typography>
       </Box>
 
@@ -2445,7 +2464,7 @@ function getErrorMessage(
     }
 
     if (!error.response) {
-      return "Não foi possível conectar ao servidor do TechLead Hub.";
+      return "Não foi possível conectar ao servidor do Hub Suporte Simer.";
     }
   }
 
