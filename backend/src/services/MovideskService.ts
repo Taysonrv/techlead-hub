@@ -4,9 +4,11 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../database/prisma";
 import { MovideskJsonImportService } from "./MovideskJsonImportService";
 
-const PAGE_SIZE = 100;
+const PAGE_SIZE = 50;
 const REQUEST_INTERVAL_MS = 6_200;
 const INCREMENTAL_OVERLAP_MINUTES = 10;
+const REQUEST_RETRY_ATTEMPTS = 4;
+const REQUEST_RETRY_BASE_MS = 2_000;
 
 function normalizeMovideskToken(raw?: string | null) {
   if (!raw) return "";
@@ -39,9 +41,11 @@ const TICKET_SELECT = [
   "stoppedTimeWorkingTime", "origin", "isDeleted"
 ].join(",");
 
+// O baseline operacional usa somente expansões necessárias ao modelo atual.
+ // Ações/históricos/satisfação serão enriquecidos em fluxo separado para evitar
+ // respostas muito grandes e ECONNRESET na API do Movidesk.
 const TICKET_EXPAND = [
-  "owner", "createdBy", "clients", "actions", "ownerHistories",
-  "statusHistories", "satisfactionSurveyResponses", "customFieldValues"
+  "owner", "createdBy", "clients", "customFieldValues"
 ].join(",");
 
 type SyncSummary = {
@@ -79,6 +83,28 @@ export class MovideskService {
     const token = normalizeMovideskToken(process.env.MOVIDESK_TOKEN);
     if (!token) throw new Error("Movidesk não configurado. Informe o token em Configurações > Movidesk.");
     return token;
+  }
+
+  private async getWithRetry(url: string, config: Parameters<typeof axios.get>[1], context: string) {
+    let lastError: unknown = null;
+    for (let attempt = 1; attempt <= REQUEST_RETRY_ATTEMPTS; attempt += 1) {
+      try {
+        return await axios.get(url, config);
+      } catch (error) {
+        lastError = error;
+        const status = axios.isAxiosError(error) ? error.response?.status : undefined;
+        const code = axios.isAxiosError(error) ? error.code : undefined;
+        const retryable = code === "ECONNRESET" || code === "ETIMEDOUT" || code === "ECONNABORTED" || status === 429 || (typeof status === "number" && status >= 500);
+        if (!retryable || attempt === REQUEST_RETRY_ATTEMPTS) throw error;
+        const retryAfterSeconds = axios.isAxiosError(error) ? Number(error.response?.headers?.["retry-after"]) : NaN;
+        const delay = Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0
+          ? retryAfterSeconds * 1000
+          : REQUEST_RETRY_BASE_MS * 2 ** (attempt - 1);
+        console.warn(`[movidesk-api] ${context}: tentativa ${attempt}/${REQUEST_RETRY_ATTEMPTS} falhou (${code ?? status ?? "rede"}). Nova tentativa em ${Math.round(delay / 1000)}s.`);
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      }
+    }
+    throw lastError;
   }
 
   async testConnection() {
@@ -139,7 +165,7 @@ export class MovideskService {
     query.set("$orderby", "lastUpdate desc");
     query.set("$top", String(sampleSize));
 
-    const response = await axios.get(`${this.url}/tickets?${query.toString()}`, { timeout: 120_000 });
+    const response = await this.getWithRetry(`${this.url}/tickets?${query.toString()}`, { timeout: 120_000 }, "pré-validação");
     if (!Array.isArray(response.data)) throw new Error("Resposta inesperada da API Movidesk.");
 
     const rows = response.data as Array<Record<string, unknown>>;
@@ -194,7 +220,27 @@ export class MovideskService {
         select: { id: true, status: true, totalRows: true, insertedRows: true, updatedRows: true, skippedRows: true, errorRows: true, startedAt: true, finishedAt: true, message: true },
       }),
     ]);
-    return { ...baselineState, completed, database: { tickets, linkedTasks }, lastImport };
+    const intervalMinutes = Number(process.env.MOVIDESK_SYNC_INTERVAL_MINUTES ?? 60);
+    const schedulerEnabledRaw = process.env.MOVIDESK_SYNC_SCHEDULER_ENABLED?.trim().toLowerCase();
+    const schedulerEnabled = Boolean(process.env.MOVIDESK_TOKEN?.trim()) && !["0","false","no","nao","não","off"].includes(schedulerEnabledRaw ?? "");
+    const safeInterval = Number.isSafeInteger(intervalMinutes) && intervalMinutes >= 15 && intervalMinutes <= 1440 ? intervalMinutes : 60;
+    const nextEstimatedAt = completed && lastImport?.finishedAt
+      ? new Date(lastImport.finishedAt.getTime() + safeInterval * 60_000).toISOString()
+      : null;
+    return {
+      ...baselineState,
+      completed,
+      database: { tickets, linkedTasks },
+      lastImport,
+      scheduler: {
+        enabled: schedulerEnabled,
+        intervalMinutes: safeInterval,
+        overlapMinutes: INCREMENTAL_OVERLAP_MINUTES,
+        pageSize: PAGE_SIZE,
+        phase: completed ? "INCREMENTAL" : baselineState.status === "RUNNING" ? "BASELINE_RUNNING" : "WAITING_BASELINE",
+        nextEstimatedAt,
+      },
+    };
   }
 
   async startBaseline(userId?: number | null) {
@@ -248,7 +294,7 @@ export class MovideskService {
 
   private async getPage(skip: number, since?: Date | null) {
     const filter = since ? `lastUpdate gt ${since.toISOString()}` : undefined;
-    const response = await axios.get(`${this.url}/tickets`, {
+    const response = await this.getWithRetry(`${this.url}/tickets`, {
       params: {
         token: this.token(),
         $select: TICKET_SELECT,
@@ -259,7 +305,7 @@ export class MovideskService {
         ...(filter ? { $filter: filter } : {}),
       },
       timeout: 120_000,
-    });
+    }, `página skip=${skip}`);
     if (!Array.isArray(response.data)) throw new Error("Resposta inesperada da API Movidesk.");
     return response.data as unknown[];
   }
