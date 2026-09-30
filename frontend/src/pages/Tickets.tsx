@@ -82,11 +82,14 @@ type Ticket = {
   contact: string | null;
 
   owner: string | null;
-  team: string | null;
+  ownerTeam?: string | null;
+  team?: string | null;
 
   category: string | null;
   cause: string | null;
+  causeDetail?: string | null;
   urgency: string | null;
+  origin?: string | null;
 
   status: string;
   baseStatus: string | null;
@@ -122,6 +125,7 @@ type Ticket = {
 
   lifetimeMinutes: number | null;
   stoppedMinutes: number | null;
+  stoppedWorkingMinutes?: number | null;
 
   taskNumber: number | null;
   taskStatus: string | null;
@@ -545,8 +549,8 @@ export function Tickets() {
       () =>
         uniqueValues(
           periodTickets,
-          "team"
-        ),
+          "ownerTeam"
+        ).concat(uniqueValues(periodTickets, "team")).filter((value, index, values) => values.indexOf(value) === index),
       [
         periodTickets,
       ]
@@ -620,7 +624,7 @@ export function Tickets() {
               normalizedSearch
             ) ||
             normalize(
-              ticket.team
+              (ticket.ownerTeam ?? ticket.team ?? null)
             ).includes(
               normalizedSearch
             ) ||
@@ -634,6 +638,8 @@ export function Tickets() {
             ).includes(
               normalizedSearch
             ) ||
+            normalize(ticket.causeDetail).includes(normalizedSearch) ||
+            normalize(ticket.origin).includes(normalizedSearch) ||
             normalize(
               ticket.service
             ).includes(
@@ -712,7 +718,7 @@ export function Tickets() {
           const matchesCategory = !category.length || Boolean(ticket.category && category.includes(ticket.category));
           const matchesOwner = !owner.length || Boolean(ticket.owner && owner.includes(ticket.owner));
           const matchesClient = !client.length || Boolean(ticket.client && client.includes(ticket.client));
-          const matchesTeam = !team.length || Boolean(ticket.team && team.includes(ticket.team));
+          const matchesTeam = !team.length || Boolean((ticket.ownerTeam ?? ticket.team ?? null) && team.includes((ticket.ownerTeam ?? ticket.team ?? null)));
           const matchesService = !service.length || Boolean(ticket.service && service.includes(ticket.service));
 
           const attention =
@@ -993,7 +999,7 @@ export function Tickets() {
         `Cliente: ${ticket.client ?? "—"}`,
         `Solicitante: ${ticket.contact ?? "—"}`,
         `Responsável: ${ticket.owner ?? "—"}`,
-        `Squad: ${ticket.team ?? "—"}`,
+        `Squad: ${(ticket.ownerTeam ?? ticket.team ?? null) ?? "—"}`,
         `Categoria: ${ticket.category ?? "—"}`,
         `Causa: ${ticket.cause ?? "—"}`,
         `Serviço: ${ticket.service ?? "—"}`,
@@ -2244,7 +2250,7 @@ export function Tickets() {
                               "nowrap",
                           }}
                         >
-                          {ticket.team ??
+                          {(ticket.ownerTeam ?? ticket.team ?? null) ??
                             "Sem squad"}
                         </Typography>
                       </TableCell>
@@ -2614,6 +2620,7 @@ export function Tickets() {
                     )
                   }
                 />
+                <TicketField label="Tempo parado útil" value={formatMinutes(selectedTicket.stoppedWorkingMinutes ?? null)} />
 
                 <TicketField
                   label="Responsável"
@@ -2749,6 +2756,8 @@ export function Tickets() {
                     selectedTicket.cause
                   }
                 />
+                <TicketField label="Detalhe da causa" value={selectedTicket.causeDetail} />
+                <TicketField label="Origem" value={selectedTicket.origin} />
 
                 <TicketField label="Serviço principal" value={selectedTicket.serviceFirstLevel ?? selectedTicket.department} />
                 <TicketField label="Serviço secundário" value={selectedTicket.serviceSecondLevel ?? selectedTicket.service} />
