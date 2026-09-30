@@ -41,3 +41,20 @@ docker compose --env-file deploy/.env -f deploy/docker-compose.example.yml up -d
 5. Em falha, restaurar a tag/digest anterior. Migrações destrutivas não são permitidas sem plano específico de rollback.
 
 O Desktop e a Web utilizam o mesmo contrato de API e o mesmo PostgreSQL. Na fase de transição, o Desktop pode continuar com backend embarcado; a etapa seguinte permitirá apontá-lo ao backend central por `TECHLEAD_HUB_SERVER_URL`.
+
+## Primeiro inicio com PostgreSQL existente
+
+Na raiz do repositorio, copie `deploy/.env.example` para `deploy/.env` e preencha `DATABASE_URL`, `JWT_SECRET` e `SYSTEM_CONFIG_KEY` com valores reais. Nao publique o arquivo preenchido. O host do PostgreSQL deve ser acessivel pelo container; `localhost` representa o proprio container. Codifique caracteres especiais das credenciais na URL.
+
+```bash
+cp deploy/.env.example deploy/.env
+docker compose --env-file deploy/.env -f deploy/docker-compose.example.yml config --quiet
+docker compose --env-file deploy/.env -f deploy/docker-compose.example.yml pull
+docker compose --env-file deploy/.env -f deploy/docker-compose.example.yml up -d
+docker compose --env-file deploy/.env -f deploy/docker-compose.example.yml ps
+docker compose --env-file deploy/.env -f deploy/docker-compose.example.yml logs --tail=100 techlead-hub
+curl http://localhost:8080/health
+curl http://localhost:8080/health/ready
+```
+
+O Compose valida variaveis obrigatorias antes de criar o container e publica a porta externa 8080 para a interna 3333. Se alterar `TECHLEAD_HUB_PORT`, ajuste as URLs de verificacao. `MIGRATE_ON_START=true` executa as migracoes na inicializacao; combine essa etapa com o time de banco. Mantenha `SYSTEM_CONFIG_KEY` estavel entre atualizacoes. Para uma nova imagem, atualize `TECHLEAD_HUB_IMAGE` e `APP_VERSION` no arquivo de ambiente apos sua publicacao.

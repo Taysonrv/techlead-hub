@@ -1,15 +1,15 @@
 services:
   techlead-hub:
-    image: ${TECHLEAD_HUB_IMAGE:-techlead-hub:1.0.0-rc.1}
+    image: ${TECHLEAD_HUB_IMAGE:-ghcr.io/taysonrv/techlead-hub:1.0.0-rc.17}
     container_name: techlead-hub
     restart: unless-stopped
     ports:
-      - "${TECHLEAD_HUB_PORT:-3333}:3333"
+      - "${TECHLEAD_HUB_PORT:-8080}:3333"
     environment:
-      DATABASE_URL: ${DATABASE_URL}
-      JWT_SECRET: ${JWT_SECRET}
-      SYSTEM_CONFIG_KEY: ${SYSTEM_CONFIG_KEY}
-      APP_VERSION: ${APP_VERSION:-1.0.0-rc.1}
+      DATABASE_URL: ${DATABASE_URL:?Defina DATABASE_URL em deploy/.env}
+      JWT_SECRET: ${JWT_SECRET:?Defina JWT_SECRET em deploy/.env}
+      SYSTEM_CONFIG_KEY: ${SYSTEM_CONFIG_KEY:?Defina SYSTEM_CONFIG_KEY em deploy/.env}
+      APP_VERSION: ${APP_VERSION:-1.0.0-rc.17}
       APP_RUNTIME: web
       HOST: 0.0.0.0
       PORT: 3333
