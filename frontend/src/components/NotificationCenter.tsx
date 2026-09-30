@@ -109,6 +109,7 @@ export function NotificationCenter() {
   const [showPreferences, setShowPreferences] = useState(false);
   const [localPreferences, setLocalPreferences] = useState<LocalNotificationPreferences>(() => getLocalNotificationPreferences());
   const alertedKeys = useRef(new Set<string>());
+  const loadingRef = useRef(false);
 
   const storageKey = `techlead-hub:notifications:read:${user?.id ?? "anonymous"}`;
 
@@ -162,7 +163,8 @@ export function NotificationCenter() {
   }, [preferences.appVersion]);
 
   const load = useCallback(async () => {
-    if (!user) return;
+    if (!user || loadingRef.current) return;
+    loadingRef.current = true;
     try {
       setLoading(true);
       const response = await api.get<NotificationResponse>("/notifications");
@@ -175,13 +177,14 @@ export function NotificationCenter() {
     } catch (error) {
       console.warn("[notifications] Não foi possível carregar:", error);
     } finally {
+      loadingRef.current = false;
       setLoading(false);
     }
   }, [user]);
 
   useEffect(() => {
     void load();
-    const timer = window.setInterval(() => void load(), 15_000);
+    const timer = window.setInterval(() => void load(), 60_000);
     return () => window.clearInterval(timer);
   }, [load]);
 
