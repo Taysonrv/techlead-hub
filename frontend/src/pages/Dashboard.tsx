@@ -43,6 +43,7 @@ import { useColorMode } from "../context/ColorModeContext";
 import { useNavigate } from "react-router-dom";
 
 import { api } from "../services/api";
+import { getTicketSnapshot } from "../services/ticketSnapshot";
 import { PeriodFilter } from "../components/PeriodFilter";
 import { PageHeader } from "../components/PageHeader";
 import { detailDrawerPaperSx } from "../theme/layoutTokens";
@@ -226,8 +227,8 @@ export function Dashboard() {
       try {
         setLoading(true);
         setError(null);
-        const response = await api.get<any>("/dashboard/tickets", { signal: controller.signal });
-        if (!controller.signal.aborted) setTickets(response.data);
+        const snapshot = await getTicketSnapshot<Ticket>();
+        if (!controller.signal.aborted) setTickets(snapshot);
       } catch (err) {
         if (controller.signal.aborted) return;
         console.error("Erro ao carregar dashboard:", err);
