@@ -632,14 +632,14 @@ export function Import() {
           CABEÇALHO
       ===================================================== */}
 
-      <PageHeader eyebrow="Gestão" title="Importar e Sincronizar Dados" description="Importe planilhas ou payloads JSON do Movidesk e acompanhe a sincronização automática do Azure DevOps." />
+      <PageHeader eyebrow="Gestão" title="Dados e Sincronizações" description="Central operacional das integrações Movidesk e Azure DevOps, com cargas automáticas, importações manuais e histórico de processamento." />
 
       {syncHealth && (
         <Card elevation={0} sx={{ mb: 3, border: "1px solid", borderColor: syncHealth.health === "critical" ? "error.main" : syncHealth.health === "attention" ? "warning.main" : "divider", borderRadius: 2.5 }}>
           <CardContent sx={{ p: { xs: 2, md: 2.5 }, "&:last-child": { pb: { xs: 2, md: 2.5 } } }}>
             <Stack direction={{ xs: "column", md: "row" }} spacing={2} sx={{ justifyContent: "space-between", alignItems: { md: "center" } }}>
               <Box>
-                <Typography sx={{ fontWeight: 850 }}>Saúde das integrações</Typography>
+                <Typography sx={{ fontWeight: 800, fontSize: "1rem", letterSpacing: "-0.01em" }}>Visão geral das integrações</Typography>
                 <Typography variant="body2" color="text.secondary">Leitura consolidada de disponibilidade e atualização dos dados operacionais.</Typography>
               </Box>
               <Chip
@@ -657,33 +657,18 @@ export function Import() {
         </Card>
       )}
 
-      <Card elevation={0} sx={{ mb: 2, border: "1px solid", borderColor: "divider", borderRadius: 2.25 }}>
-        <CardContent sx={{ py: 1.25, "&:last-child": { pb: 1.25 } }}>
-          <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ alignItems: { sm: "center" }, justifyContent: "space-between" }}>
-            <Box>
-              <Typography sx={{ fontWeight: 800 }}>Histórico consolidado</Typography>
-              <Typography variant="caption" color="text.secondary">Últimas execuções Movidesk e Azure. Abra somente quando precisar auditar sincronizações.</Typography>
-            </Box>
-            <Button size="small" variant="outlined" onClick={() => setHistoryExpanded((value) => !value)}>{historyExpanded ? "Ocultar histórico" : "Ver histórico"}</Button>
-          </Stack>
-          <Collapse in={historyExpanded} unmountOnExit><Box sx={{ mt: 1.25 }}><SyncHistory /></Box></Collapse>
-        </CardContent>
-      </Card>
-
-      <EmailRecoveryConfiguration />
-
       <SectionHeader
         title="Movidesk"
         description="Carga inicial completa e acompanhamento da sincronização incremental automática dos tickets."
       />
 
-      <Card elevation={0} sx={{ mb: 3, border: "1px solid", borderColor: "divider", borderRadius: 2.5 }}>
+      <Card elevation={0} sx={{ mb: 3, border: "1px solid", borderColor: "divider", borderRadius: 3, overflow: "hidden", bgcolor: "background.paper" }}>
         {movideskStatusLoading && !movideskStatus && <LinearProgress />}
         <CardContent sx={{ p: { xs: 2, md: 2.5 } }}>
           <Stack direction={{ xs: "column", md: "row" }} spacing={2} sx={{ justifyContent: "space-between", alignItems: { md: "center" } }}>
             <Box>
               <Stack direction="row" spacing={1} useFlexGap sx={{ alignItems: "center", flexWrap: "wrap" }}>
-                <Typography sx={{ fontWeight: 800, fontSize: "1.05rem" }}>Sincronização Movidesk</Typography>
+                <Typography sx={{ fontWeight: 750, fontSize: "1rem", letterSpacing: "-0.01em" }}>API Movidesk</Typography>
                 {movideskStatus && <Chip size="small" color={movideskStatus.scheduler.enabled ? "success" : "default"} label={movideskStatus.scheduler.enabled ? "Scheduler ativo" : "Scheduler desativado"} />}
                 {movideskStatus?.status === "RUNNING" && <Chip size="small" color="info" label="FULL em execução" />}
               </Stack>
@@ -796,9 +781,9 @@ export function Import() {
                 <Typography
                   sx={{
                     fontWeight:
-                      800,
+                      700,
                     fontSize:
-                      "1.05rem",
+                      "1rem",
                   }}
                 >
                   Sincronização automática
@@ -1250,8 +1235,8 @@ export function Import() {
       ===================================================== */}
 
       <SectionHeader
-        title="Movidesk"
-        description="Importação manual de planilhas e payloads JSON utilizados pela base do TechLead Hub."
+        title="Importação manual Movidesk"
+        description="Canal complementar para cargas controladas por Excel ou JSON. A sincronização via API permanece como fonte automática principal."
       />
 
       <Alert
@@ -1263,9 +1248,7 @@ export function Import() {
             2,
         }}
       >
-        A importação cria tickets novos e atualiza os existentes pelo número
-        do atendimento. O JSON preserva o payload completo e aproveita
-        históricos, SLA, vínculos, causa, serviços e campos de Tarefa.
+        Use a importação manual para cargas pontuais ou conferências. Tickets existentes são atualizados pelo número do atendimento e novos registros são incluídos sem substituir a rotina automática da API.
       </Alert>
 
       <Card
@@ -1335,7 +1318,7 @@ export function Import() {
             }}
             sx={{
               minHeight:
-                220,
+                168,
               display:
                 "flex",
               alignItems:
@@ -1345,7 +1328,7 @@ export function Import() {
               textAlign:
                 "center",
               border:
-                "2px dashed",
+                "1px dashed",
               borderColor:
                 dragging
                   ? "primary.main"
@@ -1607,6 +1590,19 @@ export function Import() {
                   : "Confirmar importação"}
             </Button>
           </Stack>
+        </CardContent>
+      </Card>
+
+      <Card elevation={0} sx={{ mt: 3, mb: 2, border: "1px solid", borderColor: "divider", borderRadius: 3, bgcolor: "background.paper" }}>
+        <CardContent sx={{ p: 2, "&:last-child": { pb: 2 } }}>
+          <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5} sx={{ alignItems: { sm: "center" }, justifyContent: "space-between" }}>
+            <Box>
+              <Typography sx={{ fontWeight: 750, fontSize: ".95rem" }}>Histórico de sincronizações</Typography>
+              <Typography variant="body2" color="text.secondary">Auditoria consolidada das execuções Movidesk e Azure DevOps.</Typography>
+            </Box>
+            <Button size="small" variant="outlined" onClick={() => setHistoryExpanded((value) => !value)}>{historyExpanded ? "Ocultar histórico" : "Ver histórico"}</Button>
+          </Stack>
+          <Collapse in={historyExpanded} unmountOnExit><Box sx={{ mt: 1.5 }}><SyncHistory /></Box></Collapse>
         </CardContent>
       </Card>
 
@@ -1885,6 +1881,11 @@ export function Import() {
           )}
         </>
       )}
+
+      <Box sx={{ mt: 3 }}>
+        <SectionHeader title="Configuração auxiliar" description="Recursos administrativos que não fazem parte do fluxo de sincronização de dados." />
+        <EmailRecoveryConfiguration />
+      </Box>
     </>
   );
 }
@@ -1911,18 +1912,13 @@ function SectionHeader({
   description: string;
 }) {
   return (
-    <Box
-      sx={{
-        mb:
-          1.25,
-      }}
-    >
+    <Box sx={{ mt: 3.5, mb: 1.5 }}>
       <Typography
         sx={{
-          fontWeight:
-            800,
-          fontSize:
-            "1.15rem",
+          fontWeight: 750,
+          fontSize: "1.05rem",
+          letterSpacing: "-0.015em",
+          lineHeight: 1.25,
         }}
       >
         {title}
@@ -2003,19 +1999,22 @@ function InfoCard({
   return (
     <Box
       sx={{
-        p:
-          1.5,
-        border:
-          "1px solid",
-        borderColor:
-          "divider",
-        borderRadius:
-          2,
+        p: 1.75,
+        minHeight: 78,
+        height: "100%",
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "center",
+        border: "1px solid",
+        borderColor: "divider",
+        borderRadius: 2.5,
+        bgcolor: "background.paper",
       }}
     >
       <Typography
         variant="caption"
         color="text.secondary"
+        sx={{ fontWeight: 600, letterSpacing: ".01em" }}
       >
         {label}
       </Typography>
@@ -2024,9 +2023,13 @@ function InfoCard({
         variant="body2"
         sx={{
           fontWeight:
-            700,
+            750,
           mt:
-            0.25,
+            0.4,
+          fontSize:
+            ".95rem",
+          letterSpacing:
+            "-0.01em",
         }}
       >
         {value}
@@ -2038,7 +2041,7 @@ function InfoCard({
 function ResultCard({
   title,
   value,
-  severity = "default",
+  severity: _severity = "default",
 }: {
   title: string;
   value: number;
@@ -2048,17 +2051,7 @@ function ResultCard({
     | "warning"
     | "error";
 }) {
-  const borderColor =
-    severity ===
-    "success"
-      ? "success.main"
-      : severity ===
-        "warning"
-      ? "warning.main"
-      : severity ===
-        "error"
-      ? "error.main"
-      : "divider";
+  const borderColor = "divider";
 
   return (
     <Card
@@ -2088,7 +2081,7 @@ function ResultCard({
           color="text.secondary"
           sx={{
             fontWeight:
-              600,
+              650,
           }}
         >
           {title}
@@ -2097,11 +2090,11 @@ function ResultCard({
         <Typography
           sx={{
             fontWeight:
-              800,
+              750,
             mt:
               0.5,
             fontSize:
-              "1.9rem",
+              "1.55rem",
             lineHeight:
               1.1,
           }}
