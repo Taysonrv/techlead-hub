@@ -91,11 +91,14 @@ type Ticket = {
   contact: string | null;
 
   owner: string | null;
-  team: string | null;
+  ownerTeam?: string | null;
+  team?: string | null;
 
   category: string | null;
   cause: string | null;
+  causeDetail?: string | null;
   urgency: string | null;
+  origin?: string | null;
 
   status: string;
   baseStatus: string | null;
@@ -104,6 +107,10 @@ type Ticket = {
 
   service: string | null;
   department: string | null;
+  serviceFirstLevel?: string | null;
+  serviceSecondLevel?: string | null;
+  serviceThirdLevel?: string | null;
+  businessArea?: string | null;
 
   createdDate: string;
   dueDate: string | null;
