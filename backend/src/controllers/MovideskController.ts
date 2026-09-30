@@ -17,6 +17,31 @@ export class MovideskController {
 
     }
 
+    async startBaseline(req: AuthenticatedRequest, res: Response) {
+        try {
+            const result = await new MovideskService().startBaseline(req.auth?.userId ?? null);
+            return res.status(result.accepted ? 202 : 200).json(result);
+        } catch (error) {
+            return res.status(500).json({ message: error instanceof Error ? error.message : "Não foi possível iniciar o baseline Movidesk." });
+        }
+    }
+
+    async baselineStatus(_req: AuthenticatedRequest, res: Response) {
+        try {
+            return res.json(await new MovideskService().baselineStatus());
+        } catch (error) {
+            return res.status(500).json({ message: error instanceof Error ? error.message : "Não foi possível consultar o baseline Movidesk." });
+        }
+    }
+
+    async coverage(_req: AuthenticatedRequest, res: Response) {
+        try {
+            return res.json(await new MovideskService().dataCoverage());
+        } catch (error) {
+            return res.status(500).json({ message: error instanceof Error ? error.message : "Não foi possível auditar os dados Movidesk." });
+        }
+    }
+
     async fullSync(req: AuthenticatedRequest, res: Response) {
         try {
             return res.json(await new MovideskService().syncTickets(req.auth?.userId ?? null, true));
