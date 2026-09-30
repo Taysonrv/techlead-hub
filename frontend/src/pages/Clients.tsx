@@ -89,11 +89,15 @@ type Ticket = {
   contact: string | null;
 
   owner: string | null;
-  team: string | null;
+  ownerTeam?: string | null;
+  team?: string | null;
 
   category: string | null;
   cause: string | null;
+  causeDetail?: string | null;
   urgency: string | null;
+  origin?: number | null;
+  createdBy?: string | null;
 
   status: string;
   baseStatus: string | null;
@@ -102,6 +106,10 @@ type Ticket = {
 
   service: string | null;
   department: string | null;
+  serviceFirstLevel?: string | null;
+  serviceSecondLevel?: string | null;
+  serviceThirdLevel?: string | null;
+  businessArea?: string | null;
 
   createdDate: string;
   dueDate: string | null;
@@ -1308,7 +1316,7 @@ export function Clients() {
       `Cliente: ${ticket.client ?? "—"}`,
       `Solicitante: ${ticket.contact ?? "—"}`,
       `Responsável: ${ticket.owner ?? "—"}`,
-      `Squad: ${ticket.team ?? "—"}`,
+      `Squad: ${(ticket.ownerTeam ?? ticket.team) ?? "—"}`,
       `Categoria: ${ticket.category ?? "—"}`,
       `Causa: ${ticket.cause ?? "—"}`,
       `Serviço: ${ticket.service ?? "—"}`,
@@ -4393,7 +4401,7 @@ function executiveClassificationText(ticket: Ticket) {
     ticket.category,
     ticket.service,
     ticket.department,
-    ticket.team,
+    (ticket.ownerTeam ?? ticket.team),
     ticket.cause,
   ].filter(Boolean).join(" "));
 }
