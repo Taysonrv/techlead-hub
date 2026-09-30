@@ -25,6 +25,17 @@ export class MovideskController {
         }
     }
 
+    async preview(req: AuthenticatedRequest, res: Response) {
+        try {
+            const requested = Number(req.query.limit ?? 25);
+            return res.json(await new MovideskService().previewTickets(requested));
+        } catch (error) {
+            const message = error instanceof Error ? error.message : "Não foi possível pré-validar os dados do Movidesk.";
+            console.error("[movidesk-preview] Falha na pré-validação:", message);
+            return res.status(500).json({ message });
+        }
+    }
+
     async test(_req: AuthenticatedRequest, res: Response) {
         try {
             return res.json(await new MovideskService().testConnection());
