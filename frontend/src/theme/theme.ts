@@ -100,8 +100,14 @@ export function createAppTheme(mode: PaletteMode = "light") {
       fontFamily: ["Inter", "Segoe UI", "Roboto", "Arial", "sans-serif"].join(","),
       h1: { fontWeight: 800 }, h2: { fontWeight: 800 },
       h3: { fontWeight: 800, fontSize: "2.1rem", lineHeight: 1.12, letterSpacing: "-0.025em" },
-      h4: { fontWeight: 800 }, h5: { fontWeight: 800 }, h6: { fontWeight: 750 },
-      button: { fontWeight: 700, textTransform: "none" },
+      h4: { fontWeight: 800, letterSpacing: "-0.02em" },
+      h5: { fontWeight: 780, letterSpacing: "-0.018em" },
+      h6: { fontWeight: 750, letterSpacing: "-0.012em" },
+      subtitle1: { fontWeight: 700, letterSpacing: "-0.008em" },
+      body1: { lineHeight: 1.55 },
+      body2: { lineHeight: 1.5 },
+      caption: { lineHeight: 1.4 },
+      button: { fontWeight: 700, textTransform: "none", letterSpacing: ".002em" },
     },
     components: {
       MuiCssBaseline: {
@@ -117,6 +123,8 @@ export function createAppTheme(mode: PaletteMode = "light") {
             color: text,
           },
           "*": { boxSizing: "border-box" },
+          "*:focus-visible": { outlineColor: aliareColors.green, outlineOffset: 2 },
+          "button, a, [role='button']": { WebkitTapHighlightColor: "transparent" },
           "::selection": { backgroundColor: dark ? "rgba(24,199,122,.32)" : aliareColors.greenLight, color: dark ? "#FFFFFF" : aliareColors.black },
         },
       },
@@ -126,12 +134,12 @@ export function createAppTheme(mode: PaletteMode = "light") {
             position: "relative",
             border: `1px solid ${border}`,
             boxShadow: dark ? "0 16px 42px rgba(0,0,0,.18), inset 0 1px rgba(255,255,255,.025)" : "0 8px 24px rgba(15,23,42,.055)",
-            borderRadius: 14,
+            borderRadius: 16,
             overflow: "hidden",
             backdropFilter: dark ? "blur(16px)" : undefined,
             background: dark ? "linear-gradient(145deg, rgba(14,35,56,.96), rgba(8,24,41,.985))" : "linear-gradient(180deg,#FFFFFF,#FBFCFD)",
             backgroundColor: paper,
-            transition: "border-color .18s ease, box-shadow .18s ease, transform .18s ease",
+            transition: "border-color .18s ease, box-shadow .18s ease, transform .18s ease, background-color .18s ease",
             "&::after": dark ? { content: '""', position: "absolute", inset: "0 0 auto", height: 1, background: "linear-gradient(90deg, rgba(24,199,122,.30), rgba(47,141,255,.16), transparent 72%)", pointerEvents: "none" } : undefined,
             "&:hover": dark ? {
               borderColor: "rgba(74,178,211,.28)",
@@ -298,7 +306,9 @@ export function createAppTheme(mode: PaletteMode = "light") {
         styleOverrides: {
           root: {
             borderRadius: 9,
-            fontWeight: 750,
+            minHeight: 26,
+            fontWeight: 700,
+            fontSize: ".75rem",
             ...(dark && {
               borderColor: "rgba(124,172,218,.24)",
               boxShadow: "inset 0 1px rgba(255,255,255,.025)",
@@ -310,7 +320,7 @@ export function createAppTheme(mode: PaletteMode = "light") {
         styleOverrides: {
           root: {
             background: dark ? "linear-gradient(180deg,#12304A,#0E263C)" : aliareColors.graphite,
-            "& .MuiTableCell-head": { color: "#FFFFFF", fontWeight: 800, borderBottomColor: dark ? "rgba(116,166,216,.18)" : aliareColors.graphite },
+            "& .MuiTableCell-head": { color: "#FFFFFF", fontWeight: 750, fontSize: ".76rem", letterSpacing: ".035em", textTransform: "uppercase", borderBottomColor: dark ? "rgba(116,166,216,.18)" : aliareColors.graphite },
           },
         },
       },
@@ -331,8 +341,9 @@ export function createAppTheme(mode: PaletteMode = "light") {
         styleOverrides: {
           root: {
             borderBottomColor: border,
-            paddingTop: 13,
-            paddingBottom: 13,
+            paddingTop: 12,
+            paddingBottom: 12,
+            fontSize: ".86rem",
             ...(dark && { color: "#DCE9F7" }),
           },
         },
@@ -359,13 +370,19 @@ export function createAppTheme(mode: PaletteMode = "light") {
           root: {
             borderRadius: 14,
             border: `1px solid ${border}`,
+            alignItems: "center",
             ...(dark && { backdropFilter: "blur(12px)", boxShadow: "inset 0 1px rgba(255,255,255,.025)" }),
           },
         },
       },
       MuiDivider: {
         styleOverrides: {
-          root: { borderColor: border },
+          root: { borderColor: border, opacity: dark ? .9 : .8 },
+        },
+      },
+      MuiFormControlLabel: {
+        styleOverrides: {
+          label: { fontSize: ".86rem", lineHeight: 1.45, color: textSecondary },
         },
       },
       MuiTablePagination: {
