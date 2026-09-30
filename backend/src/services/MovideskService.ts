@@ -111,7 +111,7 @@ export class MovideskService {
       await new Promise((resolve) => setTimeout(resolve, REQUEST_INTERVAL_MS));
     }
 
-    if (mode === "FULL") {
+    if (mode === "FULL" && summary.errors === 0) {
       await prisma.auditLog.create({
         data: {
           userId: userId ?? null,
