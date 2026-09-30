@@ -23,7 +23,7 @@ function normalizeMovideskToken(raw: string) {
     (value.startsWith('"') && value.endsWith('"')) ||
     (value.startsWith("'") && value.endsWith("'"))
   ) value = value.slice(1, -1).trim();
-  try { return decodeURIComponent(value); } catch { return value; }
+  return value;
 }
 
 class SystemConfigurationService {
