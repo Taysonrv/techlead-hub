@@ -112,11 +112,21 @@ export class GlobalController {
     const raw = typeof req.query.q === "string" ? req.query.q.trim().slice(0, 240) : "";
     if (raw.length < 2) return res.status(400).json({ message: "Informe um assunto para investigação." });
 
-    const terms = [...new Set(normalizeSearch(raw).split(/[^a-z0-9]+/).filter((term) => term.length >= 3))].slice(0, 8);
+    const stopWords=new Set(["com","sem","para","por","uma","uns","das","dos","que","esta","estao","ficou","fica","quando","onde","como","de","da","do","em","no","na","nos","nas","e","ou","a","o"]);
+    const normalizedRaw=normalizeSearch(raw).replace(/[^a-z0-9]+/g," ").trim();
+    const allWords=normalizedRaw.split(/\s+/).filter(Boolean);
+    const concepts=[...new Set(allWords.filter((term)=>term.length>=3&&!stopWords.has(term)))].slice(0,10);
+    const terms=concepts.length?concepts:[...new Set(allWords.filter((term)=>term.length>=2))].slice(0,8);
+    const phrases=[normalizedRaw,...terms.slice(0,-1).map((term,index)=>`${term} ${terms[index+1]}`)].filter((value,index,list)=>value.length>=5&&list.indexOf(value)===index);
     const scoreText = (values: Array<string | null | undefined>) => {
-      const haystack = normalizeSearch(values.filter(Boolean).join(" "));
+      const haystack = normalizeSearch(values.filter(Boolean).join(" ")).replace(/[^a-z0-9]+/g," ");
       const matched = terms.filter((term) => haystack.includes(term));
-      return { matched, score: Math.round((matched.length / Math.max(terms.length, 1)) * 100) };
+      const matchedPhrases=phrases.filter((phrase)=>haystack.includes(phrase));
+      const coverage=matched.length/Math.max(terms.length,1);
+      const phraseBonus=matchedPhrases.length?Math.min(25,10+(matchedPhrases.length*5)):0;
+      const allConcepts=terms.length>1&&matched.length===terms.length;
+      const score=Math.min(100,Math.round((coverage*75)+phraseBonus+(allConcepts?10:0)));
+      return { matched, matchedPhrases, allConcepts, score };
     };
 
     const ticketOr: any[] = terms.flatMap((term) => [
@@ -125,6 +135,7 @@ export class GlobalController {
       { category: { contains: term, mode: "insensitive" as const } },
       { cause: { contains: term, mode: "insensitive" as const } },
       { causeDetail: { contains: term, mode: "insensitive" as const } },
+      { justification: { contains: term, mode: "insensitive" as const } },
       { service: { contains: term, mode: "insensitive" as const } },
       { serviceFirstLevel: { contains: term, mode: "insensitive" as const } },
       { serviceSecondLevel: { contains: term, mode: "insensitive" as const } },
@@ -145,7 +156,7 @@ export class GlobalController {
     const [ticketRows, workItemRows, knownRows] = await Promise.all([
       prisma.ticket.findMany({
         where: { isDeleted: false, OR: ticketOr },
-        select: { movideskId:true,subject:true,client:true,status:true,category:true,cause:true,causeDetail:true,service:true,serviceFirstLevel:true,serviceSecondLevel:true,serviceThirdLevel:true,taskNumber:true,taskType:true,deliveredVersion:true,registeredVersion:true,createdDate:true,lastUpdate:true },
+        select: { movideskId:true,subject:true,client:true,status:true,category:true,cause:true,causeDetail:true,justification:true,service:true,serviceFirstLevel:true,serviceSecondLevel:true,serviceThirdLevel:true,taskNumber:true,taskType:true,deliveredVersion:true,registeredVersion:true,createdDate:true,lastUpdate:true },
         orderBy: { lastUpdate: "desc" }, take: 120,
       }),
       prisma.azureWorkItem.findMany({
@@ -170,7 +181,7 @@ export class GlobalController {
     ]);
 
     const tickets = ticketRows.map((item) => {
-      const match=scoreText([item.subject,item.client,item.category,item.cause,item.causeDetail,item.service,item.serviceFirstLevel,item.serviceSecondLevel,item.serviceThirdLevel]);
+      const match=scoreText([item.subject,item.client,item.category,item.cause,item.causeDetail,item.justification,item.service,item.serviceFirstLevel,item.serviceSecondLevel,item.serviceThirdLevel]);
       return {...item,score:match.score,matchedTerms:match.matched};
     }).sort((a,b)=>b.score-a.score||b.createdDate.getTime()-a.createdDate.getTime()).slice(0,24);
     const workItems = workItemRows.map((item) => {
@@ -207,8 +218,18 @@ export class GlobalController {
     const leadingVersion=topVersions[0];
     if(leadingVersion && leadingVersion.total>=2)signals.push(`A versão ${leadingVersion.version} aparece em ${leadingVersion.total} evidências relacionadas.`);
 
+    const context={
+      original:raw,
+      concepts:terms,
+      phrases,
+      interpretation:terms.length>1
+        ? `Investigação contextual combinando ${terms.map((term)=>`“${term}”`).join(" + ")}; resultados que preservam mais conceitos e a frase recebem maior relevância.`
+        : `Investigação pelo conceito “${terms[0]??raw}”, cruzando as fontes disponíveis.`,
+      strategy:"contextual",
+    };
+
     return res.json({
-      query:raw,terms,
+      query:raw,terms,context,
       summary:{tickets:tickets.length,workItems:workItems.length,knownProblems:knownProblems.length,evidence:evidence.length,rules:ruleItems.length,clients:clients.size,strongRecurrence:recurrence},
       tickets,workItems,knownProblems,evidence,ruleItems:ruleItems.slice(0,12),topVersions,signals,
     });
