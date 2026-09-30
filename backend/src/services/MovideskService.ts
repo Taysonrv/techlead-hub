@@ -63,16 +63,30 @@ export class MovideskService {
   }
 
   async testConnection() {
-    try {
-      const token = this.token();
+    const token = this.token();
+    const request = async (mode: "BEARER" | "QUERY") => {
       const query = new URLSearchParams();
-      query.set("token", token);
       query.set("$select", "id,lastUpdate");
       query.set("$top", "1");
-      const response = await axios.get(`${this.url}/tickets?${query.toString()}`, {
+      if (mode === "QUERY") query.set("token", token);
+      return axios.get(`${this.url}/tickets?${query.toString()}`, {
+        headers: mode === "BEARER" ? { Authorization: `Bearer ${token}` } : undefined,
         timeout: 30_000,
       });
-      return { ok: true, endpoint: this.url, sampleCount: Array.isArray(response.data) ? response.data.length : 0 };
+    };
+
+    let bearerError: unknown = null;
+    try {
+      const response = await request("BEARER");
+      return { ok: true, endpoint: this.url, authentication: "BEARER", sampleCount: Array.isArray(response.data) ? response.data.length : 0 };
+    } catch (error) {
+      bearerError = error;
+      if (!axios.isAxiosError(error) || error.response?.status !== 401) throw error;
+    }
+
+    try {
+      const response = await request("QUERY");
+      return { ok: true, endpoint: this.url, authentication: "QUERY", sampleCount: Array.isArray(response.data) ? response.data.length : 0 };
     } catch (error) {
       if (axios.isAxiosError(error)) {
         const status = error.response?.status;
@@ -83,8 +97,8 @@ export class MovideskService {
             : remote && typeof remote === "object"
               ? JSON.stringify(remote).slice(0, 500)
               : error.message;
-        if (status === 401) {
-          throw new Error("Movidesk rejeitou a credencial (HTTP 401). Revise o token salvo em Configurações > Movidesk; o endpoint respondeu normalmente, mas não autorizou a credencial enviada.");
+        if (status === 401 && axios.isAxiosError(bearerError) && bearerError.response?.status === 401) {
+          throw new Error("Movidesk rejeitou a credencial nos dois formatos suportados (Bearer e parâmetro token), ambos com HTTP 401. Como a mesma URL funciona no navegador, valide se o valor salvo corresponde exatamente ao token usado no link funcional.");
         }
         throw new Error(`Movidesk respondeu${status ? ` HTTP ${status}` : ""}: ${remoteMessage}`);
       }
