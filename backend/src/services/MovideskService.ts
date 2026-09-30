@@ -111,6 +111,60 @@ export class MovideskService {
     }
   }
 
+  async previewTickets(limit = 25) {
+    const sampleSize = Math.min(Math.max(Math.trunc(limit) || 25, 1), 25);
+    const token = this.token();
+    const query = new URLSearchParams();
+    query.set("token", token);
+    query.set("$select", TICKET_SELECT);
+    query.set("$expand", TICKET_EXPAND);
+    query.set("$orderby", "lastUpdate desc");
+    query.set("$top", String(sampleSize));
+
+    const response = await axios.get(`${this.url}/tickets?${query.toString()}`, { timeout: 120_000 });
+    if (!Array.isArray(response.data)) throw new Error("Resposta inesperada da API Movidesk.");
+
+    const rows = response.data as Array<Record<string, unknown>>;
+    const required = ["id", "subject", "createdDate"] as const;
+    const observed = [
+      "id", "subject", "createdDate", "lastUpdate", "owner", "clients", "category",
+      "serviceFirstLevel", "serviceSecondLevel", "serviceThirdLevel", "status",
+      "slaAgreement", "slaSolutionDate", "slaResponseDate", "customFieldValues",
+    ] as const;
+    const coverage = Object.fromEntries(observed.map((field) => [
+      field,
+      rows.filter((row) => {
+        const value = row[field];
+        return value !== null && value !== undefined && value !== "" && (!Array.isArray(value) || value.length > 0);
+      }).length,
+    ]));
+    const issues: Array<{ row: number; id: unknown; fields: string[] }> = [];
+    rows.forEach((row, index) => {
+      const missing = required.filter((field) => row[field] === null || row[field] === undefined || row[field] === "");
+      if (missing.length) issues.push({ row: index + 1, id: row.id ?? null, fields: [...missing] });
+    });
+
+    return {
+      readOnly: true,
+      sampleSize: rows.length,
+      requested: sampleSize,
+      validForImport: issues.length === 0,
+      requiredFields: required,
+      coverage,
+      issues,
+      examples: rows.slice(0, 5).map((row) => ({
+        id: row.id ?? null,
+        subject: row.subject ?? null,
+        createdDate: row.createdDate ?? null,
+        lastUpdate: row.lastUpdate ?? null,
+        status: row.status ?? null,
+        ownerTeam: row.ownerTeam ?? null,
+        serviceFirstLevel: row.serviceFirstLevel ?? null,
+        serviceSecondLevel: row.serviceSecondLevel ?? null,
+      })),
+    };
+  }
+
   async hasCompletedBaseline() {
     const baseline = await prisma.auditLog.findFirst({
       where: { action: "MOVIDESK_BASELINE_COMPLETED" },
