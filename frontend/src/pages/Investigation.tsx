@@ -20,7 +20,69 @@ return <Box><PageHeader eyebrow="INTELIGÊNCIA" title="Central de Investigação
 {(topicView==="all"||topicView==="azure")&&<Card variant="outlined" sx={{borderTop:"2px solid",borderTopColor:"info.main"}}><CardContent><Stack direction="row" sx={{alignItems:"center",mb:1}}><Typography sx={{fontWeight:850}}>Desenvolvimento relacionado</Typography><SectionInfo title="Correções, Evoluções e APOIOs do Azure relacionados aos conceitos investigados, incluindo versão quando disponível."/></Stack>{topicData.workItems.slice(0,12).map(x=><Box key={x.id} onClick={()=>{const path=`${x.workItemType.toLowerCase().includes("apoio")?"/apoios":x.workItemType.toLowerCase().includes("evolu")?"/evolucoes":"/correcoes"}?task=${x.id}`;setDetail({kind:"azure",title:`#${x.id} · ${x.title}`,subtitle:x.workItemType,path,score:x.score,meta:[x.state,x.client??"",x.deliveredVersion??x.registeredVersion??""].filter(Boolean)})}} sx={{p:1,borderRadius:2,cursor:"pointer","&:hover":{bgcolor:"action.hover"}}}><Stack direction="row" spacing={1} sx={{alignItems:"center"}}><Chip size="small" label={`${x.score}%`}/><Typography sx={{fontWeight:750,flex:1}}>#{x.id} · {x.title}</Typography></Stack><Typography variant="caption" color="text.secondary">{[x.workItemType,x.state,x.client,x.deliveredVersion??x.registeredVersion].filter(Boolean).join(" · ")}</Typography></Box>)}</CardContent></Card>}
 </Box>}
 {(topicView==="all"||topicView==="knowledge")&&topicData.knownProblems.length>0&&<Card variant="outlined"><CardContent><Stack direction="row" spacing={1} sx={{alignItems:"center",mb:1}}><Typography sx={{fontWeight:850}}>Soluções e Problemas Conhecidos</Typography><Button size="small" onClick={()=>navigate(`/problemas-conhecidos?q=${encodeURIComponent(topicData.query)}`)}>Abrir quadro</Button></Stack><Box sx={{display:"grid",gridTemplateColumns:{xs:"1fr",lg:"repeat(2,1fr)"},gap:1}}>{topicData.knownProblems.slice(0,8).map(x=><Box key={x.id} sx={{p:1.2,border:"1px solid",borderColor:"divider",borderRadius:2}}><Stack direction="row" spacing={.7} sx={{alignItems:"center",mb:.5}}><Chip size="small" color={x.score>=60?"success":"default"} label={`${x.score}%`}/><Chip size="small" variant="outlined" label={x.status}/><Typography sx={{fontWeight:800}}>{x.title}</Typography></Stack><Typography variant="body2" color="text.secondary">{x.symptom}</Typography><Typography variant="body2" sx={{mt:.7,fontWeight:700}}>{x.technicalSolution||x.workaround||x.solution}</Typography></Box>)}</Box></CardContent></Card>}
-{(topicView==="all"||topicView==="technical")&&<Stack direction={{xs:"column",lg:"row"}} spacing={1.5}><Card variant="outlined" sx={{flex:1,borderTop:"2px solid",borderTopColor:"success.main"}}><CardContent><Stack direction="row" sx={{alignItems:"center",mb:1}}><Typography sx={{fontWeight:850}}>Regra × evidência</Typography><SectionInfo title="Cruza o contexto pesquisado com o Mapa SIMER e as Regras do Sistema disponíveis. Use como trilha técnica para validação."/></Stack>{topicData.evidence.length?topicData.evidence.slice(0,10).map(x=><Box key={x.id} onClick={()=>navigate(`/mapa-simer?focusId=${x.id}`)} sx={{p:1,borderRadius:2,cursor:"pointer","&:hover":{bgcolor:"action.hover"}}}><Typography sx={{fontWeight:750}}>{x.title}</Typography><Typography variant="caption" color="text.secondary">{[x.kind,x.mapName,x.path].filter(Boolean).join(" · ")}</Typography></Box>):<Alert severity="info">Nenhuma evidência técnica correlacionada.</Alert>}</CardContent></Card><Card variant="outlined" sx={{flex:1}}><CardContent><Typography sx={{fontWeight:850,mb:1}}>Versões e recorrência</Typography>{topicData.topVersions.length?topicData.topVersions.map(x=><Box key={x.version} onClick={()=>setDetail({kind:"generic",title:`Versão ${x.version}`,subtitle:"Recorrência por versão",score:x.total,meta:[`${x.total} evidências relacionadas ao contexto investigado`]})} sx={{display:"flex",justifyContent:"space-between",alignItems:"center",p:.8,borderRadius:1.5,cursor:"pointer","&:hover":{bgcolor:"action.hover"}}><Typography sx={{fontWeight:750}}>{x.version}</Typography><Chip clickable size="small" label={`${x.total} evidências`}/></Box>):<Alert severity="info">Nenhuma versão recorrente identificada.</Alert>}</CardContent></Card></Stack>}
+{(topicView === "all" || topicView === "technical") && (
+  <Stack direction={{ xs: "column", lg: "row" }} spacing={1.5}>
+    <Card variant="outlined" sx={{ flex: 1, borderTop: "2px solid", borderTopColor: "success.main" }}>
+      <CardContent>
+        <Stack direction="row" sx={{ alignItems: "center", mb: 1 }}>
+          <Typography sx={{ fontWeight: 850 }}>Regra × evidência</Typography>
+          <SectionInfo title="Cruza o contexto pesquisado com o Mapa SIMER e as Regras do Sistema disponíveis. Use como trilha técnica para validação." />
+        </Stack>
+        {topicData.evidence.length ? (
+          topicData.evidence.slice(0, 10).map((x) => (
+            <Box
+              key={x.id}
+              onClick={() => navigate(`/mapa-simer?focusId=${x.id}`)}
+              sx={{ p: 1, borderRadius: 2, cursor: "pointer", "&:hover": { bgcolor: "action.hover" } }}
+            >
+              <Typography sx={{ fontWeight: 750 }}>{x.title}</Typography>
+              <Typography variant="caption" color="text.secondary">
+                {[x.kind, x.mapName, x.path].filter(Boolean).join(" · ")}
+              </Typography>
+            </Box>
+          ))
+        ) : (
+          <Alert severity="info">Nenhuma evidência técnica correlacionada.</Alert>
+        )}
+      </CardContent>
+    </Card>
+    <Card variant="outlined" sx={{ flex: 1 }}>
+      <CardContent>
+        <Typography sx={{ fontWeight: 850, mb: 1 }}>Versões e recorrência</Typography>
+        {topicData.topVersions.length ? (
+          topicData.topVersions.map((x) => (
+            <Box
+              key={x.version}
+              onClick={() =>
+                setDetail({
+                  kind: "generic",
+                  title: `Versão ${x.version}`,
+                  subtitle: "Recorrência por versão",
+                  score: x.total,
+                  meta: [`${x.total} evidências relacionadas ao contexto investigado`],
+                })
+              }
+              sx={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                p: 0.8,
+                borderRadius: 1.5,
+                cursor: "pointer",
+                "&:hover": { bgcolor: "action.hover" },
+              }}
+            >
+              <Typography sx={{ fontWeight: 750 }}>{x.version}</Typography>
+              <Chip clickable size="small" label={`${x.total} evidências`} />
+            </Box>
+          ))
+        ) : (
+          <Alert severity="info">Nenhuma versão recorrente identificada.</Alert>
+        )}
+      </CardContent>
+    </Card>
+  </Stack>
+)}
 </Stack>}
 {data&&<Stack spacing={2}>
 <Card variant="outlined"><CardContent><Stack direction={{xs:"column",md:"row"}} spacing={2} sx={{justifyContent:"space-between"}}><Box><Typography variant="overline" color="text.secondary">DOSSIÊ TÉCNICO</Typography><Typography variant="h5" sx={{fontWeight:900}}>#{data.ticket.movideskId} · {data.ticket.subject}</Typography><Typography color="text.secondary">{[data.ticket.client,data.ticket.status,data.ticket.owner].filter(Boolean).join(" · ")}</Typography></Box><Stack direction="row" spacing={1} sx={{flexWrap:"wrap",alignContent:"flex-start"}}><Chip label={`Qualidade ${data.quality.score}%`} color={data.quality.score>=80?"success":"warning"}/><Chip label={`${data.summary.similarCases} similares`}/><Chip label={`${data.summary.relatedWorkItems} Azure`}/><Chip label={`${data.summary.technicalEvidence??0} evidências`}/><Chip label={`${data.summary.rules??0} regras`}/></Stack></Stack></CardContent></Card>
@@ -42,4 +104,117 @@ return <Box><PageHeader eyebrow="INTELIGÊNCIA" title="Central de Investigação
 </Stack>
 <Card variant="outlined"><CardContent><Typography sx={{fontWeight:850}}>Casos semelhantes</Typography><Typography variant="body2" color="text.secondary" sx={{mb:1}}>Score explicável por cliente, serviço, categoria, causa, versão e termos do assunto.</Typography>{data.similar.length?data.similar.map(x=><Box key={x.movideskId} onClick={()=>navigate(`/tickets?movidesk=${x.movideskId}`)} sx={{p:1.2,borderRadius:2,cursor:"pointer","&:hover":{bgcolor:"action.hover"}}}><Stack direction={{xs:"column",md:"row"}} spacing={1} sx={{alignItems:{md:"center"}}}><Chip size="small" color={x.score>=60?"success":x.score>=45?"warning":"default"} label={`${x.score} pts`}/><Typography sx={{fontWeight:750,flex:1}}>#{x.movideskId} · {x.subject}</Typography><Typography variant="caption" color="text.secondary">{x.explanation?.matchedSignals??x.reasons.length} sinais</Typography></Stack><Typography variant="caption" color="text.secondary">{x.client}</Typography><Stack direction="row" spacing={.6} useFlexGap sx={{flexWrap:"wrap",mt:.7}}>{(x.signals??[]).filter(s=>s.matched).map(sig=><Chip key={sig.key} size="small" variant="outlined" label={`${sig.label} +${sig.weight}`}/>)}</Stack></Box>):<Alert severity="info">Nenhum caso com correlação mínima encontrado.</Alert>}</CardContent></Card>
 <Stack direction={{xs:"column",lg:"row"}} spacing={2}><Card variant="outlined" sx={{flex:1}}><CardContent><Typography sx={{fontWeight:850,mb:1}}>Azure relacionado</Typography>{data.workItems.map(x=><Box key={x.id} sx={{py:.7}}><Typography sx={{fontWeight:700}}>#{x.id} · {x.title}</Typography><Typography variant="caption" color="text.secondary">{x.workItemType} · {x.state}</Typography></Box>)}</CardContent></Card><Card variant="outlined" sx={{flex:1}}><CardContent><Typography sx={{fontWeight:850,mb:1}}>O que mudou?</Typography>{data.timeline.map((x,i)=><Box key={i} sx={{borderLeft:"2px solid",borderColor:"divider",pl:1.5,pb:1}}><Typography sx={{fontWeight:700}}>{x.title}</Typography><Typography variant="caption" color="text.secondary">{new Date(x.date).toLocaleString("pt-BR")}</Typography></Box>)}</CardContent></Card></Stack>
-</Stack>}<Stack spacing={2}>{Object.entries(grouped).map(([type,list])=><Card key={type} variant="outlined"><CardContent><Stack direction="row" spacing={1} sx={{alignItems:"center",mb:1}}><AnalyticsOutlined fontSize="small"/><Typography sx={{fontWeight:850}}>{type}</Typography><Chip size="small" label={list.length}/></Stack><Divider sx={{mb:1}}/>{list.slice(0,8).map(i=><Box key={i.id} onClick={()=>setDetail({kind:"generic",title:i.title,subtitle:i.subtitle,path:i.path})} sx={{p:1.2,borderRadius:2,cursor:"pointer","&:hover":{bgcolor:"action.hover"}}}><Typography sx={{fontWeight:750}}>{i.title}</Typography><Typography variant="caption" color="text.secondary">{i.subtitle}</Typography></Box>)}</CardContent></Card>)}</Stack>{topicData&&<Box sx={{display:"grid",gridTemplateColumns:{xs:"1fr",xl:"minmax(0,.8fr) minmax(0,1.2fr)"},gap:1.5,mb:2}}><Card variant="outlined"><CardContent><Typography sx={{fontWeight:850}}>Distribuição das evidências</Typography><Box sx={{height:220}}><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={[{name:"Tickets",value:topicData.summary.tickets},{name:"Azure",value:topicData.summary.workItems},{name:"Conhecimento",value:topicData.summary.knownProblems},{name:"Técnicas",value:topicData.summary.evidence}].filter(x=>x.value>0)} dataKey="value" nameKey="name" innerRadius={52} outerRadius={78} paddingAngle={3}>{["#18C77A","#4C8DFF","#A78BFA","#F59E0B"].map((fill,i)=><Cell key={i} fill={fill}/>)}</Pie><ChartTooltip/></PieChart></ResponsiveContainer></Box></CardContent></Card><Card variant="outlined"><CardContent><Typography sx={{fontWeight:850}}>Versões mais relacionadas</Typography><Box sx={{height:220}}>{topicData.topVersions.length?<ResponsiveContainer width="100%" height="100%"><BarChart data={topicData.topVersions.slice(0,8)} layout="vertical"><CartesianGrid horizontal={false}/><XAxis type="number" allowDecimals={false}/><YAxis type="category" dataKey="version" width={92}/><ChartTooltip/><Bar dataKey="total" name="Evidências" radius={[0,6,6,0]} fill="#18C77A"/></BarChart></ResponsiveContainer>:<Box sx={{height:"100%",display:"grid",placeItems:"center"}}><Typography variant="body2" color="text.secondary">Sem versões relacionadas.</Typography></Box>}</Box></CardContent></Card></Box>}<Card variant="outlined" sx={{mt:2}}><CardContent><Typography sx={{fontWeight:850}}>Inteligência de diagnóstico</Typography><Stack direction="row" useFlexGap sx={{flexWrap:"wrap",gap:1,mt:1}}><Chip icon={<AccountTreeOutlined/>} label="Regra × evidência"/><Chip icon={<TimelineOutlined/>} label="O que mudou?"/><Chip label="Casos semelhantes"/><Chip label="Anomalias"/><Chip label="SQL diagnóstico"/></Stack></CardContent></Card><Dialog open={Boolean(detail)} onClose={()=>setDetail(null)} fullWidth maxWidth="sm"><DialogTitle>Detalhamento da investigação</DialogTitle><DialogContent><Typography variant="overline" color="text.secondary">{detail?.kind==="ticket"?"ATENDIMENTO":detail?.kind==="azure"?"DESENVOLVIMENTO":"EVIDÊNCIA"}</Typography><Typography variant="h6" sx={{fontWeight:900}}>{detail?.title}</Typography>{detail?.subtitle&&<Typography color="text.secondary">{detail.subtitle}</Typography>}{typeof detail?.score==="number"&&<Chip sx={{mt:1.2}} label={detail.kind==="generic"?`${detail.score} evidências`:`Aderência ${detail.score}%`}/>}<Stack spacing={.6} sx={{mt:1.5}}>{detail?.meta?.map((x,i)=><Typography key={i} variant="body2">• {x}</Typography>)}</Stack><Alert severity="info" sx={{mt:1.5}}>O detalhamento mantém a investigação aberta. Acesse a rotina de origem apenas quando precisar continuar a análise nela.</Alert></DialogContent><DialogActions><Button onClick={()=>setDetail(null)}>Fechar</Button>{detail?.path&&<Button variant="contained" onClick={()=>navigate(detail.path!)}>Abrir rotina</Button>}</DialogActions></Dialog></Box>}
+</Stack>}
+<Stack spacing={2}>
+  {Object.entries(grouped).map(([type, list]) => (
+    <Card key={type} variant="outlined">
+      <CardContent>
+        <Stack direction="row" spacing={1} sx={{ alignItems: "center", mb: 1 }}>
+          <AnalyticsOutlined fontSize="small" />
+          <Typography sx={{ fontWeight: 850 }}>{type}</Typography>
+          <Chip size="small" label={list.length} />
+        </Stack>
+        <Divider sx={{ mb: 1 }} />
+        {list.slice(0, 8).map((i) => (
+          <Box
+            key={i.id}
+            onClick={() => setDetail({ kind: "generic", title: i.title, subtitle: i.subtitle, path: i.path })}
+            sx={{ p: 1.2, borderRadius: 2, cursor: "pointer", "&:hover": { bgcolor: "action.hover" } }}
+          >
+            <Typography sx={{ fontWeight: 750 }}>{i.title}</Typography>
+            <Typography variant="caption" color="text.secondary">{i.subtitle}</Typography>
+          </Box>
+        ))}
+      </CardContent>
+    </Card>
+  ))}
+</Stack>
+{topicData && (
+  <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", xl: "minmax(0,.8fr) minmax(0,1.2fr)" }, gap: 1.5, mb: 2 }}>
+    <Card variant="outlined">
+      <CardContent>
+        <Typography sx={{ fontWeight: 850 }}>Distribuição das evidências</Typography>
+        <Box sx={{ height: 220 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie
+                data={[
+                  { name: "Tickets", value: topicData.summary.tickets },
+                  { name: "Azure", value: topicData.summary.workItems },
+                  { name: "Conhecimento", value: topicData.summary.knownProblems },
+                  { name: "Técnicas", value: topicData.summary.evidence },
+                ].filter((x) => x.value > 0)}
+                dataKey="value"
+                nameKey="name"
+                innerRadius={52}
+                outerRadius={78}
+                paddingAngle={3}
+              >
+                {["#18C77A", "#4C8DFF", "#A78BFA", "#F59E0B"].map((fill, i) => <Cell key={i} fill={fill} />)}
+              </Pie>
+              <ChartTooltip />
+            </PieChart>
+          </ResponsiveContainer>
+        </Box>
+      </CardContent>
+    </Card>
+    <Card variant="outlined">
+      <CardContent>
+        <Typography sx={{ fontWeight: 850 }}>Versões mais relacionadas</Typography>
+        <Box sx={{ height: 220 }}>
+          {topicData.topVersions.length ? (
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={topicData.topVersions.slice(0, 8)} layout="vertical">
+                <CartesianGrid horizontal={false} />
+                <XAxis type="number" allowDecimals={false} />
+                <YAxis type="category" dataKey="version" width={92} />
+                <ChartTooltip />
+                <Bar dataKey="total" name="Evidências" radius={[0, 6, 6, 0]} fill="#18C77A" />
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <Box sx={{ height: "100%", display: "grid", placeItems: "center" }}>
+              <Typography variant="body2" color="text.secondary">Sem versões relacionadas.</Typography>
+            </Box>
+          )}
+        </Box>
+      </CardContent>
+    </Card>
+  </Box>
+)}
+<Card variant="outlined" sx={{ mt: 2 }}>
+  <CardContent>
+    <Typography sx={{ fontWeight: 850 }}>Inteligência de diagnóstico</Typography>
+    <Stack direction="row" useFlexGap sx={{ flexWrap: "wrap", gap: 1, mt: 1 }}>
+      <Chip icon={<AccountTreeOutlined />} label="Regra × evidência" />
+      <Chip icon={<TimelineOutlined />} label="O que mudou?" />
+      <Chip label="Casos semelhantes" />
+      <Chip label="Anomalias" />
+      <Chip label="SQL diagnóstico" />
+    </Stack>
+  </CardContent>
+</Card>
+<Dialog open={Boolean(detail)} onClose={() => setDetail(null)} fullWidth maxWidth="sm">
+  <DialogTitle>Detalhamento da investigação</DialogTitle>
+  <DialogContent>
+    <Typography variant="overline" color="text.secondary">
+      {detail?.kind === "ticket" ? "ATENDIMENTO" : detail?.kind === "azure" ? "DESENVOLVIMENTO" : "EVIDÊNCIA"}
+    </Typography>
+    <Typography variant="h6" sx={{ fontWeight: 900 }}>{detail?.title}</Typography>
+    {detail?.subtitle && <Typography color="text.secondary">{detail.subtitle}</Typography>}
+    {typeof detail?.score === "number" && (
+      <Chip sx={{ mt: 1.2 }} label={detail.kind === "generic" ? `${detail.score} evidências` : `Aderência ${detail.score}%`} />
+    )}
+    <Stack spacing={0.6} sx={{ mt: 1.5 }}>
+      {detail?.meta?.map((x, i) => <Typography key={i} variant="body2">• {x}</Typography>)}
+    </Stack>
+    <Alert severity="info" sx={{ mt: 1.5 }}>
+      O detalhamento mantém a investigação aberta. Acesse a rotina de origem apenas quando precisar continuar a análise nela.
+    </Alert>
+  </DialogContent>
+  <DialogActions>
+    <Button onClick={() => setDetail(null)}>Fechar</Button>
+    {detail?.path && <Button variant="contained" onClick={() => navigate(detail.path!)}>Abrir rotina</Button>}
+  </DialogActions>
+</Dialog>
+</Box>}
