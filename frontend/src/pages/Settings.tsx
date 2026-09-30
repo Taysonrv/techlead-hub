@@ -134,7 +134,7 @@ export function Settings() {
   function changeNotificationPreference(key:keyof LocalNotificationPreferences,enabled:boolean){const next={...notificationPreferences,[key]:enabled};setNotificationPreferences(next);saveLocalNotificationPreferences(next)}
   async function changeStartup(enabled: boolean) {
     if (!window.techLeadHub?.startup) return;
-    try { setStartupSaving(true); setError(null); const state=await window.techLeadHub.startup.set(enabled); setStartupEnabled(state.enabled); setSuccess(state.enabled ? "TechLead Hub será iniciado automaticamente com o Windows." : "Inicialização automática com o Windows desativada."); }
+    try { setStartupSaving(true); setError(null); const state=await window.techLeadHub.startup.set(enabled); setStartupEnabled(state.enabled); setSuccess(state.enabled ? "Hub Suporte Simer será iniciado automaticamente com o Windows." : "Inicialização automática com o Windows desativada."); }
     catch { setError("Não foi possível alterar a inicialização com o Windows."); }
     finally { setStartupSaving(false); }
   }
@@ -370,7 +370,7 @@ export function Settings() {
       <Card variant="outlined" sx={{ mb: 2 }}><CardContent>
         <Typography sx={{fontWeight:850}}>Notificações</Typography>
         <Typography variant="body2" color="text.secondary" sx={{mt:.4,mb:1.5}}>Escolha quais eventos podem gerar avisos. Estas preferências também controlam os alertas rápidos no canto inferior direito.</Typography>
-        <Stack>{([["sound","Som das notificações"],["chat","Chat e menções"],["operation","Alertas operacionais e problemas conhecidos"],["appVersion","Novas versões do TechLead Hub"],["simerVersion","Novas versões do SIMER"],["azureCompleted","Correções, Evoluções e APOIOs concluídos"],["azureUpdated","Alterações em Correções, Evoluções e APOIOs"]] as Array<[keyof LocalNotificationPreferences,string]>).map(([key,label])=><Stack key={key} direction="row" sx={{py:.75,alignItems:"center",justifyContent:"space-between",borderBottom:"1px solid",borderColor:"divider"}}><Typography variant="body2">{label}</Typography><Switch size="small" checked={notificationPreferences[key]} onChange={(_,enabled)=>changeNotificationPreference(key,enabled)}/></Stack>)}</Stack>
+        <Stack>{([["sound","Som das notificações"],["chat","Chat e menções"],["operation","Alertas operacionais e problemas conhecidos"],["appVersion","Novas versões do Hub Suporte Simer"],["simerVersion","Novas versões do SIMER"],["azureCompleted","Correções, Evoluções e APOIOs concluídos"],["azureUpdated","Alterações em Correções, Evoluções e APOIOs"]] as Array<[keyof LocalNotificationPreferences,string]>).map(([key,label])=><Stack key={key} direction="row" sx={{py:.75,alignItems:"center",justifyContent:"space-between",borderBottom:"1px solid",borderColor:"divider"}}><Typography variant="body2">{label}</Typography><Switch size="small" checked={notificationPreferences[key]} onChange={(_,enabled)=>changeNotificationPreference(key,enabled)}/></Stack>)}</Stack>
       </CardContent></Card>
 
 
@@ -409,8 +409,8 @@ export function Settings() {
         {window.techLeadHub?.platform === "win32" && window.techLeadHub.startup && <Card elevation={0} sx={{ border: "1px solid", borderColor: startupEnabled ? "rgba(24,199,122,.28)" : "divider", borderRadius: 2.5, background: startupEnabled ? "linear-gradient(120deg,rgba(24,199,122,.055),transparent)" : undefined }}>
           <CardContent sx={{ p: { xs: 2, md: 2.5 } }}>
             <Stack direction={{xs:"column",sm:"row"}} spacing={2} sx={{alignItems:{sm:"center"},justifyContent:"space-between"}}>
-              <Box><Typography sx={{fontWeight:850}}>Inicialização com o Windows</Typography><Typography variant="body2" color="text.secondary">Mantenha o TechLead Hub disponível desde o início da sessão para receber atualizações e avisos operacionais.</Typography></Box>
-              <Stack direction="row" spacing={1} sx={{alignItems:"center"}}><Chip size="small" color={startupEnabled?"success":"default"} variant="outlined" label={startupEnabled?"Automático":"Manual"}/><Switch checked={startupEnabled} disabled={startupSaving} onChange={(_,checked)=>void changeStartup(checked)} slotProps={{input:{"aria-label":"Iniciar TechLead Hub com o Windows"}}}/></Stack>
+              <Box><Typography sx={{fontWeight:850}}>Inicialização com o Windows</Typography><Typography variant="body2" color="text.secondary">Mantenha o Hub Suporte Simer disponível desde o início da sessão para receber atualizações e avisos operacionais.</Typography></Box>
+              <Stack direction="row" spacing={1} sx={{alignItems:"center"}}><Chip size="small" color={startupEnabled?"success":"default"} variant="outlined" label={startupEnabled?"Automático":"Manual"}/><Switch checked={startupEnabled} disabled={startupSaving} onChange={(_,checked)=>void changeStartup(checked)} slotProps={{input:{"aria-label":"Iniciar Hub Suporte Simer com o Windows"}}}/></Stack>
             </Stack>
           </CardContent>
         </Card>}
