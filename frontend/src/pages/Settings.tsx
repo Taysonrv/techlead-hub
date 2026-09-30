@@ -39,6 +39,8 @@ type ConfigurationState = {
   project: string;
   wiki: string;
   patConfigured: boolean;
+  movideskConfigured: boolean;
+  movideskUrl: string;
   runtime?: string;
 };
 
@@ -48,6 +50,8 @@ type ConfigurationForm = {
   project: string;
   wiki: string;
   pat: string;
+  movideskToken: string;
+  movideskUrl: string;
 };
 
 type ActiveSession = { id: number; clientType: string; deviceName: string | null; appVersion: string | null; ipAddress: string | null; createdAt: string; lastActivityAt: string; user: { id: number; name: string; username: string } };
@@ -67,6 +71,8 @@ const EMPTY_FORM: ConfigurationForm = {
   project: "",
   wiki: "",
   pat: "",
+  movideskToken: "",
+  movideskUrl: "https://api.movidesk.com/public/v1",
 };
 
 export function Settings() {
@@ -134,6 +140,7 @@ export function Settings() {
         organization: current.organization ?? "",
         project: current.project ?? "",
         wiki: current.wiki ?? "",
+        movideskUrl: current.movideskUrl ?? "https://api.movidesk.com/public/v1",
       }));
     } catch (loadError) {
       setError(
@@ -213,6 +220,8 @@ export function Settings() {
           project: form.project,
           wiki: form.wiki,
           pat: form.pat,
+          movideskToken: form.movideskToken,
+          movideskUrl: form.movideskUrl,
         },
       );
 
@@ -471,6 +480,26 @@ export function Settings() {
                 helperText="O PAT atual não é exibido por segurança."
               />
             </Box>
+          </CardContent>
+        </Card>
+
+        <Card elevation={0} sx={{ border: "1px solid", borderColor: configuration?.movideskConfigured ? "rgba(24,199,122,.28)" : "divider", borderRadius: 2.5 }}>
+          <CardContent sx={{ p: { xs: 2, md: 2.5 } }}>
+            <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5} sx={{ alignItems: { sm: "center" }, justifyContent: "space-between" }}>
+              <Box>
+                <Typography sx={{ fontWeight: 800 }}>Movidesk</Typography>
+                <Typography variant="body2" color="text.secondary">Fonte operacional de tickets. Sincronização automática incremental a cada 60 minutos.</Typography>
+              </Box>
+              <Chip icon={configuration?.movideskConfigured ? <CloudDoneOutlined /> : <CloudOffOutlined />} label={configuration?.movideskConfigured ? "Token configurado" : "Não configurado"} color={configuration?.movideskConfigured ? "success" : "default"} variant="outlined" />
+            </Stack>
+            <Divider sx={{ my: 2 }} />
+            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" }, gap: 2 }}>
+              <TextField label="Endpoint da API" value={form.movideskUrl} onChange={(event) => updateField("movideskUrl", event.target.value)} />
+              <TextField type="password" label="Novo token Movidesk" value={form.movideskToken} onChange={(event) => updateField("movideskToken", event.target.value)} autoComplete="new-password" placeholder={configuration?.movideskConfigured ? "Deixe vazio para manter o token atual" : "Cole o token recebido"} helperText="O token atual nunca é exibido e fica criptografado no banco." />
+            </Box>
+            <Stack direction="row" spacing={1} sx={{ mt: 2, justifyContent: "flex-end" }}>
+              <Button variant="outlined" disabled={!configuration?.movideskConfigured} onClick={async () => { try { setError(null); const response = await api.get<{ok:boolean}>("/movidesk/test"); if (response.data.ok) setSuccess("Conexão com o Movidesk validada com sucesso."); } catch (testError) { setError(testError instanceof Error ? testError.message : "Não foi possível validar o Movidesk."); } }}>Testar conexão</Button>
+            </Stack>
           </CardContent>
         </Card>
 
