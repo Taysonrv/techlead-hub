@@ -13,6 +13,16 @@ const OFFSET_TO_CURSOR_THRESHOLD = 9_000;
 const BASELINE_CHECKPOINT_ACTION = "MOVIDESK_BASELINE_CHECKPOINT";
 const BASELINE_FAILED_ACTION = "MOVIDESK_BASELINE_FAILED";
 
+function normalizeMovideskDateTimeOffset(value: string) {
+  const trimmed = value.trim();
+  const withTimezone = /(?:Z|[+-]\d{2}:\d{2})$/i.test(trimmed) ? trimmed : `${trimmed}Z`;
+  const parsed = new Date(withTimezone);
+  if (Number.isNaN(parsed.getTime())) {
+    throw new Error(`Data/hora inválida recebida do Movidesk para cursor: ${value}`);
+  }
+  return parsed.toISOString();
+}
+
 function normalizeMovideskToken(raw?: string | null) {
   if (!raw) return "";
   let value = raw.trim();
@@ -378,7 +388,7 @@ export class MovideskService {
     cursor?: { lastUpdate: string; id: number } | null,
   ) {
     const filter = cursor
-      ? `(lastUpdate gt ${cursor.lastUpdate}) or (lastUpdate eq ${cursor.lastUpdate} and id gt ${cursor.id})`
+      ? `(lastUpdate gt ${normalizeMovideskDateTimeOffset(cursor.lastUpdate)}) or (lastUpdate eq ${normalizeMovideskDateTimeOffset(cursor.lastUpdate)} and id gt ${cursor.id})`
       : since
         ? `lastUpdate gt ${since.toISOString()}`
         : undefined;
@@ -420,7 +430,7 @@ export class MovideskService {
     if (!Number.isSafeInteger(id) || !lastUpdate) {
       throw new Error(`Cursor inválido ao reconstruir o FULL antes do skip=${nextSkip}.`);
     }
-    return { id, lastUpdate };
+    return { id, lastUpdate: normalizeMovideskDateTimeOffset(lastUpdate) };
   }
 
   private async latestSuccessfulSyncDate() {
@@ -494,7 +504,7 @@ export class MovideskService {
         const lastId = Number(lastRow.id);
         const lastUpdate = typeof lastRow.lastUpdate === "string" ? lastRow.lastUpdate : "";
         if (Number.isSafeInteger(lastId) && lastUpdate) {
-          fullCursor = { id: lastId, lastUpdate };
+          fullCursor = { id: lastId, lastUpdate: normalizeMovideskDateTimeOffset(lastUpdate) };
         }
         await this.saveBaselineCheckpoint(userId ?? null, summary, nextSkip, fullCursor);
         baselineState.progress = {
