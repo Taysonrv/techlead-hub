@@ -29,7 +29,9 @@ export class MovideskController {
         try {
             return res.json(await new MovideskService().testConnection());
         } catch (error) {
-            return res.status(500).json({ message: error instanceof Error ? error.message : "Não foi possível validar a conexão com o Movidesk." });
+            const message = error instanceof Error ? error.message : "Não foi possível validar a conexão com o Movidesk.";
+            console.error("[movidesk-test] Falha ao validar conexão:", message);
+            return res.status(500).json({ message });
         }
     }
 
