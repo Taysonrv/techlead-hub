@@ -42,7 +42,6 @@ import { useColorMode } from "../context/ColorModeContext";
 
 import { useNavigate } from "react-router-dom";
 
-import { api } from "../services/api";
 import { getTicketSnapshot } from "../services/ticketSnapshot";
 import { PeriodFilter } from "../components/PeriodFilter";
 import { PageHeader } from "../components/PageHeader";
