@@ -680,7 +680,7 @@ export function Sidebar() {
 
         <Box sx={{ px: 1.1, mb: .5 }}>
           <ListItemButton component={NavLink} to="/" end title="Página inicial" sx={{ minHeight: 42, px: 1.25, borderRadius: 1.5, color: "rgba(255,255,255,.72)", "&:hover": { bgcolor: "rgba(255,255,255,.05)", color: "#fff" }, "&.active": { bgcolor: "rgba(24,199,122,.10)", color: "#fff" }, "&.active .MuiListItemIcon-root": { color: aliareColors.green } }}>
-            <ListItemIcon sx={{ minWidth: 32, color: "rgba(255,255,255,.50)" }}><HomeOutlined fontSize="small" /></ListItemIcon>
+            <ListItemIcon sx={{ minWidth: 34, color: "rgba(255,255,255,.44)", "& .MuiSvgIcon-root": { fontSize: 19 } }}><HomeOutlined fontSize="small" /></ListItemIcon>
             <ListItemText primary="Página inicial" slotProps={{ primary: { sx: { fontSize: ".8rem", fontWeight: 600, lineHeight: 1.35 } } }} />
             {!window.techLeadHub?.desktop && <RoutineNewTabButton path="/" label="Página inicial" />}
           </ListItemButton>
@@ -688,7 +688,7 @@ export function Sidebar() {
         {canAccess("coordination") && (
           <Box sx={{ px: 1.1, mb: .75 }}>
             <ListItemButton component={NavLink} to="/coordenacao" title="Central da Coordenação" sx={{ minHeight: 42, px: 1.25, borderRadius: 1.5, color: "rgba(255,255,255,.72)", "&:hover": { bgcolor: "rgba(24,199,122,.08)", color: "#fff" }, "&.active": { bgcolor: "rgba(24,199,122,.13)", color: "#fff" }, "&.active .MuiListItemIcon-root": { color: aliareColors.green } }}>
-              <ListItemIcon sx={{ minWidth: 32, color: "rgba(255,255,255,.50)" }}><InsightsOutlined fontSize="small" /></ListItemIcon>
+              <ListItemIcon sx={{ minWidth: 34, color: "rgba(255,255,255,.44)", "& .MuiSvgIcon-root": { fontSize: 19 } }}><InsightsOutlined fontSize="small" /></ListItemIcon>
               <ListItemText primary="Central da Coordenação" slotProps={{ primary: { sx: { fontSize: ".8rem", fontWeight: 600, lineHeight: 1.35 } } }} />
               {!window.techLeadHub?.desktop && <RoutineNewTabButton path="/coordenacao" label="Central da Coordenação" />}
             </ListItemButton>
@@ -756,7 +756,9 @@ export function Sidebar() {
             aliareColors.black,
 
           borderTop:
-            "1px solid rgba(255,255,255,0.08)",
+            "1px solid rgba(255,255,255,0.07)",
+          boxShadow:
+            "0 -10px 28px rgba(0,0,0,.16)",
         }}
       >
         <Box
@@ -1086,11 +1088,13 @@ function MenuSection({
       sx={{
         px:
           1.1,
+        mb:
+          0.2,
       }}
     >
       <ListItemButton aria-expanded={open} onClick={onToggle} sx={{ minHeight: 36, px: 1.25, borderRadius: 1.5, color: open ? "rgba(255,255,255,.90)" : "rgba(255,255,255,.52)", bgcolor: open ? "rgba(255,255,255,.045)" : "transparent", "&:hover": { bgcolor: "rgba(255,255,255,.04)", color: "rgba(255,255,255,.82)" } }}>
         <ListItemText primary={title} slotProps={{ primary: { sx: { fontSize: ".68rem", fontWeight: 650, letterSpacing: ".075em", textTransform: "uppercase" } } }} />
-        {open ? <ExpandLessRounded fontSize="small" /> : <ExpandMoreRounded fontSize="small" />}
+        {open ? <ExpandLessRounded sx={{ fontSize: 18, opacity: .7 }} /> : <ExpandMoreRounded sx={{ fontSize: 18, opacity: .7 }} />}
       </ListItemButton>
 
       <Collapse in={open} timeout="auto" unmountOnExit>
@@ -1303,6 +1307,9 @@ function MenuItem({
 
           transition:
             "color 0.15s ease",
+          "& .MuiSvgIcon-root": {
+            fontSize: 19,
+          },
         }}
       >
         {hasBadge ? (
