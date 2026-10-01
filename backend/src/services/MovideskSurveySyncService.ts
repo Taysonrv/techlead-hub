@@ -1,5 +1,5 @@
 import { Prisma } from "@prisma/client";
-import axios, { type AxiosResponse } from "axios";
+import axios, { AxiosError, type AxiosResponse } from "axios";
 import { prisma } from "../database/prisma";
 import { SIMER_CLIENTS } from "../domain/OperationalScope";
 
@@ -9,6 +9,24 @@ const WAIT_MS = 6200;
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export class MovideskSurveySyncService {
+  private async getResponses(params: Record<string, unknown>): Promise<AxiosResponse<unknown>> {
+    for (let attempt = 1; attempt <= 6; attempt += 1) {
+      try {
+        return await axios.get(`${API_URL}/survey/responses`, { params: { token: this.token(), ...params }, timeout: 120000 });
+      } catch (error) {
+        const err = error as AxiosError;
+        const status = err.response?.status;
+        const retryable = err.code === "ECONNRESET" || err.code === "ETIMEDOUT" || err.code === "ECONNABORTED" || status === 429 || (status !== undefined && status >= 500);
+        if (!retryable || attempt === 6) throw new Error(`Movidesk /survey/responses: falha após ${attempt} tentativa(s): ${err.message}`);
+        const retryAfter = Number(err.response?.headers?.["retry-after"] ?? 0);
+        const delay = retryAfter > 0 ? retryAfter * 1000 : Math.min(2000 * 2 ** (attempt - 1), 30000);
+        console.warn(`[movidesk-csat] tentativa=${attempt}/6 falhou (${err.code ?? status ?? "erro"}); nova tentativa em ${Math.round(delay/1000)}s.`);
+        await sleep(delay);
+      }
+    }
+    throw new Error("Movidesk /survey/responses: tentativas esgotadas.");
+  }
+
   private token() {
     const token = process.env.MOVIDESK_TOKEN?.trim();
     if (!token) throw new Error("MOVIDESK_TOKEN não configurado.");
@@ -22,10 +40,7 @@ export class MovideskSurveySyncService {
     for (;;) {
       pages += 1;
       if (pages > 500) throw new Error("CSAT interrompido: limite de segurança de 500 páginas atingido.");
-      const response: AxiosResponse<unknown> = await axios.get(`${API_URL}/survey/responses`, {
-        params: { token: this.token(), responseDateGreaterThan: "2026-01-01", limit: 100, ...(cursor ? { startingAfter: cursor } : {}) },
-        timeout: 120000,
-      });
+      const response = await this.getResponses({ responseDateGreaterThan: "2026-01-01", limit: 100, ...(cursor ? { startingAfter: cursor } : {}) });
       const body: Record<string, unknown> = response.data && typeof response.data === "object" && !Array.isArray(response.data) ? response.data as Record<string, unknown> : {};
       const rows = Array.isArray(body.items) ? body.items as Array<Record<string, unknown>> : [];
       if (!rows.length) break;
