@@ -50,6 +50,17 @@ export class MovideskController {
         }
     }
 
+    async diagnoseScope(req: AuthenticatedRequest, res: Response) {
+        try {
+            const requested = Number(req.query.limit ?? 3);
+            return res.json(await new MovideskService().diagnoseScopedClients(requested));
+        } catch (error) {
+            const message = error instanceof Error ? error.message : "Não foi possível diagnosticar o escopo Movidesk.";
+            console.error("[movidesk-scope-diagnostic] Falha:", message);
+            return res.status(500).json({ message });
+        }
+    }
+
     async preview(req: AuthenticatedRequest, res: Response) {
         try {
             const requested = Number(req.query.limit ?? 25);
