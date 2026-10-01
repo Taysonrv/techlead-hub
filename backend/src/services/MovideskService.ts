@@ -511,17 +511,36 @@ export class MovideskService {
   }
 
   async baselineStatus() {
-    const completed = await this.hasCompletedBaseline();
-    const [tickets, scopedTickets, linkedTasks, lastImport] = await Promise.all([
-      prisma.ticket.count(),
-      prisma.ticket.count({ where: { createdDate: { gte: SYNC_SCOPE_START }, client: { in: [...SIMER_CLIENTS], mode: "insensitive" } } }),
-      prisma.ticket.count({ where: { taskNumber: { not: null }, createdDate: { gte: SYNC_SCOPE_START }, client: { in: [...SIMER_CLIENTS], mode: "insensitive" } } }),
-      prisma.importRun.findFirst({
-        where: { source: "MOVIDESK_API" },
-        orderBy: { startedAt: "desc" },
-        select: { id: true, status: true, totalRows: true, insertedRows: true, updatedRows: true, skippedRows: true, errorRows: true, startedAt: true, finishedAt: true, message: true },
-      }),
-    ]);
+    // Este endpoint é telemetria. Uma indisponibilidade transitória do banco
+    // deve degradar somente o status exibido, nunca o job de sincronização.
+    let completed = false;
+    let tickets = 0;
+    let scopedTickets = 0;
+    let linkedTasks = 0;
+    let lastImport: {
+      id: number; status: string; totalRows: number; insertedRows: number;
+      updatedRows: number; skippedRows: number; errorRows: number;
+      startedAt: Date; finishedAt: Date | null; message: string | null;
+    } | null = null;
+    let databaseAvailable = true;
+    let databaseError: string | null = null;
+    try {
+      completed = await this.hasCompletedBaseline();
+      [tickets, scopedTickets, linkedTasks, lastImport] = await Promise.all([
+        prisma.ticket.count(),
+        prisma.ticket.count({ where: { createdDate: { gte: SYNC_SCOPE_START }, client: { in: [...SIMER_CLIENTS], mode: "insensitive" } } }),
+        prisma.ticket.count({ where: { taskNumber: { not: null }, createdDate: { gte: SYNC_SCOPE_START }, client: { in: [...SIMER_CLIENTS], mode: "insensitive" } } }),
+        prisma.importRun.findFirst({
+          where: { source: "MOVIDESK_API" },
+          orderBy: { startedAt: "desc" },
+          select: { id: true, status: true, totalRows: true, insertedRows: true, updatedRows: true, skippedRows: true, errorRows: true, startedAt: true, finishedAt: true, message: true },
+        }),
+      ]);
+    } catch (error) {
+      databaseAvailable = false;
+      databaseError = error instanceof Error ? error.message.split("\n")[0].slice(0, 240) : "Banco de dados temporariamente indisponível.";
+      console.warn(`[movidesk-status] Telemetria indisponível temporariamente: ${databaseError}`);
+    }
     const intervalMinutes = Number(process.env.MOVIDESK_SYNC_INTERVAL_MINUTES ?? 60);
     const schedulerEnabledRaw = process.env.MOVIDESK_SYNC_SCHEDULER_ENABLED?.trim().toLowerCase();
     const schedulerEnabled = Boolean(process.env.MOVIDESK_TOKEN?.trim()) && !["0","false","no","nao","não","off"].includes(schedulerEnabledRaw ?? "");
@@ -532,7 +551,7 @@ export class MovideskService {
     return {
       ...baselineState,
       completed,
-      database: { tickets, scopedTickets, linkedTasks },
+      database: { available: databaseAvailable, error: databaseError, tickets, scopedTickets, linkedTasks },
       scope: { startDate: SYNC_SCOPE_START.toISOString(), clients: [...SIMER_CLIENTS] },
       lastImport,
       scheduler: {
