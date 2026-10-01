@@ -80,6 +80,25 @@ type ImportPreview = {
   };
 };
 
+type MovideskScopeDiagnostic = {
+  readOnly: boolean;
+  filterAccepted: boolean;
+  requested: number;
+  returned: number;
+  samples: Array<{
+    id: number | null;
+    createdDate: string | null;
+    lastUpdate: string | null;
+    resolvedSimerClient: string | null;
+    clients: Array<{
+      keys?: string[];
+      businessName?: string | null;
+      organization?: unknown;
+      type?: string;
+    }>;
+  }>;
+};
+
 type MovideskBaselineStatus = {
   status: "IDLE" | "RUNNING" | "SUCCESS" | "ERROR";
   startedAt: string | null;
@@ -201,6 +220,8 @@ export function Import() {
   const [movideskStatus, setMovideskStatus] = useState<MovideskBaselineStatus | null>(null);
   const [movideskStatusLoading, setMovideskStatusLoading] = useState(false);
   const [movideskFullStarting, setMovideskFullStarting] = useState(false);
+  const [scopeDiagnostic, setScopeDiagnostic] = useState<MovideskScopeDiagnostic | null>(null);
+  const [scopeDiagnosticLoading, setScopeDiagnosticLoading] = useState(false);
 
   /* =======================================================
      AZURE
@@ -614,6 +635,19 @@ export function Import() {
     return () => window.clearInterval(timer);
   }, [loadMovideskStatus]);
 
+  async function diagnoseMovideskScope() {
+    try {
+      setScopeDiagnosticLoading(true);
+      setError(null);
+      const response = await api.get<MovideskScopeDiagnostic>("/movidesk/scope/diagnostic?limit=3", { timeout: 120_000 });
+      setScopeDiagnostic(response.data);
+    } catch (err: unknown) {
+      setError(getApiErrorMessage(err, "Não foi possível diagnosticar o escopo de clientes do Movidesk."));
+    } finally {
+      setScopeDiagnosticLoading(false);
+    }
+  }
+
   async function startMovideskFull() {
     try {
       setMovideskFullStarting(true);
@@ -680,6 +714,9 @@ export function Import() {
               </Typography>
             </Box>
             <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
+              <Button variant="outlined" disabled={scopeDiagnosticLoading || movideskStatus?.status === "RUNNING"} onClick={() => void diagnoseMovideskScope()}>
+                {scopeDiagnosticLoading ? "Diagnosticando..." : "Diagnosticar escopo"}
+              </Button>
               <Button variant="outlined" disabled={movideskStatusLoading} onClick={() => void loadMovideskStatus(true)}>
                 {movideskStatusLoading ? "Atualizando..." : "Atualizar status"}
               </Button>
@@ -717,6 +754,22 @@ export function Import() {
               FULL: {movideskStatus.result.pages} página(s) • {movideskStatus.result.totalRows} lidos • {movideskStatus.result.created} novos • {movideskStatus.result.updated} atualizados • {movideskStatus.result.ignored} ignorados • {movideskStatus.result.errors} erros.
             </Alert>}
             {movideskStatus.error && <Alert severity="error" sx={{ mt: 2 }}>{movideskStatus.error}</Alert>}
+            {scopeDiagnostic && (
+              <Box sx={{ mt: 2, p: 1.75, border: "1px solid", borderColor: "divider", borderRadius: 2.5, bgcolor: "background.default" }}>
+                <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ justifyContent: "space-between", alignItems: { sm: "center" }, mb: 1 }}>
+                  <Box>
+                    <Typography variant="body2" sx={{ fontWeight: 750 }}>Diagnóstico do escopo remoto</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      Filtro aceito • {scopeDiagnostic.returned} amostra(s) retornada(s) • leitura sem gravação no banco
+                    </Typography>
+                  </Box>
+                  <Chip size="small" color={scopeDiagnostic.samples.some((sample) => sample.resolvedSimerClient) ? "success" : "warning"} label={scopeDiagnostic.samples.some((sample) => sample.resolvedSimerClient) ? "Cliente SIMER identificado" : "Cliente ainda não identificado"} />
+                </Stack>
+                <Box component="pre" sx={{ m: 0, p: 1.5, overflow: "auto", maxHeight: 360, borderRadius: 2, bgcolor: "rgba(0,0,0,.18)", fontSize: ".72rem", lineHeight: 1.55, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                  {JSON.stringify(scopeDiagnostic.samples, null, 2)}
+                </Box>
+              </Box>
+            )}
           </>}
         </CardContent>
       </Card>
