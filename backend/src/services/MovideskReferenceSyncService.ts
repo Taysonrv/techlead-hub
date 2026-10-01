@@ -57,7 +57,7 @@ export class MovideskReferenceSyncService {
       });
       for (let attempt = 1; attempt <= 5; attempt += 1) {
         try {
-          if (operations.length) await prisma.$transaction(operations, { timeout: 30000 });
+          if (operations.length) await prisma.$transaction(operations);
           processed += operations.length;
           break;
         } catch (error) {
