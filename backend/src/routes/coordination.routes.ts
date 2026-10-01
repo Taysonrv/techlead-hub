@@ -67,6 +67,22 @@ coordinationRoutes.get("/csat", async (req: AuthenticatedRequest, res) => {
   }
 });
 
+coordinationRoutes.get("/csat/details", async (req: AuthenticatedRequest, res) => {
+  try {
+    const days = Number(req.query.days ?? 180);
+    const value = req.query.value === undefined ? undefined : Number(req.query.value);
+    res.json(await coordinationService.csatDetails(Number.isFinite(days) ? days : 180, {
+      client: typeof req.query.client === "string" ? req.query.client : undefined,
+      analyst: typeof req.query.analyst === "string" ? req.query.analyst : undefined,
+      service: typeof req.query.service === "string" ? req.query.service : undefined,
+      value: value !== undefined && Number.isFinite(value) ? value : undefined,
+    }));
+  } catch (error) {
+    console.error("[coordination] Falha ao carregar detalhes CSAT:", error);
+    res.status(500).json({ error: "Não foi possível carregar os detalhes de CSAT." });
+  }
+});
+
 coordinationRoutes.get("/sla-development", async (req: AuthenticatedRequest, res) => {
   try {
     const days = Number(req.query.days ?? 180);
