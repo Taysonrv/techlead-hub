@@ -213,17 +213,34 @@ export class CoordinationService {
   }
 
   async csatDetails(days = 180, filters: { client?: string; analyst?: string; service?: string; value?: number } = {}) {
-    const overview = await this.csatOverview(days);
-    const normalized = (value: string | null | undefined) => (value ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR").trim();
-    return {
-      periodDays: overview.periodDays,
-      items: overview.recent.filter((item) =>
-        (!filters.client || normalized(item.client) === normalized(filters.client)) &&
-        (!filters.analyst || normalized(item.owner) === normalized(filters.analyst)) &&
-        (!filters.service || normalized(item.service) === normalized(filters.service)) &&
-        (!filters.value || item.value === filters.value)
-      ),
-    };
+    const safeDays = Math.min(Math.max(days, 30), 730);
+    const since = new Date(Date.now() - safeDays * 86400000);
+    const responses = await prisma.movideskSurveyResponse.findMany({
+      where: {
+        responseDate: { gte: since },
+        ticketId: { not: null },
+        ...(filters.value ? { value: filters.value } : {}),
+      },
+      orderBy: { responseDate: "desc" },
+      take: 500,
+    });
+    const ids = [...new Set(responses.map((item) => item.ticketId).filter((id): id is number => id !== null))];
+    const tickets = ids.length ? await prisma.ticket.findMany({
+      where: { AND: [{ movideskId: { in: ids }, isDeleted: false }, coordinationTicketScope()] },
+      select: { movideskId:true, subject:true, client:true, owner:true, service:true, serviceFirstLevel:true, serviceSecondLevel:true, serviceThirdLevel:true, taskNumber:true },
+    }) : [];
+    const byTicket = new Map(tickets.map((ticket) => [ticket.movideskId, ticket]));
+    const normalize = (value: string | null | undefined) => (value ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR").trim();
+    const items = responses.flatMap((response) => {
+      const ticket = response.ticketId ? byTicket.get(response.ticketId) : undefined;
+      if (!ticket) return [];
+      const service = [ticket.serviceFirstLevel,ticket.serviceSecondLevel,ticket.serviceThirdLevel].map(v=>v?.trim()).filter(Boolean).join(" » ") || ticket.service || "Sem serviço";
+      if (filters.client && normalize(ticket.client) !== normalize(filters.client)) return [];
+      if (filters.analyst && normalize(ticket.owner) !== normalize(filters.analyst)) return [];
+      if (filters.service && normalize(service) !== normalize(filters.service)) return [];
+      return [{ id:response.id, ticketId:response.ticketId, subject:ticket.subject, client:ticket.client, owner:ticket.owner, taskNumber:ticket.taskNumber, service, value:response.value, commentary:response.commentary, responseDate:response.responseDate }];
+    });
+    return { periodDays:safeDays, total:items.length, truncated:responses.length===500, items };
   }
 
   async slaDevelopmentFlow(days = 180) {
