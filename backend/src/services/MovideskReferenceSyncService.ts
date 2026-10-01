@@ -40,10 +40,10 @@ export class MovideskReferenceSyncService {
       const response = await this.get("/services", { $select: "id,name,parentServiceId,isActive,defaultCategory,defaultUrgency", $top: 25, $skip: skip, $orderby: "id asc" });
       const rows = Array.isArray(response.data) ? response.data as Array<Record<string, unknown>> : [];
       console.log(`[movidesk-catalog] página=${pages} skip=${skip} serviços=${rows.length} processados=${processed}`);
-      for (const row of rows) {
+      const operations = rows.flatMap((row) => {
         const id = Number(row.id);
         const name = typeof row.name === "string" ? row.name.trim() : "";
-        if (!Number.isSafeInteger(id) || !name) continue;
+        if (!Number.isSafeInteger(id) || !name) return [];
         const data = {
           name,
           parentServiceId: Number.isSafeInteger(Number(row.parentServiceId)) ? Number(row.parentServiceId) : null,
@@ -53,8 +53,21 @@ export class MovideskReferenceSyncService {
           rawData: row as Prisma.InputJsonValue,
           syncedAt: new Date(),
         };
-        await prisma.movideskServiceCatalog.upsert({ where: { id }, create: { id, ...data }, update: data });
-        processed += 1;
+        return [prisma.movideskServiceCatalog.upsert({ where: { id }, create: { id, ...data }, update: data })];
+      });
+      for (let attempt = 1; attempt <= 5; attempt += 1) {
+        try {
+          if (operations.length) await prisma.$transaction(operations, { timeout: 30000 });
+          processed += operations.length;
+          break;
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          const transient = /P1017|connection|pool|Can't reach database|closed the connection|timed out/i.test(message);
+          if (!transient || attempt === 5) throw error;
+          const delay = Math.min(2000 * 2 ** (attempt - 1), 20000);
+          console.warn(`[movidesk-catalog-db] página=${pages} tentativa=${attempt}/5; banco indisponível, nova tentativa em ${delay/1000}s.`);
+          await sleep(delay);
+        }
       }
       if (rows.length < 25) break;
       await sleep(WAIT_MS);
