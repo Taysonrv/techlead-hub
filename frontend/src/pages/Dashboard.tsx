@@ -125,6 +125,9 @@ type Ticket = {
   lifetimeMinutes: number | null;
   stoppedMinutes: number | null;
   stoppedWorkingMinutes?: number | null;
+  satisfactionScore?: number | null;
+  satisfactionComment?: string | null;
+  satisfactionDate?: string | null;
 
   taskNumber: number | null;
   taskStatus: string | null;
@@ -836,7 +839,7 @@ export function Dashboard() {
         summary: "Percentual de tickets medidos que receberam a primeira resposta dentro do prazo.",
         calculation: "Tickets dentro do prazo ÷ tickets com medição válida × 100.",
         source: "Movidesk · timestamps e prazos sincronizados",
-        reference: "responseSlaIndicator",
+        reference: "firstResponseDate ≤ firstResponseDueDate",
         periodRule: "Considera tickets abertos no período selecionado.",
         notes: "Registros sem medição ficam fora do denominador.",
       },
@@ -849,14 +852,32 @@ export function Dashboard() {
       severity: slaSeverity(solutionSla),
       info: {
         title: "SLA Solução",
-        summary: "Percentual oficial de solução dentro do prazo no recorte de atendimentos.",
-        calculation: "Tickets com indicador dentro do prazo ÷ tickets com indicador oficial válido × 100.",
+        summary: "Percentual de tickets concluídos até o prazo de solução informado.",
+        calculation: "Tickets concluídos no prazo ÷ tickets com timestamps válidos × 100.",
         source: "Movidesk · timestamps e prazos sincronizados",
-        reference: "solutionSlaIndicator",
+        reference: "resolvedDate/closedDate ≤ dueDate",
         periodRule: "Considera tickets abertos no período selecionado, igual às telas Clientes e Desempenho.",
         notes: "Registros sem medição ficam fora do denominador.",
       },
       onClick: () => showTickets("SLA de solução", solutionSla.measuredTickets, `${solutionSla.within} dentro • ${solutionSla.outside} fora • ${solutionSla.unmeasured} sem medição`),
+    },
+    {
+      title: "CSAT",
+      value: (() => {
+        const values=filteredTickets.map((ticket)=>ticket.satisfactionScore).filter((value): value is number => typeof value === "number");
+        return values.length ? (values.reduce((total,value)=>total+value,0)/values.length).toLocaleString("pt-BR",{maximumFractionDigits:2}) : "—";
+      })(),
+      description: `${filteredTickets.filter((ticket)=>ticket.satisfactionScore != null).length} avaliação(ões) no período`,
+      severity: "success" as Severity,
+      info: {
+        title: "CSAT",
+        summary: "Média das avaliações de satisfação vinculadas aos tickets SIMER do recorte atual.",
+        calculation: "Média das notas persistidas da Pesquisa de Satisfação Movidesk.",
+        source: "Pesquisa de Satisfação Movidesk",
+        reference: "MovideskSurveyResponse → Ticket.movideskId",
+        periodRule: "Respeita o período e os filtros aplicados ao Dashboard.",
+      },
+      onClick: () => showTickets("Tickets com avaliação CSAT", filteredTickets.filter((ticket)=>ticket.satisfactionScore != null), "Pesquisa de Satisfação Movidesk"),
     },
     {
       title: "Críticos",
