@@ -126,6 +126,9 @@ type Ticket = {
 
   lifetimeMinutes: number | null;
   stoppedMinutes: number | null;
+  satisfactionScore?: number | null;
+  satisfactionComment?: string | null;
+  satisfactionDate?: string | null;
 
   taskNumber: number | null;
   taskStatus: string | null;
@@ -987,6 +990,11 @@ export function Analysts() {
         resolvedTickets.length,
       attentionTickets:
         attentionTickets.length,
+      csatResponses: scopedTickets.filter((ticket) => ticket.satisfactionScore != null).length,
+      csatAverage: (() => {
+        const values=scopedTickets.map((ticket)=>ticket.satisfactionScore).filter((value): value is number => typeof value === "number");
+        return values.length ? values.reduce((total,value)=>total+value,0)/values.length : null;
+      })(),
 
       azureTasks: new Set(
         scopedTickets
@@ -1959,7 +1967,14 @@ export function Analysts() {
                 Limpar filtros
               </Button>
             )}
-          </Box>
+            <MetricCard
+          title="CSAT"
+          value={summary.csatAverage == null ? "—" : summary.csatAverage.toLocaleString("pt-BR",{maximumFractionDigits:2})}
+          description={`${summary.csatResponses} avaliação(ões) no recorte atual`}
+          info={{ title:"CSAT", summary:"Média das avaliações de satisfação vinculadas aos tickets da equipe.", calculation:"Média de satisfactionScore para os tickets após os filtros atuais.", source:"Pesquisa de Satisfação Movidesk", reference:"MovideskSurveyResponse → Ticket.movideskId", periodRule:"Respeita período, Squad, Analista, área e serviço selecionados." }}
+          onClick={()=>showTickets("Tickets com avaliação CSAT", scopedTickets.filter((ticket)=>ticket.satisfactionScore != null), "Pesquisa de Satisfação Movidesk")}
+        />
+      </Box>
         </CardContent>
       </Card>
 
@@ -1974,7 +1989,7 @@ export function Analysts() {
           gridTemplateColumns: {
             xs: "1fr",
             sm: "repeat(2, 1fr)",
-            lg: "repeat(4, 1fr)",
+            lg: "repeat(5, 1fr)",
           },
 
           gap: {
