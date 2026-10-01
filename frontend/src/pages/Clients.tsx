@@ -891,6 +891,10 @@ export function Clients() {
         resolutionRate: scopedTickets.length > 0
           ? Math.round((resolved / scopedTickets.length) * 1000) / 10 : 0,
         responseSla, solutionSla,
+        csat: (() => {
+          const values=scopedTickets.map((ticket)=>ticket.satisfactionScore).filter((value): value is number => typeof value === "number");
+          return { responses:values.length, average:values.length ? values.reduce((total,value)=>total+value,0)/values.length : null };
+        })(),
         azureTasks: azureItems.length,
         azureCorrections: azureItems.filter((item) => item.workItemType === "Correção Clientes").length,
         azureEvolutions: azureItems.filter((item) => item.workItemType === "Evolução").length,
@@ -1894,7 +1898,7 @@ export function Clients() {
             <Chip size="small" variant="outlined" label={selectedClient || `${summary.totalClients} cliente(s) na carteira`} />
           </Stack>
 
-          <Box className="client-print-kpi-grid" sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2, 1fr)", lg: "repeat(4, 1fr)" }, gap: 1.25 }}>
+          <Box className="client-print-kpi-grid" sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2, 1fr)", lg: "repeat(5, 1fr)" }, gap: 1.25 }}>
             <ExecutiveMetric
               title="Taxa de resolução"
               value={`${portfolioSummary.resolutionRate}%`}
@@ -1936,6 +1940,13 @@ export function Clients() {
                 periodRule: "Respeita o recorte atual; itens sem os timestamps necessários ficam fora do denominador.",
               }}
               onClick={() => showTickets("SLA solução - tickets medidos", scopedTickets.filter((ticket) => Boolean(ticket.dueDate && (ticket.resolvedDate || ticket.closedDate))), "Tickets com timestamps suficientes para medição")}
+            />
+            <ExecutiveMetric
+              title="CSAT"
+              value={portfolioSummary.csat.average == null ? "—" : portfolioSummary.csat.average.toLocaleString("pt-BR",{maximumFractionDigits:2})}
+              description={`${portfolioSummary.csat.responses} avaliação(ões) no recorte`}
+              info={{ title:"CSAT", summary:"Média das avaliações de satisfação vinculadas aos atendimentos do cliente.", calculation:"Média das notas da Pesquisa de Satisfação Movidesk.", source:"Pesquisa de Satisfação Movidesk", reference:"MovideskSurveyResponse → Ticket.movideskId", periodRule:"Respeita os filtros e período atuais." }}
+              onClick={()=>showTickets("Tickets com avaliação CSAT", scopedTickets.filter((ticket)=>ticket.satisfactionScore != null), "Pesquisa de Satisfação Movidesk")}
             />
             <ExecutiveMetric
               title="Desenvolvimento"
