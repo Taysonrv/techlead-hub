@@ -139,22 +139,26 @@ export class CoordinationService {
   }
 
   async integrationHealth() {
-    const [tickets, linkedTasks, azureItems, csat, services, latestCsat, latestCatalog] = await Promise.all([
-      prisma.ticket.count({ where: { AND: [{ isDeleted: false }, coordinationTicketScope()] } }),
-      prisma.ticket.count({ where: { AND: [{ isDeleted: false, taskNumber: { not: null } }, coordinationTicketScope()] } }),
+    const ticketScope = simerClientTicketScope();
+    const [tickets, linkedTasks, withService, withCause, withBusinessArea, azureItems, csat, services, latestCsat, latestCatalog] = await Promise.all([
+      prisma.ticket.count({ where: { AND: [{ isDeleted: false }, ticketScope] } }),
+      prisma.ticket.count({ where: { AND: [{ isDeleted: false, taskNumber: { not: null } }, ticketScope] } }),
+      prisma.ticket.count({ where: { AND: [{ isDeleted: false, OR:[{service:{not:null}},{serviceFirstLevel:{not:null}},{serviceSecondLevel:{not:null}},{serviceThirdLevel:{not:null}}] }, ticketScope] } }),
+      prisma.ticket.count({ where: { AND: [{ isDeleted: false, cause: { not:null } }, ticketScope] } }),
+      prisma.ticket.count({ where: { AND: [{ isDeleted: false, businessArea: { not:null } }, ticketScope] } }),
       prisma.azureWorkItem.count({ where: coordinationAzureScope() }),
-      prisma.movideskSurveyResponse.count(),
-      prisma.movideskServiceCatalog.count(),
+      prisma.movideskSurveyResponse.count({ where:{ ticketId:{not:null} } }),
+      prisma.movideskServiceCatalog.count({ where:{isActive:true} }),
       prisma.movideskSurveyResponse.aggregate({ _max: { syncedAt: true, responseDate: true } }),
       prisma.movideskServiceCatalog.aggregate({ _max: { syncedAt: true } }),
     ]);
+    const pct=(value:number)=>tickets ? Math.round(value/tickets*1000)/10 : 0;
     return {
-      tickets,
-      linkedTasks,
-      azureItems,
-      csatResponses: csat,
-      catalogServices: services,
-      taskLinkCoveragePct: tickets ? Math.round(linkedTasks / tickets * 1000) / 10 : 0,
+      tickets, linkedTasks, azureItems, csatResponses: csat, catalogServices: services,
+      taskLinkCoveragePct: pct(linkedTasks),
+      serviceCoveragePct: pct(withService),
+      causeCoveragePct: pct(withCause),
+      businessAreaCoveragePct: pct(withBusinessArea),
       latestCsatSyncAt: latestCsat._max.syncedAt,
       latestCsatResponseAt: latestCsat._max.responseDate,
       latestCatalogSyncAt: latestCatalog._max.syncedAt,
