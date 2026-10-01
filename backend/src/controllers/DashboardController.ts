@@ -1248,8 +1248,8 @@ export class DashboardController {
   }
 
   /**
-   * Histórico pesado do Movidesk carregado sob demanda. Mantém a listagem
-   * rápida e entrega ações, trocas de responsável e satisfação no drawer.
+   * Analytics disponíveis do atendimento carregados sob demanda. O payload legado
+   * pode conter eventos; CSAT vem da API de Pesquisa de Satisfação persistida.
    */
   async ticketAnalytics(
     req: Request,
@@ -1267,6 +1267,7 @@ export class DashboardController {
           id,
         },
         select: {
+          movideskId: true,
           rawData: true,
         },
       });
@@ -1275,7 +1276,20 @@ export class DashboardController {
         return res.status(404).json({ error: "Atendimento não encontrado." });
       }
 
-      return res.json(analyzeMovideskPayload(ticket.rawData));
+      const analytics = analyzeMovideskPayload(ticket.rawData);
+      const csat = await prisma.movideskSurveyResponse.findFirst({
+        where: { ticketId: ticket.movideskId },
+        orderBy: { responseDate: "desc" },
+        select: { value:true, commentary:true, responseDate:true },
+      });
+
+      return res.json({
+        ...analytics,
+        satisfactionScore: csat?.value ?? analytics.satisfactionScore ?? null,
+        satisfactionComment: csat?.commentary ?? analytics.satisfactionComment ?? null,
+        satisfactionDate: csat?.responseDate ?? null,
+        satisfactionSource: csat ? "MovideskSurveyResponse" : null,
+      });
     } catch (error) {
       console.error("Erro ao buscar histórico do atendimento:", error);
       return res.status(500).json({
