@@ -26,7 +26,7 @@ import { detailDrawerPaperSx } from "../theme/layoutTokens";
 import { PageHeader } from "../components/PageHeader";
 import { api, getApiErrorMessage } from "../services/api";
 import { aliareColors } from "../theme/theme";
-import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip as ChartTooltip, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip as ChartTooltip, XAxis, YAxis } from "recharts";
 
 type Data = {
   generatedAt: string;
@@ -58,6 +58,16 @@ type Data = {
   };
 };
 
+type SlaDevelopment = {
+  periodDays: number;
+  rule: { taskEndState: string; schedule: string; profile: string };
+  dataQuality: { bugsInPeriod: number; linked: number; missingAzure: number; missingTaskCreatedAt: number; missingPriority: number };
+  summary: { bugsWithTask: number; concluded: number; openDevelopment: number; avgSupportMinutes: number; avgFactoryMinutes: number; avgTotalMinutes: number; supportWithinOla: number; factoryWithinOla: number; totalWithinSla: number };
+  byPriority: Array<{ priority: string; total: number; concluded: number; avgSupportMinutes: number; avgFactoryMinutes: number; avgTotalMinutes: number; supportWithinOla: number; factoryWithinOla: number; totalWithinSla: number }>;
+  monthly: Array<{ month: string; label: string; total: number; concluded: number; supportWithinPct: number; factoryWithinPct: number; totalWithinPct: number }>;
+  outliers: { total: number; support: number; factory: number; totalSla: number; critical: number };
+};
+
 type DetailKind = "backlog" | "critical" | "stale" | "dueSoon" | "overdue" | "blocked" | "unassigned" | "analyst" | "service" | "serviceModule" | "serviceClient" | "serviceAnalyst";
 type DetailData = {
   kind: DetailKind; analyst: string | null; total: number; loaded?: number; truncated: boolean;
@@ -77,6 +87,9 @@ export function Coordination() {
   const [detailError, setDetailError] = useState("");
   const [details, setDetails] = useState<DetailData | null>(null);
   const [serviceDays, setServiceDays] = useState(0);
+  const [slaDays, setSlaDays] = useState(180);
+  const [slaDevelopment, setSlaDevelopment] = useState<SlaDevelopment | null>(null);
+  const [slaLoading, setSlaLoading] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -105,6 +118,19 @@ export function Coordination() {
     }, 120);
     return () => { window.clearTimeout(timer); controller.abort(); };
   }, [Boolean(data)]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setSlaLoading(true);
+    api.get<SlaDevelopment>("/coordination/sla-development", { params: { days: slaDays }, signal: controller.signal })
+      .then((response) => setSlaDevelopment(response.data))
+      .catch(() => { if (!controller.signal.aborted) setSlaDevelopment(null); })
+      .finally(() => { if (!controller.signal.aborted) setSlaLoading(false); });
+    return () => controller.abort();
+  }, [slaDays]);
+
+  const formatHours = (minutes: number) => minutes ? `${(minutes / 60).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}h` : "—";
+  const rate = (within: number, total: number) => total ? Math.round(within / total * 1000) / 10 : 0;
 
   const maximum = useMemo(
     () => Math.max(...(data?.workload.map((item) => item.total) ?? [1]), 1),
@@ -169,20 +195,67 @@ export function Coordination() {
           </Alert>
 
           {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-          <Card variant="outlined" sx={{mb:2}}>
-<CardContent>
-<Stack direction={{xs:"column",md:"row"}} spacing={1.5} sx={{alignItems:{md:"center"},justifyContent:"space-between"}}>
-<Box>
-<Typography sx={{fontWeight:900}}>SLA × OLA · Suporte x Desenvolvimento</Typography>
-<Typography variant="body2" color="text.secondary" sx={{mt:.35}}>Este painel ainda não está pronto para uso operacional.</Typography>
-</Box>
-<Chip size="small" color="warning" variant="outlined" label="Aguardando integração PSG" />
-</Stack>
-<Alert severity="info" variant="outlined" sx={{mt:1.5,borderRadius:2}}>
-Os indicadores, cards e gráficos de SLA/OLA desta seção dependem de dados que ainda não estão disponíveis de forma completa no TechLead Hub. A visualização ficará indisponível até a integração com o PSG, evitando apresentar métricas parciais ou potencialmente incorretas.
-</Alert>
-</CardContent>
-</Card>
+          <Card variant="outlined" sx={{ mb: 2, overflow: "hidden" }}>
+            <CardContent>
+              <Stack direction={{ xs: "column", lg: "row" }} spacing={1.5} sx={{ alignItems: { lg: "center" }, justifyContent: "space-between", mb: 1.5 }}>
+                <Box>
+                  <Typography sx={{ fontWeight: 900 }}>SLA × OLA · Suporte x Desenvolvimento</Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mt: .35 }}>
+                    Ticket Movidesk → abertura da Task → conclusão no Azure, calculado em horas úteis.
+                  </Typography>
+                </Box>
+                <Stack direction="row" spacing={.6} useFlexGap sx={{ flexWrap: "wrap" }}>
+                  {[90,180,365].map((days) => <Chip key={days} clickable size="small" label={days === 365 ? "12 meses" : `${days} dias`} color={slaDays === days ? "primary" : "default"} variant={slaDays === days ? "filled" : "outlined"} onClick={() => setSlaDays(days)} />)}
+                </Stack>
+              </Stack>
+              {slaLoading ? <LinearProgress sx={{ borderRadius: 2 }} /> : slaDevelopment ? (
+                <Stack spacing={1.5}>
+                  <Alert severity={slaDevelopment.dataQuality.missingAzure || slaDevelopment.dataQuality.missingTaskCreatedAt || slaDevelopment.dataQuality.missingPriority ? "warning" : "success"} variant="outlined">
+                    Cobertura: {slaDevelopment.dataQuality.linked}/{slaDevelopment.dataQuality.bugsInPeriod} correções vinculadas. Sem Azure: {slaDevelopment.dataQuality.missingAzure} · sem abertura da Task: {slaDevelopment.dataQuality.missingTaskCreatedAt} · sem prioridade: {slaDevelopment.dataQuality.missingPriority}.
+                  </Alert>
+                  <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2,1fr)", xl: "repeat(4,1fr)" }, gap: 1.25 }}>
+                    <KpiCard title="OLA Suporte" value={`${rate(slaDevelopment.summary.supportWithinOla, slaDevelopment.summary.bugsWithTask)}%`} subtitle={`${formatHours(slaDevelopment.summary.avgSupportMinutes)} em média`} info="Da abertura do ticket Movidesk até a abertura da Task no Azure." accent={aliareColors.info} />
+                    <KpiCard title="OLA Desenvolvimento" value={`${rate(slaDevelopment.summary.factoryWithinOla, slaDevelopment.summary.concluded)}%`} subtitle={`${formatHours(slaDevelopment.summary.avgFactoryMinutes)} em média`} info="Da abertura da Task até sua conclusão no Azure." accent={aliareColors.green} />
+                    <KpiCard title="SLA total" value={`${rate(slaDevelopment.summary.totalWithinSla, slaDevelopment.summary.concluded)}%`} subtitle={`${formatHours(slaDevelopment.summary.avgTotalMinutes)} em média`} info="Ciclo completo medido para correções concluídas." accent={aliareColors.warning} />
+                    <KpiCard title="Fora da meta" value={slaDevelopment.outliers.total} subtitle={`${slaDevelopment.outliers.critical} crítico(s)`} info="Correções cujo consumo ultrapassou pelo menos uma meta operacional." accent={aliareColors.error} />
+                  </Box>
+                  <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", xl: "1fr 1.4fr" }, gap: 1.25 }}>
+                    <Box sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2.5, p: 1.5 }}>
+                      <Typography sx={{ fontWeight: 850, mb: 1 }}>Cumprimento por prioridade</Typography>
+                      <Stack spacing={1}>
+                        {slaDevelopment.byPriority.map((item) => (
+                          <Box key={item.priority}>
+                            <Stack direction="row" sx={{ justifyContent: "space-between", mb: .35 }}>
+                              <Typography variant="body2" sx={{ fontWeight: 800 }}>{item.priority} · {item.total} item(ns)</Typography>
+                              <Typography variant="caption" color="text.secondary">Suporte {rate(item.supportWithinOla,item.total)}% · Dev {rate(item.factoryWithinOla,item.concluded)}% · Total {rate(item.totalWithinSla,item.concluded)}%</Typography>
+                            </Stack>
+                            <LinearProgress variant="determinate" value={rate(item.totalWithinSla,item.concluded)} sx={{ height: 7, borderRadius: 5 }} />
+                          </Box>
+                        ))}
+                      </Stack>
+                    </Box>
+                    <Box sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2.5, p: 1.5, minHeight: 250 }}>
+                      <Typography sx={{ fontWeight: 850, mb: 1 }}>Tendência mensal de cumprimento</Typography>
+                      <ResponsiveContainer width="100%" height={210}>
+                        <LineChart data={slaDevelopment.monthly} margin={{ top: 8, right: 10, left: -18, bottom: 0 }}>
+                          <CartesianGrid vertical={false} />
+                          <XAxis dataKey="label" />
+                          <YAxis domain={[0,100]} />
+                          <ChartTooltip />
+                          <Line type="monotone" dataKey="supportWithinPct" name="OLA Suporte %" stroke={aliareColors.info} strokeWidth={2.5} dot={false} />
+                          <Line type="monotone" dataKey="factoryWithinPct" name="OLA Desenvolvimento %" stroke={aliareColors.green} strokeWidth={2.5} dot={false} />
+                          <Line type="monotone" dataKey="totalWithinPct" name="SLA total %" stroke={aliareColors.warning} strokeWidth={2.5} dot={false} />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </Box>
+                  </Box>
+                  <Typography variant="caption" color="text.secondary">
+                    Regra operacional: {slaDevelopment.rule.schedule} · conclusão da Task: {slaDevelopment.rule.taskEndState}. Os percentuais são calculados pelo Hub a partir dos timestamps Movidesk/Azure e não usam os indicadores SLA não suportados pelo TicketApiDto.
+                  </Typography>
+                </Stack>
+              ) : <Alert severity="warning">Não foi possível carregar a análise SLA × OLA.</Alert>}
+            </CardContent>
+          </Card>
 
           {loading || !data ? (
             <Box sx={{ minHeight: 320, display: "grid", placeItems: "center" }}>
