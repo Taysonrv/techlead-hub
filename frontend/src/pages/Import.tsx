@@ -124,6 +124,7 @@ type AzureSyncRun = {
 type SyncHealthState = "healthy" | "attention" | "critical" | "unknown";
 type SyncCenterSummary = {
   running: number;
+  runningProviders?: string[];
   health: SyncHealthState;
   checkedAt: string;
   providers: {
@@ -683,11 +684,19 @@ export function Import() {
                 label={syncHealth.health === "critical" ? "Ação necessária" : syncHealth.health === "attention" ? "Requer atenção" : "Integrações saudáveis"}
               />
             </Stack>
-            <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2,minmax(0,1fr))" }, gap: 1.25 }}>
-              <IntegrationHealthCard title="Movidesk" configured={syncHealth.providers.movidesk.configured} health={syncHealth.providers.movidesk.health} />
+            <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(3,minmax(0,1fr))" }, gap: 1.25 }}>
+              <IntegrationHealthCard title="Movidesk · Tickets" configured={syncHealth.providers.movidesk.configured} health={syncHealth.providers.movidesk.health} />
               <IntegrationHealthCard title="Azure DevOps" configured={syncHealth.providers.azureDevOps.configured} health={syncHealth.providers.azureDevOps.health} />
+              <Box sx={{ p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: 2.25, bgcolor: "background.default" }}>
+                <Typography variant="caption" color="text.secondary">Movidesk · Catálogo + CSAT</Typography>
+                <Typography sx={{ mt: .35, fontWeight: 750 }}>Diário às 03:20</Typography>
+                <Typography variant="caption" color="text.secondary">Próxima: {formatDateTime(referenceNextAt)}</Typography>
+              </Box>
             </Box>
-            {syncHealth.running > 0 && <Alert severity="info" sx={{ mt: 1.5 }}>{syncHealth.running} sincronização(ões) em processamento neste momento.</Alert>}
+            {syncHealth.running > 0 && <Alert severity="info" sx={{ mt: 1.5 }}>
+              {syncHealth.running === 1 ? "1 sincronização em processamento" : `${syncHealth.running} sincronizações em processamento`}
+              {syncHealth.runningProviders?.length ? ` · ${syncHealth.runningProviders.map((provider) => provider === "MOVIDESK" ? "Movidesk" : "Azure DevOps").join(" + ")}` : ""}.
+            </Alert>}
           </CardContent>
         </Card>
       )}
@@ -709,7 +718,7 @@ export function Import() {
               </Stack>
               <Typography variant="body2" color="text.secondary" sx={{ mt: .75 }}>
                 {movideskStatus
-                  ? `Tickets a cada ${movideskStatus.scheduler.intervalMinutes} min • Catálogo + CSAT diário às 03:20 • overlap ${movideskStatus.scheduler.overlapMinutes} min • ${movideskStatus.scheduler.phase === "INCREMENTAL" ? "baseline concluído" : movideskStatus.scheduler.phase === "BASELINE_RUNNING" ? "baseline em execução" : "aguardando baseline FULL"}`
+                  ? movideskStatus.scheduler.phase === "INCREMENTAL" ? "Base inicial concluída · atualização incremental ativa" : movideskStatus.scheduler.phase === "BASELINE_RUNNING" ? "Carga inicial em execução" : "Aguardando carga inicial"
                   : "Consultando o sincronizador Movidesk..."}
               </Typography>
             </Box>
@@ -728,7 +737,7 @@ export function Import() {
 
           {movideskStatus && <>
             <Divider sx={{ my: 2 }} />
-            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr 1fr", lg: "repeat(6,1fr)" }, gap: 1.5 }}>
+            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr 1fr", lg: "repeat(5,1fr)" }, gap: 1.5 }}>
               <InfoCard label="Tickets na base" value={String(movideskStatus.database.tickets)} />
               <InfoCard label="Tickets no escopo 2026" value={String(movideskStatus.database.scopedTickets ?? 0)} />
               <InfoCard label="Tickets com Task no escopo" value={String(movideskStatus.database.linkedTasks)} />
@@ -1252,9 +1261,7 @@ export function Import() {
                     0.75,
                 }}
               >
-                {azureStatus
-                  ? `Incremental a cada ${azureStatus.scheduler.intervalMinutes} minuto(s) • overlap de ${azureStatus.scheduler.overlapMinutes} minuto(s)`
-                  : "Carregando configuração do sincronizador..."}
+                {azureStatus ? "Correções, Evoluções e APOIOs · acompanhamento do último processamento" : "Carregando status do sincronizador..."}
               </Typography>
             </Box>
 
@@ -1310,7 +1317,7 @@ export function Import() {
                     sm:
                       "repeat(2, 1fr)",
                     lg:
-                      "repeat(4, 1fr)",
+                      "repeat(3, 1fr)",
                   },
                   gap:
                     1.5,
@@ -1334,16 +1341,6 @@ export function Import() {
                       azureStatus
                         .lastSuccessfulRun
                         ?.finishedAt,
-                    )
-                  }
-                />
-
-                <InfoCard
-                  label="Próxima execução estimada"
-                  value={
-                    formatDateTime(
-                      azureStatus
-                        .nextEstimatedAt,
                     )
                   }
                 />
