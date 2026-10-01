@@ -69,7 +69,7 @@ type CsatOverview = {
   recent: Array<{ id: string; ticketId: number | null; subject: string; client: string | null; owner: string | null; value: number | null; commentary: string | null; responseDate: string | null; service: string }>;
 };
 
-type IntegrationHealth = { tickets: number; linkedTasks: number; azureItems: number; csatResponses: number; catalogServices: number; taskLinkCoveragePct: number; latestCsatSyncAt: string | null; latestCsatResponseAt: string | null; latestCatalogSyncAt: string | null; sources: Record<string,string> };
+type IntegrationHealth = { tickets: number; linkedTasks: number; azureItems: number; csatResponses: number; catalogServices: number; taskLinkCoveragePct: number; serviceCoveragePct: number; causeCoveragePct: number; businessAreaCoveragePct: number; latestCsatSyncAt: string | null; latestCsatResponseAt: string | null; latestCatalogSyncAt: string | null; sources: Record<string,string> };
 
 type SlaBreakdown = { total:number; concluded:number; openDevelopment:number; avgSupportMinutes:number; avgFactoryMinutes:number; avgTotalMinutes:number; supportWithinOla:number; factoryWithinOla:number; totalWithinSla:number };
 
