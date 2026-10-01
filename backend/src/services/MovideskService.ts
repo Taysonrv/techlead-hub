@@ -237,6 +237,56 @@ export class MovideskService {
     }
   }
 
+  async diagnoseScopedClients(limit = 3) {
+    const sampleSize = Math.min(Math.max(Math.trunc(limit) || 3, 1), 5);
+    const response = await this.getWithRetry(`${this.url}/tickets`, {
+      params: {
+        token: this.token(),
+        $select: "id,createdDate,lastUpdate",
+        $expand: "clients",
+        $orderby: "lastUpdate desc,id desc",
+        $top: sampleSize,
+        $filter: this.remoteScopeFilter(),
+      },
+      timeout: 120_000,
+    }, "diagnóstico do escopo remoto SIMER");
+    if (!Array.isArray(response.data)) throw new Error("Resposta inesperada da API Movidesk no diagnóstico.");
+
+    const rows = response.data as Array<Record<string, unknown>>;
+    return {
+      readOnly: true,
+      filterAccepted: true,
+      requested: sampleSize,
+      returned: rows.length,
+      samples: rows.map((row) => {
+        const clients = Array.isArray(row.clients) ? row.clients : [];
+        return {
+          id: row.id ?? null,
+          createdDate: row.createdDate ?? null,
+          lastUpdate: row.lastUpdate ?? null,
+          resolvedSimerClient: this.ticketClientName(row),
+          clients: clients.map((item) => {
+            if (!item || typeof item !== "object" || Array.isArray(item)) return { type: typeof item };
+            const client = item as Record<string, unknown>;
+            const organization = client.organization;
+            return {
+              keys: Object.keys(client).sort(),
+              businessName: typeof client.businessName === "string" ? client.businessName : null,
+              organization: organization && typeof organization === "object" && !Array.isArray(organization)
+                ? {
+                    keys: Object.keys(organization as Record<string, unknown>).sort(),
+                    businessName: typeof (organization as Record<string, unknown>).businessName === "string"
+                      ? (organization as Record<string, unknown>).businessName
+                      : null,
+                  }
+                : organization ?? null,
+            };
+          }),
+        };
+      }),
+    };
+  }
+
   async previewTickets(limit = 25) {
     const sampleSize = Math.min(Math.max(Math.trunc(limit) || 25, 1), 25);
     const token = this.token();
