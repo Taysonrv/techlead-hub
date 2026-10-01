@@ -3,7 +3,7 @@ import crypto from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../database/prisma";
 import { MovideskJsonImportService } from "./MovideskJsonImportService";
-import { isSimerClient } from "../domain/OperationalScope";
+import { isSimerClient, SIMER_CLIENTS } from "../domain/OperationalScope";
 
 const PAGE_SIZE = 50;
 const REQUEST_INTERVAL_MS = 6_200;
@@ -469,7 +469,7 @@ export class MovideskService {
     const latest = await prisma.ticket.aggregate({
       where: {
         createdDate: { gte: SYNC_SCOPE_START },
-        client: { not: null },
+        client: { in: [...SIMER_CLIENTS], mode: "insensitive" },
       },
       _max: { lastUpdate: true },
     });
