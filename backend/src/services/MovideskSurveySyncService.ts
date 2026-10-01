@@ -1,5 +1,5 @@
 import { Prisma } from "@prisma/client";
-import axios from "axios";
+import axios, { type AxiosResponse } from "axios";
 import { prisma } from "../database/prisma";
 import { SIMER_CLIENTS } from "../domain/OperationalScope";
 
@@ -19,11 +19,11 @@ export class MovideskSurveySyncService {
     let cursor: string | null = null;
     let processed = 0, upserted = 0, skippedOutsideScope = 0;
     for (;;) {
-      const response = await axios.get(`${API_URL}/survey/responses`, {
+      const response: AxiosResponse<unknown> = await axios.get(`${API_URL}/survey/responses`, {
         params: { token: this.token(), responseDateGreaterThan: "2026-01-01", limit: 100, ...(cursor ? { startingAfter: cursor } : {}) },
         timeout: 120000,
       });
-      const body = response.data && typeof response.data === "object" && !Array.isArray(response.data) ? response.data as Record<string, unknown> : {};
+      const body: Record<string, unknown> = response.data && typeof response.data === "object" && !Array.isArray(response.data) ? response.data as Record<string, unknown> : {};
       const rows = Array.isArray(body.items) ? body.items as Array<Record<string, unknown>> : [];
       if (!rows.length) break;
 
@@ -57,7 +57,7 @@ export class MovideskSurveySyncService {
 
       if (body.hasMore !== true) break;
       const last = rows[rows.length - 1];
-      const next = typeof body.startingAfter === "string" ? body.startingAfter :
+      const next: string | null = typeof body.startingAfter === "string" ? body.startingAfter :
         typeof body.nextStartingAfter === "string" ? body.nextStartingAfter :
         last && typeof last.id === "string" ? last.id : null;
       if (!next || next === cursor) break;
