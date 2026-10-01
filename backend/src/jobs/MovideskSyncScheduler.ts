@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../database/prisma";
 import { MovideskService } from "../services/MovideskService";
+import { releaseMovideskApi, tryAcquireMovideskApi } from "./MovideskSyncCoordinator";
 
 const DEFAULT_INTERVAL_MINUTES = 60;
 const DEFAULT_INITIAL_DELAY_SECONDS = 90;
@@ -55,6 +56,10 @@ export class MovideskSyncScheduler {
 
   private async execute() {
     if (this.running) return;
+    if (!tryAcquireMovideskApi("TICKETS")) {
+      console.log("[movidesk-sync] Ciclo adiado: outra rotina Movidesk está utilizando a API.");
+      return;
+    }
     this.running = true;
     const started = Date.now();
     try {
@@ -92,6 +97,7 @@ export class MovideskSyncScheduler {
       console.error("[movidesk-sync] Falha na sincronização automática:", error);
     } finally {
       this.running = false;
+      releaseMovideskApi("TICKETS");
     }
   }
 }
