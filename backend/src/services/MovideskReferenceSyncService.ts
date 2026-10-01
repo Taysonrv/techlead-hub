@@ -40,13 +40,18 @@ export class MovideskReferenceSyncService {
       select: { service: true, serviceFirstLevel: true, serviceSecondLevel: true, serviceThirdLevel: true },
     });
 
+    // O catálogo remoto é apenas enriquecimento. A hierarquia operacional já
+    // existe no Ticket; portanto buscamos somente o serviço mais específico
+    // observado em cada atendimento, evitando consultar separadamente todos
+    // os níveis pai (SIMER, módulo, rotina etc.).
     const names = [...new Set(
-      tickets.flatMap((ticket) => [
-        ticket.service,
-        ticket.serviceFirstLevel,
-        ticket.serviceSecondLevel,
-        ticket.serviceThirdLevel,
-      ]).map((value) => value?.trim()).filter((value): value is string => Boolean(value)),
+      tickets.map((ticket) =>
+        ticket.serviceThirdLevel?.trim()
+        || ticket.service?.trim()
+        || ticket.serviceSecondLevel?.trim()
+        || ticket.serviceFirstLevel?.trim()
+        || null,
+      ).filter((value): value is string => Boolean(value)),
     )].sort((a, b) => a.localeCompare(b, "pt-BR"));
 
     console.log(`[movidesk-catalog] escopo SIMER/2026 | tickets=${tickets.length} | serviços referenciados=${names.length}`);
