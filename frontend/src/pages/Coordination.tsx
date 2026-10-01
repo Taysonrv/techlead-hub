@@ -82,8 +82,12 @@ type SlaDevelopment = {
   monthly: Array<{ month: string; label: string; total: number; concluded: number; supportWithinPct: number; factoryWithinPct: number; totalWithinPct: number }>;
   owners: Array<SlaBreakdown & { owner:string; rows:number[] }>;
   clients: Array<SlaBreakdown & { client:string; rows:number[] }>;
-  outliers: { total: number; support: number; factory: number; totalSla: number; critical: number };
+  outliers: { total: number; support: number; factory: number; totalSla: number; critical: number; top: Array<SlaRow> };
+  rows: SlaRow[];
 };
+
+type SlaRow = { movideskId:number; subject:string; client:string|null; owner:string; taskNumber:number; taskTitle?:string|null; taskState?:string|null; urgency:string; supportMinutes:number; factoryMinutes:number|null; totalMinutes:number|null; supportPct:number; factoryPct:number|null; totalPct:number|null; bottleneck:string };
+type CsatDetail = { periodDays:number; total:number; truncated:boolean; items:Array<{ id:string; ticketId:number|null; subject:string; client:string|null; owner:string|null; taskNumber:number|null; service:string; value:number|null; commentary:string|null; responseDate:string|null }> };
 
 type DetailKind = "backlog" | "critical" | "stale" | "dueSoon" | "overdue" | "blocked" | "unassigned" | "analyst" | "service" | "serviceModule" | "serviceClient" | "serviceAnalyst";
 type DetailData = {
@@ -110,6 +114,10 @@ export function Coordination() {
   const [csat, setCsat] = useState<CsatOverview | null>(null);
   const [csatLoading, setCsatLoading] = useState(false);
   const [integrationHealth, setIntegrationHealth] = useState<IntegrationHealth | null>(null);
+  const [slaDetail, setSlaDetail] = useState<{ title:string; rows:SlaRow[] } | null>(null);
+  const [csatDetail, setCsatDetail] = useState<CsatDetail | null>(null);
+  const [csatDetailTitle, setCsatDetailTitle] = useState("");
+  const [csatDetailLoading, setCsatDetailLoading] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -186,6 +194,20 @@ export function Coordination() {
         ["unassigned", "Sem responsável", data.indicators.unassignedItems, "Tarefas sem responsável identificado."],
       ]
     : [];
+
+  function openSlaRows(title:string, ids:number[]) {
+    if (!slaDevelopment) return;
+    const idSet=new Set(ids);
+    setSlaDetail({ title, rows:slaDevelopment.rows.filter((row)=>idSet.has(row.movideskId)) });
+  }
+
+  async function openCsatDetails(title:string, params:Record<string,string|number>) {
+    try {
+      setCsatDetailTitle(title); setCsatDetail(null); setCsatDetailLoading(true);
+      const response=await api.get<CsatDetail>("/coordination/csat/details",{params:{days:slaDays,...params}});
+      setCsatDetail(response.data);
+    } finally { setCsatDetailLoading(false); }
+  }
 
   async function openDetails(kind: DetailKind, title: string, analyst?: string, serviceModule?: string, serviceClient?: string, serviceName?: string) {
     try {
@@ -306,7 +328,7 @@ export function Coordination() {
                     {[{title:"Por analista",items:slaDevelopment.owners.map(x=>({name:x.owner,...x}))},{title:"Por cliente",items:slaDevelopment.clients.map(x=>({name:x.client,...x}))}].map((group)=>(
                       <Box key={group.title} sx={{ border:"1px solid", borderColor:"divider", borderRadius:2.5, p:1.5 }}>
                         <Typography sx={{ fontWeight:850, mb:1 }}>{group.title}</Typography>
-                        <Stack spacing={.8}>{group.items.slice(0,8).map((item)=><Box key={item.name}><Stack direction="row" sx={{ justifyContent:"space-between", gap:1 }}><Typography variant="body2" noWrap sx={{ fontWeight:750 }}>{item.name}</Typography><Typography variant="caption" color="text.secondary">{item.total} · SLA {rate(item.totalWithinSla,item.concluded)}%</Typography></Stack><LinearProgress variant="determinate" value={rate(item.totalWithinSla,item.concluded)} sx={{ height:6,borderRadius:4,mt:.3 }}/></Box>)}</Stack>
+                        <Stack spacing={.8}>{group.items.slice(0,8).map((item)=><Box key={item.name} onClick={()=>openSlaRows(`${group.title} · ${item.name}`,item.rows)} sx={{ cursor:"pointer", borderRadius:1.5, p:.45, mx:-.45, "&:hover":{ bgcolor:"action.hover" } }}><Stack direction="row" sx={{ justifyContent:"space-between", gap:1 }}><Typography variant="body2" noWrap sx={{ fontWeight:750 }}>{item.name}</Typography><Typography variant="caption" color="text.secondary">{item.total} · SLA {rate(item.totalWithinSla,item.concluded)}%</Typography></Stack><LinearProgress variant="determinate" value={rate(item.totalWithinSla,item.concluded)} sx={{ height:6,borderRadius:4,mt:.3 }}/></Box>)}</Stack>
                       </Box>
                     ))}
                   </Box>
@@ -347,7 +369,7 @@ export function Coordination() {
                     <Box sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2.5, p: 1.5 }}>
                       <Typography sx={{ fontWeight: 850, mb: 1 }}>CSAT por analista</Typography>
                       <Stack spacing={.8}>
-                        {csat.byAnalyst.slice(0,8).map((item) => <Stack key={item.name} direction="row" spacing={1} sx={{ alignItems:"center" }}>
+                        {csat.byAnalyst.slice(0,8).map((item) => <Stack key={item.name} direction="row" spacing={1} onClick={()=>void openCsatDetails(`CSAT · ${item.name}`,{analyst:item.name})} sx={{ alignItems:"center", cursor:"pointer", borderRadius:1.5, p:.5, mx:-.5, "&:hover":{bgcolor:"action.hover"} }}>
                           <Typography variant="body2" sx={{ flex:1, minWidth:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{item.name}</Typography>
                           <Typography variant="caption" color="text.secondary">{item.responses} resp.</Typography>
                           <Chip size="small" variant="outlined" label={item.average.toLocaleString("pt-BR",{maximumFractionDigits:2})} />
@@ -647,6 +669,14 @@ export function Coordination() {
           )}
         </CardContent>
       </Card>
+      <Drawer anchor="right" open={Boolean(slaDetail)} onClose={()=>setSlaDetail(null)} slotProps={{ paper:{ sx:detailDrawerPaperSx } }}>
+        <DetailPanelHeader eyebrow="SLA × OLA" title={slaDetail?.title ?? "Detalhes"} identifier={slaDetail ? `${slaDetail.rows.length} item(ns)` : undefined} onClose={()=>setSlaDetail(null)} />
+        <Stack spacing={1.2} sx={{ p:2 }}>{slaDetail?.rows.map((row)=><Button key={row.movideskId} variant="outlined" onClick={()=>navigate(`/tickets?movidesk=${row.movideskId}`)} sx={{ textTransform:"none", textAlign:"left", justifyContent:"flex-start", p:1.25 }}><Box><Typography sx={{fontWeight:800}}>#{row.movideskId} · {row.subject}</Typography><Typography variant="caption" color="text.secondary">{[row.client,row.owner,row.urgency,`Task #${row.taskNumber}`].filter(Boolean).join(" · ")}</Typography><Typography variant="caption" sx={{display:"block",mt:.35}}>Suporte {formatHours(row.supportMinutes)} · Desenvolvimento {formatHours(row.factoryMinutes ?? 0)} · Total {formatHours(row.totalMinutes ?? 0)}</Typography></Box></Button>)}</Stack>
+      </Drawer>
+      <Drawer anchor="right" open={Boolean(csatDetailTitle)} onClose={()=>{setCsatDetailTitle("");setCsatDetail(null)}} slotProps={{ paper:{ sx:detailDrawerPaperSx } }}>
+        <DetailPanelHeader eyebrow="CSAT" title={csatDetailTitle || "Avaliações"} identifier={csatDetail ? `${csatDetail.total} resposta(s)` : undefined} onClose={()=>{setCsatDetailTitle("");setCsatDetail(null)}} />
+        {csatDetailLoading ? <Box sx={{py:8,display:"grid",placeItems:"center"}}><CircularProgress/></Box> : <Stack spacing={1.2} sx={{p:2}}>{csatDetail?.items.map((item)=><Button key={item.id} variant="outlined" onClick={()=>item.ticketId&&navigate(`/tickets?movidesk=${item.ticketId}`)} sx={{textTransform:"none",textAlign:"left",justifyContent:"flex-start",p:1.25}}><Box><Stack direction="row" spacing={1} sx={{alignItems:"center"}}><Typography sx={{fontWeight:800}}>#{item.ticketId} · {item.subject}</Typography><Chip size="small" label={item.value ?? "—"}/></Stack><Typography variant="caption" color="text.secondary">{[item.client,item.owner,item.service].filter(Boolean).join(" · ")}</Typography>{item.commentary&&<Typography variant="body2" sx={{mt:.65}}>{item.commentary}</Typography>}</Box></Button>)}{csatDetail?.truncated&&<Alert severity="info">Recorte limitado aos 500 registros mais recentes.</Alert>}</Stack>}
+      </Drawer>
       <Drawer anchor="right" open={Boolean(detailTitle)} onClose={() => { setDetailTitle(""); setDetails(null); setDetailError(""); }} slotProps={{ paper: { sx: detailDrawerPaperSx } }}>
         <DetailPanelHeader eyebrow="Coordenação" title={detailTitle || "Detalhes"} identifier={details ? `${details.total} item(ns) no recorte · ${details.loaded ?? (details.tickets.length + details.workItems.length)} carregado(s)` : undefined} onClose={() => { setDetailTitle(""); setDetails(null); setDetailError(""); }} />
         {detailLoading ? <Box sx={{ py: 8, display: "grid", placeItems: "center" }}><CircularProgress /></Box> : detailError ? <Alert severity="error" sx={{m:2}}>{detailError}</Alert> : details ? (
