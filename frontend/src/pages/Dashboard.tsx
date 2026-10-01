@@ -132,9 +132,6 @@ type Ticket = {
 
   azureWorkItem?: AzureTaskSummary | null;
 
-  responseSlaIndicator?: string | null;
-  solutionSlaIndicator?: string | null;
-
   importSource?: string | null;
   importedAt?: string | null;
   importBatch?: string | null;
