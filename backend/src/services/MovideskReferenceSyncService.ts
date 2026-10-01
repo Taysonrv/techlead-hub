@@ -70,6 +70,7 @@ export class MovideskReferenceSyncService {
     // ramos diferentes, por isso mantemos todos os IDs retornados.
     for (let index = 0; index < names.length; index += 1) {
       const name = names[index];
+      if (!name) continue;
       requests += 1;
       try {
         const response = await this.get("/services", {
