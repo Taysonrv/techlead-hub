@@ -215,12 +215,12 @@ export function Performance() {
     });
   }, [tickets, effectiveStartDate, effectiveEndDate]);
 
-  const officialResponseSla = useMemo(
+  const timestampResponseSla = useMemo(
     () => calculateTimestampSla(periodTickets, "response"),
     [periodTickets],
   );
 
-  const officialSolutionSla = useMemo(
+  const timestampSolutionSla = useMemo(
     () => calculateTimestampSla(periodTickets, "solution"),
     [periodTickets],
   );
@@ -229,7 +229,7 @@ export function Performance() {
      MOTOR OPERACIONAL DE PRAZOS
 
      Usado para risco e priorização do backlog. O realizado
-     oficial de SLA vem dos indicadores importados acima.
+     realizado de SLA vem dos timestamps sincronizados acima.
   ======================================================= */
 
   const evaluatedTickets = useMemo<EvaluatedTicket[]>(() => {
@@ -327,13 +327,13 @@ export function Performance() {
     );
 
     const firstScore =
-      officialResponseSla.measured > 0
-        ? officialResponseSla.percentage ?? 0
+      timestampResponseSla.measured > 0
+        ? timestampResponseSla.percentage ?? 0
         : 100;
 
     const resolutionScore =
-      officialSolutionSla.measured > 0
-        ? officialSolutionSla.percentage ?? 0
+      timestampSolutionSla.measured > 0
+        ? timestampSolutionSla.percentage ?? 0
         : 100;
 
     const riskScore = Math.max(0, 100 - riskRate);
@@ -346,7 +346,7 @@ export function Performance() {
       score,
       label: healthLabel(score),
     };
-  }, [officialResponseSla, officialSolutionSla, riskGroups]);
+  }, [timestampResponseSla, timestampSolutionSla, riskGroups]);
 
   const analysts = useMemo<AnalystPerformance[]>(() => {
     const map = new Map<string, EvaluatedTicket[]>();
@@ -471,17 +471,17 @@ export function Performance() {
   const firstResponsePie = [
     {
       name: "Dentro do prazo",
-      value: officialResponseSla.within,
+      value: timestampResponseSla.within,
       color: deadlineColors.within,
     },
     {
       name: "Fora do prazo",
-      value: officialResponseSla.outside,
+      value: timestampResponseSla.outside,
       color: deadlineColors.overdue,
     },
     {
       name: "Sem medição",
-      value: officialResponseSla.unmeasured,
+      value: timestampResponseSla.unmeasured,
       color: deadlineColors.attention,
     },
   ].filter((item) => item.value > 0);
@@ -489,17 +489,17 @@ export function Performance() {
   const resolutionPie = [
     {
       name: "Dentro do prazo",
-      value: officialSolutionSla.within,
+      value: timestampSolutionSla.within,
       color: deadlineColors.within,
     },
     {
       name: "Fora do prazo",
-      value: officialSolutionSla.outside,
+      value: timestampSolutionSla.outside,
       color: deadlineColors.overdue,
     },
     {
       name: "Sem medição",
-      value: officialSolutionSla.unmeasured,
+      value: timestampSolutionSla.unmeasured,
       color: deadlineColors.attention,
     },
   ].filter((item) => item.value > 0);
@@ -585,9 +585,9 @@ export function Performance() {
       >
         <PerformanceKpi
           title="SLA suporte · 1ª resposta"
-          value={formatOfficialRate(officialResponseSla.percentage)}
-          description={`${officialResponseSla.within} dentro • ${officialResponseSla.outside} fora • ${officialResponseSla.unmeasured} sem medição`}
-          accent={rateColor(officialResponseSla.percentage ?? 0)}
+          value={formatSlaRate(timestampResponseSla.percentage)}
+          description={`${timestampResponseSla.within} dentro • ${timestampResponseSla.outside} fora • ${timestampResponseSla.unmeasured} sem medição`}
+          accent={rateColor(timestampResponseSla.percentage ?? 0)}
           info={{
             title: "Primeira resposta",
             summary:
@@ -596,7 +596,7 @@ export function Performance() {
               "Dentro do prazo ÷ (dentro do prazo + fora do prazo) × 100.",
             source: "Movidesk · timestamps e prazos sincronizados",
             reference:
-              "responseSlaIndicator",
+              "firstResponseDate ≤ firstResponseDueDate",
             periodRule:
               "Considera os tickets abertos dentro do período selecionado e elegíveis para medição.",
             notes:
@@ -606,16 +606,16 @@ export function Performance() {
             setDrilldown({
               title: "Prazo de primeira resposta",
               subtitle: "Atendimentos elegíveis para primeira resposta",
-              tickets: officialResponseSla.measuredTickets,
+              tickets: timestampResponseSla.measuredTickets,
             })
           }
         />
 
         <PerformanceKpi
           title="SLA suporte · solução"
-          value={formatOfficialRate(officialSolutionSla.percentage)}
-          description={`${officialSolutionSla.within} dentro • ${officialSolutionSla.outside} fora • ${officialSolutionSla.unmeasured} sem medição`}
-          accent={rateColor(officialSolutionSla.percentage ?? 0)}
+          value={formatSlaRate(timestampSolutionSla.percentage)}
+          description={`${timestampSolutionSla.within} dentro • ${timestampSolutionSla.outside} fora • ${timestampSolutionSla.unmeasured} sem medição`}
+          accent={rateColor(timestampSolutionSla.percentage ?? 0)}
           info={{
             title: "Resolução",
             summary:
@@ -624,7 +624,7 @@ export function Performance() {
               "Dentro do prazo ÷ (dentro do prazo + fora do prazo) × 100.",
             source: "Movidesk · timestamps e prazos sincronizados",
             reference:
-              "solutionSlaIndicator",
+              "resolvedDate/closedDate ≤ dueDate",
             periodRule:
               "A população vem dos tickets abertos no período selecionado e elegíveis para medição.",
             notes:
@@ -634,7 +634,7 @@ export function Performance() {
             setDrilldown({
               title: "Prazo de resolução",
               subtitle: "Atendimentos concluídos com prazo informado",
-              tickets: officialSolutionSla.measuredTickets,
+              tickets: timestampSolutionSla.measuredTickets,
             })
           }
         />
@@ -723,7 +723,7 @@ export function Performance() {
         <DonutCard
           title="Prazo de primeira resposta"
           subtitle="Distribuição dos atendimentos elegíveis"
-          centerValue={formatOfficialRate(officialResponseSla.percentage)}
+          centerValue={formatSlaRate(timestampResponseSla.percentage)}
           centerLabel="cumprimento"
           data={firstResponsePie}
           info={{
@@ -742,17 +742,17 @@ export function Performance() {
             if (name === "Dentro do prazo") {
               setDrilldown({
                 title: "Primeira resposta dentro do prazo",
-                tickets: officialResponseSla.withinTickets,
+                tickets: timestampResponseSla.withinTickets,
               });
             } else if (name === "Fora do prazo") {
               setDrilldown({
                 title: "Primeira resposta fora do prazo",
-                tickets: officialResponseSla.outsideTickets,
+                tickets: timestampResponseSla.outsideTickets,
               });
             } else {
               setDrilldown({
                 title: "Primeira resposta pendente",
-                tickets: officialResponseSla.unmeasuredTickets,
+                tickets: timestampResponseSla.unmeasuredTickets,
               });
             }
           }}
@@ -761,7 +761,7 @@ export function Performance() {
         <DonutCard
           title="Prazo de resolução"
           subtitle="Atendimentos concluídos com prazo"
-          centerValue={formatOfficialRate(officialSolutionSla.percentage)}
+          centerValue={formatSlaRate(timestampSolutionSla.percentage)}
           centerLabel="cumprimento"
           data={resolutionPie}
           info={{
@@ -780,7 +780,7 @@ export function Performance() {
             if (name === "Dentro do prazo") {
               setDrilldown({
                 title: "Resoluções dentro do prazo",
-                tickets: officialSolutionSla.withinTickets,
+                tickets: timestampSolutionSla.withinTickets,
               });
               return;
             }
@@ -788,7 +788,7 @@ export function Performance() {
             if (name === "Fora do prazo") {
               setDrilldown({
                 title: "Resoluções fora do prazo",
-                tickets: officialSolutionSla.outsideTickets,
+                tickets: timestampSolutionSla.outsideTickets,
               });
               return;
             }
@@ -796,7 +796,7 @@ export function Performance() {
             setDrilldown({
               title: "Resoluções em andamento",
               subtitle: "Atendimentos ainda abertos e dentro do prazo",
-              tickets: officialSolutionSla.unmeasuredTickets,
+              tickets: timestampSolutionSla.unmeasuredTickets,
             });
           }}
         />
@@ -1956,7 +1956,7 @@ function rateColor(rate: number) {
   return deadlineColors.overdue;
 }
 
-function formatOfficialRate(rate: number | null) {
+function formatSlaRate(rate: number | null) {
   return rate === null
     ? "Sem medição"
     : `${rate.toLocaleString("pt-BR", {
