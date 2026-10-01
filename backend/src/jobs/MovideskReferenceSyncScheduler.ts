@@ -89,13 +89,34 @@ export class MovideskReferenceSyncScheduler {
     state.scheduler.nextEstimatedAt = null;
   }
 
+  private scheduleDueRetry() {
+    if (this.stopped || !this.enabled()) return;
+    const result = runReferenceSync();
+    if (!result.accepted) {
+      const retryAt = new Date(Date.now() + 10 * 60_000);
+      state.scheduler.nextEstimatedAt = retryAt.toISOString();
+      this.timer = setTimeout(() => { this.timer = null; this.scheduleDueRetry(); }, 10 * 60_000);
+      this.timer.unref();
+      return;
+    }
+    this.scheduleNext();
+  }
+
   private scheduleNext() {
     if (this.stopped || !this.enabled()) return;
     const next = nextRun();
     state.scheduler.nextEstimatedAt = next.toISOString();
     this.timer = setTimeout(() => {
       this.timer = null;
-      runReferenceSync();
+      const result = runReferenceSync();
+      if (!result.accepted) {
+        const retryAt = new Date(Date.now() + 10 * 60_000);
+        state.scheduler.nextEstimatedAt = retryAt.toISOString();
+        console.log("[movidesk-reference] Execução diária adiada por concorrência; nova tentativa em 10 min.");
+        this.timer = setTimeout(() => { this.timer = null; this.scheduleDueRetry(); }, 10 * 60_000);
+        this.timer.unref();
+        return;
+      }
       this.scheduleNext();
     }, Math.max(1_000, next.getTime() - Date.now()));
     this.timer.unref();
