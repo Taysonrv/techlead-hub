@@ -78,7 +78,7 @@ type SlaDevelopment = {
   rule: { taskEndState: string; schedule: string; profile: string };
   dataQuality: { bugsInPeriod: number; linked: number; missingAzure: number; missingTaskCreatedAt: number; missingPriority: number };
   summary: { bugsWithTask: number; concluded: number; openDevelopment: number; avgSupportMinutes: number; avgFactoryMinutes: number; avgTotalMinutes: number; supportWithinOla: number; factoryWithinOla: number; totalWithinSla: number };
-  byPriority: Array<{ priority: string; total: number; concluded: number; avgSupportMinutes: number; avgFactoryMinutes: number; avgTotalMinutes: number; supportWithinOla: number; factoryWithinOla: number; totalWithinSla: number }>;
+  byPriority: Array<{ priority: string; total: number; concluded: number; avgSupportMinutes: number; avgFactoryMinutes: number; avgTotalMinutes: number; supportWithinOla: number; factoryWithinOla: number; totalWithinSla: number; rows:number[] }>;
   monthly: Array<{ month: string; label: string; total: number; concluded: number; supportWithinPct: number; factoryWithinPct: number; totalWithinPct: number }>;
   owners: Array<SlaBreakdown & { owner:string; rows:number[] }>;
   clients: Array<SlaBreakdown & { client:string; rows:number[] }>;
@@ -299,7 +299,7 @@ export function Coordination() {
                       <Typography sx={{ fontWeight: 850, mb: 1 }}>Cumprimento por prioridade</Typography>
                       <Stack spacing={1}>
                         {slaDevelopment.byPriority.map((item) => (
-                          <Box key={item.priority}>
+                          <Box key={item.priority} onClick={()=>openSlaRows(`SLA × OLA · ${item.priority}`,item.rows)} sx={{ cursor:"pointer", borderRadius:1.5, p:.45, mx:-.45, "&:hover":{ bgcolor:"action.hover" } }}>
                             <Stack direction="row" sx={{ justifyContent: "space-between", mb: .35 }}>
                               <Typography variant="body2" sx={{ fontWeight: 800 }}>{item.priority} · {item.total} item(ns)</Typography>
                               <Typography variant="caption" color="text.secondary">Suporte {rate(item.supportWithinOla,item.total)}% · Dev {rate(item.factoryWithinOla,item.concluded)}% · Total {rate(item.totalWithinSla,item.concluded)}%</Typography>
