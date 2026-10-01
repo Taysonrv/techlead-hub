@@ -50,7 +50,7 @@ import { KpiCard as ExecutiveKpiCard } from "../components/KpiCard";
 import { ExportTicketsButton } from "../components/ExportTicketsButton";
 import { useFilters } from "../context/FiltersContext";
 import { aliareColors } from "../theme/theme";
-import { calculateOfficialSla } from "../utils/officialSla";
+import { calculateTimestampSla } from "../utils/timestampSla";
 import { calculateServiceLevel } from "../utils/serviceLevel";
 import {
   chartPalette,
@@ -278,8 +278,8 @@ export function Dashboard() {
   const stoppedTickets = useMemo(() => pendingTickets.filter((ticket) => ticket.baseStatus === "Stopped"), [pendingTickets]);
   const criticalTickets = useMemo(() => pendingTickets.filter((ticket) => normalize(ticket.urgency) === "critica"), [pendingTickets]);
 
-  const responseSla = useMemo(() => calculateOfficialSla(openedInPeriod, "response"), [openedInPeriod]);
-  const solutionSla = useMemo(() => calculateOfficialSla(openedInPeriod, "solution"), [openedInPeriod]);
+  const responseSla = useMemo(() => calculateTimestampSla(openedInPeriod, "response"), [openedInPeriod]);
+  const solutionSla = useMemo(() => calculateTimestampSla(openedInPeriod, "solution"), [openedInPeriod]);
 
   const summary = useMemo(() => ({
     abertosNoPeriodo: openedInPeriod.length,
