@@ -368,6 +368,12 @@ export function Analysts() {
   const [selectedAnalyst, setSelectedAnalyst] =
     useState("");
 
+  const [selectedBusinessArea, setSelectedBusinessArea] =
+    useState("");
+
+  const [selectedService, setSelectedService] =
+    useState("");
+
   /* Drill-down */
 
   const [drilldown, setDrilldown] =
@@ -585,19 +591,26 @@ export function Analysts() {
      FILTRO POR SQUAD
   ===================================================== */
 
-  const squadTickets = useMemo(() => {
-    if (!selectedSquad) {
-      return periodTickets;
-    }
+  const businessAreas = useMemo(() => Array.from(new Set(
+    periodTickets.map((ticket) => ticket.businessArea?.trim()).filter((value): value is string => Boolean(value))
+  )).sort((a, b) => a.localeCompare(b, "pt-BR")), [periodTickets]);
 
-    return periodTickets.filter(
-      (ticket) =>
-        (ticket.ownerTeam ?? ticket.team) ===
-        selectedSquad
-    );
+  const services = useMemo(() => Array.from(new Set(
+    periodTickets.map((ticket) => (ticket.serviceSecondLevel ?? ticket.service)?.trim()).filter((value): value is string => Boolean(value))
+  )).sort((a, b) => a.localeCompare(b, "pt-BR")), [periodTickets]);
+
+  const squadTickets = useMemo(() => {
+    return periodTickets.filter((ticket) => {
+      if (selectedSquad && (ticket.ownerTeam ?? ticket.team) !== selectedSquad) return false;
+      if (selectedBusinessArea && ticket.businessArea !== selectedBusinessArea) return false;
+      if (selectedService && (ticket.serviceSecondLevel ?? ticket.service) !== selectedService) return false;
+      return true;
+    });
   }, [
     periodTickets,
     selectedSquad,
+    selectedBusinessArea,
+    selectedService,
   ]);
 
   /* =====================================================
@@ -1620,6 +1633,8 @@ export function Analysts() {
   function clearFilters() {
     setSelectedSquad("");
     setSelectedAnalyst("");
+    setSelectedBusinessArea("");
+    setSelectedService("");
   }
 
   async function copyTicketNumber(
@@ -1786,7 +1801,7 @@ export function Analysts() {
             },
           }}
         >
-          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "180px repeat(2, minmax(220px, 1fr)) auto" }, gap: 1.25, alignItems: "center" }}>
+          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "180px repeat(2, minmax(180px, 1fr))", xl: "180px repeat(4, minmax(170px, 1fr)) auto" }, gap: 1.25, alignItems: "center" }}>
             <Box
               sx={{
                 minWidth: {
@@ -1911,8 +1926,26 @@ export function Analysts() {
               </Select>
             </FormControl>
 
+            <FormControl size="small" sx={{ minWidth: { xs: "100%", md: 200 } }}>
+              <InputLabel shrink>Área de negócio</InputLabel>
+              <Select value={selectedBusinessArea} label="Área de negócio" onChange={(event) => setSelectedBusinessArea(event.target.value)}>
+                <MenuItem value="">Todas as áreas</MenuItem>
+                {businessAreas.map((area) => <MenuItem key={area} value={area}>{area}</MenuItem>)}
+              </Select>
+            </FormControl>
+
+            <FormControl size="small" sx={{ minWidth: { xs: "100%", md: 200 } }}>
+              <InputLabel shrink>Serviço N2</InputLabel>
+              <Select value={selectedService} label="Serviço N2" onChange={(event) => setSelectedService(event.target.value)}>
+                <MenuItem value="">Todos os serviços</MenuItem>
+                {services.map((service) => <MenuItem key={service} value={service}>{service}</MenuItem>)}
+              </Select>
+            </FormControl>
+
             {(selectedSquad ||
-              selectedAnalyst) && (
+              selectedAnalyst ||
+              selectedBusinessArea ||
+              selectedService) && (
               <Button
                 size="small"
                 variant="outlined"
@@ -1968,7 +2001,7 @@ export function Analysts() {
             source:
               "Movidesk",
             reference:
-              "Ticket.owner + Ticket.team + Ticket.createdDate",
+              "Ticket.owner + Ticket.ownerTeam + Ticket.createdDate",
             periodRule:
               "Respeita integralmente o período global selecionado na tela.",
             notes:
