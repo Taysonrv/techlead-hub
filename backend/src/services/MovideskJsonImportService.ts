@@ -296,14 +296,22 @@ export class MovideskJsonImportService {
 
   private primaryClient(value: unknown) {
     const clients = Array.isArray(value) ? value.filter(this.isObject) : [];
-    const first = clients[0];
-    if (!first) return { organization: null, contact: null };
-    const organization = this.isObject(first.organization)
-      ? this.toText(first.organization.businessName)
-      : null;
+    if (!clients.length) return { organization: null, contact: null };
+
+    for (const client of clients) {
+      if (!this.isObject(client.organization)) continue;
+      const organization = this.toText(client.organization.businessName);
+      if (!organization) continue;
+      return {
+        organization,
+        contact: this.toText(client.businessName),
+      };
+    }
+
+    const first = clients[0]!;
     return {
-      organization: organization ?? this.toText(first.businessName),
-      contact: organization ? this.toText(first.businessName) : null,
+      organization: this.toText(first.businessName),
+      contact: null,
     };
   }
 
