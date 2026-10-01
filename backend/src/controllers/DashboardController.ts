@@ -508,12 +508,6 @@ export class DashboardController {
               closedDate:
                 ticket.closedDate,
 
-              solutionSlaIndicator:
-                ticket.solutionSlaIndicator,
-
-              responseSlaIndicator:
-                ticket.responseSlaIndicator,
-
               lifetimeMinutes:
                 ticket.lifetimeMinutes,
 
