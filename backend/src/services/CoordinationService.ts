@@ -138,6 +138,30 @@ export class CoordinationService {
     };
   }
 
+  async integrationHealth() {
+    const [tickets, linkedTasks, azureItems, csat, services, latestCsat, latestCatalog] = await Promise.all([
+      prisma.ticket.count({ where: { AND: [{ isDeleted: false }, coordinationTicketScope()] } }),
+      prisma.ticket.count({ where: { AND: [{ isDeleted: false, taskNumber: { not: null } }, coordinationTicketScope()] } }),
+      prisma.azureWorkItem.count({ where: coordinationAzureScope() }),
+      prisma.movideskSurveyResponse.count(),
+      prisma.movideskServiceCatalog.count(),
+      prisma.movideskSurveyResponse.aggregate({ _max: { syncedAt: true, responseDate: true } }),
+      prisma.movideskServiceCatalog.aggregate({ _max: { syncedAt: true } }),
+    ]);
+    return {
+      tickets,
+      linkedTasks,
+      azureItems,
+      csatResponses: csat,
+      catalogServices: services,
+      taskLinkCoveragePct: tickets ? Math.round(linkedTasks / tickets * 1000) / 10 : 0,
+      latestCsatSyncAt: latestCsat._max.syncedAt,
+      latestCsatResponseAt: latestCsat._max.responseDate,
+      latestCatalogSyncAt: latestCatalog._max.syncedAt,
+      sources: { tickets: "Movidesk", tasks: "Azure DevOps", csat: "Movidesk Survey", services: "Movidesk Service Catalog" },
+    };
+  }
+
   async csatOverview(days = 180) {
     const safeDays = Math.min(Math.max(days, 30), 730);
     const since = new Date(Date.now() - safeDays * 86400000);
