@@ -88,7 +88,7 @@ type MovideskBaselineStatus = {
   result: { mode: string; pages: number; totalRows: number; created: number; updated: number; ignored: number; errors: number } | null;
   error: string | null;
   progress: { nextSkip: number; pages: number; processedRows: number; created: number; updated: number; ignored: number; errors: number; resumed: boolean } | null;
-  database: { tickets: number; linkedTasks: number };
+  database: { tickets: number; scopedTickets?: number; linkedTasks: number }; scope?: { startDate: string; clients: string[] };
   lastImport: { status: string; totalRows: number; insertedRows: number; updatedRows: number; skippedRows: number; errorRows: number; startedAt: string; finishedAt: string | null; message: string | null } | null;
   scheduler: { enabled: boolean; intervalMinutes: number; overlapMinutes: number; pageSize: number; phase: "WAITING_BASELINE" | "BASELINE_RUNNING" | "INCREMENTAL"; nextEstimatedAt: string | null };
 };
@@ -691,9 +691,10 @@ export function Import() {
 
           {movideskStatus && <>
             <Divider sx={{ my: 2 }} />
-            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr 1fr", lg: "repeat(4,1fr)" }, gap: 1.5 }}>
+            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr 1fr", lg: "repeat(5,1fr)" }, gap: 1.5 }}>
               <InfoCard label="Tickets na base" value={String(movideskStatus.database.tickets)} />
-              <InfoCard label="Tickets com Task" value={String(movideskStatus.database.linkedTasks)} />
+              <InfoCard label="Tickets no escopo 2026" value={String(movideskStatus.database.scopedTickets ?? 0)} />
+              <InfoCard label="Tickets com Task no escopo" value={String(movideskStatus.database.linkedTasks)} />
               <InfoCard label="Última execução" value={formatDateTime(movideskStatus.lastImport?.finishedAt ?? movideskStatus.lastImport?.startedAt)} />
               <InfoCard label="Próxima incremental" value={formatDateTime(movideskStatus.scheduler.nextEstimatedAt)} />
             </Box>
