@@ -48,6 +48,16 @@ coordinationRoutes.get("/services", async (req: AuthenticatedRequest, res) => {
   }
 });
 
+coordinationRoutes.get("/csat", async (req: AuthenticatedRequest, res) => {
+  try {
+    const days = Number(req.query.days ?? 180);
+    res.json(await coordinationService.csatOverview(Number.isFinite(days) ? days : 180));
+  } catch (error) {
+    console.error("[coordination] Falha na análise CSAT:", error);
+    res.status(500).json({ error: "Não foi possível gerar a análise de CSAT." });
+  }
+});
+
 coordinationRoutes.get("/sla-development", async (req: AuthenticatedRequest, res) => {
   try {
     const days = Number(req.query.days ?? 180);
