@@ -74,7 +74,7 @@ export class MovideskReferenceSyncService {
           await sleep(delay);
         }
       }
-      await prisma.auditLog.create({ data: { action: CATALOG_CHECKPOINT_ACTION, entityType: "MovideskServiceCatalog", metadata: { nextSkip: skip + rows.length, processedAt: new Date().toISOString() } } });
+      await prisma.auditLog.create({ data: { action: CATALOG_CHECKPOINT_ACTION, metadata: { nextSkip: skip + rows.length, processedAt: new Date().toISOString() } } });
       if (rows.length < 25) break;
       await sleep(WAIT_MS);
     }
