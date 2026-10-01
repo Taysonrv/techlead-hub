@@ -48,6 +48,20 @@ export const SUPPORT_OPERATIONAL_MEMBERS = [
   SUPPORT_COORDINATOR,
 ] as const;
 
+export function simerClientTicketScope(): Prisma.TicketWhereInput {
+  return {
+    client: {
+      in: [...SIMER_CLIENTS],
+      mode: "insensitive",
+    },
+  };
+}
+
+/**
+ * Escopo principal das telas Movidesk: a carteira é definida pelo cliente.
+ * O responsável é dimensão analítica e pode mudar durante o ciclo do ticket;
+ * por isso não deve excluir um atendimento SIMER da visão operacional.
+ */
 export function ticketOperationalScope():
   Prisma.TicketWhereInput {
   return {
