@@ -429,6 +429,7 @@ export function Dashboard() {
   const dailyFlow = useMemo(() => {
     const opened = new Map<string, number>();
     const resolved = new Map<string, number>();
+    const closed = new Map<string, number>();
 
     openedInPeriod.forEach((ticket) => {
       const date = new Date(ticket.createdDate);
@@ -445,7 +446,15 @@ export function Dashboard() {
       resolved.set(key, (resolved.get(key) ?? 0) + 1);
     });
 
-    const result: Array<{ sortDate: string; date: string; opened: number; resolved: number }> = [];
+    closedInPeriod.forEach((ticket) => {
+      if (!ticket.closedDate) return;
+      const date = new Date(ticket.closedDate);
+      if (Number.isNaN(date.getTime())) return;
+      const key = formatIsoDate(date);
+      closed.set(key, (closed.get(key) ?? 0) + 1);
+    });
+
+    const result: Array<{ sortDate: string; date: string; opened: number; resolved: number; closed: number }> = [];
     const cursor = startOfDay(effectiveStartDate);
     const lastDay = endOfDay(effectiveEndDate);
 
@@ -456,12 +465,13 @@ export function Dashboard() {
         date: formatShortDate(key),
         opened: opened.get(key) ?? 0,
         resolved: resolved.get(key) ?? 0,
+        closed: closed.get(key) ?? 0,
       });
       cursor.setDate(cursor.getDate() + 1);
     }
 
     return result;
-  }, [openedInPeriod, resolvedInPeriod, effectiveStartDate, effectiveEndDate]);
+  }, [openedInPeriod, resolvedInPeriod, closedInPeriod, effectiveStartDate, effectiveEndDate]);
 
   const ticketsEligibleForCause = useMemo(
     () => filteredTickets.filter((ticket) => isCauseApplicable(ticket.category)),
@@ -806,18 +816,18 @@ export function Dashboard() {
       onClick: () => showTickets("Abertos atualmente com o SIMER", openedWithSimerInPeriod, "Subconjunto da demanda aberta no período cuja responsabilidade atual está com a operação SIMER"),
     },
     {
-      title: "Pendentes",
+      title: "Backlog atual",
       value: summary.pendentes,
-      description: "Backlog atual em andamento",
+      description: "Estoque atual de tickets ativos",
       severity: "warning" as Severity,
       info: {
-        title: "Pendentes",
-        summary: "Backlog atual de tickets ainda ativos, independentemente da data de abertura.",
+        title: "Backlog atual",
+        summary: "Estoque atual de tickets ainda ativos, independentemente da data de abertura. Não equivale ao indicador histórico Pendentes no fim do período do Movidesk.",
         calculation: "Contagem de tickets com baseStatus New, InAttendance ou Stopped.",
         source: "Movidesk",
         reference: "Ticket.baseStatus",
         periodRule: "Não é limitado pela data de abertura, pois representa o backlog atual.",
-        notes: "Clique para visualizar todos os tickets que permanecem ativos.",
+        notes: "Clique para visualizar todos os tickets que permanecem ativos. Para períodos passados, o Hub não reconstrói artificialmente o estado histórico sem snapshot daquele dia.",
       },
       onClick: () => showTickets("Backlog atual", pendingTickets, "Tickets que permanecem ativos neste momento"),
     },
@@ -1321,10 +1331,10 @@ export function Dashboard() {
               <Stack direction={{ xs: "column", sm: "row" }} sx={{ justifyContent: "center", alignItems: "center", gap: 1 }}>
                 <Box sx={{ textAlign: "center" }}>
                   <Typography sx={{ fontWeight: 850, fontSize: "1.05rem" }}>
-                    Abertos x Resolvidos
+                    Abertos × Resolvidos × Fechados
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
-                    Fluxo diário no período • identifica entrada acima da capacidade de resolução
+                    Fluxo diário da carteira • entrada, resolução e fechamento no período
                   </Typography>
                 </Box>
               </Stack>
@@ -1347,12 +1357,14 @@ export function Dashboard() {
                     <Tooltip contentStyle={chartTooltipStyle} />
                     <Area type="monotone" dataKey="opened" name="Abertos" stroke={semanticChartColors.normal} strokeWidth={2.4} fill="url(#openedFlow)" activeDot={{ r: 6, cursor: "pointer", onClick: (_event, payload: any) => { const day = payload?.payload?.sortDate; if (day) showTickets(`Abertos em ${formatShortDate(day)}`, openedInPeriod.filter((ticket) => formatIsoDate(new Date(ticket.createdDate)) === day), "Tickets abertos no dia selecionado"); } }} />
                     <Area type="monotone" dataKey="resolved" name="Resolvidos" stroke={semanticChartColors.positive} strokeWidth={2.4} fill="url(#resolvedFlow)" activeDot={{ r: 6, cursor: "pointer", onClick: (_event, payload: any) => { const day = payload?.payload?.sortDate; if (day) showTickets(`Resolvidos em ${formatShortDate(day)}`, resolvedInPeriod.filter((ticket) => Boolean(ticket.resolvedDate) && formatIsoDate(new Date(ticket.resolvedDate!)) === day), "Tickets resolvidos no dia selecionado"); } }} />
+                    <Area type="monotone" dataKey="closed" name="Fechados" stroke={semanticChartColors.muted} strokeWidth={2.2} fillOpacity={0} activeDot={{ r: 6, cursor: "pointer", onClick: (_event, payload: any) => { const day = payload?.payload?.sortDate; if (day) showTickets(`Fechados em ${formatShortDate(day)}`, closedInPeriod.filter((ticket) => Boolean(ticket.closedDate) && formatIsoDate(new Date(ticket.closedDate!)) === day), "Tickets fechados no dia selecionado"); } }} />
                   </AreaChart>
                 </ResponsiveContainer>
               </Box>
               <Stack direction="row" spacing={2} sx={{ mt: .5, justifyContent: "center", alignItems: "center" }}>
                 <Typography variant="caption" sx={{ color: semanticChartColors.normal, fontWeight: 800 }}>● Abertos</Typography>
                 <Typography variant="caption" sx={{ color: semanticChartColors.positive, fontWeight: 800 }}>● Resolvidos</Typography>
+                <Typography variant="caption" sx={{ color: semanticChartColors.muted, fontWeight: 800 }}>● Fechados</Typography>
               </Stack>
             </CardBase>
 
