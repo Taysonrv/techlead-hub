@@ -1,5 +1,5 @@
 import { Prisma } from "@prisma/client";
-import axios from "axios";
+import axios, { AxiosError, type AxiosResponse } from "axios";
 import { prisma } from "../database/prisma";
 
 const API_URL = process.env.MOVIDESK_API_URL?.trim() || "https://api.movidesk.com/public/v1";
@@ -7,6 +7,24 @@ const WAIT_MS = 6200;
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export class MovideskReferenceSyncService {
+  private async get(path: string, params: Record<string, unknown>): Promise<AxiosResponse<unknown>> {
+    for (let attempt = 1; attempt <= 6; attempt += 1) {
+      try {
+        return await axios.get(`${API_URL}${path}`, { params: { token: this.token(), ...params }, timeout: 120000 });
+      } catch (error) {
+        const err = error as AxiosError;
+        const status = err.response?.status;
+        const retryable = err.code === "ECONNRESET" || err.code === "ETIMEDOUT" || err.code === "ECONNABORTED" || status === 429 || (status !== undefined && status >= 500);
+        if (!retryable || attempt === 6) throw new Error(`Movidesk ${path}: falha após ${attempt} tentativa(s): ${err.message}`);
+        const retryAfter = Number(err.response?.headers?.["retry-after"] ?? 0);
+        const delay = retryAfter > 0 ? retryAfter * 1000 : Math.min(2000 * 2 ** (attempt - 1), 30000);
+        console.warn(`[movidesk-reference] ${path} tentativa=${attempt}/6 falhou (${err.code ?? status ?? "erro"}); nova tentativa em ${Math.round(delay/1000)}s.`);
+        await sleep(delay);
+      }
+    }
+    throw new Error(`Movidesk ${path}: tentativas esgotadas.`);
+  }
+
   private token() {
     const token = process.env.MOVIDESK_TOKEN?.trim();
     if (!token) throw new Error("MOVIDESK_TOKEN não configurado.");
@@ -16,13 +34,10 @@ export class MovideskReferenceSyncService {
   async syncCatalog() {
     let processed = 0;
     let pages = 0;
-    for (let skip = 0; ; skip += 50) {
+    for (let skip = 0; ; skip += 25) {
       pages += 1;
       if (pages > 500) throw new Error("Catálogo interrompido: limite de segurança de 500 páginas atingido.");
-      const response = await axios.get(`${API_URL}/services`, {
-        params: { token: this.token(), $select: "id,name,parentServiceId,isActive,defaultCategory,defaultUrgency", $top: 50, $skip: skip, $orderby: "id asc" },
-        timeout: 120000,
-      });
+      const response = await this.get("/services", { $select: "id,name,parentServiceId,isActive,defaultCategory,defaultUrgency", $top: 25, $skip: skip, $orderby: "id asc" });
       const rows = Array.isArray(response.data) ? response.data as Array<Record<string, unknown>> : [];
       console.log(`[movidesk-catalog] página=${pages} skip=${skip} serviços=${rows.length} processados=${processed}`);
       for (const row of rows) {
@@ -41,14 +56,14 @@ export class MovideskReferenceSyncService {
         await prisma.movideskServiceCatalog.upsert({ where: { id }, create: { id, ...data }, update: data });
         processed += 1;
       }
-      if (rows.length < 50) break;
+      if (rows.length < 25) break;
       await sleep(WAIT_MS);
     }
     return { pages, processed, syncedAt: new Date().toISOString() };
   }
 
   async syncSurveyQuestions() {
-    const response = await axios.get(`${API_URL}/survey/questions`, { params: { token: this.token() }, timeout: 120000 });
+    const response = await this.get("/survey/questions", {});
     const rows = Array.isArray(response.data) ? response.data as Array<Record<string, unknown>> : [];
     let processed = 0;
     for (const row of rows) {
