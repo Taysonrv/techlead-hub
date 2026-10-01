@@ -12,4 +12,5 @@ movideskRoutes.get("/baseline/status", requirePermission("imports"), controller.
 movideskRoutes.get("/coverage", requirePermission("imports"), controller.coverage.bind(controller));
 movideskRoutes.post("/sync/full", requirePermission("imports"), controller.fullSync.bind(controller));
 movideskRoutes.get("/test", requirePermission("imports"), controller.test.bind(controller));
+movideskRoutes.get("/scope/diagnostic", requirePermission("imports"), controller.diagnoseScope.bind(controller));
 movideskRoutes.get("/preview", requirePermission("imports"), controller.preview.bind(controller));
