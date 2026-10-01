@@ -45,6 +45,7 @@ import {
   useState,
 } from "react";
 
+import { useNavigate } from "react-router-dom";
 import { api } from "../services/api";
 import { useFilters } from "../context/FiltersContext";
 import { PeriodFilter } from "../components/PeriodFilter";
@@ -156,6 +157,7 @@ type AnalystPerformance = {
 };
 
 export function Performance() {
+  const navigate = useNavigate();
   const theme = useTheme();
   const [hiddenTrendSeries, setHiddenTrendSeries] = useState<Set<string>>(() => new Set());
   const [analystsPage, setAnalystsPage] = useState(0);
