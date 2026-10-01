@@ -537,7 +537,7 @@ export function Performance() {
         eyebrow="Qualidade operacional"
         title="Desempenho do Atendimento"
         description="Prazos, risco operacional e desempenho da equipe em uma visão única"
-        meta="Indicadores oficiais de SLA separados do risco operacional calculado"
+        meta="SLA calculado pelos marcos temporais disponíveis, separado do risco operacional"
         action={<PeriodFilter />}
       />
 
@@ -572,16 +572,16 @@ export function Performance() {
           info={{
             title: "Primeira resposta",
             summary:
-              "Percentual oficial de primeiras respostas dentro do prazo entre os atendimentos medidos pelo Movidesk.",
+              "Percentual calculado de primeiras respostas concluídas até o prazo informado no ticket.",
             calculation:
               "Dentro do prazo ÷ (dentro do prazo + fora do prazo) × 100.",
-            source: "Indicador oficial do Movidesk",
+            source: "Movidesk · timestamps e prazos sincronizados",
             reference:
               "responseSlaIndicator",
             periodRule:
               "Considera os tickets abertos dentro do período selecionado e elegíveis para medição.",
             notes:
-              "Registros sem indicador oficial não entram no denominador.",
+              "Registros sem os marcos temporais necessários não entram no denominador.",
           }}
           onClick={() =>
             setDrilldown({
@@ -600,16 +600,16 @@ export function Performance() {
           info={{
             title: "Resolução",
             summary:
-              "Percentual oficial de soluções dentro do prazo entre os atendimentos medidos pelo Movidesk.",
+              "Percentual calculado de soluções concluídas até o prazo informado no ticket.",
             calculation:
               "Dentro do prazo ÷ (dentro do prazo + fora do prazo) × 100.",
-            source: "Indicador oficial do Movidesk",
+            source: "Movidesk · timestamps e prazos sincronizados",
             reference:
               "solutionSlaIndicator",
             periodRule:
               "A população vem dos tickets abertos no período selecionado e elegíveis para medição.",
             notes:
-              "Registros sem indicador oficial não entram no denominador.",
+              "Registros sem os marcos temporais necessários não entram no denominador.",
           }}
           onClick={() =>
             setDrilldown({
@@ -669,7 +669,7 @@ export function Performance() {
             periodRule:
               "Calculado sobre os atendimentos medidos no período selecionado.",
             notes:
-              "É um índice gerencial de apoio à coordenação e não substitui o SLA oficial do Movidesk.",
+              "É um índice gerencial de apoio à coordenação e é um índice gerencial e não representa um campo oficial de SLA retornado pela API.",
           }}
           onClick={() =>
             setDrilldown({
