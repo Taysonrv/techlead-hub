@@ -50,6 +50,17 @@ export class MovideskController {
         }
     }
 
+    async diagnoseEnrichment(req: AuthenticatedRequest, res: Response) {
+        try {
+            const requested = req.query.ticketId ? Number(req.query.ticketId) : null;
+            return res.json(await new MovideskService().diagnoseTicketEnrichment(Number.isSafeInteger(requested) ? requested : null));
+        } catch (error) {
+            const message = error instanceof Error ? error.message : "Não foi possível diagnosticar o enriquecimento Movidesk.";
+            console.error("[movidesk-enrichment-diagnostic] Falha:", message);
+            return res.status(500).json({ message });
+        }
+    }
+
     async diagnoseScope(req: AuthenticatedRequest, res: Response) {
         try {
             const requested = Number(req.query.limit ?? 3);
