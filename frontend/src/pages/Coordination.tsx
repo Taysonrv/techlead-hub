@@ -69,6 +69,10 @@ type CsatOverview = {
   recent: Array<{ id: string; ticketId: number | null; subject: string; client: string | null; owner: string | null; value: number | null; commentary: string | null; responseDate: string | null; service: string }>;
 };
 
+type IntegrationHealth = { tickets: number; linkedTasks: number; azureItems: number; csatResponses: number; catalogServices: number; taskLinkCoveragePct: number; latestCsatSyncAt: string | null; latestCsatResponseAt: string | null; latestCatalogSyncAt: string | null; sources: Record<string,string> };
+
+type SlaBreakdown = { total:number; concluded:number; openDevelopment:number; avgSupportMinutes:number; avgFactoryMinutes:number; avgTotalMinutes:number; supportWithinOla:number; factoryWithinOla:number; totalWithinSla:number };
+
 type SlaDevelopment = {
   periodDays: number;
   rule: { taskEndState: string; schedule: string; profile: string };
@@ -76,6 +80,8 @@ type SlaDevelopment = {
   summary: { bugsWithTask: number; concluded: number; openDevelopment: number; avgSupportMinutes: number; avgFactoryMinutes: number; avgTotalMinutes: number; supportWithinOla: number; factoryWithinOla: number; totalWithinSla: number };
   byPriority: Array<{ priority: string; total: number; concluded: number; avgSupportMinutes: number; avgFactoryMinutes: number; avgTotalMinutes: number; supportWithinOla: number; factoryWithinOla: number; totalWithinSla: number }>;
   monthly: Array<{ month: string; label: string; total: number; concluded: number; supportWithinPct: number; factoryWithinPct: number; totalWithinPct: number }>;
+  owners: Array<SlaBreakdown & { owner:string; rows:number[] }>;
+  clients: Array<SlaBreakdown & { client:string; rows:number[] }>;
   outliers: { total: number; support: number; factory: number; totalSla: number; critical: number };
 };
 
@@ -103,6 +109,7 @@ export function Coordination() {
   const [slaLoading, setSlaLoading] = useState(false);
   const [csat, setCsat] = useState<CsatOverview | null>(null);
   const [csatLoading, setCsatLoading] = useState(false);
+  const [integrationHealth, setIntegrationHealth] = useState<IntegrationHealth | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -131,6 +138,14 @@ export function Coordination() {
     }, 120);
     return () => { window.clearTimeout(timer); controller.abort(); };
   }, [Boolean(data)]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    api.get<IntegrationHealth>("/coordination/integration-health", { signal: controller.signal })
+      .then((response) => setIntegrationHealth(response.data))
+      .catch(() => { if (!controller.signal.aborted) setIntegrationHealth(null); });
+    return () => controller.abort();
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -218,6 +233,21 @@ export function Coordination() {
           </Alert>
 
           {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+          {integrationHealth && <Card variant="outlined" sx={{ mb: 2 }}>
+            <CardContent>
+              <Stack direction={{ xs:"column", md:"row" }} spacing={1} sx={{ justifyContent:"space-between", mb:1.25 }}>
+                <Box><Typography sx={{ fontWeight:900 }}>Saúde das integrações</Typography><Typography variant="body2" color="text.secondary">Cobertura das fontes que alimentam os indicadores executivos.</Typography></Box>
+                <Chip size="small" variant="outlined" label={`${integrationHealth.taskLinkCoveragePct}% tickets com Task vinculada`} />
+              </Stack>
+              <Box sx={{ display:"grid", gridTemplateColumns:{ xs:"1fr 1fr", md:"repeat(5,1fr)" }, gap:1 }}>
+                <KpiCard title="Tickets" value={integrationHealth.tickets} subtitle="Movidesk" info="Tickets do escopo operacional." accent={aliareColors.info}/>
+                <KpiCard title="Vínculos Task" value={integrationHealth.linkedTasks} subtitle="Movidesk → Azure" info="Tickets com número de Task relacionado." accent={aliareColors.green}/>
+                <KpiCard title="Work Items" value={integrationHealth.azureItems} subtitle="Azure DevOps" info="Itens Azure no escopo da coordenação." accent={aliareColors.info}/>
+                <KpiCard title="CSAT" value={integrationHealth.csatResponses} subtitle="Respostas" info="Respostas da pesquisa Movidesk persistidas." accent={aliareColors.warning}/>
+                <KpiCard title="Serviços" value={integrationHealth.catalogServices} subtitle="Catálogo Movidesk" info="Serviços persistidos do catálogo oficial." accent={aliareColors.green}/>
+              </Box>
+            </CardContent>
+          </Card>}
           <Card variant="outlined" sx={{ mb: 2, overflow: "hidden" }}>
             <CardContent>
               <Stack direction={{ xs: "column", lg: "row" }} spacing={1.5} sx={{ alignItems: { lg: "center" }, justifyContent: "space-between", mb: 1.5 }}>
@@ -271,6 +301,14 @@ export function Coordination() {
                         </LineChart>
                       </ResponsiveContainer>
                     </Box>
+                  </Box>
+                  <Box sx={{ display:"grid", gridTemplateColumns:{ xs:"1fr", xl:"1fr 1fr" }, gap:1.25 }}>
+                    {[{title:"Por analista",items:slaDevelopment.owners.map(x=>({name:x.owner,...x}))},{title:"Por cliente",items:slaDevelopment.clients.map(x=>({name:x.client,...x}))}].map((group)=>(
+                      <Box key={group.title} sx={{ border:"1px solid", borderColor:"divider", borderRadius:2.5, p:1.5 }}>
+                        <Typography sx={{ fontWeight:850, mb:1 }}>{group.title}</Typography>
+                        <Stack spacing={.8}>{group.items.slice(0,8).map((item)=><Box key={item.name}><Stack direction="row" sx={{ justifyContent:"space-between", gap:1 }}><Typography variant="body2" noWrap sx={{ fontWeight:750 }}>{item.name}</Typography><Typography variant="caption" color="text.secondary">{item.total} · SLA {rate(item.totalWithinSla,item.concluded)}%</Typography></Stack><LinearProgress variant="determinate" value={rate(item.totalWithinSla,item.concluded)} sx={{ height:6,borderRadius:4,mt:.3 }}/></Box>)}</Stack>
+                      </Box>
+                    ))}
                   </Box>
                   <Typography variant="caption" color="text.secondary">
                     Regra operacional: {slaDevelopment.rule.schedule} · conclusão da Task: {slaDevelopment.rule.taskEndState}. Os percentuais são calculados pelo Hub a partir dos timestamps Movidesk/Azure e não usam os indicadores SLA não suportados pelo TicketApiDto.
