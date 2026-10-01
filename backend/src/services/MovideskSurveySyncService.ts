@@ -101,7 +101,7 @@ export class MovideskSurveySyncService {
         last && typeof last.id === "string" ? last.id : null;
       if (!next || next === cursor) break;
       cursor = next;
-      await prisma.auditLog.create({ data: { action: CSAT_CHECKPOINT_ACTION, entityType: "MovideskSurveyResponse", metadata: { cursor, processedAt: new Date().toISOString() } } });
+      await prisma.auditLog.create({ data: { action: CSAT_CHECKPOINT_ACTION, metadata: { cursor, processedAt: new Date().toISOString() } } });
       await sleep(WAIT_MS);
     }
     return { pages, processed, upserted, skippedOutsideScope, syncedAt: new Date().toISOString() };
