@@ -58,6 +58,17 @@ type Data = {
   };
 };
 
+type CsatOverview = {
+  periodDays: number;
+  summary: { responses: number; average: number; positivePct: number; comments: number };
+  distribution: Array<{ value: number; count: number }>;
+  monthly: Array<{ month: string; responses: number; average: number; positivePct: number }>;
+  byClient: Array<{ name: string; responses: number; average: number; positivePct: number }>;
+  byAnalyst: Array<{ name: string; responses: number; average: number; positivePct: number }>;
+  byService: Array<{ name: string; responses: number; average: number; positivePct: number }>;
+  recent: Array<{ id: string; ticketId: number | null; subject: string; client: string | null; owner: string | null; value: number | null; commentary: string | null; responseDate: string | null; service: string }>;
+};
+
 type SlaDevelopment = {
   periodDays: number;
   rule: { taskEndState: string; schedule: string; profile: string };
@@ -90,6 +101,8 @@ export function Coordination() {
   const [slaDays, setSlaDays] = useState(180);
   const [slaDevelopment, setSlaDevelopment] = useState<SlaDevelopment | null>(null);
   const [slaLoading, setSlaLoading] = useState(false);
+  const [csat, setCsat] = useState<CsatOverview | null>(null);
+  const [csatLoading, setCsatLoading] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -131,6 +144,16 @@ export function Coordination() {
 
   const formatHours = (minutes: number) => minutes ? `${(minutes / 60).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}h` : "—";
   const rate = (within: number, total: number) => total ? Math.round(within / total * 1000) / 10 : 0;
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setCsatLoading(true);
+    api.get<CsatOverview>("/coordination/csat", { params: { days: slaDays }, signal: controller.signal })
+      .then((response) => setCsat(response.data))
+      .catch(() => { if (!controller.signal.aborted) setCsat(null); })
+      .finally(() => { if (!controller.signal.aborted) setCsatLoading(false); });
+    return () => controller.abort();
+  }, [slaDays]);
 
   const maximum = useMemo(
     () => Math.max(...(data?.workload.map((item) => item.total) ?? [1]), 1),
@@ -254,6 +277,49 @@ export function Coordination() {
                   </Typography>
                 </Stack>
               ) : <Alert severity="warning">Não foi possível carregar a análise SLA × OLA.</Alert>}
+            </CardContent>
+          </Card>
+          <Card variant="outlined" sx={{ mb: 2, overflow: "hidden" }}>
+            <CardContent>
+              <Stack direction={{ xs: "column", md: "row" }} spacing={1} sx={{ justifyContent: "space-between", mb: 1.5 }}>
+                <Box>
+                  <Typography sx={{ fontWeight: 900 }}>CSAT · Experiência do atendimento</Typography>
+                  <Typography variant="body2" color="text.secondary">Fonte oficial: respostas da Pesquisa de Satisfação Movidesk relacionadas aos tickets SIMER.</Typography>
+                </Box>
+                {csat && <Chip size="small" variant="outlined" label={`${csat.summary.responses} resposta(s) no período`} />}
+              </Stack>
+              {csatLoading ? <LinearProgress sx={{ borderRadius: 2 }} /> : csat ? (
+                <Stack spacing={1.5}>
+                  <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2,1fr)", xl: "repeat(4,1fr)" }, gap: 1.25 }}>
+                    <KpiCard title="CSAT médio" value={csat.summary.responses ? csat.summary.average.toLocaleString("pt-BR", { maximumFractionDigits: 2 }) : "—"} subtitle="escala da pesquisa Movidesk" info="Média das notas respondidas no período." accent={aliareColors.green} />
+                    <KpiCard title="Avaliações 4–5" value={csat.summary.responses ? `${csat.summary.positivePct}%` : "—"} subtitle="respostas positivas" info="Percentual de respostas com nota 4 ou 5." accent={aliareColors.info} />
+                    <KpiCard title="Respostas" value={csat.summary.responses} subtitle={`${csat.summary.comments} com comentário`} info="Pesquisas vinculadas a tickets do escopo SIMER." accent={aliareColors.warning} />
+                    <KpiCard title="Comentários" value={csat.summary.comments} subtitle="feedback qualitativo" info="Respostas que possuem comentário textual do cliente." accent={aliareColors.purple} />
+                  </Box>
+                  {csat.summary.responses > 0 && <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", xl: "1fr 1.4fr" }, gap: 1.25 }}>
+                    <Box sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2.5, p: 1.5 }}>
+                      <Typography sx={{ fontWeight: 850, mb: 1 }}>Distribuição das notas</Typography>
+                      <ResponsiveContainer width="100%" height={210}>
+                        <BarChart data={csat.distribution} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
+                          <CartesianGrid vertical={false} /><XAxis dataKey="value" /><YAxis allowDecimals={false} /><ChartTooltip />
+                          <Bar dataKey="count" name="Respostas" fill={aliareColors.green} radius={[6,6,0,0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </Box>
+                    <Box sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2.5, p: 1.5 }}>
+                      <Typography sx={{ fontWeight: 850, mb: 1 }}>CSAT por analista</Typography>
+                      <Stack spacing={.8}>
+                        {csat.byAnalyst.slice(0,8).map((item) => <Stack key={item.name} direction="row" spacing={1} sx={{ alignItems:"center" }}>
+                          <Typography variant="body2" sx={{ flex:1, minWidth:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{item.name}</Typography>
+                          <Typography variant="caption" color="text.secondary">{item.responses} resp.</Typography>
+                          <Chip size="small" variant="outlined" label={item.average.toLocaleString("pt-BR",{maximumFractionDigits:2})} />
+                        </Stack>)}
+                      </Stack>
+                    </Box>
+                  </Box>}
+                  {!csat.summary.responses && <Alert severity="info" variant="outlined">Ainda não há respostas CSAT sincronizadas para os tickets SIMER deste período. Execute a sincronização de Catálogo + CSAT em Dados e Sincronizações.</Alert>}
+                </Stack>
+              ) : <Alert severity="warning">Não foi possível carregar o CSAT.</Alert>}
             </CardContent>
           </Card>
 
