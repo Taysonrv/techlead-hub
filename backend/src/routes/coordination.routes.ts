@@ -48,6 +48,15 @@ coordinationRoutes.get("/services", async (req: AuthenticatedRequest, res) => {
   }
 });
 
+coordinationRoutes.get("/integration-health", async (_req: AuthenticatedRequest, res) => {
+  try {
+    res.json(await coordinationService.integrationHealth());
+  } catch (error) {
+    console.error("[coordination] Falha ao consultar saúde das integrações:", error);
+    res.status(500).json({ error: "Não foi possível consultar a saúde das integrações." });
+  }
+});
+
 coordinationRoutes.get("/csat", async (req: AuthenticatedRequest, res) => {
   try {
     const days = Number(req.query.days ?? 180);
