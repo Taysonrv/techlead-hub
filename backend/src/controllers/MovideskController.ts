@@ -1,19 +1,8 @@
 import { Response } from "express";
 import { MovideskService } from "../services/MovideskService";
-import { MovideskReferenceSyncService } from "../services/MovideskReferenceSyncService";
-import { MovideskSurveySyncService } from "../services/MovideskSurveySyncService";
+import { referenceSyncStatus, runReferenceSync } from "../jobs/MovideskReferenceSyncScheduler";
 import type { AuthenticatedRequest } from "../middlewares/authMiddleware";
 
-type ReferenceSyncState = {
-    status: "IDLE" | "RUNNING" | "SUCCESS" | "FAILED";
-    phase: "IDLE" | "CATALOG" | "QUESTIONS" | "CSAT" | "DONE";
-    startedAt: string | null;
-    finishedAt: string | null;
-    result: Record<string, unknown> | null;
-    error: string | null;
-};
-const referenceSyncState: ReferenceSyncState = { status: "IDLE", phase: "IDLE", startedAt: null, finishedAt: null, result: null, error: null };
-let referenceSyncPromise: Promise<void> | null = null;
 
 export class MovideskController {
 
@@ -64,39 +53,12 @@ export class MovideskController {
     }
 
     async syncReferenceData(_req: AuthenticatedRequest, res: Response) {
-        if (referenceSyncPromise) return res.status(202).json({ accepted: false, state: referenceSyncState });
-        referenceSyncState.status = "RUNNING";
-        referenceSyncState.phase = "CATALOG";
-        referenceSyncState.startedAt = new Date().toISOString();
-        referenceSyncState.finishedAt = null;
-        referenceSyncState.result = null;
-        referenceSyncState.error = null;
-        referenceSyncPromise = (async () => {
-            try {
-                const reference = new MovideskReferenceSyncService();
-                const survey = new MovideskSurveySyncService();
-                const services = await reference.syncCatalog();
-                referenceSyncState.phase = "QUESTIONS";
-                const questions = await reference.syncSurveyQuestions();
-                referenceSyncState.phase = "CSAT";
-                const csat = await survey.syncResponses();
-                referenceSyncState.result = { services, questions, csat, syncedAt: new Date().toISOString() };
-                referenceSyncState.status = "SUCCESS";
-                referenceSyncState.phase = "DONE";
-            } catch (error) {
-                referenceSyncState.status = "FAILED";
-                referenceSyncState.error = error instanceof Error ? error.message : "Falha desconhecida.";
-                console.error("[movidesk-reference-sync] Falha:", referenceSyncState.error);
-            } finally {
-                referenceSyncState.finishedAt = new Date().toISOString();
-                referenceSyncPromise = null;
-            }
-        })();
-        return res.status(202).json({ accepted: true, state: referenceSyncState });
+        const result = runReferenceSync();
+        return res.status(result.accepted ? 202 : 200).json(result);
     }
 
     async referenceSyncStatus(_req: AuthenticatedRequest, res: Response) {
-        return res.json(referenceSyncState);
+        return res.json(referenceSyncStatus());
     }
 
     async diagnoseApiCatalog(_req: AuthenticatedRequest, res: Response) {
