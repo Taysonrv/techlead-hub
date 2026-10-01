@@ -56,11 +56,11 @@ export class MovideskSurveySyncService {
       }) : [];
       const scoped = new Set(tickets.map((ticket) => ticket.movideskId));
 
-      for (const row of rows) {
+      const operations = rows.flatMap((row) => {
         processed += 1;
         const id = typeof row.id === "string" ? row.id.trim() : "";
         const ticketId = Number(row.ticketId);
-        if (!id || !Number.isSafeInteger(ticketId) || !scoped.has(ticketId)) { skippedOutsideScope += 1; continue; }
+        if (!id || !Number.isSafeInteger(ticketId) || !scoped.has(ticketId)) { skippedOutsideScope += 1; return []; }
         const parsedDate = typeof row.responseDate === "string" ? new Date(row.responseDate) : null;
         const data = {
           questionId: typeof row.questionId === "string" ? row.questionId : null,
@@ -73,8 +73,21 @@ export class MovideskSurveySyncService {
           rawData: row as Prisma.InputJsonValue,
           syncedAt: new Date(),
         };
-        await prisma.movideskSurveyResponse.upsert({ where: { id }, create: { id, ...data }, update: data });
-        upserted += 1;
+        return [prisma.movideskSurveyResponse.upsert({ where: { id }, create: { id, ...data }, update: data })];
+      });
+      for (let attempt = 1; attempt <= 5; attempt += 1) {
+        try {
+          if (operations.length) await prisma.$transaction(operations, { timeout: 30000 });
+          upserted += operations.length;
+          break;
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          const transient = /P1017|connection|pool|Can't reach database|closed the connection|timed out/i.test(message);
+          if (!transient || attempt === 5) throw error;
+          const delay = Math.min(2000 * 2 ** (attempt - 1), 20000);
+          console.warn(`[movidesk-csat-db] página=${pages} tentativa=${attempt}/5; banco indisponível, nova tentativa em ${delay/1000}s.`);
+          await sleep(delay);
+        }
       }
 
       if (body.hasMore !== true) break;
