@@ -250,38 +250,69 @@ export class MovideskService {
         });
     if (!scopedTicket) throw new Error("Nenhum ticket do escopo SIMER/2026 foi encontrado para diagnóstico.");
 
-    const candidates = ["actions", "histories"] as const;
-    const capabilities: Array<{ resource: string; supported: boolean; count: number | null; keys: string[]; error: string | null }> = [];
-    for (const resource of candidates) {
+    const candidates = [
+      { resource: "actions", expand: "actions" },
+      { resource: "actions.createdBy", expand: "actions($expand=createdBy)" },
+      { resource: "histories", expand: "histories" },
+    ] as const;
+    const capabilities: Array<{
+      resource: string;
+      supported: boolean;
+      valueType: string | null;
+      count: number | null;
+      keys: string[];
+      sample: unknown;
+      error: string | null;
+    }> = [];
+
+    const sanitize = (value: unknown, depth = 0): unknown => {
+      if (depth > 2 || value === null || value === undefined) return value ?? null;
+      if (Array.isArray(value)) return value.slice(0, 1).map((item) => sanitize(item, depth + 1));
+      if (typeof value !== "object") return typeof value === "string" && value.length > 240 ? `${value.slice(0, 240)}…` : value;
+      const output: Record<string, unknown> = {};
+      for (const [key, item] of Object.entries(value as Record<string, unknown>).slice(0, 30)) {
+        if (/token|password|email|phone|address|cep/i.test(key)) continue;
+        output[key] = sanitize(item, depth + 1);
+      }
+      return output;
+    };
+
+    for (const candidate of candidates) {
       try {
         const response = await this.getWithRetry(`${this.url}/tickets`, {
           params: {
             token: this.token(),
             $select: "id",
-            $expand: resource,
+            $expand: candidate.expand,
             $top: 1,
             $filter: `id eq ${scopedTicket.movideskId}`,
           },
           timeout: 120_000,
-        }, `diagnóstico de enriquecimento ${resource} ticket=${scopedTicket.movideskId}`);
+        }, `diagnóstico de enriquecimento ${candidate.resource} ticket=${scopedTicket.movideskId}`);
         const row = Array.isArray(response.data) ? response.data[0] as Record<string, unknown> | undefined : undefined;
-        const value = row?.[resource];
+        const value = row?.actions;
         const first = Array.isArray(value) && value.length && value[0] && typeof value[0] === "object" && !Array.isArray(value[0])
           ? value[0] as Record<string, unknown>
-          : null;
+          : value && typeof value === "object" && !Array.isArray(value)
+            ? value as Record<string, unknown>
+            : null;
         capabilities.push({
-          resource,
+          resource: candidate.resource,
           supported: true,
+          valueType: Array.isArray(value) ? "array" : value === null ? "null" : typeof value,
           count: Array.isArray(value) ? value.length : null,
           keys: first ? Object.keys(first).sort() : [],
+          sample: sanitize(value),
           error: null,
         });
       } catch (error) {
         capabilities.push({
-          resource,
+          resource: candidate.resource,
           supported: false,
+          valueType: null,
           count: null,
           keys: [],
+          sample: null,
           error: error instanceof Error ? error.message.replace(/token=[^&\\s]+/gi, "token=[REDACTED]").slice(0, 500) : "Falha desconhecida.",
         });
       }
