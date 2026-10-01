@@ -1090,12 +1090,11 @@ export function Analysts() {
                 new Set<string>(),
             };
 
-          if (
-            (ticket.ownerTeam ?? ticket.team)?.trim()
-          ) {
-            current.teams.add(
-              (ticket.ownerTeam ?? ticket.team).trim()
-            );
+          const ownerTeam =
+            (ticket.ownerTeam ?? ticket.team ?? "").trim();
+
+          if (ownerTeam) {
+            current.teams.add(ownerTeam);
           }
 
           values.set(
