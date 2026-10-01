@@ -11,7 +11,7 @@ import { prisma } from "../database/prisma";
 import { analyzeMovideskPayload } from "../services/MovideskPayloadAnalytics";
 
 import {
-  ticketOperationalScope,
+  simerClientTicketScope,
 } from "../domain/OperationalScope";
 
 export class DashboardController {
@@ -957,7 +957,6 @@ export class DashboardController {
               resolvedDate: true, closedDate: true, canceledDate: true,
               reopenedDate: true, lastActionDate: true, lastUpdate: true,
               actionCount: true, resolvedInFirstCall: true,
-              solutionSlaIndicator: true, responseSlaIndicator: true,
               lifetimeMinutes: true, stoppedMinutes: true, taskNumber: true,
               taskStatus: true, taskTitle: true, taskType: true, taskUrl: true,
               registeredVersion: true, deliveredVersion: true,
@@ -1176,14 +1175,6 @@ export class DashboardController {
             resolvedInFirstCall:
               ticket.resolvedInFirstCall,
 
-            /* SLA oficial Movidesk */
-
-            solutionSlaIndicator:
-              ticket.solutionSlaIndicator,
-
-            responseSlaIndicator:
-              ticket.responseSlaIndicator,
-
             /* Tempos */
 
             lifetimeMinutes:
@@ -1309,7 +1300,7 @@ async function getLatestSnapshotWhere(): Promise<SnapshotWhere> {
    * JSON complementares sem ocultar tickets de lotes anteriores.
    */
   return {
-    ...ticketOperationalScope(),
+    ...simerClientTicketScope(),
     isDeleted: false,
   };
 }
