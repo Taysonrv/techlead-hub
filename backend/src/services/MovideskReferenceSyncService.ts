@@ -55,25 +55,35 @@ export class MovideskReferenceSyncService {
     }
 
     const quote = (value: string) => `'${value.replace(/'/g, "''")}'`;
-    const chunkSize = 10;
     const rowsById = new Map<number, Record<string, unknown>>();
+    const failedNames: string[] = [];
     let requests = 0;
 
-    for (let index = 0; index < names.length; index += chunkSize) {
-      const chunk = names.slice(index, index + chunkSize);
+    // O endpoint /services mostrou instabilidade com filtros OR extensos.
+    // Consultamos um nome por vez: payload pequeno, resultado previsível e
+    // nenhuma varredura do catálogo global. Nomes iguais podem existir em
+    // ramos diferentes, por isso mantemos todos os IDs retornados.
+    for (let index = 0; index < names.length; index += 1) {
+      const name = names[index];
       requests += 1;
-      const response = await this.get("/services", {
-        $select: "id,name,parentServiceId,isActive,defaultCategory,defaultUrgency",
-        $filter: chunk.map((name) => `name eq ${quote(name)}`).join(" or "),
-        $orderby: "id asc",
-      });
-      const rows = Array.isArray(response.data) ? response.data as Array<Record<string, unknown>> : [];
-      for (const row of rows) {
-        const id = Number(row.id);
-        if (Number.isSafeInteger(id)) rowsById.set(id, row);
+      try {
+        const response = await this.get("/services", {
+          $select: "id,name,parentServiceId,isActive,defaultCategory,defaultUrgency",
+          $filter: `name eq ${quote(name)}`,
+          $top: 50,
+          $orderby: "id asc",
+        });
+        const rows = Array.isArray(response.data) ? response.data as Array<Record<string, unknown>> : [];
+        for (const row of rows) {
+          const id = Number(row.id);
+          if (Number.isSafeInteger(id)) rowsById.set(id, row);
+        }
+        console.log(`[movidesk-catalog] SIMER/2026 | ${index + 1}/${names.length} | serviço="${name}" | encontrados=${rows.length} | únicos=${rowsById.size}`);
+      } catch (error) {
+        failedNames.push(name);
+        console.warn(`[movidesk-catalog] serviço="${name}" não sincronizado nesta execução: ${error instanceof Error ? error.message : String(error)}`);
       }
-      console.log(`[movidesk-catalog] escopo SIMER/2026 | consulta=${requests} | nomes=${chunk.length} | encontrados=${rows.length} | únicos=${rowsById.size}`);
-      if (index + chunkSize < names.length) await sleep(WAIT_MS);
+      if (index + 1 < names.length) await sleep(WAIT_MS);
     }
 
     const rows = [...rowsById.values()];
@@ -123,14 +133,15 @@ export class MovideskReferenceSyncService {
           referencedNames: names.length,
           synchronizedServices: operations.length,
           requests,
+          failedNames,
           removedOutsideScope: removedOutsideScope.count,
           completedAt: new Date().toISOString(),
         },
       },
     });
 
-    console.log(`[movidesk-catalog] concluído | escopo=SIMER/2026 | referenciados=${names.length} | sincronizados=${operations.length} | removidos fora do escopo=${removedOutsideScope.count}`);
-    return { pages: requests, processed: operations.length, referenced: names.length, removedOutsideScope: removedOutsideScope.count, syncedAt: new Date().toISOString() };
+    console.log(`[movidesk-catalog] concluído | escopo=SIMER/2026 | referenciados=${names.length} | sincronizados=${operations.length} | falhas=${failedNames.length} | removidos fora do escopo=${removedOutsideScope.count}`);
+    return { pages: requests, processed: operations.length, referenced: names.length, failed: failedNames.length, failedNames, removedOutsideScope: removedOutsideScope.count, syncedAt: new Date().toISOString() };
   }
 
   async syncSurveyQuestions() {
