@@ -12,6 +12,7 @@ import { analyzeMovideskPayload } from "../services/MovideskPayloadAnalytics";
 
 import {
   simerClientTicketScope,
+  isSupportAnalyst,
 } from "../domain/OperationalScope";
 
 export class DashboardController {
@@ -907,6 +908,7 @@ export class DashboardController {
       return res.json(tickets.map((ticket) => ({
         ...ticket,
         team: ticket.ownerTeam,
+        isWithSimer: isSupportAnalyst(ticket.owner),
         azureWorkItem:
           (ticket.taskNumber ? byId.get(ticket.taskNumber) : null) ??
           byMovidesk.get(ticket.movideskId) ??
