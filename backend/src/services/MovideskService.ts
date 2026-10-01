@@ -237,6 +237,65 @@ export class MovideskService {
     }
   }
 
+  async diagnoseTicketEnrichment(ticketId?: number | null) {
+    const scopedTicket = ticketId
+      ? await prisma.ticket.findFirst({
+          where: { movideskId: ticketId, createdDate: { gte: SYNC_SCOPE_START }, client: { in: [...SIMER_CLIENTS], mode: "insensitive" } },
+          select: { movideskId: true, client: true, contact: true },
+        })
+      : await prisma.ticket.findFirst({
+          where: { createdDate: { gte: SYNC_SCOPE_START }, client: { in: [...SIMER_CLIENTS], mode: "insensitive" } },
+          orderBy: { lastUpdate: "desc" },
+          select: { movideskId: true, client: true, contact: true },
+        });
+    if (!scopedTicket) throw new Error("Nenhum ticket do escopo SIMER/2026 foi encontrado para diagnóstico.");
+
+    const candidates = ["actions", "histories"] as const;
+    const capabilities: Array<{ resource: string; supported: boolean; count: number | null; keys: string[]; error: string | null }> = [];
+    for (const resource of candidates) {
+      try {
+        const response = await this.getWithRetry(`${this.url}/tickets`, {
+          params: {
+            token: this.token(),
+            $select: "id",
+            $expand: resource,
+            $top: 1,
+            $filter: `id eq ${scopedTicket.movideskId}`,
+          },
+          timeout: 120_000,
+        }, `diagnóstico de enriquecimento ${resource} ticket=${scopedTicket.movideskId}`);
+        const row = Array.isArray(response.data) ? response.data[0] as Record<string, unknown> | undefined : undefined;
+        const value = row?.[resource];
+        const first = Array.isArray(value) && value.length && value[0] && typeof value[0] === "object" && !Array.isArray(value[0])
+          ? value[0] as Record<string, unknown>
+          : null;
+        capabilities.push({
+          resource,
+          supported: true,
+          count: Array.isArray(value) ? value.length : null,
+          keys: first ? Object.keys(first).sort() : [],
+          error: null,
+        });
+      } catch (error) {
+        capabilities.push({
+          resource,
+          supported: false,
+          count: null,
+          keys: [],
+          error: error instanceof Error ? error.message.replace(/token=[^&\\s]+/gi, "token=[REDACTED]").slice(0, 500) : "Falha desconhecida.",
+        });
+      }
+      await new Promise((resolve) => setTimeout(resolve, REQUEST_INTERVAL_MS));
+    }
+
+    return {
+      readOnly: true,
+      ticket: scopedTicket,
+      capabilities,
+      note: "A sonda valida apenas suporte e estrutura; nenhum histórico ou ação é persistido.",
+    };
+  }
+
   async diagnoseScopedClients(limit = 3) {
     const sampleSize = Math.min(Math.max(Math.trunc(limit) || 3, 1), 5);
     const response = await this.getWithRetry(`${this.url}/tickets`, {
