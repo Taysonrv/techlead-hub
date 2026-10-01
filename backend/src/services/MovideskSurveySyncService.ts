@@ -61,7 +61,12 @@ export class MovideskSurveySyncService {
     const queryStart = completed && watermark ? new Date(Math.max(START.getTime(), watermark.getTime() - CSAT_OVERLAP_MS)) : START;
     let cursor: string | null = !completed && typeof metadata.cursor === "string" && metadata.cursor ? metadata.cursor : null;
     let maxResponseDate = watermark ?? START;
-    console.log(`[movidesk-csat] ${completed ? "incremental" : "baseline"} | início=${queryStart.toISOString()}${cursor ? " | retomando checkpoint" : ""}`);
+    const scopedTickets = await prisma.ticket.findMany({
+      where: { createdDate: { gte: START }, client: { in: [...SIMER_CLIENTS], mode: "insensitive" } },
+      select: { movideskId: true },
+    });
+    const scoped = new Set(scopedTickets.map((ticket) => ticket.movideskId));
+    console.log(`[movidesk-csat] ${completed ? "incremental" : "baseline"} | início=${queryStart.toISOString()} | tickets SIMER=${scoped.size}${cursor ? " | retomando checkpoint" : ""}`);
     let processed = 0, upserted = 0, skippedOutsideScope = 0, pages = 0;
     const seenPages = new Set<string>();
     for (;;) {
@@ -75,13 +80,6 @@ export class MovideskSurveySyncService {
       if (seenPages.has(signature)) throw new Error(`CSAT interrompido: API repetiu a página ${pages}; paginação não avançou.`);
       seenPages.add(signature);
       console.log(`[movidesk-csat] página=${pages} respostas=${rows.length} processadas=${processed} gravadas=${upserted}`);
-
-      const ids = [...new Set(rows.map((row) => Number(row.ticketId)).filter(Number.isSafeInteger))];
-      const tickets = ids.length ? await prisma.ticket.findMany({
-        where: { movideskId: { in: ids }, createdDate: { gte: START }, client: { in: [...SIMER_CLIENTS], mode: "insensitive" } },
-        select: { movideskId: true },
-      }) : [];
-      const scoped = new Set(tickets.map((ticket) => ticket.movideskId));
 
       const operations = rows.flatMap((row) => {
         processed += 1;
