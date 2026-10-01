@@ -11,8 +11,8 @@ const INCREMENTAL_OVERLAP_MINUTES = 10;
 const REQUEST_RETRY_ATTEMPTS = 6;
 const REQUEST_RETRY_BASE_MS = 2_000;
 const OFFSET_TO_CURSOR_THRESHOLD = 9_000;
-const BASELINE_CHECKPOINT_ACTION = "MOVIDESK_SCOPED_BASELINE_CHECKPOINT_2026";
-const BASELINE_COMPLETED_ACTION = "MOVIDESK_SCOPED_BASELINE_COMPLETED_2026";
+const BASELINE_CHECKPOINT_ACTION = "MOVIDESK_SCOPED_BASELINE_CHECKPOINT_2026_V2";
+const BASELINE_COMPLETED_ACTION = "MOVIDESK_SCOPED_BASELINE_COMPLETED_2026_V2";
 const SYNC_SCOPE_START = new Date("2026-01-01T00:00:00.000Z");
 const BASELINE_FAILED_ACTION = "MOVIDESK_BASELINE_FAILED";
 
@@ -110,6 +110,52 @@ export class MovideskService {
     const token = normalizeMovideskToken(process.env.MOVIDESK_TOKEN);
     if (!token) throw new Error("Movidesk não configurado. Informe o token em Configurações > Movidesk.");
     return token;
+  }
+
+  private odataString(value: string) {
+    return `'${value.replace(/'/g, "''")}'`;
+  }
+
+  private remoteClientScopeFilter() {
+    const clients = SIMER_CLIENTS.map(
+      (client) => `c/organization/businessName eq ${this.odataString(client)}`,
+    ).join(" or ");
+    return `clients/any(c: ${clients})`;
+  }
+
+  private remoteScopeFilter(extra?: string | null) {
+    const filters = [
+      `createdDate ge ${SYNC_SCOPE_START.toISOString()}`,
+      this.remoteClientScopeFilter(),
+      extra?.trim() || null,
+    ].filter((value): value is string => Boolean(value));
+    return filters.map((value) => `(${value})`).join(" and ");
+  }
+
+  private async validateRemoteScopeFilter() {
+    const filter = this.remoteScopeFilter();
+    try {
+      const response = await this.getWithRetry(`${this.url}/tickets`, {
+        params: {
+          token: this.token(),
+          $select: "id,createdDate",
+          $expand: "clients",
+          $orderby: "lastUpdate asc,id asc",
+          $top: 1,
+          $filter: filter,
+        },
+        timeout: 120_000,
+      }, "pré-validação do escopo remoto SIMER");
+      if (!Array.isArray(response.data)) {
+        throw new Error("Resposta inesperada da API Movidesk na pré-validação do escopo.");
+      }
+      console.info(`[movidesk-sync] Escopo remoto validado | início=${SYNC_SCOPE_START.toISOString()} | clientes=${SIMER_CLIENTS.length}.`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "falha desconhecida";
+      throw new Error(
+        `O FULL foi bloqueado antes da varredura porque o endpoint de tickets não aceitou o filtro remoto de clientes SIMER. Nenhum fallback para toda a base será executado. Detalhe: ${message}`,
+      );
+    }
   }
 
   private async getWithRetry(url: string, config: Parameters<typeof axios.get>[1], context: string) {
@@ -289,6 +335,8 @@ export class MovideskService {
       return { accepted: false, reason: "COMPLETED", state: await this.baselineStatus() };
     }
 
+    await this.validateRemoteScopeFilter();
+
     const checkpoint = await this.loadBaselineCheckpoint();
     baselineState = {
       status: "RUNNING",
@@ -407,13 +455,12 @@ export class MovideskService {
     since?: Date | null,
     cursor?: { lastUpdate: string; id: number } | null,
   ) {
-    const scopeFilter = `createdDate ge ${SYNC_SCOPE_START.toISOString()}`;
     const cursorFilter = cursor
       ? `((lastUpdate gt ${normalizeMovideskDateTimeOffset(cursor.lastUpdate)}) or (lastUpdate eq ${normalizeMovideskDateTimeOffset(cursor.lastUpdate)} and id gt ${cursor.id}))`
       : since
         ? `lastUpdate gt ${since.toISOString()}`
         : null;
-    const filter = cursorFilter ? `${scopeFilter} and ${cursorFilter}` : scopeFilter;
+    const filter = this.remoteScopeFilter(cursorFilter);
     const response = await this.getWithRetry(`${this.url}/tickets`, {
       params: {
         token: this.token(),
@@ -440,6 +487,7 @@ export class MovideskService {
         $orderby: "lastUpdate asc,id asc",
         $top: PAGE_SIZE,
         $skip: anchorSkip,
+        $filter: this.remoteScopeFilter(),
       },
       timeout: 120_000,
     }, `reconstrução do cursor skip=${anchorSkip}`);
@@ -561,7 +609,7 @@ export class MovideskService {
           userId: userId ?? null,
           action: BASELINE_COMPLETED_ACTION,
           entity: "Ticket",
-          metadata: { pages: summary.pages, totalRows: summary.totalRows, errors: summary.errors, scopeStart: SYNC_SCOPE_START.toISOString(), scope: "SIMER_CLIENTS" },
+          metadata: { pages: summary.pages, totalRows: summary.totalRows, errors: summary.errors, scopeStart: SYNC_SCOPE_START.toISOString(), scope: "SIMER_CLIENTS_REMOTE_FILTER_V2" },
         },
       });
       baselineState.progress = baselineState.progress
