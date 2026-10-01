@@ -50,6 +50,16 @@ export class MovideskController {
         }
     }
 
+    async diagnoseApiCatalog(_req: AuthenticatedRequest, res: Response) {
+        try {
+            return res.json(await new MovideskService().diagnoseApiCatalog());
+        } catch (error) {
+            const message = error instanceof Error ? error.message : "Não foi possível diagnosticar o catálogo da API Movidesk.";
+            console.error("[movidesk-api-catalog] Falha:", message);
+            return res.status(500).json({ message });
+        }
+    }
+
     async diagnoseEnrichment(req: AuthenticatedRequest, res: Response) {
         try {
             const requested = req.query.ticketId ? Number(req.query.ticketId) : null;
