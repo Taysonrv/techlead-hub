@@ -259,7 +259,10 @@ export function Coordination() {
             <CardContent>
               <Stack direction={{ xs:"column", md:"row" }} spacing={1} sx={{ justifyContent:"space-between", mb:1.25 }}>
                 <Box><Typography sx={{ fontWeight:900 }}>Saúde das integrações</Typography><Typography variant="body2" color="text.secondary">Cobertura das fontes que alimentam os indicadores executivos.</Typography></Box>
-                <Chip size="small" variant="outlined" label={`${integrationHealth.taskLinkCoveragePct}% tickets com Task vinculada`} />
+                <Chip size="small" variant="outlined" label={`${integrationHealth.taskLinkCoveragePct}% com Task vinculada`} />
+              <Chip size="small" variant="outlined" label={`${integrationHealth.serviceCoveragePct}% com serviço`} />
+              <Chip size="small" variant="outlined" label={`${integrationHealth.causeCoveragePct}% com causa`} />
+              <Chip size="small" variant="outlined" label={`${integrationHealth.businessAreaCoveragePct}% com área de negócio`} />
               </Stack>
               <Box sx={{ display:"grid", gridTemplateColumns:{ xs:"1fr 1fr", md:"repeat(5,1fr)" }, gap:1 }}>
                 <KpiCard title="Tickets" value={integrationHealth.tickets} subtitle="Movidesk" info="Tickets do escopo operacional." accent={aliareColors.info}/>
