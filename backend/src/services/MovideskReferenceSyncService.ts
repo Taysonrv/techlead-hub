@@ -37,7 +37,8 @@ export class MovideskReferenceSyncService {
     let pages = 0;
     const checkpoint = await prisma.auditLog.findFirst({ where: { action: CATALOG_CHECKPOINT_ACTION }, orderBy: { createdAt: "desc" }, select: { metadata: true } });
     const metadata = checkpoint?.metadata && typeof checkpoint.metadata === "object" && !Array.isArray(checkpoint.metadata) ? checkpoint.metadata as Record<string, unknown> : {};
-    const resumeSkip = Number.isSafeInteger(Number(metadata.nextSkip)) ? Math.max(0, Number(metadata.nextSkip)) : 0;
+    const completed = metadata.completed === true;
+    const resumeSkip = !completed && Number.isSafeInteger(Number(metadata.nextSkip)) ? Math.max(0, Number(metadata.nextSkip)) : 0;
     console.log(`[movidesk-catalog] início skip=${resumeSkip}${resumeSkip ? " (checkpoint)" : ""}`);
     for (let skip = resumeSkip; ; skip += 25) {
       pages += 1;
@@ -74,10 +75,11 @@ export class MovideskReferenceSyncService {
           await sleep(delay);
         }
       }
-      await prisma.auditLog.create({ data: { action: CATALOG_CHECKPOINT_ACTION, metadata: { nextSkip: skip + rows.length, processedAt: new Date().toISOString() } } });
+      await prisma.auditLog.create({ data: { action: CATALOG_CHECKPOINT_ACTION, metadata: { nextSkip: skip + rows.length, completed: false, processedAt: new Date().toISOString() } } });
       if (rows.length < 25) break;
       await sleep(WAIT_MS);
     }
+    await prisma.auditLog.create({ data: { action: CATALOG_CHECKPOINT_ACTION, metadata: { nextSkip: 0, completed: true, completedAt: new Date().toISOString() } } });
     return { pages, processed, syncedAt: new Date().toISOString() };
   }
 
