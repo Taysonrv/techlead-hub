@@ -15,12 +15,16 @@ export class MovideskReferenceSyncService {
 
   async syncCatalog() {
     let processed = 0;
+    let pages = 0;
     for (let skip = 0; ; skip += 50) {
+      pages += 1;
+      if (pages > 500) throw new Error("Catálogo interrompido: limite de segurança de 500 páginas atingido.");
       const response = await axios.get(`${API_URL}/services`, {
         params: { token: this.token(), $select: "id,name,parentServiceId,isActive,defaultCategory,defaultUrgency", $top: 50, $skip: skip, $orderby: "id asc" },
         timeout: 120000,
       });
       const rows = Array.isArray(response.data) ? response.data as Array<Record<string, unknown>> : [];
+      console.log(`[movidesk-catalog] página=${pages} skip=${skip} serviços=${rows.length} processados=${processed}`);
       for (const row of rows) {
         const id = Number(row.id);
         const name = typeof row.name === "string" ? row.name.trim() : "";
@@ -40,7 +44,7 @@ export class MovideskReferenceSyncService {
       if (rows.length < 50) break;
       await sleep(WAIT_MS);
     }
-    return { processed, syncedAt: new Date().toISOString() };
+    return { pages, processed, syncedAt: new Date().toISOString() };
   }
 
   async syncSurveyQuestions() {
