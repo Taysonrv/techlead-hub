@@ -1001,6 +1001,15 @@ export class DashboardController {
         );
 
       const ticketMovideskIds = tickets.map((ticket) => ticket.movideskId);
+      const csatResponses = ticketMovideskIds.length ? await prisma.movideskSurveyResponse.findMany({
+        where: { ticketId: { in: ticketMovideskIds } },
+        orderBy: { responseDate: "desc" },
+        select: { ticketId:true, value:true, commentary:true, responseDate:true },
+      }) : [];
+      const csatByTicket = new Map<number, (typeof csatResponses)[number]>();
+      for (const response of csatResponses) {
+        if (response.ticketId && !csatByTicket.has(response.ticketId)) csatByTicket.set(response.ticketId, response);
+      }
       const azureWorkItems =
         taskNumbers.length > 0 || ticketMovideskIds.length > 0
           ? await prisma.azureWorkItem.findMany({
@@ -1174,6 +1183,15 @@ export class DashboardController {
 
             resolvedInFirstCall:
               ticket.resolvedInFirstCall,
+
+            satisfactionScore:
+              csatByTicket.get(ticket.movideskId)?.value ?? null,
+
+            satisfactionComment:
+              csatByTicket.get(ticket.movideskId)?.commentary ?? null,
+
+            satisfactionDate:
+              csatByTicket.get(ticket.movideskId)?.responseDate ?? null,
 
             /* Tempos */
 
