@@ -80,6 +80,13 @@ type ImportPreview = {
   };
 };
 
+type MovideskApiCatalogDiagnostic = {
+  readOnly: boolean;
+  scope: { startDate: string; clients: string[] };
+  results: Array<{ resource: string; supported: boolean; shape: string | null; count: number | null; hasMore: boolean | null; keys: string[]; sample: unknown; error: string | null }>;
+  note: string;
+};
+
 type MovideskEnrichmentDiagnostic = {
   readOnly: boolean;
   ticket: { movideskId: number; client: string | null; contact: string | null };
@@ -237,6 +244,8 @@ export function Import() {
   const [scopeDiagnosticLoading, setScopeDiagnosticLoading] = useState(false);
   const [enrichmentDiagnostic, setEnrichmentDiagnostic] = useState<MovideskEnrichmentDiagnostic | null>(null);
   const [enrichmentDiagnosticLoading, setEnrichmentDiagnosticLoading] = useState(false);
+  const [apiCatalogDiagnostic, setApiCatalogDiagnostic] = useState<MovideskApiCatalogDiagnostic | null>(null);
+  const [apiCatalogDiagnosticLoading, setApiCatalogDiagnosticLoading] = useState(false);
 
   /* =======================================================
      AZURE
@@ -650,6 +659,19 @@ export function Import() {
     return () => window.clearInterval(timer);
   }, [loadMovideskStatus]);
 
+  async function diagnoseMovideskApiCatalog() {
+    try {
+      setApiCatalogDiagnosticLoading(true);
+      setError(null);
+      const response = await api.get<MovideskApiCatalogDiagnostic>("/movidesk/catalog/diagnostic", { timeout: 240_000 });
+      setApiCatalogDiagnostic(response.data);
+    } catch (err: unknown) {
+      setError(getApiErrorMessage(err, "Não foi possível diagnosticar o catálogo da API Movidesk."));
+    } finally {
+      setApiCatalogDiagnosticLoading(false);
+    }
+  }
+
   async function diagnoseMovideskEnrichment() {
     try {
       setEnrichmentDiagnosticLoading(true);
@@ -748,6 +770,9 @@ export function Import() {
               <Button variant="outlined" disabled={enrichmentDiagnosticLoading || movideskStatus?.status === "RUNNING"} onClick={() => void diagnoseMovideskEnrichment()}>
                 {enrichmentDiagnosticLoading ? "Validando recursos..." : "Diagnosticar enriquecimento"}
               </Button>
+              <Button variant="outlined" disabled={apiCatalogDiagnosticLoading || movideskStatus?.status === "RUNNING"} onClick={() => void diagnoseMovideskApiCatalog()}>
+                {apiCatalogDiagnosticLoading ? "Mapeando APIs..." : "Mapear APIs disponíveis"}
+              </Button>
               <Button variant="outlined" disabled={movideskStatusLoading} onClick={() => void loadMovideskStatus(true)}>
                 {movideskStatusLoading ? "Atualizando..." : "Atualizar status"}
               </Button>
@@ -785,6 +810,21 @@ export function Import() {
               FULL: {movideskStatus.result.pages} página(s) • {movideskStatus.result.totalRows} lidos • {movideskStatus.result.created} novos • {movideskStatus.result.updated} atualizados • {movideskStatus.result.ignored} ignorados • {movideskStatus.result.errors} erros.
             </Alert>}
             {movideskStatus.error && <Alert severity="error" sx={{ mt: 2 }}>{movideskStatus.error}</Alert>}
+            {apiCatalogDiagnostic && (
+              <Box sx={{ mt: 2, p: 1.75, border: "1px solid", borderColor: "divider", borderRadius: 2.5, bgcolor: "background.default" }}>
+                <Typography variant="body2" sx={{ fontWeight: 750, mb: .5 }}>Catálogo de APIs Movidesk</Typography>
+                <Typography variant="caption" color="text.secondary">Somente leitura • amostras mínimas • nenhum dado gravado</Typography>
+                <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap", my: 1.25 }}>
+                  {apiCatalogDiagnostic.results.map((item) => (
+                    <Chip key={item.resource} size="small" color={item.supported ? "success" : "error"} variant="outlined"
+                      label={item.supported ? `${item.resource}: disponível` : `${item.resource}: indisponível`} />
+                  ))}
+                </Stack>
+                <Box component="pre" sx={{ m: 0, p: 1.5, overflow: "auto", maxHeight: 420, borderRadius: 2, bgcolor: "rgba(0,0,0,.18)", fontSize: ".72rem", lineHeight: 1.55, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                  {JSON.stringify(apiCatalogDiagnostic.results, null, 2)}
+                </Box>
+              </Box>
+            )}
             {enrichmentDiagnostic && (
               <Box sx={{ mt: 2, p: 1.75, border: "1px solid", borderColor: "divider", borderRadius: 2.5, bgcolor: "background.default" }}>
                 <Stack direction={{ xs: "column", md: "row" }} spacing={1.5} sx={{ justifyContent: "space-between", alignItems: { md: "center" }, mb: 1.25 }}>
