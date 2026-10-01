@@ -1,12 +1,15 @@
-export type OfficialSlaKind = "response" | "solution";
+export type CalculatedSlaKind = "response" | "solution";
 
-export type OfficialSlaTicket = {
+export type CalculatedSlaTicket = {
   category?: string | null;
-  responseSlaIndicator?: string | null;
-  solutionSlaIndicator?: string | null;
+  firstResponseDueDate?: string | null;
+  firstResponseDate?: string | null;
+  dueDate?: string | null;
+  resolvedDate?: string | null;
+  closedDate?: string | null;
 };
 
-export type OfficialSlaSummary<T extends OfficialSlaTicket> = {
+export type CalculatedSlaSummary<T extends CalculatedSlaTicket> = {
   within: number;
   outside: number;
   unmeasured: number;
@@ -19,47 +22,48 @@ export type OfficialSlaSummary<T extends OfficialSlaTicket> = {
 };
 
 /**
- * Resultado histórico oficial informado pelo Movidesk.
- *
- * A regra é compartilhada por Dashboard, Clientes e Desempenho para que
- * o mesmo recorte sempre produza o mesmo numerador e denominador.
+ * SLA calculado pelo Hub a partir dos marcos temporais disponíveis no Ticket.
+ * Não representa os indicadores responseSlaIndicator/solutionSlaIndicator:
+ * esses campos não são expostos pelo TicketApiDto utilizado na integração.
  */
-export function calculateOfficialSla<T extends OfficialSlaTicket>(
+export function calculateOfficialSla<T extends CalculatedSlaTicket>(
   tickets: T[],
-  kind: OfficialSlaKind,
-): OfficialSlaSummary<T> {
+  kind: CalculatedSlaKind,
+): CalculatedSlaSummary<T> {
   const withinTickets: T[] = [];
   const outsideTickets: T[] = [];
   const unmeasuredTickets: T[] = [];
 
   tickets.forEach((ticket) => {
-    if (!isOfficialSlaCategory(ticket.category)) {
+    if (!isMeasuredCategory(ticket.category)) {
       unmeasuredTickets.push(ticket);
       return;
     }
 
-    const result = normalizeOfficialSlaIndicator(
+    const due = parseDate(kind === "response" ? ticket.firstResponseDueDate : ticket.dueDate);
+    const completed = parseDate(
       kind === "response"
-        ? ticket.responseSlaIndicator
-        : ticket.solutionSlaIndicator,
+        ? ticket.firstResponseDate
+        : ticket.resolvedDate ?? ticket.closedDate,
     );
 
-    if (result === true) withinTickets.push(ticket);
-    else if (result === false) outsideTickets.push(ticket);
-    else unmeasuredTickets.push(ticket);
+    if (!due || !completed) {
+      unmeasuredTickets.push(ticket);
+      return;
+    }
+
+    if (completed.getTime() <= due.getTime()) withinTickets.push(ticket);
+    else outsideTickets.push(ticket);
   });
 
   const measuredTickets = [...withinTickets, ...outsideTickets];
   const measured = measuredTickets.length;
-
   return {
     within: withinTickets.length,
     outside: outsideTickets.length,
     unmeasured: unmeasuredTickets.length,
     measured,
-    percentage: measured > 0
-      ? Math.round((withinTickets.length / measured) * 1000) / 10
-      : null,
+    percentage: measured ? Math.round(withinTickets.length / measured * 1000) / 10 : null,
     withinTickets,
     outsideTickets,
     unmeasuredTickets,
@@ -67,42 +71,17 @@ export function calculateOfficialSla<T extends OfficialSlaTicket>(
   };
 }
 
-export function normalizeOfficialSlaIndicator(
-  value: string | null | undefined,
-): boolean | null {
-  const normalized = normalize(value);
-  if (!normalized) return null;
-
-  if ([
-    "fora do prazo",
-    "fora",
-    "violado",
-    "vencido",
-    "estourado",
-    "nao cumprido",
-    "nao atingido",
-  ].some((term) => normalized.includes(term))) return false;
-
-  if ([
-    "dentro do prazo",
-    "no prazo",
-    "dentro",
-    "cumprido",
-    "atingido",
-  ].some((term) => normalized.includes(term))) return true;
-
-  return null;
+function parseDate(value: string | null | undefined) {
+  if (!value) return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
-function isOfficialSlaCategory(category: string | null | undefined) {
+function isMeasuredCategory(category: string | null | undefined) {
   const normalized = normalize(category);
   return normalized !== "adequacao" && normalized !== "solicitacao de servico";
 }
 
 function normalize(value: string | null | undefined) {
-  return (value ?? "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .trim()
-    .toLowerCase();
+  return (value ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase();
 }
