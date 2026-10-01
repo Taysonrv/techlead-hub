@@ -320,8 +320,6 @@ export class SyncCenterService {
     const [
       latestMovidesk,
       latestAzure,
-      movideskProcessing,
-      azureProcessing,
     ] =
       await Promise.all([
         prisma.importRun.findFirst({
@@ -350,19 +348,6 @@ export class SyncCenterService {
           ],
         }),
 
-        prisma.importRun.count({
-          where: {
-            status:
-              "PROCESSING",
-          },
-        }),
-
-        prisma.azureSyncRun.count({
-          where: {
-            status:
-              "PROCESSING",
-          },
-        }),
       ]);
 
     const now = Date.now();
@@ -379,15 +364,22 @@ export class SyncCenterService {
       };
     };
 
-    const movideskHealth = providerHealth(latestMovidesk, 24 * 60);
-    const azureHealth = providerHealth(latestAzure, Number(process.env.AZURE_SYNC_INTERVAL_MINUTES ?? 15));
+    const movideskExpectedMinutes = Number(process.env.MOVIDESK_SYNC_INTERVAL_MINUTES ?? 60);
+    const azureExpectedMinutes = Number(process.env.AZURE_SYNC_INTERVAL_MINUTES ?? 15);
+    const movideskHealth = providerHealth(latestMovidesk, movideskExpectedMinutes);
+    const azureHealth = providerHealth(latestAzure, azureExpectedMinutes);
+    const isActuallyRunning = (run: { status: string; startedAt: Date; finishedAt: Date | null } | null, maxMinutes: number) =>
+      Boolean(run && run.status === "PROCESSING" && !run.finishedAt && now - run.startedAt.getTime() <= maxMinutes * 60_000);
+    const runningProviders = [
+      ...(isActuallyRunning(latestMovidesk, Math.max(30, movideskExpectedMinutes * 2)) ? ["MOVIDESK"] : []),
+      ...(isActuallyRunning(latestAzure, Math.max(10, azureExpectedMinutes * 2)) ? ["AZURE_DEVOPS"] : []),
+    ];
     const states = [movideskHealth.state, azureHealth.state];
     const health = states.includes("critical") ? "critical" : states.includes("attention") || states.includes("unknown") ? "attention" : "healthy";
 
     return {
-      running:
-        movideskProcessing +
-        azureProcessing,
+      running: runningProviders.length,
+      runningProviders,
       health,
       checkedAt: new Date(now),
       providers: {
