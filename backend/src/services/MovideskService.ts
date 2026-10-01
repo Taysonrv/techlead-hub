@@ -237,6 +237,85 @@ export class MovideskService {
     }
   }
 
+  async diagnoseApiCatalog() {
+    const probes = [
+      { resource: "persons", path: "/persons", params: { $select: "id,businessName,personType,profileType,isActive", $top: 1 } },
+      { resource: "services", path: "/services", params: { $select: "id,name,parentServiceId,isActive,defaultCategory,defaultUrgency", $top: 1 } },
+      { resource: "survey.questions", path: "/survey/questions", params: {} },
+      { resource: "survey.responses.2026", path: "/survey/responses", params: { responseDateGreaterThan: "2026-01-01", limit: 1 } },
+    ] as const;
+
+    const results: Array<{
+      resource: string;
+      supported: boolean;
+      shape: string | null;
+      count: number | null;
+      hasMore: boolean | null;
+      keys: string[];
+      sample: unknown;
+      error: string | null;
+    }> = [];
+
+    const sanitize = (value: unknown, depth = 0): unknown => {
+      if (depth > 2 || value === null || value === undefined) return value ?? null;
+      if (Array.isArray(value)) return value.slice(0, 1).map((item) => sanitize(item, depth + 1));
+      if (typeof value !== "object") return typeof value === "string" && value.length > 180 ? `${value.slice(0, 180)}…` : value;
+      const output: Record<string, unknown> = {};
+      for (const [key, item] of Object.entries(value as Record<string, unknown>).slice(0, 30)) {
+        if (/token|password|email|phone|address|cpf|cnpj|cep/i.test(key)) continue;
+        output[key] = sanitize(item, depth + 1);
+      }
+      return output;
+    };
+
+    for (const probe of probes) {
+      try {
+        const response = await this.getWithRetry(`${this.url}${probe.path}`, {
+          params: { token: this.token(), ...probe.params },
+          timeout: 120_000,
+        }, `catálogo API ${probe.resource}`);
+        const data = response.data as unknown;
+        const objectData = data && typeof data === "object" && !Array.isArray(data) ? data as Record<string, unknown> : null;
+        const items = Array.isArray(data)
+          ? data
+          : objectData && Array.isArray(objectData.items)
+            ? objectData.items
+            : [];
+        const first = items[0] ?? (objectData && !("items" in objectData) ? objectData : null);
+        const firstObject = first && typeof first === "object" && !Array.isArray(first) ? first as Record<string, unknown> : null;
+        results.push({
+          resource: probe.resource,
+          supported: true,
+          shape: Array.isArray(data) ? "array" : objectData && Array.isArray(objectData.items) ? "paged-object" : typeof data,
+          count: items.length,
+          hasMore: objectData && typeof objectData.hasMore === "boolean" ? objectData.hasMore : null,
+          keys: firstObject ? Object.keys(firstObject).sort() : [],
+          sample: sanitize(first),
+          error: null,
+        });
+      } catch (error) {
+        results.push({
+          resource: probe.resource,
+          supported: false,
+          shape: null,
+          count: null,
+          hasMore: null,
+          keys: [],
+          sample: null,
+          error: error instanceof Error ? error.message.replace(/token=[^&\\s]+/gi, "token=[REDACTED]").slice(0, 500) : "Falha desconhecida.",
+        });
+      }
+      await new Promise((resolve) => setTimeout(resolve, REQUEST_INTERVAL_MS));
+    }
+
+    return {
+      readOnly: true,
+      scope: { startDate: SYNC_SCOPE_START.toISOString(), clients: [...SIMER_CLIENTS] },
+      results,
+      note: "Sonda de catálogo: valida acesso e formato com amostras mínimas; não persiste dados.",
+    };
+  }
+
   async diagnoseTicketEnrichment(ticketId?: number | null) {
     const scopedTicket = ticketId
       ? await prisma.ticket.findFirst({
