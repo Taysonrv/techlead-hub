@@ -6,7 +6,8 @@ import { SIMER_CLIENTS } from "../domain/OperationalScope";
 const API_URL = process.env.MOVIDESK_API_URL?.trim() || "https://api.movidesk.com/public/v1";
 const START = new Date("2026-01-01T00:00:00.000Z");
 const WAIT_MS = 6200;
-const CSAT_CHECKPOINT_ACTION = "MOVIDESK_CSAT_CHECKPOINT_V1";
+const CSAT_CHECKPOINT_ACTION = "MOVIDESK_CSAT_CHECKPOINT_V2";
+const CSAT_OVERLAP_MS = 60 * 60 * 1000;
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export class MovideskSurveySyncService {
@@ -37,14 +38,19 @@ export class MovideskSurveySyncService {
   async syncResponses() {
     const checkpoint = await prisma.auditLog.findFirst({ where: { action: CSAT_CHECKPOINT_ACTION }, orderBy: { createdAt: "desc" }, select: { metadata: true } });
     const metadata = checkpoint?.metadata && typeof checkpoint.metadata === "object" && !Array.isArray(checkpoint.metadata) ? checkpoint.metadata as Record<string, unknown> : {};
-    let cursor: string | null = typeof metadata.cursor === "string" && metadata.cursor ? metadata.cursor : null;
-    console.log(`[movidesk-csat] início${cursor ? " a partir do checkpoint" : " desde 2026-01-01"}`);
+    const completed = metadata.completed === true;
+    const watermarkRaw = typeof metadata.watermark === "string" ? new Date(metadata.watermark) : null;
+    const watermark = watermarkRaw && !Number.isNaN(watermarkRaw.getTime()) ? watermarkRaw : null;
+    const queryStart = completed && watermark ? new Date(Math.max(START.getTime(), watermark.getTime() - CSAT_OVERLAP_MS)) : START;
+    let cursor: string | null = !completed && typeof metadata.cursor === "string" && metadata.cursor ? metadata.cursor : null;
+    let maxResponseDate = watermark ?? START;
+    console.log(`[movidesk-csat] ${completed ? "incremental" : "baseline"} | início=${queryStart.toISOString()}${cursor ? " | retomando checkpoint" : ""}`);
     let processed = 0, upserted = 0, skippedOutsideScope = 0, pages = 0;
     const seenPages = new Set<string>();
     for (;;) {
       pages += 1;
       if (pages > 500) throw new Error("CSAT interrompido: limite de segurança de 500 páginas atingido.");
-      const response = await this.getResponses({ responseDateGreaterThan: "2026-01-01", limit: 100, ...(cursor ? { startingAfter: cursor } : {}) });
+      const response = await this.getResponses({ responseDateGreaterThan: queryStart.toISOString(), limit: 100, ...(cursor ? { startingAfter: cursor } : {}) });
       const body: Record<string, unknown> = response.data && typeof response.data === "object" && !Array.isArray(response.data) ? response.data as Record<string, unknown> : {};
       const rows = Array.isArray(body.items) ? body.items as Array<Record<string, unknown>> : [];
       if (!rows.length) break;
@@ -66,6 +72,7 @@ export class MovideskSurveySyncService {
         const ticketId = Number(row.ticketId);
         if (!id || !Number.isSafeInteger(ticketId) || !scoped.has(ticketId)) { skippedOutsideScope += 1; return []; }
         const parsedDate = typeof row.responseDate === "string" ? new Date(row.responseDate) : null;
+        if (parsedDate && !Number.isNaN(parsedDate.getTime()) && parsedDate > maxResponseDate) maxResponseDate = parsedDate;
         const data = {
           questionId: typeof row.questionId === "string" ? row.questionId : null,
           type: Number.isSafeInteger(Number(row.type)) ? Number(row.type) : null,
@@ -101,9 +108,11 @@ export class MovideskSurveySyncService {
         last && typeof last.id === "string" ? last.id : null;
       if (!next || next === cursor) break;
       cursor = next;
-      await prisma.auditLog.create({ data: { action: CSAT_CHECKPOINT_ACTION, metadata: { cursor, processedAt: new Date().toISOString() } } });
+      await prisma.auditLog.create({ data: { action: CSAT_CHECKPOINT_ACTION, metadata: { completed: false, cursor, watermark: maxResponseDate.toISOString(), processedAt: new Date().toISOString() } } });
       await sleep(WAIT_MS);
     }
-    return { pages, processed, upserted, skippedOutsideScope, syncedAt: new Date().toISOString() };
+    await prisma.auditLog.create({ data: { action: CSAT_CHECKPOINT_ACTION, metadata: { completed: true, cursor: null, watermark: maxResponseDate.toISOString(), processedAt: new Date().toISOString() } } });
+    console.log(`[movidesk-csat] concluído | modo=${completed ? "INCREMENTAL" : "BASELINE"} | páginas=${pages} | processadas=${processed} | gravadas=${upserted} | foraEscopo=${skippedOutsideScope} | watermark=${maxResponseDate.toISOString()}`);
+    return { pages, processed, upserted, skippedOutsideScope, mode: completed ? "INCREMENTAL" : "BASELINE", watermark: maxResponseDate.toISOString(), syncedAt: new Date().toISOString() };
   }
 }
