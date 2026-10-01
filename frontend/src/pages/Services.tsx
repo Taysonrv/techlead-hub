@@ -8,7 +8,7 @@ import { aliareColors } from "../theme/theme";
 import { useNavigate } from "react-router-dom";
 
 type Data = {
-  periodMonths: number; total: number; specific: number; generic: number; withoutService: number; suspected: number; classificationRate: number; catalogSize: number;
+  periodMonths: number; total: number; specific: number; generic: number; withoutService: number; suspected: number; classificationRate: number; catalogSize: number; officialCatalogSize: number; simerCatalogSize: number;
   trend: Array<{ month: string; total: number; specific: number; generic: number; withoutService: number; suspected: number }>;
   ranking: Array<{ service: string; count: number }>;
   modules: Array<{ module: string; count: number }>;
@@ -29,7 +29,7 @@ export function Services() {
   useEffect(()=>{const timer=window.setTimeout(()=>{void load()},180);return()=>{window.clearTimeout(timer);requestRef.current?.abort()}},[load]);
   const tooltip={borderRadius:12,border:`1px solid ${theme.palette.divider}`,background:theme.palette.background.paper};
   return <Box sx={{pb:4}}>
-    <PageHeader eyebrow="Inteligência operacional" title="Serviços SIMER" description="Análise histórica da classificação de Serviços no Movidesk, demanda por módulo e oportunidades de melhoria na qualidade dos atendimentos." meta={data?`${data.total} atendimento(s) · últimos ${data.periodMonths} meses · ${data.catalogSize} serviços conhecidos`:undefined}/>
+    <PageHeader eyebrow="Inteligência operacional" title="Serviços SIMER" description="Análise histórica da classificação de Serviços no Movidesk, demanda por módulo e oportunidades de melhoria na qualidade dos atendimentos." meta={data?`${data.total} atendimento(s) · últimos ${data.periodMonths} meses · ${data.simerCatalogSize} serviços SIMER no catálogo Movidesk`:undefined}/>
     <Card variant="outlined" sx={{mt:2}}><CardContent><Box sx={{display:"grid",gridTemplateColumns:{xs:"1fr",md:"repeat(3,minmax(180px,1fr)) auto"},gap:1.2}}>
       <Autocomplete size="small" options={data?.filters.clients??[]} value={client||null} onChange={(_,v)=>setClient(v??"")} renderInput={(p)=><TextField {...p} label="Cliente"/>}/>
       <Autocomplete size="small" options={data?.filters.analysts??[]} value={analyst||null} onChange={(_,v)=>setAnalyst(v??"")} renderInput={(p)=><TextField {...p} label="Analista"/>}/>
@@ -38,12 +38,13 @@ export function Services() {
     </Box></CardContent></Card>
     {error&&<Alert severity="error" sx={{mt:2}}>{error}</Alert>}
     {loading?<Box sx={{py:10,display:"grid",placeItems:"center"}}><CircularProgress/></Box>:data&&<Stack spacing={2} sx={{mt:2}}>
-      <Box sx={{display:"grid",gridTemplateColumns:{xs:"1fr",sm:"repeat(2,1fr)",xl:"repeat(5,1fr)"},gap:2}}>
+      <Box sx={{display:"grid",gridTemplateColumns:{xs:"1fr",sm:"repeat(2,1fr)",xl:"repeat(3,1fr)",xxl:"repeat(6,1fr)"},gap:2}}>
         <KpiCard title="Classificação específica" value={`${data.classificationRate}%`} subtitle={`${data.specific} atendimento(s)`} info="Percentual de tickets com Serviço específico no período." accent={aliareColors.green}/>
         <KpiCard title="SIMER genérico" value={data.generic} subtitle="Requer revisão" info="Classificações somente em níveis genéricos do SIMER." onClick={()=>navigate("/qualidade-dados?issue=genericSimerService")} accent={aliareColors.warning}/>
         <KpiCard title="Sem serviço" value={data.withoutService} subtitle="Requer classificação" info="Tickets sem Serviço identificado." onClick={()=>navigate("/qualidade-dados?issue=withoutService")} accent={aliareColors.error}/>
         <KpiCard title="Possível incorreto" value={data.suspected} subtitle="Validação assistiva" info="Divergências com sugestão de confiança suficiente." onClick={()=>navigate("/qualidade-dados?issue=suspectedServiceMismatch")} accent={aliareColors.info}/>
         <KpiCard title="Atendimentos analisados" value={data.total} subtitle={`${data.comparison.volumeDelta >= 0 ? "+" : ""}${data.comparison.volumeDelta}% vs. período anterior`} info={`Período anterior: ${data.comparison.previousTotal} atendimento(s).`} accent={aliareColors.info}/>
+        <KpiCard title="Catálogo Movidesk" value={data.simerCatalogSize} subtitle={`${data.officialCatalogSize} serviços ativos sincronizados`} info={`Serviços SIMER identificados na hierarquia oficial sincronizada. Catálogo combinado usado na análise: ${data.catalogSize}.`} accent={aliareColors.purple}/>
       </Box>
       <Card variant="outlined"><CardContent><Stack direction={{xs:"column",md:"row"}} spacing={1.5} sx={{alignItems:{md:"center"},justifyContent:"space-between"}}><Box><Typography variant="h6" sx={{fontWeight:850}}>Comparação com o período anterior</Typography><Typography variant="body2" color="text.secondary">Compara janelas consecutivas de {data.periodMonths} meses usando o mesmo filtro de cliente e analista.</Typography></Box><Stack direction="row" spacing={1} sx={{flexWrap:"wrap"}}><Chip label={`Volume ${data.comparison.volumeDelta >= 0 ? "+" : ""}${data.comparison.volumeDelta}%`} color={data.comparison.volumeDelta > 0 ? "warning" : "success"} variant="outlined"/><Chip label={`Qualidade ${data.comparison.classificationDelta >= 0 ? "+" : ""}${data.comparison.classificationDelta} p.p.`} color={data.comparison.classificationDelta >= 0 ? "success" : "warning"} variant="outlined"/><Chip label={`Anterior: ${data.comparison.previousClassificationRate}% específicos`} variant="outlined"/></Stack></Stack></CardContent></Card>
       <Box sx={{display:"grid",gridTemplateColumns:{xs:"1fr",xl:"1.25fr .75fr"},gap:2}}>
