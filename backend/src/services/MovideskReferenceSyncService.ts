@@ -107,9 +107,11 @@ export class MovideskReferenceSyncService {
       }
     }
 
-    const scopedIds = [...rowsById.keys()];
+    // A limpeza usa os nomes efetivamente referenciados pelos tickets, e não
+    // somente os IDs retornados nesta execução. Assim uma resposta parcial da
+    // API nunca apaga um serviço SIMER válido que já estava sincronizado.
     const removedOutsideScope = await prisma.movideskServiceCatalog.deleteMany({
-      where: scopedIds.length ? { id: { notIn: scopedIds } } : undefined,
+      where: { name: { notIn: names } },
     });
 
     await prisma.auditLog.create({
