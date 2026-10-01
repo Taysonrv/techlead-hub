@@ -212,6 +212,20 @@ export class CoordinationService {
     };
   }
 
+  async csatDetails(days = 180, filters: { client?: string; analyst?: string; service?: string; value?: number } = {}) {
+    const overview = await this.csatOverview(days);
+    const normalized = (value: string | null | undefined) => (value ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR").trim();
+    return {
+      periodDays: overview.periodDays,
+      items: overview.recent.filter((item) =>
+        (!filters.client || normalized(item.client) === normalized(filters.client)) &&
+        (!filters.analyst || normalized(item.owner) === normalized(filters.analyst)) &&
+        (!filters.service || normalized(item.service) === normalized(filters.service)) &&
+        (!filters.value || item.value === filters.value)
+      ),
+    };
+  }
+
   async slaDevelopmentFlow(days = 180) {
     const since = new Date(Date.now() - Math.min(Math.max(days, 30), 730) * 86400000);
     const tickets = await prisma.ticket.findMany({
