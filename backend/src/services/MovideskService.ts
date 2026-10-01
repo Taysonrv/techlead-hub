@@ -247,9 +247,10 @@ export class MovideskService {
 
   async baselineStatus() {
     const completed = await this.hasCompletedBaseline();
-    const [tickets, linkedTasks, lastImport] = await Promise.all([
+    const [tickets, scopedTickets, linkedTasks, lastImport] = await Promise.all([
       prisma.ticket.count(),
-      prisma.ticket.count({ where: { taskNumber: { not: null } } }),
+      prisma.ticket.count({ where: { createdDate: { gte: SYNC_SCOPE_START }, client: { in: [...SIMER_CLIENTS], mode: "insensitive" } } }),
+      prisma.ticket.count({ where: { taskNumber: { not: null }, createdDate: { gte: SYNC_SCOPE_START }, client: { in: [...SIMER_CLIENTS], mode: "insensitive" } } }),
       prisma.importRun.findFirst({
         where: { source: "MOVIDESK_API" },
         orderBy: { startedAt: "desc" },
@@ -266,7 +267,8 @@ export class MovideskService {
     return {
       ...baselineState,
       completed,
-      database: { tickets, linkedTasks },
+      database: { tickets, scopedTickets, linkedTasks },
+      scope: { startDate: SYNC_SCOPE_START.toISOString(), clients: [...SIMER_CLIENTS] },
       lastImport,
       scheduler: {
         enabled: schedulerEnabled,
