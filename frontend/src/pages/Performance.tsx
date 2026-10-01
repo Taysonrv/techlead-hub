@@ -70,7 +70,7 @@ import {
   type DeadlineLevel,
   type ServiceLevelResult,
 } from "../utils/serviceLevel";
-import { calculateOfficialSla } from "../utils/officialSla";
+import { calculateTimestampSla } from "../utils/timestampSla";
 
 type Ticket = {
   id: number;
@@ -216,12 +216,12 @@ export function Performance() {
   }, [tickets, effectiveStartDate, effectiveEndDate]);
 
   const officialResponseSla = useMemo(
-    () => calculateOfficialSla(periodTickets, "response"),
+    () => calculateTimestampSla(periodTickets, "response"),
     [periodTickets],
   );
 
   const officialSolutionSla = useMemo(
-    () => calculateOfficialSla(periodTickets, "solution"),
+    () => calculateTimestampSla(periodTickets, "solution"),
     [periodTickets],
   );
 
@@ -366,8 +366,8 @@ export function Performance() {
         );
 
         const ownerTickets = ownerItems.map((item) => item.ticket);
-        const responseOfficial = calculateOfficialSla(ownerTickets, "response");
-        const solutionOfficial = calculateOfficialSla(ownerTickets, "solution");
+        const responseOfficial = calculateTimestampSla(ownerTickets, "response");
+        const solutionOfficial = calculateTimestampSla(ownerTickets, "solution");
         const officialMeasuredIds = new Set([
           ...responseOfficial.measuredTickets,
           ...solutionOfficial.measuredTickets,
@@ -463,8 +463,8 @@ export function Performance() {
       .sort(([dateA], [dateB]) => dateA.localeCompare(dateB))
       .map(([date, dayTickets]) => ({
         date: formatShortDate(date),
-        firstResponse: calculateOfficialSla(dayTickets, "response").percentage ?? 0,
-        resolution: calculateOfficialSla(dayTickets, "solution").percentage ?? 0,
+        firstResponse: calculateTimestampSla(dayTickets, "response").percentage ?? 0,
+        resolution: calculateTimestampSla(dayTickets, "solution").percentage ?? 0,
       }));
   }, [periodTickets]);
 
@@ -559,8 +559,7 @@ export function Performance() {
         variant="outlined"
         sx={{ mb: 1.5, borderRadius: 2 }}
       >
-        <strong>SLA do suporte:</strong> utiliza exclusivamente os indicadores oficiais
-        importados do Movidesk e os tickets abertos no período selecionado. Atendimentos
+        <strong>SLA do suporte:</strong> é calculado pelos prazos e timestamps sincronizados do Movidesk para os tickets abertos no período selecionado. Atendimentos
         sem medição e as categorias Adequação e Solicitação de Serviço não entram no denominador.
         Os prazos calculados em horas úteis são exibidos separadamente como risco operacional.
       </Alert>
