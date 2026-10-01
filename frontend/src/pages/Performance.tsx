@@ -101,8 +101,6 @@ type Ticket = {
   taskNumber: number | null;
   taskStatus: string | null;
   deliveredVersion: string | null;
-  responseSlaIndicator?: string | null;
-  solutionSlaIndicator?: string | null;
 };
 
 type ExecutiveQuality = { csat:{summary:{responses:number;average:number;positivePct:number;comments:number}}; sla:{summary:{bugsWithTask:number;concluded:number;supportWithinOla:number;factoryWithinOla:number;totalWithinSla:number;avgSupportMinutes:number;avgFactoryMinutes:number;avgTotalMinutes:number}} };
