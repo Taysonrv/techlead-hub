@@ -1,0 +1,69 @@
+import { Prisma } from "@prisma/client";
+import axios from "axios";
+import { prisma } from "../database/prisma";
+import { SIMER_CLIENTS } from "../domain/OperationalScope";
+
+const API_URL = process.env.MOVIDESK_API_URL?.trim() || "https://api.movidesk.com/public/v1";
+const START = new Date("2026-01-01T00:00:00.000Z");
+const WAIT_MS = 6200;
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+export class MovideskSurveySyncService {
+  private token() {
+    const token = process.env.MOVIDESK_TOKEN?.trim();
+    if (!token) throw new Error("MOVIDESK_TOKEN não configurado.");
+    return token;
+  }
+
+  async syncResponses() {
+    let cursor: string | null = null;
+    let processed = 0, upserted = 0, skippedOutsideScope = 0;
+    for (;;) {
+      const response = await axios.get(`${API_URL}/survey/responses`, {
+        params: { token: this.token(), responseDateGreaterThan: "2026-01-01", limit: 100, ...(cursor ? { startingAfter: cursor } : {}) },
+        timeout: 120000,
+      });
+      const body = response.data && typeof response.data === "object" && !Array.isArray(response.data) ? response.data as Record<string, unknown> : {};
+      const rows = Array.isArray(body.items) ? body.items as Array<Record<string, unknown>> : [];
+      if (!rows.length) break;
+
+      const ids = [...new Set(rows.map((row) => Number(row.ticketId)).filter(Number.isSafeInteger))];
+      const tickets = ids.length ? await prisma.ticket.findMany({
+        where: { movideskId: { in: ids }, createdDate: { gte: START }, client: { in: [...SIMER_CLIENTS], mode: "insensitive" } },
+        select: { movideskId: true },
+      }) : [];
+      const scoped = new Set(tickets.map((ticket) => ticket.movideskId));
+
+      for (const row of rows) {
+        processed += 1;
+        const id = typeof row.id === "string" ? row.id.trim() : "";
+        const ticketId = Number(row.ticketId);
+        if (!id || !Number.isSafeInteger(ticketId) || !scoped.has(ticketId)) { skippedOutsideScope += 1; continue; }
+        const parsedDate = typeof row.responseDate === "string" ? new Date(row.responseDate) : null;
+        const data = {
+          questionId: typeof row.questionId === "string" ? row.questionId : null,
+          type: Number.isSafeInteger(Number(row.type)) ? Number(row.type) : null,
+          clientId: typeof row.clientId === "string" ? row.clientId : null,
+          ticketId,
+          responseDate: parsedDate && !Number.isNaN(parsedDate.getTime()) ? parsedDate : null,
+          commentary: typeof row.commentary === "string" ? row.commentary : null,
+          value: Number.isSafeInteger(Number(row.value)) ? Number(row.value) : null,
+          rawData: row as Prisma.InputJsonValue,
+          syncedAt: new Date(),
+        };
+        await prisma.movideskSurveyResponse.upsert({ where: { id }, create: { id, ...data }, update: data });
+        upserted += 1;
+      }
+
+      if (body.hasMore !== true) break;
+      const last = rows[rows.length - 1];
+      const next = typeof body.startingAfter === "string" ? body.startingAfter :
+        typeof body.nextStartingAfter === "string" ? body.nextStartingAfter :
+        last && typeof last.id === "string" ? last.id : null;
+      if (!next || next === cursor) break;
+      cursor = next;
+      await sleep(WAIT_MS);
+    }
+    return { processed, upserted, skippedOutsideScope, syncedAt: new Date().toISOString() };
+  }
+}
