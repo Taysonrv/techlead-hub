@@ -243,7 +243,7 @@ export class MovideskService {
       params: {
         token: this.token(),
         $select: "id,createdDate,lastUpdate",
-        $expand: "clients",
+        $expand: "clients($expand=organization)",
         $orderby: "lastUpdate desc,id desc",
         $top: sampleSize,
         $filter: this.remoteScopeFilter(),
