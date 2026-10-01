@@ -77,7 +77,7 @@ export class MovideskSurveySyncService {
       });
       for (let attempt = 1; attempt <= 5; attempt += 1) {
         try {
-          if (operations.length) await prisma.$transaction(operations, { timeout: 30000 });
+          if (operations.length) await prisma.$transaction(operations);
           upserted += operations.length;
           break;
         } catch (error) {
