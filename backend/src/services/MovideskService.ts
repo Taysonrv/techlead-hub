@@ -538,7 +538,7 @@ export class MovideskService {
       ]);
     } catch (error) {
       databaseAvailable = false;
-      databaseError = error instanceof Error ? error.message.split("\n")[0].slice(0, 240) : "Banco de dados temporariamente indisponível.";
+      databaseError = error instanceof Error ? (error.message.split("\n")[0] ?? error.message).slice(0, 240) : "Banco de dados temporariamente indisponível.";
       console.warn(`[movidesk-status] Telemetria indisponível temporariamente: ${databaseError}`);
     }
     const intervalMinutes = Number(process.env.MOVIDESK_SYNC_INTERVAL_MINUTES ?? 60);
