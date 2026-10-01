@@ -80,45 +80,6 @@ type ImportPreview = {
   };
 };
 
-type MovideskApiCatalogDiagnostic = {
-  readOnly: boolean;
-  scope: { startDate: string; clients: string[] };
-  results: Array<{ resource: string; supported: boolean; shape: string | null; count: number | null; hasMore: boolean | null; keys: string[]; sample: unknown; error: string | null }>;
-  note: string;
-};
-
-type MovideskEnrichmentDiagnostic = {
-  readOnly: boolean;
-  ticket: { movideskId: number; client: string | null; contact: string | null };
-  capabilities: Array<{
-    resource: string;
-    supported: boolean;
-    count: number | null;
-    keys: string[];
-    error: string | null;
-  }>;
-  note: string;
-};
-
-type MovideskScopeDiagnostic = {
-  readOnly: boolean;
-  filterAccepted: boolean;
-  requested: number;
-  returned: number;
-  samples: Array<{
-    id: number | null;
-    createdDate: string | null;
-    lastUpdate: string | null;
-    resolvedSimerClient: string | null;
-    clients: Array<{
-      keys?: string[];
-      businessName?: string | null;
-      organization?: unknown;
-      type?: string;
-    }>;
-  }>;
-};
-
 type MovideskBaselineStatus = {
   status: "IDLE" | "RUNNING" | "SUCCESS" | "ERROR";
   startedAt: string | null;
@@ -240,15 +201,10 @@ export function Import() {
   const [movideskStatus, setMovideskStatus] = useState<MovideskBaselineStatus | null>(null);
   const [movideskStatusLoading, setMovideskStatusLoading] = useState(false);
   const [movideskFullStarting, setMovideskFullStarting] = useState(false);
-  const [scopeDiagnostic, setScopeDiagnostic] = useState<MovideskScopeDiagnostic | null>(null);
-  const [scopeDiagnosticLoading, setScopeDiagnosticLoading] = useState(false);
-  const [enrichmentDiagnostic, setEnrichmentDiagnostic] = useState<MovideskEnrichmentDiagnostic | null>(null);
-  const [enrichmentDiagnosticLoading, setEnrichmentDiagnosticLoading] = useState(false);
-  const [apiCatalogDiagnostic, setApiCatalogDiagnostic] = useState<MovideskApiCatalogDiagnostic | null>(null);
-  const [apiCatalogDiagnosticLoading, setApiCatalogDiagnosticLoading] = useState(false);
   const [referenceSyncLoading, setReferenceSyncLoading] = useState(false);
   const [referenceSyncResult, setReferenceSyncResult] = useState<Record<string, unknown> | null>(null);
   const [referenceSyncPhase, setReferenceSyncPhase] = useState<string | null>(null);
+  const [referenceNextAt, setReferenceNextAt] = useState<string | null>(null);
 
   /* =======================================================
      AZURE
@@ -664,8 +620,9 @@ export function Import() {
 
   async function loadReferenceSyncStatus() {
     try {
-      const response = await api.get<{ status:string; phase:string; result:Record<string,unknown>|null; error:string|null }>("/movidesk/reference-sync/status", { timeout: 30_000 });
+      const response = await api.get<{ status:string; phase:string; result:Record<string,unknown>|null; error:string|null; scheduler?:{ enabled:boolean; hour:number; minute:number; nextEstimatedAt:string|null } }>("/movidesk/reference-sync/status", { timeout: 30_000 });
       setReferenceSyncPhase(response.data.phase);
+      setReferenceNextAt(response.data.scheduler?.nextEstimatedAt ?? null);
       setReferenceSyncLoading(response.data.status === "RUNNING");
       if (response.data.result) setReferenceSyncResult(response.data.result);
       if (response.data.status === "FAILED" && response.data.error) setError(response.data.error);
@@ -688,45 +645,6 @@ export function Import() {
     } catch (err: unknown) {
       setReferenceSyncLoading(false);
       setError(getApiErrorMessage(err, "Não foi possível iniciar Catálogo + CSAT Movidesk."));
-    }
-  }
-
-  async function diagnoseMovideskApiCatalog() {
-    try {
-      setApiCatalogDiagnosticLoading(true);
-      setError(null);
-      const response = await api.get<MovideskApiCatalogDiagnostic>("/movidesk/catalog/diagnostic", { timeout: 240_000 });
-      setApiCatalogDiagnostic(response.data);
-    } catch (err: unknown) {
-      setError(getApiErrorMessage(err, "Não foi possível diagnosticar o catálogo da API Movidesk."));
-    } finally {
-      setApiCatalogDiagnosticLoading(false);
-    }
-  }
-
-  async function diagnoseMovideskEnrichment() {
-    try {
-      setEnrichmentDiagnosticLoading(true);
-      setError(null);
-      const response = await api.get<MovideskEnrichmentDiagnostic>("/movidesk/enrichment/diagnostic", { timeout: 180_000 });
-      setEnrichmentDiagnostic(response.data);
-    } catch (err: unknown) {
-      setError(getApiErrorMessage(err, "Não foi possível diagnosticar os recursos de enriquecimento do Movidesk."));
-    } finally {
-      setEnrichmentDiagnosticLoading(false);
-    }
-  }
-
-  async function diagnoseMovideskScope() {
-    try {
-      setScopeDiagnosticLoading(true);
-      setError(null);
-      const response = await api.get<MovideskScopeDiagnostic>("/movidesk/scope/diagnostic?limit=3", { timeout: 120_000 });
-      setScopeDiagnostic(response.data);
-    } catch (err: unknown) {
-      setError(getApiErrorMessage(err, "Não foi possível diagnosticar o escopo de clientes do Movidesk."));
-    } finally {
-      setScopeDiagnosticLoading(false);
     }
   }
 
@@ -791,20 +709,11 @@ export function Import() {
               </Stack>
               <Typography variant="body2" color="text.secondary" sx={{ mt: .75 }}>
                 {movideskStatus
-                  ? `Incremental a cada ${movideskStatus.scheduler.intervalMinutes} min • overlap ${movideskStatus.scheduler.overlapMinutes} min • lote ${movideskStatus.scheduler.pageSize} tickets • ${movideskStatus.scheduler.phase === "INCREMENTAL" ? "baseline concluído" : movideskStatus.scheduler.phase === "BASELINE_RUNNING" ? "baseline em execução" : "aguardando baseline FULL"}`
+                  ? `Tickets a cada ${movideskStatus.scheduler.intervalMinutes} min • Catálogo + CSAT diário às 03:20 • overlap ${movideskStatus.scheduler.overlapMinutes} min • ${movideskStatus.scheduler.phase === "INCREMENTAL" ? "baseline concluído" : movideskStatus.scheduler.phase === "BASELINE_RUNNING" ? "baseline em execução" : "aguardando baseline FULL"}`
                   : "Consultando o sincronizador Movidesk..."}
               </Typography>
             </Box>
             <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
-              <Button variant="outlined" disabled={scopeDiagnosticLoading || movideskStatus?.status === "RUNNING"} onClick={() => void diagnoseMovideskScope()}>
-                {scopeDiagnosticLoading ? "Diagnosticando..." : "Diagnosticar escopo"}
-              </Button>
-              <Button variant="outlined" disabled={enrichmentDiagnosticLoading || movideskStatus?.status === "RUNNING"} onClick={() => void diagnoseMovideskEnrichment()}>
-                {enrichmentDiagnosticLoading ? "Validando recursos..." : "Diagnosticar enriquecimento"}
-              </Button>
-              <Button variant="outlined" disabled={apiCatalogDiagnosticLoading || movideskStatus?.status === "RUNNING"} onClick={() => void diagnoseMovideskApiCatalog()}>
-                {apiCatalogDiagnosticLoading ? "Mapeando APIs..." : "Mapear APIs disponíveis"}
-              </Button>
               <Button variant="contained" disabled={referenceSyncLoading || movideskStatus?.status === "RUNNING"} onClick={() => void syncMovideskReferenceData()}>
                 {referenceSyncLoading ? `Sincronizando · ${referenceSyncPhase === "CATALOG" ? "Catálogo" : referenceSyncPhase === "QUESTIONS" ? "Perguntas CSAT" : referenceSyncPhase === "CSAT" ? "Respostas CSAT" : "Preparando"}` : "Sincronizar Catálogo + CSAT"}
               </Button>
@@ -819,12 +728,13 @@ export function Import() {
 
           {movideskStatus && <>
             <Divider sx={{ my: 2 }} />
-            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr 1fr", lg: "repeat(5,1fr)" }, gap: 1.5 }}>
+            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr 1fr", lg: "repeat(6,1fr)" }, gap: 1.5 }}>
               <InfoCard label="Tickets na base" value={String(movideskStatus.database.tickets)} />
               <InfoCard label="Tickets no escopo 2026" value={String(movideskStatus.database.scopedTickets ?? 0)} />
               <InfoCard label="Tickets com Task no escopo" value={String(movideskStatus.database.linkedTasks)} />
               <InfoCard label="Última execução" value={formatDateTime(movideskStatus.lastImport?.finishedAt ?? movideskStatus.lastImport?.startedAt)} />
               <InfoCard label="Próxima incremental" value={formatDateTime(movideskStatus.scheduler.nextEstimatedAt)} />
+              <InfoCard label="Próximo Catálogo + CSAT" value={formatDateTime(referenceNextAt)} />
             </Box>
             {movideskStatus.progress && !movideskStatus.completed && <Box sx={{ mt: 2, p: 1.75, border: "1px solid", borderColor: movideskStatus.status === "ERROR" ? "warning.main" : "divider", borderRadius: 2.5, bgcolor: "background.default" }}>
               <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ justifyContent: "space-between", alignItems: { sm: "center" }, mb: 1 }}>
@@ -849,58 +759,6 @@ export function Import() {
               <Alert severity="success" variant="outlined" sx={{ mt: 2 }}>
                 Catálogo e CSAT sincronizados. <Box component="span" sx={{ fontFamily: "monospace", fontSize: ".78rem" }}>{JSON.stringify(referenceSyncResult)}</Box>
               </Alert>
-            )}
-            {apiCatalogDiagnostic && (
-              <Box sx={{ mt: 2, p: 1.75, border: "1px solid", borderColor: "divider", borderRadius: 2.5, bgcolor: "background.default" }}>
-                <Typography variant="body2" sx={{ fontWeight: 750, mb: .5 }}>Catálogo de APIs Movidesk</Typography>
-                <Typography variant="caption" color="text.secondary">Somente leitura • amostras mínimas • nenhum dado gravado</Typography>
-                <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap", my: 1.25 }}>
-                  {apiCatalogDiagnostic.results.map((item) => (
-                    <Chip key={item.resource} size="small" color={item.supported ? "success" : "error"} variant="outlined"
-                      label={item.supported ? `${item.resource}: disponível` : `${item.resource}: indisponível`} />
-                  ))}
-                </Stack>
-                <Box component="pre" sx={{ m: 0, p: 1.5, overflow: "auto", maxHeight: 420, borderRadius: 2, bgcolor: "rgba(0,0,0,.18)", fontSize: ".72rem", lineHeight: 1.55, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-                  {JSON.stringify(apiCatalogDiagnostic.results, null, 2)}
-                </Box>
-              </Box>
-            )}
-            {enrichmentDiagnostic && (
-              <Box sx={{ mt: 2, p: 1.75, border: "1px solid", borderColor: "divider", borderRadius: 2.5, bgcolor: "background.default" }}>
-                <Stack direction={{ xs: "column", md: "row" }} spacing={1.5} sx={{ justifyContent: "space-between", alignItems: { md: "center" }, mb: 1.25 }}>
-                  <Box>
-                    <Typography variant="body2" sx={{ fontWeight: 750 }}>Diagnóstico de enriquecimento</Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      Ticket {enrichmentDiagnostic.ticket.movideskId} • {enrichmentDiagnostic.ticket.client ?? "Cliente não informado"} • somente leitura
-                    </Typography>
-                  </Box>
-                  <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap" }}>
-                    {enrichmentDiagnostic.capabilities.map((item) => (
-                      <Chip key={item.resource} size="small" color={item.supported ? "success" : "error"} variant="outlined"
-                        label={item.supported ? `${item.resource}: ${item.count ?? 0}` : `${item.resource}: não suportado`} />
-                    ))}
-                  </Stack>
-                </Stack>
-                <Box component="pre" sx={{ m: 0, p: 1.5, overflow: "auto", maxHeight: 360, borderRadius: 2, bgcolor: "rgba(0,0,0,.18)", fontSize: ".72rem", lineHeight: 1.55, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-                  {JSON.stringify(enrichmentDiagnostic.capabilities, null, 2)}
-                </Box>
-              </Box>
-            )}
-            {scopeDiagnostic && (
-              <Box sx={{ mt: 2, p: 1.75, border: "1px solid", borderColor: "divider", borderRadius: 2.5, bgcolor: "background.default" }}>
-                <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ justifyContent: "space-between", alignItems: { sm: "center" }, mb: 1 }}>
-                  <Box>
-                    <Typography variant="body2" sx={{ fontWeight: 750 }}>Diagnóstico do escopo remoto</Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      Filtro aceito • {scopeDiagnostic.returned} amostra(s) retornada(s) • leitura sem gravação no banco
-                    </Typography>
-                  </Box>
-                  <Chip size="small" color={scopeDiagnostic.samples.some((sample) => sample.resolvedSimerClient) ? "success" : "warning"} label={scopeDiagnostic.samples.some((sample) => sample.resolvedSimerClient) ? "Cliente SIMER identificado" : "Cliente ainda não identificado"} />
-                </Stack>
-                <Box component="pre" sx={{ m: 0, p: 1.5, overflow: "auto", maxHeight: 360, borderRadius: 2, bgcolor: "rgba(0,0,0,.18)", fontSize: ".72rem", lineHeight: 1.55, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-                  {JSON.stringify(scopeDiagnostic.samples, null, 2)}
-                </Box>
-              </Box>
             )}
           </>}
         </CardContent>
