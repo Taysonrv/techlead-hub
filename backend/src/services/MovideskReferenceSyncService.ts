@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import axios, { AxiosError, type AxiosResponse } from "axios";
 import { prisma } from "../database/prisma";
+import { simerClientTicketScope } from "../domain/OperationalScope";
 
 const API_URL = process.env.MOVIDESK_API_URL?.trim() || "https://api.movidesk.com/public/v1";
 const WAIT_MS = 6200;
@@ -33,54 +34,101 @@ export class MovideskReferenceSyncService {
   }
 
   async syncCatalog() {
-    let processed = 0;
-    let pages = 0;
-    const checkpoint = await prisma.auditLog.findFirst({ where: { action: CATALOG_CHECKPOINT_ACTION }, orderBy: { createdAt: "desc" }, select: { metadata: true } });
-    const metadata = checkpoint?.metadata && typeof checkpoint.metadata === "object" && !Array.isArray(checkpoint.metadata) ? checkpoint.metadata as Record<string, unknown> : {};
-    const completed = metadata.completed === true;
-    const resumeSkip = !completed && Number.isSafeInteger(Number(metadata.nextSkip)) ? Math.max(0, Number(metadata.nextSkip)) : 0;
-    console.log(`[movidesk-catalog] início skip=${resumeSkip}${resumeSkip ? " (checkpoint)" : ""}`);
-    for (let skip = resumeSkip; ; skip += 25) {
-      pages += 1;
-      if (pages > 500) throw new Error("Catálogo interrompido: limite de segurança de 500 páginas atingido.");
-      const response = await this.get("/services", { $select: "id,name,parentServiceId,isActive,defaultCategory,defaultUrgency", $top: 25, $skip: skip, $orderby: "id asc" });
-      const rows = Array.isArray(response.data) ? response.data as Array<Record<string, unknown>> : [];
-      console.log(`[movidesk-catalog] página=${pages} skip=${skip} serviços=${rows.length} processados=${processed}`);
-      const operations = rows.flatMap((row) => {
-        const id = Number(row.id);
-        const name = typeof row.name === "string" ? row.name.trim() : "";
-        if (!Number.isSafeInteger(id) || !name) return [];
-        const data = {
-          name,
-          parentServiceId: Number.isSafeInteger(Number(row.parentServiceId)) ? Number(row.parentServiceId) : null,
-          isActive: typeof row.isActive === "boolean" ? row.isActive : true,
-          defaultCategory: typeof row.defaultCategory === "string" ? row.defaultCategory : null,
-          defaultUrgency: typeof row.defaultUrgency === "string" ? row.defaultUrgency : null,
-          rawData: row as Prisma.InputJsonValue,
-          syncedAt: new Date(),
-        };
-        return [prisma.movideskServiceCatalog.upsert({ where: { id }, create: { id, ...data }, update: data })];
-      });
-      for (let attempt = 1; attempt <= 5; attempt += 1) {
-        try {
-          if (operations.length) await prisma.$transaction(operations);
-          processed += operations.length;
-          break;
-        } catch (error) {
-          const message = error instanceof Error ? error.message : String(error);
-          const transient = /P1017|connection|pool|Can't reach database|closed the connection|timed out/i.test(message);
-          if (!transient || attempt === 5) throw error;
-          const delay = Math.min(2000 * 2 ** (attempt - 1), 20000);
-          console.warn(`[movidesk-catalog-db] página=${pages} tentativa=${attempt}/5; banco indisponível, nova tentativa em ${delay/1000}s.`);
-          await sleep(delay);
-        }
-      }
-      await prisma.auditLog.create({ data: { action: CATALOG_CHECKPOINT_ACTION, metadata: { nextSkip: skip + rows.length, completed: false, processedAt: new Date().toISOString() } } });
-      if (rows.length < 25) break;
-      await sleep(WAIT_MS);
+    const scopeStart = new Date("2026-01-01T00:00:00.000Z");
+    const tickets = await prisma.ticket.findMany({
+      where: { AND: [{ isDeleted: false, createdDate: { gte: scopeStart } }, simerClientTicketScope()] },
+      select: { service: true, serviceFirstLevel: true, serviceSecondLevel: true, serviceThirdLevel: true },
+    });
+
+    const names = [...new Set(
+      tickets.flatMap((ticket) => [
+        ticket.service,
+        ticket.serviceFirstLevel,
+        ticket.serviceSecondLevel,
+        ticket.serviceThirdLevel,
+      ]).map((value) => value?.trim()).filter((value): value is string => Boolean(value)),
+    )].sort((a, b) => a.localeCompare(b, "pt-BR"));
+
+    console.log(`[movidesk-catalog] escopo SIMER/2026 | tickets=${tickets.length} | serviços referenciados=${names.length}`);
+    if (!names.length) {
+      return { pages: 0, processed: 0, referenced: 0, removedOutsideScope: 0, syncedAt: new Date().toISOString() };
     }
-    await prisma.auditLog.create({ data: { action: CATALOG_CHECKPOINT_ACTION, metadata: { nextSkip: 0, completed: true, completedAt: new Date().toISOString() } } });
-    return { pages, processed, syncedAt: new Date().toISOString() };
+
+    const quote = (value: string) => `'${value.replace(/'/g, "''")}'`;
+    const chunkSize = 10;
+    const rowsById = new Map<number, Record<string, unknown>>();
+    let requests = 0;
+
+    for (let index = 0; index < names.length; index += chunkSize) {
+      const chunk = names.slice(index, index + chunkSize);
+      requests += 1;
+      const response = await this.get("/services", {
+        $select: "id,name,parentServiceId,isActive,defaultCategory,defaultUrgency",
+        $filter: chunk.map((name) => `name eq ${quote(name)}`).join(" or "),
+        $orderby: "id asc",
+      });
+      const rows = Array.isArray(response.data) ? response.data as Array<Record<string, unknown>> : [];
+      for (const row of rows) {
+        const id = Number(row.id);
+        if (Number.isSafeInteger(id)) rowsById.set(id, row);
+      }
+      console.log(`[movidesk-catalog] escopo SIMER/2026 | consulta=${requests} | nomes=${chunk.length} | encontrados=${rows.length} | únicos=${rowsById.size}`);
+      if (index + chunkSize < names.length) await sleep(WAIT_MS);
+    }
+
+    const rows = [...rowsById.values()];
+    const operations = rows.flatMap((row) => {
+      const id = Number(row.id);
+      const name = typeof row.name === "string" ? row.name.trim() : "";
+      if (!Number.isSafeInteger(id) || !name) return [];
+      const data = {
+        name,
+        parentServiceId: Number.isSafeInteger(Number(row.parentServiceId)) ? Number(row.parentServiceId) : null,
+        isActive: typeof row.isActive === "boolean" ? row.isActive : true,
+        defaultCategory: typeof row.defaultCategory === "string" ? row.defaultCategory : null,
+        defaultUrgency: typeof row.defaultUrgency === "string" ? row.defaultUrgency : null,
+        rawData: row as Prisma.InputJsonValue,
+        syncedAt: new Date(),
+      };
+      return [prisma.movideskServiceCatalog.upsert({ where: { id }, create: { id, ...data }, update: data })];
+    });
+
+    for (let attempt = 1; attempt <= 5; attempt += 1) {
+      try {
+        if (operations.length) await prisma.$transaction(operations);
+        break;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        const transient = /P1017|connection|pool|Can't reach database|closed the connection|timed out/i.test(message);
+        if (!transient || attempt === 5) throw error;
+        const delay = Math.min(2000 * 2 ** (attempt - 1), 20000);
+        console.warn(`[movidesk-catalog-db] tentativa=${attempt}/5; banco indisponível, nova tentativa em ${delay/1000}s.`);
+        await sleep(delay);
+      }
+    }
+
+    const scopedIds = [...rowsById.keys()];
+    const removedOutsideScope = await prisma.movideskServiceCatalog.deleteMany({
+      where: scopedIds.length ? { id: { notIn: scopedIds } } : undefined,
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        action: CATALOG_CHECKPOINT_ACTION,
+        metadata: {
+          completed: true,
+          scope: "SIMER_CLIENTS_2026",
+          referencedNames: names.length,
+          synchronizedServices: operations.length,
+          requests,
+          removedOutsideScope: removedOutsideScope.count,
+          completedAt: new Date().toISOString(),
+        },
+      },
+    });
+
+    console.log(`[movidesk-catalog] concluído | escopo=SIMER/2026 | referenciados=${names.length} | sincronizados=${operations.length} | removidos fora do escopo=${removedOutsideScope.count}`);
+    return { pages: requests, processed: operations.length, referenced: names.length, removedOutsideScope: removedOutsideScope.count, syncedAt: new Date().toISOString() };
   }
 
   async syncSurveyQuestions() {
