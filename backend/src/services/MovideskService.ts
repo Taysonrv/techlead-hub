@@ -11,8 +11,8 @@ const INCREMENTAL_OVERLAP_MINUTES = 10;
 const REQUEST_RETRY_ATTEMPTS = 6;
 const REQUEST_RETRY_BASE_MS = 2_000;
 const OFFSET_TO_CURSOR_THRESHOLD = 9_000;
-const BASELINE_CHECKPOINT_ACTION = "MOVIDESK_SCOPED_BASELINE_CHECKPOINT_2026_V3";
-const BASELINE_COMPLETED_ACTION = "MOVIDESK_SCOPED_BASELINE_COMPLETED_2026_V3";
+const BASELINE_CHECKPOINT_ACTION = "MOVIDESK_SCOPED_BASELINE_CHECKPOINT_2026_V4";
+const BASELINE_COMPLETED_ACTION = "MOVIDESK_SCOPED_BASELINE_COMPLETED_2026_V4";
 const SYNC_SCOPE_START = new Date("2026-01-01T00:00:00.000Z");
 const BASELINE_FAILED_ACTION = "MOVIDESK_BASELINE_FAILED";
 
@@ -61,7 +61,7 @@ const TICKET_SELECT = [
  // Ações/históricos/satisfação serão enriquecidos em fluxo separado para evitar
  // respostas muito grandes e ECONNRESET na API do Movidesk.
 const TICKET_EXPAND = [
-  "owner", "createdBy", "clients", "customFieldValues"
+  "owner", "createdBy", "clients($expand=organization)", "customFieldValues"
 ].join(",");
 
 type SyncSummary = {
@@ -139,7 +139,7 @@ export class MovideskService {
         params: {
           token: this.token(),
           $select: "id,createdDate",
-          $expand: "clients",
+          $expand: "clients($expand=organization)",
           $orderby: "lastUpdate asc,id asc",
           $top: 1,
           $filter: filter,
@@ -666,7 +666,7 @@ export class MovideskService {
           userId: userId ?? null,
           action: BASELINE_COMPLETED_ACTION,
           entity: "Ticket",
-          metadata: { pages: summary.pages, totalRows: summary.totalRows, errors: summary.errors, scopeStart: SYNC_SCOPE_START.toISOString(), scope: "SIMER_CLIENTS_REMOTE_FILTER_V2" },
+          metadata: { pages: summary.pages, totalRows: summary.totalRows, errors: summary.errors, scopeStart: SYNC_SCOPE_START.toISOString(), scope: "SIMER_CLIENTS_REMOTE_FILTER_V4" },
         },
       });
       baselineState.progress = baselineState.progress
