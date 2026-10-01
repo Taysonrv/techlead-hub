@@ -17,8 +17,11 @@ export class MovideskSurveySyncService {
 
   async syncResponses() {
     let cursor: string | null = null;
-    let processed = 0, upserted = 0, skippedOutsideScope = 0;
+    let processed = 0, upserted = 0, skippedOutsideScope = 0, pages = 0;
+    const seenPages = new Set<string>();
     for (;;) {
+      pages += 1;
+      if (pages > 500) throw new Error("CSAT interrompido: limite de segurança de 500 páginas atingido.");
       const response: AxiosResponse<unknown> = await axios.get(`${API_URL}/survey/responses`, {
         params: { token: this.token(), responseDateGreaterThan: "2026-01-01", limit: 100, ...(cursor ? { startingAfter: cursor } : {}) },
         timeout: 120000,
@@ -26,6 +29,10 @@ export class MovideskSurveySyncService {
       const body: Record<string, unknown> = response.data && typeof response.data === "object" && !Array.isArray(response.data) ? response.data as Record<string, unknown> : {};
       const rows = Array.isArray(body.items) ? body.items as Array<Record<string, unknown>> : [];
       if (!rows.length) break;
+      const signature = rows.map((row) => String(row.id ?? "")).join("|");
+      if (seenPages.has(signature)) throw new Error(`CSAT interrompido: API repetiu a página ${pages}; paginação não avançou.`);
+      seenPages.add(signature);
+      console.log(`[movidesk-csat] página=${pages} respostas=${rows.length} processadas=${processed} gravadas=${upserted}`);
 
       const ids = [...new Set(rows.map((row) => Number(row.ticketId)).filter(Number.isSafeInteger))];
       const tickets = ids.length ? await prisma.ticket.findMany({
@@ -64,6 +71,6 @@ export class MovideskSurveySyncService {
       cursor = next;
       await sleep(WAIT_MS);
     }
-    return { processed, upserted, skippedOutsideScope, syncedAt: new Date().toISOString() };
+    return { pages, processed, upserted, skippedOutsideScope, syncedAt: new Date().toISOString() };
   }
 }
