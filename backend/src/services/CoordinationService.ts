@@ -138,6 +138,56 @@ export class CoordinationService {
     };
   }
 
+  async csatOverview(days = 180) {
+    const safeDays = Math.min(Math.max(days, 30), 730);
+    const since = new Date(Date.now() - safeDays * 86400000);
+    const responses = await prisma.movideskSurveyResponse.findMany({
+      where: { responseDate: { gte: since }, ticketId: { not: null } },
+      orderBy: { responseDate: "desc" },
+    });
+    const ticketIds = [...new Set(responses.map((item) => item.ticketId).filter((id): id is number => id !== null))];
+    const tickets = ticketIds.length ? await prisma.ticket.findMany({
+      where: { AND: [{ movideskId: { in: ticketIds }, isDeleted: false }, coordinationTicketScope()] },
+      select: { movideskId: true, subject: true, client: true, owner: true, service: true, serviceFirstLevel: true, serviceSecondLevel: true, serviceThirdLevel: true },
+    }) : [];
+    const byTicket = new Map(tickets.map((ticket) => [ticket.movideskId, ticket]));
+    const scoped = responses.flatMap((response) => {
+      const ticket = response.ticketId ? byTicket.get(response.ticketId) : undefined;
+      if (!ticket || response.value === null) return [];
+      const service = [ticket.serviceFirstLevel, ticket.serviceSecondLevel, ticket.serviceThirdLevel].map((value) => value?.trim()).filter(Boolean).join(" » ") || ticket.service || "Sem serviço";
+      return [{ ...response, ticket, service }];
+    });
+    const average = (values: number[]) => values.length ? Math.round(values.reduce((a,b)=>a+b,0) / values.length * 100) / 100 : 0;
+    const values = scoped.map((item) => item.value as number);
+    const positive = values.filter((value) => value >= 4).length;
+    const distribution = [1,2,3,4,5].map((value) => ({ value, count: values.filter((item) => item === value).length }));
+    const group = (keyOf: (item: (typeof scoped)[number]) => string) => {
+      const map = new Map<string, number[]>();
+      for (const item of scoped) {
+        const key = keyOf(item) || "Não informado";
+        map.set(key, [...(map.get(key) ?? []), item.value as number]);
+      }
+      return [...map].map(([name, scores]) => ({ name, responses: scores.length, average: average(scores), positivePct: Math.round(scores.filter((value) => value >= 4).length / scores.length * 1000) / 10 })).sort((a,b) => b.responses-a.responses);
+    };
+    const monthlyMap = new Map<string, number[]>();
+    for (const item of scoped) {
+      if (!item.responseDate) continue;
+      const month = item.responseDate.toISOString().slice(0,7);
+      monthlyMap.set(month, [...(monthlyMap.get(month) ?? []), item.value as number]);
+    }
+    const monthly = [...monthlyMap].sort(([a],[b]) => a.localeCompare(b)).map(([month,scores]) => ({ month, responses: scores.length, average: average(scores), positivePct: Math.round(scores.filter((value) => value >= 4).length / scores.length * 1000) / 10 }));
+    return {
+      periodDays: safeDays,
+      summary: { responses: scoped.length, average: average(values), positivePct: values.length ? Math.round(positive / values.length * 1000) / 10 : 0, comments: scoped.filter((item) => Boolean(item.commentary?.trim())).length },
+      distribution,
+      monthly,
+      byClient: group((item) => item.ticket.client ?? "Sem cliente").slice(0,12),
+      byAnalyst: group((item) => item.ticket.owner ?? "Sem responsável").slice(0,12),
+      byService: group((item) => item.service).slice(0,12),
+      recent: scoped.slice(0,20).map((item) => ({ id:item.id, ticketId:item.ticketId, subject:item.ticket.subject, client:item.ticket.client, owner:item.ticket.owner, value:item.value, commentary:item.commentary, responseDate:item.responseDate, service:item.service })),
+    };
+  }
+
   async slaDevelopmentFlow(days = 180) {
     const since = new Date(Date.now() - Math.min(Math.max(days, 30), 730) * 86400000);
     const tickets = await prisma.ticket.findMany({
