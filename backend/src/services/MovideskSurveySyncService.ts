@@ -38,9 +38,26 @@ export class MovideskSurveySyncService {
   async syncResponses() {
     const checkpoint = await prisma.auditLog.findFirst({ where: { action: CSAT_CHECKPOINT_ACTION }, orderBy: { createdAt: "desc" }, select: { metadata: true } });
     const metadata = checkpoint?.metadata && typeof checkpoint.metadata === "object" && !Array.isArray(checkpoint.metadata) ? checkpoint.metadata as Record<string, unknown> : {};
-    const completed = metadata.completed === true;
+    let completed = metadata.completed === true;
     const watermarkRaw = typeof metadata.watermark === "string" ? new Date(metadata.watermark) : null;
-    const watermark = watermarkRaw && !Number.isNaN(watermarkRaw.getTime()) ? watermarkRaw : null;
+    let watermark = watermarkRaw && !Number.isNaN(watermarkRaw.getTime()) ? watermarkRaw : null;
+
+    // Migração V1 -> V2: a carga inicial já pode ter sido concluída antes da
+    // existência do watermark. Nesse caso usamos a resposta persistida mais
+    // recente como baseline, sem repetir a varredura global.
+    if (!checkpoint && !watermark) {
+      const latestPersisted = await prisma.movideskSurveyResponse.findFirst({
+        where: { responseDate: { not: null } },
+        orderBy: { responseDate: "desc" },
+        select: { responseDate: true },
+      });
+      if (latestPersisted?.responseDate) {
+        watermark = latestPersisted.responseDate;
+        completed = true;
+        console.log(`[movidesk-csat] checkpoint V2 inicializado a partir da base persistida | watermark=${watermark.toISOString()}`);
+      }
+    }
+
     const queryStart = completed && watermark ? new Date(Math.max(START.getTime(), watermark.getTime() - CSAT_OVERLAP_MS)) : START;
     let cursor: string | null = !completed && typeof metadata.cursor === "string" && metadata.cursor ? metadata.cursor : null;
     let maxResponseDate = watermark ?? START;
