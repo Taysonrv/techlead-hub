@@ -104,6 +104,8 @@ type Ticket = {
   solutionSlaIndicator?: string | null;
 };
 
+type ExecutiveQuality = { csat:{summary:{responses:number;average:number;positivePct:number;comments:number}}; sla:{summary:{bugsWithTask:number;concluded:number;supportWithinOla:number;factoryWithinOla:number;totalWithinSla:number;avgSupportMinutes:number;avgFactoryMinutes:number;avgTotalMinutes:number}} };
+
 type DeadlineBucket =
   | "within"
   | "attention"
@@ -162,6 +164,7 @@ export function Performance() {
   const [error, setError] = useState<string | null>(null);
   const loadRequestRef = useRef<AbortController | null>(null);
   const [drilldown, setDrilldown] = useState<DrilldownState | null>(null);
+  const [executiveQuality, setExecutiveQuality] = useState<ExecutiveQuality | null>(null);
 
   const {
     effectiveStartDate,
@@ -190,6 +193,16 @@ export function Performance() {
 
     void loadTickets();
     return () => controller.abort();
+  }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    Promise.all([
+      api.get("/coordination/csat", { params:{ days:180 }, signal:controller.signal }),
+      api.get("/coordination/sla-development", { params:{ days:180 }, signal:controller.signal }),
+    ]).then(([csat,sla]) => setExecutiveQuality({csat:csat.data,sla:sla.data}))
+      .catch(()=>{ if(!controller.signal.aborted) setExecutiveQuality(null); });
+    return ()=>controller.abort();
   }, []);
 
   const periodTickets = useMemo(() => {
@@ -551,6 +564,13 @@ export function Performance() {
         sem medição e as categorias Adequação e Solicitação de Serviço não entram no denominador.
         Os prazos calculados em horas úteis são exibidos separadamente como risco operacional.
       </Alert>
+
+      {executiveQuality && <Box sx={{ display:"grid", gridTemplateColumns:{xs:"1fr",sm:"repeat(2,minmax(0,1fr))",xl:"repeat(4,minmax(0,1fr))"}, gap:1.25, mb:1.75 }}>
+        <PerformanceKpi title="CSAT" value={executiveQuality.csat.summary.responses ? executiveQuality.csat.summary.average.toLocaleString("pt-BR",{maximumFractionDigits:2}) : "—"} description={`${executiveQuality.csat.summary.responses} resposta(s) · ${executiveQuality.csat.summary.positivePct}% notas 4–5`} accent={aliareColors.green} />
+        <PerformanceKpi title="OLA Suporte" value={executiveQuality.sla.summary.bugsWithTask ? `${Math.round(executiveQuality.sla.summary.supportWithinOla/executiveQuality.sla.summary.bugsWithTask*1000)/10}%` : "—"} description="Ticket → abertura da Task" accent={aliareColors.info} />
+        <PerformanceKpi title="OLA Desenvolvimento" value={executiveQuality.sla.summary.concluded ? `${Math.round(executiveQuality.sla.summary.factoryWithinOla/executiveQuality.sla.summary.concluded*1000)/10}%` : "—"} description="Task → conclusão no Azure" accent={aliareColors.green} />
+        <PerformanceKpi title="SLA ponta a ponta" value={executiveQuality.sla.summary.concluded ? `${Math.round(executiveQuality.sla.summary.totalWithinSla/executiveQuality.sla.summary.concluded*1000)/10}%` : "—"} description="Suporte + Desenvolvimento" accent={aliareColors.warning} />
+      </Box>}
 
       <Box
         sx={{
