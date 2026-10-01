@@ -3,6 +3,7 @@ import crypto from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../database/prisma";
 import { MovideskJsonImportService } from "./MovideskJsonImportService";
+import { isSimerClient } from "../domain/OperationalScope";
 
 const PAGE_SIZE = 50;
 const REQUEST_INTERVAL_MS = 6_200;
@@ -10,7 +11,9 @@ const INCREMENTAL_OVERLAP_MINUTES = 10;
 const REQUEST_RETRY_ATTEMPTS = 6;
 const REQUEST_RETRY_BASE_MS = 2_000;
 const OFFSET_TO_CURSOR_THRESHOLD = 9_000;
-const BASELINE_CHECKPOINT_ACTION = "MOVIDESK_BASELINE_CHECKPOINT";
+const BASELINE_CHECKPOINT_ACTION = "MOVIDESK_SCOPED_BASELINE_CHECKPOINT_2026";
+const BASELINE_COMPLETED_ACTION = "MOVIDESK_SCOPED_BASELINE_COMPLETED_2026";
+const SYNC_SCOPE_START = new Date("2026-01-01T00:00:00.000Z");
 const BASELINE_FAILED_ACTION = "MOVIDESK_BASELINE_FAILED";
 
 function normalizeMovideskDateTimeOffset(value: string) {
@@ -375,11 +378,26 @@ export class MovideskService {
 
   async hasCompletedBaseline() {
     const baseline = await prisma.auditLog.findFirst({
-      where: { action: "MOVIDESK_BASELINE_COMPLETED" },
+      where: { action: BASELINE_COMPLETED_ACTION },
       orderBy: { createdAt: "desc" },
       select: { id: true },
     });
     return Boolean(baseline);
+  }
+
+  private ticketClientName(row: unknown) {
+    if (!row || typeof row !== "object" || Array.isArray(row)) return null;
+    const clients = (row as Record<string, unknown>).clients;
+    if (!Array.isArray(clients) || !clients.length) return null;
+    const first = clients[0];
+    if (!first || typeof first !== "object" || Array.isArray(first)) return null;
+    const client = first as Record<string, unknown>;
+    const organization = client.organization;
+    if (organization && typeof organization === "object" && !Array.isArray(organization)) {
+      const businessName = (organization as Record<string, unknown>).businessName;
+      if (typeof businessName === "string" && businessName.trim()) return businessName.trim();
+    }
+    return typeof client.businessName === "string" ? client.businessName.trim() : null;
   }
 
   private async getPage(
@@ -387,11 +405,13 @@ export class MovideskService {
     since?: Date | null,
     cursor?: { lastUpdate: string; id: number } | null,
   ) {
-    const filter = cursor
-      ? `(lastUpdate gt ${normalizeMovideskDateTimeOffset(cursor.lastUpdate)}) or (lastUpdate eq ${normalizeMovideskDateTimeOffset(cursor.lastUpdate)} and id gt ${cursor.id})`
+    const scopeFilter = `createdDate ge ${SYNC_SCOPE_START.toISOString()}`;
+    const cursorFilter = cursor
+      ? `((lastUpdate gt ${normalizeMovideskDateTimeOffset(cursor.lastUpdate)}) or (lastUpdate eq ${normalizeMovideskDateTimeOffset(cursor.lastUpdate)} and id gt ${cursor.id}))`
       : since
         ? `lastUpdate gt ${since.toISOString()}`
-        : undefined;
+        : null;
+    const filter = cursorFilter ? `${scopeFilter} and ${cursorFilter}` : scopeFilter;
     const response = await this.getWithRetry(`${this.url}/tickets`, {
       params: {
         token: this.token(),
@@ -438,7 +458,7 @@ export class MovideskService {
     // Assim, uma interrupção no meio do baseline nunca faz o próximo ciclo
     // saltar os tickets das páginas que ainda não foram importadas.
     const baseline = await prisma.auditLog.findFirst({
-      where: { action: "MOVIDESK_BASELINE_COMPLETED" },
+      where: { action: BASELINE_COMPLETED_ACTION },
       orderBy: { createdAt: "desc" },
       select: { id: true },
     });
@@ -446,7 +466,13 @@ export class MovideskService {
 
     // O cursor deve seguir o relógio do dado remoto (lastUpdate), e não o
     // horário local em que a importação terminou.
-    const latest = await prisma.ticket.aggregate({ _max: { lastUpdate: true } });
+    const latest = await prisma.ticket.aggregate({
+      where: {
+        createdDate: { gte: SYNC_SCOPE_START },
+        client: { not: null },
+      },
+      _max: { lastUpdate: true },
+    });
     const cursor = latest._max.lastUpdate;
     if (!cursor) return null;
     return new Date(cursor.getTime() - INCREMENTAL_OVERLAP_MINUTES * 60_000);
@@ -487,10 +513,13 @@ export class MovideskService {
       const rows = await this.getPage(skip, since, useCursor ? fullCursor : null);
       if (!rows.length) break;
 
-      const result = await new MovideskJsonImportService().execute(
-        Buffer.from(JSON.stringify(rows), "utf8"),
-        { fileName: `API Movidesk · ${mode} · página ${summary.pages + 1}`, userId: userId ?? null, source: "MOVIDESK_API" },
-      );
+      const scopedRows = rows.filter((row) => isSimerClient(this.ticketClientName(row)));
+      const result = scopedRows.length
+        ? await new MovideskJsonImportService().execute(
+            Buffer.from(JSON.stringify(scopedRows), "utf8"),
+            { fileName: `API Movidesk · ${mode} · página ${summary.pages + 1}`, userId: userId ?? null, source: "MOVIDESK_API" },
+          )
+        : { totalRows: 0, created: 0, updated: 0, ignored: 0, errors: 0 };
       summary.pages += 1;
       summary.totalRows += result.totalRows;
       summary.created += result.created;
@@ -528,9 +557,9 @@ export class MovideskService {
       await prisma.auditLog.create({
         data: {
           userId: userId ?? null,
-          action: "MOVIDESK_BASELINE_COMPLETED",
+          action: BASELINE_COMPLETED_ACTION,
           entity: "Ticket",
-          metadata: { pages: summary.pages, totalRows: summary.totalRows, errors: summary.errors },
+          metadata: { pages: summary.pages, totalRows: summary.totalRows, errors: summary.errors, scopeStart: SYNC_SCOPE_START.toISOString(), scope: "SIMER_CLIENTS" },
         },
       });
       baselineState.progress = baselineState.progress
