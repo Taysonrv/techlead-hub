@@ -1967,13 +1967,6 @@ export function Analysts() {
                 Limpar filtros
               </Button>
             )}
-            <MetricCard
-          title="CSAT"
-          value={summary.csatAverage == null ? "—" : summary.csatAverage.toLocaleString("pt-BR",{maximumFractionDigits:2})}
-          description={`${summary.csatResponses} avaliação(ões) no recorte atual`}
-          info={{ title:"CSAT", summary:"Média das avaliações de satisfação vinculadas aos tickets da equipe.", calculation:"Média de satisfactionScore para os tickets após os filtros atuais.", source:"Pesquisa de Satisfação Movidesk", reference:"MovideskSurveyResponse → Ticket.movideskId", periodRule:"Respeita período, Squad, Analista, área e serviço selecionados." }}
-          onClick={()=>showTickets("Tickets com avaliação CSAT", scopedTickets.filter((ticket)=>ticket.satisfactionScore != null), "Pesquisa de Satisfação Movidesk")}
-        />
       </Box>
         </CardContent>
       </Card>
@@ -2151,6 +2144,13 @@ export function Analysts() {
               )
             )
           }
+        />
+        <MetricCard
+          title="CSAT"
+          value={summary.csatAverage ?? 0}
+          description={summary.csatAverage == null ? "Sem avaliações no recorte" : `${summary.csatResponses} avaliação(ões) · média ${summary.csatAverage.toLocaleString("pt-BR",{maximumFractionDigits:2})}`}
+          info={{ title:"CSAT", summary:"Média das avaliações de satisfação vinculadas aos tickets da equipe.", calculation:"Média de satisfactionScore para os tickets após os filtros atuais.", source:"Pesquisa de Satisfação Movidesk", reference:"MovideskSurveyResponse → Ticket.movideskId", periodRule:"Respeita período, Squad, Analista, área e serviço selecionados." }}
+          onClick={()=>showTickets("Tickets com avaliação CSAT", scopedTickets.filter((ticket)=>ticket.satisfactionScore != null), "Pesquisa de Satisfação Movidesk")}
         />
       </Box>
 
