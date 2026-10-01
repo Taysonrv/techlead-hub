@@ -1,5 +1,7 @@
 import { Response } from "express";
 import { MovideskService } from "../services/MovideskService";
+import { MovideskReferenceSyncService } from "../services/MovideskReferenceSyncService";
+import { MovideskSurveySyncService } from "../services/MovideskSurveySyncService";
 import type { AuthenticatedRequest } from "../middlewares/authMiddleware";
 
 export class MovideskController {
@@ -47,6 +49,21 @@ export class MovideskController {
             return res.json(await new MovideskService().syncTickets(req.auth?.userId ?? null, true));
         } catch (error) {
             return res.status(500).json({ message: error instanceof Error ? error.message : "Não foi possível executar a carga completa do Movidesk." });
+        }
+    }
+
+    async syncReferenceData(_req: AuthenticatedRequest, res: Response) {
+        try {
+            const reference = new MovideskReferenceSyncService();
+            const survey = new MovideskSurveySyncService();
+            const services = await reference.syncCatalog();
+            const questions = await reference.syncSurveyQuestions();
+            const responses = await survey.syncResponses();
+            return res.json({ services, questions, csat: responses, syncedAt: new Date().toISOString() });
+        } catch (error) {
+            const message = error instanceof Error ? error.message : "Não foi possível sincronizar catálogo e CSAT Movidesk.";
+            console.error("[movidesk-reference-sync] Falha:", message);
+            return res.status(500).json({ message });
         }
     }
 
