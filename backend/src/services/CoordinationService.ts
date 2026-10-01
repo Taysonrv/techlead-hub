@@ -1,7 +1,7 @@
 import { isBug, isConcluded, mapPriority, SLA_PRIORITY } from "../domain/TicketClassificationRules";
 import { slaBusinessMinutes } from "../domain/SlaCalendarRules";
 import { prisma } from "../database/prisma";
-import { SIMER_CLIENTS, SUPPORT_ANALYSTS, SUPPORT_COORDINATOR, coordinationAzureScope, coordinationTicketScope } from "../domain/OperationalScope";
+import { SIMER_CLIENTS, SUPPORT_ANALYSTS, SUPPORT_COORDINATOR, coordinationAzureScope, coordinationTicketScope, simerClientTicketScope } from "../domain/OperationalScope";
 import { SIMER_SERVICE_CATALOG, suggestSimerService, type SimerServiceCatalogItem } from "../domain/SimerServiceCatalog";
 import { extractMovideskTimeEntries } from "./MovideskPayloadAnalytics";
 import { coordinationAzurePriorityPredicate, coordinationOpenAzurePredicate, coordinationOpenTicketPredicate, coordinationTicketPriorityPredicate, type CoordinationPriorityKind } from "../domain/CoordinationPredicates";
@@ -293,8 +293,8 @@ export class CoordinationService {
     since.setDate(1); since.setHours(0, 0, 0, 0);
     const previousSince = new Date(since);
     previousSince.setMonth(previousSince.getMonth() - months);
-    const scope = coordinationTicketScope();
-    const allTickets = await prisma.ticket.findMany({
+    const scope = simerClientTicketScope();
+    const [allTickets, officialServices] = await Promise.all([prisma.ticket.findMany({
       where: {
         AND: [
           scope,
@@ -309,7 +309,10 @@ export class CoordinationService {
         createdDate: true, baseStatus: true,
       },
       orderBy: { createdDate: "desc" },
-    });
+    }), prisma.movideskServiceCatalog.findMany({
+      where: { isActive: true },
+      select: { id:true, name:true, parentServiceId:true },
+    })]);
     const tickets = allTickets.filter((ticket) => ticket.createdDate >= since);
     const previousTickets = allTickets.filter((ticket) => ticket.createdDate >= previousSince && ticket.createdDate < since);
     const normalize = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR").trim();
@@ -321,6 +324,20 @@ export class CoordinationService {
     };
     const catalogMap = new Map<string, SimerServiceCatalogItem>();
     for (const item of SIMER_SERVICE_CATALOG) catalogMap.set(normalize(item.path), item);
+    const officialById = new Map(officialServices.map((item) => [item.id, item]));
+    const officialPath = (id:number) => {
+      const names:string[]=[]; const seen=new Set<number>(); let current=officialById.get(id);
+      while(current && !seen.has(current.id) && names.length < 8) {
+        seen.add(current.id); names.unshift(current.name); current=current.parentServiceId ? officialById.get(current.parentServiceId) : undefined;
+      }
+      return names.join(" » ");
+    };
+    for (const item of officialServices) {
+      const path=officialPath(item.id);
+      if (!path || !/simer/i.test(path)) continue;
+      const parts=path.split("»").map((value)=>value.trim()).filter(Boolean);
+      catalogMap.set(normalize(path), { id:`movidesk:${item.id}`, path, name:item.name, module:parts.length >= 3 ? parts[2] ?? null : null });
+    }
     for (const ticket of tickets) {
       const path = pathOf(ticket); if (!path || !/simer/i.test(path)) continue;
       const parts = path.split("»").map((v) => v.trim()).filter(Boolean);
@@ -386,6 +403,8 @@ export class CoordinationService {
       periodMonths: months, total: tickets.length, specific, generic: genericCount, withoutService, suspected,
       classificationRate: currentRate,
       catalogSize: catalog.length,
+      officialCatalogSize: officialServices.length,
+      simerCatalogSize: officialServices.filter((item)=>/simer/i.test(officialPath(item.id))).length,
       comparison: { previousTotal, volumeDelta, previousClassificationRate: previousRate, classificationDelta },
       trend: [...monthsMap.values()].sort((a,b) => a.month.localeCompare(b.month)),
       ranking, modules, causes, categories, categoryServices, samples,
