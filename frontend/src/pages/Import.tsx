@@ -246,6 +246,8 @@ export function Import() {
   const [enrichmentDiagnosticLoading, setEnrichmentDiagnosticLoading] = useState(false);
   const [apiCatalogDiagnostic, setApiCatalogDiagnostic] = useState<MovideskApiCatalogDiagnostic | null>(null);
   const [apiCatalogDiagnosticLoading, setApiCatalogDiagnosticLoading] = useState(false);
+  const [referenceSyncLoading, setReferenceSyncLoading] = useState(false);
+  const [referenceSyncResult, setReferenceSyncResult] = useState<Record<string, unknown> | null>(null);
 
   /* =======================================================
      AZURE
@@ -659,6 +661,19 @@ export function Import() {
     return () => window.clearInterval(timer);
   }, [loadMovideskStatus]);
 
+  async function syncMovideskReferenceData() {
+    try {
+      setReferenceSyncLoading(true);
+      setError(null);
+      const response = await api.post<Record<string, unknown>>("/movidesk/reference-sync", {}, { timeout: 900_000 });
+      setReferenceSyncResult(response.data);
+    } catch (err: unknown) {
+      setError(getApiErrorMessage(err, "Não foi possível sincronizar Catálogo + CSAT Movidesk."));
+    } finally {
+      setReferenceSyncLoading(false);
+    }
+  }
+
   async function diagnoseMovideskApiCatalog() {
     try {
       setApiCatalogDiagnosticLoading(true);
@@ -773,6 +788,9 @@ export function Import() {
               <Button variant="outlined" disabled={apiCatalogDiagnosticLoading || movideskStatus?.status === "RUNNING"} onClick={() => void diagnoseMovideskApiCatalog()}>
                 {apiCatalogDiagnosticLoading ? "Mapeando APIs..." : "Mapear APIs disponíveis"}
               </Button>
+              <Button variant="contained" disabled={referenceSyncLoading || movideskStatus?.status === "RUNNING"} onClick={() => void syncMovideskReferenceData()}>
+                {referenceSyncLoading ? "Sincronizando Catálogo + CSAT..." : "Sincronizar Catálogo + CSAT"}
+              </Button>
               <Button variant="outlined" disabled={movideskStatusLoading} onClick={() => void loadMovideskStatus(true)}>
                 {movideskStatusLoading ? "Atualizando..." : "Atualizar status"}
               </Button>
@@ -810,6 +828,11 @@ export function Import() {
               FULL: {movideskStatus.result.pages} página(s) • {movideskStatus.result.totalRows} lidos • {movideskStatus.result.created} novos • {movideskStatus.result.updated} atualizados • {movideskStatus.result.ignored} ignorados • {movideskStatus.result.errors} erros.
             </Alert>}
             {movideskStatus.error && <Alert severity="error" sx={{ mt: 2 }}>{movideskStatus.error}</Alert>}
+            {referenceSyncResult && (
+              <Alert severity="success" variant="outlined" sx={{ mt: 2 }}>
+                Catálogo e CSAT sincronizados. <Box component="span" sx={{ fontFamily: "monospace", fontSize: ".78rem" }}>{JSON.stringify(referenceSyncResult)}</Box>
+              </Alert>
+            )}
             {apiCatalogDiagnostic && (
               <Box sx={{ mt: 2, p: 1.75, border: "1px solid", borderColor: "divider", borderRadius: 2.5, bgcolor: "background.default" }}>
                 <Typography variant="body2" sx={{ fontWeight: 750, mb: .5 }}>Catálogo de APIs Movidesk</Typography>
