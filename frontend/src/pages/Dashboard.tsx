@@ -94,6 +94,7 @@ type Ticket = {
   owner: string | null;
   ownerTeam?: string | null;
   team?: string | null;
+  isWithSimer?: boolean;
 
   category: string | null;
   cause: string | null;
@@ -262,6 +263,11 @@ export function Dashboard() {
     isDateInPeriod(ticket.createdDate, periodBounds.start, periodBounds.end)
   ), [tickets, periodBounds]);
 
+  const openedWithSimerInPeriod = useMemo(
+    () => openedInPeriod.filter((ticket) => ticket.isWithSimer === true),
+    [openedInPeriod],
+  );
+
   // Backlog atual não é limitado pela data de abertura.
   const pendingTickets = useMemo(() => tickets.filter(isOpen), [tickets]);
 
@@ -286,6 +292,7 @@ export function Dashboard() {
 
   const summary = useMemo(() => ({
     abertosNoPeriodo: openedInPeriod.length,
+    abertosComSimerNoPeriodo: openedWithSimerInPeriod.length,
     pendentes: pendingTickets.length,
     resolvidosNoPeriodo: resolvedInPeriod.length,
     fechadosNoPeriodo: closedInPeriod.length,
@@ -293,7 +300,7 @@ export function Dashboard() {
     emAtendimento: attendanceTickets.length,
     parados: stoppedTickets.length,
     criticos: criticalTickets.length,
-  }), [openedInPeriod, pendingTickets, resolvedInPeriod, closedInPeriod, newTickets, attendanceTickets, stoppedTickets, criticalTickets]);
+  }), [openedInPeriod, openedWithSimerInPeriod, pendingTickets, resolvedInPeriod, closedInPeriod, newTickets, attendanceTickets, stoppedTickets, criticalTickets]);
 
   /* =======================================================
      DESENVOLVIMENTO / AZURE DEVOPS
@@ -767,20 +774,36 @@ export function Dashboard() {
 
   const cards = [
     {
-      title: "Abertos",
+      title: "Abertos · Carteira SIMER",
       value: summary.abertosNoPeriodo,
-      description: "Abertos no período selecionado",
+      description: "Demanda aberta pelos clientes da carteira",
       severity: "default" as Severity,
       info: {
-        title: "Abertos",
-        summary: "Tickets cuja data de abertura está dentro do período selecionado.",
-        calculation: "Contagem dos tickets com createdDate entre o início e o fim do período.",
+        title: "Abertos · Carteira SIMER",
+        summary: "Todos os tickets abertos no período pelos clientes da carteira SIMER, independentemente da equipe responsável atual.",
+        calculation: "Contagem dos tickets dos clientes da carteira com createdDate dentro do período.",
         source: "Movidesk",
-        reference: "Ticket.createdDate",
+        reference: "Ticket.client + Ticket.createdDate",
         periodRule: "Respeita integralmente o período global selecionado.",
-        notes: "Clique no card para abrir exatamente os tickets que compõem o indicador.",
+        notes: "O ticket permanece neste indicador mesmo quando é transferido para Produto, Cloud, Vistra, Hendow ou outra equipe.",
       },
-      onClick: () => showTickets("Tickets abertos no período", openedInPeriod, "Data de abertura dentro do período selecionado"),
+      onClick: () => showTickets("Abertos · Carteira SIMER", openedInPeriod, "Tickets abertos pelos clientes da carteira no período selecionado"),
+    },
+    {
+      title: "Com o SIMER",
+      value: summary.abertosComSimerNoPeriodo,
+      description: "Dos abertos no período, atualmente com a operação SIMER",
+      severity: "default" as Severity,
+      info: {
+        title: "Com o SIMER",
+        summary: "Subconjunto dos tickets abertos no período que permanecem atualmente sob responsabilidade de um analista da operação SIMER.",
+        calculation: "Abertos da carteira no período filtrados pelo responsável atual pertencente à operação SIMER.",
+        source: "Movidesk",
+        reference: "Ticket.createdDate + Ticket.owner",
+        periodRule: "A abertura respeita o período global; a responsabilidade representa o estado atual do ticket.",
+        notes: "Transferências para Produto, Cloud, Vistra, Hendow ou outras equipes deixam de compor este indicador, mas continuam em Abertos · Carteira SIMER.",
+      },
+      onClick: () => showTickets("Abertos atualmente com o SIMER", openedWithSimerInPeriod, "Subconjunto da demanda aberta no período cuja responsabilidade atual está com a operação SIMER"),
     },
     {
       title: "Pendentes",
