@@ -4,6 +4,7 @@ import { prisma } from "../database/prisma";
 
 const API_URL = process.env.MOVIDESK_API_URL?.trim() || "https://api.movidesk.com/public/v1";
 const WAIT_MS = 6200;
+const CATALOG_CHECKPOINT_ACTION = "MOVIDESK_CATALOG_CHECKPOINT_V1";
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export class MovideskReferenceSyncService {
@@ -34,7 +35,11 @@ export class MovideskReferenceSyncService {
   async syncCatalog() {
     let processed = 0;
     let pages = 0;
-    for (let skip = 0; ; skip += 25) {
+    const checkpoint = await prisma.auditLog.findFirst({ where: { action: CATALOG_CHECKPOINT_ACTION }, orderBy: { createdAt: "desc" }, select: { metadata: true } });
+    const metadata = checkpoint?.metadata && typeof checkpoint.metadata === "object" && !Array.isArray(checkpoint.metadata) ? checkpoint.metadata as Record<string, unknown> : {};
+    const resumeSkip = Number.isSafeInteger(Number(metadata.nextSkip)) ? Math.max(0, Number(metadata.nextSkip)) : 0;
+    console.log(`[movidesk-catalog] início skip=${resumeSkip}${resumeSkip ? " (checkpoint)" : ""}`);
+    for (let skip = resumeSkip; ; skip += 25) {
       pages += 1;
       if (pages > 500) throw new Error("Catálogo interrompido: limite de segurança de 500 páginas atingido.");
       const response = await this.get("/services", { $select: "id,name,parentServiceId,isActive,defaultCategory,defaultUrgency", $top: 25, $skip: skip, $orderby: "id asc" });
@@ -69,6 +74,7 @@ export class MovideskReferenceSyncService {
           await sleep(delay);
         }
       }
+      await prisma.auditLog.create({ data: { action: CATALOG_CHECKPOINT_ACTION, entityType: "MovideskServiceCatalog", metadata: { nextSkip: skip + rows.length, processedAt: new Date().toISOString() } } });
       if (rows.length < 25) break;
       await sleep(WAIT_MS);
     }
