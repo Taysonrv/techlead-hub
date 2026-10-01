@@ -122,6 +122,8 @@ type Ticket = {
   reopenCount?: number;
   satisfactionScore?: number | null;
   satisfactionComment?: string | null;
+  satisfactionDate?: string | null;
+  satisfactionSource?: string | null;
   timeline?: Array<{ date: string; type: string; title: string; description: string | null; author: string | null }>;
 
   lifetimeMinutes: number | null;
@@ -149,6 +151,8 @@ type TicketAnalytics = {
   reopenCount: number;
   satisfactionScore: number | null;
   satisfactionComment: string | null;
+  satisfactionDate: string | null;
+  satisfactionSource: string | null;
 };
 
 type AzureTaskSummary = {
@@ -2904,12 +2908,21 @@ export function Tickets() {
                 <TicketField label="Trocas de responsável" value={selectedTicket.ownerHandoffs} />
                 <TicketField label="Quantidade de reaberturas" value={selectedTicket.reopenCount} />
                 <TicketField label="Resolvido no primeiro contato" value={selectedTicket.resolvedInFirstCall === null ? "Não informado" : selectedTicket.resolvedInFirstCall ? "Sim" : "Não"} />
-                <TicketField label="Satisfação" value={selectedTicket.satisfactionScore != null ? `${selectedTicket.satisfactionScore}/5` : null} />
+                <TicketField label="CSAT" value={selectedTicket.satisfactionScore != null ? `${selectedTicket.satisfactionScore}/5` : null} />
+                <TicketField label="Data do CSAT" value={formatDate(selectedTicket.satisfactionDate ?? null)} />
+                <TicketField label="Fonte CSAT" value={selectedTicket.satisfactionSource === "MovideskSurveyResponse" ? "Pesquisa de Satisfação Movidesk" : null} />
                 <TicketField label="Fonte da importação" value={selectedTicket.importSource} />
                 <TicketField label="Importado em" value={formatDate(selectedTicket.importedAt ?? null)} />
               </Box>
 
               {/* JUSTIFICATIVA */}
+
+              {selectedTicket.satisfactionComment && (
+                <Box sx={{ mb:2.25, p:1.5, border:"1px solid", borderColor:"divider", borderRadius:2 }}>
+                  <Typography variant="caption" color="text.secondary">Comentário CSAT</Typography>
+                  <Typography variant="body2" sx={{ mt:.5, whiteSpace:"pre-wrap" }}>{selectedTicket.satisfactionComment}</Typography>
+                </Box>
+              )}
 
               {selectedTicket.justification && (
                 <>
