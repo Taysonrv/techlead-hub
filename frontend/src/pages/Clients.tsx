@@ -53,7 +53,7 @@ import {
 import { useNavigate } from "react-router-dom";
 
 import { getTicketSnapshot } from "../services/ticketSnapshot";
-import { calculateOfficialSla } from "../utils/officialSla";
+import { calculateTimestampSla } from "../utils/timestampSla";
 import { useFilters } from "../context/FiltersContext";
 import { PeriodFilter } from "../components/PeriodFilter";
 import { PageHeader } from "../components/PageHeader";
@@ -876,8 +876,8 @@ export function Clients() {
               "Closed"
         ).length;
 
-      const responseResult = calculateOfficialSla(scopedTickets, "response");
-      const solutionResult = calculateOfficialSla(scopedTickets, "solution");
+      const responseResult = calculateTimestampSla(scopedTickets, "response");
+      const solutionResult = calculateTimestampSla(scopedTickets, "solution");
       const responseSla = { measured: responseResult.measured, onTime: responseResult.within, percent: responseResult.percentage };
       const solutionSla = { measured: solutionResult.measured, onTime: solutionResult.within, percent: solutionResult.percentage };
       const azureItems = Array.from(new Map(
