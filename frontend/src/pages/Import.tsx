@@ -248,6 +248,7 @@ export function Import() {
   const [apiCatalogDiagnosticLoading, setApiCatalogDiagnosticLoading] = useState(false);
   const [referenceSyncLoading, setReferenceSyncLoading] = useState(false);
   const [referenceSyncResult, setReferenceSyncResult] = useState<Record<string, unknown> | null>(null);
+  const [referenceSyncPhase, setReferenceSyncPhase] = useState<string | null>(null);
 
   /* =======================================================
      AZURE
@@ -661,16 +662,32 @@ export function Import() {
     return () => window.clearInterval(timer);
   }, [loadMovideskStatus]);
 
+  async function loadReferenceSyncStatus() {
+    try {
+      const response = await api.get<{ status:string; phase:string; result:Record<string,unknown>|null; error:string|null }>("/movidesk/reference-sync/status", { timeout: 30_000 });
+      setReferenceSyncPhase(response.data.phase);
+      setReferenceSyncLoading(response.data.status === "RUNNING");
+      if (response.data.result) setReferenceSyncResult(response.data.result);
+      if (response.data.status === "FAILED" && response.data.error) setError(response.data.error);
+    } catch { /* status é complementar; não derruba a tela */ }
+  }
+
+  useEffect(() => {
+    void loadReferenceSyncStatus();
+    const timer = window.setInterval(() => { void loadReferenceSyncStatus(); }, 5_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
   async function syncMovideskReferenceData() {
     try {
       setReferenceSyncLoading(true);
+      setReferenceSyncResult(null);
       setError(null);
-      const response = await api.post<Record<string, unknown>>("/movidesk/reference-sync", {}, { timeout: 900_000 });
-      setReferenceSyncResult(response.data);
+      const response = await api.post<{ accepted:boolean; state:{ phase:string } }>("/movidesk/reference-sync", {}, { timeout: 30_000 });
+      setReferenceSyncPhase(response.data.state.phase);
     } catch (err: unknown) {
-      setError(getApiErrorMessage(err, "Não foi possível sincronizar Catálogo + CSAT Movidesk."));
-    } finally {
       setReferenceSyncLoading(false);
+      setError(getApiErrorMessage(err, "Não foi possível iniciar Catálogo + CSAT Movidesk."));
     }
   }
 
@@ -789,7 +806,7 @@ export function Import() {
                 {apiCatalogDiagnosticLoading ? "Mapeando APIs..." : "Mapear APIs disponíveis"}
               </Button>
               <Button variant="contained" disabled={referenceSyncLoading || movideskStatus?.status === "RUNNING"} onClick={() => void syncMovideskReferenceData()}>
-                {referenceSyncLoading ? "Sincronizando Catálogo + CSAT..." : "Sincronizar Catálogo + CSAT"}
+                {referenceSyncLoading ? `Sincronizando · ${referenceSyncPhase === "CATALOG" ? "Catálogo" : referenceSyncPhase === "QUESTIONS" ? "Perguntas CSAT" : referenceSyncPhase === "CSAT" ? "Respostas CSAT" : "Preparando"}` : "Sincronizar Catálogo + CSAT"}
               </Button>
               <Button variant="outlined" disabled={movideskStatusLoading} onClick={() => void loadMovideskStatus(true)}>
                 {movideskStatusLoading ? "Atualizando..." : "Atualizar status"}
