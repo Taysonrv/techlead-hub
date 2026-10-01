@@ -14,4 +14,5 @@ movideskRoutes.post("/sync/full", requirePermission("imports"), controller.fullS
 movideskRoutes.get("/test", requirePermission("imports"), controller.test.bind(controller));
 movideskRoutes.get("/scope/diagnostic", requirePermission("imports"), controller.diagnoseScope.bind(controller));
 movideskRoutes.get("/enrichment/diagnostic", requirePermission("imports"), controller.diagnoseEnrichment.bind(controller));
+movideskRoutes.get("/catalog/diagnostic", requirePermission("imports"), controller.diagnoseApiCatalog.bind(controller));
 movideskRoutes.get("/preview", requirePermission("imports"), controller.preview.bind(controller));
