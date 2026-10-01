@@ -6,6 +6,7 @@ import { SIMER_CLIENTS } from "../domain/OperationalScope";
 const API_URL = process.env.MOVIDESK_API_URL?.trim() || "https://api.movidesk.com/public/v1";
 const START = new Date("2026-01-01T00:00:00.000Z");
 const WAIT_MS = 6200;
+const CSAT_CHECKPOINT_ACTION = "MOVIDESK_CSAT_CHECKPOINT_V1";
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export class MovideskSurveySyncService {
@@ -34,7 +35,10 @@ export class MovideskSurveySyncService {
   }
 
   async syncResponses() {
-    let cursor: string | null = null;
+    const checkpoint = await prisma.auditLog.findFirst({ where: { action: CSAT_CHECKPOINT_ACTION }, orderBy: { createdAt: "desc" }, select: { metadata: true } });
+    const metadata = checkpoint?.metadata && typeof checkpoint.metadata === "object" && !Array.isArray(checkpoint.metadata) ? checkpoint.metadata as Record<string, unknown> : {};
+    let cursor: string | null = typeof metadata.cursor === "string" && metadata.cursor ? metadata.cursor : null;
+    console.log(`[movidesk-csat] início${cursor ? " a partir do checkpoint" : " desde 2026-01-01"}`);
     let processed = 0, upserted = 0, skippedOutsideScope = 0, pages = 0;
     const seenPages = new Set<string>();
     for (;;) {
@@ -97,6 +101,7 @@ export class MovideskSurveySyncService {
         last && typeof last.id === "string" ? last.id : null;
       if (!next || next === cursor) break;
       cursor = next;
+      await prisma.auditLog.create({ data: { action: CSAT_CHECKPOINT_ACTION, entityType: "MovideskSurveyResponse", metadata: { cursor, processedAt: new Date().toISOString() } } });
       await sleep(WAIT_MS);
     }
     return { pages, processed, upserted, skippedOutsideScope, syncedAt: new Date().toISOString() };
