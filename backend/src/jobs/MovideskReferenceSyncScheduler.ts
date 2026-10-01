@@ -1,5 +1,6 @@
 import { MovideskReferenceSyncService } from "../services/MovideskReferenceSyncService";
 import { MovideskSurveySyncService } from "../services/MovideskSurveySyncService";
+import { releaseMovideskApi, tryAcquireMovideskApi } from "./MovideskSyncCoordinator";
 
 export type ReferenceSyncState = {
   status: "IDLE" | "RUNNING" | "SUCCESS" | "FAILED";
@@ -36,6 +37,7 @@ export function referenceSyncStatus() {
 
 export function runReferenceSync() {
   if (running) return { accepted: false, state: referenceSyncStatus() };
+  if (!tryAcquireMovideskApi("REFERENCE")) return { accepted: false, state: referenceSyncStatus() };
   state.status = "RUNNING"; state.phase = "CATALOG"; state.startedAt = new Date().toISOString();
   state.finishedAt = null; state.result = null; state.error = null;
   running = (async () => {
@@ -56,6 +58,7 @@ export function runReferenceSync() {
     } finally {
       state.finishedAt = new Date().toISOString();
       running = null;
+      releaseMovideskApi("REFERENCE");
     }
   })();
   return { accepted: true, state: referenceSyncStatus() };
@@ -71,7 +74,8 @@ export class MovideskReferenceSyncScheduler {
   }
 
   start() {
-    if (!this.enabled() || this.timer) return;
+    if (!this.enabled()) { state.scheduler.enabled = false; state.scheduler.nextEstimatedAt = null; return; }
+    if (this.timer) return;
     this.stopped = false;
     state.scheduler.enabled = true;
     this.scheduleNext();
