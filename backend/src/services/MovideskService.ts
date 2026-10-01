@@ -11,8 +11,8 @@ const INCREMENTAL_OVERLAP_MINUTES = 10;
 const REQUEST_RETRY_ATTEMPTS = 6;
 const REQUEST_RETRY_BASE_MS = 2_000;
 const OFFSET_TO_CURSOR_THRESHOLD = 9_000;
-const BASELINE_CHECKPOINT_ACTION = "MOVIDESK_SCOPED_BASELINE_CHECKPOINT_2026_V2";
-const BASELINE_COMPLETED_ACTION = "MOVIDESK_SCOPED_BASELINE_COMPLETED_2026_V2";
+const BASELINE_CHECKPOINT_ACTION = "MOVIDESK_SCOPED_BASELINE_CHECKPOINT_2026_V3";
+const BASELINE_COMPLETED_ACTION = "MOVIDESK_SCOPED_BASELINE_COMPLETED_2026_V3";
 const SYNC_SCOPE_START = new Date("2026-01-01T00:00:00.000Z");
 const BASELINE_FAILED_ACTION = "MOVIDESK_BASELINE_FAILED";
 
@@ -439,15 +439,22 @@ export class MovideskService {
     if (!row || typeof row !== "object" || Array.isArray(row)) return null;
     const clients = (row as Record<string, unknown>).clients;
     if (!Array.isArray(clients) || !clients.length) return null;
-    const first = clients[0];
-    if (!first || typeof first !== "object" || Array.isArray(first)) return null;
-    const client = first as Record<string, unknown>;
-    const organization = client.organization;
-    if (organization && typeof organization === "object" && !Array.isArray(organization)) {
-      const businessName = (organization as Record<string, unknown>).businessName;
-      if (typeof businessName === "string" && businessName.trim()) return businessName.trim();
+
+    const names: string[] = [];
+    for (const item of clients) {
+      if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+      const client = item as Record<string, unknown>;
+      const organization = client.organization;
+      if (organization && typeof organization === "object" && !Array.isArray(organization)) {
+        const businessName = (organization as Record<string, unknown>).businessName;
+        if (typeof businessName === "string" && businessName.trim()) names.push(businessName.trim());
+      }
+      if (typeof client.businessName === "string" && client.businessName.trim()) {
+        names.push(client.businessName.trim());
+      }
     }
-    return typeof client.businessName === "string" ? client.businessName.trim() : null;
+
+    return names.find((name) => isSimerClient(name)) ?? null;
   }
 
   private async getPage(
