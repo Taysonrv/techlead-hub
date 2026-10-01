@@ -1962,7 +1962,7 @@ export function Clients() {
             <Button size="small" variant="outlined" onClick={() => navigate("/evolucoes")}>Evoluções</Button>
           </Stack>
           <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1.25 }}>
-            SLA considera somente o indicador oficial disponível no Movidesk. Registros sem medição não são tratados como descumprimento.
+            SLA é calculado pelos prazos e timestamps sincronizados do Movidesk. Registros sem dados suficientes não são tratados como descumprimento.
           </Typography>
         </CardContent>
       </Card>
