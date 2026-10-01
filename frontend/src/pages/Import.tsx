@@ -80,6 +80,19 @@ type ImportPreview = {
   };
 };
 
+type MovideskEnrichmentDiagnostic = {
+  readOnly: boolean;
+  ticket: { movideskId: number; client: string | null; contact: string | null };
+  capabilities: Array<{
+    resource: string;
+    supported: boolean;
+    count: number | null;
+    keys: string[];
+    error: string | null;
+  }>;
+  note: string;
+};
+
 type MovideskScopeDiagnostic = {
   readOnly: boolean;
   filterAccepted: boolean;
@@ -222,6 +235,8 @@ export function Import() {
   const [movideskFullStarting, setMovideskFullStarting] = useState(false);
   const [scopeDiagnostic, setScopeDiagnostic] = useState<MovideskScopeDiagnostic | null>(null);
   const [scopeDiagnosticLoading, setScopeDiagnosticLoading] = useState(false);
+  const [enrichmentDiagnostic, setEnrichmentDiagnostic] = useState<MovideskEnrichmentDiagnostic | null>(null);
+  const [enrichmentDiagnosticLoading, setEnrichmentDiagnosticLoading] = useState(false);
 
   /* =======================================================
      AZURE
@@ -635,6 +650,19 @@ export function Import() {
     return () => window.clearInterval(timer);
   }, [loadMovideskStatus]);
 
+  async function diagnoseMovideskEnrichment() {
+    try {
+      setEnrichmentDiagnosticLoading(true);
+      setError(null);
+      const response = await api.get<MovideskEnrichmentDiagnostic>("/movidesk/enrichment/diagnostic", { timeout: 180_000 });
+      setEnrichmentDiagnostic(response.data);
+    } catch (err: unknown) {
+      setError(getApiErrorMessage(err, "Não foi possível diagnosticar os recursos de enriquecimento do Movidesk."));
+    } finally {
+      setEnrichmentDiagnosticLoading(false);
+    }
+  }
+
   async function diagnoseMovideskScope() {
     try {
       setScopeDiagnosticLoading(true);
@@ -717,6 +745,9 @@ export function Import() {
               <Button variant="outlined" disabled={scopeDiagnosticLoading || movideskStatus?.status === "RUNNING"} onClick={() => void diagnoseMovideskScope()}>
                 {scopeDiagnosticLoading ? "Diagnosticando..." : "Diagnosticar escopo"}
               </Button>
+              <Button variant="outlined" disabled={enrichmentDiagnosticLoading || movideskStatus?.status === "RUNNING"} onClick={() => void diagnoseMovideskEnrichment()}>
+                {enrichmentDiagnosticLoading ? "Validando recursos..." : "Diagnosticar enriquecimento"}
+              </Button>
               <Button variant="outlined" disabled={movideskStatusLoading} onClick={() => void loadMovideskStatus(true)}>
                 {movideskStatusLoading ? "Atualizando..." : "Atualizar status"}
               </Button>
@@ -754,6 +785,27 @@ export function Import() {
               FULL: {movideskStatus.result.pages} página(s) • {movideskStatus.result.totalRows} lidos • {movideskStatus.result.created} novos • {movideskStatus.result.updated} atualizados • {movideskStatus.result.ignored} ignorados • {movideskStatus.result.errors} erros.
             </Alert>}
             {movideskStatus.error && <Alert severity="error" sx={{ mt: 2 }}>{movideskStatus.error}</Alert>}
+            {enrichmentDiagnostic && (
+              <Box sx={{ mt: 2, p: 1.75, border: "1px solid", borderColor: "divider", borderRadius: 2.5, bgcolor: "background.default" }}>
+                <Stack direction={{ xs: "column", md: "row" }} spacing={1.5} sx={{ justifyContent: "space-between", alignItems: { md: "center" }, mb: 1.25 }}>
+                  <Box>
+                    <Typography variant="body2" sx={{ fontWeight: 750 }}>Diagnóstico de enriquecimento</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      Ticket {enrichmentDiagnostic.ticket.movideskId} • {enrichmentDiagnostic.ticket.client ?? "Cliente não informado"} • somente leitura
+                    </Typography>
+                  </Box>
+                  <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap" }}>
+                    {enrichmentDiagnostic.capabilities.map((item) => (
+                      <Chip key={item.resource} size="small" color={item.supported ? "success" : "error"} variant="outlined"
+                        label={item.supported ? `${item.resource}: ${item.count ?? 0}` : `${item.resource}: não suportado`} />
+                    ))}
+                  </Stack>
+                </Stack>
+                <Box component="pre" sx={{ m: 0, p: 1.5, overflow: "auto", maxHeight: 360, borderRadius: 2, bgcolor: "rgba(0,0,0,.18)", fontSize: ".72rem", lineHeight: 1.55, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                  {JSON.stringify(enrichmentDiagnostic.capabilities, null, 2)}
+                </Box>
+              </Box>
+            )}
             {scopeDiagnostic && (
               <Box sx={{ mt: 2, p: 1.75, border: "1px solid", borderColor: "divider", borderRadius: 2.5, bgcolor: "background.default" }}>
                 <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ justifyContent: "space-between", alignItems: { sm: "center" }, mb: 1 }}>
