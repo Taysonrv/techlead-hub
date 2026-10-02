@@ -54,5 +54,11 @@ export function productivityExpectedHours(start: Date, end: Date) {
 }
 
 export function sameOperationalPerson(a: string | null | undefined, b: string) {
-  return Boolean(a && a.localeCompare(b, "pt-BR", { sensitivity: "base" }) === 0);
+  const normalize = (value: string) => value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLocaleUpperCase("pt-BR");
+  return Boolean(a && normalize(a) === normalize(b));
 }
