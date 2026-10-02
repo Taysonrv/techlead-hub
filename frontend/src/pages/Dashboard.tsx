@@ -214,6 +214,7 @@ export function Dashboard() {
   const [copyMessage, setCopyMessage] =
     useState("");
   const [categoryPeriod, setCategoryPeriod] = useState<CardPeriod>("30d");
+  const [flowHidden, setFlowHidden] = useState<Set<"opened" | "resolved" | "closed">>(() => new Set());
   const [statusPeriod, setStatusPeriod] = useState<CardPeriod>("30d");
 
   const {
@@ -1370,16 +1371,23 @@ export function Dashboard() {
                     <XAxis dataKey="date" tick={{ fontSize: 10 }} minTickGap={24} interval="preserveStartEnd" tickMargin={8} />
                     <YAxis allowDecimals={false} tick={{ fontSize: 10 }} width={42} />
                     <Tooltip contentStyle={chartTooltipStyle} />
-                    <Area type="monotone" dataKey="opened" name="Abertos" stroke={semanticChartColors.normal} strokeWidth={2.4} fill="url(#openedFlow)" activeDot={{ r: 6, cursor: "pointer", onClick: (_event, payload: any) => { const day = payload?.payload?.sortDate; if (day) showTickets(`Abertos em ${formatShortDate(day)}`, openedInPeriod.filter((ticket) => formatIsoDate(new Date(ticket.createdDate)) === day), "Tickets abertos no dia selecionado"); } }} />
+                    {!flowHidden.has("opened") && <Area type="monotone" dataKey="opened" name="Abertos" stroke={semanticChartColors.normal} strokeWidth={2.4} fill="url(#openedFlow)" activeDot={{ r: 6, cursor: "pointer", onClick: (_event, payload: any) => { const day = payload?.payload?.sortDate; if (day) showTickets(`Abertos em ${formatShortDate(day)}`, openedInPeriod.filter((ticket) => formatIsoDate(new Date(ticket.createdDate)) === day), "Tickets abertos no dia selecionado"); } }} />
                     <Area type="monotone" dataKey="resolved" name="Resolvidos" stroke={semanticChartColors.positive} strokeWidth={2.4} fill="url(#resolvedFlow)" activeDot={{ r: 6, cursor: "pointer", onClick: (_event, payload: any) => { const day = payload?.payload?.sortDate; if (day) showTickets(`Resolvidos em ${formatShortDate(day)}`, resolvedInPeriod.filter((ticket) => Boolean(ticket.resolvedDate) && formatIsoDate(new Date(ticket.resolvedDate!)) === day), "Tickets resolvidos no dia selecionado"); } }} />
                     <Area type="monotone" dataKey="closed" name="Fechados" stroke={semanticChartColors.neutral} strokeWidth={2.2} fillOpacity={0} activeDot={{ r: 6, cursor: "pointer", onClick: (_event, payload: any) => { const day = payload?.payload?.sortDate; if (day) showTickets(`Fechados em ${formatShortDate(day)}`, closedInPeriod.filter((ticket) => Boolean(ticket.closedDate) && formatIsoDate(new Date(ticket.closedDate!)) === day), "Tickets fechados no dia selecionado"); } }} />
                   </AreaChart>
                 </ResponsiveContainer>
               </Box>
-              <Stack direction="row" spacing={2} sx={{ mt: .5, justifyContent: "center", alignItems: "center" }}>
-                <Typography variant="caption" sx={{ color: semanticChartColors.normal, fontWeight: 800 }}>● Abertos</Typography>
-                <Typography variant="caption" sx={{ color: semanticChartColors.positive, fontWeight: 800 }}>● Resolvidos</Typography>
-                <Typography variant="caption" sx={{ color: semanticChartColors.neutral, fontWeight: 800 }}>● Fechados</Typography>
+              <Stack direction="row" spacing={1} useFlexGap sx={{ mt: .5, justifyContent: "center", alignItems: "center", flexWrap: "wrap" }}>
+                {([
+                  ["opened","Abertos",semanticChartColors.normal],
+                  ["resolved","Resolvidos",semanticChartColors.positive],
+                  ["closed","Fechados",semanticChartColors.neutral],
+                ] as const).map(([key,label,color]) => {
+                  const active = !flowHidden.has(key);
+                  return <Chip key={key} size="small" clickable variant={active ? "filled" : "outlined"} label={`● ${label}`}
+                    onClick={() => setFlowHidden((current) => { const next = new Set(current); if (next.has(key)) next.delete(key); else if (current.size < 2) next.add(key); return next; })}
+                    sx={{ color: active ? color : "text.disabled", fontWeight: 800, opacity: active ? 1 : .55 }} />;
+                })}
               </Stack>
             </CardBase>
 
