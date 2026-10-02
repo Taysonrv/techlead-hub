@@ -53,7 +53,7 @@ export class CoordinationService {
                 ticketPriority,
                 ...(analyst ? [{ owner: { equals: analyst, mode: "insensitive" as const } }] : []),
                 ...(serviceClient ? [{ client: { equals: serviceClient, mode: "insensitive" as const } }] : []),
-                ...(serviceSince && ["service","serviceThirdLevel","serviceModule","serviceClient","serviceAnalyst"].includes(kind) ? [{ createdDate: { gte: serviceSince } }] : []),
+                ...(serviceSince ? [{ createdDate: { gte: serviceSince } }] : []),
                 ...(serviceModule ? [{
                   OR: [
                     { service: { contains: serviceModule, mode: "insensitive" as const } },
@@ -82,6 +82,7 @@ export class CoordinationService {
                 azureScope,
                 azurePriority,
                 ...(analyst ? [{ createdByName: { equals: analyst, mode: "insensitive" as const } }] : []),
+                ...(serviceSince ? [{ azureCreatedAt: { gte: serviceSince } }] : []),
               ],
             },
             orderBy: [{ azureChangedAt: "asc" }],
@@ -116,7 +117,7 @@ export class CoordinationService {
         ticketScope, ticketPriority,
         ...(analyst?[{owner:{equals:analyst,mode:"insensitive" as const}}]:[]),
         ...(serviceClient?[{client:{equals:serviceClient,mode:"insensitive" as const}}]:[]),
-        ...(serviceSince&&["service","serviceThirdLevel","serviceModule","serviceClient","serviceAnalyst"].includes(kind)?[{createdDate:{gte:serviceSince}}]:[]),
+        ...(serviceSince?[{createdDate:{gte:serviceSince}}]:[]),
         ...(serviceModule?[{OR:[
           {service:{contains:serviceModule,mode:"insensitive" as const}},
           {serviceFirstLevel:{contains:serviceModule,mode:"insensitive" as const}},
@@ -127,6 +128,7 @@ export class CoordinationService {
       wantsAzure ? prisma.azureWorkItem.count({ where: { AND: [
         azureScope, azurePriority,
         ...(analyst?[{createdByName:{equals:analyst,mode:"insensitive" as const}}]:[]),
+        ...(serviceSince?[{azureCreatedAt:{gte:serviceSince}}]:[]),
       ] } }) : Promise.resolve(0),
     ]);
     // Para Serviço exato o filtro é pós-query; nesse caso o total conhecido é o conjunto filtrado carregado.
@@ -487,31 +489,31 @@ export class CoordinationService {
       serviceTickets,
     ] = await Promise.all([
       prisma.ticket.count({
-        where: { AND: [ticketScope, coordinationTicketPriorityPredicate("backlog", now)] },
+        where: { AND: [ticketScope, coordinationTicketPriorityPredicate("backlog", now), ...(serviceSince ? [{ createdDate: { gte: serviceSince } }] : [])] },
       }),
       prisma.ticket.count({
-        where: { AND: [ticketScope, coordinationTicketPriorityPredicate("critical", now)] },
+        where: { AND: [ticketScope, coordinationTicketPriorityPredicate("critical", now), ...(serviceSince ? [{ createdDate: { gte: serviceSince } }] : [])] },
       }),
       prisma.ticket.count({
         where: {
-          AND: [ticketScope, coordinationTicketPriorityPredicate("stale", now)],
+          AND: [ticketScope, coordinationTicketPriorityPredicate("stale", now), ...(serviceSince ? [{ createdDate: { gte: serviceSince } }] : [])],
         },
       }),
       prisma.ticket.count({
         where: {
-          AND: [ticketScope, coordinationTicketPriorityPredicate("dueSoon", now)],
+          AND: [ticketScope, coordinationTicketPriorityPredicate("dueSoon", now), ...(serviceSince ? [{ createdDate: { gte: serviceSince } }] : [])],
         },
       }),
       prisma.ticket.count({
         where: {
-          AND: [ticketScope, coordinationTicketPriorityPredicate("overdue", now)],
+          AND: [ticketScope, coordinationTicketPriorityPredicate("overdue", now), ...(serviceSince ? [{ createdDate: { gte: serviceSince } }] : [])],
         },
       }),
       prisma.azureWorkItem.count({
-        where: { AND: [azureScope, coordinationAzurePriorityPredicate("blocked")] },
+        where: { AND: [azureScope, coordinationAzurePriorityPredicate("blocked"), ...(serviceSince ? [{ azureCreatedAt: { gte: serviceSince } }] : [])] },
       }),
       prisma.azureWorkItem.count({
-        where: { AND: [azureScope, coordinationAzurePriorityPredicate("unassigned")] },
+        where: { AND: [azureScope, coordinationAzurePriorityPredicate("unassigned"), ...(serviceSince ? [{ azureCreatedAt: { gte: serviceSince } }] : [])] },
       }),
       prisma.ticket.groupBy({
         by: ["owner"],
@@ -521,6 +523,7 @@ export class CoordinationService {
             {
               AND: [coordinationOpenTicketPredicate()],
               owner: { in: [...SUPPORT_ANALYSTS], mode: "insensitive" },
+              ...(serviceSince ? [{ createdDate: { gte: serviceSince } }] : [])
             },
           ],
         },
@@ -534,6 +537,7 @@ export class CoordinationService {
             {
               AND: [coordinationOpenAzurePredicate()],
               createdByName: { in: [...SUPPORT_ANALYSTS], mode: "insensitive" },
+              ...(serviceSince ? [{ azureCreatedAt: { gte: serviceSince } }] : [])
             },
           ],
         },
