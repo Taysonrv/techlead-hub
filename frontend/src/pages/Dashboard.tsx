@@ -850,12 +850,12 @@ export function Dashboard() {
     {
       title: "Resolvidos",
       value: summary.resolvidosNoPeriodo,
-      description: "Resolvidos no período selecionado",
+      description: "Abertos no período e resolvidos no mesmo recorte",
       severity: "success" as Severity,
       info: {
         title: "Resolvidos",
-        summary: "Tickets cuja resolução ocorreu dentro do período selecionado.",
-        calculation: "Contagem dos tickets com resolvedDate dentro do período.",
+        summary: "Tickets abertos no período selecionado que também foram resolvidos dentro desse mesmo recorte.",
+        calculation: "Cohort de createdDate no período, filtrado por resolvedDate dentro do período.",
         source: "Movidesk",
         reference: "Ticket.resolvedDate",
         periodRule: "Usa a data de resolução, e não a data de abertura.",
@@ -866,7 +866,7 @@ export function Dashboard() {
     {
       title: "Fechados",
       value: summary.fechadosNoPeriodo,
-      description: "Fechados no período selecionado",
+      description: "Abertos no período e fechados no mesmo recorte",
       severity: "success" as Severity,
       info: {
         title: "Fechados",
