@@ -12,7 +12,7 @@ import { PageHeader } from "../components/PageHeader";
 import { KpiCard } from "../components/KpiCard";
 import { DetailFieldGrid, DetailPanelHeader, DetailSection } from "../components/DetailPanel";
 import { detailDrawerPaperSx } from "../theme/layoutTokens";
-import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip as ChartTooltip, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip as ChartTooltip, XAxis, YAxis } from "recharts";
 
 type Sample = {
   id: number; workItemType: string; title: string; state: string; client: string | null;
