@@ -86,7 +86,9 @@ coordinationRoutes.get("/csat/details", async (req: AuthenticatedRequest, res) =
 coordinationRoutes.get("/sla-development", async (req: AuthenticatedRequest, res) => {
   try {
     const days = Number(req.query.days ?? 180);
-    res.json(await coordinationService.slaDevelopmentFlow(Number.isFinite(days) ? days : 180));
+    const startDate = typeof req.query.startDate === "string" ? req.query.startDate : undefined;
+    const endDate = typeof req.query.endDate === "string" ? req.query.endDate : undefined;
+    res.json(await coordinationService.slaDevelopmentFlow(Number.isFinite(days) ? days : 180, startDate, endDate));
   } catch (error) {
     console.error("[coordination] Falha na análise SLA x desenvolvimento:", error);
     res.status(500).json({ error: "Não foi possível gerar a análise SLA x desenvolvimento." });
