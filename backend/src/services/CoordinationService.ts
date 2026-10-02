@@ -147,7 +147,7 @@ export class CoordinationService {
       prisma.ticket.count({ where: { AND: [{ isDeleted: false, cause: { not:null } }, ticketScope] } }),
       prisma.ticket.count({ where: { AND: [{ isDeleted: false, businessArea: { not:null } }, ticketScope] } }),
       prisma.azureWorkItem.count({ where: coordinationAzureScope() }),
-      prisma.movideskSurveyResponse.count({ where:{ ticketId:{not:null} } }),
+      prisma.movideskSurveyResponse.count({ where:{ ticketId:{not:null}, type:2 } }),
       prisma.movideskServiceCatalog.count({ where:{isActive:true} }),
       prisma.movideskSurveyResponse.aggregate({ _max: { syncedAt: true, responseDate: true } }),
       prisma.movideskServiceCatalog.aggregate({ _max: { syncedAt: true } }),
@@ -170,7 +170,7 @@ export class CoordinationService {
     const safeDays = Math.min(Math.max(days, 30), 730);
     const since = new Date(Date.now() - safeDays * 86400000);
     const responses = await prisma.movideskSurveyResponse.findMany({
-      where: { responseDate: { gte: since }, ticketId: { not: null } },
+      where: { responseDate: { gte: since }, ticketId: { not: null }, type: 2 },
       orderBy: { responseDate: "desc" },
     });
     const ticketIds = [...new Set(responses.map((item) => item.ticketId).filter((id): id is number => id !== null))];
@@ -223,6 +223,7 @@ export class CoordinationService {
       where: {
         responseDate: { gte: since },
         ticketId: { not: null },
+        type: 2,
         ...(filters.value ? { value: filters.value } : {}),
       },
       orderBy: { responseDate: "desc" },
