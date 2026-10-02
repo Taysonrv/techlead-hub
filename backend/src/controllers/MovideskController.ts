@@ -89,6 +89,16 @@ export class MovideskController {
         }
     }
 
+    async backfillCauses(_req: AuthenticatedRequest, res: Response) {
+        try {
+            return res.json(await new MovideskService().backfillTicketCauses());
+        } catch (error) {
+            const message = error instanceof Error ? error.message : "Não foi possível consolidar as causas Movidesk.";
+            console.error("[movidesk-cause-backfill] Falha:", message);
+            return res.status(500).json({ message });
+        }
+    }
+
     async recentEnrichments(req: AuthenticatedRequest, res: Response) {
         try {
             const requested = Number(req.query.limit ?? 10);
