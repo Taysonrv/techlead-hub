@@ -480,15 +480,28 @@ export function Dashboard() {
     [filteredTickets]
   );
 
-  const causes = useMemo(
-    () => groupByField(ticketsEligibleForCause, "cause", "Sem causa").slice(0, 8),
-    [ticketsEligibleForCause]
-  );
+  const causes = useMemo(() => {
+    const grouped = new Map<string, number>();
+    ticketsEligibleForCause.forEach((ticket) => {
+      const label = ticket.causeDetail?.trim() || ticket.cause?.trim() || "Sem causa";
+      grouped.set(label, (grouped.get(label) ?? 0) + 1);
+    });
+    return [...grouped.entries()].map(([label,total]) => ({ label,total })).sort((a,b) => b.total-a.total).slice(0,8);
+  }, [ticketsEligibleForCause]);
 
-  const businessAreas = useMemo(
-    () => groupByField(filteredTickets, "businessArea", "Sem área de negócio").slice(0, 6),
-    [filteredTickets],
-  );
+  const businessAreas = useMemo(() => {
+    // businessArea é um campo customizado e pode estar vazio. Serviço é a
+    // classificação operacional mais confiável disponível no snapshot.
+    const grouped = new Map<string, number>();
+    filteredTickets.forEach((ticket) => {
+      const label = ticket.businessArea?.trim()
+        || ticket.serviceSecondLevel?.trim()
+        || ticket.serviceFirstLevel?.trim()
+        || "Sem área de negócio";
+      grouped.set(label, (grouped.get(label) ?? 0) + 1);
+    });
+    return [...grouped.entries()].map(([label,total]) => ({ label,total })).sort((a,b) => b.total-a.total).slice(0,6);
+  }, [filteredTickets]);
 
   const serviceDistribution = useMemo(
     () => groupByField(filteredTickets, "serviceSecondLevel", "Sem serviço").slice(0, 6),
