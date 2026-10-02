@@ -50,17 +50,17 @@ export class MovideskSyncScheduler {
   }
 
   private async runAndReschedule() {
-    try { await this.execute(); }
-    finally { this.schedule(this.intervalMinutes() * 60_000); }
+    let retrySoon = false;
+    try { retrySoon = await this.execute(); }
+    finally { this.schedule(retrySoon ? 2 * 60_000 : this.intervalMinutes() * 60_000); }
   }
 
-  private async execute() {
-    if (this.running) return;
+  private async execute(): Promise<boolean> {
+    if (this.running) return false;
     if (!tryAcquireMovideskApi("TICKETS")) {
       requestMovideskApiPriority();
       console.log("[movidesk-sync] API ocupada: sincronização principal ganhou prioridade e tentará novamente em 2 minuto(s).");
-      this.schedule(2 * 60_000);
-      return;
+      return true;
     }
     this.running = true;
     const started = Date.now();
@@ -68,7 +68,7 @@ export class MovideskSyncScheduler {
       const service = new MovideskService();
       if (!(await service.hasCompletedBaseline())) {
         console.log("[movidesk-sync] Ciclo aguardando baseline FULL manual; nenhuma carga automática foi executada.");
-        return;
+        return false;
       }
 
       const result = await prisma.$transaction(async (tx) => {
@@ -85,7 +85,7 @@ export class MovideskSyncScheduler {
 
       if (!result.acquired) {
         console.log("[movidesk-sync] Ciclo ignorado: outra instância já está sincronizando.");
-        return;
+        return false;
       }
       const s = result.sync;
       console.log([
@@ -102,5 +102,6 @@ export class MovideskSyncScheduler {
       releaseMovideskApi("TICKETS");
       clearMovideskApiPriority();
     }
+    return false;
   }
 }
