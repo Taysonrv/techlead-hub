@@ -671,8 +671,7 @@ export class DashboardController {
 
             total:
               item._count.id,
-          });
-          }
+          })
         );
 
       return res.json(
@@ -1305,7 +1304,8 @@ export class DashboardController {
             importBatch:
               ticket.importBatch,
 
-          })
+            });
+          }
         );
 
       return res.json(
