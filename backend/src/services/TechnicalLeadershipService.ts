@@ -1,6 +1,6 @@
 import { prisma } from "../database/prisma";
 import type { Prisma } from "@prisma/client";
-import { SIMER_CLIENTS, SUPPORT_ANALYSTS, coordinationAzureScope, coordinationTicketScope } from "../domain/OperationalScope";
+import { SIMER_CLIENTS, SUPPORT_ANALYSTS, OPERATIONAL_SCOPE_START, coordinationAzureScope, coordinationTicketScope } from "../domain/OperationalScope";
 import { OPERATIONAL_AGING, daysBefore, hoursBefore, isOperationalTicketOpen, isTerminalWorkItemState, normalizeOperationalText, ticketLastMovement, workItemLastMovement } from "../domain/OperationalLifecycleRules";
 import { TECHNICAL_LEADERSHIP_AUDIT_SIGNALS, TECHNICAL_LEADERSHIP_THRESHOLDS, leadershipAuditConfidence, recurrenceAction, recurrenceConfidence, recurrenceGapConfidence, recurrenceGapImpact, recurrencePattern, recurrenceReading, recurrenceReadingAction, recurrenceTrend, volumeGapImpact } from "../domain/TechnicalLeadershipRules";
 
@@ -110,8 +110,9 @@ export class TechnicalLeadershipService {
     const taskStale = openTasks.filter((task) => (workItemLastMovement(task) ?? now) < daysBefore(now, OPERATIONAL_AGING.workItemStaleDays));
     const unassigned = openTasks.filter((task) => !task.assignedToName);
     const ticketByTask = new Map(tickets.filter((t) => t.taskNumber).map((t) => [t.taskNumber!, t]));
+    const taskById = new Map(tasks.map((task) => [task.id, task]));
     const taskByTicket = new Map(tasks.filter((t) => t.movideskTicket).map((t) => [t.movideskTicket!, t]));
-    const linkedTask = (ticket: (typeof tickets)[number]) => (ticket.taskNumber ? tasks.find((t) => t.id === ticket.taskNumber) : undefined) ?? taskByTicket.get(ticket.movideskId);
+    const linkedTask = (ticket: (typeof tickets)[number]) => (ticket.taskNumber ? taskById.get(ticket.taskNumber) : undefined) ?? taskByTicket.get(ticket.movideskId);
     const closedTicketActiveTask = tickets.filter((ticket) => !openTicket(ticket) && linkedTask(ticket) && !terminalTask(linkedTask(ticket)!.state));
     const openTicketFinishedTask = openTickets.filter((ticket) => linkedTask(ticket) && terminalTask(linkedTask(ticket)!.state));
 
@@ -248,7 +249,8 @@ export class TechnicalLeadershipService {
       }] : []),
     ];
 
-    const previousOpen = previousTickets.filter(openTicket).length;
+    const previousWindowComplete = previousStart >= OPERATIONAL_SCOPE_START;
+    const previousOpen = previousWindowComplete ? previousTickets.filter(openTicket).length : 0;
 
     // Indicadores gerenciais equivalentes aos painéis operacionais do Movidesk,
     // calculados sobre a mesma base filtrada da Central de Liderança.
@@ -377,7 +379,7 @@ export class TechnicalLeadershipService {
     const weekly = {
       current: currentTickets.length,
       previous: previousTickets.length,
-      changePct: previousTickets.length ? Math.round(((currentTickets.length - previousTickets.length) / previousTickets.length) * 100) : null,
+      changePct: previousWindowComplete && previousTickets.length ? Math.round(((currentTickets.length - previousTickets.length) / previousTickets.length) * 100) : null,
       open: openTickets.length,
       previousOpen,
       overdue: overdue.length,
@@ -397,6 +399,8 @@ export class TechnicalLeadershipService {
     const result = {
       generatedAt: now,
       periodDays: days,
+      periodStart,
+      periodEnd,
       radar: {
         newTooLong: newTooLong.length, pausedTooLong: pausedTooLong.length, noMovement: noMovement.length,
         slaOverdue: riskOverdue.length, overdue: overdue.length, slaViolated: slaViolated.length, slaSoon: slaSoon.length, blocked: blocked.length,
