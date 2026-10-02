@@ -456,6 +456,21 @@ export function Settings() {
   return (
     <Box>
       <PageHeader eyebrow="Sistema" title="Configurações" description="Configuração administrativa central. As integrações são protegidas no banco compartilhado e valem para todos os usuários Web e Desktop." />
+      <Card variant="outlined" sx={{ mb: 2 }}>
+        <CardContent>
+          <Stack direction={{ xs: "column", md: "row" }} spacing={2} sx={{ alignItems: { md: "center" }, justifyContent: "space-between" }}>
+            <Box>
+              <Typography sx={{ fontWeight: 850 }}>Dados e Sincronizações</Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: .4 }}>
+                Central operacional das integrações Movidesk e Azure DevOps, cargas automáticas, importações e histórico de processamento.
+              </Typography>
+            </Box>
+            <Button variant="outlined" onClick={() => { window.location.href = "/importar"; }}>
+              Abrir Dados e Sincronizações
+            </Button>
+          </Stack>
+        </CardContent>
+      </Card>
       <Card variant="outlined" sx={{ mb: 2 }}><CardContent>
         <Typography sx={{fontWeight:850}}>Permissões por usuário</Typography>
         <Typography variant="body2" color="text.secondary" sx={{mt:.4,mb:1.5}}>Defina exatamente quais rotinas cada usuário pode acessar. Administradores permanecem com acesso integral.</Typography>
