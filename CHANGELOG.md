@@ -10,8 +10,9 @@
 
 ### Dashboard e classificação Movidesk
 - Categorias passam a respeitar o período global selecionado no Dashboard.
-- Causa passa a ser uma dimensão exclusiva dos tickets da categoria Problema.
-- Motivo passa a ser uma dimensão exclusiva dos tickets da categoria Dúvida.
+- Causa passa a ser uma dimensão exclusiva dos tickets da categoria Problema, limitada a Configuração, Erro operacional, Não identificada, Resolvido pelo usuário e SEFAZ ou aplicativo de terceiros.
+- Solução contorno permanece exclusivamente como Categoria e deixa de ser interpretada como Causa; o valor legado “Bug no Produto / ERP (não Utilizar)” também não compõe a análise de causas.
+- Motivo passa a ser uma dimensão exclusiva dos tickets da categoria Dúvida, limitado a Apoio processos operacionais, Configuração, Dúvida interna, Inexperiência do usuário, Informação, Integração com terceiros e Priorização.
 - Novo card de Motivos das Dúvidas e revisão do card de Principais Causas.
 - Backfill idempotente para consolidar Causa e Motivo a partir dos campos customizados já armazenados.
 - Diagnóstico de cobertura para Problema/Causa e Dúvida/Motivo, incluindo customFieldId candidatos dos registros ainda não classificados.
