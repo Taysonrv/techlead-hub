@@ -236,10 +236,18 @@ export class MovideskJsonImportService {
       subject,
       category: this.toText(row.category),
       cause:
-        this.toText(row.cause) ??
-        this.toText(row.causa) ??
-        this.customValue(customFields, CUSTOM_FIELDS.cause) ??
-        this.detectCause(customFields),
+        this.isCategory(this.toText(row.category), "problema")
+          ? (this.toText(row.cause) ??
+            this.toText(row.causa) ??
+            this.customValue(customFields, CUSTOM_FIELDS.cause) ??
+            this.detectCause(customFields))
+          : null,
+      reason:
+        this.isCategory(this.toText(row.category), "duvida")
+          ? (this.toText(row.reason) ??
+            this.toText(row.motivo) ??
+            this.detectReason(customFields))
+          : null,
       causeDetail:
         this.toText(row.causeDetail) ??
         this.toText(row.detalheCausa) ??
@@ -324,6 +332,43 @@ export class MovideskJsonImportService {
 
   private personName(value: unknown) {
     return this.isObject(value) ? this.toText(value.businessName) : null;
+  }
+
+  private isCategory(value: string | null, expected: string) {
+    if (!value) return false;
+    const normalized = value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLocaleLowerCase("pt-BR");
+    return normalized === expected;
+  }
+
+  private detectReason(fields: CustomField[]) {
+    const known = [
+      "apoio processos operacionais",
+      "configuração",
+      "configuracao",
+      "dúvida interna",
+      "duvida interna",
+      "inexperiência do usuário",
+      "inexperiencia do usuario",
+      "informação",
+      "informacao",
+      "integração com terceiros",
+      "integracao com terceiros",
+      "priorização",
+      "priorizacao",
+    ];
+    const normalizedKnown = known.map((value) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR"));
+    for (const field of fields) {
+      const candidates = [
+        this.toText(field.value),
+        ...(field.items ?? []).map((item) => this.toText(item.customFieldItem)),
+      ].filter((value): value is string => Boolean(value));
+      for (const value of candidates) {
+        if (value.length > 80) continue;
+        const normalized = value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLocaleLowerCase("pt-BR");
+        if (normalizedKnown.some((token) => normalized === token || normalized.includes(token))) return value;
+      }
+    }
+    return null;
   }
 
   private detectCause(fields: CustomField[]) {
