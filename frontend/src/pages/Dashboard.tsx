@@ -291,8 +291,12 @@ export function Dashboard() {
     isDateInPeriod(ticket.closedDate, periodBounds.start, periodBounds.end)
   ), [openedBySimerOperationInPeriod, periodBounds]);
 
-  // Causas, áreas, serviços, SLA e CSAT analisam a Operação SIMER.
+  // Áreas/serviços/SLA/CSAT mantêm a leitura da responsabilidade operacional atual.
   const filteredTickets = openedBySimerOperationInPeriod;
+
+  // Causa é atributo histórico do atendimento e deve representar toda a carteira
+  // SIMER aberta no período, mesmo quando o responsável atual já não está na squad.
+  const causeTickets = openedInPeriod;
 
   const newTickets = useMemo(() => pendingTickets.filter((ticket) => ticket.baseStatus === "New"), [pendingTickets]);
   const attendanceTickets = useMemo(() => pendingTickets.filter((ticket) => ticket.baseStatus === "InAttendance"), [pendingTickets]);
@@ -491,10 +495,10 @@ export function Dashboard() {
     if (!raw) return null;
     const normalized = normalize(raw);
     if (!normalized || normalized === "sem causa") return null;
-    if (normalized.includes("erro operacional")) return "Problema - Erro operacional";
-    if (normalized.includes("configuracao")) return "Problema - Configuração";
+    if (normalized.includes("erro operacional")) return "Erro operacional";
+    if (normalized.includes("configuracao")) return "Configuração";
     if (normalized.includes("solucao de contorno")) return "Solução de contorno";
-    if (normalized.includes("nao identificada")) return "Problema - Não identificada";
+    if (normalized.includes("nao identificada")) return "Não identificada";
     if (normalized.includes("sefaz") || normalized.includes("aplicativos de terceiros")) return "SEFAZ ou aplicativos de terceiros";
     // Causa é uma classificação curta. Textos livres pertencem a causeDetail
     // e nunca devem virar categorias/eixos do gráfico.
@@ -502,8 +506,8 @@ export function Dashboard() {
   };
 
   const ticketsWithCause = useMemo(
-    () => filteredTickets.filter((ticket) => Boolean(canonicalCause(ticket.cause))),
-    [filteredTickets],
+    () => causeTickets.filter((ticket) => Boolean(canonicalCause(ticket.cause))),
+    [causeTickets],
   );
 
   const causes = useMemo(() => {
