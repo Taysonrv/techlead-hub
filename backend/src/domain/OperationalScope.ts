@@ -211,7 +211,15 @@ export function isSimerOperationalTeam(value: string | null | undefined) {
 
   if (!normalized) return false;
 
+  const hasSimer = normalized.includes("SIMER");
+  const isSupportLevel = /SUPORTE(?:\s*\|\s*|\s*-\s*|\s*\/\s*|\s+)N[123]/.test(normalized)
+    || /N[123](?:\s*\|\s*|\s*-\s*|\s*\/\s*|\s+)SUPORTE/.test(normalized);
+  const isLegalLevel = /LEGISLACAO(?:\s*\|\s*|\s*-\s*|\s*\/\s*|\s+)N[123]/.test(normalized)
+    || /N[123](?:\s*\|\s*|\s*-\s*|\s*\/\s*|\s+)LEGISLACAO/.test(normalized);
+  const isBds = /\bBDS\b|BANCO DE DADOS/.test(normalized);
+
   return (
+    (hasSimer && (isSupportLevel || isLegalLevel || isBds)) ||
     normalized.includes("SIMER | SUPORTE") ||
     normalized.includes("SIMER - SUPORTE") ||
     normalized.includes("SIMER / SUPORTE") ||
