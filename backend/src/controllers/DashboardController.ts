@@ -966,6 +966,51 @@ export class DashboardController {
           }
         );
 
+      // Compatibilidade para bases já sincronizadas antes da separação
+      // Categoria -> Causa/Motivo. Lemos rawData somente dos tickets ainda
+      // sem classificação, sem aumentar o payload enviado ao frontend.
+      const classificationRows = await prisma.ticket.findMany({
+        where: {
+          ...snapshotWhere,
+          OR: [
+            { category: { equals: "Problema", mode: "insensitive" }, cause: null },
+            { category: { in: ["Dúvida", "Duvida"], mode: "insensitive" }, reason: null },
+          ],
+          rawData: { not: Prisma.JsonNull },
+        },
+        select: { id: true, category: true, rawData: true },
+      });
+      const normalizeClassification = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLocaleLowerCase("pt-BR");
+      const classificationValue = (rawData: Prisma.JsonValue, kind: "cause" | "reason") => {
+        if (!rawData || typeof rawData !== "object" || Array.isArray(rawData)) return null;
+        const fields = Array.isArray((rawData as Record<string, unknown>).customFieldValues)
+          ? (rawData as Record<string, unknown>).customFieldValues as unknown[]
+          : [];
+        const canonical = kind === "cause"
+          ? new Map([["configuracao","Configuração"],["erro operacional","Erro operacional"],["nao identificada","Não identificada"],["resolvido pelo usuario","Resolvido pelo usuário"],["sefaz ou aplicativo de terceiros","SEFAZ ou aplicativo de terceiros"],["sefaz ou aplicativos de terceiros","SEFAZ ou aplicativo de terceiros"]])
+          : new Map([["apoio processos operacionais","Apoio processos operacionais"],["configuracao","Configuração"],["duvida interna","Dúvida interna"],["inexperiencia do usuario","Inexperiência do usuário"],["informacao","Informação"],["integracao com terceiros","Integração com terceiros"],["priorizacao","Priorização"]]);
+        for (const field of fields) {
+          if (!field || typeof field !== "object" || Array.isArray(field)) continue;
+          const item = field as Record<string, unknown>;
+          const values = [
+            typeof item.value === "string" ? item.value : null,
+            ...(Array.isArray(item.items) ? item.items.map((child) => child && typeof child === "object" && !Array.isArray(child) ? (child as Record<string, unknown>).customFieldItem : null) : []),
+          ].filter((value): value is string => typeof value === "string" && Boolean(value.trim()));
+          for (const value of values) {
+            const normalized = normalizeClassification(value);
+            for (const [token, label] of canonical) if (normalized === token || normalized.includes(token)) return label;
+          }
+        }
+        return null;
+      };
+      const classificationById = new Map(classificationRows.map((ticket) => {
+        const category = normalizeClassification(ticket.category ?? "");
+        return [ticket.id, {
+          cause: category === "problema" ? classificationValue(ticket.rawData as Prisma.JsonValue, "cause") : null,
+          reason: category === "duvida" ? classificationValue(ticket.rawData as Prisma.JsonValue, "reason") : null,
+        }];
+      }));
+
       /*
        * A relação canônica entre atendimento e Azure é:
        * Ticket.taskNumber === AzureWorkItem.id
@@ -1094,10 +1139,10 @@ export class DashboardController {
               ticket.category,
 
             cause:
-              ticket.cause,
+              ticket.cause ?? classificationById.get(ticket.id)?.cause ?? null,
 
             reason:
-              ticket.reason,
+              ticket.reason ?? classificationById.get(ticket.id)?.reason ?? null,
 
             causeDetail:
               ticket.causeDetail,
