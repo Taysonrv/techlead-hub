@@ -507,7 +507,10 @@ export function Dashboard() {
     return null;
   };
 
-  const problemTickets = useMemo(() => filteredTickets.filter((ticket) => canonicalCategory(ticket.category) === "Problema"), [filteredTickets]);
+  // Causa/Motivo são dimensões da entrada do atendimento. O período é o global
+  // do Dashboard (createdDate), sem restringir pela responsabilidade atual:
+  // um ticket pode ter sido aberto no período e já ter saído da fila SIMER.
+  const problemTickets = useMemo(() => openedInPeriod.filter((ticket) => canonicalCategory(ticket.category) === "Problema"), [openedInPeriod]);
   const ticketsWithCause = useMemo(() => problemTickets.filter((ticket) => Boolean(canonicalCause(ticket.cause))), [problemTickets]);
   const causes = useMemo(() => {
     const grouped = new Map<string, number>();
@@ -532,7 +535,7 @@ export function Dashboard() {
     return null;
   };
 
-  const doubtTickets = useMemo(() => filteredTickets.filter((ticket) => canonicalCategory(ticket.category) === "Dúvida"), [filteredTickets]);
+  const doubtTickets = useMemo(() => openedInPeriod.filter((ticket) => canonicalCategory(ticket.category) === "Dúvida"), [openedInPeriod]);
   const ticketsWithReason = useMemo(() => doubtTickets.filter((ticket) => Boolean(canonicalReason(ticket.reason))), [doubtTickets]);
   const reasons = useMemo(() => {
     const grouped = new Map<string, number>();
