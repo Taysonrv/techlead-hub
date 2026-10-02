@@ -658,7 +658,76 @@ export class MovideskService {
     };
   }
 
+  private classificationFromRaw(row: Record<string, unknown>, kind: "cause" | "reason") {
+    const normalize = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLocaleLowerCase("pt-BR");
+    const labels = kind === "cause"
+      ? new Map([["configuracao","Configuração"],["erro operacional","Erro operacional"],["nao identificada","Não identificada"],["resolvido pelo usuario","Resolvido pelo usuário"],["sefaz ou aplicativo de terceiros","SEFAZ ou aplicativo de terceiros"],["sefaz ou aplicativos de terceiros","SEFAZ ou aplicativo de terceiros"]])
+      : new Map([["apoio processos operacionais","Apoio processos operacionais"],["configuracao","Configuração"],["duvida interna","Dúvida interna"],["inexperiencia do usuario","Inexperiência do usuário"],["informacao","Informação"],["integracao com terceiros","Integração com terceiros"],["priorizacao","Priorização"]]);
+    const fields = Array.isArray(row.customFieldValues) ? row.customFieldValues : [];
+    for (const rawField of fields) {
+      if (!rawField || typeof rawField !== "object" || Array.isArray(rawField)) continue;
+      const field = rawField as Record<string, unknown>;
+      const values = [
+        typeof field.value === "string" ? field.value : null,
+        ...(Array.isArray(field.items) ? field.items.map((item) => item && typeof item === "object" && !Array.isArray(item) ? (item as Record<string, unknown>).customFieldItem : null) : []),
+      ].filter((value): value is string => typeof value === "string" && Boolean(value.trim()));
+      for (const value of values) {
+        const normalized = normalize(value);
+        for (const [token, label] of labels) {
+          if (normalized === token || normalized.includes(token)) return label;
+        }
+      }
+    }
+    return null;
+  }
+
+  private async refreshRecentClassifications() {
+    // Causa/Motivo pertencem ao ticket base, não ao enriquecimento. Relemos
+    // uma janela recente para corrigir tickets que não sofreram lastUpdate
+    // depois da introdução das colunas locais.
+    const since = new Date();
+    since.setUTCDate(since.getUTCDate() - 62);
+    let skip = 0;
+    let scanned = 0;
+    let updated = 0;
+    for (let page = 0; page < 8; page += 1) {
+      const response = await this.getWithRetry(`${this.url}/tickets`, {
+        params: {
+          token: this.token(),
+          $select: "id,category,createdDate,lastUpdate",
+          $expand: "customFieldValues",
+          $orderby: "createdDate desc,id desc",
+          $top: PAGE_SIZE,
+          $skip: skip,
+          $filter: this.remoteScopeFilter(`createdDate ge ${since.toISOString()}`),
+        },
+        timeout: 120_000,
+      }, `classificações recentes página=${page + 1}`);
+      if (!Array.isArray(response.data) || response.data.length === 0) break;
+      const rows = response.data as Array<Record<string, unknown>>;
+      scanned += rows.length;
+      for (const row of rows) {
+        const movideskId = Number(row.id);
+        const category = typeof row.category === "string" ? row.category.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLocaleLowerCase("pt-BR") : "";
+        if (!Number.isSafeInteger(movideskId) || (category !== "problema" && category !== "duvida")) continue;
+        const cause = category === "problema" ? this.classificationFromRaw(row, "cause") : null;
+        const reason = category === "duvida" ? this.classificationFromRaw(row, "reason") : null;
+        if (!cause && !reason) continue;
+        const result = await prisma.ticket.updateMany({
+          where: { movideskId },
+          data: category === "problema" ? { cause, reason: null } : { reason, cause: null },
+        });
+        updated += result.count;
+      }
+      if (rows.length < PAGE_SIZE) break;
+      skip += rows.length;
+      await new Promise((resolve) => setTimeout(resolve, REQUEST_INTERVAL_MS));
+    }
+    return { scanned, updated };
+  }
+
   async backfillTicketCauses() {
+    const remote = await this.refreshRecentClassifications();
     const candidates = await prisma.ticket.findMany({
       where: {
         AND: [
@@ -711,7 +780,7 @@ export class MovideskService {
         }
       }
     }
-    return { scanned: candidates.length, updated: causesUpdated + reasonsUpdated, causesUpdated, reasonsUpdated };
+    return { scanned: candidates.length, updated: causesUpdated + reasonsUpdated + remote.updated, causesUpdated, reasonsUpdated, remoteScanned: remote.scanned, remoteUpdated: remote.updated };
   }
 
   async classificationCoverage() {
