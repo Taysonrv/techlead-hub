@@ -141,29 +141,38 @@ export class CoordinationService {
     };
   }
 
-  async integrationHealth() {
+  async integrationHealth(days = 30) {
+    const safeDays = Math.min(Math.max(days || 730, 1), 730);
+    const now = new Date();
+    const since = days > 0 ? new Date(now.getTime() - (safeDays - 1) * 86400000) : new Date("2026-01-01T00:00:00.000Z");
+    since.setHours(0, 0, 0, 0);
     const ticketScope = ticketOperationalScope();
-    const [tickets, linkedTasks, withService, withCause, withBusinessArea, azureItems, csat, services, latestCsat, latestCatalog] = await Promise.all([
-      prisma.ticket.count({ where: { AND: [{ isDeleted: false }, ticketScope] } }),
-      prisma.ticket.count({ where: { AND: [{ isDeleted: false, taskNumber: { not: null } }, ticketScope] } }),
-      prisma.ticket.count({ where: { AND: [{ isDeleted: false, OR:[{service:{not:null}},{serviceFirstLevel:{not:null}},{serviceSecondLevel:{not:null}},{serviceThirdLevel:{not:null}}] }, ticketScope] } }),
-      prisma.ticket.count({ where: { AND: [{ isDeleted: false, cause: { not:null } }, ticketScope] } }),
-      prisma.ticket.count({ where: { AND: [{ isDeleted: false, businessArea: { not:null } }, ticketScope] } }),
-      prisma.azureWorkItem.count({ where: coordinationAzureScope() }),
-      prisma.movideskSurveyResponse.count({ where:{ ticketId:{not:null}, type:2 } }),
+    const periodTicketScope = { AND: [ticketScope, { isDeleted: false }, { createdDate: { gte: since, lte: now } }] };
+    const periodTickets = await prisma.ticket.findMany({
+      where: periodTicketScope,
+      select: { movideskId: true, taskNumber: true },
+    });
+    const ticketIds = periodTickets.map((ticket) => ticket.movideskId);
+    const taskIds = periodTickets.map((ticket) => ticket.taskNumber).filter((id): id is number => id !== null);
+    const [withService, withCause, withBusinessArea, azureItems, csat, services, latestCsat, latestCatalog] = await Promise.all([
+      prisma.ticket.count({ where: { AND: [periodTicketScope, { OR:[{service:{not:null}},{serviceFirstLevel:{not:null}},{serviceSecondLevel:{not:null}},{serviceThirdLevel:{not:null}}] }] } }),
+      prisma.ticket.count({ where: { AND: [periodTicketScope, { cause: { not:null } }] } }),
+      prisma.ticket.count({ where: { AND: [periodTicketScope, { businessArea: { not:null } }] } }),
+      taskIds.length ? prisma.azureWorkItem.count({ where: { id: { in: taskIds } } }) : Promise.resolve(0),
+      ticketIds.length ? prisma.movideskSurveyResponse.count({ where:{ ticketId:{in:ticketIds}, type:2, responseDate:{gte:since,lte:now} } }) : Promise.resolve(0),
       prisma.movideskServiceCatalog.count({ where:{isActive:true} }),
-      prisma.movideskSurveyResponse.aggregate({ where:{type:2}, _max: { syncedAt: true, responseDate: true } }),
+      ticketIds.length ? prisma.movideskSurveyResponse.aggregate({ where:{ticketId:{in:ticketIds},type:2,responseDate:{gte:since,lte:now}}, _max: { syncedAt: true, responseDate: true } }) : Promise.resolve({_max:{syncedAt:null,responseDate:null}}),
       prisma.movideskServiceCatalog.aggregate({ _max: { syncedAt: true } }),
     ]);
+    const tickets = periodTickets.length;
+    const linkedTasks = taskIds.length;
     const pct=(value:number)=>tickets ? Math.round(value/tickets*1000)/10 : 0;
     return {
+      periodDays: days || 0, period:{start:since,end:now},
       tickets, linkedTasks, azureItems, csatResponses: csat, catalogServices: services,
-      taskLinkCoveragePct: pct(linkedTasks),
-      serviceCoveragePct: pct(withService),
-      causeCoveragePct: pct(withCause),
-      businessAreaCoveragePct: pct(withBusinessArea),
-      latestCsatSyncAt: latestCsat._max.syncedAt,
-      latestCsatResponseAt: latestCsat._max.responseDate,
+      taskLinkCoveragePct: pct(linkedTasks), serviceCoveragePct: pct(withService),
+      causeCoveragePct: pct(withCause), businessAreaCoveragePct: pct(withBusinessArea),
+      latestCsatSyncAt: latestCsat._max.syncedAt, latestCsatResponseAt: latestCsat._max.responseDate,
       latestCatalogSyncAt: latestCatalog._max.syncedAt,
       sources: { tickets: "Movidesk", tasks: "Azure DevOps", csat: "Movidesk Survey", services: "Movidesk Service Catalog" },
     };
