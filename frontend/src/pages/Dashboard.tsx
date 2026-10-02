@@ -325,7 +325,7 @@ export function Dashboard() {
     });
 
     return Array.from(byId.values());
-  }, [tickets]);
+  }, [openedInPeriod]);
 
   const azureDevelopment = useMemo(() => {
     const corrections = azureWorkItems.filter(
