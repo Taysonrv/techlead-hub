@@ -15,6 +15,16 @@
 - Produtividade por horas registradas utiliza apontamentos estruturados do Movidesk.
 - Enriquecimento incremental mantém checkpoint e redução progressiva das pendências, sem reprocessar continuamente o mesmo lote.
 
+### Central de Liderança Técnica
+- Auditoria de classificação alinhada ao modelo Movidesk: Causa é exigida somente para Problema e Motivo somente para Dúvida; demais categorias não são sinalizadas indevidamente por ausência dessas dimensões.
+- Recorrências deixam de usar Causa como fallback de tema técnico e priorizam Serviço/rotina e Categoria, reduzindo agrupamentos semanticamente incorretos.
+- Sinais Azure passam a respeitar os filtros ativos de Cliente e Analista; sem filtro, permanece o portfólio SIMER completo.
+- Vínculo Ticket ↔ Task otimizado por índice em memória, eliminando buscas lineares repetidas durante a análise.
+- Comparação com período anterior deixa de produzir tendência quando a janela histórica ultrapassa o início oficial da base operacional (01/01/2026).
+- Período recebe opção Mês passado, metadado mostra intervalo exato e indicadores individuais deixam de oferecer Personalizado sem datas próprias.
+- Backlog e sinais de atenção foram renomeados como snapshot atual para não sugerir incorretamente que são uma coorte exclusiva do período.
+- Drawer de auditoria passa a exibir separadamente Causa e Motivo.
+
 ### UX, sincronização e release
 - Cards executivos revisados para manter proporções, período e drill-down consistentes.
 - Dados e Sincronizações concentra diagnóstico de cobertura e ações operacionais de Movidesk.
