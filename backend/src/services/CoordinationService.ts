@@ -442,11 +442,11 @@ export class CoordinationService {
   }
 
   async productivityCapacity(days = 28) {
-    const cacheKey = `capacity:${Math.min(Math.max(days, 7), 90)}`;
+    const cacheKey = `capacity:${Math.min(Math.max(days, 7), 730)}`;
     const cached = cacheGet<any>(cacheKey);
     if (cached) return cached;
     const now = new Date();
-    const start = new Date(now.getTime() - (Math.min(Math.max(days, 7), 90) - 1) * 86400000);
+    const start = new Date(now.getTime() - (Math.min(Math.max(days, 7), 730) - 1) * 86400000);
     start.setHours(0, 0, 0, 0);
     const { businessDays, hoursPerDay } = productivityExpectedHours(start, now);
     const tickets = await prisma.ticket.findMany({
@@ -521,9 +521,11 @@ export class CoordinationService {
           AND: [
             ticketScope,
             {
-              AND: [coordinationOpenTicketPredicate()],
+              AND: [
+                coordinationOpenTicketPredicate(),
+                ...(serviceSince ? [{ createdDate: { gte: serviceSince } }] : []),
+              ],
               owner: { in: [...SUPPORT_ANALYSTS], mode: "insensitive" },
-              ...(serviceSince ? [{ createdDate: { gte: serviceSince } }] : [])
             },
           ],
         },
@@ -535,9 +537,11 @@ export class CoordinationService {
           AND: [
             azureScope,
             {
-              AND: [coordinationOpenAzurePredicate()],
+              AND: [
+                coordinationOpenAzurePredicate(),
+                ...(serviceSince ? [{ azureCreatedAt: { gte: serviceSince } }] : []),
+              ],
               createdByName: { in: [...SUPPORT_ANALYSTS], mode: "insensitive" },
-              ...(serviceSince ? [{ azureCreatedAt: { gte: serviceSince } }] : [])
             },
           ],
         },
