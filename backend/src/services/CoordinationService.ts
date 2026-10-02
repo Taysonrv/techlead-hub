@@ -52,7 +52,7 @@ export class CoordinationService {
                 ticketPriority,
                 ...(analyst ? [{ owner: { equals: analyst, mode: "insensitive" as const } }] : []),
                 ...(serviceClient ? [{ client: { equals: serviceClient, mode: "insensitive" as const } }] : []),
-                ...periodTicketFilter,
+                ...(serviceSince ? [{ createdDate: { gte: serviceSince } }] : []),
                 ...(serviceModule ? [{
                   OR: [
                     { service: { contains: serviceModule, mode: "insensitive" as const } },
@@ -81,7 +81,7 @@ export class CoordinationService {
                 azureScope,
                 azurePriority,
                 ...(analyst ? [{ createdByName: { equals: analyst, mode: "insensitive" as const } }] : []),
-                ...periodAzureFilter,
+                ...(serviceSince ? [{ azureCreatedAt: { gte: serviceSince } }] : []),
               ],
             },
             orderBy: [{ azureChangedAt: "asc" }],
@@ -292,18 +292,18 @@ export class CoordinationService {
     });
     const byId=new Map(items.map(x=>[x.id,x]));
     const byTicket=new Map(items.filter(x=>x.movideskTicket).map(x=>[x.movideskTicket!,x]));
-    let missingAzure=0,missingTaskCreatedAt=0,missingPriority=0;
+    let missingAzure=0,missingTaskCreatedAt=0,missingPriority=0,invalidTimeline=0;
     const rows=bugTickets.flatMap(t=>{const w=(t.taskNumber?byId.get(t.taskNumber):undefined)??byTicket.get(t.movideskId);if(!w){missingAzure++;return[]}if(!w.azureCreatedAt){missingTaskCreatedAt++;return[]}const p=mapPriority(t.urgency,w.criticality);if(!p){missingPriority++;return[]}const concluded=isConcluded(w.state,t.taskStatus);// Para o estado atual Concluída, stateChangedAt representa a transição que encerrou a Task.
       // azureClosedAt fica como fallback porque pode refletir outro marco de fechamento do Work Item.
-      const end=concluded?(w.stateChangedAt??w.azureClosedAt??w.azureChangedAt):null;const support=slaBusinessMinutes(t.createdDate,w.azureCreatedAt);const factory=end?slaBusinessMinutes(w.azureCreatedAt,end):null;const total=factory===null?null:support+factory;const rule=SLA_PRIORITY[p];const tg={support:rule.supportMinutes,factory:rule.factoryMinutes,total:rule.totalMinutes};const supportPct=Math.round(support/tg.support*1000)/10;const factoryPct=factory===null?null:Math.round(factory/tg.factory*1000)/10;const totalPct=total===null?null:Math.round(total/tg.total*1000)/10;const bottleneck=factoryPct!==null&&factoryPct>supportPct?"Fábrica":"Suporte";return[{movideskId:t.movideskId,subject:t.subject,client:t.client,owner:t.owner??"Sem responsável",taskNumber:w.id,taskTitle:w.title??t.taskTitle,taskState:w.state??t.taskStatus,urgency:p,taskCreatedAt:w.azureCreatedAt,taskConcludedAt:end,supportMinutes:support,factoryMinutes:factory,totalMinutes:total,supportTargetMinutes:tg.support,factoryTargetMinutes:tg.factory,totalTargetMinutes:tg.total,supportPct,factoryPct,totalPct,bottleneck}]} );
+      const end=concluded?(w.stateChangedAt??w.azureClosedAt??w.azureChangedAt):null;if(w.azureCreatedAt<t.createdDate||(end&&end<w.azureCreatedAt)){invalidTimeline++;return[]}const support=slaBusinessMinutes(t.createdDate,w.azureCreatedAt);const factoryEnd=end??until;const factory=slaBusinessMinutes(w.azureCreatedAt,factoryEnd);const total=support+factory;const rule=SLA_PRIORITY[p];const tg={support:rule.supportMinutes,factory:rule.factoryMinutes,total:rule.totalMinutes};const supportPct=Math.round(support/tg.support*1000)/10;const factoryPct=Math.round(factory/tg.factory*1000)/10;const totalPct=Math.round(total/tg.total*1000)/10;const bottleneck=factoryPct>supportPct?"Fábrica":"Suporte";return[{movideskId:t.movideskId,subject:t.subject,client:t.client,owner:t.owner??"Sem responsável",taskNumber:w.id,taskTitle:w.title??t.taskTitle,taskState:w.state??t.taskStatus,urgency:p,taskCreatedAt:w.azureCreatedAt,taskConcludedAt:end,supportMinutes:support,factoryMinutes:factory,totalMinutes:total,supportTargetMinutes:tg.support,factoryTargetMinutes:tg.factory,totalTargetMinutes:tg.total,supportPct,factoryPct,totalPct,bottleneck}]} );
     const done=rows.filter(r=>r.taskConcludedAt);
     const avg=(xs:number[])=>xs.length?Math.round(xs.reduce((a,b)=>a+b,0)/xs.length):0;
-    const summarize=(group:any[])=>{const completed=group.filter(r=>r.taskConcludedAt);return{total:group.length,concluded:completed.length,openDevelopment:group.length-completed.length,avgSupportMinutes:avg(group.map(r=>r.supportMinutes)),avgFactoryMinutes:avg(completed.map(r=>r.factoryMinutes!)),avgTotalMinutes:avg(completed.map(r=>r.totalMinutes!)),supportWithinOla:group.filter(r=>r.supportPct<=100).length,factoryWithinOla:completed.filter(r=>(r.factoryPct??Infinity)<=100).length,totalWithinSla:completed.filter(r=>(r.totalPct??Infinity)<=100).length,supportBottleneck:group.filter(r=>r.bottleneck==="Suporte").length,factoryBottleneck:completed.filter(r=>r.bottleneck==="Fábrica").length}};
+    const summarize=(group:any[])=>{const completed=group.filter(r=>r.taskConcludedAt);return{total:group.length,concluded:completed.length,openDevelopment:group.length-completed.length,avgSupportMinutes:avg(group.map(r=>r.supportMinutes)),avgFactoryMinutes:avg(group.map(r=>r.factoryMinutes!)),avgTotalMinutes:avg(group.map(r=>r.totalMinutes!)),supportWithinOla:group.filter(r=>r.supportPct<=100).length,factoryWithinOla:completed.filter(r=>(r.factoryPct??Infinity)<=100).length,totalWithinSla:completed.filter(r=>(r.totalPct??Infinity)<=100).length,supportBottleneck:group.filter(r=>r.bottleneck==="Suporte").length,factoryBottleneck:group.filter(r=>r.bottleneck==="Fábrica").length}};
     const outlierRows=rows.map(r=>{const supportOver=Math.max(0,r.supportPct-100);const factoryOver=r.factoryPct===null?0:Math.max(0,r.factoryPct-100);const totalOver=r.totalPct===null?0:Math.max(0,r.totalPct-100);const severity=Math.max(supportOver,factoryOver,totalOver);return{...r,severity,outlierStage:totalOver>=factoryOver&&totalOver>=supportOver?"SLA total":factoryOver>supportOver?"Fábrica":"Suporte"}}).filter(r=>r.severity>0).sort((a,b)=>b.severity-a.severity);
     const outliers={
       total:outlierRows.length,
       support:rows.filter(r=>r.supportPct>100).length,
-      factory:done.filter(r=>(r.factoryPct??0)>100).length,
+      factory:rows.filter(r=>(r.factoryPct??0)>100).length,
       totalSla:done.filter(r=>(r.totalPct??0)>100).length,
       critical:outlierRows.filter(r=>r.severity>=100).length,
       top:outlierRows.slice(0,15).map(r=>({movideskId:r.movideskId,subject:r.subject,client:r.client,owner:r.owner,taskNumber:r.taskNumber,urgency:r.urgency,supportPct:r.supportPct,factoryPct:r.factoryPct,totalPct:r.totalPct,severity:r.severity,outlierStage:r.outlierStage,supportMinutes:r.supportMinutes,factoryMinutes:r.factoryMinutes,totalMinutes:r.totalMinutes}))
@@ -314,7 +314,7 @@ export class CoordinationService {
     const monthKey=(date:Date)=>date.toISOString().slice(0,7);
     const monthLabel=(key:string)=>{const [year,month]=key.split("-");return new Intl.DateTimeFormat("pt-BR",{month:"short",year:"2-digit",timeZone:"UTC"}).format(new Date(Date.UTC(Number(year),Number(month)-1,1))).replace(".","");};
     const monthly=[...new Set(rows.map(r=>monthKey(r.taskCreatedAt)))].sort().map(month=>{const group=rows.filter(r=>monthKey(r.taskCreatedAt)===month);const completed=group.filter(r=>r.taskConcludedAt);return{month,label:monthLabel(month),total:group.length,concluded:completed.length,avgSupportMinutes:avg(group.map(r=>r.supportMinutes)),avgFactoryMinutes:avg(completed.map(r=>r.factoryMinutes!)),avgTotalMinutes:avg(completed.map(r=>r.totalMinutes!)),supportWithinPct:group.length?Math.round(group.filter(r=>r.supportPct<=100).length/group.length*1000)/10:0,factoryWithinPct:completed.length?Math.round(completed.filter(r=>(r.factoryPct??Infinity)<=100).length/completed.length*1000)/10:0,totalWithinPct:completed.length?Math.round(completed.filter(r=>(r.totalPct??Infinity)<=100).length/completed.length*1000)/10:0}});
-    return { periodDays: days, period:{start:since,end:until}, rule:{taskEndState:"Concluida",schedule:"Seg-Sex 08:00-18:00",profile:"PADRAO"}, dataQuality:{bugsInPeriod:bugTickets.length,linked:rows.length,missingAzure,missingTaskCreatedAt,missingPriority}, summary:{bugsWithTask:rows.length,concluded:done.length,openDevelopment:rows.length-done.length,avgSupportMinutes:avg(rows.map(r=>r.supportMinutes)),avgFactoryMinutes:avg(done.map(r=>r.factoryMinutes!)),avgTotalMinutes:avg(done.map(r=>r.totalMinutes!)),supportWithinOla:rows.filter(r=>r.supportPct<=100).length,factoryWithinOla:done.filter(r=>(r.factoryPct??Infinity)<=100).length,totalWithinSla:done.filter(r=>(r.totalPct??Infinity)<=100).length}, byPriority, owners, clients, monthly, outliers, rows };
+    return { periodDays: days, period:{start:since,end:until}, rule:{taskEndState:"Concluida",schedule:"Seg-Sex 08:00-18:00",profile:"PADRAO"}, dataQuality:{bugsInPeriod:bugTickets.length,linked:rows.length,missingAzure,missingTaskCreatedAt,missingPriority,invalidTimeline}, summary:{bugsWithTask:rows.length,concluded:done.length,openDevelopment:rows.length-done.length,avgSupportMinutes:avg(rows.map(r=>r.supportMinutes)),avgFactoryMinutes:avg(rows.map(r=>r.factoryMinutes!)),avgTotalMinutes:avg(rows.map(r=>r.totalMinutes!)),supportWithinOla:rows.filter(r=>r.supportPct<=100).length,factoryWithinOla:rows.filter(r=>(r.factoryPct??Infinity)<=100).length,totalWithinSla:rows.filter(r=>(r.totalPct??Infinity)<=100).length}, byPriority, owners, clients, monthly, outliers, rows };
   }
 
   async serviceIntelligence(filters: { client?: string; analyst?: string; months?: number } = {}) {
