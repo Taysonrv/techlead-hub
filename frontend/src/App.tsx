@@ -209,10 +209,22 @@ function AuthenticatedLayout({
                 "& .MuiCardContent-root": { minWidth: 0 },
                 "& .MuiCard-root + .MuiCard-root": { scrollMarginTop: 96 },
                 "& .MuiButton-root": { whiteSpace: "nowrap" },
+                "& .MuiButton-root .MuiButton-startIcon, & .MuiButton-root .MuiButton-endIcon": { flexShrink: 0 },
+                "& .MuiIconButton-root": { flexShrink: 0 },
                 "& .MuiTypography-root": { textWrap: "pretty" },
+                "& h1, & h2, & h3, & h4, & h5, & h6": { textWrap: "balance" },
                 "& .MuiCard-root:focus-within": (theme) => ({
                   borderColor: theme.palette.mode === "dark" ? "rgba(24,199,122,.24)" : "rgba(16,148,91,.18)",
                 }),
+                "& .MuiCard-root[role='button'], & .MuiCardActionArea-root": {
+                  cursor: "pointer",
+                },
+                "& .MuiCard-root[role='button']:hover, & .MuiCard-root:has(.MuiCardActionArea-root):hover": {
+                  transform: "translateY(-2px)",
+                },
+                "& .MuiCard-root[role='button']:active, & .MuiCardActionArea-root:active": {
+                  transform: "translateY(0)",
+                },
                 "& .MuiTableContainer-root": { overflowX: "auto", overflowY: "visible", overscrollBehaviorX: "contain", scrollbarGutter: "stable" },
                 "& .MuiTableContainer-root table": { minWidth: "max-content" },
                 "& .MuiTableContainer-root .MuiTableCell-root": { maxWidth: 420 },
