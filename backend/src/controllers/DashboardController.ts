@@ -943,7 +943,7 @@ export class DashboardController {
             /* O payload completo é carregado somente no detalhe. */
             select: {
               id: true, movideskId: true, protocol: true, subject: true,
-              category: true, cause: true, causeDetail: true, urgency: true, status: true,
+              category: true, cause: true, reason: true, causeDetail: true, urgency: true, status: true,
               baseStatus: true, justification: true, client: true,
               contact: true, owner: true, ownerTeam: true, service: true,
               department: true, serviceFirstLevel: true,
