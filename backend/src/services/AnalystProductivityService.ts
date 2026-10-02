@@ -29,7 +29,6 @@ export class AnalystProductivityService {
       prisma.movideskTimeAppointment.findMany({
         where: {
           date: { gte: start, lte: end },
-          createdByName: { in: [...SUPPORT_ANALYSTS], mode: "insensitive" },
           action: { ticket: { AND: [ticketOperationalScope(), { isDeleted: false }] } },
         },
         select: {
