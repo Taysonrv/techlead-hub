@@ -16,7 +16,7 @@ import {
   ManagementPdfService,
 } from "../services/ManagementPdfService";
 import { prisma } from "../database/prisma";
-import { SIMER_CLIENTS, SUPPORT_ANALYSTS, azureOperationalScope, ticketOperationalScope } from "../domain/OperationalScope";
+import { SIMER_CLIENTS, SUPPORT_ANALYSTS, OPERATIONAL_SCOPE_START, azureOperationalScope, ticketOperationalScope } from "../domain/OperationalScope";
 
 const REPORT_SCOPES:
   ReportScope[] = [
@@ -142,6 +142,12 @@ export class ReportController {
             message:
               "Informe from e to no formato AAAA-MM-DD.",
           });
+      }
+
+      if (from.getTime() < OPERATIONAL_SCOPE_START.getTime()) {
+        return response.status(400).json({
+          message: "A base operacional oficial dos relatórios inicia em 01/01/2026.",
+        });
       }
 
       if (
