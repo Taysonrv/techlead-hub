@@ -884,16 +884,30 @@ export class MovideskService {
 
   async syncTicketEnrichment(limit = 100) {
     const safeLimit = Math.min(Math.max(Math.trunc(limit) || 100, 1), 500);
-    const tickets = await prisma.ticket.findMany({
+    const enrichmentCandidates = await prisma.ticket.findMany({
       where: {
         createdDate: { gte: SYNC_SCOPE_START },
         client: { in: [...SIMER_CLIENTS], mode: "insensitive" },
         isDeleted: false,
       },
       orderBy: [{ lastUpdate: "desc" }, { movideskId: "desc" }],
-      take: safeLimit,
-      select: { id: true, movideskId: true, lastUpdate: true },
+      select: {
+        id: true,
+        movideskId: true,
+        lastUpdate: true,
+        movideskEnrichment: {
+          select: { sourceLastUpdate: true, lastError: true, errorAt: true },
+        },
+      },
     });
+    const tickets = enrichmentCandidates
+      .filter((ticket) => {
+        const checkpoint = ticket.movideskEnrichment;
+        if (!checkpoint || checkpoint.lastError || !checkpoint.sourceLastUpdate) return true;
+        if (!ticket.lastUpdate) return false;
+        return ticket.lastUpdate.getTime() > checkpoint.sourceLastUpdate.getTime();
+      })
+      .slice(0, safeLimit);
 
     let actions = 0;
     let appointments = 0;
@@ -1102,11 +1116,59 @@ export class MovideskService {
             appointments += 1;
           }
         }
+
+        await prisma.movideskTicketEnrichment.upsert({
+          where: { ticketId: ticket.id },
+          create: {
+            ticketId: ticket.id,
+            sourceLastUpdate: ticket.lastUpdate,
+            enrichedAt: new Date(),
+            actionsCount: remoteActions.length,
+            timeAppointmentsCount: remoteActions.reduce((total, action) => total + (
+              action && typeof action === "object" && !Array.isArray(action) && Array.isArray((action as Record<string, unknown>).timeAppointments)
+                ? ((action as Record<string, unknown>).timeAppointments as unknown[]).length
+                : 0
+            ), 0),
+            ownerHistoriesCount: remoteOwnerHistories.length,
+            statusHistoriesCount: remoteStatusHistories.length,
+            lastError: null,
+            errorAt: null,
+          },
+          update: {
+            sourceLastUpdate: ticket.lastUpdate,
+            enrichedAt: new Date(),
+            actionsCount: remoteActions.length,
+            timeAppointmentsCount: remoteActions.reduce((total, action) => total + (
+              action && typeof action === "object" && !Array.isArray(action) && Array.isArray((action as Record<string, unknown>).timeAppointments)
+                ? ((action as Record<string, unknown>).timeAppointments as unknown[]).length
+                : 0
+            ), 0),
+            ownerHistoriesCount: remoteOwnerHistories.length,
+            statusHistoriesCount: remoteStatusHistories.length,
+            lastError: null,
+            errorAt: null,
+          },
+        });
       } catch (error) {
         errors += 1;
+        const errorMessage = error instanceof Error ? error.message.slice(0, 500) : "Falha desconhecida.";
+        await prisma.movideskTicketEnrichment.upsert({
+          where: { ticketId: ticket.id },
+          create: {
+            ticketId: ticket.id,
+            sourceLastUpdate: null,
+            enrichedAt: new Date(0),
+            lastError: errorMessage,
+            errorAt: new Date(),
+          },
+          update: {
+            lastError: errorMessage,
+            errorAt: new Date(),
+          },
+        }).catch(() => undefined);
         errorDetails.push({
           ticketId: ticket.movideskId,
-          message: error instanceof Error ? error.message.slice(0, 500) : "Falha desconhecida.",
+          message: errorMessage,
         });
       }
 
@@ -1117,6 +1179,11 @@ export class MovideskService {
 
     return {
       tickets: tickets.length,
+      pendingBeforeRun: enrichmentCandidates.filter((ticket) => {
+        const checkpoint = ticket.movideskEnrichment;
+        if (!checkpoint || checkpoint.lastError || !checkpoint.sourceLastUpdate) return true;
+        return Boolean(ticket.lastUpdate && ticket.lastUpdate.getTime() > checkpoint.sourceLastUpdate.getTime());
+      }).length,
       actions,
       appointments,
       ownerHistories,
