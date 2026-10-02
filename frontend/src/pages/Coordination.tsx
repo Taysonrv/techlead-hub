@@ -271,7 +271,7 @@ export function Coordination() {
             </Box>
             <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap", alignItems: "center" }}>
               <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 800, mr: .25 }}>Período analítico</Typography>
-              {[{v:30,l:"30d"},{v:90,l:"90d"},{v:180,l:"6 meses"},{v:365,l:"12 meses"},{v:0,l:"Todo"}].map((period)=><Chip key={period.v} clickable size="small" label={period.l} color={serviceDays===period.v?"primary":"default"} variant={serviceDays===period.v?"filled":"outlined"} onClick={()=>setServiceDays(period.v)} />)}
+              {[{v:30,l:"30d"},{v:90,l:"90d"},{v:180,l:"6 meses"},{v:365,l:"12 meses"},{v:0,l:"Todo"}].map((period)=><Chip key={period.v} clickable size="small" label={period.l} color={serviceDays===period.v?"primary":"default"} variant={serviceDays===period.v?"filled":"outlined"} onClick={()=>{setServiceDays(period.v);setSlaPeriod("30d");setSlaDays(period.v || 730)}} />)}
               <Button size="small" variant="outlined" onClick={() => navigate("/atencao")}>Riscos</Button>
               <Button size="small" variant="outlined" onClick={() => navigate("/qualidade-dados")}>Pendências</Button>
               <Button size="small" variant="outlined" onClick={() => navigate("/desempenho")}>Desempenho</Button>
@@ -512,7 +512,7 @@ export function Coordination() {
                     key={label}
                     title={label}
                     value={value}
-                    subtitle="Operação atual"
+                    subtitle={serviceDays ? `Recorte · últimos ${serviceDays} dias` : "Recorte · histórico disponível"}
                     info={info}
                     onClick={() => void openDetails(kind, label)}
                     accent={
