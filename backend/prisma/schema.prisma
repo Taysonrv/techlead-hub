@@ -385,6 +385,7 @@ model Ticket {
   actions MovideskTicketAction[]
   ownerHistories MovideskOwnerHistory[]
   statusHistories MovideskStatusHistory[]
+  movideskEnrichment MovideskTicketEnrichment?
 
   // Auditoria
   createdAt DateTime @default(now())
@@ -424,6 +425,27 @@ model Ticket {
 // =========================================================
 // AÇÕES E APONTAMENTOS MOVIDESK
 // =========================================================
+
+model MovideskTicketEnrichment {
+  id Int @id @default(autoincrement())
+  ticketId Int @unique
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  sourceLastUpdate DateTime?
+  enrichedAt DateTime
+  actionsCount Int @default(0)
+  timeAppointmentsCount Int @default(0)
+  ownerHistoriesCount Int @default(0)
+  statusHistoriesCount Int @default(0)
+  lastError String? @db.Text
+  errorAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([sourceLastUpdate])
+  @@index([enrichedAt])
+  @@index([errorAt])
+}
 
 model MovideskOwnerHistory {
   id Int @id @default(autoincrement())
