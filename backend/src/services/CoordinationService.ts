@@ -52,7 +52,7 @@ export class CoordinationService {
                 ticketPriority,
                 ...(analyst ? [{ owner: { equals: analyst, mode: "insensitive" as const } }] : []),
                 ...(serviceClient ? [{ client: { equals: serviceClient, mode: "insensitive" as const } }] : []),
-                ...(serviceSince ? [{ createdDate: { gte: serviceSince } }] : []),
+                ...periodTicketFilter,
                 ...(serviceModule ? [{
                   OR: [
                     { service: { contains: serviceModule, mode: "insensitive" as const } },
@@ -81,7 +81,7 @@ export class CoordinationService {
                 azureScope,
                 azurePriority,
                 ...(analyst ? [{ createdByName: { equals: analyst, mode: "insensitive" as const } }] : []),
-                ...(serviceSince ? [{ azureCreatedAt: { gte: serviceSince } }] : []),
+                ...periodAzureFilter,
               ],
             },
             orderBy: [{ azureChangedAt: "asc" }],
@@ -141,13 +141,18 @@ export class CoordinationService {
     };
   }
 
-  async integrationHealth(days = 30) {
+  async integrationHealth(days = 30, startDate?: string, endDate?: string) {
     const safeDays = Math.min(Math.max(days || 730, 1), 730);
     const now = new Date();
-    const since = days > 0 ? new Date(now.getTime() - (safeDays - 1) * 86400000) : new Date("2026-01-01T00:00:00.000Z");
+    const parsedStart = startDate ? new Date(`${startDate}T00:00:00.000`) : null;
+    const parsedEnd = endDate ? new Date(`${endDate}T23:59:59.999`) : null;
+    const since = parsedStart && !Number.isNaN(parsedStart.getTime())
+      ? parsedStart
+      : days > 0 ? new Date(now.getTime() - (safeDays - 1) * 86400000) : new Date("2026-01-01T00:00:00.000Z");
     since.setHours(0, 0, 0, 0);
+    const until = parsedEnd && !Number.isNaN(parsedEnd.getTime()) ? parsedEnd : now;
     const ticketScope = ticketOperationalScope();
-    const periodTicketScope = { AND: [ticketScope, { isDeleted: false }, { createdDate: { gte: since, lte: now } }] };
+    const periodTicketScope = { AND: [ticketScope, { isDeleted: false }, { createdDate: { gte: since, lte: until } }] };
     const periodTickets = await prisma.ticket.findMany({
       where: periodTicketScope,
       select: { movideskId: true, taskNumber: true },
@@ -159,16 +164,16 @@ export class CoordinationService {
       prisma.ticket.count({ where: { AND: [periodTicketScope, { cause: { not:null } }] } }),
       prisma.ticket.count({ where: { AND: [periodTicketScope, { businessArea: { not:null } }] } }),
       taskIds.length ? prisma.azureWorkItem.count({ where: { id: { in: taskIds } } }) : Promise.resolve(0),
-      ticketIds.length ? prisma.movideskSurveyResponse.count({ where:{ ticketId:{in:ticketIds}, type:2, responseDate:{gte:since,lte:now} } }) : Promise.resolve(0),
+      ticketIds.length ? prisma.movideskSurveyResponse.count({ where:{ ticketId:{in:ticketIds}, type:2, responseDate:{gte:since,lte:until} } }) : Promise.resolve(0),
       prisma.movideskServiceCatalog.count({ where:{isActive:true} }),
-      ticketIds.length ? prisma.movideskSurveyResponse.aggregate({ where:{ticketId:{in:ticketIds},type:2,responseDate:{gte:since,lte:now}}, _max: { syncedAt: true, responseDate: true } }) : Promise.resolve({_max:{syncedAt:null,responseDate:null}}),
+      ticketIds.length ? prisma.movideskSurveyResponse.aggregate({ where:{ticketId:{in:ticketIds},type:2,responseDate:{gte:since,lte:until}}, _max: { syncedAt: true, responseDate: true } }) : Promise.resolve({_max:{syncedAt:null,responseDate:null}}),
       prisma.movideskServiceCatalog.aggregate({ _max: { syncedAt: true } }),
     ]);
     const tickets = periodTickets.length;
     const linkedTasks = taskIds.length;
     const pct=(value:number)=>tickets ? Math.round(value/tickets*1000)/10 : 0;
     return {
-      periodDays: days || 0, period:{start:since,end:now},
+      periodDays: days || 0, period:{start:since,end:until},
       tickets, linkedTasks, azureItems, csatResponses: csat, catalogServices: services,
       taskLinkCoveragePct: pct(linkedTasks), serviceCoveragePct: pct(withService),
       causeCoveragePct: pct(withCause), businessAreaCoveragePct: pct(withBusinessArea),
@@ -481,13 +486,20 @@ export class CoordinationService {
     return cacheSet(cacheKey, { days: requestedDays, period:{start,end:now}, businessDays, hoursPerDay, expectedHours, registeredHours, coverageRate: expectedHours ? Number((registeredHours/expectedHours*100).toFixed(1)) : null, dataSource: "Movidesk actions.timeAppointments.accountedTime", hasRegisteredTimeData: registeredHours > 0, appointments: appointments.length, analysts }, 60_000);
   }
 
-  async summary(_userId: number, serviceDays = 0) {
-    const cacheKey = `summary:${serviceDays}`;
+  async summary(_userId: number, serviceDays = 0, startDate?: string, endDate?: string) {
+    const cacheKey = `summary:${serviceDays}:${startDate ?? ""}:${endDate ?? ""}`;
     const cached = cacheGet<any>(cacheKey);
     if (cached) return cached;
     const now = new Date();
     const ticketScope = ticketOperationalScope();
-    const serviceSince = serviceDays > 0 ? new Date(now.getTime() - Math.min(serviceDays, 730) * 86400000) : null;
+    const parsedStart = startDate ? new Date(`${startDate}T00:00:00.000`) : null;
+    const parsedEnd = endDate ? new Date(`${endDate}T23:59:59.999`) : null;
+    const serviceSince = parsedStart && !Number.isNaN(parsedStart.getTime())
+      ? parsedStart
+      : serviceDays > 0 ? new Date(now.getTime() - Math.min(serviceDays, 730) * 86400000) : null;
+    const serviceUntil = parsedEnd && !Number.isNaN(parsedEnd.getTime()) ? parsedEnd : now;
+    const periodTicketFilter = serviceSince ? [{ createdDate: { gte: serviceSince, lte: serviceUntil } }] : [];
+    const periodAzureFilter = serviceSince ? [{ azureCreatedAt: { gte: serviceSince, lte: serviceUntil } }] : [];
     const azureScope = coordinationAzureScope();
 
     const [
@@ -503,31 +515,31 @@ export class CoordinationService {
       serviceTickets,
     ] = await Promise.all([
       prisma.ticket.count({
-        where: { AND: [ticketScope, coordinationTicketPriorityPredicate("backlog", now), ...(serviceSince ? [{ createdDate: { gte: serviceSince } }] : [])] },
+        where: { AND: [ticketScope, coordinationTicketPriorityPredicate("backlog", now), ...periodTicketFilter] },
       }),
       prisma.ticket.count({
-        where: { AND: [ticketScope, coordinationTicketPriorityPredicate("critical", now), ...(serviceSince ? [{ createdDate: { gte: serviceSince } }] : [])] },
+        where: { AND: [ticketScope, coordinationTicketPriorityPredicate("critical", now), ...periodTicketFilter] },
       }),
       prisma.ticket.count({
         where: {
-          AND: [ticketScope, coordinationTicketPriorityPredicate("stale", now), ...(serviceSince ? [{ createdDate: { gte: serviceSince } }] : [])],
+          AND: [ticketScope, coordinationTicketPriorityPredicate("stale", now), ...periodTicketFilter],
         },
       }),
       prisma.ticket.count({
         where: {
-          AND: [ticketScope, coordinationTicketPriorityPredicate("dueSoon", now), ...(serviceSince ? [{ createdDate: { gte: serviceSince } }] : [])],
+          AND: [ticketScope, coordinationTicketPriorityPredicate("dueSoon", now), ...periodTicketFilter],
         },
       }),
       prisma.ticket.count({
         where: {
-          AND: [ticketScope, coordinationTicketPriorityPredicate("overdue", now), ...(serviceSince ? [{ createdDate: { gte: serviceSince } }] : [])],
+          AND: [ticketScope, coordinationTicketPriorityPredicate("overdue", now), ...periodTicketFilter],
         },
       }),
       prisma.azureWorkItem.count({
-        where: { AND: [azureScope, coordinationAzurePriorityPredicate("blocked"), ...(serviceSince ? [{ azureCreatedAt: { gte: serviceSince } }] : [])] },
+        where: { AND: [azureScope, coordinationAzurePriorityPredicate("blocked"), ...periodAzureFilter] },
       }),
       prisma.azureWorkItem.count({
-        where: { AND: [azureScope, coordinationAzurePriorityPredicate("unassigned"), ...(serviceSince ? [{ azureCreatedAt: { gte: serviceSince } }] : [])] },
+        where: { AND: [azureScope, coordinationAzurePriorityPredicate("unassigned"), ...periodAzureFilter] },
       }),
       prisma.ticket.groupBy({
         by: ["owner"],
@@ -537,7 +549,7 @@ export class CoordinationService {
             {
               AND: [
                 coordinationOpenTicketPredicate(),
-                ...(serviceSince ? [{ createdDate: { gte: serviceSince } }] : []),
+                ...periodTicketFilter,
               ],
               owner: { in: [...SUPPORT_ANALYSTS], mode: "insensitive" },
             },
@@ -553,7 +565,7 @@ export class CoordinationService {
             {
               AND: [
                 coordinationOpenAzurePredicate(),
-                ...(serviceSince ? [{ azureCreatedAt: { gte: serviceSince } }] : []),
+                ...periodAzureFilter,
               ],
               createdByName: { in: [...SUPPORT_ANALYSTS], mode: "insensitive" },
             },
@@ -567,7 +579,7 @@ export class CoordinationService {
         where: { AND: [
           ticketOperationalScope(),
           coordinationOpenTicketPredicate(),
-          ...(serviceSince ? [{ createdDate: { gte: serviceSince } }] : []),
+          ...periodTicketFilter,
         ] },
         select: {
           id: true, subject: true, category: true, cause: true, service: true, client: true, owner: true,
