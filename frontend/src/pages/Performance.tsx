@@ -73,6 +73,19 @@ import {
 } from "../utils/serviceLevel";
 import { calculateTimestampSla } from "../utils/timestampSla";
 
+const SUPPORT_ANALYSTS = [
+  "ALAN KARDEK DA SILVA BARROS NETO",
+  "DÉBORA DAL CORREIA",
+  "DIEGO OLIVEIRA ARANTES",
+  "LUIZ ANTÔNIO COSTA CUNHA",
+  "RENAN BRENO CARVALHO",
+  "TAYSON ALVES DE ARAUJO",
+  "THIAGO DE LIMA MACHADO",
+] as const;
+
+const normalizePerson = (value?: string | null) => (value ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLocaleUpperCase("pt-BR");
+const isOfficialSupportAnalyst = (value?: string | null) => SUPPORT_ANALYSTS.some((analyst) => normalizePerson(analyst) === normalizePerson(value));
+
 type Ticket = {
   id: number;
   movideskId: number;
@@ -353,7 +366,8 @@ export function Performance() {
     const map = new Map<string, EvaluatedTicket[]>();
 
     evaluatedTickets.forEach((item) => {
-      const key = item.ticket.owner ?? "Sem responsável";
+      if (!isOfficialSupportAnalyst(item.ticket.owner)) return;
+      const key = SUPPORT_ANALYSTS.find((analyst) => normalizePerson(analyst) === normalizePerson(item.ticket.owner)) ?? item.ticket.owner!;
       const list = map.get(key) ?? [];
       list.push(item);
       map.set(key, list);
