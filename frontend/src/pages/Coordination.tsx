@@ -505,8 +505,8 @@ export function Coordination() {
                 <CardContent>
                   <Stack direction={{ xs: "column", lg: "row" }} spacing={1.5} sx={{ justifyContent: "space-between", alignItems: { lg: "center" }, mb: 1.5 }}>
                     <Box>
-                      <Typography variant="h6" sx={{ fontWeight: 850 }}>Qualidade da classificação por Serviço</Typography>
-                      <Typography variant="body2" color="text.secondary">Atendimentos abertos dos clientes da carteira SIMER e qualidade da hierarquia de Serviço sincronizada do Movidesk.</Typography>
+                      <Typography variant="h6" sx={{ fontWeight: 850 }}>Qualidade da classificação por Serviço · 2º nível</Typography>
+                      <Typography variant="body2" color="text.secondary">Atendimentos abertos da equipe SIMER classificados pelo Serviço de 2º nível sincronizado do Movidesk.</Typography>
                     </Box>
                     <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap" }}>
                       <Chip label={`${data.serviceAnalytics.classificationRate}% específicos`} color={data.serviceAnalytics.classificationRate >= 90 ? "success" : data.serviceAnalytics.classificationRate >= 75 ? "warning" : "error"} variant="outlined" />
@@ -526,9 +526,9 @@ export function Coordination() {
                     </Stack>
                   </Stack>
                   <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2,1fr)", xl: "repeat(4,1fr)" }, gap: 1.25, mb: 2 }}>
-                    <KpiCard title="Com serviço específico" value={data.serviceAnalytics.specificServices} subtitle="Atendimentos abertos" info="Tickets abertos da carteira sob responsabilidade da equipe oficial com rotina específica informada no Serviço Movidesk. Use o ranking abaixo para abrir e exportar cada rotina." accent={aliareColors.green} />
-                    <KpiCard title="Sem serviço" value={data.serviceAnalytics.withoutService} subtitle="Requer classificação" info="Atendimentos abertos da carteira sob responsabilidade da equipe oficial sem Serviço identificado." onClick={() => navigate("/qualidade-dados?issue=withoutService")} accent={aliareColors.error} />
-                    <KpiCard title="SIMER genérico" value={data.serviceAnalytics.genericService} subtitle="Requer revisão" info="Tickets da equipe classificados somente em níveis genéricos, como Atendimento ao Cliente/SIMER, sem rotina específica." onClick={() => navigate("/qualidade-dados?issue=genericSimerService")} accent={aliareColors.warning} />
+                    <KpiCard title="Com serviço específico" value={data.serviceAnalytics.specificServices} subtitle="Atendimentos abertos" info="Tickets da equipe com Serviço de 2º nível informado no Movidesk. O 1º nível é apenas agrupador e o 3º nível permanece disponível no detalhamento." accent={aliareColors.green} />
+                    <KpiCard title="Sem serviço" value={data.serviceAnalytics.withoutService} subtitle="Requer classificação" info="Atendimentos da equipe sem Serviço de 2º nível informado." onClick={() => navigate("/qualidade-dados?issue=withoutService")} accent={aliareColors.error} />
+                    <KpiCard title="SIMER genérico" value={data.serviceAnalytics.genericService} subtitle="Requer revisão" info="Tickets cujo Serviço de 2º nível ainda é genérico (por exemplo SIMER), exigindo refinamento da classificação." onClick={() => navigate("/qualidade-dados?issue=genericSimerService")} accent={aliareColors.warning} />
                     <KpiCard title="Possível incorreto" value={data.serviceAnalytics.suspectedMismatch} subtitle="Sugestão assistiva" info="No escopo da equipe, o Serviço informado diverge de uma sugestão assistiva com evidência suficiente. Exige validação humana." onClick={() => navigate("/qualidade-dados?issue=suspectedServiceMismatch")} accent={aliareColors.info} />
                   </Box>
                   {data.serviceAnalytics.genericService > 0 && <Alert severity="warning" sx={{mb:1.5}}><strong>{data.serviceAnalytics.genericService}</strong> atendimento(s) estão apenas em níveis genéricos do SIMER e foram retirados do ranking abaixo para não distorcer a leitura das rotinas específicas. Use o card “SIMER genérico” para revisar esses casos.</Alert>}
