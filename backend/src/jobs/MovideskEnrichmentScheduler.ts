@@ -84,6 +84,7 @@ export class MovideskEnrichmentScheduler {
         "[movidesk-enrichment] Lote concluído.",
         `tickets=${result.tickets}`,
         `pendentesAntes=${result.pendingBeforeRun}`,
+        `pendentesDepois=${result.pendingAfterRun}`,
         `acoes=${result.actions}`,
         `apontamentos=${result.appointments}`,
         `historicosResponsavel=${result.ownerHistories}`,
