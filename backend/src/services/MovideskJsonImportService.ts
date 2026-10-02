@@ -344,6 +344,9 @@ export class MovideskJsonImportService {
         ...(field.items ?? []).map((item) => this.toText(item.customFieldItem)),
       ].filter((value): value is string => Boolean(value));
       for (const value of candidates) {
+        // Causa é um campo classificatório curto. Descrições longas podem
+        // mencionar palavras como "configuração" ou "SEFAZ", mas não são causa.
+        if (value.length > 80) continue;
         const normalized = value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR");
         if (known.some((token) => normalized.includes(token.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR")))) {
           return value;
