@@ -237,16 +237,20 @@ export class MovideskJsonImportService {
       category: this.toText(row.category),
       cause:
         this.isCategory(this.toText(row.category), "problema")
-          ? (this.toText(row.cause) ??
-            this.toText(row.causa) ??
-            this.customValue(customFields, CUSTOM_FIELDS.cause) ??
-            this.detectCause(customFields))
+          ? this.normalizeCause(
+              this.toText(row.cause) ??
+              this.toText(row.causa) ??
+              this.customValue(customFields, CUSTOM_FIELDS.cause) ??
+              this.detectCause(customFields),
+            )
           : null,
       reason:
         this.isCategory(this.toText(row.category), "duvida")
-          ? (this.toText(row.reason) ??
-            this.toText(row.motivo) ??
-            this.detectReason(customFields))
+          ? this.normalizeReason(
+              this.toText(row.reason) ??
+              this.toText(row.motivo) ??
+              this.detectReason(customFields),
+            )
           : null,
       causeDetail:
         this.toText(row.causeDetail) ??
@@ -340,6 +344,32 @@ export class MovideskJsonImportService {
     return normalized === expected;
   }
 
+  private normalizeClassification(value: string | null) {
+    return value?.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLocaleLowerCase("pt-BR") ?? "";
+  }
+
+  private normalizeCause(value: string | null) {
+    const normalized = this.normalizeClassification(value);
+    if (normalized === "configuracao") return "Configuração";
+    if (normalized === "erro operacional") return "Erro operacional";
+    if (normalized === "nao identificada") return "Não identificada";
+    if (normalized === "resolvido pelo usuario") return "Resolvido pelo usuário";
+    if (normalized === "sefaz ou aplicativo de terceiros" || normalized === "sefaz ou aplicativos de terceiros") return "SEFAZ ou aplicativo de terceiros";
+    return null;
+  }
+
+  private normalizeReason(value: string | null) {
+    const normalized = this.normalizeClassification(value);
+    if (normalized === "apoio processos operacionais") return "Apoio processos operacionais";
+    if (normalized === "configuracao") return "Configuração";
+    if (normalized === "duvida interna") return "Dúvida interna";
+    if (normalized === "inexperiencia do usuario") return "Inexperiência do usuário";
+    if (normalized === "informacao") return "Informação";
+    if (normalized === "integracao com terceiros") return "Integração com terceiros";
+    if (normalized === "priorizacao") return "Priorização";
+    return null;
+  }
+
   private detectReason(fields: CustomField[]) {
     const known = [
       "apoio processos operacionais",
@@ -376,10 +406,10 @@ export class MovideskJsonImportService {
       "erro operacional",
       "configuração",
       "configuracao",
-      "solução de contorno",
-      "solucao de contorno",
       "não identificada",
       "nao identificada",
+      "resolvido pelo usuário",
+      "resolvido pelo usuario",
       "sefaz",
       "aplicativos de terceiros",
     ];
