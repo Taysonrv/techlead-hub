@@ -5,7 +5,7 @@ import {
   sameOperationalPerson,
 } from "../domain/ProductivityRules";
 import { prisma } from "../database/prisma";
-import { SUPPORT_ANALYSTS, SUPPORT_TEAMS, ticketOperationalScope } from "../domain/OperationalScope";
+import { SUPPORT_ANALYSTS, SUPPORT_TEAMS, isSupportAnalyst, ticketOperationalScope } from "../domain/OperationalScope";
 
 export type AnalystTimeProductivityParams = {
   startDate?: string | null;
@@ -17,7 +17,10 @@ export class AnalystProductivityService {
   public async analyze(params: { startDate?: string | null; endDate?: string | null; analyst?: string | null } = {}) {
     const end = params.endDate ? new Date(`${params.endDate}T23:59:59.999`) : new Date();
     const start = params.startDate ? new Date(`${params.startDate}T00:00:00.000`) : new Date(end.getTime() - 27 * 86400000);
-    const analysts = params.analyst ? [params.analyst] : [...SUPPORT_ANALYSTS];
+    const requestedAnalyst = params.analyst?.trim() || null;
+    const analysts = requestedAnalyst && isSupportAnalyst(requestedAnalyst)
+      ? [SUPPORT_ANALYSTS.find((analyst) => sameOperationalPerson(analyst, requestedAnalyst)) ?? requestedAnalyst]
+      : [...SUPPORT_ANALYSTS];
     const [tickets, appointments] = await Promise.all([
       prisma.ticket.findMany({
         where: { AND: [ticketOperationalScope(), { isDeleted: false }] },
@@ -26,6 +29,7 @@ export class AnalystProductivityService {
       prisma.movideskTimeAppointment.findMany({
         where: {
           date: { gte: start, lte: end },
+          createdByName: { in: [...SUPPORT_ANALYSTS], mode: "insensitive" },
           action: { ticket: { AND: [ticketOperationalScope(), { isDeleted: false }] } },
         },
         select: {
