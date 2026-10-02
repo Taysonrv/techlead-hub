@@ -429,7 +429,7 @@ export class CoordinationService {
     start.setHours(0, 0, 0, 0);
     const { businessDays, hoursPerDay } = productivityExpectedHours(start, now);
     const tickets = await prisma.ticket.findMany({
-      where: { AND: [coordinationTicketScope(), { isDeleted: false }] },
+      where: { AND: [simerClientTicketScope(), { isDeleted: false }] },
       select: { owner: true, rawData: true },
     });
     const analysts = SUPPORT_ANALYSTS.map((analyst) => {
@@ -443,7 +443,7 @@ export class CoordinationService {
     });
     const expectedHours = analysts.reduce((sum,row)=>sum+row.expectedHours,0);
     const registeredHours = Number(analysts.reduce((sum,row)=>sum+row.registeredHours,0).toFixed(2));
-    return cacheSet(cacheKey, { days, businessDays, hoursPerDay, expectedHours, registeredHours, coverageRate: expectedHours ? Number((registeredHours/expectedHours*100).toFixed(1)) : null, analysts }, 60_000);
+    return cacheSet(cacheKey, { days, businessDays, hoursPerDay, expectedHours, registeredHours, coverageRate: expectedHours ? Number((registeredHours/expectedHours*100).toFixed(1)) : null, dataSource: "Movidesk rawData.timeAppointments", hasRegisteredTimeData: registeredHours > 0, analysts }, 60_000);
   }
 
   async summary(_userId: number, serviceDays = 0) {
@@ -526,7 +526,7 @@ export class CoordinationService {
         where: { AND: [
           coordinationOpenTicketPredicate(),
           ...(serviceSince ? [{ createdDate: { gte: serviceSince } }] : []),
-          coordinationTicketScope(),
+          simerClientTicketScope(),
         ] },
         select: {
           id: true, subject: true, category: true, cause: true, service: true, client: true, owner: true,
