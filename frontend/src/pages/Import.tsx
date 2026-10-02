@@ -97,6 +97,13 @@ type MovideskBaselineStatus = {
    TIPOS - AZURE
 ========================================================= */
 
+type ClassificationCoverage = {
+  scope: { start: string; tickets: number };
+  problems: { total: number; classified: number; missing: number; coveragePct: number };
+  doubts: { total: number; classified: number; missing: number; coveragePct: number };
+  generatedAt: string;
+};
+
 type AzureSyncStatus =
   | "PROCESSING"
   | "SUCCESS"
@@ -238,6 +245,8 @@ export function Import() {
 
   const [syncHealth, setSyncHealth] = useState<SyncCenterSummary | null>(null);
   const [historyExpanded, setHistoryExpanded] = useState(false);
+  const [classificationCoverage, setClassificationCoverage] = useState<ClassificationCoverage | null>(null);
+  const [classificationBusy, setClassificationBusy] = useState(false);
 
   const fileSize =
     useMemo(
@@ -342,6 +351,36 @@ export function Import() {
       loadAzureStatus,
     ],
   );
+
+  const loadClassificationCoverage = useCallback(async () => {
+    try {
+      const response = await api.get<ClassificationCoverage>("/movidesk/classifications/coverage", { timeout: 60_000 });
+      setClassificationCoverage(response.data);
+    } catch {
+      // Diagnóstico complementar: não bloqueia as demais sincronizações.
+    }
+  }, []);
+
+  useEffect(() => {
+    if (movideskStatus?.completed) void loadClassificationCoverage();
+  }, [movideskStatus?.completed, loadClassificationCoverage]);
+
+  async function consolidateClassifications() {
+    try {
+      setClassificationBusy(true);
+      setError(null);
+      const response = await api.post<{ scanned:number; causesUpdated:number; reasonsUpdated:number; remoteUpdated:number }>("/movidesk/causes/backfill", {}, { timeout: 180_000 });
+      await loadClassificationCoverage();
+      setResult(null);
+      setError(null);
+      window.dispatchEvent(new CustomEvent("techlead-hub:sync-completed"));
+      alert(`Classificações consolidadas: ${response.data.causesUpdated} causa(s), ${response.data.reasonsUpdated} motivo(s) e ${response.data.remoteUpdated} ticket(s) relidos do Movidesk.`);
+    } catch (err: unknown) {
+      setError(getApiErrorMessage(err, "Não foi possível consolidar Causas e Motivos. Se a API Movidesk estiver ocupada, aguarde a sincronização atual concluir."));
+    } finally {
+      setClassificationBusy(false);
+    }
+  }
 
   /* =======================================================
      MOVIDESK - ARQUIVO
@@ -774,6 +813,36 @@ export function Import() {
           </>}
         </CardContent>
       </Card>
+
+      {movideskStatus?.completed && (
+        <Card elevation={0} sx={{ mb: 3, border: "1px solid", borderColor: "divider", borderRadius: 3, bgcolor: "background.paper" }}>
+          <CardContent sx={{ p: { xs: 2, md: 2.5 }, "&:last-child": { pb: { xs: 2, md: 2.5 } } }}>
+            <Stack direction={{ xs: "column", md: "row" }} spacing={1.5} sx={{ justifyContent: "space-between", alignItems: { md: "center" } }}>
+              <Box>
+                <Typography sx={{ fontWeight: 800 }}>Qualidade das classificações Movidesk</Typography>
+                <Typography variant="body2" color="text.secondary">Causa é consolidada somente para Problema; Motivo somente para Dúvida. Escopo operacional 2026+.</Typography>
+              </Box>
+              <Button variant="outlined" disabled={classificationBusy} onClick={() => void consolidateClassifications()}>
+                {classificationBusy ? "Consolidando..." : "Consolidar causas e motivos"}
+              </Button>
+            </Stack>
+            {classificationCoverage ? (
+              <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" }, gap: 1.25 }}>
+                {([["Problema / Causa", classificationCoverage.problems], ["Dúvida / Motivo", classificationCoverage.doubts]] as const).map(([label,item]) => (
+                  <Box key={label} sx={{ p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: 2.25, bgcolor: "background.default" }}>
+                    <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "center", gap: 1 }}>
+                      <Typography sx={{ fontWeight: 800 }}>{label}</Typography>
+                      <Chip size="small" color={item.coveragePct >= 90 ? "success" : item.coveragePct >= 60 ? "warning" : "default"} label={`${item.coveragePct}%`} />
+                    </Stack>
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: .5 }}>{item.classified} classificado(s) · {item.missing} pendente(s) · {item.total} total</Typography>
+                    <LinearProgress variant="determinate" value={item.coveragePct} sx={{ mt: 1, height: 6, borderRadius: 99 }} />
+                  </Box>
+                ))}
+              </Box>
+            ) : <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5 }}>Carregando cobertura das classificações...</Typography>}
+          </CardContent>
+        </Card>
+      )}
 
       {/* =====================================================
           MOVIDESK
