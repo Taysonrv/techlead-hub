@@ -131,7 +131,8 @@ export function Coordination() {
   const [detailTitle, setDetailTitle] = useState("");
   const [detailError, setDetailError] = useState("");
   const [details, setDetails] = useState<DetailData | null>(null);
-  const [serviceDays, setServiceDays] = useState(90);
+  const [serviceDays, setServiceDays] = useState(30);
+  const [analyticPeriod, setAnalyticPeriod] = useState<"thisMonth" | "lastMonth" | "3m" | "6m" | "12m" | "all">("thisMonth");
   const [slaDays, setSlaDays] = useState(30);
   const [slaPeriod, setSlaPeriod] = useState<"thisMonth" | "lastMonth" | "30d" | "custom">("30d");
   const [slaCustomStart, setSlaCustomStart] = useState("");
@@ -146,18 +147,34 @@ export function Coordination() {
   const [csatDetailTitle, setCsatDetailTitle] = useState("");
   const [csatDetailLoading, setCsatDetailLoading] = useState(false);
 
+  const analyticParams = useMemo(() => {
+    const now = new Date();
+    const iso = (date: Date) => [date.getFullYear(), String(date.getMonth() + 1).padStart(2, "0"), String(date.getDate()).padStart(2, "0")].join("-");
+    if (analyticPeriod === "thisMonth") return { startDate: iso(new Date(now.getFullYear(), now.getMonth(), 1)), endDate: iso(now), days: serviceDays };
+    if (analyticPeriod === "lastMonth") return { startDate: iso(new Date(now.getFullYear(), now.getMonth() - 1, 1)), endDate: iso(new Date(now.getFullYear(), now.getMonth(), 0)), days: serviceDays };
+    if (analyticPeriod === "all") return { startDate: "2026-01-01", endDate: iso(now), days: 0 };
+    const months = analyticPeriod === "3m" ? 3 : analyticPeriod === "6m" ? 6 : 12;
+    return { startDate: iso(new Date(now.getFullYear(), now.getMonth() - months + 1, 1)), endDate: iso(now), days: serviceDays };
+  }, [analyticPeriod, serviceDays]);
+
+  const analyticPeriodLabel = analyticPeriod === "thisMonth" ? "Este mês"
+    : analyticPeriod === "lastMonth" ? "Mês passado"
+    : analyticPeriod === "3m" ? "Últimos 3 meses"
+    : analyticPeriod === "6m" ? "Últimos 6 meses"
+    : analyticPeriod === "12m" ? "Últimos 12 meses" : "Desde 01/01/2026";
+
   const load = useCallback(async () => {
     try {
       setLoading(true);
       setError("");
-      const response = await api.get<Data>("/coordination/summary", { params: { serviceDays } });
+      const response = await api.get<Data>("/coordination/summary", { params: { serviceDays: analyticParams.days, startDate: analyticParams.startDate, endDate: analyticParams.endDate } });
       setData(response.data);
     } catch (requestError: unknown) {
       setError(getApiErrorMessage(requestError, "Não foi possível carregar a central."));
     } finally {
       setLoading(false);
     }
-  }, [serviceDays]);
+  }, [analyticParams.days, analyticParams.endDate, analyticParams.startDate]);
 
   useEffect(() => {
     void load();
@@ -176,11 +193,11 @@ export function Coordination() {
 
   useEffect(() => {
     const controller = new AbortController();
-    api.get<IntegrationHealth>("/coordination/integration-health", { params: { days: serviceDays }, signal: controller.signal })
+    api.get<IntegrationHealth>("/coordination/integration-health", { params: { days: analyticParams.days, startDate: analyticParams.startDate, endDate: analyticParams.endDate }, signal: controller.signal })
       .then((response) => setIntegrationHealth(response.data))
       .catch(() => { if (!controller.signal.aborted) setIntegrationHealth(null); });
     return () => controller.abort();
-  }, []);
+  }, [analyticParams.days, analyticParams.endDate, analyticParams.startDate]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -271,7 +288,14 @@ export function Coordination() {
             </Box>
             <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap", alignItems: "center" }}>
               <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 800, mr: .25 }}>Período analítico</Typography>
-              {[{v:30,l:"30d"},{v:90,l:"90d"},{v:180,l:"6 meses"},{v:365,l:"12 meses"},{v:0,l:"Todo"}].map((period)=><Chip key={period.v} clickable size="small" label={period.l} color={serviceDays===period.v?"primary":"default"} variant={serviceDays===period.v?"filled":"outlined"} onClick={()=>{setServiceDays(period.v);setSlaPeriod("30d");setSlaDays(period.v || 730)}} />)}
+              {([
+                { v:"thisMonth", l:"Este mês", days:30 },
+                { v:"lastMonth", l:"Mês passado", days:30 },
+                { v:"3m", l:"3 meses", days:90 },
+                { v:"6m", l:"6 meses", days:180 },
+                { v:"12m", l:"12 meses", days:365 },
+                { v:"all", l:"Todo 2026", days:0 },
+              ] as const).map((period)=><Chip key={period.v} clickable size="small" label={period.l} color={analyticPeriod===period.v?"primary":"default"} variant={analyticPeriod===period.v?"filled":"outlined"} onClick={()=>{setAnalyticPeriod(period.v);setServiceDays(period.days);setSlaPeriod("30d");setSlaDays(period.days || 730)}} />)}
               <Button size="small" variant="outlined" onClick={() => navigate("/atencao")}>Riscos</Button>
               <Button size="small" variant="outlined" onClick={() => navigate("/qualidade-dados")}>Pendências</Button>
               <Button size="small" variant="outlined" onClick={() => navigate("/desempenho")}>Desempenho</Button>
