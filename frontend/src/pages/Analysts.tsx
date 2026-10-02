@@ -443,7 +443,6 @@ export function Analysts() {
   const [timeProductivity, setTimeProductivity] = useState<TimeProductivityResponse | null>(null);
   const [timeProductivityLoading, setTimeProductivityLoading] = useState(false);
   const [timeProductivityError, setTimeProductivityError] = useState<string | null>(null);
-  const timeProductivityRequestKey = useRef("");
 
   const [
     productivityDrilldown,
@@ -536,10 +535,6 @@ export function Analysts() {
   ]);
 
   useEffect(() => {
-    const requestKey = [formatDateForApi(effectiveStartDate), formatDateForApi(effectiveEndDate), selectedAnalyst].join("|");
-    if (requestKey === timeProductivityRequestKey.current) return;
-    timeProductivityRequestKey.current = requestKey;
-
     const controller = new AbortController();
     async function loadTimeProductivity() {
       try {
