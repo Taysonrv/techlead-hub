@@ -30,7 +30,7 @@ export class CoordinationService {
     // Busca um registro adicional para informar truncamento sem confundir "quantidade carregada" com total real.
     const fetchLimit = Math.min(safeLimit + 1, 501);
     const serviceSince = serviceDays > 0 ? new Date(now.getTime() - Math.min(serviceDays, 730) * 86400000) : null;
-    const ticketScope = coordinationTicketScope();
+    const ticketScope = ticketOperationalScope();
     const azureScope = coordinationAzureScope();
 
     const priorityKinds: CoordinationPriorityKind[] = ["backlog", "critical", "stale", "dueSoon", "overdue"];
@@ -100,7 +100,10 @@ export class CoordinationService {
     const ticketServicePath = (ticket: (typeof tickets)[number]) =>
       [ticket.serviceFirstLevel, ticket.serviceSecondLevel, ticket.serviceThirdLevel].map((v) => v?.trim()).filter(Boolean).join(" » ") || ticket.service?.trim() || "";
     const serviceFilteredTickets = serviceName
-      ? tickets.filter((ticket) => normalizeService(ticketServicePath(ticket)) === normalizeService(serviceName))
+      ? tickets.filter((ticket) => {
+          const parts = ticketServicePath(ticket).split("»").map((value) => normalizeService(value)).filter(Boolean);
+          return parts.includes(normalizeService(serviceName));
+        })
       : tickets;
     const ticketTruncated = serviceFilteredTickets.length > safeLimit;
     const workItemTruncated = workItems.length > safeLimit;
