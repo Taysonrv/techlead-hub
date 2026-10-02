@@ -529,44 +529,11 @@ export function Dashboard() {
   }, [openedInPeriod]);
 
 
-  const canonicalCause = (value?: string | null) => {
-    const raw = value?.trim();
-    if (!raw) return null;
-    const normalized = normalize(raw);
-    if (normalized.includes("erro operacional")) return "Erro operacional";
-    if (normalized.includes("configuracao")) return "Configuração";
-    if (normalized.includes("nao identificada")) return "Não identificada";
-    if (normalized.includes("resolvido pelo usuario")) return "Resolvido pelo usuário";
-    if (normalized.includes("sefaz") || normalized.includes("aplicativo")) return "SEFAZ ou aplicativo de terceiros";
-    return null;
-  };
-
-  // Causa/Motivo são dimensões da entrada do atendimento. O período é o global
-  // do Dashboard (createdDate), sem restringir pela responsabilidade atual:
-  // um ticket pode ter sido aberto no período e já ter saído da fila SIMER.
-  const problemTickets = useMemo(() => openedInPeriod.filter((ticket) => canonicalCategory(ticket.category) === "Problema"), [openedInPeriod]);
-  const ticketsWithCause = useMemo(() => problemTickets.filter((ticket) => Boolean(canonicalCause(ticket.cause))), [problemTickets]);
   const causes = useMemo(
     () => classificationData?.causes.map(({ label, total }) => ({ label, total })) ?? [],
     [classificationData],
   );
 
-  const canonicalReason = (value?: string | null) => {
-    const raw = value?.trim();
-    if (!raw) return null;
-    const normalized = normalize(raw);
-    if (normalized.includes("apoio processos operacionais")) return "Apoio processos operacionais";
-    if (normalized === "configuracao" || normalized.includes("configuracao")) return "Configuração";
-    if (normalized.includes("duvida interna")) return "Dúvida interna";
-    if (normalized.includes("inexperiencia do usuario")) return "Inexperiência do usuário";
-    if (normalized === "informacao" || normalized.includes("informacao")) return "Informação";
-    if (normalized.includes("integracao com terceiros")) return "Integração com terceiros";
-    if (normalized.includes("priorizacao")) return "Priorização";
-    return null;
-  };
-
-  const doubtTickets = useMemo(() => openedInPeriod.filter((ticket) => canonicalCategory(ticket.category) === "Dúvida"), [openedInPeriod]);
-  const ticketsWithReason = useMemo(() => doubtTickets.filter((ticket) => Boolean(canonicalReason(ticket.reason))), [doubtTickets]);
   const reasons = useMemo(
     () => classificationData?.reasons.map(({ label, total }) => ({ label, total })) ?? [],
     [classificationData],
