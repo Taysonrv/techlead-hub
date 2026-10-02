@@ -486,26 +486,36 @@ export function Dashboard() {
     return result;
   }, [openedInPeriod, resolvedInPeriod, closedInPeriod, effectiveStartDate, effectiveEndDate]);
 
+  const canonicalCause = (value?: string | null) => {
+    const raw = value?.trim();
+    if (!raw) return null;
+    const normalized = normalize(raw);
+    if (!normalized || normalized === "sem causa") return null;
+    if (normalized.includes("erro operacional")) return "Problema - Erro operacional";
+    if (normalized.includes("configuracao")) return "Problema - Configuração";
+    if (normalized.includes("solucao de contorno")) return "Solução de contorno";
+    if (normalized.includes("nao identificada")) return "Problema - Não identificada";
+    if (normalized.includes("sefaz") || normalized.includes("aplicativos de terceiros")) return "SEFAZ ou aplicativos de terceiros";
+    // Causa é uma classificação curta. Textos livres pertencem a causeDetail
+    // e nunca devem virar categorias/eixos do gráfico.
+    return raw.length <= 80 ? raw : null;
+  };
+
   const ticketsWithCause = useMemo(
-    () => filteredTickets.filter((ticket) => {
-      const label = ticket.causeDetail?.trim() || ticket.cause?.trim();
-      return Boolean(label) && normalize(label) !== "sem causa";
-    }),
+    () => filteredTickets.filter((ticket) => Boolean(canonicalCause(ticket.cause))),
     [filteredTickets],
   );
 
   const causes = useMemo(() => {
     const grouped = new Map<string, number>();
     ticketsWithCause.forEach((ticket) => {
-      const label = ticket.causeDetail?.trim() || ticket.cause?.trim();
+      const label = canonicalCause(ticket.cause);
       if (!label) return;
-      const existing = [...grouped.keys()].find((key) => normalize(key) === normalize(label));
-      const key = existing ?? label;
-      grouped.set(key, (grouped.get(key) ?? 0) + 1);
+      grouped.set(label, (grouped.get(label) ?? 0) + 1);
     });
     return [...grouped.entries()]
       .map(([label, total]) => ({ label, total }))
-      .sort((a, b) => b.total - a.total)
+      .sort((a, b) => b.total - a.total || a.label.localeCompare(b.label, "pt-BR"))
       .slice(0, 8);
   }, [ticketsWithCause]);
 
@@ -1424,7 +1434,7 @@ export function Dashboard() {
                       label={{ position: "right", fontSize: 10, fontWeight: 800, fill: isDark ? "rgba(226,232,240,.86)" : "rgba(30,41,59,.86)" }}
                       onClick={(_, index) => {
                         const cause = causes.slice(0, 6)[index]?.label;
-                        if (cause) showTickets(`Causa: ${cause}`, ticketsWithCause.filter((ticket) => normalize(ticket.causeDetail?.trim() || ticket.cause?.trim()) === normalize(cause)), "Tickets classificados com a causa selecionada");
+                        if (cause) showTickets(`Causa: ${cause}`, ticketsWithCause.filter((ticket) => canonicalCause(ticket.cause) === cause), "Tickets classificados com a causa selecionada");
                       }} />
                   </BarChart>
                 </ResponsiveContainer>
