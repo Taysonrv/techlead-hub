@@ -6,7 +6,6 @@ import {
 } from "../domain/ProductivityRules";
 import { prisma } from "../database/prisma";
 import { SUPPORT_ANALYSTS, SUPPORT_TEAMS, ticketOperationalScope } from "../domain/OperationalScope";
-import { extractMovideskTimeEntries } from "./MovideskPayloadAnalytics";
 
 export type AnalystTimeProductivityParams = {
   startDate?: string | null;
@@ -19,10 +18,25 @@ export class AnalystProductivityService {
     const end = params.endDate ? new Date(`${params.endDate}T23:59:59.999`) : new Date();
     const start = params.startDate ? new Date(`${params.startDate}T00:00:00.000`) : new Date(end.getTime() - 27 * 86400000);
     const analysts = params.analyst ? [params.analyst] : [...SUPPORT_ANALYSTS];
-    const tickets = await prisma.ticket.findMany({
-      where: { AND: [ticketOperationalScope(), { isDeleted: false }, { owner: { in: analysts, mode: "insensitive" } }] },
-      select: { movideskId: true, subject: true, owner: true, rawData: true },
-    });
+    const [tickets, appointments] = await Promise.all([
+      prisma.ticket.findMany({
+        where: { AND: [ticketOperationalScope(), { isDeleted: false }] },
+        select: { id: true, movideskId: true, subject: true, owner: true },
+      }),
+      prisma.movideskTimeAppointment.findMany({
+        where: {
+          date: { gte: start, lte: end },
+          action: { ticket: { AND: [ticketOperationalScope(), { isDeleted: false }] } },
+        },
+        select: {
+          accountedTime: true,
+          date: true,
+          createdByName: true,
+          createdByTeamName: true,
+          action: { select: { ticket: { select: { movideskId: true, subject: true, owner: true } } } },
+        },
+      }),
+    ]);
     const holidays = productivityHolidays();
     const { businessDays, hoursPerDay, expectedHours } = productivityExpectedHours(start, end);
     const isBusinessDay = (value: Date) => isProductivityBusinessDay(value, holidays);
@@ -39,29 +53,37 @@ export class AnalystProductivityService {
       weeks.set(key, current);
     }
     const result = analysts.map((analyst) => {
-      let registeredMinutes = 0; const ticketMinutes = new Map<number, number>(); const weeklyMinutes = new Map<string, number>();
-      for (const ticket of tickets) for (const entry of extractMovideskTimeEntries(ticket.rawData)) {
-        if (entry.date) { const entryDate = new Date(entry.date); if (entryDate < start || entryDate > end) continue; }
-        const belongs = entry.analyst ? same(entry.analyst, analyst) : same(ticket.owner, analyst);
-        if (!belongs) continue;
-        registeredMinutes += entry.minutes;
-        ticketMinutes.set(ticket.movideskId, (ticketMinutes.get(ticket.movideskId) ?? 0) + entry.minutes);
-        if (entry.date) { const key = weekKey(new Date(entry.date)); weeklyMinutes.set(key, (weeklyMinutes.get(key) ?? 0) + entry.minutes); }
+      let registeredHoursTotal = 0;
+      const ticketHours = new Map<number, { hours: number; subject: string }>();
+      const weeklyHours = new Map<string, number>();
+      for (const appointment of appointments) {
+        if (!appointment.createdByName || !same(appointment.createdByName, analyst)) continue;
+        const hours = Number(appointment.accountedTime ?? 0);
+        if (!Number.isFinite(hours) || hours <= 0) continue;
+        registeredHoursTotal += hours;
+        const ticket = appointment.action.ticket;
+        const current = ticketHours.get(ticket.movideskId) ?? { hours: 0, subject: ticket.subject };
+        current.hours += hours;
+        ticketHours.set(ticket.movideskId, current);
+        if (appointment.date) {
+          const key = weekKey(appointment.date);
+          weeklyHours.set(key, (weeklyHours.get(key) ?? 0) + hours);
+        }
       }
+      const registeredHours = Number(registeredHoursTotal.toFixed(2));
       return {
-        analyst, businessDays, expectedHours, registeredHours: Number((registeredMinutes / 60).toFixed(2)),
-        coverageRate: expectedHours ? Number(((registeredMinutes / 60 / expectedHours) * 100).toFixed(1)) : null,
-        ticketsWithTime: ticketMinutes.size,
-        averageHoursPerTicket: ticketMinutes.size ? Number((registeredMinutes / 60 / ticketMinutes.size).toFixed(2)) : null,
+        analyst, businessDays, expectedHours, registeredHours,
+        coverageRate: expectedHours ? Number((registeredHours / expectedHours * 100).toFixed(1)) : null,
+        ticketsWithTime: ticketHours.size,
+        averageHoursPerTicket: ticketHours.size ? Number((registeredHours / ticketHours.size).toFixed(2)) : null,
         weekly: [...weeks.values()].map((week) => {
-          const registeredHours = Number(((weeklyMinutes.get(week.week) ?? 0) / 60).toFixed(2));
+          const weekRegisteredHours = Number((weeklyHours.get(week.week) ?? 0).toFixed(2));
           const expected = week.businessDays * hoursPerDay;
-          return { week: week.week, businessDays: week.businessDays, expectedHours: expected, registeredHours, coverageRate: expected ? Number((registeredHours / expected * 100).toFixed(1)) : null };
+          return { week: week.week, businessDays: week.businessDays, expectedHours: expected, registeredHours: weekRegisteredHours, coverageRate: expected ? Number((weekRegisteredHours / expected * 100).toFixed(1)) : null };
         }),
-        topTickets: [...ticketMinutes.entries()].sort((a,b) => b[1]-a[1]).slice(0,10).map(([movideskId, minutes]) => {
-          const ticket = tickets.find((item) => item.movideskId === movideskId);
-          return { movideskId, subject: ticket?.subject ?? "", hours: Number((minutes / 60).toFixed(2)) };
-        }),
+        topTickets: [...ticketHours.entries()].sort((a,b) => b[1].hours-a[1].hours).slice(0,10).map(([movideskId, item]) => ({
+          movideskId, subject: item.subject, hours: Number(item.hours.toFixed(2)),
+        })),
       };
     });
     const teams = Object.entries(SUPPORT_TEAMS).map(([team, members]) => {
@@ -77,7 +99,7 @@ export class AnalystProductivityService {
     });
     return {
       generatedAt: new Date().toISOString(), startDate: start.toISOString(), endDate: end.toISOString(),
-      definition: { expectedHours: `${hoursPerDay} horas por dia útil (segunda a sexta), descontando ${holidays.size} feriado(s) configurado(s) no período de referência. Férias, afastamentos e jornadas individuais ainda devem ser tratados como ajustes de capacidade.`, registeredHours: "Soma dos apontamentos de tempo disponíveis no payload sincronizado do Movidesk.", coverageRate: "Horas registradas ÷ horas previstas × 100. Indicador de cobertura de apontamento, não avaliação isolada de desempenho." },
+      definition: { expectedHours: `${hoursPerDay} horas por dia útil (segunda a sexta), descontando ${holidays.size} feriado(s) configurado(s) no período de referência. Férias, afastamentos e jornadas individuais ainda devem ser tratados como ajustes de capacidade.`, registeredHours: "Soma de accountedTime dos apontamentos estruturados do Movidesk, atribuída ao autor real de cada apontamento.", coverageRate: "Horas registradas ÷ horas previstas × 100. Indicador de cobertura de apontamento, não avaliação isolada de desempenho." },
       analysts: result, teams, weekly,
       insights: {
         expectedHours: Number(result.reduce((sum,row)=>sum+row.expectedHours,0).toFixed(2)),
@@ -89,6 +111,7 @@ export class AnalystProductivityService {
         weeklyTrend: weekly.length>=2 ? Number((weekly.at(-1)!.coverageRate??0)-(weekly.at(-2)!.coverageRate??0)).toFixed(1) : null,
       },
       capacity: { hoursPerDay, configuredHolidays: [...holidays].sort() },
+      dataSource: "Movidesk actions.timeAppointments.accountedTime",
     };
   }
 
