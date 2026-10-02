@@ -2158,7 +2158,7 @@ export function Analysts() {
         />
         <MetricCard
           title="CSAT"
-          value={summary.csatPositivePct == null ? "—" : `${summary.csatPositivePct.toLocaleString("pt-BR")}%`}
+          value={summary.csatPositivePct ?? 0}
           description={summary.csatPositivePct == null ? "Sem avaliações no recorte" : `${summary.csatResponses} avaliação(ões) · notas 4–5`}
           info={{ title:"CSAT", summary:"Percentual de avaliações positivas vinculadas aos tickets da equipe.", calculation:"Respostas com nota 4 ou 5 ÷ total de respostas válidas × 100.", source:"Pesquisa de Satisfação Movidesk", reference:"MovideskSurveyResponse → Ticket.movideskId", periodRule:"Respeita período, Squad, Analista, área e serviço selecionados." }}
           onClick={()=>showTickets("Tickets com avaliação CSAT", scopedTickets.filter((ticket)=>ticket.satisfactionScore != null), "Pesquisa de Satisfação Movidesk")}
