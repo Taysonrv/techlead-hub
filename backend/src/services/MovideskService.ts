@@ -865,6 +865,163 @@ export class MovideskService {
     return summary;
   }
 
+  async syncTicketEnrichment(limit = 100) {
+    const safeLimit = Math.min(Math.max(Math.trunc(limit) || 100, 1), 500);
+    const tickets = await prisma.ticket.findMany({
+      where: {
+        createdDate: { gte: SYNC_SCOPE_START },
+        client: { in: [...SIMER_CLIENTS], mode: "insensitive" },
+        isDeleted: false,
+      },
+      orderBy: [{ lastUpdate: "desc" }, { movideskId: "desc" }],
+      take: safeLimit,
+      select: { id: true, movideskId: true, lastUpdate: true },
+    });
+
+    let actions = 0;
+    let appointments = 0;
+    let errors = 0;
+    const errorDetails: Array<{ ticketId: number; message: string }> = [];
+
+    for (let index = 0; index < tickets.length; index += 1) {
+      const ticket = tickets[index]!;
+      try {
+        const response = await this.getWithRetry(`${this.url}/tickets`, {
+          params: {
+            token: this.token(),
+            id: ticket.movideskId,
+            includeDeletedItems: true,
+          },
+          timeout: 120_000,
+        }, `enriquecimento ticket=${ticket.movideskId}`);
+
+        const row = response.data && typeof response.data === "object" && !Array.isArray(response.data)
+          ? response.data as Record<string, unknown>
+          : null;
+        if (!row) throw new Error("Resposta do ticket não possui o formato esperado.");
+
+        const remoteActions = Array.isArray(row.actions) ? row.actions : [];
+        for (const rawAction of remoteActions) {
+          if (!rawAction || typeof rawAction !== "object" || Array.isArray(rawAction)) continue;
+          const action = rawAction as Record<string, unknown>;
+          const movideskActionId = Number(action.id);
+          if (!Number.isSafeInteger(movideskActionId) || movideskActionId <= 0) continue;
+
+          const createdBy = action.createdBy && typeof action.createdBy === "object" && !Array.isArray(action.createdBy)
+            ? action.createdBy as Record<string, unknown>
+            : null;
+          const createdDate = typeof action.createdDate === "string" ? new Date(action.createdDate) : null;
+
+          const savedAction = await prisma.movideskTicketAction.upsert({
+            where: { ticketId_movideskActionId: { ticketId: ticket.id, movideskActionId } },
+            create: {
+              ticketId: ticket.id,
+              movideskActionId,
+              type: Number.isSafeInteger(Number(action.type)) ? Number(action.type) : null,
+              origin: Number.isSafeInteger(Number(action.origin)) ? Number(action.origin) : null,
+              description: typeof action.description === "string" ? action.description : null,
+              status: typeof action.status === "string" ? action.status : null,
+              justification: typeof action.justification === "string" ? action.justification : null,
+              createdDate: createdDate && !Number.isNaN(createdDate.getTime()) ? createdDate : null,
+              createdById: createdBy?.id != null ? String(createdBy.id) : null,
+              createdByName: typeof createdBy?.businessName === "string" ? createdBy.businessName : null,
+              isDeleted: action.isDeleted === true,
+              rawData: action as Prisma.InputJsonValue,
+              syncedAt: new Date(),
+            },
+            update: {
+              type: Number.isSafeInteger(Number(action.type)) ? Number(action.type) : null,
+              origin: Number.isSafeInteger(Number(action.origin)) ? Number(action.origin) : null,
+              description: typeof action.description === "string" ? action.description : null,
+              status: typeof action.status === "string" ? action.status : null,
+              justification: typeof action.justification === "string" ? action.justification : null,
+              createdDate: createdDate && !Number.isNaN(createdDate.getTime()) ? createdDate : null,
+              createdById: createdBy?.id != null ? String(createdBy.id) : null,
+              createdByName: typeof createdBy?.businessName === "string" ? createdBy.businessName : null,
+              isDeleted: action.isDeleted === true,
+              rawData: action as Prisma.InputJsonValue,
+              syncedAt: new Date(),
+            },
+          });
+          actions += 1;
+
+          const remoteAppointments = Array.isArray(action.timeAppointments) ? action.timeAppointments : [];
+          for (const rawAppointment of remoteAppointments) {
+            if (!rawAppointment || typeof rawAppointment !== "object" || Array.isArray(rawAppointment)) continue;
+            const appointment = rawAppointment as Record<string, unknown>;
+            const movideskAppointmentId = Number(appointment.id);
+            if (!Number.isSafeInteger(movideskAppointmentId) || movideskAppointmentId <= 0) continue;
+
+            const appointmentCreatedBy = appointment.createdBy && typeof appointment.createdBy === "object" && !Array.isArray(appointment.createdBy)
+              ? appointment.createdBy as Record<string, unknown>
+              : null;
+            const createdByTeam = appointment.createdByTeam && typeof appointment.createdByTeam === "object" && !Array.isArray(appointment.createdByTeam)
+              ? appointment.createdByTeam as Record<string, unknown>
+              : null;
+            const appointmentDate = typeof appointment.date === "string" ? new Date(appointment.date) : null;
+            const accountedTime = Number(appointment.accountedTime);
+
+            await prisma.movideskTimeAppointment.upsert({
+              where: { actionId_movideskAppointmentId: { actionId: savedAction.id, movideskAppointmentId } },
+              create: {
+                actionId: savedAction.id,
+                movideskAppointmentId,
+                activity: typeof appointment.activity === "string" ? appointment.activity : null,
+                date: appointmentDate && !Number.isNaN(appointmentDate.getTime()) ? appointmentDate : null,
+                periodStart: typeof appointment.periodStart === "string" ? appointment.periodStart : null,
+                periodEnd: typeof appointment.periodEnd === "string" ? appointment.periodEnd : null,
+                workTime: typeof appointment.workTime === "string" ? appointment.workTime : null,
+                accountedTime: Number.isFinite(accountedTime) ? new Prisma.Decimal(accountedTime) : null,
+                workTypeName: typeof appointment.workTypeName === "string" ? appointment.workTypeName : null,
+                createdById: appointmentCreatedBy?.id != null ? String(appointmentCreatedBy.id) : null,
+                createdByName: typeof appointmentCreatedBy?.businessName === "string" ? appointmentCreatedBy.businessName : null,
+                createdByTeamId: Number.isSafeInteger(Number(createdByTeam?.id)) ? Number(createdByTeam?.id) : null,
+                createdByTeamName: typeof createdByTeam?.name === "string" ? createdByTeam.name : null,
+                rawData: appointment as Prisma.InputJsonValue,
+                syncedAt: new Date(),
+              },
+              update: {
+                activity: typeof appointment.activity === "string" ? appointment.activity : null,
+                date: appointmentDate && !Number.isNaN(appointmentDate.getTime()) ? appointmentDate : null,
+                periodStart: typeof appointment.periodStart === "string" ? appointment.periodStart : null,
+                periodEnd: typeof appointment.periodEnd === "string" ? appointment.periodEnd : null,
+                workTime: typeof appointment.workTime === "string" ? appointment.workTime : null,
+                accountedTime: Number.isFinite(accountedTime) ? new Prisma.Decimal(accountedTime) : null,
+                workTypeName: typeof appointment.workTypeName === "string" ? appointment.workTypeName : null,
+                createdById: appointmentCreatedBy?.id != null ? String(appointmentCreatedBy.id) : null,
+                createdByName: typeof appointmentCreatedBy?.businessName === "string" ? appointmentCreatedBy.businessName : null,
+                createdByTeamId: Number.isSafeInteger(Number(createdByTeam?.id)) ? Number(createdByTeam?.id) : null,
+                createdByTeamName: typeof createdByTeam?.name === "string" ? createdByTeam.name : null,
+                rawData: appointment as Prisma.InputJsonValue,
+                syncedAt: new Date(),
+              },
+            });
+            appointments += 1;
+          }
+        }
+      } catch (error) {
+        errors += 1;
+        errorDetails.push({
+          ticketId: ticket.movideskId,
+          message: error instanceof Error ? error.message.slice(0, 500) : "Falha desconhecida.",
+        });
+      }
+
+      if (index < tickets.length - 1) {
+        await new Promise((resolve) => setTimeout(resolve, REQUEST_INTERVAL_MS));
+      }
+    }
+
+    return {
+      tickets: tickets.length,
+      actions,
+      appointments,
+      errors,
+      errorDetails: errorDetails.slice(0, 50),
+      generatedAt: new Date().toISOString(),
+    };
+  }
+
   async updateTicketStatus(ticketId: number, status: string, justification?: string | null) {
     const response = await axios.patch(
       `${this.url}/tickets`,
