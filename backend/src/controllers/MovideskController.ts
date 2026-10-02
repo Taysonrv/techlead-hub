@@ -99,6 +99,16 @@ export class MovideskController {
         }
     }
 
+    async classificationCoverage(_req: AuthenticatedRequest, res: Response) {
+        try {
+            return res.json(await new MovideskService().classificationCoverage());
+        } catch (error) {
+            const message = error instanceof Error ? error.message : "Não foi possível diagnosticar a cobertura de causas e motivos.";
+            console.error("[movidesk-classification-coverage] Falha:", message);
+            return res.status(500).json({ message });
+        }
+    }
+
     async recentEnrichments(req: AuthenticatedRequest, res: Response) {
         try {
             const requested = Number(req.query.limit ?? 10);
