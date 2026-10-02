@@ -66,7 +66,34 @@ const ROUTINE_PERMISSIONS = [
 type Diagnostics = { status: string; appVersion: string; runtime: string; nodeVersion: string; database: { status: string; latencyMs: number }; sessionPolicy: { exclusiveAcrossPlatforms: boolean; idleTimeoutMinutes: number }; checkedAt: string };
 type MovideskPreview = { readOnly: boolean; sampleSize: number; requested: number; validForImport: boolean; requiredFields: string[]; coverage: Record<string, number>; issues: Array<{ row: number; id: unknown; fields: string[] }>; examples: Array<{ id: unknown; subject: unknown; createdDate: unknown; lastUpdate: unknown; status: unknown; ownerTeam: unknown; serviceFirstLevel: unknown; serviceSecondLevel: unknown }> };
 type MovideskBaselineStatus = { status: "IDLE" | "RUNNING" | "SUCCESS" | "ERROR"; startedAt: string | null; finishedAt: string | null; completed: boolean; result: { mode: string; pages: number; totalRows: number; created: number; updated: number; ignored: number; errors: number } | null; error: string | null; database: { tickets: number; linkedTasks: number }; lastImport: { status: string; totalRows: number; insertedRows: number; updatedRows: number; skippedRows: number; errorRows: number; message: string | null } | null };
-type MovideskCoverage = { total: number; coverage: Record<string, number>; deleted: number; withRawData: number; generatedAt: string };
+type MovideskCoverage = {
+  total: number;
+  coverage: Record<string, number>;
+  deleted: number;
+  withRawData: number;
+  enrichment?: {
+    actions: number;
+    timeAppointments: number;
+    ownerHistories: number;
+    statusHistories: number;
+    ticketsWithActions: number;
+    ticketsWithAppointments: number;
+    checkpoints: number;
+    errors: number;
+    pending: number;
+    coveragePct: number;
+  };
+  generatedAt: string;
+};
+type MovideskEnrichmentResult = {
+  tickets: number;
+  pendingBeforeRun: number;
+  actions: number;
+  appointments: number;
+  ownerHistories: number;
+  statusHistories: number;
+  errors: number;
+};
 
 const EMPTY_FORM: ConfigurationForm = {
   databaseUrl: "",
@@ -104,6 +131,7 @@ export function Settings() {
   const [movideskBaseline, setMovideskBaseline] = useState<MovideskBaselineStatus | null>(null);
   const [movideskCoverage, setMovideskCoverage] = useState<MovideskCoverage | null>(null);
   const [baselineBusy, setBaselineBusy] = useState(false);
+  const [enrichmentBusy, setEnrichmentBusy] = useState(false);
 
   useEffect(() => {
     void loadConfiguration();
@@ -305,6 +333,24 @@ export function Settings() {
     } catch (baselineError: any) {
       setError(baselineError?.response?.data?.message ?? "Não foi possível iniciar a carga FULL.");
     } finally { setBaselineBusy(false); }
+  }
+
+  async function syncMovideskEnrichment() {
+    try {
+      setEnrichmentBusy(true);
+      setError(null);
+      setSuccess(null);
+      const response = await api.post<MovideskEnrichmentResult>("/movidesk/enrichment/sync", { limit: 5 }, { timeout: 120_000 });
+      const coverage = await api.get<MovideskCoverage>("/movidesk/coverage", { timeout: 60_000 });
+      setMovideskCoverage(coverage.data);
+      setSuccess(
+        `Enriquecimento concluído: ${response.data.tickets} ticket(s), ${response.data.appointments} apontamento(s), ${response.data.ownerHistories} histórico(s) de responsável e ${response.data.statusHistories} histórico(s) de status.`,
+      );
+    } catch (syncError: any) {
+      setError(syncError?.response?.data?.message ?? "Não foi possível executar o enriquecimento Movidesk.");
+    } finally {
+      setEnrichmentBusy(false);
+    }
   }
 
   async function saveConfiguration() {
@@ -617,6 +663,30 @@ export function Settings() {
                 <Box sx={{ mt: 1, display: "grid", gridTemplateColumns: { xs: "repeat(2,1fr)", md: "repeat(4,1fr)" }, gap: 1 }}>
                   {Object.entries(movideskCoverage.coverage).map(([field,count]) => <Box key={field}><Typography variant="caption" color="text.secondary">{field}</Typography><Typography variant="body2" sx={{ fontWeight: 750 }}>{count}/{movideskCoverage.total}</Typography></Box>)}
                 </Box>
+                {movideskCoverage.enrichment && <Box sx={{ mt: 2, p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: 1.5 }}>
+                  <Stack direction={{ xs: "column", md: "row" }} spacing={1} sx={{ alignItems: { md: "center" }, justifyContent: "space-between" }}>
+                    <Box>
+                      <Stack direction="row" spacing={1} sx={{ alignItems: "center", flexWrap: "wrap" }}>
+                        <Typography variant="body2" sx={{ fontWeight: 850 }}>Enriquecimento operacional</Typography>
+                        <Chip size="small" color={movideskCoverage.enrichment.errors ? "warning" : movideskCoverage.enrichment.coveragePct >= 90 ? "success" : "default"} label={`${movideskCoverage.enrichment.coveragePct}% coberto`} />
+                      </Stack>
+                      <Typography variant="caption" color="text.secondary">
+                        {movideskCoverage.enrichment.pending} pendente(s) · {movideskCoverage.enrichment.errors} com erro · scheduler incremental em lotes controlados
+                      </Typography>
+                    </Box>
+                    <Button size="small" variant="outlined" disabled={enrichmentBusy || !movideskBaseline?.completed} onClick={() => void syncMovideskEnrichment()}>
+                      {enrichmentBusy ? "Enriquecendo..." : "Processar próximo lote"}
+                    </Button>
+                  </Stack>
+                  <Box sx={{ mt: 1.25, display: "grid", gridTemplateColumns: { xs: "repeat(2,minmax(0,1fr))", md: "repeat(4,minmax(0,1fr))" }, gap: 1 }}>
+                    {[
+                      ["Ações", movideskCoverage.enrichment.actions],
+                      ["Apontamentos", movideskCoverage.enrichment.timeAppointments],
+                      ["Hist. responsável", movideskCoverage.enrichment.ownerHistories],
+                      ["Hist. status", movideskCoverage.enrichment.statusHistories],
+                    ].map(([label,value]) => <Box key={String(label)}><Typography variant="caption" color="text.secondary">{label}</Typography><Typography variant="body2" sx={{ fontWeight: 800 }}>{value}</Typography></Box>)}
+                  </Box>
+                </Box>}
               </Box>}
             </Box>
             {movideskPreview && <Box sx={{ mt: 2, p: 1.5, border: "1px solid", borderColor: movideskPreview.validForImport ? "success.main" : "warning.main", borderRadius: 1.5 }}>
