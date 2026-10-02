@@ -935,9 +935,9 @@ export class MovideskService {
         const historyKey = (kind: string, index: number, changedDate: Date | null, primary: string | null, actorId: string | null) =>
           crypto.createHash("sha256").update([kind, String(index), changedDate?.toISOString() ?? "", primary ?? "", actorId ?? ""].join("|")).digest("hex");
 
-        const ownerHistories = Array.isArray(row.ownerHistories) ? row.ownerHistories : [];
-        for (let historyIndex = 0; historyIndex < ownerHistories.length; historyIndex += 1) {
-          const rawHistory = ownerHistories[historyIndex];
+        const remoteOwnerHistories = Array.isArray(row.ownerHistories) ? row.ownerHistories : [];
+        for (let historyIndex = 0; historyIndex < remoteOwnerHistories.length; historyIndex += 1) {
+          const rawHistory = remoteOwnerHistories[historyIndex];
           const history = objectOf(rawHistory);
           if (!history) continue;
           const owner = objectOf(history.owner);
