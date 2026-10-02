@@ -7,6 +7,7 @@ import {
 } from "./jobs/AzureDevOpsSyncScheduler";
 import { MovideskSyncScheduler } from "./jobs/MovideskSyncScheduler";
 import { MovideskReferenceSyncScheduler } from "./jobs/MovideskReferenceSyncScheduler";
+import { MovideskEnrichmentScheduler } from "./jobs/MovideskEnrichmentScheduler";
 
 import {
   ensureApplicationSchema,
@@ -55,6 +56,7 @@ const PORT =
 let azureSyncScheduler: AzureDevOpsSyncScheduler | undefined;
 let movideskSyncScheduler: MovideskSyncScheduler | undefined;
 let movideskReferenceSyncScheduler: MovideskReferenceSyncScheduler | undefined;
+let movideskEnrichmentScheduler: MovideskEnrichmentScheduler | undefined;
 
 let server: Server | undefined;
 
@@ -81,6 +83,7 @@ async function start() {
   azureSyncScheduler = databaseReady ? new AzureDevOpsSyncScheduler() : undefined;
   movideskSyncScheduler = databaseReady ? new MovideskSyncScheduler() : undefined;
   movideskReferenceSyncScheduler = databaseReady ? new MovideskReferenceSyncScheduler() : undefined;
+  movideskEnrichmentScheduler = databaseReady ? new MovideskEnrichmentScheduler() : undefined;
 
   server = app.listen(
     PORT,
@@ -97,6 +100,7 @@ async function start() {
       azureSyncScheduler?.start();
       movideskSyncScheduler?.start();
       movideskReferenceSyncScheduler?.start();
+      movideskEnrichmentScheduler?.start();
       if (!databaseReady) console.warn("[server] Scheduler Azure não iniciado enquanto o banco estiver indisponível.");
     },
   );
@@ -134,6 +138,7 @@ async function shutdown(
   azureSyncScheduler?.stop();
   movideskSyncScheduler?.stop();
   movideskReferenceSyncScheduler?.stop();
+  movideskEnrichmentScheduler?.stop();
 
   try {
     if (server) {
