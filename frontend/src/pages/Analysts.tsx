@@ -1094,52 +1094,15 @@ export function Analysts() {
 
   const knownSupportAnalysts =
     useMemo(() => {
-      const values =
-        new Map<
-          string,
-          {
-            name: string;
-            teams: Set<string>;
-          }
-        >();
-
-      tickets.forEach(
-        (ticket) => {
-          const owner =
-            ticket.owner?.trim();
-
-          if (!owner) {
-            return;
-          }
-
-          const key =
-            normalize(owner);
-
-          const current =
-            values.get(key) ?? {
-              name:
-                owner,
-              teams:
-                new Set<string>(),
-            };
-
-          const ownerTeam =
-            (ticket.ownerTeam ?? ticket.team ?? "").trim();
-
-          if (ownerTeam) {
-            current.teams.add(ownerTeam);
-          }
-
-          values.set(
-            key,
-            current
-          );
-        }
-      );
-
-      return Array.from(
-        values.values()
-      );
+      return SUPPORT_ANALYSTS.map((officialName) => {
+        const teams = new Set<string>();
+        tickets.forEach((ticket) => {
+          if (!namesLikelySamePerson(officialName, ticket.owner ?? "")) return;
+          const ownerTeam = (ticket.ownerTeam ?? ticket.team ?? "").trim();
+          if (ownerTeam) teams.add(ownerTeam);
+        });
+        return { name: officialName, teams };
+      });
     }, [tickets]);
 
   const productivityAnalysts =
