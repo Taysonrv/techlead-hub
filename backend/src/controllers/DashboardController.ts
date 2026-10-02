@@ -956,6 +956,7 @@ export class DashboardController {
               lifetimeMinutes: true, stoppedMinutes: true, taskNumber: true,
               taskStatus: true, taskTitle: true, taskType: true, taskUrl: true,
               registeredVersion: true, deliveredVersion: true,
+              rawData: true,
               importSource: true, importedAt: true, importBatch: true,
             },
 
@@ -1092,7 +1093,7 @@ export class DashboardController {
               ticket.category,
 
             cause:
-              ticket.cause,
+              ticket.cause ?? recoverCauseFromRawData(ticket.rawData),
 
             causeDetail:
               ticket.causeDetail,
@@ -1323,6 +1324,54 @@ export class DashboardController {
   }
 }
 
+
+const KNOWN_SIMER_CAUSES = new Set([
+  "problema - configuracao",
+  "problema configuracao",
+  "problema - erro operacional",
+  "problema erro operacional",
+  "solucao de contorno",
+  "nao identificada",
+  "sefaz ou aplicativos de terceiros",
+  "sefaz/aplicativos de terceiros",
+  "sefaz ou terceiros",
+]);
+
+function recoverCauseFromRawData(rawData: Prisma.JsonValue | null): string | null {
+  if (!rawData || typeof rawData !== "object" || Array.isArray(rawData)) return null;
+  const row = rawData as Record<string, Prisma.JsonValue>;
+
+  const directCandidates = [row.cause, row.causa, row.Causa];
+  for (const candidate of directCandidates) {
+    if (typeof candidate === "string" && candidate.trim()) return candidate.trim();
+  }
+
+  const customFields = row.customFieldValues;
+  if (!Array.isArray(customFields)) return null;
+
+  for (const field of customFields) {
+    if (!field || typeof field !== "object" || Array.isArray(field)) continue;
+    const record = field as Record<string, Prisma.JsonValue>;
+    const values: string[] = [];
+
+    if (typeof record.value === "string" && record.value.trim()) values.push(record.value.trim());
+    if (Array.isArray(record.items)) {
+      for (const item of record.items) {
+        if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+        const itemRecord = item as Record<string, Prisma.JsonValue>;
+        if (typeof itemRecord.customFieldItem === "string" && itemRecord.customFieldItem.trim()) {
+          values.push(itemRecord.customFieldItem.trim());
+        }
+      }
+    }
+
+    for (const value of values) {
+      if (KNOWN_SIMER_CAUSES.has(normalize(value))) return value;
+    }
+  }
+
+  return null;
+}
 
 type SnapshotWhere =
   Prisma.TicketWhereInput;
