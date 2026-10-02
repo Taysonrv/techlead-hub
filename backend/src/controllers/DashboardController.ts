@@ -1122,6 +1122,13 @@ export class DashboardController {
             team:
               ticket.ownerTeam,
 
+            /*
+             * Responsabilidade operacional atual. Este campo pertence ao
+             * contrato do snapshot consumido pelo Dashboard.
+             */
+            isWithSimer:
+              isSimerOperationalResponsibility(ticket.owner, ticket.ownerTeam),
+
             /* Produto / serviço */
 
             service:
