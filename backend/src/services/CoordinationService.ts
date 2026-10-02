@@ -142,7 +142,7 @@ export class CoordinationService {
   }
 
   async integrationHealth() {
-    const ticketScope = simerClientTicketScope();
+    const ticketScope = ticketOperationalScope();
     const [tickets, linkedTasks, withService, withCause, withBusinessArea, azureItems, csat, services, latestCsat, latestCatalog] = await Promise.all([
       prisma.ticket.count({ where: { AND: [{ isDeleted: false }, ticketScope] } }),
       prisma.ticket.count({ where: { AND: [{ isDeleted: false, taskNumber: { not: null } }, ticketScope] } }),
@@ -178,7 +178,7 @@ export class CoordinationService {
     });
     const ticketIds = [...new Set(responses.map((item) => item.ticketId).filter((id): id is number => id !== null))];
     const tickets = ticketIds.length ? await prisma.ticket.findMany({
-      where: { AND: [{ movideskId: { in: ticketIds }, isDeleted: false }, coordinationTicketScope()] },
+      where: { AND: [{ movideskId: { in: ticketIds }, isDeleted: false }, ticketOperationalScope()] },
       select: { movideskId: true, subject: true, client: true, owner: true, service: true, serviceFirstLevel: true, serviceSecondLevel: true, serviceThirdLevel: true },
     }) : [];
     const byTicket = new Map(tickets.map((ticket) => [ticket.movideskId, ticket]));
@@ -236,7 +236,7 @@ export class CoordinationService {
     });
     const ids = [...new Set(responses.map((item) => item.ticketId).filter((id): id is number => id !== null))];
     const tickets = ids.length ? await prisma.ticket.findMany({
-      where: { AND: [{ movideskId: { in: ids }, isDeleted: false }, coordinationTicketScope()] },
+      where: { AND: [{ movideskId: { in: ids }, isDeleted: false }, ticketOperationalScope()] },
       select: { movideskId:true, subject:true, client:true, owner:true, service:true, serviceFirstLevel:true, serviceSecondLevel:true, serviceThirdLevel:true, taskNumber:true },
     }) : [];
     const byTicket = new Map(tickets.map((ticket) => [ticket.movideskId, ticket]));
