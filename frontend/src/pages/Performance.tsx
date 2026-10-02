@@ -234,6 +234,32 @@ export function Performance() {
     [periodTickets],
   );
 
+  const operationalSummary = useMemo(() => {
+    const start = startOfDay(effectiveStartDate);
+    const end = endOfDay(effectiveEndDate);
+    const closed = tickets.filter((ticket) => {
+      if (!ticket.closedDate) return false;
+      const date = new Date(ticket.closedDate);
+      return date >= start && date <= end;
+    });
+    const pending = periodTickets.filter(isOpen);
+    const resolved = periodTickets.filter((ticket) => Boolean(ticket.resolvedDate || ticket.closedDate));
+    const resolutionMinutes = resolved
+      .map((ticket) => ticket.lifetimeMinutes)
+      .filter((value): value is number => typeof value === "number" && Number.isFinite(value) && value >= 0);
+    const avgMinutes = resolutionMinutes.length
+      ? Math.round(resolutionMinutes.reduce((sum,value)=>sum+value,0)/resolutionMinutes.length)
+      : null;
+    return {
+      opened: periodTickets.length,
+      closed: closed.length,
+      pending: pending.length,
+      effectiveness: periodTickets.length ? Math.round(resolved.length / periodTickets.length * 1000) / 10 : 0,
+      avgResolutionMinutes: avgMinutes,
+      resolved: resolved.length,
+    };
+  }, [tickets, periodTickets, effectiveStartDate, effectiveEndDate]);
+
   const timestampSolutionSla = useMemo(
     () => calculateTimestampSla(periodTickets, "solution"),
     [periodTickets],
@@ -578,6 +604,14 @@ export function Performance() {
         sem medição e as categorias Adequação e Solicitação de Serviço não entram no denominador.
         Os prazos calculados em horas úteis são exibidos separadamente como risco operacional.
       </Alert>
+
+      <Box sx={{ display:"grid", gridTemplateColumns:{xs:"1fr",sm:"repeat(2,minmax(0,1fr))",lg:"repeat(5,minmax(0,1fr))"}, gap:1.25, mb:1.75 }}>
+        <PerformanceKpi title="Tickets abertos" value={operationalSummary.opened} description="Entradas no período selecionado" accent={aliareColors.info} info={{title:"Tickets abertos",summary:"Volume de tickets criados no período.",calculation:"Contagem por createdDate dentro do filtro global.",source:"Movidesk",periodRule:"Segue o período selecionado na tela."}} />
+        <PerformanceKpi title="Tickets fechados" value={operationalSummary.closed} description="Fechamentos ocorridos no período" accent={aliareColors.green} info={{title:"Tickets fechados",summary:"Tickets cuja data de fechamento ocorreu no período.",calculation:"Contagem por closedDate dentro do filtro global.",source:"Movidesk",periodRule:"Segue o período selecionado na tela."}} />
+        <PerformanceKpi title="Tickets pendentes" value={operationalSummary.pending} description="Entradas do período ainda em aberto" accent={aliareColors.warning} info={{title:"Tickets pendentes",summary:"Tickets criados no período que permanecem fora dos estados Resolvido, Fechado e Cancelado.",calculation:"Entradas do período − tickets em estados finais.",source:"Movidesk",periodRule:"Coorte de tickets criados no período."}} />
+        <PerformanceKpi title="Efetividade" value={`${operationalSummary.effectiveness}%`} description={`${operationalSummary.resolved} resolvido(s) da coorte`} accent={rateColor(operationalSummary.effectiveness)} info={{title:"Efetividade",summary:"Percentual da coorte de entradas do período que já alcançou resolução ou fechamento.",calculation:"Tickets resolvidos/fechados ÷ tickets criados no período.",source:"Movidesk",periodRule:"Coorte de tickets criados no período; não confundir com SLA."}} />
+        <PerformanceKpi title="TMR" value={operationalSummary.avgResolutionMinutes===null?"—":formatServiceMinutes(operationalSummary.avgResolutionMinutes)} description="Tempo médio de resolução" accent={aliareColors.purple} info={{title:"TMR",summary:"Tempo médio de resolução dos tickets resolvidos da coorte selecionada.",calculation:"Média de lifetimeMinutes dos tickets resolvidos/fechados com medição disponível.",source:"Movidesk",periodRule:"Tickets criados no período com tempo de vida medido."}} />
+      </Box>
 
       {executiveQuality && <Box sx={{ display:"grid", gridTemplateColumns:{xs:"1fr",sm:"repeat(2,minmax(0,1fr))",xl:"repeat(4,minmax(0,1fr))"}, gap:1.25, mb:1.75 }}>
         <PerformanceKpi title="CSAT" value={executiveQuality.csat.summary.responses ? executiveQuality.csat.summary.average.toLocaleString("pt-BR",{maximumFractionDigits:2}) : "—"} description={`${executiveQuality.csat.summary.responses} resposta(s) · ${executiveQuality.csat.summary.positivePct}% notas 4–5`} accent={aliareColors.green} info={{ title:"CSAT", summary:"Média das avaliações de satisfação vinculadas aos tickets SIMER.", calculation:"Média das notas respondidas; o percentual positivo considera notas 4 e 5.", source:"Pesquisa de Satisfação Movidesk", reference:"MovideskSurveyResponse", periodRule:"Visão consolidada dos últimos 180 dias." }} onClick={()=>navigate("/coordenacao")} />
