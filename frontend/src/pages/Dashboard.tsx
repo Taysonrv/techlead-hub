@@ -1480,7 +1480,10 @@ export function Dashboard() {
                       label={{ position: "right", fontSize: 10, fontWeight: 800, fill: isDark ? "rgba(226,232,240,.86)" : "rgba(30,41,59,.86)" }}
                       onClick={(_, index) => {
                         const cause = causes.slice(0, 6)[index]?.label;
-                        if (cause) showTickets(`Causa: ${cause}`, ticketsWithCause.filter((ticket) => canonicalCause(ticket.cause) === cause), "Tickets classificados com a causa selecionada");
+                        if (cause) {
+                           const ids = new Set(classificationData?.causes.find((item) => item.label === cause)?.ticketIds ?? []);
+                           showTickets(`Causa: ${cause}`, openedInPeriod.filter((ticket) => ids.has(ticket.id)), "Tickets classificados com a causa selecionada");
+                         }
                       }} />
                   </BarChart>
                 </ResponsiveContainer>
@@ -1494,7 +1497,10 @@ export function Dashboard() {
               subtitle="Somente categoria Dúvida • motivo informado no Movidesk"
               data={reasons}
               emptyMessage="Nenhum motivo preenchido nos tickets de Dúvida deste período."
-              onItemClick={(label) => showTickets(`Motivo: ${label}`, ticketsWithReason.filter((ticket) => canonicalReason(ticket.reason) === label), "Tickets de Dúvida classificados com o motivo selecionado")}
+              onItemClick={(label) => {
+                const ids = new Set(classificationData?.reasons.find((item) => item.label === label)?.ticketIds ?? []);
+                showTickets(`Motivo: ${label}`, openedInPeriod.filter((ticket) => ids.has(ticket.id)), "Tickets de Dúvida classificados com o motivo selecionado");
+              }}
             />
           </Box>
 
