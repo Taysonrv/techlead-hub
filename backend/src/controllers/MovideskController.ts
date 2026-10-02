@@ -90,12 +90,17 @@ export class MovideskController {
     }
 
     async backfillCauses(_req: AuthenticatedRequest, res: Response) {
+        if (!tryAcquireMovideskApi("MANUAL")) {
+            return res.status(409).json({ message: "A API Movidesk está ocupada com outra sincronização. Aguarde o lote atual terminar e tente novamente." });
+        }
         try {
             return res.json(await new MovideskService().backfillTicketCauses());
         } catch (error) {
-            const message = error instanceof Error ? error.message : "Não foi possível consolidar as causas Movidesk.";
-            console.error("[movidesk-cause-backfill] Falha:", message);
+            const message = error instanceof Error ? error.message : "Não foi possível consolidar as causas e motivos Movidesk.";
+            console.error("[movidesk-classification-backfill] Falha:", message);
             return res.status(500).json({ message });
+        } finally {
+            releaseMovideskApi("MANUAL");
         }
     }
 
