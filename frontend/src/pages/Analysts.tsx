@@ -1183,13 +1183,13 @@ export function Analysts() {
 
   const scopedTimeProductivity = useMemo(() => {
     if (!timeProductivity) return null;
-    const analysts = scopedTimeProductivity!.analysts.filter((item) =>
+    const analysts = timeProductivity.analysts.filter((item) =>
       isOfficialSupportAnalyst(item.analyst) &&
       (!selectedAnalyst || namesLikelySamePerson(selectedAnalyst, item.analyst))
     );
     const allowedNames = new Set(analysts.map((item) => normalize(item.analyst)));
-    const teams = scopedTimeProductivity!.teams.filter((team) => team.analysts > 0);
-    const weekly = scopedTimeProductivity!.weekly.map((week) => {
+    const teams = timeProductivity.teams.filter((team) => team.analysts > 0);
+    const weekly = timeProductivity.weekly.map((week) => {
       if (!selectedAnalyst) return week;
       const analyst = analysts[0];
       return analyst?.weekly.find((item) => item.week === week.week) ?? { ...week, expectedHours: 0, registeredHours: 0, coverageRate: null };
