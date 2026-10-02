@@ -7,6 +7,7 @@ export class SimerMapController {
   private readonly service = new SimerMapService();
   private readonly rules = new SystemRuleService();
   summary = async (_req: AuthenticatedRequest, res: Response) => res.json(await this.service.summary());
+  mapCatalog = async (req: AuthenticatedRequest, res: Response) => res.json({ items: await this.service.mapCatalog(Number(req.query.limit ?? 500)) });
   search = async (req: AuthenticatedRequest, res: Response) => res.json({ items: await this.service.search(String(req.query.q ?? ""), Number(req.query.limit ?? 50)) });
   context = async (req: AuthenticatedRequest, res: Response) => res.json({ items: await this.service.context(String(req.body?.text ?? ""), Number(req.body?.limit ?? 20)) });
   resolveContainer = async (req: AuthenticatedRequest, res: Response) => res.json({ item: await this.service.resolveContainer(Number(req.params.id)) });
