@@ -101,7 +101,7 @@ export function Coordination() {
   const navigate = useNavigate();
   const theme = useTheme();
   const [data, setData] = useState<Data | null>(null);
-  const [capacity, setCapacity] = useState<{ days: number; businessDays: number; hoursPerDay: number; expectedHours: number; registeredHours: number; coverageRate: number | null; analysts: Array<{ analyst: string; expectedHours: number; registeredHours: number; coverageRate: number | null }> } | null>(null);
+  const [capacity, setCapacity] = useState<{ days: number; businessDays: number; hoursPerDay: number; expectedHours: number; registeredHours: number; coverageRate: number | null; dataSource?: string; hasRegisteredTimeData?: boolean; analysts: Array<{ analyst: string; expectedHours: number; registeredHours: number; coverageRate: number | null }> } | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -372,7 +372,7 @@ export function Coordination() {
                   </Box>
                   {csat.summary.responses > 0 && <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", xl: "1fr 1.4fr" }, gap: 1.25 }}>
                     <Box sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2.5, p: 1.5 }}>
-                      <Typography sx={{ fontWeight: 850, mb: 1 }}>Distribuição das notas</Typography>
+                      <Stack direction="row" sx={{alignItems:"center",justifyContent:"space-between",mb:.5}}><Typography sx={{ fontWeight: 850 }}>Distribuição das notas</Typography><Tooltip title="Quantidade de respostas CSAT Movidesk do tipo Carinhas/Smiley para cada nota da escala 1–5."><InfoOutlined sx={{fontSize:17,color:"text.secondary"}}/></Tooltip></Stack><Typography variant="caption" color="text.secondary">Escala CSAT 1–5 · somente respostas vinculadas à carteira SIMER</Typography>
                       <ResponsiveContainer width="100%" height={210}>
                         <BarChart data={csat.distribution} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
                           <CartesianGrid vertical={false} /><XAxis dataKey="value" /><YAxis allowDecimals={false} /><ChartTooltip />
@@ -588,6 +588,7 @@ export function Coordination() {
                     <Box><Typography variant="h6" sx={{ fontWeight: 850 }}>Capacidade e horas registradas</Typography><Typography variant="body2" color="text.secondary">Últimos {capacity.days} dias. A cobertura compara apontamentos Movidesk com a jornada prevista e deve ser lida junto com volume, SLA e complexidade.</Typography></Box>
                     <Button variant="outlined" onClick={() => navigate("/analistas")}>Abrir análise completa</Button>
                   </Stack>
+                  {capacity.hasRegisteredTimeData === false && <Alert severity="warning" variant="outlined" sx={{mt:1.5}}>A API/snapshot atual não contém apontamentos de tempo utilizáveis para este período. As horas previstas são capacidade teórica; horas registradas não serão inferidas a partir de duração do ticket.</Alert>}
                   <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(3,1fr)" }, gap: 1.25, mt: 1.5 }}>
                     <KpiCard title="Horas previstas" value={`${capacity.expectedHours.toLocaleString("pt-BR")}h`} subtitle={`${capacity.businessDays} dias úteis · ${capacity.hoursPerDay}h/dia`} info="Capacidade teórica da equipe no período, antes de ajustes individuais por férias ou afastamentos." accent={aliareColors.info}/>
                     <KpiCard title="Horas registradas" value={`${capacity.registeredHours.toLocaleString("pt-BR")}h`} subtitle="Apontamentos Movidesk" info="Soma dos apontamentos de tempo encontrados nos atendimentos da equipe." accent={aliareColors.green}/>
