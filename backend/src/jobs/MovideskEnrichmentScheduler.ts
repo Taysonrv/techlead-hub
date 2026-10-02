@@ -1,8 +1,8 @@
 import { MovideskService } from "../services/MovideskService";
 import { releaseMovideskApi, tryAcquireMovideskApi } from "./MovideskSyncCoordinator";
 
-const DEFAULT_INTERVAL_MINUTES = 15;
-const DEFAULT_INITIAL_DELAY_SECONDS = 300;
+const DEFAULT_INTERVAL_MINUTES = 1;
+const DEFAULT_INITIAL_DELAY_SECONDS = 60;
 const DEFAULT_BATCH_SIZE = 5;
 
 export class MovideskEnrichmentScheduler {
@@ -18,7 +18,7 @@ export class MovideskEnrichmentScheduler {
 
   private intervalMinutes() {
     const parsed = Number(process.env.MOVIDESK_ENRICHMENT_INTERVAL_MINUTES ?? DEFAULT_INTERVAL_MINUTES);
-    return Number.isSafeInteger(parsed) && parsed >= 15 && parsed <= 1440 ? parsed : DEFAULT_INTERVAL_MINUTES;
+    return Number.isSafeInteger(parsed) && parsed >= 1 && parsed <= 1440 ? parsed : DEFAULT_INTERVAL_MINUTES;
   }
 
   private batchSize() {
@@ -91,6 +91,7 @@ export class MovideskEnrichmentScheduler {
         `historicosStatus=${result.statusHistories}`,
         `erros=${result.errors}`,
         `duracao=${Math.round((Date.now() - started) / 1000)}s`,
+        result.pendingAfterRun > 0 ? `etaAprox=${Math.ceil(result.pendingAfterRun / Math.max(1, result.tickets - result.errors))} lote(s)` : "fila=concluida",
       ].join(" | "));
     } catch (error) {
       console.error("[movidesk-enrichment] Falha no enriquecimento automático:", error);
