@@ -1488,26 +1488,26 @@ function PerformanceKpi({
   description: string;
   accent: string;
   info: CardInfo;
-  onClick: () => void;
+  onClick?: () => void;
 }) {
   return (
     <Card
       elevation={0}
-      role="button"
-      tabIndex={0}
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
       onClick={onClick}
-      onKeyDown={(event) => {
+      onKeyDown={onClick ? (event) => {
         if (event.key === "Enter" || event.key === " ") {
           onClick();
         }
-      }}
+      } : undefined}
       sx={{
         position: "relative",
         overflow: "hidden",
         border: "1px solid",
         borderColor: "divider",
         borderRadius: 2.25,
-        cursor: "pointer",
+        cursor: onClick ? "pointer" : "default",
         backgroundColor: "background.paper",
         transition:
           "transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease",
@@ -1520,11 +1520,11 @@ function PerformanceKpi({
           height: 3,
           backgroundColor: accent,
         },
-        "&:hover": {
+        "&:hover": onClick ? {
           transform: "translateY(-2px)",
           borderColor: accent,
           boxShadow: "0 8px 24px rgba(16,24,40,0.08)",
-        },
+        } : {},
         "&:focus-visible": {
           outline: `2px solid ${accent}`,
           outlineOffset: "2px",
