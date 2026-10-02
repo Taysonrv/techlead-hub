@@ -190,15 +190,28 @@ jobs:
           RELEASE_VERSION: ${{ needs.metadata.outputs.version }}
         run: |
           $repo = "${{ github.repository }}"
+
+          # workflow_dispatch não cria a tag automaticamente. Para o canal estável,
+          # garanta que a tag imutável da versão aponte para o commit validado pelo job.
+          if (-not (git ls-remote --exit-code --tags origin "refs/tags/$env:RELEASE_TAG" 2>$null)) {
+            git tag -a $env:RELEASE_TAG -m "TechLead Hub $env:RELEASE_VERSION"
+            git push origin $env:RELEASE_TAG
+            if ($LASTEXITCODE -ne 0) { throw "Não foi possível criar a tag $env:RELEASE_TAG." }
+          }
+
           if (-not (gh release view $env:RELEASE_TAG --repo $repo 2>$null)) {
-            gh release create $env:RELEASE_TAG --repo $repo --verify-tag --draft --title "TechLead Hub $env:RELEASE_VERSION" --generate-notes
+            gh release create $env:RELEASE_TAG --repo $repo --verify-tag --draft --title "TechLead Hub $env:RELEASE_VERSION" --notes-file "../release-notes.md"
+            if ($LASTEXITCODE -ne 0) { throw "Não foi possível criar a release $env:RELEASE_TAG." }
           }
           $assets = Get-ChildItem release -File | Where-Object {
             $_.Extension -in @(".exe", ".blockmap") -or
             $_.Name -in @("beta.yml", "latest.yml")
           } | ForEach-Object { $_.FullName }
+          if (-not $assets) { throw "Nenhum artefato de atualização foi localizado." }
           gh release upload $env:RELEASE_TAG $assets --repo $repo --clobber
+          if ($LASTEXITCODE -ne 0) { throw "Falha ao enviar os artefatos da versão estável." }
           gh release edit $env:RELEASE_TAG --repo $repo --draft=false --prerelease=false --latest
+          if ($LASTEXITCODE -ne 0) { throw "Não foi possível publicar a release estável." }
       - uses: actions/upload-artifact@v4
         with:
           name: techlead-hub-desktop-${{ needs.metadata.outputs.version }}
