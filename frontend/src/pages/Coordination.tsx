@@ -176,7 +176,7 @@ export function Coordination() {
 
   useEffect(() => {
     const controller = new AbortController();
-    api.get<IntegrationHealth>("/coordination/integration-health", { signal: controller.signal })
+    api.get<IntegrationHealth>("/coordination/integration-health", { params: { days: serviceDays }, signal: controller.signal })
       .then((response) => setIntegrationHealth(response.data))
       .catch(() => { if (!controller.signal.aborted) setIntegrationHealth(null); });
     return () => controller.abort();
