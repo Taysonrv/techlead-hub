@@ -235,8 +235,14 @@ export class MovideskJsonImportService {
       protocol: this.toText(row.protocol) ?? String(movideskId),
       subject,
       category: this.toText(row.category),
-      cause: this.customValue(customFields, CUSTOM_FIELDS.cause),
-      causeDetail: this.customValue(customFields, CUSTOM_FIELDS.causeDetail),
+      cause:
+        this.toText(row.cause) ??
+        this.toText(row.causa) ??
+        this.customValue(customFields, CUSTOM_FIELDS.cause),
+      causeDetail:
+        this.toText(row.causeDetail) ??
+        this.toText(row.detalheCausa) ??
+        this.customValue(customFields, CUSTOM_FIELDS.causeDetail),
       urgency: this.toText(row.urgency),
       status,
       baseStatus: this.toText(row.baseStatus) ?? this.mapBaseStatus(status),
