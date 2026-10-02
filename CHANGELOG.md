@@ -15,6 +15,14 @@
 - Produtividade por horas registradas utiliza apontamentos estruturados do Movidesk.
 - Enriquecimento incremental mantém checkpoint e redução progressiva das pendências, sem reprocessar continuamente o mesmo lote.
 
+### Varredura final de release
+- Relatórios Gerenciais passam a respeitar explicitamente a base operacional oficial iniciada em 01/01/2026 no frontend e no backend, evitando períodos anteriores sem população canônica.
+- Filtro de relatórios ganha atalhos Este mês, Mês passado, 90 dias e Desde 01/01/2026.
+- Dados e Sincronizações passa a exibir a cobertura de Problema/Causa e Dúvida/Motivo e oferece a consolidação dessas classificações no workspace operacional.
+- Feedback da consolidação de classificações permanece dentro da tela, sem diálogo bloqueante do navegador.
+- Configurações deixa de afirmar um timeout fixo de sessão e passa a apresentar a política informada pelo diagnóstico do servidor.
+- Administração de Usuários teve a nomenclatura do produto padronizada para Hub Suporte Simer.
+
 ### Desenvolvimento
 - Correções, Evoluções e Apoios agora iniciam pela atualização mais recente do Azure (`azureChangedAt DESC`) e mantêm essa ordenação como padrão ao trocar de rotina.
 - Filtros de Correções, Evoluções e Apoios foram movidos para imediatamente abaixo do cabeçalho, antes dos KPIs, gráficos, pipeline e qualidade de dados.
