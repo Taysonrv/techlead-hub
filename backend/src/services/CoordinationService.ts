@@ -3,7 +3,6 @@ import { slaBusinessMinutes } from "../domain/SlaCalendarRules";
 import { prisma } from "../database/prisma";
 import { SIMER_CLIENTS, SUPPORT_ANALYSTS, SUPPORT_COORDINATOR, coordinationAzureScope, coordinationTicketScope, simerClientTicketScope, ticketOperationalScope } from "../domain/OperationalScope";
 import { SIMER_SERVICE_CATALOG, suggestSimerService, type SimerServiceCatalogItem } from "../domain/SimerServiceCatalog";
-import { extractMovideskTimeEntries } from "./MovideskPayloadAnalytics";
 import { coordinationAzurePriorityPredicate, coordinationOpenAzurePredicate, coordinationOpenTicketPredicate, coordinationTicketPriorityPredicate, type CoordinationPriorityKind } from "../domain/CoordinationPredicates";
 import { productivityExpectedHours, sameOperationalPerson } from "../domain/ProductivityRules";
 
