@@ -201,6 +201,32 @@ export function isSupportAnalyst(
   );
 }
 
+
+export function isSimerOperationalTeam(value: string | null | undefined) {
+  const normalized = (value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toUpperCase();
+
+  if (!normalized) return false;
+
+  return (
+    normalized.includes("SIMER | SUPORTE") ||
+    normalized.includes("SIMER - SUPORTE") ||
+    normalized.includes("SIMER / SUPORTE") ||
+    normalized.includes("SIMER | LEGISLACAO") ||
+    normalized.includes("SIMER - LEGISLACAO") ||
+    normalized.includes("SIMER / LEGISLACAO") ||
+    normalized === "SUPORTE SIMER" ||
+    normalized === "SIMER"
+  );
+}
+
+export function isSimerOperationalResponsibility(owner: string | null | undefined, ownerTeam: string | null | undefined) {
+  return isSupportAnalyst(owner) || isSimerOperationalTeam(ownerTeam);
+}
+
 export function isSimerClient(
   value:
     string |
