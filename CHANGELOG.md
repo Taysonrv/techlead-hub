@@ -24,6 +24,13 @@
 - Drawer de tickets enriquecido com ações, horas e histórico operacional.
 - Escopo operacional canônico centralizado para clientes SIMER e carteira a partir de 2026.
 
+### Polimento visual, UX e acessibilidade
+- Densidade de botões, chips e tabelas centralizada no tema MUI para reduzir diferenças de proporção entre telas.
+- Removidas sobrescritas CSS globais com !important que conflitavam com componentes e layouts responsivos.
+- Cards deixam de cortar conteúdo interno por regra global de overflow, preservando tooltips, menus e visualizações mais complexas.
+- Foco de teclado visível restaurado globalmente para controles interativos, mantendo a exceção específica dos elementos SVG dos gráficos.
+- Dark Mode, responsividade, superfícies, filtros, tabelas, drawers e gráficos continuam compartilhando os mesmos tokens visuais do produto.
+
 ### Estabilidade e desempenho
 - Redução de consultas auxiliares do snapshot do Dashboard.
 - CSAT passa a utilizar a resposta mais recente por ticket nos pontos revisados.
