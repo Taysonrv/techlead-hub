@@ -6,6 +6,7 @@ const controller = new SimerMapController();
 simerMapRoutes.use(requirePermission("simer-map"));
 simerMapRoutes.get("/summary", controller.summary);
 simerMapRoutes.get("/search", controller.search);
+simerMapRoutes.get("/map-catalog", controller.mapCatalog);
 simerMapRoutes.get("/tree", controller.tree);
 simerMapRoutes.get("/builder/status", controller.builderStatus);
 simerMapRoutes.get("/rules/summary", controller.ruleSummary);
