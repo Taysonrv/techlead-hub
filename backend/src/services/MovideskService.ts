@@ -600,6 +600,64 @@ export class MovideskService {
     return { accepted: true, state: await this.baselineStatus() };
   }
 
+  async recentEnrichments(limit = 10) {
+    const safeLimit = Math.max(1, Math.min(50, Number.isSafeInteger(limit) ? limit : 10));
+    const rows = await prisma.movideskTicketEnrichment.findMany({
+      orderBy: [{ enrichedAt: "desc" }, { id: "desc" }],
+      take: safeLimit,
+      include: {
+        ticket: {
+          select: {
+            id: true,
+            movideskId: true,
+            subject: true,
+            client: true,
+            lastUpdate: true,
+            actions: {
+              where: { isDeleted: false },
+              select: {
+                timeAppointments: { select: { accountedTime: true } },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    return {
+      items: rows.map((row) => {
+        const accountedHours = row.ticket.actions.reduce(
+          (total, action) => total + action.timeAppointments.reduce(
+            (actionTotal, appointment) => actionTotal + Number(appointment.accountedTime ?? 0),
+            0,
+          ),
+          0,
+        );
+        const current = !row.lastError && Boolean(
+          !row.ticket.lastUpdate ||
+          (row.sourceLastUpdate && row.sourceLastUpdate.getTime() >= row.ticket.lastUpdate.getTime()),
+        );
+        return {
+          ticketId: row.ticket.id,
+          movideskId: row.ticket.movideskId,
+          subject: row.ticket.subject,
+          client: row.ticket.client,
+          actions: row.actionsCount,
+          timeAppointments: row.timeAppointmentsCount,
+          accountedHours: Number(accountedHours.toFixed(2)),
+          ownerHistories: row.ownerHistoriesCount,
+          statusHistories: row.statusHistoriesCount,
+          enrichedAt: row.enrichedAt,
+          sourceLastUpdate: row.sourceLastUpdate,
+          currentLastUpdate: row.ticket.lastUpdate,
+          status: row.lastError ? "ERROR" : current ? "CURRENT" : "STALE",
+          lastError: row.lastError,
+        };
+      }),
+      generatedAt: new Date().toISOString(),
+    };
+  }
+
   async dataCoverage() {
     const total = await prisma.ticket.count();
     const fields = [
