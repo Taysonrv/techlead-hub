@@ -352,7 +352,7 @@ export function Users() {
     >
       {/* HEADER */}
 
-      <PageHeader eyebrow="Sistema" title="Usuários" description="Aprovação e controle de acesso ao TechLead Hub." action={<Button
+      <PageHeader eyebrow="Sistema" title="Usuários" description="Aprovação e controle de acesso ao Hub Suporte Simer." action={<Button
           variant="outlined"
           startIcon={
             <RefreshOutlined />
