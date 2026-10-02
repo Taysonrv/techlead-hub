@@ -450,11 +450,14 @@ export class CoordinationService {
   }
 
   async productivityCapacity(days = 28) {
-    const cacheKey = `capacity:${Math.min(Math.max(days, 7), 730)}`;
+    const requestedDays = days > 0 ? Math.min(Math.max(days, 1), 730) : 0;
+    const cacheKey = `capacity:${requestedDays || "all-2026"}`;
     const cached = cacheGet<any>(cacheKey);
     if (cached) return cached;
     const now = new Date();
-    const start = new Date(now.getTime() - (Math.min(Math.max(days, 7), 730) - 1) * 86400000);
+    const start = requestedDays
+      ? new Date(now.getTime() - (requestedDays - 1) * 86400000)
+      : new Date("2026-01-01T00:00:00.000Z");
     start.setHours(0, 0, 0, 0);
     const { businessDays, hoursPerDay } = productivityExpectedHours(start, now);
     const appointments = await prisma.movideskTimeAppointment.findMany({
@@ -475,7 +478,7 @@ export class CoordinationService {
     });
     const expectedHours = analysts.reduce((sum,row)=>sum+row.expectedHours,0);
     const registeredHours = Number(analysts.reduce((sum,row)=>sum+row.registeredHours,0).toFixed(2));
-    return cacheSet(cacheKey, { days, businessDays, hoursPerDay, expectedHours, registeredHours, coverageRate: expectedHours ? Number((registeredHours/expectedHours*100).toFixed(1)) : null, dataSource: "Movidesk actions.timeAppointments.accountedTime", hasRegisteredTimeData: registeredHours > 0, analysts }, 60_000);
+    return cacheSet(cacheKey, { days: requestedDays, period:{start,end:now}, businessDays, hoursPerDay, expectedHours, registeredHours, coverageRate: expectedHours ? Number((registeredHours/expectedHours*100).toFixed(1)) : null, dataSource: "Movidesk actions.timeAppointments.accountedTime", hasRegisteredTimeData: registeredHours > 0, appointments: appointments.length, analysts }, 60_000);
   }
 
   async summary(_userId: number, serviceDays = 0) {
