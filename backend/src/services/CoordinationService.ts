@@ -449,22 +449,25 @@ export class CoordinationService {
     const start = new Date(now.getTime() - (Math.min(Math.max(days, 7), 730) - 1) * 86400000);
     start.setHours(0, 0, 0, 0);
     const { businessDays, hoursPerDay } = productivityExpectedHours(start, now);
-    const tickets = await prisma.ticket.findMany({
-      where: { AND: [simerClientTicketScope(), { isDeleted: false }] },
-      select: { owner: true, rawData: true },
+    const appointments = await prisma.movideskTimeAppointment.findMany({
+      where: {
+        date: { gte: start, lte: now },
+        action: { ticket: { AND: [simerClientTicketScope(), { isDeleted: false }] } },
+      },
+      select: { accountedTime: true, createdByName: true },
     });
     const analysts = SUPPORT_ANALYSTS.map((analyst) => {
-      let minutes = 0;
-      for (const ticket of tickets) for (const entry of extractMovideskTimeEntries(ticket.rawData)) {
-        if (entry.date) { const date = new Date(entry.date); if (date < start || date > now) continue; }
-        if (entry.analyst ? sameOperationalPerson(entry.analyst, analyst) : sameOperationalPerson(ticket.owner, analyst)) minutes += entry.minutes;
-      }
-      const expectedHours = businessDays * hoursPerDay, registeredHours = Number((minutes/60).toFixed(2));
+      const registeredHours = Number(appointments.reduce((sum, entry) => {
+        if (!entry.createdByName || !sameOperationalPerson(entry.createdByName, analyst)) return sum;
+        const hours = Number(entry.accountedTime ?? 0);
+        return sum + (Number.isFinite(hours) && hours > 0 ? hours : 0);
+      }, 0).toFixed(2));
+      const expectedHours = businessDays * hoursPerDay;
       return { analyst, expectedHours, registeredHours, coverageRate: expectedHours ? Number((registeredHours/expectedHours*100).toFixed(1)) : null };
     });
     const expectedHours = analysts.reduce((sum,row)=>sum+row.expectedHours,0);
     const registeredHours = Number(analysts.reduce((sum,row)=>sum+row.registeredHours,0).toFixed(2));
-    return cacheSet(cacheKey, { days, businessDays, hoursPerDay, expectedHours, registeredHours, coverageRate: expectedHours ? Number((registeredHours/expectedHours*100).toFixed(1)) : null, dataSource: "Movidesk rawData.timeAppointments", hasRegisteredTimeData: registeredHours > 0, analysts }, 60_000);
+    return cacheSet(cacheKey, { days, businessDays, hoursPerDay, expectedHours, registeredHours, coverageRate: expectedHours ? Number((registeredHours/expectedHours*100).toFixed(1)) : null, dataSource: "Movidesk actions.timeAppointments.accountedTime", hasRegisteredTimeData: registeredHours > 0, analysts }, 60_000);
   }
 
   async summary(_userId: number, serviceDays = 0) {
