@@ -1,5 +1,29 @@
 # Changelog
 
+## 1.0.0-rc.20 — 2026-10-02
+
+### Dashboard e dados Movidesk
+- Causa e Motivo passam a ser calculados por endpoint analítico server-side, usando o período global do Dashboard e o mesmo conjunto de IDs no drill-down.
+- Principais Causas considera exclusivamente tickets da categoria Problema e os valores oficiais de Causa.
+- Motivos das Dúvidas considera exclusivamente tickets da categoria Dúvida e os valores oficiais de Motivo.
+- Áreas de negócio e Serviços mais acionados deixam de compartilhar fallback: Área usa somente `businessArea` e Serviço usa somente `serviceSecondLevel`.
+- Estados sem dados passam a refletir ausência real de preenchimento, sem fabricar classificação a partir de outra dimensão.
+
+### Escopo operacional e produtividade
+- Filtro Responsável da tela de Tickets restringido ao quadro oficial do Suporte SIMER.
+- Tela de Analistas e Desempenho permanecem alinhadas ao mesmo quadro operacional.
+- Produtividade por horas registradas utiliza apontamentos estruturados do Movidesk.
+- Enriquecimento incremental mantém checkpoint e redução progressiva das pendências, sem reprocessar continuamente o mesmo lote.
+
+### UX, sincronização e release
+- Cards executivos revisados para manter proporções, período e drill-down consistentes.
+- Dados e Sincronizações concentra diagnóstico de cobertura e ações operacionais de Movidesk.
+- Release Web permanece baseada em imagem imutável, migration controlada e readiness antes de considerar a atualização concluída.
+- Workflow bloqueia publicação sem seção correspondente no CHANGELOG e valida os artefatos Desktop antes da publicação.
+- RC.20 consolida o pacote final destinado à validação da Coordenação.
+
+> Release Candidate para validação da Coordenação. Publicar no canal beta após backend, frontend e testes concluírem sem erro.
+
 ## 1.0.0-rc.19 — 2026-10-02
 
 - Dashboard de Causa/Motivo agora usa endpoint analítico server-side com o mesmo escopo SIMER e período global, eliminando divergência entre cobertura persistida e snapshot do frontend; drill-down usa os IDs retornados pela mesma consulta.
