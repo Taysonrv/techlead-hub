@@ -1074,6 +1074,14 @@ export class MovideskService {
           const parsed = Number(value);
           return Number.isFinite(parsed) ? parsed : null;
         };
+        const remoteLastUpdate = dateOf(row.lastUpdate);
+        const checkpointLastUpdate = remoteLastUpdate ?? ticket.lastUpdate;
+        if (remoteLastUpdate && (!ticket.lastUpdate || remoteLastUpdate.getTime() > ticket.lastUpdate.getTime())) {
+          await prisma.ticket.update({
+            where: { id: ticket.id },
+            data: { lastUpdate: remoteLastUpdate },
+          });
+        }
         const historyKey = (kind: string, index: number, changedDate: Date | null, primary: string | null, actorId: string | null) =>
           crypto.createHash("sha256").update([kind, String(index), changedDate?.toISOString() ?? "", primary ?? "", actorId ?? ""].join("|")).digest("hex");
 
@@ -1249,7 +1257,7 @@ export class MovideskService {
           where: { ticketId: ticket.id },
           create: {
             ticketId: ticket.id,
-            sourceLastUpdate: ticket.lastUpdate,
+            sourceLastUpdate: checkpointLastUpdate,
             enrichedAt: new Date(),
             actionsCount: remoteActions.length,
             timeAppointmentsCount: remoteActions.reduce((total, action) => total + (
@@ -1263,7 +1271,7 @@ export class MovideskService {
             errorAt: null,
           },
           update: {
-            sourceLastUpdate: ticket.lastUpdate,
+            sourceLastUpdate: checkpointLastUpdate,
             enrichedAt: new Date(),
             actionsCount: remoteActions.length,
             timeAppointmentsCount: remoteActions.reduce((total, action) => total + (
