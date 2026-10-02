@@ -248,10 +248,18 @@ export class CoordinationService {
     return { periodDays:safeDays, total:items.length, truncated:responses.length===500, items };
   }
 
-  async slaDevelopmentFlow(days = 180) {
-    const since = new Date(Date.now() - Math.min(Math.max(days, 30), 730) * 86400000);
+  async slaDevelopmentFlow(days = 180, startDate?: string, endDate?: string) {
+    const parseDate = (value?: string, endOfDay = false) => {
+      if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+      const date = new Date(`${value}T${endOfDay ? "23:59:59.999" : "00:00:00.000"}`);
+      return Number.isNaN(date.getTime()) ? null : date;
+    };
+    const customStart = parseDate(startDate);
+    const customEnd = parseDate(endDate, true);
+    const since = customStart ?? new Date(Date.now() - Math.min(Math.max(days, 1), 730) * 86400000);
+    const until = customEnd ?? new Date();
     const tickets = await prisma.ticket.findMany({
-      where: { AND: [{ isDeleted: false, createdDate: { gte: since } }, coordinationTicketScope()] },
+      where: { AND: [{ isDeleted: false, createdDate: { gte: since, lte: until } }, simerClientTicketScope()] },
       select: { movideskId:true, subject:true, category:true, client:true, owner:true, urgency:true, createdDate:true, taskNumber:true, taskStatus:true, taskTitle:true, taskType:true }
     });
     const bugTickets=tickets.filter(t=>isBug(t.category,t.taskType));
@@ -285,7 +293,7 @@ export class CoordinationService {
     const monthKey=(date:Date)=>date.toISOString().slice(0,7);
     const monthLabel=(key:string)=>{const [year,month]=key.split("-");return new Intl.DateTimeFormat("pt-BR",{month:"short",year:"2-digit",timeZone:"UTC"}).format(new Date(Date.UTC(Number(year),Number(month)-1,1))).replace(".","");};
     const monthly=[...new Set(rows.map(r=>monthKey(r.taskCreatedAt)))].sort().map(month=>{const group=rows.filter(r=>monthKey(r.taskCreatedAt)===month);const completed=group.filter(r=>r.taskConcludedAt);return{month,label:monthLabel(month),total:group.length,concluded:completed.length,avgSupportMinutes:avg(group.map(r=>r.supportMinutes)),avgFactoryMinutes:avg(completed.map(r=>r.factoryMinutes!)),avgTotalMinutes:avg(completed.map(r=>r.totalMinutes!)),supportWithinPct:group.length?Math.round(group.filter(r=>r.supportPct<=100).length/group.length*1000)/10:0,factoryWithinPct:completed.length?Math.round(completed.filter(r=>(r.factoryPct??Infinity)<=100).length/completed.length*1000)/10:0,totalWithinPct:completed.length?Math.round(completed.filter(r=>(r.totalPct??Infinity)<=100).length/completed.length*1000)/10:0}});
-    return { periodDays: days, rule:{taskEndState:"Concluida",schedule:"Seg-Sex 08:00-18:00",profile:"PADRAO"}, dataQuality:{bugsInPeriod:bugTickets.length,linked:rows.length,missingAzure,missingTaskCreatedAt,missingPriority}, summary:{bugsWithTask:rows.length,concluded:done.length,openDevelopment:rows.length-done.length,avgSupportMinutes:avg(rows.map(r=>r.supportMinutes)),avgFactoryMinutes:avg(done.map(r=>r.factoryMinutes!)),avgTotalMinutes:avg(done.map(r=>r.totalMinutes!)),supportWithinOla:rows.filter(r=>r.supportPct<=100).length,factoryWithinOla:done.filter(r=>(r.factoryPct??Infinity)<=100).length,totalWithinSla:done.filter(r=>(r.totalPct??Infinity)<=100).length}, byPriority, owners, clients, monthly, outliers, rows };
+    return { periodDays: days, period:{start:since,end:until}, rule:{taskEndState:"Concluida",schedule:"Seg-Sex 08:00-18:00",profile:"PADRAO"}, dataQuality:{bugsInPeriod:bugTickets.length,linked:rows.length,missingAzure,missingTaskCreatedAt,missingPriority}, summary:{bugsWithTask:rows.length,concluded:done.length,openDevelopment:rows.length-done.length,avgSupportMinutes:avg(rows.map(r=>r.supportMinutes)),avgFactoryMinutes:avg(done.map(r=>r.factoryMinutes!)),avgTotalMinutes:avg(done.map(r=>r.totalMinutes!)),supportWithinOla:rows.filter(r=>r.supportPct<=100).length,factoryWithinOla:done.filter(r=>(r.factoryPct??Infinity)<=100).length,totalWithinSla:done.filter(r=>(r.totalPct??Infinity)<=100).length}, byPriority, owners, clients, monthly, outliers, rows };
   }
 
   async serviceIntelligence(filters: { client?: string; analyst?: string; months?: number } = {}) {
