@@ -265,11 +265,11 @@ export function Coordination() {
               <Chip size="small" variant="outlined" label={`${integrationHealth.businessAreaCoveragePct}% com área de negócio`} />
               </Stack>
               <Box sx={{ display:"grid", gridTemplateColumns:{ xs:"1fr 1fr", md:"repeat(5,1fr)" }, gap:1 }}>
-                <KpiCard title="Tickets" value={integrationHealth.tickets} subtitle="Movidesk" info="Tickets do escopo operacional." accent={aliareColors.info}/>
+                <KpiCard title="Tickets" value={integrationHealth.tickets} subtitle="Movidesk" info="Tickets dos clientes da carteira SIMER." accent={aliareColors.info}/>
                 <KpiCard title="Vínculos Task" value={integrationHealth.linkedTasks} subtitle="Movidesk → Azure" info="Tickets com número de Task relacionado." accent={aliareColors.green}/>
                 <KpiCard title="Work Items" value={integrationHealth.azureItems} subtitle="Azure DevOps" info="Itens Azure no escopo da coordenação." accent={aliareColors.info}/>
-                <KpiCard title="CSAT" value={integrationHealth.csatResponses} subtitle="Respostas" info="Respostas da pesquisa Movidesk persistidas." accent={aliareColors.warning}/>
-                <KpiCard title="Serviços" value={integrationHealth.catalogServices} subtitle="Catálogo Movidesk" info="Serviços persistidos do catálogo oficial." accent={aliareColors.green}/>
+                <KpiCard title="CSAT" value={integrationHealth.csatResponses} subtitle="CSAT 1–5" info="Respostas Movidesk do tipo Carinhas/Smiley (escala 1–5) persistidas para a carteira." accent={aliareColors.warning}/>
+                <KpiCard title="Serviços" value={integrationHealth.catalogServices} subtitle="Recorte enriquecido" info="Metadados Movidesk sincronizados para os Serviços observados na carteira; não representa o catálogo global." accent={aliareColors.green}/>
               </Box>
             </CardContent>
           </Card>}
