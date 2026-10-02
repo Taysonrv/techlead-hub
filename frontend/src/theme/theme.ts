@@ -207,11 +207,12 @@ export function createAppTheme(mode: PaletteMode = "light") {
         },
       },
       MuiButton: {
-        defaultProps: { disableElevation: true },
+        defaultProps: { disableElevation: true, size: "small" },
         styleOverrides: {
           root: {
             borderRadius: 8,
-            minHeight: 38,
+            minHeight: 36,
+            fontSize: ".88rem",
             textTransform: "none",
             fontWeight: 700,
             letterSpacing: ".005em",
@@ -304,12 +305,13 @@ export function createAppTheme(mode: PaletteMode = "light") {
         styleOverrides: { select: { backgroundColor: dark ? "rgba(7,20,35,.34)" : undefined } },
       },
       MuiChip: {
+        defaultProps: { size: "small" },
         styleOverrides: {
           root: {
             borderRadius: 9,
-            minHeight: 26,
+            minHeight: 25,
             fontWeight: 700,
-            fontSize: ".75rem",
+            fontSize: ".78rem",
             ...(dark && {
               borderColor: "rgba(124,172,218,.24)",
               boxShadow: "inset 0 1px rgba(255,255,255,.025)",
@@ -342,8 +344,7 @@ export function createAppTheme(mode: PaletteMode = "light") {
         styleOverrides: {
           root: {
             borderBottomColor: border,
-            paddingTop: 12,
-            paddingBottom: 12,
+            padding: "10px 14px",
             fontSize: ".86rem",
             lineHeight: 1.45,
             ...(dark && { color: "#DCE9F7" }),
@@ -399,7 +400,7 @@ export function createAppTheme(mode: PaletteMode = "light") {
       MuiTablePagination: {
         styleOverrides: {
           root: {
-            minHeight: 52,
+            minHeight: 50,
             borderTop: `1px solid ${border}`,
             ...(dark && { backgroundColor: "rgba(6,25,36,.82)", color: textSecondary }),
           },
