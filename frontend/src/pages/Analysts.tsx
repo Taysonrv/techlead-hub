@@ -46,6 +46,7 @@ import { useNavigate } from "react-router-dom";
 import { useTheme } from "@mui/material/styles";
 
 import { api } from "../services/api";
+import { getTicketSnapshot } from "../services/ticketSnapshot";
 import { useFilters } from "../context/FiltersContext";
 import { PeriodFilter } from "../components/PeriodFilter";
 import { PageHeader } from "../components/PageHeader";
@@ -439,11 +440,8 @@ export function Analysts() {
         setLoading(true);
         setError(null);
 
-        const response = await api.get(
-          "/dashboard/tickets"
-        );
-
-        setTickets(response.data);
+        const snapshot = await getTicketSnapshot<Ticket>();
+        setTickets(snapshot);
       } catch (err) {
         console.error(
           "Erro ao carregar dados dos analistas:",
