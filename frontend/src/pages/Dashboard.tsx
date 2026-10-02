@@ -277,29 +277,32 @@ export function Dashboard() {
     [openedBySimerOperationInPeriod],
   );
 
-  // Backlog atual não é limitado pela data de abertura.
-  const pendingTickets = useMemo(() => tickets.filter(isOpen), [tickets]);
+  // Estoque operacional atual: responsabilidade SIMER + estado ativo.
+  // Não é limitado pela data de abertura.
+  const pendingTickets = useMemo(
+    () => tickets.filter((ticket) => ticket.isWithSimer === true && isOpen(ticket)),
+    [tickets],
+  );
 
-  // Cards executivos comparam o mesmo cohort: tickets ABERTOS no período.
-  // Isso evita comparar entradas dos últimos 30 dias com resoluções de tickets antigos.
-  const resolvedInPeriod = useMemo(() => openedInPeriod.filter((ticket) =>
+  // Fluxo executivo usa o mesmo universo operacional das entradas.
+  const resolvedInPeriod = useMemo(() => openedBySimerOperationInPeriod.filter((ticket) =>
     isDateInPeriod(ticket.resolvedDate, periodBounds.start, periodBounds.end)
-  ), [openedInPeriod, periodBounds]);
+  ), [openedBySimerOperationInPeriod, periodBounds]);
 
-  const closedInPeriod = useMemo(() => openedInPeriod.filter((ticket) =>
+  const closedInPeriod = useMemo(() => openedBySimerOperationInPeriod.filter((ticket) =>
     isDateInPeriod(ticket.closedDate, periodBounds.start, periodBounds.end)
-  ), [openedInPeriod, periodBounds]);
+  ), [openedBySimerOperationInPeriod, periodBounds]);
 
-  // Rankings e gráficos de entrada continuam baseados na abertura do período.
-  const filteredTickets = openedInPeriod;
+  // Causas, áreas, serviços, SLA e CSAT analisam a Operação SIMER.
+  const filteredTickets = openedBySimerOperationInPeriod;
 
   const newTickets = useMemo(() => pendingTickets.filter((ticket) => ticket.baseStatus === "New"), [pendingTickets]);
   const attendanceTickets = useMemo(() => pendingTickets.filter((ticket) => ticket.baseStatus === "InAttendance"), [pendingTickets]);
   const stoppedTickets = useMemo(() => pendingTickets.filter((ticket) => ticket.baseStatus === "Stopped"), [pendingTickets]);
   const criticalTickets = useMemo(() => pendingTickets.filter((ticket) => normalize(ticket.urgency) === "critica"), [pendingTickets]);
 
-  const responseSla = useMemo(() => calculateTimestampSla(openedInPeriod, "response"), [openedInPeriod]);
-  const solutionSla = useMemo(() => calculateTimestampSla(openedInPeriod, "solution"), [openedInPeriod]);
+  const responseSla = useMemo(() => calculateTimestampSla(openedBySimerOperationInPeriod, "response"), [openedBySimerOperationInPeriod]);
+  const solutionSla = useMemo(() => calculateTimestampSla(openedBySimerOperationInPeriod, "solution"), [openedBySimerOperationInPeriod]);
 
   const summary = useMemo(() => ({
     abertosNoPeriodo: openedInPeriod.length,
@@ -325,7 +328,7 @@ export function Dashboard() {
   const azureWorkItems = useMemo(() => {
     const byId = new Map<number, AzureTaskSummary>();
 
-    openedInPeriod.forEach((ticket) => {
+    openedBySimerOperationInPeriod.forEach((ticket) => {
       if (ticket.azureWorkItem) {
         byId.set(
           ticket.azureWorkItem.id,
@@ -415,9 +418,9 @@ export function Dashboard() {
     return { start: startOfDay(start), end };
   };
   const categoryBounds = cardPeriodBounds(categoryPeriod);
-  const categoryTickets = useMemo(() => tickets.filter((ticket) => isDateInPeriod(ticket.createdDate, categoryBounds.start, categoryBounds.end)), [tickets, categoryPeriod]);
+  const categoryTickets = useMemo(() => tickets.filter((ticket) => ticket.isWithSimer === true && isDateInPeriod(ticket.createdDate, categoryBounds.start, categoryBounds.end)), [tickets, categoryPeriod]);
   const statusBounds = cardPeriodBounds(statusPeriod);
-  const statusTickets = useMemo(() => tickets.filter((ticket) => isOpen(ticket) && isDateInPeriod(ticket.createdDate, statusBounds.start, statusBounds.end)), [tickets, statusPeriod]);
+  const statusTickets = useMemo(() => tickets.filter((ticket) => ticket.isWithSimer === true && isOpen(ticket) && isDateInPeriod(ticket.createdDate, statusBounds.start, statusBounds.end)), [tickets, statusPeriod]);
 
   /* =======================================================
      CATEGORIAS
