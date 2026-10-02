@@ -16,6 +16,7 @@ movideskRoutes.get("/scope/diagnostic", requirePermission("imports"), controller
 movideskRoutes.get("/enrichment/diagnostic", requirePermission("imports"), controller.diagnoseEnrichment.bind(controller));
 movideskRoutes.get("/enrichment/recent", requirePermission("imports"), controller.recentEnrichments.bind(controller));
 movideskRoutes.post("/enrichment/sync", requirePermission("imports"), controller.syncEnrichment.bind(controller));
+movideskRoutes.post("/causes/backfill", requirePermission("imports"), controller.backfillCauses.bind(controller));
 movideskRoutes.get("/catalog/diagnostic", requirePermission("imports"), controller.diagnoseApiCatalog.bind(controller));
 movideskRoutes.post("/reference-sync", requirePermission("imports"), controller.syncReferenceData.bind(controller));
 movideskRoutes.get("/reference-sync/status", requirePermission("imports"), controller.referenceSyncStatus.bind(controller));
