@@ -211,7 +211,6 @@ export function Dashboard() {
 
   const [copyMessage, setCopyMessage] =
     useState("");
-  const [categoryPeriod, setCategoryPeriod] = useState<CardPeriod>("30d");
   const [flowHidden, setFlowHidden] = useState<Set<"opened" | "resolved" | "closed">>(() => new Set());
   const [statusPeriod, setStatusPeriod] = useState<CardPeriod>("30d");
 
@@ -419,26 +418,12 @@ export function Dashboard() {
     if (value === "year") start = new Date(now.getFullYear(), 0, 1);
     return { start: startOfDay(start), end };
   };
-  const categoryBounds = cardPeriodBounds(categoryPeriod);
-  // Categorias são dimensão histórica da carteira e não dependem do responsável atual.
-  const categoryTickets = useMemo(() => tickets.filter((ticket) => isDateInPeriod(ticket.createdDate, categoryBounds.start, categoryBounds.end)), [tickets, categoryPeriod]);
   const statusBounds = cardPeriodBounds(statusPeriod);
   const statusTickets = useMemo(() => tickets.filter((ticket) => ticket.isWithSimer === true && isOpen(ticket) && isDateInPeriod(ticket.createdDate, statusBounds.start, statusBounds.end)), [tickets, statusPeriod]);
 
   /* =======================================================
      CATEGORIAS
   ======================================================= */
-
-  const categories =
-    useMemo(
-      () =>
-        groupByField(
-          categoryTickets,
-          "category",
-          "Sem categoria"
-        ),
-      [categoryTickets]
-    );
 
   /* =======================================================
      ANÁLISES GERENCIAIS
@@ -502,7 +487,7 @@ export function Dashboard() {
     return value?.trim() || "Sem categoria";
   };
 
-  const categoryAnalysis = useMemo(() => {
+  const categories = useMemo(() => {
     const grouped = new Map<string, number>();
     openedInPeriod.forEach((ticket) => {
       const label = canonicalCategory(ticket.category);
@@ -510,6 +495,7 @@ export function Dashboard() {
     });
     return [...grouped.entries()].map(([label,total])=>({label,total})).sort((a,b)=>b.total-a.total);
   }, [openedInPeriod]);
+
 
   const canonicalCause = (value?: string | null) => {
     const raw = value?.trim();
@@ -1360,9 +1346,7 @@ export function Dashboard() {
               subtitle="Distribuição no período"
               data={categories.slice(0, 6)}
               colors={chartPalette}
-              onItemClick={(label) => showTickets(`Categoria: ${label}`, categoryTickets.filter((ticket) => (ticket.category || "Sem categoria") === label), periodLabel(categoryPeriod))}
-              period={categoryPeriod}
-              onPeriodChange={setCategoryPeriod}
+              onItemClick={(label) => showTickets(`Categoria: ${label}`, openedInPeriod.filter((ticket) => canonicalCategory(ticket.category) === label), "Período global do Dashboard")}
             />
 
             <DonutAnalysisCard
@@ -1484,14 +1468,7 @@ export function Dashboard() {
             </CardBase>
           </Box>
 
-          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", xl: "1fr 1fr" }, gap: 1.5, mb: 1.5 }}>
-            <OperationalRankingCard
-              title="Atendimentos por categoria"
-              subtitle="Distribuição da carteira SIMER no período selecionado"
-              data={categoryAnalysis}
-              emptyMessage="Nenhuma categoria encontrada no período."
-              onItemClick={(label) => showTickets(`Categoria: ${label}`, openedInPeriod.filter((ticket) => canonicalCategory(ticket.category) === label), "Tickets da categoria selecionada")}
-            />
+          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr" }, gap: 1.5, mb: 1.5 }}>
             <OperationalRankingCard
               title="Motivos das dúvidas"
               subtitle="Somente categoria Dúvida • motivo informado no Movidesk"
