@@ -71,6 +71,18 @@ export class MovideskController {
         }
     }
 
+    async syncEnrichment(req: AuthenticatedRequest, res: Response) {
+        try {
+            const requested = Number(req.body?.limit ?? req.query.limit ?? 100);
+            const limit = Number.isSafeInteger(requested) ? requested : 100;
+            return res.json(await new MovideskService().syncTicketEnrichment(limit));
+        } catch (error) {
+            const message = error instanceof Error ? error.message : "Não foi possível sincronizar ações e apontamentos do Movidesk.";
+            console.error("[movidesk-enrichment-sync] Falha:", message);
+            return res.status(500).json({ message });
+        }
+    }
+
     async diagnoseEnrichment(req: AuthenticatedRequest, res: Response) {
         try {
             const requested = req.query.ticketId ? Number(req.query.ticketId) : null;
