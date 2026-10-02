@@ -210,7 +210,9 @@ export class CoordinationService {
       distribution,
       monthly,
       byClient: group((item) => item.ticket.client ?? "Sem cliente").slice(0,12),
-      byAnalyst: group((item) => item.ticket.owner ?? "Sem responsável").slice(0,12),
+      byAnalyst: group((item) => item.ticket.owner ?? "Sem responsável")
+        .filter((item) => SUPPORT_ANALYSTS.some((analyst) => sameOperationalPerson(analyst, item.name)))
+        .slice(0,12),
       byService: group((item) => item.service).slice(0,12),
       recent: scoped.slice(0,20).map((item) => ({ id:item.id, ticketId:item.ticketId, subject:item.ticket.subject, client:item.ticket.client, owner:item.ticket.owner, value:item.value, commentary:item.commentary, responseDate:item.responseDate, service:item.service })),
     };
