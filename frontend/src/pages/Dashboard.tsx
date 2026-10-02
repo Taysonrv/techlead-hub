@@ -496,7 +496,8 @@ export function Dashboard() {
   const causes = useMemo(() => {
     const grouped = new Map<string, number>();
     ticketsEligibleForCause.forEach((ticket) => {
-      const label = ticket.causeDetail?.trim() || ticket.cause?.trim() || "Sem causa";
+      const label = ticket.causeDetail?.trim() || ticket.cause?.trim();
+      if (!label || normalize(label) === "sem causa") return;
       grouped.set(label, (grouped.get(label) ?? 0) + 1);
     });
     return [...grouped.entries()].map(([label,total]) => ({ label,total })).sort((a,b) => b.total-a.total).slice(0,8);
@@ -812,52 +813,19 @@ export function Dashboard() {
 
   const cards = [
     {
-      title: "Abertos · Operação SIMER",
+      title: "Abertos no Período",
       value: summary.abertosOperacaoNoPeriodo,
       description: "Entradas do período atribuídas à operação SIMER",
       severity: "default" as Severity,
       info: {
-        title: "Abertos · Operação SIMER",
-        summary: "Tickets dos clientes da carteira abertos no período e atualmente atribuídos a analistas/equipes da operação SIMER.",
-        calculation: "createdDate no período + responsabilidade operacional SIMER. Inclui Suporte N1/N2/N3, Legislação N1/N2/N3 e SIMER BDS.",
+        title: "Abertos no Período",
+        summary: "Tickets abertos no período sob responsabilidade da operação SIMER.",
+        calculation: "createdDate no período + responsabilidade operacional SIMER.",
         source: "Movidesk",
-        reference: "Ticket.client + Ticket.createdDate + Ticket.owner/ownerTeam",
-        periodRule: "A abertura respeita o período global; a responsabilidade representa a atribuição atual disponível no Movidesk.",
-        notes: "Hendow e Vistra BI entram quando o responsável atual pertence à operação SIMER; o nome do Serviço, isoladamente, não inclui nem exclui o ticket.",
-      },
-      onClick: () => showTickets("Abertos · Operação SIMER", openedBySimerOperationInPeriod, "Tickets abertos no período atribuídos à operação SIMER"),
-    },
-    {
-      title: "Abertos · Carteira",
-      value: summary.abertosNoPeriodo,
-      description: "Toda demanda aberta pelos clientes da carteira",
-      severity: "default" as Severity,
-      info: {
-        title: "Abertos · Carteira",
-        summary: "Todos os tickets abertos no período pelos clientes da carteira SIMER, independentemente da equipe responsável atual.",
-        calculation: "Contagem dos tickets dos clientes da carteira com createdDate dentro do período.",
-        source: "Movidesk",
-        reference: "Ticket.client + Ticket.createdDate",
+        reference: "Ticket.createdDate + Ticket.owner/ownerTeam",
         periodRule: "Respeita integralmente o período global selecionado.",
-        notes: "Permanece na carteira mesmo quando transferido para Produto, Cloud, Vistra, Hendow, implantação ou outra equipe.",
       },
-      onClick: () => showTickets("Abertos · Carteira", openedInPeriod, "Toda demanda aberta pelos clientes da carteira no período selecionado"),
-    },
-    {
-      title: "Com o SIMER",
-      value: summary.abertosComSimerNoPeriodo,
-      description: "Dos abertos no período, atualmente com a operação SIMER",
-      severity: "default" as Severity,
-      info: {
-        title: "Com o SIMER",
-        summary: "Subconjunto dos tickets abertos no período que continuam ativos e permanecem atualmente sob responsabilidade da operação SIMER.",
-        calculation: "Abertos da carteira no período filtrados por estado ativo e responsabilidade atual da operação SIMER.",
-        source: "Movidesk",
-        reference: "Ticket.createdDate + Ticket.owner",
-        periodRule: "A abertura respeita o período global; a responsabilidade representa o estado atual do ticket.",
-        notes: "Transferências para Produto, Cloud, Vistra, Hendow ou outras equipes deixam de compor este indicador, mas continuam em Abertos · Carteira SIMER.",
-      },
-      onClick: () => showTickets("Abertos atualmente com o SIMER", openedWithSimerInPeriod, "Tickets abertos no período que continuam ativos e cuja responsabilidade atual está com a operação SIMER"),
+      onClick: () => showTickets("Abertos no Período", openedBySimerOperationInPeriod, "Tickets abertos no período atribuídos à operação SIMER"),
     },
     {
       title: "Backlog atual",
@@ -942,14 +910,14 @@ export function Dashboard() {
       title: "CSAT",
       value: (() => {
         const values=filteredTickets.map((ticket)=>ticket.satisfactionScore).filter((value): value is number => typeof value === "number");
-        return values.length ? (values.reduce((total,value)=>total+value,0)/values.length).toLocaleString("pt-BR",{maximumFractionDigits:2}) : "—";
+        return values.length ? `${(values.filter((value)=>value >= 4).length / values.length * 100).toLocaleString("pt-BR",{maximumFractionDigits:1})}%` : "—";
       })(),
-      description: `${filteredTickets.filter((ticket)=>ticket.satisfactionScore != null).length} avaliação(ões) no período`,
+      description: `${filteredTickets.filter((ticket)=>ticket.satisfactionScore != null).length} avaliação(ões) · notas 4–5`,
       severity: "success" as Severity,
       info: {
         title: "CSAT",
-        summary: "Média das avaliações de satisfação vinculadas aos tickets SIMER do recorte atual.",
-        calculation: "Média das notas persistidas da Pesquisa de Satisfação Movidesk.",
+        summary: "Percentual de avaliações positivas vinculadas aos tickets SIMER do recorte atual.",
+        calculation: "Respostas com nota 4 ou 5 ÷ total de respostas válidas × 100.",
         source: "Pesquisa de Satisfação Movidesk",
         reference: "MovideskSurveyResponse → Ticket.movideskId",
         periodRule: "Respeita o período e os filtros aplicados ao Dashboard.",
@@ -1450,7 +1418,7 @@ export function Dashboard() {
                       label={{ position: "right", fontSize: 10, fontWeight: 800, fill: isDark ? "rgba(226,232,240,.86)" : "rgba(30,41,59,.86)" }}
                       onClick={(_, index) => {
                         const cause = causes.slice(0, 6)[index]?.label;
-                        if (cause) showTickets(`Causa: ${cause}`, ticketsEligibleForCause.filter((ticket) => (ticket.cause ?? "Sem causa") === cause), "Tickets classificados com a causa selecionada");
+                        if (cause) showTickets(`Causa: ${cause}`, ticketsEligibleForCause.filter((ticket) => (ticket.causeDetail?.trim() || ticket.cause?.trim()) === cause), "Tickets classificados com a causa selecionada");
                       }} />
                   </BarChart>
                 </ResponsiveContainer>
