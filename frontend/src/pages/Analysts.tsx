@@ -292,6 +292,7 @@ type TimeProductivityResponse = {
   teams: Array<{ team: string; analysts: number; expectedHours: number; registeredHours: number; coverageRate: number | null }>;
   weekly: Array<{ week: string; expectedHours: number; registeredHours: number; coverageRate: number | null }>;
   capacity: { hoursPerDay: number; configuredHolidays: string[] };
+  dataSource?: string;
 };
 
 type ProductivityDrilldown = {
@@ -2371,13 +2372,13 @@ export function Analysts() {
         <CardContent>
           <Stack direction={{ xs: "column", lg: "row" }} spacing={1.5} sx={{ justifyContent: "space-between", alignItems: { lg: "flex-start" } }}>
             <Box><Typography sx={{ fontWeight: 800, fontSize: "1.05rem" }}>Produtividade por horas registradas</Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mt: .35 }}>Compara a jornada prevista com os apontamentos de tempo disponíveis nos atendimentos do Movidesk. Use como indicador de cobertura de apontamento, em conjunto com volume, complexidade, SLA e entregas.</Typography></Box>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: .35 }}>Compara a jornada prevista com os apontamentos reais de tempo do Movidesk. As horas são atribuídas ao autor de cada apontamento, independentemente do responsável atual do ticket.</Typography></Box>
             <Chip size="small" variant="outlined" label="Fonte: Movidesk" />
           </Stack>
           {timeProductivityError && <Alert severity="warning" sx={{ mt: 1.5 }}>{timeProductivityError}</Alert>}
           {timeProductivityLoading ? <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}><CircularProgress size={28}/></Box> : !timeProductivity ? <Alert severity="info" variant="outlined" sx={{ mt: 1.5 }}>Sem dados de horas registradas para o recorte atual.</Alert> : timeProductivity.analysts.length === 0 ? <Alert severity="info" variant="outlined" sx={{ mt: 1.5 }}>Nenhum analista possui apontamentos de tempo no período e filtro selecionados.</Alert> : <>
             <Alert severity="info" variant="outlined" sx={{ mt: 1.5 }}>{timeProductivity.definition.expectedHours} {timeProductivity.definition.coverageRate}</Alert>
-            <Stack direction="row" spacing={1} sx={{ mt: 1, flexWrap: "wrap" }}><Chip size="small" variant="outlined" label={`Jornada: ${timeProductivity.capacity.hoursPerDay}h/dia útil`}/><Chip size="small" variant="outlined" label={`Feriados configurados: ${timeProductivity.capacity.configuredHolidays.length}`}/></Stack>
+            <Stack direction="row" spacing={1} sx={{ mt: 1, flexWrap: "wrap" }}><Chip size="small" variant="outlined" label={`Jornada: ${timeProductivity.capacity.hoursPerDay}h/dia útil`}/><Chip size="small" variant="outlined" label={`Feriados configurados: ${timeProductivity.capacity.configuredHolidays.length}`}/>{timeProductivity.dataSource && <Chip size="small" color="success" variant="outlined" label="Fonte: apontamentos estruturados Movidesk"/>}</Stack>
             <Box sx={{display:"grid",gridTemplateColumns:{xs:"repeat(2,1fr)",lg:"repeat(4,1fr)"},gap:1,mt:1.5}}>
               {[
                 ["Horas previstas",timeProductivity.analysts.reduce((a,x)=>a+x.expectedHours,0),"Capacidade útil no período"],
