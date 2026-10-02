@@ -107,6 +107,19 @@ jobs:
         shell: pwsh
         working-directory: desktop
         run: node scripts/validate-release.mjs
+      - name: Preparar notas da versão
+        shell: pwsh
+        env:
+          RELEASE_VERSION: ${{ needs.metadata.outputs.version }}
+        run: |
+          $content = Get-Content "CHANGELOG.md" -Raw
+          $escaped = [regex]::Escape($env:RELEASE_VERSION)
+          $match = [regex]::Match($content, "(?ms)^## $escaped .*?(?=^## |\z)")
+          if (-not $match.Success) {
+            throw "CHANGELOG.md não possui uma seção para $env:RELEASE_VERSION. O release não pode ser publicado sem log de novidades."
+          }
+          Set-Content -Path "release-notes.md" -Value $match.Value.Trim() -Encoding UTF8
+
       - name: Publicar Beta no repositório de releases
         if: needs.metadata.outputs.channel == 'beta'
         shell: pwsh
@@ -118,7 +131,7 @@ jobs:
         run: |
           $repo = "Taysonrv/techlead-hub-releases"
           if (-not (gh release view $env:RELEASE_TAG --repo $repo 2>$null)) {
-            gh release create $env:RELEASE_TAG --repo $repo --target main --draft --title "TechLead Hub $env:RELEASE_VERSION" --notes "Versão Beta do TechLead Hub. Consulte as novidades dentro do aplicativo."
+            gh release create $env:RELEASE_TAG --repo $repo --target main --draft --title "TechLead Hub $env:RELEASE_VERSION" --notes-file "../release-notes.md"
             if ($LASTEXITCODE -ne 0) { throw "Não foi possível criar a release $env:RELEASE_TAG." }
           }
           $assets = Get-ChildItem release -File | Where-Object {
