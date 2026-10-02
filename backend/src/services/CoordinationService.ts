@@ -337,6 +337,10 @@ export class CoordinationService {
       const values = path.split("»").map(normalize).filter(Boolean);
       return values.some((v) => v.includes("simer")) && values.filter((v) => !/^(atendimento ao cliente|siagri simer|simer|siagri)$/.test(v)).length === 0;
     };
+    const serviceLabel = (path: string) => {
+      const parts = path.split("»").map((value) => value.trim()).filter(Boolean);
+      return parts.at(-1) ?? path.trim();
+    };
     const catalogMap = new Map<string, SimerServiceCatalogItem>();
     for (const item of SIMER_SERVICE_CATALOG) catalogMap.set(normalize(item.path), item);
     const officialById = new Map(officialServices.map((item) => [item.id, item]));
