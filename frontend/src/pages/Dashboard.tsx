@@ -271,13 +271,15 @@ export function Dashboard() {
   // Backlog atual não é limitado pela data de abertura.
   const pendingTickets = useMemo(() => tickets.filter(isOpen), [tickets]);
 
-  const resolvedInPeriod = useMemo(() => tickets.filter((ticket) =>
+  // Cards executivos comparam o mesmo cohort: tickets ABERTOS no período.
+  // Isso evita comparar entradas dos últimos 30 dias com resoluções de tickets antigos.
+  const resolvedInPeriod = useMemo(() => openedInPeriod.filter((ticket) =>
     isDateInPeriod(ticket.resolvedDate, periodBounds.start, periodBounds.end)
-  ), [tickets, periodBounds]);
+  ), [openedInPeriod, periodBounds]);
 
-  const closedInPeriod = useMemo(() => tickets.filter((ticket) =>
+  const closedInPeriod = useMemo(() => openedInPeriod.filter((ticket) =>
     isDateInPeriod(ticket.closedDate, periodBounds.start, periodBounds.end)
-  ), [tickets, periodBounds]);
+  ), [openedInPeriod, periodBounds]);
 
   // Rankings e gráficos de entrada continuam baseados na abertura do período.
   const filteredTickets = openedInPeriod;
@@ -313,7 +315,7 @@ export function Dashboard() {
   const azureWorkItems = useMemo(() => {
     const byId = new Map<number, AzureTaskSummary>();
 
-    tickets.forEach((ticket) => {
+    openedInPeriod.forEach((ticket) => {
       if (ticket.azureWorkItem) {
         byId.set(
           ticket.azureWorkItem.id,
@@ -1174,7 +1176,7 @@ export function Dashboard() {
                   calculation: "Contagem distinta de Work Items do tipo Correção Clientes.",
                   source: "Azure DevOps",
                   reference: "System.WorkItemType",
-                  periodRule: "Usa os Work Items vinculados ao snapshot atual de tickets.",
+                  periodRule: "Usa somente Work Items vinculados aos tickets abertos no período global selecionado.",
                 }}
                 onClick={() => navigate("/correcoes")}
               />
@@ -1189,7 +1191,7 @@ export function Dashboard() {
                   calculation: "Contagem distinta de Work Items do tipo Evolução.",
                   source: "Azure DevOps",
                   reference: "System.WorkItemType",
-                  periodRule: "Usa os Work Items vinculados ao snapshot atual de tickets.",
+                  periodRule: "Usa somente Work Items vinculados aos tickets abertos no período global selecionado.",
                 }}
                 onClick={() => navigate("/evolucoes")}
               />
