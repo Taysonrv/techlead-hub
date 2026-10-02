@@ -9,9 +9,21 @@ export type ReleaseNote = {
   items: readonly ReleaseNoteItem[];
 };
 
-export const FALLBACK_APP_VERSION = "1.0.0-rc.17";
+export const FALLBACK_APP_VERSION = import.meta.env.VITE_APP_VERSION || "development";
 
 export const releaseNotes: Record<string, ReleaseNote> = {
+  "1.0.0-rc.19": {
+    version: "1.0.0-rc.19",
+    title: "Coordenação, Movidesk auditável e operação Web",
+    items: [
+      { title: "SLA × OLA revisado", description: "A Central da Coordenação passa a separar tempo de Suporte, Desenvolvimento e SLA total, com leitura por prioridade, riscos em aberto e tratamento de linhas temporais inválidas." },
+      { title: "Categoria, Causa e Motivo", description: "O Dashboard diferencia Categoria do atendimento, Causa exclusiva de Problema e Motivo exclusivo de Dúvida, sempre respeitando o período global selecionado." },
+      { title: "Diagnóstico de classificação", description: "Dados e Sincronizações passa a medir cobertura de causas e motivos e identificar campos Movidesk candidatos nos tickets ainda não classificados." },
+      { title: "Movidesk enriquecido", description: "Ações, apontamentos, históricos de responsável e status passam a ser persistidos de forma estruturada para produtividade, capacidade e investigação." },
+      { title: "Produtividade estruturada", description: "Análises de produtividade e capacidade deixam de depender da leitura de payload bruto quando existem apontamentos estruturados do Movidesk." },
+      { title: "Release Web rastreável", description: "A versão Web recebe fluxo operacional de atualização por imagem versionada, migrations antes da aplicação e validação de readiness após a troca." },
+    ],
+  },
   "1.0.0-rc.17": {
     version: "1.0.0-rc.17",
     title: "Identidade do produto e entrega Web para infraestrutura",
