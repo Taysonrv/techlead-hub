@@ -27,7 +27,7 @@ import { detailDrawerPaperSx } from "../theme/layoutTokens";
 import { PageHeader } from "../components/PageHeader";
 import { api, getApiErrorMessage } from "../services/api";
 import { aliareColors } from "../theme/theme";
-import { Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip as ChartTooltip, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip as ChartTooltip, XAxis, YAxis } from "recharts";
 
 type Data = {
   generatedAt: string;
@@ -41,6 +41,7 @@ type Data = {
     moduleRanking: Array<{ module: string; count: number }>;
     clientQuality: Array<{ client: string; total: number; issues: number; rate: number }>;
     analystQuality: Array<{ analyst: string; total: number; issues: number; rate: number }>;
+    thirdLevel: { classified: number; missing: number; rate: number; ranking: Array<{ service: string; count: number }> };
   };
   integrations: Record<string, { configured: boolean; connected: boolean; items: number }>;
   scope: { coordinator: string; analysts: string[]; clients: string[] };
@@ -90,7 +91,7 @@ type SlaDevelopment = {
 type SlaRow = { movideskId:number; subject:string; client:string|null; owner:string; taskNumber:number; taskTitle?:string|null; taskState?:string|null; urgency:string; supportMinutes:number; factoryMinutes:number|null; totalMinutes:number|null; supportPct:number; factoryPct:number|null; totalPct:number|null; bottleneck:string };
 type CsatDetail = { periodDays:number; total:number; truncated:boolean; items:Array<{ id:string; ticketId:number|null; subject:string; client:string|null; owner:string|null; taskNumber:number|null; service:string; value:number|null; commentary:string|null; responseDate:string|null }> };
 
-type DetailKind = "backlog" | "critical" | "stale" | "dueSoon" | "overdue" | "blocked" | "unassigned" | "analyst" | "service" | "serviceModule" | "serviceClient" | "serviceAnalyst";
+type DetailKind = "backlog" | "critical" | "stale" | "dueSoon" | "overdue" | "blocked" | "unassigned" | "analyst" | "service" | "serviceThirdLevel" | "serviceModule" | "serviceClient" | "serviceAnalyst";
 type DetailData = {
   kind: DetailKind; analyst: string | null; total: number; loaded?: number; truncated: boolean;
   tickets: Array<{ movideskId: number; subject: string; status: string; urgency: string | null; client: string | null; owner: string | null; lastUpdate: string | null; dueDate: string | null; taskNumber: number | null; registeredVersion: string | null; deliveredVersion: string | null; service: string | null; serviceFirstLevel: string | null; serviceSecondLevel: string | null; serviceThirdLevel: string | null; category: string | null; cause: string | null }>;
@@ -108,7 +109,7 @@ export function Coordination() {
   const [detailTitle, setDetailTitle] = useState("");
   const [detailError, setDetailError] = useState("");
   const [details, setDetails] = useState<DetailData | null>(null);
-  const [serviceDays, setServiceDays] = useState(0);
+  const [serviceDays, setServiceDays] = useState(90);
   const [slaDays, setSlaDays] = useState(30);
   const [slaPeriod, setSlaPeriod] = useState<"thisMonth" | "lastMonth" | "30d" | "custom">("30d");
   const [slaCustomStart, setSlaCustomStart] = useState("");
@@ -181,12 +182,12 @@ export function Coordination() {
   useEffect(() => {
     const controller = new AbortController();
     setCsatLoading(true);
-    api.get<CsatOverview>("/coordination/csat", { params: { days: slaDays }, signal: controller.signal })
+    api.get<CsatOverview>("/coordination/csat", { params: { days: serviceDays || 730 }, signal: controller.signal })
       .then((response) => setCsat(response.data))
       .catch(() => { if (!controller.signal.aborted) setCsat(null); })
       .finally(() => { if (!controller.signal.aborted) setCsatLoading(false); });
     return () => controller.abort();
-  }, [slaDays]);
+  }, [serviceDays]);
 
   const maximum = useMemo(
     () => Math.max(...(data?.workload.map((item) => item.total) ?? [1]), 1),
@@ -214,7 +215,7 @@ export function Coordination() {
   async function openCsatDetails(title:string, params:Record<string,string|number>) {
     try {
       setCsatDetailTitle(title); setCsatDetail(null); setCsatDetailLoading(true);
-      const response=await api.get<CsatDetail>("/coordination/csat/details",{params:{days:slaDays,...params}});
+      const response=await api.get<CsatDetail>("/coordination/csat/details",{params:{days:serviceDays || 730,...params}});
       setCsatDetail(response.data);
     } finally { setCsatDetailLoading(false); }
   }
@@ -246,7 +247,9 @@ export function Coordination() {
               <Typography sx={{ fontWeight: 900, fontSize: "1rem" }}>Cockpit da coordenação</Typography>
               <Typography variant="body2" color="text.secondary">Leitura rápida para decidir onde atuar primeiro, com acesso direto aos recortes operacionais.</Typography>
             </Box>
-            <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap" }}>
+            <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap", alignItems: "center" }}>
+              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 800, mr: .25 }}>Período analítico</Typography>
+              {[{v:30,l:"30d"},{v:90,l:"90d"},{v:180,l:"6 meses"},{v:365,l:"12 meses"},{v:0,l:"Todo"}].map((period)=><Chip key={period.v} clickable size="small" label={period.l} color={serviceDays===period.v?"primary":"default"} variant={serviceDays===period.v?"filled":"outlined"} onClick={()=>setServiceDays(period.v)} />)}
               <Button size="small" variant="outlined" onClick={() => navigate("/atencao")}>Riscos</Button>
               <Button size="small" variant="outlined" onClick={() => navigate("/qualidade-dados")}>Pendências</Button>
               <Button size="small" variant="outlined" onClick={() => navigate("/desempenho")}>Desempenho</Button>
@@ -365,10 +368,10 @@ export function Coordination() {
               {csatLoading ? <LinearProgress sx={{ borderRadius: 2 }} /> : csat ? (
                 <Stack spacing={1.5}>
                   <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2,1fr)", xl: "repeat(4,1fr)" }, gap: 1.25 }}>
-                    <KpiCard title="CSAT médio" value={csat.summary.responses ? csat.summary.average.toLocaleString("pt-BR", { maximumFractionDigits: 2 }) : "—"} subtitle="escala da pesquisa Movidesk" info="Média das notas respondidas no período." accent={aliareColors.green} />
-                    <KpiCard title="Avaliações 4–5" value={csat.summary.responses ? `${csat.summary.positivePct}%` : "—"} subtitle="respostas positivas" info="Percentual de respostas com nota 4 ou 5." accent={aliareColors.info} />
-                    <KpiCard title="Respostas" value={csat.summary.responses} subtitle={`${csat.summary.comments} com comentário`} info="Pesquisas vinculadas a tickets do escopo SIMER." accent={aliareColors.warning} />
-                    <KpiCard title="Comentários" value={csat.summary.comments} subtitle="feedback qualitativo" info="Respostas que possuem comentário textual do cliente." accent={aliareColors.purple} />
+                    <KpiCard title="CSAT médio" value={csat.summary.responses ? csat.summary.average.toLocaleString("pt-BR", { maximumFractionDigits: 2 }) : "—"} subtitle="escala da pesquisa Movidesk" info="Média das notas respondidas no período. Clique para detalhar." accent={aliareColors.green} onClick={()=>void openCsatDetails("CSAT · Todas as avaliações",{})} />
+                    <KpiCard title="Avaliações 4–5" value={csat.summary.responses ? `${csat.summary.positivePct}%` : "—"} subtitle="respostas positivas" info="Percentual de respostas com nota 4 ou 5." accent={aliareColors.info} onClick={()=>void openCsatDetails("CSAT · Avaliações positivas",{})} />
+                    <KpiCard title="Respostas" value={csat.summary.responses} subtitle={`${csat.summary.comments} com comentário`} info="Pesquisas vinculadas a tickets do escopo SIMER. Clique para detalhar." accent={aliareColors.warning} onClick={()=>void openCsatDetails("CSAT · Respostas",{})} />
+                    <KpiCard title="Comentários" value={csat.summary.comments} subtitle="feedback qualitativo" info="Respostas que possuem comentário textual do cliente. Clique para detalhar." accent={aliareColors.purple} onClick={()=>void openCsatDetails("CSAT · Comentários",{commentsOnly:"true"})} />
                   </Box>
                   {csat.summary.responses > 0 && <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", xl: "minmax(0, 1fr) minmax(0, 1fr)" }, gap: 1.5, alignItems: "stretch" }}>
                     <Box sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2.5, p: 1.75, minWidth: 0, display: "flex", flexDirection: "column", bgcolor: "background.paper" }}>
@@ -380,7 +383,7 @@ export function Coordination() {
                         <ResponsiveContainer width="100%" height="100%">
                           <BarChart data={csat.distribution} margin={{ top: 12, right: 12, left: -12, bottom: 4 }}>
                             <CartesianGrid vertical={false} strokeDasharray="3 3" /><XAxis dataKey="value" axisLine={false} tickLine={false} /><YAxis allowDecimals={false} axisLine={false} tickLine={false} /><ChartTooltip />
-                            <Bar dataKey="count" name="Respostas" fill={aliareColors.green} radius={[7,7,0,0]} maxBarSize={72} />
+                            <Bar dataKey="count" name="Respostas" fill={aliareColors.green} radius={[7,7,0,0]} maxBarSize={72} cursor="pointer" onClick={(_, index)=>{const score=csat.distribution[index]?.value;if(score)void openCsatDetails(`CSAT · Nota ${score}`,{value:score})}} />
                           </BarChart>
                         </ResponsiveContainer>
                       </Box>
@@ -394,7 +397,7 @@ export function Coordination() {
                         {csat.byAnalyst.filter((item) => data?.scope.analysts.some((analyst) => analyst.localeCompare(item.name, "pt-BR", { sensitivity: "base" }) === 0)).slice(0,8).map((item) => <Stack key={item.name} direction="row" spacing={1} role="button" tabIndex={0} onClick={()=>void openCsatDetails(`CSAT · ${item.name}`,{analyst:item.name})} onKeyDown={(event)=>{if(event.key==="Enter"||event.key===" ")void openCsatDetails(`CSAT · ${item.name}`,{analyst:item.name})}} sx={{ alignItems:"center", cursor:"pointer", borderRadius:1.5, px:1, py:.75, mx:-1, transition:"background-color .15s ease", "&:hover":{bgcolor:"action.hover"} }}>
                           <Typography variant="body2" sx={{ flex:1, minWidth:0, fontWeight:650, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{item.name}</Typography>
                           <Typography variant="caption" color="text.secondary" sx={{whiteSpace:"nowrap"}}>{item.responses} resp.</Typography>
-                          <Chip size="small" variant="outlined" label={item.average.toLocaleString("pt-BR",{maximumFractionDigits:2})} sx={{minWidth:48,fontWeight:750}} />
+                          <Chip size="small" variant="outlined" label={`${item.average.toLocaleString("pt-BR",{maximumFractionDigits:2})} · ${item.positivePct}%`} sx={{minWidth:92,fontWeight:750}} />
                         </Stack>)}
                       </Stack>
                     </Box>
@@ -520,9 +523,7 @@ export function Coordination() {
                       <Typography variant="body2" color="text.secondary">Aplicado aos indicadores, ranking, detalhamento e exportação.</Typography>
                     </Box>
                     <Stack direction="row" spacing={0.6} useFlexGap sx={{ flexWrap: "wrap" }}>
-                      {[{ v: 30, l: "30 dias" }, { v: 90, l: "90 dias" }, { v: 180, l: "6 meses" }, { v: 365, l: "12 meses" }, { v: 0, l: "Todo período" }].map((period) => (
-                        <Chip key={period.v} label={period.l} clickable color={serviceDays === period.v ? "primary" : "default"} variant={serviceDays === period.v ? "filled" : "outlined"} onClick={() => setServiceDays(period.v)} />
-                      ))}
+                      <Chip size="small" label={serviceDays ? `Sincronizado com o filtro global · ${serviceDays} dias` : "Sincronizado com o filtro global · todo período"} variant="outlined" />
                     </Stack>
                   </Stack>
                   <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2,1fr)", xl: "repeat(4,1fr)" }, gap: 1.25, mb: 2 }}>
@@ -545,6 +546,30 @@ export function Coordination() {
                       </ResponsiveContainer>
                     </Box>
                   ) : <Alert severity="info">Ainda não há Serviços suficientes no histórico sincronizado para montar o ranking.</Alert>}
+
+                  <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", xl: "repeat(2,minmax(0,1fr))" }, gap: 1.5, mt: 2 }}>
+                    <Box sx={{ p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: 2.5, background: theme.palette.mode === "dark" ? "linear-gradient(145deg,rgba(47,111,237,.08),rgba(24,199,122,.035))" : "linear-gradient(145deg,rgba(47,111,237,.045),rgba(24,199,122,.025))" }}>
+                      <Stack direction="row" sx={{justifyContent:"space-between",alignItems:"flex-start",mb:1}}>
+                        <Box><Typography sx={{ fontWeight: 850 }}>Qualidade da classificação · 3º nível</Typography><Typography variant="caption" color="text.secondary">Cobertura das rotinas detalhadas do Serviço no Movidesk.</Typography></Box>
+                        <Chip size="small" label={`${data.serviceAnalytics.thirdLevel.rate}% classificados`} color={data.serviceAnalytics.thirdLevel.rate >= 90 ? "success" : data.serviceAnalytics.thirdLevel.rate >= 75 ? "warning" : "error"} variant="outlined"/>
+                      </Stack>
+                      <Box sx={{display:"grid",gridTemplateColumns:{xs:"1fr",sm:"180px minmax(0,1fr)"},gap:1,alignItems:"center"}}>
+                        <Box sx={{height:170}}>
+                          <ResponsiveContainer width="100%" height="100%">
+                            <PieChart><Pie data={[{name:"Classificados",value:data.serviceAnalytics.thirdLevel.classified},{name:"Sem 3º nível",value:data.serviceAnalytics.thirdLevel.missing}]} dataKey="value" nameKey="name" innerRadius={48} outerRadius={70} paddingAngle={3} stroke="none"><Cell fill={aliareColors.green}/><Cell fill={aliareColors.warning}/></Pie><ChartTooltip/><Legend verticalAlign="bottom" height={28}/></PieChart>
+                          </ResponsiveContainer>
+                        </Box>
+                        <Stack spacing={.55}>{data.serviceAnalytics.thirdLevel.ranking.slice(0,5).map((item)=><Button key={item.service} onClick={()=>void openDetails("serviceThirdLevel",`3º nível · ${item.service}`,undefined,undefined,undefined,item.service)} sx={{justifyContent:"space-between",textTransform:"none",color:"text.primary",px:.5,minWidth:0}}><Typography variant="body2" noWrap title={item.service} sx={{maxWidth:"75%"}}>{item.service}</Typography><Chip size="small" label={item.count} variant="outlined"/></Button>)}</Stack>
+                      </Box>
+                    </Box>
+                    <Box sx={{ p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: 2.5, minHeight:220 }}>
+                      <Typography sx={{ fontWeight: 850 }}>Top Serviços · 3º nível</Typography>
+                      <Typography variant="caption" color="text.secondary">Clique em uma barra para abrir os atendimentos classificados naquela rotina.</Typography>
+                      <Box sx={{height:180,mt:1}}>
+                        <ResponsiveContainer width="100%" height="100%"><BarChart data={data.serviceAnalytics.thirdLevel.ranking.slice(0,6)} layout="vertical" margin={{top:2,right:28,left:8,bottom:2}}><CartesianGrid horizontal={false} strokeDasharray="3 3"/><XAxis type="number" allowDecimals={false} axisLine={false} tickLine={false}/><YAxis type="category" dataKey="service" width={120} axisLine={false} tickLine={false} tickFormatter={(v:string)=>v.length>18?`${v.slice(0,17)}…`:v}/><ChartTooltip/><Bar dataKey="count" fill={aliareColors.info} radius={[0,6,6,0]} cursor="pointer" onClick={(_,index)=>{const service=data.serviceAnalytics.thirdLevel.ranking[index]?.service;if(service)void openDetails("serviceThirdLevel",`3º nível · ${service}`,undefined,undefined,undefined,service)}}/></BarChart></ResponsiveContainer>
+                      </Box>
+                    </Box>
+                  </Box>
 
                   <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", xl: "repeat(3,minmax(0,1fr))" }, gap: 1.5, mt: 2 }}>
                     <Box sx={{ p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: 2 }}>
@@ -620,7 +645,7 @@ export function Coordination() {
                       <BarChart data={data.workload} layout="vertical" margin={{ top: 6, right: 18, left: 8, bottom: 4 }}>
                         <CartesianGrid stroke={theme.palette.divider} strokeDasharray="4 4" horizontal={false} opacity={0.55} />
                         <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11, fill: theme.palette.text.secondary }} axisLine={false} tickLine={false} />
-                        <YAxis type="category" dataKey="analyst" width={118} tick={{ fontSize: 11, fill: theme.palette.text.secondary }} axisLine={false} tickLine={false} />
+                        <YAxis type="category" dataKey="analyst" width={104} tick={{ fontSize: 11, fill: theme.palette.text.secondary }} axisLine={false} tickLine={false} tickFormatter={(value:string)=>{const parts=value.trim().split(/\s+/);return parts.length>1?`${parts[0]} ${parts.at(-1)?.charAt(0)}.`:value}} />
                         <ChartTooltip contentStyle={{ borderRadius: 12, border: `1px solid ${theme.palette.divider}`, background: theme.palette.background.paper, boxShadow: "0 14px 36px rgba(0,0,0,.18)" }} cursor={{ fill: theme.palette.action.hover }} />
                         <Bar dataKey="tickets" name="Tickets" stackId="load" fill={aliareColors.info} radius={[0, 0, 0, 0]} cursor="pointer" onClick={(_, index) => { const analyst = data.workload[index]?.analyst; if (analyst) void openDetails("analyst", `Carga de ${analyst}`, analyst); }} />
                         <Bar dataKey="workItems" name="Azure" stackId="load" fill={aliareColors.green} radius={[0, 6, 6, 0]} cursor="pointer" onClick={(_, index) => { const analyst = data.workload[index]?.analyst; if (analyst) void openDetails("analyst", `Carga de ${analyst}`, analyst); }} />
