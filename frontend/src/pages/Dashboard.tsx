@@ -507,7 +507,7 @@ export function Dashboard() {
     return null;
   };
 
-  const problemTickets = useMemo(() => openedInPeriod.filter((ticket) => normalize(ticket.category) === "problema"), [openedInPeriod]);
+  const problemTickets = useMemo(() => filteredTickets.filter((ticket) => canonicalCategory(ticket.category) === "Problema"), [filteredTickets]);
   const ticketsWithCause = useMemo(() => problemTickets.filter((ticket) => Boolean(canonicalCause(ticket.cause))), [problemTickets]);
   const causes = useMemo(() => {
     const grouped = new Map<string, number>();
@@ -532,7 +532,7 @@ export function Dashboard() {
     return null;
   };
 
-  const doubtTickets = useMemo(() => openedInPeriod.filter((ticket) => normalize(ticket.category) === "duvida"), [openedInPeriod]);
+  const doubtTickets = useMemo(() => filteredTickets.filter((ticket) => canonicalCategory(ticket.category) === "Dúvida"), [filteredTickets]);
   const ticketsWithReason = useMemo(() => doubtTickets.filter((ticket) => Boolean(canonicalReason(ticket.reason))), [doubtTickets]);
   const reasons = useMemo(() => {
     const grouped = new Map<string, number>();
@@ -1369,14 +1369,7 @@ export function Dashboard() {
               EVOLUÇÃO MENSAL POR CATEGORIA
           ============================================== */}
 
-          <Box
-            sx={{
-              display: "grid",
-              gridTemplateColumns: { xs: "1fr", xl: "1.25fr .75fr" },
-              gap: 2,
-              my: 2,
-            }}
-          >
+          <Box sx={{ my: 2 }}>
             <CardBase>
               <Stack direction={{ xs: "column", sm: "row" }} sx={{ justifyContent: "center", alignItems: "center", gap: 1 }}>
                 <Box sx={{ textAlign: "center" }}>
@@ -1430,7 +1423,9 @@ export function Dashboard() {
                 })}
               </Stack>
             </CardBase>
+          </Box>
 
+          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", xl: "1fr 1fr" }, gap: 2, mb: 2 }}>
             <CardBase>
               <Box sx={{ textAlign: "center" }}><Typography sx={{ fontWeight: 850, fontSize: "1.05rem" }}>
                 Principais causas
@@ -1464,9 +1459,7 @@ export function Dashboard() {
                 <Typography variant="body2" color="text.secondary" sx={{ textAlign: "center" }}>Nenhuma causa preenchida nos tickets de categoria Problema para o período selecionado.</Typography>
               </Box>}
             </CardBase>
-          </Box>
 
-          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr" }, gap: 1.5, mb: 1.5 }}>
             <OperationalRankingCard
               title="Motivos das dúvidas"
               subtitle="Somente categoria Dúvida • motivo informado no Movidesk"
