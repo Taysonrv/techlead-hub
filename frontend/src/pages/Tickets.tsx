@@ -153,6 +153,8 @@ type TicketAnalytics = {
   satisfactionComment: string | null;
   satisfactionDate: string | null;
   satisfactionSource: string | null;
+  timeAppointmentSummary?: { count: number; accountedHours: number };
+  historySummary?: { ownerChanges: number; statusChanges: number; ownerWorkingHours: number; statusWorkingHours: number };
 };
 
 type AzureTaskSummary = {
@@ -2905,7 +2907,10 @@ export function Tickets() {
                 <TicketField label="Última ação" value={formatDate(selectedTicket.lastActionDate)} />
                 <TicketField label="Última atualização" value={formatDate(selectedTicket.lastUpdate)} />
                 <TicketField label="Quantidade de ações" value={selectedTicket.actionCount} />
-                <TicketField label="Trocas de responsável" value={selectedTicket.ownerHandoffs} />
+                <TicketField label="Apontamentos de tempo" value={selectedTicket.timeAppointmentSummary?.count ?? null} />
+                <TicketField label="Horas apontadas" value={selectedTicket.timeAppointmentSummary?.accountedHours != null ? `${selectedTicket.timeAppointmentSummary.accountedHours.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}h` : null} />
+                <TicketField label="Trocas de responsável" value={selectedTicket.historySummary?.ownerChanges ?? selectedTicket.ownerHandoffs} />
+                <TicketField label="Mudanças de status" value={selectedTicket.historySummary?.statusChanges ?? null} />
                 <TicketField label="Quantidade de reaberturas" value={selectedTicket.reopenCount} />
                 <TicketField label="Resolvido no primeiro contato" value={selectedTicket.resolvedInFirstCall === null ? "Não informado" : selectedTicket.resolvedInFirstCall ? "Sim" : "Não"} />
                 <TicketField label="CSAT" value={selectedTicket.satisfactionScore != null ? `${selectedTicket.satisfactionScore}/5` : null} />
