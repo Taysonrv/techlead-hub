@@ -612,11 +612,28 @@ export class MovideskService {
     for (const field of fields) {
       coverage[field] = await prisma.ticket.count({ where: { [field]: { not: null } } });
     }
-    const [deleted, withRawData] = await Promise.all([
+    const [deleted, withRawData, actionCount, appointmentCount, ownerHistoryCount, statusHistoryCount, ticketsWithActions, ticketsWithAppointments] = await Promise.all([
       prisma.ticket.count({ where: { isDeleted: true } }),
       prisma.ticket.count({ where: { rawData: { not: Prisma.DbNull } } }),
+      prisma.movideskTicketAction.count(),
+      prisma.movideskTimeAppointment.count(),
+      prisma.movideskOwnerHistory.count(),
+      prisma.movideskStatusHistory.count(),
+      prisma.ticket.count({ where: { actions: { some: {} } } }),
+      prisma.ticket.count({ where: { actions: { some: { timeAppointments: { some: {} } } } } }),
     ]);
-    return { total, coverage, deleted, withRawData, generatedAt: new Date().toISOString() };
+    return {
+      total, coverage, deleted, withRawData,
+      enrichment: {
+        actions: actionCount,
+        timeAppointments: appointmentCount,
+        ownerHistories: ownerHistoryCount,
+        statusHistories: statusHistoryCount,
+        ticketsWithActions,
+        ticketsWithAppointments,
+      },
+      generatedAt: new Date().toISOString(),
+    };
   }
 
   private async loadBaselineCheckpoint() {
