@@ -1,6 +1,6 @@
 import { prisma } from "../database/prisma";
 import type { Prisma } from "@prisma/client";
-import { SIMER_CLIENTS, SUPPORT_ANALYSTS, ticketOperationalScope } from "../domain/OperationalScope";
+import { SIMER_CLIENTS, SUPPORT_ANALYSTS, simerClientTicketScope } from "../domain/OperationalScope";
 import { analyzeMovideskIndicators } from "./MovideskPayloadAnalytics";
 import { SIMER_SERVICE_CATALOG, suggestSimerService, type SimerServiceCatalogItem } from "../domain/SimerServiceCatalog";
 import { OPEN_TICKET_BASE_STATES, OPERATIONAL_AGING, hoursBefore, isOperationalTicketFinalized, isOperationalTicketOpen, isTerminalWorkItemState, normalizeOperationalText, ticketLastRecordedMovement } from "../domain/OperationalLifecycleRules";
@@ -36,7 +36,7 @@ export class DataQualityService {
       prisma.ticket.findMany({
       where: {
         AND: [
-          ticketOperationalScope(),
+          simerClientTicketScope(),
           ...(clients.length ? [{ client: { in: clients, mode: "insensitive" as const } }] : []),
           ...(users.length ? [{ owner: { in: users, mode: "insensitive" as const } }] : []),
         ],
@@ -51,12 +51,21 @@ export class DataQualityService {
       },
     }),
       prisma.ticket.findMany({
-        where: { taskNumber: { not: null } },
+        where: { AND: [simerClientTicketScope(), { taskNumber: { not: null } }] },
         select: { taskNumber: true },
       }),
     ]);
     const taskIds = scopedTickets.map((item) => item.taskNumber).filter((value): value is number => value !== null);
     const movideskIds = scopedTickets.map((item) => item.movideskId).filter((value): value is number => value !== null);
+    const csatResponses = movideskIds.length ? await prisma.movideskSurveyResponse.findMany({
+      where: { ticketId: { in: movideskIds }, type: 2 },
+      orderBy: { responseDate: "desc" },
+      select: { ticketId: true, value: true, commentary: true, responseDate: true },
+    }) : [];
+    const csatByTicket = new Map<number, (typeof csatResponses)[number]>();
+    for (const response of csatResponses) {
+      if (response.ticketId && !csatByTicket.has(response.ticketId)) csatByTicket.set(response.ticketId, response);
+    }
 
     if (params.issue === "__coordinationOverview") {
       const linked = taskIds.length ? await prisma.azureWorkItem.findMany({
@@ -330,7 +339,7 @@ export class DataQualityService {
       isTicketOpen(ticket) && (analyticsByTicketId.get(ticket.id)?.ownerHandoffs ?? 0) >= 3,
     );
     const lowSatisfaction = scopedTickets.filter((ticket) => {
-      const score = analyticsByTicketId.get(ticket.id)?.satisfactionScore;
+      const score = csatByTicket.get(ticket.movideskId)?.value;
       return score !== null && score !== undefined && score <= 2;
     });
     const suspectedClassification = scopedTickets.filter((ticket) =>
@@ -486,6 +495,8 @@ export class DataQualityService {
       lastMovement: lastMovement(ticket),
       resolvedInFirstCall: ticket.resolvedInFirstCall,
       ...analyticsByTicketId.get(ticket.id),
+      satisfactionScore: csatByTicket.get(ticket.movideskId)?.value ?? null,
+      satisfactionComment: csatByTicket.get(ticket.movideskId)?.commentary ?? null,
       source: "MOVIDESK" as const,
     });
     const samples = params.issue === "awaitingReturnWithoutCause"
