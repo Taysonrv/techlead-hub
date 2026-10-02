@@ -576,10 +576,10 @@ export function Coordination() {
                         <Chip size="small" label={`${data.serviceAnalytics.thirdLevel.rate}% classificados`} color={data.serviceAnalytics.thirdLevel.rate >= 90 ? "success" : data.serviceAnalytics.thirdLevel.rate >= 75 ? "warning" : "error"} variant="outlined"/>
                       </Stack>
                       <Box sx={{display:"grid",gridTemplateColumns:{xs:"1fr",sm:"180px minmax(0,1fr)"},gap:1,alignItems:"center"}}>
-                        <Box sx={{height:170}}>
+                        <Box sx={{height:180,position:"relative"}}>
                           <ResponsiveContainer width="100%" height="100%">
                             <PieChart><Pie data={[{name:"Classificados",value:data.serviceAnalytics.thirdLevel.classified},{name:"Sem 3º nível",value:data.serviceAnalytics.thirdLevel.missing}]} dataKey="value" nameKey="name" innerRadius={48} outerRadius={70} paddingAngle={3} stroke="none"><Cell fill={aliareColors.green}/><Cell fill={aliareColors.warning}/></Pie><ChartTooltip/><Legend verticalAlign="bottom" height={28}/></PieChart>
-                          </ResponsiveContainer>
+                          </ResponsiveContainer><Box sx={{position:"absolute",inset:0,display:"grid",placeItems:"center",pointerEvents:"none",pb:3}}><Box sx={{textAlign:"center"}}><Typography sx={{fontWeight:950,fontSize:20}}>{data.serviceAnalytics.thirdLevel.rate}%</Typography><Typography variant="caption" color="text.secondary">classificados</Typography></Box></Box>
                         </Box>
                         <Stack spacing={.55}>{data.serviceAnalytics.thirdLevel.ranking.slice(0,5).map((item)=><Button key={item.service} onClick={()=>void openDetails("serviceThirdLevel",`3º nível · ${item.service}`,undefined,undefined,undefined,item.service)} sx={{justifyContent:"space-between",textTransform:"none",color:"text.primary",px:.5,minWidth:0}}><Typography variant="body2" noWrap title={item.service} sx={{maxWidth:"75%"}}>{item.service}</Typography><Chip size="small" label={item.count} variant="outlined"/></Button>)}</Stack>
                       </Box>
@@ -594,41 +594,44 @@ export function Coordination() {
                   </Box>
 
                   <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", xl: "repeat(3,minmax(0,1fr))" }, gap: 1.5, mt: 2 }}>
-                    <Box sx={{ p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: 2 }}>
+                    <Box sx={{ ...analyticsPanelSx, p: 1.75 }}>
                       <Typography sx={{ fontWeight: 850 }}>Módulos mais demandados</Typography>
                       <Typography variant="caption" color="text.secondary">Distribuição dos atendimentos abertos pelos módulos derivados do Serviço.</Typography>
                       <Stack spacing={.75} sx={{ mt: 1.25 }}>
-                        {data.serviceAnalytics.moduleRanking.slice(0, 6).map((item) => (
-                          <Button key={item.module} onClick={() => void openDetails("serviceModule", `Serviço · ${item.module}`, undefined, item.module)} sx={{ justifyContent: "space-between", textTransform: "none", color: "text.primary", px: .5 }}>
-                            <Typography variant="body2" noWrap title={item.module}>{item.module}</Typography>
-                            <Chip size="small" label={item.count} variant="outlined" />
+                        {data.serviceAnalytics.moduleRanking.slice(0, 6).map((item,index) => (
+                          <Button key={item.module} onClick={() => void openDetails("serviceModule", `Serviço · ${item.module}`, undefined, item.module)} sx={rankingRowSx}>
+                            <Box sx={{width:26,height:26,borderRadius:"50%",display:"grid",placeItems:"center",flexShrink:0,fontSize:12,fontWeight:900,color:chartColors[index%chartColors.length],border:"1px solid currentColor",mr:1}}>{index+1}</Box>
+                            <Box sx={{minWidth:0,flex:1,textAlign:"left"}}><Typography variant="body2" noWrap title={item.module} sx={{fontWeight:750}}>{item.module}</Typography><LinearProgress variant="determinate" value={data.serviceAnalytics.moduleRanking[0]?.count ? item.count/data.serviceAnalytics.moduleRanking[0].count*100 : 0} sx={{height:5,borderRadius:5,mt:.55,"& .MuiLinearProgress-bar":{background:chartColors[index%chartColors.length]}}}/></Box>
+                            <Chip size="small" label={item.count} variant="outlined" sx={{ml:1,fontWeight:850}} />
                           </Button>
                         ))}
                         {!data.serviceAnalytics.moduleRanking.length && <Typography variant="caption" color="text.secondary">Sem módulos classificados.</Typography>}
                       </Stack>
                     </Box>
 
-                    <Box sx={{ p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: 2 }}>
+                    <Box sx={{ ...analyticsPanelSx, p: 1.75 }}>
                       <Typography sx={{ fontWeight: 850 }}>Qualidade por cliente</Typography>
                       <Typography variant="caption" color="text.secondary">Clientes com maior quantidade de ausências, classificações genéricas ou divergências sugeridas.</Typography>
                       <Stack spacing={.75} sx={{ mt: 1.25 }}>
-                        {data.serviceAnalytics.clientQuality.slice(0, 6).map((item) => (
-                          <Button key={item.client} onClick={() => void openDetails("serviceClient", `Serviços · ${item.client}`, undefined, undefined, item.client)} sx={{ justifyContent: "space-between", textTransform: "none", color: "text.primary", px: .5 }}>
-                            <Box sx={{ minWidth: 0, textAlign: "left" }}><Typography variant="body2" noWrap title={item.client}>{item.client}</Typography><Typography variant="caption" color="text.secondary">{item.issues} revisão(ões) de {item.total}</Typography></Box>
-                            <Chip size="small" label={`${item.rate}%`} color={item.rate >= 90 ? "success" : item.rate >= 75 ? "warning" : "error"} variant="outlined" />
+                        {data.serviceAnalytics.clientQuality.slice(0, 6).map((item,index) => (
+                          <Button key={item.client} onClick={() => void openDetails("serviceClient", `Serviços · ${item.client}`, undefined, undefined, item.client)} sx={rankingRowSx}>
+                            <Box sx={{width:26,height:26,borderRadius:"50%",display:"grid",placeItems:"center",flexShrink:0,fontSize:12,fontWeight:900,color:chartColors[index%chartColors.length],border:"1px solid currentColor",mr:1}}>{index+1}</Box>
+                            <Box sx={{ minWidth: 0, flex:1, textAlign: "left" }}><Typography variant="body2" noWrap title={item.client} sx={{fontWeight:750}}>{item.client}</Typography><Typography variant="caption" color="text.secondary">{item.issues} revisão(ões) de {item.total}</Typography><LinearProgress variant="determinate" value={item.rate} sx={{height:5,borderRadius:5,mt:.45}}/></Box>
+                            <Chip size="small" label={`${item.rate}%`} color={item.rate >= 90 ? "success" : item.rate >= 75 ? "warning" : "error"} variant="outlined" sx={{ml:1,fontWeight:850}} />
                           </Button>
                         ))}
                       </Stack>
                     </Box>
 
-                    <Box sx={{ p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: 2 }}>
+                    <Box sx={{ ...analyticsPanelSx, p: 1.75 }}>
                       <Typography sx={{ fontWeight: 850 }}>Qualidade por analista</Typography>
                       <Typography variant="caption" color="text.secondary">Indicador de apoio à revisão de classificação, sem avaliação individual automática.</Typography>
                       <Stack spacing={.75} sx={{ mt: 1.25 }}>
-                        {data.serviceAnalytics.analystQuality.slice(0, 6).map((item) => (
-                          <Button key={item.analyst} onClick={() => void openDetails("serviceAnalyst", `Serviços · ${item.analyst}`, item.analyst)} sx={{ justifyContent: "space-between", textTransform: "none", color: "text.primary", px: .5 }}>
-                            <Box sx={{ minWidth: 0, textAlign: "left" }}><Typography variant="body2" noWrap title={item.analyst}>{item.analyst}</Typography><Typography variant="caption" color="text.secondary">{item.issues} revisão(ões) de {item.total}</Typography></Box>
-                            <Chip size="small" label={`${item.rate}%`} color={item.rate >= 90 ? "success" : item.rate >= 75 ? "warning" : "error"} variant="outlined" />
+                        {data.serviceAnalytics.analystQuality.slice(0, 6).map((item,index) => (
+                          <Button key={item.analyst} onClick={() => void openDetails("serviceAnalyst", `Serviços · ${item.analyst}`, item.analyst)} sx={rankingRowSx}>
+                            <Box sx={{width:26,height:26,borderRadius:"50%",display:"grid",placeItems:"center",flexShrink:0,fontSize:12,fontWeight:900,color:chartColors[index%chartColors.length],border:"1px solid currentColor",mr:1}}>{index+1}</Box>
+                            <Box sx={{ minWidth: 0, flex:1, textAlign: "left" }}><Typography variant="body2" noWrap title={item.analyst} sx={{fontWeight:750}}>{item.analyst}</Typography><Typography variant="caption" color="text.secondary">{item.issues} revisão(ões) de {item.total}</Typography><LinearProgress variant="determinate" value={item.rate} sx={{height:5,borderRadius:5,mt:.45}}/></Box>
+                            <Chip size="small" label={`${item.rate}%`} color={item.rate >= 90 ? "success" : item.rate >= 75 ? "warning" : "error"} variant="outlined" sx={{ml:1,fontWeight:850}} />
                           </Button>
                         ))}
                       </Stack>
