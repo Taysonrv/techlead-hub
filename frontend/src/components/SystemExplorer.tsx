@@ -432,7 +432,18 @@ export function SystemExplorer({
             </CardContent>
           </Card>
         ) : !detail ? (
-          <EmptyState />
+          selectedMap && mapTree.length ? (
+            <Card variant="outlined" sx={{borderRadius:3}}>
+              <CardContent>
+                <Stack direction="row" spacing={1} sx={{alignItems:"center",mb:1}}>
+                  <SchemaOutlined color="primary"/>
+                  <Box sx={{flex:1}}><Typography sx={{fontWeight:950}}>{selectedMap.mapName}</Typography><Typography variant="caption" color="text.secondary">Estrutura técnica importada do mapa .mm</Typography></Box>
+                  <Chip size="small" label={`${mapTree.length} nós carregados`} variant="outlined"/>
+                </Stack>
+                <SimerMapTree items={mapTree} focusId={selectedMap.id} onSelect={()=>undefined} onFollowLink={(node)=>void followMapLink(node)} onOpenContainer={(node)=>void openContainer(node)}/>
+              </CardContent>
+            </Card>
+          ) : <EmptyState />
         ) : (
           <Stack spacing={1.5}>
             <Card variant="outlined" sx={{ borderRadius: 3, overflow: "hidden" }}>
