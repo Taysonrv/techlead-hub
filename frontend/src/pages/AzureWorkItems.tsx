@@ -3264,12 +3264,13 @@ export function AzureWorkItems({
         <Card
           variant="outlined"
           sx={{
-            order:
-              5,
+            order: 0,
+            borderColor: "divider",
+            backgroundColor: "background.paper",
           }}
         >
-          <CardContent>
-            <Stack spacing={2}>
+          <CardContent sx={{ py: 1.75, "&:last-child": { pb: 1.75 } }}>
+            <Stack spacing={1.5}>
               <Stack direction={{ xs: "column", md: "row" }} spacing={1} sx={{ justifyContent: "space-between", alignItems: { md: "center" } }}>
                 <Box>
                   <Typography sx={{ fontWeight: 850 }}>Filtros dos Work Items</Typography>
