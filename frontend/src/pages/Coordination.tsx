@@ -78,8 +78,8 @@ type SlaBreakdown = { total:number; concluded:number; openDevelopment:number; av
 type SlaDevelopment = {
   periodDays: number;
   rule: { taskEndState: string; schedule: string; profile: string };
-  dataQuality: { bugsInPeriod: number; linked: number; missingAzure: number; missingTaskCreatedAt: number; missingPriority: number };
-  summary: { bugsWithTask: number; concluded: number; openDevelopment: number; avgSupportMinutes: number; avgFactoryMinutes: number; avgTotalMinutes: number; supportWithinOla: number; factoryWithinOla: number; totalWithinSla: number };
+  dataQuality: { bugsInPeriod: number; linked: number; missingAzure: number; missingTaskCreatedAt: number; missingPriority: number; invalidTimeline?: number };
+  summary: { bugsWithTask: number; concluded: number; openDevelopment: number; avgSupportMinutes: number; avgFactoryMinutes: number; avgTotalMinutes: number; supportWithinOla: number; factoryWithinOla: number; totalWithinSla: number; openFactoryOverOla?: number; openTotalOverSla?: number };
   byPriority: Array<{ priority: string; total: number; concluded: number; avgSupportMinutes: number; avgFactoryMinutes: number; avgTotalMinutes: number; supportWithinOla: number; factoryWithinOla: number; totalWithinSla: number; rows:number[] }>;
   monthly: Array<{ month: string; label: string; total: number; concluded: number; supportWithinPct: number; factoryWithinPct: number; totalWithinPct: number }>;
   owners: Array<SlaBreakdown & { owner:string; rows:number[] }>;
@@ -359,14 +359,15 @@ export function Coordination() {
               </Stack>
               {slaLoading ? <LinearProgress sx={{ borderRadius: 2 }} /> : slaDevelopment ? (
                 <Stack spacing={1.5}>
-                  <Alert severity={slaDevelopment.dataQuality.missingAzure || slaDevelopment.dataQuality.missingTaskCreatedAt || slaDevelopment.dataQuality.missingPriority ? "warning" : "success"} variant="outlined">
-                    Cobertura: {slaDevelopment.dataQuality.linked}/{slaDevelopment.dataQuality.bugsInPeriod} correções vinculadas. Sem Azure: {slaDevelopment.dataQuality.missingAzure} · sem abertura da Task: {slaDevelopment.dataQuality.missingTaskCreatedAt} · sem prioridade: {slaDevelopment.dataQuality.missingPriority}.
+                  <Alert severity={slaDevelopment.dataQuality.missingAzure || slaDevelopment.dataQuality.missingTaskCreatedAt || slaDevelopment.dataQuality.missingPriority || slaDevelopment.dataQuality.invalidTimeline ? "warning" : "success"} variant="outlined">
+                    Cobertura: {slaDevelopment.dataQuality.linked}/{slaDevelopment.dataQuality.bugsInPeriod} correções vinculadas. Sem Azure: {slaDevelopment.dataQuality.missingAzure} · sem abertura da Task: {slaDevelopment.dataQuality.missingTaskCreatedAt} · sem prioridade: {slaDevelopment.dataQuality.missingPriority} · linha temporal inválida: {slaDevelopment.dataQuality.invalidTimeline ?? 0}.
                   </Alert>
-                  <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2,1fr)", xl: "repeat(4,1fr)" }, gap: 1.25 }}>
-                    <KpiCard title="OLA Suporte" value={`${rate(slaDevelopment.summary.supportWithinOla, slaDevelopment.summary.bugsWithTask)}%`} subtitle={`${formatHours(slaDevelopment.summary.avgSupportMinutes)} em média`} info="Da abertura do ticket Movidesk até a abertura da Task no Azure." accent={aliareColors.info} />
-                    <KpiCard title="OLA Desenvolvimento" value={`${rate(slaDevelopment.summary.factoryWithinOla, slaDevelopment.summary.concluded)}%`} subtitle={`${formatHours(slaDevelopment.summary.avgFactoryMinutes)} em média`} info="Da abertura da Task até sua conclusão no Azure." accent={aliareColors.green} />
-                    <KpiCard title="SLA total" value={`${rate(slaDevelopment.summary.totalWithinSla, slaDevelopment.summary.concluded)}%`} subtitle={`${formatHours(slaDevelopment.summary.avgTotalMinutes)} em média`} info="Ciclo completo medido para correções concluídas." accent={aliareColors.warning} />
-                    <KpiCard title="Fora da meta" value={slaDevelopment.outliers.total} subtitle={`${slaDevelopment.outliers.critical} crítico(s)`} info="Correções cujo consumo ultrapassou pelo menos uma meta operacional." accent={aliareColors.error} />
+                  <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2,1fr)", xl: "repeat(5,1fr)" }, gap: 1.25 }}>
+                    <KpiCard title="OLA Suporte" value={`${rate(slaDevelopment.summary.supportWithinOla, slaDevelopment.summary.bugsWithTask)}%`} subtitle={`${formatHours(slaDevelopment.summary.avgSupportMinutes)} em média`} info="Da abertura do ticket Movidesk até a abertura da Task no Azure. Considera todas as correções com Task válida." accent={aliareColors.info} />
+                    <KpiCard title="OLA Desenvolvimento" value={`${rate(slaDevelopment.summary.factoryWithinOla, slaDevelopment.summary.bugsWithTask)}%`} subtitle={`${formatHours(slaDevelopment.summary.avgFactoryMinutes)} consumidas em média`} info="Da abertura da Task até a conclusão; para itens ainda abertos, mede o consumo acumulado até o fim do recorte." accent={aliareColors.green} />
+                    <KpiCard title="SLA concluídos" value={slaDevelopment.summary.concluded ? `${rate(slaDevelopment.summary.totalWithinSla, slaDevelopment.summary.concluded)}%` : "—"} subtitle={`${slaDevelopment.summary.concluded} concluída(s) · ${formatHours(slaDevelopment.summary.avgTotalMinutes)} média`} info="SLA final calculado somente para correções cuja Task já foi concluída." accent={aliareColors.warning} />
+                    <KpiCard title="Em desenvolvimento" value={slaDevelopment.summary.openDevelopment} subtitle={`${slaDevelopment.summary.openFactoryOverOla ?? 0} acima do OLA Dev`} info="Correções com Task aberta. O consumo continua sendo calculado para identificar risco antes da conclusão." accent={aliareColors.purple} />
+                    <KpiCard title="Fora da meta" value={slaDevelopment.outliers.total} subtitle={`${slaDevelopment.outliers.support} suporte · ${slaDevelopment.outliers.factory} desenvolvimento`} info="Itens que já ultrapassaram pelo menos uma meta operacional, incluindo Tasks ainda abertas." accent={aliareColors.error} />
                   </Box>
                   <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", xl: "1fr 1.4fr" }, gap: 1.25 }}>
                     <Box sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2.5, p: 1.5 }}>
@@ -376,9 +377,9 @@ export function Coordination() {
                           <Box key={item.priority} onClick={()=>openSlaRows(`SLA × OLA · ${item.priority}`,item.rows)} sx={{ cursor:"pointer", borderRadius:1.5, p:.45, mx:-.45, "&:hover":{ bgcolor:"action.hover" } }}>
                             <Stack direction="row" sx={{ justifyContent: "space-between", mb: .35 }}>
                               <Typography variant="body2" sx={{ fontWeight: 800 }}>{item.priority} · {item.total} item(ns)</Typography>
-                              <Typography variant="caption" color="text.secondary">Suporte {rate(item.supportWithinOla,item.total)}% · Dev {rate(item.factoryWithinOla,item.concluded)}% · Total {rate(item.totalWithinSla,item.concluded)}%</Typography>
+                              <Typography variant="caption" color="text.secondary">Suporte {rate(item.supportWithinOla,item.total)}% · Dev {rate(item.factoryWithinOla,item.total)}% · SLA concluído {rate(item.totalWithinSla,item.concluded)}%</Typography>
                             </Stack>
-                            <LinearProgress variant="determinate" value={rate(item.totalWithinSla,item.concluded)} sx={{ height: 7, borderRadius: 5 }} />
+                            <LinearProgress variant="determinate" value={item.concluded ? rate(item.totalWithinSla,item.concluded) : 0} sx={{ height: 7, borderRadius: 5 }} />
                           </Box>
                         ))}
                       </Stack>
@@ -407,7 +408,7 @@ export function Coordination() {
                     ))}
                   </Box>
                   <Typography variant="caption" color="text.secondary">
-                    Regra operacional: {slaDevelopment.rule.schedule} · conclusão da Task: {slaDevelopment.rule.taskEndState}. Os percentuais são calculados pelo Hub a partir dos timestamps Movidesk/Azure e não usam os indicadores SLA não suportados pelo TicketApiDto.
+                    Regra operacional: {slaDevelopment.rule.schedule} · conclusão da Task: {slaDevelopment.rule.taskEndState}. Suporte = abertura do ticket → abertura da Task. Desenvolvimento = abertura da Task → status Concluída; enquanto aberta, o consumo é atualizado até o fim do recorte. SLA final usa apenas Tasks concluídas. Registros com sequência temporal inválida são excluídos e sinalizados na cobertura.
                   </Typography>
                 </Stack>
               ) : <Alert severity="warning">Não foi possível carregar a análise SLA × OLA.</Alert>}
