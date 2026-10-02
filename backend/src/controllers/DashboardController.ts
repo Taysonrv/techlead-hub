@@ -276,6 +276,85 @@ export class DashboardController {
   }
 
   /* =========================================================
+     CLASSIFICAÇÕES MOVIEDESK — CAUSA / MOTIVO
+     Consulta server-side para não depender de cache ou transformação
+     do snapshot utilizado pelos demais cards do Dashboard.
+  ========================================================= */
+
+  async classifications(req: Request, res: Response) {
+    try {
+      const period = getPeriod(req);
+      const dateWhere = period
+        ? { createdDate: { gte: period.start, lt: period.end } }
+        : {};
+      const scope = await getLatestSnapshotWhere();
+      const rows = await prisma.ticket.findMany({
+        where: {
+          ...scope,
+          ...dateWhere,
+          category: { in: ["Problema", "Dúvida", "Duvida"], mode: "insensitive" },
+        },
+        select: { id: true, category: true, cause: true, reason: true },
+      });
+      const norm = (value?: string | null) => (value ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLocaleLowerCase("pt-BR");
+      const canonicalCause = (value?: string | null) => {
+        const v = norm(value);
+        if (!v || v.includes("bug no produto / erp")) return null;
+        if (v.includes("erro operacional")) return "Erro operacional";
+        if (v.includes("configuracao")) return "Configuração";
+        if (v.includes("nao identificada")) return "Não identificada";
+        if (v.includes("resolvido pelo usuario")) return "Resolvido pelo usuário";
+        if (v.includes("sefaz") || v.includes("aplicativo")) return "SEFAZ ou aplicativo de terceiros";
+        return null;
+      };
+      const canonicalReason = (value?: string | null) => {
+        const v = norm(value);
+        if (v.includes("apoio processos operacionais")) return "Apoio processos operacionais";
+        if (v.includes("configuracao")) return "Configuração";
+        if (v.includes("duvida interna")) return "Dúvida interna";
+        if (v.includes("inexperiencia do usuario")) return "Inexperiência do usuário";
+        if (v.includes("informacao")) return "Informação";
+        if (v.includes("integracao com terceiros")) return "Integração com terceiros";
+        if (v.includes("priorizacao")) return "Priorização";
+        return null;
+      };
+      const aggregate = (items: Array<{ id: number; label: string }>) => {
+        const grouped = new Map<string, { label: string; total: number; ticketIds: number[] }>();
+        for (const item of items) {
+          const current = grouped.get(item.label) ?? { label: item.label, total: 0, ticketIds: [] };
+          current.total += 1;
+          current.ticketIds.push(item.id);
+          grouped.set(item.label, current);
+        }
+        return [...grouped.values()].sort((a,b) => b.total - a.total);
+      };
+      const problemRows = rows.filter((row) => norm(row.category) === "problema");
+      const doubtRows = rows.filter((row) => norm(row.category) === "duvida");
+      const causes = aggregate(problemRows.flatMap((row) => {
+        const label = canonicalCause(row.cause);
+        return label ? [{ id: row.id, label }] : [];
+      }));
+      const reasons = aggregate(doubtRows.flatMap((row) => {
+        const label = canonicalReason(row.reason);
+        return label ? [{ id: row.id, label }] : [];
+      }));
+      return res.json({
+        causes,
+        reasons,
+        diagnostics: {
+          problemTotal: problemRows.length,
+          problemClassified: causes.reduce((sum,item) => sum + item.total, 0),
+          doubtTotal: doubtRows.length,
+          doubtClassified: reasons.reduce((sum,item) => sum + item.total, 0),
+        },
+      });
+    } catch (error) {
+      console.error("Erro ao buscar classificações do Dashboard:", error);
+      return res.status(500).json({ error: "Não foi possível carregar Causas e Motivos." });
+    }
+  }
+
+  /* =========================================================
      PONTOS DE ATENÇÃO
   ========================================================= */
 
