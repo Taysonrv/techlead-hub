@@ -247,6 +247,7 @@ export function Import() {
   const [historyExpanded, setHistoryExpanded] = useState(false);
   const [classificationCoverage, setClassificationCoverage] = useState<ClassificationCoverage | null>(null);
   const [classificationBusy, setClassificationBusy] = useState(false);
+  const [syncNotice, setSyncNotice] = useState<string | null>(null);
 
   const fileSize =
     useMemo(
@@ -374,8 +375,9 @@ export function Import() {
       setResult(null);
       setError(null);
       window.dispatchEvent(new CustomEvent("techlead-hub:sync-completed"));
-      alert(`Classificações consolidadas: ${response.data.causesUpdated} causa(s), ${response.data.reasonsUpdated} motivo(s) e ${response.data.remoteUpdated} ticket(s) relidos do Movidesk.`);
+      setSyncNotice(`Classificações consolidadas: ${response.data.causesUpdated} causa(s), ${response.data.reasonsUpdated} motivo(s) e ${response.data.remoteUpdated} ticket(s) relidos do Movidesk.`);
     } catch (err: unknown) {
+      setSyncNotice(null);
       setError(getApiErrorMessage(err, "Não foi possível consolidar Causas e Motivos. Se a API Movidesk estiver ocupada, aguarde a sincronização atual concluir."));
     } finally {
       setClassificationBusy(false);
@@ -826,6 +828,7 @@ export function Import() {
                 {classificationBusy ? "Consolidando..." : "Consolidar causas e motivos"}
               </Button>
             </Stack>
+            {syncNotice && <Alert severity="success" onClose={() => setSyncNotice(null)} sx={{ mt: 1.5 }}>{syncNotice}</Alert>}
             {classificationCoverage ? (
               <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" }, gap: 1.25 }}>
                 {([["Problema / Causa", classificationCoverage.problems], ["Dúvida / Motivo", classificationCoverage.doubts]] as const).map(([label,item]) => (
