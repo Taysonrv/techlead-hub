@@ -372,10 +372,10 @@ export function Settings() {
       setCauseBackfillBusy(true);
       setError(null);
       setSuccess(null);
-      const response = await api.post<{ scanned: number; updated: number; causesUpdated: number; reasonsUpdated: number }>("/movidesk/causes/backfill", {}, { timeout: 120_000 });
+      const response = await api.post<{ scanned: number; updated: number; causesUpdated: number; reasonsUpdated: number; remoteScanned: number; remoteUpdated: number }>("/movidesk/causes/backfill", {}, { timeout: 180_000 });
       const classifications = await api.get<ClassificationCoverage>("/movidesk/classifications/coverage", { timeout: 60_000 });
       setClassificationCoverage(classifications.data);
-      setSuccess(`Classificações consolidadas: ${response.data.causesUpdated} causa(s) e ${response.data.reasonsUpdated} motivo(s) atualizados entre ${response.data.scanned} candidato(s) da carteira 2026+.`);
+      setSuccess(`Classificações atualizadas: ${response.data.remoteUpdated} ticket(s) relidos do Movidesk recente; ${response.data.causesUpdated} causa(s) e ${response.data.reasonsUpdated} motivo(s) consolidados localmente. ${response.data.scanned} candidato(s) 2026+ analisados.`);
     } catch (backfillError: any) {
       setError(backfillError?.response?.data?.message ?? "Não foi possível consolidar as causas e motivos dos tickets.");
     } finally {
