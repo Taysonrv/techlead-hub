@@ -829,7 +829,7 @@ export function Dashboard() {
     },
     {
       title: "Abertos · Carteira",
-      value: summary.abertosNoPeriodo,
+      value: summary.abertosOperacaoNoPeriodo,
       description: "Toda demanda aberta pelos clientes da carteira",
       severity: "default" as Severity,
       info: {
@@ -1378,7 +1378,7 @@ export function Dashboard() {
                     Abertos × Resolvidos × Fechados
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
-                    Fluxo diário da carteira • entrada, resolução e fechamento no período
+                    Fluxo diário da Operação SIMER • entrada, resolução e fechamento no período
                   </Typography>
                 </Box>
               </Stack>
@@ -1463,7 +1463,7 @@ export function Dashboard() {
           <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", xl: "1fr 1fr" }, gap: 1.5 }}>
             <OperationalRankingCard
               title="Áreas de negócio"
-              subtitle="Distribuição dos tickets abertos no período pelos dados normalizados do Movidesk"
+              subtitle="Distribuição das entradas da Operação SIMER pelos dados normalizados do Movidesk"
               data={businessAreas}
               emptyMessage="Nenhuma área de negócio informada no período."
               onItemClick={(label) => showTickets(
