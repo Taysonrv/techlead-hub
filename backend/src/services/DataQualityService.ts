@@ -59,7 +59,8 @@ export class DataQualityService {
     const movideskIds = scopedTickets.map((item) => item.movideskId).filter((value): value is number => value !== null);
     const csatResponses = movideskIds.length ? await prisma.movideskSurveyResponse.findMany({
       where: { ticketId: { in: movideskIds }, type: 2 },
-      orderBy: { responseDate: "desc" },
+      orderBy: [{ ticketId: "asc" }, { responseDate: "desc" }],
+      distinct: ["ticketId"],
       select: { ticketId: true, value: true, commentary: true, responseDate: true },
     }) : [];
     const csatByTicket = new Map<number, (typeof csatResponses)[number]>();
