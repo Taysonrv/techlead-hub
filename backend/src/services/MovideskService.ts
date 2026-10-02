@@ -714,6 +714,85 @@ export class MovideskService {
     return { scanned: candidates.length, updated: causesUpdated + reasonsUpdated, causesUpdated, reasonsUpdated };
   }
 
+  async classificationCoverage() {
+    const tickets = await prisma.ticket.findMany({
+      where: {
+        AND: [
+          { createdDate: { gte: SYNC_SCOPE_START } },
+          { client: { in: [...SIMER_CLIENTS], mode: "insensitive" } },
+          { category: { in: ["Problema", "Dúvida", "Duvida"], mode: "insensitive" } },
+          { isDeleted: false },
+        ],
+      },
+      select: { movideskId: true, category: true, cause: true, reason: true, rawData: true },
+    });
+    const normalize = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLocaleLowerCase("pt-BR");
+    const problems = tickets.filter((ticket) => normalize(ticket.category ?? "") === "problema");
+    const doubts = tickets.filter((ticket) => normalize(ticket.category ?? "") === "duvida");
+    const distribution = (values: Array<string | null>) => {
+      const grouped = new Map<string, number>();
+      values.filter((value): value is string => Boolean(value?.trim())).forEach((value) => grouped.set(value.trim(), (grouped.get(value.trim()) ?? 0) + 1));
+      return [...grouped.entries()].map(([label, total]) => ({ label, total })).sort((a,b) => b.total - a.total);
+    };
+    const diagnosticFields = (subset: typeof tickets, field: "cause" | "reason") => {
+      const aggregate = new Map<string, { customFieldId: number | null; values: Map<string, number>; tickets: Set<number> }>();
+      for (const ticket of subset.filter((item) => !item[field])) {
+        if (!ticket.rawData || typeof ticket.rawData !== "object" || Array.isArray(ticket.rawData)) continue;
+        const raw = ticket.rawData as Record<string, unknown>;
+        const fields = Array.isArray(raw.customFieldValues) ? raw.customFieldValues : [];
+        for (const rawField of fields) {
+          if (!rawField || typeof rawField !== "object" || Array.isArray(rawField)) continue;
+          const item = rawField as Record<string, unknown>;
+          const customFieldId = typeof item.customFieldId === "number" ? item.customFieldId : Number(item.customFieldId);
+          const values: string[] = [];
+          if (typeof item.value === "string" && item.value.trim()) values.push(item.value.trim());
+          if (Array.isArray(item.items)) for (const child of item.items) {
+            if (!child || typeof child !== "object" || Array.isArray(child)) continue;
+            const value = (child as Record<string, unknown>).customFieldItem;
+            if (typeof value === "string" && value.trim()) values.push(value.trim());
+          }
+          for (const value of values.filter((value) => value.length <= 100)) {
+            const key = Number.isFinite(customFieldId) ? String(customFieldId) : "unknown";
+            const current = aggregate.get(key) ?? { customFieldId: Number.isFinite(customFieldId) ? customFieldId : null, values: new Map<string, number>(), tickets: new Set<number>() };
+            current.values.set(value, (current.values.get(value) ?? 0) + 1);
+            current.tickets.add(ticket.movideskId);
+            aggregate.set(key, current);
+          }
+        }
+      }
+      return [...aggregate.values()]
+        .map((item) => ({
+          customFieldId: item.customFieldId,
+          tickets: item.tickets.size,
+          values: [...item.values.entries()].map(([value,total]) => ({value,total})).sort((a,b)=>b.total-a.total).slice(0,12),
+        }))
+        .sort((a,b)=>b.tickets-a.tickets)
+        .slice(0,20);
+    };
+    const problemWithCause = problems.filter((ticket) => Boolean(ticket.cause?.trim())).length;
+    const doubtWithReason = doubts.filter((ticket) => Boolean(ticket.reason?.trim())).length;
+    return {
+      scope: { start: SYNC_SCOPE_START, tickets: tickets.length },
+      problems: {
+        total: problems.length,
+        classified: problemWithCause,
+        missing: problems.length - problemWithCause,
+        coveragePct: problems.length ? Number((problemWithCause / problems.length * 100).toFixed(1)) : 0,
+        distribution: distribution(problems.map((ticket) => ticket.cause)),
+        unclassifiedCustomFields: diagnosticFields(problems, "cause"),
+      },
+      doubts: {
+        total: doubts.length,
+        classified: doubtWithReason,
+        missing: doubts.length - doubtWithReason,
+        coveragePct: doubts.length ? Number((doubtWithReason / doubts.length * 100).toFixed(1)) : 0,
+        distribution: distribution(doubts.map((ticket) => ticket.reason)),
+        unclassifiedCustomFields: diagnosticFields(doubts, "reason"),
+      },
+      generatedAt: new Date().toISOString(),
+    };
+  }
+
   async dataCoverage() {
     const total = await prisma.ticket.count();
     const fields = [
