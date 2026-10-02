@@ -12,6 +12,18 @@ export type ReleaseNote = {
 export const FALLBACK_APP_VERSION = import.meta.env.VITE_APP_VERSION || "development";
 
 export const releaseNotes: Record<string, ReleaseNote> = {
+  "1.0.0-rc.20": {
+    version: "1.0.0-rc.20",
+    title: "Polimento final, Dashboard consistente e escopo SIMER",
+    items: [
+      { title: "Dashboard de classificação corrigido", description: "Causas de Problema e Motivos de Dúvida passam a ser calculados no backend pelo período selecionado, com drill-down usando exatamente a mesma população do indicador." },
+      { title: "Dimensões Movidesk separadas", description: "Áreas de negócio deixam de reutilizar Serviço como fallback, eliminando rankings duplicados e preservando o significado de cada dimensão." },
+      { title: "Squad SIMER consistente", description: "Filtros e análises de responsáveis nas telas revisadas ficam restritos aos analistas oficiais do Suporte SIMER, evitando contaminação por Produto e outras squads." },
+      { title: "Produtividade por apontamentos", description: "Horas registradas utilizam os apontamentos estruturados do Movidesk e o mesmo quadro operacional aplicado aos demais indicadores." },
+      { title: "Sincronização auditável", description: "Cobertura, enriquecimento, causas e motivos permanecem centralizados em Dados e Sincronizações, com processamento incremental e diagnóstico de pendências." },
+      { title: "Entrega Web segura", description: "Atualização Web mantém imagem versionada, migration antes da troca da aplicação e validação automática de readiness." },
+    ],
+  },
   "1.0.0-rc.19": {
     version: "1.0.0-rc.19",
     title: "Coordenação, Movidesk auditável e operação Web",
