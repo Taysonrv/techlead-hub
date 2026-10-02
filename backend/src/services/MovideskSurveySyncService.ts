@@ -75,7 +75,10 @@ export class MovideskSurveySyncService {
       const response = await this.getResponses({ responseDateGreaterThan: queryStart.toISOString(), limit: 100, ...(cursor ? { startingAfter: cursor } : {}) });
       const body: Record<string, unknown> = response.data && typeof response.data === "object" && !Array.isArray(response.data) ? response.data as Record<string, unknown> : {};
       const rows = Array.isArray(body.items) ? body.items as Array<Record<string, unknown>> : [];
-      if (!rows.length) break;
+      if (!rows.length) {
+        if (body.hasMore === true) throw new Error(`CSAT interrompido: API informou hasMore=true, mas a página ${pages} veio vazia.`);
+        break;
+      }
       const signature = rows.map((row) => String(row.id ?? "")).join("|");
       if (seenPages.has(signature)) throw new Error(`CSAT interrompido: API repetiu a página ${pages}; paginação não avançou.`);
       seenPages.add(signature);
@@ -85,9 +88,12 @@ export class MovideskSurveySyncService {
         processed += 1;
         const id = typeof row.id === "string" ? row.id.trim() : "";
         const ticketId = Number(row.ticketId);
-        if (!id || !Number.isSafeInteger(ticketId) || !scoped.has(ticketId)) { skippedOutsideScope += 1; return []; }
         const parsedDate = typeof row.responseDate === "string" ? new Date(row.responseDate) : null;
+        // O cursor temporal acompanha o stream global retornado pela API. A persistência
+        // continua restrita aos tickets SIMER, mas respostas externas não podem impedir
+        // o watermark de avançar e provocar reprocessamento desnecessário no dia seguinte.
         if (parsedDate && !Number.isNaN(parsedDate.getTime()) && parsedDate > maxResponseDate) maxResponseDate = parsedDate;
+        if (!id || !Number.isSafeInteger(ticketId) || !scoped.has(ticketId)) { skippedOutsideScope += 1; return []; }
         const data = {
           questionId: typeof row.questionId === "string" ? row.questionId : null,
           type: Number.isSafeInteger(Number(row.type)) ? Number(row.type) : null,
@@ -121,7 +127,7 @@ export class MovideskSurveySyncService {
       const next: string | null = typeof body.startingAfter === "string" ? body.startingAfter :
         typeof body.nextStartingAfter === "string" ? body.nextStartingAfter :
         last && typeof last.id === "string" ? last.id : null;
-      if (!next || next === cursor) break;
+      if (!next || next === cursor) throw new Error(`CSAT interrompido: paginação não forneceu um cursor válido na página ${pages}.`);
       cursor = next;
       await prisma.auditLog.create({ data: { action: CSAT_CHECKPOINT_ACTION, metadata: { completed: false, cursor, watermark: maxResponseDate.toISOString(), processedAt: new Date().toISOString() } } });
       await sleep(WAIT_MS);
