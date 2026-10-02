@@ -47,6 +47,7 @@ import {
 
 import { useNavigate } from "react-router-dom";
 import { api } from "../services/api";
+import { getTicketSnapshot } from "../services/ticketSnapshot";
 import { useFilters } from "../context/FiltersContext";
 import { PeriodFilter } from "../components/PeriodFilter";
 import { PageHeader } from "../components/PageHeader";
@@ -180,8 +181,8 @@ export function Performance() {
       try {
         setLoading(true);
         setError(null);
-        const response = await api.get<Ticket[]>("/dashboard/tickets", { signal: controller.signal });
-        if (!controller.signal.aborted) setTickets(response.data);
+        const snapshot = await getTicketSnapshot<Ticket>();
+        if (!controller.signal.aborted) setTickets(snapshot);
       } catch (requestError) {
         if (controller.signal.aborted) return;
         console.error("Erro ao carregar desempenho:", requestError);
@@ -1304,16 +1305,6 @@ export function Performance() {
                 showLastButton
               />
       </Card>
-
-      <Alert
-        severity="info"
-        variant="outlined"
-        sx={{ mt: 1.75, borderRadius: 2 }}
-      >
-        <strong>Próxima camada:</strong> esta página já está preparada para receber
-        CSAT geral, por analista e por squad. Para isso, precisamos incorporar os
-        dados de avaliação do Movidesk à importação.
-      </Alert>
 
       <Drawer
         anchor="right"
