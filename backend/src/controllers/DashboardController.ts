@@ -864,7 +864,7 @@ export class DashboardController {
         select: {
           id: true, movideskId: true, protocol: true, subject: true,
           client: true, contact: true, owner: true, ownerTeam: true,
-          category: true, cause: true, causeDetail: true, urgency: true, status: true,
+          category: true, cause: true, reason: true, causeDetail: true, urgency: true, status: true,
           baseStatus: true, justification: true, service: true,
           department: true, createdDate: true, dueDate: true,
           firstResponseDueDate: true, firstResponseDate: true,
@@ -1095,6 +1095,9 @@ export class DashboardController {
 
             cause:
               ticket.cause,
+
+            reason:
+              ticket.reason,
 
             causeDetail:
               ticket.causeDetail,
