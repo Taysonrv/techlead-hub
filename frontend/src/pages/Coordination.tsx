@@ -233,6 +233,17 @@ export function Coordination() {
     [data],
   );
 
+  const workloadSummary = useMemo(() => {
+    const rows = data?.workload ?? [];
+    const tickets = rows.reduce((sum, item) => sum + item.tickets, 0);
+    const workItems = rows.reduce((sum, item) => sum + item.workItems, 0);
+    const total = tickets + workItems;
+    return {
+      tickets, workItems, total,
+      average: rows.length ? Number((total / rows.length).toFixed(1)) : 0,
+    };
+  }, [data]);
+
   const cards: Array<[DetailKind, string, number, string]> = data
     ? [
         ["backlog", "Backlog atual", data.indicators.openTickets, "Atendimentos abertos do escopo cooperativas."],
@@ -685,9 +696,9 @@ export function Coordination() {
                   <Stack direction={{ xs: "column", md: "row" }} spacing={1} sx={{ justifyContent: "space-between", alignItems: { md: "center" }, mb: 1.5 }}>
                     <Box>
                       <Typography variant="h6" sx={{ fontWeight: 850 }}>Distribuição da carga operacional</Typography>
-                      <Typography variant="body2" color="text.secondary">Tickets e itens Azure por analista da equipe oficial.</Typography>
+                      <Typography variant="body2" color="text.secondary">Backlog Movidesk + Work Items Azure atribuídos atualmente a cada analista · ${analyticPeriodLabel}.</Typography>
                     </Box>
-                    <Chip label="Visão comparativa" variant="outlined" />
+                    <Stack direction="row" spacing={.75} useFlexGap sx={{flexWrap:"wrap"}}><Chip size="small" label={`${workloadSummary.total} itens`} variant="outlined" /><Chip size="small" label={`Média ${workloadSummary.average}/analista`} variant="outlined" /></Stack>
                   </Stack>
                   {data.workload.length ? <Box sx={{ width: "100%", height: Math.max(250, data.workload.length * 42) }}>
                     <ResponsiveContainer width="100%" height="100%">
@@ -695,7 +706,7 @@ export function Coordination() {
                         <CartesianGrid stroke={theme.palette.divider} strokeDasharray="4 4" horizontal={false} opacity={0.55} />
                         <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11, fill: theme.palette.text.secondary }} axisLine={false} tickLine={false} />
                         <YAxis type="category" dataKey="analyst" width={104} tick={{ fontSize: 11, fill: theme.palette.text.secondary }} axisLine={false} tickLine={false} tickFormatter={(value:string)=>{const parts=value.trim().split(/\s+/);return parts.length>1?`${parts[0]} ${parts.at(-1)?.charAt(0)}.`:value}} />
-                        <ChartTooltip contentStyle={{ borderRadius: 12, border: `1px solid ${theme.palette.divider}`, background: theme.palette.background.paper, boxShadow: "0 14px 36px rgba(0,0,0,.18)" }} cursor={{ fill: theme.palette.action.hover }} />
+                        <ChartTooltip contentStyle={{ borderRadius: 12, border: `1px solid ${theme.palette.divider}`, background: theme.palette.background.paper, boxShadow: "0 14px 36px rgba(0,0,0,.18)" }} cursor={{ fill: theme.palette.action.hover }} /><Legend iconType="circle" wrapperStyle={{fontSize:11,paddingTop:8}} />
                         <Bar dataKey="tickets" name="Tickets" stackId="load" fill={aliareColors.info} radius={[0, 0, 0, 0]} cursor="pointer" onClick={(_, index) => { const analyst = data.workload[index]?.analyst; if (analyst) void openDetails("analyst", `Carga de ${analyst}`, analyst); }} />
                         <Bar dataKey="workItems" name="Azure" stackId="load" fill={aliareColors.green} radius={[0, 6, 6, 0]} cursor="pointer" onClick={(_, index) => { const analyst = data.workload[index]?.analyst; if (analyst) void openDetails("analyst", `Carga de ${analyst}`, analyst); }} />
                       </BarChart>
@@ -716,10 +727,10 @@ export function Coordination() {
                         Carga consolidada por analista
                       </Typography>
                       <Typography variant="body2" color="text.secondary">
-                        Somente a equipe oficial de Suporte e Sustentação.
+                        Composição da carga por fonte, participação no backlog da equipe e acesso ao recorte individual.
                       </Typography>
                     </Box>
-                    <Chip label={`${data.workload.length} analista(s) com carga`} variant="outlined" />
+                    <Stack direction="row" spacing={.75}><Chip size="small" label={`${workloadSummary.tickets} tickets`} variant="outlined" /><Chip size="small" label={`${workloadSummary.workItems} Azure`} variant="outlined" /></Stack>
                   </Stack>
 
                   <Stack spacing={2}>
@@ -741,16 +752,14 @@ export function Coordination() {
                             <Tooltip title="Clique para abrir o recorte operacional deste analista."><InfoOutlined sx={{ fontSize: 15, color: "text.secondary" }} /></Tooltip>
                           </Stack>
                         </Stack>
-                        <LinearProgress
-                          variant="determinate"
-                          value={(item.total / maximum) * 100}
-                          sx={{
-                            height: 8,
-                            borderRadius: 5,
-                            bgcolor: "rgba(47,111,237,.08)",
-                            "& .MuiLinearProgress-bar": { bgcolor: aliareColors.info },
-                          }}
-                        />
+                        <Stack direction="row" spacing={1} sx={{alignItems:"center",mb:.7}}>
+                          <Box sx={{flex:1,height:9,borderRadius:5,overflow:"hidden",display:"flex",bgcolor:"rgba(47,111,237,.08)"}}>
+                            <Box sx={{width:`${item.total ? item.tickets/item.total*100 : 0}%`,bgcolor:aliareColors.info,transition:"width .2s ease"}} />
+                            <Box sx={{width:`${item.total ? item.workItems/item.total*100 : 0}%`,bgcolor:aliareColors.green,transition:"width .2s ease"}} />
+                          </Box>
+                          <Typography variant="caption" sx={{minWidth:72,textAlign:"right",fontWeight:800}}>{workloadSummary.total ? (item.total/workloadSummary.total*100).toLocaleString("pt-BR",{maximumFractionDigits:1}) : 0}% da carga</Typography>
+                        </Stack>
+                        <LinearProgress variant="determinate" value={(item.total / maximum) * 100} sx={{height:3,borderRadius:3,bgcolor:"rgba(47,111,237,.06)","& .MuiLinearProgress-bar":{bgcolor:"text.disabled"}}} />
                       </Box>
                     ))}
                     {!data.workload.length && (
