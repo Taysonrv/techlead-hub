@@ -2,6 +2,7 @@
 
 ## 1.0.0-rc.19 — 2026-10-02
 
+- Dashboard de Causa/Motivo agora usa endpoint analítico server-side com o mesmo escopo SIMER e período global, eliminando divergência entre cobertura persistida e snapshot do frontend; drill-down usa os IDs retornados pela mesma consulta.
 ### Central da Coordenação e indicadores
 - Revisão do painel SLA × OLA com separação entre tempo de Suporte, Desenvolvimento e SLA total.
 - Indicadores por prioridade P1–P4, riscos em desenvolvimento, estouros de OLA/SLA e tratamento de linhas temporais inconsistentes.
