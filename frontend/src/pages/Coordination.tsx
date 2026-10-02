@@ -498,12 +498,12 @@ export function Coordination() {
                   <Stack direction={{ xs: "column", lg: "row" }} spacing={1.5} sx={{ justifyContent: "space-between", alignItems: { lg: "center" }, mb: 1.5 }}>
                     <Box>
                       <Typography variant="h6" sx={{ fontWeight: 850 }}>Qualidade da classificação por Serviço</Typography>
-                      <Typography variant="body2" color="text.secondary">Atendimentos abertos da carteira da squad (cliente ou analista da squad) e qualidade do Serviço informado no Movidesk.</Typography>
+                      <Typography variant="body2" color="text.secondary">Atendimentos abertos dos clientes da carteira SIMER e qualidade da hierarquia de Serviço sincronizada do Movidesk.</Typography>
                     </Box>
                     <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap" }}>
                       <Chip label={`${data.serviceAnalytics.classificationRate}% específicos`} color={data.serviceAnalytics.classificationRate >= 90 ? "success" : data.serviceAnalytics.classificationRate >= 75 ? "warning" : "error"} variant="outlined" />
                       <Chip label={`${data.serviceAnalytics.catalogSize} serviços conhecidos`} variant="outlined" />
-                      <Chip label="Escopo: clientes ou analistas da squad" variant="outlined" />
+                      <Chip label="Escopo: clientes da carteira SIMER" variant="outlined" />
                     </Stack>
                   </Stack>
                   <Stack direction={{ xs: "column", md: "row" }} spacing={1} sx={{ justifyContent: "space-between", alignItems: { md: "center" }, mb: 1.5 }}>
