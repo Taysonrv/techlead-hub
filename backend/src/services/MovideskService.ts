@@ -742,6 +742,13 @@ export class MovideskService {
     });
     let causesUpdated = 0;
     let reasonsUpdated = 0;
+    await prisma.ticket.updateMany({
+      where: {
+        category: { equals: "Problema", mode: "insensitive" },
+        cause: { contains: "Bug no Produto / ERP", mode: "insensitive" },
+      },
+      data: { cause: null },
+    });
     const normalize = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLocaleLowerCase("pt-BR");
     const causeTokens = ["erro operacional", "configuracao", "nao identificada", "resolvido pelo usuario", "sefaz", "aplicativos de terceiros", "aplicativo de terceiros"];
     const reasonTokens = ["apoio processos operacionais", "configuracao", "duvida interna", "inexperiencia do usuario", "informacao", "integracao com terceiros", "priorizacao"];
