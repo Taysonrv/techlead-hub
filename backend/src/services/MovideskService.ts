@@ -664,48 +664,60 @@ export class MovideskService {
         AND: [
           { createdDate: { gte: SYNC_SCOPE_START } },
           { client: { in: [...SIMER_CLIENTS], mode: "insensitive" } },
-          { cause: null },
+          { category: { in: ["Problema", "Dúvida", "Duvida"], mode: "insensitive" } },
           { rawData: { not: Prisma.JsonNull } },
           { isDeleted: false },
         ],
       },
-      select: { id: true, rawData: true },
+      select: { id: true, category: true, cause: true, reason: true, rawData: true },
     });
-    let updated = 0;
+    let causesUpdated = 0;
+    let reasonsUpdated = 0;
     const normalize = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLocaleLowerCase("pt-BR");
-    const known = ["erro operacional", "configuracao", "solucao de contorno", "nao identificada", "sefaz", "aplicativos de terceiros"];
-    for (const ticket of candidates) {
-      if (!ticket.rawData || typeof ticket.rawData !== "object" || Array.isArray(ticket.rawData)) continue;
-      const raw = ticket.rawData as Record<string, unknown>;
+    const causeTokens = ["erro operacional", "configuracao", "nao identificada", "resolvido pelo usuario", "sefaz", "aplicativos de terceiros", "aplicativo de terceiros"];
+    const reasonTokens = ["apoio processos operacionais", "configuracao", "duvida interna", "inexperiencia do usuario", "informacao", "integracao com terceiros", "priorizacao"];
+    const extract = (rawData: Prisma.JsonValue, tokens: string[]) => {
+      if (!rawData || typeof rawData !== "object" || Array.isArray(rawData)) return null;
+      const raw = rawData as Record<string, unknown>;
       const fields = Array.isArray(raw.customFieldValues) ? raw.customFieldValues : [];
-      let cause: string | null = null;
       for (const field of fields) {
         if (!field || typeof field !== "object" || Array.isArray(field)) continue;
         const item = field as Record<string, unknown>;
         const values: string[] = [];
         if (typeof item.value === "string" && item.value.trim()) values.push(item.value.trim());
-        if (Array.isArray(item.items)) {
-          for (const child of item.items) {
-            if (!child || typeof child !== "object" || Array.isArray(child)) continue;
-            const value = (child as Record<string, unknown>).customFieldItem;
-            if (typeof value === "string" && value.trim()) values.push(value.trim());
-          }
+        if (Array.isArray(item.items)) for (const child of item.items) {
+          if (!child || typeof child !== "object" || Array.isArray(child)) continue;
+          const value = (child as Record<string, unknown>).customFieldItem;
+          if (typeof value === "string" && value.trim()) values.push(value.trim());
         }
-        cause = values.find((value) => known.some((token) => normalize(value).includes(token))) ?? null;
-        if (cause) break;
+        const found = values.find((value) => value.length <= 80 && tokens.some((token) => normalize(value).includes(token)));
+        if (found) return found;
       }
-      if (cause) {
-        await prisma.ticket.update({ where: { id: ticket.id }, data: { cause } });
-        updated += 1;
+      return null;
+    };
+    for (const ticket of candidates) {
+      const category = normalize(ticket.category ?? "");
+      if (category === "problema") {
+        const cause = extract(ticket.rawData as Prisma.JsonValue, causeTokens);
+        if (cause && cause !== ticket.cause) {
+          await prisma.ticket.update({ where: { id: ticket.id }, data: { cause, reason: null } });
+          causesUpdated += 1;
+        }
+      } else if (category === "duvida") {
+        const reason = extract(ticket.rawData as Prisma.JsonValue, reasonTokens);
+        if (reason && reason !== ticket.reason) {
+          await prisma.ticket.update({ where: { id: ticket.id }, data: { reason, cause: null } });
+          reasonsUpdated += 1;
+        }
       }
     }
-    return { scanned: candidates.length, updated };
+    return { scanned: candidates.length, updated: causesUpdated + reasonsUpdated, causesUpdated, reasonsUpdated };
   }
 
   async dataCoverage() {
     const total = await prisma.ticket.count();
     const fields = [
-      "client", "contact", "owner", "ownerTeam", "category", "cause", "urgency",
+      "client", "contact", "owner", "ownerTeam", "category", "cause", "reason", "urgency",
       "serviceFirstLevel", "serviceSecondLevel", "serviceThirdLevel", "businessArea",
       "lastUpdate", "dueDate", "firstResponseDate", "resolvedDate", "closedDate",
       "slaAgreement", "taskNumber", "registeredVersion", "deliveredVersion",
