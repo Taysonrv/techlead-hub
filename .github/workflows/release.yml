@@ -194,9 +194,13 @@ jobs:
           # workflow_dispatch não cria a tag automaticamente. Para o canal estável,
           # garanta que a tag imutável da versão aponte para o commit validado pelo job.
           if (-not (git ls-remote --exit-code --tags origin "refs/tags/$env:RELEASE_TAG" 2>$null)) {
-            git tag -a $env:RELEASE_TAG -m "TechLead Hub $env:RELEASE_VERSION"
-            git push origin $env:RELEASE_TAG
-            if ($LASTEXITCODE -ne 0) { throw "Não foi possível criar a tag $env:RELEASE_TAG." }
+            # Tag leve: não exige identidade git.user.name/user.email no runner.
+            # O SHA explícito garante que a tag aponte exatamente para o commit
+            # que foi checkout/buildado/testado nesta execução.
+            git tag $env:RELEASE_TAG $env:GITHUB_SHA
+            if ($LASTEXITCODE -ne 0) { throw "Não foi possível criar localmente a tag $env:RELEASE_TAG." }
+            git push origin "refs/tags/$env:RELEASE_TAG"
+            if ($LASTEXITCODE -ne 0) { throw "Não foi possível publicar a tag $env:RELEASE_TAG." }
           }
 
           if (-not (gh release view $env:RELEASE_TAG --repo $repo 2>$null)) {
