@@ -290,6 +290,7 @@ model Ticket {
   subject       String
   category      String?
   cause         String?
+  reason        String?
   urgency       String?
   status        String
   baseStatus    String?
