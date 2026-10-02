@@ -41,7 +41,7 @@ export class CoordinationService {
       ? coordinationAzurePriorityPredicate(kind)
       : coordinationOpenAzurePredicate();
 
-    const wantsTickets = ["backlog", "critical", "stale", "dueSoon", "overdue", "analyst", "service", "serviceModule", "serviceClient", "serviceAnalyst"].includes(kind);
+    const wantsTickets = ["backlog", "critical", "stale", "dueSoon", "overdue", "analyst", "service", "serviceThirdLevel", "serviceModule", "serviceClient", "serviceAnalyst"].includes(kind);
     const wantsAzure = ["blocked", "unassigned", "analyst"].includes(kind);
 
     const [tickets, workItems] = await Promise.all([
@@ -53,7 +53,7 @@ export class CoordinationService {
                 ticketPriority,
                 ...(analyst ? [{ owner: { equals: analyst, mode: "insensitive" as const } }] : []),
                 ...(serviceClient ? [{ client: { equals: serviceClient, mode: "insensitive" as const } }] : []),
-                ...(serviceSince && ["service","serviceModule","serviceClient","serviceAnalyst"].includes(kind) ? [{ createdDate: { gte: serviceSince } }] : []),
+                ...(serviceSince && ["service","serviceThirdLevel","serviceModule","serviceClient","serviceAnalyst"].includes(kind) ? [{ createdDate: { gte: serviceSince } }] : []),
                 ...(serviceModule ? [{
                   OR: [
                     { service: { contains: serviceModule, mode: "insensitive" as const } },
@@ -100,7 +100,9 @@ export class CoordinationService {
     const ticketServicePath = (ticket: (typeof tickets)[number]) =>
       ticket.serviceSecondLevel?.trim() || "";
     const serviceFilteredTickets = serviceName
-      ? tickets.filter((ticket) => normalizeService(ticket.serviceSecondLevel?.trim() || "") === normalizeService(serviceName))
+      ? tickets.filter((ticket) => normalizeService(
+          kind === "serviceThirdLevel" ? ticket.serviceThirdLevel?.trim() || "" : ticket.serviceSecondLevel?.trim() || ""
+        ) === normalizeService(serviceName))
       : tickets;
     const ticketTruncated = serviceFilteredTickets.length > safeLimit;
     const workItemTruncated = workItems.length > safeLimit;
@@ -114,7 +116,7 @@ export class CoordinationService {
         ticketScope, ticketPriority,
         ...(analyst?[{owner:{equals:analyst,mode:"insensitive" as const}}]:[]),
         ...(serviceClient?[{client:{equals:serviceClient,mode:"insensitive" as const}}]:[]),
-        ...(serviceSince&&["service","serviceModule","serviceClient","serviceAnalyst"].includes(kind)?[{createdDate:{gte:serviceSince}}]:[]),
+        ...(serviceSince&&["service","serviceThirdLevel","serviceModule","serviceClient","serviceAnalyst"].includes(kind)?[{createdDate:{gte:serviceSince}}]:[]),
         ...(serviceModule?[{OR:[
           {service:{contains:serviceModule,mode:"insensitive" as const}},
           {serviceFirstLevel:{contains:serviceModule,mode:"insensitive" as const}},
@@ -218,7 +220,7 @@ export class CoordinationService {
     };
   }
 
-  async csatDetails(days = 180, filters: { client?: string; analyst?: string; service?: string; value?: number } = {}) {
+  async csatDetails(days = 180, filters: { client?: string; analyst?: string; service?: string; value?: number; commentsOnly?: boolean } = {}) {
     const safeDays = Math.min(Math.max(days, 30), 730);
     const since = new Date(Date.now() - safeDays * 86400000);
     const responses = await prisma.movideskSurveyResponse.findMany({
@@ -245,6 +247,7 @@ export class CoordinationService {
       if (filters.client && normalize(ticket.client) !== normalize(filters.client)) return [];
       if (filters.analyst && normalize(ticket.owner) !== normalize(filters.analyst)) return [];
       if (filters.service && normalize(service) !== normalize(filters.service)) return [];
+      if (filters.commentsOnly && !response.commentary?.trim()) return [];
       return [{ id:response.id, ticketId:response.ticketId, subject:ticket.subject, client:ticket.client, owner:ticket.owner, taskNumber:ticket.taskNumber, service, value:response.value, commentary:response.commentary, responseDate:response.responseDate }];
     });
     return { periodDays:safeDays, total:items.length, truncated:responses.length===500, items };
@@ -633,12 +636,17 @@ export class CoordinationService {
     const genericRanking = serviceRanking.filter((item) => isGenericService(item.service));
     const specificRanking = serviceRanking.filter((item) => !isGenericService(item.service));
     const serviceModuleCounts = new Map<string, number>();
+    const thirdLevelCounts = new Map<string, number>();
+    let thirdLevelMissing = 0;
     const serviceClientIssues = new Map<string, { total: number; issues: number }>();
     const serviceAnalystIssues = new Map<string, { total: number; issues: number }>();
     for (const ticket of serviceTickets) {
       const path = servicePath(ticket);
       const module = ticket.serviceSecondLevel?.trim();
       if (module) serviceModuleCounts.set(module, (serviceModuleCounts.get(module) ?? 0) + 1);
+      const thirdLevel = ticket.serviceThirdLevel?.trim();
+      if (thirdLevel) thirdLevelCounts.set(thirdLevel, (thirdLevelCounts.get(thirdLevel) ?? 0) + 1);
+      else thirdLevelMissing += 1;
 
       const suggestion = path ? suggestSimerService({
         subject: ticket.subject, category: ticket.category, cause: ticket.cause, currentService: ticket.service,
@@ -658,6 +666,10 @@ export class CoordinationService {
     }
     const moduleRanking = [...serviceModuleCounts.entries()].map(([module, count]) => ({ module, count }))
       .sort((a, b) => b.count - a.count || a.module.localeCompare(b.module, "pt-BR")).slice(0, 10);
+    const thirdLevelRanking = [...thirdLevelCounts.entries()].map(([service, count]) => ({ service, count }))
+      .sort((a, b) => b.count - a.count || a.service.localeCompare(b.service, "pt-BR")).slice(0, 10);
+    const thirdLevelClassified = Math.max(serviceTickets.length - thirdLevelMissing, 0);
+    const thirdLevelRate = serviceTickets.length ? Math.round((thirdLevelClassified / serviceTickets.length) * 100) : 0;
     const clientQuality = [...serviceClientIssues.entries()].map(([client, row]) => ({
       client, ...row, rate: row.total ? Math.round(((row.total - row.issues) / row.total) * 100) : 0,
     })).sort((a, b) => b.issues - a.issues || b.total - a.total).slice(0, 10);
@@ -769,6 +781,7 @@ export class CoordinationService {
         ranking: specificRanking,
         genericRanking,
         moduleRanking,
+        thirdLevel: { classified: thirdLevelClassified, missing: thirdLevelMissing, rate: thirdLevelRate, ranking: thirdLevelRanking },
         clientQuality,
         analystQuality,
       },
