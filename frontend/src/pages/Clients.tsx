@@ -1404,7 +1404,7 @@ export function Clients() {
         @media print {
           @page { size: A4 portrait; margin: 9mm; }
           html, body.client-pdf-export {
-            background: #fff !important;
+            background: #ffffff !important;
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
           }
@@ -1428,7 +1428,7 @@ export function Clients() {
             margin: 0 !important;
             min-height: auto !important;
             overflow: visible !important;
-            background: #fff !important;
+            background: #ffffff !important;
           }
           body.client-pdf-export main > div:last-child {
             width: 100% !important;
