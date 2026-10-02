@@ -90,8 +90,16 @@ export class MovideskController {
     }
 
     async backfillCauses(_req: AuthenticatedRequest, res: Response) {
-        if (!tryAcquireMovideskApi("MANUAL")) {
-            return res.status(409).json({ message: "A API Movidesk está ocupada com outra sincronização. Aguarde o lote atual terminar e tente novamente." });
+        const waitForApi = async () => {
+            const deadline = Date.now() + 90_000;
+            while (Date.now() < deadline) {
+                if (tryAcquireMovideskApi("MANUAL")) return true;
+                await new Promise((resolve) => setTimeout(resolve, 1_500));
+            }
+            return false;
+        };
+        if (!(await waitForApi())) {
+            return res.status(409).json({ message: "A API Movidesk permaneceu ocupada por mais de 90 segundos. O processamento atual não foi interrompido; tente novamente após a conclusão do lote." });
         }
         try {
             return res.json(await new MovideskService().backfillTicketCauses());
