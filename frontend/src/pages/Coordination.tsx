@@ -370,23 +370,31 @@ export function Coordination() {
                     <KpiCard title="Respostas" value={csat.summary.responses} subtitle={`${csat.summary.comments} com comentário`} info="Pesquisas vinculadas a tickets do escopo SIMER." accent={aliareColors.warning} />
                     <KpiCard title="Comentários" value={csat.summary.comments} subtitle="feedback qualitativo" info="Respostas que possuem comentário textual do cliente." accent={aliareColors.purple} />
                   </Box>
-                  {csat.summary.responses > 0 && <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", xl: "1fr 1.4fr" }, gap: 1.25 }}>
-                    <Box sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2.5, p: 1.5 }}>
-                      <Stack direction="row" sx={{alignItems:"center",justifyContent:"space-between",mb:.5}}><Typography sx={{ fontWeight: 850 }}>Distribuição das notas</Typography><Tooltip title="Quantidade de respostas CSAT Movidesk do tipo Carinhas/Smiley para cada nota da escala 1–5."><InfoOutlined sx={{fontSize:17,color:"text.secondary"}}/></Tooltip></Stack><Typography variant="caption" color="text.secondary">Escala CSAT 1–5 · somente respostas vinculadas à carteira SIMER</Typography>
-                      <ResponsiveContainer width="100%" height={210}>
-                        <BarChart data={csat.distribution} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
-                          <CartesianGrid vertical={false} /><XAxis dataKey="value" /><YAxis allowDecimals={false} /><ChartTooltip />
-                          <Bar dataKey="count" name="Respostas" fill={aliareColors.green} radius={[6,6,0,0]} />
-                        </BarChart>
-                      </ResponsiveContainer>
+                  {csat.summary.responses > 0 && <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", xl: "minmax(0, 1fr) minmax(0, 1fr)" }, gap: 1.5, alignItems: "stretch" }}>
+                    <Box sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2.5, p: 1.75, minWidth: 0, display: "flex", flexDirection: "column", bgcolor: "background.paper" }}>
+                      <Stack direction="row" sx={{alignItems:"flex-start",justifyContent:"space-between",gap:1,mb:.25}}>
+                        <Box><Typography sx={{ fontWeight: 850 }}>Distribuição das notas</Typography><Typography variant="caption" color="text.secondary">Escala CSAT 1–5 · respostas vinculadas à carteira SIMER</Typography></Box>
+                        <Tooltip title="Quantidade de respostas da Pesquisa de Satisfação Movidesk em cada nota da escala 1–5."><InfoOutlined sx={{fontSize:17,color:"text.secondary",mt:.25}}/></Tooltip>
+                      </Stack>
+                      <Box sx={{ flex: 1, minHeight: 260, mt: 1 }}>
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={csat.distribution} margin={{ top: 12, right: 12, left: -12, bottom: 4 }}>
+                            <CartesianGrid vertical={false} strokeDasharray="3 3" /><XAxis dataKey="value" axisLine={false} tickLine={false} /><YAxis allowDecimals={false} axisLine={false} tickLine={false} /><ChartTooltip />
+                            <Bar dataKey="count" name="Respostas" fill={aliareColors.green} radius={[7,7,0,0]} maxBarSize={72} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </Box>
                     </Box>
-                    <Box sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2.5, p: 1.5 }}>
-                      <Typography sx={{ fontWeight: 850, mb: 1 }}>CSAT por analista</Typography>
-                      <Stack spacing={.8}>
-                        {csat.byAnalyst.slice(0,8).map((item) => <Stack key={item.name} direction="row" spacing={1} onClick={()=>void openCsatDetails(`CSAT · ${item.name}`,{analyst:item.name})} sx={{ alignItems:"center", cursor:"pointer", borderRadius:1.5, p:.5, mx:-.5, "&:hover":{bgcolor:"action.hover"} }}>
-                          <Typography variant="body2" sx={{ flex:1, minWidth:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{item.name}</Typography>
-                          <Typography variant="caption" color="text.secondary">{item.responses} resp.</Typography>
-                          <Chip size="small" variant="outlined" label={item.average.toLocaleString("pt-BR",{maximumFractionDigits:2})} />
+                    <Box sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2.5, p: 1.75, minWidth: 0, display: "flex", flexDirection: "column", bgcolor: "background.paper" }}>
+                      <Stack direction="row" sx={{alignItems:"flex-start",justifyContent:"space-between",gap:1,mb:1}}>
+                        <Box><Typography sx={{ fontWeight: 850 }}>CSAT por analista</Typography><Typography variant="caption" color="text.secondary">Equipe oficial de Suporte e Sustentação · clique para detalhar</Typography></Box>
+                        <Tooltip title="Média e quantidade de avaliações por analista da operação SIMER. Pessoas fora da equipe oficial não compõem este ranking."><InfoOutlined sx={{fontSize:17,color:"text.secondary",mt:.25}}/></Tooltip>
+                      </Stack>
+                      <Stack spacing={.35} sx={{ flex: 1 }}>
+                        {csat.byAnalyst.filter((item) => data?.scope.analysts.some((analyst) => analyst.localeCompare(item.name, "pt-BR", { sensitivity: "base" }) === 0)).slice(0,8).map((item) => <Stack key={item.name} direction="row" spacing={1} role="button" tabIndex={0} onClick={()=>void openCsatDetails(`CSAT · ${item.name}`,{analyst:item.name})} onKeyDown={(event)=>{if(event.key==="Enter"||event.key===" ")void openCsatDetails(`CSAT · ${item.name}`,{analyst:item.name})}} sx={{ alignItems:"center", cursor:"pointer", borderRadius:1.5, px:1, py:.75, mx:-1, transition:"background-color .15s ease", "&:hover":{bgcolor:"action.hover"} }}>
+                          <Typography variant="body2" sx={{ flex:1, minWidth:0, fontWeight:650, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{item.name}</Typography>
+                          <Typography variant="caption" color="text.secondary" sx={{whiteSpace:"nowrap"}}>{item.responses} resp.</Typography>
+                          <Chip size="small" variant="outlined" label={item.average.toLocaleString("pt-BR",{maximumFractionDigits:2})} sx={{minWidth:48,fontWeight:750}} />
                         </Stack>)}
                       </Stack>
                     </Box>
