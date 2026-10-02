@@ -3,9 +3,7 @@ import type {
   Response,
 } from "express";
 
-import type {
-  Prisma,
-} from "@prisma/client";
+import { Prisma } from "@prisma/client";
 
 import { prisma } from "../database/prisma";
 import { analyzeMovideskPayload } from "../services/MovideskPayloadAnalytics";
