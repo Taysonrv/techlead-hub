@@ -39,6 +39,10 @@ export class SimerMapService {
     return {total:Number(stats[0]?.total??0),maps:Number(stats[0]?.maps??0),links:Number(links[0]?.total??0),importedAt:stats[0]?.importedAt??null,builderApiUrl:process.env.SIMER_BUILDER_API_URL?.trim()||"http://appdev.siagri.com.br:8888",items:maps.map(x=>({mapName:x.mapName,total:Number(x.total)})),kinds:kinds.map(x=>({kind:x.nodeKind,total:Number(x.total)}))};
   }
   async builderStatus(){const url=process.env.SIMER_BUILDER_API_URL?.trim()||"http://appdev.siagri.com.br:8888";const started=Date.now();try{const r=await axios.get(url,{timeout:2500,validateStatus:()=>true});return{url,reachable:true,status:r.status,latencyMs:Date.now()-started};}catch{return{url,reachable:false,status:null,latencyMs:Date.now()-started};}}
+  async mapCatalog(limit=500) {
+    const safe = Math.max(1, Math.min(limit, 1000));
+    return prisma.$queryRawUnsafe<MapRow[]>(`SELECT DISTINCT ON ("sourceFile") id,"sourceFile","mapName","nodeId","nodeText",path,depth,"parentPath","parentNodeId",icon,link,"nodeKind","importedAt" FROM "SimerMapNode" WHERE ${SIMER_SCOPE_SQL} ORDER BY "sourceFile",depth ASC,id ASC LIMIT $1`, safe);
+  }
   async search(query:string,limit=50){
     const q=query.trim();if(!q)return[];const safe=Math.max(1,Math.min(limit,100));
     return prisma.$queryRawUnsafe<MapRow[]>(`SELECT id,"sourceFile","mapName","nodeId","nodeText",path,depth,"parentPath","parentNodeId",icon,link,"nodeKind","importedAt" FROM "SimerMapNode" WHERE ${SIMER_SCOPE_SQL} AND ("nodeText" ILIKE $1 OR path ILIKE $1 OR "mapName" ILIKE $1 OR COALESCE(link,'') ILIKE $1) ORDER BY CASE WHEN LOWER("nodeText")=LOWER($2) THEN 0 WHEN "nodeText" ILIKE $1 THEN 1 WHEN "mapName" ILIKE $1 THEN 2 ELSE 3 END,depth ASC LIMIT $3`,`%${q}%`,q,safe);
