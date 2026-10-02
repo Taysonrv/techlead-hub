@@ -1028,14 +1028,16 @@ export class MovideskService {
         },
       },
     });
-    const tickets = enrichmentCandidates
-      .filter((ticket) => {
-        const checkpoint = ticket.movideskEnrichment;
-        if (!checkpoint || checkpoint.lastError || !checkpoint.sourceLastUpdate) return true;
-        if (!ticket.lastUpdate) return false;
-        return ticket.lastUpdate.getTime() > checkpoint.sourceLastUpdate.getTime();
-      })
-      .slice(0, safeLimit);
+    const isPendingEnrichment = (ticket: (typeof enrichmentCandidates)[number]) => {
+      const checkpoint = ticket.movideskEnrichment;
+      if (!checkpoint || checkpoint.lastError || !checkpoint.sourceLastUpdate) return true;
+      if (!ticket.lastUpdate) return false;
+      // Tolerância de 1 segundo evita reprocessamento causado apenas por
+      // diferenças de precisão entre timestamps da API e do PostgreSQL.
+      return ticket.lastUpdate.getTime() - checkpoint.sourceLastUpdate.getTime() > 1_000;
+    };
+    const pendingBeforeRun = enrichmentCandidates.filter(isPendingEnrichment).length;
+    const tickets = enrichmentCandidates.filter(isPendingEnrichment).slice(0, safeLimit);
 
     let actions = 0;
     let appointments = 0;
@@ -1315,11 +1317,8 @@ export class MovideskService {
 
     return {
       tickets: tickets.length,
-      pendingBeforeRun: enrichmentCandidates.filter((ticket) => {
-        const checkpoint = ticket.movideskEnrichment;
-        if (!checkpoint || checkpoint.lastError || !checkpoint.sourceLastUpdate) return true;
-        return Boolean(ticket.lastUpdate && ticket.lastUpdate.getTime() > checkpoint.sourceLastUpdate.getTime());
-      }).length,
+      pendingBeforeRun,
+      pendingAfterRun: Math.max(0, pendingBeforeRun - (tickets.length - errors)),
       actions,
       appointments,
       ownerHistories,
