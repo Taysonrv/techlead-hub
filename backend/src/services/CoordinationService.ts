@@ -1,7 +1,7 @@
 import { isBug, isConcluded, mapPriority, SLA_PRIORITY } from "../domain/TicketClassificationRules";
 import { slaBusinessMinutes } from "../domain/SlaCalendarRules";
 import { prisma } from "../database/prisma";
-import { SIMER_CLIENTS, SUPPORT_ANALYSTS, SUPPORT_COORDINATOR, coordinationAzureScope, coordinationTicketScope, simerClientTicketScope } from "../domain/OperationalScope";
+import { SIMER_CLIENTS, SUPPORT_ANALYSTS, SUPPORT_COORDINATOR, coordinationAzureScope, coordinationTicketScope, simerClientTicketScope, ticketOperationalScope } from "../domain/OperationalScope";
 import { SIMER_SERVICE_CATALOG, suggestSimerService, type SimerServiceCatalogItem } from "../domain/SimerServiceCatalog";
 import { extractMovideskTimeEntries } from "./MovideskPayloadAnalytics";
 import { coordinationAzurePriorityPredicate, coordinationOpenAzurePredicate, coordinationOpenTicketPredicate, coordinationTicketPriorityPredicate, type CoordinationPriorityKind } from "../domain/CoordinationPredicates";
@@ -370,7 +370,8 @@ export class CoordinationService {
       const path = pathOf(ticket);
       if (!path) { withoutService += 1; month.withoutService += 1; }
       else {
-        serviceCounts.set(path, (serviceCounts.get(path) ?? 0) + 1);
+        const label = serviceLabel(path);
+      serviceCounts.set(label, (serviceCounts.get(label) ?? 0) + 1);
         const parts = path.split("»").map((v) => v.trim()).filter(Boolean);
         const module = parts.length >= 3 ? parts[2] : null;
         if (module) moduleCounts.set(module, (moduleCounts.get(module) ?? 0) + 1);
@@ -461,7 +462,7 @@ export class CoordinationService {
     const cached = cacheGet<any>(cacheKey);
     if (cached) return cached;
     const now = new Date();
-    const ticketScope = coordinationTicketScope();
+    const ticketScope = ticketOperationalScope();
     const serviceSince = serviceDays > 0 ? new Date(now.getTime() - Math.min(serviceDays, 730) * 86400000) : null;
     const azureScope = coordinationAzureScope();
 
@@ -534,9 +535,9 @@ export class CoordinationService {
         // Qualidade de Serviço pertence à carteira da squad: basta o ticket ser
         // de um cliente da squad OU estar com um analista da squad.
         where: { AND: [
+          ticketOperationalScope(),
           coordinationOpenTicketPredicate(),
           ...(serviceSince ? [{ createdDate: { gte: serviceSince } }] : []),
-          simerClientTicketScope(),
         ] },
         select: {
           id: true, subject: true, category: true, cause: true, service: true, client: true, owner: true,
@@ -590,10 +591,16 @@ export class CoordinationService {
       serviceCatalogMap.set(normalize(path), { id: `observed:${normalize(path)}`, path, name, module });
     }
     const serviceCatalog = [...serviceCatalogMap.values()];
+    const genericServiceLevel = (value: string) =>
+      /^(atendimento ao cliente|siagri simer|simer|siagri)$/i.test(normalize(value));
     const isGenericService = (path: string) => {
-      const values = path.split("»").map((value) => normalize(value)).filter(Boolean);
-      if (!values.some((value) => value.includes("simer"))) return false;
-      return values.filter((value) => !/^(atendimento ao cliente|siagri simer|simer|siagri)$/.test(value)).length === 0;
+      const values = path.split("»").map((value) => value.trim()).filter(Boolean);
+      return values.length > 0 && values.every(genericServiceLevel);
+    };
+    const serviceLabel = (path: string) => {
+      const values = path.split("»").map((value) => value.trim()).filter(Boolean);
+      const specificLevels = values.filter((value) => !genericServiceLevel(value));
+      return specificLevels.at(-1) ?? values.at(-1) ?? path;
     };
     let withoutService = 0;
     let genericService = 0;
