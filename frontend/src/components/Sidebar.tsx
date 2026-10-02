@@ -32,7 +32,6 @@ import {
   PersonOutlined,
   SettingsOutlined,
   SupportAgentOutlined,
-  UploadFileOutlined,
   WorkspacesOutlined,
   InsightsOutlined,
   RadarOutlined,
