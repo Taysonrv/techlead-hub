@@ -344,9 +344,6 @@ export function Sidebar() {
   const managementMenu = useMemo<MenuItemData[]>(
     () => [
       ...(canAccess("knowledge") ? [{ label: "Base de Conhecimento", path: "/conhecimento", icon: <MenuBookOutlined fontSize="small" /> }] : []),
-      ...(canAccess("imports")
-        ? [{ label: "Dados e Sincronizações", path: "/importar", icon: <UploadFileOutlined fontSize="small" /> }]
-        : []),
     ],
     [user?.role, user?.permissions],
   );
