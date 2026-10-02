@@ -1,5 +1,6 @@
 import { Response } from "express";
 import { MovideskService } from "../services/MovideskService";
+import { releaseMovideskApi, tryAcquireMovideskApi } from "../jobs/MovideskSyncCoordinator";
 import { referenceSyncStatus, runReferenceSync } from "../jobs/MovideskReferenceSyncScheduler";
 import type { AuthenticatedRequest } from "../middlewares/authMiddleware";
 
@@ -72,6 +73,9 @@ export class MovideskController {
     }
 
     async syncEnrichment(req: AuthenticatedRequest, res: Response) {
+        if (!tryAcquireMovideskApi("ENRICHMENT")) {
+            return res.status(409).json({ message: "Outra rotina Movidesk está utilizando a API. Tente novamente após a conclusão da sincronização atual." });
+        }
         try {
             const requested = Number(req.body?.limit ?? req.query.limit ?? 100);
             const limit = Number.isSafeInteger(requested) ? requested : 100;
@@ -80,6 +84,8 @@ export class MovideskController {
             const message = error instanceof Error ? error.message : "Não foi possível sincronizar ações e apontamentos do Movidesk.";
             console.error("[movidesk-enrichment-sync] Falha:", message);
             return res.status(500).json({ message });
+        } finally {
+            releaseMovideskApi("ENRICHMENT");
         }
     }
 
