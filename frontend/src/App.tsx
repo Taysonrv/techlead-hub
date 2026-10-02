@@ -199,9 +199,9 @@ function AuthenticatedLayout({
                   boxShadow: theme.palette.mode === "dark" ? "inset 0 1px rgba(255,255,255,.012)" : "none",
                 }),
                 "& > *": { position: "relative", zIndex: 1 },
-                "& .MuiCard-root": { contain: "paint" },
-                "& .MuiCard-root, & .MuiPaper-root": { minWidth: 0 },
-                "& .MuiCard-root .MuiCardContent-root": { overflow: "hidden" },
+                "& .MuiCard-root": { contain: "layout paint", minWidth: 0 },
+                "& .MuiPaper-root": { minWidth: 0 },
+                "& .MuiCard-root .MuiCardContent-root": { minWidth: 0 },
                 "& .MuiCard-root [role='button'], & .MuiPaper-root [role='button']": { cursor: "pointer" },
                 "& .MuiCard-root:has([role='button']):hover": (theme) => ({
                   borderColor: theme.palette.mode === "dark" ? "rgba(24,199,122,.28)" : "rgba(16,148,91,.18)",
