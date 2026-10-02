@@ -12,7 +12,7 @@ import { analyzeMovideskPayload } from "../services/MovideskPayloadAnalytics";
 
 import {
   simerClientTicketScope,
-  isSupportAnalyst,
+  isSimerOperationalResponsibility,
 } from "../domain/OperationalScope";
 
 export class DashboardController {
@@ -908,7 +908,7 @@ export class DashboardController {
       return res.json(tickets.map((ticket) => ({
         ...ticket,
         team: ticket.ownerTeam,
-        isWithSimer: isSupportAnalyst(ticket.owner) || isSimerOperationalTeam(ticket.ownerTeam),
+        isWithSimer: isSimerOperationalResponsibility(ticket.owner, ticket.ownerTeam),
         azureWorkItem:
           (ticket.taskNumber ? byId.get(ticket.taskNumber) : null) ??
           byMovidesk.get(ticket.movideskId) ??
@@ -1313,29 +1313,6 @@ export class DashboardController {
   }
 }
 
-
-function isSimerOperationalTeam(value: string | null | undefined) {
-  const normalized = (value ?? "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .trim()
-    .toUpperCase();
-
-  if (!normalized) return false;
-
-  // Responsabilidade operacional do suporte/legislação SIMER.
-  // Produto, implantação e integrações de terceiros permanecem apenas na visão Carteira.
-  return (
-    normalized.includes("SIMER | SUPORTE") ||
-    normalized.includes("SIMER - SUPORTE") ||
-    normalized.includes("SIMER / SUPORTE") ||
-    normalized.includes("SIMER | LEGISLACAO") ||
-    normalized.includes("SIMER - LEGISLACAO") ||
-    normalized.includes("SIMER / LEGISLACAO") ||
-    normalized === "SUPORTE SIMER" ||
-    normalized === "SIMER"
-  );
-}
 
 type SnapshotWhere =
   Prisma.TicketWhereInput;
