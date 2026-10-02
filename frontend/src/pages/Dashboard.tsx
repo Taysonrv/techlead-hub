@@ -41,6 +41,7 @@ import { useColorMode } from "../context/ColorModeContext";
 import { useNavigate } from "react-router-dom";
 
 import { getTicketSnapshot } from "../services/ticketSnapshot";
+import { api } from "../services/api";
 import { PeriodFilter } from "../components/PeriodFilter";
 import { PageHeader } from "../components/PageHeader";
 import { detailDrawerPaperSx } from "../theme/layoutTokens";
@@ -145,6 +146,18 @@ type RankingItem = {
   total: number;
 };
 
+type ClassificationItem = RankingItem & { ticketIds: number[] };
+type ClassificationResponse = {
+  causes: ClassificationItem[];
+  reasons: ClassificationItem[];
+  diagnostics: {
+    problemTotal: number;
+    problemClassified: number;
+    doubtTotal: number;
+    doubtClassified: number;
+  };
+};
+
 
 type AttentionLevel =
   | "critico"
@@ -202,6 +215,7 @@ export function Dashboard() {
 
   const [error, setError] =
     useState<string | null>(null);
+  const [classificationData, setClassificationData] = useState<ClassificationResponse | null>(null);
   const loadRequestRef = useRef<AbortController | null>(null);
 
   const [drilldown, setDrilldown] =
@@ -261,6 +275,26 @@ export function Dashboard() {
   const openedInPeriod = useMemo(() => tickets.filter((ticket) =>
     isDateInPeriod(ticket.createdDate, periodBounds.start, periodBounds.end)
   ), [tickets, periodBounds]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const formatDate = (date: Date) => {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const day = String(date.getDate()).padStart(2, "0");
+      return `${year}-${month}-${day}`;
+    };
+    api.get<ClassificationResponse>("/dashboard/classifications", {
+      params: { startDate: formatDate(effectiveStartDate), endDate: formatDate(effectiveEndDate) },
+      signal: controller.signal,
+      timeout: 60_000,
+    }).then((response) => {
+      if (!controller.signal.aborted) setClassificationData(response.data);
+    }).catch((error) => {
+      if (!controller.signal.aborted) console.error("Erro ao carregar Causa/Motivo:", error);
+    });
+    return () => controller.abort();
+  }, [effectiveStartDate, effectiveEndDate]);
 
   // Fluxo de entrada da operação: abriu no período e a responsabilidade
   // atual pertence à operação SIMER. Não exige que o ticket continue aberto.
@@ -512,14 +546,10 @@ export function Dashboard() {
   // um ticket pode ter sido aberto no período e já ter saído da fila SIMER.
   const problemTickets = useMemo(() => openedInPeriod.filter((ticket) => canonicalCategory(ticket.category) === "Problema"), [openedInPeriod]);
   const ticketsWithCause = useMemo(() => problemTickets.filter((ticket) => Boolean(canonicalCause(ticket.cause))), [problemTickets]);
-  const causes = useMemo(() => {
-    const grouped = new Map<string, number>();
-    ticketsWithCause.forEach((ticket) => {
-      const label = canonicalCause(ticket.cause);
-      if (label) grouped.set(label, (grouped.get(label) ?? 0) + 1);
-    });
-    return [...grouped.entries()].map(([label,total])=>({label,total})).sort((a,b)=>b.total-a.total);
-  }, [ticketsWithCause]);
+  const causes = useMemo(
+    () => classificationData?.causes.map(({ label, total }) => ({ label, total })) ?? [],
+    [classificationData],
+  );
 
   const canonicalReason = (value?: string | null) => {
     const raw = value?.trim();
@@ -537,14 +567,10 @@ export function Dashboard() {
 
   const doubtTickets = useMemo(() => openedInPeriod.filter((ticket) => canonicalCategory(ticket.category) === "Dúvida"), [openedInPeriod]);
   const ticketsWithReason = useMemo(() => doubtTickets.filter((ticket) => Boolean(canonicalReason(ticket.reason))), [doubtTickets]);
-  const reasons = useMemo(() => {
-    const grouped = new Map<string, number>();
-    ticketsWithReason.forEach((ticket) => {
-      const label = canonicalReason(ticket.reason);
-      if (label) grouped.set(label, (grouped.get(label) ?? 0) + 1);
-    });
-    return [...grouped.entries()].map(([label,total])=>({label,total})).sort((a,b)=>b.total-a.total);
-  }, [ticketsWithReason]);
+  const reasons = useMemo(
+    () => classificationData?.reasons.map(({ label, total }) => ({ label, total })) ?? [],
+    [classificationData],
+  );
 
   const businessAreas = useMemo(() => {
     // businessArea é um campo customizado e pode estar vazio. Serviço é a
