@@ -94,6 +94,22 @@ type MovideskEnrichmentResult = {
   statusHistories: number;
   errors: number;
 };
+type RecentEnrichment = {
+  ticketId: number;
+  movideskId: number;
+  subject: string;
+  client: string | null;
+  actions: number;
+  timeAppointments: number;
+  accountedHours: number;
+  ownerHistories: number;
+  statusHistories: number;
+  enrichedAt: string;
+  status: "CURRENT" | "STALE" | "ERROR";
+  lastError: string | null;
+};
+type RecentEnrichmentResponse = { items: RecentEnrichment[]; generatedAt: string };
+
 
 const EMPTY_FORM: ConfigurationForm = {
   databaseUrl: "",
@@ -132,6 +148,7 @@ export function Settings() {
   const [movideskCoverage, setMovideskCoverage] = useState<MovideskCoverage | null>(null);
   const [baselineBusy, setBaselineBusy] = useState(false);
   const [enrichmentBusy, setEnrichmentBusy] = useState(false);
+  const [recentEnrichments, setRecentEnrichments] = useState<RecentEnrichment[]>([]);
 
   useEffect(() => {
     void loadConfiguration();
@@ -316,6 +333,8 @@ export function Settings() {
       if (response.data.completed) {
         const coverage = await api.get<MovideskCoverage>("/movidesk/coverage", { timeout: 60_000 });
         setMovideskCoverage(coverage.data);
+        const recent = await api.get<RecentEnrichmentResponse>("/movidesk/enrichment/recent?limit=10", { timeout: 30_000 });
+        setRecentEnrichments(recent.data.items);
       }
       return response.data;
     } catch (statusError: any) {
@@ -343,6 +362,8 @@ export function Settings() {
       const response = await api.post<MovideskEnrichmentResult>("/movidesk/enrichment/sync", { limit: 5 }, { timeout: 120_000 });
       const coverage = await api.get<MovideskCoverage>("/movidesk/coverage", { timeout: 60_000 });
       setMovideskCoverage(coverage.data);
+      const recent = await api.get<RecentEnrichmentResponse>("/movidesk/enrichment/recent?limit=10", { timeout: 30_000 });
+      setRecentEnrichments(recent.data.items);
       setSuccess(
         `Enriquecimento concluído: ${response.data.tickets} ticket(s), ${response.data.appointments} apontamento(s), ${response.data.ownerHistories} histórico(s) de responsável e ${response.data.statusHistories} histórico(s) de status.`,
       );
@@ -686,6 +707,24 @@ export function Settings() {
                       ["Hist. status", movideskCoverage.enrichment.statusHistories],
                     ].map(([label,value]) => <Box key={String(label)}><Typography variant="caption" color="text.secondary">{label}</Typography><Typography variant="body2" sx={{ fontWeight: 800 }}>{value}</Typography></Box>)}
                   </Box>
+                  {recentEnrichments.length > 0 && <Box sx={{ mt: 2 }}>
+                    <Typography variant="body2" sx={{ fontWeight: 850, mb: 1 }}>Últimos tickets enriquecidos</Typography>
+                    <Stack spacing={0.75}>
+                      {recentEnrichments.map((item) => <Box key={item.ticketId} sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "110px minmax(220px,1fr) 90px 90px 90px 100px 100px 150px" }, gap: 1, alignItems: "center", p: 1, border: "1px solid", borderColor: "divider", borderRadius: 1.25 }}>
+                        <Typography variant="body2" sx={{ fontWeight: 850 }}>#{item.movideskId}</Typography>
+                        <Box sx={{ minWidth: 0 }}><Typography variant="body2" noWrap title={item.subject}>{item.subject}</Typography><Typography variant="caption" color="text.secondary" noWrap>{item.client || "Sem cliente"}</Typography></Box>
+                        <Typography variant="caption">Ações <b>{item.actions}</b></Typography>
+                        <Typography variant="caption">Apont. <b>{item.timeAppointments}</b></Typography>
+                        <Typography variant="caption">Horas <b>{item.accountedHours.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}h</b></Typography>
+                        <Typography variant="caption">Resp. <b>{item.ownerHistories}</b></Typography>
+                        <Typography variant="caption">Status <b>{item.statusHistories}</b></Typography>
+                        <Stack direction="row" spacing={0.75} sx={{ alignItems: "center", justifyContent: "flex-end" }}>
+                          <Chip size="small" color={item.status === "CURRENT" ? "success" : item.status === "ERROR" ? "error" : "warning"} label={item.status === "CURRENT" ? "Atual" : item.status === "ERROR" ? "Erro" : "Pendente"} />
+                          <Typography variant="caption" color="text.secondary">{new Date(item.enrichedAt).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}</Typography>
+                        </Stack>
+                      </Box>)}
+                    </Stack>
+                  </Box>}
                 </Box>}
               </Box>}
             </Box>
