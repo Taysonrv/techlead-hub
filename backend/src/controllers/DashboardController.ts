@@ -1302,14 +1302,40 @@ export class DashboardController {
       }
 
       const analytics = analyzeMovideskPayload(ticket.rawData);
-      const csat = await prisma.movideskSurveyResponse.findFirst({
-        where: { ticketId: ticket.movideskId, type: 2 },
-        orderBy: { responseDate: "desc" },
-        select: { value:true, commentary:true, responseDate:true },
-      });
+      const [csat, actions] = await Promise.all([
+        prisma.movideskSurveyResponse.findFirst({
+          where: { ticketId: ticket.movideskId, type: 2 },
+          orderBy: { responseDate: "desc" },
+          select: { value:true, commentary:true, responseDate:true },
+        }),
+        prisma.movideskTicketAction.findMany({
+          where: { ticketId: id, isDeleted: false },
+          orderBy: { createdDate: "asc" },
+          include: {
+            timeAppointments: {
+              orderBy: [{ date: "asc" }, { movideskAppointmentId: "asc" }],
+            },
+          },
+        }),
+      ]);
+
+      const timeAppointments = actions.flatMap((action) =>
+        action.timeAppointments.map((appointment) => ({
+          ...appointment,
+          accountedTime: appointment.accountedTime != null ? Number(appointment.accountedTime) : null,
+          movideskActionId: action.movideskActionId,
+          actionCreatedDate: action.createdDate,
+        }))
+      );
 
       return res.json({
         ...analytics,
+        actions,
+        timeAppointments,
+        timeAppointmentSummary: {
+          count: timeAppointments.length,
+          accountedHours: timeAppointments.reduce((sum, item) => sum + (item.accountedTime ?? 0), 0),
+        },
         satisfactionScore: csat?.value ?? analytics.satisfactionScore ?? null,
         satisfactionComment: csat?.commentary ?? analytics.satisfactionComment ?? null,
         satisfactionDate: csat?.responseDate ?? null,
