@@ -317,16 +317,24 @@ export class CoordinationService {
     return { periodDays: days, period:{start:since,end:until}, rule:{taskEndState:"Concluida",schedule:"Seg-Sex 08:00-18:00",profile:"PADRAO"}, dataQuality:{bugsInPeriod:bugTickets.length,linked:rows.length,missingAzure,missingTaskCreatedAt,missingPriority,invalidTimeline}, summary:{bugsWithTask:rows.length,concluded:done.length,openDevelopment:rows.length-done.length,avgSupportMinutes:avg(rows.map(r=>r.supportMinutes)),avgFactoryMinutes:avg(rows.map(r=>r.factoryMinutes!)),avgTotalMinutes:avg(done.map(r=>r.totalMinutes!)),supportWithinOla:rows.filter(r=>r.supportPct<=100).length,factoryWithinOla:rows.filter(r=>(r.factoryPct??Infinity)<=100).length,totalWithinSla:done.filter(r=>(r.totalPct??Infinity)<=100).length,openFactoryOverOla:rows.filter(r=>!r.taskConcludedAt&&(r.factoryPct??0)>100).length,openTotalOverSla:rows.filter(r=>!r.taskConcludedAt&&(r.totalPct??0)>100).length}, byPriority, owners, clients, monthly, outliers, rows };
   }
 
-  async serviceIntelligence(filters: { client?: string; analyst?: string; months?: number } = {}) {
-    const months = Math.min(Math.max(filters.months ?? 6, 3), 12);
-    const cacheKey = `services:${months}:${filters.client?.toLocaleLowerCase("pt-BR") ?? ""}:${filters.analyst?.toLocaleLowerCase("pt-BR") ?? ""}`;
+  async serviceIntelligence(filters: { client?: string; analyst?: string; months?: number; startDate?: string; endDate?: string } = {}) {
+    const months = Math.min(Math.max(filters.months ?? 6, 1), 24);
+    const parseDate = (value?: string, endOfDay = false) => {
+      if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+      const date = new Date(`${value}T${endOfDay ? "23:59:59.999" : "00:00:00.000"}`);
+      return Number.isNaN(date.getTime()) ? null : date;
+    };
+    const customStart = parseDate(filters.startDate);
+    const customEnd = parseDate(filters.endDate, true);
+    const now = new Date();
+    const since = customStart ?? (() => { const d = new Date(now); d.setMonth(d.getMonth() - months + 1); d.setDate(1); d.setHours(0,0,0,0); return d; })();
+    const until = customEnd ?? now;
+    if (since > until) throw new Error("Período inválido: data inicial posterior à final.");
+    const periodMs = Math.max(until.getTime() - since.getTime() + 1, 86400000);
+    const previousSince = new Date(since.getTime() - periodMs);
+    const cacheKey = `services:${since.toISOString()}:${until.toISOString()}:${filters.client?.toLocaleLowerCase("pt-BR") ?? ""}:${filters.analyst?.toLocaleLowerCase("pt-BR") ?? ""}`;
     const cached = cacheGet<any>(cacheKey);
     if (cached) return cached;
-    const since = new Date();
-    since.setMonth(since.getMonth() - months + 1);
-    since.setDate(1); since.setHours(0, 0, 0, 0);
-    const previousSince = new Date(since);
-    previousSince.setMonth(previousSince.getMonth() - months);
     const scope = simerClientTicketScope();
     const [allTickets, officialServices] = await Promise.all([prisma.ticket.findMany({
       where: {
@@ -347,7 +355,7 @@ export class CoordinationService {
       where: { isActive: true },
       select: { id:true, name:true, parentServiceId:true },
     })]);
-    const tickets = allTickets.filter((ticket) => ticket.createdDate >= since);
+    const tickets = allTickets.filter((ticket) => ticket.createdDate >= since && ticket.createdDate <= until);
     const previousTickets = allTickets.filter((ticket) => ticket.createdDate >= previousSince && ticket.createdDate < since);
     const normalize = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR").trim();
     const pathOf = (ticket: (typeof tickets)[number]) =>
@@ -439,7 +447,7 @@ export class CoordinationService {
     const currentRate = tickets.length ? Math.round((specific / tickets.length) * 100) : 0;
     const classificationDelta = currentRate - previousRate;
     return cacheSet(cacheKey, {
-      periodMonths: months, total: tickets.length, specific, generic: genericCount, withoutService, suspected,
+      periodMonths: months, period: { start: since, end: until }, total: tickets.length, specific, generic: genericCount, withoutService, suspected,
       classificationRate: currentRate,
       catalogSize: catalog.length,
       officialCatalogSize: officialServices.length,
