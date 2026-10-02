@@ -119,70 +119,11 @@ body {
 }
 
 /* =========================================================
-   MATERIAL UI - TABELAS
-
-   Reduz a altura das linhas para permitir visualizar
-   mais tickets sem deixar a tabela apertada demais.
+   MATERIAL UI - DENSIDADE
+   Dimensões visuais são centralizadas no tema MUI. Evitamos
+   !important globais para não sobrescrever componentes e
+   páginas que precisam de densidade ou tamanho próprios.
 ========================================================= */
-
-.MuiTableCell-root {
-  padding-top: 10px !important;
-  padding-bottom: 10px !important;
-  padding-left: 14px !important;
-  padding-right: 14px !important;
-
-  font-size: 0.9rem !important;
-}
-
-/* Cabeçalho das tabelas */
-
-.MuiTableHead-root .MuiTableCell-root {
-  padding-top: 11px !important;
-  padding-bottom: 11px !important;
-
-  white-space: nowrap;
-}
-
-/* =========================================================
-   MATERIAL UI - INPUTS
-========================================================= */
-
-.MuiInputBase-root {
-  font-size: 0.93rem !important;
-}
-
-.MuiInputLabel-root {
-  font-size: 0.93rem !important;
-}
-
-.MuiMenuItem-root {
-  font-size: 0.93rem !important;
-}
-
-/* =========================================================
-   MATERIAL UI - BOTÕES
-========================================================= */
-
-.MuiButton-root {
-  min-height: 36px;
-
-  font-size: 0.88rem !important;
-  font-weight: 600 !important;
-
-  text-transform: none !important;
-}
-
-/* =========================================================
-   MATERIAL UI - CHIPS
-========================================================= */
-
-.MuiChip-root {
-  font-size: 0.82rem !important;
-}
-
-.MuiChip-sizeSmall {
-  height: 25px !important;
-}
 
 /* =========================================================
    MATERIAL UI - CARDS
@@ -261,22 +202,7 @@ svg {
 ========================================================= */
 
 @media (max-width: 1366px) {
-  .MuiTableCell-root {
-    padding-top: 8px !important;
-    padding-bottom: 8px !important;
-
-    padding-left: 10px !important;
-    padding-right: 10px !important;
-  }
-
-
-  .MuiButton-root {
-    min-height: 34px;
-  }
-
-  .MuiChip-sizeSmall {
-    height: 23px !important;
-  }
+  html { font-size: 14.5px; }
 }
 
 /* =========================================================
@@ -288,10 +214,6 @@ svg {
     font-size: 14px;
   }
 
-  .MuiTableCell-root {
-    padding-left: 8px !important;
-    padding-right: 8px !important;
-  }
 }
 
 /* =========================================================
