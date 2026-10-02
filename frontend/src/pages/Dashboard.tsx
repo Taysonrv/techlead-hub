@@ -540,17 +540,19 @@ export function Dashboard() {
   );
 
   const businessAreas = useMemo(() => {
-    // businessArea é um campo customizado e pode estar vazio. Serviço é a
-    // classificação operacional mais confiável disponível no snapshot.
+    // Área de negócio e Serviço são dimensões diferentes no Movidesk.
+    // Nunca usar serviceSecondLevel/serviceFirstLevel como fallback aqui,
+    // pois isso duplica visualmente o ranking de Serviços.
     const grouped = new Map<string, number>();
     filteredTickets.forEach((ticket) => {
-      const label = ticket.businessArea?.trim()
-        || ticket.serviceSecondLevel?.trim()
-        || ticket.serviceFirstLevel?.trim()
-        || "Sem área de negócio";
+      const label = ticket.businessArea?.trim();
+      if (!label) return;
       grouped.set(label, (grouped.get(label) ?? 0) + 1);
     });
-    return [...grouped.entries()].map(([label,total]) => ({ label,total })).sort((a,b) => b.total-a.total).slice(0,6);
+    return [...grouped.entries()]
+      .map(([label,total]) => ({ label,total }))
+      .sort((a,b) => b.total-a.total)
+      .slice(0,6);
   }, [filteredTickets]);
 
   const serviceDistribution = useMemo(
@@ -1474,7 +1476,7 @@ export function Dashboard() {
           <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", xl: "1fr 1fr" }, gap: 1.5 }}>
             <OperationalRankingCard
               title="Áreas de negócio"
-              subtitle="Distribuição das entradas da Operação SIMER pelos dados normalizados do Movidesk"
+              subtitle="Área de negócio informada no Movidesk • sem fallback para Serviço"
               data={businessAreas}
               emptyMessage="Nenhuma área de negócio informada no período."
               onItemClick={(label) => showTickets(
