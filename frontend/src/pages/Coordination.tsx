@@ -108,7 +108,10 @@ export function Coordination() {
   const [detailError, setDetailError] = useState("");
   const [details, setDetails] = useState<DetailData | null>(null);
   const [serviceDays, setServiceDays] = useState(0);
-  const [slaDays, setSlaDays] = useState(180);
+  const [slaDays, setSlaDays] = useState(30);
+  const [slaPeriod, setSlaPeriod] = useState<"thisMonth" | "lastMonth" | "30d" | "custom">("30d");
+  const [slaCustomStart, setSlaCustomStart] = useState("");
+  const [slaCustomEnd, setSlaCustomEnd] = useState("");
   const [slaDevelopment, setSlaDevelopment] = useState<SlaDevelopment | null>(null);
   const [slaLoading, setSlaLoading] = useState(false);
   const [csat, setCsat] = useState<CsatOverview | null>(null);
@@ -158,12 +161,18 @@ export function Coordination() {
   useEffect(() => {
     const controller = new AbortController();
     setSlaLoading(true);
-    api.get<SlaDevelopment>("/coordination/sla-development", { params: { days: slaDays }, signal: controller.signal })
+    const now = new Date();
+    const iso = (date: Date) => [date.getFullYear(), String(date.getMonth()+1).padStart(2,"0"), String(date.getDate()).padStart(2,"0")].join("-");
+    let params: Record<string, string | number> = { days: slaDays };
+    if (slaPeriod === "thisMonth") params = { startDate: iso(new Date(now.getFullYear(), now.getMonth(), 1)), endDate: iso(now) };
+    if (slaPeriod === "lastMonth") params = { startDate: iso(new Date(now.getFullYear(), now.getMonth()-1, 1)), endDate: iso(new Date(now.getFullYear(), now.getMonth(), 0)) };
+    if (slaPeriod === "custom" && slaCustomStart && slaCustomEnd) params = { startDate: slaCustomStart, endDate: slaCustomEnd };
+    api.get<SlaDevelopment>("/coordination/sla-development", { params, signal: controller.signal })
       .then((response) => setSlaDevelopment(response.data))
       .catch(() => { if (!controller.signal.aborted) setSlaDevelopment(null); })
       .finally(() => { if (!controller.signal.aborted) setSlaLoading(false); });
     return () => controller.abort();
-  }, [slaDays]);
+  }, [slaDays, slaPeriod, slaCustomStart, slaCustomEnd]);
 
   const formatHours = (minutes: number) => minutes ? `${(minutes / 60).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}h` : "—";
   const rate = (within: number, total: number) => total ? Math.round(within / total * 1000) / 10 : 0;
@@ -283,7 +292,8 @@ export function Coordination() {
                   </Typography>
                 </Box>
                 <Stack direction="row" spacing={.6} useFlexGap sx={{ flexWrap: "wrap" }}>
-                  {[90,180,365].map((days) => <Chip key={days} clickable size="small" label={days === 365 ? "12 meses" : `${days} dias`} color={slaDays === days ? "primary" : "default"} variant={slaDays === days ? "filled" : "outlined"} onClick={() => setSlaDays(days)} />)}
+                  {([["thisMonth","Este mês"],["lastMonth","Mês passado"],["30d","Últimos 30 dias"],["custom","Personalizado"]] as const).map(([value,label]) => <Chip key={value} clickable size="small" label={label} color={slaPeriod === value ? "primary" : "default"} variant={slaPeriod === value ? "filled" : "outlined"} onClick={() => { setSlaPeriod(value); if(value==="30d") setSlaDays(30); }} />)}
+                  {slaPeriod === "custom" && <><TextField size="small" type="date" value={slaCustomStart} onChange={(e)=>setSlaCustomStart(e.target.value)} sx={{width:145}}/><TextField size="small" type="date" value={slaCustomEnd} onChange={(e)=>setSlaCustomEnd(e.target.value)} sx={{width:145}}/></>}
                 </Stack>
               </Stack>
               {slaLoading ? <LinearProgress sx={{ borderRadius: 2 }} /> : slaDevelopment ? (
