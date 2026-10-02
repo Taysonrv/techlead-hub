@@ -18,7 +18,7 @@ export async function getTicketSnapshot<T>(): Promise<T[]> {
   }
 
   if (!inFlight) {
-    inFlight = api.get<T[]>("/dashboard/tickets")
+    inFlight = api.get<T[]>("/dashboard/tickets", { timeout: 60_000 })
       .then((response) => {
         cachedTickets = response.data;
         cachedAt = Date.now();
