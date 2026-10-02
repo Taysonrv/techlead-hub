@@ -15,6 +15,13 @@
 - Produtividade por horas registradas utiliza apontamentos estruturados do Movidesk.
 - Enriquecimento incremental mantém checkpoint e redução progressiva das pendências, sem reprocessar continuamente o mesmo lote.
 
+### Desenvolvimento
+- Correções, Evoluções e Apoios agora iniciam pela atualização mais recente do Azure (`azureChangedAt DESC`) e mantêm essa ordenação como padrão ao trocar de rotina.
+- Filtros de Correções, Evoluções e Apoios foram movidos para imediatamente abaixo do cabeçalho, antes dos KPIs, gráficos, pipeline e qualidade de dados.
+- Versões passa a iniciar em "Versão mais recente", com registros sem versão posicionados depois das versões identificadas.
+- Filtros de Versões também passam a ocupar o topo da tela, imediatamente após o título, com apresentação mais compacta.
+- Rótulo de ordenação foi alinhado à regra real: "Atualização mais recente/antiga", evitando chamar alteração geral do Work Item de mudança de estado.
+
 ### Central de Liderança Técnica
 - Auditoria de classificação alinhada ao modelo Movidesk: Causa é exigida somente para Problema e Motivo somente para Dúvida; demais categorias não são sinalizadas indevidamente por ausência dessas dimensões.
 - Recorrências deixam de usar Causa como fallback de tema técnico e priorizam Serviço/rotina e Categoria, reduzindo agrupamentos semanticamente incorretos.
