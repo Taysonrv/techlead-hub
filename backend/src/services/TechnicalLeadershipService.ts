@@ -59,7 +59,7 @@ export class TechnicalLeadershipService {
       orderBy: [{ lastUpdate: "asc" }, { createdDate: "asc" }],
       take: 5000,
       select: {
-        id: true, movideskId: true, subject: true, category: true, cause: true, urgency: true,
+        id: true, movideskId: true, subject: true, category: true, cause: true, reason: true, urgency: true,
         status: true, baseStatus: true, client: true, owner: true, service: true,
         serviceFirstLevel: true, serviceSecondLevel: true, serviceThirdLevel: true,
         createdDate: true, dueDate: true, lastUpdate: true, lastActionDate: true,
@@ -116,12 +116,18 @@ export class TechnicalLeadershipService {
     const openTicketFinishedTask = openTickets.filter((ticket) => linkedTask(ticket) && terminalTask(linkedTask(ticket)!.state));
 
     const periodTickets = tickets.filter((ticket) => ticket.createdDate >= periodStart && ticket.createdDate <= periodEnd);
+    const emptyClassification = (value: string | null | undefined) => {
+      const normalized = normalize(value);
+      return !normalized || ["outros", "outro", "-", "nao informado", "em branco"].includes(normalized);
+    };
+    // Causa é dimensão exclusiva de Problema; Motivo é dimensão exclusiva de Dúvida.
+    // As demais categorias não devem ser marcadas como inconsistentes apenas por não possuírem Causa/Motivo.
     const classificationAudit = periodTickets.filter((ticket) => {
       const category = normalize(ticket.category);
-      const cause = normalize(ticket.cause);
-      if (!category || !cause || ["outros", "outro", "-", "nao informado"].includes(category) || ["outros", "outro", "-", "nao informado"].includes(cause)) return true;
-      return (/duvida|orientacao/.test(category) && /bug|erro|falha|configuracao|operacional/.test(cause))
-        || (/problema|erro|incidente/.test(category) && /duvida|orientacao|treinamento/.test(cause));
+      if (emptyClassification(ticket.category)) return true;
+      if (/^problema$/.test(category)) return emptyClassification(ticket.cause);
+      if (/^duvida$/.test(category)) return emptyClassification(ticket.reason);
+      return false;
     });
     const auditSignal = <T,>(ticket: T, key: keyof typeof TECHNICAL_LEADERSHIP_AUDIT_SIGNALS) => {
       const rule = TECHNICAL_LEADERSHIP_AUDIT_SIGNALS[key];
@@ -146,13 +152,13 @@ export class TechnicalLeadershipService {
       .sort((a, b) => b.score - a.score || b.reasons.length - a.reasons.length)
       .slice(0, 15)
       .map(({ ticket, reasons, sources, score }) => ({
-        ...ticket, reason: reasons[0], reasons, evidenceCount: reasons.length, sources: [...sources], auditScore: score,
+        ...ticket, classificationReason: ticket.reason, reason: reasons[0], reasons, evidenceCount: reasons.length, sources: [...sources], auditScore: score,
         confidence: leadershipAuditConfidence({ sources, evidenceCount: reasons.length }),
       }));
 
     const recurrenceKey = (ticket: (typeof tickets)[number]) => {
       const generic = new Set(["simer", "siagri simer", "atendimento ao cliente", "outros", "outro", "nao informado", "sem classificacao"]);
-      const candidates = [ticket.serviceThirdLevel, ticket.serviceSecondLevel, ticket.serviceFirstLevel, ticket.service, ticket.category, ticket.cause]
+      const candidates = [ticket.serviceThirdLevel, ticket.serviceSecondLevel, ticket.serviceFirstLevel, ticket.service, ticket.category]
         .map((value) => normalize(value))
         .filter((value) => value.length >= 4 && !generic.has(value));
       return candidates[0] ?? "sem classificacao";
@@ -235,7 +241,7 @@ export class TechnicalLeadershipService {
       }] : []),
       ...(classificationAudit.length ? [{
         id: "GAP-Q01", type: "Qualidade", title: "Classificações para auditoria",
-        evidence: `${classificationAudit.length} ticket(s) com ausência ou possível divergência entre categoria e causa; exige revisão humana antes de confirmar o gap`,
+        evidence: `${classificationAudit.length} ticket(s) com classificação incompleta: Categoria ausente, Causa ausente em Problema ou Motivo ausente em Dúvida; exige revisão humana antes de confirmar o gap`,
         impact: volumeGapImpact(classificationAudit.length, TECHNICAL_LEADERSHIP_THRESHOLDS.classificationHighImpactMinimum), action: "Revisar a amostra priorizada e confirmar somente divergências reais antes de orientar ajustes.", status: "Validar evidências",
         confidence: "Média", ticketCount: classificationAudit.length, azureLinked: classificationAudit.filter((ticket) => Boolean(linkedTask(ticket))).length,
         blockedLinked: 0, deliveredLinked: 0, examples: classificationAudit.slice(0, 3),
