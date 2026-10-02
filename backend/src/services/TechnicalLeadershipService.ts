@@ -73,11 +73,10 @@ export class TechnicalLeadershipService {
     const tasks = await prisma.azureWorkItem.findMany({
       where: {
         OR: [
-          // Carteira Azure da Coordenação: Work Items do portfólio SIMER.
-          coordinationAzureScope(),
-          // Evidência técnica relacionada: preserva Tasks vinculadas aos tickets
-          // já selecionados pela Liderança, mesmo quando o Cliente Principal no
-          // Azure não está preenchido ou diverge da carteira.
+          // Sem filtro, considera o portfólio SIMER da Coordenação. Com Cliente/Analista,
+          // restringe o Azure às evidências vinculadas aos tickets já filtrados para
+          // impedir que cards de Tasks ignorem o recorte selecionado na tela.
+          ...(!params.client && !params.user ? [coordinationAzureScope()] : []),
           ...(taskIds.length ? [{ id: { in: taskIds } }] : []),
           ...(ticketIds.length ? [{ movideskTicket: { in: ticketIds } }] : []),
         ],
