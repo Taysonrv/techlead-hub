@@ -383,6 +383,8 @@ model Ticket {
 
   // Enriquecimento das ações e apontamentos do Movidesk
   actions MovideskTicketAction[]
+  ownerHistories MovideskOwnerHistory[]
+  statusHistories MovideskStatusHistory[]
 
   // Auditoria
   createdAt DateTime @default(now())
@@ -422,6 +424,53 @@ model Ticket {
 // =========================================================
 // AÇÕES E APONTAMENTOS MOVIDESK
 // =========================================================
+
+model MovideskOwnerHistory {
+  id Int @id @default(autoincrement())
+  ticketId Int
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  sequenceKey String
+  ownerTeam String?
+  ownerId String?
+  ownerName String?
+  changedById String?
+  changedByName String?
+  changedDate DateTime?
+  permanencyTimeFullSeconds Float?
+  permanencyTimeWorkingSeconds Float?
+  rawData Json?
+  syncedAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([ticketId, sequenceKey])
+  @@index([ticketId, changedDate])
+  @@index([ownerName])
+  @@index([ownerTeam])
+}
+
+model MovideskStatusHistory {
+  id Int @id @default(autoincrement())
+  ticketId Int
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  sequenceKey String
+  status String
+  justification String?
+  changedById String?
+  changedByName String?
+  changedDate DateTime?
+  permanencyTimeFullSeconds Float?
+  permanencyTimeWorkingSeconds Float?
+  rawData Json?
+  syncedAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([ticketId, sequenceKey])
+  @@index([ticketId, changedDate])
+  @@index([status])
+  @@index([changedByName])
+}
 
 model MovideskTicketAction {
   id Int @id @default(autoincrement())
