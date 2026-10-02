@@ -1325,17 +1325,14 @@ export class DashboardController {
 }
 
 
-const KNOWN_SIMER_CAUSES = new Set([
-  "problema - configuracao",
-  "problema configuracao",
-  "problema - erro operacional",
-  "problema erro operacional",
-  "solucao de contorno",
-  "nao identificada",
-  "sefaz ou aplicativos de terceiros",
-  "sefaz/aplicativos de terceiros",
-  "sefaz ou terceiros",
-]);
+function isKnownSimerCause(value: string) {
+  const normalized = normalize(value);
+  return normalized.includes("erro operacional")
+    || normalized.includes("configuracao")
+    || normalized.includes("solucao de contorno")
+    || normalized.includes("nao identificada")
+    || (normalized.includes("sefaz") && (normalized.includes("terceir") || normalized.includes("aplicativ")));
+}
 
 function recoverCauseFromRawData(rawData: Prisma.JsonValue | null): string | null {
   if (!rawData || typeof rawData !== "object" || Array.isArray(rawData)) return null;
@@ -1366,7 +1363,7 @@ function recoverCauseFromRawData(rawData: Prisma.JsonValue | null): string | nul
     }
 
     for (const value of values) {
-      if (KNOWN_SIMER_CAUSES.has(normalize(value))) return value;
+      if (isKnownSimerCause(value)) return value;
     }
   }
 
