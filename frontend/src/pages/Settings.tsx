@@ -363,7 +363,7 @@ export function Settings() {
       const response = await api.post<{ scanned: number; updated: number }>("/movidesk/causes/backfill", {}, { timeout: 120_000 });
       setSuccess(`Causas consolidadas: ${response.data.updated} ticket(s) atualizado(s) entre ${response.data.scanned} candidato(s) da carteira 2026+.`);
     } catch (backfillError: any) {
-      setError(backfillError?.response?.data?.message ?? "Não foi possível consolidar as causas dos tickets.");
+      setError(backfillError?.response?.data?.message ?? "Não foi possível consolidar as causas e motivos dos tickets.");
     } finally {
       setCauseBackfillBusy(false);
     }
@@ -714,7 +714,7 @@ export function Settings() {
                       {enrichmentBusy ? "Enriquecendo..." : "Processar próximo lote"}
                     </Button>
                     <Button size="small" variant="text" disabled={causeBackfillBusy || !movideskBaseline?.completed} onClick={() => void backfillMovideskCauses()}>
-                      {causeBackfillBusy ? "Consolidando causas..." : "Consolidar causas 2026+"}
+                      {causeBackfillBusy ? "Consolidando causas..." : "Consolidar causas e motivos 2026+"}
                     </Button>
                   </Stack>
                   <Box sx={{ mt: 1.25, display: "grid", gridTemplateColumns: { xs: "repeat(2,minmax(0,1fr))", md: "repeat(4,minmax(0,1fr))" }, gap: 1 }}>
