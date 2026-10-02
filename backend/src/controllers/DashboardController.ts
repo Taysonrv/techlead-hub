@@ -1302,7 +1302,7 @@ export class DashboardController {
       }
 
       const analytics = analyzeMovideskPayload(ticket.rawData);
-      const [csat, actions] = await Promise.all([
+      const [csat, actions, ownerHistories, statusHistories] = await Promise.all([
         prisma.movideskSurveyResponse.findFirst({
           where: { ticketId: ticket.movideskId, type: 2 },
           orderBy: { responseDate: "desc" },
@@ -1316,6 +1316,14 @@ export class DashboardController {
               orderBy: [{ date: "asc" }, { movideskAppointmentId: "asc" }],
             },
           },
+        }),
+        prisma.movideskOwnerHistory.findMany({
+          where: { ticketId: id },
+          orderBy: [{ changedDate: "asc" }, { id: "asc" }],
+        }),
+        prisma.movideskStatusHistory.findMany({
+          where: { ticketId: id },
+          orderBy: [{ changedDate: "asc" }, { id: "asc" }],
         }),
       ]);
 
@@ -1331,6 +1339,14 @@ export class DashboardController {
       return res.json({
         ...analytics,
         actions,
+        ownerHistories,
+        statusHistories,
+        historySummary: {
+          ownerChanges: ownerHistories.length,
+          statusChanges: statusHistories.length,
+          ownerWorkingHours: ownerHistories.reduce((sum, item) => sum + ((item.permanencyTimeWorkingSeconds ?? 0) / 3600), 0),
+          statusWorkingHours: statusHistories.reduce((sum, item) => sum + ((item.permanencyTimeWorkingSeconds ?? 0) / 3600), 0),
+        },
         timeAppointments,
         timeAppointmentSummary: {
           count: timeAppointments.length,
