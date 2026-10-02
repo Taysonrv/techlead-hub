@@ -437,7 +437,7 @@ export class CoordinationService {
       const key=`${category}::${service}`; const current=categoryServiceMap.get(key);
       categoryServiceMap.set(key,{category,service,count:(current?.count??0)+1});
     }
-    const categoryServices=[...categoryServiceMap.values()].sort((a,b)=>b.count-a.count).slice(0,60);
+    const categoryServices=[...categoryServiceMap.values()].sort((a,b)=>b.count-a.count).slice(0,60).map((item)=>({ ...item, label: `${item.category} · ${serviceLabel(item.service)}` }));
     const previousTotal = previousTickets.length;
     const volumeDelta = previousTotal ? Math.round(((tickets.length - previousTotal) / previousTotal) * 100) : tickets.length ? 100 : 0;
     const previousSpecific = previousTickets.filter((ticket) => {
