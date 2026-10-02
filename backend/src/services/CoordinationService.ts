@@ -220,7 +220,7 @@ export class CoordinationService {
     };
   }
 
-  async csatDetails(days = 180, filters: { client?: string; analyst?: string; service?: string; value?: number; commentsOnly?: boolean } = {}) {
+  async csatDetails(days = 180, filters: { client?: string; analyst?: string; service?: string; value?: number; minValue?: number; commentsOnly?: boolean } = {}) {
     const safeDays = Math.min(Math.max(days, 30), 730);
     const since = new Date(Date.now() - safeDays * 86400000);
     const responses = await prisma.movideskSurveyResponse.findMany({
@@ -229,6 +229,7 @@ export class CoordinationService {
         ticketId: { not: null },
         type: 2,
         ...(filters.value ? { value: filters.value } : {}),
+        ...(filters.minValue ? { value: { gte: filters.minValue } } : {}),
       },
       orderBy: { responseDate: "desc" },
       take: 500,
