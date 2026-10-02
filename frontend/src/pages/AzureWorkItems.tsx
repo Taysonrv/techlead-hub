@@ -1552,7 +1552,7 @@ export function AzureWorkItems({
                     : hasAssignedTo,
 
                 sortBy:
-                  "stateChangedAt",
+                  "azureChangedAt",
 
                 sortDirection,
               },
@@ -3361,10 +3361,10 @@ export function AzureWorkItems({
                     }}
                   >
                     <MenuItem value="desc">
-                      Movimentação mais recente
+                      Atualização mais recente
                     </MenuItem>
                     <MenuItem value="asc">
-                      Movimentação mais antiga
+                      Atualização mais antiga
                     </MenuItem>
                   </Select>
                 </FormControl>
