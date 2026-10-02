@@ -2029,15 +2029,15 @@ export function Analysts() {
         />
 
         <MetricCard
-          title="Pendentes"
+          title="Ainda abertos"
           value={
             summary.openTickets
           }
           description="Tickets ainda não concluídos"
           info={{
-            title: "Pendentes",
+            title: "Ainda abertos",
             summary:
-              "Tickets da carteira filtrada que ainda estão abertos no atendimento.",
+              "Tickets abertos dentro do período analisado que continuam ativos atualmente.",
             calculation:
               "Contagem dos tickets considerados abertos pela regra operacional da tela.",
             source:
@@ -2047,7 +2047,7 @@ export function Analysts() {
             periodRule:
               "Usa somente os tickets que já passaram pelos filtros de período, Squad e Analista.",
             notes:
-              "Clique para listar os tickets pendentes da seleção atual.",
+              "Não equivale ao snapshot histórico “Pendentes no fim do período” do Movidesk.",
           }}
           severity={
             summary.openTickets >
@@ -2057,7 +2057,7 @@ export function Analysts() {
           }
           onClick={() =>
             showTickets(
-              "Tickets pendentes",
+              "Tickets ainda abertos",
               scopedTickets.filter(
                 isOpen
               )
