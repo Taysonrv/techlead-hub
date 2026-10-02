@@ -254,8 +254,7 @@ export class DashboardController {
 
             total:
               item._count.id,
-          });
-          }
+          })
         );
 
       return res.json(
