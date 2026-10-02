@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.0.0 LTS — 2026-10-02
+
+### Release estável
+- Primeira versão LTS do Hub Suporte Simer, promovendo o pacote validado da linha RC.20 para o canal estável.
+- Consolida Dashboard e analytics Movidesk, Central da Coordenação, Central de Liderança Técnica, produtividade por apontamentos, Dados e Sincronizações e integração Azure DevOps.
+- Padroniza a carteira operacional oficial em 2026+, com Causa exclusiva de Problema e Motivo exclusivo de Dúvida.
+- Inclui enriquecimento estruturado de ações, apontamentos e históricos Movidesk, checkpoints de sincronização e diagnósticos de cobertura.
+- Consolida os ajustes finais de UX, dark mode, filtros, drill-downs, relatórios gerenciais, administração e preparação Web/Desktop.
+
+> Versão LTS destinada à publicação no canal estável após validação automática de backend, frontend, testes, instalador Desktop e imagem Web.
+
 ## 1.0.0-rc.20 — 2026-10-02
 
 ### Dashboard e dados Movidesk
