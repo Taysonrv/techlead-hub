@@ -362,8 +362,8 @@ export function Settings() {
       setSuccess(null);
       const response = await api.post<{ scanned: number; updated: number }>("/movidesk/causes/backfill", {}, { timeout: 120_000 });
       setSuccess(`Causas consolidadas: ${response.data.updated} ticket(s) atualizado(s) entre ${response.data.scanned} candidato(s) da carteira 2026+.`);
-    } catch (error) {
-      setError(errorMessage(error, "Não foi possível consolidar as causas dos tickets."));
+    } catch (backfillError: any) {
+      setError(backfillError?.response?.data?.message ?? "Não foi possível consolidar as causas dos tickets.");
     } finally {
       setCauseBackfillBusy(false);
     }
