@@ -1,5 +1,3 @@
-import { isCauseApplicable } from "../domain/ticket/classificationRules";
-
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
@@ -488,20 +486,28 @@ export function Dashboard() {
     return result;
   }, [openedInPeriod, resolvedInPeriod, closedInPeriod, effectiveStartDate, effectiveEndDate]);
 
-  const ticketsEligibleForCause = useMemo(
-    () => filteredTickets.filter((ticket) => isCauseApplicable(ticket.category)),
-    [filteredTickets]
+  const ticketsWithCause = useMemo(
+    () => filteredTickets.filter((ticket) => {
+      const label = ticket.causeDetail?.trim() || ticket.cause?.trim();
+      return Boolean(label) && normalize(label) !== "sem causa";
+    }),
+    [filteredTickets],
   );
 
   const causes = useMemo(() => {
     const grouped = new Map<string, number>();
-    ticketsEligibleForCause.forEach((ticket) => {
+    ticketsWithCause.forEach((ticket) => {
       const label = ticket.causeDetail?.trim() || ticket.cause?.trim();
-      if (!label || normalize(label) === "sem causa") return;
-      grouped.set(label, (grouped.get(label) ?? 0) + 1);
+      if (!label) return;
+      const existing = [...grouped.keys()].find((key) => normalize(key) === normalize(label));
+      const key = existing ?? label;
+      grouped.set(key, (grouped.get(key) ?? 0) + 1);
     });
-    return [...grouped.entries()].map(([label,total]) => ({ label,total })).sort((a,b) => b.total-a.total).slice(0,8);
-  }, [ticketsEligibleForCause]);
+    return [...grouped.entries()]
+      .map(([label, total]) => ({ label, total }))
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 8);
+  }, [ticketsWithCause]);
 
   const businessAreas = useMemo(() => {
     // businessArea é um campo customizado e pode estar vazio. Serviço é a
@@ -1418,12 +1424,12 @@ export function Dashboard() {
                       label={{ position: "right", fontSize: 10, fontWeight: 800, fill: isDark ? "rgba(226,232,240,.86)" : "rgba(30,41,59,.86)" }}
                       onClick={(_, index) => {
                         const cause = causes.slice(0, 6)[index]?.label;
-                        if (cause) showTickets(`Causa: ${cause}`, ticketsEligibleForCause.filter((ticket) => (ticket.causeDetail?.trim() || ticket.cause?.trim()) === cause), "Tickets classificados com a causa selecionada");
+                        if (cause) showTickets(`Causa: ${cause}`, ticketsWithCause.filter((ticket) => normalize(ticket.causeDetail?.trim() || ticket.cause?.trim()) === normalize(cause)), "Tickets classificados com a causa selecionada");
                       }} />
                   </BarChart>
                 </ResponsiveContainer>
               </Box> : <Box sx={{ minHeight: 250, display: "grid", placeItems: "center", px: 2 }}>
-                <Typography variant="body2" color="text.secondary" sx={{ textAlign: "center" }}>Nenhuma causa registrada para os filtros selecionados.</Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ textAlign: "center" }}>Nenhuma causa preenchida nos atendimentos da Operação SIMER para o período selecionado.</Typography>
               </Box>}
             </CardBase>
           </Box>
