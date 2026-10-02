@@ -27,7 +27,7 @@ import { detailDrawerPaperSx } from "../theme/layoutTokens";
 import { PageHeader } from "../components/PageHeader";
 import { api, getApiErrorMessage } from "../services/api";
 import { aliareColors } from "../theme/theme";
-import { Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip as ChartTooltip, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, ReferenceLine, Tooltip as ChartTooltip, XAxis, YAxis } from "recharts";
 
 type Data = {
   generatedAt: string;
@@ -379,7 +379,11 @@ export function Coordination() {
                               <Typography variant="body2" sx={{ fontWeight: 800 }}>{item.priority} · {item.total} item(ns)</Typography>
                               <Typography variant="caption" color="text.secondary">Suporte {rate(item.supportWithinOla,item.total)}% · Dev {rate(item.factoryWithinOla,item.total)}% · SLA concluído {rate(item.totalWithinSla,item.concluded)}%</Typography>
                             </Stack>
-                            <LinearProgress variant="determinate" value={item.concluded ? rate(item.totalWithinSla,item.concluded) : 0} sx={{ height: 7, borderRadius: 5 }} />
+                            <Stack spacing={.35}>
+                              <LinearProgress variant="determinate" value={rate(item.supportWithinOla,item.total)} sx={{height:4,borderRadius:4,"& .MuiLinearProgress-bar":{bgcolor:aliareColors.info}}}/>
+                              <LinearProgress variant="determinate" value={rate(item.factoryWithinOla,item.total)} sx={{height:4,borderRadius:4,"& .MuiLinearProgress-bar":{bgcolor:aliareColors.green}}}/>
+                              <LinearProgress variant="determinate" value={item.concluded ? rate(item.totalWithinSla,item.concluded) : 0} sx={{height:4,borderRadius:4,"& .MuiLinearProgress-bar":{bgcolor:aliareColors.warning}}}/>
+                            </Stack>
                           </Box>
                         ))}
                       </Stack>
@@ -387,14 +391,16 @@ export function Coordination() {
                     <Box sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2.5, p: 1.5, minHeight: 250 }}>
                       <Typography sx={{ fontWeight: 850, mb: 1 }}>Tendência mensal de cumprimento</Typography>
                       <ResponsiveContainer width="100%" height={210}>
-                        <LineChart data={slaDevelopment.monthly} margin={{ top: 8, right: 10, left: -18, bottom: 0 }}>
-                          <CartesianGrid vertical={false} />
-                          <XAxis dataKey="label" />
-                          <YAxis domain={[0,100]} />
-                          <ChartTooltip />
-                          <Line type="monotone" dataKey="supportWithinPct" name="OLA Suporte %" stroke={aliareColors.info} strokeWidth={2.5} dot={false} />
-                          <Line type="monotone" dataKey="factoryWithinPct" name="OLA Desenvolvimento %" stroke={aliareColors.green} strokeWidth={2.5} dot={false} />
-                          <Line type="monotone" dataKey="totalWithinPct" name="SLA total %" stroke={aliareColors.warning} strokeWidth={2.5} dot={false} />
+                        <LineChart data={slaDevelopment.monthly} margin={{ top: 8, right: 16, left: -8, bottom: 4 }}>
+                          <CartesianGrid vertical={false} stroke={theme.palette.divider} strokeDasharray="3 3" opacity={.55} />
+                          <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{fontSize:11,fill:theme.palette.text.secondary}} />
+                          <YAxis domain={[0,100]} tickFormatter={(value)=>`${value}%`} axisLine={false} tickLine={false} tick={{fontSize:11,fill:theme.palette.text.secondary}} />
+                          <ReferenceLine y={100} stroke={theme.palette.text.disabled} strokeDasharray="5 5" />
+                          <ChartTooltip contentStyle={{borderRadius:12,border:`1px solid ${theme.palette.divider}`,backgroundColor:theme.palette.background.paper,color:theme.palette.text.primary}} formatter={(value)=>[`${Number(value).toLocaleString("pt-BR",{maximumFractionDigits:1})}%`]} />
+                          <Legend iconType="circle" wrapperStyle={{fontSize:11,paddingTop:8}} />
+                          <Line type="monotone" dataKey="supportWithinPct" name="OLA Suporte" stroke={aliareColors.info} strokeWidth={2.5} dot={{r:2}} activeDot={{r:5}} />
+                          <Line type="monotone" dataKey="factoryWithinPct" name="OLA Desenvolvimento" stroke={aliareColors.green} strokeWidth={2.5} dot={{r:2}} activeDot={{r:5}} />
+                          <Line type="monotone" dataKey="totalWithinPct" name="SLA concluído" stroke={aliareColors.warning} strokeWidth={2.5} dot={{r:2}} activeDot={{r:5}} />
                         </LineChart>
                       </ResponsiveContainer>
                     </Box>
