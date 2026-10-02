@@ -124,6 +124,8 @@ type Ticket = {
   satisfactionComment?: string | null;
   satisfactionDate?: string | null;
   satisfactionSource?: string | null;
+  timeAppointmentSummary?: { count: number; accountedHours: number };
+  historySummary?: { ownerChanges: number; statusChanges: number; ownerWorkingHours: number; statusWorkingHours: number };
   timeline?: Array<{ date: string; type: string; title: string; description: string | null; author: string | null }>;
 
   lifetimeMinutes: number | null;
