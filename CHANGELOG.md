@@ -1,5 +1,43 @@
 # Changelog
 
+## 1.0.0-rc.19 — 2026-10-02
+
+### Central da Coordenação e indicadores
+- Revisão do painel SLA × OLA com separação entre tempo de Suporte, Desenvolvimento e SLA total.
+- Indicadores por prioridade P1–P4, riscos em desenvolvimento, estouros de OLA/SLA e tratamento de linhas temporais inconsistentes.
+- Refinamento visual dos gráficos, referências percentuais, legendas, tooltips e compatibilidade com Dark Mode.
+- Ajustes de escopo para que análises gerenciais utilizem a carteira SIMER 2026+ de forma consistente.
+
+### Dashboard e classificação Movidesk
+- Categorias passam a respeitar o período global selecionado no Dashboard.
+- Causa passa a ser uma dimensão exclusiva dos tickets da categoria Problema.
+- Motivo passa a ser uma dimensão exclusiva dos tickets da categoria Dúvida.
+- Novo card de Motivos das Dúvidas e revisão do card de Principais Causas.
+- Backfill idempotente para consolidar Causa e Motivo a partir dos campos customizados já armazenados.
+- Diagnóstico de cobertura para Problema/Causa e Dúvida/Motivo, incluindo customFieldId candidatos dos registros ainda não classificados.
+
+### Movidesk, produtividade e qualidade dos dados
+- Persistência estruturada de ações, apontamentos de horas, históricos de responsável e históricos de status.
+- Checkpoint de enriquecimento para acompanhar cobertura, pendências e erros de sincronização.
+- Produtividade por analista e capacidade da Coordenação passam a consumir apontamentos estruturados.
+- Drawer de tickets enriquecido com ações, horas e histórico operacional.
+- Escopo operacional canônico centralizado para clientes SIMER e carteira a partir de 2026.
+
+### Estabilidade e desempenho
+- Redução de consultas auxiliares do snapshot do Dashboard.
+- CSAT passa a utilizar a resposta mais recente por ticket nos pontos revisados.
+- Melhorias de consistência entre filtros, drill-downs e indicadores gerenciais.
+- Correções de build, tipagem e migration relacionadas à nova dimensão Motivo.
+
+### Web, Desktop e release
+- Imagem Web continua versionada junto ao release e executa migrations de forma controlada antes da aplicação.
+- Processo de atualização Web documentado e automatizável com pull da imagem, migration, recriação e validação de readiness.
+- Novidades da versão passam a acompanhar obrigatoriamente o release dentro do aplicativo e neste changelog.
+- Atualizador Desktop mantém canal Beta/RC com verificação, download e instalação controlados.
+
+> Release Candidate para validação da Coordenação. Publicar no canal beta somente após backend, frontend, testes e imagem Web concluírem com sucesso.
+
+
 ## 1.0.0-rc.16 — 2026-09-28
 
 ### Inteligência colaborativa
