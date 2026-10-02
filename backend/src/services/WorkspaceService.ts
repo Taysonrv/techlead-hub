@@ -1,7 +1,7 @@
 import {
   prisma,
 } from "../database/prisma";
-import { SUPPORT_ANALYSTS, SUPPORT_COORDINATOR, SUPPORT_TEAMS, type SupportTeamName } from "../domain/OperationalScope";
+import { SUPPORT_ANALYSTS, SUPPORT_COORDINATOR, SUPPORT_TEAMS, azureOperationalScope, type SupportTeamName } from "../domain/OperationalScope";
 import { MovideskService } from "./MovideskService";
 import { AnalystProductivityService } from "./AnalystProductivityService";
 import { DataQualityService } from "./DataQualityService";
@@ -53,6 +53,7 @@ export class WorkspaceService {
 
     const tickets = await prisma.ticket.findMany({
       where: { AND: [
+        { isDeleted: false },
         { owner: { in: operationOwners, mode: "insensitive" } },
         ...(params.client ? [{ client: { equals: params.client, mode: "insensitive" as const } }] : []),
         ...(params.search ? [{ OR: [
@@ -139,10 +140,11 @@ export class WorkspaceService {
     const blocked = workItems.filter((item) => item.blockedProcess && !isTerminal(item.state)).length;
 
     const versionItems = await prisma.azureWorkItem.findMany({
-      where: {
-        deliveredVersion: { not: null },
-        workItemType: { in: ["Correção Clientes", "Evolução", "APOIO"], mode: "insensitive" },
-      },
+      where: { AND: [
+        azureOperationalScope(),
+        { deliveredVersion: { not: null },
+        workItemType: { in: ["Correção Clientes", "Evolução", "APOIO"], mode: "insensitive" } },
+      ] },
       orderBy: [{ azureChangedAt: "desc" }, { id: "desc" }],
       take: 1000,
       select: { id: true, workItemType: true, title: true, state: true, deliveredVersion: true },
