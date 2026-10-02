@@ -101,6 +101,28 @@ type DetailData = {
 export function Coordination() {
   const navigate = useNavigate();
   const theme = useTheme();
+  const chartColors = [aliareColors.info, aliareColors.green, aliareColors.warning, aliareColors.purple, "#ff6b57", "#22d3ee"];
+  const analyticsPanelSx = {
+    border: "1px solid",
+    borderColor: theme.palette.mode === "dark" ? "rgba(94,151,255,.24)" : "rgba(47,111,237,.14)",
+    borderRadius: 3,
+    background: theme.palette.mode === "dark"
+      ? "linear-gradient(145deg,rgba(12,31,55,.94),rgba(8,22,40,.98))"
+      : "linear-gradient(145deg,rgba(255,255,255,.98),rgba(246,250,255,.98))",
+    boxShadow: theme.palette.mode === "dark" ? "0 18px 48px rgba(0,0,0,.18)" : "0 14px 34px rgba(30,64,175,.06)",
+    overflow: "hidden",
+  } as const;
+  const rankingRowSx = {
+    justifyContent: "flex-start",
+    textTransform: "none",
+    color: "text.primary",
+    borderRadius: 2,
+    px: 1,
+    py: .8,
+    minHeight: 42,
+    transition: "transform .16s ease, background-color .16s ease",
+    "&:hover": { bgcolor: "action.hover", transform: "translateX(2px)" },
+  } as const;
   const [data, setData] = useState<Data | null>(null);
   const [capacity, setCapacity] = useState<{ days: number; businessDays: number; hoursPerDay: number; expectedHours: number; registeredHours: number; coverageRate: number | null; dataSource?: string; hasRegisteredTimeData?: boolean; analysts: Array<{ analyst: string; expectedHours: number; registeredHours: number; coverageRate: number | null }> } | null>(null);
   const [error, setError] = useState("");
@@ -145,12 +167,12 @@ export function Coordination() {
     if (!data) return;
     const controller = new AbortController();
     const timer = window.setTimeout(() => {
-      api.get("/coordination/productivity-capacity", { params: { days: 28 }, signal: controller.signal })
+      api.get("/coordination/productivity-capacity", { params: { days: serviceDays || 730 }, signal: controller.signal })
         .then((response) => setCapacity(response.data))
         .catch(() => { if (!controller.signal.aborted) setCapacity(null); });
     }, 120);
     return () => { window.clearTimeout(timer); controller.abort(); };
-  }, [Boolean(data)]);
+  }, [Boolean(data), serviceDays]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -374,7 +396,7 @@ export function Coordination() {
                     <KpiCard title="Comentários" value={csat.summary.comments} subtitle="feedback qualitativo" info="Respostas que possuem comentário textual do cliente. Clique para detalhar." accent={aliareColors.purple} onClick={()=>void openCsatDetails("CSAT · Comentários",{commentsOnly:"true"})} />
                   </Box>
                   {csat.summary.responses > 0 && <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", xl: "minmax(0, 1fr) minmax(0, 1fr)" }, gap: 1.5, alignItems: "stretch" }}>
-                    <Box sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2.5, p: 1.75, minWidth: 0, display: "flex", flexDirection: "column", bgcolor: "background.paper" }}>
+                    <Box sx={{ ...analyticsPanelSx, p: 1.75, minWidth: 0, display: "flex", flexDirection: "column" }}>
                       <Stack direction="row" sx={{alignItems:"flex-start",justifyContent:"space-between",gap:1,mb:.25}}>
                         <Box><Typography sx={{ fontWeight: 850 }}>Distribuição das notas</Typography><Typography variant="caption" color="text.secondary">Escala CSAT 1–5 · respostas vinculadas à carteira SIMER</Typography></Box>
                         <Tooltip title="Quantidade de respostas da Pesquisa de Satisfação Movidesk em cada nota da escala 1–5."><InfoOutlined sx={{fontSize:17,color:"text.secondary",mt:.25}}/></Tooltip>
@@ -382,13 +404,13 @@ export function Coordination() {
                       <Box sx={{ flex: 1, minHeight: 260, mt: 1 }}>
                         <ResponsiveContainer width="100%" height="100%">
                           <BarChart data={csat.distribution} margin={{ top: 12, right: 12, left: -12, bottom: 4 }}>
-                            <CartesianGrid vertical={false} strokeDasharray="3 3" /><XAxis dataKey="value" axisLine={false} tickLine={false} /><YAxis allowDecimals={false} axisLine={false} tickLine={false} /><ChartTooltip />
-                            <Bar dataKey="count" name="Respostas" fill={aliareColors.green} radius={[7,7,0,0]} maxBarSize={72} cursor="pointer" onClick={(_, index)=>{const score=csat.distribution[index]?.value;if(score)void openCsatDetails(`CSAT · Nota ${score}`,{value:score})}} />
+                            <CartesianGrid vertical={false} stroke={theme.palette.divider} strokeDasharray="3 3" opacity={.55} /><XAxis dataKey="value" axisLine={false} tickLine={false} tick={{fill:theme.palette.text.secondary}} /><YAxis allowDecimals={false} axisLine={false} tickLine={false} tick={{fill:theme.palette.text.secondary}} /><ChartTooltip contentStyle={{borderRadius:12,border:`1px solid ${theme.palette.divider}`,backgroundColor:theme.palette.background.paper,color:theme.palette.text.primary}} cursor={{fill:theme.palette.action.hover}} />
+                            <Bar dataKey="count" name="Respostas" radius={[7,7,0,0]} maxBarSize={72} cursor="pointer" onClick={(_, index)=>{const score=csat.distribution[index]?.value;if(score)void openCsatDetails(`CSAT · Nota ${score}`,{value:score})}}>{csat.distribution.map((item,index)=><Cell key={item.value} fill={chartColors[index % chartColors.length]}/>)}</Bar>
                           </BarChart>
                         </ResponsiveContainer>
                       </Box>
                     </Box>
-                    <Box sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2.5, p: 1.75, minWidth: 0, display: "flex", flexDirection: "column", bgcolor: "background.paper" }}>
+                    <Box sx={{ ...analyticsPanelSx, p: 1.75, minWidth: 0, display: "flex", flexDirection: "column" }}>
                       <Stack direction="row" sx={{alignItems:"flex-start",justifyContent:"space-between",gap:1,mb:1}}>
                         <Box><Typography sx={{ fontWeight: 850 }}>CSAT por analista</Typography><Typography variant="caption" color="text.secondary">Equipe oficial de Suporte e Sustentação · clique para detalhar</Typography></Box>
                         <Tooltip title="Média e quantidade de avaliações por analista da operação SIMER. Pessoas fora da equipe oficial não compõem este ranking."><InfoOutlined sx={{fontSize:17,color:"text.secondary",mt:.25}}/></Tooltip>
@@ -541,14 +563,14 @@ export function Coordination() {
                           <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11, fill: theme.palette.text.secondary }} axisLine={false} tickLine={false} />
                           <YAxis type="category" dataKey="service" width={210} tick={{ fontSize: 10, fill: theme.palette.text.secondary }} axisLine={false} tickLine={false} tickFormatter={(value: string) => { const label = value.split("»").at(-1)?.trim() ?? value; return label.length > 28 ? `${label.slice(0, 27)}…` : label; }} />
                           <ChartTooltip contentStyle={{ borderRadius: 12, border: `1px solid ${theme.palette.divider}`, backgroundColor: theme.palette.background.paper, color: theme.palette.text.primary, boxShadow: "0 14px 36px rgba(0,0,0,.24)" }} wrapperStyle={{ outline: "none" }} cursor={{ fill: theme.palette.action.hover }} formatter={(value) => [value, "Atendimentos"]} labelFormatter={(value) => String(value)} />
-                          <Bar dataKey="count" name="Atendimentos" fill={aliareColors.info} radius={[0, 6, 6, 0]} maxBarSize={28} label={{position:"right",fill:theme.palette.text.secondary,fontSize:11,fontWeight:800}} cursor="pointer" onClick={(_, index) => { const service = data.serviceAnalytics.ranking[index]?.service; if (service) void openDetails("service", `Serviço · ${service.split("»").at(-1)?.trim() ?? service}`, undefined, undefined, undefined, service); }} />
+                          <Bar dataKey="count" name="Atendimentos" radius={[0, 6, 6, 0]} maxBarSize={28} label={{position:"right",fill:theme.palette.text.secondary,fontSize:11,fontWeight:800}} cursor="pointer" onClick={(_, index) => { const service = data.serviceAnalytics.ranking[index]?.service; if (service) void openDetails("service", `Serviço · ${service.split("»").at(-1)?.trim() ?? service}`, undefined, undefined, undefined, service); }}>{data.serviceAnalytics.ranking.map((item,index)=><Cell key={item.service} fill={chartColors[index % chartColors.length]}/>)}</Bar>
                         </BarChart>
                       </ResponsiveContainer>
                     </Box>
                   ) : <Alert severity="info">Ainda não há Serviços suficientes no histórico sincronizado para montar o ranking.</Alert>}
 
                   <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", xl: "repeat(2,minmax(0,1fr))" }, gap: 1.5, mt: 2 }}>
-                    <Box sx={{ p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: 2.5, background: theme.palette.mode === "dark" ? "linear-gradient(145deg,rgba(47,111,237,.08),rgba(24,199,122,.035))" : "linear-gradient(145deg,rgba(47,111,237,.045),rgba(24,199,122,.025))" }}>
+                    <Box sx={{ ...analyticsPanelSx, p: 1.75 }}>
                       <Stack direction="row" sx={{justifyContent:"space-between",alignItems:"flex-start",mb:1}}>
                         <Box><Typography sx={{ fontWeight: 850 }}>Qualidade da classificação · 3º nível</Typography><Typography variant="caption" color="text.secondary">Cobertura das rotinas detalhadas do Serviço no Movidesk.</Typography></Box>
                         <Chip size="small" label={`${data.serviceAnalytics.thirdLevel.rate}% classificados`} color={data.serviceAnalytics.thirdLevel.rate >= 90 ? "success" : data.serviceAnalytics.thirdLevel.rate >= 75 ? "warning" : "error"} variant="outlined"/>
@@ -562,11 +584,11 @@ export function Coordination() {
                         <Stack spacing={.55}>{data.serviceAnalytics.thirdLevel.ranking.slice(0,5).map((item)=><Button key={item.service} onClick={()=>void openDetails("serviceThirdLevel",`3º nível · ${item.service}`,undefined,undefined,undefined,item.service)} sx={{justifyContent:"space-between",textTransform:"none",color:"text.primary",px:.5,minWidth:0}}><Typography variant="body2" noWrap title={item.service} sx={{maxWidth:"75%"}}>{item.service}</Typography><Chip size="small" label={item.count} variant="outlined"/></Button>)}</Stack>
                       </Box>
                     </Box>
-                    <Box sx={{ p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: 2.5, minHeight:220 }}>
+                    <Box sx={{ ...analyticsPanelSx, p: 1.75, minHeight:220 }}>
                       <Typography sx={{ fontWeight: 850 }}>Top Serviços · 3º nível</Typography>
                       <Typography variant="caption" color="text.secondary">Clique em uma barra para abrir os atendimentos classificados naquela rotina.</Typography>
                       <Box sx={{height:180,mt:1}}>
-                        <ResponsiveContainer width="100%" height="100%"><BarChart data={data.serviceAnalytics.thirdLevel.ranking.slice(0,6)} layout="vertical" margin={{top:2,right:28,left:8,bottom:2}}><CartesianGrid horizontal={false} strokeDasharray="3 3"/><XAxis type="number" allowDecimals={false} axisLine={false} tickLine={false}/><YAxis type="category" dataKey="service" width={120} axisLine={false} tickLine={false} tickFormatter={(v:string)=>v.length>18?`${v.slice(0,17)}…`:v}/><ChartTooltip/><Bar dataKey="count" fill={aliareColors.info} radius={[0,6,6,0]} cursor="pointer" onClick={(_,index)=>{const service=data.serviceAnalytics.thirdLevel.ranking[index]?.service;if(service)void openDetails("serviceThirdLevel",`3º nível · ${service}`,undefined,undefined,undefined,service)}}/></BarChart></ResponsiveContainer>
+                        <ResponsiveContainer width="100%" height="100%"><BarChart data={data.serviceAnalytics.thirdLevel.ranking.slice(0,6)} layout="vertical" margin={{top:2,right:28,left:8,bottom:2}}><CartesianGrid horizontal={false} strokeDasharray="3 3"/><XAxis type="number" allowDecimals={false} axisLine={false} tickLine={false}/><YAxis type="category" dataKey="service" width={120} axisLine={false} tickLine={false} tickFormatter={(v:string)=>v.length>18?`${v.slice(0,17)}…`:v}/><ChartTooltip contentStyle={{borderRadius:12,border:`1px solid ${theme.palette.divider}`,backgroundColor:theme.palette.background.paper,color:theme.palette.text.primary}}/><Bar dataKey="count" radius={[0,6,6,0]} cursor="pointer" onClick={(_,index)=>{const service=data.serviceAnalytics.thirdLevel.ranking[index]?.service;if(service)void openDetails("serviceThirdLevel",`3º nível · ${service}`,undefined,undefined,undefined,service)}}>{data.serviceAnalytics.thirdLevel.ranking.slice(0,6).map((item,index)=><Cell key={item.service} fill={chartColors[index % chartColors.length]}/>)}</Bar></BarChart></ResponsiveContainer>
                       </Box>
                     </Box>
                   </Box>
