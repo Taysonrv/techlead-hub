@@ -231,6 +231,8 @@ export function SystemExplorer({
   onOpenMap: (item: SystemMapItem) => void;
 }) {
   const [catalog, setCatalog] = useState<Catalog | null>(null);
+  const [technicalMaps, setTechnicalMaps] = useState<SystemMapItem[]>([]);
+  const [catalogError, setCatalogError] = useState("");
   const [detail, setDetail] = useState<Detail | null>(null);
   const [filter, setFilter] = useState("");
   const [loading, setLoading] = useState(false);
@@ -240,7 +242,18 @@ export function SystemExplorer({
   const [rightTab, setRightTab] = useState(0);
 
   useEffect(() => {
-    void api.get<Catalog>("/simer-map/catalog").then((response) => setCatalog(response.data));
+    const controller = new AbortController();
+    Promise.all([
+      api.get<Catalog>("/simer-map/catalog", { signal: controller.signal }),
+      api.get<{items:SystemMapItem[]}>("/simer-map/map-catalog", { params:{limit:500}, signal:controller.signal }),
+    ]).then(([functional,technical]) => {
+      setCatalog(functional.data);
+      setTechnicalMaps(technical.data.items ?? []);
+      setCatalogError("");
+    }).catch(() => {
+      if (!controller.signal.aborted) setCatalogError("Não foi possível carregar a estrutura funcional/técnica do SIMER.");
+    });
+    return () => controller.abort();
   }, []);
 
   async function openRoutine(process: Process) {
@@ -379,13 +392,29 @@ export function SystemExplorer({
 
           <Divider sx={{ my: 1.1 }} />
 
-          {catalog ? (
+          {catalogError ? (
+            <Typography variant="body2" color="error.main" sx={{py:2}}>{catalogError}</Typography>
+          ) : catalog && (catalog.total ?? 0) > 0 ? (
             <Branch
               node={catalog}
               onOpen={(process) => void openRoutine(process)}
               filter={filter}
               selected={detail?.process.id}
             />
+          ) : catalog ? (
+            <Box>
+              <Typography variant="caption" color="text.secondary" sx={{display:"block",mb:1}}>
+                Fluxos funcionais ainda não importados. Exibindo a estrutura técnica disponível nos mapas .mm.
+              </Typography>
+              <Stack spacing={.35}>
+                {technicalMaps.filter((item)=>!filter.trim()||`${item.mapName} ${item.nodeText} ${item.path}`.toLocaleLowerCase("pt-BR").includes(filter.toLocaleLowerCase("pt-BR").trim())).slice(0,120).map((item)=>(
+                  <Button key={item.sourceFile} size="small" variant="text" onClick={()=>onOpenMap(item)} sx={{justifyContent:"flex-start",textTransform:"none",textAlign:"left"}}>
+                    <SchemaOutlined sx={{fontSize:16,mr:.7,flexShrink:0}}/><Typography variant="body2" noWrap title={item.path||item.sourceFile}>{item.mapName||item.nodeText}</Typography>
+                  </Button>
+                ))}
+                {!technicalMaps.length&&<Typography variant="body2" color="text.secondary" sx={{py:2}}>Nenhuma estrutura importada. Use “Regras e Mapas” para carregar os arquivos de origem.</Typography>}
+              </Stack>
+            </Box>
           ) : (
             <Box sx={{ textAlign: "center", py: 4 }}>
               <CircularProgress size={24} />
