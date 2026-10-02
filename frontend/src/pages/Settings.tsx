@@ -148,6 +148,7 @@ export function Settings() {
   const [movideskCoverage, setMovideskCoverage] = useState<MovideskCoverage | null>(null);
   const [baselineBusy, setBaselineBusy] = useState(false);
   const [enrichmentBusy, setEnrichmentBusy] = useState(false);
+  const [causeBackfillBusy, setCauseBackfillBusy] = useState(false);
   const [recentEnrichments, setRecentEnrichments] = useState<RecentEnrichment[]>([]);
 
   useEffect(() => {
@@ -352,6 +353,20 @@ export function Settings() {
     } catch (baselineError: any) {
       setError(baselineError?.response?.data?.message ?? "Não foi possível iniciar a carga FULL.");
     } finally { setBaselineBusy(false); }
+  }
+
+  async function backfillMovideskCauses() {
+    try {
+      setCauseBackfillBusy(true);
+      setError(null);
+      setSuccess(null);
+      const response = await api.post<{ scanned: number; updated: number }>("/movidesk/causes/backfill", {}, { timeout: 120_000 });
+      setSuccess(`Causas consolidadas: ${response.data.updated} ticket(s) atualizado(s) entre ${response.data.scanned} candidato(s) da carteira 2026+.`);
+    } catch (error) {
+      setError(errorMessage(error, "Não foi possível consolidar as causas dos tickets."));
+    } finally {
+      setCauseBackfillBusy(false);
+    }
   }
 
   async function syncMovideskEnrichment() {
@@ -697,6 +712,9 @@ export function Settings() {
                     </Box>
                     <Button size="small" variant="outlined" disabled={enrichmentBusy || !movideskBaseline?.completed} onClick={() => void syncMovideskEnrichment()}>
                       {enrichmentBusy ? "Enriquecendo..." : "Processar próximo lote"}
+                    </Button>
+                    <Button size="small" variant="text" disabled={causeBackfillBusy || !movideskBaseline?.completed} onClick={() => void backfillMovideskCauses()}>
+                      {causeBackfillBusy ? "Consolidando causas..." : "Consolidar causas 2026+"}
                     </Button>
                   </Stack>
                   <Box sx={{ mt: 1.25, display: "grid", gridTemplateColumns: { xs: "repeat(2,minmax(0,1fr))", md: "repeat(4,minmax(0,1fr))" }, gap: 1 }}>
