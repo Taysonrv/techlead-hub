@@ -21,6 +21,8 @@
 - Persistência estruturada de ações, apontamentos de horas, históricos de responsável e históricos de status.
 - Checkpoint de enriquecimento para acompanhar cobertura, pendências e erros de sincronização.
 - Produtividade por analista e capacidade da Coordenação passam a consumir apontamentos estruturados.
+- Tela de Analistas restringida ao quadro oficial do Suporte SIMER (Alan, Débora, Diego, Luiz, Renan, Tayson e Thiago), impedindo que responsáveis de Produto/Fábrica contaminem rankings e tabelas.
+- Produtividade por horas registradas reforçada no backend e frontend com o mesmo escopo oficial de analistas, mantendo os sete analistas mesmo quando ainda não há apontamento no período.
 - Drawer de tickets enriquecido com ações, horas e histórico operacional.
 - Escopo operacional canônico centralizado para clientes SIMER e carteira a partir de 2026.
 
