@@ -76,6 +76,7 @@ coordinationRoutes.get("/csat/details", async (req: AuthenticatedRequest, res) =
       analyst: typeof req.query.analyst === "string" ? req.query.analyst : undefined,
       service: typeof req.query.service === "string" ? req.query.service : undefined,
       value: value !== undefined && Number.isFinite(value) ? value : undefined,
+      commentsOnly: req.query.commentsOnly === "true",
     }));
   } catch (error) {
     console.error("[coordination] Falha ao carregar detalhes CSAT:", error);
