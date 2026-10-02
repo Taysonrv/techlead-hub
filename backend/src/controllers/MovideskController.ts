@@ -89,6 +89,17 @@ export class MovideskController {
         }
     }
 
+    async recentEnrichments(req: AuthenticatedRequest, res: Response) {
+        try {
+            const requested = Number(req.query.limit ?? 10);
+            return res.json(await new MovideskService().recentEnrichments(Number.isSafeInteger(requested) ? requested : 10));
+        } catch (error) {
+            const message = error instanceof Error ? error.message : "Não foi possível consultar os últimos enriquecimentos Movidesk.";
+            console.error("[movidesk-enrichment-recent] Falha:", message);
+            return res.status(500).json({ message });
+        }
+    }
+
     async diagnoseEnrichment(req: AuthenticatedRequest, res: Response) {
         try {
             const requested = req.query.ticketId ? Number(req.query.ticketId) : null;
