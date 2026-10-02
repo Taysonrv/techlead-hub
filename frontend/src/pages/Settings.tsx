@@ -109,6 +109,12 @@ type RecentEnrichment = {
   lastError: string | null;
 };
 type RecentEnrichmentResponse = { items: RecentEnrichment[]; generatedAt: string };
+type ClassificationCoverage = {
+  scope: { start: string; tickets: number };
+  problems: { total: number; classified: number; missing: number; coveragePct: number; distribution: Array<{label:string;total:number}>; unclassifiedCustomFields: Array<{customFieldId:number|null;tickets:number;values:Array<{value:string;total:number}>}> };
+  doubts: { total: number; classified: number; missing: number; coveragePct: number; distribution: Array<{label:string;total:number}>; unclassifiedCustomFields: Array<{customFieldId:number|null;tickets:number;values:Array<{value:string;total:number}>}> };
+  generatedAt: string;
+};
 
 
 const EMPTY_FORM: ConfigurationForm = {
@@ -150,6 +156,7 @@ export function Settings() {
   const [enrichmentBusy, setEnrichmentBusy] = useState(false);
   const [causeBackfillBusy, setCauseBackfillBusy] = useState(false);
   const [recentEnrichments, setRecentEnrichments] = useState<RecentEnrichment[]>([]);
+  const [classificationCoverage, setClassificationCoverage] = useState<ClassificationCoverage | null>(null);
 
   useEffect(() => {
     void loadConfiguration();
@@ -334,8 +341,12 @@ export function Settings() {
       if (response.data.completed) {
         const coverage = await api.get<MovideskCoverage>("/movidesk/coverage", { timeout: 60_000 });
         setMovideskCoverage(coverage.data);
-        const recent = await api.get<RecentEnrichmentResponse>("/movidesk/enrichment/recent?limit=10", { timeout: 30_000 });
+        const [recent, classifications] = await Promise.all([
+          api.get<RecentEnrichmentResponse>("/movidesk/enrichment/recent?limit=10", { timeout: 30_000 }),
+          api.get<ClassificationCoverage>("/movidesk/classifications/coverage", { timeout: 60_000 }),
+        ]);
         setRecentEnrichments(recent.data.items);
+        setClassificationCoverage(classifications.data);
       }
       return response.data;
     } catch (statusError: any) {
@@ -360,8 +371,10 @@ export function Settings() {
       setCauseBackfillBusy(true);
       setError(null);
       setSuccess(null);
-      const response = await api.post<{ scanned: number; updated: number }>("/movidesk/causes/backfill", {}, { timeout: 120_000 });
-      setSuccess(`Causas consolidadas: ${response.data.updated} ticket(s) atualizado(s) entre ${response.data.scanned} candidato(s) da carteira 2026+.`);
+      const response = await api.post<{ scanned: number; updated: number; causesUpdated: number; reasonsUpdated: number }>("/movidesk/causes/backfill", {}, { timeout: 120_000 });
+      const classifications = await api.get<ClassificationCoverage>("/movidesk/classifications/coverage", { timeout: 60_000 });
+      setClassificationCoverage(classifications.data);
+      setSuccess(`Classificações consolidadas: ${response.data.causesUpdated} causa(s) e ${response.data.reasonsUpdated} motivo(s) atualizados entre ${response.data.scanned} candidato(s) da carteira 2026+.`);
     } catch (backfillError: any) {
       setError(backfillError?.response?.data?.message ?? "Não foi possível consolidar as causas e motivos dos tickets.");
     } finally {
@@ -725,6 +738,27 @@ export function Settings() {
                       ["Hist. status", movideskCoverage.enrichment.statusHistories],
                     ].map(([label,value]) => <Box key={String(label)}><Typography variant="caption" color="text.secondary">{label}</Typography><Typography variant="body2" sx={{ fontWeight: 800 }}>{value}</Typography></Box>)}
                   </Box>
+                  {classificationCoverage && <Box sx={{ mt: 2, p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: 1.5 }}>
+                    <Typography variant="body2" sx={{fontWeight:850,mb:1}}>Cobertura de Categoria → Causa/Motivo</Typography>
+                    <Box sx={{display:"grid",gridTemplateColumns:{xs:"1fr",md:"1fr 1fr"},gap:1}}>
+                      {[
+                        ["Problema / Causa", classificationCoverage.problems],
+                        ["Dúvida / Motivo", classificationCoverage.doubts],
+                      ].map(([label, raw]) => {
+                        const item = raw as ClassificationCoverage["problems"];
+                        return <Box key={String(label)} sx={{p:1.25,border:"1px solid",borderColor:"divider",borderRadius:1.25}}>
+                          <Stack direction="row" spacing={1} sx={{justifyContent:"space-between",alignItems:"center"}}>
+                            <Typography variant="body2" sx={{fontWeight:800}}>{String(label)}</Typography>
+                            <Chip size="small" color={item.coveragePct >= 90 ? "success" : item.coveragePct >= 60 ? "warning" : "default"} label={`${item.coveragePct}%`} />
+                          </Stack>
+                          <Typography variant="caption" color="text.secondary">{item.classified} classificado(s) · {item.missing} sem classificação · {item.total} total</Typography>
+                          <LinearProgress variant="determinate" value={item.coveragePct} sx={{mt:1,height:6,borderRadius:4}} />
+                          {item.distribution.length > 0 && <Typography variant="caption" sx={{display:"block",mt:1}}>{item.distribution.slice(0,6).map(v=>`${v.label}: ${v.total}`).join(" · ")}</Typography>}
+                          {item.unclassifiedCustomFields.length > 0 && <Typography variant="caption" color="text.secondary" sx={{display:"block",mt:.75}}>Campos candidatos sem classificação: {item.unclassifiedCustomFields.slice(0,4).map(v=>`#${v.customFieldId ?? "?"} (${v.tickets})`).join(" · ")}</Typography>}
+                        </Box>;
+                      })}
+                    </Box>
+                  </Box>}
                   {recentEnrichments.length > 0 && <Box sx={{ mt: 2 }}>
                     <Typography variant="body2" sx={{ fontWeight: 850, mb: 1 }}>Últimos tickets enriquecidos</Typography>
                     <Stack spacing={0.75}>
