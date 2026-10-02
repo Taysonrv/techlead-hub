@@ -206,6 +206,7 @@ export function Import() {
   const [referenceSyncResult, setReferenceSyncResult] = useState<Record<string, unknown> | null>(null);
   const [referenceSyncPhase, setReferenceSyncPhase] = useState<string | null>(null);
   const [referenceNextAt, setReferenceNextAt] = useState<string | null>(null);
+  const [referenceSchedule, setReferenceSchedule] = useState<{ hour:number; minute:number } | null>(null);
 
   /* =======================================================
      AZURE
@@ -624,6 +625,7 @@ export function Import() {
       const response = await api.get<{ status:string; phase:string; result:Record<string,unknown>|null; error:string|null; scheduler?:{ enabled:boolean; hour:number; minute:number; nextEstimatedAt:string|null } }>("/movidesk/reference-sync/status", { timeout: 30_000 });
       setReferenceSyncPhase(response.data.phase);
       setReferenceNextAt(response.data.scheduler?.nextEstimatedAt ?? null);
+      setReferenceSchedule(response.data.scheduler ? { hour: response.data.scheduler.hour, minute: response.data.scheduler.minute } : null);
       setReferenceSyncLoading(response.data.status === "RUNNING");
       if (response.data.result) setReferenceSyncResult(response.data.result);
       if (response.data.status === "FAILED" && response.data.error) setError(response.data.error);
@@ -689,8 +691,8 @@ export function Import() {
               <IntegrationHealthCard title="Azure DevOps" configured={syncHealth.providers.azureDevOps.configured} health={syncHealth.providers.azureDevOps.health} />
               <Box sx={{ p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: 2.25, bgcolor: "background.default" }}>
                 <Typography variant="caption" color="text.secondary">Movidesk · Catálogo + CSAT</Typography>
-                <Typography sx={{ mt: .35, fontWeight: 750 }}>Diário às 03:20</Typography>
-                <Typography variant="caption" color="text.secondary">Próxima: {formatDateTime(referenceNextAt)}</Typography>
+                <Typography sx={{ mt: .35, fontWeight: 750 }}>{referenceSchedule ? `Diário às ${String(referenceSchedule.hour).padStart(2,"0")}:${String(referenceSchedule.minute).padStart(2,"0")}` : "Agenda diária"}</Typography>
+                <Typography variant="caption" color="text.secondary">Próxima: {formatDateTime(referenceNextAt)} · horário configurado no ambiente</Typography>
               </Box>
             </Box>
             {syncHealth.running > 0 && <Alert severity="info" sx={{ mt: 1.5 }}>
