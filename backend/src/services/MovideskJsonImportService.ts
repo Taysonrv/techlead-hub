@@ -238,7 +238,8 @@ export class MovideskJsonImportService {
       cause:
         this.toText(row.cause) ??
         this.toText(row.causa) ??
-        this.customValue(customFields, CUSTOM_FIELDS.cause),
+        this.customValue(customFields, CUSTOM_FIELDS.cause) ??
+        this.detectCause(customFields),
       causeDetail:
         this.toText(row.causeDetail) ??
         this.toText(row.detalheCausa) ??
@@ -323,6 +324,33 @@ export class MovideskJsonImportService {
 
   private personName(value: unknown) {
     return this.isObject(value) ? this.toText(value.businessName) : null;
+  }
+
+  private detectCause(fields: CustomField[]) {
+    const known = [
+      "erro operacional",
+      "configuração",
+      "configuracao",
+      "solução de contorno",
+      "solucao de contorno",
+      "não identificada",
+      "nao identificada",
+      "sefaz",
+      "aplicativos de terceiros",
+    ];
+    for (const field of fields) {
+      const candidates = [
+        this.toText(field.value),
+        ...(field.items ?? []).map((item) => this.toText(item.customFieldItem)),
+      ].filter((value): value is string => Boolean(value));
+      for (const value of candidates) {
+        const normalized = value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR");
+        if (known.some((token) => normalized.includes(token.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR")))) {
+          return value;
+        }
+      }
+    }
+    return null;
   }
 
   private customValue(fields: CustomField[], id: number) {
