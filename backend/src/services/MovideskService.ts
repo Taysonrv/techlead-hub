@@ -658,6 +658,50 @@ export class MovideskService {
     };
   }
 
+  async backfillTicketCauses() {
+    const candidates = await prisma.ticket.findMany({
+      where: {
+        AND: [
+          { createdDate: { gte: SYNC_SCOPE_START } },
+          { client: { in: [...SIMER_CLIENTS], mode: "insensitive" } },
+          { cause: null },
+          { rawData: { not: Prisma.JsonNull } },
+          { isDeleted: false },
+        ],
+      },
+      select: { id: true, rawData: true },
+    });
+    let updated = 0;
+    const normalize = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLocaleLowerCase("pt-BR");
+    const known = ["erro operacional", "configuracao", "solucao de contorno", "nao identificada", "sefaz", "aplicativos de terceiros"];
+    for (const ticket of candidates) {
+      if (!ticket.rawData || typeof ticket.rawData !== "object" || Array.isArray(ticket.rawData)) continue;
+      const raw = ticket.rawData as Record<string, unknown>;
+      const fields = Array.isArray(raw.customFieldValues) ? raw.customFieldValues : [];
+      let cause: string | null = null;
+      for (const field of fields) {
+        if (!field || typeof field !== "object" || Array.isArray(field)) continue;
+        const item = field as Record<string, unknown>;
+        const values: string[] = [];
+        if (typeof item.value === "string" && item.value.trim()) values.push(item.value.trim());
+        if (Array.isArray(item.items)) {
+          for (const child of item.items) {
+            if (!child || typeof child !== "object" || Array.isArray(child)) continue;
+            const value = (child as Record<string, unknown>).customFieldItem;
+            if (typeof value === "string" && value.trim()) values.push(value.trim());
+          }
+        }
+        cause = values.find((value) => known.some((token) => normalize(value).includes(token))) ?? null;
+        if (cause) break;
+      }
+      if (cause) {
+        await prisma.ticket.update({ where: { id: ticket.id }, data: { cause } });
+        updated += 1;
+      }
+    }
+    return { scanned: candidates.length, updated };
+  }
+
   async dataCoverage() {
     const total = await prisma.ticket.count();
     const fields = [
