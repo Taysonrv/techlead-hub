@@ -141,10 +141,10 @@ export function createAppTheme(mode: PaletteMode = "light") {
             backgroundColor: paper,
             transition: "border-color .18s ease, box-shadow .18s ease, transform .18s ease, background-color .18s ease",
             "&::after": dark ? { content: '""', position: "absolute", inset: "0 0 auto", height: 1, background: "linear-gradient(90deg, rgba(24,199,122,.30), rgba(47,141,255,.16), transparent 72%)", pointerEvents: "none" } : undefined,
-            "&:hover": dark ? {
-              borderColor: "rgba(70,194,163,.28)",
-              boxShadow: "0 18px 46px rgba(0,0,0,.22), inset 0 1px rgba(255,255,255,.035)",
-            } : undefined,
+            "&:hover": {
+              borderColor: dark ? "rgba(70,194,163,.28)" : "rgba(24,199,122,.20)",
+              boxShadow: dark ? "0 18px 46px rgba(0,0,0,.22), inset 0 1px rgba(255,255,255,.035)" : "0 14px 34px rgba(15,23,42,.075)",
+            },
           },
         },
       },
@@ -152,6 +152,7 @@ export function createAppTheme(mode: PaletteMode = "light") {
         styleOverrides: {
           root: {
             backgroundImage: "none",
+            transition: "border-color .16s ease, box-shadow .16s ease, background-color .16s ease",
             ...(dark && {
               borderColor: "rgba(92,154,211,.20)",
               boxShadow: "0 14px 38px rgba(0,0,0,.16)",
@@ -344,6 +345,7 @@ export function createAppTheme(mode: PaletteMode = "light") {
             paddingTop: 12,
             paddingBottom: 12,
             fontSize: ".86rem",
+            lineHeight: 1.45,
             ...(dark && { color: "#DCE9F7" }),
           },
         },
@@ -364,6 +366,15 @@ export function createAppTheme(mode: PaletteMode = "light") {
         styleOverrides: {
           input: dark ? { "&::placeholder": { color: "#7F98B3", opacity: 1 } } : {},
         },
+      },
+      MuiCircularProgress: {
+        styleOverrides: { root: { color: aliareColors.green } },
+      },
+      MuiDialogTitle: {
+        styleOverrides: { root: { fontWeight: 850, letterSpacing: "-.012em" } },
+      },
+      MuiDialogContent: {
+        styleOverrides: { root: { scrollbarGutter: "stable" } },
       },
       MuiAlert: {
         styleOverrides: {
