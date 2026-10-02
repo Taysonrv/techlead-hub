@@ -264,7 +264,7 @@ export function Dashboard() {
   ), [tickets, periodBounds]);
 
   const openedWithSimerInPeriod = useMemo(
-    () => openedInPeriod.filter((ticket) => ticket.isWithSimer === true),
+    () => openedInPeriod.filter((ticket) => ticket.isWithSimer === true && isOpen(ticket)),
     [openedInPeriod],
   );
 
@@ -806,14 +806,14 @@ export function Dashboard() {
       severity: "default" as Severity,
       info: {
         title: "Com o SIMER",
-        summary: "Subconjunto dos tickets abertos no período que permanecem atualmente sob responsabilidade de um analista da operação SIMER.",
-        calculation: "Abertos da carteira no período filtrados pelo responsável atual pertencente à operação SIMER.",
+        summary: "Subconjunto dos tickets abertos no período que continuam ativos e permanecem atualmente sob responsabilidade da operação SIMER.",
+        calculation: "Abertos da carteira no período filtrados por estado ativo e responsabilidade atual da operação SIMER.",
         source: "Movidesk",
         reference: "Ticket.createdDate + Ticket.owner",
         periodRule: "A abertura respeita o período global; a responsabilidade representa o estado atual do ticket.",
         notes: "Transferências para Produto, Cloud, Vistra, Hendow ou outras equipes deixam de compor este indicador, mas continuam em Abertos · Carteira SIMER.",
       },
-      onClick: () => showTickets("Abertos atualmente com o SIMER", openedWithSimerInPeriod, "Subconjunto da demanda aberta no período cuja responsabilidade atual está com a operação SIMER"),
+      onClick: () => showTickets("Abertos atualmente com o SIMER", openedWithSimerInPeriod, "Tickets abertos no período que continuam ativos e cuja responsabilidade atual está com a operação SIMER"),
     },
     {
       title: "Backlog atual",
