@@ -356,7 +356,7 @@ export function Versions() {
     setVersionSort,
   ] =
     useState<VersionSort>(
-      "total-desc",
+      "version-desc",
     );
 
   const [
@@ -1441,7 +1441,7 @@ export function Versions() {
           mb:
             2,
           order:
-            2,
+            0,
           backgroundColor: "background.paper",
           color: "text.primary",
           position: "relative",
@@ -1451,8 +1451,8 @@ export function Versions() {
           "& .MuiOutlinedInput-notchedOutline": { borderColor: "divider" },
         }}
       >
-        <CardContent>
-          <Stack direction={{ xs: "column", md: "row" }} spacing={1} sx={{ mb: 1.5, justifyContent: "space-between", alignItems: { md: "center" } }}>
+        <CardContent sx={{ py: 1.75, "&:last-child": { pb: 1.75 } }}>
+          <Stack direction={{ xs: "column", md: "row" }} spacing={1} sx={{ mb: 1.25, justifyContent: "space-between", alignItems: { md: "center" } }}>
             <Box>
               <Typography sx={{ fontWeight: 850 }}>Filtros de versões</Typography>
               <Typography variant="caption" color="text.secondary">Use o recorte principal e abra filtros avançados somente quando necessário.</Typography>
