@@ -1565,7 +1565,7 @@ export function Clients() {
                 xs: "minmax(0, 1fr)",
                 md: "repeat(2, minmax(0, 1fr))",
                 lg: "repeat(3, minmax(0, 1fr))",
-                xl: "190px repeat(5, minmax(0, 1fr))",
+                xl: "repeat(4, minmax(0, 1fr))",
               },
               gap: 1.5,
               alignItems: {
@@ -1574,13 +1574,7 @@ export function Clients() {
               },
             }}
           >
-            <Box
-              sx={{
-                minWidth: {
-                  md: 190,
-                },
-              }}
-            >
+            <Box sx={{ gridColumn: "1 / -1", display: "flex", alignItems: "baseline", gap: 1.25, flexWrap: "wrap" }}>
               <Typography
         sx={{
           fontWeight: 800,
@@ -1591,11 +1585,8 @@ export function Clients() {
                 Visão dos clientes
               </Typography>
 
-              <Typography
-                variant="caption"
-                color="text.secondary"
-              >
-                Cliente, categoria, status e responsável
+              <Typography variant="caption" color="text.secondary">
+                Refine a carteira por cliente, classificação e responsabilidade atual
               </Typography>
             </Box>
 
