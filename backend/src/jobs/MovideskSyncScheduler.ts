@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../database/prisma";
 import { MovideskService } from "../services/MovideskService";
-import { releaseMovideskApi, tryAcquireMovideskApi } from "./MovideskSyncCoordinator";
+import { clearMovideskApiPriority, releaseMovideskApi, requestMovideskApiPriority, tryAcquireMovideskApi } from "./MovideskSyncCoordinator";
 
 const DEFAULT_INTERVAL_MINUTES = 60;
 const DEFAULT_INITIAL_DELAY_SECONDS = 90;
@@ -57,7 +57,9 @@ export class MovideskSyncScheduler {
   private async execute() {
     if (this.running) return;
     if (!tryAcquireMovideskApi("TICKETS")) {
-      console.log("[movidesk-sync] Ciclo adiado: outra rotina Movidesk está utilizando a API.");
+      requestMovideskApiPriority();
+      console.log("[movidesk-sync] API ocupada: sincronização principal ganhou prioridade e tentará novamente em 2 minuto(s).");
+      this.schedule(2 * 60_000);
       return;
     }
     this.running = true;
@@ -98,6 +100,7 @@ export class MovideskSyncScheduler {
     } finally {
       this.running = false;
       releaseMovideskApi("TICKETS");
+      clearMovideskApiPriority();
     }
   }
 }
