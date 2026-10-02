@@ -254,7 +254,8 @@ export class DashboardController {
 
             total:
               item._count.id,
-          })
+          });
+          }
         );
 
       return res.json(
@@ -1113,7 +1114,15 @@ export class DashboardController {
 
       const result =
         tickets.map(
-          (ticket) => ({
+          (ticket) => {
+            const categoryKey = normalizeClassification(ticket.category ?? "");
+            const cause = categoryKey === "problema"
+              ? ticket.cause ?? classificationById.get(ticket.id)?.cause ?? null
+              : null;
+            const reason = categoryKey === "duvida"
+              ? ticket.reason ?? classificationById.get(ticket.id)?.reason ?? null
+              : null;
+            return ({
             /*
              * Nunca mais substituímos o ID técnico
              * pelo número do Movidesk.
@@ -1136,11 +1145,9 @@ export class DashboardController {
             category:
               ticket.category,
 
-            cause:
-              ticket.cause ?? classificationById.get(ticket.id)?.cause ?? null,
+            cause,
 
-            reason:
-              ticket.reason ?? classificationById.get(ticket.id)?.reason ?? null,
+            reason,
 
             causeDetail:
               ticket.causeDetail,
