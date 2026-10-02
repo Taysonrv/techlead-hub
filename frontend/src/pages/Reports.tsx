@@ -60,6 +60,8 @@ type ReportFilterKey = "client" | "analyst" | "category" | "ticketStatus" | "wor
 type ReportFilters = Partial<Record<ReportFilterKey, string>>;
 type ReportFilterOptions = Record<"clients" | "analysts" | "categories" | "ticketStatuses" | "workItemTypes" | "azureStates" | "versions", string[]>;
 
+const OPERATIONAL_START = "2026-01-01";
+
 const EMPTY_OPTIONS: ReportFilterOptions = { clients: [], analysts: [], categories: [], ticketStatuses: [], workItemTypes: [], azureStates: [], versions: [] };
 const FILTERS_BY_REPORT: Record<ReportScope, ReportFilterKey[]> = {
   executive: ["client", "analyst", "category"],
@@ -197,13 +199,9 @@ export function Reports() {
       () => {
         const date =
           new Date();
-        date.setDate(
-          date.getDate() -
-            364
-        );
-        return formatInputDate(
-          date
-        );
+        date.setDate(date.getDate() - 364);
+        const candidate = formatInputDate(date);
+        return candidate < OPERATIONAL_START ? OPERATIONAL_START : candidate;
       },
       []
     );
@@ -385,9 +383,15 @@ export function Reports() {
               mb: 2,
             }}
           >
-            Tickets usam a data de abertura; Work Items usam a data de criação no Azure.
+Tickets usam a data de abertura; Work Items usam a data de criação no Azure. A carteira operacional oficial inicia em 01/01/2026.
           </Typography>
 
+          <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap", mb: 1.5 }}>
+            <Button size="small" variant="outlined" onClick={() => { const d=new Date(); d.setDate(1); setFrom(formatInputDate(d)); setTo(today); }}>Este mês</Button>
+            <Button size="small" variant="outlined" onClick={() => { const now=new Date(); const start=new Date(now.getFullYear(),now.getMonth()-1,1); const end=new Date(now.getFullYear(),now.getMonth(),0); setFrom(formatInputDate(start)); setTo(formatInputDate(end)); }}>Mês passado</Button>
+            <Button size="small" variant="outlined" onClick={() => { const d=new Date(); d.setDate(d.getDate()-89); const value=formatInputDate(d); setFrom(value<OPERATIONAL_START?OPERATIONAL_START:value); setTo(today); }}>90 dias</Button>
+            <Button size="small" variant="outlined" onClick={() => { setFrom(OPERATIONAL_START); setTo(today); }}>Desde 01/01/2026</Button>
+          </Stack>
           <Stack
             direction={{
               xs:
@@ -414,6 +418,7 @@ export function Reports() {
                     true,
                 },
                 htmlInput: {
+                  min: OPERATIONAL_START,
                   max:
                     to ||
                     today,
@@ -432,7 +437,7 @@ export function Reports() {
                   event.target.value
                 )
               }
-              helperText="Histórico disponível de até 10 anos."
+              helperText="Base operacional oficial disponível desde 01/01/2026."
               slotProps={{
                 inputLabel: {
                   shrink:
