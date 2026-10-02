@@ -998,7 +998,7 @@ export class DashboardController {
 
       const ticketMovideskIds = tickets.map((ticket) => ticket.movideskId);
       const csatResponses = ticketMovideskIds.length ? await prisma.movideskSurveyResponse.findMany({
-        where: { ticketId: { in: ticketMovideskIds } },
+        where: { ticketId: { in: ticketMovideskIds }, type: 2 },
         orderBy: { responseDate: "desc" },
         select: { ticketId:true, value:true, commentary:true, responseDate:true },
       }) : [];
@@ -1292,7 +1292,7 @@ export class DashboardController {
 
       const analytics = analyzeMovideskPayload(ticket.rawData);
       const csat = await prisma.movideskSurveyResponse.findFirst({
-        where: { ticketId: ticket.movideskId },
+        where: { ticketId: ticket.movideskId, type: 2 },
         orderBy: { responseDate: "desc" },
         select: { value:true, commentary:true, responseDate:true },
       });
