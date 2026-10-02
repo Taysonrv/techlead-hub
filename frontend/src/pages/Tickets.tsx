@@ -71,6 +71,22 @@ import {
    TIPOS
 ========================================================= */
 
+
+const SUPPORT_ANALYSTS = [
+  "ALAN KARDEK DA SILVA BARROS NETO",
+  "DÉBORA DAL CORREIA",
+  "DIEGO OLIVEIRA ARANTES",
+  "LUIZ ANTÔNIO COSTA CUNHA",
+  "RENAN BRENO CARVALHO",
+  "TAYSON ALVES DE ARAUJO",
+  "THIAGO DE LIMA MACHADO",
+] as const;
+
+function isSupportAnalystName(value: string | null | undefined) {
+  const normalized = normalize(value).trim();
+  return SUPPORT_ANALYSTS.some((analyst) => normalize(analyst).trim() === normalized);
+}
+
 type Ticket = {
   id: number;
   movideskId: number;
@@ -534,12 +550,14 @@ export function Tickets() {
       ]
     );
 
+  // Responsável é um filtro da squad SIMER, não um catálogo de todos os
+  // responsáveis encontrados nos tickets. Mantém a mesma regra das telas
+  // Analistas e Desempenho e impede Produto/Desenvolvimento de aparecer aqui.
   const owners =
     useMemo(
       () =>
-        uniqueValues(
-          periodTickets,
-          "owner"
+        SUPPORT_ANALYSTS.filter((analyst) =>
+          periodTickets.some((ticket) => isSupportAnalystName(ticket.owner) && normalize(ticket.owner) === normalize(analyst))
         ),
       [
         periodTickets,
