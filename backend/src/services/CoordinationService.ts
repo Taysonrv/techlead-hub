@@ -98,12 +98,9 @@ export class CoordinationService {
 
     const normalizeService = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR").trim();
     const ticketServicePath = (ticket: (typeof tickets)[number]) =>
-      [ticket.serviceFirstLevel, ticket.serviceSecondLevel, ticket.serviceThirdLevel].map((v) => v?.trim()).filter(Boolean).join(" » ") || ticket.service?.trim() || "";
+      ticket.serviceSecondLevel?.trim() || "";
     const serviceFilteredTickets = serviceName
-      ? tickets.filter((ticket) => {
-          const parts = ticketServicePath(ticket).split("»").map((value) => normalizeService(value)).filter(Boolean);
-          return parts.includes(normalizeService(serviceName));
-        })
+      ? tickets.filter((ticket) => normalizeService(ticket.serviceSecondLevel?.trim() || "") === normalizeService(serviceName))
       : tickets;
     const ticketTruncated = serviceFilteredTickets.length > safeLimit;
     const workItemTruncated = workItems.length > safeLimit;
@@ -578,10 +575,10 @@ export class CoordinationService {
 
     const normalize = (value: string) =>
       value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR").trim();
+    // Para a Central da Coordenação, "Serviço" é o 2º nível do Movidesk.
+    // O 1º nível é apenas agrupador e o 3º nível permanece como detalhamento.
     const servicePath = (ticket: (typeof serviceTickets)[number]) =>
-      [ticket.serviceFirstLevel, ticket.serviceSecondLevel, ticket.serviceThirdLevel]
-        .map((value) => value?.trim()).filter((value): value is string => Boolean(value))
-        .join(" » ") || ticket.service?.trim() || "";
+      ticket.serviceSecondLevel?.trim() || "";
 
     const serviceCatalogMap = new Map<string, SimerServiceCatalogItem>();
     for (const item of SIMER_SERVICE_CATALOG) serviceCatalogMap.set(normalize(item.path), item);
@@ -596,15 +593,8 @@ export class CoordinationService {
     const serviceCatalog = [...serviceCatalogMap.values()];
     const genericServiceLevel = (value: string) =>
       /^(atendimento ao cliente|siagri simer|simer|siagri)$/i.test(normalize(value));
-    const isGenericService = (path: string) => {
-      const values = path.split("»").map((value) => value.trim()).filter(Boolean);
-      return values.length > 0 && values.every(genericServiceLevel);
-    };
-    const serviceLabel = (path: string) => {
-      const values = path.split("»").map((value) => value.trim()).filter(Boolean);
-      const specificLevels = values.filter((value) => !genericServiceLevel(value));
-      return specificLevels.at(-1) ?? values.at(-1) ?? path;
-    };
+    const isGenericService = (service: string) => genericServiceLevel(service);
+    const serviceLabel = (service: string) => service.trim();
     let withoutService = 0;
     let genericService = 0;
     let suspectedMismatch = 0;
@@ -643,8 +633,7 @@ export class CoordinationService {
     const serviceAnalystIssues = new Map<string, { total: number; issues: number }>();
     for (const ticket of serviceTickets) {
       const path = servicePath(ticket);
-      const parts = path.split("»").map((value) => value.trim()).filter(Boolean);
-      const module = parts.find((value, index) => index >= 2 && !/^(siagri simer|simer)$/i.test(value));
+      const module = ticket.serviceSecondLevel?.trim();
       if (module) serviceModuleCounts.set(module, (serviceModuleCounts.get(module) ?? 0) + 1);
 
       const suggestion = path ? suggestSimerService({
