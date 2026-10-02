@@ -51,7 +51,9 @@ coordinationRoutes.get("/services", async (req: AuthenticatedRequest, res) => {
 coordinationRoutes.get("/integration-health", async (req: AuthenticatedRequest, res) => {
   try {
     const days = Number(req.query.days ?? 30);
-    res.json(await coordinationService.integrationHealth(Number.isFinite(days) ? days : 30));
+    const startDate = typeof req.query.startDate === "string" ? req.query.startDate : undefined;
+    const endDate = typeof req.query.endDate === "string" ? req.query.endDate : undefined;
+    res.json(await coordinationService.integrationHealth(Number.isFinite(days) ? days : 30, startDate, endDate));
   } catch (error) {
     console.error("[coordination] Falha ao consultar saúde das integrações:", error);
     res.status(500).json({ error: "Não foi possível consultar a saúde das integrações." });
@@ -102,7 +104,9 @@ coordinationRoutes.get("/sla-development", async (req: AuthenticatedRequest, res
 coordinationRoutes.get("/summary", async (req: AuthenticatedRequest, res) => {
   try {
     const serviceDays = Number(req.query.serviceDays ?? 0);
-    res.json(await coordinationService.summary(req.auth!.userId, Number.isFinite(serviceDays) ? serviceDays : 0));
+    const startDate = typeof req.query.startDate === "string" ? req.query.startDate : undefined;
+    const endDate = typeof req.query.endDate === "string" ? req.query.endDate : undefined;
+    res.json(await coordinationService.summary(req.auth!.userId, Number.isFinite(serviceDays) ? serviceDays : 0, startDate, endDate));
   }
   catch (error) { console.error("[coordination] Falha ao montar visão:", error); res.status(500).json({ error: "Não foi possível gerar a visão de coordenação." }); }
 });
