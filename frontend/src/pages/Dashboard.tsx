@@ -829,7 +829,7 @@ export function Dashboard() {
     },
     {
       title: "Abertos · Carteira",
-      value: summary.abertosOperacaoNoPeriodo,
+      value: summary.abertosNoPeriodo,
       description: "Toda demanda aberta pelos clientes da carteira",
       severity: "default" as Severity,
       info: {
