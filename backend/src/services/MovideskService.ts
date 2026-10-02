@@ -624,6 +624,24 @@ export class MovideskService {
       prisma.movideskTicketEnrichment.count(),
       prisma.movideskTicketEnrichment.count({ where: { lastError: { not: null } } }),
     ]);
+    const enrichmentStates = await prisma.ticket.findMany({
+      where: {
+        createdDate: { gte: SYNC_SCOPE_START },
+        client: { in: [...SIMER_CLIENTS], mode: "insensitive" },
+        isDeleted: false,
+      },
+      select: {
+        lastUpdate: true,
+        movideskEnrichment: { select: { sourceLastUpdate: true, lastError: true } },
+      },
+    });
+    const enrichmentPending = enrichmentStates.filter((ticket) => {
+      const checkpoint = ticket.movideskEnrichment;
+      if (!checkpoint || checkpoint.lastError || !checkpoint.sourceLastUpdate) return true;
+      return Boolean(ticket.lastUpdate && ticket.lastUpdate.getTime() > checkpoint.sourceLastUpdate.getTime());
+    }).length;
+    const enrichmentScopeTotal = enrichmentStates.length;
+    const enrichmentCurrent = enrichmentScopeTotal - enrichmentPending;
     return {
       total, coverage, deleted, withRawData,
       enrichment: {
@@ -635,8 +653,10 @@ export class MovideskService {
         ticketsWithAppointments,
         checkpoints: enrichmentCheckpoints,
         errors: enrichmentErrors,
-        pending: Math.max(total - enrichmentCheckpoints + enrichmentErrors, 0),
-        coveragePct: total ? Number(((enrichmentCheckpoints - enrichmentErrors) / total * 100).toFixed(1)) : 0,
+        scopeTotal: enrichmentScopeTotal,
+        current: enrichmentCurrent,
+        pending: enrichmentPending,
+        coveragePct: enrichmentScopeTotal ? Number((enrichmentCurrent / enrichmentScopeTotal * 100).toFixed(1)) : 0,
       },
       generatedAt: new Date().toISOString(),
     };
