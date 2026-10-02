@@ -308,15 +308,40 @@ type ProductivityDrilldown = {
    automaticamente aos filtros.
 ===================================================== */
 
+const SUPPORT_ANALYSTS = [
+  "ALAN KARDEK DA SILVA BARROS NETO",
+  "DÉBORA DAL CORREIA",
+  "DIEGO OLIVEIRA ARANTES",
+  "LUIZ ANTÔNIO COSTA CUNHA",
+  "RENAN BRENO CARVALHO",
+  "TAYSON ALVES DE ARAUJO",
+  "THIAGO DE LIMA MACHADO",
+] as const;
+
 const KNOWN_SQUADS = [
+  "Suporte SIMER BDS",
+  "Coordenação",
   "Nível 1",
   "Nível 2",
   "Nível 3",
   "Nível 1 Legal e Contábil",
   "Nível 2 Legal e Contábil",
   "Nível 3 Legal e Contábil",
-  "BDS",
-];
+] as const;
+
+const isOfficialSupportAnalyst = (value: string | null | undefined) =>
+  Boolean(value && SUPPORT_ANALYSTS.some((name) => namesLikelySamePerson(name, value)));
+
+const isAllowedSquad = (value: string | null | undefined) => {
+  const normalized = normalize(value);
+  return [
+    "suporte simer bds", "simer bds", "bds",
+    "coordenacao",
+    "nivel 1", "nivel 2", "nivel 3",
+    "nivel 1 legal e contabil", "nivel 2 legal e contabil", "nivel 3 legal e contabil",
+    "legislacao n1", "legislacao n2", "legislacao n3",
+  ].includes(normalized);
+};
 
 /* =====================================================
    CORES DO GRÁFICO DE PIZZA
@@ -567,25 +592,13 @@ export function Analysts() {
   ===================================================== */
 
   const squads = useMemo(() => {
-    const apiTeams =
-      periodTickets
-        .map((ticket) => (ticket.ownerTeam ?? ticket.team))
-        .filter(
-          (value): value is string =>
-            Boolean(value?.trim())
-        );
+    const apiTeams = periodTickets
+      .map((ticket) => (ticket.ownerTeam ?? ticket.team))
+      .filter((value): value is string => Boolean(value?.trim()) && isAllowedSquad(value));
 
-    return Array.from(
-      new Set([
-        ...KNOWN_SQUADS,
-        ...apiTeams,
-      ])
-    ).sort((a, b) =>
-      a.localeCompare(
-        b,
-        "pt-BR"
-      )
-    );
+    return Array.from(new Set([...KNOWN_SQUADS, ...apiTeams]))
+      .filter(isAllowedSquad)
+      .sort((a, b) => a.localeCompare(b, "pt-BR"));
   }, [periodTickets]);
 
   /* =====================================================
@@ -602,6 +615,7 @@ export function Analysts() {
 
   const squadTickets = useMemo(() => {
     return periodTickets.filter((ticket) => {
+      if (!isOfficialSupportAnalyst(ticket.owner)) return false;
       if (selectedSquad && (ticket.ownerTeam ?? ticket.team) !== selectedSquad) return false;
       if (selectedBusinessArea && ticket.businessArea !== selectedBusinessArea) return false;
       if (selectedService && (ticket.serviceSecondLevel ?? ticket.service) !== selectedService) return false;
@@ -630,7 +644,7 @@ export function Analysts() {
             (
               value
             ): value is string =>
-              Boolean(value?.trim())
+              Boolean(value?.trim()) && isOfficialSupportAnalyst(value)
           )
       )
     ).sort((a, b) =>
@@ -692,9 +706,8 @@ export function Analysts() {
 
     scopedTickets.forEach(
       (ticket) => {
-        const owner =
-          ticket.owner ??
-          "Sem responsável";
+        if (!isOfficialSupportAnalyst(ticket.owner)) return;
+        const owner = ticket.owner!;
 
         if (
           !grouped.has(owner)
@@ -989,9 +1002,9 @@ export function Analysts() {
       attentionTickets:
         attentionTickets.length,
       csatResponses: scopedTickets.filter((ticket) => ticket.satisfactionScore != null).length,
-      csatAverage: (() => {
+      csatPositivePct: (() => {
         const values=scopedTickets.map((ticket)=>ticket.satisfactionScore).filter((value): value is number => typeof value === "number");
-        return values.length ? values.reduce((total,value)=>total+value,0)/values.length : null;
+        return values.length ? Math.round(values.filter((value)=>value >= 4).length / values.length * 1000) / 10 : null;
       })(),
 
       azureTasks: new Set(
@@ -2145,9 +2158,9 @@ export function Analysts() {
         />
         <MetricCard
           title="CSAT"
-          value={summary.csatAverage ?? 0}
-          description={summary.csatAverage == null ? "Sem avaliações no recorte" : `${summary.csatResponses} avaliação(ões) · média ${summary.csatAverage.toLocaleString("pt-BR",{maximumFractionDigits:2})}`}
-          info={{ title:"CSAT", summary:"Média das avaliações de satisfação vinculadas aos tickets da equipe.", calculation:"Média de satisfactionScore para os tickets após os filtros atuais.", source:"Pesquisa de Satisfação Movidesk", reference:"MovideskSurveyResponse → Ticket.movideskId", periodRule:"Respeita período, Squad, Analista, área e serviço selecionados." }}
+          value={summary.csatPositivePct == null ? "—" : `${summary.csatPositivePct.toLocaleString("pt-BR")}%`}
+          description={summary.csatPositivePct == null ? "Sem avaliações no recorte" : `${summary.csatResponses} avaliação(ões) · notas 4–5`}
+          info={{ title:"CSAT", summary:"Percentual de avaliações positivas vinculadas aos tickets da equipe.", calculation:"Respostas com nota 4 ou 5 ÷ total de respostas válidas × 100.", source:"Pesquisa de Satisfação Movidesk", reference:"MovideskSurveyResponse → Ticket.movideskId", periodRule:"Respeita período, Squad, Analista, área e serviço selecionados." }}
           onClick={()=>showTickets("Tickets com avaliação CSAT", scopedTickets.filter((ticket)=>ticket.satisfactionScore != null), "Pesquisa de Satisfação Movidesk")}
         />
       </Box>
