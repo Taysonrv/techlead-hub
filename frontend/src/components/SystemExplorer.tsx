@@ -408,7 +408,7 @@ export function SystemExplorer({
               </Typography>
               <Stack spacing={.35}>
                 {technicalMaps.filter((item)=>!filter.trim()||`${item.mapName} ${item.nodeText} ${item.path}`.toLocaleLowerCase("pt-BR").includes(filter.toLocaleLowerCase("pt-BR").trim())).slice(0,120).map((item)=>(
-                  <Button key={item.sourceFile} size="small" variant="text" onClick={()=>onOpenMap(item)} sx={{justifyContent:"flex-start",textTransform:"none",textAlign:"left"}}>
+                  <Button key={item.sourceFile} size="small" variant="text" onClick={()=>void openMap(item)} sx={{justifyContent:"flex-start",textTransform:"none",textAlign:"left"}}>
                     <SchemaOutlined sx={{fontSize:16,mr:.7,flexShrink:0}}/><Typography variant="body2" noWrap title={item.path||item.sourceFile}>{item.mapName||item.nodeText}</Typography>
                   </Button>
                 ))}
