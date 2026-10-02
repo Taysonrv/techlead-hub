@@ -558,7 +558,7 @@ export class CoordinationService {
         _count: { id: true },
       }),
       prisma.azureWorkItem.groupBy({
-        by: ["createdByName"],
+        by: ["assignedToName"],
         where: {
           AND: [
             azureScope,
@@ -567,7 +567,7 @@ export class CoordinationService {
                 coordinationOpenAzurePredicate(),
                 ...periodAzureFilter,
               ],
-              createdByName: { in: [...SUPPORT_ANALYSTS], mode: "insensitive" },
+              assignedToName: { in: [...SUPPORT_ANALYSTS], mode: "insensitive" },
             },
           ],
         },
@@ -602,9 +602,9 @@ export class CoordinationService {
     }
 
     for (const row of workItemOwners) {
-      if (!row.createdByName) continue;
+      if (!row.assignedToName) continue;
       const analyst = SUPPORT_ANALYSTS.find(
-        (name) => name.localeCompare(row.createdByName!, "pt-BR", { sensitivity: "base" }) === 0,
+        (name) => name.localeCompare(row.assignedToName!, "pt-BR", { sensitivity: "base" }) === 0,
       );
       if (!analyst) continue;
       workload.get(analyst)!.workItems += row._count.id;
