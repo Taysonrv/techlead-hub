@@ -144,6 +144,12 @@ routes.get(
 );
 
 routes.get(
+  "/api/dashboard/classifications",
+  requireAnyPermission("dashboard", "tickets", "attention", "clients", "performance", "coordination"),
+  dashboard.classifications.bind(dashboard),
+);
+
+routes.get(
   "/api/dashboard/attention",
   requireAnyPermission("dashboard", "tickets", "attention", "clients", "performance", "coordination"),
   dashboard.attention,
