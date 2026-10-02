@@ -23,6 +23,9 @@
 - Produtividade por analista e capacidade da Coordenação passam a consumir apontamentos estruturados.
 - Tela de Analistas restringida ao quadro oficial do Suporte SIMER (Alan, Débora, Diego, Luiz, Renan, Tayson e Thiago), impedindo que responsáveis de Produto/Fábrica contaminem rankings e tabelas.
 - Produtividade por horas registradas reforçada no backend e frontend com o mesmo escopo oficial de analistas, mantendo os sete analistas mesmo quando ainda não há apontamento no período.
+- Corrigido travamento de carregamento da produtividade por horas em React Strict Mode; o cálculo usa diretamente `timeAppointments.accountedTime` dos apontamentos Movidesk.
+- Desempenho por analista passa a aceitar exclusivamente o mesmo quadro oficial do Suporte SIMER usado na tela de Analistas.
+- Dashboard recupera Causa e Motivo diretamente dos campos adicionais já armazenados no payload Movidesk quando a coluna consolidada ainda estiver vazia, sem enviar o rawData pesado ao navegador.
 - Drawer de tickets enriquecido com ações, horas e histórico operacional.
 - Escopo operacional canônico centralizado para clientes SIMER e carteira a partir de 2026.
 
