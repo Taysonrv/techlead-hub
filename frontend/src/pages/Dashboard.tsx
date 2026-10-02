@@ -420,7 +420,8 @@ export function Dashboard() {
     return { start: startOfDay(start), end };
   };
   const categoryBounds = cardPeriodBounds(categoryPeriod);
-  const categoryTickets = useMemo(() => tickets.filter((ticket) => ticket.isWithSimer === true && isDateInPeriod(ticket.createdDate, categoryBounds.start, categoryBounds.end)), [tickets, categoryPeriod]);
+  // Categorias são dimensão histórica da carteira e não dependem do responsável atual.
+  const categoryTickets = useMemo(() => tickets.filter((ticket) => isDateInPeriod(ticket.createdDate, categoryBounds.start, categoryBounds.end)), [tickets, categoryPeriod]);
   const statusBounds = cardPeriodBounds(statusPeriod);
   const statusTickets = useMemo(() => tickets.filter((ticket) => ticket.isWithSimer === true && isOpen(ticket) && isDateInPeriod(ticket.createdDate, statusBounds.start, statusBounds.end)), [tickets, statusPeriod]);
 
@@ -490,38 +491,73 @@ export function Dashboard() {
     return result;
   }, [openedInPeriod, resolvedInPeriod, closedInPeriod, effectiveStartDate, effectiveEndDate]);
 
+  const canonicalCategory = (value?: string | null) => {
+    const normalized = normalize(value ?? "");
+    if (normalized === "adequacao") return "Adequação";
+    if (normalized === "bug") return "Bug";
+    if (normalized === "duvida") return "Dúvida";
+    if (normalized === "problema") return "Problema";
+    if (normalized === "solicitacao de servico") return "Solicitação de Serviço";
+    if (normalized === "solucao contorno" || normalized === "solucao de contorno") return "Solução contorno";
+    return value?.trim() || "Sem categoria";
+  };
+
+  const categoryAnalysis = useMemo(() => {
+    const grouped = new Map<string, number>();
+    openedInPeriod.forEach((ticket) => {
+      const label = canonicalCategory(ticket.category);
+      grouped.set(label, (grouped.get(label) ?? 0) + 1);
+    });
+    return [...grouped.entries()].map(([label,total])=>({label,total})).sort((a,b)=>b.total-a.total);
+  }, [openedInPeriod]);
+
   const canonicalCause = (value?: string | null) => {
     const raw = value?.trim();
     if (!raw) return null;
     const normalized = normalize(raw);
-    if (!normalized || normalized === "sem causa") return null;
     if (normalized.includes("erro operacional")) return "Erro operacional";
     if (normalized.includes("configuracao")) return "Configuração";
-    if (normalized.includes("solucao de contorno")) return "Solução de contorno";
     if (normalized.includes("nao identificada")) return "Não identificada";
-    if (normalized.includes("sefaz") || normalized.includes("aplicativos de terceiros")) return "SEFAZ ou aplicativos de terceiros";
-    // Causa é uma classificação curta. Textos livres pertencem a causeDetail
-    // e nunca devem virar categorias/eixos do gráfico.
-    return raw.length <= 80 ? raw : null;
+    if (normalized.includes("resolvido pelo usuario")) return "Resolvido pelo usuário";
+    if (normalized.includes("sefaz") || normalized.includes("aplicativo")) return "SEFAZ ou aplicativo de terceiros";
+    return null;
   };
 
-  const ticketsWithCause = useMemo(
-    () => causeTickets.filter((ticket) => Boolean(canonicalCause(ticket.cause))),
-    [causeTickets],
-  );
-
+  const problemTickets = useMemo(() => openedInPeriod.filter((ticket) => normalize(ticket.category) === "problema"), [openedInPeriod]);
+  const ticketsWithCause = useMemo(() => problemTickets.filter((ticket) => Boolean(canonicalCause(ticket.cause))), [problemTickets]);
   const causes = useMemo(() => {
     const grouped = new Map<string, number>();
     ticketsWithCause.forEach((ticket) => {
       const label = canonicalCause(ticket.cause);
-      if (!label) return;
-      grouped.set(label, (grouped.get(label) ?? 0) + 1);
+      if (label) grouped.set(label, (grouped.get(label) ?? 0) + 1);
     });
-    return [...grouped.entries()]
-      .map(([label, total]) => ({ label, total }))
-      .sort((a, b) => b.total - a.total || a.label.localeCompare(b.label, "pt-BR"))
-      .slice(0, 8);
+    return [...grouped.entries()].map(([label,total])=>({label,total})).sort((a,b)=>b.total-a.total);
   }, [ticketsWithCause]);
+
+  const canonicalReason = (value?: string | null) => {
+    const raw = value?.trim();
+    if (!raw) return null;
+    const normalized = normalize(raw);
+    if (normalized.includes("apoio processos operacionais")) return "Apoio processos operacionais";
+    if (normalized === "configuracao" || normalized.includes("configuracao")) return "Configuração";
+    if (normalized.includes("duvida interna")) return "Dúvida interna";
+    if (normalized.includes("inexperiencia do usuario")) return "Inexperiência do usuário";
+    if (normalized === "informacao" || normalized.includes("informacao")) return "Informação";
+    if (normalized.includes("integracao com terceiros")) return "Integração com terceiros";
+    if (normalized.includes("priorizacao")) return "Priorização";
+    return null;
+  };
+
+  const doubtTickets = useMemo(() => openedInPeriod.filter((ticket) => normalize(ticket.category) === "duvida"), [openedInPeriod]);
+  const ticketsWithReason = useMemo(() => doubtTickets.filter((ticket) => Boolean(canonicalReason(ticket.reason))), [doubtTickets]);
+  const reasons = useMemo(() => {
+    const grouped = new Map<string, number>();
+    ticketsWithReason.forEach((ticket) => {
+      const label = canonicalReason(ticket.reason);
+      if (label) grouped.set(label, (grouped.get(label) ?? 0) + 1);
+    });
+    return [...grouped.entries()].map(([label,total])=>({label,total})).sort((a,b)=>b.total-a.total);
+  }, [ticketsWithReason]);
 
   const businessAreas = useMemo(() => {
     // businessArea é um campo customizado e pode estar vazio. Serviço é a
@@ -1418,7 +1454,7 @@ export function Dashboard() {
                 Principais causas
               </Typography>
               <Typography variant="caption" color="text.secondary">
-                Causas mais frequentes • clique na leitura para direcionar ação preventiva
+                Somente categoria Problema • causas mais frequentes no período
               </Typography></Box>
               {causes.length ? <Box sx={{ height: Math.max(250, Math.min(330, causes.slice(0, 6).length * 44 + 64)), mt: 1.25 }}>
                 <ResponsiveContainer width="100%" height="100%">
@@ -1443,9 +1479,26 @@ export function Dashboard() {
                   </BarChart>
                 </ResponsiveContainer>
               </Box> : <Box sx={{ minHeight: 250, display: "grid", placeItems: "center", px: 2 }}>
-                <Typography variant="body2" color="text.secondary" sx={{ textAlign: "center" }}>Nenhuma causa preenchida nos atendimentos da Operação SIMER para o período selecionado.</Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ textAlign: "center" }}>Nenhuma causa preenchida nos tickets de categoria Problema para o período selecionado.</Typography>
               </Box>}
             </CardBase>
+          </Box>
+
+          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", xl: "1fr 1fr" }, gap: 1.5, mb: 1.5 }}>
+            <OperationalRankingCard
+              title="Atendimentos por categoria"
+              subtitle="Distribuição da carteira SIMER no período selecionado"
+              data={categoryAnalysis}
+              emptyMessage="Nenhuma categoria encontrada no período."
+              onItemClick={(label) => showTickets(`Categoria: ${label}`, openedInPeriod.filter((ticket) => canonicalCategory(ticket.category) === label), "Tickets da categoria selecionada")}
+            />
+            <OperationalRankingCard
+              title="Motivos das dúvidas"
+              subtitle="Somente categoria Dúvida • motivo informado no Movidesk"
+              data={reasons}
+              emptyMessage="Nenhum motivo preenchido nos tickets de Dúvida deste período."
+              onItemClick={(label) => showTickets(`Motivo: ${label}`, ticketsWithReason.filter((ticket) => canonicalReason(ticket.reason) === label), "Tickets de Dúvida classificados com o motivo selecionado")}
+            />
           </Box>
 
           <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", xl: "1fr 1fr" }, gap: 1.5 }}>
