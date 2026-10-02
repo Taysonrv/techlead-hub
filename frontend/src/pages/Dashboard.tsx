@@ -264,9 +264,17 @@ export function Dashboard() {
     isDateInPeriod(ticket.createdDate, periodBounds.start, periodBounds.end)
   ), [tickets, periodBounds]);
 
-  const openedWithSimerInPeriod = useMemo(
-    () => openedInPeriod.filter((ticket) => ticket.isWithSimer === true && isOpen(ticket)),
+  // Fluxo de entrada da operação: abriu no período e a responsabilidade
+  // atual pertence à operação SIMER. Não exige que o ticket continue aberto.
+  const openedBySimerOperationInPeriod = useMemo(
+    () => openedInPeriod.filter((ticket) => ticket.isWithSimer === true),
     [openedInPeriod],
+  );
+
+  // Estoque do cohort ainda sob responsabilidade da operação.
+  const openedWithSimerInPeriod = useMemo(
+    () => openedBySimerOperationInPeriod.filter(isOpen),
+    [openedBySimerOperationInPeriod],
   );
 
   // Backlog atual não é limitado pela data de abertura.
@@ -295,6 +303,7 @@ export function Dashboard() {
 
   const summary = useMemo(() => ({
     abertosNoPeriodo: openedInPeriod.length,
+    abertosOperacaoNoPeriodo: openedBySimerOperationInPeriod.length,
     abertosComSimerNoPeriodo: openedWithSimerInPeriod.length,
     pendentes: pendingTickets.length,
     resolvidosNoPeriodo: resolvedInPeriod.length,
@@ -303,7 +312,7 @@ export function Dashboard() {
     emAtendimento: attendanceTickets.length,
     parados: stoppedTickets.length,
     criticos: criticalTickets.length,
-  }), [openedInPeriod, openedWithSimerInPeriod, pendingTickets, resolvedInPeriod, closedInPeriod, newTickets, attendanceTickets, stoppedTickets, criticalTickets]);
+  }), [openedInPeriod, openedBySimerOperationInPeriod, openedWithSimerInPeriod, pendingTickets, resolvedInPeriod, closedInPeriod, newTickets, attendanceTickets, stoppedTickets, criticalTickets]);
 
   /* =======================================================
      DESENVOLVIMENTO / AZURE DEVOPS
@@ -800,20 +809,36 @@ export function Dashboard() {
 
   const cards = [
     {
-      title: "Abertos · Carteira SIMER",
-      value: summary.abertosNoPeriodo,
-      description: "Demanda aberta pelos clientes da carteira",
+      title: "Abertos · Operação SIMER",
+      value: summary.abertosOperacaoNoPeriodo,
+      description: "Entradas do período atribuídas à operação SIMER",
       severity: "default" as Severity,
       info: {
-        title: "Abertos · Carteira SIMER",
+        title: "Abertos · Operação SIMER",
+        summary: "Tickets dos clientes da carteira abertos no período e atualmente atribuídos a analistas/equipes da operação SIMER.",
+        calculation: "createdDate no período + responsabilidade operacional SIMER. Inclui Suporte N1/N2/N3, Legislação N1/N2/N3 e SIMER BDS.",
+        source: "Movidesk",
+        reference: "Ticket.client + Ticket.createdDate + Ticket.owner/ownerTeam",
+        periodRule: "A abertura respeita o período global; a responsabilidade representa a atribuição atual disponível no Movidesk.",
+        notes: "Hendow e Vistra BI entram quando o responsável atual pertence à operação SIMER; o nome do Serviço, isoladamente, não inclui nem exclui o ticket.",
+      },
+      onClick: () => showTickets("Abertos · Operação SIMER", openedBySimerOperationInPeriod, "Tickets abertos no período atribuídos à operação SIMER"),
+    },
+    {
+      title: "Abertos · Carteira",
+      value: summary.abertosNoPeriodo,
+      description: "Toda demanda aberta pelos clientes da carteira",
+      severity: "default" as Severity,
+      info: {
+        title: "Abertos · Carteira",
         summary: "Todos os tickets abertos no período pelos clientes da carteira SIMER, independentemente da equipe responsável atual.",
         calculation: "Contagem dos tickets dos clientes da carteira com createdDate dentro do período.",
         source: "Movidesk",
         reference: "Ticket.client + Ticket.createdDate",
         periodRule: "Respeita integralmente o período global selecionado.",
-        notes: "O ticket permanece neste indicador mesmo quando é transferido para Produto, Cloud, Vistra, Hendow ou outra equipe.",
+        notes: "Permanece na carteira mesmo quando transferido para Produto, Cloud, Vistra, Hendow, implantação ou outra equipe.",
       },
-      onClick: () => showTickets("Abertos · Carteira SIMER", openedInPeriod, "Tickets abertos pelos clientes da carteira no período selecionado"),
+      onClick: () => showTickets("Abertos · Carteira", openedInPeriod, "Toda demanda aberta pelos clientes da carteira no período selecionado"),
     },
     {
       title: "Com o SIMER",
