@@ -149,7 +149,7 @@ export class CoordinationService {
       prisma.azureWorkItem.count({ where: coordinationAzureScope() }),
       prisma.movideskSurveyResponse.count({ where:{ ticketId:{not:null}, type:2 } }),
       prisma.movideskServiceCatalog.count({ where:{isActive:true} }),
-      prisma.movideskSurveyResponse.aggregate({ _max: { syncedAt: true, responseDate: true } }),
+      prisma.movideskSurveyResponse.aggregate({ where:{type:2}, _max: { syncedAt: true, responseDate: true } }),
       prisma.movideskServiceCatalog.aggregate({ _max: { syncedAt: true } }),
     ]);
     const pct=(value:number)=>tickets ? Math.round(value/tickets*1000)/10 : 0;
