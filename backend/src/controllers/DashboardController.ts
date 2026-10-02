@@ -956,7 +956,6 @@ export class DashboardController {
               lifetimeMinutes: true, stoppedMinutes: true, taskNumber: true,
               taskStatus: true, taskTitle: true, taskType: true, taskUrl: true,
               registeredVersion: true, deliveredVersion: true,
-              rawData: true,
               importSource: true, importedAt: true, importBatch: true,
             },
 
@@ -1093,7 +1092,7 @@ export class DashboardController {
               ticket.category,
 
             cause:
-              ticket.cause ?? recoverCauseFromRawData(ticket.rawData),
+              ticket.cause,
 
             causeDetail:
               ticket.causeDetail,
