@@ -696,7 +696,7 @@ export function Coordination() {
                   <Stack direction={{ xs: "column", md: "row" }} spacing={1} sx={{ justifyContent: "space-between", alignItems: { md: "center" }, mb: 1.5 }}>
                     <Box>
                       <Typography variant="h6" sx={{ fontWeight: 850 }}>Distribuição da carga operacional</Typography>
-                      <Typography variant="body2" color="text.secondary">Backlog Movidesk + Work Items Azure atribuídos atualmente a cada analista · ${analyticPeriodLabel}.</Typography>
+                      <Typography variant="body2" color="text.secondary">Backlog Movidesk + Work Items Azure atribuídos atualmente a cada analista · {analyticPeriodLabel}.</Typography>
                     </Box>
                     <Stack direction="row" spacing={.75} useFlexGap sx={{flexWrap:"wrap"}}><Chip size="small" label={`${workloadSummary.total} itens`} variant="outlined" /><Chip size="small" label={`Média ${workloadSummary.average}/analista`} variant="outlined" /></Stack>
                   </Stack>
