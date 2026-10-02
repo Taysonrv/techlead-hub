@@ -71,12 +71,14 @@ coordinationRoutes.get("/csat/details", async (req: AuthenticatedRequest, res) =
   try {
     const days = Number(req.query.days ?? 180);
     const value = req.query.value === undefined ? undefined : Number(req.query.value);
+    const minValue = req.query.minValue === undefined ? undefined : Number(req.query.minValue);
     res.json(await coordinationService.csatDetails(Number.isFinite(days) ? days : 180, {
       client: typeof req.query.client === "string" ? req.query.client : undefined,
       analyst: typeof req.query.analyst === "string" ? req.query.analyst : undefined,
       service: typeof req.query.service === "string" ? req.query.service : undefined,
       value: value !== undefined && Number.isFinite(value) ? value : undefined,
       commentsOnly: req.query.commentsOnly === "true",
+      minValue: minValue !== undefined && Number.isFinite(minValue) ? minValue : undefined,
     }));
   } catch (error) {
     console.error("[coordination] Falha ao carregar detalhes CSAT:", error);
