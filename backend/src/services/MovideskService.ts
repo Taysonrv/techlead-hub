@@ -880,6 +880,8 @@ export class MovideskService {
 
     let actions = 0;
     let appointments = 0;
+    let ownerHistories = 0;
+    let statusHistories = 0;
     let errors = 0;
     const errorDetails: Array<{ ticketId: number; message: string }> = [];
 
@@ -899,6 +901,90 @@ export class MovideskService {
           ? response.data as Record<string, unknown>
           : null;
         if (!row) throw new Error("Resposta do ticket não possui o formato esperado.");
+
+        const textOf = (value: unknown) => typeof value === "string" && value.trim() ? value.trim() : null;
+        const objectOf = (value: unknown) => value && typeof value === "object" && !Array.isArray(value)
+          ? value as Record<string, unknown>
+          : null;
+        const dateOf = (value: unknown) => {
+          if (typeof value !== "string" || !value.trim()) return null;
+          const parsed = new Date(value);
+          return Number.isNaN(parsed.getTime()) ? null : parsed;
+        };
+        const numberOf = (value: unknown) => {
+          const parsed = Number(value);
+          return Number.isFinite(parsed) ? parsed : null;
+        };
+        const historyKey = (kind: string, index: number, changedDate: Date | null, primary: string | null, actorId: string | null) =>
+          crypto.createHash("sha256").update([kind, String(index), changedDate?.toISOString() ?? "", primary ?? "", actorId ?? ""].join("|")).digest("hex");
+
+        const ownerHistories = Array.isArray(row.ownerHistories) ? row.ownerHistories : [];
+        for (let historyIndex = 0; historyIndex < ownerHistories.length; historyIndex += 1) {
+          const rawHistory = ownerHistories[historyIndex];
+          const history = objectOf(rawHistory);
+          if (!history) continue;
+          const owner = objectOf(history.owner);
+          const changedBy = objectOf(history.changedBy);
+          const changedDate = dateOf(history.changedDate);
+          const ownerId = owner?.id != null ? String(owner.id) : null;
+          const ownerName = textOf(owner?.businessName);
+          const ownerTeam = textOf(history.ownerTeam);
+          const sequenceKey = historyKey("owner", historyIndex, changedDate, ownerName ?? ownerTeam, ownerId);
+
+          await prisma.movideskOwnerHistory.upsert({
+            where: { ticketId_sequenceKey: { ticketId: ticket.id, sequenceKey } },
+            create: {
+              ticketId: ticket.id, sequenceKey, ownerTeam, ownerId, ownerName,
+              changedById: changedBy?.id != null ? String(changedBy.id) : null,
+              changedByName: textOf(changedBy?.businessName), changedDate,
+              permanencyTimeFullSeconds: numberOf(history.permanencyTimeFullTime),
+              permanencyTimeWorkingSeconds: numberOf(history.permanencyTimeWorkingTime),
+              rawData: history as Prisma.InputJsonValue, syncedAt: new Date(),
+            },
+            update: {
+              ownerTeam, ownerId, ownerName,
+              changedById: changedBy?.id != null ? String(changedBy.id) : null,
+              changedByName: textOf(changedBy?.businessName), changedDate,
+              permanencyTimeFullSeconds: numberOf(history.permanencyTimeFullTime),
+              permanencyTimeWorkingSeconds: numberOf(history.permanencyTimeWorkingTime),
+              rawData: history as Prisma.InputJsonValue, syncedAt: new Date(),
+            },
+          });
+          ownerHistories += 1;
+        }
+
+        const remoteStatusHistories = Array.isArray(row.statusHistories) ? row.statusHistories : [];
+        for (let historyIndex = 0; historyIndex < remoteStatusHistories.length; historyIndex += 1) {
+          const rawHistory = remoteStatusHistories[historyIndex];
+          const history = objectOf(rawHistory);
+          if (!history) continue;
+          const status = textOf(history.status);
+          if (!status) continue;
+          const changedBy = objectOf(history.changedBy);
+          const changedDate = dateOf(history.changedDate);
+          const changedById = changedBy?.id != null ? String(changedBy.id) : null;
+          const sequenceKey = historyKey("status", historyIndex, changedDate, status, changedById);
+
+          await prisma.movideskStatusHistory.upsert({
+            where: { ticketId_sequenceKey: { ticketId: ticket.id, sequenceKey } },
+            create: {
+              ticketId: ticket.id, sequenceKey, status,
+              justification: textOf(history.justification), changedById,
+              changedByName: textOf(changedBy?.businessName), changedDate,
+              permanencyTimeFullSeconds: numberOf(history.permanencyTimeFullTime),
+              permanencyTimeWorkingSeconds: numberOf(history.permanencyTimeWorkingTime),
+              rawData: history as Prisma.InputJsonValue, syncedAt: new Date(),
+            },
+            update: {
+              status, justification: textOf(history.justification), changedById,
+              changedByName: textOf(changedBy?.businessName), changedDate,
+              permanencyTimeFullSeconds: numberOf(history.permanencyTimeFullTime),
+              permanencyTimeWorkingSeconds: numberOf(history.permanencyTimeWorkingTime),
+              rawData: history as Prisma.InputJsonValue, syncedAt: new Date(),
+            },
+          });
+          statusHistories += 1;
+        }
 
         const remoteActions = Array.isArray(row.actions) ? row.actions : [];
         for (const rawAction of remoteActions) {
@@ -1016,6 +1102,8 @@ export class MovideskService {
       tickets: tickets.length,
       actions,
       appointments,
+      ownerHistories,
+      statusHistories,
       errors,
       errorDetails: errorDetails.slice(0, 50),
       generatedAt: new Date().toISOString(),
