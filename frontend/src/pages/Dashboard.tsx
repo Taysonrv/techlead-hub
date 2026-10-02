@@ -96,6 +96,7 @@ type Ticket = {
 
   category: string | null;
   cause: string | null;
+  reason: string | null;
   causeDetail?: string | null;
   urgency: string | null;
   origin?: number | null;
@@ -293,9 +294,6 @@ export function Dashboard() {
   // Áreas/serviços/SLA/CSAT mantêm a leitura da responsabilidade operacional atual.
   const filteredTickets = openedBySimerOperationInPeriod;
 
-  // Causa é atributo histórico do atendimento e deve representar toda a carteira
-  // SIMER aberta no período, mesmo quando o responsável atual já não está na squad.
-  const causeTickets = openedInPeriod;
 
   const newTickets = useMemo(() => pendingTickets.filter((ticket) => ticket.baseStatus === "New"), [pendingTickets]);
   const attendanceTickets = useMemo(() => pendingTickets.filter((ticket) => ticket.baseStatus === "InAttendance"), [pendingTickets]);
