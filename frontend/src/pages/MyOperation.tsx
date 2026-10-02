@@ -191,7 +191,7 @@ export function MyOperation() {
       {metrics.map(([key, label, info, valueKey]) => <KpiCard key={key} title={label} value={data?.summary[valueKey] ?? 0} subtitle="Clique para filtrar a operação" info={info} accent={metric === key ? aliareColors.green : aliareColors.greenDark} active={metric === key} onClick={() => setMetric(metric === key ? "" : key)} />)}
     </Box>
 
-    {loading ? <Box sx={{ py: 10, textAlign: "center" }}><CircularProgress /></Box> : items.length === 0 ? <Alert severity="info" sx={{ mt: 2 }}>Nenhum registro encontrado para os filtros selecionados.</Alert> : view === "kanban" ?
+    {loading ? <Box sx={{ py: 10, textAlign: "center" }}><CircularProgress /></Box> : items.length === 0 ? <Card variant="outlined" sx={{mt:2,borderStyle:"dashed"}}><CardContent sx={{py:5,textAlign:"center"}}><FilterAltOutlined sx={{fontSize:34,color:"text.disabled"}}/><Typography sx={{fontWeight:850,mt:1}}>Nenhum registro neste recorte</Typography><Typography variant="body2" color="text.secondary" sx={{mt:.5}}>Revise os filtros, altere o conteúdo entre Atendimentos/Tarefas ou volte para a visão completa.</Typography><Button sx={{mt:1.5}} variant="outlined" onClick={()=>{setClient("");setAnalyst("");setTeam("");setType("");setSearch("");setMetric("");setSourceView("tickets");setSort("priority");}}>Limpar recorte</Button></CardContent></Card> : view === "kanban" ?
       <Box sx={{ mt: 2, display: "grid", gridTemplateColumns: { xs: "repeat(2, minmax(0, 1fr))", md: "repeat(3, minmax(0, 1fr))", lg: "repeat(6, minmax(0, 1fr))" }, alignItems: "stretch", gap: .8, width: "100%", minWidth: 0, pb: 2 }}>
         {lanes.map((column) => {
           const columnItems = items.filter((item) => lane(item.status) === column);
@@ -204,7 +204,7 @@ export function MyOperation() {
               <Chip size="small" label={columnItems.length} sx={{ height: 21, fontSize: ".68rem", fontWeight: 800, flexShrink: 0 }} />
             </Stack>
             <Stack spacing={.7} sx={{ flex: 1, overflowY: "auto", overflowX: "hidden", p: .7 }}>
-              {visibleItems.length ? visibleItems.map((item) => <OperationCard key={item.key} item={item} compact draggable={Boolean(item.ticket)} onDragStart={() => item.ticket && setDragged(item.ticket)} onDragEnd={() => setDragged(null)} onClick={() => void openItem(item)} />) : <Typography variant="caption" color="text.secondary" sx={{ py: 3, px: 1, textAlign: "center" }}>Nenhum registro</Typography>}
+              {visibleItems.length ? visibleItems.map((item) => <OperationCard key={item.key} item={item} compact draggable={Boolean(item.ticket)} onDragStart={() => item.ticket && setDragged(item.ticket)} onDragEnd={() => setDragged(null)} onClick={() => void openItem(item)} />) : <Box sx={{py:3,px:1,textAlign:"center",border:"1px dashed",borderColor:"divider",borderRadius:1.5}}><Typography variant="caption" color="text.secondary">Fila vazia neste recorte</Typography></Box>}
               {remaining > 0 && <Button size="small" onClick={() => setVisibleByLane((current) => ({ ...current, [column]: visibleLimit + LANE_INCREMENT }))} sx={{ textTransform: "none", fontSize: ".7rem" }}>Mostrar mais {Math.min(remaining, LANE_INCREMENT)} de {remaining}</Button>}
             </Stack>
           </Box>;
