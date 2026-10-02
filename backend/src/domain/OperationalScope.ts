@@ -19,6 +19,7 @@ export const SIMER_CLIENTS = [
   "COPERAMA - ITURAMA-MG",
 ] as const;
 
+export const OPERATIONAL_SCOPE_START = new Date("2026-01-01T00:00:00.000Z");
 export const SUPPORT_COORDINATOR = "WELLINGTON ALVES GOLD" as const;
 
 export const SUPPORT_ANALYSTS = [
@@ -50,42 +51,27 @@ export const SUPPORT_OPERATIONAL_MEMBERS = [
 
 export function simerClientTicketScope(): Prisma.TicketWhereInput {
   return {
-    client: {
-      in: [...SIMER_CLIENTS],
-      mode: "insensitive",
-    },
-  };
-}
-
-/**
- * Escopo principal das telas Movidesk: a carteira é definida pelo cliente.
- * O responsável é dimensão analítica e pode mudar durante o ciclo do ticket;
- * por isso não deve excluir um atendimento SIMER da visão operacional.
- */
-export function ticketOperationalScope():
-  Prisma.TicketWhereInput {
-  return {
     AND: [
       {
-        client: {
-          in: [
-            ...SIMER_CLIENTS,
-          ],
-          mode:
-            "insensitive",
-        },
+        createdDate: { gte: OPERATIONAL_SCOPE_START },
       },
       {
-        owner: {
-          in: [
-            ...SUPPORT_ANALYSTS,
-          ],
-          mode:
-            "insensitive",
+        client: {
+          in: [...SIMER_CLIENTS],
+          mode: "insensitive",
         },
       },
     ],
   };
+}
+
+/**
+ * Escopo principal das telas Movidesk: somente atendimentos criados a partir
+ * de 01/01/2026 e pertencentes aos clientes da carteira SIMER.
+ * Responsável/equipe são dimensões analíticas e não critérios de pertencimento.
+ */
+export function ticketOperationalScope(): Prisma.TicketWhereInput {
+  return simerClientTicketScope();
 }
 
 /**
@@ -95,22 +81,7 @@ export function ticketOperationalScope():
  * intencionalmente mais estrito (cliente E analista).
  */
 export function coordinationTicketScope(): Prisma.TicketWhereInput {
-  return {
-    OR: [
-      {
-        client: {
-          in: [...SIMER_CLIENTS],
-          mode: "insensitive",
-        },
-      },
-      {
-        owner: {
-          in: [...SUPPORT_ANALYSTS],
-          mode: "insensitive",
-        },
-      },
-    ],
-  };
+  return simerClientTicketScope();
 }
 
 /**
