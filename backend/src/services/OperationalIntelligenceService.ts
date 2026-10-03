@@ -1,4 +1,5 @@
 import { prisma } from "../database/prisma";
+import { azureOperationalScope, ticketOperationalScope } from "../domain/OperationalScope";
 
 const normalize=(value?:string|null)=>String(value??"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").trim().toLowerCase();
 const serviceOf=(row:any)=>row.serviceThirdLevel||row.serviceSecondLevel||row.serviceFirstLevel||row.service||"Sem serviço";
@@ -11,9 +12,9 @@ export class OperationalIntelligenceService {
     const previousSince=new Date(since); previousSince.setDate(previousSince.getDate()-safeDays);
 
     const [tickets,previous,azure,lastAzureRun,lastImportRun,lastCatalog,lastSurvey]=await Promise.all([
-      prisma.ticket.findMany({where:{isDeleted:false,createdDate:{gte:since}},select:{movideskId:true,subject:true,client:true,category:true,cause:true,service:true,serviceFirstLevel:true,serviceSecondLevel:true,serviceThirdLevel:true,taskNumber:true,registeredVersion:true,deliveredVersion:true,createdDate:true}}),
-      prisma.ticket.findMany({where:{isDeleted:false,createdDate:{gte:previousSince,lt:since}},select:{service:true,serviceFirstLevel:true,serviceSecondLevel:true,serviceThirdLevel:true}}),
-      prisma.azureWorkItem.findMany({where:{azureChangedAt:{gte:since}},select:{id:true,workItemType:true,state:true,client:true,movideskTicket:true,deliveredVersion:true,registeredVersion:true,azureChangedAt:true}}),
+      prisma.ticket.findMany({where:{AND:[ticketOperationalScope(),{isDeleted:false,createdDate:{gte:since}}]},select:{movideskId:true,subject:true,client:true,category:true,cause:true,service:true,serviceFirstLevel:true,serviceSecondLevel:true,serviceThirdLevel:true,taskNumber:true,registeredVersion:true,deliveredVersion:true,createdDate:true}}),
+      prisma.ticket.findMany({where:{AND:[ticketOperationalScope(),{isDeleted:false,createdDate:{gte:previousSince,lt:since}}]},select:{service:true,serviceFirstLevel:true,serviceSecondLevel:true,serviceThirdLevel:true}}),
+      prisma.azureWorkItem.findMany({where:{AND:[azureOperationalScope(),{azureChangedAt:{gte:since}}]},select:{id:true,workItemType:true,state:true,client:true,movideskTicket:true,deliveredVersion:true,registeredVersion:true,azureChangedAt:true}}),
       prisma.azureSyncRun.findFirst({orderBy:{startedAt:"desc"},select:{status:true,source:true,totalItems:true,errorItems:true,startedAt:true,finishedAt:true,message:true}}),
       prisma.importRun.findFirst({orderBy:{startedAt:"desc"},select:{status:true,source:true,totalRows:true,errorRows:true,startedAt:true,finishedAt:true,message:true}}),
       prisma.movideskServiceCatalog.aggregate({_max:{syncedAt:true},_count:{id:true}}),
@@ -41,6 +42,7 @@ export class OperationalIntelligenceService {
     const versioned=tickets.filter(x=>x.deliveredVersion||x.registeredVersion).length;
     return {
       generatedAt:new Date().toISOString(),periodDays:safeDays,
+      scope:{name:"Carteira SIMER",description:"Clientes oficiais da carteira SIMER, com base operacional a partir de 01/01/2026."},
       observability:{
         sources:[
           {key:"movidesk",label:"Movidesk / Tickets",status:lastImportRun?.status==="SUCCESS"?"healthy":lastImportRun?.status==="PROCESSING"?"syncing":lastImportRun?"attention":"unknown",lastSyncAt:lastImportRun?.finishedAt??lastImportRun?.startedAt??null,items:lastImportRun?.totalRows??tickets.length,errors:lastImportRun?.errorRows??0,detail:lastImportRun?.message??"Última importação de tickets."},
