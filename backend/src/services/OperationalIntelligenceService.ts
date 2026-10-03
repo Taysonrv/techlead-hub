@@ -10,10 +10,14 @@ export class OperationalIntelligenceService {
     const since=new Date(); since.setDate(since.getDate()-safeDays);
     const previousSince=new Date(since); previousSince.setDate(previousSince.getDate()-safeDays);
 
-    const [tickets,previous,azure]=await Promise.all([
+    const [tickets,previous,azure,lastAzureRun,lastImportRun,lastCatalog,lastSurvey]=await Promise.all([
       prisma.ticket.findMany({where:{isDeleted:false,createdDate:{gte:since}},select:{movideskId:true,subject:true,client:true,category:true,cause:true,service:true,serviceFirstLevel:true,serviceSecondLevel:true,serviceThirdLevel:true,taskNumber:true,registeredVersion:true,deliveredVersion:true,createdDate:true}}),
       prisma.ticket.findMany({where:{isDeleted:false,createdDate:{gte:previousSince,lt:since}},select:{service:true,serviceFirstLevel:true,serviceSecondLevel:true,serviceThirdLevel:true}}),
-      prisma.azureWorkItem.findMany({where:{azureChangedAt:{gte:since}},select:{id:true,workItemType:true,state:true,client:true,movideskTicket:true,deliveredVersion:true,registeredVersion:true,azureChangedAt:true}})
+      prisma.azureWorkItem.findMany({where:{azureChangedAt:{gte:since}},select:{id:true,workItemType:true,state:true,client:true,movideskTicket:true,deliveredVersion:true,registeredVersion:true,azureChangedAt:true}}),
+      prisma.azureSyncRun.findFirst({orderBy:{startedAt:"desc"},select:{status:true,source:true,totalItems:true,errorItems:true,startedAt:true,finishedAt:true,message:true}}),
+      prisma.importRun.findFirst({orderBy:{startedAt:"desc"},select:{status:true,source:true,totalRows:true,errorRows:true,startedAt:true,finishedAt:true,message:true}}),
+      prisma.movideskServiceCatalog.aggregate({_max:{syncedAt:true},_count:{id:true}}),
+      prisma.movideskSurveyResponse.aggregate({_max:{syncedAt:true,responseDate:true},_count:{id:true}})
     ]);
 
     const aggregate=(rows:any[],key:(row:any)=>string)=>{
@@ -37,6 +41,16 @@ export class OperationalIntelligenceService {
     const versioned=tickets.filter(x=>x.deliveredVersion||x.registeredVersion).length;
     return {
       generatedAt:new Date().toISOString(),periodDays:safeDays,
+      observability:{
+        sources:[
+          {key:"movidesk",label:"Movidesk / Tickets",status:lastImportRun?.status==="SUCCESS"?"healthy":lastImportRun?.status==="PROCESSING"?"syncing":lastImportRun?"attention":"unknown",lastSyncAt:lastImportRun?.finishedAt??lastImportRun?.startedAt??null,items:lastImportRun?.totalRows??tickets.length,errors:lastImportRun?.errorRows??0,detail:lastImportRun?.message??"Última importação de tickets."},
+          {key:"azure",label:"Azure DevOps",status:lastAzureRun?.status==="SUCCESS"?"healthy":lastAzureRun?.status==="PROCESSING"?"syncing":lastAzureRun?"attention":"unknown",lastSyncAt:lastAzureRun?.finishedAt??lastAzureRun?.startedAt??null,items:lastAzureRun?.totalItems??azure.length,errors:lastAzureRun?.errorItems??0,detail:lastAzureRun?.message??"Última sincronização de Work Items."},
+          {key:"services",label:"Catálogo de Serviços",status:lastCatalog._max.syncedAt?"healthy":"unknown",lastSyncAt:lastCatalog._max.syncedAt,items:lastCatalog._count.id,errors:0,detail:"Metadados do catálogo Movidesk usados na classificação."},
+          {key:"csat",label:"Pesquisa CSAT",status:lastSurvey._max.syncedAt?"healthy":"unknown",lastSyncAt:lastSurvey._max.syncedAt,items:lastSurvey._count.id,errors:0,detail:lastSurvey._max.responseDate?`Resposta mais recente: ${lastSurvey._max.responseDate.toISOString()}`:"Sem resposta sincronizada."}
+        ],
+        warning:"Indicadores de inteligência dependem da atualização das fontes. Uma fonte desatualizada reduz a confiança do diagnóstico e não deve ser interpretada como ausência de ocorrência."
+      },
+
       summary:{tickets:tickets.length,azureItems:azure.length,linkCoverage:percent(linked,tickets.length),classificationCoverage:percent(classified,tickets.length),versionCoverage:percent(versioned,tickets.length),anomalies:anomalies.length,clusters:clusters.length},
       trends:{monthly,services:services.slice(0,10),clients:clients.slice(0,10),versions:versions.slice(0,8)},
       anomalies,clusters,
