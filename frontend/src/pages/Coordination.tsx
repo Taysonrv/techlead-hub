@@ -77,8 +77,9 @@ type SlaBreakdown = { total:number; concluded:number; openDevelopment:number; av
 
 type SlaDevelopment = {
   periodDays: number;
-  rule: { taskEndState: string; schedule: string; profile: string };
-  dataQuality: { bugsInPeriod: number; linked: number; missingAzure: number; missingTaskCreatedAt: number; missingPriority: number; invalidTimeline?: number };
+  rule: { taskEndState: string; schedule: string; profile: string; supportStart?:string;supportEnd?:string;factoryStart?:string;factoryEnd?:string };
+  dataQuality: { bugsInPeriod: number; linked: number; linkageRate?:number; missingAzure: number; missingTaskCreatedAt: number; missingPriority: number; invalidTimeline?: number };
+  health?:{score:number;status:"stable"|"attention"|"critical";formula:string;components:Array<{key:string;label:string;score:number;weight:number;detail:string}>;alerts:Array<{severity:"warning"|"error";title:string;detail:string}>};
   summary: { bugsWithTask: number; concluded: number; openDevelopment: number; avgSupportMinutes: number; avgFactoryMinutes: number; avgTotalMinutes: number; supportWithinOla: number; factoryWithinOla: number; totalWithinSla: number; openFactoryOverOla?: number; openTotalOverSla?: number };
   byPriority: Array<{ priority: string; total: number; concluded: number; avgSupportMinutes: number; avgFactoryMinutes: number; avgTotalMinutes: number; supportWithinOla: number; factoryWithinOla: number; totalWithinSla: number; rows:number[] }>;
   monthly: Array<{ month: string; label: string; total: number; concluded: number; supportWithinPct: number; factoryWithinPct: number; totalWithinPct: number }>;
@@ -359,6 +360,16 @@ export function Coordination() {
               </Stack>
               {slaLoading ? <LinearProgress sx={{ borderRadius: 2 }} /> : slaDevelopment ? (
                 <Stack spacing={1.5}>
+                  {slaDevelopment.health&&<Box sx={{...analyticsPanelSx,p:1.5}}>
+                    <Stack direction={{xs:"column",md:"row"}} spacing={1.5} sx={{justifyContent:"space-between",alignItems:{md:"center"},mb:1.25}}>
+                      <Box><Typography sx={{fontWeight:900}}>Saúde SLA × OLA</Typography><Typography variant="body2" color="text.secondary">Índice transparente para leitura executiva; cada componente permanece disponível separadamente.</Typography></Box>
+                      <Stack direction="row" spacing={1} sx={{alignItems:"center"}}><Chip color={slaDevelopment.health.status==="stable"?"success":slaDevelopment.health.status==="attention"?"warning":"error"} label={`${slaDevelopment.health.score}% · ${slaDevelopment.health.status==="stable"?"Estável":slaDevelopment.health.status==="attention"?"Atenção":"Crítico"}`}/><Tooltip title={slaDevelopment.health.formula}><InfoOutlined sx={{fontSize:18,color:"text.secondary"}}/></Tooltip></Stack>
+                    </Stack>
+                    <Box sx={{display:"grid",gridTemplateColumns:{xs:"1fr",sm:"repeat(2,1fr)",xl:"repeat(4,1fr)"},gap:1}}>
+                      {slaDevelopment.health.components.map(component=><Box key={component.key} sx={{p:1.1,border:"1px solid",borderColor:"divider",borderRadius:2,bgcolor:"background.paper"}}><Stack direction="row" sx={{justifyContent:"space-between",gap:1}}><Typography variant="caption" color="text.secondary" sx={{fontWeight:800}}>{component.label}</Typography><Typography variant="caption" color="text.secondary">{component.weight}% peso</Typography></Stack><Typography sx={{fontSize:"1.35rem",fontWeight:900,my:.4}}>{component.score}%</Typography><LinearProgress variant="determinate" value={component.score} sx={{height:5,borderRadius:99,mb:.6}}/><Typography variant="caption" color="text.secondary">{component.detail}</Typography></Box>)}
+                    </Box>
+                    {slaDevelopment.health.alerts.length>0&&<Stack spacing={.7} sx={{mt:1}}>{slaDevelopment.health.alerts.map((alert,i)=><Alert key={i} severity={alert.severity} variant="outlined"><Typography sx={{fontWeight:800}}>{alert.title}</Typography><Typography variant="body2">{alert.detail}</Typography></Alert>)}</Stack>}
+                  </Box>}
                   <Alert severity={slaDevelopment.dataQuality.missingAzure || slaDevelopment.dataQuality.missingTaskCreatedAt || slaDevelopment.dataQuality.missingPriority || slaDevelopment.dataQuality.invalidTimeline ? "warning" : "success"} variant="outlined">
                     Cobertura: {slaDevelopment.dataQuality.linked}/{slaDevelopment.dataQuality.bugsInPeriod} correções vinculadas. Sem Azure: {slaDevelopment.dataQuality.missingAzure} · sem abertura da Task: {slaDevelopment.dataQuality.missingTaskCreatedAt} · sem prioridade: {slaDevelopment.dataQuality.missingPriority} · linha temporal inválida: {slaDevelopment.dataQuality.invalidTimeline ?? 0}.
                   </Alert>
@@ -414,7 +425,7 @@ export function Coordination() {
                     ))}
                   </Box>
                   <Typography variant="caption" color="text.secondary">
-                    Regra operacional: {slaDevelopment.rule.schedule} · conclusão da Task: {slaDevelopment.rule.taskEndState}. Suporte = abertura do ticket → abertura da Task. Desenvolvimento = abertura da Task → status Concluída; enquanto aberta, o consumo é atualizado até o fim do recorte. SLA final usa apenas Tasks concluídas. Registros com sequência temporal inválida são excluídos e sinalizados na cobertura.
+                    Regra operacional: {slaDevelopment.rule.schedule} · conclusão da Task: {slaDevelopment.rule.taskEndState}. Suporte = {slaDevelopment.rule.supportStart ?? "abertura do ticket"} → {slaDevelopment.rule.supportEnd ?? "abertura da Task"}. Fábrica = {slaDevelopment.rule.factoryStart ?? "abertura da Task"} → {slaDevelopment.rule.factoryEnd ?? "Task Concluída"}; enquanto aberta, o consumo é atualizado até o fim do recorte. SLA final usa apenas Tasks concluídas. O índice de saúde é explicável pela fórmula exibida no card e não substitui os indicadores individuais.
                   </Typography>
                 </Stack>
               ) : <Alert severity="warning">Não foi possível carregar a análise SLA × OLA.</Alert>}
