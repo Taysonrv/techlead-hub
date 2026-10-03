@@ -1,5 +1,30 @@
 # Changelog
 
+## 2.1.0-rc.1 — 2026-10-03
+
+### Inteligência e automação operacional
+- Nova Central de Inteligência com radar de sinais, tendências, anomalias, recorrências e DNA Técnico da operação.
+- Motor de correlação cruza Serviço, Cliente e Versão e encaminha os sinais diretamente para a investigação contextual.
+- Saúde operacional explicável combina cobertura Azure, classificação, versão, estabilidade e recorrência, mantendo fórmula e componentes visíveis.
+
+### Investigação e Problemas Conhecidos
+- Timeline operacional unifica eventos persistidos do Movidesk e Azure DevOps, da abertura do Ticket até a conclusão da Task e versão entregue.
+- Problemas Conhecidos passa a sugerir candidatos a partir de recorrências dos últimos 180 dias; a publicação permanece sob revisão humana.
+- Busca global inclui a Central de Inteligência e os novos conceitos de recorrência, anomalia, cluster e DNA Técnico.
+
+### SLA × OLA 2.0
+- Central da Coordenação formaliza Suporte = abertura do Ticket → abertura da Task e Fábrica = abertura da Task → Task Concluída.
+- Cockpit de saúde SLA × OLA apresenta OLA Suporte, OLA Fábrica, SLA Total, qualidade dos vínculos, pesos e alertas de itens abertos acima do limite.
+- Mantidas análises por prioridade P1–P4, analista, cliente, tendência mensal, outliers e drill-down.
+
+### Confiabilidade e experiência
+- Observabilidade das fontes diferencia problema operacional de dado incompleto, exibindo estado, última sincronização, volume e erros de Movidesk, Azure, catálogo de serviços e CSAT.
+- Interfaces novas seguem superfícies responsivas, dark mode, cards compactos, estados explicativos e navegação contextual.
+- Corrigidas tipagens estritas do build Docker para clusters e evidências de Problemas Conhecidos.
+
+> Release Candidate destinada à validação funcional da linha 2.1 antes da promoção para versão estável.
+
+
 ### Dashboard e sessão
 - Corrigida a sessão autenticada para não expirar após poucos minutos: timeout ocioso padrão ampliado para 8 horas, mantendo configuração por ambiente e heartbeat.
 - `Tickets por Categoria` agora usa o mesmo cohort operacional de `Abertos no Período`.
