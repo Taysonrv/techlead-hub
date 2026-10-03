@@ -1,5 +1,5 @@
 import { prisma } from "../database/prisma";
-import { azureOperationalScope, ticketOperationalScope } from "../domain/OperationalScope";
+import { ticketOperationalScope } from "../domain/OperationalScope";
 
 const normalize=(value?:string|null)=>String(value??"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").trim().toLowerCase();
 const serviceOf=(row:any)=>row.serviceThirdLevel||row.serviceSecondLevel||row.serviceFirstLevel||row.service||"Sem serviço";
@@ -12,14 +12,18 @@ export class OperationalIntelligenceService {
     const previousSince=new Date(since); previousSince.setDate(previousSince.getDate()-safeDays);
 
     const [tickets,previous,azure,lastAzureRun,lastImportRun,lastCatalog,lastSurvey]=await Promise.all([
-      prisma.ticket.findMany({where:{AND:[ticketOperationalScope(),{isDeleted:false,createdDate:{gte:since}}]},select:{movideskId:true,subject:true,client:true,category:true,cause:true,service:true,serviceFirstLevel:true,serviceSecondLevel:true,serviceThirdLevel:true,taskNumber:true,registeredVersion:true,deliveredVersion:true,createdDate:true}}),
-      prisma.ticket.findMany({where:{AND:[ticketOperationalScope(),{isDeleted:false,createdDate:{gte:previousSince,lt:since}}]},select:{service:true,serviceFirstLevel:true,serviceSecondLevel:true,serviceThirdLevel:true}}),
-      prisma.azureWorkItem.findMany({where:{AND:[azureOperationalScope(),{azureChangedAt:{gte:since}}]},select:{id:true,workItemType:true,state:true,client:true,movideskTicket:true,deliveredVersion:true,registeredVersion:true,azureChangedAt:true}}),
+      prisma.ticket.findMany({where:{AND:[{AND:[ticketOperationalScope(),{NOT:{OR:[{service:{contains:"SIAGRI WEB",mode:"insensitive"}},{serviceFirstLevel:{contains:"SIAGRI WEB",mode:"insensitive"}},{serviceSecondLevel:{contains:"SIAGRI WEB",mode:"insensitive"}},{serviceThirdLevel:{contains:"SIAGRI WEB",mode:"insensitive"}},{ownerTeam:{contains:"SIAGRI WEB",mode:"insensitive"}}]}},{OR:[{service:{contains:"SIMER",mode:"insensitive"}},{serviceFirstLevel:{contains:"SIMER",mode:"insensitive"}},{serviceSecondLevel:{contains:"SIMER",mode:"insensitive"}},{serviceThirdLevel:{contains:"SIMER",mode:"insensitive"}},{ownerTeam:{contains:"SIMER",mode:"insensitive"}}]}]},{isDeleted:false,createdDate:{gte:since}}]},select:{movideskId:true,subject:true,client:true,category:true,cause:true,service:true,serviceFirstLevel:true,serviceSecondLevel:true,serviceThirdLevel:true,taskNumber:true,registeredVersion:true,deliveredVersion:true,createdDate:true}}),
+      prisma.ticket.findMany({where:{AND:[{AND:[ticketOperationalScope(),{NOT:{OR:[{service:{contains:"SIAGRI WEB",mode:"insensitive"}},{serviceFirstLevel:{contains:"SIAGRI WEB",mode:"insensitive"}},{serviceSecondLevel:{contains:"SIAGRI WEB",mode:"insensitive"}},{serviceThirdLevel:{contains:"SIAGRI WEB",mode:"insensitive"}},{ownerTeam:{contains:"SIAGRI WEB",mode:"insensitive"}}]}},{OR:[{service:{contains:"SIMER",mode:"insensitive"}},{serviceFirstLevel:{contains:"SIMER",mode:"insensitive"}},{serviceSecondLevel:{contains:"SIMER",mode:"insensitive"}},{serviceThirdLevel:{contains:"SIMER",mode:"insensitive"}},{ownerTeam:{contains:"SIMER",mode:"insensitive"}}]}]},{isDeleted:false,createdDate:{gte:previousSince,lt:since}}]},select:{service:true,serviceFirstLevel:true,serviceSecondLevel:true,serviceThirdLevel:true}}),
+      prisma.azureWorkItem.findMany({where:{azureChangedAt:{gte:since}},select:{id:true,workItemType:true,state:true,client:true,movideskTicket:true,deliveredVersion:true,registeredVersion:true,azureChangedAt:true}}),
       prisma.azureSyncRun.findFirst({orderBy:{startedAt:"desc"},select:{status:true,source:true,totalItems:true,errorItems:true,startedAt:true,finishedAt:true,message:true}}),
       prisma.importRun.findFirst({orderBy:{startedAt:"desc"},select:{status:true,source:true,totalRows:true,errorRows:true,startedAt:true,finishedAt:true,message:true}}),
       prisma.movideskServiceCatalog.aggregate({_max:{syncedAt:true},_count:{id:true}}),
       prisma.movideskSurveyResponse.aggregate({_max:{syncedAt:true,responseDate:true},_count:{id:true}})
     ]);
+
+    const simerTicketIds=new Set(tickets.map(t=>t.movideskId));
+    const simerTaskIds=new Set(tickets.map(t=>t.taskNumber).filter((id):id is number=>Boolean(id)));
+    const scopedAzure=azure.filter(item=>(item.movideskTicket&&simerTicketIds.has(item.movideskTicket))||simerTaskIds.has(item.id));
 
     const aggregate=(rows:any[],key:(row:any)=>string)=>{
       const map=new Map<string,{name:string,total:number}>();
@@ -42,7 +46,7 @@ export class OperationalIntelligenceService {
     const versioned=tickets.filter(x=>x.deliveredVersion||x.registeredVersion).length;
     return {
       generatedAt:new Date().toISOString(),periodDays:safeDays,
-      scope:{name:"Carteira SIMER",description:"Clientes oficiais da carteira SIMER, com base operacional a partir de 01/01/2026."},
+      scope:{name:"Carteira SIMER",description:"Produto SIMER nos clientes oficiais da carteira, excluindo outras soluções como SIAGRI WEB."},
       observability:{
         sources:[
           {key:"movidesk",label:"Movidesk / Tickets",status:lastImportRun?.status==="SUCCESS"?"healthy":lastImportRun?.status==="PROCESSING"?"syncing":lastImportRun?"attention":"unknown",lastSyncAt:lastImportRun?.finishedAt??lastImportRun?.startedAt??null,items:lastImportRun?.totalRows??tickets.length,errors:lastImportRun?.errorRows??0,detail:lastImportRun?.message??"Última importação de tickets."},
@@ -53,7 +57,7 @@ export class OperationalIntelligenceService {
         warning:"Indicadores de inteligência dependem da atualização das fontes. Uma fonte desatualizada reduz a confiança do diagnóstico e não deve ser interpretada como ausência de ocorrência."
       },
 
-      summary:{tickets:tickets.length,azureItems:azure.length,linkCoverage:percent(linked,tickets.length),classificationCoverage:percent(classified,tickets.length),versionCoverage:percent(versioned,tickets.length),anomalies:anomalies.length,clusters:clusters.length},
+      summary:{tickets:tickets.length,azureItems:scopedAzure.length,linkCoverage:percent(linked,tickets.length),classificationCoverage:percent(classified,tickets.length),versionCoverage:percent(versioned,tickets.length),anomalies:anomalies.length,clusters:clusters.length},
       trends:{monthly,services:services.slice(0,10),clients:clients.slice(0,10),versions:versions.slice(0,8)},
       anomalies,clusters,
       health:{
