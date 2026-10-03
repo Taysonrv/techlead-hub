@@ -12,6 +12,24 @@ export type ReleaseNote = {
 export const FALLBACK_APP_VERSION = import.meta.env.VITE_APP_VERSION || "development";
 
 export const releaseNotes: Record<string, ReleaseNote> = {
+  "2.1.0": {
+    version: "2.1.0",
+    title: "Inteligência operacional, recorrência e investigação assistida",
+    items: [
+      { title: "Central de Inteligência", description: "Novo cockpit reúne volume, cobertura Azure, qualidade de classificação, anomalias e clusters recorrentes em uma leitura acionável." },
+      { title: "Motor de recorrência", description: "Serviço dedicado correlaciona serviço, cliente e versão para destacar padrões repetidos sem substituir a análise técnica do analista." },
+      { title: "Detecção de anomalias", description: "A demanda por serviço é comparada com uma janela anterior equivalente para destacar aumentos relevantes e abrir a investigação contextual." },
+      { title: "Investigação conectada", description: "Sinais, serviços e clusters levam diretamente à Central de Investigação, aproveitando tickets, Azure, versões, regras e evidências já disponíveis." },
+      { title: "Qualidade acionável", description: "Cobertura de vínculo Azure, classificação e versão passam a compor o cockpit e direcionam o usuário para higienização quando necessário." },
+      { title: "Experiência visual 2.1", description: "Cards compactos, radar de sinais, gráficos responsivos, hierarquia visual refinada e superfícies consistentes em light e dark mode." },
+      { title: "Busca global ampliada", description: "A Central de Inteligência passa a ser localizada pela pesquisa global por inteligência, recorrência, anomalias, clusters e DNA técnico." },
+      { title: "DNA Técnico explicável", description: "A operação ganha assinatura por serviços, clientes e versões, índice de recorrência e qualidade das evidências com drill-down para investigação." },
+      { title: "Timeline Ticket → Azure → versão", description: "A investigação organiza eventos persistidos do Movidesk e Azure em ordem cronológica, incluindo criação, ativação, movimentação, conclusão e versão quando disponível." },
+      { title: "Problemas Conhecidos assistidos", description: "Recorrências dos últimos 180 dias geram candidatos para revisão, sem publicação automática e com rastreabilidade dos casos que originaram o sinal." },
+      { title: "SLA × OLA 2.0", description: "Suporte, Fábrica e SLA total recebem cockpit explicável, alertas de risco em aberto, composição por P1–P4, analista, cliente e tendência mensal." },
+      { title: "Observabilidade das fontes", description: "A Central diferencia sinais operacionais de falhas de dados exibindo estado, última sincronização, volume e erros de Movidesk, Azure, catálogo de serviços e CSAT." },
+    ],
+  },
   "1.0.0-rc.20": {
     version: "1.0.0-rc.20",
     title: "Polimento final, Dashboard consistente e escopo SIMER",
