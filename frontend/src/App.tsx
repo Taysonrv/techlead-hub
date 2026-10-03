@@ -66,6 +66,7 @@ const SimerMap = lazy(() => import("./pages/SimerMap").then((module) => ({ defau
 const Investigation = lazy(() => import("./pages/Investigation").then((module) => ({ default: module.Investigation })));
 const KnownProblems = lazy(() => import("./pages/KnownProblems").then((module) => ({ default: module.KnownProblems })));
 const Intelligence = lazy(() => import("./pages/Intelligence").then((module) => ({ default: module.Intelligence })));
+const ManagementIntelligence = lazy(() => import("./pages/ManagementIntelligence").then((module) => ({ default: module.ManagementIntelligence })));
 
 import {
   aliareColors,
@@ -96,7 +97,11 @@ function AuthenticatedLayout({
       "/mapa-simer": "Mapa SIMER",
       "/investigacao": "Central de Investigação",
       "/problemas-conhecidos": "Problemas Conhecidos",
-      "/inteligencia": "Central de Inteligência",
+      "/inteligencia": "Central de Gestão & Inteligência",
+      "/gestao-inteligencia": "Central de Gestão & Inteligência",
+      "/gestao-inteligencia/inteligencia": "Gestão · Inteligência",
+      "/gestao-inteligencia/coordenacao": "Gestão · Coordenação",
+      "/gestao-inteligencia/lideranca": "Gestão · Liderança Técnica",
       "/analistas": "Analistas",
       "/clientes": "Clientes",
       "/desempenho": "Desempenho",
@@ -446,13 +451,17 @@ function App() {
           />
 
           <Route path="/chat" element={<AuthenticatedLayout><Chat /></AuthenticatedLayout>} />
-          <Route path="/coordenacao" element={<RoutineAccess permission="coordination"><AuthenticatedLayout><Coordination /></AuthenticatedLayout></RoutineAccess>} />
+          <Route path="/coordenacao" element={<Navigate to="/gestao-inteligencia/coordenacao" replace />} />
           <Route path="/servicos" element={<RoutineAccess permission="services"><AuthenticatedLayout><Services /></AuthenticatedLayout></RoutineAccess>} />
-          <Route path="/lideranca-tecnica" element={<RoutineAccess permission="technical-leadership"><AuthenticatedLayout><TechnicalLeadership /></AuthenticatedLayout></RoutineAccess>} />
+          <Route path="/lideranca-tecnica" element={<Navigate to="/gestao-inteligencia/lideranca" replace />} />
           <Route path="/mapa-simer" element={<RoutineAccess permission="simer-map"><AuthenticatedLayout><SimerMap /></AuthenticatedLayout></RoutineAccess>} />
           <Route path="/investigacao" element={<AuthenticatedLayout><Investigation /></AuthenticatedLayout>} />
           <Route path="/problemas-conhecidos" element={<RoutineAccess permission="known-problems"><AuthenticatedLayout><KnownProblems /></AuthenticatedLayout></RoutineAccess>} />
-          <Route path="/inteligencia" element={<RoutineAccess permission="dashboard"><AuthenticatedLayout><Intelligence /></AuthenticatedLayout></RoutineAccess>} />
+          <Route path="/inteligencia" element={<Navigate to="/gestao-inteligencia/inteligencia" replace />} />
+          <Route path="/gestao-inteligencia" element={<RoutineAccess permission="dashboard"><AuthenticatedLayout><ManagementIntelligence /></AuthenticatedLayout></RoutineAccess>} />
+          <Route path="/gestao-inteligencia/inteligencia" element={<RoutineAccess permission="dashboard"><AuthenticatedLayout><ManagementIntelligence /></AuthenticatedLayout></RoutineAccess>} />
+          <Route path="/gestao-inteligencia/coordenacao" element={<RoutineAccess permission="coordination"><AuthenticatedLayout><ManagementIntelligence /></AuthenticatedLayout></RoutineAccess>} />
+          <Route path="/gestao-inteligencia/lideranca" element={<RoutineAccess permission="technical-leadership"><AuthenticatedLayout><ManagementIntelligence /></AuthenticatedLayout></RoutineAccess>} />
 
           <Route
             path="/analistas"
