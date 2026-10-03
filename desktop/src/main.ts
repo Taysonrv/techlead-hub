@@ -34,7 +34,7 @@ import type {
 
 import {
   compareAppVersions,
-  findNewestRelease,
+  findBestUpdateRelease,
 } from "./update-discovery.js";
 
 import type {
@@ -297,27 +297,30 @@ async function configureDiscoveredUpdateFeed(): Promise<"configured" | "current"
     }
 
     const releases = await response.json() as GitHubRelease[];
-    const release = findNewestRelease(releases, IS_PRERELEASE, UPDATE_MANIFEST);
+    const candidate = findBestUpdateRelease(releases, app.getVersion());
 
-    if (!release) {
-      console.warn(`[updater] Nenhuma release válida com ${UPDATE_MANIFEST} foi localizada.`);
-      configureGitHubUpdateFeed();
-      return "fallback";
-    }
-
-    if (compareAppVersions(release.tag_name, app.getVersion()) <= 0) {
-      console.log(`[updater] Release mais recente confirmada pela API: ${release.tag_name}.`);
+    if (!candidate) {
+      console.log("[updater] Nenhuma versão superior elegível foi localizada.");
       return "current";
     }
 
-    const releaseUrl = `https://github.com/${UPDATE_REPOSITORY.owner}/${UPDATE_REPOSITORY.repo}/releases/download/${encodeURIComponent(release.tag_name)}/`;
-    getAutoUpdater().setFeedURL({
+    const releaseUrl = `https://github.com/${UPDATE_REPOSITORY.owner}/${UPDATE_REPOSITORY.repo}/releases/download/${encodeURIComponent(candidate.release.tag_name)}/`;
+    const updater = getAutoUpdater();
+
+    // Uma RC pode ser promovida para a primeira versão estável. Ao escolher
+    // latest.yml, ajustamos também a política do electron-updater para não
+    // rejeitar a release estável por ter iniciado no canal beta.
+    updater.allowPrerelease = candidate.channel === "beta";
+    updater.channel = candidate.channel;
+    updater.setFeedURL({
       provider: "generic",
       url: releaseUrl,
-      channel: UPDATE_CHANNEL,
+      channel: candidate.channel,
     });
 
-    console.log(`[updater] Release descoberta: ${release.tag_name}; feed direto: ${releaseUrl}`);
+    console.log(
+      `[updater] Release descoberta: ${candidate.release.tag_name}; canal: ${candidate.channel}; manifesto: ${candidate.manifestName}; feed direto: ${releaseUrl}`,
+    );
     return "configured";
   } catch (error) {
     console.warn("[updater] Descoberta explícita indisponível; usando o provedor GitHub.", error);
