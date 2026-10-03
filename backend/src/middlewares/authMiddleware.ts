@@ -243,7 +243,10 @@ export async function authMiddleware(
       );
     }
 
-    const idleTimeoutMs = Number(process.env.SESSION_IDLE_TIMEOUT_MS ?? 5 * 60 * 1_000);
+    const configuredIdleTimeoutMs = Number(process.env.SESSION_IDLE_TIMEOUT_MS ?? 8 * 60 * 60 * 1_000);
+    const idleTimeoutMs = Number.isFinite(configuredIdleTimeoutMs) && configuredIdleTimeoutMs >= 60_000
+      ? configuredIdleTimeoutMs
+      : 8 * 60 * 60 * 1_000;
     if (session.lastActivityAt.getTime() <= now.getTime() - idleTimeoutMs) {
       await prisma.userSession.update({ where: { id: session.id }, data: { revokedAt: now } });
       return unauthorized(response, "Sessão encerrada por inatividade.");
