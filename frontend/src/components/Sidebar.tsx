@@ -318,16 +318,14 @@ export function Sidebar() {
   const analysisMenu = useMemo<MenuItemData[]>(
     () => [
       ...(canAccess("dashboard") ? [{ label: "Dashboard", path: "/", icon: <DashboardOutlined fontSize="small" /> }] : []),
-      ...(canAccess("dashboard") ? [{ label: "Central de Inteligência", path: "/inteligencia", icon: <PsychologyOutlined fontSize="small" /> }] : []),
+      ...(canAccess("dashboard") ? [{ label: "Gestão & Inteligência", path: "/gestao-inteligencia", icon: <PsychologyOutlined fontSize="small" /> }] : []),
       ...(canAccess("simer-map") ? [{ label: "Mapa SIMER", path: "/mapa-simer", icon: <AccountTreeOutlined fontSize="small" /> }] : []),
       ...(canAccess("performance") ? [{ label: "Desempenho", path: "/desempenho", icon: <TrendingUpOutlined fontSize="small" /> }] : []),
       ...(canAccess("reports") ? [{ label: "Relatórios", path: "/relatorios", icon: <AssessmentOutlined fontSize="small" /> }] : []),
       ...(canAccess("services")
         ? [{ label: "Serviços SIMER", path: "/servicos", icon: <FactCheckOutlined fontSize="small" /> }]
         : []),
-      ...(canAccess("technical-leadership")
-        ? [{ label: "Central de Liderança", path: "/lideranca-tecnica", icon: <RadarOutlined fontSize="small" /> }]
-        : []),
+
     ],
     [user?.role, user?.permissions],
   );
