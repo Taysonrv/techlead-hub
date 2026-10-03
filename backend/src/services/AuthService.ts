@@ -33,7 +33,14 @@ type LoginInput = {
   forceTransfer?: boolean;
 };
 
-const SESSION_IDLE_TIMEOUT_MS = 5 * 60 * 1_000;
+const DEFAULT_SESSION_IDLE_TIMEOUT_MS = 8 * 60 * 60 * 1_000;
+
+function getSessionIdleTimeoutMs() {
+  const configured = Number(process.env.SESSION_IDLE_TIMEOUT_MS ?? DEFAULT_SESSION_IDLE_TIMEOUT_MS);
+  return Number.isFinite(configured) && configured >= 60_000
+    ? configured
+    : DEFAULT_SESSION_IDLE_TIMEOUT_MS;
+}
 
 type ChangePasswordInput = {
   userId: number;
@@ -534,7 +541,7 @@ export class AuthService {
       throw new AuthError(`Esta versão do aplicativo não é compatível com o servidor ${serverVersion}. Atualize o TechLead Hub.`, 426, "INCOMPATIBLE_VERSION");
     }
     const now = new Date();
-    const activeSince = new Date(now.getTime() - SESSION_IDLE_TIMEOUT_MS);
+    const activeSince = new Date(now.getTime() - getSessionIdleTimeoutMs());
     const conflictingSessions = await prisma.userSession.findMany({
       where: {
         userId: user.id,
