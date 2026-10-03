@@ -9,7 +9,7 @@ import { PageHeader } from "../components/PageHeader";
 import { aliareColors } from "../theme/theme";
 
 type Data={
-  generatedAt:string;periodDays:number;
+  generatedAt:string;periodDays:number;scope:{name:string;description:string};
   summary:{tickets:number;azureItems:number;linkCoverage:number;classificationCoverage:number;versionCoverage:number;anomalies:number;clusters:number};
   trends:{monthly:Array<{month:string;total:number}>;services:Array<{name:string;total:number}>;clients:Array<{name:string;total:number}>;versions:Array<{name:string;total:number}>};
   anomalies:Array<{name:string;total:number;previous:number;delta:number}>;
@@ -28,7 +28,7 @@ export function Intelligence(){
   const openInvestigation=(q:string)=>navigate(`/investigacao?q=${encodeURIComponent(q)}`);
   return <Box sx={{pb:4}}>
     <PageHeader eyebrow="Inteligência 2.1" title="Central de Inteligência" description="Correlação, recorrência e sinais operacionais para transformar dados do suporte em evidências acionáveis." meta={data?`${data.periodDays} dias · atualizado ${new Date(data.generatedAt).toLocaleString("pt-BR")}`:undefined}/>
-    <Stack direction={{xs:"column",sm:"row"}} spacing={1.5} sx={{mb:2,alignItems:{sm:"center"}}}><TextField select size="small" label="Período" value={days} onChange={e=>setDays(Number(e.target.value))} sx={{minWidth:190}}><MenuItem value={30}>30 dias</MenuItem><MenuItem value={90}>90 dias</MenuItem><MenuItem value={180}>6 meses</MenuItem><MenuItem value={365}>12 meses</MenuItem></TextField><Button startIcon={<SearchOutlined/>} onClick={()=>navigate("/investigacao")} variant="outlined">Investigar assunto</Button><Button startIcon={<PsychologyOutlined/>} onClick={()=>navigate("/problemas-conhecidos")} variant="outlined">Problemas conhecidos</Button></Stack>
+    <Stack direction={{xs:"column",sm:"row"}} spacing={1.5} sx={{mb:2,alignItems:{sm:"center"}}}><Chip label={data?data.scope.name:"Carteira SIMER"} color="success" variant="outlined" sx={{fontWeight:800}}/><TextField select size="small" label="Período" value={days} onChange={e=>setDays(Number(e.target.value))} sx={{minWidth:190}}><MenuItem value={30}>30 dias</MenuItem><MenuItem value={90}>90 dias</MenuItem><MenuItem value={180}>6 meses</MenuItem><MenuItem value={365}>12 meses</MenuItem></TextField><Button startIcon={<SearchOutlined/>} onClick={()=>navigate("/investigacao")} variant="outlined">Investigar assunto</Button><Button startIcon={<PsychologyOutlined/>} onClick={()=>navigate("/problemas-conhecidos")} variant="outlined">Problemas conhecidos</Button></Stack>
     {loading&&<LinearProgress sx={{mb:2}}/>}{error&&<Alert severity="error" sx={{mb:2}}>{error}</Alert>}
     {data&&<><Box sx={{display:"grid",gridTemplateColumns:{xs:"1fr",sm:"repeat(2,1fr)",xl:"repeat(5,1fr)"},gap:1.5,mb:2}}>
       <Metric title="Tickets analisados" value={data.summary.tickets} detail="Base do período" icon={<HubOutlined/>}/>
