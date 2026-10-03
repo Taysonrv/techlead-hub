@@ -227,7 +227,6 @@ export function Dashboard() {
   const [copyMessage, setCopyMessage] =
     useState("");
   const [flowHidden, setFlowHidden] = useState<Set<"opened" | "resolved" | "closed">>(() => new Set());
-  const [statusPeriod, setStatusPeriod] = useState<CardPeriod>("30d");
 
   const {
     period,
@@ -437,21 +436,13 @@ export function Dashboard() {
     };
   }, [azureWorkItems]);
 
-  const cardPeriodBounds = (value: CardPeriod) => {
-    const now = new Date();
-    const end = endOfDay(now);
-    let start = startOfDay(now);
-    if (value === "7d") start.setDate(start.getDate() - 7);
-    if (value === "30d") start.setDate(start.getDate() - 30);
-    if (value === "60d") start.setDate(start.getDate() - 60);
-    if (value === "90d") start.setDate(start.getDate() - 90);
-    if (value === "month") start = new Date(now.getFullYear(), now.getMonth(), 1);
-    if (value === "semester") start = new Date(now.getFullYear(), now.getMonth() < 6 ? 0 : 6, 1);
-    if (value === "year") start = new Date(now.getFullYear(), 0, 1);
-    return { start: startOfDay(start), end };
-  };
-  const statusBounds = cardPeriodBounds(statusPeriod);
-  const statusTickets = useMemo(() => tickets.filter((ticket) => ticket.isWithSimer === true && isOpen(ticket) && isDateInPeriod(ticket.createdDate, statusBounds.start, statusBounds.end)), [tickets, statusPeriod]);
+  // Status do backlog usa o mesmo recorte global dos demais indicadores do Dashboard.
+  // Assim, Categoria e Status partem do mesmo cohort operacional e diferem
+  // apenas pela dimensão analisada.
+  const statusTickets = useMemo(
+    () => openedBySimerOperationInPeriod.filter(isOpen),
+    [openedBySimerOperationInPeriod],
+  );
 
   /* =======================================================
      CATEGORIAS
@@ -526,7 +517,7 @@ export function Dashboard() {
       grouped.set(label, (grouped.get(label) ?? 0) + 1);
     });
     return [...grouped.entries()].map(([label,total])=>({label,total})).sort((a,b)=>b.total-a.total);
-  }, [openedInPeriod]);
+  }, [openedBySimerOperationInPeriod]);
 
 
   const causes = useMemo(
@@ -1346,8 +1337,8 @@ export function Dashboard() {
             />
 
             <DonutAnalysisCard
-              title="Status dos Tickets"
-              subtitle="Composição dos tickets abertos no período"
+              title="Status do Backlog do Período"
+              subtitle="Tickets do período que permanecem ativos • mesmo recorte dos cards"
               data={backlogStatus}
               colors={[semanticChartColors.normal, semanticChartColors.positive, semanticChartColors.stopped]}
               onItemClick={(label) => {
@@ -1356,10 +1347,8 @@ export function Dashboard() {
                   "Em atendimento": statusAttendanceTickets,
                   "Parados": statusStoppedTickets,
                 };
-                showTickets(`Status: ${label}`, map[label] ?? [], periodLabel(statusPeriod));
+                showTickets(`Status: ${label}`, map[label] ?? [], "Tickets abertos no período atribuídos à operação SIMER que permanecem ativos");
               }}
-              period={statusPeriod}
-              onPeriodChange={setStatusPeriod}
             />
           </Box>
 
