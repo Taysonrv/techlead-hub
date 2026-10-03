@@ -1213,6 +1213,7 @@ export class MovideskService {
     let errors = 0;
     const errorDetails: Array<{ ticketId: number; message: string }> = [];
 
+    const enrichmentStartedAt = Date.now();
     for (let index = 0; index < tickets.length; index += 1) {
       const ticket = tickets[index]!;
       try {
@@ -1482,16 +1483,24 @@ export class MovideskService {
       }
     }
 
+    const processed = Math.max(0, tickets.length - errors);
+    const pendingAfterRun = Math.max(0, pendingBeforeRun - processed);
+    const elapsedMinutes = Math.max((Date.now() - enrichmentStartedAt) / 60_000, 1 / 60);
+    const throughputPerMinute = processed / elapsedMinutes;
+    const estimatedMinutesRemaining = throughputPerMinute > 0 && pendingAfterRun > 0 ? Math.ceil(pendingAfterRun / throughputPerMinute) : null;
+
     return {
       tickets: tickets.length,
       pendingBeforeRun,
-      pendingAfterRun: Math.max(0, pendingBeforeRun - (tickets.length - errors)),
+      pendingAfterRun,
       actions,
       appointments,
       ownerHistories,
       statusHistories,
       errors,
       errorDetails: errorDetails.slice(0, 50),
+      throughputPerMinute,
+      estimatedMinutesRemaining,
       generatedAt: new Date().toISOString(),
     };
   }
