@@ -28,7 +28,7 @@ export class OperationalIntelligenceService {
     const anomalies=services.slice(0,20).map(item=>{const before=previousServices.get(normalize(item.name))??0;const delta=before?Math.round((item.total-before)/before*100):item.total>=4?100:0;return {...item,previous:before,delta};}).filter(x=>x.total>=3&&x.delta>=50).sort((a,b)=>b.delta-a.delta||b.total-a.total).slice(0,8);
 
     const clustersMap=new Map<string,{service:string;client:string;version:string;cases:number;tickets:number[]}>();
-    tickets.forEach(row=>{const service=serviceOf(row),client=row.client||"Sem cliente",version=row.deliveredVersion||row.registeredVersion||"Sem versão";const key=[normalize(service),normalize(client),normalize(version)].join("|");const current=clustersMap.get(key)??{service,client,version,cases:0,tickets:[]};current.cases++;current.tickets.push(row.movideskId);clustersMap.set(key,current);});
+    tickets.forEach(row=>{const service=serviceOf(row),client=row.client||"Sem cliente",version=row.deliveredVersion||row.registeredVersion||"Sem versão";const key=[normalize(service),normalize(client),normalize(version)].join("|");const current=clustersMap.get(key)??{service,client,version,cases:0,tickets:[] as number[]};current.cases++;current.tickets.push(row.movideskId);clustersMap.set(key,current);});
     const clusters=[...clustersMap.values()].filter(x=>x.cases>=2).sort((a,b)=>b.cases-a.cases).slice(0,10);
     const monthly=[...tickets.reduce((map,row)=>{const key=row.createdDate.toISOString().slice(0,7);map.set(key,(map.get(key)??0)+1);return map},new Map<string,number>()).entries()].map(([month,total])=>({month,total})).sort((a,b)=>a.month.localeCompare(b.month));
 
