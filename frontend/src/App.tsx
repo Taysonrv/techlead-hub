@@ -65,6 +65,7 @@ const TechnicalLeadership = lazy(() => import("./pages/TechnicalLeadership").the
 const SimerMap = lazy(() => import("./pages/SimerMap").then((module) => ({ default: module.SimerMap })));
 const Investigation = lazy(() => import("./pages/Investigation").then((module) => ({ default: module.Investigation })));
 const KnownProblems = lazy(() => import("./pages/KnownProblems").then((module) => ({ default: module.KnownProblems })));
+const Intelligence = lazy(() => import("./pages/Intelligence").then((module) => ({ default: module.Intelligence })));
 
 import {
   aliareColors,
@@ -95,6 +96,7 @@ function AuthenticatedLayout({
       "/mapa-simer": "Mapa SIMER",
       "/investigacao": "Central de Investigação",
       "/problemas-conhecidos": "Problemas Conhecidos",
+      "/inteligencia": "Central de Inteligência",
       "/analistas": "Analistas",
       "/clientes": "Clientes",
       "/desempenho": "Desempenho",
@@ -450,6 +452,7 @@ function App() {
           <Route path="/mapa-simer" element={<RoutineAccess permission="simer-map"><AuthenticatedLayout><SimerMap /></AuthenticatedLayout></RoutineAccess>} />
           <Route path="/investigacao" element={<AuthenticatedLayout><Investigation /></AuthenticatedLayout>} />
           <Route path="/problemas-conhecidos" element={<RoutineAccess permission="known-problems"><AuthenticatedLayout><KnownProblems /></AuthenticatedLayout></RoutineAccess>} />
+          <Route path="/inteligencia" element={<RoutineAccess permission="dashboard"><AuthenticatedLayout><Intelligence /></AuthenticatedLayout></RoutineAccess>} />
 
           <Route
             path="/analistas"
