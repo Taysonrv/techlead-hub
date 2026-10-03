@@ -286,13 +286,23 @@ export class GlobalController {
     }).filter((item)=>item.score>=15).sort((a,b)=>b.score-a.score||b.createdDate.getTime()-a.createdDate.getTime()).slice(0,12);
 
     const workItemIds=[ticket.taskNumber,...similar.map((x)=>x.taskNumber)].filter((v):v is number=>Number.isInteger(v));
-    const workItems=workItemIds.length?await prisma.azureWorkItem.findMany({where:{id:{in:[...new Set(workItemIds)]}},select:{id:true,title:true,workItemType:true,state:true,client:true,module:true,process:true,registeredVersion:true,deliveredVersion:true,azureChangedAt:true,remoteUrl:true}}):[];
+    const workItems=workItemIds.length?await prisma.azureWorkItem.findMany({where:{id:{in:[...new Set(workItemIds)]}},select:{id:true,title:true,workItemType:true,state:true,client:true,module:true,process:true,registeredVersion:true,deliveredVersion:true,azureCreatedAt:true,activatedAt:true,stateChangedAt:true,azureChangedAt:true,azureClosedAt:true,remoteUrl:true}}):[];
     const timeline=[
-      {date:ticket.createdDate,kind:"ticket",title:`Atendimento #${ticket.movideskId} aberto`},
-      ...(ticket.lastUpdate?[{date:ticket.lastUpdate,kind:"update",title:"Última atualização do atendimento"}]:[]),
-      ...(ticket.resolvedDate?[{date:ticket.resolvedDate,kind:"resolved",title:"Atendimento resolvido"}]:[]),
-      ...workItems.filter(x=>x.azureChangedAt).map(x=>({date:x.azureChangedAt!,kind:"azure",title:`${x.workItemType} #${x.id} atualizada`})),
-    ].sort((a,b)=>b.date.getTime()-a.date.getTime());
+      {date:ticket.createdDate,kind:"ticket-opened",title:`Atendimento #${ticket.movideskId} aberto`,source:"Movidesk",status:ticket.status,path:`/tickets?movidesk=${ticket.movideskId}`},
+      ...(ticket.lastUpdate?[{date:ticket.lastUpdate,kind:"ticket-updated",title:"Última atualização do atendimento",source:"Movidesk",status:ticket.status,path:`/tickets?movidesk=${ticket.movideskId}`}]:[]),
+      ...(ticket.resolvedDate?[{date:ticket.resolvedDate,kind:"ticket-resolved",title:"Atendimento resolvido",source:"Movidesk",status:"Resolvido",path:`/tickets?movidesk=${ticket.movideskId}`}]:[]),
+      ...workItems.flatMap(x=>{
+        const path=`${workItemPath(x.workItemType)}?task=${x.id}`;
+        const version=x.deliveredVersion??x.registeredVersion??null;
+        return [
+          ...(x.azureCreatedAt?[{date:x.azureCreatedAt,kind:"azure-created",title:`${x.workItemType} #${x.id} criada`,source:"Azure DevOps",status:x.state,path,version:null}]:[]),
+          ...(x.activatedAt?[{date:x.activatedAt,kind:"azure-activated",title:`${x.workItemType} #${x.id} ativada`,source:"Azure DevOps",status:x.state,path,version:null}]:[]),
+          ...(x.stateChangedAt?[{date:x.stateChangedAt,kind:"azure-state",title:`${x.workItemType} #${x.id} movimentada`,source:"Azure DevOps",status:x.state,path,version:null}]:[]),
+          ...(x.azureClosedAt?[{date:x.azureClosedAt,kind:"azure-closed",title:`${x.workItemType} #${x.id} concluída`,source:"Azure DevOps",status:x.state,path,version}]:[]),
+          ...(!x.azureClosedAt&&x.azureChangedAt?[{date:x.azureChangedAt,kind:"azure-updated",title:`${x.workItemType} #${x.id} atualizada`,source:"Azure DevOps",status:x.state,path,version}]:[])
+        ];
+      }),
+    ].sort((a,b)=>a.date.getTime()-b.date.getTime());
 
     const completeness=[ticket.client,ticket.category,ticket.owner,serviceValues[0],ticket.taskNumber||"no-task"].filter(Boolean).length;
     const technicalText=[ticket.subject,ticket.category,ticket.cause,...serviceValues,...workItems.map(x=>x.title)].filter(Boolean).join(" ");
