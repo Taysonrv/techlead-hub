@@ -371,7 +371,7 @@ export function Dashboard() {
     });
 
     return Array.from(byId.values());
-  }, [openedInPeriod]);
+  }, [openedBySimerOperationInPeriod]);
 
   const azureDevelopment = useMemo(() => {
     const corrections = azureWorkItems.filter(
@@ -521,7 +521,7 @@ export function Dashboard() {
 
   const categories = useMemo(() => {
     const grouped = new Map<string, number>();
-    openedInPeriod.forEach((ticket) => {
+    openedBySimerOperationInPeriod.forEach((ticket) => {
       const label = canonicalCategory(ticket.category);
       grouped.set(label, (grouped.get(label) ?? 0) + 1);
     });
@@ -1342,7 +1342,7 @@ export function Dashboard() {
               subtitle="Distribuição no período"
               data={categories.slice(0, 6)}
               colors={chartPalette}
-              onItemClick={(label) => showTickets(`Categoria: ${label}`, openedInPeriod.filter((ticket) => canonicalCategory(ticket.category) === label), "Período global do Dashboard")}
+              onItemClick={(label) => showTickets(`Categoria: ${label}`, openedBySimerOperationInPeriod.filter((ticket) => canonicalCategory(ticket.category) === label), "Tickets abertos no período atribuídos à operação SIMER")}
             />
 
             <DonutAnalysisCard
