@@ -34,7 +34,6 @@ import {
   SupportAgentOutlined,
   WorkspacesOutlined,
   InsightsOutlined,
-  RadarOutlined,
   PsychologyOutlined,
   ChatBubbleOutlineRounded,
   HomeOutlined,
