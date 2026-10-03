@@ -60,12 +60,9 @@ const DataQuality = lazy(() => import("./pages/DataQuality").then((module) => ({
 const Services = lazy(() => import("./pages/Services").then((module) => ({ default: module.Services })));
 const Knowledge = lazy(() => import("./pages/Knowledge").then((module) => ({ default: module.Knowledge })));
 const Chat = lazy(() => import("./pages/Chat").then((module) => ({ default: module.Chat })));
-const Coordination = lazy(() => import("./pages/Coordination").then((module) => ({ default: module.Coordination })));
-const TechnicalLeadership = lazy(() => import("./pages/TechnicalLeadership").then((module) => ({ default: module.TechnicalLeadership })));
 const SimerMap = lazy(() => import("./pages/SimerMap").then((module) => ({ default: module.SimerMap })));
 const Investigation = lazy(() => import("./pages/Investigation").then((module) => ({ default: module.Investigation })));
 const KnownProblems = lazy(() => import("./pages/KnownProblems").then((module) => ({ default: module.KnownProblems })));
-const Intelligence = lazy(() => import("./pages/Intelligence").then((module) => ({ default: module.Intelligence })));
 const ManagementIntelligence = lazy(() => import("./pages/ManagementIntelligence").then((module) => ({ default: module.ManagementIntelligence })));
 
 import {
