@@ -68,3 +68,40 @@ export function findNewestRelease(
     ))
     .sort((left, right) => compareAppVersions(right.tag_name, left.tag_name))[0] ?? null;
 }
+
+/**
+ * Descobre a melhor atualização para a instalação atual.
+ *
+ * Builds estáveis permanecem estritamente no canal latest.
+ * Builds prerelease podem continuar no beta ou promover para uma versão
+ * estável superior. Isso permite a transição RC -> primeira LTS sem deixar
+ * instalações existentes presas permanentemente no canal beta.
+ */
+export function findBestUpdateRelease(
+  releases: GitHubRelease[],
+  currentVersion: string,
+): { release: GitHubRelease; manifestName: "beta.yml" | "latest.yml"; channel: "beta" | "latest" } | null {
+  const currentIsPrerelease = currentVersion.includes("-");
+
+  const candidates = releases.flatMap((release) => {
+    if (release.draft) return [];
+
+    if (!release.prerelease && release.assets.some((asset) => asset.name === "latest.yml")) {
+      return [{ release, manifestName: "latest.yml" as const, channel: "latest" as const }];
+    }
+
+    if (
+      currentIsPrerelease &&
+      release.prerelease &&
+      release.assets.some((asset) => asset.name === "beta.yml")
+    ) {
+      return [{ release, manifestName: "beta.yml" as const, channel: "beta" as const }];
+    }
+
+    return [];
+  });
+
+  return candidates
+    .filter(({ release }) => compareAppVersions(release.tag_name, currentVersion) > 0)
+    .sort((left, right) => compareAppVersions(right.release.tag_name, left.release.tag_name))[0] ?? null;
+}
