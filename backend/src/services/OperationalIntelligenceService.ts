@@ -40,6 +40,13 @@ export class OperationalIntelligenceService {
       summary:{tickets:tickets.length,azureItems:azure.length,linkCoverage:percent(linked,tickets.length),classificationCoverage:percent(classified,tickets.length),versionCoverage:percent(versioned,tickets.length),anomalies:anomalies.length,clusters:clusters.length},
       trends:{monthly,services:services.slice(0,10),clients:clients.slice(0,10),versions:versions.slice(0,8)},
       anomalies,clusters,
+      technicalDna:{
+        topServices:services.slice(0,6).map(item=>({...item,share:percent(item.total,tickets.length)})),
+        topClients:clients.slice(0,6).map(item=>({...item,share:percent(item.total,tickets.length)})),
+        topVersions:versions.filter(x=>x.name!=="Sem versão").slice(0,6).map(item=>({...item,share:percent(item.total,tickets.length)})),
+        recurrenceIndex:percent(clusters.reduce((sum,item)=>sum+item.cases,0),tickets.length),
+        evidenceQuality:Math.round((percent(linked,tickets.length)+percent(classified,tickets.length)+percent(versioned,tickets.length))/3*10)/10
+      },
       signals:[
         ...anomalies.slice(0,3).map(x=>({severity:x.delta>=100?"high":"medium",title:`Aumento em ${x.name}`,detail:`${x.total} tickets no período, ${x.delta}% acima do período anterior.`,query:x.name})),
         ...(percent(linked,tickets.length)<70?[{severity:"medium",title:"Cobertura Azure abaixo de 70%",detail:`${percent(linked,tickets.length)}% dos tickets possuem Task vinculada.`,path:"/qualidade-dados"}]:[])
