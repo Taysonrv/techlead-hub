@@ -3,6 +3,7 @@
 ## 2.0.0 LTS — 2026-10-02
 
 ### Release estável
+- Atualizador Desktop passa a promover instalações RC/beta para uma versão estável superior quando houver `latest.yml`, permitindo a migração automática da linha 1.0.0-rc.x para a 2.0.0 LTS; após a promoção, instalações estáveis permanecem no canal latest.
 - Primeira versão LTS do Hub Suporte Simer, promovendo o pacote validado da linha RC.20 para o canal estável.
 - Consolida Dashboard e analytics Movidesk, Central da Coordenação, Central de Liderança Técnica, produtividade por apontamentos, Dados e Sincronizações e integração Azure DevOps.
 - Padroniza a carteira operacional oficial em 2026+, com Causa exclusiva de Problema e Motivo exclusivo de Dúvida.
