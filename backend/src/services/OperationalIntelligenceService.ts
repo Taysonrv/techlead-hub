@@ -40,6 +40,17 @@ export class OperationalIntelligenceService {
       summary:{tickets:tickets.length,azureItems:azure.length,linkCoverage:percent(linked,tickets.length),classificationCoverage:percent(classified,tickets.length),versionCoverage:percent(versioned,tickets.length),anomalies:anomalies.length,clusters:clusters.length},
       trends:{monthly,services:services.slice(0,10),clients:clients.slice(0,10),versions:versions.slice(0,8)},
       anomalies,clusters,
+      health:{
+        score:Math.round(((percent(linked,tickets.length)*.30)+(percent(classified,tickets.length)*.25)+(percent(versioned,tickets.length)*.20)+((100-Math.min(100,anomalies.length*12.5))*.15)+((100-Math.min(100,clusters.length*8))*.10))*10)/10,
+        formula:"30% vínculo Azure + 25% classificação + 20% versão + 15% estabilidade de volume + 10% baixa recorrência",
+        components:[
+          {key:"azure",label:"Vínculo Azure",score:percent(linked,tickets.length),weight:30},
+          {key:"classification",label:"Classificação",score:percent(classified,tickets.length),weight:25},
+          {key:"version",label:"Versão",score:percent(versioned,tickets.length),weight:20},
+          {key:"stability",label:"Estabilidade",score:100-Math.min(100,anomalies.length*12.5),weight:15},
+          {key:"recurrence",label:"Baixa recorrência",score:100-Math.min(100,clusters.length*8),weight:10}
+        ]
+      },
       technicalDna:{
         topServices:services.slice(0,6).map(item=>({...item,share:percent(item.total,tickets.length)})),
         topClients:clients.slice(0,6).map(item=>({...item,share:percent(item.total,tickets.length)})),
