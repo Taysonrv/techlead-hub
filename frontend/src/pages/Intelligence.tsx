@@ -15,6 +15,7 @@ type Data={
   anomalies:Array<{name:string;total:number;previous:number;delta:number}>;
   clusters:Array<{service:string;client:string;version:string;cases:number;tickets:number[]}>;
   signals:Array<{severity:string;title:string;detail:string;query?:string;path?:string}>;
+  technicalDna:{topServices:Array<{name:string;total:number;share:number}>;topClients:Array<{name:string;total:number;share:number}>;topVersions:Array<{name:string;total:number;share:number}>;recurrenceIndex:number;evidenceQuality:number};
 };
 
 export function Intelligence(){
@@ -39,11 +40,26 @@ export function Intelligence(){
       <Card elevation={0} sx={panel}><CardContent><Typography sx={{fontWeight:850}}>Evolução da demanda</Typography><Typography variant="body2" color="text.secondary" sx={{mb:2}}>Volume mensal dentro do recorte selecionado.</Typography><Box sx={{height:290}}><ResponsiveContainer width="100%" height="100%"><LineChart data={data.trends.monthly}><CartesianGrid strokeDasharray="3 3" vertical={false}/><XAxis dataKey="month"/><YAxis allowDecimals={false}/><ChartTooltip/><Line type="monotone" dataKey="total" stroke={aliareColors.green} strokeWidth={3} dot={{r:3}}/></LineChart></ResponsiveContainer></Box></CardContent></Card>
       <Card elevation={0} sx={panel}><CardContent><Typography sx={{fontWeight:850}}>Serviços com maior demanda</Typography><Typography variant="body2" color="text.secondary" sx={{mb:2}}>Clique no gráfico para aprofundar pela Central de Investigação.</Typography><Box sx={{height:290}}><ResponsiveContainer width="100%" height="100%"><BarChart data={data.trends.services.slice(0,7)} layout="vertical" margin={{left:20}}><CartesianGrid strokeDasharray="3 3" horizontal={false}/><XAxis type="number" allowDecimals={false}/><YAxis type="category" dataKey="name" width={130} tick={{fontSize:11}}/><ChartTooltip/><Bar dataKey="total" fill={aliareColors.info} radius={[0,7,7,0]} onClick={(row:any)=>row?.name&&openInvestigation(row.name)}/></BarChart></ResponsiveContainer></Box></CardContent></Card>
     </Box>
+    <Card elevation={0} sx={{...panel,mb:2,overflow:"hidden"}}><CardContent>
+      <Stack direction={{xs:"column",md:"row"}} sx={{justifyContent:"space-between",gap:2,mb:2}}>
+        <Box><Typography sx={{fontWeight:900,fontSize:"1.08rem"}}>DNA Técnico da operação</Typography><Typography variant="body2" color="text.secondary">Assinatura explicável do período baseada em recorrência, concentração e qualidade das evidências.</Typography></Box>
+        <Stack direction="row" spacing={1}><Chip label={`Recorrência ${data.technicalDna.recurrenceIndex}%`} variant="outlined"/><Chip label={`Evidência ${data.technicalDna.evidenceQuality}%`} color={data.technicalDna.evidenceQuality>=75?"success":"warning"}/></Stack>
+      </Stack>
+      <Box sx={{display:"grid",gridTemplateColumns:{xs:"1fr",md:"repeat(3,1fr)"},gap:2}}>
+        <DnaColumn title="Serviços dominantes" rows={data.technicalDna.topServices} onOpen={openInvestigation}/>
+        <DnaColumn title="Clientes com maior sinal" rows={data.technicalDna.topClients} onOpen={openInvestigation}/>
+        <DnaColumn title="Versões presentes" rows={data.technicalDna.topVersions} onOpen={openInvestigation}/>
+      </Box>
+    </Card>
     <Box sx={{display:"grid",gridTemplateColumns:{xs:"1fr",lg:"1fr 1fr"},gap:2}}>
       <Card elevation={0} sx={panel}><CardContent><Typography sx={{fontWeight:850,mb:.5}}>Anomalias detectadas</Typography><Typography variant="body2" color="text.secondary" sx={{mb:1.5}}>Compara o período atual com uma janela anterior de mesmo tamanho.</Typography><Stack spacing={1}>{data.anomalies.length?data.anomalies.map(a=><Button key={a.name} onClick={()=>openInvestigation(a.name)} sx={{textTransform:"none",justifyContent:"space-between",p:1.2,borderRadius:2,color:"text.primary","&:hover":{bgcolor:"action.hover"}}}><Box sx={{textAlign:"left",minWidth:0}}><Typography sx={{fontWeight:750,overflow:"hidden",textOverflow:"ellipsis"}}>{a.name}</Typography><Typography variant="caption" color="text.secondary">{a.total} agora · {a.previous} anteriormente</Typography></Box><Chip label={`+${a.delta}%`} size="small" color={a.delta>=100?"error":"warning"}/></Button>):<Alert severity="success">Nenhuma anomalia relevante neste período.</Alert>}</Stack></CardContent></Card>
       <Card elevation={0} sx={panel}><CardContent><Typography sx={{fontWeight:850,mb:.5}}>Clusters recorrentes</Typography><Typography variant="body2" color="text.secondary" sx={{mb:1.5}}>Concentrações de serviço, cliente e versão encontradas automaticamente.</Typography><Stack spacing={1}>{data.clusters.map((c,i)=><Button key={i} onClick={()=>openInvestigation([c.service,c.client].join(" "))} sx={{textTransform:"none",justifyContent:"flex-start",textAlign:"left",p:1.2,borderRadius:2,color:"text.primary","&:hover":{bgcolor:"action.hover"}}}><Box sx={{minWidth:0,width:"100%"}}><Stack direction="row" sx={{justifyContent:"space-between",gap:1}}><Typography sx={{fontWeight:750,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.service}</Typography><Chip size="small" label={`${c.cases} casos`}/></Stack><Typography variant="caption" color="text.secondary">{c.client} · {c.version}</Typography></Box></Button>)}</Stack></CardContent></Card>
     </Box></>}
   </Box>;
+}
+
+function DnaColumn({title,rows,onOpen}:{title:string;rows:Array<{name:string;total:number;share:number}>;onOpen:(q:string)=>void}){
+  return <Box sx={{p:1.5,borderRadius:2.5,bgcolor:"action.hover",minWidth:0}}><Typography variant="caption" color="text.secondary" sx={{fontWeight:800,textTransform:"uppercase",letterSpacing:".06em"}}>{title}</Typography><Stack spacing={1.2} sx={{mt:1.2}}>{rows.length?rows.slice(0,5).map(row=><Box key={row.name} onClick={()=>onOpen(row.name)} sx={{cursor:"pointer"}}><Stack direction="row" sx={{justifyContent:"space-between",gap:1,mb:.4}}><Typography variant="body2" sx={{fontWeight:750,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{row.name}</Typography><Typography variant="caption" color="text.secondary">{row.total} · {row.share}%</Typography></Stack><LinearProgress variant="determinate" value={Math.min(100,row.share)} sx={{height:5,borderRadius:99}}/></Box>):<Typography variant="body2" color="text.secondary">Sem evidências suficientes.</Typography>}</Stack></Box>;
 }
 
 function Metric({title,value,detail,icon}:{title:string;value:string|number;detail:string;icon:ReactNode}){
