@@ -294,7 +294,7 @@ export class DashboardController {
           ...dateWhere,
           category: { in: ["Problema", "Dúvida", "Duvida"], mode: "insensitive" },
         },
-        select: { id: true, category: true, cause: true, reason: true },
+        select: { id: true, category: true, cause: true, reason: true, rawData: true },
       });
       const norm = (value?: string | null) => (value ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLocaleLowerCase("pt-BR");
       const canonicalCause = (value?: string | null) => {
@@ -318,6 +318,25 @@ export class DashboardController {
         if (v.includes("priorizacao")) return "Priorização";
         return null;
       };
+      const classificationFromRaw = (rawData: Prisma.JsonValue, kind: "cause" | "reason") => {
+        if (!rawData || typeof rawData !== "object" || Array.isArray(rawData)) return null;
+        const fields = Array.isArray((rawData as Record<string, unknown>).customFieldValues)
+          ? (rawData as Record<string, unknown>).customFieldValues as unknown[]
+          : [];
+        for (const field of fields) {
+          if (!field || typeof field !== "object" || Array.isArray(field)) continue;
+          const item = field as Record<string, unknown>;
+          const values = [
+            typeof item.value === "string" ? item.value : null,
+            ...(Array.isArray(item.items) ? item.items.map((child) => child && typeof child === "object" && !Array.isArray(child) ? (child as Record<string, unknown>).customFieldItem : null) : []),
+          ].filter((value): value is string => typeof value === "string" && Boolean(value.trim()));
+          for (const value of values) {
+            const label = kind === "cause" ? canonicalCause(value) : canonicalReason(value);
+            if (label) return label;
+          }
+        }
+        return null;
+      };
       const aggregate = (items: Array<{ id: number; label: string }>) => {
         const grouped = new Map<string, { label: string; total: number; ticketIds: number[] }>();
         for (const item of items) {
@@ -331,11 +350,11 @@ export class DashboardController {
       const problemRows = rows.filter((row) => norm(row.category) === "problema");
       const doubtRows = rows.filter((row) => norm(row.category) === "duvida");
       const causes = aggregate(problemRows.flatMap((row) => {
-        const label = canonicalCause(row.cause);
+        const label = canonicalCause(row.cause) ?? classificationFromRaw(row.rawData as Prisma.JsonValue, "cause");
         return label ? [{ id: row.id, label }] : [];
       }));
       const reasons = aggregate(doubtRows.flatMap((row) => {
-        const label = canonicalReason(row.reason);
+        const label = canonicalReason(row.reason) ?? classificationFromRaw(row.rawData as Prisma.JsonValue, "reason");
         return label ? [{ id: row.id, label }] : [];
       }));
       return res.json({
@@ -346,6 +365,7 @@ export class DashboardController {
           problemClassified: causes.reduce((sum,item) => sum + item.total, 0),
           doubtTotal: doubtRows.length,
           doubtClassified: reasons.reduce((sum,item) => sum + item.total, 0),
+          recoveredFromRaw: rows.filter((row) => (!row.cause && norm(row.category) === "problema" && Boolean(classificationFromRaw(row.rawData as Prisma.JsonValue, "cause"))) || (!row.reason && norm(row.category) === "duvida" && Boolean(classificationFromRaw(row.rawData as Prisma.JsonValue, "reason")))).length,
         },
       });
     } catch (error) {
