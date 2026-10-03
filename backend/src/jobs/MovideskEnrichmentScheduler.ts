@@ -3,7 +3,8 @@ import { releaseMovideskApi, tryAcquireMovideskApi } from "./MovideskSyncCoordin
 
 const DEFAULT_INTERVAL_MINUTES = 1;
 const DEFAULT_INITIAL_DELAY_SECONDS = 60;
-const DEFAULT_BATCH_SIZE = 5;
+const DEFAULT_BATCH_SIZE = 10;
+const DEFAULT_CONTINUATION_SECONDS = 3;
 
 export class MovideskEnrichmentScheduler {
   private timer: NodeJS.Timeout | null = null;
@@ -23,7 +24,7 @@ export class MovideskEnrichmentScheduler {
 
   private batchSize() {
     const parsed = Number(process.env.MOVIDESK_ENRICHMENT_BATCH_SIZE ?? DEFAULT_BATCH_SIZE);
-    return Number.isSafeInteger(parsed) && parsed >= 1 && parsed <= 10 ? parsed : DEFAULT_BATCH_SIZE;
+    return Number.isSafeInteger(parsed) && parsed >= 1 && parsed <= 25 ? parsed : DEFAULT_BATCH_SIZE;
   }
 
   start() {
@@ -56,18 +57,19 @@ export class MovideskEnrichmentScheduler {
   }
 
   private async runAndReschedule() {
+    let pending = 0;
     try {
-      await this.execute();
+      pending = await this.execute();
     } finally {
-      this.schedule(this.intervalMinutes() * 60_000);
+      this.schedule(pending > 0 ? DEFAULT_CONTINUATION_SECONDS * 1000 : this.intervalMinutes() * 60_000);
     }
   }
 
-  private async execute() {
-    if (this.running) return;
+  private async execute(): Promise<number> {
+    if (this.running) return 0;
     if (!tryAcquireMovideskApi("ENRICHMENT_SCHEDULER")) {
       console.log("[movidesk-enrichment] Ciclo adiado: outra rotina Movidesk está utilizando a API.");
-      return;
+      return 1;
     }
 
     this.running = true;
@@ -76,7 +78,7 @@ export class MovideskEnrichmentScheduler {
       const service = new MovideskService();
       if (!(await service.hasCompletedBaseline())) {
         console.log("[movidesk-enrichment] Ciclo aguardando baseline FULL.");
-        return;
+        return 0;
       }
 
       const result = await service.syncTicketEnrichment(this.batchSize());
@@ -91,10 +93,14 @@ export class MovideskEnrichmentScheduler {
         `historicosStatus=${result.statusHistories}`,
         `erros=${result.errors}`,
         `duracao=${Math.round((Date.now() - started) / 1000)}s`,
-        result.pendingAfterRun > 0 ? `etaAprox=${Math.ceil(result.pendingAfterRun / Math.max(1, result.tickets - result.errors))} lote(s)` : "fila=concluida",
+        `throughput=${result.throughputPerMinute.toFixed(1)} ticket(s)/min`,
+        result.estimatedMinutesRemaining != null ? `etaAprox=${result.estimatedMinutesRemaining} min` : "etaAprox=calculando",
+        result.pendingAfterRun > 0 ? `continuaEm=${DEFAULT_CONTINUATION_SECONDS}s` : "fila=concluida",
       ].join(" | "));
+      return result.pendingAfterRun;
     } catch (error) {
       console.error("[movidesk-enrichment] Falha no enriquecimento automático:", error);
+      return 0;
     } finally {
       this.running = false;
       releaseMovideskApi("ENRICHMENT_SCHEDULER");
