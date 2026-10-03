@@ -12,6 +12,19 @@ export type ReleaseNote = {
 export const FALLBACK_APP_VERSION = import.meta.env.VITE_APP_VERSION || "development";
 
 export const releaseNotes: Record<string, ReleaseNote> = {
+  "2.1.0": {
+    version: "2.1.0",
+    title: "Inteligência operacional, recorrência e investigação assistida",
+    items: [
+      { title: "Central de Inteligência", description: "Novo cockpit reúne volume, cobertura Azure, qualidade de classificação, anomalias e clusters recorrentes em uma leitura acionável." },
+      { title: "Motor de recorrência", description: "Serviço dedicado correlaciona serviço, cliente e versão para destacar padrões repetidos sem substituir a análise técnica do analista." },
+      { title: "Detecção de anomalias", description: "A demanda por serviço é comparada com uma janela anterior equivalente para destacar aumentos relevantes e abrir a investigação contextual." },
+      { title: "Investigação conectada", description: "Sinais, serviços e clusters levam diretamente à Central de Investigação, aproveitando tickets, Azure, versões, regras e evidências já disponíveis." },
+      { title: "Qualidade acionável", description: "Cobertura de vínculo Azure, classificação e versão passam a compor o cockpit e direcionam o usuário para higienização quando necessário." },
+      { title: "Experiência visual 2.1", description: "Cards compactos, radar de sinais, gráficos responsivos, hierarquia visual refinada e superfícies consistentes em light e dark mode." },
+      { title: "Busca global ampliada", description: "A Central de Inteligência passa a ser localizada pela pesquisa global por inteligência, recorrência, anomalias, clusters e DNA técnico." },
+    ],
+  },
   "1.0.0-rc.20": {
     version: "1.0.0-rc.20",
     title: "Polimento final, Dashboard consistente e escopo SIMER",
