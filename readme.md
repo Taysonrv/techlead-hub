@@ -4,7 +4,7 @@ Aplicação Web e Desktop para inteligência operacional do suporte e sustentaç
 
 ## Versão em preparação
 
-`1.0.0-rc.15`
+`2.1.0-rc.1`
 
 O TechLead Hub consolida dados operacionais do Movidesk e Azure DevOps para apoiar analistas e coordenação em investigação, acompanhamento de tickets, Tasks, qualidade dos dados, SLA/OLA, versões e recorrências.
 
