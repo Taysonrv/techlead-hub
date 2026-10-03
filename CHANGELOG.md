@@ -1,5 +1,11 @@
 # Changelog
 
+### Dashboard e sessão
+- Corrigida a sessão autenticada para não expirar após poucos minutos: timeout ocioso padrão ampliado para 8 horas, mantendo configuração por ambiente e heartbeat.
+- `Tickets por Categoria` agora usa o mesmo cohort operacional de `Abertos no Período`.
+- `Status dos Tickets` foi consolidado como `Status do Backlog do Período`, usando o período global do Dashboard e apenas tickets desse cohort que permanecem ativos.
+- Removido o seletor de período independente do donut de status para evitar comparação de populações diferentes na mesma visão executiva.
+
 ## 2.0.0 LTS — 2026-10-02
 
 ### Release estável
