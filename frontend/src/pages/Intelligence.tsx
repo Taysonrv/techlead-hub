@@ -1,4 +1,5 @@
 import { useEffect,useState } from "react";
+import type { ReactNode } from "react";
 import { Alert,Box,Button,Card,CardContent,Chip,LinearProgress,MenuItem,Stack,TextField,Typography,useTheme } from "@mui/material";
 import { AutoGraphOutlined,HubOutlined,PsychologyOutlined,SearchOutlined,TrendingUpOutlined } from "@mui/icons-material";
 import { Bar,BarChart,CartesianGrid,Line,LineChart,ResponsiveContainer,Tooltip as ChartTooltip,XAxis,YAxis } from "recharts";
@@ -45,6 +46,6 @@ export function Intelligence(){
   </Box>;
 }
 
-function Metric({title,value,detail,icon}:{title:string;value:string|number;detail:string;icon:React.ReactNode}){
+function Metric({title,value,detail,icon}:{title:string;value:string|number;detail:string;icon:ReactNode}){
   return <Card elevation={0} sx={{border:"1px solid",borderColor:"divider",borderRadius:3,height:"100%",transition:"transform .16s ease, box-shadow .16s ease","&:hover":{transform:"translateY(-2px)",boxShadow:"0 12px 30px rgba(15,23,42,.08)"}}}><CardContent><Stack direction="row" sx={{alignItems:"center",justifyContent:"space-between",mb:1}}><Typography variant="body2" color="text.secondary" sx={{fontWeight:700}}>{title}</Typography><Box sx={{display:"flex",color:"primary.main"}}>{icon}</Box></Stack><Typography sx={{fontSize:"1.8rem",fontWeight:900,lineHeight:1.1}}>{value}</Typography><Typography variant="caption" color="text.secondary">{detail}</Typography></CardContent></Card>;
 }
