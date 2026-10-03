@@ -77,17 +77,29 @@ export function findNewestRelease(
  * estável superior. Isso permite a transição RC -> primeira LTS sem deixar
  * instalações existentes presas permanentemente no canal beta.
  */
+export type UpdateReleaseCandidate = {
+  release: GitHubRelease;
+  manifestName: "beta.yml" | "latest.yml";
+  channel: "beta" | "latest";
+};
+
 export function findBestUpdateRelease(
   releases: GitHubRelease[],
   currentVersion: string,
-): { release: GitHubRelease; manifestName: "beta.yml" | "latest.yml"; channel: "beta" | "latest" } | null {
+): UpdateReleaseCandidate | null {
   const currentIsPrerelease = currentVersion.includes("-");
+  const candidates: UpdateReleaseCandidate[] = [];
 
-  const candidates = releases.flatMap((release) => {
-    if (release.draft) return [];
+  for (const release of releases) {
+    if (release.draft) continue;
 
     if (!release.prerelease && release.assets.some((asset) => asset.name === "latest.yml")) {
-      return [{ release, manifestName: "latest.yml" as const, channel: "latest" as const }];
+      candidates.push({
+        release,
+        manifestName: "latest.yml",
+        channel: "latest",
+      });
+      continue;
     }
 
     if (
@@ -95,13 +107,17 @@ export function findBestUpdateRelease(
       release.prerelease &&
       release.assets.some((asset) => asset.name === "beta.yml")
     ) {
-      return [{ release, manifestName: "beta.yml" as const, channel: "beta" as const }];
+      candidates.push({
+        release,
+        manifestName: "beta.yml",
+        channel: "beta",
+      });
     }
+  }
 
-    return [];
-  });
+  const eligible = candidates
+    .filter((candidate) => compareAppVersions(candidate.release.tag_name, currentVersion) > 0)
+    .sort((left, right) => compareAppVersions(right.release.tag_name, left.release.tag_name));
 
-  return candidates
-    .filter(({ release }) => compareAppVersions(release.tag_name, currentVersion) > 0)
-    .sort((left, right) => compareAppVersions(right.release.tag_name, left.release.tag_name))[0] ?? null;
+  return eligible[0] ?? null;
 }
