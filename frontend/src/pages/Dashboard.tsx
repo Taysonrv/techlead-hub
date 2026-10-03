@@ -155,6 +155,7 @@ type ClassificationResponse = {
     problemClassified: number;
     doubtTotal: number;
     doubtClassified: number;
+    recoveredFromRaw?: number;
   };
 };
 
@@ -529,6 +530,20 @@ export function Dashboard() {
     () => classificationData?.reasons.map(({ label, total }) => ({ label, total })) ?? [],
     [classificationData],
   );
+
+  const classificationCoverage = useMemo(() => ({
+    problemTotal: classificationData?.diagnostics.problemTotal ?? 0,
+    problemClassified: classificationData?.diagnostics.problemClassified ?? 0,
+    doubtTotal: classificationData?.diagnostics.doubtTotal ?? 0,
+    doubtClassified: classificationData?.diagnostics.doubtClassified ?? 0,
+    recoveredFromRaw: classificationData?.diagnostics.recoveredFromRaw ?? 0,
+  }), [classificationData]);
+
+  const businessAreaCoverage = useMemo(() => {
+    const total = filteredTickets.length;
+    const filled = filteredTickets.filter((ticket) => Boolean(ticket.businessArea?.trim())).length;
+    return { total, filled };
+  }, [filteredTickets]);
 
   const businessAreas = useMemo(() => {
     // Área de negócio e Serviço são dimensões diferentes no Movidesk.
@@ -1419,7 +1434,8 @@ export function Dashboard() {
               </Typography>
               <Typography variant="caption" color="text.secondary">
                 Somente categoria Problema • causas mais frequentes no período
-              </Typography></Box>
+              </Typography>
+              {classificationData && <Typography variant="caption" color="text.secondary" sx={{ display:"block", mt:.35 }}>Cobertura: {classificationCoverage.problemClassified}/{classificationCoverage.problemTotal} tickets classificados{classificationCoverage.recoveredFromRaw > 0 ? ` • ${classificationCoverage.recoveredFromRaw} recuperados do payload` : ""}</Typography>}</Box>
               {causes.length ? <Box sx={{ height: Math.max(250, Math.min(330, causes.slice(0, 6).length * 44 + 64)), mt: 1.25 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={causes.slice(0, 6)} layout="vertical" margin={{ left: 10, right: 34, top: 4, bottom: 4 }}>
@@ -1446,15 +1462,15 @@ export function Dashboard() {
                   </BarChart>
                 </ResponsiveContainer>
               </Box> : <Box sx={{ minHeight: 250, display: "grid", placeItems: "center", px: 2 }}>
-                <Typography variant="body2" color="text.secondary" sx={{ textAlign: "center" }}>Nenhuma causa preenchida nos tickets de categoria Problema para o período selecionado.</Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ textAlign: "center" }}>{classificationCoverage.problemTotal > 0 ? `Existem ${classificationCoverage.problemTotal} tickets de categoria Problema no período, mas a causa ainda não está disponível nos dados sincronizados.` : "Nenhum ticket de categoria Problema no período selecionado."}</Typography>
               </Box>}
             </CardBase>
 
             <OperationalRankingCard
               title="Motivos das dúvidas"
-              subtitle="Somente categoria Dúvida • motivo informado no Movidesk"
+              subtitle={`Somente categoria Dúvida • motivo informado no Movidesk • cobertura ${classificationCoverage.doubtClassified}/${classificationCoverage.doubtTotal}`}
               data={reasons}
-              emptyMessage="Nenhum motivo preenchido nos tickets de Dúvida deste período."
+              emptyMessage={classificationCoverage.doubtTotal > 0 ? `Existem ${classificationCoverage.doubtTotal} tickets de Dúvida no período, mas o motivo ainda não está disponível nos dados sincronizados.` : "Nenhum ticket de Dúvida no período selecionado."}
               onItemClick={(label) => {
                 const ids = new Set(classificationData?.reasons.find((item) => item.label === label)?.ticketIds ?? []);
                 showTickets(`Motivo: ${label}`, openedInPeriod.filter((ticket) => ids.has(ticket.id)), "Tickets de Dúvida classificados com o motivo selecionado");
@@ -1465,9 +1481,9 @@ export function Dashboard() {
           <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", xl: "1fr 1fr" }, gap: 1.5 }}>
             <OperationalRankingCard
               title="Áreas de negócio"
-              subtitle="Área de negócio informada no Movidesk • sem fallback para Serviço"
+              subtitle={`Área de negócio informada no Movidesk • cobertura ${businessAreaCoverage.filled}/${businessAreaCoverage.total} • sem fallback para Serviço`}
               data={businessAreas}
-              emptyMessage="Nenhuma área de negócio informada no período."
+              emptyMessage={businessAreaCoverage.total > 0 ? `Existem ${businessAreaCoverage.total} tickets SIMER no período, mas a Área de negócio ainda não está disponível nos dados sincronizados.` : "Nenhum ticket SIMER no período selecionado."}
               onItemClick={(label) => showTickets(
                 `Área de negócio: ${label}`,
                 filteredTickets.filter((ticket) => (ticket.businessArea ?? "Sem área de negócio") === label),
