@@ -74,6 +74,28 @@ const coordinationMetricKeys = new Set([
 ]);
 const coordinationMetrics = metrics.filter(([key]) => coordinationMetricKeys.has(key));
 
+const priorityWeight: Record<string, number> = {
+  ticketClosedTaskOpen: 100,
+  ticketOpenTaskFinished: 92,
+  ticketOpenTaskWithoutDelivery: 90,
+  danglingTaskTickets: 88,
+  completedWithoutVersion: 82,
+  versionMismatch: 78,
+  reopenedTickets: 72,
+  excessiveOwnerHandoffs: 68,
+  withoutTicket: 64,
+  withoutClient: 58,
+  suspectedClassification: 46,
+  withoutService: 42,
+};
+
+function priorityLevel(score: number) {
+  if (score >= 80) return { label: "Crítica", color: "error" as const };
+  if (score >= 55) return { label: "Alta", color: "warning" as const };
+  if (score >= 30) return { label: "Média", color: "info" as const };
+  return { label: "Baixa", color: "default" as const };
+}
+
 export function DataQuality() {
   const theme = useTheme();
   const navigate = useNavigate();
@@ -193,6 +215,15 @@ export function DataQuality() {
   const hasFilters = Boolean(type.length || client.length || user.length || search || issue);
   const filterCount = type.length + client.length + user.length + (search ? 1 : 0);
   const title = useMemo(() => metrics.find(([key]) => key === issue)?.[1] ?? "Pendências encontradas", [issue]);
+  const rankedPriorities = useMemo(() => coordinationMetrics
+    .map(([key, label, info, group]) => {
+      const total = Number(data?.summary[key] ?? 0);
+      const weight = priorityWeight[key] ?? 40;
+      const score = total > 0 ? Math.min(100, Math.round(weight * 0.72 + Math.min(total, 20) / 20 * 28)) : 0;
+      return { key, label, info, group, total, score, level: priorityLevel(score) };
+    })
+    .filter((item) => item.total > 0)
+    .sort((left, right) => right.score - left.score || right.total - left.total), [data]);
 
   return <Box sx={{ pb: 4 }}>
     <PageHeader eyebrow="Governança operacional" title="Pendências 2.0" description="Radar preventivo de inconsistências, continuidade, classificação e vínculos entre Movidesk e Azure na operação SIMER." meta={issue ? `${data?.samples.length ?? 0} evidência(s) no recorte selecionado` : `${coordinationMetrics.reduce((total, [key]) => total + (data?.summary[key] ?? 0), 0)} sinal(is) prioritário(s)`} />
@@ -245,6 +276,24 @@ export function DataQuality() {
         {coordinationMetrics.map(([key, label, info, group]) => <KpiCard key={key} title={label} value={data?.summary[key] ?? 0} subtitle={group} info={info} accent={issue === key ? aliareColors.green : group === "Fluxo" ? "#ef4444" : group === "Versão" ? "#8b5cf6" : group === "Vínculo" ? "#f59e0b" : group === "Serviço" ? "#0891b2" : "#2676b9"} active={issue === key} onClick={() => setIssue(issue === key ? "" : key)} />)}
       </Box>
     </Box>
+
+    <Card variant="outlined" sx={{ mt: 2 }}><CardContent>
+      <Stack direction={{ xs: "column", md: "row" }} spacing={1} sx={{ justifyContent: "space-between", alignItems: { md: "center" }, mb: 1.5 }}>
+        <Box><Typography variant="h6" sx={{ fontWeight: 900 }}>O que atacar primeiro</Typography><Typography variant="body2" color="text.secondary">Ranking explicável por criticidade operacional e volume. O score prioriza fluxo quebrado e vínculos antes de qualidade cadastral.</Typography></Box>
+        <Chip variant="outlined" label={rankedPriorities.length ? `${rankedPriorities.length} frentes ativas` : "Sem frentes críticas"} />
+      </Stack>
+      <Stack spacing={.8}>
+        {rankedPriorities.slice(0, 6).map((item, index) => (
+          <Button key={item.key} onClick={() => setIssue(item.key)} sx={{ display: "grid", gridTemplateColumns: { xs: "32px minmax(0,1fr) auto", md: "40px minmax(0,1fr) 90px 80px" }, gap: 1, alignItems: "center", textTransform: "none", textAlign: "left", border: "1px solid", borderColor: issue === item.key ? "primary.main" : "divider", borderRadius: 2, p: 1.1 }}>
+            <Typography sx={{ fontWeight: 900, color: "text.secondary" }}>#{index + 1}</Typography>
+            <Box sx={{ minWidth: 0 }}><Typography noWrap sx={{ fontWeight: 850 }}>{item.label}</Typography><Typography variant="caption" color="text.secondary">{item.group} · peso operacional {priorityWeight[item.key] ?? 40}</Typography></Box>
+            <Chip size="small" color={item.level.color} label={item.level.label} />
+            <Typography sx={{ display: { xs: "none", md: "block" }, fontWeight: 900, textAlign: "right" }}>{item.score}/100</Typography>
+          </Button>
+        ))}
+        {!rankedPriorities.length && <Alert severity="success">Nenhuma pendência prioritária foi identificada no recorte atual.</Alert>}
+      </Stack>
+    </CardContent></Card>
 
     <Card variant="outlined" sx={{ mt: 2, overflow: "hidden" }}><CardContent>
       <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ justifyContent: "space-between", alignItems: { sm: "center" }, mb: 1.5 }}>
