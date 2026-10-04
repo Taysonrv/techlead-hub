@@ -21,7 +21,6 @@ import {
   AutoFixHighOutlined,
   BugReportOutlined,
   ConfirmationNumberOutlined,
-  DashboardOutlined,
   ExpandMoreRounded,
   ExpandLessRounded,
   InfoOutlined,
@@ -32,7 +31,6 @@ import {
   PersonOutlined,
   SettingsOutlined,
   SupportAgentOutlined,
-  InsightsOutlined,
   PsychologyOutlined,
   ChatBubbleOutlineRounded,
   HomeOutlined,
@@ -312,7 +310,6 @@ export function Sidebar() {
 
   const analysisMenu = useMemo<MenuItemData[]>(
     () => [
-      ...(canAccess("dashboard") ? [{ label: "Visão Operacional", path: "/visao-operacional", icon: <DashboardOutlined fontSize="small" /> }] : []),
       ...(canAccess("dashboard") ? [{ label: "Gestão & Inteligência", path: "/gestao-inteligencia", icon: <PsychologyOutlined fontSize="small" /> }] : []),
       ...(canAccess("simer-map") ? [{ label: "Mapa SIMER", path: "/mapa-simer", icon: <AccountTreeOutlined fontSize="small" /> }] : []),
       ...(canAccess("reports") ? [{ label: "Relatórios", path: "/relatorios", icon: <AssessmentOutlined fontSize="small" /> }] : []),
@@ -668,22 +665,13 @@ export function Sidebar() {
           </Box>
         </Box>
 
-        <Box sx={{ px: 1.1, mb: .5 }}>
-          <ListItemButton component={NavLink} to="/" end title="Página inicial" sx={{ minHeight: 42, px: 1.25, borderRadius: 1.5, color: "rgba(255,255,255,.72)", "&:hover": { bgcolor: "rgba(255,255,255,.05)", color: "#fff" }, "&.active": { bgcolor: "rgba(24,199,122,.10)", color: "#fff" }, "&.active .MuiListItemIcon-root": { color: aliareColors.green } }}>
+        <Box sx={{ px: 1.1, mb: .75 }}>
+          <ListItemButton component={NavLink} to="/visao-operacional" title="Visão Operacional" sx={{ minHeight: 42, px: 1.25, borderRadius: 1.5, color: "rgba(255,255,255,.72)", "&:hover": { bgcolor: "rgba(24,199,122,.08)", color: "#fff" }, "&.active": { bgcolor: "rgba(24,199,122,.13)", color: "#fff" }, "&.active .MuiListItemIcon-root": { color: aliareColors.green } }}>
             <ListItemIcon sx={{ minWidth: 34, color: "rgba(255,255,255,.44)", "& .MuiSvgIcon-root": { fontSize: 19 } }}><HomeOutlined fontSize="small" /></ListItemIcon>
-            <ListItemText primary="Página inicial" slotProps={{ primary: { sx: { fontSize: ".8rem", fontWeight: 600, lineHeight: 1.35 } } }} />
-            {!window.techLeadHub?.desktop && <RoutineNewTabButton path="/" label="Página inicial" />}
+            <ListItemText primary="Início" slotProps={{ primary: { sx: { fontSize: ".8rem", fontWeight: 600, lineHeight: 1.35 } } }} />
+            {!window.techLeadHub?.desktop && <RoutineNewTabButton path="/visao-operacional" label="Visão Operacional" />}
           </ListItemButton>
         </Box>
-        {canAccess("coordination") && (
-          <Box sx={{ px: 1.1, mb: .75 }}>
-            <ListItemButton component={NavLink} to="/coordenacao" title="Central da Coordenação" sx={{ minHeight: 42, px: 1.25, borderRadius: 1.5, color: "rgba(255,255,255,.72)", "&:hover": { bgcolor: "rgba(24,199,122,.08)", color: "#fff" }, "&.active": { bgcolor: "rgba(24,199,122,.13)", color: "#fff" }, "&.active .MuiListItemIcon-root": { color: aliareColors.green } }}>
-              <ListItemIcon sx={{ minWidth: 34, color: "rgba(255,255,255,.44)", "& .MuiSvgIcon-root": { fontSize: 19 } }}><InsightsOutlined fontSize="small" /></ListItemIcon>
-              <ListItemText primary="Central da Coordenação" slotProps={{ primary: { sx: { fontSize: ".8rem", fontWeight: 600, lineHeight: 1.35 } } }} />
-              {!window.techLeadHub?.desktop && <RoutineNewTabButton path="/coordenacao" label="Central da Coordenação" />}
-            </ListItemButton>
-          </Box>
-        )}
 
         <MenuSection
           title="Cadastros"
