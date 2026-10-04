@@ -107,7 +107,7 @@ type ClassificationCoverage = {
 
 type MetadataDiagnostic = {
   readOnly: boolean;
-  expectedCustomFields: { cause: number; businessArea: number };
+  expectedCustomFields: { cause: number; reason: number; businessArea: number };
   tickets: Array<{
     movideskId: number;
     foundLocally: boolean;
@@ -954,7 +954,7 @@ export function Import({ embedded = false }: { embedded?: boolean }) {
                 return <Box key={ticket.movideskId} sx={{ p: 1.5, border: "1px solid", borderColor: onlyRemote.length ? "warning.main" : "divider", borderRadius: 2.25, bgcolor: "background.default" }}>
                   <Stack direction="row" spacing={1} useFlexGap sx={{ alignItems: "center", flexWrap: "wrap" }}>
                     <Typography sx={{ fontWeight: 900 }}>#{ticket.movideskId}</Typography>
-                    <Chip size="small" color={ticket.error ? "error" : onlyRemote.length ? "warning" : "success"} label={ticket.error ? "Falha" : onlyRemote.length ? "Divergência local × Movidesk" : "Sem divergência de IDs"} />
+                    <Chip size="small" color={ticket.error ? "error" : onlyRemote.length ? "warning" : "success"} label={ticket.error ? "Falha" : onlyRemote.length ? "Divergência local × Movidesk" : "Campos oficiais consistentes"} />
                     {ticket.local?.category && <Chip size="small" variant="outlined" label={ticket.local.category} />}
                   </Stack>
                   {ticket.error ? <Alert severity="error" sx={{ mt: 1 }}>{ticket.error}</Alert> : <>
