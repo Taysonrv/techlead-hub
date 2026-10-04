@@ -64,6 +64,9 @@ const SimerMap = lazy(() => import("./pages/SimerMap").then((module) => ({ defau
 const Investigation = lazy(() => import("./pages/Investigation").then((module) => ({ default: module.Investigation })));
 const KnownProblems = lazy(() => import("./pages/KnownProblems").then((module) => ({ default: module.KnownProblems })));
 const ManagementIntelligence = lazy(() => import("./pages/ManagementIntelligence").then((module) => ({ default: module.ManagementIntelligence })));
+const OperationalOverview = lazy(() => import("./pages/OperationalOverview").then((module) => ({ default: module.OperationalOverview })));
+const OperationsHub = lazy(() => import("./pages/OperationsHub").then((module) => ({ default: module.OperationsHub })));
+const RiskPendingHub = lazy(() => import("./pages/RiskPendingHub").then((module) => ({ default: module.RiskPendingHub })));
 
 import {
   aliareColors,
@@ -436,17 +439,23 @@ function App() {
           <Route
             path="/"
             element={
-              <RoutineAccess permission="dashboard"><AuthenticatedLayout><Dashboard /></AuthenticatedLayout></RoutineAccess>
+              <Navigate to="/visao-operacional" replace />
             }
           />
 
           <Route
             path="/tickets"
             element={
-              <RoutineAccess permission="tickets"><AuthenticatedLayout><Tickets /></AuthenticatedLayout></RoutineAccess>
+              <Navigate to="/operacao/tickets" replace />
             }
           />
 
+          <Route path="/visao-operacional" element={<RoutineAccess permission="dashboard"><AuthenticatedLayout><OperationalOverview /></AuthenticatedLayout></RoutineAccess>} />
+          <Route path="/visao-operacional/desempenho" element={<RoutineAccess permission="performance"><AuthenticatedLayout><OperationalOverview /></AuthenticatedLayout></RoutineAccess>} />
+          <Route path="/operacao/tickets" element={<RoutineAccess permission="tickets"><AuthenticatedLayout><OperationsHub /></AuthenticatedLayout></RoutineAccess>} />
+          <Route path="/operacao/minha-operacao" element={<RoutineAccess permission="my-operation"><AuthenticatedLayout><OperationsHub /></AuthenticatedLayout></RoutineAccess>} />
+          <Route path="/pendencias-riscos" element={<RoutineAccess permission="attention"><AuthenticatedLayout><RiskPendingHub /></AuthenticatedLayout></RoutineAccess>} />
+          <Route path="/pendencias-riscos/qualidade" element={<RoutineAccess permission="data-quality"><AuthenticatedLayout><RiskPendingHub /></AuthenticatedLayout></RoutineAccess>} />
           <Route path="/chat" element={<AuthenticatedLayout><Chat /></AuthenticatedLayout>} />
           <Route path="/coordenacao" element={<Navigate to="/gestao-inteligencia/coordenacao" replace />} />
           <Route path="/servicos" element={<RoutineAccess permission="services"><AuthenticatedLayout><Services /></AuthenticatedLayout></RoutineAccess>} />
@@ -477,14 +486,14 @@ function App() {
           <Route
             path="/desempenho"
             element={
-              <RoutineAccess permission="performance"><AuthenticatedLayout><Performance /></AuthenticatedLayout></RoutineAccess>
+              <Navigate to="/visao-operacional/desempenho" replace />
             }
           />
 
           <Route
             path="/atencao"
             element={
-              <RoutineAccess permission="attention"><AuthenticatedLayout><Attention /></AuthenticatedLayout></RoutineAccess>
+              <Navigate to="/pendencias-riscos" replace />
             }
           />
 
@@ -541,12 +550,12 @@ function App() {
 
           <Route
             path="/minha-operacao"
-            element={<RoutineAccess permission="my-operation"><AuthenticatedLayout><MyOperation /></AuthenticatedLayout></RoutineAccess>}
+            element={<Navigate to="/operacao/minha-operacao" replace />}
           />
 
           <Route
             path="/qualidade-dados"
-            element={<RoutineAccess permission="data-quality"><AuthenticatedLayout><DataQuality /></AuthenticatedLayout></RoutineAccess>}
+            element={<Navigate to="/pendencias-riscos/qualidade" replace />}
           />
 
           {/* =================================================
