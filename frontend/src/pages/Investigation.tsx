@@ -96,7 +96,33 @@ return <Box><PageHeader eyebrow="INTELIGÊNCIA" title="Central de Investigação
 {Boolean(data.intelligence?.clusters?.length)&&<Card variant="outlined"><CardContent><Typography sx={{fontWeight:850}}>Clusters de recorrência</Typography><Typography variant="body2" color="text.secondary" sx={{mb:1.25}}>Agrupamentos explicáveis por Serviço × Categoria × Versão. “Transversal” indica presença em mais de um cliente, não causalidade.</Typography><Stack spacing={.8}>{data.intelligence!.clusters.map((c,i)=><Box key={i} sx={{display:"grid",gridTemplateColumns:{xs:"1fr",md:"90px minmax(0,1fr) 110px 100px"},gap:1,alignItems:"center",p:1.1,border:"1px solid",borderColor:"divider",borderRadius:2}}><Chip size="small" color={c.scope==="transversal"?"warning":"default"} label={c.scope}/><Box sx={{minWidth:0}}><Typography noWrap sx={{fontWeight:800}}>{c.service}</Typography><Typography noWrap variant="caption" color="text.secondary">{c.category} · {c.version}</Typography></Box><Chip size="small" variant="outlined" label={`${c.cases} casos`}/><Typography variant="caption" color="text.secondary">{c.clients} cliente(s)</Typography></Box>)}</Stack></CardContent></Card>}
 {Boolean(data.anomalies?.length)&&<Alert severity="warning"><Typography sx={{fontWeight:800,mb:.5}}>Sinais para investigação</Typography>{data.anomalies!.map((x,i)=><Typography key={i} variant="body2">• {x}</Typography>)}</Alert>}
 <Stack direction={{xs:"column",lg:"row"}} spacing={2}>
-<Card variant="outlined" sx={{flex:1}}><CardContent><Typography sx={{fontWeight:850,mb:1}}>Regra × evidência</Typography><Typography variant="body2" color="text.secondary" sx={{mb:1}}>Pontos técnicos encontrados automaticamente no Mapa SIMER e confrontados com o contexto do atendimento.</Typography>{data.evidence?.length?data.evidence.map(x=><Box key={x.id} sx={{p:1,borderRadius:2,border:"1px solid",borderColor:"divider",bgcolor:"action.hover"}}}><Stack direction="row" spacing={1} sx={{alignItems:"center"}}><Chip size="small" label={x.kind}/><Chip size="small" variant="outlined" label={`${x.score} pts`}/><Typography sx={{fontWeight:700}}>{x.title}</Typography></Stack><Typography variant="caption" color="text.secondary">Caminho no SIMER</Typography><Typography variant="body2" sx={{fontWeight:700}}>{[x.mapName,x.path,x.title].filter(Boolean).join(" → ")}</Typography></Box>):<Alert severity="info">Nenhuma evidência técnica correlacionada.</Alert>}</CardContent></Card>
+<Card variant="outlined" sx={{ flex: 1 }}>
+  <CardContent>
+    <Typography sx={{ fontWeight: 850, mb: 1 }}>Regra × evidência</Typography>
+    <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+      Pontos técnicos encontrados na estrutura do SIMER e confrontados com o contexto do atendimento.
+    </Typography>
+    {data.evidence?.length ? (
+      data.evidence.map((x) => (
+        <Box key={x.id} sx={{ p: 1, mb: 1, borderRadius: 2, border: "1px solid", borderColor: "divider", bgcolor: "action.hover" }}>
+          <Stack direction="row" spacing={1} useFlexGap sx={{ alignItems: "center", flexWrap: "wrap" }}>
+            <Chip size="small" label={x.kind} />
+            <Chip size="small" variant="outlined" label={`${x.score} pts`} />
+            <Typography sx={{ fontWeight: 700 }}>{x.title}</Typography>
+          </Stack>
+          <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.6 }}>
+            Caminho no SIMER
+          </Typography>
+          <Typography variant="body2" sx={{ fontWeight: 700 }}>
+            {[x.mapName, x.path, x.title].filter(Boolean).join(" → ")}
+          </Typography>
+        </Box>
+      ))
+    ) : (
+      <Alert severity="info">Nenhuma evidência técnica correlacionada.</Alert>
+    )}
+  </CardContent>
+</Card>
 <Card variant="outlined" sx={{flex:1}}><CardContent><Typography sx={{fontWeight:850,mb:1}}>Regras do Sistema relacionadas</Typography>{data.ruleItems?.length?data.ruleItems.slice(0,8).map((x,i)=><Box key={x.id??i} sx={{py:.7}}><Typography sx={{fontWeight:700}}>{x.name??x.nodeText??"Regra relacionada"}</Typography><Typography variant="caption" color="text.secondary">{x.path??""}</Typography></Box>):<Alert severity="info">Nenhuma regra BPMN relacionada ao contexto.</Alert>}</CardContent></Card>
 </Stack>
 <Card variant="outlined"><CardContent><Typography sx={{fontWeight:850}}>Casos semelhantes</Typography><Typography variant="body2" color="text.secondary" sx={{mb:1}}>Score explicável por cliente, serviço, categoria, causa, versão e termos do assunto.</Typography>{data.similar.length?data.similar.map(x=><Box key={x.movideskId} onClick={()=>navigate(`/tickets?movidesk=${x.movideskId}`)} sx={{p:1.2,borderRadius:2,cursor:"pointer","&:hover":{bgcolor:"action.hover"}}}><Stack direction={{xs:"column",md:"row"}} spacing={1} sx={{alignItems:{md:"center"}}}><Chip size="small" color={x.score>=60?"success":x.score>=45?"warning":"default"} label={`${x.score} pts`}/><Typography sx={{fontWeight:750,flex:1}}>#{x.movideskId} · {x.subject}</Typography><Typography variant="caption" color="text.secondary">{x.explanation?.matchedSignals??x.reasons.length} sinais</Typography></Stack><Typography variant="caption" color="text.secondary">{x.client}</Typography><Stack direction="row" spacing={.6} useFlexGap sx={{flexWrap:"wrap",mt:.7}}>{(x.signals??[]).filter(s=>s.matched).map(sig=><Chip key={sig.key} size="small" variant="outlined" label={`${sig.label} +${sig.weight}`}/>)}</Stack></Box>):<Alert severity="info">Nenhum caso com correlação mínima encontrado.</Alert>}</CardContent></Card>
