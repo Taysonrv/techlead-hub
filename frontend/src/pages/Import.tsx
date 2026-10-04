@@ -118,6 +118,16 @@ type MetadataDiagnostic = {
   }>;
 };
 
+type MetadataTimeline = {
+  readOnly: boolean;
+  period: { start: string; end: string; tickets: number };
+  months: Array<{ month:string; tickets:number; problems:number; causes:number; doubts:number; reasons:number; businessAreas:number; causeCoveragePct:number; reasonCoveragePct:number; businessAreaCoveragePct:number }>;
+  lastKnown: Record<"cause"|"reason"|"businessArea", { movideskId:number; createdDate:string; value:string|null } | null>;
+  firstMissingAfterLastKnown: Record<"cause"|"reason"|"businessArea", { movideskId:number; createdDate:string; category:string|null } | null>;
+  suggestedDiagnosticTickets: number[];
+  note: string;
+};
+
 type AzureSyncStatus =
   | "PROCESSING"
   | "SUCCESS"
@@ -265,6 +275,8 @@ export function Import({ embedded = false }: { embedded?: boolean }) {
   const [metadataTickets, setMetadataTickets] = useState("815474, 777071");
   const [metadataDiagnostic, setMetadataDiagnostic] = useState<MetadataDiagnostic | null>(null);
   const [metadataDiagnosticLoading, setMetadataDiagnosticLoading] = useState(false);
+  const [metadataTimeline, setMetadataTimeline] = useState<MetadataTimeline | null>(null);
+  const [metadataTimelineLoading, setMetadataTimelineLoading] = useState(false);
 
   const fileSize =
     useMemo(
@@ -398,6 +410,20 @@ export function Import({ embedded = false }: { embedded?: boolean }) {
       setError(getApiErrorMessage(err, "Não foi possível consolidar Causas e Motivos. Se a API Movidesk estiver ocupada, aguarde a sincronização atual concluir."));
     } finally {
       setClassificationBusy(false);
+    }
+  }
+
+  async function loadMetadataTimeline() {
+    try {
+      setMetadataTimelineLoading(true);
+      setError(null);
+      const response = await api.get<MetadataTimeline>("/movidesk/metadata/timeline", { params: { start: "2026-06-01", end: "2026-10-31" }, timeout: 60_000 });
+      setMetadataTimeline(response.data);
+      if (response.data.suggestedDiagnosticTickets.length) setMetadataTickets(response.data.suggestedDiagnosticTickets.join(", "));
+    } catch (err: unknown) {
+      setError(getApiErrorMessage(err, "Não foi possível analisar a cobertura temporal dos metadados."));
+    } finally {
+      setMetadataTimelineLoading(false);
     }
   }
 
@@ -895,6 +921,25 @@ export function Import({ embedded = false }: { embedded?: boolean }) {
               <Box sx={{ flex: 1 }}>
                 <Typography sx={{ fontWeight: 800 }}>Diagnóstico de metadados analíticos</Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 1.25 }}>Compara Causa, Motivo e Área de negócio armazenados no Hub com os customFieldValues atuais do Movidesk. Somente leitura.</Typography>
+                <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ mb: 1.25 }}>
+                  <Button variant="contained" disabled={metadataTimelineLoading} onClick={() => void loadMetadataTimeline()}>{metadataTimelineLoading ? "Analisando período..." : "Analisar jun → out/2026"}</Button>
+                  {metadataTimeline && <Chip size="small" variant="outlined" label={`${metadataTimeline.period.tickets} tickets no período`} sx={{ alignSelf: "center" }} />}
+                </Stack>
+                {metadataTimeline && <Box sx={{ mb: 1.5, overflowX: "auto" }}>
+                  <Box sx={{ minWidth: 700, display: "grid", gridTemplateColumns: "100px repeat(4,1fr)", gap: .75 }}>
+                    {["Mês","Tickets","Causa","Motivo","Área"].map((label) => <Typography key={label} variant="caption" sx={{ fontWeight: 800, px: .75 }}>{label}</Typography>)}
+                    {metadataTimeline.months.flatMap((row) => [
+                      <Typography key={`${row.month}-m`} variant="body2" sx={{ px:.75, py:.5, fontWeight:750 }}>{row.month}</Typography>,
+                      <Typography key={`${row.month}-t`} variant="body2" sx={{ px:.75, py:.5 }}>{row.tickets}</Typography>,
+                      <Typography key={`${row.month}-c`} variant="body2" sx={{ px:.75, py:.5 }}>{row.causes}/{row.problems} · {row.causeCoveragePct}%</Typography>,
+                      <Typography key={`${row.month}-r`} variant="body2" sx={{ px:.75, py:.5 }}>{row.reasons}/{row.doubts} · {row.reasonCoveragePct}%</Typography>,
+                      <Typography key={`${row.month}-a`} variant="body2" sx={{ px:.75, py:.5 }}>{row.businessAreas}/{row.tickets} · {row.businessAreaCoveragePct}%</Typography>,
+                    ])}
+                  </Box>
+                  <Alert severity="info" sx={{ mt:1.25 }}>
+                    Últimos conhecidos — Causa: {metadataTimeline.lastKnown.cause ? `#${metadataTimeline.lastKnown.cause.movideskId} · ${new Date(metadataTimeline.lastKnown.cause.createdDate).toLocaleDateString("pt-BR")}` : "—"}; Motivo: {metadataTimeline.lastKnown.reason ? `#${metadataTimeline.lastKnown.reason.movideskId} · ${new Date(metadataTimeline.lastKnown.reason.createdDate).toLocaleDateString("pt-BR")}` : "—"}; Área: {metadataTimeline.lastKnown.businessArea ? `#${metadataTimeline.lastKnown.businessArea.movideskId} · ${new Date(metadataTimeline.lastKnown.businessArea.createdDate).toLocaleDateString("pt-BR")}` : "—"}. Os tickets sugeridos abaixo foram selecionados automaticamente para comparar a fronteira da ruptura com o Movidesk.
+                  </Alert>
+                </Box>}
                 <TextField fullWidth size="small" label="Atendimentos" value={metadataTickets} onChange={(event) => setMetadataTickets(event.target.value)} helperText="Separe os números por vírgula. Ex.: 815474, 777071" />
               </Box>
               <Button variant="outlined" disabled={metadataDiagnosticLoading} onClick={() => void diagnoseMetadata()}>
