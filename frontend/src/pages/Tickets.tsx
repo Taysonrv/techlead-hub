@@ -298,9 +298,10 @@ export function Tickets() {
 
   const [category, setCategory] = useState<string[]>([]);
 
-  const [owner, setOwner] = useState<string[]>([]);
+  const owner = sharedAnalysts;
+  const setOwner = setSharedAnalysts;
 
-  const [client, setClient] = useState<string[]>([]);
+
 
   const [team, setTeam] = useState<string[]>([]);
 
@@ -345,8 +346,11 @@ export function Tickets() {
   const {
     effectiveStartDate,
     effectiveEndDate,
-  } =
-    useFilters();
+    clients: client,
+    setClients: setClient,
+    analysts: sharedAnalysts,
+    setAnalysts: setSharedAnalysts,
+  } = useFilters();
 
   /* =======================================================
      CARREGAMENTO
