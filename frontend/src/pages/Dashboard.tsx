@@ -178,6 +178,8 @@ type DrilldownState = {
   title: string;
   subtitle?: string;
   tickets: Ticket[];
+  destinationPath?: string;
+  destinationLabel?: string;
 } | null;
 
 type MetricInfoDefinition = {
@@ -777,7 +779,8 @@ export function Dashboard() {
   function showTickets(
     title: string,
     list: Ticket[],
-    subtitle?: string
+    subtitle?: string,
+    options?: { destinationPath?: string; destinationLabel?: string }
   ) {
     setSelectedTicket(null);
 
@@ -785,7 +788,23 @@ export function Dashboard() {
       title,
       subtitle,
       tickets: list,
+      destinationPath: options?.destinationPath,
+      destinationLabel: options?.destinationLabel,
     });
+  }
+
+
+  function showDevelopmentItems(kind: "Correção Clientes" | "Evolução") {
+    const isCorrection = kind === "Correção Clientes";
+    const items = isCorrection ? azureDevelopment.corrections : azureDevelopment.evolutions;
+    const ids = new Set(items.map((item) => item.id));
+    const related = openedBySimerOperationInPeriod.filter((ticket) => ticket.azureWorkItem && ids.has(ticket.azureWorkItem.id));
+    showTickets(
+      isCorrection ? "Correções em Desenvolvimento" : "Evoluções em Desenvolvimento",
+      related,
+      String(ids.size) + " Work Item(s) único(s) do Azure • " + String(related.length) + " atendimento(s) vinculado(s) no período selecionado",
+      { destinationPath: isCorrection ? "/correcoes" : "/evolucoes", destinationLabel: isCorrection ? "Ir para Correções" : "Ir para Evoluções" },
+    );
   }
 
   async function copyTicketNumber(
@@ -1188,17 +1207,17 @@ export function Dashboard() {
               <Button
                 size="small"
                 variant="outlined"
-                onClick={() => navigate("/correcoes")}
+                onClick={() => showDevelopmentItems("Correção Clientes")}
               >
-                Ver Correções
+                Detalhar Correções
               </Button>
 
               <Button
                 size="small"
                 variant="outlined"
-                onClick={() => navigate("/evolucoes")}
+                onClick={() => showDevelopmentItems("Evolução")}
               >
-                Ver Evoluções
+                Detalhar Evoluções
               </Button>
             </Stack>
           </Stack>
@@ -1232,7 +1251,7 @@ export function Dashboard() {
                   reference: "System.WorkItemType",
                   periodRule: "Usa somente Work Items vinculados aos tickets abertos no período global selecionado.",
                 }}
-                onClick={() => navigate("/correcoes")}
+                onClick={() => showDevelopmentItems("Correção Clientes")}
               />
 
               <DevelopmentMetric
@@ -1247,7 +1266,7 @@ export function Dashboard() {
                   reference: "System.WorkItemType",
                   periodRule: "Usa somente Work Items vinculados aos tickets abertos no período global selecionado.",
                 }}
-                onClick={() => navigate("/evolucoes")}
+                onClick={() => showDevelopmentItems("Evolução")}
               />
 
               <DevelopmentMetric
@@ -1987,13 +2006,9 @@ export function Dashboard() {
 
                 <Button
                   size="small"
-                  onClick={() =>
-                    navigate(
-                      "/tickets"
-                    )
-                  }
+                  onClick={() => navigate(drilldown.destinationPath ?? "/tickets")}
                 >
-                  Ir para Tickets
+                  {drilldown.destinationLabel ?? "Ir para Tickets"}
                 </Button>
               </Stack>
 
