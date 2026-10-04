@@ -1943,7 +1943,7 @@ export function Dashboard() {
                   <Typography variant="caption" color="text.secondary" sx={{display:"block"}}>{item.module ?? "Módulo não informado"}{item.process ? " • " + item.process : ""}{item.movideskTicket ? " • Ticket #" + item.movideskTicket : ""}</Typography>
                   {item.deliveredVersion && <Chip size="small" label={"Versão " + item.deliveredVersion} variant="outlined" sx={{mt:.75}}/>}
                 </Box>
-                <Stack spacing=.5 sx={{alignItems:"flex-end"}}><Chip size="small" label={item.state || "Sem status"} variant="outlined"/>{item.criticality && <Chip size="small" label={item.criticality} color={normalize(item.criticality)==="critica"?"error":normalize(item.criticality)==="alta"?"warning":"default"} variant="outlined"/>}</Stack>
+                <Stack spacing={0.5} sx={{ alignItems: "flex-end" }}><Chip size="small" label={item.state || "Sem status"} variant="outlined"/>{item.criticality && <Chip size="small" label={item.criticality} color={normalize(item.criticality) === "critica" ? "error" : normalize(item.criticality) === "alta" ? "warning" : "default"} variant="outlined"/>}</Stack>
               </Stack>
             </Box>)}
           </>}
