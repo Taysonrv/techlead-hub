@@ -4,7 +4,7 @@ import { MovideskService } from "../services/MovideskService";
 import { clearMovideskApiPriority, releaseMovideskApi, requestMovideskApiPriority, tryAcquireMovideskApi } from "./MovideskSyncCoordinator";
 
 const DEFAULT_INTERVAL_MINUTES = 60;
-const DEFAULT_INITIAL_DELAY_SECONDS = 90;
+const DEFAULT_INITIAL_DELAY_SECONDS = 5;
 const LOCK_NAMESPACE = 864211;
 const LOCK_RESOURCE = 2;
 type LockRow = { acquired: boolean };
@@ -32,7 +32,7 @@ export class MovideskSyncScheduler {
     }
     if (this.timer) return;
     this.stopped = false;
-    console.log(`[movidesk-sync] Scheduler habilitado: atualização a cada ${this.intervalMinutes()} minuto(s).`);
+    console.log(`[movidesk-sync] Scheduler habilitado: primeira reconciliação em ${DEFAULT_INITIAL_DELAY_SECONDS}s; depois atualização a cada ${this.intervalMinutes()} minuto(s).`);
     this.schedule(DEFAULT_INITIAL_DELAY_SECONDS * 1000);
   }
 
