@@ -64,6 +64,19 @@ export class MovideskController {
         return res.json(referenceSyncStatus());
     }
 
+    async diagnoseAnalyticalMetadata(req: AuthenticatedRequest, res: Response) {
+        try {
+            const raw = typeof req.query.tickets === "string" ? req.query.tickets : "";
+            const ids = raw.split(",").map((value) => Number(value.trim())).filter((value) => Number.isSafeInteger(value) && value > 0);
+            if (!ids.length) return res.status(400).json({ message: "Informe tickets separados por vírgula." });
+            return res.json(await new MovideskService().diagnoseAnalyticalMetadata(ids));
+        } catch (error) {
+            const message = error instanceof Error ? error.message : "Não foi possível diagnosticar os metadados analíticos.";
+            console.error("[movidesk-analytical-metadata] Falha:", message);
+            return res.status(500).json({ message });
+        }
+    }
+
     async diagnoseApiCatalog(_req: AuthenticatedRequest, res: Response) {
         try {
             return res.json(await new MovideskService().diagnoseApiCatalog());
