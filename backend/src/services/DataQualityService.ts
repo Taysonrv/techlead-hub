@@ -1,6 +1,6 @@
 import { prisma } from "../database/prisma";
 import type { Prisma } from "@prisma/client";
-import { SIMER_CLIENTS, SUPPORT_ANALYSTS, simerClientTicketScope } from "../domain/OperationalScope";
+import { SIMER_CLIENTS, SUPPORT_ANALYSTS, ticketOperationalScope, azureOperationalScope } from "../domain/OperationalScope";
 import { analyzeMovideskIndicators } from "./MovideskPayloadAnalytics";
 import { SIMER_SERVICE_CATALOG, suggestSimerService, type SimerServiceCatalogItem } from "../domain/SimerServiceCatalog";
 import { OPEN_TICKET_BASE_STATES, OPERATIONAL_AGING, hoursBefore, isOperationalTicketFinalized, isOperationalTicketOpen, isTerminalWorkItemState, normalizeOperationalText, ticketLastRecordedMovement } from "../domain/OperationalLifecycleRules";
@@ -36,7 +36,7 @@ export class DataQualityService {
       prisma.ticket.findMany({
       where: {
         AND: [
-          simerClientTicketScope(),
+          ticketOperationalScope(),
           ...(clients.length ? [{ client: { in: clients, mode: "insensitive" as const } }] : []),
           ...(users.length ? [{ owner: { in: users, mode: "insensitive" as const } }] : []),
         ],
@@ -51,7 +51,7 @@ export class DataQualityService {
       },
     }),
       prisma.ticket.findMany({
-        where: { AND: [simerClientTicketScope(), { taskNumber: { not: null } }] },
+        where: { AND: [ticketOperationalScope(), { taskNumber: { not: null } }] },
         select: { taskNumber: true },
       }),
     ]);
@@ -112,6 +112,7 @@ export class DataQualityService {
 
     const scope: Prisma.AzureWorkItemWhereInput = {
       AND: [
+        azureOperationalScope(),
         {
           OR: [
             { createdByName: { in: [...SUPPORT_ANALYSTS], mode: "insensitive" } },
