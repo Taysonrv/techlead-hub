@@ -169,7 +169,7 @@ const MAX_FILE_SIZE =
 const AZURE_STATUS_REFRESH_MS =
   30_000;
 
-export function Import() {
+export function Import({ embedded = false }: { embedded?: boolean }) {
   const inputRef =
     useRef<HTMLInputElement | null>(
       null,
@@ -711,7 +711,7 @@ export function Import() {
           CABEÇALHO
       ===================================================== */}
 
-      <PageHeader eyebrow="Gestão" title="Dados e Sincronizações" description="Central operacional das integrações Movidesk e Azure DevOps, com cargas automáticas, importações manuais e histórico de processamento." />
+      {!embedded && <PageHeader eyebrow="Gestão" title="Dados e Sincronizações" description="Central operacional das integrações Movidesk e Azure DevOps, com cargas automáticas, importações manuais e histórico de processamento." />}
 
       {syncHealth && (
         <Card elevation={0} sx={{ mb: 3, border: "1px solid", borderColor: syncHealth.health === "critical" ? "error.main" : syncHealth.health === "attention" ? "warning.main" : "divider", borderRadius: 2.5 }}>
