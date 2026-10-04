@@ -237,6 +237,86 @@ export class MovideskService {
     }
   }
 
+  async analyticalMetadataTimeline(start: Date, end: Date) {
+    const tickets = await prisma.ticket.findMany({
+      where: {
+        createdDate: { gte: start, lte: end },
+        client: { in: [...SIMER_CLIENTS], mode: "insensitive" },
+        isDeleted: false,
+      },
+      select: {
+        movideskId: true, createdDate: true, category: true,
+        cause: true, reason: true, businessArea: true,
+      },
+      orderBy: [{ createdDate: "asc" }, { movideskId: "asc" }],
+    });
+
+    const monthKey = (date: Date) => `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+    const rows = new Map<string, { month:string; tickets:number; problems:number; causes:number; doubts:number; reasons:number; businessAreas:number }>();
+    const ensure = (key: string) => {
+      const existing = rows.get(key);
+      if (existing) return existing;
+      const created = { month:key, tickets:0, problems:0, causes:0, doubts:0, reasons:0, businessAreas:0 };
+      rows.set(key, created);
+      return created;
+    };
+    for (const ticket of tickets) {
+      const row = ensure(monthKey(ticket.createdDate));
+      row.tickets += 1;
+      if (ticket.category?.trim().toLocaleLowerCase("pt-BR") === "problema") {
+        row.problems += 1;
+        if (ticket.cause?.trim()) row.causes += 1;
+      }
+      if (ticket.category?.trim().toLocaleLowerCase("pt-BR") === "dúvida" || ticket.category?.trim().toLocaleLowerCase("pt-BR") === "duvida") {
+        row.doubts += 1;
+        if (ticket.reason?.trim()) row.reasons += 1;
+      }
+      if (ticket.businessArea?.trim()) row.businessAreas += 1;
+    }
+
+    const pct = (value:number,total:number) => total ? Number((value / total * 100).toFixed(1)) : 0;
+    const months = [...rows.values()].map((row) => ({
+      ...row,
+      causeCoveragePct: pct(row.causes, row.problems),
+      reasonCoveragePct: pct(row.reasons, row.doubts),
+      businessAreaCoveragePct: pct(row.businessAreas, row.tickets),
+    }));
+
+    const lastWith = (field: "cause"|"reason"|"businessArea") => {
+      const found = [...tickets].reverse().find((ticket) => Boolean(ticket[field]?.trim()));
+      return found ? { movideskId: found.movideskId, createdDate: found.createdDate, value: found[field] } : null;
+    };
+    const firstMissingAfter = (last: { createdDate: Date } | null, field: "cause"|"reason"|"businessArea", category?: "problema"|"duvida") => {
+      if (!last) return null;
+      const found = tickets.find((ticket) => {
+        if (ticket.createdDate <= last.createdDate || ticket[field]?.trim()) return false;
+        const normalized = ticket.category?.trim().toLocaleLowerCase("pt-BR");
+        return !category || (category === "problema" ? normalized === "problema" : normalized === "dúvida" || normalized === "duvida");
+      });
+      return found ? { movideskId: found.movideskId, createdDate: found.createdDate, category: found.category } : null;
+    };
+    const last = { cause: lastWith("cause"), reason: lastWith("reason"), businessArea: lastWith("businessArea") };
+
+    return {
+      readOnly: true,
+      period: { start, end, tickets: tickets.length },
+      months,
+      lastKnown: last,
+      firstMissingAfterLastKnown: {
+        cause: firstMissingAfter(last.cause, "cause", "problema"),
+        reason: firstMissingAfter(last.reason, "reason", "duvida"),
+        businessArea: firstMissingAfter(last.businessArea, "businessArea"),
+      },
+      suggestedDiagnosticTickets: [...new Set([
+        last.cause?.movideskId, last.reason?.movideskId, last.businessArea?.movideskId,
+        firstMissingAfter(last.cause, "cause", "problema")?.movideskId,
+        firstMissingAfter(last.reason, "reason", "duvida")?.movideskId,
+        firstMissingAfter(last.businessArea, "businessArea")?.movideskId,
+      ].filter((id): id is number => typeof id === "number"))].slice(0, 10),
+      note: "Leitura local do escopo SIMER. Causa usa apenas Problema; Motivo usa apenas Dúvida; Área usa todos os tickets.",
+    };
+  }
+
   async diagnoseAnalyticalMetadata(ticketIds: number[]) {
     const ids = [...new Set(ticketIds.filter((id) => Number.isSafeInteger(id) && id > 0))].slice(0, 10);
     if (!ids.length) throw new Error("Informe ao menos um ticket válido para o diagnóstico.");
