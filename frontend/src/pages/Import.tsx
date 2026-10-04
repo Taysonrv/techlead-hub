@@ -893,7 +893,7 @@ export function Import({ embedded = false }: { embedded?: boolean }) {
               {movideskStatus.apiCompliance.rateLimit.retryAfterUntil && <Alert severity="warning" sx={{ mt: 1.25 }}>
                 Movidesk solicitou pausa até {formatDateTime(movideskStatus.apiCompliance.rateLimit.retryAfterUntil)}. A fila global respeitará automaticamente o Retry-After.
               </Alert>}
-            </Box>
+            </Box>}
             {movideskStatus.progress && !movideskStatus.completed && <Box sx={{ mt: 2, p: 1.75, border: "1px solid", borderColor: movideskStatus.status === "ERROR" ? "warning.main" : "divider", borderRadius: 2.5, bgcolor: "background.default" }}>
               <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ justifyContent: "space-between", alignItems: { sm: "center" }, mb: 1 }}>
                 <Typography variant="body2" sx={{ fontWeight: 750 }}>
