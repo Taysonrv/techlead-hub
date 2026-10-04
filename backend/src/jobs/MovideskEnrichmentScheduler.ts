@@ -102,21 +102,23 @@ export class MovideskEnrichmentScheduler {
       }
 
       const result = await service.syncTicketEnrichment(this.batchSize());
-      console.log([
-        "[movidesk-enrichment] Lote concluído.",
-        `tickets=${result.tickets}`,
-        `pendentesAntes=${result.pendingBeforeRun}`,
-        `pendentesDepois=${result.pendingAfterRun}`,
-        `acoes=${result.actions}`,
-        `apontamentos=${result.appointments}`,
-        `historicosResponsavel=${result.ownerHistories}`,
-        `historicosStatus=${result.statusHistories}`,
-        `erros=${result.errors}`,
-        `duracao=${Math.round((Date.now() - started) / 1000)}s`,
-        `throughput=${result.throughputPerMinute.toFixed(1)} ticket(s)/min`,
-        result.estimatedMinutesRemaining != null ? `etaAprox=${result.estimatedMinutesRemaining} min` : "etaAprox=calculando",
-        result.pendingAfterRun > 0 ? `continuaEm=${DEFAULT_CONTINUATION_SECONDS}s` : "fila=concluida",
-      ].join(" | "));
+      if (result.tickets > 0 || result.errors > 0 || result.pendingBeforeRun > 0) {
+        console.log([
+          "[movidesk-enrichment] Lote concluído.",
+          `tickets=${result.tickets}`,
+          `pendentesAntes=${result.pendingBeforeRun}`,
+          `pendentesDepois=${result.pendingAfterRun}`,
+          `acoes=${result.actions}`,
+          `apontamentos=${result.appointments}`,
+          `historicosResponsavel=${result.ownerHistories}`,
+          `historicosStatus=${result.statusHistories}`,
+          `erros=${result.errors}`,
+          `duracao=${Math.round((Date.now() - started) / 1000)}s`,
+          `throughput=${result.throughputPerMinute.toFixed(1)} ticket(s)/min`,
+          result.estimatedMinutesRemaining != null ? `etaAprox=${result.estimatedMinutesRemaining} min` : "etaAprox=calculando",
+          result.pendingAfterRun > 0 ? `continuaEm=${DEFAULT_CONTINUATION_SECONDS}s` : "fila=concluida",
+        ].join(" | "));
+      }
       return result.pendingAfterRun > 0 ? "PENDING" : "IDLE";
     } catch (error) {
       console.error("[movidesk-enrichment] Falha no enriquecimento automático:", error);
