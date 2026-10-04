@@ -579,10 +579,42 @@ export class DataQualityService {
         types: ["Correção Clientes", "Evolução", "APOIO"],
       },
     };
-    dataQualityCache.set(cacheKey, { expiresAt: Date.now() + 120_000, value: result });
-    return result;
+    const unfiltered = !types.length && !clients.length && !users.length && !params.issue && !params.search;
+    let trend: Array<{ date: string; total: number; critical: number }> = [];
+    if (unfiltered) {
+      const snapshotDate = new Date();
+      snapshotDate.setUTCHours(0, 0, 0, 0);
+      await prisma.dataQualitySnapshot.upsert({
+        where: { scopeKey_snapshotDate: { scopeKey: "SIMER_SUPPORT", snapshotDate } },
+        create: { scopeKey: "SIMER_SUPPORT", snapshotDate, metrics: result.summary },
+        update: { metrics: result.summary },
+      });
+      const snapshots = await prisma.dataQualitySnapshot.findMany({
+        where: { scopeKey: "SIMER_SUPPORT" },
+        orderBy: { snapshotDate: "desc" },
+        take: 30,
+        select: { snapshotDate: true, metrics: true },
+      });
+      const criticalKeys = ["ticketClosedTaskOpen", "ticketOpenTaskFinished", "ticketOpenTaskWithoutDelivery", "danglingTaskTickets", "completedWithoutVersion", "versionMismatch"];
+      trend = snapshots.reverse().map((snapshot) => {
+        const snapshotMetrics = (snapshot.metrics ?? {}) as Record<string, unknown>;
+        const total = coordinationMetricKeysForTrend.reduce((sum, key) => sum + Number(snapshotMetrics[key] ?? 0), 0);
+        const critical = criticalKeys.reduce((sum, key) => sum + Number(snapshotMetrics[key] ?? 0), 0);
+        return { date: snapshot.snapshotDate.toISOString(), total, critical };
+      });
+    }
+
+    const response = { ...result, trend };
+    dataQualityCache.set(cacheKey, { expiresAt: Date.now() + 120_000, value: response });
+    return response;
   }
 }
+
+const coordinationMetricKeysForTrend = [
+  "ticketOpenTaskFinished", "ticketOpenTaskWithoutDelivery", "ticketClosedTaskOpen",
+  "danglingTaskTickets", "reopenedTickets", "excessiveOwnerHandoffs", "withoutTicket",
+  "withoutClient", "completedWithoutVersion", "versionMismatch", "suspectedClassification", "withoutService",
+];
 
 function compareVersions(left: string, right: string) {
   const leftParts = left.match(/\d+/g)?.map(Number) ?? [];
