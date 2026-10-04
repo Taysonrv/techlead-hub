@@ -105,6 +105,19 @@ type ClassificationCoverage = {
   generatedAt: string;
 };
 
+type MetadataDiagnostic = {
+  readOnly: boolean;
+  expectedCustomFields: { cause: number; businessArea: number };
+  tickets: Array<{
+    movideskId: number;
+    foundLocally: boolean;
+    error?: string;
+    local?: { createdDate: string; lastUpdate: string; category: string | null; client: string | null; cause: string | null; reason: string | null; businessArea: string | null; rawCustomFields: Array<{ customFieldId: number; values: string[] }> };
+    remote?: { found: boolean; category: string | null; createdDate: unknown; lastUpdate: unknown; causeDetected: string | null; reasonDetected: string | null; customFields: Array<{ customFieldId: number; values: string[] }> };
+    delta?: { rawHasCustomFields: boolean; remoteHasCustomFields: boolean; customFieldIdsOnlyRemote: number[] };
+  }>;
+};
+
 type AzureSyncStatus =
   | "PROCESSING"
   | "SUCCESS"
@@ -249,6 +262,9 @@ export function Import({ embedded = false }: { embedded?: boolean }) {
   const [classificationCoverage, setClassificationCoverage] = useState<ClassificationCoverage | null>(null);
   const [classificationBusy, setClassificationBusy] = useState(false);
   const [syncNotice, setSyncNotice] = useState<string | null>(null);
+  const [metadataTickets, setMetadataTickets] = useState("815474, 777071");
+  const [metadataDiagnostic, setMetadataDiagnostic] = useState<MetadataDiagnostic | null>(null);
+  const [metadataDiagnosticLoading, setMetadataDiagnosticLoading] = useState(false);
 
   const fileSize =
     useMemo(
@@ -382,6 +398,25 @@ export function Import({ embedded = false }: { embedded?: boolean }) {
       setError(getApiErrorMessage(err, "Não foi possível consolidar Causas e Motivos. Se a API Movidesk estiver ocupada, aguarde a sincronização atual concluir."));
     } finally {
       setClassificationBusy(false);
+    }
+  }
+
+  async function diagnoseMetadata() {
+    try {
+      setMetadataDiagnosticLoading(true);
+      setMetadataDiagnostic(null);
+      setError(null);
+      const tickets = metadataTickets.split(",").map((value) => value.trim()).filter(Boolean).join(",");
+      if (!tickets) {
+        setError("Informe ao menos um número de atendimento.");
+        return;
+      }
+      const response = await api.get<MetadataDiagnostic>("/movidesk/metadata/diagnostic", { params: { tickets }, timeout: 180_000 });
+      setMetadataDiagnostic(response.data);
+    } catch (err: unknown) {
+      setError(getApiErrorMessage(err, "Não foi possível comparar os metadados com o Movidesk."));
+    } finally {
+      setMetadataDiagnosticLoading(false);
     }
   }
 
@@ -849,6 +884,44 @@ export function Import({ embedded = false }: { embedded?: boolean }) {
                 ))}
               </Box>
             ) : <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5 }}>Carregando cobertura das classificações...</Typography>}
+          </CardContent>
+        </Card>
+      )}
+
+      {movideskStatus?.completed && (
+        <Card elevation={0} sx={{ mb: 3, border: "1px solid", borderColor: "divider", borderRadius: 3, bgcolor: "background.paper" }}>
+          <CardContent sx={{ p: { xs: 2, md: 2.5 } }}>
+            <Stack direction={{ xs: "column", md: "row" }} spacing={1.5} sx={{ justifyContent: "space-between", alignItems: { md: "flex-end" } }}>
+              <Box sx={{ flex: 1 }}>
+                <Typography sx={{ fontWeight: 800 }}>Diagnóstico de metadados analíticos</Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 1.25 }}>Compara Causa, Motivo e Área de negócio armazenados no Hub com os customFieldValues atuais do Movidesk. Somente leitura.</Typography>
+                <TextField fullWidth size="small" label="Atendimentos" value={metadataTickets} onChange={(event) => setMetadataTickets(event.target.value)} helperText="Separe os números por vírgula. Ex.: 815474, 777071" />
+              </Box>
+              <Button variant="outlined" disabled={metadataDiagnosticLoading} onClick={() => void diagnoseMetadata()}>
+                {metadataDiagnosticLoading ? "Diagnosticando..." : "Diagnosticar metadados"}
+              </Button>
+            </Stack>
+            {metadataDiagnostic && <Stack spacing={1.25} sx={{ mt: 2 }}>
+              {metadataDiagnostic.tickets.map((ticket) => {
+                const onlyRemote = ticket.delta?.customFieldIdsOnlyRemote ?? [];
+                const remoteFields = ticket.remote?.customFields ?? [];
+                const localFields = ticket.local?.rawCustomFields ?? [];
+                return <Box key={ticket.movideskId} sx={{ p: 1.5, border: "1px solid", borderColor: onlyRemote.length ? "warning.main" : "divider", borderRadius: 2.25, bgcolor: "background.default" }}>
+                  <Stack direction="row" spacing={1} useFlexGap sx={{ alignItems: "center", flexWrap: "wrap" }}>
+                    <Typography sx={{ fontWeight: 900 }}>#{ticket.movideskId}</Typography>
+                    <Chip size="small" color={ticket.error ? "error" : onlyRemote.length ? "warning" : "success"} label={ticket.error ? "Falha" : onlyRemote.length ? "Divergência local × Movidesk" : "Sem divergência de IDs"} />
+                    {ticket.local?.category && <Chip size="small" variant="outlined" label={ticket.local.category} />}
+                  </Stack>
+                  {ticket.error ? <Alert severity="error" sx={{ mt: 1 }}>{ticket.error}</Alert> : <>
+                    <Box sx={{ mt: 1.25, display: "grid", gridTemplateColumns: { xs: "1fr", lg: "1fr 1fr" }, gap: 1.25 }}>
+                      <Box><Typography variant="caption" color="text.secondary">Hub / banco local</Typography><Typography variant="body2"><b>Causa:</b> {ticket.local?.cause ?? "—"} · <b>Motivo:</b> {ticket.local?.reason ?? "—"} · <b>Área:</b> {ticket.local?.businessArea ?? "—"}</Typography><Typography variant="caption" color="text.secondary">Campos no rawData: {localFields.length ? localFields.map((field) => `${field.customFieldId}=${field.values.join(" / ")}`).join(" · ") : "nenhum customFieldValue persistido"}</Typography></Box>
+                      <Box><Typography variant="caption" color="text.secondary">Movidesk agora</Typography><Typography variant="body2"><b>Causa detectada:</b> {ticket.remote?.causeDetected ?? "—"} · <b>Motivo detectado:</b> {ticket.remote?.reasonDetected ?? "—"}</Typography><Typography variant="caption" color="text.secondary">Campos retornados: {remoteFields.length ? remoteFields.map((field) => `${field.customFieldId}=${field.values.join(" / ")}`).join(" · ") : "nenhum customFieldValue retornado"}</Typography></Box>
+                    </Box>
+                    {onlyRemote.length > 0 && <Alert severity="warning" sx={{ mt: 1 }}>IDs presentes no Movidesk e ausentes do rawData local: {onlyRemote.join(", ")}. Isso indica lacuna na persistência/sincronização do ticket.</Alert>}
+                  </>}
+                </Box>;
+              })}
+            </Stack>}
           </CardContent>
         </Card>
       )}
