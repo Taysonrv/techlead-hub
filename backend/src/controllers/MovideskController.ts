@@ -64,6 +64,21 @@ export class MovideskController {
         return res.json(referenceSyncStatus());
     }
 
+    async analyticalMetadataTimeline(req: AuthenticatedRequest, res: Response) {
+        try {
+            const start = new Date(typeof req.query.start === "string" ? `${req.query.start}T00:00:00.000Z` : "2026-06-01T00:00:00.000Z");
+            const end = new Date(typeof req.query.end === "string" ? `${req.query.end}T23:59:59.999Z` : "2026-10-31T23:59:59.999Z");
+            if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start > end) {
+                return res.status(400).json({ message: "Período inválido para o diagnóstico." });
+            }
+            return res.json(await new MovideskService().analyticalMetadataTimeline(start, end));
+        } catch (error) {
+            const message = error instanceof Error ? error.message : "Não foi possível analisar a linha do tempo dos metadados.";
+            console.error("[movidesk-metadata-timeline] Falha:", message);
+            return res.status(500).json({ message });
+        }
+    }
+
     async diagnoseAnalyticalMetadata(req: AuthenticatedRequest, res: Response) {
         try {
             const raw = typeof req.query.tickets === "string" ? req.query.tickets : "";
