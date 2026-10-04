@@ -2627,7 +2627,7 @@ export function Tickets() {
                   startIcon={<AccountTreeOutlined />}
                   onClick={() => {
                     const context = [selectedTicket.subject, selectedTicket.category, selectedTicket.cause, selectedTicket.serviceFirstLevel, selectedTicket.serviceSecondLevel, selectedTicket.serviceThirdLevel, selectedTicket.justification].filter(Boolean).join(" ");
-                    navigate(`/mapa-simer?context=${encodeURIComponent(context)}&ticket=${selectedTicket.movideskId}`);
+                    navigate(`/investigacao?q=${encodeURIComponent(context)}&ticket=${selectedTicket.movideskId}`);
                   }}
                 >
                   Investigar no Mapa
