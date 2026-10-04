@@ -248,9 +248,6 @@ export function Import({ embedded = false }: { embedded?: boolean }) {
   const [movideskStatus, setMovideskStatus] = useState<MovideskBaselineStatus | null>(null);
   const [movideskStatusLoading, setMovideskStatusLoading] = useState(false);
   const [movideskFullStarting, setMovideskFullStarting] = useState(false);
-  const [referenceSyncLoading, setReferenceSyncLoading] = useState(false);
-  const [referenceSyncResult, setReferenceSyncResult] = useState<Record<string, unknown> | null>(null);
-  const [referenceSyncPhase, setReferenceSyncPhase] = useState<string | null>(null);
   const [referenceNextAt, setReferenceNextAt] = useState<string | null>(null);
   const [referenceSchedule, setReferenceSchedule] = useState<{ hour:number; minute:number } | null>(null);
 
@@ -285,8 +282,6 @@ export function Import({ embedded = false }: { embedded?: boolean }) {
   const [syncHealth, setSyncHealth] = useState<SyncCenterSummary | null>(null);
   const [historyExpanded, setHistoryExpanded] = useState(false);
   const [classificationCoverage, setClassificationCoverage] = useState<ClassificationCoverage | null>(null);
-  const [classificationBusy, setClassificationBusy] = useState(false);
-  const [syncNotice, setSyncNotice] = useState<string | null>(null);
   const [metadataTickets, setMetadataTickets] = useState("815474, 777071");
   const [metadataDiagnostic, setMetadataDiagnostic] = useState<MetadataDiagnostic | null>(null);
   const [metadataDiagnosticLoading, setMetadataDiagnosticLoading] = useState(false);
@@ -409,24 +404,6 @@ export function Import({ embedded = false }: { embedded?: boolean }) {
   useEffect(() => {
     if (movideskStatus?.completed) void loadClassificationCoverage();
   }, [movideskStatus?.completed, loadClassificationCoverage]);
-
-  async function consolidateClassifications() {
-    try {
-      setClassificationBusy(true);
-      setError(null);
-      const response = await api.post<{ scanned:number; causesUpdated:number; reasonsUpdated:number; remoteUpdated:number }>("/movidesk/causes/backfill", {}, { timeout: 180_000 });
-      await loadClassificationCoverage();
-      setResult(null);
-      setError(null);
-      window.dispatchEvent(new CustomEvent("techlead-hub:sync-completed"));
-      setSyncNotice(`Classificações consolidadas: ${response.data.causesUpdated} causa(s), ${response.data.reasonsUpdated} motivo(s) e ${response.data.remoteUpdated} ticket(s) relidos do Movidesk.`);
-    } catch (err: unknown) {
-      setSyncNotice(null);
-      setError(getApiErrorMessage(err, "Não foi possível consolidar Causas e Motivos. Se a API Movidesk estiver ocupada, aguarde a sincronização atual concluir."));
-    } finally {
-      setClassificationBusy(false);
-    }
-  }
 
   async function loadMetadataTimeline() {
     try {
@@ -741,11 +718,8 @@ export function Import({ embedded = false }: { embedded?: boolean }) {
   async function loadReferenceSyncStatus() {
     try {
       const response = await api.get<{ status:string; phase:string; result:Record<string,unknown>|null; error:string|null; scheduler?:{ enabled:boolean; hour:number; minute:number; nextEstimatedAt:string|null } }>("/movidesk/reference-sync/status", { timeout: 30_000 });
-      setReferenceSyncPhase(response.data.phase);
       setReferenceNextAt(response.data.scheduler?.nextEstimatedAt ?? null);
       setReferenceSchedule(response.data.scheduler ? { hour: response.data.scheduler.hour, minute: response.data.scheduler.minute } : null);
-      setReferenceSyncLoading(response.data.status === "RUNNING");
-      if (response.data.result) setReferenceSyncResult(response.data.result);
       if (response.data.status === "FAILED" && response.data.error) setError(response.data.error);
     } catch { /* status é complementar; não derruba a tela */ }
   }
@@ -755,19 +729,6 @@ export function Import({ embedded = false }: { embedded?: boolean }) {
     const timer = window.setInterval(() => { void loadReferenceSyncStatus(); }, 5_000);
     return () => window.clearInterval(timer);
   }, []);
-
-  async function syncMovideskReferenceData() {
-    try {
-      setReferenceSyncLoading(true);
-      setReferenceSyncResult(null);
-      setError(null);
-      const response = await api.post<{ accepted:boolean; state:{ phase:string } }>("/movidesk/reference-sync", {}, { timeout: 30_000 });
-      setReferenceSyncPhase(response.data.state.phase);
-    } catch (err: unknown) {
-      setReferenceSyncLoading(false);
-      setError(getApiErrorMessage(err, "Não foi possível iniciar Catálogo + CSAT Movidesk."));
-    }
-  }
 
   async function startMovideskFull() {
     try {
@@ -823,7 +784,7 @@ export function Import({ embedded = false }: { embedded?: boolean }) {
 
       <SectionHeader
         title="Movidesk"
-        description="Operação centralizada da API, carga FULL, sincronização incremental e importações manuais de contingência."
+        description="Monitoramento da sincronização automática de tickets, histórico e dados de referência do Movidesk."
       />
 
       <Card elevation={0} sx={{ mb: 3, border: "1px solid", borderColor: "divider", borderRadius: 3, overflow: "hidden", bgcolor: "background.paper" }}>
@@ -841,34 +802,28 @@ export function Import({ embedded = false }: { embedded?: boolean }) {
                   ? movideskStatus.scheduler.phase === "INCREMENTAL" ? "Base inicial concluída · atualização incremental ativa" : movideskStatus.scheduler.phase === "BASELINE_RUNNING" ? "Carga inicial em execução" : "Aguardando carga inicial"
                   : "Consultando o sincronizador Movidesk..."}
               </Typography>
-              {movideskStatus?.enrichmentScheduler && <Stack direction="row" spacing={.75} useFlexGap sx={{ mt: 1, flexWrap: "wrap" }}>
-                <Chip size="small" variant="outlined" color={movideskStatus.enrichmentScheduler.enabled ? "success" : "default"} label={movideskStatus.enrichmentScheduler.enabled ? `Enriquecimento ativo · lote ${movideskStatus.enrichmentScheduler.batchSize}` : "Enriquecimento desativado"} />
-                <Chip size="small" variant="outlined" color={movideskStatus.enrichmentScheduler.apiState === "BUSY" ? "warning" : "success"} label={movideskStatus.enrichmentScheduler.apiState === "BUSY" ? `API ocupada · ${movideskStatus.enrichmentScheduler.apiOwner ?? "rotina Movidesk"}` : "API disponível"} />
-                <Chip size="small" variant="outlined" label={`Continuação ${movideskStatus.enrichmentScheduler.continuationSeconds}s · espera ${movideskStatus.enrichmentScheduler.busyRetrySeconds}s`} />
-              </Stack>}
+
             </Box>
-            <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
-              <Button variant="contained" disabled={referenceSyncLoading || movideskStatus?.status === "RUNNING"} onClick={() => void syncMovideskReferenceData()}>
-                {referenceSyncLoading ? `Sincronizando · ${referenceSyncPhase === "CATALOG" ? "Catálogo" : referenceSyncPhase === "QUESTIONS" ? "Perguntas CSAT" : referenceSyncPhase === "CSAT" ? "Respostas CSAT" : "Preparando"}` : "Sincronizar Catálogo + CSAT"}
-              </Button>
-              <Button variant="outlined" disabled={movideskStatusLoading} onClick={() => void loadMovideskStatus(true)}>
-                {movideskStatusLoading ? "Atualizando..." : "Atualizar status"}
-              </Button>
-              <Button variant="contained" disabled={movideskFullStarting || movideskStatus?.status === "RUNNING" || movideskStatus?.completed} onClick={() => void startMovideskFull()}>
-                {movideskFullStarting ? "Iniciando..." : movideskStatus?.status === "RUNNING" ? "FULL em execução" : movideskStatus?.completed ? "Baseline concluído" : movideskStatus?.progress?.nextSkip ? "Retomar FULL" : "Iniciar FULL"}
-              </Button>
-            </Stack>
+            {movideskStatus && !movideskStatus.completed && (
+              <Box sx={{ minWidth: { md: 280 }, p: 1.5, border: "1px solid", borderColor: "warning.main", borderRadius: 2.25, bgcolor: "background.default" }}>
+                <Typography variant="body2" sx={{ fontWeight: 800 }}>Reconciliação histórica V5 pendente</Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: .35, mb: 1 }}>
+                  Execução única para completar a base com /tickets/past. Após concluir, esta ação desaparece.
+                </Typography>
+                <Button fullWidth size="small" variant="contained" disabled={movideskFullStarting || movideskStatus.status === "RUNNING"} onClick={() => void startMovideskFull()}>
+                  {movideskFullStarting ? "Iniciando..." : movideskStatus.status === "RUNNING" ? "Reconciliação em execução" : movideskStatus.progress?.nextSkip ? "Retomar reconciliação" : "Executar reconciliação V5"}
+                </Button>
+              </Box>
+            )}
           </Stack>
 
           {movideskStatus && <>
             <Divider sx={{ my: 2 }} />
-            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr 1fr", lg: "repeat(5,1fr)" }, gap: 1.5 }}>
-              <InfoCard label="Tickets na base" value={String(movideskStatus.database.tickets)} />
+            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr 1fr", lg: "repeat(4,1fr)" }, gap: 1.5 }}>
               <InfoCard label="Tickets no escopo 2026" value={String(movideskStatus.database.scopedTickets ?? 0)} />
               <InfoCard label="Tickets com Task no escopo" value={String(movideskStatus.database.linkedTasks)} />
               <InfoCard label="Última execução" value={formatDateTime(movideskStatus.lastImport?.finishedAt ?? movideskStatus.lastImport?.startedAt)} />
               <InfoCard label="Próxima incremental" value={formatDateTime(movideskStatus.scheduler.nextEstimatedAt)} />
-              <InfoCard label="Próximo Catálogo + CSAT" value={formatDateTime(referenceNextAt)} />
             </Box>
             {movideskStatus.apiCompliance && <Box sx={{ mt: 2, p: 1.75, border: "1px solid", borderColor: "divider", borderRadius: 2.5, bgcolor: "background.default" }}>
               <Stack direction={{ xs: "column", md: "row" }} spacing={1} useFlexGap sx={{ alignItems: { md: "center" }, justifyContent: "space-between", flexWrap: "wrap" }}>
@@ -913,11 +868,6 @@ export function Import({ embedded = false }: { embedded?: boolean }) {
               FULL: {movideskStatus.result.pages} página(s) • {movideskStatus.result.totalRows} lidos • {movideskStatus.result.created} novos • {movideskStatus.result.updated} atualizados • {movideskStatus.result.ignored} ignorados • {movideskStatus.result.errors} erros.
             </Alert>}
             {movideskStatus.error && <Alert severity="error" sx={{ mt: 2 }}>{movideskStatus.error}</Alert>}
-            {referenceSyncResult && (
-              <Alert severity="success" variant="outlined" sx={{ mt: 2 }}>
-                Catálogo e CSAT sincronizados. <Box component="span" sx={{ fontFamily: "monospace", fontSize: ".78rem" }}>{JSON.stringify(referenceSyncResult)}</Box>
-              </Alert>
-            )}
           </>}
         </CardContent>
       </Card>
@@ -925,16 +875,10 @@ export function Import({ embedded = false }: { embedded?: boolean }) {
       {movideskStatus?.completed && (
         <Card elevation={0} sx={{ mb: 3, border: "1px solid", borderColor: "divider", borderRadius: 3, bgcolor: "background.paper" }}>
           <CardContent sx={{ p: { xs: 2, md: 2.5 }, "&:last-child": { pb: { xs: 2, md: 2.5 } } }}>
-            <Stack direction={{ xs: "column", md: "row" }} spacing={1.5} sx={{ justifyContent: "space-between", alignItems: { md: "center" } }}>
-              <Box>
-                <Typography sx={{ fontWeight: 800 }}>Qualidade das classificações Movidesk</Typography>
-                <Typography variant="body2" color="text.secondary">Causa é consolidada somente para Problema; Motivo somente para Dúvida. Escopo operacional 2026+.</Typography>
-              </Box>
-              <Button variant="outlined" disabled={classificationBusy} onClick={() => void consolidateClassifications()}>
-                {classificationBusy ? "Consolidando..." : "Consolidar causas e motivos"}
-              </Button>
-            </Stack>
-            {syncNotice && <Alert severity="success" onClose={() => setSyncNotice(null)} sx={{ mt: 1.5 }}>{syncNotice}</Alert>}
+            <Box>
+              <Typography sx={{ fontWeight: 800 }}>Qualidade das classificações Movidesk</Typography>
+              <Typography variant="body2" color="text.secondary">Cobertura observada dos campos oficiais: Causa (Problema) e Motivo (Dúvida). Somente monitoramento, sem inferência textual.</Typography>
+            </Box>
             {classificationCoverage ? (
               <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" }, gap: 1.25 }}>
                 {([["Problema / Causa", classificationCoverage.problems], ["Dúvida / Motivo", classificationCoverage.doubts]] as const).map(([label,item]) => (
