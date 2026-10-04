@@ -18,6 +18,7 @@ movideskRoutes.get("/enrichment/recent", requirePermission("imports"), controlle
 movideskRoutes.post("/enrichment/sync", requirePermission("imports"), controller.syncEnrichment.bind(controller));
 movideskRoutes.post("/causes/backfill", requirePermission("imports"), controller.backfillCauses.bind(controller));
 movideskRoutes.get("/classifications/coverage", requirePermission("imports"), controller.classificationCoverage.bind(controller));
+movideskRoutes.get("/metadata/timeline", requirePermission("imports"), controller.analyticalMetadataTimeline.bind(controller));
 movideskRoutes.get("/metadata/diagnostic", requirePermission("imports"), controller.diagnoseAnalyticalMetadata.bind(controller));
 movideskRoutes.get("/catalog/diagnostic", requirePermission("imports"), controller.diagnoseApiCatalog.bind(controller));
 movideskRoutes.post("/reference-sync", requirePermission("imports"), controller.syncReferenceData.bind(controller));
