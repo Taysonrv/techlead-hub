@@ -295,15 +295,26 @@ export function Dashboard() {
       const day = String(date.getDate()).padStart(2, "0");
       return `${year}-${month}-${day}`;
     };
+    const startDate = formatDate(effectiveStartDate);
+    const endDate = formatDate(effectiveEndDate);
+
+    // Nunca manter a classificação do período anterior enquanto o novo
+    // recorte está sendo carregado. Área/Serviço já recalculam de forma
+    // síncrona a partir do snapshot; Causa/Motivo devem seguir a mesma regra.
+    setClassificationData(null);
+
     api.get<ClassificationResponse>("/dashboard/classifications", {
-      params: { startDate: formatDate(effectiveStartDate), endDate: formatDate(effectiveEndDate) },
+      params: { startDate, endDate },
       signal: controller.signal,
       timeout: 60_000,
     }).then((response) => {
       if (!controller.signal.aborted) setClassificationData(response.data);
     }).catch((error) => {
-      if (!controller.signal.aborted) console.error("Erro ao carregar Causa/Motivo:", error);
+      if (controller.signal.aborted) return;
+      setClassificationData(null);
+      console.error(`Erro ao carregar Causa/Motivo para ${startDate}.. ${endDate}:`, error);
     });
+
     return () => controller.abort();
   }, [effectiveStartDate, effectiveEndDate]);
 
