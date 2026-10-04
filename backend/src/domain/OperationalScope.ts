@@ -70,8 +70,39 @@ export function simerClientTicketScope(): Prisma.TicketWhereInput {
  * de 01/01/2026 e pertencentes aos clientes da carteira SIMER.
  * Responsável/equipe são dimensões analíticas e não critérios de pertencimento.
  */
+
+export const SIMER_EXCLUDED_PRODUCTS = ["AGB", "CLOVER", "SIAGRI WEB"] as const;
+
+export function simerSupportTicketScope(): Prisma.TicketWhereInput {
+  return {
+    AND: [
+      simerClientTicketScope(),
+      {
+        NOT: {
+          OR: SIMER_EXCLUDED_PRODUCTS.flatMap((product) => [
+            { service: { contains: product, mode: "insensitive" as const } },
+            { serviceFirstLevel: { contains: product, mode: "insensitive" as const } },
+            { serviceSecondLevel: { contains: product, mode: "insensitive" as const } },
+            { serviceThirdLevel: { contains: product, mode: "insensitive" as const } },
+            { ownerTeam: { contains: product, mode: "insensitive" as const } },
+          ]),
+        },
+      },
+      {
+        OR: [
+          { service: { contains: "SIMER", mode: "insensitive" } },
+          { serviceFirstLevel: { contains: "SIMER", mode: "insensitive" } },
+          { serviceSecondLevel: { contains: "SIMER", mode: "insensitive" } },
+          { serviceThirdLevel: { contains: "SIMER", mode: "insensitive" } },
+          { ownerTeam: { contains: "SIMER", mode: "insensitive" } },
+        ],
+      },
+    ],
+  };
+}
+
 export function ticketOperationalScope(): Prisma.TicketWhereInput {
-  return simerClientTicketScope();
+  return simerSupportTicketScope();
 }
 
 /**
