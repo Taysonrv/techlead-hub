@@ -264,6 +264,35 @@ export function DataQuality() {
       </Box>
     </CardContent></Card>
 
+    <Box sx={{ mt: 2, display: "grid", gridTemplateColumns: { xs: "1fr", xl: "1fr 1fr" }, gap: 2 }}>
+      <Card variant="outlined"><CardContent>
+        <Typography variant="h6" sx={{ fontWeight: 850 }}>Mapa das pendências</Typography>
+        <Typography variant="body2" color="text.secondary">Distribuição de todos os detectores por domínio. Ajuda a identificar onde a operação está acumulando dívida.</Typography>
+        <Box sx={{ height: 300, mt: 1 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie data={Array.from(new Set(metrics.map(([, , , group]) => group))).map((group) => ({ name: group, value: metrics.filter(([, , , itemGroup]) => itemGroup === group).reduce((sum, [key]) => sum + Number(data?.summary[key] ?? 0), 0) })).filter((item) => item.value > 0)} dataKey="value" nameKey="name" innerRadius={62} outerRadius={100} paddingAngle={2}>
+                {Array.from(new Set(metrics.map(([, , , group]) => group))).map((group, index) => <Cell key={group} fill={[aliareColors.green, aliareColors.info, "#8b5cf6", "#f59e0b", "#0891b2", "#ef4444", "#64748b"][index % 7]} />)}
+              </Pie>
+              <ChartTooltip contentStyle={{ borderRadius: 12, border: `1px solid ${theme.palette.divider}`, background: theme.palette.background.paper, color: theme.palette.text.primary }} />
+            </PieChart>
+          </ResponsiveContainer>
+        </Box>
+      </CardContent></Card>
+      <Card variant="outlined"><CardContent>
+        <Typography variant="h6" sx={{ fontWeight: 850 }}>Cobertura de governança</Typography>
+        <Typography variant="body2" color="text.secondary">Indicadores complementares que não precisam ocupar a primeira linha, mas devem permanecer monitorados.</Typography>
+        <Box sx={{ mt: 2, display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" }, gap: 1 }}>
+          {metrics.filter(([key]) => !coordinationMetricKeys.has(key)).map(([key, label, , group]) => (
+            <Button key={key} variant={issue === key ? "contained" : "outlined"} onClick={() => setIssue(issue === key ? "" : key)} sx={{ minHeight: 54, justifyContent: "space-between", textTransform: "none", px: 1.25 }}>
+              <Box sx={{ textAlign: "left", minWidth: 0 }}><Typography sx={{ fontSize: ".78rem", fontWeight: 800 }}>{label}</Typography><Typography variant="caption" sx={{ opacity: .72 }}>{group}</Typography></Box>
+              <Chip size="small" label={data?.summary[key] ?? 0} />
+            </Button>
+          ))}
+        </Box>
+      </CardContent></Card>
+    </Box>
+
     <Card variant="outlined" sx={{ mt: 2 }}><CardContent>
       <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ justifyContent: "space-between", alignItems: { sm: "center" } }}>
         <Box>
