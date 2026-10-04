@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom";
 import { api, getApiErrorMessage } from "../services/api";
 import { aliareColors } from "../theme/theme";
 import { PageHeader } from "../components/PageHeader";
+import { useFilters } from "../context/FiltersContext";
 import { KpiCard } from "../components/KpiCard";
 import { DetailFieldGrid, DetailPanelHeader, DetailSection } from "../components/DetailPanel";
 import { detailDrawerPaperSx } from "../theme/layoutTokens";
