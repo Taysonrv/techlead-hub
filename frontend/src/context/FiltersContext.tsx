@@ -37,6 +37,11 @@ type FiltersContextData = {
 
   effectiveStartDate: Date;
   effectiveEndDate: Date;
+
+  clients: string[];
+  setClients: (clients: string[]) => void;
+  analysts: string[];
+  setAnalysts: (analysts: string[]) => void;
 };
 
 type FiltersProviderProps = {
@@ -64,6 +69,9 @@ export function FiltersProvider({
     setStartDate,
   ] =
     useState("");
+
+  const [clients, setClients] = useState<string[]>([]);
+  const [analysts, setAnalysts] = useState<string[]>([]);
 
   const [
     endDate,
@@ -191,6 +199,10 @@ export function FiltersProvider({
 
         effectiveStartDate,
         effectiveEndDate,
+        clients,
+        setClients,
+        analysts,
+        setAnalysts,
       }),
       [
         period,
@@ -198,6 +210,8 @@ export function FiltersProvider({
         endDate,
         effectiveStartDate,
         effectiveEndDate,
+        clients,
+        analysts,
       ]
     );
 
