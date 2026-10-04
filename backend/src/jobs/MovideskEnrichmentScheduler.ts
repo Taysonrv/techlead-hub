@@ -1,5 +1,5 @@
 import { MovideskService } from "../services/MovideskService";
-import { releaseMovideskApi, tryAcquireMovideskApi } from "./MovideskSyncCoordinator";
+import { movideskApiOwner, releaseMovideskApi, tryAcquireMovideskApi } from "./MovideskSyncCoordinator";
 
 const DEFAULT_INTERVAL_MINUTES = 1;
 const DEFAULT_INITIAL_DELAY_SECONDS = 60;
@@ -7,6 +7,24 @@ const DEFAULT_BATCH_SIZE = 10;
 const DEFAULT_CONTINUATION_SECONDS = 15;
 const DEFAULT_BUSY_RETRY_SECONDS = 30;
 const DEFAULT_COOLDOWN_SECONDS = 90;
+
+export function movideskEnrichmentSchedulerStatus() {
+  const interval = Number(process.env.MOVIDESK_ENRICHMENT_INTERVAL_MINUTES ?? DEFAULT_INTERVAL_MINUTES);
+  const batch = Number(process.env.MOVIDESK_ENRICHMENT_BATCH_SIZE ?? DEFAULT_BATCH_SIZE);
+  const raw = process.env.MOVIDESK_ENRICHMENT_SCHEDULER_ENABLED?.trim().toLowerCase();
+  const explicitlyDisabled = Boolean(raw && ["0", "false", "no", "nao", "não", "off"].includes(raw));
+  const owner = movideskApiOwner();
+  return {
+    enabled: !explicitlyDisabled && Boolean(process.env.MOVIDESK_TOKEN?.trim()),
+    batchSize: Number.isSafeInteger(batch) && batch >= 1 && batch <= 25 ? batch : DEFAULT_BATCH_SIZE,
+    idleIntervalMinutes: Number.isSafeInteger(interval) && interval >= 1 && interval <= 1440 ? interval : DEFAULT_INTERVAL_MINUTES,
+    continuationSeconds: DEFAULT_CONTINUATION_SECONDS,
+    busyRetrySeconds: DEFAULT_BUSY_RETRY_SECONDS,
+    errorCooldownSeconds: DEFAULT_COOLDOWN_SECONDS,
+    apiState: owner ? "BUSY" : "AVAILABLE",
+    apiOwner: owner,
+  };
+}
 
 export class MovideskEnrichmentScheduler {
   private timer: NodeJS.Timeout | null = null;
