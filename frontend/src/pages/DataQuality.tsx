@@ -81,8 +81,7 @@ export function DataQuality() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [type, setType] = useState<string[]>([]);
-  const [client, setClient] = useState<string[]>([]);
-  const [user, setUser] = useState<string[]>([]);
+  const { clients: client, setClients: setClient, analysts: user, setAnalysts: setUser } = useFilters();
   const [search, setSearch] = useState("");
   const [issue, setIssue] = useState(() => searchParams.get("issue") ?? "");
   const [selected, setSelected] = useState<Sample | null>(null);
