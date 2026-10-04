@@ -2,6 +2,7 @@ import { Router } from "express";
 import type { AuthenticatedRequest } from "../middlewares/authMiddleware";
 import { prisma } from "../database/prisma";
 import { requirePermission } from "../middlewares/roleMiddleware";
+import { simerClientTicketScope, azureOperationalScope } from "../domain/OperationalScope";
 
 export const knownProblemRoutes = Router();
 knownProblemRoutes.use(requirePermission("known-problems"));
@@ -10,6 +11,28 @@ const clean = (value: unknown, max = 4000) => typeof value === "string" ? value.
 const optional = (value: unknown, max = 1000) => clean(value, max) || null;
 const allowedStatus = new Set(["ATIVO","INVESTIGANDO","CORRECAO_ANDAMENTO","RESOLVIDO"]);
 const allowedSeverity = new Set(["BAIXA","MEDIA","ALTA","CRITICA"]);
+const simerProductScope = {
+  OR: [
+    { service: { contains: "SIMER", mode: "insensitive" as const } },
+    { serviceFirstLevel: { contains: "SIMER", mode: "insensitive" as const } },
+    { serviceSecondLevel: { contains: "SIMER", mode: "insensitive" as const } },
+    { serviceThirdLevel: { contains: "SIMER", mode: "insensitive" as const } },
+  ],
+};
+const excludedErpScope = {
+  NOT: {
+    OR: ["AGB","CLOVER"].flatMap((erp) => [
+      { service: { contains: erp, mode: "insensitive" as const } },
+      { serviceFirstLevel: { contains: erp, mode: "insensitive" as const } },
+      { serviceSecondLevel: { contains: erp, mode: "insensitive" as const } },
+      { serviceThirdLevel: { contains: erp, mode: "insensitive" as const } },
+    ]),
+  },
+};
+const knownProblemTicketScope = () => ({
+  AND: [simerClientTicketScope(), simerProductScope, excludedErpScope],
+});
+
 
 async function list(req: AuthenticatedRequest) {
   const q = clean(req.query.q, 200).toLocaleLowerCase("pt-BR");
@@ -50,7 +73,7 @@ knownProblemRoutes.get("/candidates", async (_req: AuthenticatedRequest,res) => 
   try {
     const since=new Date(); since.setDate(since.getDate()-180);
     const tickets=await prisma.ticket.findMany({
-      where:{isDeleted:false,createdDate:{gte:since}},
+      where:{AND:[knownProblemTicketScope(),{isDeleted:false,createdDate:{gte:since}}]},
       select:{movideskId:true,subject:true,client:true,category:true,cause:true,service:true,serviceFirstLevel:true,serviceSecondLevel:true,serviceThirdLevel:true,taskNumber:true,deliveredVersion:true,registeredVersion:true,createdDate:true},
       orderBy:{createdDate:"desc"},take:2500
     });
@@ -74,7 +97,7 @@ knownProblemRoutes.get("/sources", async (req: AuthenticatedRequest,res) => {
     // pesquisáveis. Assim "coap fixacao saldo", por exemplo, não precisa existir como
     // uma frase exata em um único campo para localizar o atendimento ou Work Item.
     const terms=[...new Set(q.split(/\\s+/).map(term=>term.trim()).filter(term=>term.length>=2))].slice(0,8);
-    const ticketWhere:any={isDeleted:false,AND:terms.map(term=>{
+    const ticketWhere:any={AND:[knownProblemTicketScope(),{isDeleted:false},...terms.map(term=>{
       const numeric=Number(term.replace(/\\D/g,""));
       return {OR:[
         ...(Number.isFinite(numeric)&&numeric>0?[{movideskId:numeric},{taskNumber:numeric}]:[]),
@@ -83,8 +106,8 @@ knownProblemRoutes.get("/sources", async (req: AuthenticatedRequest,res) => {
         {serviceFirstLevel:{contains:term,mode:"insensitive"}},{serviceSecondLevel:{contains:term,mode:"insensitive"}},{serviceThirdLevel:{contains:term,mode:"insensitive"}},
         {taskType:{contains:term,mode:"insensitive"}},{registeredVersion:{contains:term,mode:"insensitive"}},{deliveredVersion:{contains:term,mode:"insensitive"}}
       ]};
-    })};
-    const workItemWhere:any={AND:terms.map(term=>{
+    })]};
+    const workItemWhere:any={AND:[azureOperationalScope(),...terms.map(term=>{
       const numeric=Number(term.replace(/\\D/g,""));
       return {OR:[
         ...(Number.isFinite(numeric)&&numeric>0?[{id:numeric},{movideskTicket:numeric}]:[]),
@@ -94,7 +117,7 @@ knownProblemRoutes.get("/sources", async (req: AuthenticatedRequest,res) => {
         {registeredVersion:{contains:term,mode:"insensitive"}},{deliveredVersion:{contains:term,mode:"insensitive"}},
         {workaround:{contains:term,mode:"insensitive"}},{technicalSolution:{contains:term,mode:"insensitive"}}
       ]};
-    })};
+    })]};
     const [tickets,workItems]=await Promise.all([
       prisma.ticket.findMany({
         where:ticketWhere,orderBy:{lastUpdate:"desc"},take:16,
