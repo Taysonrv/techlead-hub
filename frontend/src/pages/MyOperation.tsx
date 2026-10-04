@@ -45,8 +45,11 @@ export function MyOperation() {
   const [data, setData] = useState<Data | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [client, setClient] = useState("");
-  const [analyst, setAnalyst] = useState("");
+  const { clients: sharedClients, setClients: setSharedClients, analysts: sharedAnalysts, setAnalysts: setSharedAnalysts } = useFilters();
+  const client = sharedClients[0] ?? "";
+  const analyst = sharedAnalysts[0] ?? "";
+  const setClient = (value: string) => setSharedClients(value ? [value] : []);
+  const setAnalyst = (value: string) => setSharedAnalysts(value ? [value] : []);
   const [team, setTeam] = useState("");
   const [type, setType] = useState("");
   const [search, setSearch] = useState("");
