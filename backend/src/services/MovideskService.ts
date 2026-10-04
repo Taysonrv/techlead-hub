@@ -4,6 +4,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../database/prisma";
 import { MovideskJsonImportService } from "./MovideskJsonImportService";
 import { isSimerClient, SIMER_CLIENTS } from "../domain/OperationalScope";
+import { movideskRateLimiter } from "./MovideskRateLimiter";
 
 const PAGE_SIZE = 50;
 const REQUEST_INTERVAL_MS = 6_200;
@@ -11,8 +12,8 @@ const INCREMENTAL_OVERLAP_MINUTES = 10;
 const REQUEST_RETRY_ATTEMPTS = 6;
 const REQUEST_RETRY_BASE_MS = 2_000;
 const OFFSET_TO_CURSOR_THRESHOLD = 9_000;
-const BASELINE_CHECKPOINT_ACTION = "MOVIDESK_SCOPED_BASELINE_CHECKPOINT_2026_V4";
-const BASELINE_COMPLETED_ACTION = "MOVIDESK_SCOPED_BASELINE_COMPLETED_2026_V4";
+const BASELINE_CHECKPOINT_ACTION = "MOVIDESK_SCOPED_BASELINE_CHECKPOINT_2026_V5";
+const BASELINE_COMPLETED_ACTION = "MOVIDESK_SCOPED_BASELINE_COMPLETED_2026_V5";
 const SYNC_SCOPE_START = new Date("2026-01-01T00:00:00.000Z");
 const BASELINE_FAILED_ACTION = "MOVIDESK_BASELINE_FAILED";
 
@@ -162,6 +163,7 @@ export class MovideskService {
     let lastError: unknown = null;
     for (let attempt = 1; attempt <= REQUEST_RETRY_ATTEMPTS; attempt += 1) {
       try {
+        await movideskRateLimiter.acquire();
         return await axios.get(url, config);
       } catch (error) {
         lastError = error;
@@ -179,6 +181,7 @@ export class MovideskService {
           throw new Error(`${context}: falha após ${attempt} tentativa(s) (${code ?? status ?? "rede"}). ${remoteMessage}`);
         }
         const retryAfterSeconds = axios.isAxiosError(error) ? Number(error.response?.headers?.["retry-after"]) : NaN;
+        if (status === 429) movideskRateLimiter.registerThrottle(Number.isFinite(retryAfterSeconds) ? retryAfterSeconds : null);
         const delay = Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0
           ? retryAfterSeconds * 1000
           : REQUEST_RETRY_BASE_MS * 2 ** (attempt - 1);
@@ -200,6 +203,7 @@ export class MovideskService {
       query.set("$select", "id,lastUpdate");
       query.set("$top", "1");
       if (mode === "QUERY") query.set("token", token);
+      await movideskRateLimiter.acquire();
       return axios.get(`${this.url}/tickets?${query.toString()}`, {
         headers: mode === "BEARER" ? { Authorization: `Bearer ${token}` } : undefined,
         timeout: 30_000,
@@ -370,15 +374,12 @@ export class MovideskService {
         const response = await this.getWithRetry(`${this.url}/tickets`, {
           params: {
             token: this.token(),
-            $select: "id,category,createdDate,lastUpdate",
-            $expand: "customFieldValues",
-            $top: 1,
-            $filter: `id eq ${id}`,
+            id,
           },
           timeout: 120_000,
         }, `diagnóstico de metadados ticket=${id}`);
-        const remote = Array.isArray(response.data) && response.data[0] && typeof response.data[0] === "object"
-          ? response.data[0] as Record<string, unknown>
+        const remote = response.data && typeof response.data === "object" && !Array.isArray(response.data)
+          ? response.data as Record<string, unknown>
           : null;
         const raw = ticket.rawData && typeof ticket.rawData === "object" && !Array.isArray(ticket.rawData)
           ? ticket.rawData as Record<string, unknown>
@@ -742,6 +743,12 @@ export class MovideskService {
       database: { available: databaseAvailable, error: databaseError, tickets, scopedTickets, linkedTasks },
       scope: { startDate: SYNC_SCOPE_START.toISOString(), clients: [...SIMER_CLIENTS] },
       lastImport,
+      apiCompliance: {
+        sources: { recent: "/tickets", historical: "/tickets/past" },
+        historicalBaselineEnabled: true,
+        conditionalCustomFieldsPreserved: true,
+        rateLimit: movideskRateLimiter.snapshot(),
+      },
       scheduler: {
         enabled: schedulerEnabled,
         intervalMinutes: safeInterval,
@@ -1202,6 +1209,23 @@ export class MovideskService {
     return response.data as unknown[];
   }
 
+  private async getPastPage(skip: number) {
+    const response = await this.getWithRetry(`${this.url}/tickets/past`, {
+      params: {
+        token: this.token(),
+        $select: TICKET_SELECT,
+        $expand: TICKET_EXPAND,
+        $orderby: "lastUpdate asc,id asc",
+        $top: PAGE_SIZE,
+        $skip: skip,
+        $filter: this.remoteScopeFilter(),
+      },
+      timeout: 120_000,
+    }, `página histórica /tickets/past skip=${skip}`);
+    if (!Array.isArray(response.data)) throw new Error("Resposta inesperada da API histórica Movidesk.");
+    return response.data as unknown[];
+  }
+
   private async reconstructFullCursor(nextSkip: number) {
     if (nextSkip <= 0) return null;
     const anchorSkip = Math.max(0, nextSkip - PAGE_SIZE);
@@ -1325,7 +1349,41 @@ export class MovideskService {
       }
 
       if (rows.length < PAGE_SIZE) break;
-      await new Promise((resolve) => setTimeout(resolve, REQUEST_INTERVAL_MS));
+    }
+
+    if (mode === "FULL") {
+      // /tickets contém somente tickets com lastUpdate recente. A rota
+      // /tickets/past completa o baseline com tickets cuja atualização
+      // ultrapassou a janela de 90 dias documentada pelo Movidesk.
+      for (let pastSkip = 0; ; pastSkip += PAGE_SIZE) {
+        const rows = await this.getPastPage(pastSkip);
+        if (!rows.length) break;
+        const scopedRows = rows.filter((row) => isSimerClient(this.ticketClientName(row)));
+        const result = scopedRows.length
+          ? await new MovideskJsonImportService().execute(
+              Buffer.from(JSON.stringify(scopedRows), "utf8"),
+              { fileName: `API Movidesk · FULL histórico · página ${summary.pages + 1}`, userId: userId ?? null, source: "MOVIDESK_API" },
+            )
+          : { totalRows: 0, created: 0, updated: 0, ignored: 0, errors: 0 };
+        summary.pages += 1;
+        summary.totalRows += result.totalRows;
+        summary.created += result.created;
+        summary.updated += result.updated;
+        summary.ignored += result.ignored;
+        summary.errors += result.errors;
+        baselineState.progress = {
+          nextSkip: pastSkip + rows.length,
+          pages: summary.pages,
+          processedRows: summary.totalRows,
+          created: summary.created,
+          updated: summary.updated,
+          ignored: summary.ignored,
+          errors: summary.errors,
+          resumed: initialSkip > 0,
+        };
+        console.info(`[movidesk-sync] FULL histórico página ${summary.pages} concluída | pastSkip=${pastSkip} | linhas=${rows.length} | processados=${summary.totalRows} | erros=${summary.errors}.`);
+        if (rows.length < PAGE_SIZE) break;
+      }
     }
 
     if (mode === "FULL" && summary.errors === 0) {
@@ -1334,7 +1392,7 @@ export class MovideskService {
           userId: userId ?? null,
           action: BASELINE_COMPLETED_ACTION,
           entity: "Ticket",
-          metadata: { pages: summary.pages, totalRows: summary.totalRows, errors: summary.errors, scopeStart: SYNC_SCOPE_START.toISOString(), scope: "SIMER_CLIENTS_REMOTE_FILTER_V4" },
+          metadata: { pages: summary.pages, totalRows: summary.totalRows, errors: summary.errors, scopeStart: SYNC_SCOPE_START.toISOString(), scope: "SIMER_CLIENTS_REMOTE_FILTER_V5_TICKETS_PLUS_PAST", sources: ["/tickets", "/tickets/past"] },
         },
       });
       baselineState.progress = baselineState.progress
