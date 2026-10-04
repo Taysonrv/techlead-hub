@@ -13,7 +13,7 @@ import { useFilters } from "../context/FiltersContext";
 import { KpiCard } from "../components/KpiCard";
 import { DetailFieldGrid, DetailPanelHeader, DetailSection } from "../components/DetailPanel";
 import { detailDrawerPaperSx } from "../theme/layoutTokens";
-import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip as ChartTooltip, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip as ChartTooltip, XAxis, YAxis } from "recharts";
 
 type Sample = {
   id: number; workItemType: string; title: string; state: string; client: string | null;
@@ -33,6 +33,7 @@ type Data = {
   summary: Record<string, number>;
   samples: Sample[];
   filters: { clients: string[]; users: string[]; types: string[] };
+  trend?: Array<{ date: string; total: number; critical: number }>;
 };
 const metrics = [
   ["awaitingReturnWithoutCause", "Aguardando retorno sem causa", "Atendimento aberto de cliente SIMER aguardando retorno, mas sem causa informada ou com valor genérico. A causa deve registrar por que o atendimento depende do cliente.", "Classificação"],
@@ -310,6 +311,16 @@ export function DataQuality() {
             <Bar dataKey="total" name="Pendências" fill={aliareColors.info} radius={[7, 7, 2, 2]} />
           </BarChart>
         </ResponsiveContainer>
+      </Box>
+    </CardContent></Card>
+
+    <Card variant="outlined" sx={{ mt: 2 }}><CardContent>
+      <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ justifyContent: "space-between", alignItems: { sm: "center" } }}>
+        <Box><Typography variant="h6" sx={{ fontWeight: 850 }}>Tendência da dívida operacional</Typography><Typography variant="body2" color="text.secondary">Snapshots diários reais do escopo SIMER. A série começa a ser construída a partir desta versão.</Typography></Box>
+        <Chip variant="outlined" label={data?.trend?.length ? `${data.trend.length} dia(s) registrados` : "Aguardando histórico"} />
+      </Stack>
+      <Box sx={{ height: 260, mt: 1.5 }}>
+        {data?.trend?.length ? <ResponsiveContainer width="100%" height="100%"><LineChart data={data.trend.map((item) => ({ ...item, day: new Date(item.date).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }) }))}><CartesianGrid stroke={theme.palette.divider} strokeDasharray="4 4" vertical={false} opacity={.5}/><XAxis dataKey="day" tick={{ fontSize: 11, fill: theme.palette.text.secondary }} axisLine={false} tickLine={false}/><YAxis allowDecimals={false} tick={{ fontSize: 11, fill: theme.palette.text.secondary }} axisLine={false} tickLine={false}/><ChartTooltip cursor={false} contentStyle={{ borderRadius: 12, border: `1px solid ${theme.palette.divider}`, background: theme.palette.background.paper, color: theme.palette.text.primary }}/><Line type="monotone" dataKey="total" name="Pendências prioritárias" stroke={theme.palette.primary.main} strokeWidth={2.5} dot={false}/><Line type="monotone" dataKey="critical" name="Fluxo crítico" stroke={theme.palette.error.main} strokeWidth={2.2} dot={false}/></LineChart></ResponsiveContainer> : <Alert severity="info">O primeiro snapshot será gravado ao abrir a visão sem filtros. A tendência ficará comparável conforme os próximos dias forem registrados.</Alert>}
       </Box>
     </CardContent></Card>
 
