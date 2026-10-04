@@ -32,7 +32,6 @@ import {
   PersonOutlined,
   SettingsOutlined,
   SupportAgentOutlined,
-  WorkspacesOutlined,
   InsightsOutlined,
   PsychologyOutlined,
   ChatBubbleOutlineRounded,
@@ -42,7 +41,6 @@ import {
   GroupsOutlined,
   WarningAmberOutlined,
   FactCheckOutlined,
-  TrendingUpOutlined,
   AssessmentOutlined,
   CampaignOutlined,
   OpenInNewRounded,
@@ -305,21 +303,18 @@ export function Sidebar() {
 
   const movementMenu = useMemo<MenuItemData[]>(
     () => [
-      ...(canAccess("my-operation") ? [{ label: "Minha Operação", path: "/minha-operacao", icon: <WorkspacesOutlined fontSize="small" /> }] : []),
-      ...(canAccess("tickets") ? [{ label: "Tickets", path: "/tickets", icon: <ConfirmationNumberOutlined fontSize="small" /> }] : []),
+      ...(canAccess("tickets") ? [{ label: "Operação", path: "/operacao/tickets", icon: <ConfirmationNumberOutlined fontSize="small" /> }] : []),
       ...(canAccess("known-problems") ? [{ label: "Problemas Conhecidos", path: "/problemas-conhecidos", icon: <CampaignOutlined fontSize="small" /> }] : []),
-      ...(canAccess("attention") ? [{ label: "Pontos de Atenção", path: "/atencao", icon: <WarningAmberOutlined fontSize="small" /> }] : []),
-      ...(canAccess("data-quality") ? [{ label: "Pendências", path: "/qualidade-dados", icon: <FactCheckOutlined fontSize="small" /> }] : []),
+      ...(canAccess("attention") ? [{ label: "Pendências & Riscos", path: "/pendencias-riscos", icon: <WarningAmberOutlined fontSize="small" /> }] : []),
     ],
     [user?.role, user?.permissions],
   );
 
   const analysisMenu = useMemo<MenuItemData[]>(
     () => [
-      ...(canAccess("dashboard") ? [{ label: "Dashboard", path: "/", icon: <DashboardOutlined fontSize="small" /> }] : []),
+      ...(canAccess("dashboard") ? [{ label: "Visão Operacional", path: "/visao-operacional", icon: <DashboardOutlined fontSize="small" /> }] : []),
       ...(canAccess("dashboard") ? [{ label: "Gestão & Inteligência", path: "/gestao-inteligencia", icon: <PsychologyOutlined fontSize="small" /> }] : []),
       ...(canAccess("simer-map") ? [{ label: "Mapa SIMER", path: "/mapa-simer", icon: <AccountTreeOutlined fontSize="small" /> }] : []),
-      ...(canAccess("performance") ? [{ label: "Desempenho", path: "/desempenho", icon: <TrendingUpOutlined fontSize="small" /> }] : []),
       ...(canAccess("reports") ? [{ label: "Relatórios", path: "/relatorios", icon: <AssessmentOutlined fontSize="small" /> }] : []),
       ...(canAccess("services")
         ? [{ label: "Serviços SIMER", path: "/servicos", icon: <FactCheckOutlined fontSize="small" /> }]
