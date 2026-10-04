@@ -174,6 +174,14 @@ type Severity =
   | "warning"
   | "success";
 
+type DevelopmentDrilldownState = {
+  title: string;
+  subtitle: string;
+  items: AzureTaskSummary[];
+  destinationPath: string;
+  destinationLabel: string;
+} | null;
+
 type DrilldownState = {
   title: string;
   subtitle?: string;
@@ -223,6 +231,7 @@ export function Dashboard() {
 
   const [drilldown, setDrilldown] =
     useState<DrilldownState>(null);
+  const [developmentDrilldown, setDevelopmentDrilldown] = useState<DevelopmentDrilldownState>(null);
 
   const [selectedTicket, setSelectedTicket] =
     useState<Ticket | null>(null);
@@ -797,14 +806,15 @@ export function Dashboard() {
   function showDevelopmentItems(kind: "Correção Clientes" | "Evolução") {
     const isCorrection = kind === "Correção Clientes";
     const items = isCorrection ? azureDevelopment.corrections : azureDevelopment.evolutions;
-    const ids = new Set(items.map((item) => item.id));
-    const related = openedBySimerOperationInPeriod.filter((ticket) => ticket.azureWorkItem && ids.has(ticket.azureWorkItem.id));
-    showTickets(
-      isCorrection ? "Correções em Desenvolvimento" : "Evoluções em Desenvolvimento",
-      related,
-      String(ids.size) + " Work Item(s) único(s) do Azure • " + String(related.length) + " atendimento(s) vinculado(s) no período selecionado",
-      { destinationPath: isCorrection ? "/correcoes" : "/evolucoes", destinationLabel: isCorrection ? "Ir para Correções" : "Ir para Evoluções" },
-    );
+    setSelectedTicket(null);
+    setDrilldown(null);
+    setDevelopmentDrilldown({
+      title: isCorrection ? "Correções em Desenvolvimento" : "Evoluções em Desenvolvimento",
+      subtitle: String(items.length) + " Work Item(s) único(s) do Azure no período selecionado",
+      items,
+      destinationPath: isCorrection ? "/correcoes" : "/evolucoes",
+      destinationLabel: isCorrection ? "Ir para Correções" : "Ir para Evoluções",
+    });
   }
 
   async function copyTicketNumber(
@@ -1906,6 +1916,39 @@ export function Dashboard() {
           </Card>
         </>
       )}
+
+      {/* =================================================
+          DRAWER - TASKS DE DESENVOLVIMENTO
+      ================================================= */}
+      <Drawer anchor="right" open={Boolean(developmentDrilldown)} onClose={() => setDevelopmentDrilldown(null)} slotProps={{ paper: { sx: detailDrawerPaperSx } }}>
+        <Box sx={{ width: { xs: 340, sm: 560 }, p: 2.5 }}>
+          {developmentDrilldown && <>
+            <Stack direction="row" sx={{justifyContent:"space-between",alignItems:"flex-start",gap:2}}>
+              <Box><Typography variant="h6" sx={{fontWeight:800}}>{developmentDrilldown.title}</Typography><Typography variant="body2" color="text.secondary">{developmentDrilldown.subtitle}</Typography></Box>
+              <IconButton size="small" onClick={()=>setDevelopmentDrilldown(null)}>✕</IconButton>
+            </Stack>
+            <Stack direction="row" spacing={1} useFlexGap sx={{mt:2,mb:2,alignItems:"center",flexWrap:"wrap"}}>
+              <Chip size="small" label={developmentDrilldown.items.length + " task(s)"} variant="outlined"/>
+              <Box sx={{minWidth:150}}><ExportTicketsButton tickets={developmentDrilldown.items} title={developmentDrilldown.title} subtitle={developmentDrilldown.subtitle}/></Box>
+              <Button size="small" onClick={()=>navigate(developmentDrilldown.destinationPath)}>{developmentDrilldown.destinationLabel}</Button>
+            </Stack>
+            <Divider/>
+            {developmentDrilldown.items.length===0 && <Alert severity="info" sx={{mt:2}}>Nenhuma Task encontrada.</Alert>}
+            {developmentDrilldown.items.map(item=><Box key={item.id} sx={{py:1.6,borderBottom:"1px solid",borderColor:"divider"}}>
+              <Stack direction="row" spacing={1} sx={{justifyContent:"space-between",alignItems:"flex-start"}}>
+                <Box sx={{minWidth:0,pr:1}}>
+                  <Typography variant="caption" sx={{fontWeight:900}}>#{item.id} · {item.workItemType}</Typography>
+                  <Typography variant="body2" sx={{fontWeight:800,mt:.35}}>{item.title}</Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{display:"block",mt:.5}}>{item.client ?? "Cliente não informado"}{item.assignedToName ? " • " + item.assignedToName : " • Sem responsável"}</Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{display:"block"}}>{item.module ?? "Módulo não informado"}{item.process ? " • " + item.process : ""}{item.movideskTicket ? " • Ticket #" + item.movideskTicket : ""}</Typography>
+                  {item.deliveredVersion && <Chip size="small" label={"Versão " + item.deliveredVersion} variant="outlined" sx={{mt:.75}}/>}
+                </Box>
+                <Stack spacing=.5 sx={{alignItems:"flex-end"}}><Chip size="small" label={item.state || "Sem status"} variant="outlined"/>{item.criticality && <Chip size="small" label={item.criticality} color={normalize(item.criticality)==="critica"?"error":normalize(item.criticality)==="alta"?"warning":"default"} variant="outlined"/>}</Stack>
+              </Stack>
+            </Box>)}
+          </>}
+        </Box>
+      </Drawer>
 
       {/* =================================================
           DRAWER - LISTAGEM
