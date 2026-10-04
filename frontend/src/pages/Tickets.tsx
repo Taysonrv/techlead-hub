@@ -298,8 +298,6 @@ export function Tickets() {
 
   const [category, setCategory] = useState<string[]>([]);
 
-  const owner = sharedAnalysts;
-  const setOwner = setSharedAnalysts;
 
 
 
@@ -351,6 +349,8 @@ export function Tickets() {
     analysts: sharedAnalysts,
     setAnalysts: setSharedAnalysts,
   } = useFilters();
+  const owner = sharedAnalysts;
+  const setOwner = setSharedAnalysts;
 
   /* =======================================================
      CARREGAMENTO
