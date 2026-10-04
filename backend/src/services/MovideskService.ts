@@ -7,7 +7,6 @@ import { isSimerClient, SIMER_CLIENTS } from "../domain/OperationalScope";
 import { movideskRateLimiter } from "./MovideskRateLimiter";
 
 const PAGE_SIZE = 50;
-const REQUEST_INTERVAL_MS = 6_200;
 const INCREMENTAL_OVERLAP_MINUTES = 10;
 const REQUEST_RETRY_ATTEMPTS = 6;
 const REQUEST_RETRY_BASE_MS = 2_000;
@@ -415,7 +414,6 @@ export class MovideskService {
           error: error instanceof Error ? error.message.replace(/token=[^&\\s]+/gi, "token=[REDACTED]").slice(0, 500) : "Falha desconhecida.",
         });
       }
-      await new Promise((resolve) => setTimeout(resolve, REQUEST_INTERVAL_MS));
     }
 
     return {
@@ -494,7 +492,6 @@ export class MovideskService {
           error: error instanceof Error ? error.message.replace(/token=[^&\\s]+/gi, "token=[REDACTED]").slice(0, 500) : "Falha desconhecida.",
         });
       }
-      await new Promise((resolve) => setTimeout(resolve, REQUEST_INTERVAL_MS));
     }
 
     return {
@@ -584,7 +581,6 @@ export class MovideskService {
           error: error instanceof Error ? error.message.replace(/token=[^&\\s]+/gi, "token=[REDACTED]").slice(0, 500) : "Falha desconhecida.",
         });
       }
-      await new Promise((resolve) => setTimeout(resolve, REQUEST_INTERVAL_MS));
     }
 
     return {
@@ -913,7 +909,6 @@ export class MovideskService {
       }
       if (rows.length < PAGE_SIZE) break;
       skip += rows.length;
-      await new Promise((resolve) => setTimeout(resolve, REQUEST_INTERVAL_MS));
     }
     return { scanned, updated };
   }
@@ -1705,7 +1700,6 @@ export class MovideskService {
       }
 
       if (index < tickets.length - 1) {
-        await new Promise((resolve) => setTimeout(resolve, REQUEST_INTERVAL_MS));
       }
     }
 
@@ -1732,6 +1726,7 @@ export class MovideskService {
   }
 
   async updateTicketStatus(ticketId: number, status: string, justification?: string | null) {
+    await movideskRateLimiter.acquire();
     const response = await axios.patch(
       `${this.url}/tickets`,
       { status, ...(justification?.trim() ? { justification: justification.trim() } : {}) },
