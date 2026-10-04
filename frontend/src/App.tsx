@@ -40,12 +40,8 @@ import {
   FiltersProvider,
 } from "./context/FiltersContext";
 
-const Dashboard = lazy(() => import("./pages/Dashboard").then((module) => ({ default: module.Dashboard })));
-const Tickets = lazy(() => import("./pages/Tickets").then((module) => ({ default: module.Tickets })));
 const Analysts = lazy(() => import("./pages/Analysts").then((module) => ({ default: module.Analysts })));
 const Clients = lazy(() => import("./pages/Clients").then((module) => ({ default: module.Clients })));
-const Attention = lazy(() => import("./pages/Attention").then((module) => ({ default: module.Attention })));
-const Performance = lazy(() => import("./pages/Performance").then((module) => ({ default: module.Performance })));
 const Import = lazy(() => import("./pages/Import").then((module) => ({ default: module.Import })));
 const About = lazy(() => import("./pages/About").then((module) => ({ default: module.About })));
 const Profile = lazy(() => import("./pages/Profile").then((module) => ({ default: module.Profile })));
@@ -55,8 +51,6 @@ const AzureWorkItems = lazy(() => import("./pages/AzureWorkItems").then((module)
 const Versions = lazy(() => import("./pages/Versions").then((module) => ({ default: module.Versions })));
 const Settings = lazy(() => import("./pages/Settings").then((module) => ({ default: module.Settings })));
 const Reports = lazy(() => import("./pages/Reports").then((module) => ({ default: module.Reports })));
-const MyOperation = lazy(() => import("./pages/MyOperation").then((module) => ({ default: module.MyOperation })));
-const DataQuality = lazy(() => import("./pages/DataQuality").then((module) => ({ default: module.DataQuality })));
 const Services = lazy(() => import("./pages/Services").then((module) => ({ default: module.Services })));
 const Knowledge = lazy(() => import("./pages/Knowledge").then((module) => ({ default: module.Knowledge })));
 const Chat = lazy(() => import("./pages/Chat").then((module) => ({ default: module.Chat })));
