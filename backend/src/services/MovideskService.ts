@@ -8,6 +8,8 @@ import { movideskRateLimiter } from "./MovideskRateLimiter";
 
 const PAGE_SIZE = 50;
 const INCREMENTAL_OVERLAP_MINUTES = 10;
+const ANALYTICAL_REFRESH_DAYS = 70;
+const ANALYTICAL_REFRESH_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const REQUEST_RETRY_ATTEMPTS = 6;
 const REQUEST_RETRY_BASE_MS = 2_000;
 const OFFSET_TO_CURSOR_THRESHOLD = 9_000;
@@ -102,6 +104,7 @@ let baselineState: BaselineState = {
   progress: null,
 };
 let baselinePromise: Promise<void> | null = null;
+let lastAnalyticalMetadataRefreshAt = 0;
 
 export class MovideskService {
   private readonly url = process.env.MOVIDESK_URL?.trim() || "https://api.movidesk.com/public/v1";
@@ -871,8 +874,7 @@ export class MovideskService {
     };
   }
 
-  private classificationFromRaw(row: Record<string, unknown>, kind: "cause" | "reason") {
-    const fieldId = kind === "cause" ? 52401 : 52413;
+  private customFieldValue(row: Record<string, unknown>, fieldId: number) {
     const fields = Array.isArray(row.customFieldValues) ? row.customFieldValues : [];
     for (const rawField of fields) {
       if (!rawField || typeof rawField !== "object" || Array.isArray(rawField)) continue;
@@ -891,16 +893,24 @@ export class MovideskService {
     return null;
   }
 
-  private async refreshRecentClassifications() {
-    // Causa/Motivo pertencem ao ticket base, não ao enriquecimento. Relemos
-    // uma janela recente para corrigir tickets que não sofreram lastUpdate
-    // depois da introdução das colunas locais.
-    const since = new Date();
-    since.setUTCDate(since.getUTCDate() - 62);
+  private classificationFromRaw(row: Record<string, unknown>, kind: "cause" | "reason") {
+    return this.customFieldValue(row, kind === "cause" ? 52401 : 52413);
+  }
+
+  private async refreshRecentClassifications(force = false) {
+    const now = Date.now();
+    if (!force && lastAnalyticalMetadataRefreshAt && now - lastAnalyticalMetadataRefreshAt < ANALYTICAL_REFRESH_INTERVAL_MS) {
+      return { scanned: 0, updated: 0, causesUpdated: 0, reasonsUpdated: 0, businessAreasUpdated: 0, skippedByCadence: true };
+    }
+
+    const since = new Date(now - ANALYTICAL_REFRESH_DAYS * 24 * 60 * 60 * 1000);
     let skip = 0;
     let scanned = 0;
-    let updated = 0;
-    for (let page = 0; page < 8; page += 1) {
+    let causesUpdated = 0;
+    let reasonsUpdated = 0;
+    let businessAreasUpdated = 0;
+
+    for (let page = 0; page < 30; page += 1) {
       const response = await this.getWithRetry(`${this.url}/tickets`, {
         params: {
           token: this.token(),
@@ -912,31 +922,55 @@ export class MovideskService {
           $filter: this.remoteScopeFilter(`createdDate ge ${since.toISOString()}`),
         },
         timeout: 120_000,
-      }, `classificações recentes página=${page + 1}`);
+      }, `metadados analíticos recentes página=${page + 1}`);
+
       if (!Array.isArray(response.data) || response.data.length === 0) break;
       const rows = response.data as Array<Record<string, unknown>>;
       scanned += rows.length;
+
       for (const row of rows) {
         const movideskId = Number(row.id);
-        const category = typeof row.category === "string" ? row.category.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLocaleLowerCase("pt-BR") : "";
-        if (!Number.isSafeInteger(movideskId) || (category !== "problema" && category !== "duvida")) continue;
-        const cause = category === "problema" ? this.classificationFromRaw(row, "cause") : null;
-        const reason = category === "duvida" ? this.classificationFromRaw(row, "reason") : null;
-        if (!cause && !reason) continue;
-        const result = await prisma.ticket.updateMany({
+        if (!Number.isSafeInteger(movideskId)) continue;
+        const category = typeof row.category === "string"
+          ? row.category.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLocaleLowerCase("pt-BR")
+          : "";
+        const cause = category === "problema" ? this.customFieldValue(row, 52401) : null;
+        const reason = category === "duvida" ? this.customFieldValue(row, 52413) : null;
+        const businessArea = this.customFieldValue(row, 207467);
+        const data: { cause?: string; reason?: string; businessArea?: string } = {};
+        if (cause) data.cause = cause;
+        if (reason) data.reason = reason;
+        if (businessArea) data.businessArea = businessArea;
+        if (!Object.keys(data).length) continue;
+
+        const existing = await prisma.ticket.findUnique({
           where: { movideskId },
-          data: category === "problema" ? { cause, reason: null } : { reason, cause: null },
+          select: { cause: true, reason: true, businessArea: true },
         });
-        updated += result.count;
+        if (!existing) continue;
+        const changedCause = Boolean(data.cause && data.cause !== existing.cause);
+        const changedReason = Boolean(data.reason && data.reason !== existing.reason);
+        const changedArea = Boolean(data.businessArea && data.businessArea !== existing.businessArea);
+        if (!changedCause && !changedReason && !changedArea) continue;
+
+        await prisma.ticket.update({ where: { movideskId }, data });
+        if (changedCause) causesUpdated += 1;
+        if (changedReason) reasonsUpdated += 1;
+        if (changedArea) businessAreasUpdated += 1;
       }
+
       if (rows.length < PAGE_SIZE) break;
       skip += rows.length;
     }
-    return { scanned, updated };
+
+    lastAnalyticalMetadataRefreshAt = Date.now();
+    const updated = causesUpdated + reasonsUpdated + businessAreasUpdated;
+    console.info(`[movidesk-metadata] Reconciliação concluída. | janela=${ANALYTICAL_REFRESH_DAYS}d | lidos=${scanned} | causas=${causesUpdated} | motivos=${reasonsUpdated} | areas=${businessAreasUpdated} | atualizacoes=${updated}`);
+    return { scanned, updated, causesUpdated, reasonsUpdated, businessAreasUpdated, skippedByCadence: false };
   }
 
   async backfillTicketCauses() {
-    const remote = await this.refreshRecentClassifications();
+    const remote = await this.refreshRecentClassifications(true);
     const candidates = await prisma.ticket.findMany({
       where: {
         AND: [
@@ -1401,6 +1435,10 @@ export class MovideskService {
         console.info(`[movidesk-sync] FULL histórico página ${summary.pages} concluída | pastSkip=${pastSkip} | linhas=${rows.length} | processados=${summary.totalRows} | erros=${summary.errors}.`);
         if (rows.length < PAGE_SIZE) break;
       }
+    }
+
+    if (mode === "INCREMENTAL" && summary.errors === 0) {
+      await this.refreshRecentClassifications();
     }
 
     if (mode === "FULL" && summary.errors === 0) {
