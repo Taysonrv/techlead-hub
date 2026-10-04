@@ -2,8 +2,8 @@ import type { NextFunction, Response } from "express";
 import type { AuthenticatedRequest } from "./authMiddleware";
 
 const DEFAULT_ANALYST_PERMISSIONS = new Set([
-  "dashboard","tickets","my-operation","known-problems","attention","data-quality","clients",
-  "simer-map","performance","reports","corrections","evolutions","support","versions","knowledge",
+  "dashboard","tickets","known-problems","attention","clients",
+  "reports","corrections","evolutions","support","versions","knowledge",
 ]);
 
 export function hasRoutinePermission(request: AuthenticatedRequest, permission: string) {
