@@ -1,4 +1,5 @@
 import { prisma } from "../database/prisma";
+import { ticketOperationalScope } from "../domain/OperationalScope";
 
 const norm=(v?:string|null)=>String(v??"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").trim().toLowerCase();
 const serviceOf=(t:any)=>t.serviceThirdLevel||t.serviceSecondLevel||t.serviceFirstLevel||t.service||null;
@@ -11,7 +12,7 @@ export class InvestigationIntelligenceService {
     const since=new Date(ticket.createdDate);since.setMonth(since.getMonth()-12);
     const until=new Date(ticket.createdDate);until.setMonth(until.getMonth()+1);
     const clientTickets=client?await prisma.ticket.findMany({
-      where:{isDeleted:false,client:{equals:client,mode:"insensitive"},createdDate:{gte:since,lte:until}},
+      where:{AND:[ticketOperationalScope(),{isDeleted:false,client:{equals:client,mode:"insensitive"},createdDate:{gte:since,lte:until}}]},
       select:{movideskId:true,subject:true,category:true,cause:true,status:true,urgency:true,service:true,serviceFirstLevel:true,serviceSecondLevel:true,serviceThirdLevel:true,createdDate:true,taskNumber:true,registeredVersion:true,deliveredVersion:true}
     }):[];
 
