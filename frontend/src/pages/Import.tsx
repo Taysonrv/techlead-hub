@@ -92,6 +92,21 @@ type MovideskBaselineStatus = {
   lastImport: { status: string; totalRows: number; insertedRows: number; updatedRows: number; skippedRows: number; errorRows: number; startedAt: string; finishedAt: string | null; message: string | null } | null;
   scheduler: { enabled: boolean; intervalMinutes: number; overlapMinutes: number; pageSize: number; phase: "WAITING_BASELINE" | "BASELINE_RUNNING" | "INCREMENTAL"; nextEstimatedAt: string | null };
   enrichmentScheduler?: { enabled: boolean; batchSize: number; idleIntervalMinutes: number; continuationSeconds: number; busyRetrySeconds: number; errorCooldownSeconds: number; apiState: "BUSY" | "AVAILABLE"; apiOwner: string | null };
+  apiCompliance?: {
+    sources: { recent: string; historical: string };
+    historicalBaselineEnabled: boolean;
+    conditionalCustomFieldsPreserved: boolean;
+    rateLimit: {
+      limitPerMinute: number;
+      configuredIntervalMs: number;
+      effectiveMaxPerMinute: number;
+      queueDepth: number;
+      totalRequestsSinceStartup: number;
+      throttledResponsesSinceStartup: number;
+      retryAfterUntil: string | null;
+      lastRequestAt: string | null;
+    };
+  };
 };
 
 /* =========================================================
@@ -854,6 +869,30 @@ export function Import({ embedded = false }: { embedded?: boolean }) {
               <InfoCard label="Última execução" value={formatDateTime(movideskStatus.lastImport?.finishedAt ?? movideskStatus.lastImport?.startedAt)} />
               <InfoCard label="Próxima incremental" value={formatDateTime(movideskStatus.scheduler.nextEstimatedAt)} />
               <InfoCard label="Próximo Catálogo + CSAT" value={formatDateTime(referenceNextAt)} />
+            </Box>
+            {movideskStatus.apiCompliance && <Box sx={{ mt: 2, p: 1.75, border: "1px solid", borderColor: "divider", borderRadius: 2.5, bgcolor: "background.default" }}>
+              <Stack direction={{ xs: "column", md: "row" }} spacing={1} useFlexGap sx={{ alignItems: { md: "center" }, justifyContent: "space-between", flexWrap: "wrap" }}>
+                <Box>
+                  <Typography variant="body2" sx={{ fontWeight: 750 }}>Conformidade da API Movidesk</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Cobertura recente e histórica, campos adicionais condicionais e limite global de requisições.
+                  </Typography>
+                </Box>
+                <Stack direction="row" spacing={.75} useFlexGap sx={{ flexWrap: "wrap" }}>
+                  <Chip size="small" color="success" variant="outlined" label={`Recentes ${movideskStatus.apiCompliance.sources.recent}`} />
+                  <Chip size="small" color={movideskStatus.apiCompliance.historicalBaselineEnabled ? "success" : "warning"} variant="outlined" label={`Histórico ${movideskStatus.apiCompliance.sources.historical}`} />
+                  <Chip size="small" color={movideskStatus.apiCompliance.conditionalCustomFieldsPreserved ? "success" : "warning"} variant="outlined" label="Metadados preservados" />
+                </Stack>
+              </Stack>
+              <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: { xs: "1fr 1fr", md: "repeat(4,1fr)" }, gap: 1 }}>
+                <InfoCard label="Limite oficial" value={`${movideskStatus.apiCompliance.rateLimit.limitPerMinute}/min`} />
+                <InfoCard label="Vazão configurada" value={`${movideskStatus.apiCompliance.rateLimit.effectiveMaxPerMinute}/min`} />
+                <InfoCard label="Fila API" value={String(movideskStatus.apiCompliance.rateLimit.queueDepth)} />
+                <InfoCard label="429 desde o início" value={String(movideskStatus.apiCompliance.rateLimit.throttledResponsesSinceStartup)} />
+              </Box>
+              {movideskStatus.apiCompliance.rateLimit.retryAfterUntil && <Alert severity="warning" sx={{ mt: 1.25 }}>
+                Movidesk solicitou pausa até {formatDateTime(movideskStatus.apiCompliance.rateLimit.retryAfterUntil)}. A fila global respeitará automaticamente o Retry-After.
+              </Alert>}
             </Box>
             {movideskStatus.progress && !movideskStatus.completed && <Box sx={{ mt: 2, p: 1.75, border: "1px solid", borderColor: movideskStatus.status === "ERROR" ? "warning.main" : "divider", borderRadius: 2.5, bgcolor: "background.default" }}>
               <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ justifyContent: "space-between", alignItems: { sm: "center" }, mb: 1 }}>
