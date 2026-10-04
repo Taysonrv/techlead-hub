@@ -1149,7 +1149,7 @@ export class DashboardController {
       const result =
         tickets.map(
           (ticket) => {
-            const categoryKey = normalizeClassification(ticket.category ?? "");
+            const categoryKey = normalize(ticket.category ?? "");
             const cause = categoryKey === "problema" ? ticket.cause ?? null : null;
             const reason = categoryKey === "duvida" ? ticket.reason ?? null : null;
             return ({
