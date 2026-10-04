@@ -33,7 +33,7 @@ type CustomField = {
 const CUSTOM_FIELDS = {
   registeredVersion: 45621,
   cause: 52401,
-  causeDetail: 52413,
+  reason: 52413,
   taskNumber: 84851,
   taskStatus: 170521,
   taskRequestType: 170529,
@@ -237,25 +237,15 @@ export class MovideskJsonImportService {
       category: this.toText(row.category),
       cause:
         this.isCategory(this.toText(row.category), "problema")
-          ? this.normalizeCause(
-              this.toText(row.cause) ??
-              this.toText(row.causa) ??
-              this.customValue(customFields, CUSTOM_FIELDS.cause) ??
-              this.detectCause(customFields),
-            )
+          ? this.normalizeCause(this.customValue(customFields, CUSTOM_FIELDS.cause))
           : null,
       reason:
         this.isCategory(this.toText(row.category), "duvida")
-          ? this.normalizeReason(
-              this.toText(row.reason) ??
-              this.toText(row.motivo) ??
-              this.detectReason(customFields),
-            )
+          ? this.normalizeReason(this.customValue(customFields, CUSTOM_FIELDS.reason))
           : null,
       causeDetail:
         this.toText(row.causeDetail) ??
-        this.toText(row.detalheCausa) ??
-        this.customValue(customFields, CUSTOM_FIELDS.causeDetail),
+        this.toText(row.detalheCausa),
       urgency: this.toText(row.urgency),
       status,
       baseStatus: this.toText(row.baseStatus) ?? this.mapBaseStatus(status),
@@ -367,67 +357,6 @@ export class MovideskJsonImportService {
     if (normalized === "informacao") return "Informação";
     if (normalized === "integracao com terceiros") return "Integração com terceiros";
     if (normalized === "priorizacao") return "Priorização";
-    return null;
-  }
-
-  private detectReason(fields: CustomField[]) {
-    const known = [
-      "apoio processos operacionais",
-      "configuração",
-      "configuracao",
-      "dúvida interna",
-      "duvida interna",
-      "inexperiência do usuário",
-      "inexperiencia do usuario",
-      "informação",
-      "informacao",
-      "integração com terceiros",
-      "integracao com terceiros",
-      "priorização",
-      "priorizacao",
-    ];
-    const normalizedKnown = known.map((value) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR"));
-    for (const field of fields) {
-      const candidates = [
-        this.toText(field.value),
-        ...(field.items ?? []).map((item) => this.toText(item.customFieldItem)),
-      ].filter((value): value is string => Boolean(value));
-      for (const value of candidates) {
-        if (value.length > 80) continue;
-        const normalized = value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLocaleLowerCase("pt-BR");
-        if (normalizedKnown.some((token) => normalized === token || normalized.includes(token))) return value;
-      }
-    }
-    return null;
-  }
-
-  private detectCause(fields: CustomField[]) {
-    const known = [
-      "erro operacional",
-      "configuração",
-      "configuracao",
-      "não identificada",
-      "nao identificada",
-      "resolvido pelo usuário",
-      "resolvido pelo usuario",
-      "sefaz",
-      "aplicativos de terceiros",
-    ];
-    for (const field of fields) {
-      const candidates = [
-        this.toText(field.value),
-        ...(field.items ?? []).map((item) => this.toText(item.customFieldItem)),
-      ].filter((value): value is string => Boolean(value));
-      for (const value of candidates) {
-        // Causa é um campo classificatório curto. Descrições longas podem
-        // mencionar palavras como "configuração" ou "SEFAZ", mas não são causa.
-        if (value.length > 80) continue;
-        const normalized = value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR");
-        if (known.some((token) => normalized.includes(token.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR")))) {
-          return value;
-        }
-      }
-    }
     return null;
   }
 
