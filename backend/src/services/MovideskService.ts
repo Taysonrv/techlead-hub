@@ -380,6 +380,23 @@ export class MovideskService {
         const remote = response.data && typeof response.data === "object" && !Array.isArray(response.data)
           ? response.data as Record<string, unknown>
           : null;
+
+        // Compara a consulta individual com a mesma projeção usada pelo sync.
+        // Isso distingue "campo omitido na consulta por id" de "campo ausente
+        // mesmo quando customFieldValues é expandido explicitamente".
+        const expandedResponse = await this.getWithRetry(`${this.url}/tickets`, {
+          params: {
+            token: this.token(),
+            $select: TICKET_SELECT,
+            $expand: TICKET_EXPAND,
+            $top: 1,
+            $filter: `id eq ${id}`,
+          },
+          timeout: 120_000,
+        }, `diagnóstico expandido de metadados ticket=${id}`);
+        const expandedRemote = Array.isArray(expandedResponse.data) && expandedResponse.data[0] && typeof expandedResponse.data[0] === "object"
+          ? expandedResponse.data[0] as Record<string, unknown>
+          : null;
         const raw = ticket.rawData && typeof ticket.rawData === "object" && !Array.isArray(ticket.rawData)
           ? ticket.rawData as Record<string, unknown>
           : null;
@@ -401,6 +418,11 @@ export class MovideskService {
             causeDetected: remote ? this.classificationFromRaw(remote, "cause") : null,
             reasonDetected: remote ? this.classificationFromRaw(remote, "reason") : null,
             customFields: remoteFields,
+          },
+          expandedRemote: {
+            found: Boolean(expandedRemote),
+            category: typeof expandedRemote?.category === "string" ? expandedRemote.category : null,
+            customFields: sanitizeFields(expandedRemote),
           },
           delta: {
             rawHasCustomFields: rawFields.length > 0,
