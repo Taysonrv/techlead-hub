@@ -563,12 +563,16 @@ export class AuthService {
     }
 
     await prisma.$transaction(async (transaction) => {
+      // Mantém uma única sessão efetiva por usuário.
+      // Novo login no mesmo canal substitui a sessão anterior; a troca
+      // WEB <-> DESKTOP continua protegida pelo conflito/forceTransfer acima.
       await transaction.userSession.updateMany({
         where: {
           userId: user.id,
           revokedAt: null,
           OR: [
             { lastActivityAt: { lte: activeSince } },
+            { clientType: normalizedClientType },
             ...(forceTransfer ? [{ clientType: { not: normalizedClientType } }] : []),
           ],
         },
