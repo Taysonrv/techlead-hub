@@ -2,9 +2,9 @@ import { Prisma } from "@prisma/client";
 import axios, { AxiosError, type AxiosResponse } from "axios";
 import { prisma } from "../database/prisma";
 import { simerClientTicketScope } from "../domain/OperationalScope";
+import { movideskRateLimiter } from "./MovideskRateLimiter";
 
 const API_URL = process.env.MOVIDESK_API_URL?.trim() || "https://api.movidesk.com/public/v1";
-const WAIT_MS = 6200;
 const CATALOG_CHECKPOINT_ACTION = "MOVIDESK_CATALOG_CHECKPOINT_V1";
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -12,6 +12,7 @@ export class MovideskReferenceSyncService {
   private async get(path: string, params: Record<string, unknown>): Promise<AxiosResponse<unknown>> {
     for (let attempt = 1; attempt <= 6; attempt += 1) {
       try {
+        await movideskRateLimiter.acquire();
         return await axios.get(`${API_URL}${path}`, { params: { token: this.token(), ...params }, timeout: 120000 });
       } catch (error) {
         const err = error as AxiosError;
@@ -19,6 +20,7 @@ export class MovideskReferenceSyncService {
         const retryable = err.code === "ECONNRESET" || err.code === "ETIMEDOUT" || err.code === "ECONNABORTED" || status === 429 || (status !== undefined && status >= 500);
         if (!retryable || attempt === 6) throw new Error(`Movidesk ${path}: falha após ${attempt} tentativa(s): ${err.message}`);
         const retryAfter = Number(err.response?.headers?.["retry-after"] ?? 0);
+        if (status === 429) movideskRateLimiter.registerThrottle(Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : null);
         const delay = retryAfter > 0 ? retryAfter * 1000 : Math.min(2000 * 2 ** (attempt - 1), 30000);
         console.warn(`[movidesk-reference] ${path} tentativa=${attempt}/6 falhou (${err.code ?? status ?? "erro"}); nova tentativa em ${Math.round(delay/1000)}s.`);
         await sleep(delay);
@@ -89,7 +91,6 @@ export class MovideskReferenceSyncService {
         failedNames.push(name);
         console.warn(`[movidesk-catalog] serviço="${name}" não sincronizado nesta execução: ${error instanceof Error ? error.message : String(error)}`);
       }
-      if (index + 1 < names.length) await sleep(WAIT_MS);
     }
 
     const rows = [...rowsById.values()];
