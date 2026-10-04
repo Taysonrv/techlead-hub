@@ -3,6 +3,7 @@ import { MovideskService } from "../services/MovideskService";
 import { releaseMovideskApi, tryAcquireMovideskApi } from "../jobs/MovideskSyncCoordinator";
 import { referenceSyncStatus, runReferenceSync } from "../jobs/MovideskReferenceSyncScheduler";
 import type { AuthenticatedRequest } from "../middlewares/authMiddleware";
+import { movideskEnrichmentSchedulerStatus } from "../jobs/MovideskEnrichmentScheduler";
 
 
 export class MovideskController {
@@ -31,7 +32,8 @@ export class MovideskController {
 
     async baselineStatus(_req: AuthenticatedRequest, res: Response) {
         try {
-            return res.json(await new MovideskService().baselineStatus());
+            const baseline = await new MovideskService().baselineStatus();
+            return res.json({ ...baseline, enrichmentScheduler: movideskEnrichmentSchedulerStatus() });
         } catch (error) {
             return res.status(500).json({ message: error instanceof Error ? error.message : "Não foi possível consultar o baseline Movidesk." });
         }
