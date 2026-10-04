@@ -237,6 +237,108 @@ export class MovideskService {
     }
   }
 
+  async diagnoseAnalyticalMetadata(ticketIds: number[]) {
+    const ids = [...new Set(ticketIds.filter((id) => Number.isSafeInteger(id) && id > 0))].slice(0, 10);
+    if (!ids.length) throw new Error("Informe ao menos um ticket válido para o diagnóstico.");
+
+    const local = await prisma.ticket.findMany({
+      where: {
+        movideskId: { in: ids },
+        createdDate: { gte: SYNC_SCOPE_START },
+        client: { in: [...SIMER_CLIENTS], mode: "insensitive" },
+      },
+      select: {
+        movideskId: true, createdDate: true, lastUpdate: true, category: true,
+        client: true, cause: true, reason: true, businessArea: true, rawData: true,
+      },
+    });
+    const localById = new Map(local.map((ticket) => [ticket.movideskId, ticket]));
+
+    const sanitizeFields = (row: Record<string, unknown> | null) => {
+      const fields = row && Array.isArray(row.customFieldValues) ? row.customFieldValues : [];
+      return fields.flatMap((rawField) => {
+        if (!rawField || typeof rawField !== "object" || Array.isArray(rawField)) return [];
+        const field = rawField as Record<string, unknown>;
+        const id = Number(field.customFieldId);
+        const values = [
+          typeof field.value === "string" ? field.value.trim() : null,
+          ...(Array.isArray(field.items) ? field.items.map((item) =>
+            item && typeof item === "object" && !Array.isArray(item) && typeof (item as Record<string, unknown>).customFieldItem === "string"
+              ? String((item as Record<string, unknown>).customFieldItem).trim()
+              : null
+          ) : []),
+        ].filter((value): value is string => Boolean(value));
+        if (!Number.isSafeInteger(id) || !values.length) return [];
+        return [{ customFieldId: id, values: [...new Set(values)].slice(0, 8) }];
+      });
+    };
+
+    const results = [];
+    for (const id of ids) {
+      const ticket = localById.get(id);
+      if (!ticket) {
+        results.push({ movideskId: id, foundLocally: false, error: "Ticket fora do escopo SIMER/2026 ou não sincronizado." });
+        continue;
+      }
+      try {
+        const response = await this.getWithRetry(`${this.url}/tickets`, {
+          params: {
+            token: this.token(),
+            $select: "id,category,createdDate,lastUpdate",
+            $expand: "customFieldValues",
+            $top: 1,
+            $filter: `id eq ${id}`,
+          },
+          timeout: 120_000,
+        }, `diagnóstico de metadados ticket=${id}`);
+        const remote = Array.isArray(response.data) && response.data[0] && typeof response.data[0] === "object"
+          ? response.data[0] as Record<string, unknown>
+          : null;
+        const raw = ticket.rawData && typeof ticket.rawData === "object" && !Array.isArray(ticket.rawData)
+          ? ticket.rawData as Record<string, unknown>
+          : null;
+        const remoteFields = sanitizeFields(remote);
+        const rawFields = sanitizeFields(raw);
+        results.push({
+          movideskId: id,
+          foundLocally: true,
+          local: {
+            createdDate: ticket.createdDate, lastUpdate: ticket.lastUpdate, category: ticket.category,
+            client: ticket.client, cause: ticket.cause, reason: ticket.reason, businessArea: ticket.businessArea,
+            rawCustomFields: rawFields,
+          },
+          remote: {
+            found: Boolean(remote),
+            category: typeof remote?.category === "string" ? remote.category : null,
+            createdDate: remote?.createdDate ?? null,
+            lastUpdate: remote?.lastUpdate ?? null,
+            causeDetected: remote ? this.classificationFromRaw(remote, "cause") : null,
+            reasonDetected: remote ? this.classificationFromRaw(remote, "reason") : null,
+            customFields: remoteFields,
+          },
+          delta: {
+            rawHasCustomFields: rawFields.length > 0,
+            remoteHasCustomFields: remoteFields.length > 0,
+            customFieldIdsOnlyRemote: remoteFields.map((field) => field.customFieldId).filter((fieldId) => !rawFields.some((field) => field.customFieldId === fieldId)),
+          },
+        });
+      } catch (error) {
+        results.push({
+          movideskId: id, foundLocally: true,
+          error: error instanceof Error ? error.message.replace(/token=[^&\\s]+/gi, "token=[REDACTED]").slice(0, 500) : "Falha desconhecida.",
+        });
+      }
+      await new Promise((resolve) => setTimeout(resolve, REQUEST_INTERVAL_MS));
+    }
+
+    return {
+      readOnly: true,
+      expectedCustomFields: { cause: 52401, businessArea: 207467 },
+      tickets: results,
+      note: "Diagnóstico somente leitura: compara banco/rawData com o payload atual do Movidesk e não altera tickets.",
+    };
+  }
+
   async diagnoseApiCatalog() {
     const probes = [
       { resource: "persons", path: "/persons", params: { $select: "id,businessName,personType,profileType,isActive", $top: 1 } },
