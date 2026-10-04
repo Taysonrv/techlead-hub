@@ -119,7 +119,7 @@ export class MovideskJsonImportService {
 
         const existing = await prisma.ticket.findUnique({
           where: { movideskId: ticket.movideskId },
-          select: { id: true },
+          select: { id: true, cause: true, reason: true, businessArea: true },
         });
 
         await prisma.ticket.upsert({
@@ -133,6 +133,12 @@ export class MovideskJsonImportService {
           },
           update: {
             ...ticket,
+            // A API pode deixar de devolver customFieldValues históricos. Não
+            // apagamos uma classificação oficial já persistida só porque o
+            // campo deixou de vir no payload atual.
+            cause: this.isCategory(ticket.category, "problema") ? (ticket.cause ?? existing?.cause ?? null) : null,
+            reason: this.isCategory(ticket.category, "duvida") ? (ticket.reason ?? existing?.reason ?? null) : null,
+            businessArea: ticket.businessArea ?? existing?.businessArea ?? null,
             importSource: source,
             importBatch: batchId,
             importedAt: new Date(),
