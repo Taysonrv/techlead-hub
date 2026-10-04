@@ -42,7 +42,6 @@ import {
 
 const Analysts = lazy(() => import("./pages/Analysts").then((module) => ({ default: module.Analysts })));
 const Clients = lazy(() => import("./pages/Clients").then((module) => ({ default: module.Clients })));
-const Import = lazy(() => import("./pages/Import").then((module) => ({ default: module.Import })));
 const About = lazy(() => import("./pages/About").then((module) => ({ default: module.About })));
 const Profile = lazy(() => import("./pages/Profile").then((module) => ({ default: module.Profile })));
 const Login = lazy(() => import("./pages/Login").then((module) => ({ default: module.Login })));
@@ -54,7 +53,6 @@ const Reports = lazy(() => import("./pages/Reports").then((module) => ({ default
 const Services = lazy(() => import("./pages/Services").then((module) => ({ default: module.Services })));
 const Knowledge = lazy(() => import("./pages/Knowledge").then((module) => ({ default: module.Knowledge })));
 const Chat = lazy(() => import("./pages/Chat").then((module) => ({ default: module.Chat })));
-const SimerMap = lazy(() => import("./pages/SimerMap").then((module) => ({ default: module.SimerMap })));
 const Investigation = lazy(() => import("./pages/Investigation").then((module) => ({ default: module.Investigation })));
 const KnownProblems = lazy(() => import("./pages/KnownProblems").then((module) => ({ default: module.KnownProblems })));
 const ManagementIntelligence = lazy(() => import("./pages/ManagementIntelligence").then((module) => ({ default: module.ManagementIntelligence })));
@@ -78,8 +76,7 @@ function AuthenticatedLayout({
    const [forbiddenMessage, setForbiddenMessage] = useState<string | null>(null);
   const location = useLocation();
   const isChat = location.pathname === "/chat";
-  const isMap = location.pathname === "/mapa-simer";
-  const fixedWorkspace = isChat || isMap;
+  const fixedWorkspace = isChat;
   useEffect(() => {
     const routineTitles: Record<string, string> = {
       "/": "Página inicial",
@@ -88,7 +85,6 @@ function AuthenticatedLayout({
       "/coordenacao": "Central da Coordenação",
       "/servicos": "Serviços SIMER",
       "/lideranca-tecnica": "Central de Liderança",
-      "/mapa-simer": "Mapa SIMER",
       "/investigacao": "Central de Investigação",
       "/problemas-conhecidos": "Problemas Conhecidos",
       "/inteligencia": "Central de Gestão & Inteligência",
@@ -105,7 +101,7 @@ function AuthenticatedLayout({
       "/apoios": "Apoios",
       "/versoes": "Versões",
       "/conhecimento": "Base de Conhecimento",
-      "/importar": "Dados e Sincronizações",
+      "/importar": "Configurações · Dados & Sincronizações",
       "/relatorios": "Relatórios",
       "/minha-operacao": "Minha Operação",
       "/qualidade-dados": "Pendências",
@@ -454,7 +450,7 @@ function App() {
           <Route path="/coordenacao" element={<Navigate to="/gestao-inteligencia/coordenacao" replace />} />
           <Route path="/servicos" element={<RoutineAccess permission="services"><AuthenticatedLayout><Services /></AuthenticatedLayout></RoutineAccess>} />
           <Route path="/lideranca-tecnica" element={<Navigate to="/gestao-inteligencia/lideranca" replace />} />
-          <Route path="/mapa-simer" element={<RoutineAccess permission="simer-map"><AuthenticatedLayout><SimerMap /></AuthenticatedLayout></RoutineAccess>} />
+          <Route path="/mapa-simer" element={<Navigate to="/investigacao" replace />} />
           <Route path="/investigacao" element={<AuthenticatedLayout><Investigation /></AuthenticatedLayout>} />
           <Route path="/problemas-conhecidos" element={<RoutineAccess permission="known-problems"><AuthenticatedLayout><KnownProblems /></AuthenticatedLayout></RoutineAccess>} />
           <Route path="/inteligencia" element={<Navigate to="/gestao-inteligencia/inteligencia" replace />} />
@@ -528,12 +524,7 @@ function App() {
             element={<RoutineAccess permission="knowledge"><AuthenticatedLayout><Knowledge /></AuthenticatedLayout></RoutineAccess>}
           />
 
-          <Route
-            path="/importar"
-            element={
-              <RoutineAccess permission="imports"><AuthenticatedLayout><Import /></AuthenticatedLayout></RoutineAccess>
-            }
-          />
+          <Route path="/importar" element={<Navigate to="/configuracoes#dados" replace />} />
 
           <Route
             path="/relatorios"
