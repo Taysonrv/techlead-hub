@@ -26,8 +26,6 @@ sessionRoutes.get("/", requireRoles("ADMIN"), async (_request, response) => {
   const now = new Date();
   const activeSince = new Date(now.getTime() - sessionIdleTimeoutMs());
 
-  // Higieniza registros que já ultrapassaram a política de inatividade para
-  // que administração e autenticação compartilhem a mesma definição de "ativa".
   await prisma.userSession.updateMany({
     where: {
       revokedAt: null,
@@ -39,15 +37,37 @@ sessionRoutes.get("/", requireRoles("ADMIN"), async (_request, response) => {
     data: { revokedAt: now },
   });
 
-  const sessions = await prisma.userSession.findMany({
+  const candidates = await prisma.userSession.findMany({
     where: { revokedAt: null, expiresAt: { gt: now }, lastActivityAt: { gt: activeSince } },
     select: {
-      id: true, clientType: true, deviceName: true, appVersion: true, ipAddress: true,
+      id: true, userId: true, clientType: true, deviceName: true, appVersion: true, ipAddress: true,
       createdAt: true, lastActivityAt: true, expiresAt: true,
       user: { select: { id: true, name: true, username: true } },
     },
     orderBy: { lastActivityAt: "desc" },
   });
+
+  // Bancos atualizados a partir de versões anteriores podem conter várias
+  // sessões válidas do mesmo usuário/canal. A mais recente é canônica.
+  const seen = new Set<string>();
+  const duplicateIds: number[] = [];
+  const sessions = candidates.filter((session) => {
+    const key = `${session.userId}:${session.clientType.toUpperCase()}`;
+    if (seen.has(key)) {
+      duplicateIds.push(session.id);
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
+
+  if (duplicateIds.length) {
+    await prisma.userSession.updateMany({
+      where: { id: { in: duplicateIds }, revokedAt: null },
+      data: { revokedAt: now },
+    });
+  }
+
   return response.json({ sessions });
 });
 
