@@ -91,6 +91,7 @@ type MovideskBaselineStatus = {
   database: { tickets: number; scopedTickets?: number; linkedTasks: number }; scope?: { startDate: string; clients: string[] };
   lastImport: { status: string; totalRows: number; insertedRows: number; updatedRows: number; skippedRows: number; errorRows: number; startedAt: string; finishedAt: string | null; message: string | null } | null;
   scheduler: { enabled: boolean; intervalMinutes: number; overlapMinutes: number; pageSize: number; phase: "WAITING_BASELINE" | "BASELINE_RUNNING" | "INCREMENTAL"; nextEstimatedAt: string | null };
+  enrichmentScheduler?: { enabled: boolean; batchSize: number; idleIntervalMinutes: number; continuationSeconds: number; busyRetrySeconds: number; errorCooldownSeconds: number; apiState: "BUSY" | "AVAILABLE"; apiOwner: string | null };
 };
 
 /* =========================================================
@@ -764,6 +765,11 @@ export function Import({ embedded = false }: { embedded?: boolean }) {
                   ? movideskStatus.scheduler.phase === "INCREMENTAL" ? "Base inicial concluída · atualização incremental ativa" : movideskStatus.scheduler.phase === "BASELINE_RUNNING" ? "Carga inicial em execução" : "Aguardando carga inicial"
                   : "Consultando o sincronizador Movidesk..."}
               </Typography>
+              {movideskStatus?.enrichmentScheduler && <Stack direction="row" spacing={.75} useFlexGap sx={{ mt: 1, flexWrap: "wrap" }}>
+                <Chip size="small" variant="outlined" color={movideskStatus.enrichmentScheduler.enabled ? "success" : "default"} label={movideskStatus.enrichmentScheduler.enabled ? `Enriquecimento ativo · lote ${movideskStatus.enrichmentScheduler.batchSize}` : "Enriquecimento desativado"} />
+                <Chip size="small" variant="outlined" color={movideskStatus.enrichmentScheduler.apiState === "BUSY" ? "warning" : "success"} label={movideskStatus.enrichmentScheduler.apiState === "BUSY" ? `API ocupada · ${movideskStatus.enrichmentScheduler.apiOwner ?? "rotina Movidesk"}` : "API disponível"} />
+                <Chip size="small" variant="outlined" label={`Continuação ${movideskStatus.enrichmentScheduler.continuationSeconds}s · espera ${movideskStatus.enrichmentScheduler.busyRetrySeconds}s`} />
+              </Stack>}
             </Box>
             <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
               <Button variant="contained" disabled={referenceSyncLoading || movideskStatus?.status === "RUNNING"} onClick={() => void syncMovideskReferenceData()}>
