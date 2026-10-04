@@ -900,13 +900,11 @@ export class MovideskService {
   private async refreshRecentClassifications(force = false) {
     const now = Date.now();
     if (!force && lastAnalyticalMetadataRefreshAt && now - lastAnalyticalMetadataRefreshAt < ANALYTICAL_REFRESH_INTERVAL_MS) {
-      return { scanned: 0, updated: 0, causesUpdated: 0, reasonsUpdated: 0, businessAreasUpdated: 0, skippedByCadence: true };
+      return { scanned: 0, updated: 0, causesUpdated: 0, reasonsUpdated: 0, businessAreasUpdated: 0, remaining: 0, skippedByCadence: true };
     }
 
     const since = new Date(now - ANALYTICAL_REFRESH_DAYS * 24 * 60 * 60 * 1000);
-    // O escopo SIMER é resolvido localmente. A API Movidesk demonstrou comportamento
-    // diferente para customFieldValues quando a coleção usa clients/any(...).
-    const localTickets = await prisma.ticket.findMany({
+    const candidates = await prisma.ticket.findMany({
       where: {
         AND: [
           { createdDate: { gte: since } },
@@ -914,75 +912,68 @@ export class MovideskService {
           { isDeleted: false },
           {
             OR: [
-              { cause: null },
-              { reason: null },
+              { AND: [{ category: { equals: "Problema", mode: "insensitive" } }, { cause: null }] },
+              { AND: [{ category: { in: ["Dúvida", "Duvida"], mode: "insensitive" } }, { reason: null }] },
               { businessArea: null },
             ],
           },
         ],
       },
-      select: { movideskId: true, cause: true, reason: true, businessArea: true },
-      orderBy: { movideskId: "asc" },
+      select: { movideskId: true, category: true, cause: true, reason: true, businessArea: true },
+      orderBy: [{ createdDate: "desc" }, { movideskId: "desc" }],
     });
 
+    // A API do Movidesk comprovadamente expõe os campos condicionais na consulta
+    // individual GET /tickets?id=<id>. Consultas OData em coleção, mesmo com
+    // $expand=customFieldValues, não reproduzem esse comportamento.
+    const MAX_PER_RUN = force ? Math.min(candidates.length, 100) : Math.min(candidates.length, 20);
+    const batch = candidates.slice(0, MAX_PER_RUN);
     let scanned = 0;
     let causesUpdated = 0;
     let reasonsUpdated = 0;
     let businessAreasUpdated = 0;
-    const existingById = new Map(localTickets.map((ticket) => [ticket.movideskId, ticket]));
-    const ids = localTickets.map((ticket) => ticket.movideskId);
 
-    // Lotes pequenos de IDs reproduzem a consulta que o diagnóstico comprovou
-    // retornar 52401/52413/207467, sem uma chamada individual por ticket.
-    const CHUNK_SIZE = 20;
-    for (let offset = 0; offset < ids.length; offset += CHUNK_SIZE) {
-      const chunk = ids.slice(offset, offset + CHUNK_SIZE);
-      if (!chunk.length) continue;
-      const idFilter = chunk.map((id) => `id eq ${id}`).join(" or ");
+    for (const ticket of batch) {
       const response = await this.getWithRetry(`${this.url}/tickets`, {
-        params: {
-          token: this.token(),
-          $select: "id,category,createdDate,lastUpdate",
-          $expand: "customFieldValues",
-          $orderby: "id asc",
-          $top: CHUNK_SIZE,
-          $filter: `(${idFilter})`,
-        },
+        params: { token: this.token(), id: ticket.movideskId },
         timeout: 120_000,
-      }, `metadados analíticos recentes lote=${Math.floor(offset / CHUNK_SIZE) + 1}`);
+      }, `metadados analíticos ticket=${ticket.movideskId}`);
+      const row = response.data && typeof response.data === "object" && !Array.isArray(response.data)
+        ? response.data as Record<string, unknown>
+        : null;
+      if (!row) continue;
+      scanned += 1;
 
-      if (!Array.isArray(response.data)) continue;
-      const rows = response.data as Array<Record<string, unknown>>;
-      scanned += rows.length;
+      const category = typeof row.category === "string"
+        ? row.category.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLocaleLowerCase("pt-BR")
+        : (ticket.category ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLocaleLowerCase("pt-BR");
+      const cause = category === "problema" ? this.customFieldValue(row, 52401) : null;
+      const reason = category === "duvida" ? this.customFieldValue(row, 52413) : null;
+      const businessArea = this.customFieldValue(row, 207467);
+      const data: { cause?: string; reason?: string; businessArea?: string; rawData?: Prisma.InputJsonValue } = {};
 
-      for (const row of rows) {
-        const movideskId = Number(row.id);
-        if (!Number.isSafeInteger(movideskId)) continue;
-        const existing = existingById.get(movideskId);
-        if (!existing) continue;
-        const category = typeof row.category === "string"
-          ? row.category.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLocaleLowerCase("pt-BR")
-          : "";
-        const cause = category === "problema" ? this.customFieldValue(row, 52401) : null;
-        const reason = category === "duvida" ? this.customFieldValue(row, 52413) : null;
-        const businessArea = this.customFieldValue(row, 207467);
-        const data: { cause?: string; reason?: string; businessArea?: string } = {};
-        if (cause && cause !== existing.cause) data.cause = cause;
-        if (reason && reason !== existing.reason) data.reason = reason;
-        if (businessArea && businessArea !== existing.businessArea) data.businessArea = businessArea;
-        if (!Object.keys(data).length) continue;
+      if (cause && cause !== ticket.cause) data.cause = cause;
+      if (reason && reason !== ticket.reason) data.reason = reason;
+      if (businessArea && businessArea !== ticket.businessArea) data.businessArea = businessArea;
 
-        await prisma.ticket.update({ where: { movideskId }, data });
-        if (data.cause) causesUpdated += 1;
-        if (data.reason) reasonsUpdated += 1;
-        if (data.businessArea) businessAreasUpdated += 1;
-      }
+      // Preserva também o payload que comprovou os metadados para que diagnósticos
+      // futuros não indiquem falsamente divergência entre banco e rawData.
+      if (cause || reason || businessArea) data.rawData = row as Prisma.InputJsonValue;
+      if (!Object.keys(data).length) continue;
+
+      await prisma.ticket.update({ where: { movideskId: ticket.movideskId }, data });
+      if (data.cause) causesUpdated += 1;
+      if (data.reason) reasonsUpdated += 1;
+      if (data.businessArea) businessAreasUpdated += 1;
     }
 
-    lastAnalyticalMetadataRefreshAt = Date.now();
+    const remaining = Math.max(0, candidates.length - batch.length);
+    // Enquanto houver candidatos, não inicia o cooldown de 6h: o próximo ciclo
+    // principal continua a fila. O cooldown só começa quando a passagem termina.
+    if (remaining === 0) lastAnalyticalMetadataRefreshAt = Date.now();
     const updated = causesUpdated + reasonsUpdated + businessAreasUpdated;
-    console.info(`[movidesk-metadata] Reconciliação concluída. | janela=${ANALYTICAL_REFRESH_DAYS}d | candidatos=${ids.length} | lidos=${scanned} | causas=${causesUpdated} | motivos=${reasonsUpdated} | areas=${businessAreasUpdated} | atualizacoes=${updated}`);
-    return { scanned, updated, causesUpdated, reasonsUpdated, businessAreasUpdated, skippedByCadence: false };
+    console.info(`[movidesk-metadata] Reconciliação concluída. | janela=${ANALYTICAL_REFRESH_DAYS}d | candidatos=${candidates.length} | processados=${batch.length} | lidos=${scanned} | causas=${causesUpdated} | motivos=${reasonsUpdated} | areas=${businessAreasUpdated} | atualizacoes=${updated} | restantes=${remaining}`);
+    return { scanned, updated, causesUpdated, reasonsUpdated, businessAreasUpdated, remaining, skippedByCadence: false };
   }
 
   async backfillTicketCauses() {
