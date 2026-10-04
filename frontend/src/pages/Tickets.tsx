@@ -100,6 +100,7 @@ type Ticket = {
   owner: string | null;
   ownerTeam?: string | null;
   team?: string | null;
+  isWithSimer?: boolean;
 
   category: string | null;
   cause: string | null;
@@ -491,6 +492,7 @@ export function Tickets() {
 
       return tickets.filter(
         (ticket) => {
+          if (ticket.isWithSimer !== true) return false;
           const created =
             new Date(
               ticket.createdDate
@@ -1173,8 +1175,8 @@ export function Tickets() {
       <PageHeader
         eyebrow="Operação"
         title="Tickets"
-        description="Consulte, priorize e investigue os chamados da operação"
-        meta={<>{periodTickets.length} ticket(s) no período • {filteredTickets.length} após filtros</>}
+        description="Consulte, priorize e investigue os chamados sob responsabilidade da operação SIMER"
+        meta={<>{periodTickets.length} entrada(s) SIMER no período • {filteredTickets.length} após filtros</>}
         action={<PeriodFilter />}
       />
 
@@ -1189,9 +1191,7 @@ export function Tickets() {
             2,
         }}
       >
-        <strong>
-          Prazo operacional:
-        </strong>{" "}
+        <strong>Escopo SIMER:</strong>{" "}esta tela considera somente tickets cuja responsabilidade atual pertence à operação SIMER. Tickets dos mesmos clientes que estejam com outras equipes não entram nos indicadores. O card “No período” é fluxo de entradas pela data de abertura; “Abertos”, “Parados” e “Sem responsável” são a situação atual desse mesmo recorte.{" "}<strong>Prazo operacional:</strong>{" "}
         esta fila usa a regra local de horas úteis, urgência, categoria e tempo parado
         para apoiar a priorização dos atendimentos ativos. Os indicadores históricos
         oficiais de SLA do Movidesk devem ser tratados separadamente. Até a identificação
@@ -1224,13 +1224,13 @@ export function Tickets() {
         }}
       >
         <KpiCard
-          title="No período"
+          title="Entradas no período"
           value={
             executiveGroups
               .all.length
           }
-          description="Todos os atendimentos"
-          info="Atendimentos abertos no período global selecionado, independentemente do status atual."
+          description="Abertos no período pela operação SIMER"
+          info="Fluxo de entrada: tickets criados no período e atualmente sob responsabilidade da operação SIMER. É o mesmo recorte operacional utilizado pelo Dashboard."
           active={
             quickFilter ===
             "all"
@@ -1248,8 +1248,8 @@ export function Tickets() {
             executiveGroups
               .open.length
           }
-          description="Ainda em andamento"
-          info="Atendimentos do período que ainda não estão Resolvidos, Fechados ou Cancelados."
+          description="Entradas do período ainda ativas"
+          info="Estoque remanescente da coorte: dentre as entradas SIMER do período, quantas continuam New, InAttendance ou Stopped hoje. Não equivale ao Backlog atual do Dashboard, que inclui tickets ativos abertos antes do período."
           accent={
             semanticChartColors.normal
           }
