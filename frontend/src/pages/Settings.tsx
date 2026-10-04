@@ -23,6 +23,7 @@ import {
   CloudOffOutlined,
   FileUploadOutlined,
   SaveOutlined,
+  SyncOutlined,
   StorageOutlined,
 } from "@mui/icons-material";
 
@@ -31,6 +32,7 @@ import {
   useState,
 } from "react";
 import { PageHeader } from "../components/PageHeader";
+import { Import } from "./Import";
 import { api } from "../services/api";
 import { getLocalNotificationPreferences, saveLocalNotificationPreferences, type LocalNotificationPreferences } from "../utils/notificationSound";
 
@@ -129,6 +131,7 @@ const EMPTY_FORM: ConfigurationForm = {
 };
 
 export function Settings() {
+  const [section, setSection] = useState<"general" | "data">(() => window.location.hash === "#dados" ? "data" : "general");
   const [configuration, setConfiguration] =
     useState<ConfigurationState | null>(null);
   const [form, setForm] =
@@ -455,22 +458,16 @@ export function Settings() {
 
   return (
     <Box>
-      <PageHeader eyebrow="Sistema" title="Configurações" description="Configuração administrativa central. As integrações são protegidas no banco compartilhado e valem para todos os usuários Web e Desktop." />
-      <Card variant="outlined" sx={{ mb: 2 }}>
-        <CardContent>
-          <Stack direction={{ xs: "column", md: "row" }} spacing={2} sx={{ alignItems: { md: "center" }, justifyContent: "space-between" }}>
-            <Box>
-              <Typography sx={{ fontWeight: 850 }}>Dados e Sincronizações</Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mt: .4 }}>
-                Central operacional das integrações Movidesk e Azure DevOps, cargas automáticas, importações e histórico de processamento.
-              </Typography>
-            </Box>
-            <Button variant="outlined" onClick={() => { window.location.href = "/importar"; }}>
-              Abrir Dados e Sincronizações
-            </Button>
+      <PageHeader eyebrow="Administração" title="Configurações" description="Administração central do TechLead Hub: integrações, sincronizações, acesso e saúde das fontes de dados." />
+      <Card variant="outlined" sx={{ mb: 2, borderRadius: 3 }}>
+        <CardContent sx={{ py: 1.25, "&:last-child": { pb: 1.25 } }}>
+          <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
+            <Button startIcon={<StorageOutlined />} variant={section === "general" ? "contained" : "text"} onClick={() => { setSection("general"); window.history.replaceState(null, "", "/configuracoes"); }}>Geral & Acessos</Button>
+            <Button startIcon={<SyncOutlined />} variant={section === "data" ? "contained" : "text"} onClick={() => { setSection("data"); window.history.replaceState(null, "", "/configuracoes#dados"); }}>Dados & Sincronizações</Button>
           </Stack>
         </CardContent>
       </Card>
+      {section === "data" ? <Import embedded /> : <>
       <Card variant="outlined" sx={{ mb: 2 }}><CardContent>
         <Typography sx={{fontWeight:850}}>Permissões por usuário</Typography>
         <Typography variant="body2" color="text.secondary" sx={{mt:.4,mb:1.5}}>Defina exatamente quais rotinas cada usuário pode acessar. Administradores permanecem com acesso integral.</Typography>
@@ -838,6 +835,7 @@ export function Settings() {
           </Button>
         </Stack>
       </Stack>
+      </>}
     </Box>
   );
 }
