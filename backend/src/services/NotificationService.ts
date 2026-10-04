@@ -159,13 +159,8 @@ export class NotificationService {
           },
         }),
         prisma.azureWorkItem.findMany({
-          where: {
-            deliveredVersion: { not: null },
-            azureChangedAt: { gte: since },
-          },
-          distinct: ["deliveredVersion"],
+          where: { deliveredVersion: { not: null } },
           orderBy: { azureChangedAt: "desc" },
-          take: 8,
           select: {
             deliveredVersion: true,
             azureChangedAt: true,
@@ -228,20 +223,39 @@ export class NotificationService {
       } satisfies AppNotification;
     });
 
-    const versionNotifications = versions
-      .filter((item) => Boolean(item.deliveredVersion?.trim()))
-      .map((item) => {
-        const version = item.deliveredVersion!.trim();
-        const occurredAt = item.azureChangedAt ?? item.updatedAt;
-        return {
-          key: `simer-version:${version}`,
-          kind: "SIMER_VERSION",
-          title: "Nova versão do SIMER",
-          message: `A versão ${version} foi identificada nas entregas.`,
-          occurredAt,
-          path: `/versoes?versao=${encodeURIComponent(version)}`,
-        } satisfies AppNotification;
-      });
+    /*
+     * Uma versão do SIMER é um evento de release, não um evento da Tarefa.
+     * deliveredVersion pode conter mais de uma versão (ex.: "7.17.44-rc, 7.16.89-lts").
+     * Consolidamos cada release individualmente e usamos a primeira ocorrência
+     * sincronizada como data do lançamento observado. Alterações posteriores em
+     * outras Tarefas da mesma versão não criam novas notificações.
+     */
+    const versionPattern = /\\b\\d+\\.\\d+(?:\\.\\d+)?(?:[-_.]?(?:rc|lte|lts|develop)(?:[-_.]?\\d+)?)?\\b/gi;
+    const firstSeenByVersion = new Map<string, Date>();
+    for (const item of versions) {
+      const raw = item.deliveredVersion?.trim();
+      if (!raw) continue;
+      const matches = raw.match(versionPattern) ?? [raw];
+      const observedAt = item.azureChangedAt ?? item.updatedAt;
+      for (const candidate of matches) {
+        const version = candidate.trim().toLocaleLowerCase("pt-BR");
+        const current = firstSeenByVersion.get(version);
+        if (!current || observedAt < current) firstSeenByVersion.set(version, observedAt);
+      }
+    }
+
+    const versionNotifications = [...firstSeenByVersion.entries()]
+      .filter(([, firstSeenAt]) => firstSeenAt >= since)
+      .sort((left, right) => right[1].getTime() - left[1].getTime())
+      .slice(0, 8)
+      .map(([version, occurredAt]) => ({
+        key: `simer-version:${version}`,
+        kind: "SIMER_VERSION" as const,
+        title: "Nova versão do SIMER",
+        message: `Versão ${version} identificada pela primeira vez nas entregas.`,
+        occurredAt,
+        path: `/versoes?versao=${encodeURIComponent(version)}`,
+      } satisfies AppNotification));
 
     const mentionNotifications = chatMentions.map((item) => ({
       key: `chat-mention:${item.id}`,
