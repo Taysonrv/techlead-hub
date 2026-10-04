@@ -283,7 +283,13 @@ export class MovideskService {
     }));
 
     const lastWith = (field: "cause"|"reason"|"businessArea") => {
-      const found = [...tickets].reverse().find((ticket) => Boolean(ticket[field]?.trim()));
+      const found = [...tickets].reverse().find((ticket) => {
+        if (!ticket[field]?.trim()) return false;
+        const category = ticket.category?.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLocaleLowerCase("pt-BR");
+        if (field === "cause") return category === "problema";
+        if (field === "reason") return category === "duvida";
+        return true;
+      });
       return found ? { movideskId: found.movideskId, createdDate: found.createdDate, value: found[field] } : null;
     };
     const firstMissingAfter = (last: { createdDate: Date } | null, field: "cause"|"reason"|"businessArea", category?: "problema"|"duvida") => {
@@ -413,7 +419,7 @@ export class MovideskService {
 
     return {
       readOnly: true,
-      expectedCustomFields: { cause: 52401, businessArea: 207467 },
+      expectedCustomFields: { cause: 52401, reason: 52413, businessArea: 207467 },
       tickets: results,
       note: "Diagnóstico somente leitura: compara banco/rawData com o payload atual do Movidesk e não altera tickets.",
     };
@@ -841,24 +847,21 @@ export class MovideskService {
   }
 
   private classificationFromRaw(row: Record<string, unknown>, kind: "cause" | "reason") {
-    const normalize = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLocaleLowerCase("pt-BR");
-    const labels = kind === "cause"
-      ? new Map([["configuracao","Configuração"],["erro operacional","Erro operacional"],["nao identificada","Não identificada"],["resolvido pelo usuario","Resolvido pelo usuário"],["sefaz ou aplicativo de terceiros","SEFAZ ou aplicativo de terceiros"],["sefaz ou aplicativos de terceiros","SEFAZ ou aplicativo de terceiros"]])
-      : new Map([["apoio processos operacionais","Apoio processos operacionais"],["configuracao","Configuração"],["duvida interna","Dúvida interna"],["inexperiencia do usuario","Inexperiência do usuário"],["informacao","Informação"],["integracao com terceiros","Integração com terceiros"],["priorizacao","Priorização"]]);
+    const fieldId = kind === "cause" ? 52401 : 52413;
     const fields = Array.isArray(row.customFieldValues) ? row.customFieldValues : [];
     for (const rawField of fields) {
       if (!rawField || typeof rawField !== "object" || Array.isArray(rawField)) continue;
       const field = rawField as Record<string, unknown>;
+      if (Number(field.customFieldId) !== fieldId) continue;
       const values = [
-        typeof field.value === "string" ? field.value : null,
-        ...(Array.isArray(field.items) ? field.items.map((item) => item && typeof item === "object" && !Array.isArray(item) ? (item as Record<string, unknown>).customFieldItem : null) : []),
-      ].filter((value): value is string => typeof value === "string" && Boolean(value.trim()));
-      for (const value of values) {
-        const normalized = normalize(value);
-        for (const [token, label] of labels) {
-          if (normalized === token || normalized.includes(token)) return label;
-        }
-      }
+        typeof field.value === "string" ? field.value.trim() : null,
+        ...(Array.isArray(field.items) ? field.items.map((item) =>
+          item && typeof item === "object" && !Array.isArray(item) && typeof (item as Record<string, unknown>).customFieldItem === "string"
+            ? String((item as Record<string, unknown>).customFieldItem).trim()
+            : null
+        ) : []),
+      ].filter((value): value is string => Boolean(value));
+      return values[0] ?? null;
     }
     return null;
   }
@@ -924,52 +927,35 @@ export class MovideskService {
     });
     let causesUpdated = 0;
     let reasonsUpdated = 0;
-    await prisma.ticket.updateMany({
-      where: {
-        category: { equals: "Problema", mode: "insensitive" },
-        cause: { contains: "Bug no Produto / ERP", mode: "insensitive" },
-      },
-      data: { cause: null },
-    });
     const normalize = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLocaleLowerCase("pt-BR");
-    const causeTokens = ["erro operacional", "configuracao", "nao identificada", "resolvido pelo usuario", "sefaz", "aplicativos de terceiros", "aplicativo de terceiros"];
-    const reasonTokens = ["apoio processos operacionais", "configuracao", "duvida interna", "inexperiencia do usuario", "informacao", "integracao com terceiros", "priorizacao"];
-    const extract = (rawData: Prisma.JsonValue, tokens: string[]) => {
-      if (!rawData || typeof rawData !== "object" || Array.isArray(rawData)) return null;
-      const raw = rawData as Record<string, unknown>;
-      const fields = Array.isArray(raw.customFieldValues) ? raw.customFieldValues : [];
-      for (const field of fields) {
-        if (!field || typeof field !== "object" || Array.isArray(field)) continue;
-        const item = field as Record<string, unknown>;
-        const values: string[] = [];
-        if (typeof item.value === "string" && item.value.trim()) values.push(item.value.trim());
-        if (Array.isArray(item.items)) for (const child of item.items) {
-          if (!child || typeof child !== "object" || Array.isArray(child)) continue;
-          const value = (child as Record<string, unknown>).customFieldItem;
-          if (typeof value === "string" && value.trim()) values.push(value.trim());
-        }
-        const found = values.find((value) => value.length <= 80 && tokens.some((token) => normalize(value).includes(token)));
-        if (found) return found;
-      }
-      return null;
-    };
     for (const ticket of candidates) {
+      if (!ticket.rawData || typeof ticket.rawData !== "object" || Array.isArray(ticket.rawData)) continue;
+      const raw = ticket.rawData as Record<string, unknown>;
       const category = normalize(ticket.category ?? "");
       if (category === "problema") {
-        const cause = extract(ticket.rawData as Prisma.JsonValue, causeTokens);
+        const cause = this.classificationFromRaw(raw, "cause");
         if (cause && cause !== ticket.cause) {
           await prisma.ticket.update({ where: { id: ticket.id }, data: { cause, reason: null } });
           causesUpdated += 1;
         }
       } else if (category === "duvida") {
-        const reason = extract(ticket.rawData as Prisma.JsonValue, reasonTokens);
+        const reason = this.classificationFromRaw(raw, "reason");
         if (reason && reason !== ticket.reason) {
           await prisma.ticket.update({ where: { id: ticket.id }, data: { reason, cause: null } });
           reasonsUpdated += 1;
         }
       }
     }
-    return { scanned: candidates.length, updated: causesUpdated + reasonsUpdated + remote.updated, causesUpdated, reasonsUpdated, remoteScanned: remote.scanned, remoteUpdated: remote.updated };
+    return {
+      scanned: candidates.length,
+      updated: causesUpdated + reasonsUpdated + remote.updated,
+      causesUpdated,
+      reasonsUpdated,
+      remoteScanned: remote.scanned,
+      remoteUpdated: remote.updated,
+      sourceFields: { cause: 52401, reason: 52413 },
+      safeMode: true,
+    };
   }
 
   async classificationCoverage() {
