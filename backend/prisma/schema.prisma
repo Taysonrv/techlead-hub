@@ -815,3 +815,16 @@ model AzureWorkItem {
   @@index([syncRunId])
   @@index([syncedAt])
 }
+
+
+model DataQualitySnapshot {
+  id        Int      @id @default(autoincrement())
+  scopeKey  String   @db.VarChar(80)
+  snapshotDate DateTime @db.Date
+  metrics   Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([scopeKey, snapshotDate])
+  @@index([snapshotDate])
+}
