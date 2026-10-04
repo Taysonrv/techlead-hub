@@ -34,7 +34,6 @@ import {
   PsychologyOutlined,
   ChatBubbleOutlineRounded,
   HomeOutlined,
-  AccountTreeOutlined,
   BusinessOutlined,
   GroupsOutlined,
   WarningAmberOutlined,
@@ -311,7 +310,6 @@ export function Sidebar() {
   const analysisMenu = useMemo<MenuItemData[]>(
     () => [
       ...(canAccess("dashboard") ? [{ label: "Gestão & Inteligência", path: "/gestao-inteligencia", icon: <PsychologyOutlined fontSize="small" /> }] : []),
-      ...(canAccess("simer-map") ? [{ label: "Mapa SIMER", path: "/mapa-simer", icon: <AccountTreeOutlined fontSize="small" /> }] : []),
       ...(canAccess("reports") ? [{ label: "Relatórios", path: "/relatorios", icon: <AssessmentOutlined fontSize="small" /> }] : []),
       ...(canAccess("services")
         ? [{ label: "Serviços SIMER", path: "/servicos", icon: <FactCheckOutlined fontSize="small" /> }]
