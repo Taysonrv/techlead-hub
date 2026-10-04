@@ -1523,7 +1523,7 @@ export function Dashboard() {
               title="Áreas de negócio"
               subtitle={`Área de negócio informada no Movidesk • cobertura ${businessAreaCoverage.filled}/${businessAreaCoverage.total} • sem fallback para Serviço`}
               data={businessAreas}
-              emptyMessage={businessAreaCoverage.total > 0 ? `Existem ${businessAreaCoverage.total} tickets SIMER no período, mas a Área de negócio ainda não está disponível nos dados sincronizados.` : "Nenhum ticket SIMER no período selecionado."}
+              emptyMessage={businessAreaCoverage.total > 0 ? `Existem ${businessAreaCoverage.total} tickets SIMER no período, mas o Movidesk não retornou o campo oficial de Área de negócio para esses tickets.` : "Nenhum ticket SIMER no período selecionado."}
               onItemClick={(label) => showTickets(
                 `Área de negócio: ${label}`,
                 filteredTickets.filter((ticket) => (ticket.businessArea ?? "Sem área de negócio") === label),
