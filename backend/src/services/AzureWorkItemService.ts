@@ -6,6 +6,7 @@ import {
   prisma,
 } from "../database/prisma";
 import { isTerminalWorkItemState } from "../domain/OperationalLifecycleRules";
+import { azureOperationalScope } from "../domain/OperationalScope";
 import { HIGH_AZURE_CRITICALITIES, isHighAzureCriticality } from "../domain/AzureWorkItemRules";
 import { AZURE_PRODUCTIVITY_TYPES, classifyAzureProductivityOutcome, isAzureProductiveOutcome, isAzureProductivityConcluded, isAzureProductivityTerminalOutcome, type AzureProductivityOutcome } from "../domain/AzureProductivityRules";
 
@@ -1868,6 +1869,7 @@ export class AzureWorkItemService {
       Prisma.AzureWorkItemWhereInput =
       {
         AND: [
+          azureOperationalScope(),
           ...(normalizedType
             ? [
                 {
@@ -2188,7 +2190,7 @@ export class AzureWorkItemService {
   ): Prisma.AzureWorkItemWhereInput {
     const and:
       Prisma.AzureWorkItemWhereInput[] =
-      [];
+      [azureOperationalScope()];
 
     const type =
       this.normalizeString(
