@@ -904,33 +904,62 @@ export class MovideskService {
     }
 
     const since = new Date(now - ANALYTICAL_REFRESH_DAYS * 24 * 60 * 60 * 1000);
-    let skip = 0;
+    // O escopo SIMER é resolvido localmente. A API Movidesk demonstrou comportamento
+    // diferente para customFieldValues quando a coleção usa clients/any(...).
+    const localTickets = await prisma.ticket.findMany({
+      where: {
+        AND: [
+          { createdDate: { gte: since } },
+          { client: { in: [...SIMER_CLIENTS], mode: "insensitive" } },
+          { isDeleted: false },
+          {
+            OR: [
+              { cause: null },
+              { reason: null },
+              { businessArea: null },
+            ],
+          },
+        ],
+      },
+      select: { movideskId: true, cause: true, reason: true, businessArea: true },
+      orderBy: { movideskId: "asc" },
+    });
+
     let scanned = 0;
     let causesUpdated = 0;
     let reasonsUpdated = 0;
     let businessAreasUpdated = 0;
+    const existingById = new Map(localTickets.map((ticket) => [ticket.movideskId, ticket]));
+    const ids = localTickets.map((ticket) => ticket.movideskId);
 
-    for (let page = 0; page < 30; page += 1) {
+    // Lotes pequenos de IDs reproduzem a consulta que o diagnóstico comprovou
+    // retornar 52401/52413/207467, sem uma chamada individual por ticket.
+    const CHUNK_SIZE = 20;
+    for (let offset = 0; offset < ids.length; offset += CHUNK_SIZE) {
+      const chunk = ids.slice(offset, offset + CHUNK_SIZE);
+      if (!chunk.length) continue;
+      const idFilter = chunk.map((id) => `id eq ${id}`).join(" or ");
       const response = await this.getWithRetry(`${this.url}/tickets`, {
         params: {
           token: this.token(),
           $select: "id,category,createdDate,lastUpdate",
           $expand: "customFieldValues",
-          $orderby: "createdDate desc,id desc",
-          $top: PAGE_SIZE,
-          $skip: skip,
-          $filter: this.remoteScopeFilter(`createdDate ge ${since.toISOString()}`),
+          $orderby: "id asc",
+          $top: CHUNK_SIZE,
+          $filter: `(${idFilter})`,
         },
         timeout: 120_000,
-      }, `metadados analíticos recentes página=${page + 1}`);
+      }, `metadados analíticos recentes lote=${Math.floor(offset / CHUNK_SIZE) + 1}`);
 
-      if (!Array.isArray(response.data) || response.data.length === 0) break;
+      if (!Array.isArray(response.data)) continue;
       const rows = response.data as Array<Record<string, unknown>>;
       scanned += rows.length;
 
       for (const row of rows) {
         const movideskId = Number(row.id);
         if (!Number.isSafeInteger(movideskId)) continue;
+        const existing = existingById.get(movideskId);
+        if (!existing) continue;
         const category = typeof row.category === "string"
           ? row.category.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLocaleLowerCase("pt-BR")
           : "";
@@ -938,34 +967,21 @@ export class MovideskService {
         const reason = category === "duvida" ? this.customFieldValue(row, 52413) : null;
         const businessArea = this.customFieldValue(row, 207467);
         const data: { cause?: string; reason?: string; businessArea?: string } = {};
-        if (cause) data.cause = cause;
-        if (reason) data.reason = reason;
-        if (businessArea) data.businessArea = businessArea;
+        if (cause && cause !== existing.cause) data.cause = cause;
+        if (reason && reason !== existing.reason) data.reason = reason;
+        if (businessArea && businessArea !== existing.businessArea) data.businessArea = businessArea;
         if (!Object.keys(data).length) continue;
 
-        const existing = await prisma.ticket.findUnique({
-          where: { movideskId },
-          select: { cause: true, reason: true, businessArea: true },
-        });
-        if (!existing) continue;
-        const changedCause = Boolean(data.cause && data.cause !== existing.cause);
-        const changedReason = Boolean(data.reason && data.reason !== existing.reason);
-        const changedArea = Boolean(data.businessArea && data.businessArea !== existing.businessArea);
-        if (!changedCause && !changedReason && !changedArea) continue;
-
         await prisma.ticket.update({ where: { movideskId }, data });
-        if (changedCause) causesUpdated += 1;
-        if (changedReason) reasonsUpdated += 1;
-        if (changedArea) businessAreasUpdated += 1;
+        if (data.cause) causesUpdated += 1;
+        if (data.reason) reasonsUpdated += 1;
+        if (data.businessArea) businessAreasUpdated += 1;
       }
-
-      if (rows.length < PAGE_SIZE) break;
-      skip += rows.length;
     }
 
     lastAnalyticalMetadataRefreshAt = Date.now();
     const updated = causesUpdated + reasonsUpdated + businessAreasUpdated;
-    console.info(`[movidesk-metadata] Reconciliação concluída. | janela=${ANALYTICAL_REFRESH_DAYS}d | lidos=${scanned} | causas=${causesUpdated} | motivos=${reasonsUpdated} | areas=${businessAreasUpdated} | atualizacoes=${updated}`);
+    console.info(`[movidesk-metadata] Reconciliação concluída. | janela=${ANALYTICAL_REFRESH_DAYS}d | candidatos=${ids.length} | lidos=${scanned} | causas=${causesUpdated} | motivos=${reasonsUpdated} | areas=${businessAreasUpdated} | atualizacoes=${updated}`);
     return { scanned, updated, causesUpdated, reasonsUpdated, businessAreasUpdated, skippedByCadence: false };
   }
 
