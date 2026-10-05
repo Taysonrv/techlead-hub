@@ -13,6 +13,7 @@ import {
   InputAdornment,
   InputLabel,
   MenuItem,
+  Menu,
   Select,
   Snackbar,
   Stack,
@@ -36,6 +37,7 @@ import {
   TuneOutlined,
   AccountTreeOutlined,
   ShareOutlined,
+  MoreHorizOutlined,
 } from "@mui/icons-material";
 
 import {
@@ -2549,67 +2551,18 @@ export function Tickets() {
                   "Sem cliente"}
               </Typography>
 
-              <Box sx={{ mt: 2, display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))" }, gap: .8 }}>
-
-                <Button
-                  size="small"
-                  variant="outlined"
-                  startIcon={
-                    <ContentCopyOutlined />
-                  }
-                  onClick={() =>
-                    void copyTicketSummary(
-                      selectedTicket
-                    )
-                  }
-                >
-                  Copiar resumo
-                </Button>
-
-                <Button
-                  size="small"
-                  variant="outlined"
-                  startIcon={<ShareOutlined />}
-                  onClick={() => {
-                    window.dispatchEvent(new CustomEvent("techlead-hub:share-chat", { detail: { label: "Ticket", recordId: selectedTicket.movideskId, title: selectedTicket.subject, client: selectedTicket.client, status: selectedTicket.status, path: `/tickets?movidesk=${selectedTicket.movideskId}` } }));
-                  }}
-                >
-                  Compartilhar no Chat
-                </Button>
-
-                <Button
-                  size="small"
-                  variant="contained"
-                  endIcon={
-                    <OpenInNewOutlined />
-                  }
-                  onClick={() =>
-                    openMovideskTicket(
-                      selectedTicket
-                    )
-                  }
-                >
-                  Abrir no Movidesk
-                </Button>
-                <Button
-                  size="small"
-                  variant="outlined"
-                  startIcon={<SearchOutlined />}
-                  onClick={() => navigate(`/investigacao?q=${selectedTicket.movideskId}`)}
-                >
-                  Investigar este atendimento
-                </Button>
-                <Button
-                  size="small"
-                  variant="outlined"
-                  startIcon={<AccountTreeOutlined />}
-                  onClick={() => {
-                    const context = [selectedTicket.subject, selectedTicket.category, selectedTicket.cause, selectedTicket.serviceFirstLevel, selectedTicket.serviceSecondLevel, selectedTicket.serviceThirdLevel, selectedTicket.justification].filter(Boolean).join(" ");
-                    navigate(`/investigacao?q=${encodeURIComponent(context)}&ticket=${selectedTicket.movideskId}`);
-                  }}
-                >
-                  Investigar no Mapa
-                </Button>
+              <Box sx={{ mt: 2 }}>
+                <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 900 }}>Ações rápidas</Typography>
+                <Box sx={{ mt: .45, display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(3, minmax(0, 1fr))" }, gap: .8 }}>
+                  <Button size="small" variant="contained" startIcon={<ShareOutlined />} onClick={() => window.dispatchEvent(new CustomEvent("techlead-hub:share-chat", { detail: { label: "Ticket", recordId: selectedTicket.movideskId, title: selectedTicket.subject, client: selectedTicket.client, status: selectedTicket.status, path: `/tickets?movidesk=${selectedTicket.movideskId}` } }))}>Compartilhar</Button>
+                  <Button size="small" variant="outlined" endIcon={<OpenInNewOutlined />} onClick={() => openMovideskTicket(selectedTicket)}>Abrir origem</Button>
+                  <Button size="small" variant="outlined" startIcon={<SearchOutlined />} onClick={() => navigate(`/investigacao?q=${selectedTicket.movideskId}`)}>Investigar</Button>
+                </Box>
+                <Button size="small" startIcon={<MoreHorizOutlined />} onClick={(event) => setTicketActionsAnchor(event.currentTarget)} sx={{ mt: .55, px: .5 }}>Mais ações</Button>
+                <Menu anchorEl={ticketActionsAnchor} open={Boolean(ticketActionsAnchor)} onClose={() => setTicketActionsAnchor(null)}>
+                  <MenuItem onClick={() => { setTicketActionsAnchor(null); void copyTicketSummary(selectedTicket); }}><ContentCopyOutlined sx={{ mr: 1, fontSize: 18 }} />Copiar resumo</MenuItem>
+                  <MenuItem onClick={() => { setTicketActionsAnchor(null); const context = [selectedTicket.subject, selectedTicket.category, selectedTicket.cause, selectedTicket.serviceFirstLevel, selectedTicket.serviceSecondLevel, selectedTicket.serviceThirdLevel, selectedTicket.justification].filter(Boolean).join(" "); navigate(`/investigacao?q=${encodeURIComponent(context)}&ticket=${selectedTicket.movideskId}`); }}><AccountTreeOutlined sx={{ mr: 1, fontSize: 18 }} />Investigar no Mapa</MenuItem>
+                </Menu>
               </Box>
               <Divider
                 sx={{
