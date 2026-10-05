@@ -15,6 +15,8 @@ import {
   MenuItem as MuiMenuItem,
   Stack,
   Typography,
+  Snackbar,
+  Paper,
 } from "@mui/material";
 
 import {
@@ -48,6 +50,7 @@ import {
   useEffect,
   useMemo,
   useState,
+  useRef,
 } from "react";
 
 import type {
@@ -67,6 +70,7 @@ import {
 } from "../context/AuthContext";
 import { UserAvatar } from "./UserAvatar";
 import { BugReportDialog } from "./BugReportDialog";
+import { playNotificationSound } from "../utils/notificationSound";
 
 import {
   api,
@@ -124,6 +128,8 @@ export function Sidebar() {
 
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [chatUnread, setChatUnread] = useState(0);
+  const [chatPopup, setChatPopup] = useState<{ channelId: number; channelName: string; authorName: string; preview: string } | null>(null);
+  const chatSnapshotRef = useRef<Map<number, { unread: number; lastMessageId: number | null }>>(new Map());
 
   const [
     appVersion,
@@ -168,15 +174,43 @@ export function Sidebar() {
   // de uma seção; o usuário decide quais grupos deseja expandir.
 
   useEffect(() => {
-    if (!user) { setChatUnread(0); return; }
+    if (!user) { setChatUnread(0); chatSnapshotRef.current.clear(); return; }
+    type GlobalChatMessage = { id: number; content: string; author: { id: number; name: string } };
+    type GlobalChatChannel = { id: number; name: string; unread?: number; messages?: GlobalChatMessage[] };
     const loadChatUnread = async () => {
       try {
-        const response = await api.get<{ channels: Array<{ unread?: number }> }>("/chat/channels");
-        setChatUnread(response.data.channels.reduce((total, channel) => total + (channel.unread ?? 0), 0));
-      } catch { /* indicador não deve afetar a navegação */ }
+        const response = await api.get<{ channels: GlobalChatChannel[] }>("/chat/channels");
+        const channels = Array.isArray(response.data.channels) ? response.data.channels : [];
+        setChatUnread(channels.reduce((total, channel) => total + (channel.unread ?? 0), 0));
+
+        const previous = chatSnapshotRef.current;
+        if (previous.size && location.pathname !== "/chat") {
+          const incoming = channels.flatMap((channel) => {
+            const latest = channel.messages?.[channel.messages.length - 1];
+            const before = previous.get(channel.id);
+            return before && latest && latest.author.id !== user.id && (channel.unread ?? 0) > before.unread && latest.id !== before.lastMessageId
+              ? [{ channel, latest }]
+              : [];
+          });
+          const newest = incoming[incoming.length - 1];
+          if (newest) {
+            setChatPopup({
+              channelId: newest.channel.id,
+              channelName: newest.channel.name,
+              authorName: newest.latest.author.name,
+              preview: newest.latest.content.startsWith("[anexo] ") ? "📎 Enviou um arquivo" : newest.latest.content,
+            });
+            if (localStorage.getItem("techlead-chat-sound") !== "off") playNotificationSound("chat");
+          }
+        }
+        chatSnapshotRef.current = new Map(channels.map((channel) => [channel.id, {
+          unread: channel.unread ?? 0,
+          lastMessageId: channel.messages?.[channel.messages.length - 1]?.id ?? null,
+        }]));
+      } catch { /* chat global não deve afetar a navegação */ }
     };
     void loadChatUnread();
-    const timer = window.setInterval(() => void loadChatUnread(), 12_000);
+    const timer = window.setInterval(() => void loadChatUnread(), 8_000);
     const refresh = () => void loadChatUnread();
     window.addEventListener("techlead-hub:chat-read", refresh);
     return () => { window.clearInterval(timer); window.removeEventListener("techlead-hub:chat-read", refresh); };
@@ -799,6 +833,28 @@ export function Sidebar() {
         </Box>
       </Box>
       </Drawer>
+
+      <Snackbar
+        open={Boolean(chatPopup)}
+        autoHideDuration={9000}
+        onClose={(_, reason) => { if (reason !== "clickaway") setChatPopup(null); }}
+        anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+        sx={{ zIndex: (theme) => theme.zIndex.modal + 20 }}
+      >
+        <Paper elevation={14} sx={{ width: 350, maxWidth: "calc(100vw - 24px)", p: 1.4, borderRadius: 2.75, border: "1px solid", borderColor: "rgba(24,199,122,.38)", borderLeft: "4px solid", borderLeftColor: aliareColors.green, background: (theme) => theme.palette.mode === "dark" ? "linear-gradient(135deg,#111f2f,#11342d)" : "linear-gradient(135deg,#fff,#effff8)", boxShadow: "0 22px 58px rgba(15,23,42,.24)" }}>
+          {chatPopup && <Stack direction="row" spacing={1.1} sx={{ alignItems: "flex-start" }}>
+            <UserAvatar user={{ name: chatPopup.authorName } as any} size={40} sx={{ backgroundColor: aliareColors.green, color: aliareColors.black }} />
+            <Box sx={{ minWidth: 0, flex: 1 }}>
+              <Typography variant="caption" sx={{ fontWeight: 900, color: aliareColors.green, letterSpacing: ".04em" }}>NOVA MENSAGEM</Typography>
+              <Typography sx={{ fontWeight: 900, lineHeight: 1.2 }} noWrap>{chatPopup.authorName}</Typography>
+              <Typography variant="caption" color="text.secondary" noWrap sx={{ display: "block" }}>{chatPopup.channelName}</Typography>
+              <Typography variant="body2" sx={{ mt: .55, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{chatPopup.preview}</Typography>
+              <Button size="small" sx={{ mt: .7, px: 0, fontWeight: 850 }} onClick={() => { const id = chatPopup.channelId; setChatPopup(null); navigate(`/chat?channel=${id}`); }}>Abrir conversa</Button>
+            </Box>
+            <IconButton size="small" aria-label="Fechar notificação" onClick={() => setChatPopup(null)}><Box component="span" sx={{ fontSize: 18, lineHeight: 1 }}>×</Box></IconButton>
+          </Stack>}
+        </Paper>
+      </Snackbar>
 
       <BugReportDialog open={feedbackOpen} onClose={() => setFeedbackOpen(false)} />
 
