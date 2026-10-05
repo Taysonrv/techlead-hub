@@ -221,11 +221,12 @@ export function Sidebar() {
   useEffect(() => {
     if (!user) { setChatUnread(0); chatSnapshotRef.current.clear(); return; }
     type GlobalChatMessage = { id: number; content: string; author: { id: number; name: string } };
-    type GlobalChatChannel = { id: number; name: string; unread?: number; messages?: GlobalChatMessage[] };
+    type GlobalChatChannel = { id: number; name: string; type?: string; unread?: number; updatedAt?: string; members?: Array<{ user: SharePerson }>; messages?: GlobalChatMessage[] };
     const loadChatUnread = async () => {
       try {
         const response = await api.get<{ channels: GlobalChatChannel[] }>("/chat/channels");
         const channels = Array.isArray(response.data.channels) ? response.data.channels : [];
+        setShareChannels(channels as ShareChannel[]);
         setChatUnread(channels.reduce((total, channel) => total + (channel.unread ?? 0), 0));
 
         const previous = chatSnapshotRef.current;
@@ -314,20 +315,16 @@ export function Sidebar() {
       setShareContext(context);
       setShareSearch("");
       setSharePickerOpen(true);
-      setSharePickerLoading(true);
-      void Promise.all([
-        api.get<{ participants: SharePerson[] }>("/chat/participants"),
-        api.get<{ channels: ShareChannel[] }>("/chat/channels"),
-        api.get<{ presence: Array<{ userId: number; effectiveStatus: "ONLINE" | "AWAY" | "BUSY" | "OFFLINE" }> }>("/chat/realtime"),
-      ]).then(([people, channels, realtime]) => {
-        setSharePeople(people.data.participants || []);
-        setShareChannels(channels.data.channels || []);
-        setSharePresence(realtime.data.presence || []);
+      setSharePickerLoading(sharePeople.length === 0);
+      void api.get<{ participants?: SharePerson[]; users?: SharePerson[] }>("/chat/participants").then((people) => {
+        setSharePeople(people.data.participants || people.data.users || []);
       }).finally(() => setSharePickerLoading(false));
+      void api.get<{ presence: Array<{ userId: number; effectiveStatus: "ONLINE" | "AWAY" | "BUSY" | "OFFLINE" }> }>("/chat/realtime").then((realtime) => setSharePresence(realtime.data.presence || []));
+      if (!shareChannels.length) void api.get<{ channels: ShareChannel[] }>("/chat/channels").then((channels) => setShareChannels(channels.data.channels || []));
     };
     window.addEventListener("techlead-hub:share-chat", receiveShare);
     return () => window.removeEventListener("techlead-hub:share-chat", receiveShare);
-  }, [location.pathname, location.search, navigate, floatingChats.length]);
+  }, [location.pathname, location.search, sharePeople.length, shareChannels.length]);
 
   const sendSharedRecordToPerson = useCallback(async (person: SharePerson) => {
     if (!shareContext || shareSendingTo) return;
@@ -1027,12 +1024,14 @@ export function Sidebar() {
           {sharePickerLoading ? <Box sx={{ py: 5, display: "grid", placeItems: "center" }}><CircularProgress size={26} /></Box> : <>
             {(() => {
               const directPeerIds = shareChannels.filter((channel) => channel.type === "DIRECT").flatMap((channel) => channel.members?.map((member) => member.user.id).filter((id) => id !== user?.id) || []);
-              const filtered = sharePeople.filter((person) => person.id !== user?.id && [person.name, person.username, person.role].some((value) => value.toLowerCase().includes(shareSearch.toLowerCase())));
+              const normalize = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR").trim();
+              const query = normalize(shareSearch);
+              const filtered = sharePeople.filter((person) => person.id !== user?.id && [person.name, person.username, person.role].some((value) => normalize(value || "").includes(query)));
               const recent = filtered.filter((person) => directPeerIds.includes(person.id)).slice(0, 6);
               const online = filtered.filter((person) => !directPeerIds.includes(person.id) && sharePresence.some((entry) => entry.userId === person.id && entry.effectiveStatus === "ONLINE"));
               const others = filtered.filter((person) => !recent.includes(person) && !online.includes(person));
               const section = (title: string, people: SharePerson[]) => people.length ? <Box sx={{ mb: 1 }}><Typography variant="overline" color="text.secondary" sx={{ fontWeight: 900 }}>{title}</Typography>{people.map((person) => { const status = sharePresence.find((entry) => entry.userId === person.id)?.effectiveStatus || "OFFLINE"; return <ListItemButton key={person.id} disabled={Boolean(shareSendingTo)} onClick={() => void sendSharedRecordToPerson(person)} sx={{ borderRadius: 1.5, px: 1, py: .7 }}><Box sx={{ position: "relative", width: 36, height: 36, mr: 1.1, borderRadius: "50%", bgcolor: "action.hover", display: "grid", placeItems: "center", fontWeight: 900 }}>{person.name.slice(0,1).toUpperCase()}<Circle sx={{ position: "absolute", right: -1, bottom: -1, fontSize: 9, color: status === "ONLINE" ? "success.main" : status === "AWAY" ? "warning.main" : status === "BUSY" ? "error.main" : "text.disabled" }} /></Box><ListItemText primary={person.name} secondary={`@${person.username} · ${person.role}`} />{status === "ONLINE" && <Chip size="small" label="Online" color="success" variant="outlined" />}{shareSendingTo === person.id && <CircularProgress size={18} sx={{ ml: 1 }} />}</ListItemButton>; })}</Box> : null;
-              return <>{section("Recentes", recent)}{section("Online", online)}{section("Outras pessoas", others)}</>;
+              return <>{section("Recentes", recent)}{section("Online", online)}{section("Outras pessoas", others)}{filtered.length === 0 && <Typography variant="body2" color="text.secondary" sx={{ py: 3, textAlign: "center" }}>Nenhuma pessoa encontrada para “{shareSearch}”.</Typography>}</>;
             })()}
           </>}
         </DialogContent>
