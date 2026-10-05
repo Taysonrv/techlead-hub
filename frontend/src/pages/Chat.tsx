@@ -539,3 +539,11 @@ export function Chat() {
   </Stack>;
 }
 
+
+
+function presenceColor(status: Presence["effectiveStatus"] | undefined) {
+  if (status === "ONLINE") return "success.main";
+  if (status === "AWAY") return "warning.main";
+  if (status === "BUSY") return "error.main";
+  return "text.disabled";
+}
