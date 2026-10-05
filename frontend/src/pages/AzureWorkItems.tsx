@@ -5166,14 +5166,12 @@ export function AzureWorkItems({
                   "background.paper",
               }}
             >
-              <Stack
-                direction={{
-                  xs:
-                    "column",
-                  sm:
-                    "row",
+              <Box
+                sx={{
+                  display: "grid",
+                  gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))" },
+                  gap: 1,
                 }}
-                spacing={1}
               >
                 <Button
                   fullWidth
@@ -5218,7 +5216,7 @@ export function AzureWorkItems({
                 >
                   Voltar à lista
                 </Button>
-              </Stack>
+              </Box>
             </Box>
           )}
         </Stack>
