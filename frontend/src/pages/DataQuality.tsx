@@ -338,15 +338,26 @@ export function DataQuality() {
       <Card variant="outlined"><CardContent>
         <Typography variant="h6" sx={{ fontWeight: 850 }}>Mapa das pendências</Typography>
         <Typography variant="body2" color="text.secondary">Distribuição de todos os detectores por domínio. Ajuda a identificar onde a operação está acumulando dívida.</Typography>
-        <Box sx={{ height: 300, mt: 1 }}>
-          <ResponsiveContainer width="100%" height="100%">
-            <PieChart>
-              <Pie data={Array.from(new Set(metrics.map(([, , , group]) => group))).map((group) => ({ name: group, value: metrics.filter(([, , , itemGroup]) => itemGroup === group).reduce((sum, [key]) => sum + Number(data?.summary[key] ?? 0), 0) })).filter((item) => item.value > 0)} dataKey="value" nameKey="name" innerRadius={62} outerRadius={100} paddingAngle={2}>
-                {Array.from(new Set(metrics.map(([, , , group]) => group))).map((group, index) => <Cell key={group} fill={[aliareColors.green, aliareColors.info, "#8b5cf6", "#f59e0b", "#0891b2", "#ef4444", "#64748b"][index % 7]} />)}
-              </Pie>
-              <ChartTooltip contentStyle={{ borderRadius: 12, border: `1px solid ${theme.palette.divider}`, background: theme.palette.background.paper, color: theme.palette.text.primary }} />
-            </PieChart>
-          </ResponsiveContainer>
+        <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "minmax(190px,.9fr) minmax(0,1.1fr)" }, gap: 1.5, alignItems: "center", mt: 1 }}>
+          <Box sx={{ height: { xs: 220, sm: 235 }, minWidth: 0 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie data={Array.from(new Set(metrics.map(([, , , group]) => group))).map((group) => ({ name: group, value: metrics.filter(([, , , itemGroup]) => itemGroup === group).reduce((sum, [key]) => sum + Number(data?.summary[key] ?? 0), 0) })).filter((item) => item.value > 0)} dataKey="value" nameKey="name" innerRadius={62} outerRadius={96} paddingAngle={2}>
+                  {Array.from(new Set(metrics.map(([, , , group]) => group))).map((group) => ({ name: group, value: metrics.filter(([, , , itemGroup]) => itemGroup === group).reduce((sum, [key]) => sum + Number(data?.summary[key] ?? 0), 0) })).filter((item) => item.value > 0).map((item, index) => <Cell key={item.name} fill={[aliareColors.green, aliareColors.info, "#8b5cf6", "#f59e0b", "#0891b2", "#ef4444", "#64748b"][index % 7]} />)}
+                </Pie>
+                <ChartTooltip contentStyle={{ borderRadius: 12, border: `1px solid ${theme.palette.divider}`, background: theme.palette.background.paper, color: theme.palette.text.primary }} />
+              </PieChart>
+            </ResponsiveContainer>
+          </Box>
+          <Stack spacing={.45} sx={{ maxHeight: { sm: 235 }, overflowY: "auto" }}>
+            {Array.from(new Set(metrics.map(([, , , group]) => group))).map((group) => ({ name: group, value: metrics.filter(([, , , itemGroup]) => itemGroup === group).reduce((sum, [key]) => sum + Number(data?.summary[key] ?? 0), 0) })).filter((item) => item.value > 0).map((item, index) => (
+              <Box key={item.name} sx={{ display: "grid", gridTemplateColumns: "9px minmax(0,1fr) auto", gap: .75, alignItems: "center", px: .65, py: .4, borderRadius: 1, "&:hover": { bgcolor: "action.hover" } }}>
+                <Box sx={{ width: 8, height: 8, borderRadius: "50%", bgcolor: [aliareColors.green, aliareColors.info, "#8b5cf6", "#f59e0b", "#0891b2", "#ef4444", "#64748b"][index % 7] }} />
+                <Typography variant="caption" noWrap sx={{ fontWeight: 700 }}>{item.name}</Typography>
+                <Typography variant="caption" sx={{ fontWeight: 900 }}>{item.value}</Typography>
+              </Box>
+            ))}
+          </Stack>
         </Box>
       </CardContent></Card>
       <Card variant="outlined"><CardContent>
