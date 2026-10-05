@@ -39,6 +39,12 @@ export function Chat() {
   const [favorites, setFavorites] = useState<number[]>(() => { try { return JSON.parse(localStorage.getItem("techlead-chat-favorites") || "[]"); } catch { return []; } });
   const [soundEnabled, setSoundEnabled] = useState(() => localStorage.getItem("techlead-chat-sound") !== "off");
   const [directOpen, setDirectOpen] = useState(false);
+  const [directSearch, setDirectSearch] = useState("");
+  const [pendingShare, setPendingShare] = useState<{ label: string; recordId?: number; title: string; client?: string | null; status?: string | null; path: string } | null>(() => {
+    const raw = new URLSearchParams(window.location.search).get("share");
+    if (!raw) return null;
+    try { return JSON.parse(raw); } catch { return null; }
+  });
   const [openingDirectId, setOpeningDirectId] = useState<number | null>(null);
   const typingTimer = useRef<number | null>(null);
   const lastRealtimeMessageId = useRef<number | null>(null);
@@ -158,6 +164,11 @@ export function Chat() {
     return () => { active = false; };
   }, [loadChannels]);
   useEffect(() => {
+    if (!pendingShare) return;
+    setDirectOpen(true);
+  }, [pendingShare]);
+
+  useEffect(() => {
     if (!selectedId) { setLoading(false); return; }
     void loadMessages(selectedId);
   }, [loadMessages, selectedId]);
@@ -239,15 +250,32 @@ export function Chat() {
       setSelectedId(existing.id);
       setDirectOpen(false);
       setError("");
+      if (pendingShare) {
+        try {
+          const payload = `[hub-card]${JSON.stringify({ type: pendingShare.label, id: pendingShare.recordId, title: pendingShare.title, client: pendingShare.client || null, status: pendingShare.status || null, path: pendingShare.path })}`;
+          const sent = await api.post<Message>(`/chat/channels/${existing.id}/messages`, { content: payload });
+          setMessages((current) => [...current, sent.data]);
+          setPendingShare(null);
+          navigate(`/chat?channel=${existing.id}`, { replace: true });
+        } catch (requestError: any) { setError(requestError?.response?.data?.error || "Não foi possível compartilhar o registro."); }
+      }
       return;
     }
     try {
       setOpeningDirectId(person.id);
       const response = await api.post<Channel>(`/chat/direct/${person.id}`);
-      await loadChannels();
+      setChannels((current) => current.some((item) => item.id === response.data.id) ? current : [response.data, ...current]);
       setSelectedId(response.data.id);
       setDirectOpen(false);
       setError("");
+      if (pendingShare) {
+        const payload = `[hub-card]${JSON.stringify({ type: pendingShare.label, id: pendingShare.recordId, title: pendingShare.title, client: pendingShare.client || null, status: pendingShare.status || null, path: pendingShare.path })}`;
+        const sent = await api.post<Message>(`/chat/channels/${response.data.id}/messages`, { content: payload });
+        setMessages([sent.data]);
+        setPendingShare(null);
+        navigate(`/chat?channel=${response.data.id}`, { replace: true });
+      }
+      void loadChannels();
     } catch (requestError: any) {
       setError(requestError?.response?.data?.error || "Não foi possível iniciar a conversa privada.");
     } finally {
@@ -515,7 +543,7 @@ export function Chat() {
     </Dialog>
     <Popover open={Boolean(emojiAnchor)} anchorEl={emojiAnchor} onClose={() => setEmojiAnchor(null)} anchorOrigin={{ vertical: "top", horizontal: "left" }} transformOrigin={{ vertical: "bottom", horizontal: "left" }}><Box sx={{ display: "grid", gridTemplateColumns: "repeat(5, 42px)", gap: .5, p: 1 }}>{emojis.map((emoji) => <IconButton key={emoji} onClick={() => { append(emoji); setEmojiAnchor(null); }} sx={{ fontSize: 22 }}>{emoji}</IconButton>)}</Box></Popover>
     <Dialog open={stickersOpen} onClose={() => setStickersOpen(false)} maxWidth="xs" fullWidth><DialogTitle>Figurinhas rápidas</DialogTitle><DialogContent><Box sx={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 1, pt: .5 }}>{stickers.map((sticker) => <Button key={sticker} variant="outlined" onClick={() => { append(sticker); setStickersOpen(false); }} sx={{ minHeight: 72, fontWeight: 850 }}>{sticker}</Button>)}</Box></DialogContent></Dialog>
-    <Dialog open={directOpen} onClose={() => setDirectOpen(false)} fullWidth maxWidth="xs"><DialogTitle>Nova conversa privada</DialogTitle><DialogContent><List>{participants.filter((person) => person.id !== user?.id).map((person) => { const existingDirect = channels.some((channel) => channel.type === "DIRECT" && channel.members?.some((member) => member.user.id === person.id) && channel.members?.some((member) => member.user.id === user?.id)); return <ListItemButton key={person.id} disabled={openingDirectId === person.id} onClick={() => void openDirect(person)} sx={{ borderRadius: 1.5 }}><Box sx={{ width: 34, height: 34, borderRadius: "50%", bgcolor: "action.hover", display: "grid", placeItems: "center", mr: 1.2, fontWeight: 900 }}>{person.name.slice(0,1)}</Box><ListItemText primary={person.name} secondary={existingDirect ? "Conversa já iniciada · clique para abrir" : `@${person.username} · ${person.role}`} /></ListItemButton>; })}</List></DialogContent></Dialog>
+    <Dialog open={directOpen} onClose={() => { setDirectOpen(false); if (pendingShare) { setPendingShare(null); navigate("/chat", { replace: true }); } }} fullWidth maxWidth="xs"><DialogTitle>{pendingShare ? "Enviar para alguém" : "Nova conversa privada"}</DialogTitle><DialogContent>{pendingShare && <Paper variant="outlined" sx={{ p: 1.2, mb: 1.25, borderColor: "primary.main", bgcolor: "rgba(24,199,122,.05)" }}><Typography variant="caption" color="primary" sx={{ fontWeight: 900 }}>{pendingShare.label}{pendingShare.recordId ? ` #${pendingShare.recordId}` : ""}</Typography><Typography variant="body2" sx={{ fontWeight: 850 }}>{pendingShare.title}</Typography><Typography variant="caption" color="text.secondary">Selecione o destinatário. O card será enviado automaticamente.</Typography></Paper>}<TextField autoFocus fullWidth size="small" placeholder="Buscar pessoa..." value={directSearch} onChange={(event) => setDirectSearch(event.target.value)} sx={{ mb: 1 }} slotProps={{ input: { startAdornment: <SearchOutlined sx={{ mr: .6, fontSize: 18, color: "text.secondary" }} /> } }} /><List sx={{ maxHeight: 360, overflowY: "auto" }}>{participants.filter((person) => person.id !== user?.id && [person.name, person.username, person.role].some((value) => value.toLowerCase().includes(directSearch.toLowerCase()))).map((person) => { const existingDirect = channels.some((channel) => channel.type === "DIRECT" && channel.members?.some((member) => member.user.id === person.id) && channel.members?.some((member) => member.user.id === user?.id)); const personPresence = presence.find((item) => item.userId === person.id); return <ListItemButton key={person.id} disabled={openingDirectId === person.id} onClick={() => void openDirect(person)} sx={{ borderRadius: 1.5, mb: .35 }}><Box sx={{ position: "relative", width: 36, height: 36, borderRadius: "50%", bgcolor: "action.hover", display: "grid", placeItems: "center", mr: 1.2, fontWeight: 900 }}>{person.name.slice(0,1)}<Circle sx={{ position: "absolute", right: -1, bottom: -1, fontSize: 9, color: presenceColor(personPresence?.effectiveStatus) }} /></Box><ListItemText primary={person.name} secondary={pendingShare ? (existingDirect ? "Enviar na conversa existente" : `@${person.username} · iniciar e enviar`) : (existingDirect ? "Conversa já iniciada · clique para abrir" : `@${person.username} · ${person.role}`)} />{openingDirectId === person.id && <CircularProgress size={18} />}</ListItemButton>; })}</List></DialogContent></Dialog>
     <Dialog open={createOpen} onClose={() => setCreateOpen(false)} fullWidth maxWidth="sm">
       <DialogTitle>Novo canal da equipe</DialogTitle>
       <DialogContent>
