@@ -71,3 +71,29 @@ export function auditOperationalMetrics(input: MetricAuditInput): MetricAuditIss
   }
   return issues;
 }
+
+
+export type DataCoverage = {
+  total: number;
+  populated: number;
+  missing: number;
+  rate: number;
+};
+
+export function dataCoverage<T>(rows: T[], predicate: (row: T) => boolean): DataCoverage {
+  const populated = rows.filter(predicate).length;
+  const total = rows.length;
+  return {
+    total,
+    populated,
+    missing: Math.max(0, total - populated),
+    rate: total ? Math.round((populated / total) * 1000) / 10 : 0,
+  };
+}
+
+export function classifyCoverage(coverage: DataCoverage): "complete" | "partial" | "unavailable" | "empty" {
+  if (coverage.total === 0) return "empty";
+  if (coverage.populated === 0) return "unavailable";
+  if (coverage.populated === coverage.total) return "complete";
+  return "partial";
+}
