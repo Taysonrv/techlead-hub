@@ -1,4 +1,4 @@
-import { Prisma } from "@prisma/client";
+
 import { prisma } from "../database/prisma";
 import { MovideskService } from "../services/MovideskService";
 import { clearMovideskApiPriority, releaseMovideskApi, requestMovideskApiPriority, tryAcquireMovideskApi } from "./MovideskSyncCoordinator";
@@ -6,9 +6,6 @@ import { clearMovideskApiPriority, releaseMovideskApi, requestMovideskApiPriorit
 const DEFAULT_INTERVAL_MINUTES = 60;
 const DEFAULT_INITIAL_DELAY_SECONDS = 5;
 const METADATA_CONTINUATION_SECONDS = 15;
-const LOCK_NAMESPACE = 864211;
-const LOCK_RESOURCE = 2;
-type LockRow = { acquired: boolean };
 
 export class MovideskSyncScheduler {
   private timer: NodeJS.Timeout | null = null;
@@ -72,23 +69,11 @@ export class MovideskSyncScheduler {
         return null;
       }
 
-      const result = await prisma.$transaction(async (tx) => {
-        const rows = await tx.$queryRaw<LockRow[]>(Prisma.sql`
-          SELECT pg_try_advisory_xact_lock(
-            CAST(${LOCK_NAMESPACE} AS integer),
-            CAST(${LOCK_RESOURCE} AS integer)
-          ) AS acquired
-        `);
-        if (rows[0]?.acquired !== true) return { acquired: false as const, sync: null };
-        const sync = await service.syncTickets(null, false);
-        return { acquired: true as const, sync };
-      }, { maxWait: 5_000, timeout: 55 * 60 * 1000 });
-
-      if (!result.acquired) {
-        console.log("[movidesk-sync] Ciclo ignorado: outra instância já está sincronizando.");
-        return null;
-      }
-      const s = result.sync;
+      // Não mantenha uma transação Prisma aberta durante toda a sincronização.
+      // Uma interactive transaction reserva uma conexão do pool enquanto syncTickets()
+      // executa chamadas externas e centenas de operações, podendo bloquear autenticação e Chat.
+      // A exclusão local já é garantida por this.running + MovideskSyncCoordinator.
+      const s = await service.syncTickets(null, false);
       const metadataRemaining = s.analyticalMetadataRemaining ?? 0;
       console.log([
         "[movidesk-sync] Sincronização concluída.",
