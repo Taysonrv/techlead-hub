@@ -232,7 +232,7 @@ export function MyOperation() {
       <Stack direction="row" spacing={1} sx={{ mt: 3, flexWrap: "wrap" }}><Button variant="outlined" startIcon={<ShareOutlined />} onClick={() => {
         if (!selected) return;
         const path = selected.source === "MOVIDESK" ? `/tickets?movidesk=${selected.id}` : `${route(selected.type)}?task=${selected.id}`;
-        window.dispatchEvent(new CustomEvent("techlead-hub:share-chat", { detail: { label: selected.type, title: `#${selected.id} · ${selected.title}`, path } }));
+        window.dispatchEvent(new CustomEvent("techlead-hub:share-chat", { detail: { label: selected.type, recordId: selected.id, title: selected.title, client: selected.client, status: selected.status, path } }));
       }}>Compartilhar no Chat</Button><Button variant="contained" onClick={() => selected && navigate(selected.source === "MOVIDESK" ? `/tickets?movidesk=${selected.id}` : `${route(selected.type)}?task=${selected.id}`)}>Abrir registro completo</Button>{selected?.workItem?.movideskTicket && <Button onClick={() => navigate(`/tickets?movidesk=${selected?.workItem?.movideskTicket}`)}>Abrir atendimento</Button>}</Stack>
     </Drawer>
   </Box>;
