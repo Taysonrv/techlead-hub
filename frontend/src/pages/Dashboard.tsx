@@ -43,6 +43,7 @@ import { useNavigate } from "react-router-dom";
 import { getTicketSnapshot } from "../services/ticketSnapshot";
 import { PeriodFilter } from "../components/PeriodFilter";
 import { PageHeader } from "../components/PageHeader";
+import { ContentState } from "../components/ContentState";
 import { detailDrawerPaperSx } from "../theme/layoutTokens";
 import { KpiCard as ExecutiveKpiCard } from "../components/KpiCard";
 import { ExportTicketsButton } from "../components/ExportTicketsButton";
@@ -1071,23 +1072,7 @@ export function Dashboard() {
   ======================================================= */
 
   if (loading) {
-    return (
-      <Box
-        sx={{
-          display: "flex",
-          justifyContent:
-            "center",
-          mt: 8,
-        }}
-      >
-        <CircularProgress
-          sx={{
-            color:
-              aliareColors.green,
-          }}
-        />
-      </Box>
-    );
+    return <ContentState kind="loading" title="Carregando visão executiva" minHeight={360} />;
   }
 
   if (error) {
