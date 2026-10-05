@@ -324,7 +324,15 @@ export function Dashboard() {
   const criticalTickets = useMemo(() => pendingTickets.filter((ticket) => normalize(ticket.urgency) === "critica"), [pendingTickets]);
 
   const responseSla = useMemo(() => calculateTimestampSla(openedBySimerOperationInPeriod, "response"), [openedBySimerOperationInPeriod]);
-  const solutionSla = useMemo(() => calculateTimestampSla(openedBySimerOperationInPeriod, "solution"), [openedBySimerOperationInPeriod]);
+
+  // SLA de solução segue a leitura oficial do Movidesk: pertence ao período
+  // em que a solução ocorreu. Isso inclui tickets abertos em meses anteriores.
+  const solutionPeriodTickets = useMemo(() => tickets.filter((ticket) => {
+    if (ticket.isWithSimer !== true || !ticket.resolvedDate) return false;
+    return isDateInPeriod(ticket.resolvedDate, periodBounds.start, periodBounds.end);
+  }), [tickets, periodBounds]);
+
+  const solutionSla = useMemo(() => calculateTimestampSla(solutionPeriodTickets, "solution"), [solutionPeriodTickets]);
 
   const summary = useMemo(() => ({
     abertosNoPeriodo: openedInPeriod.length,
@@ -1009,7 +1017,7 @@ export function Dashboard() {
         calculation: "Tickets concluídos no prazo ÷ tickets com timestamps válidos × 100.",
         source: "Movidesk · timestamps e prazos sincronizados",
         reference: "resolvedDate/closedDate ≤ dueDate",
-        periodRule: "Considera tickets abertos no período selecionado, igual às telas Clientes e Desempenho.",
+        periodRule: "Considera tickets resolvidos no período selecionado, independentemente da data de abertura.",
         notes: "Registros sem medição ficam fora do denominador.",
       },
       onClick: () => showTickets("SLA de solução", solutionSla.measuredTickets, `${solutionSla.within} dentro • ${solutionSla.outside} fora • ${solutionSla.unmeasured} sem medição`),
