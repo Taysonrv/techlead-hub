@@ -48,6 +48,7 @@ import {
   TaskAltOutlined,
   TimelineOutlined,
   TuneOutlined,
+  ShareOutlined,
 } from "@mui/icons-material";
 
 import {
@@ -5174,6 +5175,19 @@ export function AzureWorkItems({
                 }}
                 spacing={1}
               >
+                <Button
+                  fullWidth
+                  variant="outlined"
+                  startIcon={<ShareOutlined />}
+                  onClick={() => {
+                    const value = selectedWorkItem.workItemType.toLocaleLowerCase("pt-BR");
+                    const route = value.includes("apoio") ? "/apoios" : value.includes("evolu") ? "/evolucoes" : "/correcoes";
+                    window.dispatchEvent(new CustomEvent("techlead-hub:share-chat", { detail: { label: selectedWorkItem.workItemType, title: `#${selectedWorkItem.id} · ${selectedWorkItem.title}`, path: `${route}?task=${selectedWorkItem.id}` } }));
+                  }}
+                >
+                  Compartilhar no Chat
+                </Button>
+
                 {selectedWorkItem.azureWebUrl && (
                   <Button
                     fullWidth
