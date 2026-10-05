@@ -181,7 +181,7 @@ function AuthenticatedLayout({
                 px: isChat ? 0 : { xs: 1.5, sm: 2, md: 2.5, lg: 3, xl: 4 },
                 pb: isChat ? 0 : { xs: 3, md: 4 },
                 minHeight: isChat ? 0 : "calc(100vh - 96px)",
-                height: isChat ? "100dvh" : "auto",
+                height: isChat ? { xs: "calc(100dvh - 62px)", md: "calc(100dvh - 70px)" } : "auto",
                 overflow: isChat ? "hidden" : "visible",
                 boxSizing: "border-box",
                 position: "relative",
