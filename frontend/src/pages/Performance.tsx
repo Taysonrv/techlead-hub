@@ -1666,114 +1666,121 @@ function DonutCard({
           <CardInfoButton info={info} />
         </Stack>
 
-        <Box sx={{ height: 205, mt: 1 }}>
-          {data.length > 0 ? (
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={chartData}
-                  dataKey="value"
-                  nameKey="name"
-                  innerRadius={62}
-                  outerRadius={88}
-                  paddingAngle={2}
-                  cornerRadius={5}
-                  stroke={theme.palette.background.paper}
-                  strokeWidth={1.5}
-                  cursor={onSliceClick ? "pointer" : "default"}
-                  onClick={(entry) => {
-                    const candidate = entry as {
-                      name?: unknown;
-                      payload?: { name?: unknown };
-                    };
-
-                    const name =
-                      typeof candidate.name === "string"
-                        ? candidate.name
-                        : typeof candidate.payload?.name === "string"
-                        ? candidate.payload.name
-                        : null;
-
-                    if (name) {
-                      onSliceClick?.(name);
-                    }
-                  }}
-                >
-                  {chartData.map((item) => (
-                    <Cell key={item.name} fill={item.color} />
-                  ))}
-                </Pie>
-
-                <Tooltip
-                  contentStyle={{
-                    borderRadius: 12,
-                    border: `1px solid ${theme.palette.divider}`,
-                    background: theme.palette.background.paper,
-                    boxShadow: "0 14px 36px rgba(0,0,0,.18)",
-                  }}
-                  cursor={false}
-                />
-
-                <text
-                  x="50%"
-                  y="47%"
-                  textAnchor="middle"
-                  dominantBaseline="middle"
-                  style={{
-                    fontSize: 23,
-                    fontWeight: 800,
-                    fill: theme.palette.text.primary,
-                  }}
-                >
-                  {hiddenItems.size > 0 ? visibleTotal : centerValue}
-                </text>
-
-                <text
-                  x="50%"
-                  y="59%"
-                  textAnchor="middle"
-                  dominantBaseline="middle"
-                  style={{
-                    fontSize: 11,
-                    fill: theme.palette.text.secondary,
-                  }}
-                >
-                  {centerLabel}
-                </text>
-              </PieChart>
-            </ResponsiveContainer>
-          ) : (
-            <EmptyState text="Sem dados para este indicador." />
-          )}
-        </Box>
-
-        {data.length > 0 && (
-          <Stack spacing={0.55}>
-            {data.map((item) => {
-              const active = !hiddenItems.has(item.name);
-              return (
-                <Box
-                  key={item.name}
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => toggleItem(item.name)}
-                  onDoubleClick={() => onSliceClick?.(item.name)}
-                  onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") toggleItem(item.name); }}
-                  sx={{
-                    display: "grid", gridTemplateColumns: "10px 1fr auto", gap: .8, alignItems: "center",
-                    px: .7, py: .35, borderRadius: 1, cursor: "pointer", opacity: active ? 1 : .38,
-                    textDecoration: active ? "none" : "line-through", transition: "all .2s ease",
-                    "&:hover": { bgcolor: "action.hover", transform: "translateX(2px)" },
-                  }}
-                >
-                  <Box sx={{ width: 8, height: 8, borderRadius: "50%", bgcolor: active ? item.color : "text.disabled", boxShadow: active ? `0 0 8px ${item.color}88` : "none" }} />
-                  <Typography variant="caption" sx={{ fontWeight: 700 }}>{item.name}</Typography>
-                  <Typography variant="caption" sx={{ fontWeight: 900 }}>{item.value}</Typography>
-                </Box>
-              );
-            })}
-          </Stack>
-        )}
+        <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "minmax(190px,.9fr) minmax(0,1.1fr)" }, gap: { xs: .75, sm: 1.5 }, alignItems: "center", mt: 1 }}>
+          <Box sx={{ height: { xs: 210, sm: 225 }, minWidth: 0 }}>
+            
+                      {data.length > 0 ? (
+                        <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                            <Pie
+                              data={chartData}
+                              dataKey="value"
+                              nameKey="name"
+                              innerRadius={62}
+                              outerRadius={88}
+                              paddingAngle={2}
+                              cornerRadius={5}
+                              stroke={theme.palette.background.paper}
+                              strokeWidth={1.5}
+                              cursor={onSliceClick ? "pointer" : "default"}
+                              onClick={(entry) => {
+                                const candidate = entry as {
+                                  name?: unknown;
+                                  payload?: { name?: unknown };
+                                };
+            
+                                const name =
+                                  typeof candidate.name === "string"
+                                    ? candidate.name
+                                    : typeof candidate.payload?.name === "string"
+                                    ? candidate.payload.name
+                                    : null;
+            
+                                if (name) {
+                                  onSliceClick?.(name);
+                                }
+                              }}
+                            >
+                              {chartData.map((item) => (
+                                <Cell key={item.name} fill={item.color} />
+                              ))}
+                            </Pie>
+            
+                            <Tooltip
+                              contentStyle={{
+                                borderRadius: 12,
+                                border: `1px solid ${theme.palette.divider}`,
+                                background: theme.palette.background.paper,
+                                boxShadow: "0 14px 36px rgba(0,0,0,.18)",
+                              }}
+                              cursor={false}
+                            />
+            
+                            <text
+                              x="50%"
+                              y="47%"
+                              textAnchor="middle"
+                              dominantBaseline="middle"
+                              style={{
+                                fontSize: 23,
+                                fontWeight: 800,
+                                fill: theme.palette.text.primary,
+                              }}
+                            >
+                              {hiddenItems.size > 0 ? visibleTotal : centerValue}
+                            </text>
+            
+                            <text
+                              x="50%"
+                              y="59%"
+                              textAnchor="middle"
+                              dominantBaseline="middle"
+                              style={{
+                                fontSize: 11,
+                                fill: theme.palette.text.secondary,
+                              }}
+                            >
+                              {centerLabel}
+                            </text>
+                          </PieChart>
+                        </ResponsiveContainer>
+                      ) : (
+                        <EmptyState text="Sem dados para este indicador." />
+                      )}
+                    </Box>
+            
+            
+          </Box>
+          <Box sx={{ minWidth: 0, maxHeight: { sm: 225 }, overflowY: "auto", pr: { sm: .5 } }}>
+                    {data.length > 0 && (
+                      <Stack spacing={0.55}>
+                        {data.map((item) => {
+                          const active = !hiddenItems.has(item.name);
+                          return (
+                            <Box
+                              key={item.name}
+                              role="button"
+                              tabIndex={0}
+                              onClick={() => toggleItem(item.name)}
+                              onDoubleClick={() => onSliceClick?.(item.name)}
+                              onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") toggleItem(item.name); }}
+                              sx={{
+                                display: "grid", gridTemplateColumns: "10px 1fr auto", gap: .8, alignItems: "center",
+                                px: .7, py: .35, borderRadius: 1, cursor: "pointer", opacity: active ? 1 : .38,
+                                textDecoration: active ? "none" : "line-through", transition: "all .2s ease",
+                                "&:hover": { bgcolor: "action.hover", transform: "translateX(2px)" },
+                              }}
+                            >
+                              <Box sx={{ width: 8, height: 8, borderRadius: "50%", bgcolor: active ? item.color : "text.disabled", boxShadow: active ? `0 0 8px ${item.color}88` : "none" }} />
+                              <Typography variant="caption" sx={{ fontWeight: 700 }}>{item.name}</Typography>
+                              <Typography variant="caption" sx={{ fontWeight: 900 }}>{item.value}</Typography>
+                            </Box>
+                          );
+                        })}
+                      </Stack>
+            
+          </Box>
+        </Box>        )}
       </ExecutiveSection>
   );
 }
