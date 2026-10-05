@@ -20,6 +20,7 @@ type Sample = {
   module: string | null; category?: string | null; cause?: string | null; reason?: string | null; service?: string | null;
   serviceFirstLevel?: string | null; serviceSecondLevel?: string | null; serviceThirdLevel?: string | null; servicePath?: string | null;
   serviceSuggestion?: { path: string; service: string; module: string | null; confidence: "HIGH" | "MEDIUM" | "LOW"; score: number; evidence: string[]; reasons: string[]; alternatives: Array<{ path: string; service: string; score: number }> } | null;
+  classificationReview?: { suggestedCategory: "Problema" | "Dúvida" | null; suggestedCause: string | null; confidence: "ALTA" | "MÉDIA"; evidence: string[]; reason: string } | null;
   assignedToName: string | null; movideskTicket: number | null;
   participantClients?: string | string[] | null;
   participantMovideskTickets?: string | number[] | null;
@@ -39,13 +40,11 @@ const metrics = [
   ["problemWithoutCause", "Problema sem causa", "Atendimento aberto com categoria Problema e sem Causa informada. A causa é obrigatória para qualificar a origem do problema e alimentar a análise operacional.", "Classificação"],
   ["doubtWithoutReason", "Dúvida sem motivo", "Atendimento aberto com categoria Dúvida e sem Motivo informado. O motivo deve identificar a natureza da orientação solicitada.", "Classificação"],
   ["withoutCategory", "Ticket sem categoria", "Atendimento aberto sem Categoria informada ou com classificação genérica equivalente a não informado.", "Classificação"],
-  ["awaitingReturnWithoutCause", "Aguardando retorno sem causa", "Atendimento aberto de cliente SIMER aguardando retorno, mas sem causa informada ou com valor genérico. A causa deve registrar por que o atendimento depende do cliente.", "Classificação"],
   ["awaitingReturnOverdue", "Retorno do cliente acima de 3 dias", "Atendimento aberto aguardando retorno do cliente, sem movimentação há mais de três dias. Permite cobrar, reavaliar ou encerrar conforme o processo.", "Prazo"],
   ["reopenedTickets", "Atendimentos reabertos", "Atendimentos ativos que já foram reabertos. Devem ser acompanhados para identificar falha na solução, recorrência ou validação incompleta.", "Recorrência"],
   ["excessiveOwnerHandoffs", "Muitas trocas de responsável", "Atendimentos ativos com três ou mais trocas de responsável. Pode indicar roteamento incorreto, falta de domínio ou quebra de continuidade.", "Coordenação"],
   ["lowSatisfaction", "Baixa satisfação", "Atendimentos dos clientes SIMER com avaliação igual ou inferior a 2. Exige análise do histórico e plano de recuperação.", "Experiência"],
-  ["suspectedClassification", "Categoria ou causa a revisar", "Atendimento aberto de cliente SIMER sem categoria ou causa, com valor genérico ou combinação contraditória entre dúvida/orientação e problema/erro.", "Classificação"],
-  ["withoutService", "Atendimentos sem serviço", "Atendimentos abertos sem Serviço ou sem qualquer nível da hierarquia de serviço do Movidesk. Devem ser classificados para permitir análise correta por módulo e rotina.", "Serviço"],
+  ["suspectedClassification", "Classificação possivelmente divergente", "Compara título e contexto recente do atendimento com Categoria e Causa informadas. Só sinaliza quando encontra evidência textual de classificação diferente; a sugestão exige validação humana.", "Classificação"],
   ["genericSimerService", "Serviço SIMER genérico", "Atendimentos abertos classificados somente em níveis genéricos como SIAGRI SIMER/SIMER, sem uma rotina específica. São candidatos à revisão do serviço informado.", "Serviço"],
   ["suspectedServiceMismatch", "Possível serviço incorreto", "Atendimentos cujo assunto, categoria e causa apontam para um Serviço SIMER diferente do atualmente classificado. A indicação é assistiva e deve ser validada pelo analista antes de qualquer ajuste.", "Serviço"],
   ["ticketOpenTaskFinished", "Pronto para encerrar", "Ticket ainda pendente, mas a Tarefa foi cancelada ou concluída e possui versão efetivamente entregue. Aguardando validar versão não entra neste recorte.", "Fluxo"],
@@ -53,7 +52,6 @@ const metrics = [
   ["ticketClosedTaskOpen", "Ticket encerrado com Tarefa ativa", "Ticket concluído, fechado ou resolvido enquanto a Tarefa relacionada ainda está em andamento.", "Fluxo"],
   ["activeTaskWithVersion", "Tarefa ativa com versão entregue", "Tarefa não finalizada vinculada a atendimento que já possui versão entregue. Pode indicar estado desatualizado.", "Versão"],
   ["completedWithoutVersion", "Tarefa finalizada sem versão entregue", "Correção ou evolução concluída e vinculada a atendimento sem versão entregue no Azure.", "Versão"],
-  ["versionMismatch", "Versão cadastrada ≠ entregue", "Correção ou evolução possui versão cadastrada diferente da versão efetivamente registrada na entrega. O indicador ajuda a identificar classificação desatualizada ou entrega divergente.", "Versão"],
   ["clientMismatch", "Cliente divergente", "O cliente do atendimento não consta como cliente principal nem como cliente participante da Correção ou Evolução relacionada. APOIO não exige cliente.", "Vínculo"],
   ["supportLinkDivergence", "APOIO com vínculo divergente", "APOIO referencia ticket inexistente no recorte ou ticket que aponta para outra Tarefa. Cliente e versão não são obrigatórios para APOIO.", "APOIO"],
   ["danglingTaskTickets", "Referência de Tarefa inexistente", "Ticket aponta para um ID de Tarefa ausente no snapshot atual do Azure.", "Vínculo"],
@@ -72,12 +70,11 @@ const coordinationMetricKeys = new Set([
   "withoutTicket",
   "withoutClient",
   "completedWithoutVersion",
-  "versionMismatch",
   "problemWithoutCause",
   "doubtWithoutReason",
   "withoutCategory",
   "suspectedClassification",
-  "withoutService",
+  "genericSimerService",
 ]);
 const coordinationMetrics = metrics.filter(([key]) => coordinationMetricKeys.has(key));
 
@@ -87,7 +84,6 @@ const priorityWeight: Record<string, number> = {
   ticketOpenTaskWithoutDelivery: 90,
   danglingTaskTickets: 88,
   completedWithoutVersion: 82,
-  versionMismatch: 78,
   reopenedTickets: 72,
   excessiveOwnerHandoffs: 68,
   withoutTicket: 64,
@@ -96,7 +92,7 @@ const priorityWeight: Record<string, number> = {
   doubtWithoutReason: 58,
   withoutCategory: 62,
   suspectedClassification: 46,
-  withoutService: 42,
+  genericSimerService: 48,
 };
 
 function priorityLevel(score: number) {
@@ -161,9 +157,7 @@ export function DataQuality() {
       problemWithoutCause: "Informar a Causa no Movidesk para o atendimento classificado como Problema.",
       doubtWithoutReason: "Informar o Motivo no Movidesk para o atendimento classificado como Dúvida.",
       withoutCategory: "Informar a Categoria correta do atendimento no Movidesk.",
-      awaitingReturnWithoutCause: "Informar a causa antes de manter o atendimento aguardando retorno.",
-      suspectedClassification: "Revisar categoria e causa conforme o assunto e a causa raiz.",
-      withoutService: "Informar o Serviço correto do atendimento no Movidesk.",
+      suspectedClassification: "Validar a sugestão contextual contra o atendimento e ajustar Categoria/Causa somente quando a evidência fizer sentido.",
       genericSimerService: "Revisar o atendimento e substituir o Serviço SIMER genérico pela rotina específica quando aplicável.",
       suspectedServiceMismatch: "Validar a sugestão contra o contexto do atendimento e corrigir o Serviço no Movidesk somente quando fizer sentido.",
       awaitingReturnOverdue: "Cobrar retorno, registrar a ação e reavaliar manutenção do ticket aberto.",
@@ -175,7 +169,6 @@ export function DataQuality() {
       ticketClosedTaskOpen: "Atualizar o estado da Tarefa ou reabrir o atendimento.",
       activeTaskWithVersion: "Validar se a Tarefa já pode ser concluída.",
       completedWithoutVersion: "Informar a versão efetivamente entregue.",
-      versionMismatch: "Validar a versão planejada no cadastro e a versão efetivamente entregue antes de ajustar o registro.",
       clientMismatch: "Revisar cliente principal e clientes participantes.",
       supportLinkDivergence: "Corrigir o vínculo do APOIO com o atendimento.",
       danglingTaskTickets: "Corrigir ou remover a referência de Tarefa no atendimento.",
