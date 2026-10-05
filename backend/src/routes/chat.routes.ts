@@ -27,11 +27,11 @@ chatRoutes.get("/events", async (req: AuthenticatedRequest, res) => {
         res.write(": heartbeat\n\n");
       }
     } catch {
-      res.write("event: error\ndata: {}\n\n");
+      // Falha transitória de banco/pool não deve derrubar o stream nem gerar tempestade
+      // de reconexões. Mantém o SSE vivo e tenta novamente no próximo ciclo.
+      res.write(": realtime temporarily unavailable\n\n");
     }
-    // Evita pressionar o pool do Prisma: cada snapshot consulta presença, digitação e última mensagem.
-    // Cinco segundos mantém a experiência de chat responsiva sem competir com Dashboard/Clientes.
-    await new Promise((resolve) => setTimeout(resolve, 5000));
+    await new Promise((resolve) => setTimeout(resolve, 15_000));
   }
   res.end();
 });
