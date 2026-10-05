@@ -2268,26 +2268,6 @@ function ClickableTableMetric({
   );
 }
 
-function EmptyState({
-  text,
-}: {
-  text: string;
-}) {
-  return (
-    <Box
-      sx={{
-        height: "100%",
-        minHeight: 90,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        textAlign: "center",
-        px: 2,
-      }}
-    >
-      <Typography variant="body2" color="text.secondary">
-        {text}
-      </Typography>
-    </Box>
-  );
+function EmptyState({ text }: { text: string }) {
+  return <ContentState kind="empty" description={text} minHeight={120} />;
 }
