@@ -50,6 +50,9 @@ import {
   CloseRounded,
   OpenInFullRounded,
   Circle,
+  SearchOutlined,
+  ShareOutlined,
+  DoneAllRounded,
 } from "@mui/icons-material";
 
 import {
@@ -140,6 +143,9 @@ export function Sidebar() {
   type FloatingChat = { channelId: number; channelName: string; minimized: boolean; unread: number; peerId?: number; peerName?: string; presence?: "ONLINE" | "AWAY" | "BUSY" | "OFFLINE"; typingNames: string[]; messages: Array<{ id: number; content: string; createdAt: string; author: { id: number; name: string } }> };
   const [floatingChats, setFloatingChats] = useState<FloatingChat[]>([]);
   const [floatingDrafts, setFloatingDrafts] = useState<Record<number, string>>({});
+  const [floatingSearch, setFloatingSearch] = useState<Record<number, string>>({});
+  const [floatingSearchOpen, setFloatingSearchOpen] = useState<Record<number, boolean>>({});
+  const [shareContext, setShareContext] = useState<{ label: string; title: string; path: string } | null>(null);
   const floatingPollRef = useRef<number | null>(null);
   const floatingHydratedRef = useRef(false);
 
@@ -286,6 +292,23 @@ export function Sidebar() {
     floatingPollRef.current = window.setInterval(() => void refresh(), 5000);
     return () => { if (floatingPollRef.current) window.clearInterval(floatingPollRef.current); floatingPollRef.current = null; };
   }, [floatingChats.map((item) => item.channelId).join(",")]);
+
+  useEffect(() => {
+    const receiveShare = (event: Event) => {
+      const detail = (event as CustomEvent<{ label?: string; title?: string; path?: string }>).detail;
+      if (!detail?.title) return;
+      setShareContext({ label: detail.label || "Registro", title: detail.title, path: detail.path || location.pathname + location.search });
+    };
+    window.addEventListener("techlead-hub:share-chat", receiveShare);
+    return () => window.removeEventListener("techlead-hub:share-chat", receiveShare);
+  }, [location.pathname, location.search]);
+
+  const shareIntoFloatingChat = useCallback((channelId: number) => {
+    if (!shareContext) return;
+    const text = `[${shareContext.label}] ${shareContext.title}\n${shareContext.path}`;
+    setFloatingDrafts((current) => ({ ...current, [channelId]: [current[channelId], text].filter(Boolean).join("\n") }));
+    setShareContext(null);
+  }, [shareContext]);
 
   /* =======================================================
      VERSÃO DO APLICATIVO
@@ -916,7 +939,7 @@ export function Sidebar() {
           {chatPopup && <Stack direction="row" spacing={1.1} sx={{ alignItems: "flex-start" }}>
             <UserAvatar user={{ name: chatPopup.authorName } as any} size={40} sx={{ backgroundColor: aliareColors.green, color: aliareColors.black }} />
             <Box sx={{ minWidth: 0, flex: 1 }}>
-              <Typography variant="caption" sx={{ fontWeight: 900, color: aliareColors.green, letterSpacing: ".04em" }}>NOVA MENSAGEM</Typography>
+              <Typography variant="caption" sx={{ fontWeight: 900, color: aliareColors.green, letterSpacing: ".04em" }}>{chatUnread > 1 ? `${chatUnread} NOVAS MENSAGENS` : "NOVA MENSAGEM"}</Typography>
               <Typography sx={{ fontWeight: 900, lineHeight: 1.2 }} noWrap>{chatPopup.authorName}</Typography>
               <Typography variant="caption" color="text.secondary" noWrap sx={{ display: "block" }}>{chatPopup.channelName}</Typography>
               <Typography variant="body2" sx={{ mt: .55, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{chatPopup.preview}</Typography>
@@ -933,14 +956,16 @@ export function Sidebar() {
             <Box sx={{ position: "relative", width: 30, height: 30, mr: .8, borderRadius: "50%", bgcolor: "rgba(255,255,255,.18)", display: "grid", placeItems: "center", fontWeight: 900 }}>{(chat.peerName || chat.channelName).slice(0,1).toUpperCase()}{chat.peerId && <Circle sx={{ position: "absolute", right: -1, bottom: -1, fontSize: 9, color: chat.presence === "ONLINE" ? "#45e39a" : chat.presence === "AWAY" ? "#ffd166" : chat.presence === "BUSY" ? "#ff6b6b" : "rgba(255,255,255,.48)", stroke: "currentColor" }} />}</Box>
             <Box sx={{ minWidth: 0, flex: 1 }}><Typography variant="body2" noWrap sx={{ fontWeight: 900 }}>{chat.channelName}</Typography>{chat.peerId && <Typography variant="caption" sx={{ display: "block", lineHeight: 1, opacity: .72 }}>{chat.presence === "ONLINE" ? "Online" : chat.presence === "AWAY" ? "Ausente" : chat.presence === "BUSY" ? "Ocupado" : "Offline"}</Typography>}</Box>
             {chat.unread > 0 && <Badge badgeContent={chat.unread} color="error" sx={{ mr: 1 }} />}
-            <Tooltip title="Abrir na Central de Conversas"><IconButton size="small" color="inherit" onClick={(event) => { event.stopPropagation(); navigate(`/chat?channel=${chat.channelId}`); }}><OpenInFullRounded fontSize="small" /></IconButton></Tooltip><Tooltip title={chat.minimized ? "Restaurar" : "Minimizar"}><IconButton size="small" color="inherit"><RemoveRounded fontSize="small" /></IconButton></Tooltip>
+            <Tooltip title="Buscar nesta conversa"><IconButton size="small" color="inherit" onClick={(event) => { event.stopPropagation(); setFloatingSearchOpen((current) => ({ ...current, [chat.channelId]: !current[chat.channelId] })); }}><SearchOutlined fontSize="small" /></IconButton></Tooltip><Tooltip title="Abrir na Central de Conversas"><IconButton size="small" color="inherit" onClick={(event) => { event.stopPropagation(); navigate(`/chat?channel=${chat.channelId}`); }}><OpenInFullRounded fontSize="small" /></IconButton></Tooltip><Tooltip title={chat.minimized ? "Restaurar" : "Minimizar"}><IconButton size="small" color="inherit"><RemoveRounded fontSize="small" /></IconButton></Tooltip>
             <Tooltip title="Fechar"><IconButton size="small" color="inherit" onClick={(event) => { event.stopPropagation(); setFloatingChats((current) => current.filter((item) => item.channelId !== chat.channelId)); }}><CloseRounded fontSize="small" /></IconButton></Tooltip>
           </Stack>
           {!chat.minimized && <>
+            {floatingSearchOpen[chat.channelId] && <Box sx={{ p: .75, borderBottom: "1px solid", borderColor: "divider", bgcolor: "background.paper" }}><TextField autoFocus size="small" fullWidth placeholder="Buscar nesta conversa..." value={floatingSearch[chat.channelId] ?? ""} onChange={(event) => setFloatingSearch((current) => ({ ...current, [chat.channelId]: event.target.value }))} slotProps={{ input: { startAdornment: <SearchOutlined sx={{ mr: .6, fontSize: 17, color: "text.secondary" }} /> } }} /></Box>}
+            {shareContext && <Box sx={{ px: 1, py: .65, bgcolor: "action.hover", borderBottom: "1px solid", borderColor: "divider" }}><Stack direction="row" spacing={.7} sx={{ alignItems: "center" }}><ShareOutlined sx={{ fontSize: 16, color: "primary.main" }} /><Typography variant="caption" noWrap sx={{ flex: 1 }}><b>{shareContext.label}:</b> {shareContext.title}</Typography><Button size="small" onClick={() => shareIntoFloatingChat(chat.channelId)}>Inserir</Button></Stack></Box>}
             <Box sx={{ flex: 1, overflowY: "auto", p: 1, bgcolor: "background.default" }}>
-              {chat.messages.slice(-30).map((message) => {
+              {chat.messages.filter((message) => !floatingSearch[chat.channelId]?.trim() || message.content.toLowerCase().includes(floatingSearch[chat.channelId].trim().toLowerCase())).slice(-30).map((message) => {
                 const mine = message.author.id === user?.id;
-                return <Box key={message.id} sx={{ display: "flex", justifyContent: mine ? "flex-end" : "flex-start", mb: .65 }}><Box sx={{ maxWidth: "82%", px: 1, py: .65, borderRadius: mine ? "12px 12px 3px 12px" : "12px 12px 12px 3px", bgcolor: mine ? "primary.main" : "background.paper", color: mine ? "primary.contrastText" : "text.primary", border: mine ? 0 : "1px solid", borderColor: "divider" }}><Typography variant="caption" sx={{ fontWeight: 800, opacity: .72 }}>{mine ? "Você" : message.author.name}</Typography><Typography variant="body2" sx={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{message.content.startsWith("[anexo] ") ? "📎 Arquivo" : message.content}</Typography></Box></Box>;
+                return <Box key={message.id} sx={{ display: "flex", justifyContent: mine ? "flex-end" : "flex-start", mb: .65 }}><Box sx={{ maxWidth: "82%", px: 1, py: .65, borderRadius: mine ? "12px 12px 3px 12px" : "12px 12px 12px 3px", bgcolor: mine ? "primary.main" : "background.paper", color: mine ? "primary.contrastText" : "text.primary", border: mine ? 0 : "1px solid", borderColor: "divider" }}><Typography variant="caption" sx={{ fontWeight: 800, opacity: .72 }}>{mine ? "Você" : message.author.name}</Typography><Typography variant="body2" sx={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{message.content.startsWith("[anexo] ") ? "📎 Arquivo" : message.content}</Typography><Stack direction="row" spacing={.35} sx={{ mt: .25, justifyContent: "flex-end", alignItems: "center", opacity: .68 }}><Typography variant="caption" sx={{ fontSize: ".62rem" }}>{new Date(message.createdAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</Typography>{mine && <DoneAllRounded sx={{ fontSize: 13 }} />}</Stack></Box></Box>;
               })}
             </Box>
             {chat.typingNames.length > 0 && <Typography variant="caption" sx={{ px: 1.1, py: .35, color: "primary.main", fontWeight: 750, bgcolor: "background.default" }}>{chat.typingNames.join(", ")} {chat.typingNames.length > 1 ? "estão digitando..." : "está digitando..."}</Typography>}
