@@ -70,6 +70,7 @@ import {
 } from "../theme/theme";
 import { InfoPopover, type InfoPopoverContent } from "../components/InfoPopover";
 import { PageHeader } from "../components/PageHeader";
+import { ContentState } from "../components/ContentState";
 import { useTheme } from "@mui/material/styles";
 import { ExecutiveSection } from "../components/ExecutiveSection";
 import { KpiCard as ExecutiveKpiCard } from "../components/KpiCard";
@@ -1374,29 +1375,8 @@ export function Versions() {
     );
   }
 
-  if (
-    loading &&
-    !data
-  ) {
-    return (
-      <Box
-        sx={{
-          display:
-            "flex",
-          justifyContent:
-            "center",
-          mt:
-            8,
-        }}
-      >
-        <CircularProgress
-          sx={{
-            color:
-              aliareColors.green,
-          }}
-        />
-      </Box>
-    );
+  if (loading && !data) {
+    return <ContentState kind="loading" title="Carregando versões" minHeight={360} />;
   }
 
   return (
