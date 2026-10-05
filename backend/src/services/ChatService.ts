@@ -118,7 +118,7 @@ export class ChatService {
     const secondId = Math.max(userId, targetUserId);
     const channel = await prisma.$transaction(async (tx) => {
       // Serializa a criação por par de usuários e elimina a corrida de dois cliques/abas.
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(${firstId}, ${secondId})`;
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(${firstId}::int, ${secondId}::int)`;
       const candidates = await tx.chatChannel.findMany({
         where: {
           type: "DIRECT",
