@@ -74,6 +74,10 @@ export function PeriodFilter() {
             Este mês
           </MenuItem>
 
+          <MenuItem value="lastMonth">
+            Mês passado
+          </MenuItem>
+
           <MenuItem value="semester">
             Este semestre
           </MenuItem>
