@@ -235,14 +235,6 @@ export class DataQualityService {
     const completedWithoutVersionTasks = finishedLinkedTasks.filter((item) =>
       !isSupportTask(item) && !isCanceledTask(item.state) && !item.deliveredVersion?.trim(),
     );
-    const normalizeVersion = (value: string | null) => normalizeStatus(value ?? "").replace(/\s+/g, "");
-    const versionMismatches = linkedTasks.filter((item) =>
-      !isSupportTask(item)
-      && Boolean(item.registeredVersion?.trim())
-      && Boolean(item.deliveredVersion?.trim())
-      && normalizeVersion(item.registeredVersion) !== normalizeVersion(item.deliveredVersion),
-    );
-
     const createLinkIndex = (items: typeof linkedTasks) => {
       const byId = new Map(items.map((item) => [item.id, item]));
       const byTicket = new Map<number, (typeof items)[number]>();
@@ -450,11 +442,9 @@ export class DataQualityService {
       if (params.issue === "withoutClient") return !isSupportTask(item) && !item.client && !item.participantClients;
       if (params.issue === "completedWithoutVersion") return completedWithoutVersionTasks.some((task) => task.id === item.id);
       if (params.issue === "activeTaskWithVersion") return !isSupportTask(item) && !isTerminalTask(item.state) && Boolean(item.deliveredVersion);
-      if (params.issue === "versionMismatch") return versionMismatches.some((task) => task.id === item.id);
       if (!params.issue) return (!item.movideskTicket && !item.participantMovideskTickets && !linkedTaskIdSet.has(item.id))
         || (!isSupportTask(item) && !item.client && !item.participantClients) || !item.module || !item.assignedToName
-        || completedWithoutVersionTasks.some((task) => task.id === item.id)
-        || versionMismatches.some((task) => task.id === item.id);
+        || completedWithoutVersionTasks.some((task) => task.id === item.id);
       return true;
     };
     const azureSamples = params.issue === "supportLinkDivergence"
@@ -587,7 +577,6 @@ export class DataQualityService {
         activeTaskWithVersion: activeLinkedTasks.filter((task) =>
           !isSupportTask(task) && Boolean(task.deliveredVersion?.trim()),
         ).length,
-        versionMismatch: versionMismatches.length,
       },
       samples,
       filters: {
@@ -612,7 +601,7 @@ export class DataQualityService {
         take: 30,
         select: { snapshotDate: true, metrics: true },
       });
-      const criticalKeys = ["ticketClosedTaskOpen", "ticketOpenTaskFinished", "ticketOpenTaskWithoutDelivery", "danglingTaskTickets", "completedWithoutVersion", "versionMismatch"];
+      const criticalKeys = ["ticketClosedTaskOpen", "ticketOpenTaskFinished", "ticketOpenTaskWithoutDelivery", "danglingTaskTickets", "completedWithoutVersion"];
       trend = snapshots.reverse().map((snapshot) => {
         const snapshotMetrics = (snapshot.metrics ?? {}) as Record<string, unknown>;
         const total = coordinationMetricKeysForTrend.reduce((sum, key) => sum + Number(snapshotMetrics[key] ?? 0), 0);
@@ -630,7 +619,7 @@ export class DataQualityService {
 const coordinationMetricKeysForTrend = [
   "ticketOpenTaskFinished", "ticketOpenTaskWithoutDelivery", "ticketClosedTaskOpen",
   "danglingTaskTickets", "reopenedTickets", "excessiveOwnerHandoffs", "withoutTicket",
-  "withoutClient", "completedWithoutVersion", "versionMismatch", "problemWithoutCause", "doubtWithoutReason", "withoutCategory", "suspectedClassification", "withoutService",
+  "withoutClient", "completedWithoutVersion", "problemWithoutCause", "doubtWithoutReason", "withoutCategory", "suspectedClassification", "withoutService",
 ];
 
 function compareVersions(left: string, right: string) {
