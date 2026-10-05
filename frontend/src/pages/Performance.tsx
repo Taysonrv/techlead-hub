@@ -274,9 +274,17 @@ export function Performance() {
     };
   }, [periodTickets, currentBacklog, periodBounds]);
 
+  // SLA de solução é um indicador de saídas: o Movidesk atribui o ticket ao
+  // período pela data em que a solução ocorreu, e não pela data de abertura.
+  const solutionPeriodTickets = useMemo(() => tickets.filter((ticket) => {
+    if (ticket.isWithSimer !== true || !ticket.resolvedDate) return false;
+    const resolved = new Date(ticket.resolvedDate);
+    return resolved >= periodBounds.start && resolved <= periodBounds.end;
+  }), [tickets, periodBounds]);
+
   const timestampSolutionSla = useMemo(
-    () => calculateTimestampSla(periodTickets, "solution"),
-    [periodTickets],
+    () => calculateTimestampSla(solutionPeriodTickets, "solution"),
+    [solutionPeriodTickets],
   );
 
   /* =======================================================
