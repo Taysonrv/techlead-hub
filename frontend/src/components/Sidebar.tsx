@@ -297,11 +297,21 @@ export function Sidebar() {
     const receiveShare = (event: Event) => {
       const detail = (event as CustomEvent<{ label?: string; recordId?: number; title?: string; client?: string | null; status?: string | null; path?: string }>).detail;
       if (!detail?.title) return;
-      setShareContext({ label: detail.label || "Registro", recordId: detail.recordId, title: detail.title, client: detail.client, status: detail.status, path: detail.path || location.pathname + location.search });
+      const context = { label: detail.label || "Registro", recordId: detail.recordId, title: detail.title, client: detail.client, status: detail.status, path: detail.path || location.pathname + location.search };
+      setShareContext(context);
+      if (location.pathname === "/chat") {
+        navigate(`/chat?share=${encodeURIComponent(JSON.stringify(context))}`);
+        return;
+      }
+      if (floatingChats.length === 0) {
+        navigate(`/chat?share=${encodeURIComponent(JSON.stringify(context))}`);
+        return;
+      }
+      setFloatingChats((current) => current.map((item) => ({ ...item, minimized: false })));
     };
     window.addEventListener("techlead-hub:share-chat", receiveShare);
     return () => window.removeEventListener("techlead-hub:share-chat", receiveShare);
-  }, [location.pathname, location.search]);
+  }, [location.pathname, location.search, navigate, floatingChats.length]);
 
   const shareIntoFloatingChat = useCallback((channelId: number) => {
     if (!shareContext) return;
