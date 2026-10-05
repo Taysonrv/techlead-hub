@@ -2583,7 +2583,7 @@ export function Tickets() {
                   variant="outlined"
                   startIcon={<ShareOutlined />}
                   onClick={() => {
-                    window.dispatchEvent(new CustomEvent("techlead-hub:share-chat", { detail: { label: "Ticket", title: `#${selectedTicket.movideskId} · ${selectedTicket.subject}`, path: `/tickets?movidesk=${selectedTicket.movideskId}` } }));
+                    window.dispatchEvent(new CustomEvent("techlead-hub:share-chat", { detail: { label: "Ticket", recordId: selectedTicket.movideskId, title: selectedTicket.subject, client: selectedTicket.client, status: selectedTicket.status, path: `/tickets?movidesk=${selectedTicket.movideskId}` } }));
                   }}
                 >
                   Compartilhar no Chat
