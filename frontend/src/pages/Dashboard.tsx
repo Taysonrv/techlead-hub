@@ -305,14 +305,15 @@ export function Dashboard() {
     [tickets],
   );
 
-  // Fluxo executivo usa o mesmo universo operacional das entradas.
-  const resolvedInPeriod = useMemo(() => openedBySimerOperationInPeriod.filter((ticket) =>
-    isDateInPeriod(ticket.resolvedDate, periodBounds.start, periodBounds.end)
-  ), [openedBySimerOperationInPeriod, periodBounds]);
+  // Métricas de saída pertencem ao período pelo evento que representam.
+  // Não exigem que o ticket tenha sido aberto no mesmo recorte.
+  const resolvedInPeriod = useMemo(() => tickets.filter((ticket) =>
+    ticket.isWithSimer === true && isDateInPeriod(ticket.resolvedDate, periodBounds.start, periodBounds.end)
+  ), [tickets, periodBounds]);
 
-  const closedInPeriod = useMemo(() => openedBySimerOperationInPeriod.filter((ticket) =>
-    isDateInPeriod(ticket.closedDate, periodBounds.start, periodBounds.end)
-  ), [openedBySimerOperationInPeriod, periodBounds]);
+  const closedInPeriod = useMemo(() => tickets.filter((ticket) =>
+    ticket.isWithSimer === true && isDateInPeriod(ticket.closedDate, periodBounds.start, periodBounds.end)
+  ), [tickets, periodBounds]);
 
   // Áreas/serviços/SLA/CSAT mantêm a leitura da responsabilidade operacional atual.
   const filteredTickets = openedBySimerOperationInPeriod;
