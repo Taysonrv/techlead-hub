@@ -1,8 +1,8 @@
 import { AddCommentOutlined, ForumOutlined, SendRounded, EmojiEmotionsOutlined, CelebrationOutlined, NotificationsActiveOutlined, ReplyOutlined, CloseOutlined, SearchOutlined, Circle, MoreHorizOutlined, DeleteOutlineRounded, StarOutlineRounded, VolumeOffOutlined, AttachFileRounded, DownloadRounded } from "@mui/icons-material";
-import { Alert, Box, Button, Checkbox, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Divider, FormControlLabel, IconButton, List, ListItemButton, ListItemIcon, ListItemText, Menu, MenuItem, Paper, Popover, Stack, TextField, Tooltip, Typography } from "@mui/material";
+import { Alert, Box, Button, Checkbox, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Divider, FormControlLabel, IconButton, List, ListItemButton, ListItemIcon, ListItemText, Menu, MenuItem, Paper, Popover, Snackbar, Stack, TextField, Tooltip, Typography } from "@mui/material";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { api, getAccessToken, getApiBaseUrl, getApiErrorMessage } from "../services/api";
+import { api, getAccessToken, getApiBaseUrl } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { playNotificationSound } from "../utils/notificationSound";
 
@@ -48,6 +48,8 @@ export function Chat() {
   const [conversationMenuAnchor, setConversationMenuAnchor] = useState<HTMLElement | null>(null);
   const [deleteConversationOpen, setDeleteConversationOpen] = useState(false);
   const [statusMessage] = useState(() => localStorage.getItem("techlead-chat-status-message") || "");
+  const [incomingPopup, setIncomingPopup] = useState<{ channelId: number; channelName: string; authorName: string; preview: string } | null>(null);
+  const previousChannelState = useRef<Map<number, { unread: number; lastMessageId: number | null }>>(new Map());
 
   const selected = useMemo(() => channels.find((channel) => channel.id === selectedId) ?? null, [channels, selectedId]);
   const selectedPeer = useMemo(() => selected?.type === "DIRECT" ? selected.members?.map((member) => member.user).find((person) => person.id !== user?.id) : null, [selected, user?.id]);
@@ -58,7 +60,32 @@ export function Chat() {
 
   const loadChannels = useCallback(async () => {
     const response = await api.get<{ channels: Channel[] }>("/chat/channels");
-    setChannels(response.data.channels);
+    const nextChannels = response.data.channels;
+    const previous = previousChannelState.current;
+    if (previous.size) {
+      const incoming = nextChannels
+        .map((channel) => {
+          const before = previous.get(channel.id);
+          const latest = channel.messages?.[channel.messages.length - 1] ?? null;
+          const isNew = Boolean(before && channel.unread > before.unread && latest && latest.id !== before.lastMessageId && latest.author.id !== user?.id);
+          return isNew ? { channel, latest } : null;
+        })
+        .filter(Boolean) as Array<{ channel: Channel; latest: Message }>;
+      const newest = incoming[incoming.length - 1];
+      if (newest && newest.channel.id !== selectedId) {
+        setIncomingPopup({
+          channelId: newest.channel.id,
+          channelName: newest.channel.name,
+          authorName: newest.latest.author.name,
+          preview: newest.latest.content.startsWith("[anexo] ") ? "📎 Enviou um arquivo" : newest.latest.content,
+        });
+      }
+    }
+    previousChannelState.current = new Map(nextChannels.map((channel) => [channel.id, {
+      unread: channel.unread,
+      lastMessageId: channel.messages?.[channel.messages.length - 1]?.id ?? null,
+    }]));
+    setChannels(nextChannels);
     const requested = Number(searchParams.get("channel"));
     setSelectedId((current) =>
       current ??
@@ -66,7 +93,7 @@ export function Chat() {
       response.data.channels[0]?.id ??
       null,
     );
-  }, [searchParams]);
+  }, [searchParams, selectedId, user?.id]);
 
   const loadMessages = useCallback(async (channelId: number, quiet = false) => {
     try {
@@ -77,7 +104,7 @@ export function Chat() {
       window.dispatchEvent(new Event("techlead-hub:chat-read"));
       setError("");
     } catch (requestError: any) {
-      if (!quiet) setError(getApiErrorMessage(requestError, "Não foi possível carregar a conversa."));
+      if (!quiet) setError(requestError?.response?.data?.error || "Não foi possível carregar a conversa.");
     } finally {
       if (!quiet) setLoading(false);
     }
@@ -166,7 +193,7 @@ export function Chat() {
       await loadChannels();
       setSelectedId(response.data.id);
       setDirectOpen(false);
-    } catch (requestError: any) { setError(getApiErrorMessage(requestError, "Não foi possível iniciar a conversa privada.")); }
+    } catch (requestError: any) { setError(requestError?.response?.data?.error || "Não foi possível iniciar a conversa privada."); }
   }
 
   const toggleFavorite = (channelId: number) => setFavorites((current) => {
@@ -189,7 +216,7 @@ export function Chat() {
       setCreateOpen(false);
       setChannelName("");
       setMemberIds([]);
-    } catch (requestError: any) { setError(getApiErrorMessage(requestError, "Não foi possível criar o canal.")); }
+    } catch (requestError: any) { setError(requestError?.response?.data?.error || "Não foi possível criar o canal."); }
   }
 
   async function sendAttachment(file: File) {
@@ -202,7 +229,7 @@ export function Chat() {
       });
       await api.post(`/chat/channels/${selectedId}/attachments`, { name: file.name, mimeType: file.type || "application/octet-stream", data });
       await loadMessages(selectedId);
-    } catch (requestError: any) { setError(getApiErrorMessage(requestError, "Não foi possível enviar o anexo.")); }
+    } catch (requestError: any) { setError(requestError?.response?.data?.error || "Não foi possível enviar o anexo."); }
     finally { setUploadingAttachment(false); if (attachmentInputRef.current) attachmentInputRef.current.value = ""; }
   }
 
@@ -224,7 +251,7 @@ export function Chat() {
       await loadChannels();
       window.dispatchEvent(new Event("techlead-hub:chat-read"));
     } catch (requestError: any) {
-      setError(getApiErrorMessage(requestError, "Não foi possível excluir a conversa."));
+      setError(requestError?.response?.data?.error || "Não foi possível excluir a conversa.");
     }
   }
 
@@ -238,7 +265,7 @@ export function Chat() {
       setContent("");
       setReplyTo(null);
       setError("");
-    } catch (requestError: any) { setError(getApiErrorMessage(requestError, "Não foi possível enviar a mensagem.")); }
+    } catch (requestError: any) { setError(requestError?.response?.data?.error || "Não foi possível enviar a mensagem."); }
     finally { setSending(false); }
   }
 
@@ -265,11 +292,51 @@ export function Chat() {
         </Stack>
         <Box sx={{ px: 1.25, pb: 1 }}><TextField size="small" fullWidth value={conversationSearch} onChange={(event) => setConversationSearch(event.target.value)} placeholder="Buscar conversa..." slotProps={{ input: { startAdornment: <SearchOutlined sx={{ mr: .7, fontSize: 18, color: "text.secondary" }} /> } }} /></Box>
         <Divider />
-        <List disablePadding>{visibleChannels.map((channel) => <ListItemButton key={channel.id} selected={channel.id === selectedId} onClick={() => setSelectedId(channel.id)} sx={{ py: 1.05, px: 1.25, mx: 1, my: .4, minHeight: 66, borderRadius: 2, transition: "background-color .18s ease, transform .18s ease", "&:hover": { transform: "translateX(2px)" }, "&.Mui-selected": { bgcolor: "rgba(24,199,122,.10)" }, "&.Mui-selected:hover": { bgcolor: "rgba(24,199,122,.14)" } }}>
-          <Box sx={{ position: "relative", mr: 1.25, width: 40, height: 40, minWidth: 40, flex: "0 0 40px", borderRadius: "50%", bgcolor: channel.id === selectedId ? "primary.main" : "action.hover", display: "grid", placeItems: "center", fontWeight: 900 }}>{channel.name.slice(0,1).toUpperCase()}<Circle sx={{ position: "absolute", width: 10, height: 10, right: 0, bottom: 0, color: "success.main", stroke: "background.paper", strokeWidth: 4 }} /></Box>
-          <ListItemText primary={channel.name} secondary={channel.clientName || channel.description || "Canal da equipe"} slotProps={{ primary: { sx: { fontWeight: 750, fontSize: ".88rem", lineHeight: 1.25, overflow: "hidden", textOverflow: "ellipsis" } }, secondary: { sx: { fontSize: ".72rem", mt: .25, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } } }} />
-          <Stack direction="row" spacing={.4} sx={{ alignItems: "center" }}><Tooltip title={favorites.includes(channel.id) ? "Remover dos favoritos" : "Favoritar"}><IconButton size="small" onClick={(event) => { event.stopPropagation(); toggleFavorite(channel.id); }} sx={{ width: 28, height: 28, p: .5, fontSize: 16 }}>{favorites.includes(channel.id) ? "★" : "☆"}</IconButton></Tooltip>{channel.unread > 0 && <Chip size="small" color="primary" label={channel.unread} />}</Stack>
-        </ListItemButton>)}</List>
+        <List disablePadding>
+          {visibleChannels
+            .slice()
+            .sort((a, b) => Number(favorites.includes(b.id)) - Number(favorites.includes(a.id)) || b.unread - a.unread)
+            .map((channel) => (
+              <ListItemButton
+                key={channel.id}
+                selected={channel.id === selectedId}
+                onClick={() => setSelectedId(channel.id)}
+                sx={{
+                  py: 1.05,
+                  px: 1.25,
+                  mx: 1,
+                  my: .4,
+                  minHeight: 70,
+                  borderRadius: 2,
+                  transition: "background-color .18s ease, transform .18s ease",
+                  "&:hover": { transform: "translateX(2px)" },
+                  "&.Mui-selected": { bgcolor: "rgba(24,199,122,.10)" },
+                  "&.Mui-selected:hover": { bgcolor: "rgba(24,199,122,.14)" },
+                }}
+              >
+                <Box sx={{ position: "relative", mr: 1.25, width: 42, height: 42, minWidth: 42, flex: "0 0 42px", borderRadius: "50%", bgcolor: channel.id === selectedId ? "primary.main" : "action.hover", display: "grid", placeItems: "center", fontWeight: 900, boxShadow: channel.id === selectedId ? "0 5px 14px rgba(24,199,122,.18)" : "none" }}>
+                  {channel.name.slice(0,1).toUpperCase()}
+                  <Circle sx={{ position: "absolute", width: 11, height: 11, right: 0, bottom: 0, color: "success.main", stroke: "background.paper", strokeWidth: 4 }} />
+                </Box>
+                <ListItemText
+                  primary={
+                    <Stack direction="row" spacing={.5} sx={{ alignItems: "center", minWidth: 0 }}>
+                      <Typography noWrap sx={{ fontWeight: channel.unread ? 900 : 750, fontSize: ".88rem", flex: 1 }}>{channel.name}</Typography>
+                      {favorites.includes(channel.id) && <Typography component="span" sx={{ color: "warning.main", fontSize: ".72rem" }}>★</Typography>}
+                    </Stack>
+                  }
+                  secondary={channel.clientName || channel.description || (channel.unread ? `${channel.unread} nova(s) mensagem(ns)` : "Canal da equipe")}
+                  slotProps={{ secondary: { sx: { fontSize: ".72rem", mt: .25, fontWeight: channel.unread ? 700 : 400, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } } }}
+                />
+                <Stack direction="row" spacing={.4} sx={{ alignItems: "center" }}>
+                  <Tooltip title={favorites.includes(channel.id) ? "Remover dos favoritos" : "Favoritar"}>
+                    <IconButton size="small" onClick={(event) => { event.stopPropagation(); toggleFavorite(channel.id); }} sx={{ width: 28, height: 28, p: .5, fontSize: 16 }}>{favorites.includes(channel.id) ? "★" : "☆"}</IconButton>
+                  </Tooltip>
+                  {channel.unread > 0 && <Chip size="small" color="primary" label={channel.unread} />}
+                </Stack>
+              </ListItemButton>
+            ))}
+        </List>
         {!channels.length && !loading && <Box sx={{ p: 3, textAlign: "center" }}><Typography color="text.secondary" variant="body2">Crie o primeiro canal da equipe.</Typography></Box>}
       </Box>
       <Box sx={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
@@ -299,6 +366,20 @@ export function Chat() {
         </Stack>
       </Box>
     </Paper>
+    <Snackbar
+      open={Boolean(incomingPopup)}
+      onClose={(_, reason) => { if (reason !== "clickaway") setIncomingPopup(null); }}
+      autoHideDuration={8000}
+      anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+      sx={{ "& .MuiSnackbarContent-root": { p: 0, bgcolor: "transparent", boxShadow: "none" } }}
+      message={incomingPopup ? <Paper elevation={10} sx={{ width: 340, maxWidth: "calc(100vw - 24px)", p: 1.35, borderRadius: 2.5, border: "1px solid", borderColor: "rgba(24,199,122,.35)", borderLeft: "4px solid", borderLeftColor: "primary.main", background: (theme) => theme.palette.mode === "dark" ? "linear-gradient(135deg,rgba(16,30,46,.98),rgba(17,48,42,.98))" : "linear-gradient(135deg,#fff,#f2fff9)", boxShadow: "0 18px 48px rgba(15,23,42,.20)" }}>
+        <Stack direction="row" spacing={1} sx={{ alignItems: "flex-start" }}>
+          <Box sx={{ width: 38, height: 38, borderRadius: "50%", bgcolor: "primary.main", color: "primary.contrastText", display: "grid", placeItems: "center", fontWeight: 950, flexShrink: 0 }}>{incomingPopup.authorName.slice(0,1).toUpperCase()}</Box>
+          <Box sx={{ minWidth: 0, flex: 1 }}><Typography variant="caption" color="primary.main" sx={{ fontWeight: 900 }}>NOVA MENSAGEM</Typography><Typography sx={{ fontWeight: 900, lineHeight: 1.2 }}>{incomingPopup.authorName}</Typography><Typography variant="caption" color="text.secondary">{incomingPopup.channelName}</Typography><Typography variant="body2" sx={{ mt: .55, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{incomingPopup.preview}</Typography><Button size="small" sx={{ mt: .65, px: 0 }} onClick={() => { setSelectedId(incomingPopup.channelId); setIncomingPopup(null); }}>Abrir conversa</Button></Box>
+          <IconButton size="small" onClick={() => setIncomingPopup(null)}><CloseOutlined fontSize="small" /></IconButton>
+        </Stack>
+      </Paper> : undefined}
+    />
     <Menu anchorEl={conversationMenuAnchor} open={Boolean(conversationMenuAnchor)} onClose={() => setConversationMenuAnchor(null)} anchorOrigin={{ vertical: "bottom", horizontal: "right" }} transformOrigin={{ vertical: "top", horizontal: "right" }} slotProps={{ paper: { sx: { mt: .5, minWidth: 220, borderRadius: 2.5, border: "1px solid", borderColor: "divider", boxShadow: "0 12px 30px rgba(15,23,42,.14)" } } }}>
       <MenuItem onClick={() => { if (selectedId) toggleFavorite(selectedId); setConversationMenuAnchor(null); }}><ListItemIcon><StarOutlineRounded fontSize="small" /></ListItemIcon>{selectedId && favorites.includes(selectedId) ? "Remover dos favoritos" : "Favoritar conversa"}</MenuItem>
       <MenuItem onClick={() => { setSoundEnabled(false); localStorage.setItem("techlead-chat-sound", "off"); setConversationMenuAnchor(null); }}><ListItemIcon><VolumeOffOutlined fontSize="small" /></ListItemIcon>Silenciar notificações</MenuItem>
@@ -336,3 +417,4 @@ export function Chat() {
     </Dialog>
   </Stack>;
 }
+
