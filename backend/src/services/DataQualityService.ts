@@ -44,7 +44,7 @@ export class DataQualityService {
       select: {
         id: true, taskNumber: true, movideskId: true, subject: true,
         status: true, baseStatus: true, client: true, owner: true,
-        category: true, cause: true, justification: true,
+        category: true, cause: true, reason: true, justification: true,
         service: true, serviceFirstLevel: true, serviceSecondLevel: true, serviceThirdLevel: true,
         deliveredVersion: true, lastActionDate: true, lastUpdate: true,
         reopenedDate: true, resolvedInFirstCall: true, rawData: true,
@@ -344,6 +344,19 @@ export class DataQualityService {
       const score = csatByTicket.get(ticket.movideskId)?.value;
       return score !== null && score !== undefined && score <= 2;
     });
+    const problemWithoutCause = scopedTickets.filter((ticket) =>
+      isTicketOpen(ticket)
+      && normalizeStatus(ticket.category ?? "") === "problema"
+      && isMissingClassification(ticket.cause),
+    );
+    const doubtWithoutReason = scopedTickets.filter((ticket) =>
+      isTicketOpen(ticket)
+      && normalizeStatus(ticket.category ?? "") === "duvida"
+      && isMissingClassification(ticket.reason),
+    );
+    const withoutCategory = scopedTickets.filter((ticket) =>
+      isTicketOpen(ticket) && isMissingClassification(ticket.category),
+    );
     const suspectedClassification = scopedTickets.filter((ticket) =>
       isTicketOpen(ticket) && hasSuspiciousClassification(ticket),
     );
@@ -437,7 +450,7 @@ export class DataQualityService {
         })
       : [];
 
-    const derivedTicketIssues = ["danglingTaskTickets", "ticketOpenTaskFinished", "ticketOpenTaskWithoutDelivery", "ticketClosedTaskOpen", "clientMismatch", "supportLinkDivergence", "awaitingReturnWithoutCause", "awaitingReturnOverdue", "reopenedTickets", "excessiveOwnerHandoffs", "lowSatisfaction", "suspectedClassification", "withoutService", "genericSimerService", "suspectedServiceMismatch"];
+    const derivedTicketIssues = ["danglingTaskTickets", "ticketOpenTaskFinished", "ticketOpenTaskWithoutDelivery", "ticketClosedTaskOpen", "clientMismatch", "supportLinkDivergence", "awaitingReturnWithoutCause", "awaitingReturnOverdue", "reopenedTickets", "excessiveOwnerHandoffs", "lowSatisfaction", "problemWithoutCause", "doubtWithoutReason", "withoutCategory", "suspectedClassification", "withoutService", "genericSimerService", "suspectedServiceMismatch"];
     const matchesAzureIssue = (item: (typeof linkedTasks)[number]) => {
       if (params.issue === "duplicatedMovideskLinks") return Boolean(item.movideskTicket && duplicatedIds.includes(item.movideskTicket));
       if (params.issue === "withoutTicket") return !item.movideskTicket && !item.participantMovideskTickets && !linkedTaskIdSet.has(item.id);
@@ -484,6 +497,7 @@ export class DataQualityService {
       assignedToName: ticket.owner,
       category: ticket.category,
       cause: ticket.cause,
+      reason: ticket.reason,
       service: ticket.service,
       serviceFirstLevel: ticket.serviceFirstLevel,
       serviceSecondLevel: ticket.serviceSecondLevel,
@@ -501,7 +515,13 @@ export class DataQualityService {
       satisfactionComment: csatByTicket.get(ticket.movideskId)?.commentary ?? null,
       source: "MOVIDESK" as const,
     });
-    const samples = params.issue === "awaitingReturnWithoutCause"
+    const samples = params.issue === "problemWithoutCause"
+      ? problemWithoutCause.slice(0, 100).map(toClassificationSample)
+      : params.issue === "doubtWithoutReason"
+      ? doubtWithoutReason.slice(0, 100).map(toClassificationSample)
+      : params.issue === "withoutCategory"
+      ? withoutCategory.slice(0, 100).map(toClassificationSample)
+      : params.issue === "awaitingReturnWithoutCause"
       ? awaitingReturnWithoutCause.slice(0, 100).map(toClassificationSample)
       : params.issue === "awaitingReturnOverdue"
       ? awaitingReturnOverdue.slice(0, 100).map(toClassificationSample)
@@ -562,6 +582,9 @@ export class DataQualityService {
         lowSatisfaction: lowSatisfaction.length,
         resolvedInFirstCall: scopedTickets.filter((ticket) => ticket.resolvedInFirstCall === true).length,
         notResolvedInFirstCall: scopedTickets.filter((ticket) => ticket.resolvedInFirstCall === false).length,
+        problemWithoutCause: problemWithoutCause.length,
+        doubtWithoutReason: doubtWithoutReason.length,
+        withoutCategory: withoutCategory.length,
         suspectedClassification: suspectedClassification.length,
         withoutService: withoutService.length,
         genericSimerService: genericSimerService.length,
@@ -613,7 +636,7 @@ export class DataQualityService {
 const coordinationMetricKeysForTrend = [
   "ticketOpenTaskFinished", "ticketOpenTaskWithoutDelivery", "ticketClosedTaskOpen",
   "danglingTaskTickets", "reopenedTickets", "excessiveOwnerHandoffs", "withoutTicket",
-  "withoutClient", "completedWithoutVersion", "versionMismatch", "suspectedClassification", "withoutService",
+  "withoutClient", "completedWithoutVersion", "versionMismatch", "problemWithoutCause", "doubtWithoutReason", "withoutCategory", "suspectedClassification", "withoutService",
 ];
 
 function compareVersions(left: string, right: string) {
