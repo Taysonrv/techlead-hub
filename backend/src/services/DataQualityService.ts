@@ -619,15 +619,6 @@ export class DataQualityService {
 const coordinationMetricKeysForTrend = [
   "ticketOpenTaskFinished", "ticketOpenTaskWithoutDelivery", "ticketClosedTaskOpen",
   "danglingTaskTickets", "reopenedTickets", "excessiveOwnerHandoffs", "withoutTicket",
-  "withoutClient", "completedWithoutVersion", "problemWithoutCause", "doubtWithoutReason", "withoutCategory", "suspectedClassification", "withoutService",
+  "withoutClient", "completedWithoutVersion", "problemWithoutCause", "doubtWithoutReason", "withoutCategory", "suspectedClassification", "genericSimerService",
 ];
 
-function compareVersions(left: string, right: string) {
-  const leftParts = left.match(/\d+/g)?.map(Number) ?? [];
-  const rightParts = right.match(/\d+/g)?.map(Number) ?? [];
-  for (let index = 0; index < Math.max(leftParts.length, rightParts.length); index += 1) {
-    const difference = (leftParts[index] ?? 0) - (rightParts[index] ?? 0);
-    if (difference !== 0) return difference;
-  }
-  return left.localeCompare(right, "pt-BR", { numeric: true });
-}
