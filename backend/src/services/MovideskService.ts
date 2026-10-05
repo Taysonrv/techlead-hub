@@ -75,6 +75,7 @@ type SyncSummary = {
   ignored: number;
   errors: number;
   since: string | null;
+  analyticalMetadataRemaining?: number;
 };
 
 type BaselineState = {
@@ -1375,6 +1376,7 @@ export class MovideskService {
       ignored: checkpoint?.ignored ?? 0,
       errors: checkpoint?.errors ?? 0,
       since: since?.toISOString() ?? null,
+      analyticalMetadataRemaining: 0,
     };
     const initialSkip = checkpoint?.nextSkip ?? 0;
     let fullCursor = mode === "FULL" && checkpoint?.cursorLastUpdate && checkpoint?.cursorId
@@ -1472,7 +1474,8 @@ export class MovideskService {
     }
 
     if (mode === "INCREMENTAL" && summary.errors === 0) {
-      await this.refreshRecentClassifications();
+      const metadataRefresh = await this.refreshRecentClassifications();
+      summary.analyticalMetadataRemaining = metadataRefresh.remaining;
     }
 
     if (mode === "FULL" && summary.errors === 0) {
