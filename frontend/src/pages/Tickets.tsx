@@ -49,6 +49,7 @@ import { getTicketSnapshot } from "../services/ticketSnapshot";
 import { useFilters } from "../context/FiltersContext";
 import { PeriodFilter } from "../components/PeriodFilter";
 import { PageHeader } from "../components/PageHeader";
+import { ContentState } from "../components/ContentState";
 import { KpiCard as ExecutiveKpiCard } from "../components/KpiCard";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
@@ -1130,30 +1131,8 @@ export function Tickets() {
      LOADING / ERROR
   ======================================================= */
 
-  if (
-    loading
-  ) {
-    return (
-      <Box
-        sx={{
-          display:
-            "flex",
-
-          justifyContent:
-            "center",
-
-          mt:
-            10,
-        }}
-      >
-        <CircularProgress
-          sx={{
-            color:
-              aliareColors.green,
-          }}
-        />
-      </Box>
-    );
+  if (loading) {
+    return <ContentState kind="loading" title="Carregando tickets" minHeight={360} />;
   }
 
   if (
