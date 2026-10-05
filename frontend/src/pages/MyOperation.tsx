@@ -28,8 +28,8 @@ const metrics = [
   ["blocked", "Bloqueadas", "Tarefas abertas com bloqueio de processo.", "blocked"],
 ] as const;
 const lanes = ["Aguardando atendimento", "Em andamento", "Pausado", "Aguardando retorno", "Interno", "Concluídos/Fechados"];
-const INITIAL_LANE_LIMIT = 6;
-const LANE_INCREMENT = 12;
+const INITIAL_LANE_LIMIT = 10;
+const LANE_INCREMENT = 16;
 const laneColors: Record<string, string> = {
   "Aguardando atendimento": "#2878c8",
   "Em andamento": "#0f9f6e",
@@ -158,7 +158,7 @@ export function MyOperation() {
     } finally { setSavingStatus(false); setDragged(null); }
   };
 
-  return <Box sx={{ pb: 4, minHeight: 0 }}>
+  return <Box sx={{ pb: 3, minHeight: 0, overflowX: "hidden" }}>
     <PageHeader eyebrow="Operação" title="Minha Operação" description="Seus atendimentos Movidesk e tarefas Azure em uma única experiência operacional." meta={`${items.length} registro(s) no recorte atual`} />
 
     <Card variant="outlined" sx={{ mt: 2 }}><CardContent><Stack direction={{ xs: "column", md: "row" }} sx={{ justifyContent: "space-between", alignItems: { md: "center" }, mb: 1.5 }}><Box><Typography sx={{ fontWeight: 850 }}>Filtros da operação</Typography><Typography variant="caption" color="text.secondary">Combine o recorte e alterne entre Kanban e lista sem perder o contexto.</Typography></Box><Chip size="small" variant="outlined" label={`${items.length} registro(s)`} /></Stack><Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(2,minmax(0,1fr))", xl: "minmax(280px,1.6fr) repeat(5,minmax(150px,1fr))" }, gap: 1.2 }}>
@@ -187,23 +187,76 @@ export function MyOperation() {
 
     {error && <Alert severity="error" onClose={() => setError("")} sx={{ mt: 2 }}>{error}</Alert>}
     {savingStatus && <Alert severity="info" sx={{ mt: 2 }}>Salvando a organização do atendimento…</Alert>}
-    <Box sx={{ mt: 2, display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2,1fr)", xl: "repeat(5,1fr)" }, gap: 2 }}>
+    <Box sx={{ mt: 2, display: "grid", gridTemplateColumns: { xs: "repeat(2,minmax(0,1fr))", md: "repeat(5,minmax(0,1fr))" }, gap: { xs: 1, md: 1.25 } }}>
       {metrics.map(([key, label, info, valueKey]) => <KpiCard key={key} title={label} value={data?.summary[valueKey] ?? 0} subtitle="Clique para filtrar a operação" info={info} accent={metric === key ? aliareColors.green : aliareColors.greenDark} active={metric === key} onClick={() => setMetric(metric === key ? "" : key)} />)}
     </Box>
 
     {loading ? <Box sx={{ py: 10, textAlign: "center" }}><CircularProgress /></Box> : items.length === 0 ? <Alert severity="info" sx={{ mt: 2 }}>Nenhum registro encontrado para os filtros selecionados.</Alert> : view === "kanban" ?
-      <Box sx={{ mt: 2, display: "grid", gridTemplateColumns: { xs: "repeat(2, minmax(0, 1fr))", md: "repeat(3, minmax(0, 1fr))", lg: "repeat(6, minmax(0, 1fr))" }, alignItems: "stretch", gap: .8, width: "100%", minWidth: 0, pb: 2 }}>
+      <Box sx={{
+        mt: 2,
+        display: "grid",
+        gridTemplateColumns: {
+          xs: "repeat(2, minmax(0, 1fr))",
+          md: "repeat(3, minmax(0, 1fr))",
+          xl: "repeat(6, minmax(0, 1fr))",
+        },
+        alignItems: "stretch",
+        gap: { xs: .75, md: 1 },
+        width: "100%",
+        minWidth: 0,
+        pb: 1.5,
+      }}>
         {lanes.map((column) => {
           const columnItems = items.filter((item) => lane(item.status) === column);
           const visibleLimit = visibleByLane[column] ?? INITIAL_LANE_LIMIT;
           const visibleItems = columnItems.slice(0, visibleLimit);
           const remaining = columnItems.length - visibleItems.length;
-          return <Box key={column} onDragOver={(event) => dragged && event.preventDefault()} onDrop={() => void changeStatus(column)} sx={{ minWidth: 0, height: "clamp(390px, calc(100vh - 405px), 620px)", display: "flex", flexDirection: "column", overflow: "hidden", background: dragged ? "linear-gradient(180deg,rgba(22,196,127,.10),rgba(22,196,127,.035))" : "linear-gradient(180deg,rgba(47,111,237,.035),rgba(16,24,40,.018))", borderRadius: 2.25, border: "1px solid", borderColor: dragged ? "success.light" : "divider", boxShadow: dragged ? "0 0 24px rgba(22,196,127,.10)" : "inset 0 1px rgba(255,255,255,.02)" }}>
-            <Stack direction="row" sx={{ position: "sticky", top: 0, zIndex: 1, justifyContent: "space-between", alignItems: "center", gap: .5, px: 1, py: .85, bgcolor: "background.paper", borderTop: `3px solid ${laneColors[column]}`, borderBottom: "1px solid", borderBottomColor: "divider", minHeight: 43 }}>
+          return <Box key={column} onDragOver={(event) => dragged && event.preventDefault()} onDrop={() => void changeStatus(column)} sx={{
+            minWidth: 0,
+            minHeight: { xs: 390, md: 470 },
+            height: { xs: "calc(100vh - 360px)", md: "calc(100vh - 330px)", xl: "calc(100vh - 300px)" },
+            maxHeight: 760,
+            display: "flex",
+            flexDirection: "column",
+            overflow: "hidden",
+            background: dragged
+              ? "linear-gradient(180deg,rgba(22,196,127,.10),rgba(22,196,127,.035))"
+              : "linear-gradient(180deg,rgba(47,111,237,.045),rgba(16,24,40,.018))",
+            borderRadius: 2.5,
+            border: "1px solid",
+            borderColor: dragged ? "success.light" : "divider",
+            boxShadow: dragged ? "0 0 24px rgba(22,196,127,.10)" : "0 8px 24px rgba(16,24,40,.035)",
+          }}>
+            <Stack direction="row" sx={{
+              position: "sticky",
+              top: 0,
+              zIndex: 2,
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: .5,
+              px: 1.1,
+              py: .9,
+              bgcolor: "background.paper",
+              borderTop: `3px solid ${laneColors[column]}`,
+              borderBottom: "1px solid",
+              borderBottomColor: "divider",
+              minHeight: 45,
+              boxShadow: "0 4px 12px rgba(16,24,40,.035)",
+            }}>
               <Typography title={column} sx={{ minWidth: 0, fontWeight: 850, fontSize: ".72rem", lineHeight: 1.15, overflow: "hidden", textOverflow: "ellipsis" }}>{column}</Typography>
               <Chip size="small" label={columnItems.length} sx={{ height: 21, fontSize: ".68rem", fontWeight: 800, flexShrink: 0 }} />
             </Stack>
-            <Stack spacing={.7} sx={{ flex: 1, overflowY: "auto", overflowX: "hidden", p: .7 }}>
+            <Stack spacing={.75} sx={{
+              flex: 1,
+              minHeight: 0,
+              overflowY: "auto",
+              overflowX: "hidden",
+              p: .75,
+              scrollbarWidth: "thin",
+              "&::-webkit-scrollbar": { width: 7 },
+              "&::-webkit-scrollbar-thumb": { borderRadius: 8, backgroundColor: "rgba(100,116,139,.34)" },
+              "&::-webkit-scrollbar-track": { backgroundColor: "transparent" },
+            }}>
               {visibleItems.length ? visibleItems.map((item) => <OperationCard key={item.key} item={item} compact draggable={Boolean(item.ticket)} onDragStart={() => item.ticket && setDragged(item.ticket)} onDragEnd={() => setDragged(null)} onClick={() => void openItem(item)} />) : <Typography variant="caption" color="text.secondary" sx={{ py: 3, px: 1, textAlign: "center" }}>Nenhum registro</Typography>}
               {remaining > 0 && <Button size="small" onClick={() => setVisibleByLane((current) => ({ ...current, [column]: visibleLimit + LANE_INCREMENT }))} sx={{ textTransform: "none", fontSize: ".7rem" }}>Mostrar mais {Math.min(remaining, LANE_INCREMENT)} de {remaining}</Button>}
             </Stack>
@@ -231,11 +284,29 @@ export function MyOperation() {
 }
 
 function OperationCard({ item, compact = false, draggable, onDragStart, onDragEnd, onClick }: { item: Unified; compact?: boolean; draggable: boolean; onDragStart?: () => void; onDragEnd?: () => void; onClick: () => void }) {
-  return <Card elevation={0} draggable={draggable} onDragStart={onDragStart} onDragEnd={onDragEnd} onClick={onClick} sx={{ width: "100%", minWidth: 0, minHeight: compact ? 132 : 112, cursor: draggable ? "grab" : "pointer", border: "1px solid", borderColor: item.workItem?.blockedProcess ? "error.light" : "divider", borderLeft: `3px solid ${item.source === "MOVIDESK" ? "#1f7acb" : aliareColors.green}`, borderRadius: 1.75, bgcolor: "background.paper", transition: "transform .16s ease, box-shadow .16s ease, border-color .16s ease", "&:hover": { transform: "translateY(-2px)", boxShadow: "0 10px 24px rgba(16,24,40,.10)", borderColor: "primary.main" }, "&:active": { cursor: draggable ? "grabbing" : "pointer" } }}><CardContent sx={{ p: compact ? 1.1 : 1.25, "&:last-child": { pb: compact ? 1.1 : 1.25 } }}>
+  return <Card elevation={0} draggable={draggable} onDragStart={onDragStart} onDragEnd={onDragEnd} onClick={onClick} sx={{
+    width: "100%",
+    minWidth: 0,
+    minHeight: compact ? 118 : 108,
+    cursor: draggable ? "grab" : "pointer",
+    border: "1px solid",
+    borderColor: item.workItem?.blockedProcess ? "error.light" : "divider",
+    borderLeft: `3px solid ${item.source === "MOVIDESK" ? "#1f7acb" : aliareColors.green}`,
+    borderRadius: 2,
+    bgcolor: "background.paper",
+    boxShadow: "0 3px 10px rgba(16,24,40,.035)",
+    transition: "transform .16s ease, box-shadow .16s ease, border-color .16s ease",
+    "&:hover": {
+      transform: "translateY(-2px)",
+      boxShadow: "0 12px 28px rgba(16,24,40,.12)",
+      borderColor: "primary.main",
+    },
+    "&:active": { cursor: draggable ? "grabbing" : "pointer" },
+  }}><CardContent sx={{ p: compact ? 1 : 1.2, "&:last-child": { pb: compact ? 1 : 1.2 } }}>
     <Stack direction="row" spacing={.4} sx={{ justifyContent: "space-between", alignItems: "center", minWidth: 0 }}><Stack direction="row" spacing={.25} sx={{ alignItems: "center", minWidth: 0 }}>{draggable && <DragIndicatorOutlined sx={{ fontSize: 14, color: "text.disabled" }} />}<Typography sx={{ fontWeight: 850, fontSize: ".7rem", flexShrink: 0 }}>#{item.id}</Typography></Stack><Chip size="small" label={item.type} sx={{ height: 19, minWidth: 0, maxWidth: "58%", fontSize: ".58rem", "& .MuiChip-label": { px: .7, overflow: "hidden", textOverflow: "ellipsis" } }} /></Stack>
-    <Typography title={item.title} sx={{ mt: .55, fontSize: compact ? ".72rem" : ".78rem", lineHeight: 1.3, fontWeight: 750, display: "-webkit-box", WebkitLineClamp: compact ? 3 : 2, WebkitBoxOrient: "vertical", overflow: "hidden", overflowWrap: "anywhere" }}>{item.title}</Typography>
-    <Typography title={item.client ?? "Cliente não informado"} variant="caption" color="text.secondary" sx={{ display: "block", mt: .55, fontSize: ".62rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.client ?? "Cliente não informado"}</Typography>
-    <Stack direction="row" spacing={.35} sx={{ mt: .55, alignItems: "center", flexWrap: "wrap", rowGap: .35 }}>
+    <Typography title={item.title} sx={{ mt: .5, fontSize: compact ? ".74rem" : ".8rem", lineHeight: 1.28, fontWeight: 760, display: "-webkit-box", WebkitLineClamp: compact ? 2 : 2, WebkitBoxOrient: "vertical", overflow: "hidden", overflowWrap: "anywhere" }}>{item.title}</Typography>
+    <Typography title={item.client ?? "Cliente não informado"} variant="caption" color="text.secondary" sx={{ display: "block", mt: .45, fontSize: ".62rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.client ?? "Cliente não informado"}</Typography>
+    <Stack direction="row" spacing={.35} sx={{ mt: .5, alignItems: "center", flexWrap: "wrap", rowGap: .35 }}>
       {item.updatedAt && <Chip size="small" icon={<ScheduleOutlined />} label={relativeDate(item.updatedAt)} variant="outlined" sx={{ height: 19, fontSize: ".57rem", "& .MuiChip-icon": { fontSize: 12 }, "& .MuiChip-label": { px: .55 } }} />}
       {!compact && <Chip size="small" label={item.status || "Status não informado"} color={statusColor(item.status)} variant="outlined" sx={{ height: 21, fontSize: ".64rem", fontWeight: 750, "& .MuiChip-label": { px: .7 } }} />}
       {item.ticket?.taskNumber && <Chip size="small" label={`Task #${item.ticket.taskNumber}`} color="info" variant="outlined" sx={{ height: 19, fontSize: ".57rem", "& .MuiChip-label": { px: .55 } }} />}
