@@ -24,20 +24,20 @@ export function PeriodFilter() {
     <Stack
       direction={{
         xs: "column",
-        md: "row",
+        sm: "row",
       }}
-      spacing={2}
+      spacing={1}
       sx={{
         alignItems: {
           xs: "stretch",
-          md: "center",
+          sm: "center",
         },
       }}
     >
       <FormControl
         size="small"
         sx={{
-          minWidth: 220,
+          minWidth: { xs: "100%", sm: 180 },
         }}
       >
         <InputLabel id="period-label">
@@ -96,8 +96,9 @@ export function PeriodFilter() {
         <Box
           sx={{
             display: "flex",
-            gap: 2,
+            gap: 1,
             flexWrap: "wrap",
+            flex: 1,
           }}
         >
           <TextField
@@ -108,7 +109,7 @@ export function PeriodFilter() {
               setStartDate(event.target.value)
             }
             sx={{
-              minWidth: 210,
+              minWidth: { xs: "100%", sm: 155 },
             }}
             slotProps={{
               inputLabel: {
@@ -126,7 +127,7 @@ export function PeriodFilter() {
               setEndDate(event.target.value)
             }
             sx={{
-              minWidth: 210,
+              minWidth: { xs: "100%", sm: 155 },
             }}
             slotProps={{
               inputLabel: {
