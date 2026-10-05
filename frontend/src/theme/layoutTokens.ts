@@ -1,13 +1,14 @@
 export const detailDrawerPaperSx = {
   width: {
-    xs: "calc(100vw - 16px)",
+    xs: "100vw",
     sm: 520,
     lg: 560,
   },
   maxWidth: "100vw",
-  p: { xs: 1.75, sm: 2.5 },
+  p: { xs: 1.5, sm: 2.25 },
   boxSizing: "border-box",
   overflowX: "hidden",
+  overscrollBehavior: "contain",
   bgcolor: "background.paper",
   color: "text.primary",
   backgroundColor: "background.paper",
