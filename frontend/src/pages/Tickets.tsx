@@ -2449,6 +2449,7 @@ export function Tickets() {
             null
           )
         }
+        ModalProps={{ disableEnforceFocus: true }}
         slotProps={{
           paper: {
             sx: {
