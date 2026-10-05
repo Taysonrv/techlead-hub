@@ -2907,6 +2907,7 @@ export function Versions() {
         onClose={
           closeDetail
         }
+        ModalProps={{ disableEnforceFocus: true }}
         slotProps={{
           paper: {
             sx: {
