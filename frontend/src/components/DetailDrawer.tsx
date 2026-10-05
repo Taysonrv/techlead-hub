@@ -18,20 +18,22 @@ export function DetailDrawer({ open, onClose, title, subtitle, children, actions
       anchor="right"
       open={open}
       onClose={onClose}
-      PaperProps={{
-        sx: {
-          width: { xs: "100%", sm: "min(92vw, 620px)", lg: `min(46vw, ${width}px)` },
-          maxWidth: "100vw",
-          bgcolor: "background.default",
+      slotProps={{
+        paper: {
+          sx: {
+            width: { xs: "100%", sm: "min(92vw, 620px)", lg: `min(46vw, ${width}px)` },
+            maxWidth: "100vw",
+            bgcolor: "background.default",
+          },
         },
       }}
     >
       <Stack sx={{ height: "100%" }}>
         <Box sx={{ px: { xs: 2, md: 2.5 }, py: 1.75, bgcolor: "background.paper" }}>
-          <Stack direction="row" alignItems="flex-start" justifyContent="space-between" spacing={1}>
-            <Box minWidth={0}>
-              <Typography variant="h6" fontWeight={800} noWrap>{title}</Typography>
-              {subtitle && <Box sx={{ mt: .35, color: "text.secondary" }}>{subtitle}</Box>}
+          <Stack direction="row" spacing={1} sx={{ alignItems: "flex-start", justifyContent: "space-between" }}>
+            <Box sx={{ minWidth: 0 }}>
+              <Typography variant="h6" noWrap sx={{ fontWeight: 800 }}>{title}</Typography>
+              {subtitle ? <Box sx={{ mt: .35, color: "text.secondary" }}>{subtitle}</Box> : null}
             </Box>
             <Stack direction="row" spacing={.5}>
               {actions}
