@@ -3552,6 +3552,9 @@ function periodLabel(
     case "month":
       return "Este mês";
 
+    case "lastMonth":
+      return "Mês passado";
+
     case "semester":
       return "Este semestre";
 
