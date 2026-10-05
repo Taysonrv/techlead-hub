@@ -145,7 +145,7 @@ export function Sidebar() {
   const [floatingDrafts, setFloatingDrafts] = useState<Record<number, string>>({});
   const [floatingSearch, setFloatingSearch] = useState<Record<number, string>>({});
   const [floatingSearchOpen, setFloatingSearchOpen] = useState<Record<number, boolean>>({});
-  const [shareContext, setShareContext] = useState<{ label: string; title: string; path: string } | null>(null);
+  const [shareContext, setShareContext] = useState<{ label: string; recordId?: number; title: string; client?: string | null; status?: string | null; path: string } | null>(null);
   const floatingPollRef = useRef<number | null>(null);
   const floatingHydratedRef = useRef(false);
 
@@ -295,9 +295,9 @@ export function Sidebar() {
 
   useEffect(() => {
     const receiveShare = (event: Event) => {
-      const detail = (event as CustomEvent<{ label?: string; title?: string; path?: string }>).detail;
+      const detail = (event as CustomEvent<{ label?: string; recordId?: number; title?: string; client?: string | null; status?: string | null; path?: string }>).detail;
       if (!detail?.title) return;
-      setShareContext({ label: detail.label || "Registro", title: detail.title, path: detail.path || location.pathname + location.search });
+      setShareContext({ label: detail.label || "Registro", recordId: detail.recordId, title: detail.title, client: detail.client, status: detail.status, path: detail.path || location.pathname + location.search });
     };
     window.addEventListener("techlead-hub:share-chat", receiveShare);
     return () => window.removeEventListener("techlead-hub:share-chat", receiveShare);
@@ -305,7 +305,7 @@ export function Sidebar() {
 
   const shareIntoFloatingChat = useCallback((channelId: number) => {
     if (!shareContext) return;
-    const text = `[${shareContext.label}] ${shareContext.title}\n${shareContext.path}`;
+    const text = `[hub-card]${JSON.stringify({ type: shareContext.label, id: shareContext.recordId, title: shareContext.title, client: shareContext.client || null, status: shareContext.status || null, path: shareContext.path })}`;
     setFloatingDrafts((current) => ({ ...current, [channelId]: [current[channelId], text].filter(Boolean).join("\n") }));
     setShareContext(null);
   }, [shareContext]);
@@ -961,11 +961,11 @@ export function Sidebar() {
           </Stack>
           {!chat.minimized && <>
             {floatingSearchOpen[chat.channelId] && <Box sx={{ p: .75, borderBottom: "1px solid", borderColor: "divider", bgcolor: "background.paper" }}><TextField autoFocus size="small" fullWidth placeholder="Buscar nesta conversa..." value={floatingSearch[chat.channelId] ?? ""} onChange={(event) => setFloatingSearch((current) => ({ ...current, [chat.channelId]: event.target.value }))} slotProps={{ input: { startAdornment: <SearchOutlined sx={{ mr: .6, fontSize: 17, color: "text.secondary" }} /> } }} /></Box>}
-            {shareContext && <Box sx={{ px: 1, py: .65, bgcolor: "action.hover", borderBottom: "1px solid", borderColor: "divider" }}><Stack direction="row" spacing={.7} sx={{ alignItems: "center" }}><ShareOutlined sx={{ fontSize: 16, color: "primary.main" }} /><Typography variant="caption" noWrap sx={{ flex: 1 }}><b>{shareContext.label}:</b> {shareContext.title}</Typography><Button size="small" onClick={() => shareIntoFloatingChat(chat.channelId)}>Inserir</Button></Stack></Box>}
+            {shareContext && <Box sx={{ px: 1, py: .65, bgcolor: "action.hover", borderBottom: "1px solid", borderColor: "divider" }}><Stack direction="row" spacing={.7} sx={{ alignItems: "center" }}><ShareOutlined sx={{ fontSize: 16, color: "primary.main" }} /><Box sx={{ minWidth: 0, flex: 1 }}><Typography variant="caption" noWrap sx={{ display: "block", fontWeight: 900 }}>{shareContext.label}{shareContext.recordId ? ` #${shareContext.recordId}` : ""}</Typography><Typography variant="caption" noWrap sx={{ display: "block", color: "text.secondary" }}>{shareContext.title}</Typography></Box><Button size="small" onClick={() => shareIntoFloatingChat(chat.channelId)}>Inserir</Button></Stack></Box>}
             <Box sx={{ flex: 1, overflowY: "auto", p: 1, bgcolor: "background.default" }}>
               {chat.messages.filter((message) => !floatingSearch[chat.channelId]?.trim() || message.content.toLowerCase().includes(floatingSearch[chat.channelId].trim().toLowerCase())).slice(-30).map((message) => {
                 const mine = message.author.id === user?.id;
-                return <Box key={message.id} sx={{ display: "flex", justifyContent: mine ? "flex-end" : "flex-start", mb: .65 }}><Box sx={{ maxWidth: "82%", px: 1, py: .65, borderRadius: mine ? "12px 12px 3px 12px" : "12px 12px 12px 3px", bgcolor: mine ? "primary.main" : "background.paper", color: mine ? "primary.contrastText" : "text.primary", border: mine ? 0 : "1px solid", borderColor: "divider" }}><Typography variant="caption" sx={{ fontWeight: 800, opacity: .72 }}>{mine ? "Você" : message.author.name}</Typography><Typography variant="body2" sx={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{message.content.startsWith("[anexo] ") ? "📎 Arquivo" : message.content}</Typography><Stack direction="row" spacing={.35} sx={{ mt: .25, justifyContent: "flex-end", alignItems: "center", opacity: .68 }}><Typography variant="caption" sx={{ fontSize: ".62rem" }}>{new Date(message.createdAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</Typography>{mine && <DoneAllRounded sx={{ fontSize: 13 }} />}</Stack></Box></Box>;
+                return <Box key={message.id} sx={{ display: "flex", justifyContent: mine ? "flex-end" : "flex-start", mb: .65 }}><Box sx={{ maxWidth: "82%", px: 1, py: .65, borderRadius: mine ? "12px 12px 3px 12px" : "12px 12px 12px 3px", bgcolor: mine ? "primary.main" : "background.paper", color: mine ? "primary.contrastText" : "text.primary", border: mine ? 0 : "1px solid", borderColor: "divider" }}><Typography variant="caption" sx={{ fontWeight: 800, opacity: .72 }}>{mine ? "Você" : message.author.name}</Typography>{message.content.startsWith("[hub-card]") ? (() => { try { const card = JSON.parse(message.content.slice(10)) as { type: string; id?: number; title: string; client?: string | null; status?: string | null; path: string }; return <Paper elevation={0} sx={{ mt: .35, p: 1, minWidth: 220, bgcolor: mine ? "rgba(255,255,255,.13)" : "action.hover", color: "inherit", border: "1px solid", borderColor: mine ? "rgba(255,255,255,.24)" : "divider", borderRadius: 1.75 }}><Stack direction="row" spacing={.7} sx={{ alignItems: "center", mb: .5 }}><ShareOutlined sx={{ fontSize: 15 }} /><Typography variant="caption" sx={{ fontWeight: 900 }}>{card.type}{card.id ? ` #${card.id}` : ""}</Typography></Stack><Typography variant="body2" sx={{ fontWeight: 850, lineHeight: 1.3 }}>{card.title}</Typography>{card.client && <Typography variant="caption" sx={{ display: "block", mt: .35, opacity: .75 }}>Cliente: {card.client}</Typography>}{card.status && <Typography variant="caption" sx={{ display: "block", opacity: .75 }}>Status: {card.status}</Typography>}<Button size="small" variant={mine ? "text" : "outlined"} sx={{ mt: .7, color: "inherit", borderColor: "currentColor" }} onClick={() => navigate(card.path)}>Abrir registro</Button></Paper>; } catch { return <Typography variant="body2">Registro compartilhado</Typography>; } })() : <Typography variant="body2" sx={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{message.content.startsWith("[anexo] ") ? "📎 Arquivo" : message.content}</Typography>}<Stack direction="row" spacing={.35} sx={{ mt: .25, justifyContent: "flex-end", alignItems: "center", opacity: .68 }}><Typography variant="caption" sx={{ fontSize: ".62rem" }}>{new Date(message.createdAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</Typography>{mine && <DoneAllRounded sx={{ fontSize: 13 }} />}</Stack></Box></Box>;
               })}
             </Box>
             {chat.typingNames.length > 0 && <Typography variant="caption" sx={{ px: 1.1, py: .35, color: "primary.main", fontWeight: 750, bgcolor: "background.default" }}>{chat.typingNames.join(", ")} {chat.typingNames.length > 1 ? "estão digitando..." : "está digitando..."}</Typography>}
