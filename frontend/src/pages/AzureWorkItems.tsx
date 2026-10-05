@@ -5182,7 +5182,7 @@ export function AzureWorkItems({
                   onClick={() => {
                     const value = selectedWorkItem.workItemType.toLocaleLowerCase("pt-BR");
                     const route = value.includes("apoio") ? "/apoios" : value.includes("evolu") ? "/evolucoes" : "/correcoes";
-                    window.dispatchEvent(new CustomEvent("techlead-hub:share-chat", { detail: { label: selectedWorkItem.workItemType, title: `#${selectedWorkItem.id} · ${selectedWorkItem.title}`, path: `${route}?task=${selectedWorkItem.id}` } }));
+                    window.dispatchEvent(new CustomEvent("techlead-hub:share-chat", { detail: { label: selectedWorkItem.workItemType, recordId: selectedWorkItem.id, title: selectedWorkItem.title, client: selectedWorkItem.client, status: selectedWorkItem.state, path: `${route}?task=${selectedWorkItem.id}` } }));
                   }}
                 >
                   Compartilhar no Chat
