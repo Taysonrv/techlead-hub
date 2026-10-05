@@ -14,26 +14,48 @@ chatRoutes.get("/events", async (req: AuthenticatedRequest, res) => {
   res.setHeader("Connection", "keep-alive");
   res.flushHeaders();
   let closed = false;
-  req.on("close", () => { closed = true; });
+  let running = false;
   let previous = "";
-  while (!closed) {
+  let timer: ReturnType<typeof setInterval> | null = null;
+  const stop = () => {
+    if (closed) return;
+    closed = true;
+    if (timer) clearInterval(timer);
+  };
+  req.on("close", stop);
+  res.on("close", stop);
+
+  // Mantém o SSE barato: heartbeat frequente não consulta o banco.
+  // O snapshot consulta o banco em cadência própria e nunca sobrepõe execuções.
+  const refresh = async () => {
+    if (closed || running) return;
+    running = true;
     try {
       const snapshot = await chatService.realtimeSnapshot(req.auth!.userId);
       const serialized = JSON.stringify(snapshot);
-      if (serialized !== previous) {
+      if (!closed && serialized !== previous) {
         res.write(`event: chat\ndata: ${serialized}\n\n`);
         previous = serialized;
-      } else {
-        res.write(": heartbeat\n\n");
       }
     } catch {
-      // Falha transitória de banco/pool não deve derrubar o stream nem gerar tempestade
-      // de reconexões. Mantém o SSE vivo e tenta novamente no próximo ciclo.
-      res.write(": realtime temporarily unavailable\n\n");
+      if (!closed) res.write(": realtime temporarily unavailable\n\n");
+    } finally {
+      running = false;
     }
-    await new Promise((resolve) => setTimeout(resolve, 15_000));
+  };
+
+  res.write(": connected\n\n");
+  void refresh();
+  timer = setInterval(() => {
+    if (!closed) res.write(": heartbeat\n\n");
+  }, 20_000);
+
+  while (!closed) {
+    await new Promise((resolve) => setTimeout(resolve, 30_000));
+    await refresh();
   }
-  res.end();
+  stop();
+  if (!res.writableEnded) res.end();
 });
 chatRoutes.get("/participants", async (_req, res) => { try { res.json({ participants: await chatService.listParticipants() }); } catch (error) { fail(res, error); } });
 chatRoutes.get("/channels", async (req: AuthenticatedRequest, res) => { try { res.json({ channels: await chatService.listChannels(req.auth!.userId) }); } catch (error) { fail(res, error); } });
