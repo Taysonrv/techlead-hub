@@ -41,7 +41,6 @@ import { useColorMode } from "../context/ColorModeContext";
 import { useNavigate } from "react-router-dom";
 
 import { getTicketSnapshot } from "../services/ticketSnapshot";
-import { api } from "../services/api";
 import { PeriodFilter } from "../components/PeriodFilter";
 import { PageHeader } from "../components/PageHeader";
 import { detailDrawerPaperSx } from "../theme/layoutTokens";
@@ -226,7 +225,6 @@ export function Dashboard() {
 
   const [error, setError] =
     useState<string | null>(null);
-  const [classificationData, setClassificationData] = useState<ClassificationResponse | null>(null);
   const loadRequestRef = useRef<AbortController | null>(null);
 
   const [drilldown, setDrilldown] =
@@ -286,37 +284,6 @@ export function Dashboard() {
   const openedInPeriod = useMemo(() => tickets.filter((ticket) =>
     isDateInPeriod(ticket.createdDate, periodBounds.start, periodBounds.end)
   ), [tickets, periodBounds]);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    const formatDate = (date: Date) => {
-      const year = date.getFullYear();
-      const month = String(date.getMonth() + 1).padStart(2, "0");
-      const day = String(date.getDate()).padStart(2, "0");
-      return `${year}-${month}-${day}`;
-    };
-    const startDate = formatDate(effectiveStartDate);
-    const endDate = formatDate(effectiveEndDate);
-
-    // Nunca manter a classificação do período anterior enquanto o novo
-    // recorte está sendo carregado. Área/Serviço já recalculam de forma
-    // síncrona a partir do snapshot; Causa/Motivo devem seguir a mesma regra.
-    setClassificationData(null);
-
-    api.get<ClassificationResponse>("/dashboard/classifications", {
-      params: { startDate, endDate },
-      signal: controller.signal,
-      timeout: 60_000,
-    }).then((response) => {
-      if (!controller.signal.aborted) setClassificationData(response.data);
-    }).catch((error) => {
-      if (controller.signal.aborted) return;
-      setClassificationData(null);
-      console.error(`Erro ao carregar Causa/Motivo para ${startDate}.. ${endDate}:`, error);
-    });
-
-    return () => controller.abort();
-  }, [effectiveStartDate, effectiveEndDate]);
 
   // Fluxo de entrada da operação: abriu no período e a responsabilidade
   // atual pertence à operação SIMER. Não exige que o ticket continue aberto.
@@ -543,22 +510,79 @@ export function Dashboard() {
   }, [openedBySimerOperationInPeriod]);
 
 
+  const classificationData = useMemo<ClassificationResponse>(() => {
+    const canonicalCause = (value?: string | null) => {
+      const v = normalize(value);
+      if (!v || v.includes("bug no produto / erp")) return null;
+      if (v.includes("erro operacional")) return "Erro operacional";
+      if (v.includes("configuracao")) return "Configuração";
+      if (v.includes("nao identificada")) return "Não identificada";
+      if (v.includes("resolvido pelo usuario")) return "Resolvido pelo usuário";
+      if (v.includes("sefaz") || v.includes("aplicativo")) return "SEFAZ ou aplicativo de terceiros";
+      return null;
+    };
+    const canonicalReason = (value?: string | null) => {
+      const v = normalize(value);
+      if (v.includes("apoio processos operacionais")) return "Apoio processos operacionais";
+      if (v.includes("configuracao")) return "Configuração";
+      if (v.includes("duvida interna")) return "Dúvida interna";
+      if (v.includes("inexperiencia do usuario")) return "Inexperiência do usuário";
+      if (v.includes("informacao")) return "Informação";
+      if (v.includes("integracao com terceiros")) return "Integração com terceiros";
+      if (v.includes("priorizacao")) return "Priorização";
+      return null;
+    };
+    const aggregate = (items: Array<{ id: number; label: string }>): ClassificationItem[] => {
+      const grouped = new Map<string, ClassificationItem>();
+      items.forEach(({ id, label }) => {
+        const current = grouped.get(label) ?? { label, total: 0, ticketIds: [] };
+        current.total += 1;
+        current.ticketIds.push(id);
+        grouped.set(label, current);
+      });
+      return [...grouped.values()].sort((a, b) => b.total - a.total);
+    };
+
+    const problemRows = openedBySimerOperationInPeriod.filter((ticket) => normalize(ticket.category) === "problema");
+    const doubtRows = openedBySimerOperationInPeriod.filter((ticket) => normalize(ticket.category) === "duvida");
+    const causes = aggregate(problemRows.flatMap((ticket) => {
+      const label = canonicalCause(ticket.cause);
+      return label ? [{ id: ticket.id, label }] : [];
+    }));
+    const reasons = aggregate(doubtRows.flatMap((ticket) => {
+      const label = canonicalReason(ticket.reason);
+      return label ? [{ id: ticket.id, label }] : [];
+    }));
+
+    return {
+      causes,
+      reasons,
+      diagnostics: {
+        problemTotal: problemRows.length,
+        problemClassified: causes.reduce((sum, item) => sum + item.total, 0),
+        doubtTotal: doubtRows.length,
+        doubtClassified: reasons.reduce((sum, item) => sum + item.total, 0),
+        recoveredFromRaw: 0,
+      },
+    };
+  }, [openedBySimerOperationInPeriod]);
+
   const causes = useMemo(
-    () => classificationData?.causes.map(({ label, total }) => ({ label, total })) ?? [],
+    () => classificationData.causes.map(({ label, total }) => ({ label, total })),
     [classificationData],
   );
 
   const reasons = useMemo(
-    () => classificationData?.reasons.map(({ label, total }) => ({ label, total })) ?? [],
+    () => classificationData.reasons.map(({ label, total }) => ({ label, total })),
     [classificationData],
   );
 
   const classificationCoverage = useMemo(() => ({
-    problemTotal: classificationData?.diagnostics.problemTotal ?? 0,
-    problemClassified: classificationData?.diagnostics.problemClassified ?? 0,
-    doubtTotal: classificationData?.diagnostics.doubtTotal ?? 0,
-    doubtClassified: classificationData?.diagnostics.doubtClassified ?? 0,
-    recoveredFromRaw: classificationData?.diagnostics.recoveredFromRaw ?? 0,
+    problemTotal: classificationData.diagnostics.problemTotal,
+    problemClassified: classificationData.diagnostics.problemClassified,
+    doubtTotal: classificationData.diagnostics.doubtTotal,
+    doubtClassified: classificationData.diagnostics.doubtClassified,
+    recoveredFromRaw: 0,
   }), [classificationData]);
 
   const businessAreaCoverage = useMemo(() => {
@@ -1475,7 +1499,7 @@ export function Dashboard() {
               <Typography variant="caption" color="text.secondary">
                 Somente categoria Problema • causas mais frequentes no período
               </Typography>
-              {classificationData && <Typography variant="caption" color="text.secondary" sx={{ display:"block", mt:.35 }}>Cobertura: {classificationCoverage.problemClassified}/{classificationCoverage.problemTotal} tickets classificados{classificationCoverage.recoveredFromRaw > 0 ? ` • ${classificationCoverage.recoveredFromRaw} recuperados do payload` : ""}</Typography>}</Box>
+              {<Typography variant="caption" color="text.secondary" sx={{ display:"block", mt:.35 }}>Cobertura: {classificationCoverage.problemClassified}/{classificationCoverage.problemTotal} tickets classificados{classificationCoverage.recoveredFromRaw > 0 ? ` • ${classificationCoverage.recoveredFromRaw} recuperados do payload` : ""}</Typography>}</Box>
               {causes.length ? <Box sx={{ height: Math.max(250, Math.min(330, causes.slice(0, 6).length * 44 + 64)), mt: 1.25 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={causes.slice(0, 6)} layout="vertical" margin={{ left: 10, right: 34, top: 4, bottom: 4 }}>
@@ -1495,7 +1519,7 @@ export function Dashboard() {
                       onClick={(_, index) => {
                         const cause = causes.slice(0, 6)[index]?.label;
                         if (cause) {
-                           const ids = new Set(classificationData?.causes.find((item) => item.label === cause)?.ticketIds ?? []);
+                           const ids = new Set(classificationData.causes.find((item) => item.label === cause)?.ticketIds ?? []);
                            showTickets(`Causa: ${cause}`, openedInPeriod.filter((ticket) => ids.has(ticket.id)), "Tickets classificados com a causa selecionada");
                          }
                       }} />
@@ -1512,7 +1536,7 @@ export function Dashboard() {
               data={reasons}
               emptyMessage={classificationCoverage.doubtTotal > 0 ? `Existem ${classificationCoverage.doubtTotal} tickets de Dúvida no período, mas o motivo ainda não está disponível nos dados sincronizados.` : "Nenhum ticket de Dúvida no período selecionado."}
               onItemClick={(label) => {
-                const ids = new Set(classificationData?.reasons.find((item) => item.label === label)?.ticketIds ?? []);
+                const ids = new Set(classificationData.reasons.find((item) => item.label === label)?.ticketIds ?? []);
                 showTickets(`Motivo: ${label}`, openedInPeriod.filter((ticket) => ids.has(ticket.id)), "Tickets de Dúvida classificados com o motivo selecionado");
               }}
             />
