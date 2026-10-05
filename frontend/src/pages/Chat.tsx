@@ -492,7 +492,8 @@ export function Chat() {
         </Stack>
         <Box sx={{ px: 1.25, pb: 1 }}><TextField size="small" fullWidth value={conversationSearch} onChange={(event) => setConversationSearch(event.target.value)} placeholder="Buscar conversa..." slotProps={{ input: { startAdornment: <SearchOutlined sx={{ mr: .7, fontSize: 18, color: "text.secondary" }} /> } }} /></Box>
         <Box sx={{ mx: 1.15, height: 1, background: (theme) => theme.palette.mode === "dark" ? "linear-gradient(90deg,transparent,rgba(148,163,184,.14),transparent)" : "linear-gradient(90deg,transparent,rgba(148,163,184,.20),transparent)" }} />
-        <List disablePadding sx={{ flex: 1, minHeight: 0, overflowY: "auto", overscrollBehavior: "contain", scrollbarWidth: "none", "&::-webkit-scrollbar": { display: "none" }, pb: 1 }}>
+        <Box sx={{ flex: "1 1 0", minHeight: 0, overflowY: "auto", overflowX: "hidden", overscrollBehavior: "contain", scrollbarWidth: "none", "&::-webkit-scrollbar": { display: "none" } }}>
+        <List disablePadding sx={{ width: "100%", py: .35 }}>
           {sidebarChannels.map((channel, index) => {
             const group = favorites.includes(channel.id) ? "Favoritos" : channel.type === "DIRECT" ? "Recentes" : "Equipes";
             const previousChannel = sidebarChannels[index - 1];
@@ -551,6 +552,7 @@ export function Chat() {
             </Box>;
           })}
         </List>
+        </Box>
         {channelsLoading && !channels.length ? <Stack spacing={1} sx={{ px: 1.2, py: 1 }}><Skeleton variant="rounded" height={54} /><Skeleton variant="rounded" height={54} /><Skeleton variant="rounded" height={54} /></Stack> : !channels.length && <Box sx={{ px: 2, py: 4, textAlign: "center" }}><Box sx={{ width: 44, height: 44, mx: "auto", mb: 1.2, borderRadius: "50%", display: "grid", placeItems: "center", bgcolor: "action.hover", color: "text.secondary" }}><ForumOutlined fontSize="small" /></Box><Typography sx={{ fontWeight: 850, fontSize: ".88rem" }}>Nenhuma conversa ainda</Typography><Typography color="text.secondary" variant="caption" sx={{ display: "block", mt: .35 }}>Inicie uma conversa privada ou crie um canal para sua equipe.</Typography><Button size="small" variant="outlined" startIcon={<PersonOutlineRounded />} onClick={() => setDirectOpen(true)} sx={{ mt: 1.4, borderRadius: 2 }}>Nova conversa</Button></Box>}
       </Box>
       <Box sx={{ display: "flex", flexDirection: "column", minWidth: 0, minHeight: 0, overflow: "hidden", borderRadius: { xs: 0, md: 2.75 }, border: { md: "1px solid" }, borderColor: { md: "divider" }, bgcolor: "background.paper" }}>
