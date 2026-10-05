@@ -5,6 +5,7 @@ import { clearMovideskApiPriority, releaseMovideskApi, requestMovideskApiPriorit
 
 const DEFAULT_INTERVAL_MINUTES = 60;
 const DEFAULT_INITIAL_DELAY_SECONDS = 5;
+const METADATA_CONTINUATION_SECONDS = 15;
 const LOCK_NAMESPACE = 864211;
 const LOCK_RESOURCE = 2;
 type LockRow = { acquired: boolean };
@@ -52,7 +53,7 @@ export class MovideskSyncScheduler {
   private async runAndReschedule() {
     let retrySoon = false;
     try { retrySoon = await this.execute(); }
-    finally { this.schedule(retrySoon ? 2 * 60_000 : this.intervalMinutes() * 60_000); }
+    finally { this.schedule(retrySoon ? METADATA_CONTINUATION_SECONDS * 1000 : this.intervalMinutes() * 60_000); }
   }
 
   private async execute(): Promise<boolean> {
@@ -88,13 +89,19 @@ export class MovideskSyncScheduler {
         return false;
       }
       const s = result.sync;
+      const metadataRemaining = s.analyticalMetadataRemaining ?? 0;
       console.log([
         "[movidesk-sync] Sincronização concluída.",
         `modo=${s.mode}`, `paginas=${s.pages}`, `total=${s.totalRows}`,
         `inseridos=${s.created}`, `atualizados=${s.updated}`,
         `ignorados=${s.ignored}`, `erros=${s.errors}`,
-        `duração=${Math.round((Date.now()-started)/1000)}s`
+        `duração=${Math.round((Date.now()-started)/1000)}s`,
+        metadataRemaining > 0 ? `metadadosRestantes=${metadataRemaining}` : "metadados=em-dia"
       ].join(" | "));
+      if (metadataRemaining > 0) {
+        console.log(`[movidesk-sync] Reconciliação analítica continuará em ${METADATA_CONTINUATION_SECONDS}s. | restantes=${metadataRemaining}`);
+        return true;
+      }
     } catch (error) {
       console.error("[movidesk-sync] Falha na sincronização automática:", error);
     } finally {
