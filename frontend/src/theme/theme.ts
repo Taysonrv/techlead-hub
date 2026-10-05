@@ -201,6 +201,8 @@ export function createAppTheme(mode: PaletteMode = "light") {
               width: "min(560px, 92vw)", maxWidth: "100vw", boxSizing: "border-box",
               borderLeft: `1px solid ${dark ? "rgba(69,201,225,.22)" : border}`,
               boxShadow: dark ? "-24px 0 60px rgba(0,0,0,.32)" : "-18px 0 48px rgba(16,24,40,.12)",
+              overscrollBehavior: "contain",
+              scrollbarGutter: "stable",
               "&::before": { content: '""', position: "absolute", inset: "0 auto 0 0", width: 2, background: "linear-gradient(180deg,#18C77A,#22D3EE,transparent 80%)", opacity: dark ? .9 : .5 },
             },
             "&.MuiDrawer-paperAnchorRight > .MuiBox-root:first-of-type": { width: "100%", maxWidth: "100%", boxSizing: "border-box" },
