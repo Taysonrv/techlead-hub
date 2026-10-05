@@ -171,7 +171,7 @@ function AuthenticatedLayout({
               },
             }}
           >
-{!isChat && <Box sx={{ px: { xs: 1.5, sm: 2, md: 2.5, lg: 3, xl: 4 } }}><GlobalTopBar /></Box>}
+<Box sx={isChat ? { position: "absolute", width: 0, height: 0, overflow: "visible" } : { px: { xs: 1.5, sm: 2, md: 2.5, lg: 3, xl: 4 } }}><GlobalTopBar /></Box>
             {forbiddenMessage && <Alert severity="warning" sx={{ mx: { xs: 1.5, sm: 2, md: 2.5, lg: 3, xl: 4 }, mb: 2, borderRadius: 2.5 }} onClose={() => setForbiddenMessage(null)}>{forbiddenMessage}</Alert>}
             <Box
               className="techlead-page-surface futuristic-page"
