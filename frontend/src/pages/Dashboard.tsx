@@ -49,6 +49,7 @@ import { ExportTicketsButton } from "../components/ExportTicketsButton";
 import { useFilters } from "../context/FiltersContext";
 import { aliareColors } from "../theme/theme";
 import { calculateTimestampSla } from "../utils/timestampSla";
+import { auditOperationalMetrics, buildOperationalCohorts } from "../utils/operationalMetrics";
 import { calculateServiceLevel } from "../utils/serviceLevel";
 import {
   chartPalette,
@@ -281,39 +282,23 @@ export function Dashboard() {
     end: endOfDay(effectiveEndDate),
   }), [effectiveStartDate, effectiveEndDate]);
 
+  const operationalCohorts = useMemo(
+    () => buildOperationalCohorts(tickets, periodBounds),
+    [tickets, periodBounds],
+  );
+
   const openedInPeriod = useMemo(() => tickets.filter((ticket) =>
     isDateInPeriod(ticket.createdDate, periodBounds.start, periodBounds.end)
   ), [tickets, periodBounds]);
 
-  // Fluxo de entrada da operação: abriu no período e a responsabilidade
-  // atual pertence à operação SIMER. Não exige que o ticket continue aberto.
-  const openedBySimerOperationInPeriod = useMemo(
-    () => openedInPeriod.filter((ticket) => ticket.isWithSimer === true),
-    [openedInPeriod],
-  );
-
-  // Estoque do cohort ainda sob responsabilidade da operação.
+  const openedBySimerOperationInPeriod = operationalCohorts.entries;
   const openedWithSimerInPeriod = useMemo(
     () => openedBySimerOperationInPeriod.filter(isOpen),
     [openedBySimerOperationInPeriod],
   );
-
-  // Estoque operacional atual: responsabilidade SIMER + estado ativo.
-  // Não é limitado pela data de abertura.
-  const pendingTickets = useMemo(
-    () => tickets.filter((ticket) => ticket.isWithSimer === true && isOpen(ticket)),
-    [tickets],
-  );
-
-  // Métricas de saída pertencem ao período pelo evento que representam.
-  // Não exigem que o ticket tenha sido aberto no mesmo recorte.
-  const resolvedInPeriod = useMemo(() => tickets.filter((ticket) =>
-    ticket.isWithSimer === true && isDateInPeriod(ticket.resolvedDate, periodBounds.start, periodBounds.end)
-  ), [tickets, periodBounds]);
-
-  const closedInPeriod = useMemo(() => tickets.filter((ticket) =>
-    ticket.isWithSimer === true && isDateInPeriod(ticket.closedDate, periodBounds.start, periodBounds.end)
-  ), [tickets, periodBounds]);
+  const pendingTickets = operationalCohorts.backlog;
+  const resolvedInPeriod = operationalCohorts.resolved;
+  const closedInPeriod = operationalCohorts.closed;
 
   // Áreas/serviços/SLA/CSAT mantêm a leitura da responsabilidade operacional atual.
   const filteredTickets = openedBySimerOperationInPeriod;
@@ -328,12 +313,20 @@ export function Dashboard() {
 
   // SLA de solução segue a leitura oficial do Movidesk: pertence ao período
   // em que a solução ocorreu. Isso inclui tickets abertos em meses anteriores.
-  const solutionPeriodTickets = useMemo(() => tickets.filter((ticket) => {
-    if (ticket.isWithSimer !== true || !ticket.resolvedDate) return false;
-    return isDateInPeriod(ticket.resolvedDate, periodBounds.start, periodBounds.end);
-  }), [tickets, periodBounds]);
+  const solutionPeriodTickets = operationalCohorts.resolved;
 
   const solutionSla = useMemo(() => calculateTimestampSla(solutionPeriodTickets, "solution"), [solutionPeriodTickets]);
+
+  const metricAudit = useMemo(() => auditOperationalMetrics({
+    entries: openedBySimerOperationInPeriod.length,
+    resolved: resolvedInPeriod.length,
+    closed: closedInPeriod.length,
+    backlog: pendingTickets.length,
+    responseMeasured: responseSla.measured,
+    responseWithin: responseSla.within,
+    solutionMeasured: solutionSla.measured,
+    solutionWithin: solutionSla.within,
+  }), [openedBySimerOperationInPeriod, resolvedInPeriod, closedInPeriod, pendingTickets, responseSla, solutionSla]);
 
   const summary = useMemo(() => ({
     abertosNoPeriodo: openedInPeriod.length,
@@ -1131,7 +1124,8 @@ export function Dashboard() {
         eyebrow="Operação"
         title="Dashboard Executivo"
         description="Visão consolidada da operação de suporte"
-        meta={<>{periodLabel(period)}{" • "}{filteredTickets.length} ticket(s) analisado(s)</>}
+        meta={<>{periodLabel(period)}{" • "}{filteredTickets.length} ticket(s) analisado(s)</>
+      {metricAudit.length > 0 && <Alert severity="warning" variant="outlined" sx={{ mb: 2 }}>Auditoria de métricas detectou {metricAudit.length} divergência(s): {metricAudit.map((item) => item.message).join(" · ")}</Alert>}}
         action={<PeriodFilter />}
       />
 
