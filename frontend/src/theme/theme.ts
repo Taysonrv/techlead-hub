@@ -270,7 +270,7 @@ export function createAppTheme(mode: PaletteMode = "light") {
         styleOverrides: {
           root: {
             minWidth: 0,
-            "& .MuiOutlinedInput-root.MuiInputBase-sizeSmall": { minHeight: 42 },
+            "& .MuiOutlinedInput-root.MuiInputBase-sizeSmall": { minHeight: 38 },
             "& .MuiAutocomplete-input": { minWidth: 0 },
           },
           tagSizeSmall: { height: 24, maxWidth: 180 },
@@ -287,7 +287,7 @@ export function createAppTheme(mode: PaletteMode = "light") {
           root: {
             transition: "border-color .16s ease, box-shadow .16s ease, background-color .16s ease",
             borderRadius: 8,
-            "&.MuiInputBase-sizeSmall": { minHeight: 42 },
+            "&.MuiInputBase-sizeSmall": { minHeight: 38 },
             backgroundColor: dark ? "rgba(5,25,34,.62)" : undefined,
             "& .MuiOutlinedInput-notchedOutline": { borderColor: dark ? "rgba(131,175,220,.30)" : undefined },
             "& .MuiOutlinedInput-notchedOutline legend": {
