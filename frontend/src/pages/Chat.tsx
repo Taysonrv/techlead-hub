@@ -1,7 +1,7 @@
 import { AddCommentOutlined, ForumOutlined, SendRounded, EmojiEmotionsOutlined, CelebrationOutlined, NotificationsActiveOutlined, ReplyOutlined, CloseOutlined, SearchOutlined, Circle, MoreHorizOutlined, DeleteOutlineRounded, StarOutlineRounded, VolumeOffOutlined, AttachFileRounded, DownloadRounded, CleaningServicesOutlined, GroupsOutlined, PersonOutlineRounded, InfoOutlined, OpenInNewOutlined } from "@mui/icons-material";
 import { Alert, Box, Button, Checkbox, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Divider, FormControlLabel, IconButton, List, ListItemButton, ListItemIcon, ListItemText, Menu, MenuItem, Paper, Popover, Snackbar, Stack, TextField, Tooltip, Typography } from "@mui/material";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { api, getAccessToken, getApiBaseUrl } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { playNotificationSound } from "../utils/notificationSound";
@@ -15,6 +15,7 @@ type RealtimeSnapshot = { presence: Presence[]; typing: Array<{ channelId: numbe
 
 export function Chat() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [channels, setChannels] = useState<Channel[]>([]);
   const [participants, setParticipants] = useState<Person[]>([]);
