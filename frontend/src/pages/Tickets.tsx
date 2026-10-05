@@ -2549,20 +2549,8 @@ export function Tickets() {
                   "Sem cliente"}
               </Typography>
 
-              <Stack
-                direction="row"
-                spacing={0.75}
-                sx={{
-                  mt:
-                    2,
+              <Box sx={{ mt: 2, display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))" }, gap: .8 }}>
 
-                  flexWrap:
-                    "wrap",
-
-                  gap:
-                    0.75,
-                }}
-              >
                 <Button
                   size="small"
                   variant="outlined"
@@ -2622,8 +2610,7 @@ export function Tickets() {
                 >
                   Investigar no Mapa
                 </Button>
-              </Stack>
-
+              </Box>
               <Divider
                 sx={{
                   my:
