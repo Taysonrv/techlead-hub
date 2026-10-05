@@ -606,19 +606,20 @@ export function Performance() {
         title="Desempenho do Atendimento"
         description="Prazos, risco operacional e desempenho da equipe em uma visão única"
         meta="SLA calculado pelos marcos temporais disponíveis, separado do risco operacional"
-        action={<PeriodFilter />
-      {metricAudit.length > 0 && <Alert severity="warning" variant="outlined" sx={{ mb: 2 }}>
-        Auditoria de consistência detectou {metricAudit.length} divergência(s): {metricAudit.map((item) => item.message).join(" · ")}
-      </Alert>}
-}
+        action={<PeriodFilter />}
       />
+      {metricAudit.length > 0 && (
+        <Alert severity="warning" variant="outlined" sx={{ mb: 2 }}>
+          Auditoria de consistência detectou {metricAudit.length} divergência(s): {metricAudit.map((item) => item.message).join(" · ")}
+        </Alert>
+      )}
 
       <Alert
         severity="info"
         variant="outlined"
         sx={{ mb: 1.5, borderRadius: 2 }}
       >
-        <strong>SLA do suporte:</strong> é calculado pelos prazos e timestamps sincronizados do Movidesk para os tickets abertos no período selecionado. Atendimentos
+        <strong>SLA do suporte:</strong> usa os prazos e timestamps sincronizados do Movidesk. A 1ª resposta segue as entradas do período; a solução segue os tickets resolvidos no período. Atendimentos
         sem medição e as categorias Adequação e Solicitação de Serviço não entram no denominador.
         Os prazos calculados em horas úteis são exibidos separadamente como risco operacional.
       </Alert>
