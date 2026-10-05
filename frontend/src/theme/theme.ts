@@ -324,6 +324,9 @@ export function createAppTheme(mode: PaletteMode = "light") {
         styleOverrides: {
           root: {
             background: dark ? "linear-gradient(180deg,#0D3440,#0A2935)" : aliareColors.graphite,
+            position: "sticky",
+            top: 0,
+            zIndex: 1,
             "& .MuiTableCell-head": { color: "#FFFFFF", fontWeight: 750, fontSize: ".74rem", letterSpacing: ".03em", textTransform: "uppercase", borderBottomColor: dark ? "rgba(116,166,216,.18)" : aliareColors.graphite, position: "sticky", top: 0, zIndex: 2 },
           },
         },
@@ -337,6 +340,8 @@ export function createAppTheme(mode: PaletteMode = "light") {
             "&::-webkit-scrollbar-thumb": { background: dark ? "#31516E" : "#C7CDD3", borderRadius: 99 },
             borderRadius: 14,
             border: `1px solid ${border}`,
+            overflowX: "auto",
+            overscrollBehaviorX: "contain",
             ...(dark && { background: "linear-gradient(145deg,rgba(9,34,44,.94),rgba(6,25,36,.97))", boxShadow: "inset 0 1px rgba(255,255,255,.025), 0 12px 28px rgba(0,0,0,.10)" }),
           },
         },
@@ -401,8 +406,10 @@ export function createAppTheme(mode: PaletteMode = "light") {
       MuiTablePagination: {
         styleOverrides: {
           root: {
-            minHeight: 46,
+            minHeight: 42,
             borderTop: `1px solid ${border}`,
+            "& .MuiTablePagination-toolbar": { minHeight: 42, paddingLeft: 12, paddingRight: 8 },
+            "& .MuiTablePagination-selectLabel, & .MuiTablePagination-displayedRows": { fontSize: ".78rem", color: textSecondary },
             ...(dark && { backgroundColor: "rgba(6,25,36,.82)", color: textSecondary }),
           },
         },
