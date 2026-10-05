@@ -8,12 +8,13 @@ type KpiCardProps = {
   value: ReactNode;
   subtitle?: string;
   info?: string;
+  metadata?: { source?: string; periodRule?: string; denominator?: string; updatedAt?: string };
   accent?: string;
   active?: boolean;
   onClick?: () => void;
 };
 
-export function KpiCard({ title, value, subtitle, info, accent = aliareColors.green, active = false, onClick }: KpiCardProps) {
+export function KpiCard({ title, value, subtitle, info, metadata, accent = aliareColors.green, active = false, onClick }: KpiCardProps) {
   const theme = useTheme();
   const dark = theme.palette.mode === "dark";
   const cardBackground = dark
@@ -32,7 +33,7 @@ export function KpiCard({ title, value, subtitle, info, accent = aliareColors.gr
     <CardContent sx={{ p: { xs: 1.6, md: 1.8 }, textAlign: "center", "&:last-child": { pb: { xs: 1.6, md: 1.8 } } }}>
       <Stack direction="row" sx={{ alignItems: "center", justifyContent: "center", gap: .5, position: "relative" }}>
         <Typography variant="body2" sx={{ fontWeight: 700, fontSize: ".82rem", letterSpacing: "-.005em", minWidth: 0, textAlign: "center" }}>{title}</Typography>
-        {info && <Tooltip title={info}><IconButton size="small" aria-label={`Informações sobre ${title}`} onClick={(event) => event.stopPropagation()} sx={{ p: .3, color: "text.secondary", position: "absolute", right: 0 }}><InfoOutlined sx={{ fontSize: 16 }} /></IconButton></Tooltip>}
+        {(info || metadata) && <Tooltip title={<Stack spacing={.45}>{info && <Typography variant="caption">{info}</Typography>}{metadata?.source && <Typography variant="caption"><b>Fonte:</b> {metadata.source}</Typography>}{metadata?.periodRule && <Typography variant="caption"><b>Período:</b> {metadata.periodRule}</Typography>}{metadata?.denominator && <Typography variant="caption"><b>Denominador:</b> {metadata.denominator}</Typography>}{metadata?.updatedAt && <Typography variant="caption"><b>Atualização:</b> {metadata.updatedAt}</Typography>}</Stack>}><IconButton size="small" aria-label={`Informações sobre ${title}`} onClick={(event) => event.stopPropagation()} sx={{ p: .3, color: "text.secondary", position: "absolute", right: 0 }}><InfoOutlined sx={{ fontSize: 16 }} /></IconButton></Tooltip>}
       </Stack>
       <Typography sx={{ mt: .6, fontWeight: 780, color: accent, letterSpacing: "-.025em", fontSize: { xs: "1.65rem", md: "1.85rem", xl: "2rem" }, lineHeight: 1.05 }}>{value}</Typography>
       {subtitle && <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: .75, minHeight: 18 }}>{subtitle}</Typography>}
