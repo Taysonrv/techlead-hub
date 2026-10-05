@@ -245,6 +245,7 @@ type KpiCardProps = {
 export function Tickets() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const [ticketActionsAnchor, setTicketActionsAnchor] = useState<HTMLElement | null>(null);
 
   const [
     tickets,
