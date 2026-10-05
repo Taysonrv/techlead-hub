@@ -3602,14 +3602,8 @@ function DonutCard({
           />
         </Stack>
 
-        <Box
-          sx={{
-            height:
-              210,
-            mt:
-              1,
-          }}
-        >
+        <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "minmax(190px,.9fr) minmax(0,1.1fr)" }, gap: { xs: .75, sm: 1.5 }, alignItems: "center", mt: 1 }}>
+          <Box sx={{ height: { xs: 210, sm: 225 }, minWidth: 0 }}>
           {data.length >
           0 ? (
             <ResponsiveContainer
@@ -3749,8 +3743,8 @@ function DonutCard({
               </Typography>
             </Box>
           )}
-        </Box>
-
+          </Box>
+          <Box sx={{ minWidth: 0, maxHeight: { sm: 225 }, overflowY: "auto" }}>
         <Stack
           direction="row"
           spacing={1}
@@ -3837,6 +3831,8 @@ function DonutCard({
             ),
           )}
         </Stack>
+          </Box>
+        </Box>
       </ExecutiveSection>
   );
 }
