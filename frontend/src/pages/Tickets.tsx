@@ -35,6 +35,7 @@ import {
   SearchOutlined,
   TuneOutlined,
   AccountTreeOutlined,
+  ShareOutlined,
 } from "@mui/icons-material";
 
 import {
@@ -2575,6 +2576,17 @@ export function Tickets() {
                   }
                 >
                   Copiar resumo
+                </Button>
+
+                <Button
+                  size="small"
+                  variant="outlined"
+                  startIcon={<ShareOutlined />}
+                  onClick={() => {
+                    window.dispatchEvent(new CustomEvent("techlead-hub:share-chat", { detail: { label: "Ticket", title: `#${selectedTicket.movideskId} · ${selectedTicket.subject}`, path: `/tickets?movidesk=${selectedTicket.movideskId}` } }));
+                  }}
+                >
+                  Compartilhar no Chat
                 </Button>
 
                 <Button
