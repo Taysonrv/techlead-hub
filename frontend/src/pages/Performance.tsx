@@ -589,11 +589,7 @@ export function Performance() {
   ].filter((item) => item.value > 0);
 
   if (loading) {
-    return (
-      <Box sx={{ display: "flex", justifyContent: "center", mt: 10 }}>
-        <CircularProgress sx={{ color: aliareColors.green }} />
-      </Box>
-    );
+    return <ContentState kind="loading" title="Carregando desempenho" minHeight={360} />;
   }
 
   if (error) {
