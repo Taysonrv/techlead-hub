@@ -2,6 +2,7 @@ import { prisma } from "../database/prisma";
 import type { Prisma } from "@prisma/client";
 import { SIMER_CLIENTS, SUPPORT_ANALYSTS, ticketOperationalScope, azureOperationalScope } from "../domain/OperationalScope";
 import { analyzeMovideskIndicators } from "./MovideskPayloadAnalytics";
+import { reviewTicketClassification } from "./TicketClassificationReview";
 import { SIMER_SERVICE_CATALOG, suggestSimerService, type SimerServiceCatalogItem } from "../domain/SimerServiceCatalog";
 import { OPEN_TICKET_BASE_STATES, OPERATIONAL_AGING, hoursBefore, isOperationalTicketFinalized, isOperationalTicketOpen, isTerminalWorkItemState, normalizeOperationalText, ticketLastRecordedMovement } from "../domain/OperationalLifecycleRules";
 
@@ -214,17 +215,6 @@ export class DataQualityService {
       const normalized = normalizeStatus(value ?? "");
       return !normalized || ["nao informado", "sem causa", "sem categoria", "outros", "outro", "-"].includes(normalized);
     };
-    const hasSuspiciousClassification = (ticket: { category: string | null; cause: string | null }) => {
-      if (isMissingClassification(ticket.category) || isMissingClassification(ticket.cause)) return true;
-      const category = normalizeStatus(ticket.category ?? "");
-      const cause = normalizeStatus(ticket.cause ?? "");
-      const doubtCategory = /duvida|orientacao/.test(category);
-      const problemCategory = /problema|erro|incidente/.test(category);
-      const doubtCause = /duvida|orientacao|treinamento/.test(cause);
-      const problemCause = /bug|erro|falha|configuracao|operacional/.test(cause);
-      return (doubtCategory && problemCause) || (problemCategory && doubtCause);
-    };
-
     const isTicketFinalized = (ticket: { baseStatus: string | null; status: string }) => {
       const status = normalizeStatus(ticket.status);
       return ["Resolved", "Closed"].includes(ticket.baseStatus ?? "")
@@ -357,8 +347,11 @@ export class DataQualityService {
     const withoutCategory = scopedTickets.filter((ticket) =>
       isTicketOpen(ticket) && isMissingClassification(ticket.category),
     );
+    const classificationReviewByTicketId = new Map(
+      scopedTickets.map((ticket) => [ticket.id, isTicketOpen(ticket) ? reviewTicketClassification(ticket) : null] as const),
+    );
     const suspectedClassification = scopedTickets.filter((ticket) =>
-      isTicketOpen(ticket) && hasSuspiciousClassification(ticket),
+      classificationReviewByTicketId.get(ticket.id) !== null,
     );
 
     /*
@@ -504,6 +497,7 @@ export class DataQualityService {
       serviceThirdLevel: ticket.serviceThirdLevel,
       servicePath: ticketServicePath(ticket).join(" » ") || ticket.service || null,
       serviceSuggestion: serviceSuggestionByTicketId.get(ticket.id) ?? null,
+      classificationReview: classificationReviewByTicketId.get(ticket.id) ?? null,
       movideskTicket: ticket.movideskId,
       registeredVersion: null,
       deliveredVersion: ticket.deliveredVersion,
