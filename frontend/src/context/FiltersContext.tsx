@@ -15,6 +15,7 @@ export type PeriodOption =
   | "60d"
   | "90d"
   | "month"
+  | "lastMonth"
   | "semester"
   | "year"
   | "custom";
@@ -118,6 +119,15 @@ export function FiltersProvider({
 
     if (period === "month") {
       start = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+    }
+
+    if (period === "lastMonth") {
+      start = new Date(now.getFullYear(), now.getMonth() - 1, 1, 0, 0, 0, 0);
+      const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+      return {
+        effectiveStartDate: start,
+        effectiveEndDate: lastMonthEnd,
+      };
     }
 
     if (period === "semester") {
