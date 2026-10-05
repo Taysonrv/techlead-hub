@@ -1,4 +1,4 @@
-import { AddCommentOutlined, ForumOutlined, SendRounded, EmojiEmotionsOutlined, CelebrationOutlined, NotificationsActiveOutlined, ReplyOutlined, CloseOutlined, SearchOutlined, Circle, MoreHorizOutlined, DeleteOutlineRounded, StarOutlineRounded, VolumeOffOutlined, AttachFileRounded, DownloadRounded, CleaningServicesOutlined, GroupsOutlined, PersonOutlineRounded } from "@mui/icons-material";
+import { AddCommentOutlined, ForumOutlined, SendRounded, EmojiEmotionsOutlined, CelebrationOutlined, NotificationsActiveOutlined, ReplyOutlined, CloseOutlined, SearchOutlined, Circle, MoreHorizOutlined, DeleteOutlineRounded, StarOutlineRounded, VolumeOffOutlined, AttachFileRounded, DownloadRounded, CleaningServicesOutlined, GroupsOutlined, PersonOutlineRounded, InfoOutlined } from "@mui/icons-material";
 import { Alert, Box, Button, Checkbox, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Divider, FormControlLabel, IconButton, List, ListItemButton, ListItemIcon, ListItemText, Menu, MenuItem, Paper, Popover, Snackbar, Stack, TextField, Tooltip, Typography } from "@mui/material";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
@@ -51,6 +51,7 @@ export function Chat() {
   const [deletingConversation, setDeletingConversation] = useState(false);
   const [maintenanceRunning, setMaintenanceRunning] = useState(false);
   const [maintenanceMessage, setMaintenanceMessage] = useState("");
+  const [conversationInfoOpen, setConversationInfoOpen] = useState(false);
   const [statusMessage] = useState(() => localStorage.getItem("techlead-chat-status-message") || "");
   const [incomingPopup, setIncomingPopup] = useState<{ channelId: number; channelName: string; authorName: string; preview: string } | null>(null);
   const previousChannelState = useRef<Map<number, { unread: number; lastMessageId: number | null }>>(new Map());
@@ -63,6 +64,10 @@ export function Chat() {
   const typingNames = remoteTyping.filter((item) => item.channelId === selectedId).map((item) => item.name);
   const visibleChannels = useMemo(() => channels.filter((channel) => [channel.name, channel.description, channel.clientName].some((value) => value?.toLowerCase().includes(conversationSearch.toLowerCase()))), [channels, conversationSearch]);
   const visibleMessages = useMemo(() => messages.filter((message) => !messageSearch.trim() || message.content.toLowerCase().includes(messageSearch.toLowerCase())), [messages, messageSearch]);
+  const sortedVisibleChannels = useMemo(() => visibleChannels.slice().sort((a, b) => {
+    const group = (channel: Channel) => favorites.includes(channel.id) ? 0 : channel.type === "DIRECT" ? 1 : 2;
+    return group(a) - group(b) || b.unread - a.unread || ((b.messages?.[b.messages.length - 1]?.id ?? 0) - (a.messages?.[a.messages.length - 1]?.id ?? 0));
+  }), [visibleChannels, favorites]);
 
   const loadChannels = useCallback(async () => {
     const response = await api.get<{ channels: Channel[] }>("/chat/channels");
@@ -369,7 +374,7 @@ export function Chat() {
       </Stack>
     </Paper>
     {error && <Alert severity="error" onClose={() => setError("")}>{error}</Alert>}
-    <Paper elevation={0} sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "300px minmax(0,1fr)" }, minHeight: 0, flex: 1, overflow: "hidden", borderRadius: 3, maxHeight: "100%", height: "100%", border: "1px solid", borderColor: "divider", boxShadow: "0 14px 38px rgba(15,23,42,.07)", bgcolor: "background.paper" }}>
+    <Paper elevation={0} sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "300px minmax(0,1fr)", xl: conversationInfoOpen ? "300px minmax(0,1fr) 260px" : "300px minmax(0,1fr)" }, minHeight: 0, flex: 1, overflow: "hidden", borderRadius: 3, maxHeight: "100%", height: "100%", border: "1px solid", borderColor: "divider", boxShadow: "0 14px 38px rgba(15,23,42,.07)", bgcolor: "background.paper" }}>
       <Box sx={{ borderRight: { md: "none" }, borderColor: "divider", position: "relative", "&::after": { content: '""', position: "absolute", top: 14, bottom: 14, right: 0, width: "1px", background: "linear-gradient(180deg,transparent,rgba(24,199,122,.32) 18%,rgba(47,111,237,.18) 82%,transparent)" }, minHeight: 0, overflowY: "auto", overscrollBehavior: "contain", bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(255,255,255,.018)" : "rgba(248,250,252,.72)" }}>
         <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between", px: 1.75, py: 1.35, minHeight: 62 }}>
           <Box sx={{ minWidth: 0, pl: .25 }}><Typography sx={{ fontWeight: 900, lineHeight: 1.2 }}>Conversas</Typography><Typography variant="caption" color="text.secondary">{channels.length} conversa(s)</Typography></Box>
@@ -382,10 +387,13 @@ export function Chat() {
         <Box sx={{ px: 1.25, pb: 1 }}><TextField size="small" fullWidth value={conversationSearch} onChange={(event) => setConversationSearch(event.target.value)} placeholder="Buscar conversa..." slotProps={{ input: { startAdornment: <SearchOutlined sx={{ mr: .7, fontSize: 18, color: "text.secondary" }} /> } }} /></Box>
         <Divider />
         <List disablePadding>
-          {visibleChannels
-            .slice()
-            .sort((a, b) => Number(favorites.includes(b.id)) - Number(favorites.includes(a.id)) || b.unread - a.unread)
-            .map((channel) => (
+          {sortedVisibleChannels.map((channel, index) => {
+            const group = favorites.includes(channel.id) ? "Favoritos" : channel.type === "DIRECT" ? "Recentes" : "Equipes";
+            const previousChannel = sortedVisibleChannels[index - 1];
+            const previousGroup = previousChannel ? (favorites.includes(previousChannel.id) ? "Favoritos" : previousChannel.type === "DIRECT" ? "Recentes" : "Equipes") : null;
+            return <Box key={channel.id}>
+              {group !== previousGroup && <Typography variant="overline" sx={{ display: "block", px: 1.75, pt: index ? 1.2 : 1, pb: .25, fontSize: ".61rem", lineHeight: 1.4, letterSpacing: ".09em", fontWeight: 900, color: "text.secondary" }}>{group}</Typography>}
+              
               <ListItemButton
                 key={channel.id}
                 selected={channel.id === selectedId}
@@ -424,12 +432,13 @@ export function Chat() {
                   {channel.unread > 0 && <Chip size="small" color="primary" label={channel.unread} />}
                 </Stack>
               </ListItemButton>
-            ))}
+            </Box>;
+          })}
         </List>
         {!channels.length && !loading && <Box sx={{ p: 3, textAlign: "center" }}><Typography color="text.secondary" variant="body2">Crie o primeiro canal da equipe.</Typography></Box>}
       </Box>
       <Box sx={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
-        <Stack direction="row" spacing={1} sx={{ px: 1.5, py: 1, alignItems: "center", justifyContent: "space-between" }}><Box><Stack direction="row" spacing={.7} sx={{ alignItems: "center" }}><Typography sx={{ fontWeight: 900 }}>{selected?.name || "Selecione uma conversa"}</Typography>{selected && <Chip size="small" icon={<Circle sx={{ fontSize: "9px !important" }} />} label={selected?.type === "DIRECT" ? ({ ONLINE: "Online", AWAY: "Ausente", BUSY: "Ocupado", OFFLINE: "Offline" }[selectedPresence?.effectiveStatus ?? "OFFLINE"]) : `${selected.members?.filter((member) => presence.find((item) => item.userId === member.user.id)?.effectiveStatus !== "OFFLINE").length ?? 0} online`} color={selectedPresence?.effectiveStatus === "BUSY" ? "error" : selectedPresence?.effectiveStatus === "AWAY" ? "warning" : selectedPresence?.effectiveStatus === "ONLINE" ? "success" : "default"} variant="outlined" />}</Stack><Typography variant="caption" color="text.secondary">{selectedPresence?.statusMessage || "Mensagens instantâneas · tempo real"}</Typography></Box><Stack direction="row" spacing={.5}><TextField size="small" value={messageSearch} onChange={(event) => setMessageSearch(event.target.value)} placeholder="Buscar na conversa" sx={{ width: 210 }} slotProps={{ input: { startAdornment: <SearchOutlined sx={{ mr: .5, fontSize: 17, color: "text.secondary" }} /> } }} /><IconButton size="small" aria-label="Opções da conversa" onClick={(event) => setConversationMenuAnchor(event.currentTarget)}><MoreHorizOutlined /></IconButton></Stack></Stack>
+        <Stack direction="row" spacing={1} sx={{ px: 1.5, py: 1, alignItems: "center", justifyContent: "space-between" }}><Box><Stack direction="row" spacing={.7} sx={{ alignItems: "center" }}><Typography sx={{ fontWeight: 900 }}>{selected?.name || "Selecione uma conversa"}</Typography>{selected && <Chip size="small" icon={<Circle sx={{ fontSize: "9px !important" }} />} label={selected?.type === "DIRECT" ? ({ ONLINE: "Online", AWAY: "Ausente", BUSY: "Ocupado", OFFLINE: "Offline" }[selectedPresence?.effectiveStatus ?? "OFFLINE"]) : `${selected.members?.filter((member) => presence.find((item) => item.userId === member.user.id)?.effectiveStatus !== "OFFLINE").length ?? 0} online`} color={selectedPresence?.effectiveStatus === "BUSY" ? "error" : selectedPresence?.effectiveStatus === "AWAY" ? "warning" : selectedPresence?.effectiveStatus === "ONLINE" ? "success" : "default"} variant="outlined" />}</Stack><Typography variant="caption" color="text.secondary">{selectedPresence?.statusMessage || "Mensagens instantâneas · tempo real"}</Typography></Box><Stack direction="row" spacing={.5}><TextField size="small" value={messageSearch} onChange={(event) => setMessageSearch(event.target.value)} placeholder="Buscar na conversa" sx={{ width: 210 }} slotProps={{ input: { startAdornment: <SearchOutlined sx={{ mr: .5, fontSize: 17, color: "text.secondary" }} /> } }} /><Tooltip title="Informações da conversa"><span><IconButton size="small" disabled={!selected} aria-label="Informações da conversa" onClick={() => setConversationInfoOpen((current) => !current)} color={conversationInfoOpen ? "primary" : "default"}><InfoOutlined /></IconButton></span></Tooltip><IconButton size="small" aria-label="Opções da conversa" onClick={(event) => setConversationMenuAnchor(event.currentTarget)}><MoreHorizOutlined /></IconButton></Stack></Stack>
         <Divider />
         <Box ref={messagesRef} sx={{ flex: 1, minHeight: 0, overflowY: "auto", overscrollBehavior: "contain", p: { xs: 1.5, md: 2.25 }, bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(255,255,255,.012)" : "#f8fafb", backgroundImage: (theme) => theme.palette.mode === "dark" ? "radial-gradient(circle at 50% 0%, rgba(24,199,122,.035), transparent 36%)" : "radial-gradient(circle at 50% 0%, rgba(24,199,122,.045), transparent 38%)" }}>
           {loading ? <Box sx={{ display: "grid", placeItems: "center", minHeight: 160 }}><CircularProgress size={28} /></Box> : visibleMessages.map((message, messageIndex) => {
@@ -454,6 +463,28 @@ export function Chat() {
           <Button variant="contained" endIcon={sending ? <CircularProgress size={16} color="inherit" /> : <SendRounded />} disabled={!selectedId || !content.trim() || sending} onClick={() => void send()} sx={{ minWidth: 44, width: 44, height: 40, px: 0, borderRadius: 2.5, "& .MuiButton-endIcon": { m: 0 } }}><Box component="span" sx={{ display: "none" }}>Enviar</Box></Button>
         </Stack>
       </Box>
+      {conversationInfoOpen && selected && <Box sx={{ display: { xs: "none", xl: "block" }, borderLeft: "1px solid", borderColor: "divider", p: 2, overflowY: "auto", bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(255,255,255,.015)" : "rgba(248,250,252,.72)" }}>
+        <Stack spacing={2}>
+          <Box sx={{ textAlign: "center", pt: 1 }}>
+            <Box sx={{ width: 64, height: 64, mx: "auto", mb: 1, borderRadius: "50%", bgcolor: "primary.main", color: "primary.contrastText", display: "grid", placeItems: "center", fontSize: "1.35rem", fontWeight: 950, boxShadow: "0 10px 24px rgba(24,199,122,.18)" }}>{selected.name.slice(0,1).toUpperCase()}</Box>
+            <Typography sx={{ fontWeight: 900 }}>{selected.name}</Typography>
+            <Typography variant="caption" color="text.secondary">{selected.type === "DIRECT" ? "Conversa privada" : "Canal da equipe"}</Typography>
+          </Box>
+          <Divider />
+          {selected.type === "DIRECT" && selectedPeer ? <Stack spacing={1}>
+            <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 900 }}>Contato</Typography>
+            <Typography variant="body2"><b>Usuário:</b> @{selectedPeer.username}</Typography>
+            <Typography variant="body2"><b>Perfil:</b> {selectedPeer.role}</Typography>
+            <Stack direction="row" spacing={.7} sx={{ alignItems: "center" }}><Circle sx={{ fontSize: 10, color: presenceColor(selectedPresence?.effectiveStatus) }} /><Typography variant="body2">{({ ONLINE: "Online", AWAY: "Ausente", BUSY: "Ocupado", OFFLINE: "Offline" }[selectedPresence?.effectiveStatus ?? "OFFLINE"])}</Typography></Stack>
+            {selectedPresence?.statusMessage && <Typography variant="body2" color="text.secondary">{selectedPresence.statusMessage}</Typography>}
+          </Stack> : <Stack spacing={1}>
+            <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 900 }}>Participantes · {selected.members?.length ?? 0}</Typography>
+            {selected.members?.map((member) => <Stack key={member.user.id} direction="row" spacing={1} sx={{ alignItems: "center" }}><Box sx={{ width: 28, height: 28, borderRadius: "50%", bgcolor: "action.hover", display: "grid", placeItems: "center", fontWeight: 850 }}>{member.user.name.slice(0,1)}</Box><Box sx={{ minWidth: 0 }}><Typography variant="body2" noWrap sx={{ fontWeight: 750 }}>{member.user.name}</Typography><Typography variant="caption" color="text.secondary">@{member.user.username}</Typography></Box></Stack>)}
+          </Stack>}
+          <Divider />
+          <Button variant={favorites.includes(selected.id) ? "contained" : "outlined"} onClick={() => toggleFavorite(selected.id)} startIcon={<StarOutlineRounded />}>{favorites.includes(selected.id) ? "Favoritada" : "Adicionar aos favoritos"}</Button>
+        </Stack>
+      </Box>}
     </Paper>
     <Snackbar open={Boolean(maintenanceMessage)} autoHideDuration={6500} onClose={() => setMaintenanceMessage("")} message={maintenanceMessage} anchorOrigin={{ vertical: "bottom", horizontal: "center" }} />
     <Snackbar
