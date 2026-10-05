@@ -105,6 +105,7 @@ let baselineState: BaselineState = {
 };
 let baselinePromise: Promise<void> | null = null;
 let lastAnalyticalMetadataRefreshAt = 0;
+const analyticalMetadataCheckedIds = new Set<number>();
 
 export class MovideskService {
   private readonly url = process.env.MOVIDESK_URL?.trim() || "https://api.movidesk.com/public/v1";
@@ -923,17 +924,43 @@ export class MovideskService {
       orderBy: [{ createdDate: "desc" }, { movideskId: "desc" }],
     });
 
+    // Prioriza classificações que alimentam os cards antes da cobertura de Área.
+    // IDs já verificados nesta passagem ficam fora da fila para que tickets que
+    // legitimamente não possuem o campo não monopolizem os ciclos seguintes.
+    const normalizeCategory = (value: string | null) =>
+      (value ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLocaleLowerCase("pt-BR");
+    const unchecked = candidates
+      .filter((ticket) => !analyticalMetadataCheckedIds.has(ticket.movideskId))
+      .sort((a, b) => {
+        const priority = (ticket: typeof a) => {
+          const category = normalizeCategory(ticket.category);
+          if (category === "problema" && !ticket.cause) return 0;
+          if (category === "duvida" && !ticket.reason) return 1;
+          if (!ticket.businessArea) return 2;
+          return 3;
+        };
+        return priority(a) - priority(b) || b.movideskId - a.movideskId;
+      });
+
+    // Ao concluir uma passagem, libera os IDs para uma futura reconciliação após
+    // o cooldown. Durante a passagem atual cada ticket é consultado no máximo uma vez.
+    if (!unchecked.length && candidates.length) {
+      analyticalMetadataCheckedIds.clear();
+      lastAnalyticalMetadataRefreshAt = Date.now();
+      return { scanned: 0, updated: 0, causesUpdated: 0, reasonsUpdated: 0, businessAreasUpdated: 0, remaining: 0, skippedByCadence: false };
+    }
+
     // A API do Movidesk comprovadamente expõe os campos condicionais na consulta
-    // individual GET /tickets?id=<id>. Consultas OData em coleção, mesmo com
-    // $expand=customFieldValues, não reproduzem esse comportamento.
-    const MAX_PER_RUN = force ? Math.min(candidates.length, 100) : Math.min(candidates.length, 20);
-    const batch = candidates.slice(0, MAX_PER_RUN);
+    // individual GET /tickets?id=<id>. Consultas OData em coleção não reproduzem isso.
+    const MAX_PER_RUN = force ? Math.min(unchecked.length, 100) : Math.min(unchecked.length, 20);
+    const batch = unchecked.slice(0, MAX_PER_RUN);
     let scanned = 0;
     let causesUpdated = 0;
     let reasonsUpdated = 0;
     let businessAreasUpdated = 0;
 
     for (const ticket of batch) {
+      analyticalMetadataCheckedIds.add(ticket.movideskId);
       const response = await this.getWithRetry(`${this.url}/tickets`, {
         params: { token: this.token(), id: ticket.movideskId },
         timeout: 120_000,
@@ -967,7 +994,7 @@ export class MovideskService {
       if (data.businessArea) businessAreasUpdated += 1;
     }
 
-    const remaining = Math.max(0, candidates.length - batch.length);
+    const remaining = Math.max(0, unchecked.length - batch.length);
     // Enquanto houver candidatos, não inicia o cooldown de 6h: o próximo ciclo
     // principal continua a fila. O cooldown só começa quando a passagem termina.
     if (remaining === 0) lastAnalyticalMetadataRefreshAt = Date.now();
