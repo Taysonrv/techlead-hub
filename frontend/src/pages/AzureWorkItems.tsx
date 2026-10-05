@@ -5166,58 +5166,16 @@ export function AzureWorkItems({
                   "background.paper",
               }}
             >
-              <Box
-                sx={{
-                  display: "grid",
-                  gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))" },
-                  gap: 1,
-                }}
-              >
-                <Button
-                  fullWidth
-                  variant="outlined"
-                  startIcon={<ShareOutlined />}
-                  onClick={() => {
-                    const value = selectedWorkItem.workItemType.toLocaleLowerCase("pt-BR");
-                    const route = value.includes("apoio") ? "/apoios" : value.includes("evolu") ? "/evolucoes" : "/correcoes";
-                    window.dispatchEvent(new CustomEvent("techlead-hub:share-chat", { detail: { label: selectedWorkItem.workItemType, recordId: selectedWorkItem.id, title: selectedWorkItem.title, client: selectedWorkItem.client, status: selectedWorkItem.state, path: `${route}?task=${selectedWorkItem.id}` } }));
-                  }}
-                >
-                  Compartilhar no Chat
-                </Button>
-
-                {selectedWorkItem.azureWebUrl && (
-                  <Button
-                    fullWidth
-                    variant="contained"
-                    startIcon={
-                      <OpenInNewOutlined />
-                    }
-                    component="a"
-                    href={
-                      selectedWorkItem.azureWebUrl
-                    }
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    Abrir no Azure DevOps
-                  </Button>
-                )}
-
-                <Button
-                  fullWidth
-                  variant="outlined"
-                  startIcon={
-                    <TaskAltOutlined />
-                  }
-                  onClick={
-                    closeDetail
-                  }
-                >
-                  Voltar à lista
-                </Button>
+              <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 900 }}>Ações rápidas</Typography>
+              <Box sx={{ mt: .45, display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))" }, gap: 1 }}>
+                <Button fullWidth variant="contained" startIcon={<ShareOutlined />} onClick={() => {
+                  const value = selectedWorkItem.workItemType.toLocaleLowerCase("pt-BR");
+                  const route = value.includes("apoio") ? "/apoios" : value.includes("evolu") ? "/evolucoes" : "/correcoes";
+                  window.dispatchEvent(new CustomEvent("techlead-hub:share-chat", { detail: { label: selectedWorkItem.workItemType, recordId: selectedWorkItem.id, title: selectedWorkItem.title, client: selectedWorkItem.client, status: selectedWorkItem.state, path: `${route}?task=${selectedWorkItem.id}` } }));
+                }}>Compartilhar</Button>
+                {selectedWorkItem.azureWebUrl && <Button fullWidth variant="outlined" startIcon={<OpenInNewOutlined />} component="a" href={selectedWorkItem.azureWebUrl} target="_blank" rel="noopener noreferrer">Abrir origem</Button>}
               </Box>
-            </Box>
+              <Button size="small" startIcon={<TaskAltOutlined />} onClick={closeDetail} sx={{ mt: .6, alignSelf: "flex-start" }}>Voltar à lista</Button>     </Box>
           )}
         </Stack>
       </Drawer>
