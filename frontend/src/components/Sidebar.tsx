@@ -17,6 +17,8 @@ import {
   Typography,
   Snackbar,
   Paper,
+  TextField,
+  Tooltip,
 } from "@mui/material";
 
 import {
@@ -43,6 +45,9 @@ import {
   AssessmentOutlined,
   CampaignOutlined,
   OpenInNewRounded,
+  SendRounded,
+  RemoveRounded,
+  CloseRounded,
 } from "@mui/icons-material";
 
 import {
@@ -130,6 +135,10 @@ export function Sidebar() {
   const [chatUnread, setChatUnread] = useState(0);
   const [chatPopup, setChatPopup] = useState<{ channelId: number; channelName: string; authorName: string; preview: string } | null>(null);
   const chatSnapshotRef = useRef<Map<number, { unread: number; lastMessageId: number | null }>>(new Map());
+  type FloatingChat = { channelId: number; channelName: string; minimized: boolean; unread: number; messages: Array<{ id: number; content: string; createdAt: string; author: { id: number; name: string } }> };
+  const [floatingChats, setFloatingChats] = useState<FloatingChat[]>([]);
+  const [floatingDrafts, setFloatingDrafts] = useState<Record<number, string>>({});
+  const floatingPollRef = useRef<number | null>(null);
 
   const [
     appVersion,
@@ -200,6 +209,7 @@ export function Sidebar() {
               authorName: newest.latest.author.name,
               preview: newest.latest.content.startsWith("[anexo] ") ? "📎 Enviou um arquivo" : newest.latest.content,
             });
+            setFloatingChats((current) => current.map((item) => item.channelId === newest.channel.id ? { ...item, unread: item.minimized ? item.unread + 1 : item.unread } : item));
             if (localStorage.getItem("techlead-chat-sound") !== "off") playNotificationSound("chat");
           }
         }
@@ -215,6 +225,42 @@ export function Sidebar() {
     window.addEventListener("techlead-hub:chat-read", refresh);
     return () => { window.clearInterval(timer); window.removeEventListener("techlead-hub:chat-read", refresh); };
   }, [user, location.pathname]);
+
+  const openFloatingChat = useCallback(async (channelId: number, channelName: string) => {
+    try {
+      const response = await api.get<{ messages: FloatingChat["messages"] }>(`/chat/channels/${channelId}/messages`);
+      setFloatingChats((current) => {
+        const existing = current.find((item) => item.channelId === channelId);
+        if (existing) return current.map((item) => item.channelId === channelId ? { ...item, minimized: false, unread: 0, messages: response.data.messages } : item);
+        return [...current.slice(-2), { channelId, channelName, minimized: false, unread: 0, messages: response.data.messages }];
+      });
+      window.dispatchEvent(new Event("techlead-hub:chat-read"));
+    } catch { navigate(`/chat?channel=${channelId}`); }
+  }, [navigate]);
+
+  const sendFloatingMessage = useCallback(async (channelId: number) => {
+    const content = floatingDrafts[channelId]?.trim();
+    if (!content) return;
+    try {
+      const response = await api.post<FloatingChat["messages"][number]>(`/chat/channels/${channelId}/messages`, { content });
+      setFloatingChats((current) => current.map((item) => item.channelId === channelId ? { ...item, messages: [...item.messages, response.data] } : item));
+      setFloatingDrafts((current) => ({ ...current, [channelId]: "" }));
+    } catch { navigate(`/chat?channel=${channelId}`); }
+  }, [floatingDrafts, navigate]);
+
+  useEffect(() => {
+    if (!floatingChats.length) return;
+    const refresh = async () => {
+      await Promise.all(floatingChats.map(async (item) => {
+        try {
+          const response = await api.get<{ messages: FloatingChat["messages"] }>(`/chat/channels/${item.channelId}/messages`);
+          setFloatingChats((current) => current.map((chat) => chat.channelId === item.channelId ? { ...chat, messages: response.data.messages } : chat));
+        } catch { /* janela compacta não deve afetar a tela atual */ }
+      }));
+    };
+    floatingPollRef.current = window.setInterval(() => void refresh(), 5000);
+    return () => { if (floatingPollRef.current) window.clearInterval(floatingPollRef.current); floatingPollRef.current = null; };
+  }, [floatingChats.map((item) => item.channelId).join(",")]);
 
   /* =======================================================
      VERSÃO DO APLICATIVO
@@ -849,12 +895,36 @@ export function Sidebar() {
               <Typography sx={{ fontWeight: 900, lineHeight: 1.2 }} noWrap>{chatPopup.authorName}</Typography>
               <Typography variant="caption" color="text.secondary" noWrap sx={{ display: "block" }}>{chatPopup.channelName}</Typography>
               <Typography variant="body2" sx={{ mt: .55, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{chatPopup.preview}</Typography>
-              <Button size="small" sx={{ mt: .7, px: 0, fontWeight: 850 }} onClick={() => { const id = chatPopup.channelId; setChatPopup(null); navigate(`/chat?channel=${id}`); }}>Abrir conversa</Button>
+              <Button size="small" sx={{ mt: .7, px: 0, fontWeight: 850 }} onClick={() => { const popup = chatPopup; setChatPopup(null); if (location.pathname === "/chat") navigate(`/chat?channel=${popup.channelId}`); else void openFloatingChat(popup.channelId, popup.channelName); }}>Abrir conversa</Button>
             </Box>
             <IconButton size="small" aria-label="Fechar notificação" onClick={() => setChatPopup(null)}><Box component="span" sx={{ fontSize: 18, lineHeight: 1 }}>×</Box></IconButton>
           </Stack>}
         </Paper>
       </Snackbar>
+
+      {location.pathname !== "/chat" && <Box sx={{ position: "fixed", right: 18, bottom: 18, zIndex: (theme) => theme.zIndex.modal + 10, display: "flex", flexDirection: "row-reverse", alignItems: "flex-end", gap: 1.25, pointerEvents: "none" }}>
+        {floatingChats.map((chat) => <Paper key={chat.channelId} elevation={16} sx={{ width: chat.minimized ? 230 : 310, height: chat.minimized ? 48 : 390, display: "flex", flexDirection: "column", overflow: "hidden", borderRadius: 2.5, border: "1px solid", borderColor: "divider", boxShadow: "0 18px 48px rgba(15,23,42,.24)", pointerEvents: "auto", transition: "height .18s ease,width .18s ease" }}>
+          <Stack direction="row" sx={{ minHeight: 48, px: 1.15, alignItems: "center", bgcolor: "primary.main", color: "primary.contrastText", cursor: "pointer" }} onClick={() => setFloatingChats((current) => current.map((item) => item.channelId === chat.channelId ? { ...item, minimized: !item.minimized, unread: 0 } : item))}>
+            <Box sx={{ width: 28, height: 28, mr: .8, borderRadius: "50%", bgcolor: "rgba(255,255,255,.18)", display: "grid", placeItems: "center", fontWeight: 900 }}>{chat.channelName.slice(0,1).toUpperCase()}</Box>
+            <Typography variant="body2" noWrap sx={{ flex: 1, fontWeight: 900 }}>{chat.channelName}</Typography>
+            {chat.unread > 0 && <Badge badgeContent={chat.unread} color="error" sx={{ mr: 1 }} />}
+            <Tooltip title={chat.minimized ? "Restaurar" : "Minimizar"}><IconButton size="small" color="inherit"><RemoveRounded fontSize="small" /></IconButton></Tooltip>
+            <Tooltip title="Fechar"><IconButton size="small" color="inherit" onClick={(event) => { event.stopPropagation(); setFloatingChats((current) => current.filter((item) => item.channelId !== chat.channelId)); }}><CloseRounded fontSize="small" /></IconButton></Tooltip>
+          </Stack>
+          {!chat.minimized && <>
+            <Box sx={{ flex: 1, overflowY: "auto", p: 1, bgcolor: "background.default" }}>
+              {chat.messages.slice(-30).map((message) => {
+                const mine = message.author.id === user?.id;
+                return <Box key={message.id} sx={{ display: "flex", justifyContent: mine ? "flex-end" : "flex-start", mb: .65 }}><Box sx={{ maxWidth: "82%", px: 1, py: .65, borderRadius: mine ? "12px 12px 3px 12px" : "12px 12px 12px 3px", bgcolor: mine ? "primary.main" : "background.paper", color: mine ? "primary.contrastText" : "text.primary", border: mine ? 0 : "1px solid", borderColor: "divider" }}><Typography variant="caption" sx={{ fontWeight: 800, opacity: .72 }}>{mine ? "Você" : message.author.name}</Typography><Typography variant="body2" sx={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{message.content.startsWith("[anexo] ") ? "📎 Arquivo" : message.content}</Typography></Box></Box>;
+              })}
+            </Box>
+            <Stack direction="row" spacing={.5} sx={{ p: .8, borderTop: "1px solid", borderColor: "divider", bgcolor: "background.paper" }}>
+              <TextField size="small" fullWidth value={floatingDrafts[chat.channelId] ?? ""} placeholder="Mensagem..." onChange={(event) => setFloatingDrafts((current) => ({ ...current, [chat.channelId]: event.target.value }))} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void sendFloatingMessage(chat.channelId); } }} />
+              <IconButton color="primary" disabled={!floatingDrafts[chat.channelId]?.trim()} onClick={() => void sendFloatingMessage(chat.channelId)}><SendRounded /></IconButton>
+            </Stack>
+          </>}
+        </Paper>)}
+      </Box>}
 
       <BugReportDialog open={feedbackOpen} onClose={() => setFeedbackOpen(false)} />
 
