@@ -17,7 +17,7 @@ import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, Pie, PieChart, Res
 
 type Sample = {
   id: number; workItemType: string; title: string; state: string; client: string | null;
-  module: string | null; category?: string | null; cause?: string | null; service?: string | null;
+  module: string | null; category?: string | null; cause?: string | null; reason?: string | null; service?: string | null;
   serviceFirstLevel?: string | null; serviceSecondLevel?: string | null; serviceThirdLevel?: string | null; servicePath?: string | null;
   serviceSuggestion?: { path: string; service: string; module: string | null; confidence: "HIGH" | "MEDIUM" | "LOW"; score: number; evidence: string[]; reasons: string[]; alternatives: Array<{ path: string; service: string; score: number }> } | null;
   assignedToName: string | null; movideskTicket: number | null;
@@ -36,6 +36,9 @@ type Data = {
   trend?: Array<{ date: string; total: number; critical: number }>;
 };
 const metrics = [
+  ["problemWithoutCause", "Problema sem causa", "Atendimento aberto com categoria Problema e sem Causa informada. A causa é obrigatória para qualificar a origem do problema e alimentar a análise operacional.", "Classificação"],
+  ["doubtWithoutReason", "Dúvida sem motivo", "Atendimento aberto com categoria Dúvida e sem Motivo informado. O motivo deve identificar a natureza da orientação solicitada.", "Classificação"],
+  ["withoutCategory", "Ticket sem categoria", "Atendimento aberto sem Categoria informada ou com classificação genérica equivalente a não informado.", "Classificação"],
   ["awaitingReturnWithoutCause", "Aguardando retorno sem causa", "Atendimento aberto de cliente SIMER aguardando retorno, mas sem causa informada ou com valor genérico. A causa deve registrar por que o atendimento depende do cliente.", "Classificação"],
   ["awaitingReturnOverdue", "Retorno do cliente acima de 3 dias", "Atendimento aberto aguardando retorno do cliente, sem movimentação há mais de três dias. Permite cobrar, reavaliar ou encerrar conforme o processo.", "Prazo"],
   ["reopenedTickets", "Atendimentos reabertos", "Atendimentos ativos que já foram reabertos. Devem ser acompanhados para identificar falha na solução, recorrência ou validação incompleta.", "Recorrência"],
@@ -70,6 +73,9 @@ const coordinationMetricKeys = new Set([
   "withoutClient",
   "completedWithoutVersion",
   "versionMismatch",
+  "problemWithoutCause",
+  "doubtWithoutReason",
+  "withoutCategory",
   "suspectedClassification",
   "withoutService",
 ]);
@@ -86,6 +92,9 @@ const priorityWeight: Record<string, number> = {
   excessiveOwnerHandoffs: 68,
   withoutTicket: 64,
   withoutClient: 58,
+  problemWithoutCause: 58,
+  doubtWithoutReason: 58,
+  withoutCategory: 62,
   suspectedClassification: 46,
   withoutService: 42,
 };
@@ -149,6 +158,9 @@ export function DataQuality() {
   function issueGuidance() {
     const metric = metrics.find(([key]) => key === issue);
     const actions: Record<string, string> = {
+      problemWithoutCause: "Informar a Causa no Movidesk para o atendimento classificado como Problema.",
+      doubtWithoutReason: "Informar o Motivo no Movidesk para o atendimento classificado como Dúvida.",
+      withoutCategory: "Informar a Categoria correta do atendimento no Movidesk.",
       awaitingReturnWithoutCause: "Informar a causa antes de manter o atendimento aguardando retorno.",
       suspectedClassification: "Revisar categoria e causa conforme o assunto e a causa raiz.",
       withoutService: "Informar o Serviço correto do atendimento no Movidesk.",
@@ -178,7 +190,7 @@ export function DataQuality() {
     const rows = data?.samples ?? [];
     const escape = (value: unknown) => `"${String(value ?? "").replace(/"/g, '""')}"`;
     const guidance = issueGuidance();
-    const header = ["Origem", "Tipo", "Atendimento", "Assunto / Título", "Cliente do ticket", "Cliente da Tarefa", "Categoria", "Causa", "Serviço", "Analista", "Status do atendimento", "Última movimentação", "Reaberturas", "Trocas de responsável", "Satisfação", "Tarefa", "Estado da Tarefa", "Versão de cadastro", "Versão entregue", "Motivo da pendência", "Ação recomendada"];
+    const header = ["Origem", "Tipo", "Atendimento", "Assunto / Título", "Cliente do ticket", "Cliente da Tarefa", "Categoria", "Causa", "Motivo", "Serviço", "Analista", "Status do atendimento", "Última movimentação", "Reaberturas", "Trocas de responsável", "Satisfação", "Tarefa", "Estado da Tarefa", "Versão de cadastro", "Versão entregue", "Motivo da pendência", "Ação recomendada"];
     const csv = [header, ...rows.map((item) => [
       item.source,
       item.workItemType,
@@ -188,6 +200,7 @@ export function DataQuality() {
       item.taskClient,
       item.category,
       item.cause,
+      item.reason,
       item.servicePath ?? item.service,
       item.assignedToName,
       item.state,
@@ -363,12 +376,12 @@ export function DataQuality() {
           Exportar lista{user.length ? " do analista" : ""}
         </Button>
       </Stack>
-      {loading ? <Box sx={{ py: 8, textAlign: "center" }}><CircularProgress /></Box> : <Stack spacing={1} sx={{ mt: 2 }}>{data?.samples.map((item) => <Button key={`${item.source}-${item.id}`} onClick={() => void open(item)} sx={{ justifyContent: "flex-start", textTransform: "none", border: "1px solid", borderColor: "divider", p: 1.3, borderRadius: 1.5 }}><Box sx={{ textAlign: "left", minWidth: 0 }}><Stack direction="row" spacing={1} sx={{ alignItems: "center" }}><Chip size="small" label={item.workItemType} /><Typography sx={{ fontWeight: 750 }}>#{item.source === "MOVIDESK" ? item.movideskTicket ?? item.id : item.id} · {item.title}</Typography></Stack><Typography variant="caption" color="text.secondary">{[item.state, item.client ?? "Sem cliente", item.category ? `Categoria ${item.category}` : "Sem categoria", item.cause ? `Causa ${item.cause}` : "Sem causa", item.servicePath ? `Serviço ${item.servicePath}` : "Sem serviço", item.serviceSuggestion ? `Sugestão ${item.serviceSuggestion.service} · ${item.serviceSuggestion.confidence}` : null, item.module ?? "Sem módulo", item.assignedToName ?? "Sem responsável", item.movideskTicket ? `Ticket ${item.movideskTicket}` : "Sem ticket", item.taskNumber ? `Tarefa #${item.taskNumber}` : "Sem Tarefa", item.taskState ?? null, item.registeredVersion ? `Cadastro ${item.registeredVersion}` : null, item.deliveredVersion ? `Entrega ${item.deliveredVersion}` : "Sem versão entregue"].filter(Boolean).join(" · ")}</Typography></Box></Button>)}</Stack>}
+      {loading ? <Box sx={{ py: 8, textAlign: "center" }}><CircularProgress /></Box> : <Stack spacing={1} sx={{ mt: 2 }}>{data?.samples.map((item) => <Button key={`${item.source}-${item.id}`} onClick={() => void open(item)} sx={{ justifyContent: "flex-start", textTransform: "none", border: "1px solid", borderColor: "divider", p: 1.3, borderRadius: 1.5 }}><Box sx={{ textAlign: "left", minWidth: 0 }}><Stack direction="row" spacing={1} sx={{ alignItems: "center" }}><Chip size="small" label={item.workItemType} /><Typography sx={{ fontWeight: 750 }}>#{item.source === "MOVIDESK" ? item.movideskTicket ?? item.id : item.id} · {item.title}</Typography></Stack><Typography variant="caption" color="text.secondary">{[item.state, item.client ?? "Sem cliente", item.category ? `Categoria ${item.category}` : "Sem categoria", item.cause ? `Causa ${item.cause}` : "Sem causa", item.reason ? `Motivo ${item.reason}` : "Sem motivo", item.servicePath ? `Serviço ${item.servicePath}` : "Sem serviço", item.serviceSuggestion ? `Sugestão ${item.serviceSuggestion.service} · ${item.serviceSuggestion.confidence}` : null, item.module ?? "Sem módulo", item.assignedToName ?? "Sem responsável", item.movideskTicket ? `Ticket ${item.movideskTicket}` : "Sem ticket", item.taskNumber ? `Tarefa #${item.taskNumber}` : "Sem Tarefa", item.taskState ?? null, item.registeredVersion ? `Cadastro ${item.registeredVersion}` : null, item.deliveredVersion ? `Entrega ${item.deliveredVersion}` : "Sem versão entregue"].filter(Boolean).join(" · ")}</Typography></Box></Button>)}</Stack>}
     </CardContent></Card>
 
     <Drawer anchor="right" open={Boolean(selected)} onClose={() => setSelected(null)} slotProps={{ paper: { sx: detailDrawerPaperSx } }}>
       <DetailPanelHeader eyebrow={selected?.workItemType} title={selected?.title ?? "Detalhes do registro"} identifier={`#${selected?.source === "MOVIDESK" ? selected.movideskTicket : selected?.id}`} onClose={() => setSelected(null)} />
-      <DetailSection title="Visão operacional"><DetailFieldGrid fields={selected ? Object.entries({ Estado: selected.state, "Cliente principal": selected.client, "Clientes participantes": formatList(selected.participantClients), Categoria: selected.category, Causa: selected.cause, Serviço: selected.servicePath ?? selected.service, "Serviço · 1º nível": selected.serviceFirstLevel, "Serviço · 2º nível": selected.serviceSecondLevel, "Serviço · 3º nível": selected.serviceThirdLevel, Módulo: selected.module, Responsável: selected.assignedToName, "Ticket principal": selected.movideskTicket, "Tickets participantes": formatList(selected.participantMovideskTickets), "Tarefa relacionada": selected.taskNumber ? `#${selected.taskNumber}` : null, "Estado da Tarefa": selected.taskState, "Título da Tarefa": selected.taskTitle, "Cliente da Tarefa": selected.taskClient, "Versão de cadastro": selected.registeredVersion, "Versão entregue": selected.deliveredVersion, "Serviço sugerido": selected.serviceSuggestion?.path, "Confiança da sugestão": selected.serviceSuggestion?.confidence, "Pontuação": selected.serviceSuggestion?.score, "Evidências": selected.serviceSuggestion?.evidence?.join(", "), "Justificativa da sugestão": selected.serviceSuggestion?.reasons?.join(" "), "Alternativas consideradas": selected.serviceSuggestion?.alternatives?.map((item) => `${item.service} (${item.score})`).join(" · "), "Motivo da pendência": issueGuidance().reason, "Última movimentação": selected.lastMovement, Reaberturas: selected.reopenCount, "Trocas de responsável": selected.ownerHandoffs, "Resolvido no primeiro contato": selected.resolvedInFirstCall === null || selected.resolvedInFirstCall === undefined ? "Não informado" : selected.resolvedInFirstCall ? "Sim" : "Não", Satisfação: selected.satisfactionScore, "Comentário da satisfação": selected.satisfactionComment, "Ação recomendada": issueGuidance().action }).map(([label, value]) => [label, String(value ?? "Não informado")]) : []} /></DetailSection>
+      <DetailSection title="Visão operacional"><DetailFieldGrid fields={selected ? Object.entries({ Estado: selected.state, "Cliente principal": selected.client, "Clientes participantes": formatList(selected.participantClients), Categoria: selected.category, Causa: selected.cause, Motivo: selected.reason, Serviço: selected.servicePath ?? selected.service, "Serviço · 1º nível": selected.serviceFirstLevel, "Serviço · 2º nível": selected.serviceSecondLevel, "Serviço · 3º nível": selected.serviceThirdLevel, Módulo: selected.module, Responsável: selected.assignedToName, "Ticket principal": selected.movideskTicket, "Tickets participantes": formatList(selected.participantMovideskTickets), "Tarefa relacionada": selected.taskNumber ? `#${selected.taskNumber}` : null, "Estado da Tarefa": selected.taskState, "Título da Tarefa": selected.taskTitle, "Cliente da Tarefa": selected.taskClient, "Versão de cadastro": selected.registeredVersion, "Versão entregue": selected.deliveredVersion, "Serviço sugerido": selected.serviceSuggestion?.path, "Confiança da sugestão": selected.serviceSuggestion?.confidence, "Pontuação": selected.serviceSuggestion?.score, "Evidências": selected.serviceSuggestion?.evidence?.join(", "), "Justificativa da sugestão": selected.serviceSuggestion?.reasons?.join(" "), "Alternativas consideradas": selected.serviceSuggestion?.alternatives?.map((item) => `${item.service} (${item.score})`).join(" · "), "Motivo da pendência": issueGuidance().reason, "Última movimentação": selected.lastMovement, Reaberturas: selected.reopenCount, "Trocas de responsável": selected.ownerHandoffs, "Resolvido no primeiro contato": selected.resolvedInFirstCall === null || selected.resolvedInFirstCall === undefined ? "Não informado" : selected.resolvedInFirstCall ? "Sim" : "Não", Satisfação: selected.satisfactionScore, "Comentário da satisfação": selected.satisfactionComment, "Ação recomendada": issueGuidance().action }).map(([label, value]) => [label, String(value ?? "Não informado")]) : []} /></DetailSection>
       {detail && <Alert severity="info" sx={{ mt: 2 }}>Detalhes completos e histórico carregados do Azure.</Alert>}
       <Button variant="contained" sx={{ mt: 3 }} onClick={() => selected && navigate(selected.source === "MOVIDESK" ? `/tickets?movidesk=${selected.movideskTicket}` : `${route(selected.workItemType)}?task=${selected.id}`)}>Abrir registro completo</Button>
     </Drawer>
