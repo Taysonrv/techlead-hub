@@ -29,7 +29,7 @@ export function DetailDrawer({ open, onClose, title, subtitle, children, actions
       }}
     >
       <Stack sx={{ height: "100%" }}>
-        <Box sx={{ px: { xs: 2, md: 2.5 }, py: 1.75, bgcolor: "background.paper" }}>
+        <Box sx={{ px: { xs: 1.75, md: 2.25 }, py: 1.5, bgcolor: "background.paper", position: "sticky", top: 0, zIndex: 2, backdropFilter: "blur(12px)" }}>
           <Stack direction="row" spacing={1} sx={{ alignItems: "flex-start", justifyContent: "space-between" }}>
             <Box sx={{ minWidth: 0 }}>
               <Typography variant="h6" noWrap sx={{ fontWeight: 800 }}>{title}</Typography>
@@ -42,7 +42,7 @@ export function DetailDrawer({ open, onClose, title, subtitle, children, actions
           </Stack>
         </Box>
         <Divider />
-        <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto", px: { xs: 2, md: 2.5 }, py: 2 }}>
+        <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto", px: { xs: 1.75, md: 2.25 }, py: 1.75 }}>
           {children}
         </Box>
       </Stack>
