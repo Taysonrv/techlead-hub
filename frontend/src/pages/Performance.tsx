@@ -115,6 +115,7 @@ type Ticket = {
   taskNumber: number | null;
   taskStatus: string | null;
   deliveredVersion: string | null;
+  isWithSimer?: boolean;
 };
 
 type ExecutiveQuality = { csat:{summary:{responses:number;average:number;positivePct:number;comments:number}}; sla:{summary:{bugsWithTask:number;concluded:number;supportWithinOla:number;factoryWithinOla:number;totalWithinSla:number;avgSupportMinutes:number;avgFactoryMinutes:number;avgTotalMinutes:number}} };
@@ -219,15 +220,25 @@ export function Performance() {
     return ()=>controller.abort();
   }, []);
 
-  const periodTickets = useMemo(() => {
-    const start = startOfDay(effectiveStartDate);
-    const end = endOfDay(effectiveEndDate);
+  const periodBounds = useMemo(() => ({
+    start: startOfDay(effectiveStartDate),
+    end: endOfDay(effectiveEndDate),
+  }), [effectiveStartDate, effectiveEndDate]);
 
-    return tickets.filter((ticket) => {
-      const created = new Date(ticket.createdDate);
-      return created >= start && created <= end;
-    });
-  }, [tickets, effectiveStartDate, effectiveEndDate]);
+  // Mesmo cohort executivo do Dashboard: entrada no período + responsabilidade
+  // operacional atual da equipe SIMER.
+  const periodTickets = useMemo(() => tickets.filter((ticket) => {
+    const created = new Date(ticket.createdDate);
+    return created >= periodBounds.start
+      && created <= periodBounds.end
+      && ticket.isWithSimer === true;
+  }), [tickets, periodBounds]);
+
+  // Backlog é estoque atual, portanto não depende da data de abertura.
+  const currentBacklog = useMemo(
+    () => tickets.filter((ticket) => ticket.isWithSimer === true && isOpen(ticket)),
+    [tickets],
+  );
 
   const timestampResponseSla = useMemo(
     () => calculateTimestampSla(periodTickets, "response"),
@@ -235,16 +246,18 @@ export function Performance() {
   );
 
   const operationalSummary = useMemo(() => {
-    const start = startOfDay(effectiveStartDate);
-    const end = endOfDay(effectiveEndDate);
-    const closed = tickets.filter((ticket) => {
+    const resolvedInPeriod = periodTickets.filter((ticket) => {
+      if (!ticket.resolvedDate) return false;
+      const date = new Date(ticket.resolvedDate);
+      return date >= periodBounds.start && date <= periodBounds.end;
+    });
+    const closedInPeriod = periodTickets.filter((ticket) => {
       if (!ticket.closedDate) return false;
       const date = new Date(ticket.closedDate);
-      return date >= start && date <= end;
+      return date >= periodBounds.start && date <= periodBounds.end;
     });
-    const pending = periodTickets.filter(isOpen);
-    const resolved = periodTickets.filter((ticket) => Boolean(ticket.resolvedDate || ticket.closedDate));
-    const resolutionMinutes = resolved
+    const completedCohort = periodTickets.filter((ticket) => Boolean(ticket.resolvedDate || ticket.closedDate));
+    const resolutionMinutes = completedCohort
       .map((ticket) => ticket.lifetimeMinutes)
       .filter((value): value is number => typeof value === "number" && Number.isFinite(value) && value >= 0);
     const avgMinutes = resolutionMinutes.length
@@ -252,13 +265,14 @@ export function Performance() {
       : null;
     return {
       opened: periodTickets.length,
-      closed: closed.length,
-      pending: pending.length,
-      effectiveness: periodTickets.length ? Math.round(resolved.length / periodTickets.length * 1000) / 10 : 0,
+      closed: closedInPeriod.length,
+      pending: currentBacklog.length,
+      effectiveness: periodTickets.length ? Math.round(completedCohort.length / periodTickets.length * 1000) / 10 : 0,
       avgResolutionMinutes: avgMinutes,
-      resolved: resolved.length,
+      resolved: resolvedInPeriod.length,
+      completedCohort: completedCohort.length,
     };
-  }, [tickets, periodTickets, effectiveStartDate, effectiveEndDate]);
+  }, [periodTickets, currentBacklog, periodBounds]);
 
   const timestampSolutionSla = useMemo(
     () => calculateTimestampSla(periodTickets, "solution"),
@@ -606,10 +620,10 @@ export function Performance() {
       </Alert>
 
       <Box sx={{ display:"grid", gridTemplateColumns:{xs:"1fr",sm:"repeat(2,minmax(0,1fr))",lg:"repeat(5,minmax(0,1fr))"}, gap:1.25, mb:1.75 }}>
-        <PerformanceKpi title="Tickets abertos" value={operationalSummary.opened} description="Entradas no período selecionado" accent={aliareColors.info} info={{title:"Tickets abertos",summary:"Volume de tickets criados no período.",calculation:"Contagem por createdDate dentro do filtro global.",source:"Movidesk",periodRule:"Segue o período selecionado na tela."}} />
-        <PerformanceKpi title="Tickets fechados" value={operationalSummary.closed} description="Fechamentos ocorridos no período" accent={aliareColors.green} info={{title:"Tickets fechados",summary:"Tickets cuja data de fechamento ocorreu no período.",calculation:"Contagem por closedDate dentro do filtro global.",source:"Movidesk",periodRule:"Segue o período selecionado na tela."}} />
-        <PerformanceKpi title="Tickets pendentes" value={operationalSummary.pending} description="Entradas do período ainda em aberto" accent={aliareColors.warning} info={{title:"Tickets pendentes",summary:"Tickets criados no período que permanecem fora dos estados Resolvido, Fechado e Cancelado.",calculation:"Entradas do período − tickets em estados finais.",source:"Movidesk",periodRule:"Coorte de tickets criados no período."}} />
-        <PerformanceKpi title="Efetividade" value={`${operationalSummary.effectiveness}%`} description={`${operationalSummary.resolved} resolvido(s) da coorte`} accent={rateColor(operationalSummary.effectiveness)} info={{title:"Efetividade",summary:"Percentual da coorte de entradas do período que já alcançou resolução ou fechamento.",calculation:"Tickets resolvidos/fechados ÷ tickets criados no período.",source:"Movidesk",periodRule:"Coorte de tickets criados no período; não confundir com SLA."}} />
+        <PerformanceKpi title="Tickets abertos" value={operationalSummary.opened} description="Entradas do período atribuídas à operação SIMER" accent={aliareColors.info} info={{title:"Tickets abertos",summary:"Mesmo cohort do Resumo Executivo: tickets criados no período sob responsabilidade da operação SIMER.",calculation:"createdDate no período + isWithSimer = true.",source:"Movidesk",periodRule:"Segue integralmente o período global selecionado."}} />
+        <PerformanceKpi title="Tickets fechados" value={operationalSummary.closed} description="Abertos e fechados no mesmo recorte" accent={aliareColors.green} info={{title:"Tickets fechados",summary:"Mesmo cohort do Resumo Executivo: tickets SIMER abertos no período e fechados dentro do mesmo recorte.",calculation:"createdDate no período + isWithSimer = true + closedDate no período.",source:"Movidesk",periodRule:"Segue integralmente o período global selecionado."}} />
+        <PerformanceKpi title="Backlog atual" value={operationalSummary.pending} description="Estoque atual de tickets ativos" accent={aliareColors.warning} info={{title:"Backlog atual",summary:"Mesmo estoque do Resumo Executivo: tickets atualmente ativos sob responsabilidade SIMER, independentemente da data de abertura.",calculation:"isWithSimer = true + status operacional ativo.",source:"Movidesk",periodRule:"Não é limitado pela data de abertura; representa o backlog atual."}} />
+        <PerformanceKpi title="Efetividade" value={`${operationalSummary.effectiveness}%`} description={`${operationalSummary.completedCohort} concluído(s) da coorte`} accent={rateColor(operationalSummary.effectiveness)} info={{title:"Efetividade",summary:"Percentual da coorte de entradas do período que já alcançou resolução ou fechamento.",calculation:"Tickets resolvidos/fechados ÷ tickets criados no período.",source:"Movidesk",periodRule:"Coorte de tickets criados no período; não confundir com SLA."}} />
         <PerformanceKpi title="TMR" value={operationalSummary.avgResolutionMinutes===null?"—":formatServiceMinutes(operationalSummary.avgResolutionMinutes)} description="Tempo médio de resolução" accent={aliareColors.purple} info={{title:"TMR",summary:"Tempo médio de resolução dos tickets resolvidos da coorte selecionada.",calculation:"Média de lifetimeMinutes dos tickets resolvidos/fechados com medição disponível.",source:"Movidesk",periodRule:"Tickets criados no período com tempo de vida medido."}} />
       </Box>
 
