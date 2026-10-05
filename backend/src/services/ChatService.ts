@@ -113,19 +113,26 @@ export class ChatService {
     if (userId === targetUserId) throw Object.assign(new Error("Selecione outro usuário para iniciar a conversa."), { statusCode: 400 });
     const target = await prisma.user.findFirst({ where: { id: targetUserId, active: true, approvalStatus: "APPROVED" }, select: memberUserSelect });
     if (!target) throw Object.assign(new Error("Usuário não localizado ou indisponível."), { statusCode: 404 });
-    const existing = await prisma.chatChannel.findFirst({
+    // Consulta pelos dois participantes e valida a composição em memória.
+    // Evita depender de `every` em uma relação M:N e também reaproveita
+    // conversas diretas antigas caso já exista mais de um canal legado.
+    const existingCandidates = await prisma.chatChannel.findMany({
       where: {
         type: "DIRECT",
         archivedAt: null,
         AND: [
           { members: { some: { userId } } },
           { members: { some: { userId: targetUserId } } },
-          { members: { every: { userId: { in: [userId, targetUserId] } } } },
         ],
       },
+      orderBy: { updatedAt: "desc" },
       include: { members: { include: { user: { select: memberUserSelect } } } },
     });
-    if (existing && existing.members.length === 2) return existing;
+    const existing = existingCandidates.find((channel) =>
+      channel.members.length === 2 &&
+      channel.members.every((member) => member.userId === userId || member.userId === targetUserId),
+    );
+    if (existing) return existing;
     const current = await prisma.user.findUnique({ where: { id: userId }, select: { name: true } });
     const channel = await prisma.chatChannel.create({
       data: {
