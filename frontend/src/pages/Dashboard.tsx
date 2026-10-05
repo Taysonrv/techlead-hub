@@ -1454,7 +1454,7 @@ export function Dashboard() {
                   </Typography>
                 </Box>
               </Stack>
-              <Box sx={{ height: 255, mt: 1.5 }}>
+              <Box sx={{ height: { xs: 225, md: 250 }, mt: 1.25 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={dailyFlow} margin={{ top: 8, right: 12, left: 4, bottom: 4 }}>
                     <defs>
@@ -2929,13 +2929,13 @@ function DonutAnalysisCard({
       <CardPeriodHeader title={title} subtitle={subtitle} value={period} onChange={onPeriodChange} />
       <Box sx={{
         display: "grid",
-        gridTemplateColumns: { xs: "1fr", sm: "minmax(220px, .88fr) minmax(240px, 1.12fr)" },
+        gridTemplateColumns: { xs: "1fr", sm: "minmax(190px, .9fr) minmax(0, 1.1fr)" },
         gap: { xs: 1, sm: 2 },
         alignItems: "center",
         mt: 1.25,
-        minHeight: { xs: 0, sm: 220 },
+        minHeight: { xs: 0, sm: 225 },
       }}>
-        <Box sx={{ height: { xs: 210, sm: 220 }, minWidth: 0, position: "relative" }}>
+        <Box sx={{ height: { xs: 210, sm: 225 }, minWidth: 0, position: "relative" }}>
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               <Pie
