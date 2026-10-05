@@ -72,6 +72,7 @@ import {
   type ServiceLevelResult,
 } from "../utils/serviceLevel";
 import { calculateTimestampSla } from "../utils/timestampSla";
+import { auditOperationalMetrics, buildOperationalCohorts } from "../utils/operationalMetrics";
 
 const SUPPORT_ANALYSTS = [
   "ALAN KARDEK DA SILVA BARROS NETO",
@@ -225,20 +226,12 @@ export function Performance() {
     end: endOfDay(effectiveEndDate),
   }), [effectiveStartDate, effectiveEndDate]);
 
-  // Mesmo cohort executivo do Dashboard: entrada no período + responsabilidade
-  // operacional atual da equipe SIMER.
-  const periodTickets = useMemo(() => tickets.filter((ticket) => {
-    const created = new Date(ticket.createdDate);
-    return created >= periodBounds.start
-      && created <= periodBounds.end
-      && ticket.isWithSimer === true;
-  }), [tickets, periodBounds]);
-
-  // Backlog é estoque atual, portanto não depende da data de abertura.
-  const currentBacklog = useMemo(
-    () => tickets.filter((ticket) => ticket.isWithSimer === true && isOpen(ticket)),
-    [tickets],
+  const operationalCohorts = useMemo(
+    () => buildOperationalCohorts(tickets, periodBounds),
+    [tickets, periodBounds],
   );
+  const periodTickets = operationalCohorts.entries;
+  const currentBacklog = operationalCohorts.backlog;
 
   const timestampResponseSla = useMemo(
     () => calculateTimestampSla(periodTickets, "response"),
@@ -246,16 +239,8 @@ export function Performance() {
   );
 
   const operationalSummary = useMemo(() => {
-    const resolvedInPeriod = tickets.filter((ticket) => {
-      if (ticket.isWithSimer !== true || !ticket.resolvedDate) return false;
-      const date = new Date(ticket.resolvedDate);
-      return date >= periodBounds.start && date <= periodBounds.end;
-    });
-    const closedInPeriod = tickets.filter((ticket) => {
-      if (ticket.isWithSimer !== true || !ticket.closedDate) return false;
-      const date = new Date(ticket.closedDate);
-      return date >= periodBounds.start && date <= periodBounds.end;
-    });
+    const resolvedInPeriod = operationalCohorts.resolved;
+    const closedInPeriod = operationalCohorts.closed;
     const completedCohort = periodTickets.filter((ticket) => Boolean(ticket.resolvedDate || ticket.closedDate));
     const resolutionMinutes = completedCohort
       .map((ticket) => ticket.lifetimeMinutes)
@@ -272,20 +257,27 @@ export function Performance() {
       resolved: resolvedInPeriod.length,
       completedCohort: completedCohort.length,
     };
-  }, [tickets, periodTickets, currentBacklog, periodBounds]);
+  }, [periodTickets, currentBacklog, operationalCohorts]);
 
   // SLA de solução é um indicador de saídas: o Movidesk atribui o ticket ao
   // período pela data em que a solução ocorreu, e não pela data de abertura.
-  const solutionPeriodTickets = useMemo(() => tickets.filter((ticket) => {
-    if (ticket.isWithSimer !== true || !ticket.resolvedDate) return false;
-    const resolved = new Date(ticket.resolvedDate);
-    return resolved >= periodBounds.start && resolved <= periodBounds.end;
-  }), [tickets, periodBounds]);
+  const solutionPeriodTickets = operationalCohorts.resolved;
 
   const timestampSolutionSla = useMemo(
     () => calculateTimestampSla(solutionPeriodTickets, "solution"),
     [solutionPeriodTickets],
   );
+
+  const metricAudit = useMemo(() => auditOperationalMetrics({
+    entries: periodTickets.length,
+    resolved: operationalCohorts.resolved.length,
+    closed: operationalCohorts.closed.length,
+    backlog: currentBacklog.length,
+    responseMeasured: timestampResponseSla.measured,
+    responseWithin: timestampResponseSla.within,
+    solutionMeasured: timestampSolutionSla.measured,
+    solutionWithin: timestampSolutionSla.within,
+  }), [periodTickets, operationalCohorts, currentBacklog, timestampResponseSla, timestampSolutionSla]);
 
   /* =======================================================
      MOTOR OPERACIONAL DE PRAZOS
@@ -614,7 +606,11 @@ export function Performance() {
         title="Desempenho do Atendimento"
         description="Prazos, risco operacional e desempenho da equipe em uma visão única"
         meta="SLA calculado pelos marcos temporais disponíveis, separado do risco operacional"
-        action={<PeriodFilter />}
+        action={<PeriodFilter />
+      {metricAudit.length > 0 && <Alert severity="warning" variant="outlined" sx={{ mb: 2 }}>
+        Auditoria de consistência detectou {metricAudit.length} divergência(s): {metricAudit.map((item) => item.message).join(" · ")}
+      </Alert>}
+}
       />
 
       <Alert
