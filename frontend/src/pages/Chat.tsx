@@ -415,11 +415,12 @@ export function Chat() {
   const stickers = ["🎉 PARABÉNS!","🚀 VAMOS!","✅ RESOLVIDO","👏 BOA!","🎯 NA META","🔥 PRIORIDADE","💡 IDEIA","🤝 OBRIGADO","☕ CAFÉ?","😎 FECHOU!","🛠️ EM ANÁLISE","📣 ATENÇÃO"];
   const append = (value: string) => setContent((current) => current ? `${current} ${value}` : value);
 
-  return <Stack spacing={1} sx={{ height: "100%", maxHeight: "100%", minHeight: 0, overflow: "hidden", p: { xs: 1, md: 1.25 }, boxSizing: "border-box", bgcolor: "background.default" }}>
-    <Paper elevation={0} sx={{ flexShrink: 0, minHeight: 62, px: 1.6, py: .8, borderRadius: 3.5, border: "1px solid", borderColor: "divider", borderLeft: "4px solid", borderLeftColor: "rgba(24,199,122,.72)", overflow: "hidden", background: (theme) => theme.palette.mode === "dark" ? "linear-gradient(105deg,#151b23,#182230 58%,#131922)" : "linear-gradient(105deg,#ffffff,#f7fafc 58%,#f3f7fb)", boxShadow: "0 8px 26px rgba(15,23,42,.055)" }}>
+  return <Stack spacing={1} sx={{ height: "100%", maxHeight: "100%", minHeight: 0, overflow: "hidden", px: { xs: 1, md: 1.25 }, pb: { xs: 1, md: 1.25 }, pt: { xs: 7.25, md: 7.5 }, boxSizing: "border-box", bgcolor: "background.default" }}>
+    <Paper elevation={0} sx={{ flexShrink: 0, minHeight: 70, px: 1.8, py: .9, borderRadius: 3.5, border: "1px solid", borderColor: "divider", borderLeft: "4px solid", borderLeftColor: "primary.main", overflow: "hidden", background: (theme) => theme.palette.mode === "dark" ? "linear-gradient(115deg,rgba(10,43,55,.96),rgba(16,34,55,.98) 56%,rgba(19,28,43,.98))" : "linear-gradient(115deg,#f2fffa,#f7fbff 58%,#f3f7fd)", boxShadow: (theme) => theme.palette.mode === "dark" ? "0 14px 34px rgba(0,0,0,.20), inset 0 1px rgba(255,255,255,.025)" : "0 14px 34px rgba(15,23,42,.075)" }}>
       <Stack direction="row" spacing={1.35} sx={{ alignItems: "center", minWidth: 0, pr: { md: 28 } }}>
         <Box sx={{ width: 36, height: 36, borderRadius: 2, display: "grid", placeItems: "center", flexShrink: 0, color: "primary.main", bgcolor: "background.paper", border: "1px solid rgba(24,199,122,.22)", boxShadow: "0 5px 16px rgba(24,199,122,.09)" }}><ForumOutlined /></Box>
         <Box sx={{ minWidth: 0, flex: 1 }}>
+          <Typography variant="overline" sx={{ display: "block", mb: .15, color: "primary.main", fontSize: ".58rem", lineHeight: 1, letterSpacing: ".14em", fontWeight: 950 }}>COLABORAÇÃO</Typography>
           <Stack direction="row" spacing={.8} sx={{ alignItems: "center" }}><Typography sx={{ fontWeight: 950, fontSize: "1.08rem", lineHeight: 1.05, letterSpacing: "-.025em", whiteSpace: "nowrap" }}>Hub de Conversas</Typography><Chip size="small" label={{ ONLINE: "Online", AWAY: "Ausente", BUSY: "Ocupado" }[availability]} color={availability === "BUSY" ? "error" : availability === "AWAY" ? "warning" : "success"} onClick={() => { const next = availability === "ONLINE" ? "AWAY" : availability === "AWAY" ? "BUSY" : "ONLINE"; setAvailability(next); localStorage.setItem("techlead-chat-status", next); }} sx={{ height: 22, fontWeight: 850 }} /></Stack>
           <Stack direction="row" spacing={.8} sx={{ alignItems: "center", minWidth: 0 }}><Typography variant="caption" color="text.secondary" noWrap>Mensagens, presença e colaboração em tempo real</Typography>{statusMessage && <Typography variant="caption" color="text.secondary" noWrap sx={{ opacity: .75 }}>· {statusMessage}</Typography>}</Stack>
         </Box>
@@ -427,7 +428,7 @@ export function Chat() {
     </Paper>
     {error && <Alert severity="error" onClose={() => setError("")}>{error}</Alert>}
     <Paper elevation={0} sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "260px minmax(0,1fr)", xl: conversationInfoOpen ? "260px minmax(0,1fr) 280px" : "260px minmax(0,1fr)" }, minHeight: 0, flex: 1, overflow: "hidden", borderRadius: 3, maxHeight: "100%", height: "100%", border: "1px solid", borderColor: "divider", boxShadow: "0 14px 38px rgba(15,23,42,.07)", bgcolor: "background.paper" }}>
-      <Box sx={{ borderRight: { md: "none" }, borderColor: "divider", position: "relative", "&::after": { content: '""', position: "absolute", top: 14, bottom: 14, right: 0, width: "1px", background: "linear-gradient(180deg,transparent,rgba(148,163,184,.30) 18%,rgba(148,163,184,.20) 82%,transparent)" }, minHeight: 0, overflowY: "auto", overscrollBehavior: "contain", bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(255,255,255,.018)" : "rgba(248,250,252,.72)" }}>
+      <Box sx={{ position: "relative", minHeight: 0, overflowY: "auto", overscrollBehavior: "contain", m: { md: .75 }, mr: { md: 0 }, borderRadius: { md: "18px 0 0 18px" }, bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(255,255,255,.025)" : "rgba(248,250,252,.88)", boxShadow: (theme) => theme.palette.mode === "dark" ? "inset 0 0 0 1px rgba(148,163,184,.08)" : "inset 0 0 0 1px rgba(148,163,184,.12)" }}>
         <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between", px: 1.35, py: 1, minHeight: 52 }}>
           <Box sx={{ minWidth: 0, pl: .25 }}><Stack direction="row" spacing={.7} sx={{ alignItems: "center" }}><Typography sx={{ fontWeight: 900, lineHeight: 1.2 }}>Conversas</Typography>{totalUnread > 0 && <Chip size="small" color="primary" label={totalUnread > 99 ? "99+" : totalUnread} sx={{ height: 20, fontWeight: 900 }} />}</Stack><Typography variant="caption" color="text.secondary">{channels.length} conversa(s){totalUnread ? ` · ${totalUnread} não lida(s)` : ""}</Typography></Box>
           <Stack direction="row">
@@ -437,7 +438,7 @@ export function Chat() {
           </Stack>
         </Stack>
         <Box sx={{ px: 1.25, pb: 1 }}><TextField size="small" fullWidth value={conversationSearch} onChange={(event) => setConversationSearch(event.target.value)} placeholder="Buscar conversa..." slotProps={{ input: { startAdornment: <SearchOutlined sx={{ mr: .7, fontSize: 18, color: "text.secondary" }} /> } }} /></Box>
-        <Divider />
+        <Box sx={{ mx: 1.15, height: 1, background: (theme) => theme.palette.mode === "dark" ? "linear-gradient(90deg,transparent,rgba(148,163,184,.14),transparent)" : "linear-gradient(90deg,transparent,rgba(148,163,184,.20),transparent)" }} />
         <List disablePadding>
           {sortedVisibleChannels.map((channel, index) => {
             const group = favorites.includes(channel.id) ? "Favoritos" : channel.type === "DIRECT" ? "Recentes" : "Equipes";
@@ -459,7 +460,7 @@ export function Chat() {
                   borderRadius: 2,
                   transition: "background-color .18s ease, transform .18s ease",
                   "&:hover": { transform: "translateX(2px)" },
-                  "&.Mui-selected": { bgcolor: "action.selected", boxShadow: "inset 3px 0 0 rgba(24,199,122,.75)" },
+                  "&.Mui-selected": { bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(40,62,78,.92)" : "rgba(232,240,244,.96)", boxShadow: "inset 3px 0 0 rgba(24,199,122,.78), 0 7px 18px rgba(15,23,42,.06)" },
                   "&.Mui-selected:hover": { bgcolor: "action.selected" },
                 }}
               >
