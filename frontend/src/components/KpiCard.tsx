@@ -30,13 +30,13 @@ export function KpiCard({ title, value, subtitle, info, metadata, accent = aliar
 
   return <Card elevation={0} role={onClick ? "button" : undefined} tabIndex={onClick ? 0 : undefined} onClick={onClick} onKeyDown={activate}
     sx={{ position: "relative", overflow: "hidden", width: "100%", height: "100%", borderColor: active ? accent : "divider", cursor: onClick ? "pointer" : "default", background: cardBackground, boxShadow: dark ? "0 14px 34px rgba(0,0,0,.16), inset 0 1px rgba(255,255,255,.025)" : undefined, transition: "transform .15s ease, box-shadow .15s ease, border-color .15s ease", "&::before": { content: '""', position: "absolute", inset: "0 0 auto", height: 3, bgcolor: accent, boxShadow: `0 1px 8px color-mix(in srgb, ${accent} 35%, transparent)` }, "&::after": dark ? { content: '""', position: "absolute", width: 96, height: 96, borderRadius: "50%", right: -42, top: -48, background: `radial-gradient(circle, color-mix(in srgb, ${accent} 16%, transparent), transparent 68%)`, pointerEvents: "none" } : undefined, ...(onClick && { "&:hover": { transform: "translateY(-2px)", borderColor: accent, boxShadow: dark ? `0 16px 34px color-mix(in srgb, ${accent} 12%, rgba(0,0,0,.30))` : "0 8px 24px rgba(16,24,40,.08)" }, "&:focus-visible": { outline: `2px solid ${accent}`, outlineOffset: 2 } }) }}>
-    <CardContent sx={{ p: { xs: 1.6, md: 1.8 }, textAlign: "center", "&:last-child": { pb: { xs: 1.6, md: 1.8 } } }}>
+    <CardContent sx={{ p: { xs: 1.35, md: 1.55 }, textAlign: "center", "&:last-child": { pb: { xs: 1.35, md: 1.55 } } }}>
       <Stack direction="row" sx={{ alignItems: "center", justifyContent: "center", gap: .5, position: "relative" }}>
         <Typography variant="body2" sx={{ fontWeight: 700, fontSize: ".82rem", letterSpacing: "-.005em", minWidth: 0, textAlign: "center" }}>{title}</Typography>
         {(info || metadata) && <Tooltip title={<Stack spacing={.45}>{info && <Typography variant="caption">{info}</Typography>}{metadata?.source && <Typography variant="caption"><b>Fonte:</b> {metadata.source}</Typography>}{metadata?.periodRule && <Typography variant="caption"><b>Período:</b> {metadata.periodRule}</Typography>}{metadata?.denominator && <Typography variant="caption"><b>Denominador:</b> {metadata.denominator}</Typography>}{metadata?.updatedAt && <Typography variant="caption"><b>Atualização:</b> {metadata.updatedAt}</Typography>}</Stack>}><IconButton size="small" aria-label={`Informações sobre ${title}`} onClick={(event) => event.stopPropagation()} sx={{ p: .3, color: "text.secondary", position: "absolute", right: 0 }}><InfoOutlined sx={{ fontSize: 16 }} /></IconButton></Tooltip>}
       </Stack>
-      <Typography sx={{ mt: .6, fontWeight: 780, color: accent, letterSpacing: "-.025em", fontSize: { xs: "1.65rem", md: "1.85rem", xl: "2rem" }, lineHeight: 1.05 }}>{value}</Typography>
-      {subtitle && <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: .75, minHeight: 18 }}>{subtitle}</Typography>}
+      <Typography sx={{ mt: .6, fontWeight: 780, color: accent, letterSpacing: "-.025em", fontSize: { xs: "1.5rem", md: "1.72rem", xl: "1.88rem" }, lineHeight: 1.05 }}>{value}</Typography>
+      {subtitle && <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: .75, minHeight: 16 }}>{subtitle}</Typography>}
     </CardContent>
   </Card>;
 }
