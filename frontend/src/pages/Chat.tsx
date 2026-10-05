@@ -1,4 +1,4 @@
-import { AddCommentOutlined, ForumOutlined, SendRounded, EmojiEmotionsOutlined, CelebrationOutlined, NotificationsActiveOutlined, ReplyOutlined, CloseOutlined, SearchOutlined, Circle, MoreHorizOutlined, DeleteOutlineRounded, StarOutlineRounded, VolumeOffOutlined, AttachFileRounded, DownloadRounded } from "@mui/icons-material";
+import { AddCommentOutlined, ForumOutlined, SendRounded, EmojiEmotionsOutlined, CelebrationOutlined, NotificationsActiveOutlined, ReplyOutlined, CloseOutlined, SearchOutlined, Circle, MoreHorizOutlined, DeleteOutlineRounded, StarOutlineRounded, VolumeOffOutlined, AttachFileRounded, DownloadRounded, CleaningServicesOutlined, GroupsOutlined, PersonOutlineRounded } from "@mui/icons-material";
 import { Alert, Box, Button, Checkbox, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Divider, FormControlLabel, IconButton, List, ListItemButton, ListItemIcon, ListItemText, Menu, MenuItem, Paper, Popover, Snackbar, Stack, TextField, Tooltip, Typography } from "@mui/material";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
@@ -48,9 +48,14 @@ export function Chat() {
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
   const [conversationMenuAnchor, setConversationMenuAnchor] = useState<HTMLElement | null>(null);
   const [deleteConversationOpen, setDeleteConversationOpen] = useState(false);
+  const [deletingConversation, setDeletingConversation] = useState(false);
+  const [maintenanceRunning, setMaintenanceRunning] = useState(false);
+  const [maintenanceMessage, setMaintenanceMessage] = useState("");
   const [statusMessage] = useState(() => localStorage.getItem("techlead-chat-status-message") || "");
   const [incomingPopup, setIncomingPopup] = useState<{ channelId: number; channelName: string; authorName: string; preview: string } | null>(null);
   const previousChannelState = useRef<Map<number, { unread: number; lastMessageId: number | null }>>(new Map());
+  const selectedIdRef = useRef<number | null>(null);
+  useEffect(() => { selectedIdRef.current = selectedId; }, [selectedId]);
 
   const selected = useMemo(() => channels.find((channel) => channel.id === selectedId) ?? null, [channels, selectedId]);
   const selectedPeer = useMemo(() => selected?.type === "DIRECT" ? selected.members?.map((member) => member.user).find((person) => person.id !== user?.id) : null, [selected, user?.id]);
@@ -88,7 +93,7 @@ export function Chat() {
         })
         .filter(Boolean) as Array<{ channel: Channel; latest: Message }>;
       const newest = incoming[incoming.length - 1];
-      if (newest && newest.channel.id !== selectedId) {
+      if (newest && newest.channel.id !== selectedIdRef.current) {
         setIncomingPopup({
           channelId: newest.channel.id,
           channelName: newest.channel.name,
@@ -109,7 +114,7 @@ export function Chat() {
       response.data.channels[0]?.id ??
       null,
     );
-  }, [searchParams, selectedId, user?.id]);
+  }, [searchParams, user?.id]);
 
   const loadMessages = useCallback(async (channelId: number, quiet = false) => {
     try {
@@ -289,17 +294,49 @@ export function Chat() {
   }
 
   async function deleteConversation() {
-    if (!selectedId) return;
+    if (!selectedId || deletingConversation) return;
+    const deletedId = selectedId;
     try {
-      await api.delete(`/chat/channels/${selectedId}`);
+      setDeletingConversation(true);
+      setError("");
+      await api.delete(`/chat/channels/${deletedId}`);
       setDeleteConversationOpen(false);
       setConversationMenuAnchor(null);
       setMessages([]);
-      setSelectedId(null);
-      await loadChannels();
+      setFavorites((current) => {
+        const next = current.filter((id) => id !== deletedId);
+        localStorage.setItem("techlead-chat-favorites", JSON.stringify(next));
+        return next;
+      });
+      setChannels((current) => {
+        const next = current.filter((channel) => channel.id !== deletedId);
+        setSelectedId(next[0]?.id ?? null);
+        return next;
+      });
+      previousChannelState.current.delete(deletedId);
       window.dispatchEvent(new Event("techlead-hub:chat-read"));
+      await loadChannels();
     } catch (requestError: any) {
       setError(requestError?.response?.data?.error || "Não foi possível excluir a conversa.");
+    } finally {
+      setDeletingConversation(false);
+    }
+  }
+
+  async function consolidateDirectDuplicates() {
+    if (maintenanceRunning) return;
+    try {
+      setMaintenanceRunning(true);
+      setError("");
+      const response = await api.post<{ groupsConsolidated: number; duplicateChannels: number; movedMessages: number }>("/chat/maintenance/direct-duplicates");
+      await loadChannels();
+      setMaintenanceMessage(response.data.groupsConsolidated
+        ? `Limpeza concluída: ${response.data.groupsConsolidated} grupo(s), ${response.data.duplicateChannels} conversa(s) duplicada(s) e ${response.data.movedMessages} mensagem(ns) consolidadas.`
+        : "Nenhuma conversa privada duplicada foi encontrada.");
+    } catch (requestError: any) {
+      setError(requestError?.response?.data?.error || "Não foi possível executar a manutenção das conversas.");
+    } finally {
+      setMaintenanceRunning(false);
     }
   }
 
@@ -336,7 +373,11 @@ export function Chat() {
       <Box sx={{ borderRight: { md: "none" }, borderColor: "divider", position: "relative", "&::after": { content: '""', position: "absolute", top: 14, bottom: 14, right: 0, width: "1px", background: "linear-gradient(180deg,transparent,rgba(24,199,122,.32) 18%,rgba(47,111,237,.18) 82%,transparent)" }, minHeight: 0, overflowY: "auto", overscrollBehavior: "contain", bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(255,255,255,.018)" : "rgba(248,250,252,.72)" }}>
         <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between", px: 1.75, py: 1.35, minHeight: 62 }}>
           <Box sx={{ minWidth: 0, pl: .25 }}><Typography sx={{ fontWeight: 900, lineHeight: 1.2 }}>Conversas</Typography><Typography variant="caption" color="text.secondary">{channels.length} conversa(s)</Typography></Box>
-          <Stack direction="row"><Tooltip title="Conversa privada"><IconButton size="small" onClick={() => setDirectOpen(true)}><ForumOutlined /></IconButton></Tooltip><Tooltip title="Novo canal"><IconButton size="small" aria-label="Criar canal" onClick={() => setCreateOpen(true)}><AddCommentOutlined /></IconButton></Tooltip></Stack>
+          <Stack direction="row">
+            {["ADMIN","COORDENADOR"].includes(user?.role ?? "") && <Tooltip title="Consolidar conversas privadas duplicadas"><span><IconButton size="small" disabled={maintenanceRunning} onClick={() => void consolidateDirectDuplicates()}>{maintenanceRunning ? <CircularProgress size={17} /> : <CleaningServicesOutlined fontSize="small" />}</IconButton></span></Tooltip>}
+            <Tooltip title="Conversa privada"><IconButton size="small" onClick={() => setDirectOpen(true)}><PersonOutlineRounded /></IconButton></Tooltip>
+            <Tooltip title="Novo canal"><IconButton size="small" aria-label="Criar canal" onClick={() => setCreateOpen(true)}><AddCommentOutlined /></IconButton></Tooltip>
+          </Stack>
         </Stack>
         <Box sx={{ px: 1.25, pb: 1 }}><TextField size="small" fullWidth value={conversationSearch} onChange={(event) => setConversationSearch(event.target.value)} placeholder="Buscar conversa..." slotProps={{ input: { startAdornment: <SearchOutlined sx={{ mr: .7, fontSize: 18, color: "text.secondary" }} /> } }} /></Box>
         <Divider />
@@ -369,7 +410,7 @@ export function Chat() {
                 <ListItemText
                   primary={
                     <Stack direction="row" spacing={.5} sx={{ alignItems: "center", minWidth: 0 }}>
-                      <Typography noWrap sx={{ fontWeight: channel.unread ? 900 : 750, fontSize: ".88rem", flex: 1 }}>{channel.name}</Typography>
+                      <Box sx={{ color: "text.secondary", display: "flex", alignItems: "center" }}>{channel.type === "DIRECT" ? <PersonOutlineRounded sx={{ fontSize: 14 }} /> : <GroupsOutlined sx={{ fontSize: 14 }} />}</Box><Typography noWrap sx={{ fontWeight: channel.unread ? 900 : 750, fontSize: ".88rem", flex: 1 }}>{channel.name}</Typography>
                       {favorites.includes(channel.id) && <Typography component="span" sx={{ color: "warning.main", fontSize: ".72rem" }}>★</Typography>}
                     </Stack>
                   }
@@ -414,6 +455,7 @@ export function Chat() {
         </Stack>
       </Box>
     </Paper>
+    <Snackbar open={Boolean(maintenanceMessage)} autoHideDuration={6500} onClose={() => setMaintenanceMessage("")} message={maintenanceMessage} anchorOrigin={{ vertical: "bottom", horizontal: "center" }} />
     <Snackbar
       open={Boolean(incomingPopup)}
       onClose={(_, reason) => { if (reason !== "clickaway") setIncomingPopup(null); }}
@@ -436,8 +478,8 @@ export function Chat() {
     </Menu>
     <Dialog open={deleteConversationOpen} onClose={() => setDeleteConversationOpen(false)} maxWidth="xs" fullWidth>
       <DialogTitle>Excluir conversa?</DialogTitle>
-      <DialogContent><Typography variant="body2" color="text.secondary">A conversa será removida da sua lista. Canais de equipe só podem ser excluídos por coordenação ou administração.</Typography></DialogContent>
-      <DialogActions><Button onClick={() => setDeleteConversationOpen(false)}>Cancelar</Button><Button color="error" variant="contained" onClick={() => void deleteConversation()}>Excluir</Button></DialogActions>
+      <DialogContent><Alert severity="warning" sx={{ mb: 1.5 }}>Esta ação remove a conversa ativa da lista.</Alert><Typography variant="body2" color="text.secondary">{selected?.type === "DIRECT" ? "A conversa privada será arquivada para os participantes. O histórico não é apagado fisicamente e permanece preservado para auditoria." : "O canal da equipe será arquivado. Apenas coordenação ou administração pode realizar esta ação."}</Typography></DialogContent>
+      <DialogActions><Button disabled={deletingConversation} onClick={() => setDeleteConversationOpen(false)}>Cancelar</Button><Button color="error" variant="contained" disabled={deletingConversation} startIcon={deletingConversation ? <CircularProgress size={16} color="inherit" /> : <DeleteOutlineRounded />} onClick={() => void deleteConversation()}>{deletingConversation ? "Excluindo..." : "Excluir"}</Button></DialogActions>
     </Dialog>
     <Popover open={Boolean(emojiAnchor)} anchorEl={emojiAnchor} onClose={() => setEmojiAnchor(null)} anchorOrigin={{ vertical: "top", horizontal: "left" }} transformOrigin={{ vertical: "bottom", horizontal: "left" }}><Box sx={{ display: "grid", gridTemplateColumns: "repeat(5, 42px)", gap: .5, p: 1 }}>{emojis.map((emoji) => <IconButton key={emoji} onClick={() => { append(emoji); setEmojiAnchor(null); }} sx={{ fontSize: 22 }}>{emoji}</IconButton>)}</Box></Popover>
     <Dialog open={stickersOpen} onClose={() => setStickersOpen(false)} maxWidth="xs" fullWidth><DialogTitle>Figurinhas rápidas</DialogTitle><DialogContent><Box sx={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 1, pt: .5 }}>{stickers.map((sticker) => <Button key={sticker} variant="outlined" onClick={() => { append(sticker); setStickersOpen(false); }} sx={{ minHeight: 72, fontWeight: 850 }}>{sticker}</Button>)}</Box></DialogContent></Dialog>
