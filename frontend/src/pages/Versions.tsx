@@ -32,6 +32,7 @@ import {
   ExpandMoreOutlined,
   Inventory2Outlined,
   OpenInNewOutlined,
+  ShareOutlined,
   SearchOutlined,
   TuneOutlined,
 } from "@mui/icons-material";
@@ -2997,14 +2998,22 @@ export function Versions() {
             {selectedVersion && (
               <>
             {selectedVersion.version && (
-              <Button
-                variant="outlined"
-                endIcon={<OpenInNewOutlined />}
-                onClick={() => openVersionInAzure(selectedVersion.version!)}
-                sx={{ mt: 2 }}
-              >
-                Abrir versão no Azure
-              </Button>
+              <Box sx={{ mt: 2, display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))" }, gap: 1 }}>
+                <Button
+                  variant="outlined"
+                  endIcon={<OpenInNewOutlined />}
+                  onClick={() => openVersionInAzure(selectedVersion.version!)}
+                >
+                  Abrir versão no Azure
+                </Button>
+                <Button
+                  variant="outlined"
+                  startIcon={<ShareOutlined />}
+                  onClick={() => window.dispatchEvent(new CustomEvent("techlead-hub:share-chat", { detail: { label: "Versão", title: selectedVersion.version!, status: selectedVersion.active ? "Ativa" : "Concluída", path: `/versoes?version=${encodeURIComponent(selectedVersion.version!)}` } }))}
+                >
+                  Compartilhar no Chat
+                </Button>
+              </Box>
             )}
             <Box
               sx={{
