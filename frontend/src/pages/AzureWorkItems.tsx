@@ -4266,6 +4266,7 @@ export function AzureWorkItems({
         onClose={
           closeDetail
         }
+        ModalProps={{ disableEnforceFocus: true }}
         slotProps={{
           paper: {
             sx: {
