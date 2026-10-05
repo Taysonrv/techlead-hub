@@ -166,14 +166,14 @@ export function Sidebar() {
     if (!user || floatingHydratedRef.current) return;
     floatingHydratedRef.current = true;
     try {
-      const saved = JSON.parse(localStorage.getItem(`techlead-floating-chats-${user.id}`) || "[]") as Array<{ channelId: number; channelName: string; minimized: boolean }>;
-      setFloatingChats(saved.slice(-3).map((item) => ({ ...item, unread: 0, typingNames: [], messages: [] })));
+      // Janelas flutuantes são transitórias. Não devem reaparecer ao navegar ou recarregar.
+      localStorage.removeItem(`techlead-floating-chats-${user.id}`);
+      setFloatingChats([]);
     } catch { localStorage.removeItem(`techlead-floating-chats-${user.id}`); }
   }, [user]);
 
   useEffect(() => {
-    if (!user || !floatingHydratedRef.current) return;
-    localStorage.setItem(`techlead-floating-chats-${user.id}`, JSON.stringify(floatingChats.map(({ channelId, channelName, minimized }) => ({ channelId, channelName, minimized }))));
+    // Não persiste mini-chats: abrir/fechar é uma decisão da sessão de navegação atual.
   }, [floatingChats, user]);
 
   const [
@@ -990,13 +990,13 @@ export function Sidebar() {
         </Paper>
       </Snackbar>
 
-      {location.pathname !== "/chat" && <Box sx={{ position: "fixed", right: 18, bottom: 18, zIndex: (theme) => theme.zIndex.modal + 10, display: "flex", flexDirection: "row-reverse", alignItems: "flex-end", gap: 1.25, pointerEvents: "none" }}>
+      {location.pathname !== "/chat" && floatingChats.length > 0 && <Box sx={{ position: "fixed", right: 18, bottom: 18, zIndex: (theme) => theme.zIndex.modal + 10, display: "flex", flexDirection: "row-reverse", alignItems: "flex-end", gap: 1.25, pointerEvents: "none" }}>
         {floatingChats.map((chat) => <Paper key={chat.channelId} elevation={16} sx={{ width: chat.minimized ? 230 : 310, height: chat.minimized ? 48 : 390, display: "flex", flexDirection: "column", overflow: "hidden", borderRadius: 2.5, border: "1px solid", borderColor: "divider", boxShadow: "0 18px 48px rgba(15,23,42,.24)", pointerEvents: "auto", transition: "height .18s ease,width .18s ease" }}>
           <Stack direction="row" sx={{ minHeight: 48, px: 1.15, alignItems: "center", bgcolor: (theme) => theme.palette.mode === "dark" ? "#18232f" : "#f7faf9", color: "text.primary", borderBottom: "1px solid", borderColor: "divider" }}>
             <Box sx={{ position: "relative", width: 30, height: 30, mr: .8, borderRadius: "50%", bgcolor: "action.selected", color: "text.primary", border: "1px solid", borderColor: "divider", display: "grid", placeItems: "center", fontWeight: 900 }}>{(chat.peerName || chat.channelName).slice(0,1).toUpperCase()}{chat.peerId && <Circle sx={{ position: "absolute", right: -1, bottom: -1, fontSize: 9, color: chat.presence === "ONLINE" ? "success.main" : chat.presence === "AWAY" ? "warning.main" : chat.presence === "BUSY" ? "error.main" : "text.disabled", stroke: "background.paper", strokeWidth: 4 }} />}</Box>
             <Box onClick={() => setFloatingChats((current) => current.map((item) => item.channelId === chat.channelId ? { ...item, minimized: !item.minimized, unread: 0 } : item))} sx={{ minWidth: 0, flex: 1, cursor: "pointer" }}><Typography variant="body2" noWrap sx={{ fontWeight: 850 }}>{chat.channelName}</Typography>{chat.peerId && <Typography variant="caption" sx={{ display: "block", lineHeight: 1, opacity: .72 }}>{chat.presence === "ONLINE" ? "Online" : chat.presence === "AWAY" ? "Ausente" : chat.presence === "BUSY" ? "Ocupado" : "Offline"}</Typography>}</Box>
             {chat.unread > 0 && <Badge badgeContent={chat.unread} color="error" sx={{ mr: 1 }} />}
-            <Tooltip title="Buscar nesta conversa"><IconButton size="small" color="inherit" onClick={(event) => { event.stopPropagation(); setFloatingSearchOpen((current) => ({ ...current, [chat.channelId]: !current[chat.channelId] })); }}><SearchOutlined fontSize="small" /></IconButton></Tooltip><Tooltip title="Abrir na Central de Conversas"><IconButton size="small" color="inherit" onClick={(event) => { event.stopPropagation(); navigate(`/chat?channel=${chat.channelId}`); }}><OpenInFullRounded fontSize="small" /></IconButton></Tooltip><Tooltip title={chat.minimized ? "Restaurar" : "Minimizar"}><IconButton size="small" color="inherit"><RemoveRounded fontSize="small" /></IconButton></Tooltip>
+            <Tooltip title="Buscar nesta conversa"><IconButton size="small" color="inherit" onClick={(event) => { event.stopPropagation(); setFloatingSearchOpen((current) => ({ ...current, [chat.channelId]: !current[chat.channelId] })); }}><SearchOutlined fontSize="small" /></IconButton></Tooltip><Tooltip title="Abrir no Hub de Conversas"><IconButton size="small" color="inherit" onClick={(event) => { event.stopPropagation(); navigate(`/chat?channel=${chat.channelId}`); }}><OpenInFullRounded fontSize="small" /></IconButton></Tooltip><Tooltip title={chat.minimized ? "Restaurar" : "Minimizar"}><IconButton size="small" color="inherit"><RemoveRounded fontSize="small" /></IconButton></Tooltip>
             <Tooltip title="Fechar"><IconButton size="small" color="inherit" onClick={(event) => { event.stopPropagation(); setFloatingChats((current) => current.filter((item) => item.channelId !== chat.channelId)); }}><CloseRounded fontSize="small" /></IconButton></Tooltip>
           </Stack>
           {!chat.minimized && <>
