@@ -167,8 +167,15 @@ api.interceptors.response.use(
       }));
     }
 
+    const payload = error.response?.data as { error?: string; message?: string; code?: string } | undefined;
+    const authFailure = status === 401 && (
+      payload?.code === "SESSION_EXPIRED" ||
+      payload?.code === "SESSION_INVALID" ||
+      /sessão expirada|sessao expirada|sessão inválida|sessao invalida|token inválido|token invalido/i.test(payload?.error || payload?.message || "")
+    );
+
     if (
-      status === 401 &&
+      authFailure &&
       !isLoginRequest
     ) {
       removeAccessToken();
