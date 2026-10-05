@@ -57,6 +57,7 @@ import { calculateTimestampSla } from "../utils/timestampSla";
 import { useFilters } from "../context/FiltersContext";
 import { PeriodFilter } from "../components/PeriodFilter";
 import { PageHeader } from "../components/PageHeader";
+import { ContentState } from "../components/ContentState";
 import { ExportTicketsButton } from "../components/ExportTicketsButton";
 import { detailDrawerPaperSx } from "../theme/layoutTokens";
 import { KpiCard as ExecutiveKpiCard } from "../components/KpiCard";
@@ -1387,23 +1388,7 @@ export function Clients() {
   ======================================================= */
 
   if (loading) {
-    return (
-      <Box
-        sx={{
-          display: "flex",
-          justifyContent:
-            "center",
-          mt: 8,
-        }}
-      >
-        <CircularProgress
-          sx={{
-            color:
-              aliareColors.green,
-          }}
-        />
-      </Box>
-    );
+    return <ContentState kind="loading" title="Carregando visão executiva" minHeight={360} />;
   }
 
   if (error) {
