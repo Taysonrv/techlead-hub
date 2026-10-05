@@ -38,6 +38,7 @@ export function Chat() {
   const [favorites, setFavorites] = useState<number[]>(() => { try { return JSON.parse(localStorage.getItem("techlead-chat-favorites") || "[]"); } catch { return []; } });
   const [soundEnabled, setSoundEnabled] = useState(() => localStorage.getItem("techlead-chat-sound") !== "off");
   const [directOpen, setDirectOpen] = useState(false);
+  const [openingDirectId, setOpeningDirectId] = useState<number | null>(null);
   const typingTimer = useRef<number | null>(null);
   const lastRealtimeMessageId = useRef<number | null>(null);
   const [presence, setPresence] = useState<Presence[]>([]);
@@ -60,7 +61,22 @@ export function Chat() {
 
   const loadChannels = useCallback(async () => {
     const response = await api.get<{ channels: Channel[] }>("/chat/channels");
-    const nextChannels = response.data.channels;
+    const rawChannels = Array.isArray(response.data.channels) ? response.data.channels : [];
+    const directByPeer = new Map<number, Channel>();
+    const nextChannels = rawChannels.filter((channel) => {
+      if (channel.type !== "DIRECT") return true;
+      const peerId = channel.members?.map((member) => member.user.id).find((id) => id !== user?.id);
+      if (!peerId) return true;
+      const existing = directByPeer.get(peerId);
+      if (!existing) { directByPeer.set(peerId, channel); return true; }
+      const existingLatest = existing.messages?.[existing.messages.length - 1]?.id ?? 0;
+      const currentLatest = channel.messages?.[channel.messages.length - 1]?.id ?? 0;
+      if (currentLatest > existingLatest || channel.unread > existing.unread) {
+        const index = rawChannels.indexOf(existing);
+        if (index >= 0) directByPeer.set(peerId, channel);
+      }
+      return false;
+    });
     const previous = previousChannelState.current;
     if (previous.size) {
       const incoming = nextChannels
@@ -111,10 +127,24 @@ export function Chat() {
   }, []);
 
   useEffect(() => {
-    void Promise.all([
-      loadChannels(),
-      api.get<{ participants: Person[] }>("/chat/participants").then((response) => setParticipants(response.data.participants)),
-    ]).catch(() => { setError("Não foi possível carregar os canais."); setLoading(false); });
+    let active = true;
+    const bootstrap = async () => {
+      const [channelsResult, participantsResult] = await Promise.allSettled([
+        loadChannels(),
+        api.get<{ participants: Person[] }>("/chat/participants"),
+      ]);
+      if (!active) return;
+      if (participantsResult.status === "fulfilled") setParticipants(participantsResult.value.data.participants);
+      if (channelsResult.status === "rejected") {
+        const requestError = channelsResult.reason as { response?: { data?: { error?: string } } };
+        setError(requestError?.response?.data?.error || "Não foi possível carregar os canais.");
+      } else {
+        setError("");
+      }
+      setLoading(false);
+    };
+    void bootstrap();
+    return () => { active = false; };
   }, [loadChannels]);
   useEffect(() => {
     if (!selectedId) { setLoading(false); return; }
@@ -188,12 +218,30 @@ export function Chat() {
   }, [availability, statusMessage]);
 
   async function openDirect(person: Person) {
+    if (openingDirectId) return;
+    const existing = channels.find((channel) =>
+      channel.type === "DIRECT" &&
+      channel.members?.some((member) => member.user.id === person.id) &&
+      channel.members?.some((member) => member.user.id === user?.id),
+    );
+    if (existing) {
+      setSelectedId(existing.id);
+      setDirectOpen(false);
+      setError("");
+      return;
+    }
     try {
+      setOpeningDirectId(person.id);
       const response = await api.post<Channel>(`/chat/direct/${person.id}`);
       await loadChannels();
       setSelectedId(response.data.id);
       setDirectOpen(false);
-    } catch (requestError: any) { setError(requestError?.response?.data?.error || "Não foi possível iniciar a conversa privada."); }
+      setError("");
+    } catch (requestError: any) {
+      setError(requestError?.response?.data?.error || "Não foi possível iniciar a conversa privada.");
+    } finally {
+      setOpeningDirectId(null);
+    }
   }
 
   const toggleFavorite = (channelId: number) => setFavorites((current) => {
@@ -393,7 +441,7 @@ export function Chat() {
     </Dialog>
     <Popover open={Boolean(emojiAnchor)} anchorEl={emojiAnchor} onClose={() => setEmojiAnchor(null)} anchorOrigin={{ vertical: "top", horizontal: "left" }} transformOrigin={{ vertical: "bottom", horizontal: "left" }}><Box sx={{ display: "grid", gridTemplateColumns: "repeat(5, 42px)", gap: .5, p: 1 }}>{emojis.map((emoji) => <IconButton key={emoji} onClick={() => { append(emoji); setEmojiAnchor(null); }} sx={{ fontSize: 22 }}>{emoji}</IconButton>)}</Box></Popover>
     <Dialog open={stickersOpen} onClose={() => setStickersOpen(false)} maxWidth="xs" fullWidth><DialogTitle>Figurinhas rápidas</DialogTitle><DialogContent><Box sx={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 1, pt: .5 }}>{stickers.map((sticker) => <Button key={sticker} variant="outlined" onClick={() => { append(sticker); setStickersOpen(false); }} sx={{ minHeight: 72, fontWeight: 850 }}>{sticker}</Button>)}</Box></DialogContent></Dialog>
-    <Dialog open={directOpen} onClose={() => setDirectOpen(false)} fullWidth maxWidth="xs"><DialogTitle>Nova conversa privada</DialogTitle><DialogContent><List>{participants.filter((person) => person.id !== user?.id).map((person) => <ListItemButton key={person.id} onClick={() => void openDirect(person)} sx={{ borderRadius: 1.5 }}><Box sx={{ width: 34, height: 34, borderRadius: "50%", bgcolor: "action.hover", display: "grid", placeItems: "center", mr: 1.2, fontWeight: 900 }}>{person.name.slice(0,1)}</Box><ListItemText primary={person.name} secondary={`@${person.username} · ${person.role}`} /></ListItemButton>)}</List></DialogContent></Dialog>
+    <Dialog open={directOpen} onClose={() => setDirectOpen(false)} fullWidth maxWidth="xs"><DialogTitle>Nova conversa privada</DialogTitle><DialogContent><List>{participants.filter((person) => person.id !== user?.id).map((person) => { const existingDirect = channels.some((channel) => channel.type === "DIRECT" && channel.members?.some((member) => member.user.id === person.id) && channel.members?.some((member) => member.user.id === user?.id)); return <ListItemButton key={person.id} disabled={openingDirectId === person.id} onClick={() => void openDirect(person)} sx={{ borderRadius: 1.5 }}><Box sx={{ width: 34, height: 34, borderRadius: "50%", bgcolor: "action.hover", display: "grid", placeItems: "center", mr: 1.2, fontWeight: 900 }}>{person.name.slice(0,1)}</Box><ListItemText primary={person.name} secondary={existingDirect ? "Conversa já iniciada · clique para abrir" : `@${person.username} · ${person.role}`} /></ListItemButton>; })}</List></DialogContent></Dialog>
     <Dialog open={createOpen} onClose={() => setCreateOpen(false)} fullWidth maxWidth="sm">
       <DialogTitle>Novo canal da equipe</DialogTitle>
       <DialogContent>
