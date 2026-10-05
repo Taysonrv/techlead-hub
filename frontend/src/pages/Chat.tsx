@@ -416,19 +416,19 @@ export function Chat() {
   const append = (value: string) => setContent((current) => current ? `${current} ${value}` : value);
 
   return <Stack spacing={1} sx={{ height: "100%", maxHeight: "100%", minHeight: 0, overflow: "hidden", p: { xs: 1, md: 1.25 }, boxSizing: "border-box", bgcolor: "background.default" }}>
-    <Paper elevation={0} sx={{ flexShrink: 0, minHeight: 76, px: 2, py: 1.15, borderRadius: 3.5, border: "1px solid", borderColor: "divider", borderLeft: "4px solid", borderLeftColor: "rgba(24,199,122,.72)", overflow: "hidden", background: (theme) => theme.palette.mode === "dark" ? "linear-gradient(105deg,#151b23,#182230 58%,#131922)" : "linear-gradient(105deg,#ffffff,#f7fafc 58%,#f3f7fb)", boxShadow: "0 8px 26px rgba(15,23,42,.055)" }}>
-      <Stack direction="row" spacing={1.35} sx={{ alignItems: "center", minWidth: 0, pr: { md: 31 } }}>
-        <Box sx={{ width: 42, height: 42, borderRadius: 2.5, display: "grid", placeItems: "center", flexShrink: 0, color: "primary.main", bgcolor: "background.paper", border: "1px solid rgba(24,199,122,.22)", boxShadow: "0 5px 16px rgba(24,199,122,.09)" }}><ForumOutlined /></Box>
+    <Paper elevation={0} sx={{ flexShrink: 0, minHeight: 62, px: 1.6, py: .8, borderRadius: 3.5, border: "1px solid", borderColor: "divider", borderLeft: "4px solid", borderLeftColor: "rgba(24,199,122,.72)", overflow: "hidden", background: (theme) => theme.palette.mode === "dark" ? "linear-gradient(105deg,#151b23,#182230 58%,#131922)" : "linear-gradient(105deg,#ffffff,#f7fafc 58%,#f3f7fb)", boxShadow: "0 8px 26px rgba(15,23,42,.055)" }}>
+      <Stack direction="row" spacing={1.35} sx={{ alignItems: "center", minWidth: 0, pr: { md: 28 } }}>
+        <Box sx={{ width: 36, height: 36, borderRadius: 2, display: "grid", placeItems: "center", flexShrink: 0, color: "primary.main", bgcolor: "background.paper", border: "1px solid rgba(24,199,122,.22)", boxShadow: "0 5px 16px rgba(24,199,122,.09)" }}><ForumOutlined /></Box>
         <Box sx={{ minWidth: 0, flex: 1 }}>
-          <Stack direction="row" spacing={.8} sx={{ alignItems: "center" }}><Typography sx={{ fontWeight: 950, fontSize: "1.22rem", lineHeight: 1.05, letterSpacing: "-.025em", whiteSpace: "nowrap" }}>Hub de Conversas</Typography><Chip size="small" label={{ ONLINE: "Online", AWAY: "Ausente", BUSY: "Ocupado" }[availability]} color={availability === "BUSY" ? "error" : availability === "AWAY" ? "warning" : "success"} onClick={() => { const next = availability === "ONLINE" ? "AWAY" : availability === "AWAY" ? "BUSY" : "ONLINE"; setAvailability(next); localStorage.setItem("techlead-chat-status", next); }} sx={{ height: 22, fontWeight: 850 }} /></Stack>
+          <Stack direction="row" spacing={.8} sx={{ alignItems: "center" }}><Typography sx={{ fontWeight: 950, fontSize: "1.08rem", lineHeight: 1.05, letterSpacing: "-.025em", whiteSpace: "nowrap" }}>Hub de Conversas</Typography><Chip size="small" label={{ ONLINE: "Online", AWAY: "Ausente", BUSY: "Ocupado" }[availability]} color={availability === "BUSY" ? "error" : availability === "AWAY" ? "warning" : "success"} onClick={() => { const next = availability === "ONLINE" ? "AWAY" : availability === "AWAY" ? "BUSY" : "ONLINE"; setAvailability(next); localStorage.setItem("techlead-chat-status", next); }} sx={{ height: 22, fontWeight: 850 }} /></Stack>
           <Stack direction="row" spacing={.8} sx={{ alignItems: "center", minWidth: 0 }}><Typography variant="caption" color="text.secondary" noWrap>Mensagens, presença e colaboração em tempo real</Typography>{statusMessage && <Typography variant="caption" color="text.secondary" noWrap sx={{ opacity: .75 }}>· {statusMessage}</Typography>}</Stack>
         </Box>
       </Stack>
     </Paper>
     {error && <Alert severity="error" onClose={() => setError("")}>{error}</Alert>}
-    <Paper elevation={0} sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "300px minmax(0,1fr)", xl: conversationInfoOpen ? "300px minmax(0,1fr) 260px" : "300px minmax(0,1fr)" }, minHeight: 0, flex: 1, overflow: "hidden", borderRadius: 3, maxHeight: "100%", height: "100%", border: "1px solid", borderColor: "divider", boxShadow: "0 14px 38px rgba(15,23,42,.07)", bgcolor: "background.paper" }}>
+    <Paper elevation={0} sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "260px minmax(0,1fr)", xl: conversationInfoOpen ? "260px minmax(0,1fr) 280px" : "260px minmax(0,1fr)" }, minHeight: 0, flex: 1, overflow: "hidden", borderRadius: 3, maxHeight: "100%", height: "100%", border: "1px solid", borderColor: "divider", boxShadow: "0 14px 38px rgba(15,23,42,.07)", bgcolor: "background.paper" }}>
       <Box sx={{ borderRight: { md: "none" }, borderColor: "divider", position: "relative", "&::after": { content: '""', position: "absolute", top: 14, bottom: 14, right: 0, width: "1px", background: "linear-gradient(180deg,transparent,rgba(148,163,184,.30) 18%,rgba(148,163,184,.20) 82%,transparent)" }, minHeight: 0, overflowY: "auto", overscrollBehavior: "contain", bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(255,255,255,.018)" : "rgba(248,250,252,.72)" }}>
-        <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between", px: 1.75, py: 1.35, minHeight: 62 }}>
+        <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between", px: 1.35, py: 1, minHeight: 52 }}>
           <Box sx={{ minWidth: 0, pl: .25 }}><Stack direction="row" spacing={.7} sx={{ alignItems: "center" }}><Typography sx={{ fontWeight: 900, lineHeight: 1.2 }}>Conversas</Typography>{totalUnread > 0 && <Chip size="small" color="primary" label={totalUnread > 99 ? "99+" : totalUnread} sx={{ height: 20, fontWeight: 900 }} />}</Stack><Typography variant="caption" color="text.secondary">{channels.length} conversa(s){totalUnread ? ` · ${totalUnread} não lida(s)` : ""}</Typography></Box>
           <Stack direction="row">
             {["ADMIN","COORDENADOR"].includes(user?.role ?? "") && <Tooltip title="Consolidar conversas privadas duplicadas"><span><IconButton size="small" disabled={maintenanceRunning} onClick={() => void consolidateDirectDuplicates()}>{maintenanceRunning ? <CircularProgress size={17} /> : <CleaningServicesOutlined fontSize="small" />}</IconButton></span></Tooltip>}
@@ -444,18 +444,18 @@ export function Chat() {
             const previousChannel = sortedVisibleChannels[index - 1];
             const previousGroup = previousChannel ? (favorites.includes(previousChannel.id) ? "Favoritos" : previousChannel.type === "DIRECT" ? "Recentes" : "Equipes") : null;
             return <Box key={channel.id}>
-              {group !== previousGroup && <Typography variant="overline" sx={{ display: "block", px: 1.75, pt: index ? 1.2 : 1, pb: .25, fontSize: ".61rem", lineHeight: 1.4, letterSpacing: ".09em", fontWeight: 900, color: "text.secondary" }}>{group}</Typography>}
+              {group !== previousGroup && <Typography variant="overline" sx={{ display: "block", px: 1.35, pt: index ? .9 : .7, pb: .2, fontSize: ".61rem", lineHeight: 1.4, letterSpacing: ".09em", fontWeight: 900, color: "text.secondary" }}>{group}</Typography>}
               
               <ListItemButton
                 key={channel.id}
                 selected={channel.id === selectedId}
                 onClick={() => setSelectedId(channel.id)}
                 sx={{
-                  py: .72,
-                  px: 1.25,
-                  mx: 1,
-                  my: .4,
-                  minHeight: 58,
+                  py: .58,
+                  px: 1,
+                  mx: .7,
+                  my: .28,
+                  minHeight: 52,
                   borderRadius: 2,
                   transition: "background-color .18s ease, transform .18s ease",
                   "&:hover": { transform: "translateX(2px)" },
@@ -463,7 +463,7 @@ export function Chat() {
                   "&.Mui-selected:hover": { bgcolor: "action.selected" },
                 }}
               >
-                <Box sx={{ position: "relative", mr: 1.1, width: 36, height: 36, minWidth: 36, flex: "0 0 36px", borderRadius: "50%", bgcolor: channel.id === selectedId ? (theme) => theme.palette.mode === "dark" ? "rgba(24,199,122,.14)" : "rgba(24,199,122,.09)" : "action.hover", display: "grid", placeItems: "center", fontWeight: 900, color: channel.id === selectedId ? "primary.main" : "text.primary", border: "1px solid", borderColor: channel.id === selectedId ? "rgba(24,199,122,.32)" : "divider", boxShadow: "none" }}>
+                <Box sx={{ position: "relative", mr: 1.1, width: 32, height: 32, minWidth: 32, flex: "0 0 32px", borderRadius: "50%", bgcolor: channel.id === selectedId ? (theme) => theme.palette.mode === "dark" ? "rgba(24,199,122,.14)" : "rgba(24,199,122,.09)" : "action.hover", display: "grid", placeItems: "center", fontWeight: 900, color: channel.id === selectedId ? "primary.main" : "text.primary", border: "1px solid", borderColor: channel.id === selectedId ? "rgba(24,199,122,.32)" : "divider", boxShadow: "none" }}>
                   {channel.name.slice(0,1).toUpperCase()}
                   <Circle sx={{ position: "absolute", width: 11, height: 11, right: 0, bottom: 0, color: "success.main", stroke: "background.paper", strokeWidth: 4 }} />
                 </Box>
