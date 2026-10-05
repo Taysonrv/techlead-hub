@@ -19,6 +19,10 @@ import {
   Paper,
   TextField,
   Tooltip,
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  Chip,
 } from "@mui/material";
 
 import {
@@ -146,6 +150,15 @@ export function Sidebar() {
   const [floatingSearch, setFloatingSearch] = useState<Record<number, string>>({});
   const [floatingSearchOpen, setFloatingSearchOpen] = useState<Record<number, boolean>>({});
   const [shareContext, setShareContext] = useState<{ label: string; recordId?: number; title: string; client?: string | null; status?: string | null; path: string } | null>(null);
+  type SharePerson = { id: number; name: string; username: string; role: string };
+  type ShareChannel = { id: number; name: string; type: string; updatedAt?: string; members?: Array<{ user: SharePerson }> };
+  const [sharePickerOpen, setSharePickerOpen] = useState(false);
+  const [sharePeople, setSharePeople] = useState<SharePerson[]>([]);
+  const [shareChannels, setShareChannels] = useState<ShareChannel[]>([]);
+  const [sharePresence, setSharePresence] = useState<Array<{ userId: number; effectiveStatus: "ONLINE" | "AWAY" | "BUSY" | "OFFLINE" }>>([]);
+  const [shareSearch, setShareSearch] = useState("");
+  const [shareSendingTo, setShareSendingTo] = useState<number | null>(null);
+  const [sharePickerLoading, setSharePickerLoading] = useState(false);
   const floatingPollRef = useRef<number | null>(null);
   const floatingHydratedRef = useRef(false);
 
@@ -299,19 +312,39 @@ export function Sidebar() {
       if (!detail?.title) return;
       const context = { label: detail.label || "Registro", recordId: detail.recordId, title: detail.title, client: detail.client, status: detail.status, path: detail.path || location.pathname + location.search };
       setShareContext(context);
-      if (location.pathname === "/chat") {
-        navigate(`/chat?share=${encodeURIComponent(JSON.stringify(context))}`);
-        return;
-      }
-      if (floatingChats.length === 0) {
-        navigate(`/chat?share=${encodeURIComponent(JSON.stringify(context))}`);
-        return;
-      }
-      setFloatingChats((current) => current.map((item) => ({ ...item, minimized: false })));
+      setShareSearch("");
+      setSharePickerOpen(true);
+      setSharePickerLoading(true);
+      void Promise.all([
+        api.get<{ participants: SharePerson[] }>("/chat/participants"),
+        api.get<{ channels: ShareChannel[] }>("/chat/channels"),
+        api.get<{ presence: Array<{ userId: number; effectiveStatus: "ONLINE" | "AWAY" | "BUSY" | "OFFLINE" }> }>("/chat/realtime"),
+      ]).then(([people, channels, realtime]) => {
+        setSharePeople(people.data.participants || []);
+        setShareChannels(channels.data.channels || []);
+        setSharePresence(realtime.data.presence || []);
+      }).finally(() => setSharePickerLoading(false));
     };
     window.addEventListener("techlead-hub:share-chat", receiveShare);
     return () => window.removeEventListener("techlead-hub:share-chat", receiveShare);
   }, [location.pathname, location.search, navigate, floatingChats.length]);
+
+  const sendSharedRecordToPerson = useCallback(async (person: SharePerson) => {
+    if (!shareContext || shareSendingTo) return;
+    setShareSendingTo(person.id);
+    try {
+      const existing = shareChannels.find((channel) => channel.type === "DIRECT" && channel.members?.some((member) => member.user.id === person.id) && channel.members?.some((member) => member.user.id === user?.id));
+      const channel = existing ?? (await api.post<ShareChannel>(`/chat/direct/${person.id}`)).data;
+      const content = `[hub-card]${JSON.stringify({ type: shareContext.label, id: shareContext.recordId, title: shareContext.title, client: shareContext.client || null, status: shareContext.status || null, path: shareContext.path })}`;
+      await api.post(`/chat/channels/${channel.id}/messages`, { content });
+      setSharePickerOpen(false);
+      setShareContext(null);
+      setShareChannels((current) => current.some((item) => item.id === channel.id) ? current : [channel, ...current]);
+      await openFloatingChat(channel.id, channel.name || person.name);
+    } catch {
+      navigate(`/chat?share=${encodeURIComponent(JSON.stringify(shareContext))}`);
+    } finally { setShareSendingTo(null); }
+  }, [shareContext, shareSendingTo, shareChannels, user?.id, openFloatingChat, navigate]);
 
   const shareIntoFloatingChat = useCallback((channelId: number) => {
     if (!shareContext) return;
@@ -986,6 +1019,24 @@ export function Sidebar() {
           </>}
         </Paper>)}
       </Box>}
+
+      <Dialog open={sharePickerOpen} onClose={() => { if (!shareSendingTo) { setSharePickerOpen(false); setShareContext(null); } }} fullWidth maxWidth="xs">
+        <DialogTitle sx={{ pb: 1 }}><Typography variant="h6" sx={{ fontWeight: 900 }}>Enviar para...</Typography>{shareContext && <Typography variant="body2" color="text.secondary" noWrap>{shareContext.label}{shareContext.recordId ? ` #${shareContext.recordId}` : ""} · {shareContext.title}</Typography>}</DialogTitle>
+        <DialogContent>
+          <TextField autoFocus fullWidth size="small" placeholder="Buscar pessoa..." value={shareSearch} onChange={(event) => setShareSearch(event.target.value)} sx={{ mb: 1.25 }} slotProps={{ input: { startAdornment: <SearchOutlined sx={{ mr: .7, fontSize: 18, color: "text.secondary" }} /> } }} />
+          {sharePickerLoading ? <Box sx={{ py: 5, display: "grid", placeItems: "center" }}><CircularProgress size={26} /></Box> : <>
+            {(() => {
+              const directPeerIds = shareChannels.filter((channel) => channel.type === "DIRECT").flatMap((channel) => channel.members?.map((member) => member.user.id).filter((id) => id !== user?.id) || []);
+              const filtered = sharePeople.filter((person) => person.id !== user?.id && [person.name, person.username, person.role].some((value) => value.toLowerCase().includes(shareSearch.toLowerCase())));
+              const recent = filtered.filter((person) => directPeerIds.includes(person.id)).slice(0, 6);
+              const online = filtered.filter((person) => !directPeerIds.includes(person.id) && sharePresence.some((entry) => entry.userId === person.id && entry.effectiveStatus === "ONLINE"));
+              const others = filtered.filter((person) => !recent.includes(person) && !online.includes(person));
+              const section = (title: string, people: SharePerson[]) => people.length ? <Box sx={{ mb: 1 }}><Typography variant="overline" color="text.secondary" sx={{ fontWeight: 900 }}>{title}</Typography>{people.map((person) => { const status = sharePresence.find((entry) => entry.userId === person.id)?.effectiveStatus || "OFFLINE"; return <ListItemButton key={person.id} disabled={Boolean(shareSendingTo)} onClick={() => void sendSharedRecordToPerson(person)} sx={{ borderRadius: 1.5, px: 1, py: .7 }}><Box sx={{ position: "relative", width: 36, height: 36, mr: 1.1, borderRadius: "50%", bgcolor: "action.hover", display: "grid", placeItems: "center", fontWeight: 900 }}>{person.name.slice(0,1).toUpperCase()}<Circle sx={{ position: "absolute", right: -1, bottom: -1, fontSize: 9, color: status === "ONLINE" ? "success.main" : status === "AWAY" ? "warning.main" : status === "BUSY" ? "error.main" : "text.disabled" }} /></Box><ListItemText primary={person.name} secondary={`@${person.username} · ${person.role}`} />{status === "ONLINE" && <Chip size="small" label="Online" color="success" variant="outlined" />}{shareSendingTo === person.id && <CircularProgress size={18} sx={{ ml: 1 }} />}</ListItemButton>; })}</Box> : null;
+              return <>{section("Recentes", recent)}{section("Online", online)}{section("Outras pessoas", others)}</>;
+            })()}
+          </>}
+        </DialogContent>
+      </Dialog>
 
       <BugReportDialog open={feedbackOpen} onClose={() => setFeedbackOpen(false)} />
 
