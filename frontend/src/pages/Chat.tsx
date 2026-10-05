@@ -1,4 +1,4 @@
-import { AddCommentOutlined, ForumOutlined, SendRounded, EmojiEmotionsOutlined, CelebrationOutlined, NotificationsActiveOutlined, ReplyOutlined, CloseOutlined, SearchOutlined, Circle, MoreHorizOutlined, DeleteOutlineRounded, StarOutlineRounded, VolumeOffOutlined, AttachFileRounded, DownloadRounded, CleaningServicesOutlined, GroupsOutlined, PersonOutlineRounded, InfoOutlined, OpenInNewOutlined, BoltOutlined, AssignmentTurnedInOutlined, PushPinOutlined, AlternateEmailOutlined } from "@mui/icons-material";
+import { AddCommentOutlined, ForumOutlined, SendRounded, EmojiEmotionsOutlined, CelebrationOutlined, NotificationsActiveOutlined, ReplyOutlined, CloseOutlined, SearchOutlined, Circle, MoreHorizOutlined, DeleteOutlineRounded, StarOutlineRounded, VolumeOffOutlined, AttachFileRounded, DownloadRounded, CleaningServicesOutlined, GroupsOutlined, PersonOutlineRounded, InfoOutlined, OpenInNewOutlined, BoltOutlined, AssignmentTurnedInOutlined, PushPinOutlined, AlternateEmailOutlined, KeyboardArrowDownRounded } from "@mui/icons-material";
 import { Alert, Box, Button, Checkbox, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Divider, FormControlLabel, IconButton, List, ListItemButton, ListItemIcon, ListItemText, Menu, MenuItem, Paper, Popover, Skeleton, Snackbar, Stack, TextField, Tooltip, Typography } from "@mui/material";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -25,6 +25,7 @@ export function Chat() {
   const [quickActionsAnchor, setQuickActionsAnchor] = useState<HTMLElement | null>(null);
   const [loading, setLoading] = useState(false);
   const [channelsLoading, setChannelsLoading] = useState(true);
+  const [showJumpToLatest, setShowJumpToLatest] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
@@ -94,20 +95,25 @@ export function Chat() {
     const response = await api.get<{ channels: Channel[] }>("/chat/channels");
     const rawChannels = Array.isArray(response.data.channels) ? response.data.channels : [];
     const directByPeer = new Map<number, Channel>();
-    const nextChannels = rawChannels.filter((channel) => {
-      if (channel.type !== "DIRECT") return true;
+    const nonDirect: Channel[] = [];
+    rawChannels.forEach((channel) => {
+      if (channel.type !== "DIRECT") { nonDirect.push(channel); return; }
       const peerId = channel.members?.map((member) => member.user.id).find((id) => id !== user?.id);
-      if (!peerId) return true;
+      if (!peerId) { nonDirect.push(channel); return; }
       const existing = directByPeer.get(peerId);
-      if (!existing) { directByPeer.set(peerId, channel); return true; }
+      if (!existing) { directByPeer.set(peerId, channel); return; }
       const existingLatest = existing.messages?.[existing.messages.length - 1]?.id ?? 0;
       const currentLatest = channel.messages?.[channel.messages.length - 1]?.id ?? 0;
-      if (currentLatest > existingLatest || channel.unread > existing.unread) {
-        const index = rawChannels.indexOf(existing);
-        if (index >= 0) directByPeer.set(peerId, channel);
-      }
-      return false;
+      if (currentLatest > existingLatest || (currentLatest === existingLatest && channel.unread > existing.unread)) directByPeer.set(peerId, channel);
     });
+    const nextChannels = [...directByPeer.values(), ...nonDirect];
+    const requestedId = Number(searchParams.get("channel"));
+    const requestedChannel = rawChannels.find((channel) => channel.id === requestedId);
+    if (requestedChannel && !nextChannels.some((channel) => channel.id === requestedChannel.id)) {
+      const requestedPeerId = requestedChannel.members?.map((member) => member.user.id).find((id) => id !== user?.id);
+      const canonical = requestedPeerId ? directByPeer.get(requestedPeerId) : undefined;
+      if (canonical) setSelectedId((current) => current === requestedChannel.id ? canonical.id : current);
+    }
     const previous = previousChannelState.current;
     if (previous.size) {
       const incoming = nextChannels
@@ -190,8 +196,25 @@ export function Chat() {
   useEffect(() => {
     const container = messagesRef.current;
     if (!container) return;
-    container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
+    const nearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 140;
+    if (selectedId || nearBottom || !showJumpToLatest) {
+      container.scrollTo({ top: container.scrollHeight, behavior: selectedId ? "auto" : "smooth" });
+      setShowJumpToLatest(false);
+    }
   }, [messages, selectedId]);
+
+  const handleMessagesScroll = useCallback(() => {
+    const container = messagesRef.current;
+    if (!container) return;
+    setShowJumpToLatest(container.scrollHeight - container.scrollTop - container.clientHeight > 180);
+  }, []);
+
+  const jumpToLatest = useCallback(() => {
+    const container = messagesRef.current;
+    if (!container) return;
+    container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
+    setShowJumpToLatest(false);
+  }, []);
 
   useEffect(() => {
     const unread = channels.reduce((sum, channel) => sum + channel.unread, 0);
@@ -475,14 +498,24 @@ export function Chat() {
                       {favorites.includes(channel.id) && <Typography component="span" sx={{ color: "warning.main", fontSize: ".72rem" }}>★</Typography>}
                     </Stack>
                   }
-                  secondary={channel.clientName || channel.description || (channel.unread ? `${channel.unread} nova(s) mensagem(ns)` : "Canal da equipe")}
+                  secondary={(() => {
+                    const typing = remoteTyping.find((item) => item.channelId === channel.id && item.userId !== user?.id);
+                    if (typing) return `${typing.name} está digitando...`;
+                    const latest = channel.messages?.[channel.messages.length - 1];
+                    if (!latest) return channel.clientName || channel.description || "Sem mensagens ainda";
+                    const preview = latest.content.startsWith("[hub-card]") ? "Compartilhou um registro" : latest.content.startsWith("[anexo] ") ? "📎 Enviou um arquivo" : latest.content.replace(/\s+/g, " ");
+                    return `${latest.author.id === user?.id ? "Você: " : ""}${preview}`;
+                  })()}
                   slotProps={{ secondary: { sx: { fontSize: ".72rem", mt: .25, fontWeight: channel.unread ? 700 : 400, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } } }}
                 />
-                <Stack direction="row" spacing={.4} sx={{ alignItems: "center" }}>
+                <Stack spacing={.15} sx={{ alignItems: "flex-end", ml: .4 }}>
+                  {channel.messages?.length ? <Typography variant="caption" color="text.secondary" sx={{ fontSize: ".62rem", lineHeight: 1 }}>{new Date(channel.messages[channel.messages.length - 1].createdAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</Typography> : null}
+                  <Stack direction="row" spacing={.25} sx={{ alignItems: "center" }}>
                   <Tooltip title={favorites.includes(channel.id) ? "Remover dos favoritos" : "Favoritar"}>
                     <IconButton size="small" onClick={(event) => { event.stopPropagation(); toggleFavorite(channel.id); }} sx={{ width: 28, height: 28, p: .5, fontSize: 16 }}>{favorites.includes(channel.id) ? "★" : "☆"}</IconButton>
                   </Tooltip>
-                  {channel.unread > 0 && <Chip size="small" color="primary" label={channel.unread} />}
+                  {channel.unread > 0 && <Chip size="small" color="primary" label={channel.unread > 99 ? "99+" : channel.unread} sx={{ minWidth: 24, height: 20, fontWeight: 900 }} />}
+                  </Stack>
                 </Stack>
               </ListItemButton>
             </Box>;
@@ -493,7 +526,7 @@ export function Chat() {
       <Box sx={{ display: "flex", flexDirection: "column", minWidth: 0, minHeight: 0, overflow: "hidden" }}>
         <Stack direction="row" spacing={1} sx={{ px: 1.5, py: 1, alignItems: "center", justifyContent: "space-between" }}><Box><Stack direction="row" spacing={.7} sx={{ alignItems: "center" }}><Typography sx={{ fontWeight: 900 }}>{selected?.name || "Selecione uma conversa"}</Typography>{selected && <Chip size="small" icon={<Circle sx={{ fontSize: "9px !important" }} />} label={selected?.type === "DIRECT" ? ({ ONLINE: "Online", AWAY: "Ausente", BUSY: "Ocupado", OFFLINE: "Offline" }[selectedPresence?.effectiveStatus ?? "OFFLINE"]) : `${selected.members?.filter((member) => presence.find((item) => item.userId === member.user.id)?.effectiveStatus !== "OFFLINE").length ?? 0} online`} color={selectedPresence?.effectiveStatus === "BUSY" ? "error" : selectedPresence?.effectiveStatus === "AWAY" ? "warning" : selectedPresence?.effectiveStatus === "ONLINE" ? "success" : "default"} variant="outlined" />}</Stack><Typography variant="caption" color="text.secondary">{selectedPresence?.statusMessage || "Mensagens instantâneas · tempo real"}</Typography></Box><Stack direction="row" spacing={.5}><TextField size="small" value={messageSearch} onChange={(event) => setMessageSearch(event.target.value)} placeholder="Buscar na conversa" sx={{ width: 210 }} slotProps={{ input: { startAdornment: <SearchOutlined sx={{ mr: .5, fontSize: 17, color: "text.secondary" }} /> } }} /><Tooltip title="Informações da conversa"><span><IconButton size="small" disabled={!selected} aria-label="Informações da conversa" onClick={() => setConversationInfoOpen((current) => !current)} color={conversationInfoOpen ? "primary" : "default"}><InfoOutlined /></IconButton></span></Tooltip><IconButton size="small" aria-label="Opções da conversa" onClick={(event) => setConversationMenuAnchor(event.currentTarget)}><MoreHorizOutlined /></IconButton></Stack></Stack>
         <Divider />
-        <Box ref={messagesRef} sx={{ flex: "1 1 0", height: 0, minHeight: 0, overflowY: "auto", overflowX: "hidden", overscrollBehavior: "contain", p: { xs: 1.25, md: 1.75 }, scrollbarWidth: "thin", "&::-webkit-scrollbar": { width: 7 }, "&::-webkit-scrollbar-thumb": { bgcolor: "action.disabled", borderRadius: 8 }, "&::-webkit-scrollbar-track": { bgcolor: "transparent" }, bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(255,255,255,.012)" : "#f8fafb", backgroundImage: (theme) => theme.palette.mode === "dark" ? "radial-gradient(circle at 50% 0%, rgba(148,163,184,.035), transparent 36%)" : "radial-gradient(circle at 50% 0%, rgba(148,163,184,.055), transparent 38%)" }}>
+        <Box ref={messagesRef} onScroll={handleMessagesScroll} sx={{ position: "relative", flex: "1 1 0", height: 0, minHeight: 0, overflowY: "auto", overflowX: "hidden", overscrollBehavior: "contain", p: { xs: 1.25, md: 1.75 }, scrollbarWidth: "thin", "&::-webkit-scrollbar": { width: 7 }, "&::-webkit-scrollbar-thumb": { bgcolor: "action.disabled", borderRadius: 8 }, "&::-webkit-scrollbar-track": { bgcolor: "transparent" }, bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(255,255,255,.012)" : "#f8fafb", backgroundImage: (theme) => theme.palette.mode === "dark" ? "radial-gradient(circle at 50% 0%, rgba(148,163,184,.035), transparent 36%)" : "radial-gradient(circle at 50% 0%, rgba(148,163,184,.055), transparent 38%)" }}>
           {loading ? <Stack spacing={1.1} sx={{ p: 1 }}><Skeleton variant="rounded" width="36%" height={48} /><Skeleton variant="rounded" width="52%" height={68} sx={{ alignSelf: "flex-end" }} /><Skeleton variant="rounded" width="28%" height={44} /></Stack> : visibleMessages.map((message, messageIndex) => {
             const mine = message.author.id === user?.id;
             const messageDay = new Date(message.createdAt).toLocaleDateString("pt-BR");
@@ -507,6 +540,7 @@ export function Chat() {
             return <Box key={message.id}>{showDay && <Stack direction="row" spacing={1} sx={{ alignItems: "center", my: 1.4 }}><Divider sx={{ flex: 1 }} /><Chip size="small" variant="outlined" label={messageDay === new Date().toLocaleDateString("pt-BR") ? "Hoje" : messageDay} sx={{ height: 22, fontSize: ".68rem", color: "text.secondary" }} /><Divider sx={{ flex: 1 }} /></Stack>}<Box sx={{ display: "flex", justifyContent: mine ? "flex-end" : "flex-start", mb: sameAuthor ? .2 : .85, mt: sameAuthor ? 0 : .4 }}><Paper elevation={0} sx={{ maxWidth: { xs: "88%", md: "58%", xl: "54%" }, p: "8px 11px", bgcolor: mine ? (theme) => theme.palette.mode === "dark" ? "rgba(51,65,85,.88)" : "#eef3f7" : mentioned ? "rgba(245,158,11,.10)" : "background.paper", color: "text.primary", border: "1px solid", borderColor: mentioned ? "warning.main" : mine ? "rgba(148,163,184,.32)" : "divider", borderRadius: mine ? "18px 18px 5px 18px" : "18px 18px 18px 5px", boxShadow: mine ? "0 8px 20px rgba(24,199,122,.12)" : "0 5px 16px rgba(15,23,42,.045)" }}><Stack direction="row" spacing={1} sx={{ justifyContent: "space-between", alignItems: "center" }}><Typography variant="caption" sx={{ fontWeight: 800, opacity: .8 }}>{sameAuthor ? "" : message.author.name}</Typography><Stack direction="row" spacing={.15}><Tooltip title={pinState.has(message.id) ? "Desafixar mensagem" : "Fixar mensagem"}><IconButton size="small" onClick={() => void togglePinnedMessage(message.id)} sx={{ color: pinState.has(message.id) ? "primary.main" : "inherit", opacity: pinState.has(message.id) ? 1 : .55 }}><PushPinOutlined sx={{ fontSize: 15 }} /></IconButton></Tooltip><Tooltip title="Responder"><IconButton size="small" onClick={() => setReplyTo(message)} sx={{ color: "inherit", opacity: .65 }}><ReplyOutlined sx={{ fontSize: 16 }} /></IconButton></Tooltip></Stack></Stack>{parent && <Box sx={{ px: 1, py: .6, mb: .6, borderLeft: "3px solid", borderColor: "primary.main", bgcolor: "action.hover", borderRadius: 1 }}><Typography variant="caption" sx={{ fontWeight: 800 }}>{parent.author.name}</Typography><Typography variant="caption" noWrap sx={{ display: "block", maxWidth: 420 }}>{parent.content}</Typography></Box>}{message.content.startsWith("[hub-card]") ? (() => { try { const card = JSON.parse(message.content.slice(10)) as { type: string; id?: number; title: string; client?: string | null; status?: string | null; path: string }; return <Paper elevation={0} sx={{ minWidth: { xs: 220, sm: 310 }, maxWidth: 430, p: 1.25, bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(15,23,42,.42)" : "#ffffff", color: "text.primary", border: "1px solid", borderColor: "divider", borderRadius: 2 }}><Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "center", gap: 1 }}><Chip size="small" label={`${card.type}${card.id ? ` #${card.id}` : ""}`} sx={{ fontWeight: 850 }} />{card.status && <Chip size="small" variant="outlined" label={card.status} />}</Stack><Typography sx={{ mt: .8, fontWeight: 900, lineHeight: 1.3 }}>{card.title}</Typography>{card.client && <Typography variant="body2" sx={{ mt: .4, opacity: .75 }}>Cliente: {card.client}</Typography>}<Button size="small" endIcon={<OpenInNewOutlined />} sx={{ mt: .9, px: 0, color: "inherit", fontWeight: 850 }} onClick={() => navigate(card.path)}>Abrir registro</Button></Paper>; } catch { return <Typography>Registro compartilhado</Typography>; } })() : attachmentInfo(message.content) ? (() => { const attachment = attachmentInfo(message.content)!; return <Paper component="a" href={attachment.href} download={attachment.name} elevation={0} sx={{ display: "flex", alignItems: "center", gap: 1, p: 1, minWidth: 210, maxWidth: 340, textDecoration: "none", color: "inherit", bgcolor: "background.paper", border: "1px solid", borderColor: "divider", borderRadius: 2 }}><Box sx={{ width: 34, height: 34, borderRadius: 1.5, display: "grid", placeItems: "center", bgcolor: "action.hover" }}><AttachFileRounded fontSize="small" /></Box><Box sx={{ minWidth: 0, flex: 1 }}><Typography variant="body2" sx={{ fontWeight: 800 }} noWrap>{attachment.name}</Typography><Typography variant="caption" color="text.secondary">{Math.max(1, Math.round(attachment.size / 1024))} KB</Typography></Box><DownloadRounded fontSize="small" /></Paper>; })() : <Typography sx={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{renderContent(message.content)}</Typography>}<Typography variant="caption" sx={{ display: "block", textAlign: "right", opacity: .7 }}>{new Date(message.createdAt).toLocaleString("pt-BR")}</Typography></Paper></Box></Box>;
           })}
           <div ref={bottomRef} />
+          {showJumpToLatest && <Button variant="contained" size="small" startIcon={<KeyboardArrowDownRounded />} onClick={jumpToLatest} sx={{ position: "sticky", bottom: 10, left: "50%", transform: "translateX(-50%)", zIndex: 4, borderRadius: 99, px: 1.5, boxShadow: "0 10px 28px rgba(15,23,42,.22)", textTransform: "none" }}>Mensagens recentes</Button>}
         </Box>
         <Divider />
         {typingNames.length > 0 && <Typography variant="caption" color="text.secondary" sx={{ px: 1.6, pt: .45 }}>{typingNames.join(", ")} {typingNames.length === 1 ? "está" : "estão"} digitando...</Typography>}
