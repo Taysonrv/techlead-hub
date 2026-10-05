@@ -135,6 +135,7 @@ type Ticket = {
   importSource?: string | null;
   importedAt?: string | null;
   importBatch?: string | null;
+  isWithSimer?: boolean;
 };
 
 type AttentionLevel =
@@ -362,7 +363,8 @@ export function Clients() {
 
         return (
           created >= start &&
-          created <= end
+          created <= end &&
+          ticket.isWithSimer === true
         );
       }
     );
@@ -511,6 +513,24 @@ export function Clients() {
       businessArea,
       executiveArea,
     ]);
+
+  // SLA de solução é uma métrica de saída. O período é determinado pela
+  // resolução, preservando os mesmos filtros locais e o escopo SIMER.
+  const solutionScopedTickets = useMemo(() => {
+    const start = startOfDay(effectiveStartDate);
+    const end = endOfDay(effectiveEndDate);
+    return tickets.filter((ticket) => {
+      if (ticket.isWithSimer !== true || !ticket.resolvedDate) return false;
+      const resolved = new Date(ticket.resolvedDate);
+      if (resolved < start || resolved > end) return false;
+      return (!selectedClient || ticket.client === selectedClient)
+        && (!category || ticket.category === category)
+        && (!status || ticket.status === status)
+        && (!owner || ticket.owner === owner)
+        && (!businessArea || ticket.businessArea === businessArea)
+        && (!executiveArea || classifyExecutiveArea(ticket) === executiveArea);
+    });
+  }, [tickets, effectiveStartDate, effectiveEndDate, selectedClient, category, status, owner, businessArea, executiveArea]);
 
   /* =======================================================
      MÉTRICAS POR CLIENTE
@@ -877,7 +897,7 @@ export function Clients() {
         ).length;
 
       const responseResult = calculateTimestampSla(scopedTickets, "response");
-      const solutionResult = calculateTimestampSla(scopedTickets, "solution");
+      const solutionResult = calculateTimestampSla(solutionScopedTickets, "solution");
       const responseSla = { measured: responseResult.measured, onTime: responseResult.within, percent: responseResult.percentage };
       const solutionSla = { measured: solutionResult.measured, onTime: solutionResult.within, percent: solutionResult.percentage };
       const azureItems = Array.from(new Map(
@@ -902,7 +922,7 @@ export function Clients() {
         azureBlocked: azureItems.filter((item) => item.blockedProcess === true).length,
         azureWithVersion: azureItems.filter((item) => Boolean(item.deliveredVersion?.trim())).length,
       };
-    }, [scopedTickets]);
+    }, [scopedTickets, solutionScopedTickets]);
 
   /* =======================================================
      PIZZA 1 - DISTRIBUIÇÃO POR CLIENTE
@@ -1914,7 +1934,7 @@ export function Clients() {
                 calculation: "Medições no prazo ÷ medições válidas × 100.",
                 source: "Movidesk",
                 reference: "firstResponseDate ≤ firstResponseDueDate",
-                periodRule: "Respeita o recorte atual; itens sem os timestamps necessários ficam fora do denominador.",
+                periodRule: "SLA de solução usa tickets resolvidos no período; itens sem os timestamps necessários ficam fora do denominador.",
               }}
               onClick={() => showTickets("SLA 1ª resposta - tickets medidos", scopedTickets.filter((ticket) => Boolean(ticket.firstResponseDate && ticket.firstResponseDueDate)), "Tickets com timestamps suficientes para medição")}
             />
