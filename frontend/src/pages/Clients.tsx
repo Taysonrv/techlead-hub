@@ -2135,7 +2135,7 @@ export function Clients() {
             >
               <Box
                 sx={{
-                  height: 235,
+                  height: { xs: 215, sm: 225 },
                   minWidth: 0,
                 }}
               >
@@ -2268,8 +2268,8 @@ export function Clients() {
           subtitle="Composição dos assuntos no recorte selecionado"
         >
           {categoryPieData.length ? (
-            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "minmax(170px,.85fr) minmax(0,1.15fr)" }, gap: 1, alignItems: "center" }}>
-              <Box sx={{ height: 235, minWidth: 0 }}>
+            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "minmax(190px,.9fr) minmax(0,1.1fr)" }, gap: 1, alignItems: "center" }}>
+              <Box sx={{ height: { xs: 215, sm: 225 }, minWidth: 0 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie data={categoryChartData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={90} innerRadius={60} paddingAngle={2} cornerRadius={5} stroke={theme.palette.background.paper} strokeWidth={1.5} cursor="pointer"
@@ -2318,7 +2318,7 @@ export function Clients() {
             >
               <Box
                 sx={{
-                  height: 235,
+                  height: { xs: 215, sm: 225 },
                   minWidth: 0,
                 }}
               >
