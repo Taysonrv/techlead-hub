@@ -324,7 +324,7 @@ export function createAppTheme(mode: PaletteMode = "light") {
         styleOverrides: {
           root: {
             background: dark ? "linear-gradient(180deg,#0D3440,#0A2935)" : aliareColors.graphite,
-            "& .MuiTableCell-head": { color: "#FFFFFF", fontWeight: 750, fontSize: ".76rem", letterSpacing: ".035em", textTransform: "uppercase", borderBottomColor: dark ? "rgba(116,166,216,.18)" : aliareColors.graphite },
+            "& .MuiTableCell-head": { color: "#FFFFFF", fontWeight: 750, fontSize: ".74rem", letterSpacing: ".03em", textTransform: "uppercase", borderBottomColor: dark ? "rgba(116,166,216,.18)" : aliareColors.graphite, position: "sticky", top: 0, zIndex: 2 },
           },
         },
       },
@@ -345,9 +345,9 @@ export function createAppTheme(mode: PaletteMode = "light") {
         styleOverrides: {
           root: {
             borderBottomColor: border,
-            padding: "10px 14px",
-            fontSize: ".86rem",
-            lineHeight: 1.45,
+            padding: "9px 12px",
+            fontSize: ".84rem",
+            lineHeight: 1.4,
             ...(dark && { color: "#DCE9F7" }),
           },
         },
@@ -357,7 +357,7 @@ export function createAppTheme(mode: PaletteMode = "light") {
           root: {
             "&:nth-of-type(even)": { backgroundColor: dark ? "rgba(112,160,207,.035)" : "rgba(15,23,42,.018)" },
             "&:hover": { backgroundColor: dark ? "rgba(24,199,122,.075)" : "rgba(24,199,122,.055)" },
-            ...(dark && { transition: "background-color .14s ease", "&:hover td:first-of-type": { boxShadow: "inset 2px 0 #18C77A" } }),
+            ...(dark && { transition: "background-color .14s ease, box-shadow .14s ease", "&:hover td:first-of-type": { boxShadow: "inset 2px 0 #18C77A" } }),
           },
         },
       },
@@ -401,7 +401,7 @@ export function createAppTheme(mode: PaletteMode = "light") {
       MuiTablePagination: {
         styleOverrides: {
           root: {
-            minHeight: 50,
+            minHeight: 46,
             borderTop: `1px solid ${border}`,
             ...(dark && { backgroundColor: "rgba(6,25,36,.82)", color: textSecondary }),
           },
