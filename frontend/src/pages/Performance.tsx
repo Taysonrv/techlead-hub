@@ -1747,9 +1747,6 @@ function DonutCard({
                       ) : (
                         <EmptyState text="Sem dados para este indicador." />
                       )}
-                    </Box>
-            
-            
           </Box>
           <Box sx={{ minWidth: 0, maxHeight: { sm: 225 }, overflowY: "auto", pr: { sm: .5 } }}>
                     {data.length > 0 && (
@@ -1778,9 +1775,9 @@ function DonutCard({
                           );
                         })}
                       </Stack>
-            
+                    )}
           </Box>
-        </Box>        )}
+        </Box>
       </ExecutiveSection>
   );
 }
