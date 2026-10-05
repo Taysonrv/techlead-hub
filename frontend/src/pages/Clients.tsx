@@ -1948,9 +1948,9 @@ export function Clients() {
                 calculation: "Medições no prazo ÷ medições válidas × 100.",
                 source: "Movidesk",
                 reference: "resolvedDate/closedDate ≤ dueDate",
-                periodRule: "Respeita o recorte atual; itens sem os timestamps necessários ficam fora do denominador.",
+                periodRule: "Usa a data de resolução para pertencer ao período; itens sem os timestamps necessários ficam fora do denominador.",
               }}
-              onClick={() => showTickets("SLA solução - tickets medidos", scopedTickets.filter((ticket) => Boolean(ticket.dueDate && (ticket.resolvedDate || ticket.closedDate))), "Tickets com timestamps suficientes para medição")}
+              onClick={() => showTickets("SLA solução - tickets medidos", solutionScopedTickets.filter((ticket) => Boolean(ticket.dueDate && ticket.resolvedDate)), "Tickets com timestamps suficientes para medição")}
             />
             <ExecutiveMetric
               title="CSAT"
@@ -2021,7 +2021,7 @@ export function Clients() {
                 <PresentationKpi title="Bugs" value={presentationSummary.bugs.length} detail={`${presentationSummary.bugs.filter((ticket) => ticket.azureWorkItem || ticket.taskNumber).length} com Task`} color="#008A68" onClick={() => showTickets("Bugs identificados", presentationSummary.bugs)} />
                 <PresentationKpi title="Com Task" value={presentationSummary.withTask.length} detail="correção, evolução ou apoio" color="#2676B9" onClick={() => showTickets("Atendimentos com Task", presentationSummary.withTask)} />
                 <PresentationKpi title="Pendências" value={presentationSummary.pending.length} detail="em acompanhamento" color="#B7791F" onClick={() => showTickets("Pendências ativas", presentationSummary.pending)} />
-                <PresentationKpi title="SLA solução" value={formatSlaPercent(portfolioSummary.solutionSla.percent)} detail={`${portfolioSummary.solutionSla.onTime} de ${portfolioSummary.solutionSla.measured} medidos`} color="#159A68" onClick={() => showTickets("SLA solução", scopedTickets.filter((ticket) => Boolean(ticket.dueDate && (ticket.resolvedDate || ticket.closedDate))))} />
+                <PresentationKpi title="SLA solução" value={formatSlaPercent(portfolioSummary.solutionSla.percent)} detail={`${portfolioSummary.solutionSla.onTime} de ${portfolioSummary.solutionSla.measured} medidos`} color="#159A68" onClick={() => showTickets("SLA solução", solutionScopedTickets.filter((ticket) => Boolean(ticket.dueDate && ticket.resolvedDate)))} />
                 <PresentationKpi title="Tempo médio de solução" value={formatMinutes(clients.find((item) => item.client === selectedClient)?.averageResolutionMinutes ?? null)} detail={`${clients.find((item) => item.client === selectedClient)?.measuredResolutionTimes ?? 0} atendimento(s) medido(s)`} color="#7C3AED" onClick={() => showTickets("Atendimentos com tempo de solução", scopedTickets.filter((ticket) => ticketResolutionMinutes(ticket) !== null))} />
               </Box>
               <Box sx={{ p: 2.25, border: "1px solid", borderColor: "divider", borderRadius: 2, bgcolor: "background.paper" }}>
