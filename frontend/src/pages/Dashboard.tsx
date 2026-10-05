@@ -1124,10 +1124,14 @@ export function Dashboard() {
         eyebrow="Operação"
         title="Dashboard Executivo"
         description="Visão consolidada da operação de suporte"
-        meta={<>{periodLabel(period)}{" • "}{filteredTickets.length} ticket(s) analisado(s)</>
-      {metricAudit.length > 0 && <Alert severity="warning" variant="outlined" sx={{ mb: 2 }}>Auditoria de métricas detectou {metricAudit.length} divergência(s): {metricAudit.map((item) => item.message).join(" · ")}</Alert>}}
+        meta={<>{periodLabel(period)}{" • "}{filteredTickets.length} ticket(s) analisado(s)</>}
         action={<PeriodFilter />}
       />
+      {metricAudit.length > 0 && (
+        <Alert severity="warning" variant="outlined" sx={{ mb: 2 }}>
+          Auditoria de métricas detectou {metricAudit.length} divergência(s): {metricAudit.map((item) => item.message).join(" · ")}
+        </Alert>
+      )}
 
       {/* =================================================
           KPIs
