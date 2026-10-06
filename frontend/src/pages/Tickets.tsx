@@ -1199,6 +1199,8 @@ export function Tickets() {
             sm:
               "repeat(2, minmax(0, 1fr))",
             lg:
+              "repeat(3, minmax(0, 1fr))",
+            xl:
               "repeat(5, minmax(0, 1fr))",
           },
 
@@ -1206,7 +1208,7 @@ export function Tickets() {
             1.25,
 
           mb:
-            1.75,
+            1.5,
         }}
       >
         <KpiCard
@@ -1360,18 +1362,18 @@ export function Tickets() {
           sx={{
             p: {
               xs:
-                1.5,
+                1.35,
               md:
-                1.75,
+                1.5,
             },
 
             "&:last-child":
               {
                 pb: {
                   xs:
-                    1.5,
+                    1.35,
                   md:
-                    1.75,
+                    1.5,
                 },
               },
           }}
