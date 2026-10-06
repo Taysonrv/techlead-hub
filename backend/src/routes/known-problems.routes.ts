@@ -86,8 +86,14 @@ knownProblemRoutes.get("/candidates", async (_req: AuthenticatedRequest,res) => 
       const score=Math.min(100,Math.round(g.cases*8+g.clients.size*10+Math.min(20,recent30*4)+Math.min(15,linkedTasks.length*5)+(trendPct>0?10:0)));
       return {service:g.service,category:g.category,cause:g.cause,version:g.version,cases:g.cases,clients:g.clients.size,tickets:g.tickets.slice(0,12),tasks:linkedTasks.slice(0,8),sampleSubjects:g.subjects.slice(0,3),covered,priority:score>=70?"high":score>=48?"medium":"review",score,recent30,previous30,trendPct,topTerms,linkedTaskCount:linkedTasks.length};
     }).filter(x=>!x.covered).sort((a,b)=>b.score-a.score||b.clients-a.clients||b.cases-a.cases).slice(0,24);
-    const summary={total:candidates.length,high:candidates.filter(x=>x.priority==="high").length,rising:candidates.filter(x=>x.trendPct>0).length,multiClient:candidates.filter(x=>x.clients>=2).length};
-    res.json({items:candidates,summary,periodDays:180,generatedAt:new Date().toISOString()});
+    const anomalies=candidates.filter(x=>x.recent30>=3&&(x.trendPct>=50||x.score>=75)).map(x=>({
+      service:x.service,category:x.category,cause:x.cause,cases:x.cases,recent30:x.recent30,previous30:x.previous30,
+      trendPct:x.trendPct,score:x.score,clients:x.clients,tickets:x.tickets,
+      severity:x.score>=85||x.trendPct>=150?"critical":"warning",
+      reason:x.previous30===0?`Novo padrão com ${x.recent30} ocorrência(s) nos últimos 30 dias`:`Crescimento de ${x.trendPct}% contra os 30 dias anteriores`
+    })).slice(0,8);
+    const summary={total:candidates.length,high:candidates.filter(x=>x.priority==="high").length,rising:candidates.filter(x=>x.trendPct>0).length,multiClient:candidates.filter(x=>x.clients>=2).length,anomalies:anomalies.length};
+    res.json({items:candidates,summary,anomalies,periodDays:180,generatedAt:new Date().toISOString()});
   } catch(error){console.error("[known-problems] candidates",error);res.status(500).json({error:"Não foi possível calcular candidatos a Problema Conhecido."});}
 });
 
