@@ -2151,6 +2151,52 @@ export function Analysts() {
         />
       </Box>
 
+      <Card elevation={0} sx={{ mb: 2, border: "1px solid", borderColor: "divider", borderRadius: 2.25 }}>
+        <CardContent sx={{ p: { xs: 1.5, md: 1.75 }, "&:last-child": { pb: { xs: 1.5, md: 1.75 } } }}>
+          <Stack direction={{ xs: "column", md: "row" }} spacing={1} sx={{ justifyContent: "space-between", alignItems: { md: "center" }, mb: 1.25 }}>
+            <Box>
+              <Typography sx={{ fontWeight: 800, fontSize: "1.05rem" }}>Leitura rápida da carteira</Typography>
+              <Typography variant="caption" color="text.secondary">Sinais objetivos do recorte atual para orientar a atuação.</Typography>
+            </Box>
+            <Chip size="small" variant="outlined" label={selectedAnalyst ? selectedAnalyst : selectedSquad ? selectedSquad : "Equipe filtrada"} />
+          </Stack>
+          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2,minmax(0,1fr))", lg: "repeat(4,minmax(0,1fr))" }, gap: 1 }}>
+            {[
+              {
+                title: "Pressão da carteira",
+                value: summary.totalTickets ? `${Math.round(summary.openTickets / summary.totalTickets * 100)}%` : "0%",
+                detail: `${summary.openTickets} de ${summary.totalTickets} ticket(s) ainda abertos`,
+                severity: summary.totalTickets && summary.openTickets / summary.totalTickets >= .5 ? "warning" : "default",
+              },
+              {
+                title: "Risco imediato",
+                value: summary.attentionTickets,
+                detail: summary.attentionTickets ? "Críticos ou parados exigindo atuação" : "Nenhum crítico/parado no recorte",
+                severity: summary.attentionTickets ? "error" : "success",
+              },
+              {
+                title: "Cobertura CSAT",
+                value: summary.csatResponses,
+                detail: summary.csatPositivePct == null ? "Sem avaliações no período" : `${summary.csatPositivePct.toLocaleString("pt-BR")}% positivas`,
+                severity: "default",
+              },
+              {
+                title: "Dependência de desenvolvimento",
+                value: summary.azureTasks,
+                detail: summary.azureBlocked ? `${summary.azureBlocked} bloqueada(s) no Azure` : "Sem bloqueios Azure vinculados",
+                severity: summary.azureBlocked ? "warning" : "default",
+              },
+            ].map((signal) => (
+              <Box key={signal.title} sx={{ p: 1.15, border: "1px solid", borderColor: signal.severity === "error" ? "error.main" : signal.severity === "warning" ? "warning.main" : "divider", borderRadius: 1.75, bgcolor: "background.default", minWidth: 0 }}>
+                <Typography variant="caption" color="text.secondary">{signal.title}</Typography>
+                <Typography sx={{ fontWeight: 900, fontSize: "1.2rem", lineHeight: 1.25, mt: .25 }}>{signal.value}</Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: .35 }}>{signal.detail}</Typography>
+              </Box>
+            ))}
+          </Box>
+        </CardContent>
+      </Card>
+
       {/* ===============================================
           DESENVOLVIMENTO / AZURE DEVOPS
       ================================================ */}
