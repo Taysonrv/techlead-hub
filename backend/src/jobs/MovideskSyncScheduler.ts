@@ -1,5 +1,5 @@
 
-import { prisma } from "../database/prisma";
+import { ensureDatabaseAvailable, reportDatabaseFailure } from "../database/prisma";
 import { MovideskService } from "../services/MovideskService";
 import { clearMovideskApiPriority, releaseMovideskApi, requestMovideskApiPriority, tryAcquireMovideskApi } from "./MovideskSyncCoordinator";
 
@@ -55,6 +55,10 @@ export class MovideskSyncScheduler {
 
   private async execute(): Promise<number | null> {
     if (this.running) return null;
+    if (!(await ensureDatabaseAvailable())) {
+      console.warn("[movidesk-sync] PostgreSQL indisponível; ciclo adiado sem consumir a API Movidesk.");
+      return 60_000;
+    }
     if (!tryAcquireMovideskApi("TICKETS")) {
       requestMovideskApiPriority();
       console.log("[movidesk-sync] API ocupada: sincronização principal ganhou prioridade e tentará novamente em 2 minuto(s).");
@@ -88,7 +92,7 @@ export class MovideskSyncScheduler {
         return METADATA_CONTINUATION_SECONDS * 1000;
       }
     } catch (error) {
-      console.error("[movidesk-sync] Falha na sincronização automática:", error);
+      if (!reportDatabaseFailure(error)) console.error("[movidesk-sync] Falha na sincronização automática:", error);
     } finally {
       this.running = false;
       releaseMovideskApi("TICKETS");
