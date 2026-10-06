@@ -129,6 +129,10 @@ export function createAppTheme(mode: PaletteMode = "light") {
           "::selection": { backgroundColor: dark ? "rgba(24,199,122,.32)" : aliareColors.greenLight, color: dark ? "#FFFFFF" : aliareColors.black },
         },
       },
+      MuiTooltip: {
+        defaultProps: { arrow: true, enterDelay: 350 },
+        styleOverrides: { tooltip: { borderRadius: 9, fontSize: ".76rem", lineHeight: 1.45, padding: "7px 10px", boxShadow: dark ? "0 10px 28px rgba(0,0,0,.32)" : "0 8px 22px rgba(15,23,42,.14)" } },
+      },
       MuiCard: {
         styleOverrides: {
           root: {
@@ -307,6 +311,13 @@ export function createAppTheme(mode: PaletteMode = "light") {
         defaultProps: { notched: true },
         styleOverrides: { select: { backgroundColor: dark ? "rgba(7,20,35,.34)" : undefined } },
       },
+      MuiTableCell: {
+        styleOverrides: {
+          head: { backgroundColor: dark ? "rgba(15,46,65,.72)" : "#F8FAFB", color: text, fontWeight: 800, borderBottomColor: border },
+          body: { borderBottomColor: border },
+        },
+      },
+      MuiTableRow: { styleOverrides: { root: { "&:hover": { backgroundColor: dark ? "rgba(24,199,122,.035)" : "rgba(16,148,91,.025)" } } } },
       MuiChip: {
         defaultProps: { size: "small" },
         styleOverrides: {
