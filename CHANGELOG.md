@@ -1,5 +1,32 @@
 # Changelog
 
+## 2.1.0-rc.2 — 2026-10-06
+
+### Operação personalizada e colaboração
+- Tickets e Analistas passam a iniciar focados no analista autenticado quando houver correspondência com a squad SIMER, mantendo o filtro removível pelo usuário.
+- Links compartilhados no Chat abrem diretamente o atendimento ou a Task correspondente, preservando parâmetros também nas rotas legadas.
+- Minha Operação recebe maior área útil de Kanban para reduzir rolagem interna.
+
+### Analistas e inteligência operacional
+- Tela de Analistas recebe leitura rápida da carteira, equilíbrio de carga e comparação com o período anterior.
+- Produtividade por horas foi reorganizada para separar evolução semanal e cobertura por equipe, eliminando espaços vazios causados pelo Grid.
+- KPIs, filtros e cards recebem novos breakpoints e drill-downs para melhorar uso em notebooks e telas intermediárias.
+
+### Performance, atualização e experiência
+- Rotas principais são pré-aquecidas após autenticação e a navegação deixa de apresentar tela branca durante carregamento de chunks.
+- Correções, Evoluções e Apoios preservam conteúdo durante refresh e tiveram o loop de atualização automática eliminado.
+- Nova versão Desktop passa a ser anunciada no topo, com ações para baixar e instalar/reiniciar.
+- Runtime Desktop exclui mapas, testes, exemplos, documentação e caches desnecessários do pacote de dependências, reduzindo quantidade de arquivos processados pelo instalador.
+- Layout visual revisado em Dashboard, Atenção, Problemas Conhecidos, Investigação, Versões, Azure, Tickets, Minha Operação, Coordenação, Performance, Qualidade, Clientes e Analistas.
+
+### Web e confiabilidade
+- Rotas frequentes adicionais são pré-carregadas de forma progressiva para reduzir latência na primeira navegação.
+- Redirecionamentos legados preservam query string e hash, evitando perda de deep-links.
+- Assets versionados continuam com cache imutável e o shell da SPA permanece sem cache para evitar incompatibilidade entre versões.
+
+> Release Candidate publicada no canal beta para validação final antes da promoção da linha 2.1.
+
+
 ## 2.1.0-rc.1 — 2026-10-03
 
 ### Inteligência e automação operacional
