@@ -60,6 +60,14 @@ const OperationalOverview = lazy(() => import("./pages/OperationalOverview").the
 const OperationsHub = lazy(() => import("./pages/OperationsHub").then((module) => ({ default: module.OperationsHub })));
 const RiskPendingHub = lazy(() => import("./pages/RiskPendingHub").then((module) => ({ default: module.RiskPendingHub })));
 
+const warmRouteChunks = () => {
+  void import("./pages/OperationalOverview");
+  void import("./pages/OperationsHub");
+  void import("./pages/AzureWorkItems");
+  void import("./pages/Versions");
+  void import("./pages/ManagementIntelligence");
+};
+
 import {
   aliareColors,
 } from "./theme/theme";
@@ -73,6 +81,10 @@ function AuthenticatedLayout({
 }: {
   children: ReactNode;
 }) {
+  useEffect(() => {
+    const id = window.setTimeout(warmRouteChunks, 250);
+    return () => window.clearTimeout(id);
+  }, []);
    const [forbiddenMessage, setForbiddenMessage] = useState<string | null>(null);
   const location = useLocation();
   const isChat = location.pathname === "/chat";
@@ -423,7 +435,7 @@ function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <Suspense fallback={<Box sx={{ minHeight: "100vh", display: "grid", placeItems: "center" }}><CircularProgress size={32} /></Box>}>
+        <Suspense fallback={<Box sx={{ minHeight: "calc(100vh - 96px)", px: { xs: 1.5, md: 3 }, pt: 2 }}><Box sx={{ width: "34%", minWidth: 220, height: 18, borderRadius: 1, bgcolor: "action.hover", mb: 1.25 }} /><Box sx={{ width: "58%", height: 12, borderRadius: 1, bgcolor: "action.hover", mb: 2 }} /><Box sx={{ height: 220, borderRadius: 3, bgcolor: "action.hover" }} /></Box>}>
         <Routes>
           <Route
             path="/login"
