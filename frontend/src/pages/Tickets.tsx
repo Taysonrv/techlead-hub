@@ -358,17 +358,6 @@ export function Tickets() {
   const owner = sharedAnalysts;
   const setOwner = setSharedAnalysts;
 
-  useEffect(() => {
-    if (!user?.name || sharedAnalysts.length > 0 || tickets.length === 0) return;
-    if (searchParams.get("movidesk") || searchParams.get("task")) return;
-    const normalizedUser = normalize(user.name);
-    const userParts = normalizedUser.split(/\s+/).filter((part) => part.length > 2 && !["de","da","do","dos","das"].includes(part));
-    const match = owners.find((analyst) => {
-      const normalizedAnalyst = normalize(analyst);
-      return userParts.length > 0 && userParts.every((part) => normalizedAnalyst.includes(part));
-    });
-    if (match) setSharedAnalysts([match]);
-  }, [user?.name, sharedAnalysts.length, tickets.length, owners, searchParams, setSharedAnalysts]);
 
   /* =======================================================
      CARREGAMENTO
@@ -587,6 +576,19 @@ export function Tickets() {
         periodTickets,
       ]
     );
+
+
+  useEffect(() => {
+    if (!user?.name || sharedAnalysts.length > 0 || tickets.length === 0) return;
+    if (searchParams.get("movidesk") || searchParams.get("task")) return;
+    const normalizedUser = normalize(user.name);
+    const userParts = normalizedUser.split(/\s+/).filter((part) => part.length > 2 && !["de","da","do","dos","das"].includes(part));
+    const match = owners.find((analyst) => {
+      const normalizedAnalyst = normalize(analyst);
+      return userParts.length > 0 && userParts.every((part) => normalizedAnalyst.includes(part));
+    });
+    if (match) setSharedAnalysts([match]);
+  }, [user?.name, sharedAnalysts.length, tickets.length, owners, searchParams, setSharedAnalysts]);
 
   const clients =
     useMemo(
