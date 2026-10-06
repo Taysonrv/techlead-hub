@@ -595,7 +595,7 @@ export function Sidebar() {
             borderRight:
               "1px solid rgba(255,255,255,0.07)",
             boxShadow:
-              "10px 0 32px rgba(0,0,0,0.10)",
+              "8px 0 24px rgba(0,0,0,0.08)",
 
             overflow:
               "hidden",
@@ -661,13 +661,13 @@ export function Sidebar() {
         <Box
           sx={{
             px:
-              2.25,
+              1.75,
 
             pt:
-              2.25,
+              1.75,
 
             pb:
-              1.75,
+              1.25,
           }}
         >
           <Stack
@@ -726,10 +726,10 @@ export function Sidebar() {
           <Box
             sx={{
               mt:
-                1.4,
+                1.1,
 
               p:
-                1.35,
+                1.15,
 
               borderRadius:
                 1.6,
@@ -831,8 +831,8 @@ export function Sidebar() {
           </Box>
         </Box>
 
-        <Box sx={{ px: 1.1, mb: .75 }}>
-          <ListItemButton component={NavLink} to="/visao-operacional" title="Visão Operacional" sx={{ minHeight: 42, px: 1.25, borderRadius: 1.5, color: "rgba(255,255,255,.72)", "&:hover": { bgcolor: "rgba(24,199,122,.08)", color: "#fff" }, "&.active": { bgcolor: "rgba(24,199,122,.13)", color: "#fff" }, "&.active .MuiListItemIcon-root": { color: aliareColors.green } }}>
+        <Box sx={{ px: 1, mb: .5 }}>
+          <ListItemButton component={NavLink} to="/visao-operacional" title="Visão Operacional" sx={{ minHeight: 40, px: 1.15, borderRadius: 1.5, color: "rgba(255,255,255,.72)", "&:hover": { bgcolor: "rgba(24,199,122,.08)", color: "#fff" }, "&.active": { bgcolor: "rgba(24,199,122,.13)", color: "#fff" }, "&.active .MuiListItemIcon-root": { color: aliareColors.green } }}>
             <ListItemIcon sx={{ minWidth: 34, color: "rgba(255,255,255,.44)", "& .MuiSvgIcon-root": { fontSize: 19 } }}><HomeOutlined fontSize="small" /></ListItemIcon>
             <ListItemText primary="Início" slotProps={{ primary: { sx: { fontSize: ".8rem", fontWeight: 600, lineHeight: 1.35 } } }} />
             {!window.techLeadHub?.desktop && <RoutineNewTabButton path="/visao-operacional" label="Visão Operacional" />}
