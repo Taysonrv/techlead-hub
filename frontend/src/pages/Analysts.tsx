@@ -1957,6 +1957,16 @@ export function Analysts() {
         </CardContent>
       </Card>
 
+      {(selectedSquad || selectedAnalyst || selectedBusinessArea || selectedService) && (
+        <Stack direction="row" spacing={.75} useFlexGap sx={{ flexWrap: "wrap", mt: -1, mb: 1.5, alignItems: "center" }}>
+          <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>Filtros ativos:</Typography>
+          {selectedSquad && <Chip size="small" label={`Squad · ${selectedSquad}`} onDelete={() => setSelectedSquad("")} />}
+          {selectedAnalyst && <Chip size="small" label={`Analista · ${selectedAnalyst}`} onDelete={() => setSelectedAnalyst("")} />}
+          {selectedBusinessArea && <Chip size="small" label={`Área · ${selectedBusinessArea}`} onDelete={() => setSelectedBusinessArea("")} />}
+          {selectedService && <Chip size="small" label={`Serviço · ${selectedService}`} onDelete={() => setSelectedService("")} />}
+        </Stack>
+      )}
+
       {/* ===============================================
           INDICADORES
       ================================================ */}
@@ -1967,8 +1977,9 @@ export function Analysts() {
 
           gridTemplateColumns: {
             xs: "1fr",
-            sm: "repeat(2, 1fr)",
-            lg: "repeat(5, 1fr)",
+            sm: "repeat(2, minmax(0,1fr))",
+            lg: "repeat(3, minmax(0,1fr))",
+            xl: "repeat(5, minmax(0,1fr))",
           },
 
           gap: {
@@ -2199,8 +2210,9 @@ export function Analysts() {
               display: "grid",
               gridTemplateColumns: {
                 xs: "1fr",
-                sm: "repeat(2, 1fr)",
-                lg: "repeat(4, 1fr)",
+                sm: "repeat(2, minmax(0,1fr))",
+                lg: "repeat(3, minmax(0,1fr))",
+                xl: "repeat(4, minmax(0,1fr))",
               },
               gap: 1.25,
             }}
@@ -2376,7 +2388,7 @@ export function Analysts() {
             <TableContainer sx={{ mt: 1.5 }}><Table size="small"><TableHead><TableRow><TableCell>Analista</TableCell><TableCell align="right">Dias úteis</TableCell><TableCell align="right">Horas previstas</TableCell><TableCell align="right">Horas registradas</TableCell><TableCell align="right">Cobertura</TableCell><TableCell align="right">Tickets apontados</TableCell><TableCell align="right">Média h/ticket</TableCell></TableRow></TableHead>
               <TableBody>{scopedTimeProductivity!.analysts.map((item) => <TableRow key={item.analyst} hover><TableCell><Typography variant="body2" sx={{ fontWeight: 700 }}>{item.analyst}</Typography></TableCell><TableCell align="right">{item.businessDays}</TableCell><TableCell align="right">{item.expectedHours.toLocaleString("pt-BR")}h</TableCell><TableCell align="right">{item.registeredHours.toLocaleString("pt-BR")}h</TableCell><TableCell align="right"><Chip size="small" label={item.coverageRate === null ? "—" : `${item.coverageRate.toLocaleString("pt-BR")}%`} color={item.coverageRate !== null && item.coverageRate >= 80 ? "success" : item.coverageRate !== null && item.coverageRate >= 60 ? "warning" : "default"} variant="outlined"/></TableCell><TableCell align="right">{item.ticketsWithTime}</TableCell><TableCell align="right">{item.averageHoursPerTicket === null ? "—" : `${item.averageHoursPerTicket.toLocaleString("pt-BR")}h`}</TableCell></TableRow>)}</TableBody>
             </Table></TableContainer>
-            {scopedTimeProductivity!.analysts.length === 1 && scopedTimeProductivity!.analysts[0].topTickets.length > 0 && <Box sx={{ mt: 2 }}><Typography variant="subtitle2" sx={{ fontWeight: 800 }}>Atendimentos com maior tempo registrado</Typography><Stack spacing={.6} sx={{ mt: .75 }}>{scopedTimeProductivity!.analysts[0].topTickets.map((ticket) => <Button key={ticket.movideskId} onClick={() => navigate(`/tickets?movidesk=${ticket.movideskId}`)} sx={{ justifyContent: "space-between", textTransform: "none", color: "text.primary", border: "1px solid", borderColor: "divider" }}><Typography variant="body2" noWrap sx={{ maxWidth: "80%" }}>#{ticket.movideskId} · {ticket.subject}</Typography><Chip size="small" label={`${ticket.hours.toLocaleString("pt-BR")}h`}/></Button>)}</Stack></Box>}
+            {scopedTimeProductivity!.analysts.length === 1 && scopedTimeProductivity!.analysts[0].topTickets.length > 0 && <Box sx={{ mt: 2 }}><Typography variant="subtitle2" sx={{ fontWeight: 800 }}>Atendimentos com maior tempo registrado</Typography><Stack spacing={.6} sx={{ mt: .75 }}>{scopedTimeProductivity!.analysts[0].topTickets.map((ticket) => <Button key={ticket.movideskId} onClick={() => navigate(`/operacao/tickets?movidesk=${ticket.movideskId}`)} sx={{ justifyContent: "space-between", textTransform: "none", color: "text.primary", border: "1px solid", borderColor: "divider" }}><Typography variant="body2" noWrap sx={{ maxWidth: "80%" }}>#{ticket.movideskId} · {ticket.subject}</Typography><Chip size="small" label={`${ticket.hours.toLocaleString("pt-BR")}h`}/></Button>)}</Stack></Box>}
           </>}
         </CardContent>
       </Card>
@@ -2471,8 +2483,9 @@ export function Analysts() {
                   display: "grid",
                   gridTemplateColumns: {
                     xs: "1fr",
-                    sm: "repeat(2, 1fr)",
-                    lg: "repeat(4, 1fr)",
+                    sm: "repeat(2, minmax(0,1fr))",
+                    lg: "repeat(3, minmax(0,1fr))",
+                    xl: "repeat(4, minmax(0,1fr))",
                   },
                   gap: 1.25,
                   mt: 2,
