@@ -583,6 +583,46 @@ export function Analysts() {
     effectiveEndDate,
   ]);
 
+  const previousPeriodTickets = useMemo(() => {
+    const start = startOfDay(effectiveStartDate);
+    const end = endOfDay(effectiveEndDate);
+    const spanMs = Math.max(1, end.getTime() - start.getTime() + 1);
+    const previousEnd = new Date(start.getTime() - 1);
+    const previousStart = new Date(previousEnd.getTime() - spanMs + 1);
+    return tickets.filter((ticket) => {
+      const created = new Date(ticket.createdDate);
+      if (created < previousStart || created > previousEnd) return false;
+      if (!isOfficialSupportAnalyst(ticket.owner)) return false;
+      if (selectedSquad && (ticket.ownerTeam ?? ticket.team) !== selectedSquad) return false;
+      if (selectedBusinessArea && ticket.businessArea !== selectedBusinessArea) return false;
+      if (selectedService && (ticket.serviceSecondLevel ?? ticket.service) !== selectedService) return false;
+      if (selectedAnalyst && ticket.owner !== selectedAnalyst) return false;
+      return true;
+    });
+  }, [tickets, effectiveStartDate, effectiveEndDate, selectedSquad, selectedBusinessArea, selectedService, selectedAnalyst]);
+
+  const operationalTrend = useMemo(() => {
+    const summarize = (items: Ticket[]) => {
+      const open = items.filter(isOpen).length;
+      const critical = items.filter((ticket) => isOpen(ticket) && normalize(ticket.urgency) === "critica").length;
+      const stopped = items.filter((ticket) => ticket.baseStatus === "Stopped").length;
+      const resolved = items.filter((ticket) => ticket.baseStatus === "Resolved" || ticket.baseStatus === "Closed").length;
+      return { total: items.length, open, critical, stopped, resolved };
+    };
+    const current = summarize(scopedTickets);
+    const previous = summarize(previousPeriodTickets);
+    const delta = (now: number, before: number) => before === 0 ? (now === 0 ? 0 : null) : Math.round(((now - before) / before) * 1000) / 10;
+    return {
+      current,
+      previous,
+      totalDelta: delta(current.total, previous.total),
+      openDelta: delta(current.open, previous.open),
+      criticalDelta: delta(current.critical, previous.critical),
+      stoppedDelta: delta(current.stopped, previous.stopped),
+      resolvedDelta: delta(current.resolved, previous.resolved),
+    };
+  }, [scopedTickets, previousPeriodTickets]);
+
   /* =====================================================
      SQUADS DISPONÍVEIS
   ===================================================== */
@@ -2266,6 +2306,42 @@ export function Analysts() {
           </CardContent>
         </Card>
       )}
+
+      <Card elevation={0} sx={{ mb: 2, border: "1px solid", borderColor: "divider", borderRadius: 2.25 }}>
+        <CardContent sx={{ p: { xs: 1.5, md: 1.75 }, "&:last-child": { pb: { xs: 1.5, md: 1.75 } } }}>
+          <Stack direction={{ xs: "column", md: "row" }} spacing={1} sx={{ justifyContent: "space-between", alignItems: { md: "center" }, mb: 1.25 }}>
+            <Box>
+              <Typography sx={{ fontWeight: 800, fontSize: "1.05rem" }}>Tendência operacional</Typography>
+              <Typography variant="caption" color="text.secondary">Compara o período selecionado com o período imediatamente anterior de mesma duração.</Typography>
+            </Box>
+            <Chip size="small" variant="outlined" label="Atual × período anterior" />
+          </Stack>
+          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2,minmax(0,1fr))", lg: "repeat(5,minmax(0,1fr))" }, gap: 1 }}>
+            {[
+              { title: "Volume recebido", value: operationalTrend.current.total, before: operationalTrend.previous.total, delta: operationalTrend.totalDelta, inverse: false },
+              { title: "Carteira aberta", value: operationalTrend.current.open, before: operationalTrend.previous.open, delta: operationalTrend.openDelta, inverse: true },
+              { title: "Críticos", value: operationalTrend.current.critical, before: operationalTrend.previous.critical, delta: operationalTrend.criticalDelta, inverse: true },
+              { title: "Parados", value: operationalTrend.current.stopped, before: operationalTrend.previous.stopped, delta: operationalTrend.stoppedDelta, inverse: true },
+              { title: "Resolvidos", value: operationalTrend.current.resolved, before: operationalTrend.previous.resolved, delta: operationalTrend.resolvedDelta, inverse: false },
+            ].map((metric) => {
+              const improving = metric.delta !== null && metric.delta !== 0 && (metric.inverse ? metric.delta < 0 : metric.delta > 0);
+              const worsening = metric.delta !== null && metric.delta !== 0 && (metric.inverse ? metric.delta > 0 : metric.delta < 0);
+              return (
+                <Box key={metric.title} sx={{ p: 1.15, border: "1px solid", borderColor: worsening ? "warning.main" : "divider", borderRadius: 1.75, bgcolor: "background.default", minWidth: 0 }}>
+                  <Typography variant="caption" color="text.secondary">{metric.title}</Typography>
+                  <Stack direction="row" spacing={.75} sx={{ alignItems: "baseline", mt: .2 }}>
+                    <Typography sx={{ fontWeight: 900, fontSize: "1.2rem" }}>{metric.value}</Typography>
+                    <Typography variant="caption" sx={{ fontWeight: 800 }} color={improving ? "success.main" : worsening ? "warning.main" : "text.secondary"}>
+                      {metric.delta === null ? "novo" : metric.delta === 0 ? "0%" : `${metric.delta > 0 ? "+" : ""}${metric.delta.toLocaleString("pt-BR")}%`}
+                    </Typography>
+                  </Stack>
+                  <Typography variant="caption" color="text.secondary">Anterior: {metric.before}</Typography>
+                </Box>
+              );
+            })}
+          </Box>
+        </CardContent>
+      </Card>
 
       {/* ===============================================
           DESENVOLVIMENTO / AZURE DEVOPS
