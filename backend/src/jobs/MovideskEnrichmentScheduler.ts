@@ -1,4 +1,5 @@
 import { MovideskService } from "../services/MovideskService";
+import { ensureDatabaseAvailable, reportDatabaseFailure } from "../database/prisma";
 import { movideskApiOwner, releaseMovideskApi, tryAcquireMovideskApi } from "./MovideskSyncCoordinator";
 
 const DEFAULT_INTERVAL_MINUTES = 1;
@@ -88,6 +89,7 @@ export class MovideskEnrichmentScheduler {
 
   private async execute(): Promise<"PENDING" | "IDLE" | "BUSY" | "ERROR"> {
     if (this.running) return "BUSY";
+    if (!(await ensureDatabaseAvailable())) return "ERROR";
     if (!tryAcquireMovideskApi("ENRICHMENT_SCHEDULER")) {
       return "BUSY";
     }
@@ -121,7 +123,7 @@ export class MovideskEnrichmentScheduler {
       }
       return result.pendingAfterRun > 0 ? "PENDING" : "IDLE";
     } catch (error) {
-      console.error("[movidesk-enrichment] Falha no enriquecimento automático:", error);
+      if (!reportDatabaseFailure(error)) console.error("[movidesk-enrichment] Falha no enriquecimento automático:", error);
       return "ERROR";
     } finally {
       this.running = false;
