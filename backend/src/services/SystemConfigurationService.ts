@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import axios from "axios";
 import { prisma } from "../database/prisma";
 
 const SETTING_ENV = {
@@ -72,7 +73,78 @@ class SystemConfigurationService {
     };
   }
 
+  private async validateAzureCandidate(input: SystemConfigurationInput) {
+    const organization = input.organization?.trim() || process.env.AZURE_DEVOPS_ORGANIZATION?.trim() || "";
+    const project = input.project?.trim() || process.env.AZURE_DEVOPS_PROJECT?.trim() || "";
+    const pat = input.pat?.trim() || process.env.AZURE_DEVOPS_PAT?.trim() || "";
+    if (!organization || !project || !pat) throw new Error("Azure DevOps: organização, projeto e PAT são obrigatórios para validar a conexão.");
+    const auth = Buffer.from(`:${pat}`, "utf8").toString("base64");
+    try {
+      await axios.get(`https://dev.azure.com/${encodeURIComponent(organization)}/${encodeURIComponent(project)}/_apis/wit/wiql`, {
+        headers: { Accept: "application/json", Authorization: `Basic ${auth}` },
+        params: { "api-version": "7.1" },
+        timeout: 15_000,
+        validateStatus: (status) => status >= 200 && status < 300,
+      });
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        const status = error.response?.status;
+        if (status === 401) throw new Error("Azure DevOps rejeitou o novo PAT (HTTP 401). A credencial atual foi preservada.");
+        if (status === 403) throw new Error("O novo PAT não possui permissão suficiente no Azure DevOps (HTTP 403). A credencial atual foi preservada.");
+        throw new Error(`Não foi possível validar o Azure DevOps${status ? ` (HTTP ${status})` : ""}. A configuração atual foi preservada.`);
+      }
+      throw error;
+    }
+    return { ok: true, organization, project };
+  }
+
+  private async validateMovideskCandidate(input: SystemConfigurationInput) {
+    const rawToken = input.movideskToken?.trim();
+    const token = rawToken ? normalizeMovideskToken(rawToken) : process.env.MOVIDESK_TOKEN?.trim() || "";
+    const url = (input.movideskUrl?.trim() || process.env.MOVIDESK_URL?.trim() || "https://api.movidesk.com/public/v1").replace(/\/$/, "");
+    if (!token) throw new Error("Movidesk: informe um token antes de validar.");
+    const request = async (mode: "BEARER" | "QUERY") => {
+      const params: Record<string, string> = { "$select": "id,lastUpdate", "$top": "1" };
+      if (mode === "QUERY") params.token = token;
+      return axios.get(`${url}/tickets`, {
+        params,
+        headers: mode === "BEARER" ? { Authorization: `Bearer ${token}` } : undefined,
+        timeout: 15_000,
+        validateStatus: (status) => status >= 200 && status < 300,
+      });
+    };
+    try {
+      await request("BEARER");
+      return { ok: true, endpoint: url, authentication: "BEARER" };
+    } catch (bearerError) {
+      if (!axios.isAxiosError(bearerError) || bearerError.response?.status !== 401) {
+        throw new Error(`Movidesk rejeitou a nova configuração${axios.isAxiosError(bearerError) && bearerError.response?.status ? ` (HTTP ${bearerError.response.status})` : ""}. O token atual foi preservado.`);
+      }
+    }
+    try {
+      await request("QUERY");
+      return { ok: true, endpoint: url, authentication: "QUERY" };
+    } catch (queryError) {
+      const status = axios.isAxiosError(queryError) ? queryError.response?.status : undefined;
+      throw new Error(`Movidesk rejeitou o novo token${status ? ` (HTTP ${status})` : ""}. O token atual foi preservado.`);
+    }
+  }
+
+  async test(input: SystemConfigurationInput) {
+    await this.loadIntoEnvironment();
+    const result: Record<string, unknown> = {};
+    if (input.pat?.trim() || input.organization?.trim() || input.project?.trim()) result.azure = await this.validateAzureCandidate(input);
+    if (input.movideskToken?.trim() || input.movideskUrl?.trim()) result.movidesk = await this.validateMovideskCandidate(input);
+    return result;
+  }
+
   async save(input: SystemConfigurationInput, updatedById: number) {
+    await this.loadIntoEnvironment();
+    // Validate replacement credentials before writing anything. A rejected candidate
+    // must never overwrite a known-good integration credential.
+    if (input.pat?.trim()) await this.validateAzureCandidate(input);
+    if (input.movideskToken?.trim()) await this.validateMovideskCandidate(input);
+
     const changedKeys: string[] = [];
     for (const key of Object.keys(SETTING_ENV) as Array<keyof typeof SETTING_ENV>) {
       const rawValue = input[key]?.trim();
