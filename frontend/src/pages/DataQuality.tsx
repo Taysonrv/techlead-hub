@@ -239,7 +239,7 @@ export function DataQuality() {
   return <Box sx={{ pb: 4 }}>
     <PageHeader eyebrow="Governança operacional" title="Pendências 2.0" description="Radar preventivo de inconsistências, continuidade, classificação e vínculos entre Movidesk e Azure na operação SIMER." meta={issue ? `${data?.samples.length ?? 0} evidência(s) no recorte selecionado` : `${coordinationMetrics.reduce((total, [key]) => total + (data?.summary[key] ?? 0), 0)} sinal(is) prioritário(s)`} />
 
-    <Card variant="outlined" sx={{ mt: 2, overflow: "visible" }}><CardContent sx={{ p: { xs: 2, md: 2.25 }, "&:last-child": { pb: { xs: 2, md: 2.25 } } }}>
+    <Card variant="outlined" sx={{ mt: 1.5, overflow: "visible" }}><CardContent sx={{ p: { xs: 1.5, md: 1.75 }, "&:last-child": { pb: { xs: 1.5, md: 1.75 } } }}>
       <Stack direction={{ xs: "column", md: "row" }} spacing={1.25} sx={{ mb: 1.75, justifyContent: "space-between", alignItems: { md: "center" } }}>
         <Box>
           <Stack direction="row" spacing={.75} sx={{ alignItems: "center" }}>
@@ -283,7 +283,7 @@ export function DataQuality() {
         <Box><Typography variant="h6" sx={{ fontWeight: 900 }}>Fila prioritária</Typography><Typography variant="body2" color="text.secondary">Sinais com ação operacional direta. Clique em um card para abrir as evidências.</Typography></Box>
         <Chip size="small" variant="outlined" label="Movidesk + Azure · SIMER" />
       </Stack>
-      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2,1fr)", lg: "repeat(3,1fr)", xl: "repeat(4,1fr)" }, gap: 1.5 }}>
+      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2,minmax(0,1fr))", lg: "repeat(3,minmax(0,1fr))", xl: "repeat(4,minmax(0,1fr))" }, gap: 1.25 }}>
         {coordinationMetrics.map(([key, label, info, group]) => <KpiCard key={key} title={label} value={data?.summary[key] ?? 0} subtitle={group} info={info} accent={issue === key ? aliareColors.green : group === "Fluxo" ? "#ef4444" : group === "Versão" ? "#8b5cf6" : group === "Vínculo" ? "#f59e0b" : group === "Serviço" ? "#0891b2" : "#2676b9"} active={issue === key} onClick={() => setIssue(issue === key ? "" : key)} />)}
       </Box>
     </Box>
@@ -338,7 +338,7 @@ export function DataQuality() {
       <Card variant="outlined"><CardContent>
         <Typography variant="h6" sx={{ fontWeight: 850 }}>Mapa das pendências</Typography>
         <Typography variant="body2" color="text.secondary">Distribuição de todos os detectores por domínio. Ajuda a identificar onde a operação está acumulando dívida.</Typography>
-        <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "minmax(190px,.9fr) minmax(0,1.1fr)" }, gap: 1.5, alignItems: "center", mt: 1 }}>
+        <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "minmax(210px,.82fr) minmax(0,1.18fr)" }, gap: 1.25, alignItems: "center", mt: 1 }}>
           <Box sx={{ height: { xs: 220, sm: 235 }, minWidth: 0 }}>
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
@@ -349,7 +349,7 @@ export function DataQuality() {
               </PieChart>
             </ResponsiveContainer>
           </Box>
-          <Stack spacing={.45} sx={{ maxHeight: { sm: 235 }, overflowY: "auto" }}>
+          <Stack spacing={.45} sx={{ maxHeight: { md: 215 }, overflowY: "auto" }}>
             {Array.from(new Set(metrics.map(([, , , group]) => group))).map((group) => ({ name: group, value: metrics.filter(([, , , itemGroup]) => itemGroup === group).reduce((sum, [key]) => sum + Number(data?.summary[key] ?? 0), 0) })).filter((item) => item.value > 0).map((item, index) => (
               <Box key={item.name} sx={{ display: "grid", gridTemplateColumns: "9px minmax(0,1fr) auto", gap: .75, alignItems: "center", px: .65, py: .4, borderRadius: 1, "&:hover": { bgcolor: "action.hover" } }}>
                 <Box sx={{ width: 8, height: 8, borderRadius: "50%", bgcolor: [aliareColors.green, aliareColors.info, "#8b5cf6", "#f59e0b", "#0891b2", "#ef4444", "#64748b"][index % 7] }} />
