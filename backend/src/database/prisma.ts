@@ -29,7 +29,13 @@ export function isDatabaseConnectivityError(error: unknown) {
 export function reportDatabaseFailure(error: unknown) {
   if (!isDatabaseConnectivityError(error)) return false;
   databaseFailureCount += 1;
-  const backoffIndex = Math.min(databaseFailureCount - 1, DATABASE_BACKOFF_MS.length - 1);\n  const delay: number = backoffIndex === 0 ? 15_000 : backoffIndex === 1 ? 30_000 : 60_000;
+  const backoffIndex = Math.min(databaseFailureCount - 1, DATABASE_BACKOFF_MS.length - 1);
+  const delay: number =
+    backoffIndex === 0
+      ? 15_000
+      : backoffIndex === 1
+        ? 30_000
+        : 60_000;
   databaseUnavailableUntil = Math.max(databaseUnavailableUntil, Date.now() + delay);
   process.env.APP_DATABASE_READY = "false";
   if (!databaseCircuitOpen) {
