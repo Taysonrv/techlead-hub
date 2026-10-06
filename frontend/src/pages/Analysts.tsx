@@ -43,6 +43,7 @@ import {
 } from "recharts";
 
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 import { useTheme } from "@mui/material/styles";
 
 import { api } from "../services/api";
@@ -380,6 +381,7 @@ export function Analysts() {
   const [analystsPage, setAnalystsPage] = useState(0);
   const navigate = useNavigate();
   const theme = useTheme();
+  const { user } = useAuth();
 
   const [tickets, setTickets] =
     useState<Ticket[]>([]);
@@ -690,6 +692,17 @@ export function Analysts() {
       )
     );
   }, [squadTickets]);
+
+  useEffect(() => {
+    if (selectedAnalyst || !user?.name || analystOptions.length === 0) return;
+    const normalizedUser = normalize(user.name);
+    const parts = normalizedUser.split(/\s+/).filter((part) => part.length > 2 && !["de","da","do","dos","das"].includes(part));
+    const match = analystOptions.find((analyst) => {
+      const normalizedAnalyst = normalize(analyst);
+      return parts.length > 0 && parts.every((part) => normalizedAnalyst.includes(part));
+    });
+    if (match) setSelectedAnalyst(match);
+  }, [user?.name, selectedAnalyst, analystOptions]);
 
   /* =====================================================
      FILTRO FINAL DA TELA
