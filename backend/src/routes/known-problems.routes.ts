@@ -70,7 +70,7 @@ knownProblemRoutes.get("/candidates", async (_req: AuthenticatedRequest,res) => 
       // are accumulated to explain the recurrence without making wording differences
       // split the same incident family.
       const key=[norm(svc),norm(cat),norm(cause)].join("|");
-      const g=groups.get(key)??{service:svc,category:cat,cause,version:ver,cases:0,clients:new Set<string>(),tickets:[],subjects:[],tasks:new Set<number>(),dates:[],tokens:new Map<string,number>()};
+      const g: Group=groups.get(key)??{service:svc,category:cat,cause,version:ver,cases:0,clients:new Set<string>(),tickets:[] as number[],subjects:[] as string[],tasks:new Set<number>(),dates:[] as Date[],tokens:new Map<string,number>()};
       g.cases++; if(t.client)g.clients.add(t.client); g.tickets.push(t.movideskId); if(t.subject)g.subjects.push(t.subject); if(t.taskNumber)g.tasks.add(t.taskNumber); g.dates.push(t.createdDate);
       subjectTokens.forEach(token=>g.tokens.set(token,(g.tokens.get(token)??0)+1)); groups.set(key,g);
     });
