@@ -958,6 +958,20 @@ export function Analysts() {
     );
   }, [scopedTickets]);
 
+  const teamBalance = useMemo(() => {
+    if (!analysts.length) return null;
+    const totalOpen = analysts.reduce((sum, item) => sum + item.open, 0);
+    const averageOpen = totalOpen / analysts.length;
+    const ranked = [...analysts].sort((a, b) => b.open - a.open);
+    const highest = ranked[0];
+    const lowest = ranked[ranked.length - 1];
+    const overloaded = analysts.filter((item) =>
+      item.workloadLevel === "alto" || (averageOpen > 0 && item.open >= averageOpen * 1.5)
+    );
+    const balanced = highest.open - lowest.open <= 2;
+    return { totalOpen, averageOpen, highest, lowest, overloaded, balanced };
+  }, [analysts]);
+
   /* =====================================================
      RESUMO
   ===================================================== */
@@ -2196,6 +2210,62 @@ export function Analysts() {
           </Box>
         </CardContent>
       </Card>
+
+      {teamBalance && analysts.length > 1 && (
+        <Card elevation={0} sx={{ mb: 2, border: "1px solid", borderColor: "divider", borderRadius: 2.25 }}>
+          <CardContent sx={{ p: { xs: 1.5, md: 1.75 }, "&:last-child": { pb: { xs: 1.5, md: 1.75 } } }}>
+            <Stack direction={{ xs: "column", md: "row" }} spacing={1} sx={{ justifyContent: "space-between", alignItems: { md: "center" }, mb: 1.25 }}>
+              <Box>
+                <Typography sx={{ fontWeight: 800, fontSize: "1.05rem" }}>Equilíbrio de carteira</Typography>
+                <Typography variant="caption" color="text.secondary">Compara a distribuição dos tickets abertos entre os analistas do recorte atual.</Typography>
+              </Box>
+              <Chip
+                size="small"
+                variant="outlined"
+                label={teamBalance.balanced ? "Distribuição equilibrada" : `${teamBalance.overloaded.length} analista(s) em atenção`}
+                color={teamBalance.balanced ? "success" : teamBalance.overloaded.length ? "warning" : "default"}
+              />
+            </Stack>
+            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(3,minmax(0,1fr))" }, gap: 1 }}>
+              <Box sx={{ p: 1.25, border: "1px solid", borderColor: "divider", borderRadius: 1.75, bgcolor: "background.default" }}>
+                <Typography variant="caption" color="text.secondary">Média por analista</Typography>
+                <Typography sx={{ fontWeight: 900, fontSize: "1.3rem" }}>{teamBalance.averageOpen.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}</Typography>
+                <Typography variant="caption" color="text.secondary">ticket(s) aberto(s)</Typography>
+              </Box>
+              <Box
+                role="button"
+                tabIndex={0}
+                onClick={() => showAnalystTickets(teamBalance.highest.owner)}
+                onKeyDown={(event) => { if (event.key === "Enter") showAnalystTickets(teamBalance.highest.owner); }}
+                sx={{ p: 1.25, border: "1px solid", borderColor: teamBalance.highest.workloadLevel === "alto" ? "warning.main" : "divider", borderRadius: 1.75, bgcolor: "background.default", cursor: "pointer", "&:hover": { borderColor: "primary.main" } }}
+              >
+                <Typography variant="caption" color="text.secondary">Maior carteira aberta</Typography>
+                <Typography noWrap title={teamBalance.highest.owner} sx={{ fontWeight: 800, mt: .15 }}>{teamBalance.highest.owner}</Typography>
+                <Typography variant="caption" color="text.secondary">{teamBalance.highest.open} aberto(s) · {teamBalance.highest.critical} crítico(s)</Typography>
+              </Box>
+              <Box
+                role="button"
+                tabIndex={0}
+                onClick={() => showAnalystTickets(teamBalance.lowest.owner)}
+                onKeyDown={(event) => { if (event.key === "Enter") showAnalystTickets(teamBalance.lowest.owner); }}
+                sx={{ p: 1.25, border: "1px solid", borderColor: "divider", borderRadius: 1.75, bgcolor: "background.default", cursor: "pointer", "&:hover": { borderColor: "primary.main" } }}
+              >
+                <Typography variant="caption" color="text.secondary">Menor carteira aberta</Typography>
+                <Typography noWrap title={teamBalance.lowest.owner} sx={{ fontWeight: 800, mt: .15 }}>{teamBalance.lowest.owner}</Typography>
+                <Typography variant="caption" color="text.secondary">{teamBalance.lowest.open} aberto(s) · {teamBalance.lowest.total} no período</Typography>
+              </Box>
+            </Box>
+            {teamBalance.overloaded.length > 0 && (
+              <Stack direction="row" spacing={.75} useFlexGap sx={{ flexWrap: "wrap", mt: 1.25, alignItems: "center" }}>
+                <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>Atenção:</Typography>
+                {teamBalance.overloaded.slice(0, 6).map((item) => (
+                  <Chip key={item.owner} size="small" clickable onClick={() => showAnalystTickets(item.owner)} label={`${item.owner} · ${item.open} abertos`} color={item.workloadLevel === "alto" ? "warning" : "default"} variant="outlined" />
+                ))}
+              </Stack>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* ===============================================
           DESENVOLVIMENTO / AZURE DEVOPS
