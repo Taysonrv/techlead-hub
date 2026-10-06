@@ -27,17 +27,21 @@ export function PeriodFilter() {
         sm: "row",
       }}
       spacing={1}
+      useFlexGap
       sx={{
         alignItems: {
           xs: "stretch",
           sm: "center",
         },
+        flexWrap: "wrap",
+        width: "100%",
       }}
     >
       <FormControl
         size="small"
         sx={{
-          minWidth: { xs: "100%", sm: 180 },
+          minWidth: { xs: "100%", sm: 170 },
+          flex: { xs: "1 1 100%", sm: "0 1 190px" },
         }}
       >
         <InputLabel id="period-label">
@@ -98,7 +102,8 @@ export function PeriodFilter() {
             display: "flex",
             gap: 1,
             flexWrap: "wrap",
-            flex: 1,
+            flex: "1 1 330px",
+            minWidth: 0,
           }}
         >
           <TextField
