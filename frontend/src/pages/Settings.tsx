@@ -140,6 +140,8 @@ export function Settings() {
     useState(true);
   const [saving, setSaving] =
     useState(false);
+  const [testingAzure, setTestingAzure] = useState(false);
+  const [testingMovidesk, setTestingMovidesk] = useState(false);
   const [error, setError] =
     useState<string | null>(null);
   const [success, setSuccess] =
@@ -281,6 +283,30 @@ export function Settings() {
           : "Não foi possível importar o arquivo.",
       );
     }
+  }
+
+  async function testAzureConnection() {
+    try {
+      setTestingAzure(true); setError(null); setSuccess(null);
+      const response = await api.post<{ azure?: { ok: boolean; organization: string; project: string } }>("/system-settings/test", {
+        organization: form.organization, project: form.project, wiki: form.wiki, pat: form.pat,
+      });
+      setSuccess(`Azure DevOps validado · ${response.data.azure?.organization ?? form.organization} / ${response.data.azure?.project ?? form.project}. Nenhuma credencial foi alterada.`);
+    } catch (testError: any) {
+      setError(testError?.response?.data?.message ?? "Não foi possível validar o Azure DevOps.");
+    } finally { setTestingAzure(false); }
+  }
+
+  async function testMovideskConnection() {
+    try {
+      setTestingMovidesk(true); setError(null); setSuccess(null);
+      const response = await api.post<{ movidesk?: { ok: boolean; authentication: string } }>("/system-settings/test", {
+        movideskToken: form.movideskToken, movideskUrl: form.movideskUrl,
+      });
+      setSuccess(`Movidesk validado com sucesso${response.data.movidesk?.authentication ? ` · autenticação ${response.data.movidesk.authentication}` : ""}. Nenhuma credencial foi alterada.`);
+    } catch (testError: any) {
+      setError(testError?.response?.data?.message ?? "Não foi possível validar o Movidesk.");
+    } finally { setTestingMovidesk(false); }
   }
 
   async function saveAndTestMovidesk() {
@@ -688,6 +714,14 @@ export function Settings() {
                 helperText="O PAT atual não é exibido por segurança."
               />
             </Box>
+            <Stack direction="row" spacing={1} sx={{ mt: 2, justifyContent: "flex-end" }}>
+              <Button variant="outlined" disabled={saving || testingAzure || (!configuration?.patConfigured && !form.pat.trim())} onClick={() => void testAzureConnection()}>
+                {testingAzure ? "Testando..." : form.pat.trim() ? "Testar novo PAT" : "Testar conexão atual"}
+              </Button>
+            </Stack>
+            <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1 }}>
+              O teste não substitui a credencial salva. Ao salvar um novo PAT, o Hub valida primeiro e preserva o atual se houver falha.
+            </Typography>
           </CardContent>
         </Card>
 
@@ -705,10 +739,14 @@ export function Settings() {
               <TextField label="Endpoint da API" value={form.movideskUrl} onChange={(event) => updateField("movideskUrl", event.target.value)} />
               <TextField type="password" label="Novo token Movidesk" value={form.movideskToken} onChange={(event) => updateField("movideskToken", event.target.value)} autoComplete="new-password" placeholder={configuration?.movideskConfigured ? "Deixe vazio para manter o token atual" : "Cole o token recebido"} helperText="O token atual nunca é exibido e fica criptografado no banco." />
             </Box>
-            <Stack direction="row" spacing={1} sx={{ mt: 2, justifyContent: "flex-end" }}>
+            <Stack direction="row" spacing={1} sx={{ mt: 2, justifyContent: "flex-end", flexWrap: "wrap" }}>
+              <Button variant="outlined" disabled={saving || testingMovidesk || (!configuration?.movideskConfigured && !form.movideskToken.trim())} onClick={() => void testMovideskConnection()}>{testingMovidesk ? "Testando..." : form.movideskToken.trim() ? "Testar novo token" : "Testar conexão atual"}</Button>
               <Button variant="outlined" disabled={saving || previewingMovidesk || !configuration?.movideskConfigured || Boolean(form.movideskToken.trim())} onClick={() => void previewMovidesk()}>{previewingMovidesk ? "Validando amostra..." : "Validar amostra (25)"}</Button>
-              <Button variant="contained" disabled={saving || previewingMovidesk || (!configuration?.movideskConfigured && !form.movideskToken.trim())} onClick={() => void saveAndTestMovidesk()}>{saving ? "Salvando e testando..." : form.movideskToken.trim() ? "Salvar e testar" : "Testar conexão salva"}</Button>
+              <Button variant="contained" disabled={saving || testingMovidesk || previewingMovidesk || !form.movideskToken.trim()} onClick={() => void saveAndTestMovidesk()}>{saving ? "Validando e salvando..." : "Validar e substituir token"}</Button>
             </Stack>
+            <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1 }}>
+              Um novo token só substitui a credencial atual após validação bem-sucedida. Em caso de erro, o token anterior é preservado.
+            </Typography>
             <Box sx={{ mt: 2, p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: 1.5 }}>
               <Stack direction={{ xs: "column", md: "row" }} spacing={1} sx={{ alignItems: { md: "center" }, justifyContent: "space-between" }}>
                 <Box>
