@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 import {
@@ -382,6 +382,7 @@ export function Analysts() {
   const navigate = useNavigate();
   const theme = useTheme();
   const { user } = useAuth();
+  const defaultAnalystApplied = useRef(false);
 
   const [tickets, setTickets] =
     useState<Ticket[]>([]);
@@ -694,13 +695,14 @@ export function Analysts() {
   }, [squadTickets]);
 
   useEffect(() => {
-    if (selectedAnalyst || !user?.name || analystOptions.length === 0) return;
+    if (defaultAnalystApplied.current || selectedAnalyst || !user?.name || analystOptions.length === 0) return;
     const normalizedUser = normalize(user.name);
     const parts = normalizedUser.split(/\s+/).filter((part) => part.length > 2 && !["de","da","do","dos","das"].includes(part));
     const match = analystOptions.find((analyst) => {
       const normalizedAnalyst = normalize(analyst);
       return parts.length > 0 && parts.every((part) => normalizedAnalyst.includes(part));
     });
+    defaultAnalystApplied.current = true;
     if (match) setSelectedAnalyst(match);
   }, [user?.name, selectedAnalyst, analystOptions]);
 
