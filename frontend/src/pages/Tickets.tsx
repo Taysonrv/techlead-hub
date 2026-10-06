@@ -2558,7 +2558,7 @@ export function Tickets() {
               <Box sx={{ mt: 2 }}>
                 <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 900 }}>Ações rápidas</Typography>
                 <Box sx={{ mt: .45, display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(3, minmax(0, 1fr))" }, gap: .8 }}>
-                  <Button size="small" variant="contained" startIcon={<ShareOutlined />} onClick={() => window.dispatchEvent(new CustomEvent("techlead-hub:share-chat", { detail: { label: "Ticket", recordId: selectedTicket.movideskId, title: selectedTicket.subject, client: selectedTicket.client, status: selectedTicket.status, path: `/tickets?movidesk=${selectedTicket.movideskId}` } }))}>Compartilhar</Button>
+                  <Button size="small" variant="contained" startIcon={<ShareOutlined />} onClick={() => window.dispatchEvent(new CustomEvent("techlead-hub:share-chat", { detail: { label: "Ticket", recordId: selectedTicket.movideskId, title: selectedTicket.subject, client: selectedTicket.client, status: selectedTicket.status, path: `/operacao/tickets?movidesk=${selectedTicket.movideskId}` } }))}>Compartilhar</Button>
                   <Button size="small" variant="outlined" endIcon={<OpenInNewOutlined />} onClick={() => openMovideskTicket(selectedTicket)}>Abrir origem</Button>
                   <Button size="small" variant="outlined" startIcon={<SearchOutlined />} onClick={() => navigate(`/investigacao?q=${selectedTicket.movideskId}`)}>Investigar</Button>
                 </Box>
