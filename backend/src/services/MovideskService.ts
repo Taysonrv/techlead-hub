@@ -10,6 +10,8 @@ const PAGE_SIZE = 50;
 const INCREMENTAL_OVERLAP_MINUTES = 10;
 const ANALYTICAL_REFRESH_DAYS = 70;
 const ANALYTICAL_REFRESH_INTERVAL_MS = 6 * 60 * 60 * 1000;
+const ANALYTICAL_BATCH_SIZE = 8;
+const ANALYTICAL_DB_YIELD_MS = 350;
 const REQUEST_RETRY_ATTEMPTS = 6;
 const REQUEST_RETRY_BASE_MS = 2_000;
 const OFFSET_TO_CURSOR_THRESHOLD = 9_000;
@@ -953,7 +955,7 @@ export class MovideskService {
 
     // A API do Movidesk comprovadamente expõe os campos condicionais na consulta
     // individual GET /tickets?id=<id>. Consultas OData em coleção não reproduzem isso.
-    const MAX_PER_RUN = force ? Math.min(unchecked.length, 100) : Math.min(unchecked.length, 20);
+    const MAX_PER_RUN = force ? Math.min(unchecked.length, 40) : Math.min(unchecked.length, ANALYTICAL_BATCH_SIZE);
     const batch = unchecked.slice(0, MAX_PER_RUN);
     let scanned = 0;
     let causesUpdated = 0;
@@ -990,6 +992,9 @@ export class MovideskService {
       if (!Object.keys(data).length) continue;
 
       await prisma.ticket.update({ where: { movideskId: ticket.movideskId }, data });
+      // A reconciliação é manutenção de baixa prioridade. Pequenas pausas entre
+      // escritas devolvem capacidade ao pool para autenticação e requisições interativas.
+      await new Promise((resolve) => setTimeout(resolve, ANALYTICAL_DB_YIELD_MS));
       if (data.cause) causesUpdated += 1;
       if (data.reason) reasonsUpdated += 1;
       if (data.businessArea) businessAreasUpdated += 1;
