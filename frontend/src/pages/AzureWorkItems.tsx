@@ -63,6 +63,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 
@@ -1206,6 +1207,8 @@ export function AzureWorkItems({
     setRefreshing,
   ] = useState(false);
 
+  const hasLoadedRef = useRef(false);
+
   const [
     detailLoading,
     setDetailLoading,
@@ -1591,7 +1594,7 @@ export function AzureWorkItems({
   const loadAll =
     useCallback(
       async () => {
-        const hasData = Boolean(summary || list);
+        const hasData = hasLoadedRef.current;
         try {
           if (hasData) setRefreshing(true);
           else setLoading(true);
@@ -1616,6 +1619,7 @@ export function AzureWorkItems({
             "Não foi possível carregar os dados sincronizados do Azure DevOps.",
           );
         } finally {
+          hasLoadedRef.current = true;
           setLoading(false);
           setRefreshing(false);
         }
@@ -1623,8 +1627,6 @@ export function AzureWorkItems({
       [
         loadList,
         loadSummary,
-        summary,
-        list,
       ],
     );
 
