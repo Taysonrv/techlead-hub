@@ -4,6 +4,8 @@ import {
 
 import {
   prisma,
+  ensureDatabaseAvailable,
+  reportDatabaseFailure,
 } from "../database/prisma";
 
 import {
@@ -234,6 +236,10 @@ export class AzureDevOpsSyncScheduler {
 
   private async execute():
     Promise<void> {
+    if (!(await ensureDatabaseAvailable())) {
+      console.warn("[azure-sync] PostgreSQL indisponível; ciclo incremental adiado.");
+      return;
+    }
     if (
       this.running
     ) {
@@ -363,10 +369,12 @@ export class AzureDevOpsSyncScheduler {
        * derrubam o servidor. O scheduler tentará novamente
        * no próximo ciclo.
        */
-      console.error(
-        "[azure-sync] Falha na sincronização incremental automática:",
-        error,
-      );
+      if (!reportDatabaseFailure(error)) {
+        console.error(
+          "[azure-sync] Falha na sincronização incremental automática:",
+          error,
+        );
+      }
     } finally {
       this.running =
         false;
