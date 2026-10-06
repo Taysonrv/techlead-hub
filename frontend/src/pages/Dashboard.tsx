@@ -2944,13 +2944,13 @@ function DonutAnalysisCard({
       <CardPeriodHeader title={title} subtitle={subtitle} value={period} onChange={onPeriodChange} />
       <Box sx={{
         display: "grid",
-        gridTemplateColumns: { xs: "1fr", sm: "minmax(190px, .9fr) minmax(0, 1.1fr)" },
-        gap: { xs: 1, sm: 2 },
+        gridTemplateColumns: { xs: "1fr", md: "minmax(210px, .82fr) minmax(0, 1.18fr)" },
+        gap: { xs: .75, md: 1.5 },
         alignItems: "center",
         mt: 1.25,
-        minHeight: { xs: 0, sm: 225 },
+        minHeight: { xs: 0, md: 210 },
       }}>
-        <Box sx={{ height: { xs: 210, sm: 225 }, minWidth: 0, position: "relative" }}>
+        <Box sx={{ height: { xs: 190, sm: 200, md: 210 }, minWidth: 0, position: "relative" }}>
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               <Pie
@@ -2959,8 +2959,8 @@ function DonutAnalysisCard({
                 nameKey="label"
                 cx="50%"
                 cy="50%"
-                innerRadius={62}
-                outerRadius={92}
+                innerRadius={56}
+                outerRadius={82}
                 paddingAngle={2}
                 cornerRadius={5}
                 stroke={theme.palette.background.paper}
@@ -2980,16 +2980,16 @@ function DonutAnalysisCard({
             </PieChart>
           </ResponsiveContainer>
           <Box sx={{ position: "absolute", inset: 0, display: "grid", placeContent: "center", pointerEvents: "none", textAlign: "center" }}>
-            <Typography sx={{ fontSize: "1.55rem", fontWeight: 900, lineHeight: 1 }}>{total}</Typography>
+            <Typography sx={{ fontSize: "1.42rem", fontWeight: 900, lineHeight: 1 }}>{total}</Typography>
             <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>tickets</Typography>
           </Box>
         </Box>
 
         <Box sx={{
           display: "grid",
-          gridTemplateColumns: { xs: "1fr", md: data.length > 4 ? "repeat(2, minmax(0, 1fr))" : "1fr" },
+          gridTemplateColumns: { xs: "1fr", sm: data.length > 4 ? "repeat(2, minmax(0, 1fr))" : "1fr" },
           columnGap: 1.25,
-          rowGap: .45,
+          rowGap: .3,
           alignContent: "center",
           minWidth: 0,
         }}>
@@ -3007,7 +3007,7 @@ function DonutAnalysisCard({
                   gap: .8,
                   cursor: "pointer",
                   px: .8,
-                  py: .65,
+                  py: .55,
                   borderRadius: 1.5,
                   opacity: active ? 1 : .38,
                   transition: "background-color .16s ease, opacity .16s ease",
