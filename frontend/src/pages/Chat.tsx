@@ -397,7 +397,7 @@ export function Chat() {
     const type = String(card.type || "").toLocaleLowerCase("pt-BR");
     if (Number.isFinite(id) && id > 0) {
       if (type.includes("ticket") || type.includes("atendimento")) {
-        navigate(`/tickets?movidesk=${id}`);
+        navigate(`/operacao/tickets?movidesk=${id}`);
         return;
       }
       if (type.includes("apoio")) {
