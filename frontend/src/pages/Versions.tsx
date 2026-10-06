@@ -1909,14 +1909,14 @@ export function Versions() {
             xs:
               "1fr",
             sm:
-              "repeat(2, 1fr)",
+              "repeat(2, minmax(0, 1fr))",
             lg:
-              "repeat(4, 1fr)",
+              "repeat(3, minmax(0, 1fr))",
             xl:
-              "repeat(5, 1fr)",
+              "repeat(5, minmax(0, 1fr))",
           },
           gap:
-            1.5,
+            1.25,
           mb:
             2,
           order:
@@ -3592,8 +3592,8 @@ function DonutCard({
           />
         </Stack>
 
-        <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "minmax(190px,.9fr) minmax(0,1.1fr)" }, gap: { xs: .75, sm: 1.5 }, alignItems: "center", mt: 1 }}>
-          <Box sx={{ height: { xs: 210, sm: 225 }, minWidth: 0 }}>
+        <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "minmax(210px,.82fr) minmax(0,1.18fr)" }, gap: { xs: .75, md: 1.25 }, alignItems: "center", mt: 1 }}>
+          <Box sx={{ height: { xs: 190, sm: 200, md: 210 }, minWidth: 0 }}>
           {data.length >
           0 ? (
             <ResponsiveContainer
