@@ -14,7 +14,7 @@ import {
   DashboardOutlined,
   NewReleasesOutlined,
   OpenInNewOutlined,
-  PersonOutline,
+  PersonOutlined,
   SearchOutlined,
 } from "@mui/icons-material";
 import { useEffect, useMemo, useState } from "react";
@@ -72,7 +72,7 @@ export function ReleaseHighlights() {
       description: "Comece pelos destaques da atualização. Eles resumem as mudanças que impactam sua rotina.",
     },
     {
-      icon: <PersonOutline />,
+      icon: <PersonOutlined />,
       title: "Sua operação já vem focada",
       description: "Tickets e Analistas tentam abrir com o seu próprio recorte. Limpe o filtro quando quiser analisar toda a equipe.",
     },
