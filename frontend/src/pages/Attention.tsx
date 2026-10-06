@@ -136,7 +136,7 @@ type AttentionTicket = Ticket & {
 };
 
 type RecurrenceCandidate = { service:string; category:string; cause:string; cases:number; clients:number; tickets:number[]; priority:"high"|"medium"|"review"; score:number; recent30:number; trendPct:number; topTerms:string[] };
-type RecurrenceResponse = { items: RecurrenceCandidate[]; summary:{total:number;high:number;rising:number;multiClient:number} };
+type RecurrenceResponse = { items: RecurrenceCandidate[]; summary:{total:number;high:number;rising:number;multiClient:number;anomalies:number}; anomalies?:Array<{service:string;reason:string;severity:"critical"|"warning";score:number;trendPct:number;recent30:number;tickets:number[]}> };
 
 type CardInfoDefinition = {
   title: string;
@@ -834,7 +834,7 @@ export function Attention() {
               <Box>
                 <Typography sx={{ fontWeight: 850 }}>Sinais de recorrência operacional</Typography>
                 <Typography variant="body2" color="text.secondary">
-                  {recurrence.summary.high} alta(s) · {recurrence.summary.rising} em crescimento · {recurrence.summary.multiClient} atingindo múltiplos clientes
+                  {recurrence.summary.high} alta(s) · {recurrence.summary.rising} em crescimento · {recurrence.summary.multiClient} atingindo múltiplos clientes · {recurrence.summary.anomalies} anomalia(s)
                 </Typography>
               </Box>
               <Button size="small" variant="outlined" onClick={() => navigate("/problemas-conhecidos")}>Revisar recorrências</Button>
@@ -842,6 +842,9 @@ export function Attention() {
             <Stack direction="row" spacing={.7} useFlexGap sx={{ mt:1, flexWrap:"wrap" }}>
               {recurrence.items.slice(0,4).map((item) => <Chip key={item.service+"|"+item.cause} color={item.priority==="high"?"error":"warning"} variant="outlined" label={`${item.service} · ${item.cases} casos · score ${item.score}`} onClick={() => navigate(`/problemas-conhecidos?q=${encodeURIComponent(item.service)}`)} />)}
             </Stack>
+            {recurrence.anomalies?.[0] && <Alert severity={recurrence.anomalies[0].severity==="critical"?"error":"warning"} variant="outlined" sx={{mt:1}}>
+              <strong>Anomalia detectada:</strong> {recurrence.anomalies[0].service} — {recurrence.anomalies[0].reason}.
+            </Alert>}
           </CardContent>
         </Card>
       )}
