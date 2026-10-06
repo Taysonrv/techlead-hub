@@ -171,7 +171,7 @@ function AuthenticatedLayout({
               },
             }}
           >
-<Box sx={isChat ? { position: "relative", zIndex: (theme) => theme.zIndex.appBar, px: { xs: 1.5, sm: 2, md: 2.5, lg: 3, xl: 4 }, pt: { xs: 1.5, sm: 2, md: 2.5, lg: 3, xl: 3.5 }, height: { xs: 62, md: 70 }, boxSizing: "border-box", overflow: "visible" } : { px: { xs: 1.5, sm: 2, md: 2.5, lg: 3, xl: 4 } }}><GlobalTopBar /></Box>
+<Box sx={isChat ? { position: "relative", zIndex: (theme) => theme.zIndex.appBar, px: { xs: 1.5, sm: 2, md: 2.5, lg: 3, xl: 4 }, pt: { xs: 1.5, sm: 2, md: 2.5, lg: 3, xl: 3.5 }, height: { xs: 62, md: 70 }, boxSizing: "border-box", overflow: "visible", pointerEvents: "none", "& .MuiTextField-root, & input, & button, & [role='button']": { pointerEvents: "auto" } } : { px: { xs: 1.5, sm: 2, md: 2.5, lg: 3, xl: 4 } }}><GlobalTopBar /></Box>
             {forbiddenMessage && <Alert severity="warning" sx={{ mx: { xs: 1.5, sm: 2, md: 2.5, lg: 3, xl: 4 }, mb: 2, borderRadius: 2.5 }} onClose={() => setForbiddenMessage(null)}>{forbiddenMessage}</Alert>}
             <Box
               className="techlead-page-surface futuristic-page"
