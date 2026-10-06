@@ -4027,10 +4027,12 @@ export function AzureWorkItems({
 
                               <TableCell
                                 sx={{
+                                  width:
+                                    360,
                                   minWidth:
-                                    340,
+                                    300,
                                   maxWidth:
-                                    520,
+                                    420,
                                 }}
                               >
                                 <Stack
@@ -4041,7 +4043,20 @@ export function AzureWorkItems({
                                     sx={{
                                       fontWeight:
                                         650,
+                                      lineHeight:
+                                        1.35,
+                                      display:
+                                        "-webkit-box",
+                                      WebkitLineClamp:
+                                        3,
+                                      WebkitBoxOrient:
+                                        "vertical",
+                                      overflow:
+                                        "hidden",
+                                      overflowWrap:
+                                        "anywhere",
                                     }}
+                                    title={item.title}
                                   >
                                     {item.title}
                                   </Typography>
