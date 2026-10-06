@@ -80,12 +80,19 @@ class SystemConfigurationService {
     if (!organization || !project || !pat) throw new Error("Azure DevOps: organização, projeto e PAT são obrigatórios para validar a conexão.");
     const auth = Buffer.from(`:${pat}`, "utf8").toString("base64");
     try {
-      await axios.get(`https://dev.azure.com/${encodeURIComponent(organization)}/${encodeURIComponent(project)}/_apis/wit/wiql`, {
-        headers: { Accept: "application/json", Authorization: `Basic ${auth}` },
-        params: { "api-version": "7.1" },
-        timeout: 15_000,
-        validateStatus: (status) => status >= 200 && status < 300,
-      });
+      // WIQL is a POST-only endpoint in Azure DevOps. Use a minimal valid
+      // query so the credential is tested against the same Work Items API
+      // consumed by the synchronization service.
+      await axios.post(
+        `https://dev.azure.com/${encodeURIComponent(organization)}/${encodeURIComponent(project)}/_apis/wit/wiql`,
+        { query: "SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = @project ORDER BY [System.ChangedDate] DESC" },
+        {
+          headers: { Accept: "application/json", "Content-Type": "application/json", Authorization: `Basic ${auth}` },
+          params: { "api-version": "7.1", "$top": "1" },
+          timeout: 15_000,
+          validateStatus: (status) => status >= 200 && status < 300,
+        },
+      );
     } catch (error) {
       if (axios.isAxiosError(error)) {
         const status = error.response?.status;
