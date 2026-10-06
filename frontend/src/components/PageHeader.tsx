@@ -5,16 +5,16 @@ import { aliareColors } from "../theme/theme";
 export function PageHeader({ eyebrow, title, description, meta, action }: { eyebrow: string; title: string; description: string; meta?: ReactNode; action?: ReactNode }) {
   const theme = useTheme();
   const dark = theme.palette.mode === "dark";
-  return <Stack direction={{ xs: "column", lg: "row" }} sx={{ justifyContent: "space-between", alignItems: { xs: "stretch", lg: "center" }, gap: 2, mb: { xs: 1.75, md: 2.25 }, position: "relative", overflow: "hidden", p: { xs: 1.6, sm: 1.85, md: 2 }, minHeight: { md: 116 }, borderRadius: { xs: 2.5, md: 3 }, isolation: "isolate", border: "1px solid", borderColor: dark ? "rgba(76,190,230,.20)" : "rgba(15,118,110,.13)", background: dark ? "radial-gradient(circle at 8% 0%, rgba(24,199,122,.12), transparent 34%), linear-gradient(125deg, rgba(9,39,59,.98), rgba(13,31,57,.98) 62%, rgba(18,34,60,.97))" : "linear-gradient(120deg, #F3FCF8 0%, #F7FBFA 48%, #F4F8FC 100%)", boxShadow: dark ? "inset 3px 0 0 #18C77A, 0 16px 38px rgba(0,0,0,.18), inset 0 1px rgba(255,255,255,.035)" : "inset 3px 0 0 #18C77A, 0 8px 22px rgba(16,24,40,.045)", "&::after": { display: "none" } }}>
+  return <Stack direction={{ xs: "column", lg: "row" }} sx={{ justifyContent: "space-between", alignItems: { xs: "stretch", lg: "center" }, gap: 2, mb: { xs: 1.75, md: 2.25 }, position: "relative", overflow: "hidden", p: { xs: 1.5, sm: 1.7, md: 1.85 }, minHeight: { md: 108 }, borderRadius: { xs: 2.5, md: 3 }, isolation: "isolate", border: "1px solid", borderColor: dark ? "rgba(76,190,230,.20)" : "rgba(15,118,110,.13)", background: dark ? "radial-gradient(circle at 8% 0%, rgba(24,199,122,.12), transparent 34%), linear-gradient(125deg, rgba(9,39,59,.98), rgba(13,31,57,.98) 62%, rgba(18,34,60,.97))" : "linear-gradient(120deg, #F3FCF8 0%, #F7FBFA 48%, #F4F8FC 100%)", boxShadow: dark ? "inset 3px 0 0 #18C77A, 0 16px 38px rgba(0,0,0,.18), inset 0 1px rgba(255,255,255,.035)" : "inset 3px 0 0 #18C77A, 0 8px 22px rgba(16,24,40,.045)", "&::after": { display: "none" } }}>
     <Box sx={{ position: "relative", zIndex: 1, minWidth: 0, flex: 1, textAlign: "left" }}>
       <Stack direction="row" spacing={1} sx={{ alignItems: "center", justifyContent: "flex-start" }}>
         <Box sx={{ width: 34, height: 3, borderRadius: 99, bgcolor: aliareColors.green, boxShadow: dark ? "0 0 12px rgba(24,199,122,.35)" : "none" }} />
         <Typography variant="caption" sx={{ fontWeight: 750, letterSpacing: ".09em", textTransform: "uppercase", color: dark ? "#42E6C1" : aliareColors.greenDark }}>{eyebrow}</Typography>
       </Stack>
-      <Typography sx={{ mt: .8, fontWeight: 780, letterSpacing: "-.028em", fontSize: { xs: "1.55rem", sm: "1.72rem", md: "1.9rem", xl: "2rem" }, lineHeight: 1.12, textShadow: dark ? "0 2px 18px rgba(0,0,0,.28)" : "none" }}>{title}</Typography>
+      <Typography sx={{ mt: .8, fontWeight: 780, letterSpacing: "-.028em", fontSize: { xs: "1.48rem", sm: "1.65rem", md: "1.82rem", xl: "1.92rem" }, lineHeight: 1.12, textShadow: dark ? "0 2px 18px rgba(0,0,0,.28)" : "none" }}>{title}</Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mt: .25 }}>{description}</Typography>
       {meta && <Typography component="div" variant="caption" color="text.secondary" sx={{ mt: .5 }}>{meta}</Typography>}
     </Box>
-    {action && <Box sx={{ position: "relative", zIndex: 1, flexShrink: 0, alignSelf: { xs: "stretch", lg: "center" }, "& > *": { maxWidth: "100%" } }}>{action}</Box>}
+    {action && <Box sx={{ position: "relative", zIndex: 1, flexShrink: 0, alignSelf: { xs: "stretch", lg: "center" }, minWidth: 0, "& > *": { maxWidth: "100%" }, "& .MuiButton-root": { width: { xs: "100%", sm: "auto" } } }}>{action}</Box>}
   </Stack>;
 }
