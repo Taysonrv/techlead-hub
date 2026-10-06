@@ -620,7 +620,7 @@ export function Performance() {
         Os prazos calculados em horas úteis são exibidos separadamente como risco operacional.
       </Alert>
 
-      <Box sx={{ display:"grid", gridTemplateColumns:{xs:"1fr",sm:"repeat(2,minmax(0,1fr))",lg:"repeat(5,minmax(0,1fr))"}, gap:1.25, mb:1.75 }}>
+      <Box sx={{ display:"grid", gridTemplateColumns:{xs:"1fr",sm:"repeat(2,minmax(0,1fr))",lg:"repeat(3,minmax(0,1fr))",xl:"repeat(5,minmax(0,1fr))"}, gap:1.25, mb:1.75 }}>
         <PerformanceKpi title="Tickets abertos" value={operationalSummary.opened} description="Entradas do período atribuídas à operação SIMER" accent={aliareColors.info} info={{title:"Tickets abertos",summary:"Mesmo cohort do Resumo Executivo: tickets criados no período sob responsabilidade da operação SIMER.",calculation:"createdDate no período + isWithSimer = true.",source:"Movidesk",periodRule:"Segue integralmente o período global selecionado."}} />
         <PerformanceKpi title="Tickets fechados" value={operationalSummary.closed} description="Fechamentos ocorridos no período" accent={aliareColors.green} info={{title:"Tickets fechados",summary:"Mesmo fluxo do Resumo Executivo: tickets SIMER cuja data de fechamento ocorreu no período.",calculation:"isWithSimer = true + closedDate no período.",source:"Movidesk",periodRule:"Segue integralmente o período global selecionado."}} />
         <PerformanceKpi title="Backlog atual" value={operationalSummary.pending} description="Estoque atual de tickets ativos" accent={aliareColors.warning} info={{title:"Backlog atual",summary:"Mesmo estoque do Resumo Executivo: tickets atualmente ativos sob responsabilidade SIMER, independentemente da data de abertura.",calculation:"isWithSimer = true + status operacional ativo.",source:"Movidesk",periodRule:"Não é limitado pela data de abertura; representa o backlog atual."}} />
@@ -1662,7 +1662,7 @@ function DonutCard({
           <CardInfoButton info={info} />
         </Stack>
 
-        <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "minmax(190px,.9fr) minmax(0,1.1fr)" }, gap: { xs: .75, sm: 1.5 }, alignItems: "center", mt: 1 }}>
+        <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "minmax(210px,.82fr) minmax(0,1.18fr)" }, gap: { xs: .75, md: 1.25 }, alignItems: "center", mt: 1 }}>
           <Box sx={{ height: { xs: 210, sm: 225 }, minWidth: 0 }}>
             
                       {data.length > 0 ? (
@@ -1744,7 +1744,7 @@ function DonutCard({
                         <EmptyState text="Sem dados para este indicador." />
                       )}
           </Box>
-          <Box sx={{ minWidth: 0, maxHeight: { sm: 225 }, overflowY: "auto", pr: { sm: .5 } }}>
+          <Box sx={{ minWidth: 0, maxHeight: { md: 210 }, overflowY: "auto", pr: { sm: .5 } }}>
                     {data.length > 0 && (
                       <Stack spacing={0.55}>
                         {data.map((item) => {
