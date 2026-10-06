@@ -43,6 +43,7 @@ import {
 import {
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 
@@ -246,6 +247,7 @@ type KpiCardProps = {
 export function Tickets() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const defaultAnalystApplied = useRef(false);
   const [searchParams] = useSearchParams();
   const [ticketActionsAnchor, setTicketActionsAnchor] = useState<HTMLElement | null>(null);
 
@@ -579,14 +581,15 @@ export function Tickets() {
 
 
   useEffect(() => {
-    if (!user?.name || sharedAnalysts.length > 0 || tickets.length === 0) return;
-    if (searchParams.get("movidesk") || searchParams.get("task")) return;
+    if (defaultAnalystApplied.current || !user?.name || sharedAnalysts.length > 0 || tickets.length === 0) return;
+    if (searchParams.get("movidesk") || searchParams.get("task")) { defaultAnalystApplied.current = true; return; }
     const normalizedUser = normalize(user.name);
     const userParts = normalizedUser.split(/\s+/).filter((part) => part.length > 2 && !["de","da","do","dos","das"].includes(part));
     const match = owners.find((analyst) => {
       const normalizedAnalyst = normalize(analyst);
       return userParts.length > 0 && userParts.every((part) => normalizedAnalyst.includes(part));
     });
+    defaultAnalystApplied.current = true;
     if (match) setSharedAnalysts([match]);
   }, [user?.name, sharedAnalysts.length, tickets.length, owners, searchParams, setSharedAnalysts]);
 
