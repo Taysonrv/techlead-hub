@@ -12,6 +12,18 @@ export type ReleaseNote = {
 export const FALLBACK_APP_VERSION = import.meta.env.VITE_APP_VERSION || "development";
 
 export const releaseNotes: Record<string, ReleaseNote> = {
+  "2.1.0-rc.2": {
+    version: "2.1.0-rc.2",
+    title: "Operação personalizada, performance e inteligência por analista",
+    items: [
+      { title: "Minha carteira ao entrar", description: "Tickets e Analistas reconhecem o usuário autenticado e iniciam no recorte correspondente, mantendo liberdade para limpar ou trocar o filtro." },
+      { title: "Analistas mais acionável", description: "Leitura rápida, equilíbrio de carteira e tendência contra o período anterior ajudam a identificar carga, críticos, parados e evolução operacional." },
+      { title: "Chat com deep-link", description: "Atendimentos e Tasks compartilhados no Chat passam a abrir diretamente no registro correspondente." },
+      { title: "Navegação mais rápida", description: "Rotas frequentes são pré-carregadas progressivamente e a aplicação mantém feedback visual durante a primeira carga." },
+      { title: "Atualização visível", description: "Quando uma versão Desktop estiver disponível, um aviso no topo permite iniciar o download e instalar assim que estiver pronta." },
+      { title: "Desktop mais enxuto", description: "O empacotamento exclui artefatos de desenvolvimento desnecessários do runtime para reduzir trabalho do instalador e da atualização." },
+    ],
+  },
   "2.1.0": {
     version: "2.1.0",
     title: "Inteligência operacional, recorrência e investigação assistida",
