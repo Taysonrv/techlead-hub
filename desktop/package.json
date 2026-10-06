@@ -63,7 +63,15 @@
         "from": "../backend/node_modules",
         "to": "backend/node_modules",
         "filter": [
-          "**/*"
+          "**/*",
+          "!**/*.map",
+          "!**/.cache/**",
+          "!**/test/**",
+          "!**/tests/**",
+          "!**/__tests__/**",
+          "!**/docs/**",
+          "!**/example/**",
+          "!**/examples/**"
         ]
       },
       {
