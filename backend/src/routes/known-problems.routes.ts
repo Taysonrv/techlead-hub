@@ -55,19 +55,39 @@ knownProblemRoutes.get("/candidates", async (_req: AuthenticatedRequest,res) => 
     const since=new Date(); since.setDate(since.getDate()-180);
     const tickets=await prisma.ticket.findMany({
       where:{AND:[knownProblemTicketScope(),{isDeleted:false,createdDate:{gte:since}}]},
-      select:{movideskId:true,subject:true,client:true,category:true,cause:true,service:true,serviceFirstLevel:true,serviceSecondLevel:true,serviceThirdLevel:true,taskNumber:true,deliveredVersion:true,registeredVersion:true,createdDate:true},
-      orderBy:{createdDate:"desc"},take:2500
+      select:{movideskId:true,subject:true,client:true,category:true,cause:true,causeDetail:true,reason:true,service:true,serviceFirstLevel:true,serviceSecondLevel:true,serviceThirdLevel:true,taskNumber:true,deliveredVersion:true,registeredVersion:true,createdDate:true},
+      orderBy:{createdDate:"desc"},take:3000
     });
     const norm=(v?:string|null)=>String(v??"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").trim().toLowerCase();
+    const words=(v?:string|null)=>[...new Set(norm(v).split(/[^a-z0-9]+/).filter(x=>x.length>=4&&!["para","como","erro","problema","ticket","simer","cliente","nao","com","sem"].includes(x)))];
     const service=(t:any)=>t.serviceThirdLevel||t.serviceSecondLevel||t.serviceFirstLevel||t.service||"Sem serviço";
-    const groups=new Map<string,{service:string;category:string;version:string;cases:number;clients:Set<string>;tickets:number[];subjects:string[];tasks:Set<number>}>();
-    tickets.forEach(t=>{const svc=service(t),cat=t.category||"Sem categoria",ver=t.deliveredVersion||t.registeredVersion||"Sem versão";const key=[norm(svc),norm(cat),norm(ver)].join("|");const g=groups.get(key)??{service:svc,category:cat,version:ver,cases:0,clients:new Set<string>(),tickets:[] as number[],subjects:[] as string[],tasks:new Set<number>()};g.cases++;if(t.client)g.clients.add(t.client);g.tickets.push(t.movideskId);if(t.subject)g.subjects.push(t.subject);if(t.taskNumber)g.tasks.add(t.taskNumber);groups.set(key,g);});
+    type Group={service:string;category:string;cause:string;version:string;cases:number;clients:Set<string>;tickets:number[];subjects:string[];tasks:Set<number>;dates:Date[];tokens:Map<string,number>};
+    const groups=new Map<string,Group>();
+    tickets.forEach(t=>{
+      const svc=service(t),cat=t.category||"Sem categoria",cause=t.causeDetail||t.cause||t.reason||"Sem causa",ver=t.deliveredVersion||t.registeredVersion||"Sem versão";
+      const subjectTokens=words(t.subject);
+      // Service/category/cause form the stable operational signature. Subject tokens
+      // are accumulated to explain the recurrence without making wording differences
+      // split the same incident family.
+      const key=[norm(svc),norm(cat),norm(cause)].join("|");
+      const g=groups.get(key)??{service:svc,category:cat,cause,version:ver,cases:0,clients:new Set<string>(),tickets:[],subjects:[],tasks:new Set<number>(),dates:[],tokens:new Map<string,number>()};
+      g.cases++; if(t.client)g.clients.add(t.client); g.tickets.push(t.movideskId); if(t.subject)g.subjects.push(t.subject); if(t.taskNumber)g.tasks.add(t.taskNumber); g.dates.push(t.createdDate);
+      subjectTokens.forEach(token=>g.tokens.set(token,(g.tokens.get(token)??0)+1)); groups.set(key,g);
+    });
     const existing=await prisma.$queryRawUnsafe<any[]>(`SELECT "service","version","movideskTicket","azureWorkItem" FROM "KnownProblem" WHERE "archived"=FALSE`);
+    const now=Date.now();
     const candidates=[...groups.values()].filter(g=>g.cases>=3).map(g=>{
       const covered=existing.some(k=>(k.service&&norm(k.service)===norm(g.service)&&(!k.version||k.version===g.version))||g.tickets.includes(Number(k.movideskTicket))||[...g.tasks].includes(Number(k.azureWorkItem)));
-      return {service:g.service,category:g.category,version:g.version,cases:g.cases,clients:g.clients.size,tickets:g.tickets.slice(0,8),tasks:[...g.tasks].slice(0,8),sampleSubjects:g.subjects.slice(0,3),covered,priority:g.clients.size>=2&&g.cases>=5?"high":g.cases>=5?"medium":"review"};
-    }).filter(x=>!x.covered).sort((a,b)=>b.clients-a.clients||b.cases-a.cases).slice(0,20);
-    res.json({items:candidates,periodDays:180,generatedAt:new Date().toISOString()});
+      const recent30=g.dates.filter(d=>now-d.getTime()<=30*86400000).length;
+      const previous30=g.dates.filter(d=>{const age=now-d.getTime();return age>30*86400000&&age<=60*86400000}).length;
+      const trendPct=previous30>0?Math.round(((recent30-previous30)/previous30)*100):recent30>0?100:0;
+      const topTerms=[...g.tokens.entries()].filter(([,count])=>count>=Math.max(2,Math.ceil(g.cases*.3))).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([term])=>term);
+      const linkedTasks=[...g.tasks];
+      const score=Math.min(100,Math.round(g.cases*8+g.clients.size*10+Math.min(20,recent30*4)+Math.min(15,linkedTasks.length*5)+(trendPct>0?10:0)));
+      return {service:g.service,category:g.category,cause:g.cause,version:g.version,cases:g.cases,clients:g.clients.size,tickets:g.tickets.slice(0,12),tasks:linkedTasks.slice(0,8),sampleSubjects:g.subjects.slice(0,3),covered,priority:score>=70?"high":score>=48?"medium":"review",score,recent30,previous30,trendPct,topTerms,linkedTaskCount:linkedTasks.length};
+    }).filter(x=>!x.covered).sort((a,b)=>b.score-a.score||b.clients-a.clients||b.cases-a.cases).slice(0,24);
+    const summary={total:candidates.length,high:candidates.filter(x=>x.priority==="high").length,rising:candidates.filter(x=>x.trendPct>0).length,multiClient:candidates.filter(x=>x.clients>=2).length};
+    res.json({items:candidates,summary,periodDays:180,generatedAt:new Date().toISOString()});
   } catch(error){console.error("[known-problems] candidates",error);res.status(500).json({error:"Não foi possível calcular candidatos a Problema Conhecido."});}
 });
 
