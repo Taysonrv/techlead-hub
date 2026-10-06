@@ -335,7 +335,7 @@ export function Coordination() {
               <Chip size="small" variant="outlined" label={`${integrationHealth.causeCoveragePct}% com causa`} />
               <Chip size="small" variant="outlined" label={`${integrationHealth.businessAreaCoveragePct}% com área de negócio`} />
               </Stack>
-              <Box sx={{ display:"grid", gridTemplateColumns:{ xs:"1fr 1fr", md:"repeat(5,1fr)" }, gap:1 }}>
+              <Box sx={{ display:"grid", gridTemplateColumns:{ xs:"1fr", sm:"repeat(2,minmax(0,1fr))", lg:"repeat(3,minmax(0,1fr))", xl:"repeat(5,minmax(0,1fr))" }, gap:1 }}>
                 <KpiCard title="Tickets" value={integrationHealth.tickets} subtitle="Movidesk" info="Tickets dos clientes da carteira SIMER." accent={aliareColors.info}/>
                 <KpiCard title="Vínculos Task" value={integrationHealth.linkedTasks} subtitle="Movidesk → Azure" info="Tickets com número de Task relacionado." accent={aliareColors.green}/>
                 <KpiCard title="Work Items" value={integrationHealth.azureItems} subtitle="Azure DevOps" info="Itens Azure no escopo da coordenação." accent={aliareColors.info}/>
@@ -365,7 +365,7 @@ export function Coordination() {
                       <Box><Typography sx={{fontWeight:900}}>Saúde SLA × OLA</Typography><Typography variant="body2" color="text.secondary">Índice transparente para leitura executiva; cada componente permanece disponível separadamente.</Typography></Box>
                       <Stack direction="row" spacing={1} sx={{alignItems:"center"}}><Chip color={slaDevelopment.health.status==="stable"?"success":slaDevelopment.health.status==="attention"?"warning":"error"} label={`${slaDevelopment.health.score}% · ${slaDevelopment.health.status==="stable"?"Estável":slaDevelopment.health.status==="attention"?"Atenção":"Crítico"}`}/><Tooltip title={slaDevelopment.health.formula}><InfoOutlined sx={{fontSize:18,color:"text.secondary"}}/></Tooltip></Stack>
                     </Stack>
-                    <Box sx={{display:"grid",gridTemplateColumns:{xs:"1fr",sm:"repeat(2,1fr)",xl:"repeat(4,1fr)"},gap:1}}>
+                    <Box sx={{display:"grid",gridTemplateColumns:{xs:"1fr",sm:"repeat(2,minmax(0,1fr))",xl:"repeat(4,minmax(0,1fr))"},gap:1}}>
                       {slaDevelopment.health.components.map(component=><Box key={component.key} sx={{p:1.1,border:"1px solid",borderColor:"divider",borderRadius:2,bgcolor:"background.paper"}}><Stack direction="row" sx={{justifyContent:"space-between",gap:1}}><Typography variant="caption" color="text.secondary" sx={{fontWeight:800}}>{component.label}</Typography><Typography variant="caption" color="text.secondary">{component.weight}% peso</Typography></Stack><Typography sx={{fontSize:"1.35rem",fontWeight:900,my:.4}}>{component.score}%</Typography><LinearProgress variant="determinate" value={component.score} sx={{height:5,borderRadius:99,mb:.6}}/><Typography variant="caption" color="text.secondary">{component.detail}</Typography></Box>)}
                     </Box>
                     {slaDevelopment.health.alerts.length>0&&<Stack spacing={.7} sx={{mt:1}}>{slaDevelopment.health.alerts.map((alert,i)=><Alert key={i} severity={alert.severity} variant="outlined"><Typography sx={{fontWeight:800}}>{alert.title}</Typography><Typography variant="body2">{alert.detail}</Typography></Alert>)}</Stack>}
@@ -373,7 +373,7 @@ export function Coordination() {
                   <Alert severity={slaDevelopment.dataQuality.missingAzure || slaDevelopment.dataQuality.missingTaskCreatedAt || slaDevelopment.dataQuality.missingPriority || slaDevelopment.dataQuality.invalidTimeline ? "warning" : "success"} variant="outlined">
                     Cobertura: {slaDevelopment.dataQuality.linked}/{slaDevelopment.dataQuality.bugsInPeriod} correções vinculadas. Sem Azure: {slaDevelopment.dataQuality.missingAzure} · sem abertura da Task: {slaDevelopment.dataQuality.missingTaskCreatedAt} · sem prioridade: {slaDevelopment.dataQuality.missingPriority} · linha temporal inválida: {slaDevelopment.dataQuality.invalidTimeline ?? 0}.
                   </Alert>
-                  <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2,1fr)", xl: "repeat(5,1fr)" }, gap: 1.25 }}>
+                  <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2,minmax(0,1fr))", lg: "repeat(3,minmax(0,1fr))", xl: "repeat(5,minmax(0,1fr))" }, gap: 1.1 }}>
                     <KpiCard title="OLA Suporte" value={`${rate(slaDevelopment.summary.supportWithinOla, slaDevelopment.summary.bugsWithTask)}%`} subtitle={`${formatHours(slaDevelopment.summary.avgSupportMinutes)} em média`} info="Da abertura do ticket Movidesk até a abertura da Task no Azure. Considera todas as correções com Task válida." accent={aliareColors.info} />
                     <KpiCard title="OLA Desenvolvimento" value={`${rate(slaDevelopment.summary.factoryWithinOla, slaDevelopment.summary.bugsWithTask)}%`} subtitle={`${formatHours(slaDevelopment.summary.avgFactoryMinutes)} consumidas em média`} info="Da abertura da Task até a conclusão; para itens ainda abertos, mede o consumo acumulado até o fim do recorte." accent={aliareColors.green} />
                     <KpiCard title="SLA concluídos" value={slaDevelopment.summary.concluded ? `${rate(slaDevelopment.summary.totalWithinSla, slaDevelopment.summary.concluded)}%` : "—"} subtitle={`${slaDevelopment.summary.concluded} concluída(s) · ${formatHours(slaDevelopment.summary.avgTotalMinutes)} média`} info="SLA final calculado somente para correções cuja Task já foi concluída." accent={aliareColors.warning} />
@@ -442,7 +442,7 @@ export function Coordination() {
               </Stack>
               {csatLoading ? <LinearProgress sx={{ borderRadius: 2 }} /> : csat ? (
                 <Stack spacing={1.5}>
-                  <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2,1fr)", xl: "repeat(4,1fr)" }, gap: 1.25 }}>
+                  <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2,minmax(0,1fr))", xl: "repeat(4,minmax(0,1fr))" }, gap: 1.1 }}>
                     <KpiCard title="CSAT médio" value={csat.summary.responses ? csat.summary.average.toLocaleString("pt-BR", { maximumFractionDigits: 2 }) : "—"} subtitle="escala da pesquisa Movidesk" info="Média das notas respondidas no período. Clique para detalhar." accent={aliareColors.green} onClick={()=>void openCsatDetails("CSAT · Todas as avaliações",{})} />
                     <KpiCard title="Avaliações 4–5" value={csat.summary.responses ? `${csat.summary.positivePct}%` : "—"} subtitle="respostas positivas" info="Percentual de respostas com nota 4 ou 5." accent={aliareColors.info} onClick={()=>void openCsatDetails("CSAT · Avaliações positivas",{minValue:4})} />
                     <KpiCard title="Respostas" value={csat.summary.responses} subtitle={`${csat.summary.comments} com comentário`} info="Pesquisas vinculadas a tickets do escopo SIMER. Clique para detalhar." accent={aliareColors.warning} onClick={()=>void openCsatDetails("CSAT · Respostas",{})} />
@@ -609,7 +609,7 @@ export function Coordination() {
                   </Box>
                   {data.serviceAnalytics.genericService > 0 && <Alert severity="warning" sx={{mb:1.5}}><strong>{data.serviceAnalytics.genericService}</strong> atendimento(s) estão apenas em níveis genéricos do SIMER e foram retirados do ranking abaixo para não distorcer a leitura das rotinas específicas. Use o card “SIMER genérico” para revisar esses casos.</Alert>}
                   {data.serviceAnalytics.ranking.length ? (
-                    <Box sx={{ width: "100%", height: Math.max(220, Math.min(420, data.serviceAnalytics.ranking.length * 42 + 30)) }}>
+                    <Box sx={{ width: "100%", height: Math.max(210, Math.min(360, data.serviceAnalytics.ranking.length * 38 + 28)) }}>
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={data.serviceAnalytics.ranking} layout="vertical" margin={{ top: 4, right: 52, left: 8, bottom: 4 }}>
                           <CartesianGrid stroke={theme.palette.divider} strokeDasharray="4 4" horizontal={false} opacity={0.55} />
@@ -700,7 +700,7 @@ export function Coordination() {
                     <Button variant="outlined" onClick={() => navigate("/analistas")}>Abrir análise completa</Button>
                   </Stack>
                   {capacity.hasRegisteredTimeData === false && <Alert severity="warning" variant="outlined" sx={{mt:1.5}}>A API/snapshot atual não contém apontamentos de tempo utilizáveis para este período. As horas previstas são capacidade teórica; horas registradas não serão inferidas a partir de duração do ticket.</Alert>}
-                  <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(3,1fr)" }, gap: 1.25, mt: 1.5 }}>
+                  <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2,minmax(0,1fr))", lg: "repeat(3,minmax(0,1fr))" }, gap: 1.1, mt: 1.5 }}>
                     <KpiCard title="Horas previstas" value={`${capacity.expectedHours.toLocaleString("pt-BR")}h`} subtitle={`${capacity.businessDays} dias úteis · ${capacity.hoursPerDay}h/dia`} info="Capacidade teórica da equipe no período, antes de ajustes individuais por férias ou afastamentos." accent={aliareColors.info}/>
                     <KpiCard title="Horas registradas" value={`${capacity.registeredHours.toLocaleString("pt-BR")}h`} subtitle="Apontamentos estruturados Movidesk" info="Soma de accountedTime dos apontamentos estruturados já enriquecidos nos atendimentos da carteira SIMER." accent={aliareColors.green}/>
                     <KpiCard title="Cobertura de apontamento" value={capacity.coverageRate === null ? "—" : `${capacity.coverageRate.toLocaleString("pt-BR")}%`} subtitle="Registradas ÷ previstas" info="Indicador de cobertura de registro de tempo; não representa isoladamente produtividade ou desempenho." accent={aliareColors.warning}/>
@@ -718,7 +718,7 @@ export function Coordination() {
                     </Box>
                     <Stack direction="row" spacing={.75} useFlexGap sx={{flexWrap:"wrap"}}><Chip size="small" label={`${workloadSummary.total} itens`} variant="outlined" /><Chip size="small" label={`Média ${workloadSummary.average}/analista`} variant="outlined" /></Stack>
                   </Stack>
-                  {data.workload.length ? <Box sx={{ width: "100%", height: Math.max(250, data.workload.length * 42) }}>
+                  {data.workload.length ? <Box sx={{ width: "100%", height: Math.max(220, Math.min(420, data.workload.length * 38)) }}>
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={data.workload} layout="vertical" margin={{ top: 6, right: 18, left: 8, bottom: 4 }}>
                         <CartesianGrid stroke={theme.palette.divider} strokeDasharray="4 4" horizontal={false} opacity={0.55} />
