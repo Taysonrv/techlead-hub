@@ -1202,6 +1202,11 @@ export function AzureWorkItems({
     useState(true);
 
   const [
+    refreshing,
+    setRefreshing,
+  ] = useState(false);
+
+  const [
     detailLoading,
     setDetailLoading,
   ] =
@@ -1586,10 +1591,10 @@ export function AzureWorkItems({
   const loadAll =
     useCallback(
       async () => {
+        const hasData = Boolean(summary || list);
         try {
-          setLoading(
-            true,
-          );
+          if (hasData) setRefreshing(true);
+          else setLoading(true);
 
           setError(
             null,
@@ -1611,14 +1616,15 @@ export function AzureWorkItems({
             "Não foi possível carregar os dados sincronizados do Azure DevOps.",
           );
         } finally {
-          setLoading(
-            false,
-          );
+          setLoading(false);
+          setRefreshing(false);
         }
       },
       [
         loadList,
         loadSummary,
+        summary,
+        list,
       ],
     );
 
@@ -2558,7 +2564,7 @@ export function AzureWorkItems({
           title={title}
           description={subtitle}
           meta={<>{formatNumber(summary?.total)} Work Item(s) sincronizado(s) • Dados locais sincronizados com Azure DevOps</>}
-          action={<Button variant="outlined" startIcon={<RefreshOutlined />} onClick={() => void loadAll()}>Recarregar</Button>}
+          action={<Button variant="outlined" disabled={refreshing} startIcon={refreshing ? <CircularProgress size={15} /> : <RefreshOutlined />} onClick={() => void loadAll()}>{refreshing ? "Atualizando" : "Recarregar"}</Button>}
         />
 
         {error && (
