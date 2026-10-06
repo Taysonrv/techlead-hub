@@ -9,7 +9,7 @@ type ContentStateProps = {
   minHeight?: number;
 };
 
-export function ContentState({ kind, title, description, minHeight = 220 }: ContentStateProps) {
+export function ContentState({ kind, title, description, minHeight = 180 }: ContentStateProps) {
   const defaults = kind === "loading"
     ? ["Carregando dados", "Aguarde enquanto consolidamos as informações."]
     : kind === "error"
@@ -29,7 +29,7 @@ export function ContentState({ kind, title, description, minHeight = 220 }: Cont
   }
 
   return (
-    <Box role={kind === "error" ? "alert" : "status"} sx={{ minHeight, display: "grid", placeItems: "center", px: 2, py: 3, border: "1px dashed", borderColor: "divider", borderRadius: 2.5, bgcolor: "action.hover" }}>
+    <Box role={kind === "error" ? "alert" : "status"} sx={{ minHeight, display: "grid", placeItems: "center", px: 2, py: 2.5, border: "1px dashed", borderColor: "divider", borderRadius: 2.5, bgcolor: "action.hover" }}>
       <Stack spacing={1} sx={{ alignItems: "center", textAlign: "center", maxWidth: 440 }}>
         {kind === "error" ? <ErrorOutlineOutlined color="error" /> : <InboxOutlined color="disabled" />}
         <Typography variant="subtitle2" sx={{ fontWeight: 750 }}>{title ?? defaults[0]}</Typography>
