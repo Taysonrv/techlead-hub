@@ -97,6 +97,45 @@ knownProblemRoutes.get("/candidates", async (_req: AuthenticatedRequest,res) => 
   } catch(error){console.error("[known-problems] candidates",error);res.status(500).json({error:"Não foi possível calcular candidatos a Problema Conhecido."});}
 });
 
+knownProblemRoutes.get("/technical-dna", async (req: AuthenticatedRequest,res) => {
+  try {
+    const serviceQuery=clean(req.query.service,240);
+    if(serviceQuery.length<2) return res.status(400).json({error:"Informe um serviço para consolidar o DNA Técnico."});
+    const since=new Date(); since.setDate(since.getDate()-180);
+    const tickets=await prisma.ticket.findMany({
+      where:{AND:[knownProblemTicketScope(),{isDeleted:false,createdDate:{gte:since}},{OR:[
+        {service:{contains:serviceQuery,mode:"insensitive"}},{serviceFirstLevel:{contains:serviceQuery,mode:"insensitive"}},
+        {serviceSecondLevel:{contains:serviceQuery,mode:"insensitive"}},{serviceThirdLevel:{contains:serviceQuery,mode:"insensitive"}}
+      ]}]},
+      select:{movideskId:true,subject:true,client:true,category:true,cause:true,causeDetail:true,reason:true,owner:true,service:true,serviceFirstLevel:true,serviceSecondLevel:true,serviceThirdLevel:true,taskNumber:true,taskType:true,registeredVersion:true,deliveredVersion:true,createdDate:true},
+      orderBy:{createdDate:"desc"},take:1200
+    });
+    const norm=(v?:string|null)=>String(v??"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").trim().toLowerCase();
+    const count=(values:Array<string|null|undefined>)=>[...values.reduce((m,v)=>{const label=String(v??"").trim();if(label)m.set(label,(m.get(label)??0)+1);return m},new Map<string,number>()).entries()].sort((a,b)=>b[1]-a[1]).slice(0,6).map(([name,total])=>({name,total}));
+    const causes=count(tickets.map(t=>t.causeDetail||t.cause||t.reason));
+    const clients=count(tickets.map(t=>t.client));
+    const analysts=count(tickets.map(t=>t.owner));
+    const versions=count(tickets.map(t=>t.deliveredVersion||t.registeredVersion));
+    const categories=count(tickets.map(t=>t.category));
+    const linked=tickets.filter(t=>t.taskNumber);
+    const taskIds=[...new Set(linked.map(t=>t.taskNumber).filter((x):x is number=>Number.isInteger(x)))];
+    const workItems=taskIds.length?await prisma.azureWorkItem.findMany({where:{AND:[azureOperationalScope(),{id:{in:taskIds}}]},select:{id:true,title:true,workItemType:true,state:true,workaround:true,technicalSolution:true,deliveredVersion:true,registeredVersion:true,client:true},take:100}):[];
+    const known=await prisma.$queryRawUnsafe<any[]>(`SELECT "id","title","symptom","solution","workaround","technicalSolution","status","severity","version" FROM "KnownProblem" WHERE "archived"=FALSE AND LOWER(COALESCE("service",'')) LIKE $1 ORDER BY "updatedAt" DESC LIMIT 12`,`%${norm(serviceQuery)}%`);
+    const solutions=workItems.filter(x=>x.workaround||x.technicalSolution).slice(0,8).map(x=>({id:x.id,title:x.title,type:x.workItemType,state:x.state,workaround:x.workaround,technicalSolution:x.technicalSolution,version:x.deliveredVersion||x.registeredVersion}));
+    const recent30=tickets.filter(t=>Date.now()-t.createdDate.getTime()<=30*86400000).length;
+    const previous30=tickets.filter(t=>{const age=Date.now()-t.createdDate.getTime();return age>30*86400000&&age<=60*86400000}).length;
+    const trendPct=previous30?Math.round(((recent30-previous30)/previous30)*100):recent30?100:0;
+    const confidenceBasis=[tickets.length>=5?"histórico suficiente":null,causes.length?"causas classificadas":null,linked.length?"vínculos Azure":null,known.length?"problemas conhecidos":null,analysts.length?"experiência por analista":null].filter(Boolean);
+    const confidence=Math.min(100,Math.round((Math.min(tickets.length,20)/20)*35+(causes.length?20:0)+(linked.length?20:0)+(known.length?15:0)+(analysts.length?10:0)));
+    res.json({service:serviceQuery,periodDays:180,totalTickets:tickets.length,recent30,previous30,trendPct,clients,causes,categories,versions,analysts,
+      development:{linkedTickets:linked.length,workItems:workItems.length,solutions},
+      knownProblems:known,
+      confidence:{score:confidence,basis:confidenceBasis},
+      sampleTickets:tickets.slice(0,12).map(t=>({movideskId:t.movideskId,subject:t.subject,client:t.client,owner:t.owner,category:t.category,cause:t.causeDetail||t.cause||t.reason,taskNumber:t.taskNumber}))
+    });
+  } catch(error){console.error("[known-problems] technical-dna",error);res.status(500).json({error:"Não foi possível consolidar o DNA Técnico do serviço."});}
+});
+
 knownProblemRoutes.get("/sources", async (req: AuthenticatedRequest,res) => {
   try {
     const q=clean(req.query.q,120); if(q.length<2) return res.json({tickets:[],workItems:[]});
