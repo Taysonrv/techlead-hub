@@ -604,28 +604,6 @@ export function Analysts() {
     });
   }, [tickets, effectiveStartDate, effectiveEndDate, selectedSquad, selectedBusinessArea, selectedService, selectedAnalyst]);
 
-  const operationalTrend = useMemo(() => {
-    const summarize = (items: Ticket[]) => {
-      const open = items.filter(isOpen).length;
-      const critical = items.filter((ticket) => isOpen(ticket) && normalize(ticket.urgency) === "critica").length;
-      const stopped = items.filter((ticket) => ticket.baseStatus === "Stopped").length;
-      const resolved = items.filter((ticket) => ticket.baseStatus === "Resolved" || ticket.baseStatus === "Closed").length;
-      return { total: items.length, open, critical, stopped, resolved };
-    };
-    const current = summarize(scopedTickets);
-    const previous = summarize(previousPeriodTickets);
-    const delta = (now: number, before: number) => before === 0 ? (now === 0 ? 0 : null) : Math.round(((now - before) / before) * 1000) / 10;
-    return {
-      current,
-      previous,
-      totalDelta: delta(current.total, previous.total),
-      openDelta: delta(current.open, previous.open),
-      criticalDelta: delta(current.critical, previous.critical),
-      stoppedDelta: delta(current.stopped, previous.stopped),
-      resolvedDelta: delta(current.resolved, previous.resolved),
-    };
-  }, [scopedTickets, previousPeriodTickets]);
-
   /* =====================================================
      SQUADS DISPONÍVEIS
   ===================================================== */
@@ -724,6 +702,28 @@ export function Analysts() {
     squadTickets,
     selectedAnalyst,
   ]);
+
+  const operationalTrend = useMemo(() => {
+    const summarize = (items: Ticket[]) => {
+      const open = items.filter(isOpen).length;
+      const critical = items.filter((ticket) => isOpen(ticket) && normalize(ticket.urgency) === "critica").length;
+      const stopped = items.filter((ticket) => ticket.baseStatus === "Stopped").length;
+      const resolved = items.filter((ticket) => ticket.baseStatus === "Resolved" || ticket.baseStatus === "Closed").length;
+      return { total: items.length, open, critical, stopped, resolved };
+    };
+    const current = summarize(scopedTickets);
+    const previous = summarize(previousPeriodTickets);
+    const delta = (now: number, before: number) => before === 0 ? (now === 0 ? 0 : null) : Math.round(((now - before) / before) * 1000) / 10;
+    return {
+      current,
+      previous,
+      totalDelta: delta(current.total, previous.total),
+      openDelta: delta(current.open, previous.open),
+      criticalDelta: delta(current.critical, previous.critical),
+      stoppedDelta: delta(current.stopped, previous.stopped),
+      resolvedDelta: delta(current.resolved, previous.resolved),
+    };
+  }, [scopedTickets, previousPeriodTickets]);
 
   /* =====================================================
      LIMPA ANALISTA SE TROCAR O SQUAD
