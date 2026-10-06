@@ -66,11 +66,22 @@ const warmRouteChunks = () => {
   void import("./pages/AzureWorkItems");
   void import("./pages/Versions");
   void import("./pages/ManagementIntelligence");
+  window.setTimeout(() => {
+    void import("./pages/Analysts");
+    void import("./pages/Clients");
+    void import("./pages/Chat");
+    void import("./pages/Investigation");
+  }, 1200);
 };
 
 import {
   aliareColors,
 } from "./theme/theme";
+
+function LegacyRedirect({ to }: { to: string }) {
+  const location = useLocation();
+  return <Navigate to={`${to}${location.search}${location.hash}`} replace />;
+}
 
 /* =========================================================
    LAYOUT AUTENTICADO
@@ -454,7 +465,7 @@ function App() {
           <Route
             path="/tickets"
             element={
-              <Navigate to="/operacao/tickets" replace />
+              <LegacyRedirect to="/operacao/tickets" />
             }
           />
 
@@ -494,14 +505,14 @@ function App() {
           <Route
             path="/desempenho"
             element={
-              <Navigate to="/visao-operacional/desempenho" replace />
+              <LegacyRedirect to="/visao-operacional/desempenho" />
             }
           />
 
           <Route
             path="/atencao"
             element={
-              <Navigate to="/pendencias-riscos" replace />
+              <LegacyRedirect to="/pendencias-riscos" />
             }
           />
 
@@ -553,12 +564,12 @@ function App() {
 
           <Route
             path="/minha-operacao"
-            element={<Navigate to="/operacao/minha-operacao" replace />}
+            element={<LegacyRedirect to="/operacao/minha-operacao" />}
           />
 
           <Route
             path="/qualidade-dados"
-            element={<Navigate to="/pendencias-riscos/qualidade" replace />}
+            element={<LegacyRedirect to="/pendencias-riscos/qualidade" />}
           />
 
           {/* =================================================
