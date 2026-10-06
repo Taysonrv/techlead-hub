@@ -5,7 +5,7 @@ import { clearMovideskApiPriority, releaseMovideskApi, requestMovideskApiPriorit
 
 const DEFAULT_INTERVAL_MINUTES = 60;
 const DEFAULT_INITIAL_DELAY_SECONDS = 5;
-const METADATA_CONTINUATION_SECONDS = 15;
+const METADATA_CONTINUATION_SECONDS = 45;
 
 export class MovideskSyncScheduler {
   private timer: NodeJS.Timeout | null = null;
@@ -84,7 +84,7 @@ export class MovideskSyncScheduler {
         metadataRemaining > 0 ? `metadadosRestantes=${metadataRemaining}` : "metadados=em-dia"
       ].join(" | "));
       if (metadataRemaining > 0) {
-        console.log(`[movidesk-sync] Reconciliação analítica continuará em ${METADATA_CONTINUATION_SECONDS}s. | restantes=${metadataRemaining}`);
+        console.log(`[movidesk-sync] Reconciliação analítica continuará em ${METADATA_CONTINUATION_SECONDS}s para preservar capacidade do banco. | restantes=${metadataRemaining}`);
         return METADATA_CONTINUATION_SECONDS * 1000;
       }
     } catch (error) {
