@@ -828,7 +828,7 @@ export function Attention() {
       />
 
       {recurrence && recurrence.items.length > 0 && (
-        <Card variant="outlined" sx={{ mb: 1.5, borderColor: "rgba(245,158,11,.28)" }}>
+        <Card variant="outlined" sx={{ mb: 1.5, borderColor: "rgba(245,158,11,.28)", overflow: "hidden" }}>
           <CardContent sx={{ py: 1.5, "&:last-child": { pb: 1.5 } }}>
             <Stack direction={{ xs:"column", md:"row" }} spacing={1} sx={{ justifyContent:"space-between", alignItems:{md:"center"} }}>
               <Box>
@@ -839,7 +839,7 @@ export function Attention() {
               </Box>
               <Button size="small" variant="outlined" onClick={() => navigate("/problemas-conhecidos")}>Revisar recorrências</Button>
             </Stack>
-            <Stack direction="row" spacing={.7} useFlexGap sx={{ mt:1, flexWrap:"wrap" }}>
+            <Stack direction="row" spacing={.7} useFlexGap sx={{ mt:1, flexWrap:"wrap", "& .MuiChip-root": { maxWidth: { xs: "100%", md: 360 } }, "& .MuiChip-label": { overflow: "hidden", textOverflow: "ellipsis" } }}>
               {recurrence.items.slice(0,4).map((item) => <Chip key={item.service+"|"+item.cause} color={item.priority==="high"?"error":"warning"} variant="outlined" label={`${item.service} · ${item.cases} casos · score ${item.score}`} onClick={() => navigate(`/problemas-conhecidos?q=${encodeURIComponent(item.service)}`)} />)}
             </Stack>
             {recurrence.anomalies?.[0] && <Alert severity={recurrence.anomalies[0].severity==="critical"?"error":"warning"} variant="outlined" sx={{mt:1}}>
@@ -874,13 +874,14 @@ export function Attention() {
           gridTemplateColumns: {
             xs: "1fr",
             sm: "repeat(2, minmax(0, 1fr))",
-            lg: "repeat(5, minmax(0, 1fr))",
+            lg: "repeat(3, minmax(0, 1fr))",
+            xl: "repeat(5, minmax(0, 1fr))",
           },
 
           gap: {
             xs: 1.25,
             md: 1.5,
-            xl: 2,
+            xl: 1.5,
           },
 
           mb: 2,
@@ -1095,6 +1096,7 @@ export function Attention() {
               gridTemplateColumns: {
                 xs: "1fr",
                 sm: "repeat(2, minmax(0, 1fr))",
+                lg: "repeat(2, minmax(0, 1fr))",
                 xl: "repeat(4, minmax(0, 1fr)) auto",
               },
               gap: 1.25,
