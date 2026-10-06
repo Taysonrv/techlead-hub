@@ -6,6 +6,8 @@ import type {
 
 import {
   prisma,
+  ensureDatabaseAvailable,
+  reportDatabaseFailure,
 } from "../database/prisma";
 
 import {
@@ -70,6 +72,9 @@ export async function authMiddleware(
     NextFunction
 ) {
   try {
+    if (!(await ensureDatabaseAvailable())) {
+      return response.status(503).json({ message: "Banco de dados temporariamente indisponível. Tente novamente em instantes." });
+    }
     /* =====================================================
        AUTHORIZATION HEADER
     ===================================================== */
@@ -315,14 +320,13 @@ export async function authMiddleware(
     };
 
     return next();
-  } catch {
+  } catch (error) {
+    if (reportDatabaseFailure(error)) {
+      return response.status(503).json({ message: "Banco de dados temporariamente indisponível. Tente novamente em instantes." });
+    }
     /*
-     * Não expomos detalhes de JWT, sessão ou banco para
-     * o cliente.
+     * Não expomos detalhes de JWT ou sessão para o cliente.
      */
-
-    return unauthorized(
-      response
-    );
+    return unauthorized(response);
   }
 }
