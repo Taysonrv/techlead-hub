@@ -190,7 +190,7 @@ type DrilldownState = {
   destinationLabel?: string;
 } | null;
 
-type RecurrenceResponse = { items:Array<{service:string;cases:number;clients:number;score:number;priority:"high"|"medium"|"review";trendPct:number}>; summary:{total:number;high:number;rising:number;multiClient:number} };
+type RecurrenceResponse = { items:Array<{service:string;cases:number;clients:number;score:number;priority:"high"|"medium"|"review";trendPct:number}>; summary:{total:number;high:number;rising:number;multiClient:number;anomalies:number}; anomalies?:Array<{service:string;reason:string;severity:"critical"|"warning";score:number;trendPct:number;recent30:number;tickets:number[]}> };
 
 type MetricInfoDefinition = {
   title: string;
@@ -1131,7 +1131,7 @@ export function Dashboard() {
               <Box>
                 <Typography sx={{fontWeight:850}}>Inteligência de recorrência</Typography>
                 <Typography variant="body2" color="text.secondary">
-                  {recurrence.summary.total} padrão(ões) detectado(s) · {recurrence.summary.high} alta prioridade · {recurrence.summary.rising} em crescimento · {recurrence.summary.multiClient} multi-cliente
+                  {recurrence.summary.total} padrão(ões) detectado(s) · {recurrence.summary.high} alta prioridade · {recurrence.summary.rising} em crescimento · {recurrence.summary.multiClient} multi-cliente · {recurrence.summary.anomalies} anomalia(s)
                 </Typography>
               </Box>
               <Stack direction="row" spacing={.7} useFlexGap sx={{flexWrap:"wrap",alignItems:"center"}}>
