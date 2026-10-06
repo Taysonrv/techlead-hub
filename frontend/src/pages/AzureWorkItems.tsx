@@ -2547,7 +2547,7 @@ export function AzureWorkItems({
   return (
     <>
       <Stack
-        spacing={2.5}
+        spacing={{ xs: 1.5, md: 2 }}
       >
         {/* =================================================
             CABEÇALHO
@@ -2585,6 +2585,8 @@ export function AzureWorkItems({
               sm:
                 "repeat(2, minmax(0, 1fr))",
               lg:
+                "repeat(3, minmax(0, 1fr))",
+              xl:
                 "repeat(5, minmax(0, 1fr))",
             },
             gap: {
@@ -2593,7 +2595,7 @@ export function AzureWorkItems({
               md:
                 1.5,
               xl:
-                2,
+                1.5,
             },
           }}
         >
@@ -2650,7 +2652,7 @@ export function AzureWorkItems({
                     height:
                       "100%",
                     minHeight:
-                      122,
+                      112,
                     border:
                       "1px solid",
                     borderColor:
@@ -2705,16 +2707,16 @@ export function AzureWorkItems({
                     sx={{
                       p: {
                         xs:
-                          1.4,
+                          1.25,
                         md:
-                          1.55,
+                          1.4,
                       },
                       "&:last-child": {
                         pb: {
                           xs:
-                            1.4,
+                            1.25,
                           md:
-                            1.55,
+                            1.4,
                         },
                       },
                     }}
@@ -2751,11 +2753,11 @@ export function AzureWorkItems({
                               0.55,
                             fontSize: {
                               xs:
-                                "1.65rem",
+                                "1.5rem",
                               md:
-                                "1.8rem",
+                                "1.65rem",
                               xl:
-                                "1.9rem",
+                                "1.78rem",
                             },
                             fontWeight:
                               800,
@@ -2831,6 +2833,8 @@ export function AzureWorkItems({
             gridTemplateColumns: {
               xs:
                 "1fr",
+              lg:
+                "repeat(2, minmax(0, 1fr))",
               xl:
                 "repeat(3, minmax(0, 1fr))",
             },
