@@ -2,6 +2,7 @@ import { Router } from "express";
 import type { AuthenticatedRequest } from "../middlewares/authMiddleware";
 import { prisma } from "../database/prisma";
 import { requirePermission } from "../middlewares/roleMiddleware";
+import { ticketOperationalScope, azureOperationalScope } from "../domain/OperationalScope";
 
 export const knownProblemRoutes = Router();
 knownProblemRoutes.use(requirePermission("known-problems"));
@@ -10,6 +11,9 @@ const clean = (value: unknown, max = 4000) => typeof value === "string" ? value.
 const optional = (value: unknown, max = 1000) => clean(value, max) || null;
 const allowedStatus = new Set(["ATIVO","INVESTIGANDO","CORRECAO_ANDAMENTO","RESOLVIDO"]);
 const allowedSeverity = new Set(["BAIXA","MEDIA","ALTA","CRITICA"]);
+const knownProblemTicketScope = () => ticketOperationalScope();
+
+
 
 async function list(req: AuthenticatedRequest) {
   const q = clean(req.query.q, 200).toLocaleLowerCase("pt-BR");
@@ -46,6 +50,92 @@ knownProblemRoutes.get("/", async (req: AuthenticatedRequest,res) => {
 });
 
 
+knownProblemRoutes.get("/candidates", async (_req: AuthenticatedRequest,res) => {
+  try {
+    const since=new Date(); since.setDate(since.getDate()-180);
+    const tickets=await prisma.ticket.findMany({
+      where:{AND:[knownProblemTicketScope(),{isDeleted:false,createdDate:{gte:since}}]},
+      select:{movideskId:true,subject:true,client:true,category:true,cause:true,causeDetail:true,reason:true,service:true,serviceFirstLevel:true,serviceSecondLevel:true,serviceThirdLevel:true,taskNumber:true,deliveredVersion:true,registeredVersion:true,createdDate:true},
+      orderBy:{createdDate:"desc"},take:3000
+    });
+    const norm=(v?:string|null)=>String(v??"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").trim().toLowerCase();
+    const words=(v?:string|null)=>[...new Set(norm(v).split(/[^a-z0-9]+/).filter(x=>x.length>=4&&!["para","como","erro","problema","ticket","simer","cliente","nao","com","sem"].includes(x)))];
+    const service=(t:any)=>t.serviceThirdLevel||t.serviceSecondLevel||t.serviceFirstLevel||t.service||"Sem serviço";
+    type Group={service:string;category:string;cause:string;version:string;cases:number;clients:Set<string>;tickets:number[];subjects:string[];tasks:Set<number>;dates:Date[];tokens:Map<string,number>};
+    const groups=new Map<string,Group>();
+    tickets.forEach(t=>{
+      const svc=service(t),cat=t.category||"Sem categoria",cause=t.causeDetail||t.cause||t.reason||"Sem causa",ver=t.deliveredVersion||t.registeredVersion||"Sem versão";
+      const subjectTokens=words(t.subject);
+      // Service/category/cause form the stable operational signature. Subject tokens
+      // are accumulated to explain the recurrence without making wording differences
+      // split the same incident family.
+      const key=[norm(svc),norm(cat),norm(cause)].join("|");
+      const g: Group=groups.get(key)??{service:svc,category:cat,cause,version:ver,cases:0,clients:new Set<string>(),tickets:[] as number[],subjects:[] as string[],tasks:new Set<number>(),dates:[] as Date[],tokens:new Map<string,number>()};
+      g.cases++; if(t.client)g.clients.add(t.client); g.tickets.push(t.movideskId); if(t.subject)g.subjects.push(t.subject); if(t.taskNumber)g.tasks.add(t.taskNumber); g.dates.push(t.createdDate);
+      subjectTokens.forEach(token=>g.tokens.set(token,(g.tokens.get(token)??0)+1)); groups.set(key,g);
+    });
+    const existing=await prisma.$queryRawUnsafe<any[]>(`SELECT "service","version","movideskTicket","azureWorkItem" FROM "KnownProblem" WHERE "archived"=FALSE`);
+    const now=Date.now();
+    const candidates=[...groups.values()].filter(g=>g.cases>=3).map(g=>{
+      const covered=existing.some(k=>(k.service&&norm(k.service)===norm(g.service)&&(!k.version||k.version===g.version))||g.tickets.includes(Number(k.movideskTicket))||[...g.tasks].includes(Number(k.azureWorkItem)));
+      const recent30=g.dates.filter(d=>now-d.getTime()<=30*86400000).length;
+      const previous30=g.dates.filter(d=>{const age=now-d.getTime();return age>30*86400000&&age<=60*86400000}).length;
+      const trendPct=previous30>0?Math.round(((recent30-previous30)/previous30)*100):recent30>0?100:0;
+      const topTerms=[...g.tokens.entries()].filter(([,count])=>count>=Math.max(2,Math.ceil(g.cases*.3))).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([term])=>term);
+      const linkedTasks=[...g.tasks];
+      const score=Math.min(100,Math.round(g.cases*8+g.clients.size*10+Math.min(20,recent30*4)+Math.min(15,linkedTasks.length*5)+(trendPct>0?10:0)));
+      return {service:g.service,category:g.category,cause:g.cause,version:g.version,cases:g.cases,clients:g.clients.size,tickets:g.tickets.slice(0,12),tasks:linkedTasks.slice(0,8),sampleSubjects:g.subjects.slice(0,3),covered,priority:score>=70?"high":score>=48?"medium":"review",score,recent30,previous30,trendPct,topTerms,linkedTaskCount:linkedTasks.length};
+    }).filter(x=>!x.covered).sort((a,b)=>b.score-a.score||b.clients-a.clients||b.cases-a.cases).slice(0,24);
+    const anomalies=candidates.filter(x=>x.recent30>=3&&(x.trendPct>=50||x.score>=75)).map(x=>({
+      service:x.service,category:x.category,cause:x.cause,cases:x.cases,recent30:x.recent30,previous30:x.previous30,
+      trendPct:x.trendPct,score:x.score,clients:x.clients,tickets:x.tickets,
+      severity:x.score>=85||x.trendPct>=150?"critical":"warning",
+      reason:x.previous30===0?`Novo padrão com ${x.recent30} ocorrência(s) nos últimos 30 dias`:`Crescimento de ${x.trendPct}% contra os 30 dias anteriores`
+    })).slice(0,8);
+    const summary={total:candidates.length,high:candidates.filter(x=>x.priority==="high").length,rising:candidates.filter(x=>x.trendPct>0).length,multiClient:candidates.filter(x=>x.clients>=2).length,anomalies:anomalies.length};
+    res.json({items:candidates,summary,anomalies,periodDays:180,generatedAt:new Date().toISOString()});
+  } catch(error){console.error("[known-problems] candidates",error);res.status(500).json({error:"Não foi possível calcular candidatos a Problema Conhecido."});}
+});
+
+knownProblemRoutes.get("/technical-dna", async (req: AuthenticatedRequest,res) => {
+  try {
+    const serviceQuery=clean(req.query.service,240);
+    if(serviceQuery.length<2) return res.status(400).json({error:"Informe um serviço para consolidar o DNA Técnico."});
+    const since=new Date(); since.setDate(since.getDate()-180);
+    const tickets=await prisma.ticket.findMany({
+      where:{AND:[knownProblemTicketScope(),{isDeleted:false,createdDate:{gte:since}},{OR:[
+        {service:{contains:serviceQuery,mode:"insensitive"}},{serviceFirstLevel:{contains:serviceQuery,mode:"insensitive"}},
+        {serviceSecondLevel:{contains:serviceQuery,mode:"insensitive"}},{serviceThirdLevel:{contains:serviceQuery,mode:"insensitive"}}
+      ]}]},
+      select:{movideskId:true,subject:true,client:true,category:true,cause:true,causeDetail:true,reason:true,owner:true,service:true,serviceFirstLevel:true,serviceSecondLevel:true,serviceThirdLevel:true,taskNumber:true,taskType:true,registeredVersion:true,deliveredVersion:true,createdDate:true},
+      orderBy:{createdDate:"desc"},take:1200
+    });
+    const norm=(v?:string|null)=>String(v??"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").trim().toLowerCase();
+    const count=(values:Array<string|null|undefined>)=>[...values.reduce((m,v)=>{const label=String(v??"").trim();if(label)m.set(label,(m.get(label)??0)+1);return m},new Map<string,number>()).entries()].sort((a,b)=>b[1]-a[1]).slice(0,6).map(([name,total])=>({name,total}));
+    const causes=count(tickets.map(t=>t.causeDetail||t.cause||t.reason));
+    const clients=count(tickets.map(t=>t.client));
+    const analysts=count(tickets.map(t=>t.owner));
+    const versions=count(tickets.map(t=>t.deliveredVersion||t.registeredVersion));
+    const categories=count(tickets.map(t=>t.category));
+    const linked=tickets.filter(t=>t.taskNumber);
+    const taskIds=[...new Set(linked.map(t=>t.taskNumber).filter((x):x is number=>Number.isInteger(x)))];
+    const workItems=taskIds.length?await prisma.azureWorkItem.findMany({where:{AND:[azureOperationalScope(),{id:{in:taskIds}}]},select:{id:true,title:true,workItemType:true,state:true,workaround:true,technicalSolution:true,deliveredVersion:true,registeredVersion:true,client:true},take:100}):[];
+    const known=await prisma.$queryRawUnsafe<any[]>(`SELECT "id","title","symptom","solution","workaround","technicalSolution","status","severity","version" FROM "KnownProblem" WHERE "archived"=FALSE AND LOWER(COALESCE("service",'')) LIKE $1 ORDER BY "updatedAt" DESC LIMIT 12`,`%${norm(serviceQuery)}%`);
+    const solutions=workItems.filter(x=>x.workaround||x.technicalSolution).slice(0,8).map(x=>({id:x.id,title:x.title,type:x.workItemType,state:x.state,workaround:x.workaround,technicalSolution:x.technicalSolution,version:x.deliveredVersion||x.registeredVersion}));
+    const recent30=tickets.filter(t=>Date.now()-t.createdDate.getTime()<=30*86400000).length;
+    const previous30=tickets.filter(t=>{const age=Date.now()-t.createdDate.getTime();return age>30*86400000&&age<=60*86400000}).length;
+    const trendPct=previous30?Math.round(((recent30-previous30)/previous30)*100):recent30?100:0;
+    const confidenceBasis=[tickets.length>=5?"histórico suficiente":null,causes.length?"causas classificadas":null,linked.length?"vínculos Azure":null,known.length?"problemas conhecidos":null,analysts.length?"experiência por analista":null].filter(Boolean);
+    const confidence=Math.min(100,Math.round((Math.min(tickets.length,20)/20)*35+(causes.length?20:0)+(linked.length?20:0)+(known.length?15:0)+(analysts.length?10:0)));
+    res.json({service:serviceQuery,periodDays:180,totalTickets:tickets.length,recent30,previous30,trendPct,clients,causes,categories,versions,analysts,
+      development:{linkedTickets:linked.length,workItems:workItems.length,solutions},
+      knownProblems:known,
+      confidence:{score:confidence,basis:confidenceBasis},
+      sampleTickets:tickets.slice(0,12).map(t=>({movideskId:t.movideskId,subject:t.subject,client:t.client,owner:t.owner,category:t.category,cause:t.causeDetail||t.cause||t.reason,taskNumber:t.taskNumber}))
+    });
+  } catch(error){console.error("[known-problems] technical-dna",error);res.status(500).json({error:"Não foi possível consolidar o DNA Técnico do serviço."});}
+});
+
 knownProblemRoutes.get("/sources", async (req: AuthenticatedRequest,res) => {
   try {
     const q=clean(req.query.q,120); if(q.length<2) return res.json({tickets:[],workItems:[]});
@@ -53,7 +143,7 @@ knownProblemRoutes.get("/sources", async (req: AuthenticatedRequest,res) => {
     // pesquisáveis. Assim "coap fixacao saldo", por exemplo, não precisa existir como
     // uma frase exata em um único campo para localizar o atendimento ou Work Item.
     const terms=[...new Set(q.split(/\\s+/).map(term=>term.trim()).filter(term=>term.length>=2))].slice(0,8);
-    const ticketWhere:any={isDeleted:false,AND:terms.map(term=>{
+    const ticketWhere:any={AND:[knownProblemTicketScope(),{isDeleted:false},...terms.map(term=>{
       const numeric=Number(term.replace(/\\D/g,""));
       return {OR:[
         ...(Number.isFinite(numeric)&&numeric>0?[{movideskId:numeric},{taskNumber:numeric}]:[]),
@@ -62,8 +152,8 @@ knownProblemRoutes.get("/sources", async (req: AuthenticatedRequest,res) => {
         {serviceFirstLevel:{contains:term,mode:"insensitive"}},{serviceSecondLevel:{contains:term,mode:"insensitive"}},{serviceThirdLevel:{contains:term,mode:"insensitive"}},
         {taskType:{contains:term,mode:"insensitive"}},{registeredVersion:{contains:term,mode:"insensitive"}},{deliveredVersion:{contains:term,mode:"insensitive"}}
       ]};
-    })};
-    const workItemWhere:any={AND:terms.map(term=>{
+    })]};
+    const workItemWhere:any={AND:[azureOperationalScope(),...terms.map(term=>{
       const numeric=Number(term.replace(/\\D/g,""));
       return {OR:[
         ...(Number.isFinite(numeric)&&numeric>0?[{id:numeric},{movideskTicket:numeric}]:[]),
@@ -73,7 +163,7 @@ knownProblemRoutes.get("/sources", async (req: AuthenticatedRequest,res) => {
         {registeredVersion:{contains:term,mode:"insensitive"}},{deliveredVersion:{contains:term,mode:"insensitive"}},
         {workaround:{contains:term,mode:"insensitive"}},{technicalSolution:{contains:term,mode:"insensitive"}}
       ]};
-    })};
+    })]};
     const [tickets,workItems]=await Promise.all([
       prisma.ticket.findMany({
         where:ticketWhere,orderBy:{lastUpdate:"desc"},take:16,

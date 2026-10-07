@@ -4,15 +4,19 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../database/prisma";
 import { MovideskJsonImportService } from "./MovideskJsonImportService";
 import { isSimerClient, SIMER_CLIENTS } from "../domain/OperationalScope";
+import { movideskRateLimiter } from "./MovideskRateLimiter";
 
 const PAGE_SIZE = 50;
-const REQUEST_INTERVAL_MS = 6_200;
 const INCREMENTAL_OVERLAP_MINUTES = 10;
+const ANALYTICAL_REFRESH_DAYS = 70;
+const ANALYTICAL_REFRESH_INTERVAL_MS = 6 * 60 * 60 * 1000;
+const ANALYTICAL_BATCH_SIZE = 8;
+const ANALYTICAL_DB_YIELD_MS = 350;
 const REQUEST_RETRY_ATTEMPTS = 6;
 const REQUEST_RETRY_BASE_MS = 2_000;
 const OFFSET_TO_CURSOR_THRESHOLD = 9_000;
-const BASELINE_CHECKPOINT_ACTION = "MOVIDESK_SCOPED_BASELINE_CHECKPOINT_2026_V4";
-const BASELINE_COMPLETED_ACTION = "MOVIDESK_SCOPED_BASELINE_COMPLETED_2026_V4";
+const BASELINE_CHECKPOINT_ACTION = "MOVIDESK_SCOPED_BASELINE_CHECKPOINT_2026_V5";
+const BASELINE_COMPLETED_ACTION = "MOVIDESK_SCOPED_BASELINE_COMPLETED_2026_V5";
 const SYNC_SCOPE_START = new Date("2026-01-01T00:00:00.000Z");
 const BASELINE_FAILED_ACTION = "MOVIDESK_BASELINE_FAILED";
 
@@ -73,6 +77,7 @@ type SyncSummary = {
   ignored: number;
   errors: number;
   since: string | null;
+  analyticalMetadataRemaining?: number;
 };
 
 type BaselineState = {
@@ -102,6 +107,8 @@ let baselineState: BaselineState = {
   progress: null,
 };
 let baselinePromise: Promise<void> | null = null;
+let lastAnalyticalMetadataRefreshAt = 0;
+const analyticalMetadataCheckedIds = new Set<number>();
 
 export class MovideskService {
   private readonly url = process.env.MOVIDESK_URL?.trim() || "https://api.movidesk.com/public/v1";
@@ -162,6 +169,7 @@ export class MovideskService {
     let lastError: unknown = null;
     for (let attempt = 1; attempt <= REQUEST_RETRY_ATTEMPTS; attempt += 1) {
       try {
+        await movideskRateLimiter.acquire();
         return await axios.get(url, config);
       } catch (error) {
         lastError = error;
@@ -179,6 +187,7 @@ export class MovideskService {
           throw new Error(`${context}: falha após ${attempt} tentativa(s) (${code ?? status ?? "rede"}). ${remoteMessage}`);
         }
         const retryAfterSeconds = axios.isAxiosError(error) ? Number(error.response?.headers?.["retry-after"]) : NaN;
+        if (status === 429) movideskRateLimiter.registerThrottle(Number.isFinite(retryAfterSeconds) ? retryAfterSeconds : null);
         const delay = Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0
           ? retryAfterSeconds * 1000
           : REQUEST_RETRY_BASE_MS * 2 ** (attempt - 1);
@@ -200,6 +209,7 @@ export class MovideskService {
       query.set("$select", "id,lastUpdate");
       query.set("$top", "1");
       if (mode === "QUERY") query.set("token", token);
+      await movideskRateLimiter.acquire();
       return axios.get(`${this.url}/tickets?${query.toString()}`, {
         headers: mode === "BEARER" ? { Authorization: `Bearer ${token}` } : undefined,
         timeout: 30_000,
@@ -235,6 +245,212 @@ export class MovideskService {
       }
       throw error;
     }
+  }
+
+  async analyticalMetadataTimeline(start: Date, end: Date) {
+    const tickets = await prisma.ticket.findMany({
+      where: {
+        createdDate: { gte: start, lte: end },
+        client: { in: [...SIMER_CLIENTS], mode: "insensitive" },
+        isDeleted: false,
+      },
+      select: {
+        movideskId: true, createdDate: true, category: true,
+        cause: true, reason: true, businessArea: true,
+      },
+      orderBy: [{ createdDate: "asc" }, { movideskId: "asc" }],
+    });
+
+    const monthKey = (date: Date) => `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+    const rows = new Map<string, { month:string; tickets:number; problems:number; causes:number; doubts:number; reasons:number; businessAreas:number }>();
+    const ensure = (key: string) => {
+      const existing = rows.get(key);
+      if (existing) return existing;
+      const created = { month:key, tickets:0, problems:0, causes:0, doubts:0, reasons:0, businessAreas:0 };
+      rows.set(key, created);
+      return created;
+    };
+    for (const ticket of tickets) {
+      const row = ensure(monthKey(ticket.createdDate));
+      row.tickets += 1;
+      if (ticket.category?.trim().toLocaleLowerCase("pt-BR") === "problema") {
+        row.problems += 1;
+        if (ticket.cause?.trim()) row.causes += 1;
+      }
+      if (ticket.category?.trim().toLocaleLowerCase("pt-BR") === "dúvida" || ticket.category?.trim().toLocaleLowerCase("pt-BR") === "duvida") {
+        row.doubts += 1;
+        if (ticket.reason?.trim()) row.reasons += 1;
+      }
+      if (ticket.businessArea?.trim()) row.businessAreas += 1;
+    }
+
+    const pct = (value:number,total:number) => total ? Number((value / total * 100).toFixed(1)) : 0;
+    const months = [...rows.values()].map((row) => ({
+      ...row,
+      causeCoveragePct: pct(row.causes, row.problems),
+      reasonCoveragePct: pct(row.reasons, row.doubts),
+      businessAreaCoveragePct: pct(row.businessAreas, row.tickets),
+    }));
+
+    const lastWith = (field: "cause"|"reason"|"businessArea") => {
+      const found = [...tickets].reverse().find((ticket) => {
+        if (!ticket[field]?.trim()) return false;
+        const category = ticket.category?.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLocaleLowerCase("pt-BR");
+        if (field === "cause") return category === "problema";
+        if (field === "reason") return category === "duvida";
+        return true;
+      });
+      return found ? { movideskId: found.movideskId, createdDate: found.createdDate, value: found[field] } : null;
+    };
+    const firstMissingAfter = (last: { createdDate: Date } | null, field: "cause"|"reason"|"businessArea", category?: "problema"|"duvida") => {
+      if (!last) return null;
+      const found = tickets.find((ticket) => {
+        if (ticket.createdDate <= last.createdDate || ticket[field]?.trim()) return false;
+        const normalized = ticket.category?.trim().toLocaleLowerCase("pt-BR");
+        return !category || (category === "problema" ? normalized === "problema" : normalized === "dúvida" || normalized === "duvida");
+      });
+      return found ? { movideskId: found.movideskId, createdDate: found.createdDate, category: found.category } : null;
+    };
+    const last = { cause: lastWith("cause"), reason: lastWith("reason"), businessArea: lastWith("businessArea") };
+
+    return {
+      readOnly: true,
+      period: { start, end, tickets: tickets.length },
+      months,
+      lastKnown: last,
+      firstMissingAfterLastKnown: {
+        cause: firstMissingAfter(last.cause, "cause", "problema"),
+        reason: firstMissingAfter(last.reason, "reason", "duvida"),
+        businessArea: firstMissingAfter(last.businessArea, "businessArea"),
+      },
+      suggestedDiagnosticTickets: [...new Set([
+        last.cause?.movideskId, last.reason?.movideskId, last.businessArea?.movideskId,
+        firstMissingAfter(last.cause, "cause", "problema")?.movideskId,
+        firstMissingAfter(last.reason, "reason", "duvida")?.movideskId,
+        firstMissingAfter(last.businessArea, "businessArea")?.movideskId,
+      ].filter((id): id is number => typeof id === "number"))].slice(0, 10),
+      note: "Leitura local do escopo SIMER. Causa usa apenas Problema; Motivo usa apenas Dúvida; Área usa todos os tickets.",
+    };
+  }
+
+  async diagnoseAnalyticalMetadata(ticketIds: number[]) {
+    const ids = [...new Set(ticketIds.filter((id) => Number.isSafeInteger(id) && id > 0))].slice(0, 10);
+    if (!ids.length) throw new Error("Informe ao menos um ticket válido para o diagnóstico.");
+
+    const local = await prisma.ticket.findMany({
+      where: {
+        movideskId: { in: ids },
+        createdDate: { gte: SYNC_SCOPE_START },
+        client: { in: [...SIMER_CLIENTS], mode: "insensitive" },
+      },
+      select: {
+        movideskId: true, createdDate: true, lastUpdate: true, category: true,
+        client: true, cause: true, reason: true, businessArea: true, rawData: true,
+      },
+    });
+    const localById = new Map(local.map((ticket) => [ticket.movideskId, ticket]));
+
+    const sanitizeFields = (row: Record<string, unknown> | null) => {
+      const fields = row && Array.isArray(row.customFieldValues) ? row.customFieldValues : [];
+      return fields.flatMap((rawField) => {
+        if (!rawField || typeof rawField !== "object" || Array.isArray(rawField)) return [];
+        const field = rawField as Record<string, unknown>;
+        const id = Number(field.customFieldId);
+        const values = [
+          typeof field.value === "string" ? field.value.trim() : null,
+          ...(Array.isArray(field.items) ? field.items.map((item) =>
+            item && typeof item === "object" && !Array.isArray(item) && typeof (item as Record<string, unknown>).customFieldItem === "string"
+              ? String((item as Record<string, unknown>).customFieldItem).trim()
+              : null
+          ) : []),
+        ].filter((value): value is string => Boolean(value));
+        if (!Number.isSafeInteger(id) || !values.length) return [];
+        return [{ customFieldId: id, values: [...new Set(values)].slice(0, 8) }];
+      });
+    };
+
+    const results = [];
+    for (const id of ids) {
+      const ticket = localById.get(id);
+      if (!ticket) {
+        results.push({ movideskId: id, foundLocally: false, error: "Ticket fora do escopo SIMER/2026 ou não sincronizado." });
+        continue;
+      }
+      try {
+        const response = await this.getWithRetry(`${this.url}/tickets`, {
+          params: {
+            token: this.token(),
+            id,
+          },
+          timeout: 120_000,
+        }, `diagnóstico de metadados ticket=${id}`);
+        const remote = response.data && typeof response.data === "object" && !Array.isArray(response.data)
+          ? response.data as Record<string, unknown>
+          : null;
+
+        // Compara a consulta individual com a mesma projeção usada pelo sync.
+        // Isso distingue "campo omitido na consulta por id" de "campo ausente
+        // mesmo quando customFieldValues é expandido explicitamente".
+        const expandedResponse = await this.getWithRetry(`${this.url}/tickets`, {
+          params: {
+            token: this.token(),
+            $select: TICKET_SELECT,
+            $expand: TICKET_EXPAND,
+            $top: 1,
+            $filter: `id eq ${id}`,
+          },
+          timeout: 120_000,
+        }, `diagnóstico expandido de metadados ticket=${id}`);
+        const expandedRemote = Array.isArray(expandedResponse.data) && expandedResponse.data[0] && typeof expandedResponse.data[0] === "object"
+          ? expandedResponse.data[0] as Record<string, unknown>
+          : null;
+        const raw = ticket.rawData && typeof ticket.rawData === "object" && !Array.isArray(ticket.rawData)
+          ? ticket.rawData as Record<string, unknown>
+          : null;
+        const remoteFields = sanitizeFields(remote);
+        const rawFields = sanitizeFields(raw);
+        results.push({
+          movideskId: id,
+          foundLocally: true,
+          local: {
+            createdDate: ticket.createdDate, lastUpdate: ticket.lastUpdate, category: ticket.category,
+            client: ticket.client, cause: ticket.cause, reason: ticket.reason, businessArea: ticket.businessArea,
+            rawCustomFields: rawFields,
+          },
+          remote: {
+            found: Boolean(remote),
+            category: typeof remote?.category === "string" ? remote.category : null,
+            createdDate: remote?.createdDate ?? null,
+            lastUpdate: remote?.lastUpdate ?? null,
+            causeDetected: remote ? this.classificationFromRaw(remote, "cause") : null,
+            reasonDetected: remote ? this.classificationFromRaw(remote, "reason") : null,
+            customFields: remoteFields,
+          },
+          expandedRemote: {
+            found: Boolean(expandedRemote),
+            category: typeof expandedRemote?.category === "string" ? expandedRemote.category : null,
+            customFields: sanitizeFields(expandedRemote),
+          },
+          delta: {
+            rawHasCustomFields: rawFields.length > 0,
+            remoteHasCustomFields: remoteFields.length > 0,
+            customFieldIdsOnlyRemote: remoteFields.map((field) => field.customFieldId).filter((fieldId) => !rawFields.some((field) => field.customFieldId === fieldId)),
+          },
+        });
+      } catch (error) {
+        results.push({
+          movideskId: id, foundLocally: true,
+          error: error instanceof Error ? error.message.replace(/token=[^&\\s]+/gi, "token=[REDACTED]").slice(0, 500) : "Falha desconhecida.",
+        });
+      }
+    }
+
+    return {
+      readOnly: true,
+      expectedCustomFields: { cause: 52401, reason: 52413, businessArea: 207467 },
+      tickets: results,
+      note: "Diagnóstico somente leitura: compara banco/rawData com o payload atual do Movidesk e não altera tickets.",
+    };
   }
 
   async diagnoseApiCatalog() {
@@ -305,7 +521,6 @@ export class MovideskService {
           error: error instanceof Error ? error.message.replace(/token=[^&\\s]+/gi, "token=[REDACTED]").slice(0, 500) : "Falha desconhecida.",
         });
       }
-      await new Promise((resolve) => setTimeout(resolve, REQUEST_INTERVAL_MS));
     }
 
     return {
@@ -395,7 +610,6 @@ export class MovideskService {
           error: error instanceof Error ? error.message.replace(/token=[^&\\s]+/gi, "token=[REDACTED]").slice(0, 500) : "Falha desconhecida.",
         });
       }
-      await new Promise((resolve) => setTimeout(resolve, REQUEST_INTERVAL_MS));
     }
 
     return {
@@ -554,6 +768,12 @@ export class MovideskService {
       database: { available: databaseAvailable, error: databaseError, tickets, scopedTickets, linkedTasks },
       scope: { startDate: SYNC_SCOPE_START.toISOString(), clients: [...SIMER_CLIENTS] },
       lastImport,
+      apiCompliance: {
+        sources: { recent: "/tickets", historical: "/tickets/past" },
+        historicalBaselineEnabled: true,
+        conditionalCustomFieldsPreserved: true,
+        rateLimit: movideskRateLimiter.snapshot(),
+      },
       scheduler: {
         enabled: schedulerEnabled,
         intervalMinutes: safeInterval,
@@ -658,76 +878,139 @@ export class MovideskService {
     };
   }
 
-  private classificationFromRaw(row: Record<string, unknown>, kind: "cause" | "reason") {
-    const normalize = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLocaleLowerCase("pt-BR");
-    const labels = kind === "cause"
-      ? new Map([["configuracao","Configuração"],["erro operacional","Erro operacional"],["nao identificada","Não identificada"],["resolvido pelo usuario","Resolvido pelo usuário"],["sefaz ou aplicativo de terceiros","SEFAZ ou aplicativo de terceiros"],["sefaz ou aplicativos de terceiros","SEFAZ ou aplicativo de terceiros"]])
-      : new Map([["apoio processos operacionais","Apoio processos operacionais"],["configuracao","Configuração"],["duvida interna","Dúvida interna"],["inexperiencia do usuario","Inexperiência do usuário"],["informacao","Informação"],["integracao com terceiros","Integração com terceiros"],["priorizacao","Priorização"]]);
+  private customFieldValue(row: Record<string, unknown>, fieldId: number) {
     const fields = Array.isArray(row.customFieldValues) ? row.customFieldValues : [];
     for (const rawField of fields) {
       if (!rawField || typeof rawField !== "object" || Array.isArray(rawField)) continue;
       const field = rawField as Record<string, unknown>;
+      if (Number(field.customFieldId) !== fieldId) continue;
       const values = [
-        typeof field.value === "string" ? field.value : null,
-        ...(Array.isArray(field.items) ? field.items.map((item) => item && typeof item === "object" && !Array.isArray(item) ? (item as Record<string, unknown>).customFieldItem : null) : []),
-      ].filter((value): value is string => typeof value === "string" && Boolean(value.trim()));
-      for (const value of values) {
-        const normalized = normalize(value);
-        for (const [token, label] of labels) {
-          if (normalized === token || normalized.includes(token)) return label;
-        }
-      }
+        typeof field.value === "string" ? field.value.trim() : null,
+        ...(Array.isArray(field.items) ? field.items.map((item) =>
+          item && typeof item === "object" && !Array.isArray(item) && typeof (item as Record<string, unknown>).customFieldItem === "string"
+            ? String((item as Record<string, unknown>).customFieldItem).trim()
+            : null
+        ) : []),
+      ].filter((value): value is string => Boolean(value));
+      return values[0] ?? null;
     }
     return null;
   }
 
-  private async refreshRecentClassifications() {
-    // Causa/Motivo pertencem ao ticket base, não ao enriquecimento. Relemos
-    // uma janela recente para corrigir tickets que não sofreram lastUpdate
-    // depois da introdução das colunas locais.
-    const since = new Date();
-    since.setUTCDate(since.getUTCDate() - 62);
-    let skip = 0;
-    let scanned = 0;
-    let updated = 0;
-    for (let page = 0; page < 8; page += 1) {
-      const response = await this.getWithRetry(`${this.url}/tickets`, {
-        params: {
-          token: this.token(),
-          $select: "id,category,createdDate,lastUpdate",
-          $expand: "customFieldValues",
-          $orderby: "createdDate desc,id desc",
-          $top: PAGE_SIZE,
-          $skip: skip,
-          $filter: this.remoteScopeFilter(`createdDate ge ${since.toISOString()}`),
-        },
-        timeout: 120_000,
-      }, `classificações recentes página=${page + 1}`);
-      if (!Array.isArray(response.data) || response.data.length === 0) break;
-      const rows = response.data as Array<Record<string, unknown>>;
-      scanned += rows.length;
-      for (const row of rows) {
-        const movideskId = Number(row.id);
-        const category = typeof row.category === "string" ? row.category.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLocaleLowerCase("pt-BR") : "";
-        if (!Number.isSafeInteger(movideskId) || (category !== "problema" && category !== "duvida")) continue;
-        const cause = category === "problema" ? this.classificationFromRaw(row, "cause") : null;
-        const reason = category === "duvida" ? this.classificationFromRaw(row, "reason") : null;
-        if (!cause && !reason) continue;
-        const result = await prisma.ticket.updateMany({
-          where: { movideskId },
-          data: category === "problema" ? { cause, reason: null } : { reason, cause: null },
-        });
-        updated += result.count;
-      }
-      if (rows.length < PAGE_SIZE) break;
-      skip += rows.length;
-      await new Promise((resolve) => setTimeout(resolve, REQUEST_INTERVAL_MS));
+  private classificationFromRaw(row: Record<string, unknown>, kind: "cause" | "reason") {
+    return this.customFieldValue(row, kind === "cause" ? 52401 : 52413);
+  }
+
+  private async refreshRecentClassifications(force = false) {
+    const now = Date.now();
+    if (!force && lastAnalyticalMetadataRefreshAt && now - lastAnalyticalMetadataRefreshAt < ANALYTICAL_REFRESH_INTERVAL_MS) {
+      return { scanned: 0, updated: 0, causesUpdated: 0, reasonsUpdated: 0, businessAreasUpdated: 0, remaining: 0, skippedByCadence: true };
     }
-    return { scanned, updated };
+
+    const since = new Date(now - ANALYTICAL_REFRESH_DAYS * 24 * 60 * 60 * 1000);
+    const candidates = await prisma.ticket.findMany({
+      where: {
+        AND: [
+          { createdDate: { gte: since } },
+          { client: { in: [...SIMER_CLIENTS], mode: "insensitive" } },
+          { isDeleted: false },
+          {
+            OR: [
+              { AND: [{ category: { equals: "Problema", mode: "insensitive" } }, { cause: null }] },
+              { AND: [{ category: { in: ["Dúvida", "Duvida"], mode: "insensitive" } }, { reason: null }] },
+              { businessArea: null },
+            ],
+          },
+        ],
+      },
+      select: { movideskId: true, category: true, cause: true, reason: true, businessArea: true },
+      orderBy: [{ createdDate: "desc" }, { movideskId: "desc" }],
+    });
+
+    // Prioriza classificações que alimentam os cards antes da cobertura de Área.
+    // IDs já verificados nesta passagem ficam fora da fila para que tickets que
+    // legitimamente não possuem o campo não monopolizem os ciclos seguintes.
+    const normalizeCategory = (value: string | null) =>
+      (value ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLocaleLowerCase("pt-BR");
+    const unchecked = candidates
+      .filter((ticket) => !analyticalMetadataCheckedIds.has(ticket.movideskId))
+      .sort((a, b) => {
+        const priority = (ticket: typeof a) => {
+          const category = normalizeCategory(ticket.category);
+          if (category === "problema" && !ticket.cause) return 0;
+          if (category === "duvida" && !ticket.reason) return 1;
+          if (!ticket.businessArea) return 2;
+          return 3;
+        };
+        return priority(a) - priority(b) || b.movideskId - a.movideskId;
+      });
+
+    // Ao concluir uma passagem, libera os IDs para uma futura reconciliação após
+    // o cooldown. Durante a passagem atual cada ticket é consultado no máximo uma vez.
+    if (!unchecked.length && candidates.length) {
+      analyticalMetadataCheckedIds.clear();
+      lastAnalyticalMetadataRefreshAt = Date.now();
+      return { scanned: 0, updated: 0, causesUpdated: 0, reasonsUpdated: 0, businessAreasUpdated: 0, remaining: 0, skippedByCadence: false };
+    }
+
+    // A API do Movidesk comprovadamente expõe os campos condicionais na consulta
+    // individual GET /tickets?id=<id>. Consultas OData em coleção não reproduzem isso.
+    const MAX_PER_RUN = force ? Math.min(unchecked.length, 40) : Math.min(unchecked.length, ANALYTICAL_BATCH_SIZE);
+    const batch = unchecked.slice(0, MAX_PER_RUN);
+    let scanned = 0;
+    let causesUpdated = 0;
+    let reasonsUpdated = 0;
+    let businessAreasUpdated = 0;
+
+    for (const ticket of batch) {
+      analyticalMetadataCheckedIds.add(ticket.movideskId);
+      const response = await this.getWithRetry(`${this.url}/tickets`, {
+        params: { token: this.token(), id: ticket.movideskId },
+        timeout: 120_000,
+      }, `metadados analíticos ticket=${ticket.movideskId}`);
+      const row = response.data && typeof response.data === "object" && !Array.isArray(response.data)
+        ? response.data as Record<string, unknown>
+        : null;
+      if (!row) continue;
+      scanned += 1;
+
+      const category = typeof row.category === "string"
+        ? row.category.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLocaleLowerCase("pt-BR")
+        : (ticket.category ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLocaleLowerCase("pt-BR");
+      const cause = category === "problema" ? this.customFieldValue(row, 52401) : null;
+      const reason = category === "duvida" ? this.customFieldValue(row, 52413) : null;
+      const businessArea = this.customFieldValue(row, 207467);
+      const data: { cause?: string; reason?: string; businessArea?: string; rawData?: Prisma.InputJsonValue } = {};
+
+      if (cause && cause !== ticket.cause) data.cause = cause;
+      if (reason && reason !== ticket.reason) data.reason = reason;
+      if (businessArea && businessArea !== ticket.businessArea) data.businessArea = businessArea;
+
+      // Preserva também o payload que comprovou os metadados para que diagnósticos
+      // futuros não indiquem falsamente divergência entre banco e rawData.
+      if (cause || reason || businessArea) data.rawData = row as Prisma.InputJsonValue;
+      if (!Object.keys(data).length) continue;
+
+      await prisma.ticket.update({ where: { movideskId: ticket.movideskId }, data });
+      // A reconciliação é manutenção de baixa prioridade. Pequenas pausas entre
+      // escritas devolvem capacidade ao pool para autenticação e requisições interativas.
+      await new Promise((resolve) => setTimeout(resolve, ANALYTICAL_DB_YIELD_MS));
+      if (data.cause) causesUpdated += 1;
+      if (data.reason) reasonsUpdated += 1;
+      if (data.businessArea) businessAreasUpdated += 1;
+    }
+
+    const remaining = Math.max(0, unchecked.length - batch.length);
+    // Enquanto houver candidatos, não inicia o cooldown de 6h: o próximo ciclo
+    // principal continua a fila. O cooldown só começa quando a passagem termina.
+    if (remaining === 0) lastAnalyticalMetadataRefreshAt = Date.now();
+    const updated = causesUpdated + reasonsUpdated + businessAreasUpdated;
+    console.info(`[movidesk-metadata] Reconciliação concluída. | janela=${ANALYTICAL_REFRESH_DAYS}d | candidatos=${candidates.length} | processados=${batch.length} | lidos=${scanned} | causas=${causesUpdated} | motivos=${reasonsUpdated} | areas=${businessAreasUpdated} | atualizacoes=${updated} | restantes=${remaining}`);
+    return { scanned, updated, causesUpdated, reasonsUpdated, businessAreasUpdated, remaining, skippedByCadence: false };
   }
 
   async backfillTicketCauses() {
-    const remote = await this.refreshRecentClassifications();
+    const remote = await this.refreshRecentClassifications(true);
     const candidates = await prisma.ticket.findMany({
       where: {
         AND: [
@@ -742,52 +1025,35 @@ export class MovideskService {
     });
     let causesUpdated = 0;
     let reasonsUpdated = 0;
-    await prisma.ticket.updateMany({
-      where: {
-        category: { equals: "Problema", mode: "insensitive" },
-        cause: { contains: "Bug no Produto / ERP", mode: "insensitive" },
-      },
-      data: { cause: null },
-    });
     const normalize = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLocaleLowerCase("pt-BR");
-    const causeTokens = ["erro operacional", "configuracao", "nao identificada", "resolvido pelo usuario", "sefaz", "aplicativos de terceiros", "aplicativo de terceiros"];
-    const reasonTokens = ["apoio processos operacionais", "configuracao", "duvida interna", "inexperiencia do usuario", "informacao", "integracao com terceiros", "priorizacao"];
-    const extract = (rawData: Prisma.JsonValue, tokens: string[]) => {
-      if (!rawData || typeof rawData !== "object" || Array.isArray(rawData)) return null;
-      const raw = rawData as Record<string, unknown>;
-      const fields = Array.isArray(raw.customFieldValues) ? raw.customFieldValues : [];
-      for (const field of fields) {
-        if (!field || typeof field !== "object" || Array.isArray(field)) continue;
-        const item = field as Record<string, unknown>;
-        const values: string[] = [];
-        if (typeof item.value === "string" && item.value.trim()) values.push(item.value.trim());
-        if (Array.isArray(item.items)) for (const child of item.items) {
-          if (!child || typeof child !== "object" || Array.isArray(child)) continue;
-          const value = (child as Record<string, unknown>).customFieldItem;
-          if (typeof value === "string" && value.trim()) values.push(value.trim());
-        }
-        const found = values.find((value) => value.length <= 80 && tokens.some((token) => normalize(value).includes(token)));
-        if (found) return found;
-      }
-      return null;
-    };
     for (const ticket of candidates) {
+      if (!ticket.rawData || typeof ticket.rawData !== "object" || Array.isArray(ticket.rawData)) continue;
+      const raw = ticket.rawData as Record<string, unknown>;
       const category = normalize(ticket.category ?? "");
       if (category === "problema") {
-        const cause = extract(ticket.rawData as Prisma.JsonValue, causeTokens);
+        const cause = this.classificationFromRaw(raw, "cause");
         if (cause && cause !== ticket.cause) {
           await prisma.ticket.update({ where: { id: ticket.id }, data: { cause, reason: null } });
           causesUpdated += 1;
         }
       } else if (category === "duvida") {
-        const reason = extract(ticket.rawData as Prisma.JsonValue, reasonTokens);
+        const reason = this.classificationFromRaw(raw, "reason");
         if (reason && reason !== ticket.reason) {
           await prisma.ticket.update({ where: { id: ticket.id }, data: { reason, cause: null } });
           reasonsUpdated += 1;
         }
       }
     }
-    return { scanned: candidates.length, updated: causesUpdated + reasonsUpdated + remote.updated, causesUpdated, reasonsUpdated, remoteScanned: remote.scanned, remoteUpdated: remote.updated };
+    return {
+      scanned: candidates.length,
+      updated: causesUpdated + reasonsUpdated + remote.updated,
+      causesUpdated,
+      reasonsUpdated,
+      remoteScanned: remote.scanned,
+      remoteUpdated: remote.updated,
+      sourceFields: { cause: 52401, reason: 52413 },
+      safeMode: true,
+    };
   }
 
   async classificationCoverage() {
@@ -1034,6 +1300,23 @@ export class MovideskService {
     return response.data as unknown[];
   }
 
+  private async getPastPage(skip: number) {
+    const response = await this.getWithRetry(`${this.url}/tickets/past`, {
+      params: {
+        token: this.token(),
+        $select: TICKET_SELECT,
+        $expand: TICKET_EXPAND,
+        $orderby: "lastUpdate asc,id asc",
+        $top: PAGE_SIZE,
+        $skip: skip,
+        $filter: this.remoteScopeFilter(),
+      },
+      timeout: 120_000,
+    }, `página histórica /tickets/past skip=${skip}`);
+    if (!Array.isArray(response.data)) throw new Error("Resposta inesperada da API histórica Movidesk.");
+    return response.data as unknown[];
+  }
+
   private async reconstructFullCursor(nextSkip: number) {
     if (nextSkip <= 0) return null;
     const anchorSkip = Math.max(0, nextSkip - PAGE_SIZE);
@@ -1098,6 +1381,7 @@ export class MovideskService {
       ignored: checkpoint?.ignored ?? 0,
       errors: checkpoint?.errors ?? 0,
       since: since?.toISOString() ?? null,
+      analyticalMetadataRemaining: 0,
     };
     const initialSkip = checkpoint?.nextSkip ?? 0;
     let fullCursor = mode === "FULL" && checkpoint?.cursorLastUpdate && checkpoint?.cursorId
@@ -1157,7 +1441,46 @@ export class MovideskService {
       }
 
       if (rows.length < PAGE_SIZE) break;
-      await new Promise((resolve) => setTimeout(resolve, REQUEST_INTERVAL_MS));
+    }
+
+    if (mode === "FULL") {
+      // /tickets contém somente tickets com lastUpdate recente. A rota
+      // /tickets/past completa o baseline com tickets cuja atualização
+      // ultrapassou a janela de 90 dias documentada pelo Movidesk.
+      for (let pastSkip = 0; ; pastSkip += PAGE_SIZE) {
+        const rows = await this.getPastPage(pastSkip);
+        if (!rows.length) break;
+        const scopedRows = rows.filter((row) => isSimerClient(this.ticketClientName(row)));
+        const result = scopedRows.length
+          ? await new MovideskJsonImportService().execute(
+              Buffer.from(JSON.stringify(scopedRows), "utf8"),
+              { fileName: `API Movidesk · FULL histórico · página ${summary.pages + 1}`, userId: userId ?? null, source: "MOVIDESK_API" },
+            )
+          : { totalRows: 0, created: 0, updated: 0, ignored: 0, errors: 0 };
+        summary.pages += 1;
+        summary.totalRows += result.totalRows;
+        summary.created += result.created;
+        summary.updated += result.updated;
+        summary.ignored += result.ignored;
+        summary.errors += result.errors;
+        baselineState.progress = {
+          nextSkip: pastSkip + rows.length,
+          pages: summary.pages,
+          processedRows: summary.totalRows,
+          created: summary.created,
+          updated: summary.updated,
+          ignored: summary.ignored,
+          errors: summary.errors,
+          resumed: initialSkip > 0,
+        };
+        console.info(`[movidesk-sync] FULL histórico página ${summary.pages} concluída | pastSkip=${pastSkip} | linhas=${rows.length} | processados=${summary.totalRows} | erros=${summary.errors}.`);
+        if (rows.length < PAGE_SIZE) break;
+      }
+    }
+
+    if (mode === "INCREMENTAL" && summary.errors === 0) {
+      const metadataRefresh = await this.refreshRecentClassifications();
+      summary.analyticalMetadataRemaining = metadataRefresh.remaining;
     }
 
     if (mode === "FULL" && summary.errors === 0) {
@@ -1166,7 +1489,7 @@ export class MovideskService {
           userId: userId ?? null,
           action: BASELINE_COMPLETED_ACTION,
           entity: "Ticket",
-          metadata: { pages: summary.pages, totalRows: summary.totalRows, errors: summary.errors, scopeStart: SYNC_SCOPE_START.toISOString(), scope: "SIMER_CLIENTS_REMOTE_FILTER_V4" },
+          metadata: { pages: summary.pages, totalRows: summary.totalRows, errors: summary.errors, scopeStart: SYNC_SCOPE_START.toISOString(), scope: "SIMER_CLIENTS_REMOTE_FILTER_V5_TICKETS_PLUS_PAST", sources: ["/tickets", "/tickets/past"] },
         },
       });
       baselineState.progress = baselineState.progress
@@ -1213,6 +1536,7 @@ export class MovideskService {
     let errors = 0;
     const errorDetails: Array<{ ticketId: number; message: string }> = [];
 
+    const enrichmentStartedAt = Date.now();
     for (let index = 0; index < tickets.length; index += 1) {
       const ticket = tickets[index]!;
       try {
@@ -1478,25 +1802,33 @@ export class MovideskService {
       }
 
       if (index < tickets.length - 1) {
-        await new Promise((resolve) => setTimeout(resolve, REQUEST_INTERVAL_MS));
       }
     }
+
+    const processed = Math.max(0, tickets.length - errors);
+    const pendingAfterRun = Math.max(0, pendingBeforeRun - processed);
+    const elapsedMinutes = Math.max((Date.now() - enrichmentStartedAt) / 60_000, 1 / 60);
+    const throughputPerMinute = processed / elapsedMinutes;
+    const estimatedMinutesRemaining = throughputPerMinute > 0 && pendingAfterRun > 0 ? Math.ceil(pendingAfterRun / throughputPerMinute) : null;
 
     return {
       tickets: tickets.length,
       pendingBeforeRun,
-      pendingAfterRun: Math.max(0, pendingBeforeRun - (tickets.length - errors)),
+      pendingAfterRun,
       actions,
       appointments,
       ownerHistories,
       statusHistories,
       errors,
       errorDetails: errorDetails.slice(0, 50),
+      throughputPerMinute,
+      estimatedMinutesRemaining,
       generatedAt: new Date().toISOString(),
     };
   }
 
   async updateTicketStatus(ticketId: number, status: string, justification?: string | null) {
+    await movideskRateLimiter.acquire();
     const response = await axios.patch(
       `${this.url}/tickets`,
       { status, ...(justification?.trim() ? { justification: justification.trim() } : {}) },

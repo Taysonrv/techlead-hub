@@ -201,6 +201,8 @@ export function createAppTheme(mode: PaletteMode = "light") {
               width: "min(560px, 92vw)", maxWidth: "100vw", boxSizing: "border-box",
               borderLeft: `1px solid ${dark ? "rgba(69,201,225,.22)" : border}`,
               boxShadow: dark ? "-24px 0 60px rgba(0,0,0,.32)" : "-18px 0 48px rgba(16,24,40,.12)",
+              overscrollBehavior: "contain",
+              scrollbarGutter: "stable",
               "&::before": { content: '""', position: "absolute", inset: "0 auto 0 0", width: 2, background: "linear-gradient(180deg,#18C77A,#22D3EE,transparent 80%)", opacity: dark ? .9 : .5 },
             },
             "&.MuiDrawer-paperAnchorRight > .MuiBox-root:first-of-type": { width: "100%", maxWidth: "100%", boxSizing: "border-box" },
@@ -268,7 +270,7 @@ export function createAppTheme(mode: PaletteMode = "light") {
         styleOverrides: {
           root: {
             minWidth: 0,
-            "& .MuiOutlinedInput-root.MuiInputBase-sizeSmall": { minHeight: 42 },
+            "& .MuiOutlinedInput-root.MuiInputBase-sizeSmall": { minHeight: 38 },
             "& .MuiAutocomplete-input": { minWidth: 0 },
           },
           tagSizeSmall: { height: 24, maxWidth: 180 },
@@ -285,7 +287,7 @@ export function createAppTheme(mode: PaletteMode = "light") {
           root: {
             transition: "border-color .16s ease, box-shadow .16s ease, background-color .16s ease",
             borderRadius: 8,
-            "&.MuiInputBase-sizeSmall": { minHeight: 42 },
+            "&.MuiInputBase-sizeSmall": { minHeight: 38 },
             backgroundColor: dark ? "rgba(5,25,34,.62)" : undefined,
             "& .MuiOutlinedInput-notchedOutline": { borderColor: dark ? "rgba(131,175,220,.30)" : undefined },
             "& .MuiOutlinedInput-notchedOutline legend": {
@@ -324,7 +326,10 @@ export function createAppTheme(mode: PaletteMode = "light") {
         styleOverrides: {
           root: {
             background: dark ? "linear-gradient(180deg,#0D3440,#0A2935)" : aliareColors.graphite,
-            "& .MuiTableCell-head": { color: "#FFFFFF", fontWeight: 750, fontSize: ".76rem", letterSpacing: ".035em", textTransform: "uppercase", borderBottomColor: dark ? "rgba(116,166,216,.18)" : aliareColors.graphite },
+            position: "sticky",
+            top: 0,
+            zIndex: 1,
+            "& .MuiTableCell-head": { color: "#FFFFFF", fontWeight: 750, fontSize: ".74rem", letterSpacing: ".03em", textTransform: "uppercase", borderBottomColor: dark ? "rgba(116,166,216,.18)" : aliareColors.graphite, position: "sticky", top: 0, zIndex: 2 },
           },
         },
       },
@@ -337,6 +342,8 @@ export function createAppTheme(mode: PaletteMode = "light") {
             "&::-webkit-scrollbar-thumb": { background: dark ? "#31516E" : "#C7CDD3", borderRadius: 99 },
             borderRadius: 14,
             border: `1px solid ${border}`,
+            overflowX: "auto",
+            overscrollBehaviorX: "contain",
             ...(dark && { background: "linear-gradient(145deg,rgba(9,34,44,.94),rgba(6,25,36,.97))", boxShadow: "inset 0 1px rgba(255,255,255,.025), 0 12px 28px rgba(0,0,0,.10)" }),
           },
         },
@@ -345,9 +352,9 @@ export function createAppTheme(mode: PaletteMode = "light") {
         styleOverrides: {
           root: {
             borderBottomColor: border,
-            padding: "10px 14px",
-            fontSize: ".86rem",
-            lineHeight: 1.45,
+            padding: "9px 12px",
+            fontSize: ".84rem",
+            lineHeight: 1.4,
             ...(dark && { color: "#DCE9F7" }),
           },
         },
@@ -357,7 +364,7 @@ export function createAppTheme(mode: PaletteMode = "light") {
           root: {
             "&:nth-of-type(even)": { backgroundColor: dark ? "rgba(112,160,207,.035)" : "rgba(15,23,42,.018)" },
             "&:hover": { backgroundColor: dark ? "rgba(24,199,122,.075)" : "rgba(24,199,122,.055)" },
-            ...(dark && { transition: "background-color .14s ease", "&:hover td:first-of-type": { boxShadow: "inset 2px 0 #18C77A" } }),
+            ...(dark && { transition: "background-color .14s ease, box-shadow .14s ease", "&:hover td:first-of-type": { boxShadow: "inset 2px 0 #18C77A" } }),
           },
         },
       },
@@ -401,8 +408,10 @@ export function createAppTheme(mode: PaletteMode = "light") {
       MuiTablePagination: {
         styleOverrides: {
           root: {
-            minHeight: 50,
+            minHeight: 42,
             borderTop: `1px solid ${border}`,
+            "& .MuiTablePagination-toolbar": { minHeight: 42, paddingLeft: 12, paddingRight: 8 },
+            "& .MuiTablePagination-selectLabel, & .MuiTablePagination-displayedRows": { fontSize: ".78rem", color: textSecondary },
             ...(dark && { backgroundColor: "rgba(6,25,36,.82)", color: textSecondary }),
           },
         },
@@ -416,7 +425,7 @@ export function createAppTheme(mode: PaletteMode = "light") {
         },
       },
       MuiSvgIcon: { styleOverrides: { root: { transition: "transform .16s ease, filter .16s ease", filter: dark ? "drop-shadow(0 2px 5px rgba(0,0,0,.18))" : "drop-shadow(0 1px 1px rgba(15,23,42,.08))" } } },
-      MuiTooltip: { styleOverrides: { tooltip: { backgroundColor: dark ? "#162D43" : aliareColors.graphite, fontSize: ".75rem", borderRadius: 7, border: dark ? "1px solid rgba(116,166,216,.20)" : undefined } } },
+      MuiTooltip: { defaultProps: { arrow: true, enterDelay: 350 }, styleOverrides: { tooltip: { backgroundColor: dark ? "#162D43" : aliareColors.graphite, fontSize: ".76rem", lineHeight: 1.45, padding: "7px 10px", borderRadius: 9, border: dark ? "1px solid rgba(116,166,216,.20)" : undefined, boxShadow: dark ? "0 10px 28px rgba(0,0,0,.32)" : "0 8px 22px rgba(15,23,42,.14)" } } },
       MuiTabs: {
         styleOverrides: {
           root: {

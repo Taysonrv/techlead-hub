@@ -61,6 +61,7 @@ import { chatRoutes } from "./chat.routes";
 import { coordinationRoutes } from "./coordination.routes";
 import { simerMapRoutes } from "./simer-map.routes";
 import { knownProblemRoutes } from "./known-problems.routes";
+import { intelligenceRoutes } from "./intelligence.routes";
 
 /* =========================================================
    ROUTER
@@ -117,6 +118,7 @@ routes.use("/api/chat", chatRoutes);
 routes.use("/api/coordination", coordinationRoutes);
 routes.use("/api/simer-map", simerMapRoutes);
 routes.use("/api/known-problems", knownProblemRoutes);
+routes.use("/api/intelligence", intelligenceRoutes);
 
 /* =========================================================
    ADMINISTRAÇÃO DE USUÁRIOS

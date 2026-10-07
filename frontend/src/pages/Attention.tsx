@@ -135,6 +135,9 @@ type AttentionTicket = Ticket & {
   serviceLevel: ServiceLevelResult;
 };
 
+type RecurrenceCandidate = { service:string; category:string; cause:string; cases:number; clients:number; tickets:number[]; priority:"high"|"medium"|"review"; score:number; recent30:number; trendPct:number; topTerms:string[] };
+type RecurrenceResponse = { items: RecurrenceCandidate[]; summary:{total:number;high:number;rising:number;multiClient:number;anomalies:number}; anomalies?:Array<{service:string;reason:string;severity:"critical"|"warning";score:number;trendPct:number;recent30:number;tickets:number[]}> };
+
 type CardInfoDefinition = {
   title: string;
   summary: string;
@@ -179,6 +182,7 @@ export function Attention() {
 
   const [copyMessage, setCopyMessage] =
     useState("");
+  const [recurrence, setRecurrence] = useState<RecurrenceResponse | null>(null);
 
   const {
     effectiveStartDate,
@@ -210,6 +214,7 @@ export function Attention() {
     }
 
     void loadTickets();
+    api.get<RecurrenceResponse>("/known-problems/candidates").then(r => setRecurrence(r.data)).catch(() => setRecurrence(null));
     return () => controller.abort();
   }, []);
 
@@ -822,6 +827,28 @@ export function Attention() {
         action={<PeriodFilter />}
       />
 
+      {recurrence && recurrence.items.length > 0 && (
+        <Card variant="outlined" sx={{ mb: 1.5, borderColor: "rgba(245,158,11,.28)", overflow: "hidden" }}>
+          <CardContent sx={{ py: 1.5, "&:last-child": { pb: 1.5 } }}>
+            <Stack direction={{ xs:"column", md:"row" }} spacing={1} sx={{ justifyContent:"space-between", alignItems:{md:"center"} }}>
+              <Box>
+                <Typography sx={{ fontWeight: 850 }}>Sinais de recorrência operacional</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {recurrence.summary.high} alta(s) · {recurrence.summary.rising} em crescimento · {recurrence.summary.multiClient} atingindo múltiplos clientes · {recurrence.summary.anomalies} anomalia(s)
+                </Typography>
+              </Box>
+              <Button size="small" variant="outlined" onClick={() => navigate("/problemas-conhecidos")}>Revisar recorrências</Button>
+            </Stack>
+            <Stack direction="row" spacing={.7} useFlexGap sx={{ mt:1, flexWrap:"wrap", "& .MuiChip-root": { maxWidth: { xs: "100%", md: 360 } }, "& .MuiChip-label": { overflow: "hidden", textOverflow: "ellipsis" } }}>
+              {recurrence.items.slice(0,4).map((item) => <Chip key={item.service+"|"+item.cause} color={item.priority==="high"?"error":"warning"} variant="outlined" label={`${item.service} · ${item.cases} casos · score ${item.score}`} onClick={() => navigate(`/problemas-conhecidos?q=${encodeURIComponent(item.service)}`)} />)}
+            </Stack>
+            {recurrence.anomalies?.[0] && <Alert severity={recurrence.anomalies[0].severity==="critical"?"error":"warning"} variant="outlined" sx={{mt:1}}>
+              <strong>Anomalia detectada:</strong> {recurrence.anomalies[0].service} — {recurrence.anomalies[0].reason}.
+            </Alert>}
+          </CardContent>
+        </Card>
+      )}
+
       <Alert
         severity="info"
         variant="outlined"
@@ -847,13 +874,14 @@ export function Attention() {
           gridTemplateColumns: {
             xs: "1fr",
             sm: "repeat(2, minmax(0, 1fr))",
-            lg: "repeat(5, minmax(0, 1fr))",
+            lg: "repeat(3, minmax(0, 1fr))",
+            xl: "repeat(5, minmax(0, 1fr))",
           },
 
           gap: {
             xs: 1.25,
             md: 1.5,
-            xl: 2,
+            xl: 1.5,
           },
 
           mb: 2,
@@ -1068,6 +1096,7 @@ export function Attention() {
               gridTemplateColumns: {
                 xs: "1fr",
                 sm: "repeat(2, minmax(0, 1fr))",
+                lg: "repeat(2, minmax(0, 1fr))",
                 xl: "repeat(4, minmax(0, 1fr)) auto",
               },
               gap: 1.25,

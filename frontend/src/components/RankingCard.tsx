@@ -45,16 +45,16 @@ export function RankingCard({
       <CardContent
         sx={{
           p: {
-            xs: 1.5,
-            sm: 1.75,
-            md: 2,
+            xs: 1.35,
+            sm: 1.5,
+            md: 1.75,
           },
 
           "&:last-child": {
             pb: {
-              xs: 1.5,
-              sm: 1.75,
-              md: 2,
+              xs: 1.35,
+              sm: 1.5,
+              md: 1.75,
             },
           },
         }}
@@ -82,7 +82,7 @@ export function RankingCard({
           color="text.secondary"
           sx={{
             mt: 0.25,
-            mb: 1.5,
+            mb: 1.15,
 
             fontSize:
               "0.78rem",
@@ -136,7 +136,7 @@ export function RankingCard({
                 alignItems:
                   "center",
 
-                py: 1,
+                py: .8,
 
                 borderTop:
                   index === 0

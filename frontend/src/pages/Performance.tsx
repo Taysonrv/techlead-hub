@@ -4,7 +4,6 @@ import {
   Card,
   CardContent,
   Chip,
-  CircularProgress,
   Divider,
   Drawer,
   IconButton,
@@ -55,6 +54,7 @@ import { ExportTicketsButton } from "../components/ExportTicketsButton";
 import { detailDrawerPaperSx } from "../theme/layoutTokens";
 import { useTheme } from "@mui/material/styles";
 import { ExecutiveSection } from "../components/ExecutiveSection";
+import { ContentState } from "../components/ContentState";
 
 import {
   aliareColors,
@@ -72,6 +72,7 @@ import {
   type ServiceLevelResult,
 } from "../utils/serviceLevel";
 import { calculateTimestampSla } from "../utils/timestampSla";
+import { auditOperationalMetrics, buildOperationalCohorts } from "../utils/operationalMetrics";
 
 const SUPPORT_ANALYSTS = [
   "ALAN KARDEK DA SILVA BARROS NETO",
@@ -115,6 +116,7 @@ type Ticket = {
   taskNumber: number | null;
   taskStatus: string | null;
   deliveredVersion: string | null;
+  isWithSimer?: boolean;
 };
 
 type ExecutiveQuality = { csat:{summary:{responses:number;average:number;positivePct:number;comments:number}}; sla:{summary:{bugsWithTask:number;concluded:number;supportWithinOla:number;factoryWithinOla:number;totalWithinSla:number;avgSupportMinutes:number;avgFactoryMinutes:number;avgTotalMinutes:number}} };
@@ -219,15 +221,17 @@ export function Performance() {
     return ()=>controller.abort();
   }, []);
 
-  const periodTickets = useMemo(() => {
-    const start = startOfDay(effectiveStartDate);
-    const end = endOfDay(effectiveEndDate);
+  const periodBounds = useMemo(() => ({
+    start: startOfDay(effectiveStartDate),
+    end: endOfDay(effectiveEndDate),
+  }), [effectiveStartDate, effectiveEndDate]);
 
-    return tickets.filter((ticket) => {
-      const created = new Date(ticket.createdDate);
-      return created >= start && created <= end;
-    });
-  }, [tickets, effectiveStartDate, effectiveEndDate]);
+  const operationalCohorts = useMemo(
+    () => buildOperationalCohorts(tickets, periodBounds),
+    [tickets, periodBounds],
+  );
+  const periodTickets = operationalCohorts.entries;
+  const currentBacklog = operationalCohorts.backlog;
 
   const timestampResponseSla = useMemo(
     () => calculateTimestampSla(periodTickets, "response"),
@@ -235,16 +239,10 @@ export function Performance() {
   );
 
   const operationalSummary = useMemo(() => {
-    const start = startOfDay(effectiveStartDate);
-    const end = endOfDay(effectiveEndDate);
-    const closed = tickets.filter((ticket) => {
-      if (!ticket.closedDate) return false;
-      const date = new Date(ticket.closedDate);
-      return date >= start && date <= end;
-    });
-    const pending = periodTickets.filter(isOpen);
-    const resolved = periodTickets.filter((ticket) => Boolean(ticket.resolvedDate || ticket.closedDate));
-    const resolutionMinutes = resolved
+    const resolvedInPeriod = operationalCohorts.resolved;
+    const closedInPeriod = operationalCohorts.closed;
+    const completedCohort = periodTickets.filter((ticket) => Boolean(ticket.resolvedDate || ticket.closedDate));
+    const resolutionMinutes = completedCohort
       .map((ticket) => ticket.lifetimeMinutes)
       .filter((value): value is number => typeof value === "number" && Number.isFinite(value) && value >= 0);
     const avgMinutes = resolutionMinutes.length
@@ -252,18 +250,34 @@ export function Performance() {
       : null;
     return {
       opened: periodTickets.length,
-      closed: closed.length,
-      pending: pending.length,
-      effectiveness: periodTickets.length ? Math.round(resolved.length / periodTickets.length * 1000) / 10 : 0,
+      closed: closedInPeriod.length,
+      pending: currentBacklog.length,
+      effectiveness: periodTickets.length ? Math.round(completedCohort.length / periodTickets.length * 1000) / 10 : 0,
       avgResolutionMinutes: avgMinutes,
-      resolved: resolved.length,
+      resolved: resolvedInPeriod.length,
+      completedCohort: completedCohort.length,
     };
-  }, [tickets, periodTickets, effectiveStartDate, effectiveEndDate]);
+  }, [periodTickets, currentBacklog, operationalCohorts]);
+
+  // SLA de solução é um indicador de saídas: o Movidesk atribui o ticket ao
+  // período pela data em que a solução ocorreu, e não pela data de abertura.
+  const solutionPeriodTickets = operationalCohorts.resolved;
 
   const timestampSolutionSla = useMemo(
-    () => calculateTimestampSla(periodTickets, "solution"),
-    [periodTickets],
+    () => calculateTimestampSla(solutionPeriodTickets, "solution"),
+    [solutionPeriodTickets],
   );
+
+  const metricAudit = useMemo(() => auditOperationalMetrics({
+    entries: periodTickets.length,
+    resolved: operationalCohorts.resolved.length,
+    closed: operationalCohorts.closed.length,
+    backlog: currentBacklog.length,
+    responseMeasured: timestampResponseSla.measured,
+    responseWithin: timestampResponseSla.within,
+    solutionMeasured: timestampSolutionSla.measured,
+    solutionWithin: timestampSolutionSla.within,
+  }), [periodTickets, operationalCohorts, currentBacklog, timestampResponseSla, timestampSolutionSla]);
 
   /* =======================================================
      MOTOR OPERACIONAL DE PRAZOS
@@ -574,11 +588,7 @@ export function Performance() {
   ].filter((item) => item.value > 0);
 
   if (loading) {
-    return (
-      <Box sx={{ display: "flex", justifyContent: "center", mt: 10 }}>
-        <CircularProgress sx={{ color: aliareColors.green }} />
-      </Box>
-    );
+    return <ContentState kind="loading" title="Carregando desempenho" minHeight={360} />;
   }
 
   if (error) {
@@ -594,22 +604,27 @@ export function Performance() {
         meta="SLA calculado pelos marcos temporais disponíveis, separado do risco operacional"
         action={<PeriodFilter />}
       />
+      {metricAudit.length > 0 && (
+        <Alert severity="warning" variant="outlined" sx={{ mb: 2 }}>
+          Auditoria de consistência detectou {metricAudit.length} divergência(s): {metricAudit.map((item) => item.message).join(" · ")}
+        </Alert>
+      )}
 
       <Alert
         severity="info"
         variant="outlined"
         sx={{ mb: 1.5, borderRadius: 2 }}
       >
-        <strong>SLA do suporte:</strong> é calculado pelos prazos e timestamps sincronizados do Movidesk para os tickets abertos no período selecionado. Atendimentos
+        <strong>SLA do suporte:</strong> usa os prazos e timestamps sincronizados do Movidesk. A 1ª resposta segue as entradas do período; a solução segue os tickets resolvidos no período. Atendimentos
         sem medição e as categorias Adequação e Solicitação de Serviço não entram no denominador.
         Os prazos calculados em horas úteis são exibidos separadamente como risco operacional.
       </Alert>
 
-      <Box sx={{ display:"grid", gridTemplateColumns:{xs:"1fr",sm:"repeat(2,minmax(0,1fr))",lg:"repeat(5,minmax(0,1fr))"}, gap:1.25, mb:1.75 }}>
-        <PerformanceKpi title="Tickets abertos" value={operationalSummary.opened} description="Entradas no período selecionado" accent={aliareColors.info} info={{title:"Tickets abertos",summary:"Volume de tickets criados no período.",calculation:"Contagem por createdDate dentro do filtro global.",source:"Movidesk",periodRule:"Segue o período selecionado na tela."}} />
-        <PerformanceKpi title="Tickets fechados" value={operationalSummary.closed} description="Fechamentos ocorridos no período" accent={aliareColors.green} info={{title:"Tickets fechados",summary:"Tickets cuja data de fechamento ocorreu no período.",calculation:"Contagem por closedDate dentro do filtro global.",source:"Movidesk",periodRule:"Segue o período selecionado na tela."}} />
-        <PerformanceKpi title="Tickets pendentes" value={operationalSummary.pending} description="Entradas do período ainda em aberto" accent={aliareColors.warning} info={{title:"Tickets pendentes",summary:"Tickets criados no período que permanecem fora dos estados Resolvido, Fechado e Cancelado.",calculation:"Entradas do período − tickets em estados finais.",source:"Movidesk",periodRule:"Coorte de tickets criados no período."}} />
-        <PerformanceKpi title="Efetividade" value={`${operationalSummary.effectiveness}%`} description={`${operationalSummary.resolved} resolvido(s) da coorte`} accent={rateColor(operationalSummary.effectiveness)} info={{title:"Efetividade",summary:"Percentual da coorte de entradas do período que já alcançou resolução ou fechamento.",calculation:"Tickets resolvidos/fechados ÷ tickets criados no período.",source:"Movidesk",periodRule:"Coorte de tickets criados no período; não confundir com SLA."}} />
+      <Box sx={{ display:"grid", gridTemplateColumns:{xs:"1fr",sm:"repeat(2,minmax(0,1fr))",lg:"repeat(3,minmax(0,1fr))",xl:"repeat(5,minmax(0,1fr))"}, gap:1.25, mb:1.75 }}>
+        <PerformanceKpi title="Tickets abertos" value={operationalSummary.opened} description="Entradas do período atribuídas à operação SIMER" accent={aliareColors.info} info={{title:"Tickets abertos",summary:"Mesmo cohort do Resumo Executivo: tickets criados no período sob responsabilidade da operação SIMER.",calculation:"createdDate no período + isWithSimer = true.",source:"Movidesk",periodRule:"Segue integralmente o período global selecionado."}} />
+        <PerformanceKpi title="Tickets fechados" value={operationalSummary.closed} description="Fechamentos ocorridos no período" accent={aliareColors.green} info={{title:"Tickets fechados",summary:"Mesmo fluxo do Resumo Executivo: tickets SIMER cuja data de fechamento ocorreu no período.",calculation:"isWithSimer = true + closedDate no período.",source:"Movidesk",periodRule:"Segue integralmente o período global selecionado."}} />
+        <PerformanceKpi title="Backlog atual" value={operationalSummary.pending} description="Estoque atual de tickets ativos" accent={aliareColors.warning} info={{title:"Backlog atual",summary:"Mesmo estoque do Resumo Executivo: tickets atualmente ativos sob responsabilidade SIMER, independentemente da data de abertura.",calculation:"isWithSimer = true + status operacional ativo.",source:"Movidesk",periodRule:"Não é limitado pela data de abertura; representa o backlog atual."}} />
+        <PerformanceKpi title="Efetividade" value={`${operationalSummary.effectiveness}%`} description={`${operationalSummary.completedCohort} concluído(s) da coorte`} accent={rateColor(operationalSummary.effectiveness)} info={{title:"Efetividade",summary:"Percentual da coorte de entradas do período que já alcançou resolução ou fechamento.",calculation:"Tickets resolvidos/fechados ÷ tickets criados no período.",source:"Movidesk",periodRule:"Coorte de tickets criados no período; não confundir com SLA."}} />
         <PerformanceKpi title="TMR" value={operationalSummary.avgResolutionMinutes===null?"—":formatServiceMinutes(operationalSummary.avgResolutionMinutes)} description="Tempo médio de resolução" accent={aliareColors.purple} info={{title:"TMR",summary:"Tempo médio de resolução dos tickets resolvidos da coorte selecionada.",calculation:"Média de lifetimeMinutes dos tickets resolvidos/fechados com medição disponível.",source:"Movidesk",periodRule:"Tickets criados no período com tempo de vida medido."}} />
       </Box>
 
@@ -1647,114 +1662,118 @@ function DonutCard({
           <CardInfoButton info={info} />
         </Stack>
 
-        <Box sx={{ height: 205, mt: 1 }}>
-          {data.length > 0 ? (
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={chartData}
-                  dataKey="value"
-                  nameKey="name"
-                  innerRadius={62}
-                  outerRadius={88}
-                  paddingAngle={2}
-                  cornerRadius={5}
-                  stroke={theme.palette.background.paper}
-                  strokeWidth={1.5}
-                  cursor={onSliceClick ? "pointer" : "default"}
-                  onClick={(entry) => {
-                    const candidate = entry as {
-                      name?: unknown;
-                      payload?: { name?: unknown };
-                    };
-
-                    const name =
-                      typeof candidate.name === "string"
-                        ? candidate.name
-                        : typeof candidate.payload?.name === "string"
-                        ? candidate.payload.name
-                        : null;
-
-                    if (name) {
-                      onSliceClick?.(name);
-                    }
-                  }}
-                >
-                  {chartData.map((item) => (
-                    <Cell key={item.name} fill={item.color} />
-                  ))}
-                </Pie>
-
-                <Tooltip
-                  contentStyle={{
-                    borderRadius: 12,
-                    border: `1px solid ${theme.palette.divider}`,
-                    background: theme.palette.background.paper,
-                    boxShadow: "0 14px 36px rgba(0,0,0,.18)",
-                  }}
-                  cursor={false}
-                />
-
-                <text
-                  x="50%"
-                  y="47%"
-                  textAnchor="middle"
-                  dominantBaseline="middle"
-                  style={{
-                    fontSize: 23,
-                    fontWeight: 800,
-                    fill: theme.palette.text.primary,
-                  }}
-                >
-                  {hiddenItems.size > 0 ? visibleTotal : centerValue}
-                </text>
-
-                <text
-                  x="50%"
-                  y="59%"
-                  textAnchor="middle"
-                  dominantBaseline="middle"
-                  style={{
-                    fontSize: 11,
-                    fill: theme.palette.text.secondary,
-                  }}
-                >
-                  {centerLabel}
-                </text>
-              </PieChart>
-            </ResponsiveContainer>
-          ) : (
-            <EmptyState text="Sem dados para este indicador." />
-          )}
+        <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "minmax(210px,.82fr) minmax(0,1.18fr)" }, gap: { xs: .75, md: 1.25 }, alignItems: "center", mt: 1 }}>
+          <Box sx={{ height: { xs: 210, sm: 225 }, minWidth: 0 }}>
+            
+                      {data.length > 0 ? (
+                        <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                            <Pie
+                              data={chartData}
+                              dataKey="value"
+                              nameKey="name"
+                              innerRadius={62}
+                              outerRadius={88}
+                              paddingAngle={2}
+                              cornerRadius={5}
+                              stroke={theme.palette.background.paper}
+                              strokeWidth={1.5}
+                              cursor={onSliceClick ? "pointer" : "default"}
+                              onClick={(entry) => {
+                                const candidate = entry as {
+                                  name?: unknown;
+                                  payload?: { name?: unknown };
+                                };
+            
+                                const name =
+                                  typeof candidate.name === "string"
+                                    ? candidate.name
+                                    : typeof candidate.payload?.name === "string"
+                                    ? candidate.payload.name
+                                    : null;
+            
+                                if (name) {
+                                  onSliceClick?.(name);
+                                }
+                              }}
+                            >
+                              {chartData.map((item) => (
+                                <Cell key={item.name} fill={item.color} />
+                              ))}
+                            </Pie>
+            
+                            <Tooltip
+                              contentStyle={{
+                                borderRadius: 12,
+                                border: `1px solid ${theme.palette.divider}`,
+                                background: theme.palette.background.paper,
+                                boxShadow: "0 14px 36px rgba(0,0,0,.18)",
+                              }}
+                              cursor={false}
+                            />
+            
+                            <text
+                              x="50%"
+                              y="47%"
+                              textAnchor="middle"
+                              dominantBaseline="middle"
+                              style={{
+                                fontSize: 23,
+                                fontWeight: 800,
+                                fill: theme.palette.text.primary,
+                              }}
+                            >
+                              {hiddenItems.size > 0 ? visibleTotal : centerValue}
+                            </text>
+            
+                            <text
+                              x="50%"
+                              y="59%"
+                              textAnchor="middle"
+                              dominantBaseline="middle"
+                              style={{
+                                fontSize: 11,
+                                fill: theme.palette.text.secondary,
+                              }}
+                            >
+                              {centerLabel}
+                            </text>
+                          </PieChart>
+                        </ResponsiveContainer>
+                      ) : (
+                        <EmptyState text="Sem dados para este indicador." />
+                      )}
+          </Box>
+          <Box sx={{ minWidth: 0, maxHeight: { md: 210 }, overflowY: "auto", pr: { sm: .5 } }}>
+                    {data.length > 0 && (
+                      <Stack spacing={0.55}>
+                        {data.map((item) => {
+                          const active = !hiddenItems.has(item.name);
+                          return (
+                            <Box
+                              key={item.name}
+                              role="button"
+                              tabIndex={0}
+                              onClick={() => toggleItem(item.name)}
+                              onDoubleClick={() => onSliceClick?.(item.name)}
+                              onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") toggleItem(item.name); }}
+                              sx={{
+                                display: "grid", gridTemplateColumns: "10px 1fr auto", gap: .8, alignItems: "center",
+                                px: .7, py: .35, borderRadius: 1, cursor: "pointer", opacity: active ? 1 : .38,
+                                textDecoration: active ? "none" : "line-through", transition: "all .2s ease",
+                                "&:hover": { bgcolor: "action.hover", transform: "translateX(2px)" },
+                              }}
+                            >
+                              <Box sx={{ width: 8, height: 8, borderRadius: "50%", bgcolor: active ? item.color : "text.disabled", boxShadow: active ? `0 0 8px ${item.color}88` : "none" }} />
+                              <Typography variant="caption" sx={{ fontWeight: 700 }}>{item.name}</Typography>
+                              <Typography variant="caption" sx={{ fontWeight: 900 }}>{item.value}</Typography>
+                            </Box>
+                          );
+                        })}
+                      </Stack>
+                    )}
+          </Box>
         </Box>
-
-        {data.length > 0 && (
-          <Stack spacing={0.55}>
-            {data.map((item) => {
-              const active = !hiddenItems.has(item.name);
-              return (
-                <Box
-                  key={item.name}
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => toggleItem(item.name)}
-                  onDoubleClick={() => onSliceClick?.(item.name)}
-                  onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") toggleItem(item.name); }}
-                  sx={{
-                    display: "grid", gridTemplateColumns: "10px 1fr auto", gap: .8, alignItems: "center",
-                    px: .7, py: .35, borderRadius: 1, cursor: "pointer", opacity: active ? 1 : .38,
-                    textDecoration: active ? "none" : "line-through", transition: "all .2s ease",
-                    "&:hover": { bgcolor: "action.hover", transform: "translateX(2px)" },
-                  }}
-                >
-                  <Box sx={{ width: 8, height: 8, borderRadius: "50%", bgcolor: active ? item.color : "text.disabled", boxShadow: active ? `0 0 8px ${item.color}88` : "none" }} />
-                  <Typography variant="caption" sx={{ fontWeight: 700 }}>{item.name}</Typography>
-                  <Typography variant="caption" sx={{ fontWeight: 900 }}>{item.value}</Typography>
-                </Box>
-              );
-            })}
-          </Stack>
-        )}
       </ExecutiveSection>
   );
 }
@@ -2249,26 +2268,6 @@ function ClickableTableMetric({
   );
 }
 
-function EmptyState({
-  text,
-}: {
-  text: string;
-}) {
-  return (
-    <Box
-      sx={{
-        height: "100%",
-        minHeight: 90,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        textAlign: "center",
-        px: 2,
-      }}
-    >
-      <Typography variant="body2" color="text.secondary">
-        {text}
-      </Typography>
-    </Box>
-  );
+function EmptyState({ text }: { text: string }) {
+  return <ContentState kind="empty" description={text} minHeight={120} />;
 }

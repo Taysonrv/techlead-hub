@@ -1,10 +1,11 @@
 import { Alert, Autocomplete, Box, Button, Card, CardContent, Chip, CircularProgress, Drawer, FormControl, InputLabel, MenuItem, Select, Stack, TextField, ToggleButton, ToggleButtonGroup, Tooltip, Typography } from "@mui/material";
-import { BookmarkAddOutlined, DeleteOutlined, DragIndicatorOutlined, FilterAltOutlined, InfoOutlined, OpenInNewOutlined, ScheduleOutlined, SearchOutlined, ViewColumnOutlined, ViewListOutlined } from "@mui/icons-material";
+import { BookmarkAddOutlined, DeleteOutlined, DragIndicatorOutlined, FilterAltOutlined, InfoOutlined, OpenInNewOutlined, ScheduleOutlined, SearchOutlined, ViewColumnOutlined, ViewListOutlined, ShareOutlined } from "@mui/icons-material";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api, getApiErrorMessage } from "../services/api";
 import { aliareColors } from "../theme/theme";
 import { PageHeader } from "../components/PageHeader";
+import { useFilters } from "../context/FiltersContext";
 import { KpiCard } from "../components/KpiCard";
 import { DetailFieldGrid, DetailPanelHeader, DetailSection } from "../components/DetailPanel";
 import { detailDrawerPaperSx } from "../theme/layoutTokens";
@@ -45,8 +46,11 @@ export function MyOperation() {
   const [data, setData] = useState<Data | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [client, setClient] = useState("");
-  const [analyst, setAnalyst] = useState("");
+  const { clients: sharedClients, setClients: setSharedClients, analysts: sharedAnalysts, setAnalysts: setSharedAnalysts } = useFilters();
+  const client = sharedClients[0] ?? "";
+  const analyst = sharedAnalysts[0] ?? "";
+  const setClient = (value: string) => setSharedClients(value ? [value] : []);
+  const setAnalyst = (value: string) => setSharedAnalysts(value ? [value] : []);
   const [team, setTeam] = useState("");
   const [type, setType] = useState("");
   const [search, setSearch] = useState("");
@@ -187,18 +191,18 @@ export function MyOperation() {
 
     {error && <Alert severity="error" onClose={() => setError("")} sx={{ mt: 2 }}>{error}</Alert>}
     {savingStatus && <Alert severity="info" sx={{ mt: 2 }}>Salvando a organização do atendimento…</Alert>}
-    <Box sx={{ mt: 2, display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2,1fr)", xl: "repeat(5,1fr)" }, gap: 2 }}>
+    <Box sx={{ mt: 2, display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2,minmax(0,1fr))", lg: "repeat(3,minmax(0,1fr))", xl: "repeat(5,minmax(0,1fr))" }, gap: 1.25 }}>
       {metrics.map(([key, label, info, valueKey]) => <KpiCard key={key} title={label} value={data?.summary[valueKey] ?? 0} subtitle="Clique para filtrar a operação" info={info} accent={metric === key ? aliareColors.green : aliareColors.greenDark} active={metric === key} onClick={() => setMetric(metric === key ? "" : key)} />)}
     </Box>
 
     {loading ? <Box sx={{ py: 10, textAlign: "center" }}><CircularProgress /></Box> : items.length === 0 ? <Card variant="outlined" sx={{mt:2,borderStyle:"dashed"}}><CardContent sx={{py:5,textAlign:"center"}}><FilterAltOutlined sx={{fontSize:34,color:"text.disabled"}}/><Typography sx={{fontWeight:850,mt:1}}>Nenhum registro neste recorte</Typography><Typography variant="body2" color="text.secondary" sx={{mt:.5}}>Revise os filtros, altere o conteúdo entre Atendimentos/Tarefas ou volte para a visão completa.</Typography><Button sx={{mt:1.5}} variant="outlined" onClick={()=>{setClient("");setAnalyst("");setTeam("");setType("");setSearch("");setMetric("");setSourceView("tickets");setSort("priority");}}>Limpar recorte</Button></CardContent></Card> : view === "kanban" ?
-      <Box sx={{ mt: 2, display: "grid", gridTemplateColumns: { xs: "repeat(2, minmax(0, 1fr))", md: "repeat(3, minmax(0, 1fr))", lg: "repeat(6, minmax(0, 1fr))" }, alignItems: "stretch", gap: .8, width: "100%", minWidth: 0, pb: 2 }}>
+      <Box sx={{ mt: 2, display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))", md: "repeat(3, minmax(0, 1fr))", xl: "repeat(6, minmax(0, 1fr))" }, alignItems: "stretch", gap: 1, width: "100%", minWidth: 0, pb: 2 }}>
         {lanes.map((column) => {
           const columnItems = items.filter((item) => lane(item.status) === column);
           const visibleLimit = visibleByLane[column] ?? INITIAL_LANE_LIMIT;
           const visibleItems = columnItems.slice(0, visibleLimit);
           const remaining = columnItems.length - visibleItems.length;
-          return <Box key={column} onDragOver={(event) => dragged && event.preventDefault()} onDrop={() => void changeStatus(column)} sx={{ minWidth: 0, height: "clamp(390px, calc(100vh - 405px), 620px)", display: "flex", flexDirection: "column", overflow: "hidden", background: dragged ? "linear-gradient(180deg,rgba(22,196,127,.10),rgba(22,196,127,.035))" : "linear-gradient(180deg,rgba(47,111,237,.035),rgba(16,24,40,.018))", borderRadius: 2.25, border: "1px solid", borderColor: dragged ? "success.light" : "divider", boxShadow: dragged ? "0 0 24px rgba(22,196,127,.10)" : "inset 0 1px rgba(255,255,255,.02)" }}>
+          return <Box key={column} onDragOver={(event) => dragged && event.preventDefault()} onDrop={() => void changeStatus(column)} sx={{ minWidth: 0, height: "clamp(520px, calc(100dvh - 300px), 760px)", display: "flex", flexDirection: "column", overflow: "hidden", background: dragged ? "linear-gradient(180deg,rgba(22,196,127,.10),rgba(22,196,127,.035))" : "linear-gradient(180deg,rgba(47,111,237,.035),rgba(16,24,40,.018))", borderRadius: 2.25, border: "1px solid", borderColor: dragged ? "success.light" : "divider", boxShadow: dragged ? "0 0 24px rgba(22,196,127,.10)" : "inset 0 1px rgba(255,255,255,.02)" }}>
             <Stack direction="row" sx={{ position: "sticky", top: 0, zIndex: 1, justifyContent: "space-between", alignItems: "center", gap: .5, px: 1, py: .85, bgcolor: "background.paper", borderTop: `3px solid ${laneColors[column]}`, borderBottom: "1px solid", borderBottomColor: "divider", minHeight: 43 }}>
               <Typography title={column} sx={{ minWidth: 0, fontWeight: 850, fontSize: ".72rem", lineHeight: 1.15, overflow: "hidden", textOverflow: "ellipsis" }}>{column}</Typography>
               <Chip size="small" label={columnItems.length} sx={{ height: 21, fontSize: ".68rem", fontWeight: 800, flexShrink: 0 }} />
@@ -225,7 +229,11 @@ export function MyOperation() {
         {knowledgeLoading ? <CircularProgress size={22} sx={{ mt: 2 }} /> : knowledge.length ? <Stack spacing={1} sx={{ mt: 1.5 }}>{knowledge.map((item, index) => <Card key={`${item.id}-${item.path}-${index}`} variant="outlined"><CardContent sx={{ p: 1.4, "&:last-child": { pb: 1.4 } }}><Stack direction="row" sx={{ justifyContent: "space-between", gap: 1 }}><Typography sx={{ fontWeight: 800 }}>{item.title}</Typography><Chip size="small" label={item.source === "bpmn" ? "BPMN" : item.source === "sharepoint" ? "SharePoint" : "Wiki"} /></Stack>{item.path && <Typography variant="caption" color="text.secondary">{item.path}</Typography>}<Typography variant="body2" sx={{ mt: .5 }}>{item.excerpt}</Typography>{item.webUrl && <Button size="small" component="a" href={item.webUrl} target="_blank" rel="noopener noreferrer" endIcon={<OpenInNewOutlined />} sx={{ mt: .5, px: 0 }}>Abrir conteúdo</Button>}</CardContent></Card>)}</Stack> : <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5 }}>Nenhum conteúdo correspondente foi localizado. Tente informar o nome da rotina ou módulo.</Typography>}
         <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ mt: 1.5 }}><Button variant="outlined" component="a" href={`${SHAREPOINT_SITE}/_layouts/15/search.aspx/siteall?q=${encodeURIComponent(knowledgeQuery)}`} target="_blank" rel="noopener noreferrer" endIcon={<OpenInNewOutlined />}>Pesquisar no SharePoint</Button><Button component="a" href={SHAREPOINT_SITE} target="_blank" rel="noopener noreferrer">Abrir portal SIMER</Button></Stack>
       </CardContent></Card>
-      <Stack direction="row" spacing={1} sx={{ mt: 3, flexWrap: "wrap" }}><Button variant="contained" onClick={() => selected && navigate(selected.source === "MOVIDESK" ? `/tickets?movidesk=${selected.id}` : `${route(selected.type)}?task=${selected.id}`)}>Abrir registro completo</Button>{selected?.workItem?.movideskTicket && <Button onClick={() => navigate(`/tickets?movidesk=${selected?.workItem?.movideskTicket}`)}>Abrir atendimento</Button>}</Stack>
+      <Stack direction="row" spacing={1} sx={{ mt: 3, flexWrap: "wrap" }}><Button variant="outlined" startIcon={<ShareOutlined />} onClick={() => {
+        if (!selected) return;
+        const path = selected.source === "MOVIDESK" ? `/tickets?movidesk=${selected.id}` : `${route(selected.type)}?task=${selected.id}`;
+        window.dispatchEvent(new CustomEvent("techlead-hub:share-chat", { detail: { label: selected.type, recordId: selected.id, title: selected.title, client: selected.client, status: selected.status, path } }));
+      }}>Compartilhar no Chat</Button><Button variant="contained" onClick={() => selected && navigate(selected.source === "MOVIDESK" ? `/tickets?movidesk=${selected.id}` : `${route(selected.type)}?task=${selected.id}`)}>Abrir registro completo</Button>{selected?.workItem?.movideskTicket && <Button onClick={() => navigate(`/tickets?movidesk=${selected?.workItem?.movideskTicket}`)}>Abrir atendimento</Button>}</Stack>
     </Drawer>
   </Box>;
 }

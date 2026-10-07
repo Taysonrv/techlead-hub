@@ -9,16 +9,18 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "../services/api";
 import { aliareColors } from "../theme/theme";
 import { PageHeader } from "../components/PageHeader";
+import { useFilters } from "../context/FiltersContext";
 import { KpiCard } from "../components/KpiCard";
 import { DetailFieldGrid, DetailPanelHeader, DetailSection } from "../components/DetailPanel";
 import { detailDrawerPaperSx } from "../theme/layoutTokens";
-import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip as ChartTooltip, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip as ChartTooltip, XAxis, YAxis } from "recharts";
 
 type Sample = {
   id: number; workItemType: string; title: string; state: string; client: string | null;
-  module: string | null; category?: string | null; cause?: string | null; service?: string | null;
+  module: string | null; category?: string | null; cause?: string | null; reason?: string | null; service?: string | null;
   serviceFirstLevel?: string | null; serviceSecondLevel?: string | null; serviceThirdLevel?: string | null; servicePath?: string | null;
   serviceSuggestion?: { path: string; service: string; module: string | null; confidence: "HIGH" | "MEDIUM" | "LOW"; score: number; evidence: string[]; reasons: string[]; alternatives: Array<{ path: string; service: string; score: number }> } | null;
+  classificationReview?: { suggestedCategory: "Problema" | "Dúvida" | null; suggestedCause: string | null; confidence: "ALTA" | "MÉDIA"; evidence: string[]; reason: string } | null;
   assignedToName: string | null; movideskTicket: number | null;
   participantClients?: string | string[] | null;
   participantMovideskTickets?: string | number[] | null;
@@ -32,15 +34,17 @@ type Data = {
   summary: Record<string, number>;
   samples: Sample[];
   filters: { clients: string[]; users: string[]; types: string[] };
+  trend?: Array<{ date: string; total: number; critical: number }>;
 };
 const metrics = [
-  ["awaitingReturnWithoutCause", "Aguardando retorno sem causa", "Atendimento aberto de cliente SIMER aguardando retorno, mas sem causa informada ou com valor genérico. A causa deve registrar por que o atendimento depende do cliente.", "Classificação"],
+  ["problemWithoutCause", "Problema sem causa", "Atendimento aberto com categoria Problema e sem Causa informada. A causa é obrigatória para qualificar a origem do problema e alimentar a análise operacional.", "Classificação"],
+  ["doubtWithoutReason", "Dúvida sem motivo", "Atendimento aberto com categoria Dúvida e sem Motivo informado. O motivo deve identificar a natureza da orientação solicitada.", "Classificação"],
+  ["withoutCategory", "Ticket sem categoria", "Atendimento aberto sem Categoria informada ou com classificação genérica equivalente a não informado.", "Classificação"],
   ["awaitingReturnOverdue", "Retorno do cliente acima de 3 dias", "Atendimento aberto aguardando retorno do cliente, sem movimentação há mais de três dias. Permite cobrar, reavaliar ou encerrar conforme o processo.", "Prazo"],
   ["reopenedTickets", "Atendimentos reabertos", "Atendimentos ativos que já foram reabertos. Devem ser acompanhados para identificar falha na solução, recorrência ou validação incompleta.", "Recorrência"],
   ["excessiveOwnerHandoffs", "Muitas trocas de responsável", "Atendimentos ativos com três ou mais trocas de responsável. Pode indicar roteamento incorreto, falta de domínio ou quebra de continuidade.", "Coordenação"],
   ["lowSatisfaction", "Baixa satisfação", "Atendimentos dos clientes SIMER com avaliação igual ou inferior a 2. Exige análise do histórico e plano de recuperação.", "Experiência"],
-  ["suspectedClassification", "Categoria ou causa a revisar", "Atendimento aberto de cliente SIMER sem categoria ou causa, com valor genérico ou combinação contraditória entre dúvida/orientação e problema/erro.", "Classificação"],
-  ["withoutService", "Atendimentos sem serviço", "Atendimentos abertos sem Serviço ou sem qualquer nível da hierarquia de serviço do Movidesk. Devem ser classificados para permitir análise correta por módulo e rotina.", "Serviço"],
+  ["suspectedClassification", "Classificação possivelmente divergente", "Compara título e contexto recente do atendimento com Categoria e Causa informadas. Só sinaliza quando encontra evidência textual de classificação diferente; a sugestão exige validação humana.", "Classificação"],
   ["genericSimerService", "Serviço SIMER genérico", "Atendimentos abertos classificados somente em níveis genéricos como SIAGRI SIMER/SIMER, sem uma rotina específica. São candidatos à revisão do serviço informado.", "Serviço"],
   ["suspectedServiceMismatch", "Possível serviço incorreto", "Atendimentos cujo assunto, categoria e causa apontam para um Serviço SIMER diferente do atualmente classificado. A indicação é assistiva e deve ser validada pelo analista antes de qualquer ajuste.", "Serviço"],
   ["ticketOpenTaskFinished", "Pronto para encerrar", "Ticket ainda pendente, mas a Tarefa foi cancelada ou concluída e possui versão efetivamente entregue. Aguardando validar versão não entra neste recorte.", "Fluxo"],
@@ -48,7 +52,6 @@ const metrics = [
   ["ticketClosedTaskOpen", "Ticket encerrado com Tarefa ativa", "Ticket concluído, fechado ou resolvido enquanto a Tarefa relacionada ainda está em andamento.", "Fluxo"],
   ["activeTaskWithVersion", "Tarefa ativa com versão entregue", "Tarefa não finalizada vinculada a atendimento que já possui versão entregue. Pode indicar estado desatualizado.", "Versão"],
   ["completedWithoutVersion", "Tarefa finalizada sem versão entregue", "Correção ou evolução concluída e vinculada a atendimento sem versão entregue no Azure.", "Versão"],
-  ["versionMismatch", "Versão cadastrada ≠ entregue", "Correção ou evolução possui versão cadastrada diferente da versão efetivamente registrada na entrega. O indicador ajuda a identificar classificação desatualizada ou entrega divergente.", "Versão"],
   ["clientMismatch", "Cliente divergente", "O cliente do atendimento não consta como cliente principal nem como cliente participante da Correção ou Evolução relacionada. APOIO não exige cliente.", "Vínculo"],
   ["supportLinkDivergence", "APOIO com vínculo divergente", "APOIO referencia ticket inexistente no recorte ou ticket que aponta para outra Tarefa. Cliente e versão não são obrigatórios para APOIO.", "APOIO"],
   ["danglingTaskTickets", "Referência de Tarefa inexistente", "Ticket aponta para um ID de Tarefa ausente no snapshot atual do Azure.", "Vínculo"],
@@ -58,14 +61,46 @@ const metrics = [
 ] as const;
 
 const coordinationMetricKeys = new Set([
-  "awaitingReturnOverdue",
-  "reopenedTickets",
-  "excessiveOwnerHandoffs",
   "ticketOpenTaskFinished",
+  "ticketOpenTaskWithoutDelivery",
   "ticketClosedTaskOpen",
   "danglingTaskTickets",
+  "reopenedTickets",
+  "excessiveOwnerHandoffs",
+  "withoutTicket",
+  "withoutClient",
+  "completedWithoutVersion",
+  "problemWithoutCause",
+  "doubtWithoutReason",
+  "withoutCategory",
+  "suspectedClassification",
+  "genericSimerService",
 ]);
 const coordinationMetrics = metrics.filter(([key]) => coordinationMetricKeys.has(key));
+
+const priorityWeight: Record<string, number> = {
+  ticketClosedTaskOpen: 100,
+  ticketOpenTaskFinished: 92,
+  ticketOpenTaskWithoutDelivery: 90,
+  danglingTaskTickets: 88,
+  completedWithoutVersion: 82,
+  reopenedTickets: 72,
+  excessiveOwnerHandoffs: 68,
+  withoutTicket: 64,
+  withoutClient: 58,
+  problemWithoutCause: 58,
+  doubtWithoutReason: 58,
+  withoutCategory: 62,
+  suspectedClassification: 46,
+  genericSimerService: 48,
+};
+
+function priorityLevel(score: number) {
+  if (score >= 80) return { label: "Crítica", color: "error" as const };
+  if (score >= 55) return { label: "Alta", color: "warning" as const };
+  if (score >= 30) return { label: "Média", color: "info" as const };
+  return { label: "Baixa", color: "default" as const };
+}
 
 export function DataQuality() {
   const theme = useTheme();
@@ -75,8 +110,7 @@ export function DataQuality() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [type, setType] = useState<string[]>([]);
-  const [client, setClient] = useState<string[]>([]);
-  const [user, setUser] = useState<string[]>([]);
+  const { clients: client, setClients: setClient, analysts: user, setAnalysts: setUser } = useFilters();
   const [search, setSearch] = useState("");
   const [issue, setIssue] = useState(() => searchParams.get("issue") ?? "");
   const [selected, setSelected] = useState<Sample | null>(null);
@@ -87,7 +121,7 @@ export function DataQuality() {
       setLoading(true); setError(false);
       const response = await api.get<Data>("/workspace/data-quality", { params: {
         type: type.length ? type.join("|||") : undefined, client: client.length ? client.join("|||") : undefined, user: user.length ? user.join("|||") : undefined,
-        issue: issue || "__coordinationOverview", search: search || undefined,
+        issue: issue || undefined, search: search || undefined,
       }, signal, timeout: 45_000 });
       if (signal?.aborted) return;
       setData(response.data);
@@ -120,9 +154,10 @@ export function DataQuality() {
   function issueGuidance() {
     const metric = metrics.find(([key]) => key === issue);
     const actions: Record<string, string> = {
-      awaitingReturnWithoutCause: "Informar a causa antes de manter o atendimento aguardando retorno.",
-      suspectedClassification: "Revisar categoria e causa conforme o assunto e a causa raiz.",
-      withoutService: "Informar o Serviço correto do atendimento no Movidesk.",
+      problemWithoutCause: "Informar a Causa no Movidesk para o atendimento classificado como Problema.",
+      doubtWithoutReason: "Informar o Motivo no Movidesk para o atendimento classificado como Dúvida.",
+      withoutCategory: "Informar a Categoria correta do atendimento no Movidesk.",
+      suspectedClassification: "Validar a sugestão contextual contra o atendimento e ajustar Categoria/Causa somente quando a evidência fizer sentido.",
       genericSimerService: "Revisar o atendimento e substituir o Serviço SIMER genérico pela rotina específica quando aplicável.",
       suspectedServiceMismatch: "Validar a sugestão contra o contexto do atendimento e corrigir o Serviço no Movidesk somente quando fizer sentido.",
       awaitingReturnOverdue: "Cobrar retorno, registrar a ação e reavaliar manutenção do ticket aberto.",
@@ -134,7 +169,6 @@ export function DataQuality() {
       ticketClosedTaskOpen: "Atualizar o estado da Tarefa ou reabrir o atendimento.",
       activeTaskWithVersion: "Validar se a Tarefa já pode ser concluída.",
       completedWithoutVersion: "Informar a versão efetivamente entregue.",
-      versionMismatch: "Validar a versão planejada no cadastro e a versão efetivamente entregue antes de ajustar o registro.",
       clientMismatch: "Revisar cliente principal e clientes participantes.",
       supportLinkDivergence: "Corrigir o vínculo do APOIO com o atendimento.",
       danglingTaskTickets: "Corrigir ou remover a referência de Tarefa no atendimento.",
@@ -149,7 +183,7 @@ export function DataQuality() {
     const rows = data?.samples ?? [];
     const escape = (value: unknown) => `"${String(value ?? "").replace(/"/g, '""')}"`;
     const guidance = issueGuidance();
-    const header = ["Origem", "Tipo", "Atendimento", "Assunto / Título", "Cliente do ticket", "Cliente da Tarefa", "Categoria", "Causa", "Serviço", "Analista", "Status do atendimento", "Última movimentação", "Reaberturas", "Trocas de responsável", "Satisfação", "Tarefa", "Estado da Tarefa", "Versão de cadastro", "Versão entregue", "Motivo da pendência", "Ação recomendada"];
+    const header = ["Origem", "Tipo", "Atendimento", "Assunto / Título", "Cliente do ticket", "Cliente da Tarefa", "Categoria", "Causa", "Motivo", "Sugestão Categoria", "Sugestão Causa", "Confiança revisão", "Evidências revisão", "Serviço", "Analista", "Status do atendimento", "Última movimentação", "Reaberturas", "Trocas de responsável", "Satisfação", "Tarefa", "Estado da Tarefa", "Versão de cadastro", "Versão entregue", "Motivo da pendência", "Ação recomendada"];
     const csv = [header, ...rows.map((item) => [
       item.source,
       item.workItemType,
@@ -159,6 +193,11 @@ export function DataQuality() {
       item.taskClient,
       item.category,
       item.cause,
+      item.reason,
+      item.classificationReview?.suggestedCategory,
+      item.classificationReview?.suggestedCause,
+      item.classificationReview?.confidence,
+      item.classificationReview?.evidence?.join(", "),
       item.servicePath ?? item.service,
       item.assignedToName,
       item.state,
@@ -187,11 +226,20 @@ export function DataQuality() {
   const hasFilters = Boolean(type.length || client.length || user.length || search || issue);
   const filterCount = type.length + client.length + user.length + (search ? 1 : 0);
   const title = useMemo(() => metrics.find(([key]) => key === issue)?.[1] ?? "Pendências encontradas", [issue]);
+  const rankedPriorities = useMemo(() => coordinationMetrics
+    .map(([key, label, info, group]) => {
+      const total = Number(data?.summary[key] ?? 0);
+      const weight = priorityWeight[key] ?? 40;
+      const score = total > 0 ? Math.min(100, Math.round(weight * 0.72 + Math.min(total, 20) / 20 * 28)) : 0;
+      return { key, label, info, group, total, score, level: priorityLevel(score) };
+    })
+    .filter((item) => item.total > 0)
+    .sort((left, right) => right.score - left.score || right.total - left.total), [data]);
 
   return <Box sx={{ pb: 4 }}>
-    <PageHeader eyebrow="Governança" title="Pendências" description="Visão executiva das pendências que exigem acompanhamento da coordenação: prazo, recorrência, continuidade e divergências entre atendimento e Tarefa." meta={issue ? `${data?.samples.length ?? 0} evidência(s) no recorte selecionado` : `${coordinationMetrics.reduce((total, [key]) => total + (data?.summary[key] ?? 0), 0)} ocorrência(s) prioritária(s)`} />
+    <PageHeader eyebrow="Governança operacional" title="Pendências 2.0" description="Radar preventivo de inconsistências, continuidade, classificação e vínculos entre Movidesk e Azure na operação SIMER." meta={issue ? `${data?.samples.length ?? 0} evidência(s) no recorte selecionado` : `${coordinationMetrics.reduce((total, [key]) => total + (data?.summary[key] ?? 0), 0)} sinal(is) prioritário(s)`} />
 
-    <Card variant="outlined" sx={{ mt: 2, overflow: "visible" }}><CardContent sx={{ p: { xs: 2, md: 2.25 }, "&:last-child": { pb: { xs: 2, md: 2.25 } } }}>
+    <Card variant="outlined" sx={{ mt: 1.5, overflow: "visible" }}><CardContent sx={{ p: { xs: 1.5, md: 1.75 }, "&:last-child": { pb: { xs: 1.5, md: 1.75 } } }}>
       <Stack direction={{ xs: "column", md: "row" }} spacing={1.25} sx={{ mb: 1.75, justifyContent: "space-between", alignItems: { md: "center" } }}>
         <Box>
           <Stack direction="row" spacing={.75} sx={{ alignItems: "center" }}>
@@ -199,7 +247,7 @@ export function DataQuality() {
             <Typography sx={{ fontWeight: 850 }}>Recorte das pendências</Typography>
             {filterCount > 0 && <Chip size="small" color="primary" variant="outlined" label={`${filterCount} filtro(s)`} />}
           </Stack>
-          <Typography variant="caption" color="text.secondary">Pesquise e combine tipo, cliente e analista para investigar somente o recorte necessário.</Typography>
+          <Typography variant="caption" color="text.secondary">Combine tipo, cliente e analista. Todos os indicadores respeitam o escopo operacional do Suporte SIMER.</Typography>
         </Box>
         <Stack direction="row" spacing={.75} useFlexGap sx={{ flexWrap: "wrap" }}>
           {issue && <Chip size="small" color="warning" variant="outlined" label={`Drill-down · ${title}`} />}
@@ -230,9 +278,33 @@ export function DataQuality() {
       </Box>
     </CardContent></Card>
     {error && <Alert severity="error" sx={{ mt: 2 }}>Não foi possível analisar a qualidade dos dados.</Alert>}
-    <Box sx={{ mt: 2, display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2,1fr)", xl: "repeat(4,1fr)" }, gap: 2 }}>
-      {coordinationMetrics.map(([key, label, info, group]) => <KpiCard key={key} title={label} value={data?.summary[key] ?? 0} subtitle={group} info={info} accent={issue === key ? aliareColors.green : group === "Fluxo" ? "#ef4444" : group === "Versão" ? "#8b5cf6" : group === "Vínculo" ? "#f59e0b" : group === "APOIO" ? "#0891b2" : "#2676b9"} active={issue === key} onClick={() => setIssue(issue === key ? "" : key)} />)}
+    <Box sx={{ mt: 2 }}>
+      <Stack direction={{ xs: "column", sm: "row" }} sx={{ justifyContent: "space-between", alignItems: { sm: "end" }, mb: 1.25, gap: 1 }}>
+        <Box><Typography variant="h6" sx={{ fontWeight: 900 }}>Fila prioritária</Typography><Typography variant="body2" color="text.secondary">Sinais com ação operacional direta. Clique em um card para abrir as evidências.</Typography></Box>
+        <Chip size="small" variant="outlined" label="Movidesk + Azure · SIMER" />
+      </Stack>
+      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2,minmax(0,1fr))", lg: "repeat(3,minmax(0,1fr))", xl: "repeat(4,minmax(0,1fr))" }, gap: 1.25 }}>
+        {coordinationMetrics.map(([key, label, info, group]) => <KpiCard key={key} title={label} value={data?.summary[key] ?? 0} subtitle={group} info={info} accent={issue === key ? aliareColors.green : group === "Fluxo" ? "#ef4444" : group === "Versão" ? "#8b5cf6" : group === "Vínculo" ? "#f59e0b" : group === "Serviço" ? "#0891b2" : "#2676b9"} active={issue === key} onClick={() => setIssue(issue === key ? "" : key)} />)}
+      </Box>
     </Box>
+
+    <Card variant="outlined" sx={{ mt: 2 }}><CardContent>
+      <Stack direction={{ xs: "column", md: "row" }} spacing={1} sx={{ justifyContent: "space-between", alignItems: { md: "center" }, mb: 1.5 }}>
+        <Box><Typography variant="h6" sx={{ fontWeight: 900 }}>O que atacar primeiro</Typography><Typography variant="body2" color="text.secondary">Ranking explicável por criticidade operacional e volume. O score prioriza fluxo quebrado e vínculos antes de qualidade cadastral.</Typography></Box>
+        <Chip variant="outlined" label={rankedPriorities.length ? `${rankedPriorities.length} frentes ativas` : "Sem frentes críticas"} />
+      </Stack>
+      <Stack spacing={.8}>
+        {rankedPriorities.slice(0, 6).map((item, index) => (
+          <Button key={item.key} onClick={() => setIssue(item.key)} sx={{ display: "grid", gridTemplateColumns: { xs: "32px minmax(0,1fr) auto", md: "40px minmax(0,1fr) 90px 80px" }, gap: 1, alignItems: "center", textTransform: "none", textAlign: "left", border: "1px solid", borderColor: issue === item.key ? "primary.main" : "divider", borderRadius: 2, p: 1.1 }}>
+            <Typography sx={{ fontWeight: 900, color: "text.secondary" }}>#{index + 1}</Typography>
+            <Box sx={{ minWidth: 0 }}><Typography noWrap sx={{ fontWeight: 850 }}>{item.label}</Typography><Typography variant="caption" color="text.secondary">{item.group} · peso operacional {priorityWeight[item.key] ?? 40}</Typography></Box>
+            <Chip size="small" color={item.level.color} label={item.level.label} />
+            <Typography sx={{ display: { xs: "none", md: "block" }, fontWeight: 900, textAlign: "right" }}>{item.score}/100</Typography>
+          </Button>
+        ))}
+        {!rankedPriorities.length && <Alert severity="success">Nenhuma pendência prioritária foi identificada no recorte atual.</Alert>}
+      </Stack>
+    </CardContent></Card>
 
     <Card variant="outlined" sx={{ mt: 2, overflow: "hidden" }}><CardContent>
       <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ justifyContent: "space-between", alignItems: { sm: "center" }, mb: 1.5 }}>
@@ -254,6 +326,56 @@ export function DataQuality() {
 
     <Card variant="outlined" sx={{ mt: 2 }}><CardContent>
       <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ justifyContent: "space-between", alignItems: { sm: "center" } }}>
+        <Box><Typography variant="h6" sx={{ fontWeight: 850 }}>Tendência da dívida operacional</Typography><Typography variant="body2" color="text.secondary">Snapshots diários reais do escopo SIMER. A série começa a ser construída a partir desta versão.</Typography></Box>
+        <Chip variant="outlined" label={data?.trend?.length ? `${data.trend.length} dia(s) registrados` : "Aguardando histórico"} />
+      </Stack>
+      <Box sx={{ height: 260, mt: 1.5 }}>
+        {data?.trend?.length ? <ResponsiveContainer width="100%" height="100%"><LineChart data={data.trend.map((item) => ({ ...item, day: new Date(item.date).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }) }))}><CartesianGrid stroke={theme.palette.divider} strokeDasharray="4 4" vertical={false} opacity={.5}/><XAxis dataKey="day" tick={{ fontSize: 11, fill: theme.palette.text.secondary }} axisLine={false} tickLine={false}/><YAxis allowDecimals={false} tick={{ fontSize: 11, fill: theme.palette.text.secondary }} axisLine={false} tickLine={false}/><ChartTooltip cursor={false} contentStyle={{ borderRadius: 12, border: `1px solid ${theme.palette.divider}`, background: theme.palette.background.paper, color: theme.palette.text.primary }}/><Line type="monotone" dataKey="total" name="Pendências prioritárias" stroke={theme.palette.primary.main} strokeWidth={2.5} dot={false}/><Line type="monotone" dataKey="critical" name="Fluxo crítico" stroke={theme.palette.error.main} strokeWidth={2.2} dot={false}/></LineChart></ResponsiveContainer> : <Alert severity="info">O primeiro snapshot será gravado ao abrir a visão sem filtros. A tendência ficará comparável conforme os próximos dias forem registrados.</Alert>}
+      </Box>
+    </CardContent></Card>
+
+    <Box sx={{ mt: 2, display: "grid", gridTemplateColumns: { xs: "1fr", xl: "1fr 1fr" }, gap: 2 }}>
+      <Card variant="outlined"><CardContent>
+        <Typography variant="h6" sx={{ fontWeight: 850 }}>Mapa das pendências</Typography>
+        <Typography variant="body2" color="text.secondary">Distribuição de todos os detectores por domínio. Ajuda a identificar onde a operação está acumulando dívida.</Typography>
+        <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "minmax(210px,.82fr) minmax(0,1.18fr)" }, gap: 1.25, alignItems: "center", mt: 1 }}>
+          <Box sx={{ height: { xs: 220, sm: 235 }, minWidth: 0 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie data={Array.from(new Set(metrics.map(([, , , group]) => group))).map((group) => ({ name: group, value: metrics.filter(([, , , itemGroup]) => itemGroup === group).reduce((sum, [key]) => sum + Number(data?.summary[key] ?? 0), 0) })).filter((item) => item.value > 0)} dataKey="value" nameKey="name" innerRadius={62} outerRadius={96} paddingAngle={2}>
+                  {Array.from(new Set(metrics.map(([, , , group]) => group))).map((group) => ({ name: group, value: metrics.filter(([, , , itemGroup]) => itemGroup === group).reduce((sum, [key]) => sum + Number(data?.summary[key] ?? 0), 0) })).filter((item) => item.value > 0).map((item, index) => <Cell key={item.name} fill={[aliareColors.green, aliareColors.info, "#8b5cf6", "#f59e0b", "#0891b2", "#ef4444", "#64748b"][index % 7]} />)}
+                </Pie>
+                <ChartTooltip contentStyle={{ borderRadius: 12, border: `1px solid ${theme.palette.divider}`, background: theme.palette.background.paper, color: theme.palette.text.primary }} />
+              </PieChart>
+            </ResponsiveContainer>
+          </Box>
+          <Stack spacing={.45} sx={{ maxHeight: { md: 215 }, overflowY: "auto" }}>
+            {Array.from(new Set(metrics.map(([, , , group]) => group))).map((group) => ({ name: group, value: metrics.filter(([, , , itemGroup]) => itemGroup === group).reduce((sum, [key]) => sum + Number(data?.summary[key] ?? 0), 0) })).filter((item) => item.value > 0).map((item, index) => (
+              <Box key={item.name} sx={{ display: "grid", gridTemplateColumns: "9px minmax(0,1fr) auto", gap: .75, alignItems: "center", px: .65, py: .4, borderRadius: 1, "&:hover": { bgcolor: "action.hover" } }}>
+                <Box sx={{ width: 8, height: 8, borderRadius: "50%", bgcolor: [aliareColors.green, aliareColors.info, "#8b5cf6", "#f59e0b", "#0891b2", "#ef4444", "#64748b"][index % 7] }} />
+                <Typography variant="caption" noWrap sx={{ fontWeight: 700 }}>{item.name}</Typography>
+                <Typography variant="caption" sx={{ fontWeight: 900 }}>{item.value}</Typography>
+              </Box>
+            ))}
+          </Stack>
+        </Box>
+      </CardContent></Card>
+      <Card variant="outlined"><CardContent>
+        <Typography variant="h6" sx={{ fontWeight: 850 }}>Cobertura de governança</Typography>
+        <Typography variant="body2" color="text.secondary">Indicadores complementares que não precisam ocupar a primeira linha, mas devem permanecer monitorados.</Typography>
+        <Box sx={{ mt: 2, display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" }, gap: 1 }}>
+          {metrics.filter(([key]) => !coordinationMetricKeys.has(key)).map(([key, label, , group]) => (
+            <Button key={key} variant={issue === key ? "contained" : "outlined"} onClick={() => setIssue(issue === key ? "" : key)} sx={{ minHeight: 54, justifyContent: "space-between", textTransform: "none", px: 1.25 }}>
+              <Box sx={{ textAlign: "left", minWidth: 0 }}><Typography sx={{ fontSize: ".78rem", fontWeight: 800 }}>{label}</Typography><Typography variant="caption" sx={{ opacity: .72 }}>{group}</Typography></Box>
+              <Chip size="small" label={data?.summary[key] ?? 0} />
+            </Button>
+          ))}
+        </Box>
+      </CardContent></Card>
+    </Box>
+
+    <Card variant="outlined" sx={{ mt: 2 }}><CardContent>
+      <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ justifyContent: "space-between", alignItems: { sm: "center" } }}>
         <Box>
           <Typography variant="h6" sx={{ fontWeight: 800 }}>{title}</Typography>
           <Typography variant="caption" color="text.secondary">{data?.samples.length ?? 0} registro(s) no recorte atual</Typography>
@@ -262,12 +384,12 @@ export function DataQuality() {
           Exportar lista{user.length ? " do analista" : ""}
         </Button>
       </Stack>
-      {loading ? <Box sx={{ py: 8, textAlign: "center" }}><CircularProgress /></Box> : <Stack spacing={1} sx={{ mt: 2 }}>{data?.samples.map((item) => <Button key={`${item.source}-${item.id}`} onClick={() => void open(item)} sx={{ justifyContent: "flex-start", textTransform: "none", border: "1px solid", borderColor: "divider", p: 1.3, borderRadius: 1.5 }}><Box sx={{ textAlign: "left", minWidth: 0 }}><Stack direction="row" spacing={1} sx={{ alignItems: "center" }}><Chip size="small" label={item.workItemType} /><Typography sx={{ fontWeight: 750 }}>#{item.source === "MOVIDESK" ? item.movideskTicket ?? item.id : item.id} · {item.title}</Typography></Stack><Typography variant="caption" color="text.secondary">{[item.state, item.client ?? "Sem cliente", item.category ? `Categoria ${item.category}` : "Sem categoria", item.cause ? `Causa ${item.cause}` : "Sem causa", item.servicePath ? `Serviço ${item.servicePath}` : "Sem serviço", item.serviceSuggestion ? `Sugestão ${item.serviceSuggestion.service} · ${item.serviceSuggestion.confidence}` : null, item.module ?? "Sem módulo", item.assignedToName ?? "Sem responsável", item.movideskTicket ? `Ticket ${item.movideskTicket}` : "Sem ticket", item.taskNumber ? `Tarefa #${item.taskNumber}` : "Sem Tarefa", item.taskState ?? null, item.registeredVersion ? `Cadastro ${item.registeredVersion}` : null, item.deliveredVersion ? `Entrega ${item.deliveredVersion}` : "Sem versão entregue"].filter(Boolean).join(" · ")}</Typography></Box></Button>)}</Stack>}
+      {loading ? <Box sx={{ py: 8, textAlign: "center" }}><CircularProgress /></Box> : <Stack spacing={1} sx={{ mt: 2 }}>{data?.samples.map((item) => <Button key={`${item.source}-${item.id}`} onClick={() => void open(item)} sx={{ justifyContent: "flex-start", textTransform: "none", border: "1px solid", borderColor: "divider", p: 1.3, borderRadius: 1.5 }}><Box sx={{ textAlign: "left", minWidth: 0 }}><Stack direction="row" spacing={1} sx={{ alignItems: "center" }}><Chip size="small" label={item.workItemType} /><Typography sx={{ fontWeight: 750 }}>#{item.source === "MOVIDESK" ? item.movideskTicket ?? item.id : item.id} · {item.title}</Typography></Stack><Typography variant="caption" color="text.secondary">{[item.state, item.client ?? "Sem cliente", item.category ? `Categoria ${item.category}` : "Sem categoria", item.cause ? `Causa ${item.cause}` : "Sem causa", item.reason ? `Motivo ${item.reason}` : "Sem motivo", item.classificationReview?.suggestedCategory ? `Sugestão Categoria ${item.classificationReview.suggestedCategory}` : null, item.classificationReview?.suggestedCause ? `Sugestão Causa ${item.classificationReview.suggestedCause}` : null, item.servicePath ? `Serviço ${item.servicePath}` : "Sem serviço", item.serviceSuggestion ? `Sugestão ${item.serviceSuggestion.service} · ${item.serviceSuggestion.confidence}` : null, item.module ?? "Sem módulo", item.assignedToName ?? "Sem responsável", item.movideskTicket ? `Ticket ${item.movideskTicket}` : "Sem ticket", item.taskNumber ? `Tarefa #${item.taskNumber}` : "Sem Tarefa", item.taskState ?? null, item.registeredVersion ? `Cadastro ${item.registeredVersion}` : null, item.deliveredVersion ? `Entrega ${item.deliveredVersion}` : "Sem versão entregue"].filter(Boolean).join(" · ")}</Typography></Box></Button>)}</Stack>}
     </CardContent></Card>
 
     <Drawer anchor="right" open={Boolean(selected)} onClose={() => setSelected(null)} slotProps={{ paper: { sx: detailDrawerPaperSx } }}>
       <DetailPanelHeader eyebrow={selected?.workItemType} title={selected?.title ?? "Detalhes do registro"} identifier={`#${selected?.source === "MOVIDESK" ? selected.movideskTicket : selected?.id}`} onClose={() => setSelected(null)} />
-      <DetailSection title="Visão operacional"><DetailFieldGrid fields={selected ? Object.entries({ Estado: selected.state, "Cliente principal": selected.client, "Clientes participantes": formatList(selected.participantClients), Categoria: selected.category, Causa: selected.cause, Serviço: selected.servicePath ?? selected.service, "Serviço · 1º nível": selected.serviceFirstLevel, "Serviço · 2º nível": selected.serviceSecondLevel, "Serviço · 3º nível": selected.serviceThirdLevel, Módulo: selected.module, Responsável: selected.assignedToName, "Ticket principal": selected.movideskTicket, "Tickets participantes": formatList(selected.participantMovideskTickets), "Tarefa relacionada": selected.taskNumber ? `#${selected.taskNumber}` : null, "Estado da Tarefa": selected.taskState, "Título da Tarefa": selected.taskTitle, "Cliente da Tarefa": selected.taskClient, "Versão de cadastro": selected.registeredVersion, "Versão entregue": selected.deliveredVersion, "Serviço sugerido": selected.serviceSuggestion?.path, "Confiança da sugestão": selected.serviceSuggestion?.confidence, "Pontuação": selected.serviceSuggestion?.score, "Evidências": selected.serviceSuggestion?.evidence?.join(", "), "Justificativa da sugestão": selected.serviceSuggestion?.reasons?.join(" "), "Alternativas consideradas": selected.serviceSuggestion?.alternatives?.map((item) => `${item.service} (${item.score})`).join(" · "), "Motivo da pendência": issueGuidance().reason, "Última movimentação": selected.lastMovement, Reaberturas: selected.reopenCount, "Trocas de responsável": selected.ownerHandoffs, "Resolvido no primeiro contato": selected.resolvedInFirstCall === null || selected.resolvedInFirstCall === undefined ? "Não informado" : selected.resolvedInFirstCall ? "Sim" : "Não", Satisfação: selected.satisfactionScore, "Comentário da satisfação": selected.satisfactionComment, "Ação recomendada": issueGuidance().action }).map(([label, value]) => [label, String(value ?? "Não informado")]) : []} /></DetailSection>
+      <DetailSection title="Visão operacional"><DetailFieldGrid fields={selected ? Object.entries({ Estado: selected.state, "Cliente principal": selected.client, "Clientes participantes": formatList(selected.participantClients), Categoria: selected.category, Causa: selected.cause, Motivo: selected.reason, "Sugestão de Categoria": selected.classificationReview?.suggestedCategory, "Sugestão de Causa": selected.classificationReview?.suggestedCause, "Confiança da revisão": selected.classificationReview?.confidence, "Evidências da revisão": selected.classificationReview?.evidence?.join(", "), "Análise contextual": selected.classificationReview?.reason, Serviço: selected.servicePath ?? selected.service, "Serviço · 1º nível": selected.serviceFirstLevel, "Serviço · 2º nível": selected.serviceSecondLevel, "Serviço · 3º nível": selected.serviceThirdLevel, Módulo: selected.module, Responsável: selected.assignedToName, "Ticket principal": selected.movideskTicket, "Tickets participantes": formatList(selected.participantMovideskTickets), "Tarefa relacionada": selected.taskNumber ? `#${selected.taskNumber}` : null, "Estado da Tarefa": selected.taskState, "Título da Tarefa": selected.taskTitle, "Cliente da Tarefa": selected.taskClient, "Versão de cadastro": selected.registeredVersion, "Versão entregue": selected.deliveredVersion, "Serviço sugerido": selected.serviceSuggestion?.path, "Confiança da sugestão": selected.serviceSuggestion?.confidence, "Pontuação": selected.serviceSuggestion?.score, "Evidências": selected.serviceSuggestion?.evidence?.join(", "), "Justificativa da sugestão": selected.serviceSuggestion?.reasons?.join(" "), "Alternativas consideradas": selected.serviceSuggestion?.alternatives?.map((item) => `${item.service} (${item.score})`).join(" · "), "Motivo da pendência": issueGuidance().reason, "Última movimentação": selected.lastMovement, Reaberturas: selected.reopenCount, "Trocas de responsável": selected.ownerHandoffs, "Resolvido no primeiro contato": selected.resolvedInFirstCall === null || selected.resolvedInFirstCall === undefined ? "Não informado" : selected.resolvedInFirstCall ? "Sim" : "Não", Satisfação: selected.satisfactionScore, "Comentário da satisfação": selected.satisfactionComment, "Ação recomendada": issueGuidance().action }).map(([label, value]) => [label, String(value ?? "Não informado")]) : []} /></DetailSection>
       {detail && <Alert severity="info" sx={{ mt: 2 }}>Detalhes completos e histórico carregados do Azure.</Alert>}
       <Button variant="contained" sx={{ mt: 3 }} onClick={() => selected && navigate(selected.source === "MOVIDESK" ? `/tickets?movidesk=${selected.movideskTicket}` : `${route(selected.workItemType)}?task=${selected.id}`)}>Abrir registro completo</Button>
     </Drawer>

@@ -1,5 +1,5 @@
 import { CalendarMonthOutlined, ChevronLeft, ChevronRight, DarkModeOutlined, LightModeOutlined, SearchOutlined } from "@mui/icons-material";
-import { Badge, Box, CircularProgress, IconButton, InputAdornment, List, ListItemButton, ListItemText, Paper, Popover, Stack, TextField, Typography } from "@mui/material";
+import { Alert, Badge, Box, Button, CircularProgress, IconButton, InputAdornment, List, ListItemButton, ListItemText, Paper, Popover, Stack, TextField, Typography } from "@mui/material";
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
@@ -10,6 +10,7 @@ import { useColorMode } from "../context/ColorModeContext";
 type SearchItem = { id: string; type: string; title: string; subtitle: string; path: string };
 type CalendarEvent = { id: string; date: string; kind: string; title: string; subtitle: string; path: string };
 type Holiday = { date: string; name: string };
+type DesktopUpdateState = { status: "idle" | "disabled" | "checking" | "available" | "not-available" | "downloading" | "downloaded" | "error"; availableVersion: string | null; percent?: number; message?: string | null };
 
 export function GlobalTopBar() {
   const navigate = useNavigate();
@@ -25,11 +26,26 @@ export function GlobalTopBar() {
   const [selectedDate, setSelectedDate] = useState(() => dateKey(new Date()));
   const [calendarPortal, setCalendarPortal] = useState<HTMLElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const [updateState, setUpdateState] = useState<DesktopUpdateState | null>(null);
 
 
   useEffect(() => {
     setCalendarPortal(document.getElementById("global-calendar-slot"));
   }, []);
+
+  useEffect(() => {
+    const updates = window.techLeadHub?.updates;
+    if (!updates) return;
+    void updates.getState().then(setUpdateState).catch(() => undefined);
+    return updates.onStateChange(setUpdateState);
+  }, []);
+
+  async function handleUpdateAction() {
+    const updates = window.techLeadHub?.updates;
+    if (!updates || !updateState) return;
+    if (updateState.status === "available") await updates.download().catch(() => undefined);
+    else if (updateState.status === "downloaded") await updates.install().catch(() => undefined);
+  }
 
   useEffect(() => {
     const onCommandPalette = (event: globalThis.KeyboardEvent) => {
@@ -86,6 +102,27 @@ export function GlobalTopBar() {
             </Paper>
           )}
       </Box>
+
+      {updateState && ["available", "downloading", "downloaded"].includes(updateState.status) && (
+        <Alert
+          severity={updateState.status === "downloaded" ? "success" : "info"}
+          variant="outlined"
+          sx={{ mt: 1, width: { xs: "100%", md: "calc(100% - 340px)" }, maxWidth: 620, pointerEvents: "auto", borderRadius: 2, py: .25, "& .MuiAlert-message": { width: "100%" } }}
+          action={
+            updateState.status === "available" || updateState.status === "downloaded"
+              ? <Button size="small" color="inherit" onClick={() => void handleUpdateAction()}>{updateState.status === "downloaded" ? "Instalar e reiniciar" : "Baixar"}</Button>
+              : undefined
+          }
+        >
+          <Typography variant="body2" sx={{ fontWeight: 800 }}>
+            {updateState.status === "downloaded"
+              ? `Versão ${updateState.availableVersion ?? ""} pronta para instalar`
+              : updateState.status === "downloading"
+                ? `Baixando nova versão · ${Math.round(updateState.percent ?? 0)}%`
+                : `Nova versão ${updateState.availableVersion ?? ""} disponível`}
+          </Typography>
+        </Alert>
+      )}
 
       {calendarPortal && createPortal(<>
         <IconButton

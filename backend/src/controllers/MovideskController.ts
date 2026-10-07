@@ -3,6 +3,7 @@ import { MovideskService } from "../services/MovideskService";
 import { releaseMovideskApi, tryAcquireMovideskApi } from "../jobs/MovideskSyncCoordinator";
 import { referenceSyncStatus, runReferenceSync } from "../jobs/MovideskReferenceSyncScheduler";
 import type { AuthenticatedRequest } from "../middlewares/authMiddleware";
+import { movideskEnrichmentSchedulerStatus } from "../jobs/MovideskEnrichmentScheduler";
 
 
 export class MovideskController {
@@ -31,7 +32,8 @@ export class MovideskController {
 
     async baselineStatus(_req: AuthenticatedRequest, res: Response) {
         try {
-            return res.json(await new MovideskService().baselineStatus());
+            const baseline = await new MovideskService().baselineStatus();
+            return res.json({ ...baseline, enrichmentScheduler: movideskEnrichmentSchedulerStatus() });
         } catch (error) {
             return res.status(500).json({ message: error instanceof Error ? error.message : "Não foi possível consultar o baseline Movidesk." });
         }
@@ -60,6 +62,34 @@ export class MovideskController {
 
     async referenceSyncStatus(_req: AuthenticatedRequest, res: Response) {
         return res.json(referenceSyncStatus());
+    }
+
+    async analyticalMetadataTimeline(req: AuthenticatedRequest, res: Response) {
+        try {
+            const start = new Date(typeof req.query.start === "string" ? `${req.query.start}T00:00:00.000Z` : "2026-06-01T00:00:00.000Z");
+            const end = new Date(typeof req.query.end === "string" ? `${req.query.end}T23:59:59.999Z` : "2026-10-31T23:59:59.999Z");
+            if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start > end) {
+                return res.status(400).json({ message: "Período inválido para o diagnóstico." });
+            }
+            return res.json(await new MovideskService().analyticalMetadataTimeline(start, end));
+        } catch (error) {
+            const message = error instanceof Error ? error.message : "Não foi possível analisar a linha do tempo dos metadados.";
+            console.error("[movidesk-metadata-timeline] Falha:", message);
+            return res.status(500).json({ message });
+        }
+    }
+
+    async diagnoseAnalyticalMetadata(req: AuthenticatedRequest, res: Response) {
+        try {
+            const raw = typeof req.query.tickets === "string" ? req.query.tickets : "";
+            const ids = raw.split(",").map((value) => Number(value.trim())).filter((value) => Number.isSafeInteger(value) && value > 0);
+            if (!ids.length) return res.status(400).json({ message: "Informe tickets separados por vírgula." });
+            return res.json(await new MovideskService().diagnoseAnalyticalMetadata(ids));
+        } catch (error) {
+            const message = error instanceof Error ? error.message : "Não foi possível diagnosticar os metadados analíticos.";
+            console.error("[movidesk-analytical-metadata] Falha:", message);
+            return res.status(500).json({ message });
+        }
     }
 
     async diagnoseApiCatalog(_req: AuthenticatedRequest, res: Response) {

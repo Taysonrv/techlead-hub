@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 import {
@@ -43,6 +43,7 @@ import {
 } from "recharts";
 
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 import { useTheme } from "@mui/material/styles";
 
 import { api } from "../services/api";
@@ -380,6 +381,8 @@ export function Analysts() {
   const [analystsPage, setAnalystsPage] = useState(0);
   const navigate = useNavigate();
   const theme = useTheme();
+  const { user } = useAuth();
+  const defaultAnalystApplied = useRef(false);
 
   const [tickets, setTickets] =
     useState<Ticket[]>([]);
@@ -583,6 +586,24 @@ export function Analysts() {
     effectiveEndDate,
   ]);
 
+  const previousPeriodTickets = useMemo(() => {
+    const start = startOfDay(effectiveStartDate);
+    const end = endOfDay(effectiveEndDate);
+    const spanMs = Math.max(1, end.getTime() - start.getTime() + 1);
+    const previousEnd = new Date(start.getTime() - 1);
+    const previousStart = new Date(previousEnd.getTime() - spanMs + 1);
+    return tickets.filter((ticket) => {
+      const created = new Date(ticket.createdDate);
+      if (created < previousStart || created > previousEnd) return false;
+      if (!isOfficialSupportAnalyst(ticket.owner)) return false;
+      if (selectedSquad && (ticket.ownerTeam ?? ticket.team) !== selectedSquad) return false;
+      if (selectedBusinessArea && ticket.businessArea !== selectedBusinessArea) return false;
+      if (selectedService && (ticket.serviceSecondLevel ?? ticket.service) !== selectedService) return false;
+      if (selectedAnalyst && ticket.owner !== selectedAnalyst) return false;
+      return true;
+    });
+  }, [tickets, effectiveStartDate, effectiveEndDate, selectedSquad, selectedBusinessArea, selectedService, selectedAnalyst]);
+
   /* =====================================================
      SQUADS DISPONÍVEIS
   ===================================================== */
@@ -651,6 +672,18 @@ export function Analysts() {
     );
   }, [squadTickets]);
 
+  useEffect(() => {
+    if (defaultAnalystApplied.current || selectedAnalyst || !user?.name || analystOptions.length === 0) return;
+    const normalizedUser = normalize(user.name);
+    const parts = normalizedUser.split(/\s+/).filter((part) => part.length > 2 && !["de","da","do","dos","das"].includes(part));
+    const match = analystOptions.find((analyst) => {
+      const normalizedAnalyst = normalize(analyst);
+      return parts.length > 0 && parts.every((part) => normalizedAnalyst.includes(part));
+    });
+    defaultAnalystApplied.current = true;
+    if (match) setSelectedAnalyst(match);
+  }, [user?.name, selectedAnalyst, analystOptions]);
+
   /* =====================================================
      FILTRO FINAL DA TELA
   ===================================================== */
@@ -669,6 +702,28 @@ export function Analysts() {
     squadTickets,
     selectedAnalyst,
   ]);
+
+  const operationalTrend = useMemo(() => {
+    const summarize = (items: Ticket[]) => {
+      const open = items.filter(isOpen).length;
+      const critical = items.filter((ticket) => isOpen(ticket) && normalize(ticket.urgency) === "critica").length;
+      const stopped = items.filter((ticket) => ticket.baseStatus === "Stopped").length;
+      const resolved = items.filter((ticket) => ticket.baseStatus === "Resolved" || ticket.baseStatus === "Closed").length;
+      return { total: items.length, open, critical, stopped, resolved };
+    };
+    const current = summarize(scopedTickets);
+    const previous = summarize(previousPeriodTickets);
+    const delta = (now: number, before: number) => before === 0 ? (now === 0 ? 0 : null) : Math.round(((now - before) / before) * 1000) / 10;
+    return {
+      current,
+      previous,
+      totalDelta: delta(current.total, previous.total),
+      openDelta: delta(current.open, previous.open),
+      criticalDelta: delta(current.critical, previous.critical),
+      stoppedDelta: delta(current.stopped, previous.stopped),
+      resolvedDelta: delta(current.resolved, previous.resolved),
+    };
+  }, [scopedTickets, previousPeriodTickets]);
 
   /* =====================================================
      LIMPA ANALISTA SE TROCAR O SQUAD
@@ -957,6 +1012,20 @@ export function Analysts() {
       }
     );
   }, [scopedTickets]);
+
+  const teamBalance = useMemo(() => {
+    if (!analysts.length) return null;
+    const totalOpen = analysts.reduce((sum, item) => sum + item.open, 0);
+    const averageOpen = totalOpen / analysts.length;
+    const ranked = [...analysts].sort((a, b) => b.open - a.open);
+    const highest = ranked[0];
+    const lowest = ranked[ranked.length - 1];
+    const overloaded = analysts.filter((item) =>
+      item.workloadLevel === "alto" || (averageOpen > 0 && item.open >= averageOpen * 1.5)
+    );
+    const balanced = highest.open - lowest.open <= 2;
+    return { totalOpen, averageOpen, highest, lowest, overloaded, balanced };
+  }, [analysts]);
 
   /* =====================================================
      RESUMO
@@ -1795,7 +1864,7 @@ export function Analysts() {
             },
           }}
         >
-          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "180px repeat(2, minmax(180px, 1fr))", xl: "180px repeat(4, minmax(170px, 1fr)) auto" }, gap: 1.25, alignItems: "center" }}>
+          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2,minmax(0,1fr))", lg: "180px repeat(2,minmax(170px,1fr))", xl: "180px repeat(4,minmax(150px,1fr)) auto" }, gap: 1.25, alignItems: "center" }}>
             <Box
               sx={{
                 minWidth: {
@@ -1957,6 +2026,16 @@ export function Analysts() {
         </CardContent>
       </Card>
 
+      {(selectedSquad || selectedAnalyst || selectedBusinessArea || selectedService) && (
+        <Stack direction="row" spacing={.75} useFlexGap sx={{ flexWrap: "wrap", mt: -1, mb: 1.5, alignItems: "center" }}>
+          <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>Filtros ativos:</Typography>
+          {selectedSquad && <Chip size="small" label={`Squad · ${selectedSquad}`} onDelete={() => setSelectedSquad("")} />}
+          {selectedAnalyst && <Chip size="small" label={`Analista · ${selectedAnalyst}`} onDelete={() => setSelectedAnalyst("")} />}
+          {selectedBusinessArea && <Chip size="small" label={`Área · ${selectedBusinessArea}`} onDelete={() => setSelectedBusinessArea("")} />}
+          {selectedService && <Chip size="small" label={`Serviço · ${selectedService}`} onDelete={() => setSelectedService("")} />}
+        </Stack>
+      )}
+
       {/* ===============================================
           INDICADORES
       ================================================ */}
@@ -1967,8 +2046,9 @@ export function Analysts() {
 
           gridTemplateColumns: {
             xs: "1fr",
-            sm: "repeat(2, 1fr)",
-            lg: "repeat(5, 1fr)",
+            sm: "repeat(2, minmax(0,1fr))",
+            lg: "repeat(3, minmax(0,1fr))",
+            xl: "repeat(5, minmax(0,1fr))",
           },
 
           gap: {
@@ -2140,6 +2220,144 @@ export function Analysts() {
         />
       </Box>
 
+      <Card elevation={0} sx={{ mb: 2, border: "1px solid", borderColor: "divider", borderRadius: 2.25 }}>
+        <CardContent sx={{ p: { xs: 1.5, md: 1.75 }, "&:last-child": { pb: { xs: 1.5, md: 1.75 } } }}>
+          <Stack direction={{ xs: "column", md: "row" }} spacing={1} sx={{ justifyContent: "space-between", alignItems: { md: "center" }, mb: 1.25 }}>
+            <Box>
+              <Typography sx={{ fontWeight: 800, fontSize: "1.05rem" }}>Leitura rápida da carteira</Typography>
+              <Typography variant="caption" color="text.secondary">Sinais objetivos do recorte atual para orientar a atuação.</Typography>
+            </Box>
+            <Chip size="small" variant="outlined" label={selectedAnalyst ? selectedAnalyst : selectedSquad ? selectedSquad : "Equipe filtrada"} />
+          </Stack>
+          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2,minmax(0,1fr))", lg: "repeat(4,minmax(0,1fr))" }, gap: 1 }}>
+            {[
+              {
+                title: "Pressão da carteira",
+                value: summary.totalTickets ? `${Math.round(summary.openTickets / summary.totalTickets * 100)}%` : "0%",
+                detail: `${summary.openTickets} de ${summary.totalTickets} ticket(s) ainda abertos`,
+                severity: summary.totalTickets && summary.openTickets / summary.totalTickets >= .5 ? "warning" : "default",
+              },
+              {
+                title: "Risco imediato",
+                value: summary.attentionTickets,
+                detail: summary.attentionTickets ? "Críticos ou parados exigindo atuação" : "Nenhum crítico/parado no recorte",
+                severity: summary.attentionTickets ? "error" : "success",
+              },
+              {
+                title: "Cobertura CSAT",
+                value: summary.csatResponses,
+                detail: summary.csatPositivePct == null ? "Sem avaliações no período" : `${summary.csatPositivePct.toLocaleString("pt-BR")}% positivas`,
+                severity: "default",
+              },
+              {
+                title: "Dependência de desenvolvimento",
+                value: summary.azureTasks,
+                detail: summary.azureBlocked ? `${summary.azureBlocked} bloqueada(s) no Azure` : "Sem bloqueios Azure vinculados",
+                severity: summary.azureBlocked ? "warning" : "default",
+              },
+            ].map((signal) => (
+              <Box key={signal.title} sx={{ p: 1.15, border: "1px solid", borderColor: signal.severity === "error" ? "error.main" : signal.severity === "warning" ? "warning.main" : "divider", borderRadius: 1.75, bgcolor: "background.default", minWidth: 0 }}>
+                <Typography variant="caption" color="text.secondary">{signal.title}</Typography>
+                <Typography sx={{ fontWeight: 900, fontSize: "1.2rem", lineHeight: 1.25, mt: .25 }}>{signal.value}</Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: .35 }}>{signal.detail}</Typography>
+              </Box>
+            ))}
+          </Box>
+        </CardContent>
+      </Card>
+
+      {teamBalance && analysts.length > 1 && (
+        <Card elevation={0} sx={{ mb: 2, border: "1px solid", borderColor: "divider", borderRadius: 2.25 }}>
+          <CardContent sx={{ p: { xs: 1.5, md: 1.75 }, "&:last-child": { pb: { xs: 1.5, md: 1.75 } } }}>
+            <Stack direction={{ xs: "column", md: "row" }} spacing={1} sx={{ justifyContent: "space-between", alignItems: { md: "center" }, mb: 1.25 }}>
+              <Box>
+                <Typography sx={{ fontWeight: 800, fontSize: "1.05rem" }}>Equilíbrio de carteira</Typography>
+                <Typography variant="caption" color="text.secondary">Compara a distribuição dos tickets abertos entre os analistas do recorte atual.</Typography>
+              </Box>
+              <Chip
+                size="small"
+                variant="outlined"
+                label={teamBalance.balanced ? "Distribuição equilibrada" : `${teamBalance.overloaded.length} analista(s) em atenção`}
+                color={teamBalance.balanced ? "success" : teamBalance.overloaded.length ? "warning" : "default"}
+              />
+            </Stack>
+            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(3,minmax(0,1fr))" }, gap: 1 }}>
+              <Box sx={{ p: 1.25, border: "1px solid", borderColor: "divider", borderRadius: 1.75, bgcolor: "background.default" }}>
+                <Typography variant="caption" color="text.secondary">Média por analista</Typography>
+                <Typography sx={{ fontWeight: 900, fontSize: "1.3rem" }}>{teamBalance.averageOpen.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}</Typography>
+                <Typography variant="caption" color="text.secondary">ticket(s) aberto(s)</Typography>
+              </Box>
+              <Box
+                role="button"
+                tabIndex={0}
+                onClick={() => showAnalystTickets(teamBalance.highest.owner)}
+                onKeyDown={(event) => { if (event.key === "Enter") showAnalystTickets(teamBalance.highest.owner); }}
+                sx={{ p: 1.25, border: "1px solid", borderColor: teamBalance.highest.workloadLevel === "alto" ? "warning.main" : "divider", borderRadius: 1.75, bgcolor: "background.default", cursor: "pointer", "&:hover": { borderColor: "primary.main" } }}
+              >
+                <Typography variant="caption" color="text.secondary">Maior carteira aberta</Typography>
+                <Typography noWrap title={teamBalance.highest.owner} sx={{ fontWeight: 800, mt: .15 }}>{teamBalance.highest.owner}</Typography>
+                <Typography variant="caption" color="text.secondary">{teamBalance.highest.open} aberto(s) · {teamBalance.highest.critical} crítico(s)</Typography>
+              </Box>
+              <Box
+                role="button"
+                tabIndex={0}
+                onClick={() => showAnalystTickets(teamBalance.lowest.owner)}
+                onKeyDown={(event) => { if (event.key === "Enter") showAnalystTickets(teamBalance.lowest.owner); }}
+                sx={{ p: 1.25, border: "1px solid", borderColor: "divider", borderRadius: 1.75, bgcolor: "background.default", cursor: "pointer", "&:hover": { borderColor: "primary.main" } }}
+              >
+                <Typography variant="caption" color="text.secondary">Menor carteira aberta</Typography>
+                <Typography noWrap title={teamBalance.lowest.owner} sx={{ fontWeight: 800, mt: .15 }}>{teamBalance.lowest.owner}</Typography>
+                <Typography variant="caption" color="text.secondary">{teamBalance.lowest.open} aberto(s) · {teamBalance.lowest.total} no período</Typography>
+              </Box>
+            </Box>
+            {teamBalance.overloaded.length > 0 && (
+              <Stack direction="row" spacing={.75} useFlexGap sx={{ flexWrap: "wrap", mt: 1.25, alignItems: "center" }}>
+                <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>Atenção:</Typography>
+                {teamBalance.overloaded.slice(0, 6).map((item) => (
+                  <Chip key={item.owner} size="small" clickable onClick={() => showAnalystTickets(item.owner)} label={`${item.owner} · ${item.open} abertos`} color={item.workloadLevel === "alto" ? "warning" : "default"} variant="outlined" />
+                ))}
+              </Stack>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      <Card elevation={0} sx={{ mb: 2, border: "1px solid", borderColor: "divider", borderRadius: 2.25 }}>
+        <CardContent sx={{ p: { xs: 1.5, md: 1.75 }, "&:last-child": { pb: { xs: 1.5, md: 1.75 } } }}>
+          <Stack direction={{ xs: "column", md: "row" }} spacing={1} sx={{ justifyContent: "space-between", alignItems: { md: "center" }, mb: 1.25 }}>
+            <Box>
+              <Typography sx={{ fontWeight: 800, fontSize: "1.05rem" }}>Tendência operacional</Typography>
+              <Typography variant="caption" color="text.secondary">Compara o período selecionado com o período imediatamente anterior de mesma duração.</Typography>
+            </Box>
+            <Chip size="small" variant="outlined" label="Atual × período anterior" />
+          </Stack>
+          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2,minmax(0,1fr))", lg: "repeat(5,minmax(0,1fr))" }, gap: 1 }}>
+            {[
+              { title: "Volume recebido", value: operationalTrend.current.total, before: operationalTrend.previous.total, delta: operationalTrend.totalDelta, inverse: false },
+              { title: "Carteira aberta", value: operationalTrend.current.open, before: operationalTrend.previous.open, delta: operationalTrend.openDelta, inverse: true },
+              { title: "Críticos", value: operationalTrend.current.critical, before: operationalTrend.previous.critical, delta: operationalTrend.criticalDelta, inverse: true },
+              { title: "Parados", value: operationalTrend.current.stopped, before: operationalTrend.previous.stopped, delta: operationalTrend.stoppedDelta, inverse: true },
+              { title: "Resolvidos", value: operationalTrend.current.resolved, before: operationalTrend.previous.resolved, delta: operationalTrend.resolvedDelta, inverse: false },
+            ].map((metric) => {
+              const improving = metric.delta !== null && metric.delta !== 0 && (metric.inverse ? metric.delta < 0 : metric.delta > 0);
+              const worsening = metric.delta !== null && metric.delta !== 0 && (metric.inverse ? metric.delta > 0 : metric.delta < 0);
+              return (
+                <Box key={metric.title} sx={{ p: 1.15, border: "1px solid", borderColor: worsening ? "warning.main" : "divider", borderRadius: 1.75, bgcolor: "background.default", minWidth: 0 }}>
+                  <Typography variant="caption" color="text.secondary">{metric.title}</Typography>
+                  <Stack direction="row" spacing={.75} sx={{ alignItems: "baseline", mt: .2 }}>
+                    <Typography sx={{ fontWeight: 900, fontSize: "1.2rem" }}>{metric.value}</Typography>
+                    <Typography variant="caption" sx={{ fontWeight: 800 }} color={improving ? "success.main" : worsening ? "warning.main" : "text.secondary"}>
+                      {metric.delta === null ? "novo" : metric.delta === 0 ? "0%" : `${metric.delta > 0 ? "+" : ""}${metric.delta.toLocaleString("pt-BR")}%`}
+                    </Typography>
+                  </Stack>
+                  <Typography variant="caption" color="text.secondary">Anterior: {metric.before}</Typography>
+                </Box>
+              );
+            })}
+          </Box>
+        </CardContent>
+      </Card>
+
       {/* ===============================================
           DESENVOLVIMENTO / AZURE DEVOPS
       ================================================ */}
@@ -2199,8 +2417,9 @@ export function Analysts() {
               display: "grid",
               gridTemplateColumns: {
                 xs: "1fr",
-                sm: "repeat(2, 1fr)",
-                lg: "repeat(4, 1fr)",
+                sm: "repeat(2, minmax(0,1fr))",
+                lg: "repeat(3, minmax(0,1fr))",
+                xl: "repeat(4, minmax(0,1fr))",
               },
               gap: 1.25,
             }}
@@ -2353,7 +2572,7 @@ export function Analysts() {
           {timeProductivityLoading ? <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}><CircularProgress size={28}/></Box> : !scopedTimeProductivity ? <Alert severity="info" variant="outlined" sx={{ mt: 1.5 }}>Sem dados de horas registradas para o recorte atual.</Alert> : scopedTimeProductivity.analysts.length === 0 ? <Alert severity="info" variant="outlined" sx={{ mt: 1.5 }}>Nenhum analista possui apontamentos de tempo no período e filtro selecionados.</Alert> : <>
             <Alert severity="info" variant="outlined" sx={{ mt: 1.5 }}>{scopedTimeProductivity!.definition.expectedHours} {scopedTimeProductivity!.definition.coverageRate}</Alert>
             <Stack direction="row" spacing={1} sx={{ mt: 1, flexWrap: "wrap" }}><Chip size="small" variant="outlined" label={`Jornada: ${scopedTimeProductivity!.capacity.hoursPerDay}h/dia útil`}/><Chip size="small" variant="outlined" label={`Feriados configurados: ${scopedTimeProductivity!.capacity.configuredHolidays.length}`}/>{scopedTimeProductivity!.dataSource && <Chip size="small" color="success" variant="outlined" label="Fonte: apontamentos estruturados Movidesk"/>}</Stack>
-            <Box sx={{display:"grid",gridTemplateColumns:{xs:"repeat(2,1fr)",lg:"repeat(4,1fr)"},gap:1,mt:1.5}}>
+            <Box sx={{display:"grid",gridTemplateColumns:{xs:"1fr",sm:"repeat(2,minmax(0,1fr))",xl:"repeat(4,minmax(0,1fr))"},gap:1,mt:1.5}}>
               {[
                 ["Horas previstas",scopedTimeProductivity!.analysts.reduce((a,x)=>a+x.expectedHours,0),"Capacidade útil no período"],
                 ["Horas registradas",scopedTimeProductivity!.analysts.reduce((a,x)=>a+x.registeredHours,0),"Apontamentos Movidesk"],
@@ -2361,14 +2580,22 @@ export function Analysts() {
                 ["Tickets apontados",scopedTimeProductivity!.analysts.reduce((a,x)=>a+x.ticketsWithTime,0),"Atendimentos com tempo"],
               ].map(([label,value,caption])=><Box key={String(label)} sx={{p:1.2,border:"1px solid",borderColor:"divider",borderRadius:2,bgcolor:"background.default"}}><Typography variant="caption" color="text.secondary">{label}</Typography><Typography sx={{fontWeight:900,fontSize:"1.25rem"}}>{label==="Cobertura"?`${Number(value).toLocaleString("pt-BR")}%`:`${Number(value).toLocaleString("pt-BR")}${String(label).includes("Horas")?"h":""}`}</Typography><Typography variant="caption" color="text.secondary">{caption}</Typography></Box>)}
             </Box>
-            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", xl: "1.15fr .85fr" }, gap: 2, mt: 2 }}>
-              <Box sx={{ minWidth: 0 }}><Typography variant="subtitle2" sx={{ fontWeight: 800, mb: 1 }}>Evolução semanal · previstas × registradas</Typography><Box sx={{ height: 280 }}><ResponsiveContainer width="100%" height="100%"><BarChart data={scopedTimeProductivity!.weekly}><CartesianGrid strokeDasharray="4 4" vertical={false} stroke={theme.palette.divider}/><XAxis dataKey="week" tick={{ fontSize: 10, fill: theme.palette.text.secondary }} axisLine={{stroke:theme.palette.divider}} tickLine={false}/><YAxis allowDecimals={false} tick={{fill:theme.palette.text.secondary}} axisLine={false} tickLine={false}/><Tooltip contentStyle={{backgroundColor:theme.palette.background.paper,border:`1px solid ${theme.palette.divider}`,borderRadius:10,color:theme.palette.text.primary}} labelStyle={{color:theme.palette.text.secondary}} itemStyle={{color:theme.palette.text.primary}} cursor={{fill:theme.palette.action.hover}}/><Legend wrapperStyle={{color:theme.palette.text.secondary}}/><Bar dataKey="expectedHours" name="Horas previstas" fill={aliareColors.info} radius={[7,7,2,2]}/><Bar dataKey="registeredHours" name="Horas registradas" fill={aliareColors.green} radius={[7,7,2,2]}/></BarChart></ResponsiveContainer></Box></Box>
-              <Box><Typography variant="subtitle2" sx={{ fontWeight: 800, mb: 1 }}>Cobertura por equipe</Typography><Stack spacing={.7}>{scopedTimeProductivity!.teams.map((item) => <Stack key={item.team} direction="row" spacing={1} sx={{ alignItems: "center", p: .8, border: "1px solid", borderColor: "divider", borderRadius: 1.5 }}><Box sx={{ flex: 1, minWidth: 0 }}><Typography variant="body2" sx={{ fontWeight: 700 }} noWrap>{item.team}</Typography><Typography variant="caption" color="text.secondary">{item.analysts} analista(s) · {item.registeredHours.toLocaleString("pt-BR")}h / {item.expectedHours.toLocaleString("pt-BR")}h</Typography></Box><Chip size="small" variant="outlined" label={item.coverageRate === null ? "—" : `${item.coverageRate.toLocaleString("pt-BR")}%`} color={item.coverageRate !== null && item.coverageRate >= 80 ? "success" : item.coverageRate !== null && item.coverageRate >= 60 ? "warning" : "default"}/></Stack>)}</Stack></Box>
+            <Box sx={{ mt: 1.5 }}>
+              <Card variant="outlined" sx={{ borderRadius: 2, overflow: "hidden" }}>
+                <CardContent sx={{ p: { xs: 1.25, md: 1.5 }, "&:last-child": { pb: { xs: 1.25, md: 1.5 } } }}>
+                  <Box sx={{ minWidth: 0, alignSelf: "start", height: "fit-content" }}><Typography variant="subtitle2" sx={{ fontWeight: 800, mb: .5 }}>Evolução semanal · previstas × registradas</Typography><Box sx={{ height: 220, maxHeight: 220, overflow: "hidden" }}><ResponsiveContainer width="100%" height="100%"><BarChart data={scopedTimeProductivity!.weekly} margin={{ top: 2, right: 8, left: -8, bottom: 0 }}><CartesianGrid strokeDasharray="4 4" vertical={false} stroke={theme.palette.divider}/><XAxis dataKey="week" tick={{ fontSize: 10, fill: theme.palette.text.secondary }} axisLine={{stroke:theme.palette.divider}} tickLine={false}/><YAxis allowDecimals={false} tick={{fill:theme.palette.text.secondary}} axisLine={false} tickLine={false}/><Tooltip contentStyle={{backgroundColor:theme.palette.background.paper,border:`1px solid ${theme.palette.divider}`,borderRadius:10,color:theme.palette.text.primary}} labelStyle={{color:theme.palette.text.secondary}} itemStyle={{color:theme.palette.text.primary}} cursor={{fill:theme.palette.action.hover}}/><Legend verticalAlign="bottom" height={28} wrapperStyle={{color:theme.palette.text.secondary, paddingTop: 4}}/><Bar dataKey="expectedHours" name="Horas previstas" fill={aliareColors.info} radius={[7,7,2,2]}/><Bar dataKey="registeredHours" name="Horas registradas" fill={aliareColors.green} radius={[7,7,2,2]}/></BarChart></ResponsiveContainer></Box></Box>
+                </CardContent>
+              </Card>
+              <Card variant="outlined" sx={{ borderRadius: 2, mt: 1.25 }}>
+                <CardContent sx={{ p: { xs: 1.25, md: 1.5 }, "&:last-child": { pb: { xs: 1.25, md: 1.5 } } }}>
+                  <Box sx={{ alignSelf: "start" }}><Typography variant="subtitle2" sx={{ fontWeight: 800, mb: 1 }}>Cobertura por equipe</Typography><Stack spacing={.7}>{scopedTimeProductivity!.teams.map((item) => <Stack key={item.team} direction="row" spacing={1} sx={{ alignItems: "center", p: .8, border: "1px solid", borderColor: "divider", borderRadius: 1.5 }}><Box sx={{ flex: 1, minWidth: 0 }}><Typography variant="body2" sx={{ fontWeight: 700 }} noWrap>{item.team}</Typography><Typography variant="caption" color="text.secondary">{item.analysts} analista(s) · {item.registeredHours.toLocaleString("pt-BR")}h / {item.expectedHours.toLocaleString("pt-BR")}h</Typography></Box><Chip size="small" variant="outlined" label={item.coverageRate === null ? "—" : `${item.coverageRate.toLocaleString("pt-BR")}%`} color={item.coverageRate !== null && item.coverageRate >= 80 ? "success" : item.coverageRate !== null && item.coverageRate >= 60 ? "warning" : "default"}/></Stack>)}</Stack></Box>
+                </CardContent>
+              </Card>
             </Box>
             <TableContainer sx={{ mt: 1.5 }}><Table size="small"><TableHead><TableRow><TableCell>Analista</TableCell><TableCell align="right">Dias úteis</TableCell><TableCell align="right">Horas previstas</TableCell><TableCell align="right">Horas registradas</TableCell><TableCell align="right">Cobertura</TableCell><TableCell align="right">Tickets apontados</TableCell><TableCell align="right">Média h/ticket</TableCell></TableRow></TableHead>
               <TableBody>{scopedTimeProductivity!.analysts.map((item) => <TableRow key={item.analyst} hover><TableCell><Typography variant="body2" sx={{ fontWeight: 700 }}>{item.analyst}</Typography></TableCell><TableCell align="right">{item.businessDays}</TableCell><TableCell align="right">{item.expectedHours.toLocaleString("pt-BR")}h</TableCell><TableCell align="right">{item.registeredHours.toLocaleString("pt-BR")}h</TableCell><TableCell align="right"><Chip size="small" label={item.coverageRate === null ? "—" : `${item.coverageRate.toLocaleString("pt-BR")}%`} color={item.coverageRate !== null && item.coverageRate >= 80 ? "success" : item.coverageRate !== null && item.coverageRate >= 60 ? "warning" : "default"} variant="outlined"/></TableCell><TableCell align="right">{item.ticketsWithTime}</TableCell><TableCell align="right">{item.averageHoursPerTicket === null ? "—" : `${item.averageHoursPerTicket.toLocaleString("pt-BR")}h`}</TableCell></TableRow>)}</TableBody>
             </Table></TableContainer>
-            {scopedTimeProductivity!.analysts.length === 1 && scopedTimeProductivity!.analysts[0].topTickets.length > 0 && <Box sx={{ mt: 2 }}><Typography variant="subtitle2" sx={{ fontWeight: 800 }}>Atendimentos com maior tempo registrado</Typography><Stack spacing={.6} sx={{ mt: .75 }}>{scopedTimeProductivity!.analysts[0].topTickets.map((ticket) => <Button key={ticket.movideskId} onClick={() => navigate(`/tickets?movidesk=${ticket.movideskId}`)} sx={{ justifyContent: "space-between", textTransform: "none", color: "text.primary", border: "1px solid", borderColor: "divider" }}><Typography variant="body2" noWrap sx={{ maxWidth: "80%" }}>#{ticket.movideskId} · {ticket.subject}</Typography><Chip size="small" label={`${ticket.hours.toLocaleString("pt-BR")}h`}/></Button>)}</Stack></Box>}
+            {scopedTimeProductivity!.analysts.length === 1 && scopedTimeProductivity!.analysts[0].topTickets.length > 0 && <Box sx={{ mt: 2 }}><Typography variant="subtitle2" sx={{ fontWeight: 800 }}>Atendimentos com maior tempo registrado</Typography><Stack spacing={.6} sx={{ mt: .75 }}>{scopedTimeProductivity!.analysts[0].topTickets.map((ticket) => <Button key={ticket.movideskId} onClick={() => navigate(`/operacao/tickets?movidesk=${ticket.movideskId}`)} sx={{ justifyContent: "space-between", textTransform: "none", color: "text.primary", border: "1px solid", borderColor: "divider" }}><Typography variant="body2" noWrap sx={{ maxWidth: "80%" }}>#{ticket.movideskId} · {ticket.subject}</Typography><Chip size="small" label={`${ticket.hours.toLocaleString("pt-BR")}h`}/></Button>)}</Stack></Box>}
           </>}
         </CardContent>
       </Card>
@@ -2463,8 +2690,9 @@ export function Analysts() {
                   display: "grid",
                   gridTemplateColumns: {
                     xs: "1fr",
-                    sm: "repeat(2, 1fr)",
-                    lg: "repeat(4, 1fr)",
+                    sm: "repeat(2, minmax(0,1fr))",
+                    lg: "repeat(3, minmax(0,1fr))",
+                    xl: "repeat(4, minmax(0,1fr))",
                   },
                   gap: 1.25,
                   mt: 2,

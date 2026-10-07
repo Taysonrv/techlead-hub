@@ -12,6 +12,40 @@ export type ReleaseNote = {
 export const FALLBACK_APP_VERSION = import.meta.env.VITE_APP_VERSION || "development";
 
 export const releaseNotes: Record<string, ReleaseNote> = {
+  "2.1.0-rc.2": {
+    version: "2.1.0-rc.2",
+    title: "Operação personalizada, performance e inteligência por analista",
+    items: [
+      { title: "Minha carteira ao entrar", description: "Tickets e Analistas reconhecem o usuário autenticado e iniciam no recorte correspondente, mantendo liberdade para limpar ou trocar o filtro." },
+      { title: "Analistas mais acionável", description: "Leitura rápida, equilíbrio de carteira e tendência contra o período anterior ajudam a identificar carga, críticos, parados e evolução operacional." },
+      { title: "Inteligência de recorrência", description: "Problemas Conhecidos, Pontos de Atenção e Dashboard passam a destacar recorrências, tendências, anomalias e correlação com Azure para acelerar a identificação de padrões." },
+      { title: "DNA Técnico e investigação", description: "A Central de Investigação e Problemas Conhecidos conectam serviço, cliente, causa, versão, evidências e histórico técnico para orientar o diagnóstico." },
+      { title: "Chat com deep-link", description: "Atendimentos e Tasks compartilhados no Chat passam a abrir diretamente no registro correspondente, reduzindo passos entre colaboração e atuação." },
+      { title: "Minha Operação ampliada", description: "O Kanban recebe maior área útil para visualizar mais tickets e Tasks com menos rolagem interna." },
+      { title: "Experiência visual revisada", description: "Dashboard, Atenção, Investigação, Versões, Azure, Tickets, Coordenação, Performance, Qualidade, Clientes e Analistas recebem proporções e responsividade refinadas." },
+      { title: "Navegação mais rápida", description: "Rotas frequentes são pré-carregadas progressivamente, o conteúdo é preservado durante atualizações e a primeira carga usa feedback visual em vez de tela branca." },
+      { title: "Atualização visível", description: "Quando uma versão Desktop estiver disponível, um aviso no topo permite iniciar o download e instalar assim que estiver pronta." },
+      { title: "Desktop mais enxuto", description: "O empacotamento exclui artefatos de desenvolvimento desnecessários do runtime para reduzir trabalho do instalador e da atualização." },
+    ],
+  },
+  "2.1.0": {
+    version: "2.1.0",
+    title: "Inteligência operacional, recorrência e investigação assistida",
+    items: [
+      { title: "Central de Inteligência", description: "Novo cockpit reúne volume, cobertura Azure, qualidade de classificação, anomalias e clusters recorrentes em uma leitura acionável." },
+      { title: "Motor de recorrência", description: "Serviço dedicado correlaciona serviço, cliente e versão para destacar padrões repetidos sem substituir a análise técnica do analista." },
+      { title: "Detecção de anomalias", description: "A demanda por serviço é comparada com uma janela anterior equivalente para destacar aumentos relevantes e abrir a investigação contextual." },
+      { title: "Investigação conectada", description: "Sinais, serviços e clusters levam diretamente à Central de Investigação, aproveitando tickets, Azure, versões, regras e evidências já disponíveis." },
+      { title: "Qualidade acionável", description: "Cobertura de vínculo Azure, classificação e versão passam a compor o cockpit e direcionam o usuário para higienização quando necessário." },
+      { title: "Experiência visual 2.1", description: "Cards compactos, radar de sinais, gráficos responsivos, hierarquia visual refinada e superfícies consistentes em light e dark mode." },
+      { title: "Busca global ampliada", description: "A Central de Inteligência passa a ser localizada pela pesquisa global por inteligência, recorrência, anomalias, clusters e DNA técnico." },
+      { title: "DNA Técnico explicável", description: "A operação ganha assinatura por serviços, clientes e versões, índice de recorrência e qualidade das evidências com drill-down para investigação." },
+      { title: "Timeline Ticket → Azure → versão", description: "A investigação organiza eventos persistidos do Movidesk e Azure em ordem cronológica, incluindo criação, ativação, movimentação, conclusão e versão quando disponível." },
+      { title: "Problemas Conhecidos assistidos", description: "Recorrências dos últimos 180 dias geram candidatos para revisão, sem publicação automática e com rastreabilidade dos casos que originaram o sinal." },
+      { title: "SLA × OLA 2.0", description: "Suporte, Fábrica e SLA total recebem cockpit explicável, alertas de risco em aberto, composição por P1–P4, analista, cliente e tendência mensal." },
+      { title: "Observabilidade das fontes", description: "A Central diferencia sinais operacionais de falhas de dados exibindo estado, última sincronização, volume e erros de Movidesk, Azure, catálogo de serviços e CSAT." },
+    ],
+  },
   "1.0.0-rc.20": {
     version: "1.0.0-rc.20",
     title: "Polimento final, Dashboard consistente e escopo SIMER",

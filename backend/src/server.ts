@@ -59,6 +59,46 @@ let movideskReferenceSyncScheduler: MovideskReferenceSyncScheduler | undefined;
 let movideskEnrichmentScheduler: MovideskEnrichmentScheduler | undefined;
 
 let server: Server | undefined;
+let databaseRecoveryTimer: NodeJS.Timeout | undefined;
+let schedulersStarted = false;
+let databaseRecoveryAttempts = 0;
+
+function startSchedulers() {
+  if (schedulersStarted) return;
+  azureSyncScheduler = new AzureDevOpsSyncScheduler();
+  movideskSyncScheduler = new MovideskSyncScheduler();
+  movideskReferenceSyncScheduler = new MovideskReferenceSyncScheduler();
+  movideskEnrichmentScheduler = new MovideskEnrichmentScheduler();
+  azureSyncScheduler.start();
+  movideskSyncScheduler.start();
+  movideskReferenceSyncScheduler.start();
+  movideskEnrichmentScheduler.start();
+  schedulersStarted = true;
+}
+
+function scheduleDatabaseRecovery() {
+  if (databaseRecoveryTimer || shuttingDown) return;
+  const delay = Math.min(60_000, 5_000 * Math.pow(2, Math.min(databaseRecoveryAttempts, 4)));
+  databaseRecoveryTimer = setTimeout(async () => {
+    databaseRecoveryTimer = undefined;
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+      await systemConfigurationService.loadIntoEnvironment();
+      process.env.APP_DATABASE_READY = "true";
+      databaseRecoveryAttempts = 0;
+      console.log("[server] PostgreSQL recuperado; schedulers serão retomados.");
+      startSchedulers();
+    } catch {
+      process.env.APP_DATABASE_READY = "false";
+      databaseRecoveryAttempts += 1;
+      if (databaseRecoveryAttempts === 1 || databaseRecoveryAttempts % 5 === 0) {
+        console.warn(`[server] PostgreSQL ainda indisponível; nova tentativa automática em até 60s. | tentativa=${databaseRecoveryAttempts}`);
+      }
+      scheduleDatabaseRecovery();
+    }
+  }, delay);
+  databaseRecoveryTimer.unref();
+}
 
 async function start() {
   let databaseReady = false;
@@ -80,10 +120,6 @@ async function start() {
   const appModule = await import("./app.js");
   const exported = appModule.default as unknown as { default?: Express };
   const app = (exported.default ?? exported) as Express;
-  azureSyncScheduler = databaseReady ? new AzureDevOpsSyncScheduler() : undefined;
-  movideskSyncScheduler = databaseReady ? new MovideskSyncScheduler() : undefined;
-  movideskReferenceSyncScheduler = databaseReady ? new MovideskReferenceSyncScheduler() : undefined;
-  movideskEnrichmentScheduler = databaseReady ? new MovideskEnrichmentScheduler() : undefined;
 
   server = app.listen(
     PORT,
@@ -97,11 +133,11 @@ async function start() {
        * O scheduler inicia somente depois que o servidor
        * HTTP está efetivamente ouvindo.
        */
-      azureSyncScheduler?.start();
-      movideskSyncScheduler?.start();
-      movideskReferenceSyncScheduler?.start();
-      movideskEnrichmentScheduler?.start();
-      if (!databaseReady) console.warn("[server] Scheduler Azure não iniciado enquanto o banco estiver indisponível.");
+      if (databaseReady) startSchedulers();
+      else {
+        console.warn("[server] Integrações em modo degradado enquanto o PostgreSQL estiver indisponível.");
+        scheduleDatabaseRecovery();
+      }
     },
   );
 }
@@ -135,6 +171,8 @@ async function shutdown(
     `[server] Encerramento solicitado (${signal}).`,
   );
 
+  if (databaseRecoveryTimer) clearTimeout(databaseRecoveryTimer);
+  databaseRecoveryTimer = undefined;
   azureSyncScheduler?.stop();
   movideskSyncScheduler?.stop();
   movideskReferenceSyncScheduler?.stop();

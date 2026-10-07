@@ -1,7 +1,8 @@
 import { prisma } from "../database/prisma";
 import type { Prisma } from "@prisma/client";
-import { SIMER_CLIENTS, SUPPORT_ANALYSTS, simerClientTicketScope } from "../domain/OperationalScope";
+import { SIMER_CLIENTS, SUPPORT_ANALYSTS, ticketOperationalScope, azureOperationalScope } from "../domain/OperationalScope";
 import { analyzeMovideskIndicators } from "./MovideskPayloadAnalytics";
+import { reviewTicketClassification } from "./TicketClassificationReview";
 import { SIMER_SERVICE_CATALOG, suggestSimerService, type SimerServiceCatalogItem } from "../domain/SimerServiceCatalog";
 import { OPEN_TICKET_BASE_STATES, OPERATIONAL_AGING, hoursBefore, isOperationalTicketFinalized, isOperationalTicketOpen, isTerminalWorkItemState, normalizeOperationalText, ticketLastRecordedMovement } from "../domain/OperationalLifecycleRules";
 
@@ -36,7 +37,7 @@ export class DataQualityService {
       prisma.ticket.findMany({
       where: {
         AND: [
-          simerClientTicketScope(),
+          ticketOperationalScope(),
           ...(clients.length ? [{ client: { in: clients, mode: "insensitive" as const } }] : []),
           ...(users.length ? [{ owner: { in: users, mode: "insensitive" as const } }] : []),
         ],
@@ -44,14 +45,14 @@ export class DataQualityService {
       select: {
         id: true, taskNumber: true, movideskId: true, subject: true,
         status: true, baseStatus: true, client: true, owner: true,
-        category: true, cause: true, justification: true,
+        category: true, cause: true, reason: true, justification: true,
         service: true, serviceFirstLevel: true, serviceSecondLevel: true, serviceThirdLevel: true,
         deliveredVersion: true, lastActionDate: true, lastUpdate: true,
         reopenedDate: true, resolvedInFirstCall: true, rawData: true,
       },
     }),
       prisma.ticket.findMany({
-        where: { AND: [simerClientTicketScope(), { taskNumber: { not: null } }] },
+        where: { AND: [ticketOperationalScope(), { taskNumber: { not: null } }] },
         select: { taskNumber: true },
       }),
     ]);
@@ -112,6 +113,7 @@ export class DataQualityService {
 
     const scope: Prisma.AzureWorkItemWhereInput = {
       AND: [
+        azureOperationalScope(),
         {
           OR: [
             { createdByName: { in: [...SUPPORT_ANALYSTS], mode: "insensitive" } },
@@ -213,17 +215,6 @@ export class DataQualityService {
       const normalized = normalizeStatus(value ?? "");
       return !normalized || ["nao informado", "sem causa", "sem categoria", "outros", "outro", "-"].includes(normalized);
     };
-    const hasSuspiciousClassification = (ticket: { category: string | null; cause: string | null }) => {
-      if (isMissingClassification(ticket.category) || isMissingClassification(ticket.cause)) return true;
-      const category = normalizeStatus(ticket.category ?? "");
-      const cause = normalizeStatus(ticket.cause ?? "");
-      const doubtCategory = /duvida|orientacao/.test(category);
-      const problemCategory = /problema|erro|incidente/.test(category);
-      const doubtCause = /duvida|orientacao|treinamento/.test(cause);
-      const problemCause = /bug|erro|falha|configuracao|operacional/.test(cause);
-      return (doubtCategory && problemCause) || (problemCategory && doubtCause);
-    };
-
     const isTicketFinalized = (ticket: { baseStatus: string | null; status: string }) => {
       const status = normalizeStatus(ticket.status);
       return ["Resolved", "Closed"].includes(ticket.baseStatus ?? "")
@@ -244,14 +235,6 @@ export class DataQualityService {
     const completedWithoutVersionTasks = finishedLinkedTasks.filter((item) =>
       !isSupportTask(item) && !isCanceledTask(item.state) && !item.deliveredVersion?.trim(),
     );
-    const normalizeVersion = (value: string | null) => normalizeStatus(value ?? "").replace(/\s+/g, "");
-    const versionMismatches = linkedTasks.filter((item) =>
-      !isSupportTask(item)
-      && Boolean(item.registeredVersion?.trim())
-      && Boolean(item.deliveredVersion?.trim())
-      && normalizeVersion(item.registeredVersion) !== normalizeVersion(item.deliveredVersion),
-    );
-
     const createLinkIndex = (items: typeof linkedTasks) => {
       const byId = new Map(items.map((item) => [item.id, item]));
       const byTicket = new Map<number, (typeof items)[number]>();
@@ -343,8 +326,24 @@ export class DataQualityService {
       const score = csatByTicket.get(ticket.movideskId)?.value;
       return score !== null && score !== undefined && score <= 2;
     });
+    const problemWithoutCause = scopedTickets.filter((ticket) =>
+      isTicketOpen(ticket)
+      && normalizeStatus(ticket.category ?? "") === "problema"
+      && isMissingClassification(ticket.cause),
+    );
+    const doubtWithoutReason = scopedTickets.filter((ticket) =>
+      isTicketOpen(ticket)
+      && normalizeStatus(ticket.category ?? "") === "duvida"
+      && isMissingClassification(ticket.reason),
+    );
+    const withoutCategory = scopedTickets.filter((ticket) =>
+      isTicketOpen(ticket) && isMissingClassification(ticket.category),
+    );
+    const classificationReviewByTicketId = new Map(
+      scopedTickets.map((ticket) => [ticket.id, isTicketOpen(ticket) ? reviewTicketClassification(ticket) : null] as const),
+    );
     const suspectedClassification = scopedTickets.filter((ticket) =>
-      isTicketOpen(ticket) && hasSuspiciousClassification(ticket),
+      classificationReviewByTicketId.get(ticket.id) !== null,
     );
 
     /*
@@ -436,18 +435,16 @@ export class DataQualityService {
         })
       : [];
 
-    const derivedTicketIssues = ["danglingTaskTickets", "ticketOpenTaskFinished", "ticketOpenTaskWithoutDelivery", "ticketClosedTaskOpen", "clientMismatch", "supportLinkDivergence", "awaitingReturnWithoutCause", "awaitingReturnOverdue", "reopenedTickets", "excessiveOwnerHandoffs", "lowSatisfaction", "suspectedClassification", "withoutService", "genericSimerService", "suspectedServiceMismatch"];
+    const derivedTicketIssues = ["danglingTaskTickets", "ticketOpenTaskFinished", "ticketOpenTaskWithoutDelivery", "ticketClosedTaskOpen", "clientMismatch", "supportLinkDivergence", "awaitingReturnWithoutCause", "awaitingReturnOverdue", "reopenedTickets", "excessiveOwnerHandoffs", "lowSatisfaction", "problemWithoutCause", "doubtWithoutReason", "withoutCategory", "suspectedClassification", "withoutService", "genericSimerService", "suspectedServiceMismatch"];
     const matchesAzureIssue = (item: (typeof linkedTasks)[number]) => {
       if (params.issue === "duplicatedMovideskLinks") return Boolean(item.movideskTicket && duplicatedIds.includes(item.movideskTicket));
       if (params.issue === "withoutTicket") return !item.movideskTicket && !item.participantMovideskTickets && !linkedTaskIdSet.has(item.id);
       if (params.issue === "withoutClient") return !isSupportTask(item) && !item.client && !item.participantClients;
       if (params.issue === "completedWithoutVersion") return completedWithoutVersionTasks.some((task) => task.id === item.id);
       if (params.issue === "activeTaskWithVersion") return !isSupportTask(item) && !isTerminalTask(item.state) && Boolean(item.deliveredVersion);
-      if (params.issue === "versionMismatch") return versionMismatches.some((task) => task.id === item.id);
       if (!params.issue) return (!item.movideskTicket && !item.participantMovideskTickets && !linkedTaskIdSet.has(item.id))
         || (!isSupportTask(item) && !item.client && !item.participantClients) || !item.module || !item.assignedToName
-        || completedWithoutVersionTasks.some((task) => task.id === item.id)
-        || versionMismatches.some((task) => task.id === item.id);
+        || completedWithoutVersionTasks.some((task) => task.id === item.id);
       return true;
     };
     const azureSamples = params.issue === "supportLinkDivergence"
@@ -483,12 +480,14 @@ export class DataQualityService {
       assignedToName: ticket.owner,
       category: ticket.category,
       cause: ticket.cause,
+      reason: ticket.reason,
       service: ticket.service,
       serviceFirstLevel: ticket.serviceFirstLevel,
       serviceSecondLevel: ticket.serviceSecondLevel,
       serviceThirdLevel: ticket.serviceThirdLevel,
       servicePath: ticketServicePath(ticket).join(" » ") || ticket.service || null,
       serviceSuggestion: serviceSuggestionByTicketId.get(ticket.id) ?? null,
+      classificationReview: classificationReviewByTicketId.get(ticket.id) ?? null,
       movideskTicket: ticket.movideskId,
       registeredVersion: null,
       deliveredVersion: ticket.deliveredVersion,
@@ -500,7 +499,13 @@ export class DataQualityService {
       satisfactionComment: csatByTicket.get(ticket.movideskId)?.commentary ?? null,
       source: "MOVIDESK" as const,
     });
-    const samples = params.issue === "awaitingReturnWithoutCause"
+    const samples = params.issue === "problemWithoutCause"
+      ? problemWithoutCause.slice(0, 100).map(toClassificationSample)
+      : params.issue === "doubtWithoutReason"
+      ? doubtWithoutReason.slice(0, 100).map(toClassificationSample)
+      : params.issue === "withoutCategory"
+      ? withoutCategory.slice(0, 100).map(toClassificationSample)
+      : params.issue === "awaitingReturnWithoutCause"
       ? awaitingReturnWithoutCause.slice(0, 100).map(toClassificationSample)
       : params.issue === "awaitingReturnOverdue"
       ? awaitingReturnOverdue.slice(0, 100).map(toClassificationSample)
@@ -561,6 +566,9 @@ export class DataQualityService {
         lowSatisfaction: lowSatisfaction.length,
         resolvedInFirstCall: scopedTickets.filter((ticket) => ticket.resolvedInFirstCall === true).length,
         notResolvedInFirstCall: scopedTickets.filter((ticket) => ticket.resolvedInFirstCall === false).length,
+        problemWithoutCause: problemWithoutCause.length,
+        doubtWithoutReason: doubtWithoutReason.length,
+        withoutCategory: withoutCategory.length,
         suspectedClassification: suspectedClassification.length,
         withoutService: withoutService.length,
         genericSimerService: genericSimerService.length,
@@ -569,7 +577,6 @@ export class DataQualityService {
         activeTaskWithVersion: activeLinkedTasks.filter((task) =>
           !isSupportTask(task) && Boolean(task.deliveredVersion?.trim()),
         ).length,
-        versionMismatch: versionMismatches.length,
       },
       samples,
       filters: {
@@ -578,17 +585,40 @@ export class DataQualityService {
         types: ["Correção Clientes", "Evolução", "APOIO"],
       },
     };
-    dataQualityCache.set(cacheKey, { expiresAt: Date.now() + 120_000, value: result });
-    return result;
+    const unfiltered = !types.length && !clients.length && !users.length && !params.issue && !params.search;
+    let trend: Array<{ date: string; total: number; critical: number }> = [];
+    if (unfiltered) {
+      const snapshotDate = new Date();
+      snapshotDate.setUTCHours(0, 0, 0, 0);
+      await prisma.dataQualitySnapshot.upsert({
+        where: { scopeKey_snapshotDate: { scopeKey: "SIMER_SUPPORT", snapshotDate } },
+        create: { scopeKey: "SIMER_SUPPORT", snapshotDate, metrics: result.summary },
+        update: { metrics: result.summary },
+      });
+      const snapshots = await prisma.dataQualitySnapshot.findMany({
+        where: { scopeKey: "SIMER_SUPPORT" },
+        orderBy: { snapshotDate: "desc" },
+        take: 30,
+        select: { snapshotDate: true, metrics: true },
+      });
+      const criticalKeys = ["ticketClosedTaskOpen", "ticketOpenTaskFinished", "ticketOpenTaskWithoutDelivery", "danglingTaskTickets", "completedWithoutVersion"];
+      trend = snapshots.reverse().map((snapshot) => {
+        const snapshotMetrics = (snapshot.metrics ?? {}) as Record<string, unknown>;
+        const total = coordinationMetricKeysForTrend.reduce((sum, key) => sum + Number(snapshotMetrics[key] ?? 0), 0);
+        const critical = criticalKeys.reduce((sum, key) => sum + Number(snapshotMetrics[key] ?? 0), 0);
+        return { date: snapshot.snapshotDate.toISOString(), total, critical };
+      });
+    }
+
+    const response = { ...result, trend };
+    dataQualityCache.set(cacheKey, { expiresAt: Date.now() + 120_000, value: response });
+    return response;
   }
 }
 
-function compareVersions(left: string, right: string) {
-  const leftParts = left.match(/\d+/g)?.map(Number) ?? [];
-  const rightParts = right.match(/\d+/g)?.map(Number) ?? [];
-  for (let index = 0; index < Math.max(leftParts.length, rightParts.length); index += 1) {
-    const difference = (leftParts[index] ?? 0) - (rightParts[index] ?? 0);
-    if (difference !== 0) return difference;
-  }
-  return left.localeCompare(right, "pt-BR", { numeric: true });
-}
+const coordinationMetricKeysForTrend = [
+  "ticketOpenTaskFinished", "ticketOpenTaskWithoutDelivery", "ticketClosedTaskOpen",
+  "danglingTaskTickets", "reopenedTickets", "excessiveOwnerHandoffs", "withoutTicket",
+  "withoutClient", "completedWithoutVersion", "problemWithoutCause", "doubtWithoutReason", "withoutCategory", "suspectedClassification", "genericSimerService",
+];
+

@@ -8,7 +8,6 @@ import {
   Card,
   CardContent,
   Chip,
-  CircularProgress,
   FormControl,
   MenuItem,
   Select,
@@ -41,15 +40,16 @@ import { useColorMode } from "../context/ColorModeContext";
 import { useNavigate } from "react-router-dom";
 
 import { getTicketSnapshot } from "../services/ticketSnapshot";
-import { api } from "../services/api";
 import { PeriodFilter } from "../components/PeriodFilter";
 import { PageHeader } from "../components/PageHeader";
+import { ContentState } from "../components/ContentState";
 import { detailDrawerPaperSx } from "../theme/layoutTokens";
 import { KpiCard as ExecutiveKpiCard } from "../components/KpiCard";
 import { ExportTicketsButton } from "../components/ExportTicketsButton";
 import { useFilters } from "../context/FiltersContext";
 import { aliareColors } from "../theme/theme";
 import { calculateTimestampSla } from "../utils/timestampSla";
+import { auditOperationalMetrics, buildOperationalCohorts } from "../utils/operationalMetrics";
 import { calculateServiceLevel } from "../utils/serviceLevel";
 import {
   chartPalette,
@@ -155,6 +155,7 @@ type ClassificationResponse = {
     problemClassified: number;
     doubtTotal: number;
     doubtClassified: number;
+    recoveredFromRaw?: number;
   };
 };
 
@@ -173,11 +174,23 @@ type Severity =
   | "warning"
   | "success";
 
+type DevelopmentDrilldownState = {
+  title: string;
+  subtitle: string;
+  items: AzureTaskSummary[];
+  destinationPath: string;
+  destinationLabel: string;
+} | null;
+
 type DrilldownState = {
   title: string;
   subtitle?: string;
   tickets: Ticket[];
+  destinationPath?: string;
+  destinationLabel?: string;
 } | null;
+
+type RecurrenceResponse = { items:Array<{service:string;cases:number;clients:number;score:number;priority:"high"|"medium"|"review";trendPct:number}>; summary:{total:number;high:number;rising:number;multiClient:number;anomalies:number}; anomalies?:Array<{service:string;reason:string;severity:"critical"|"warning";score:number;trendPct:number;recent30:number;tickets:number[]}> };
 
 type MetricInfoDefinition = {
   title: string;
@@ -215,11 +228,11 @@ export function Dashboard() {
 
   const [error, setError] =
     useState<string | null>(null);
-  const [classificationData, setClassificationData] = useState<ClassificationResponse | null>(null);
   const loadRequestRef = useRef<AbortController | null>(null);
 
   const [drilldown, setDrilldown] =
     useState<DrilldownState>(null);
+  const [developmentDrilldown, setDevelopmentDrilldown] = useState<DevelopmentDrilldownState>(null);
 
   const [selectedTicket, setSelectedTicket] =
     useState<Ticket | null>(null);
@@ -227,6 +240,7 @@ export function Dashboard() {
   const [copyMessage, setCopyMessage] =
     useState("");
   const [flowHidden, setFlowHidden] = useState<Set<"opened" | "resolved" | "closed">>(() => new Set());
+  const [recurrence, setRecurrence] = useState<RecurrenceResponse | null>(null);
 
   const {
     period,
@@ -259,8 +273,18 @@ export function Dashboard() {
     }
 
     void loadTickets();
+    apiRecurrence();
     return () => controller.abort();
   }, []);
+
+  async function apiRecurrence() {
+    try {
+      const response = await import("../services/api").then(({ api }) => api.get<RecurrenceResponse>("/known-problems/candidates"));
+      if (!loadRequestRef.current?.signal.aborted) setRecurrence(response.data);
+    } catch {
+      setRecurrence(null);
+    }
+  }
 
   /* =======================================================
      PERÍODO + CONJUNTOS EXECUTIVOS
@@ -271,58 +295,23 @@ export function Dashboard() {
     end: endOfDay(effectiveEndDate),
   }), [effectiveStartDate, effectiveEndDate]);
 
+  const operationalCohorts = useMemo(
+    () => buildOperationalCohorts(tickets, periodBounds),
+    [tickets, periodBounds],
+  );
+
   const openedInPeriod = useMemo(() => tickets.filter((ticket) =>
     isDateInPeriod(ticket.createdDate, periodBounds.start, periodBounds.end)
   ), [tickets, periodBounds]);
 
-  useEffect(() => {
-    const controller = new AbortController();
-    const formatDate = (date: Date) => {
-      const year = date.getFullYear();
-      const month = String(date.getMonth() + 1).padStart(2, "0");
-      const day = String(date.getDate()).padStart(2, "0");
-      return `${year}-${month}-${day}`;
-    };
-    api.get<ClassificationResponse>("/dashboard/classifications", {
-      params: { startDate: formatDate(effectiveStartDate), endDate: formatDate(effectiveEndDate) },
-      signal: controller.signal,
-      timeout: 60_000,
-    }).then((response) => {
-      if (!controller.signal.aborted) setClassificationData(response.data);
-    }).catch((error) => {
-      if (!controller.signal.aborted) console.error("Erro ao carregar Causa/Motivo:", error);
-    });
-    return () => controller.abort();
-  }, [effectiveStartDate, effectiveEndDate]);
-
-  // Fluxo de entrada da operação: abriu no período e a responsabilidade
-  // atual pertence à operação SIMER. Não exige que o ticket continue aberto.
-  const openedBySimerOperationInPeriod = useMemo(
-    () => openedInPeriod.filter((ticket) => ticket.isWithSimer === true),
-    [openedInPeriod],
-  );
-
-  // Estoque do cohort ainda sob responsabilidade da operação.
+  const openedBySimerOperationInPeriod = operationalCohorts.entries;
   const openedWithSimerInPeriod = useMemo(
     () => openedBySimerOperationInPeriod.filter(isOpen),
     [openedBySimerOperationInPeriod],
   );
-
-  // Estoque operacional atual: responsabilidade SIMER + estado ativo.
-  // Não é limitado pela data de abertura.
-  const pendingTickets = useMemo(
-    () => tickets.filter((ticket) => ticket.isWithSimer === true && isOpen(ticket)),
-    [tickets],
-  );
-
-  // Fluxo executivo usa o mesmo universo operacional das entradas.
-  const resolvedInPeriod = useMemo(() => openedBySimerOperationInPeriod.filter((ticket) =>
-    isDateInPeriod(ticket.resolvedDate, periodBounds.start, periodBounds.end)
-  ), [openedBySimerOperationInPeriod, periodBounds]);
-
-  const closedInPeriod = useMemo(() => openedBySimerOperationInPeriod.filter((ticket) =>
-    isDateInPeriod(ticket.closedDate, periodBounds.start, periodBounds.end)
-  ), [openedBySimerOperationInPeriod, periodBounds]);
+  const pendingTickets = operationalCohorts.backlog;
+  const resolvedInPeriod = operationalCohorts.resolved;
+  const closedInPeriod = operationalCohorts.closed;
 
   // Áreas/serviços/SLA/CSAT mantêm a leitura da responsabilidade operacional atual.
   const filteredTickets = openedBySimerOperationInPeriod;
@@ -334,7 +323,23 @@ export function Dashboard() {
   const criticalTickets = useMemo(() => pendingTickets.filter((ticket) => normalize(ticket.urgency) === "critica"), [pendingTickets]);
 
   const responseSla = useMemo(() => calculateTimestampSla(openedBySimerOperationInPeriod, "response"), [openedBySimerOperationInPeriod]);
-  const solutionSla = useMemo(() => calculateTimestampSla(openedBySimerOperationInPeriod, "solution"), [openedBySimerOperationInPeriod]);
+
+  // SLA de solução segue a leitura oficial do Movidesk: pertence ao período
+  // em que a solução ocorreu. Isso inclui tickets abertos em meses anteriores.
+  const solutionPeriodTickets = operationalCohorts.resolved;
+
+  const solutionSla = useMemo(() => calculateTimestampSla(solutionPeriodTickets, "solution"), [solutionPeriodTickets]);
+
+  const metricAudit = useMemo(() => auditOperationalMetrics({
+    entries: openedBySimerOperationInPeriod.length,
+    resolved: resolvedInPeriod.length,
+    closed: closedInPeriod.length,
+    backlog: pendingTickets.length,
+    responseMeasured: responseSla.measured,
+    responseWithin: responseSla.within,
+    solutionMeasured: solutionSla.measured,
+    solutionWithin: solutionSla.within,
+  }), [openedBySimerOperationInPeriod, resolvedInPeriod, closedInPeriod, pendingTickets, responseSla, solutionSla]);
 
   const summary = useMemo(() => ({
     abertosNoPeriodo: openedInPeriod.length,
@@ -520,15 +525,86 @@ export function Dashboard() {
   }, [openedBySimerOperationInPeriod]);
 
 
+  const classificationData = useMemo<ClassificationResponse>(() => {
+    const canonicalCause = (value?: string | null) => {
+      const v = normalize(value);
+      if (!v || v.includes("bug no produto / erp")) return null;
+      if (v.includes("erro operacional")) return "Erro operacional";
+      if (v.includes("configuracao")) return "Configuração";
+      if (v.includes("nao identificada")) return "Não identificada";
+      if (v.includes("resolvido pelo usuario")) return "Resolvido pelo usuário";
+      if (v.includes("sefaz") || v.includes("aplicativo")) return "SEFAZ ou aplicativo de terceiros";
+      return null;
+    };
+    const canonicalReason = (value?: string | null) => {
+      const v = normalize(value);
+      if (v.includes("apoio processos operacionais")) return "Apoio processos operacionais";
+      if (v.includes("configuracao")) return "Configuração";
+      if (v.includes("duvida interna")) return "Dúvida interna";
+      if (v.includes("inexperiencia do usuario")) return "Inexperiência do usuário";
+      if (v.includes("informacao")) return "Informação";
+      if (v.includes("integracao com terceiros")) return "Integração com terceiros";
+      if (v.includes("priorizacao")) return "Priorização";
+      return null;
+    };
+    const aggregate = (items: Array<{ id: number; label: string }>): ClassificationItem[] => {
+      const grouped = new Map<string, ClassificationItem>();
+      items.forEach(({ id, label }) => {
+        const current = grouped.get(label) ?? { label, total: 0, ticketIds: [] };
+        current.total += 1;
+        current.ticketIds.push(id);
+        grouped.set(label, current);
+      });
+      return [...grouped.values()].sort((a, b) => b.total - a.total);
+    };
+
+    const problemRows = openedBySimerOperationInPeriod.filter((ticket) => normalize(ticket.category) === "problema");
+    const doubtRows = openedBySimerOperationInPeriod.filter((ticket) => normalize(ticket.category) === "duvida");
+    const causes = aggregate(problemRows.flatMap((ticket) => {
+      const label = canonicalCause(ticket.cause);
+      return label ? [{ id: ticket.id, label }] : [];
+    }));
+    const reasons = aggregate(doubtRows.flatMap((ticket) => {
+      const label = canonicalReason(ticket.reason);
+      return label ? [{ id: ticket.id, label }] : [];
+    }));
+
+    return {
+      causes,
+      reasons,
+      diagnostics: {
+        problemTotal: problemRows.length,
+        problemClassified: causes.reduce((sum, item) => sum + item.total, 0),
+        doubtTotal: doubtRows.length,
+        doubtClassified: reasons.reduce((sum, item) => sum + item.total, 0),
+        recoveredFromRaw: 0,
+      },
+    };
+  }, [openedBySimerOperationInPeriod]);
+
   const causes = useMemo(
-    () => classificationData?.causes.map(({ label, total }) => ({ label, total })) ?? [],
+    () => classificationData.causes.map(({ label, total }) => ({ label, total })),
     [classificationData],
   );
 
   const reasons = useMemo(
-    () => classificationData?.reasons.map(({ label, total }) => ({ label, total })) ?? [],
+    () => classificationData.reasons.map(({ label, total }) => ({ label, total })),
     [classificationData],
   );
+
+  const classificationCoverage = useMemo(() => ({
+    problemTotal: classificationData.diagnostics.problemTotal,
+    problemClassified: classificationData.diagnostics.problemClassified,
+    doubtTotal: classificationData.diagnostics.doubtTotal,
+    doubtClassified: classificationData.diagnostics.doubtClassified,
+    recoveredFromRaw: 0,
+  }), [classificationData]);
+
+  const businessAreaCoverage = useMemo(() => {
+    const total = filteredTickets.length;
+    const filled = filteredTickets.filter((ticket) => Boolean(ticket.businessArea?.trim())).length;
+    return { total, filled };
+  }, [filteredTickets]);
 
   const businessAreas = useMemo(() => {
     // Área de negócio e Serviço são dimensões diferentes no Movidesk.
@@ -762,7 +838,8 @@ export function Dashboard() {
   function showTickets(
     title: string,
     list: Ticket[],
-    subtitle?: string
+    subtitle?: string,
+    options?: { destinationPath?: string; destinationLabel?: string }
   ) {
     setSelectedTicket(null);
 
@@ -770,6 +847,23 @@ export function Dashboard() {
       title,
       subtitle,
       tickets: list,
+      destinationPath: options?.destinationPath,
+      destinationLabel: options?.destinationLabel,
+    });
+  }
+
+
+  function showDevelopmentItems(kind: "Correção Clientes" | "Evolução") {
+    const isCorrection = kind === "Correção Clientes";
+    const items = isCorrection ? azureDevelopment.corrections : azureDevelopment.evolutions;
+    setSelectedTicket(null);
+    setDrilldown(null);
+    setDevelopmentDrilldown({
+      title: isCorrection ? "Correções em Desenvolvimento" : "Evoluções em Desenvolvimento",
+      subtitle: String(items.length) + " Work Item(s) único(s) do Azure no período selecionado",
+      items,
+      destinationPath: isCorrection ? "/correcoes" : "/evolucoes",
+      destinationLabel: isCorrection ? "Ir para Correções" : "Ir para Evoluções",
     });
   }
 
@@ -930,7 +1024,7 @@ export function Dashboard() {
         calculation: "Tickets concluídos no prazo ÷ tickets com timestamps válidos × 100.",
         source: "Movidesk · timestamps e prazos sincronizados",
         reference: "resolvedDate/closedDate ≤ dueDate",
-        periodRule: "Considera tickets abertos no período selecionado, igual às telas Clientes e Desempenho.",
+        periodRule: "Considera tickets resolvidos no período selecionado, independentemente da data de abertura.",
         notes: "Registros sem medição ficam fora do denominador.",
       },
       onClick: () => showTickets("SLA de solução", solutionSla.measuredTickets, `${solutionSla.within} dentro • ${solutionSla.outside} fora • ${solutionSla.unmeasured} sem medição`),
@@ -990,23 +1084,7 @@ export function Dashboard() {
   ======================================================= */
 
   if (loading) {
-    return (
-      <Box
-        sx={{
-          display: "flex",
-          justifyContent:
-            "center",
-          mt: 8,
-        }}
-      >
-        <CircularProgress
-          sx={{
-            color:
-              aliareColors.green,
-          }}
-        />
-      </Box>
-    );
+    return <ContentState kind="loading" title="Carregando visão executiva" minHeight={360} />;
   }
 
   if (error) {
@@ -1046,6 +1124,29 @@ export function Dashboard() {
         meta={<>{periodLabel(period)}{" • "}{filteredTickets.length} ticket(s) analisado(s)</>}
         action={<PeriodFilter />}
       />
+      {recurrence && recurrence.summary.total > 0 && (
+        <Card elevation={0} sx={{ mb:2, border:"1px solid", borderColor:"rgba(245,158,11,.28)", borderRadius:2 }}>
+          <CardContent sx={{ py:1.5, "&:last-child":{pb:1.5} }}>
+            <Stack direction={{xs:"column",md:"row"}} spacing={1.5} sx={{justifyContent:"space-between",alignItems:{md:"center"}}}>
+              <Box>
+                <Typography sx={{fontWeight:850}}>Inteligência de recorrência</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {recurrence.summary.total} padrão(ões) detectado(s) · {recurrence.summary.high} alta prioridade · {recurrence.summary.rising} em crescimento · {recurrence.summary.multiClient} multi-cliente · {recurrence.summary.anomalies} anomalia(s)
+                </Typography>
+              </Box>
+              <Stack direction="row" spacing={.7} useFlexGap sx={{flexWrap:"wrap",alignItems:"center"}}>
+                {recurrence.items.slice(0,3).map(item => <Chip key={item.service} size="small" color={item.priority==="high"?"error":"warning"} variant="outlined" label={`${item.service}: ${item.cases} casos · ${item.score}/100`} onClick={()=>navigate(`/problemas-conhecidos?q=${encodeURIComponent(item.service)}`)}/>)}
+                <Button size="small" onClick={()=>navigate("/problemas-conhecidos")}>Ver análise</Button>
+              </Stack>
+            </Stack>
+          </CardContent>
+        </Card>
+      )}
+      {metricAudit.length > 0 && (
+        <Alert severity="warning" variant="outlined" sx={{ mb: 2 }}>
+          Auditoria de métricas detectou {metricAudit.length} divergência(s): {metricAudit.map((item) => item.message).join(" · ")}
+        </Alert>
+      )}
 
       {/* =================================================
           KPIs
@@ -1173,17 +1274,17 @@ export function Dashboard() {
               <Button
                 size="small"
                 variant="outlined"
-                onClick={() => navigate("/correcoes")}
+                onClick={() => showDevelopmentItems("Correção Clientes")}
               >
-                Ver Correções
+                Detalhar Correções
               </Button>
 
               <Button
                 size="small"
                 variant="outlined"
-                onClick={() => navigate("/evolucoes")}
+                onClick={() => showDevelopmentItems("Evolução")}
               >
-                Ver Evoluções
+                Detalhar Evoluções
               </Button>
             </Stack>
           </Stack>
@@ -1217,7 +1318,7 @@ export function Dashboard() {
                   reference: "System.WorkItemType",
                   periodRule: "Usa somente Work Items vinculados aos tickets abertos no período global selecionado.",
                 }}
-                onClick={() => navigate("/correcoes")}
+                onClick={() => showDevelopmentItems("Correção Clientes")}
               />
 
               <DevelopmentMetric
@@ -1232,7 +1333,7 @@ export function Dashboard() {
                   reference: "System.WorkItemType",
                   periodRule: "Usa somente Work Items vinculados aos tickets abertos no período global selecionado.",
                 }}
-                onClick={() => navigate("/evolucoes")}
+                onClick={() => showDevelopmentItems("Evolução")}
               />
 
               <DevelopmentMetric
@@ -1368,7 +1469,7 @@ export function Dashboard() {
                   </Typography>
                 </Box>
               </Stack>
-              <Box sx={{ height: 255, mt: 1.5 }}>
+              <Box sx={{ height: { xs: 225, md: 250 }, mt: 1.25 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={dailyFlow} margin={{ top: 8, right: 12, left: 4, bottom: 4 }}>
                     <defs>
@@ -1419,7 +1520,8 @@ export function Dashboard() {
               </Typography>
               <Typography variant="caption" color="text.secondary">
                 Somente categoria Problema • causas mais frequentes no período
-              </Typography></Box>
+              </Typography>
+              {<Typography variant="caption" color="text.secondary" sx={{ display:"block", mt:.35 }}>Cobertura: {classificationCoverage.problemClassified}/{classificationCoverage.problemTotal} tickets classificados{classificationCoverage.recoveredFromRaw > 0 ? ` • ${classificationCoverage.recoveredFromRaw} recuperados do payload` : ""}</Typography>}</Box>
               {causes.length ? <Box sx={{ height: Math.max(250, Math.min(330, causes.slice(0, 6).length * 44 + 64)), mt: 1.25 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={causes.slice(0, 6)} layout="vertical" margin={{ left: 10, right: 34, top: 4, bottom: 4 }}>
@@ -1439,24 +1541,24 @@ export function Dashboard() {
                       onClick={(_, index) => {
                         const cause = causes.slice(0, 6)[index]?.label;
                         if (cause) {
-                           const ids = new Set(classificationData?.causes.find((item) => item.label === cause)?.ticketIds ?? []);
+                           const ids = new Set(classificationData.causes.find((item) => item.label === cause)?.ticketIds ?? []);
                            showTickets(`Causa: ${cause}`, openedInPeriod.filter((ticket) => ids.has(ticket.id)), "Tickets classificados com a causa selecionada");
                          }
                       }} />
                   </BarChart>
                 </ResponsiveContainer>
               </Box> : <Box sx={{ minHeight: 250, display: "grid", placeItems: "center", px: 2 }}>
-                <Typography variant="body2" color="text.secondary" sx={{ textAlign: "center" }}>Nenhuma causa preenchida nos tickets de categoria Problema para o período selecionado.</Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ textAlign: "center" }}>{classificationCoverage.problemTotal > 0 ? `Existem ${classificationCoverage.problemTotal} tickets de categoria Problema no período, mas a causa ainda não está disponível nos dados sincronizados.` : "Nenhum ticket de categoria Problema no período selecionado."}</Typography>
               </Box>}
             </CardBase>
 
             <OperationalRankingCard
               title="Motivos das dúvidas"
-              subtitle="Somente categoria Dúvida • motivo informado no Movidesk"
+              subtitle={`Somente categoria Dúvida • motivo informado no Movidesk • cobertura ${classificationCoverage.doubtClassified}/${classificationCoverage.doubtTotal}`}
               data={reasons}
-              emptyMessage="Nenhum motivo preenchido nos tickets de Dúvida deste período."
+              emptyMessage={classificationCoverage.doubtTotal > 0 ? `Existem ${classificationCoverage.doubtTotal} tickets de Dúvida no período, mas o motivo ainda não está disponível nos dados sincronizados.` : "Nenhum ticket de Dúvida no período selecionado."}
               onItemClick={(label) => {
-                const ids = new Set(classificationData?.reasons.find((item) => item.label === label)?.ticketIds ?? []);
+                const ids = new Set(classificationData.reasons.find((item) => item.label === label)?.ticketIds ?? []);
                 showTickets(`Motivo: ${label}`, openedInPeriod.filter((ticket) => ids.has(ticket.id)), "Tickets de Dúvida classificados com o motivo selecionado");
               }}
             />
@@ -1465,9 +1567,9 @@ export function Dashboard() {
           <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", xl: "1fr 1fr" }, gap: 1.5 }}>
             <OperationalRankingCard
               title="Áreas de negócio"
-              subtitle="Área de negócio informada no Movidesk • sem fallback para Serviço"
+              subtitle={`Área de negócio informada no Movidesk • cobertura ${businessAreaCoverage.filled}/${businessAreaCoverage.total} • sem fallback para Serviço`}
               data={businessAreas}
-              emptyMessage="Nenhuma área de negócio informada no período."
+              emptyMessage={businessAreaCoverage.total > 0 ? `Existem ${businessAreaCoverage.total} tickets SIMER no período, mas o Movidesk não retornou o campo oficial de Área de negócio para esses tickets.` : "Nenhum ticket SIMER no período selecionado."}
               onItemClick={(label) => showTickets(
                 `Área de negócio: ${label}`,
                 filteredTickets.filter((ticket) => (ticket.businessArea ?? "Sem área de negócio") === label),
@@ -1873,6 +1975,39 @@ export function Dashboard() {
       )}
 
       {/* =================================================
+          DRAWER - TASKS DE DESENVOLVIMENTO
+      ================================================= */}
+      <Drawer anchor="right" open={Boolean(developmentDrilldown)} onClose={() => setDevelopmentDrilldown(null)} slotProps={{ paper: { sx: detailDrawerPaperSx } }}>
+        <Box sx={{ width: { xs: "100vw", sm: 560 }, maxWidth: "100vw", p: 2.5 }}>
+          {developmentDrilldown && <>
+            <Stack direction="row" sx={{justifyContent:"space-between",alignItems:"flex-start",gap:2}}>
+              <Box><Typography variant="h6" sx={{fontWeight:800}}>{developmentDrilldown.title}</Typography><Typography variant="body2" color="text.secondary">{developmentDrilldown.subtitle}</Typography></Box>
+              <IconButton size="small" onClick={()=>setDevelopmentDrilldown(null)}>✕</IconButton>
+            </Stack>
+            <Stack direction="row" spacing={1} useFlexGap sx={{mt:2,mb:2,alignItems:"center",flexWrap:"wrap"}}>
+              <Chip size="small" label={developmentDrilldown.items.length + " task(s)"} variant="outlined"/>
+              <Box sx={{minWidth:150}}><ExportTicketsButton tickets={developmentDrilldown.items} title={developmentDrilldown.title} subtitle={developmentDrilldown.subtitle}/></Box>
+              <Button size="small" onClick={()=>navigate(developmentDrilldown.destinationPath)}>{developmentDrilldown.destinationLabel}</Button>
+            </Stack>
+            <Divider/>
+            {developmentDrilldown.items.length===0 && <Alert severity="info" sx={{mt:2}}>Nenhuma Task encontrada.</Alert>}
+            {developmentDrilldown.items.map(item=><Box key={item.id} sx={{py:1.6,borderBottom:"1px solid",borderColor:"divider"}}>
+              <Stack direction="row" spacing={1} sx={{justifyContent:"space-between",alignItems:"flex-start"}}>
+                <Box sx={{minWidth:0,pr:1}}>
+                  <Typography variant="caption" sx={{fontWeight:900}}>#{item.id} · {item.workItemType}</Typography>
+                  <Typography variant="body2" sx={{fontWeight:800,mt:.35}}>{item.title}</Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{display:"block",mt:.5}}>{item.client ?? "Cliente não informado"}{item.assignedToName ? " • " + item.assignedToName : " • Sem responsável"}</Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{display:"block"}}>{item.module ?? "Módulo não informado"}{item.process ? " • " + item.process : ""}{item.movideskTicket ? " • Ticket #" + item.movideskTicket : ""}</Typography>
+                  {item.deliveredVersion && <Chip size="small" label={"Versão " + item.deliveredVersion} variant="outlined" sx={{mt:.75}}/>}
+                </Box>
+                <Stack spacing={0.5} sx={{ alignItems: "flex-end" }}><Chip size="small" label={item.state || "Sem status"} variant="outlined"/>{item.criticality && <Chip size="small" label={item.criticality} color={normalize(item.criticality) === "critica" ? "error" : normalize(item.criticality) === "alta" ? "warning" : "default"} variant="outlined"/>}</Stack>
+              </Stack>
+            </Box>)}
+          </>}
+        </Box>
+      </Drawer>
+
+      {/* =================================================
           DRAWER - LISTAGEM
       ================================================= */}
 
@@ -1971,13 +2106,9 @@ export function Dashboard() {
 
                 <Button
                   size="small"
-                  onClick={() =>
-                    navigate(
-                      "/tickets"
-                    )
-                  }
+                  onClick={() => navigate(drilldown.destinationPath ?? "/tickets")}
                 >
-                  Ir para Tickets
+                  {drilldown.destinationLabel ?? "Ir para Tickets"}
                 </Button>
               </Stack>
 
@@ -2813,13 +2944,13 @@ function DonutAnalysisCard({
       <CardPeriodHeader title={title} subtitle={subtitle} value={period} onChange={onPeriodChange} />
       <Box sx={{
         display: "grid",
-        gridTemplateColumns: { xs: "1fr", sm: "minmax(220px, .88fr) minmax(240px, 1.12fr)" },
-        gap: { xs: 1, sm: 2 },
+        gridTemplateColumns: { xs: "1fr", md: "minmax(210px, .82fr) minmax(0, 1.18fr)" },
+        gap: { xs: .75, md: 1.5 },
         alignItems: "center",
         mt: 1.25,
-        minHeight: { xs: 0, sm: 220 },
+        minHeight: { xs: 0, md: 210 },
       }}>
-        <Box sx={{ height: { xs: 210, sm: 220 }, minWidth: 0, position: "relative" }}>
+        <Box sx={{ height: { xs: 190, sm: 200, md: 210 }, minWidth: 0, position: "relative" }}>
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               <Pie
@@ -2828,8 +2959,8 @@ function DonutAnalysisCard({
                 nameKey="label"
                 cx="50%"
                 cy="50%"
-                innerRadius={62}
-                outerRadius={92}
+                innerRadius={56}
+                outerRadius={82}
                 paddingAngle={2}
                 cornerRadius={5}
                 stroke={theme.palette.background.paper}
@@ -2849,16 +2980,16 @@ function DonutAnalysisCard({
             </PieChart>
           </ResponsiveContainer>
           <Box sx={{ position: "absolute", inset: 0, display: "grid", placeContent: "center", pointerEvents: "none", textAlign: "center" }}>
-            <Typography sx={{ fontSize: "1.55rem", fontWeight: 900, lineHeight: 1 }}>{total}</Typography>
+            <Typography sx={{ fontSize: "1.42rem", fontWeight: 900, lineHeight: 1 }}>{total}</Typography>
             <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>tickets</Typography>
           </Box>
         </Box>
 
         <Box sx={{
           display: "grid",
-          gridTemplateColumns: { xs: "1fr", md: data.length > 4 ? "repeat(2, minmax(0, 1fr))" : "1fr" },
+          gridTemplateColumns: { xs: "1fr", sm: data.length > 4 ? "repeat(2, minmax(0, 1fr))" : "1fr" },
           columnGap: 1.25,
-          rowGap: .45,
+          rowGap: .3,
           alignContent: "center",
           minWidth: 0,
         }}>
@@ -2876,7 +3007,7 @@ function DonutAnalysisCard({
                   gap: .8,
                   cursor: "pointer",
                   px: .8,
-                  py: .65,
+                  py: .55,
                   borderRadius: 1.5,
                   opacity: active ? 1 : .38,
                   transition: "background-color .16s ease, opacity .16s ease",
@@ -3442,6 +3573,9 @@ function periodLabel(
 
     case "month":
       return "Este mês";
+
+    case "lastMonth":
+      return "Mês passado";
 
     case "semester":
       return "Este semestre";

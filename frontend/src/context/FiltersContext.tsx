@@ -15,6 +15,7 @@ export type PeriodOption =
   | "60d"
   | "90d"
   | "month"
+  | "lastMonth"
   | "semester"
   | "year"
   | "custom";
@@ -37,6 +38,11 @@ type FiltersContextData = {
 
   effectiveStartDate: Date;
   effectiveEndDate: Date;
+
+  clients: string[];
+  setClients: (clients: string[]) => void;
+  analysts: string[];
+  setAnalysts: (analysts: string[]) => void;
 };
 
 type FiltersProviderProps = {
@@ -64,6 +70,9 @@ export function FiltersProvider({
     setStartDate,
   ] =
     useState("");
+
+  const [clients, setClients] = useState<string[]>([]);
+  const [analysts, setAnalysts] = useState<string[]>([]);
 
   const [
     endDate,
@@ -110,6 +119,15 @@ export function FiltersProvider({
 
     if (period === "month") {
       start = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+    }
+
+    if (period === "lastMonth") {
+      start = new Date(now.getFullYear(), now.getMonth() - 1, 1, 0, 0, 0, 0);
+      const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+      return {
+        effectiveStartDate: start,
+        effectiveEndDate: lastMonthEnd,
+      };
     }
 
     if (period === "semester") {
@@ -191,6 +209,10 @@ export function FiltersProvider({
 
         effectiveStartDate,
         effectiveEndDate,
+        clients,
+        setClients,
+        analysts,
+        setAnalysts,
       }),
       [
         period,
@@ -198,6 +220,8 @@ export function FiltersProvider({
         endDate,
         effectiveStartDate,
         effectiveEndDate,
+        clients,
+        analysts,
       ]
     );
 

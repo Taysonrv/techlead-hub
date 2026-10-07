@@ -6,7 +6,6 @@ import {
   CardContent,
   Checkbox,
   Chip,
-  CircularProgress,
   Divider,
   Drawer,
   FormControl,
@@ -14,6 +13,7 @@ import {
   InputAdornment,
   InputLabel,
   MenuItem,
+  Menu,
   Select,
   Snackbar,
   Stack,
@@ -36,11 +36,14 @@ import {
   SearchOutlined,
   TuneOutlined,
   AccountTreeOutlined,
+  ShareOutlined,
+  MoreHorizOutlined,
 } from "@mui/icons-material";
 
 import {
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 
@@ -49,8 +52,10 @@ import { getTicketSnapshot } from "../services/ticketSnapshot";
 import { useFilters } from "../context/FiltersContext";
 import { PeriodFilter } from "../components/PeriodFilter";
 import { PageHeader } from "../components/PageHeader";
+import { ContentState } from "../components/ContentState";
 import { KpiCard as ExecutiveKpiCard } from "../components/KpiCard";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 
 import {
   aliareColors,
@@ -100,6 +105,7 @@ type Ticket = {
   owner: string | null;
   ownerTeam?: string | null;
   team?: string | null;
+  isWithSimer?: boolean;
 
   category: string | null;
   cause: string | null;
@@ -240,7 +246,10 @@ type KpiCardProps = {
 
 export function Tickets() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const defaultAnalystApplied = useRef(false);
   const [searchParams] = useSearchParams();
+  const [ticketActionsAnchor, setTicketActionsAnchor] = useState<HTMLElement | null>(null);
 
   const [
     tickets,
@@ -297,9 +306,8 @@ export function Tickets() {
 
   const [category, setCategory] = useState<string[]>([]);
 
-  const [owner, setOwner] = useState<string[]>([]);
 
-  const [client, setClient] = useState<string[]>([]);
+
 
   const [team, setTeam] = useState<string[]>([]);
 
@@ -344,8 +352,14 @@ export function Tickets() {
   const {
     effectiveStartDate,
     effectiveEndDate,
-  } =
-    useFilters();
+    clients: client,
+    setClients: setClient,
+    analysts: sharedAnalysts,
+    setAnalysts: setSharedAnalysts,
+  } = useFilters();
+  const owner = sharedAnalysts;
+  const setOwner = setSharedAnalysts;
+
 
   /* =======================================================
      CARREGAMENTO
@@ -491,6 +505,7 @@ export function Tickets() {
 
       return tickets.filter(
         (ticket) => {
+          if (ticket.isWithSimer !== true) return false;
           const created =
             new Date(
               ticket.createdDate
@@ -563,6 +578,20 @@ export function Tickets() {
         periodTickets,
       ]
     );
+
+
+  useEffect(() => {
+    if (defaultAnalystApplied.current || !user?.name || sharedAnalysts.length > 0 || tickets.length === 0) return;
+    if (searchParams.get("movidesk") || searchParams.get("task")) { defaultAnalystApplied.current = true; return; }
+    const normalizedUser = normalize(user.name);
+    const userParts = normalizedUser.split(/\s+/).filter((part) => part.length > 2 && !["de","da","do","dos","das"].includes(part));
+    const match = owners.find((analyst) => {
+      const normalizedAnalyst = normalize(analyst);
+      return userParts.length > 0 && userParts.every((part) => normalizedAnalyst.includes(part));
+    });
+    defaultAnalystApplied.current = true;
+    if (match) setSharedAnalysts([match]);
+  }, [user?.name, sharedAnalysts.length, tickets.length, owners, searchParams, setSharedAnalysts]);
 
   const clients =
     useMemo(
@@ -1124,30 +1153,8 @@ export function Tickets() {
      LOADING / ERROR
   ======================================================= */
 
-  if (
-    loading
-  ) {
-    return (
-      <Box
-        sx={{
-          display:
-            "flex",
-
-          justifyContent:
-            "center",
-
-          mt:
-            10,
-        }}
-      >
-        <CircularProgress
-          sx={{
-            color:
-              aliareColors.green,
-          }}
-        />
-      </Box>
-    );
+  if (loading) {
+    return <ContentState kind="loading" title="Carregando tickets" minHeight={360} />;
   }
 
   if (
@@ -1173,8 +1180,8 @@ export function Tickets() {
       <PageHeader
         eyebrow="Operação"
         title="Tickets"
-        description="Consulte, priorize e investigue os chamados da operação"
-        meta={<>{periodTickets.length} ticket(s) no período • {filteredTickets.length} após filtros</>}
+        description="Consulte, priorize e investigue os chamados sob responsabilidade da operação SIMER"
+        meta={<>{periodTickets.length} entrada(s) SIMER no período • {filteredTickets.length} após filtros</>}
         action={<PeriodFilter />}
       />
 
@@ -1189,9 +1196,7 @@ export function Tickets() {
             2,
         }}
       >
-        <strong>
-          Prazo operacional:
-        </strong>{" "}
+        <strong>Escopo SIMER:</strong>{" "}esta tela considera somente tickets cuja responsabilidade atual pertence à operação SIMER. Tickets dos mesmos clientes que estejam com outras equipes não entram nos indicadores. O card “No período” é fluxo de entradas pela data de abertura; “Abertos”, “Parados” e “Sem responsável” são a situação atual desse mesmo recorte.{" "}<strong>Prazo operacional:</strong>{" "}
         esta fila usa a regra local de horas úteis, urgência, categoria e tempo parado
         para apoiar a priorização dos atendimentos ativos. Os indicadores históricos
         oficiais de SLA do Movidesk devem ser tratados separadamente. Até a identificação
@@ -1213,6 +1218,8 @@ export function Tickets() {
             sm:
               "repeat(2, minmax(0, 1fr))",
             lg:
+              "repeat(3, minmax(0, 1fr))",
+            xl:
               "repeat(5, minmax(0, 1fr))",
           },
 
@@ -1220,17 +1227,17 @@ export function Tickets() {
             1.25,
 
           mb:
-            1.75,
+            1.5,
         }}
       >
         <KpiCard
-          title="No período"
+          title="Entradas no período"
           value={
             executiveGroups
               .all.length
           }
-          description="Todos os atendimentos"
-          info="Atendimentos abertos no período global selecionado, independentemente do status atual."
+          description="Abertos no período pela operação SIMER"
+          info="Fluxo de entrada: tickets criados no período e atualmente sob responsabilidade da operação SIMER. É o mesmo recorte operacional utilizado pelo Dashboard."
           active={
             quickFilter ===
             "all"
@@ -1248,8 +1255,8 @@ export function Tickets() {
             executiveGroups
               .open.length
           }
-          description="Ainda em andamento"
-          info="Atendimentos do período que ainda não estão Resolvidos, Fechados ou Cancelados."
+          description="Entradas do período ainda ativas"
+          info="Estoque remanescente da coorte: dentre as entradas SIMER do período, quantas continuam New, InAttendance ou Stopped hoje. Não equivale ao Backlog atual do Dashboard, que inclui tickets ativos abertos antes do período."
           accent={
             semanticChartColors.normal
           }
@@ -1374,18 +1381,18 @@ export function Tickets() {
           sx={{
             p: {
               xs:
-                1.5,
+                1.35,
               md:
-                1.75,
+                1.5,
             },
 
             "&:last-child":
               {
                 pb: {
                   xs:
-                    1.5,
+                    1.35,
                   md:
-                    1.75,
+                    1.5,
                 },
               },
           }}
@@ -2463,6 +2470,7 @@ export function Tickets() {
             null
           )
         }
+        ModalProps={{ disableEnforceFocus: true }}
         slotProps={{
           paper: {
             sx: {
@@ -2566,70 +2574,19 @@ export function Tickets() {
                   "Sem cliente"}
               </Typography>
 
-              <Stack
-                direction="row"
-                spacing={0.75}
-                sx={{
-                  mt:
-                    2,
-
-                  flexWrap:
-                    "wrap",
-
-                  gap:
-                    0.75,
-                }}
-              >
-                <Button
-                  size="small"
-                  variant="outlined"
-                  startIcon={
-                    <ContentCopyOutlined />
-                  }
-                  onClick={() =>
-                    void copyTicketSummary(
-                      selectedTicket
-                    )
-                  }
-                >
-                  Copiar resumo
-                </Button>
-
-                <Button
-                  size="small"
-                  variant="contained"
-                  endIcon={
-                    <OpenInNewOutlined />
-                  }
-                  onClick={() =>
-                    openMovideskTicket(
-                      selectedTicket
-                    )
-                  }
-                >
-                  Abrir no Movidesk
-                </Button>
-                <Button
-                  size="small"
-                  variant="outlined"
-                  startIcon={<SearchOutlined />}
-                  onClick={() => navigate(`/investigacao?q=${selectedTicket.movideskId}`)}
-                >
-                  Investigar este atendimento
-                </Button>
-                <Button
-                  size="small"
-                  variant="outlined"
-                  startIcon={<AccountTreeOutlined />}
-                  onClick={() => {
-                    const context = [selectedTicket.subject, selectedTicket.category, selectedTicket.cause, selectedTicket.serviceFirstLevel, selectedTicket.serviceSecondLevel, selectedTicket.serviceThirdLevel, selectedTicket.justification].filter(Boolean).join(" ");
-                    navigate(`/mapa-simer?context=${encodeURIComponent(context)}&ticket=${selectedTicket.movideskId}`);
-                  }}
-                >
-                  Investigar no Mapa
-                </Button>
-              </Stack>
-
+              <Box sx={{ mt: 2 }}>
+                <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 900 }}>Ações rápidas</Typography>
+                <Box sx={{ mt: .45, display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(3, minmax(0, 1fr))" }, gap: .8 }}>
+                  <Button size="small" variant="contained" startIcon={<ShareOutlined />} onClick={() => window.dispatchEvent(new CustomEvent("techlead-hub:share-chat", { detail: { label: "Ticket", recordId: selectedTicket.movideskId, title: selectedTicket.subject, client: selectedTicket.client, status: selectedTicket.status, path: `/operacao/tickets?movidesk=${selectedTicket.movideskId}` } }))}>Compartilhar</Button>
+                  <Button size="small" variant="outlined" endIcon={<OpenInNewOutlined />} onClick={() => openMovideskTicket(selectedTicket)}>Abrir origem</Button>
+                  <Button size="small" variant="outlined" startIcon={<SearchOutlined />} onClick={() => navigate(`/investigacao?q=${selectedTicket.movideskId}`)}>Investigar</Button>
+                </Box>
+                <Button size="small" startIcon={<MoreHorizOutlined />} onClick={(event) => setTicketActionsAnchor(event.currentTarget)} sx={{ mt: .55, px: .5 }}>Mais ações</Button>
+                <Menu anchorEl={ticketActionsAnchor} open={Boolean(ticketActionsAnchor)} onClose={() => setTicketActionsAnchor(null)}>
+                  <MenuItem onClick={() => { setTicketActionsAnchor(null); void copyTicketSummary(selectedTicket); }}><ContentCopyOutlined sx={{ mr: 1, fontSize: 18 }} />Copiar resumo</MenuItem>
+                  <MenuItem onClick={() => { setTicketActionsAnchor(null); const context = [selectedTicket.subject, selectedTicket.category, selectedTicket.cause, selectedTicket.serviceFirstLevel, selectedTicket.serviceSecondLevel, selectedTicket.serviceThirdLevel, selectedTicket.justification].filter(Boolean).join(" "); navigate(`/investigacao?q=${encodeURIComponent(context)}&ticket=${selectedTicket.movideskId}`); }}><AccountTreeOutlined sx={{ mr: 1, fontSize: 18 }} />Investigar no Mapa</MenuItem>
+                </Menu>
+              </Box>
               <Divider
                 sx={{
                   my:

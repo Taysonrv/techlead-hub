@@ -1,6 +1,6 @@
 {
   "name": "techlead-hub-desktop",
-  "version": "2.0.0",
+  "version": "2.1.0-rc.2",
   "description": "TechLead Hub - Support Intelligence",
   "main": "dist/main.js",
   "author": "Aliare - Suporte e Sustentação - SIMER",
@@ -63,7 +63,15 @@
         "from": "../backend/node_modules",
         "to": "backend/node_modules",
         "filter": [
-          "**/*"
+          "**/*",
+          "!**/*.map",
+          "!**/.cache/**",
+          "!**/test/**",
+          "!**/tests/**",
+          "!**/__tests__/**",
+          "!**/docs/**",
+          "!**/example/**",
+          "!**/examples/**"
         ]
       },
       {

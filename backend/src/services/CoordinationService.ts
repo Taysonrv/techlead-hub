@@ -314,7 +314,31 @@ export class CoordinationService {
     const monthKey=(date:Date)=>date.toISOString().slice(0,7);
     const monthLabel=(key:string)=>{const [year,month]=key.split("-");return new Intl.DateTimeFormat("pt-BR",{month:"short",year:"2-digit",timeZone:"UTC"}).format(new Date(Date.UTC(Number(year),Number(month)-1,1))).replace(".","");};
     const monthly=[...new Set(rows.map(r=>monthKey(r.taskCreatedAt)))].sort().map(month=>{const group=rows.filter(r=>monthKey(r.taskCreatedAt)===month);const completed=group.filter(r=>r.taskConcludedAt);return{month,label:monthLabel(month),total:group.length,concluded:completed.length,avgSupportMinutes:avg(group.map(r=>r.supportMinutes)),avgFactoryMinutes:avg(completed.map(r=>r.factoryMinutes!)),avgTotalMinutes:avg(completed.map(r=>r.totalMinutes!)),supportWithinPct:group.length?Math.round(group.filter(r=>r.supportPct<=100).length/group.length*1000)/10:0,factoryWithinPct:completed.length?Math.round(completed.filter(r=>(r.factoryPct??Infinity)<=100).length/completed.length*1000)/10:0,totalWithinPct:completed.length?Math.round(completed.filter(r=>(r.totalPct??Infinity)<=100).length/completed.length*1000)/10:0}});
-    return { periodDays: days, period:{start:since,end:until}, rule:{taskEndState:"Concluida",schedule:"Seg-Sex 08:00-18:00",profile:"PADRAO"}, dataQuality:{bugsInPeriod:bugTickets.length,linked:rows.length,missingAzure,missingTaskCreatedAt,missingPriority,invalidTimeline}, summary:{bugsWithTask:rows.length,concluded:done.length,openDevelopment:rows.length-done.length,avgSupportMinutes:avg(rows.map(r=>r.supportMinutes)),avgFactoryMinutes:avg(rows.map(r=>r.factoryMinutes!)),avgTotalMinutes:avg(done.map(r=>r.totalMinutes!)),supportWithinOla:rows.filter(r=>r.supportPct<=100).length,factoryWithinOla:rows.filter(r=>(r.factoryPct??Infinity)<=100).length,totalWithinSla:done.filter(r=>(r.totalPct??Infinity)<=100).length,openFactoryOverOla:rows.filter(r=>!r.taskConcludedAt&&(r.factoryPct??0)>100).length,openTotalOverSla:rows.filter(r=>!r.taskConcludedAt&&(r.totalPct??0)>100).length}, byPriority, owners, clients, monthly, outliers, rows };
+    const summary={bugsWithTask:rows.length,concluded:done.length,openDevelopment:rows.length-done.length,avgSupportMinutes:avg(rows.map(r=>r.supportMinutes)),avgFactoryMinutes:avg(rows.map(r=>r.factoryMinutes!)),avgTotalMinutes:avg(done.map(r=>r.totalMinutes!)),supportWithinOla:rows.filter(r=>r.supportPct<=100).length,factoryWithinOla:rows.filter(r=>(r.factoryPct??Infinity)<=100).length,totalWithinSla:done.filter(r=>(r.totalPct??Infinity)<=100).length,openFactoryOverOla:rows.filter(r=>!r.taskConcludedAt&&(r.factoryPct??0)>100).length,openTotalOverSla:rows.filter(r=>!r.taskConcludedAt&&(r.totalPct??0)>100).length};
+    const pct=(value:number,total:number)=>total?Math.round(value/total*1000)/10:0;
+    const linkageRate=bugTickets.length?Math.round(rows.length/bugTickets.length*1000)/10:0;
+    const supportRate=pct(summary.supportWithinOla,rows.length);
+    const factoryRate=pct(summary.factoryWithinOla,done.length);
+    const totalRate=pct(summary.totalWithinSla,done.length);
+    const dataQualityRate=bugTickets.length?Math.round(rows.length/bugTickets.length*1000)/10:100;
+    const healthScore=Math.round((supportRate*.25+factoryRate*.30+totalRate*.30+dataQualityRate*.15)*10)/10;
+    const health={
+      score:healthScore,
+      status:healthScore>=85?"stable":healthScore>=70?"attention":"critical",
+      formula:"25% OLA Suporte + 30% OLA Fábrica + 30% SLA Total + 15% Qualidade dos vínculos",
+      components:[
+        {key:"support",label:"OLA Suporte",score:supportRate,weight:25,detail:`${summary.supportWithinOla} de ${rows.length} dentro do limite`},
+        {key:"factory",label:"OLA Fábrica",score:factoryRate,weight:30,detail:`${summary.factoryWithinOla} de ${done.length} concluídas dentro do limite`},
+        {key:"total",label:"SLA Total",score:totalRate,weight:30,detail:`${summary.totalWithinSla} de ${done.length} concluídas dentro do limite`},
+        {key:"data",label:"Qualidade dos vínculos",score:dataQualityRate,weight:15,detail:`${rows.length} de ${bugTickets.length} Bugs com dados suficientes para cálculo`}
+      ],
+      alerts:[
+        ...(summary.openFactoryOverOla?[{severity:"warning",title:"Fábrica acima do OLA",detail:`${summary.openFactoryOverOla} item(ns) ainda aberto(s) já ultrapassaram o limite de Fábrica.`}]:[]),
+        ...(summary.openTotalOverSla?[{severity:"error",title:"SLA total em risco",detail:`${summary.openTotalOverSla} item(ns) aberto(s) já ultrapassaram o limite total.`}]:[]),
+        ...(linkageRate<80?[{severity:"warning",title:"Cobertura insuficiente",detail:`Apenas ${linkageRate}% dos Bugs do período possuem dados completos para o fluxo Ticket → Task.`}]:[])
+      ]
+    };
+    return { periodDays: days, period:{start:since,end:until}, rule:{taskEndState:"Concluida",schedule:"Seg-Sex 08:00-18:00",profile:"PADRAO",supportStart:"Abertura do Ticket",supportEnd:"Abertura da Task",factoryStart:"Abertura da Task",factoryEnd:"Task Concluída"}, dataQuality:{bugsInPeriod:bugTickets.length,linked:rows.length,linkageRate,missingAzure,missingTaskCreatedAt,missingPriority,invalidTimeline}, summary, health, byPriority, owners, clients, monthly, outliers, rows };
   }
 
   async serviceIntelligence(filters: { client?: string; analyst?: string; months?: number; startDate?: string; endDate?: string } = {}) {

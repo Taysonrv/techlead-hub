@@ -1,13 +1,11 @@
-import { Prisma } from "@prisma/client";
-import { prisma } from "../database/prisma";
+
+import { ensureDatabaseAvailable, reportDatabaseFailure } from "../database/prisma";
 import { MovideskService } from "../services/MovideskService";
 import { clearMovideskApiPriority, releaseMovideskApi, requestMovideskApiPriority, tryAcquireMovideskApi } from "./MovideskSyncCoordinator";
 
 const DEFAULT_INTERVAL_MINUTES = 60;
-const DEFAULT_INITIAL_DELAY_SECONDS = 90;
-const LOCK_NAMESPACE = 864211;
-const LOCK_RESOURCE = 2;
-type LockRow = { acquired: boolean };
+const DEFAULT_INITIAL_DELAY_SECONDS = 5;
+const METADATA_CONTINUATION_SECONDS = 45;
 
 export class MovideskSyncScheduler {
   private timer: NodeJS.Timeout | null = null;
@@ -32,7 +30,7 @@ export class MovideskSyncScheduler {
     }
     if (this.timer) return;
     this.stopped = false;
-    console.log(`[movidesk-sync] Scheduler habilitado: atualização a cada ${this.intervalMinutes()} minuto(s).`);
+    console.log(`[movidesk-sync] Scheduler habilitado: primeira reconciliação em ${DEFAULT_INITIAL_DELAY_SECONDS}s; depois atualização a cada ${this.intervalMinutes()} minuto(s).`);
     this.schedule(DEFAULT_INITIAL_DELAY_SECONDS * 1000);
   }
 
@@ -50,17 +48,21 @@ export class MovideskSyncScheduler {
   }
 
   private async runAndReschedule() {
-    let retrySoon = false;
-    try { retrySoon = await this.execute(); }
-    finally { this.schedule(retrySoon ? 2 * 60_000 : this.intervalMinutes() * 60_000); }
+    let nextDelay: number | null = null;
+    try { nextDelay = await this.execute(); }
+    finally { this.schedule(nextDelay ?? this.intervalMinutes() * 60_000); }
   }
 
-  private async execute(): Promise<boolean> {
-    if (this.running) return false;
+  private async execute(): Promise<number | null> {
+    if (this.running) return null;
+    if (!(await ensureDatabaseAvailable())) {
+      console.warn("[movidesk-sync] PostgreSQL indisponível; ciclo adiado sem consumir a API Movidesk.");
+      return 60_000;
+    }
     if (!tryAcquireMovideskApi("TICKETS")) {
       requestMovideskApiPriority();
       console.log("[movidesk-sync] API ocupada: sincronização principal ganhou prioridade e tentará novamente em 2 minuto(s).");
-      return true;
+      return 2 * 60_000;
     }
     this.running = true;
     const started = Date.now();
@@ -68,40 +70,34 @@ export class MovideskSyncScheduler {
       const service = new MovideskService();
       if (!(await service.hasCompletedBaseline())) {
         console.log("[movidesk-sync] Ciclo aguardando baseline FULL manual; nenhuma carga automática foi executada.");
-        return false;
+        return null;
       }
 
-      const result = await prisma.$transaction(async (tx) => {
-        const rows = await tx.$queryRaw<LockRow[]>(Prisma.sql`
-          SELECT pg_try_advisory_xact_lock(
-            CAST(${LOCK_NAMESPACE} AS integer),
-            CAST(${LOCK_RESOURCE} AS integer)
-          ) AS acquired
-        `);
-        if (rows[0]?.acquired !== true) return { acquired: false as const, sync: null };
-        const sync = await service.syncTickets(null, false);
-        return { acquired: true as const, sync };
-      }, { maxWait: 5_000, timeout: 55 * 60 * 1000 });
-
-      if (!result.acquired) {
-        console.log("[movidesk-sync] Ciclo ignorado: outra instância já está sincronizando.");
-        return false;
-      }
-      const s = result.sync;
+      // Não mantenha uma transação Prisma aberta durante toda a sincronização.
+      // Uma interactive transaction reserva uma conexão do pool enquanto syncTickets()
+      // executa chamadas externas e centenas de operações, podendo bloquear autenticação e Chat.
+      // A exclusão local já é garantida por this.running + MovideskSyncCoordinator.
+      const s = await service.syncTickets(null, false);
+      const metadataRemaining = s.analyticalMetadataRemaining ?? 0;
       console.log([
         "[movidesk-sync] Sincronização concluída.",
         `modo=${s.mode}`, `paginas=${s.pages}`, `total=${s.totalRows}`,
         `inseridos=${s.created}`, `atualizados=${s.updated}`,
         `ignorados=${s.ignored}`, `erros=${s.errors}`,
-        `duração=${Math.round((Date.now()-started)/1000)}s`
+        `duração=${Math.round((Date.now()-started)/1000)}s`,
+        metadataRemaining > 0 ? `metadadosRestantes=${metadataRemaining}` : "metadados=em-dia"
       ].join(" | "));
+      if (metadataRemaining > 0) {
+        console.log(`[movidesk-sync] Reconciliação analítica continuará em ${METADATA_CONTINUATION_SECONDS}s para preservar capacidade do banco. | restantes=${metadataRemaining}`);
+        return METADATA_CONTINUATION_SECONDS * 1000;
+      }
     } catch (error) {
-      console.error("[movidesk-sync] Falha na sincronização automática:", error);
+      if (!reportDatabaseFailure(error)) console.error("[movidesk-sync] Falha na sincronização automática:", error);
     } finally {
       this.running = false;
       releaseMovideskApi("TICKETS");
       clearMovideskApiPriority();
     }
-    return false;
+    return null;
   }
 }

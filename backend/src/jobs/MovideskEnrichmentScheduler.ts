@@ -1,9 +1,31 @@
 import { MovideskService } from "../services/MovideskService";
-import { releaseMovideskApi, tryAcquireMovideskApi } from "./MovideskSyncCoordinator";
+import { ensureDatabaseAvailable, reportDatabaseFailure } from "../database/prisma";
+import { movideskApiOwner, releaseMovideskApi, tryAcquireMovideskApi } from "./MovideskSyncCoordinator";
 
 const DEFAULT_INTERVAL_MINUTES = 1;
 const DEFAULT_INITIAL_DELAY_SECONDS = 60;
-const DEFAULT_BATCH_SIZE = 5;
+const DEFAULT_BATCH_SIZE = 10;
+const DEFAULT_CONTINUATION_SECONDS = 15;
+const DEFAULT_BUSY_RETRY_SECONDS = 30;
+const DEFAULT_COOLDOWN_SECONDS = 90;
+
+export function movideskEnrichmentSchedulerStatus() {
+  const interval = Number(process.env.MOVIDESK_ENRICHMENT_INTERVAL_MINUTES ?? DEFAULT_INTERVAL_MINUTES);
+  const batch = Number(process.env.MOVIDESK_ENRICHMENT_BATCH_SIZE ?? DEFAULT_BATCH_SIZE);
+  const raw = process.env.MOVIDESK_ENRICHMENT_SCHEDULER_ENABLED?.trim().toLowerCase();
+  const explicitlyDisabled = Boolean(raw && ["0", "false", "no", "nao", "não", "off"].includes(raw));
+  const owner = movideskApiOwner();
+  return {
+    enabled: !explicitlyDisabled && Boolean(process.env.MOVIDESK_TOKEN?.trim()),
+    batchSize: Number.isSafeInteger(batch) && batch >= 1 && batch <= 25 ? batch : DEFAULT_BATCH_SIZE,
+    idleIntervalMinutes: Number.isSafeInteger(interval) && interval >= 1 && interval <= 1440 ? interval : DEFAULT_INTERVAL_MINUTES,
+    continuationSeconds: DEFAULT_CONTINUATION_SECONDS,
+    busyRetrySeconds: DEFAULT_BUSY_RETRY_SECONDS,
+    errorCooldownSeconds: DEFAULT_COOLDOWN_SECONDS,
+    apiState: owner ? "BUSY" : "AVAILABLE",
+    apiOwner: owner,
+  };
+}
 
 export class MovideskEnrichmentScheduler {
   private timer: NodeJS.Timeout | null = null;
@@ -23,7 +45,7 @@ export class MovideskEnrichmentScheduler {
 
   private batchSize() {
     const parsed = Number(process.env.MOVIDESK_ENRICHMENT_BATCH_SIZE ?? DEFAULT_BATCH_SIZE);
-    return Number.isSafeInteger(parsed) && parsed >= 1 && parsed <= 10 ? parsed : DEFAULT_BATCH_SIZE;
+    return Number.isSafeInteger(parsed) && parsed >= 1 && parsed <= 25 ? parsed : DEFAULT_BATCH_SIZE;
   }
 
   start() {
@@ -56,18 +78,20 @@ export class MovideskEnrichmentScheduler {
   }
 
   private async runAndReschedule() {
+    let outcome: "PENDING" | "IDLE" | "BUSY" | "ERROR" = "IDLE";
     try {
-      await this.execute();
+      outcome = await this.execute();
     } finally {
-      this.schedule(this.intervalMinutes() * 60_000);
+      const delay = outcome === "PENDING" ? DEFAULT_CONTINUATION_SECONDS * 1000 : outcome === "BUSY" ? DEFAULT_BUSY_RETRY_SECONDS * 1000 : outcome === "ERROR" ? DEFAULT_COOLDOWN_SECONDS * 1000 : this.intervalMinutes() * 60_000;
+      this.schedule(delay);
     }
   }
 
-  private async execute() {
-    if (this.running) return;
+  private async execute(): Promise<"PENDING" | "IDLE" | "BUSY" | "ERROR"> {
+    if (this.running) return "BUSY";
+    if (!(await ensureDatabaseAvailable())) return "ERROR";
     if (!tryAcquireMovideskApi("ENRICHMENT_SCHEDULER")) {
-      console.log("[movidesk-enrichment] Ciclo adiado: outra rotina Movidesk está utilizando a API.");
-      return;
+      return "BUSY";
     }
 
     this.running = true;
@@ -76,25 +100,31 @@ export class MovideskEnrichmentScheduler {
       const service = new MovideskService();
       if (!(await service.hasCompletedBaseline())) {
         console.log("[movidesk-enrichment] Ciclo aguardando baseline FULL.");
-        return;
+        return "IDLE";
       }
 
       const result = await service.syncTicketEnrichment(this.batchSize());
-      console.log([
-        "[movidesk-enrichment] Lote concluído.",
-        `tickets=${result.tickets}`,
-        `pendentesAntes=${result.pendingBeforeRun}`,
-        `pendentesDepois=${result.pendingAfterRun}`,
-        `acoes=${result.actions}`,
-        `apontamentos=${result.appointments}`,
-        `historicosResponsavel=${result.ownerHistories}`,
-        `historicosStatus=${result.statusHistories}`,
-        `erros=${result.errors}`,
-        `duracao=${Math.round((Date.now() - started) / 1000)}s`,
-        result.pendingAfterRun > 0 ? `etaAprox=${Math.ceil(result.pendingAfterRun / Math.max(1, result.tickets - result.errors))} lote(s)` : "fila=concluida",
-      ].join(" | "));
+      if (result.tickets > 0 || result.errors > 0 || result.pendingBeforeRun > 0) {
+        console.log([
+          "[movidesk-enrichment] Lote concluído.",
+          `tickets=${result.tickets}`,
+          `pendentesAntes=${result.pendingBeforeRun}`,
+          `pendentesDepois=${result.pendingAfterRun}`,
+          `acoes=${result.actions}`,
+          `apontamentos=${result.appointments}`,
+          `historicosResponsavel=${result.ownerHistories}`,
+          `historicosStatus=${result.statusHistories}`,
+          `erros=${result.errors}`,
+          `duracao=${Math.round((Date.now() - started) / 1000)}s`,
+          `throughput=${result.throughputPerMinute.toFixed(1)} ticket(s)/min`,
+          result.estimatedMinutesRemaining != null ? `etaAprox=${result.estimatedMinutesRemaining} min` : "etaAprox=calculando",
+          result.pendingAfterRun > 0 ? `continuaEm=${DEFAULT_CONTINUATION_SECONDS}s` : "fila=concluida",
+        ].join(" | "));
+      }
+      return result.pendingAfterRun > 0 ? "PENDING" : "IDLE";
     } catch (error) {
-      console.error("[movidesk-enrichment] Falha no enriquecimento automático:", error);
+      if (!reportDatabaseFailure(error)) console.error("[movidesk-enrichment] Falha no enriquecimento automático:", error);
+      return "ERROR";
     } finally {
       this.running = false;
       releaseMovideskApi("ENRICHMENT_SCHEDULER");

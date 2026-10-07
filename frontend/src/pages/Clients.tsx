@@ -9,7 +9,6 @@ import {
   Card,
   CardContent,
   Chip,
-  CircularProgress,
   Divider,
   Drawer,
   FormControl,
@@ -57,6 +56,7 @@ import { calculateTimestampSla } from "../utils/timestampSla";
 import { useFilters } from "../context/FiltersContext";
 import { PeriodFilter } from "../components/PeriodFilter";
 import { PageHeader } from "../components/PageHeader";
+import { ContentState } from "../components/ContentState";
 import { ExportTicketsButton } from "../components/ExportTicketsButton";
 import { detailDrawerPaperSx } from "../theme/layoutTokens";
 import { KpiCard as ExecutiveKpiCard } from "../components/KpiCard";
@@ -135,6 +135,7 @@ type Ticket = {
   importSource?: string | null;
   importedAt?: string | null;
   importBatch?: string | null;
+  isWithSimer?: boolean;
 };
 
 type AttentionLevel =
@@ -362,7 +363,8 @@ export function Clients() {
 
         return (
           created >= start &&
-          created <= end
+          created <= end &&
+          ticket.isWithSimer === true
         );
       }
     );
@@ -511,6 +513,24 @@ export function Clients() {
       businessArea,
       executiveArea,
     ]);
+
+  // SLA de solução é uma métrica de saída. O período é determinado pela
+  // resolução, preservando os mesmos filtros locais e o escopo SIMER.
+  const solutionScopedTickets = useMemo(() => {
+    const start = startOfDay(effectiveStartDate);
+    const end = endOfDay(effectiveEndDate);
+    return tickets.filter((ticket) => {
+      if (ticket.isWithSimer !== true || !ticket.resolvedDate) return false;
+      const resolved = new Date(ticket.resolvedDate);
+      if (resolved < start || resolved > end) return false;
+      return (!selectedClient || ticket.client === selectedClient)
+        && (!category || ticket.category === category)
+        && (!status || ticket.status === status)
+        && (!owner || ticket.owner === owner)
+        && (!businessArea || ticket.businessArea === businessArea)
+        && (!executiveArea || classifyExecutiveArea(ticket) === executiveArea);
+    });
+  }, [tickets, effectiveStartDate, effectiveEndDate, selectedClient, category, status, owner, businessArea, executiveArea]);
 
   /* =======================================================
      MÉTRICAS POR CLIENTE
@@ -877,7 +897,7 @@ export function Clients() {
         ).length;
 
       const responseResult = calculateTimestampSla(scopedTickets, "response");
-      const solutionResult = calculateTimestampSla(scopedTickets, "solution");
+      const solutionResult = calculateTimestampSla(solutionScopedTickets, "solution");
       const responseSla = { measured: responseResult.measured, onTime: responseResult.within, percent: responseResult.percentage };
       const solutionSla = { measured: solutionResult.measured, onTime: solutionResult.within, percent: solutionResult.percentage };
       const azureItems = Array.from(new Map(
@@ -902,7 +922,7 @@ export function Clients() {
         azureBlocked: azureItems.filter((item) => item.blockedProcess === true).length,
         azureWithVersion: azureItems.filter((item) => Boolean(item.deliveredVersion?.trim())).length,
       };
-    }, [scopedTickets]);
+    }, [scopedTickets, solutionScopedTickets]);
 
   /* =======================================================
      PIZZA 1 - DISTRIBUIÇÃO POR CLIENTE
@@ -1367,23 +1387,7 @@ export function Clients() {
   ======================================================= */
 
   if (loading) {
-    return (
-      <Box
-        sx={{
-          display: "flex",
-          justifyContent:
-            "center",
-          mt: 8,
-        }}
-      >
-        <CircularProgress
-          sx={{
-            color:
-              aliareColors.green,
-          }}
-        />
-      </Box>
-    );
+    return <ContentState kind="loading" title="Carregando visão executiva" minHeight={360} />;
   }
 
   if (error) {
@@ -1889,7 +1893,7 @@ export function Clients() {
             <Chip size="small" variant="outlined" label={selectedClient || `${summary.totalClients} cliente(s) na carteira`} />
           </Stack>
 
-          <Box className="client-print-kpi-grid" sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2, 1fr)", lg: "repeat(5, 1fr)" }, gap: 1.25 }}>
+          <Box className="client-print-kpi-grid" sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0,1fr))", lg: "repeat(3, minmax(0,1fr))", xl: "repeat(5, minmax(0,1fr))" }, gap: 1.25 }}>
             <ExecutiveMetric
               title="Taxa de resolução"
               value={`${portfolioSummary.resolutionRate}%`}
@@ -1914,7 +1918,7 @@ export function Clients() {
                 calculation: "Medições no prazo ÷ medições válidas × 100.",
                 source: "Movidesk",
                 reference: "firstResponseDate ≤ firstResponseDueDate",
-                periodRule: "Respeita o recorte atual; itens sem os timestamps necessários ficam fora do denominador.",
+                periodRule: "SLA de solução usa tickets resolvidos no período; itens sem os timestamps necessários ficam fora do denominador.",
               }}
               onClick={() => showTickets("SLA 1ª resposta - tickets medidos", scopedTickets.filter((ticket) => Boolean(ticket.firstResponseDate && ticket.firstResponseDueDate)), "Tickets com timestamps suficientes para medição")}
             />
@@ -1928,9 +1932,9 @@ export function Clients() {
                 calculation: "Medições no prazo ÷ medições válidas × 100.",
                 source: "Movidesk",
                 reference: "resolvedDate/closedDate ≤ dueDate",
-                periodRule: "Respeita o recorte atual; itens sem os timestamps necessários ficam fora do denominador.",
+                periodRule: "Usa a data de resolução para pertencer ao período; itens sem os timestamps necessários ficam fora do denominador.",
               }}
-              onClick={() => showTickets("SLA solução - tickets medidos", scopedTickets.filter((ticket) => Boolean(ticket.dueDate && (ticket.resolvedDate || ticket.closedDate))), "Tickets com timestamps suficientes para medição")}
+              onClick={() => showTickets("SLA solução - tickets medidos", solutionScopedTickets.filter((ticket) => Boolean(ticket.dueDate && ticket.resolvedDate)), "Tickets com timestamps suficientes para medição")}
             />
             <ExecutiveMetric
               title="CSAT"
@@ -1996,12 +2000,12 @@ export function Clients() {
           <CardContent sx={{ p: { xs: 1.5, md: isPresenting ? 3 : 2 }, flex: isPresenting ? 1 : undefined, overflow: isPresenting ? "hidden" : undefined, display: "flex", flexDirection: "column" }}>
             {(!isPresenting || presentationPage === 0) && <Box sx={{ height: isPresenting ? "100%" : "auto", display: "flex", flexDirection: "column", justifyContent: isPresenting ? "center" : undefined }}>
               <Typography variant="h5" sx={{ fontWeight: 900, mb: 2 }}>Resumo executivo</Typography>
-              <Box className="client-print-kpi-grid" sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2,1fr)", lg: "repeat(6,minmax(0,1fr))" }, gap: 1.25, mb: 2 }}>
+              <Box className="client-print-kpi-grid" sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2,minmax(0,1fr))", lg: "repeat(3,minmax(0,1fr))", xl: "repeat(6,minmax(0,1fr))" }, gap: 1.25, mb: 2 }}>
                 <PresentationKpi title="Atendimentos" value={scopedTickets.length} detail="no período" color="#075985" onClick={() => showTickets("Atendimentos no foco", scopedTickets)} />
                 <PresentationKpi title="Bugs" value={presentationSummary.bugs.length} detail={`${presentationSummary.bugs.filter((ticket) => ticket.azureWorkItem || ticket.taskNumber).length} com Task`} color="#008A68" onClick={() => showTickets("Bugs identificados", presentationSummary.bugs)} />
                 <PresentationKpi title="Com Task" value={presentationSummary.withTask.length} detail="correção, evolução ou apoio" color="#2676B9" onClick={() => showTickets("Atendimentos com Task", presentationSummary.withTask)} />
                 <PresentationKpi title="Pendências" value={presentationSummary.pending.length} detail="em acompanhamento" color="#B7791F" onClick={() => showTickets("Pendências ativas", presentationSummary.pending)} />
-                <PresentationKpi title="SLA solução" value={formatSlaPercent(portfolioSummary.solutionSla.percent)} detail={`${portfolioSummary.solutionSla.onTime} de ${portfolioSummary.solutionSla.measured} medidos`} color="#159A68" onClick={() => showTickets("SLA solução", scopedTickets.filter((ticket) => Boolean(ticket.dueDate && (ticket.resolvedDate || ticket.closedDate))))} />
+                <PresentationKpi title="SLA solução" value={formatSlaPercent(portfolioSummary.solutionSla.percent)} detail={`${portfolioSummary.solutionSla.onTime} de ${portfolioSummary.solutionSla.measured} medidos`} color="#159A68" onClick={() => showTickets("SLA solução", solutionScopedTickets.filter((ticket) => Boolean(ticket.dueDate && ticket.resolvedDate)))} />
                 <PresentationKpi title="Tempo médio de solução" value={formatMinutes(clients.find((item) => item.client === selectedClient)?.averageResolutionMinutes ?? null)} detail={`${clients.find((item) => item.client === selectedClient)?.measuredResolutionTimes ?? 0} atendimento(s) medido(s)`} color="#7C3AED" onClick={() => showTickets("Atendimentos com tempo de solução", scopedTickets.filter((ticket) => ticketResolutionMinutes(ticket) !== null))} />
               </Box>
               <Box sx={{ p: 2.25, border: "1px solid", borderColor: "divider", borderRadius: 2, bgcolor: "background.paper" }}>
@@ -2115,7 +2119,7 @@ export function Clients() {
             >
               <Box
                 sx={{
-                  height: 235,
+                  height: { xs: 215, sm: 225 },
                   minWidth: 0,
                 }}
               >
@@ -2248,8 +2252,8 @@ export function Clients() {
           subtitle="Composição dos assuntos no recorte selecionado"
         >
           {categoryPieData.length ? (
-            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "minmax(170px,.85fr) minmax(0,1.15fr)" }, gap: 1, alignItems: "center" }}>
-              <Box sx={{ height: 235, minWidth: 0 }}>
+            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "minmax(190px,.9fr) minmax(0,1.1fr)" }, gap: 1, alignItems: "center" }}>
+              <Box sx={{ height: { xs: 215, sm: 225 }, minWidth: 0 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie data={categoryChartData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={90} innerRadius={60} paddingAngle={2} cornerRadius={5} stroke={theme.palette.background.paper} strokeWidth={1.5} cursor="pointer"
@@ -2298,7 +2302,7 @@ export function Clients() {
             >
               <Box
                 sx={{
-                  height: 235,
+                  height: { xs: 215, sm: 225 },
                   minWidth: 0,
                 }}
               >
@@ -2465,7 +2469,7 @@ export function Clients() {
                 <Chip size="small" variant="outlined" label={`${ownerChartData.reduce((sum, item) => sum + Number(item.value || 0), 0)} tickets distribuídos`} />
                 <Chip size="small" variant="outlined" label={`Maior carteira: ${ownerChartData[0]?.name ?? "—"} · ${ownerChartData[0]?.value ?? 0}`} />
               </Stack>
-              <Box sx={{ height: Math.max(250, Math.min(390, ownerChartData.length * 43 + 52)) }}>
+              <Box sx={{ height: Math.max(220, Math.min(350, ownerChartData.length * 38 + 46)) }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={ownerChartData} layout="vertical" barCategoryGap="28%" margin={{ top: 6, right: 54, bottom: 4, left: 8 }}>
                     <CartesianGrid strokeDasharray="4 6" horizontal={false} stroke={theme.palette.divider} opacity={0.4} />

@@ -113,30 +113,43 @@ export class ChatService {
     if (userId === targetUserId) throw Object.assign(new Error("Selecione outro usuário para iniciar a conversa."), { statusCode: 400 });
     const target = await prisma.user.findFirst({ where: { id: targetUserId, active: true, approvalStatus: "APPROVED" }, select: memberUserSelect });
     if (!target) throw Object.assign(new Error("Usuário não localizado ou indisponível."), { statusCode: 404 });
-    const existing = await prisma.chatChannel.findFirst({
-      where: {
-        type: "DIRECT",
-        archivedAt: null,
-        AND: [
-          { members: { some: { userId } } },
-          { members: { some: { userId: targetUserId } } },
-          { members: { every: { userId: { in: [userId, targetUserId] } } } },
-        ],
-      },
-      include: { members: { include: { user: { select: memberUserSelect } } } },
+
+    const firstId = Math.min(userId, targetUserId);
+    const secondId = Math.max(userId, targetUserId);
+    const channel = await prisma.$transaction(async (tx) => {
+      // Serializa a criação por par de usuários e elimina a corrida de dois cliques/abas.
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(${firstId}::int, ${secondId}::int)`;
+      const candidates = await tx.chatChannel.findMany({
+        where: {
+          type: "DIRECT",
+          archivedAt: null,
+          AND: [
+            { members: { some: { userId } } },
+            { members: { some: { userId: targetUserId } } },
+          ],
+        },
+        orderBy: { updatedAt: "desc" },
+        include: { members: { include: { user: { select: memberUserSelect } } } },
+      });
+      const existing = candidates.find((item) =>
+        item.members.length === 2 &&
+        item.members.every((member) => member.userId === userId || member.userId === targetUserId),
+      );
+      if (existing) return existing;
+
+      return tx.chatChannel.create({
+        data: {
+          name: target.name,
+          type: "DIRECT",
+          description: "Conversa privada",
+          members: { create: [{ userId }, { userId: targetUserId }] },
+        },
+        include: { members: { include: { user: { select: memberUserSelect } } } },
+      });
     });
-    if (existing && existing.members.length === 2) return existing;
+
     const current = await prisma.user.findUnique({ where: { id: userId }, select: { name: true } });
-    const channel = await prisma.chatChannel.create({
-      data: {
-        name: target.name,
-        type: "DIRECT",
-        description: "Conversa privada",
-        members: { create: [{ userId }, { userId: targetUserId }] },
-      },
-      include: { members: { include: { user: { select: memberUserSelect } } } },
-    });
-    await this.audit(userId, "CHAT_DIRECT_CREATED", "ChatChannel", channel.id, { targetUserId, participants: [current?.name, target.name].filter(Boolean) });
+    await this.audit(userId, "CHAT_DIRECT_OPENED", "ChatChannel", channel.id, { targetUserId, participants: [current?.name, target.name].filter(Boolean) });
     return channel;
   }
 
@@ -253,16 +266,81 @@ export class ChatService {
   async deleteChannel(userId: number, role: string, channelId: number) {
     const channel = await prisma.chatChannel.findUnique({
       where: { id: channelId },
-      select: { id: true, name: true, type: true, members: { select: { userId: true } } },
+      select: { id: true, name: true, type: true, archivedAt: true, members: { select: { userId: true } } },
     });
-    if (!channel || !channel.members.some((member) => member.userId === userId)) {
-      throw Object.assign(new Error("Conversa não localizada ou acesso não autorizado."), { statusCode: 404 });
+    if (!channel || channel.archivedAt || !channel.members.some((member) => member.userId === userId)) {
+      throw Object.assign(new Error("Conversa não localizada ou já foi removida."), { statusCode: 404 });
     }
-    if (channel.type !== "DIRECT" && role === "ANALISTA") {
+    if (channel.type !== "DIRECT" && !["COORDENADOR", "ADMIN"].includes(role)) {
       throw Object.assign(new Error("Somente coordenação ou administração pode excluir canais da equipe."), { statusCode: 403 });
     }
-    await prisma.chatChannel.update({ where: { id: channelId }, data: { archivedAt: new Date() } });
-    await this.audit(userId, "CHAT_CHANNEL_DELETED", "ChatChannel", channelId, { type: channel.type, name: channel.name });
+
+    await prisma.$transaction(async (tx) => {
+      await tx.$executeRawUnsafe(`DELETE FROM "ChatTyping" WHERE "channelId"=$1`, channelId);
+      await tx.chatChannel.update({ where: { id: channelId }, data: { archivedAt: new Date() } });
+    });
+    // A exclusão já foi concluída; falha de auditoria não deve devolver falso erro ao usuário.
+    await this.audit(userId, "CHAT_CHANNEL_DELETED", "ChatChannel", channelId, { type: channel.type, name: channel.name }).catch((error) => {
+      console.error("[chat] Falha ao auditar exclusão de conversa:", error);
+    });
+  }
+
+  async consolidateDirectDuplicates(userId: number, role: string) {
+    if (!["COORDENADOR", "ADMIN"].includes(role)) {
+      throw Object.assign(new Error("Somente coordenação ou administração pode executar a manutenção do chat."), { statusCode: 403 });
+    }
+    const directs = await prisma.chatChannel.findMany({
+      where: { type: "DIRECT", archivedAt: null },
+      orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+      include: { members: { select: { userId: true, lastReadAt: true, joinedAt: true } }, _count: { select: { messages: true } } },
+    });
+
+    const groups = new Map<string, typeof directs>();
+    for (const channel of directs) {
+      if (channel.members.length !== 2) continue;
+      const pair = channel.members.map((member) => member.userId).sort((x, y) => x - y).join(":");
+      const current = groups.get(pair) ?? [];
+      current.push(channel);
+      groups.set(pair, current);
+    }
+
+    let duplicateChannels = 0;
+    let movedMessages = 0;
+    const consolidated: Array<{ keptChannelId: number; archivedChannelIds: number[]; messagesMoved: number }> = [];
+
+    for (const channels of groups.values()) {
+      if (channels.length < 2) continue;
+      const canonical = channels[0]!;
+      const duplicates = channels.slice(1);
+      const duplicateIds = duplicates.map((item) => item.id);
+      const messageCount = duplicates.reduce((sum, item) => sum + item._count.messages, 0);
+
+      await prisma.$transaction(async (tx) => {
+        // Mantém todo o histórico no canal canônico; IDs e relações de resposta permanecem intactos.
+        await tx.chatMessage.updateMany({ where: { channelId: { in: duplicateIds } }, data: { channelId: canonical.id } });
+        for (const member of canonical.members) {
+          const related = duplicates.flatMap((item) => item.members).filter((item) => item.userId === member.userId);
+          const readTimes = [member.lastReadAt, ...related.map((item) => item.lastReadAt)].filter((value): value is Date => Boolean(value));
+          if (readTimes.length) {
+            const lastReadAt = new Date(Math.max(...readTimes.map((value) => value.getTime())));
+            await tx.chatChannelMember.update({ where: { channelId_userId: { channelId: canonical.id, userId: member.userId } }, data: { lastReadAt } });
+          }
+        }
+        await tx.$executeRawUnsafe(`DELETE FROM "ChatTyping" WHERE "channelId" = ANY($1::int[])`, duplicateIds);
+        await tx.chatChannel.updateMany({ where: { id: { in: duplicateIds } }, data: { archivedAt: new Date() } });
+        await tx.chatChannel.update({ where: { id: canonical.id }, data: { updatedAt: new Date() } });
+      });
+
+      duplicateChannels += duplicateIds.length;
+      movedMessages += messageCount;
+      consolidated.push({ keptChannelId: canonical.id, archivedChannelIds: duplicateIds, messagesMoved: messageCount });
+    }
+
+    const result = { groupsConsolidated: consolidated.length, duplicateChannels, movedMessages, consolidated };
+    await this.audit(userId, "CHAT_DIRECT_DUPLICATES_CONSOLIDATED", "ChatChannel", 0, result).catch((error) => {
+      console.error("[chat] Falha ao auditar consolidação de conversas:", error);
+    });
+    return result;
   }
 
   async deleteMessage(userId: number, role: string, messageId: number) {

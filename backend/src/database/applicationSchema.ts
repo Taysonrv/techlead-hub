@@ -293,6 +293,18 @@ export async function ensureApplicationSchema() {
   await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "KnownProblem_status_updatedAt_idx" ON "KnownProblem" ("status","updatedAt" DESC)`);
   await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "KnownProblem_service_idx" ON "KnownProblem" ("service")`);
   await prisma.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS "DataQualitySnapshot" (
+      "id" SERIAL PRIMARY KEY,
+      "scopeKey" VARCHAR(80) NOT NULL,
+      "snapshotDate" DATE NOT NULL,
+      "metrics" JSONB NOT NULL,
+      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      CONSTRAINT "DataQualitySnapshot_scopeKey_snapshotDate_key" UNIQUE ("scopeKey","snapshotDate")
+    )
+  `);
+  await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "DataQualitySnapshot_snapshotDate_idx" ON "DataQualitySnapshot" ("snapshotDate")`);
+  await prisma.$executeRawUnsafe(`
     CREATE TABLE IF NOT EXISTS "KnownProblemRead" (
       "problemId" INTEGER NOT NULL REFERENCES "KnownProblem"("id") ON DELETE CASCADE,
       "userId" INTEGER NOT NULL REFERENCES "User"("id") ON DELETE CASCADE,

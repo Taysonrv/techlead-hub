@@ -40,13 +40,8 @@ import {
   FiltersProvider,
 } from "./context/FiltersContext";
 
-const Dashboard = lazy(() => import("./pages/Dashboard").then((module) => ({ default: module.Dashboard })));
-const Tickets = lazy(() => import("./pages/Tickets").then((module) => ({ default: module.Tickets })));
 const Analysts = lazy(() => import("./pages/Analysts").then((module) => ({ default: module.Analysts })));
 const Clients = lazy(() => import("./pages/Clients").then((module) => ({ default: module.Clients })));
-const Attention = lazy(() => import("./pages/Attention").then((module) => ({ default: module.Attention })));
-const Performance = lazy(() => import("./pages/Performance").then((module) => ({ default: module.Performance })));
-const Import = lazy(() => import("./pages/Import").then((module) => ({ default: module.Import })));
 const About = lazy(() => import("./pages/About").then((module) => ({ default: module.About })));
 const Profile = lazy(() => import("./pages/Profile").then((module) => ({ default: module.Profile })));
 const Login = lazy(() => import("./pages/Login").then((module) => ({ default: module.Login })));
@@ -55,20 +50,38 @@ const AzureWorkItems = lazy(() => import("./pages/AzureWorkItems").then((module)
 const Versions = lazy(() => import("./pages/Versions").then((module) => ({ default: module.Versions })));
 const Settings = lazy(() => import("./pages/Settings").then((module) => ({ default: module.Settings })));
 const Reports = lazy(() => import("./pages/Reports").then((module) => ({ default: module.Reports })));
-const MyOperation = lazy(() => import("./pages/MyOperation").then((module) => ({ default: module.MyOperation })));
-const DataQuality = lazy(() => import("./pages/DataQuality").then((module) => ({ default: module.DataQuality })));
 const Services = lazy(() => import("./pages/Services").then((module) => ({ default: module.Services })));
 const Knowledge = lazy(() => import("./pages/Knowledge").then((module) => ({ default: module.Knowledge })));
 const Chat = lazy(() => import("./pages/Chat").then((module) => ({ default: module.Chat })));
-const Coordination = lazy(() => import("./pages/Coordination").then((module) => ({ default: module.Coordination })));
-const TechnicalLeadership = lazy(() => import("./pages/TechnicalLeadership").then((module) => ({ default: module.TechnicalLeadership })));
-const SimerMap = lazy(() => import("./pages/SimerMap").then((module) => ({ default: module.SimerMap })));
 const Investigation = lazy(() => import("./pages/Investigation").then((module) => ({ default: module.Investigation })));
 const KnownProblems = lazy(() => import("./pages/KnownProblems").then((module) => ({ default: module.KnownProblems })));
+const ManagementIntelligence = lazy(() => import("./pages/ManagementIntelligence").then((module) => ({ default: module.ManagementIntelligence })));
+const OperationalOverview = lazy(() => import("./pages/OperationalOverview").then((module) => ({ default: module.OperationalOverview })));
+const OperationsHub = lazy(() => import("./pages/OperationsHub").then((module) => ({ default: module.OperationsHub })));
+const RiskPendingHub = lazy(() => import("./pages/RiskPendingHub").then((module) => ({ default: module.RiskPendingHub })));
+
+const warmRouteChunks = () => {
+  void import("./pages/OperationalOverview");
+  void import("./pages/OperationsHub");
+  void import("./pages/AzureWorkItems");
+  void import("./pages/Versions");
+  void import("./pages/ManagementIntelligence");
+  window.setTimeout(() => {
+    void import("./pages/Analysts");
+    void import("./pages/Clients");
+    void import("./pages/Chat");
+    void import("./pages/Investigation");
+  }, 1200);
+};
 
 import {
   aliareColors,
 } from "./theme/theme";
+
+function LegacyRedirect({ to }: { to: string }) {
+  const location = useLocation();
+  return <Navigate to={`${to}${location.search}${location.hash}`} replace />;
+}
 
 /* =========================================================
    LAYOUT AUTENTICADO
@@ -79,11 +92,14 @@ function AuthenticatedLayout({
 }: {
   children: ReactNode;
 }) {
+  useEffect(() => {
+    const id = window.setTimeout(warmRouteChunks, 250);
+    return () => window.clearTimeout(id);
+  }, []);
    const [forbiddenMessage, setForbiddenMessage] = useState<string | null>(null);
   const location = useLocation();
   const isChat = location.pathname === "/chat";
-  const isMap = location.pathname === "/mapa-simer";
-  const fixedWorkspace = isChat || isMap;
+  const fixedWorkspace = isChat;
   useEffect(() => {
     const routineTitles: Record<string, string> = {
       "/": "Página inicial",
@@ -92,9 +108,13 @@ function AuthenticatedLayout({
       "/coordenacao": "Central da Coordenação",
       "/servicos": "Serviços SIMER",
       "/lideranca-tecnica": "Central de Liderança",
-      "/mapa-simer": "Mapa SIMER",
       "/investigacao": "Central de Investigação",
       "/problemas-conhecidos": "Problemas Conhecidos",
+      "/inteligencia": "Central de Gestão & Inteligência",
+      "/gestao-inteligencia": "Central de Gestão & Inteligência",
+      "/gestao-inteligencia/inteligencia": "Gestão · Inteligência",
+      "/gestao-inteligencia/coordenacao": "Gestão · Coordenação",
+      "/gestao-inteligencia/lideranca": "Gestão · Liderança Técnica",
       "/analistas": "Analistas",
       "/clientes": "Clientes",
       "/desempenho": "Desempenho",
@@ -104,7 +124,7 @@ function AuthenticatedLayout({
       "/apoios": "Apoios",
       "/versoes": "Versões",
       "/conhecimento": "Base de Conhecimento",
-      "/importar": "Dados e Sincronizações",
+      "/importar": "Configurações · Dados & Sincronizações",
       "/relatorios": "Relatórios",
       "/minha-operacao": "Minha Operação",
       "/qualidade-dados": "Pendências",
@@ -156,7 +176,7 @@ function AuthenticatedLayout({
               minHeight: fixedWorkspace ? 0 : "100vh",
               height: fixedWorkspace ? "100dvh" : "auto",
               boxSizing: "border-box",
-              overflowY: fixedWorkspace ? "auto" : undefined,
+              overflowY: isChat ? "hidden" : fixedWorkspace ? "auto" : undefined,
               backgroundColor: "background.default",
               backgroundImage: (theme) => theme.palette.mode === "dark" ? "radial-gradient(circle at 88% 0%, rgba(84,73,255,.07), transparent 26%), linear-gradient(145deg,rgba(7,19,33,.98),rgba(9,25,43,.98))" : "none",
               color: "text.primary",
@@ -174,7 +194,7 @@ function AuthenticatedLayout({
               },
             }}
           >
-{!isChat && <Box sx={{ px: { xs: 1.5, sm: 2, md: 2.5, lg: 3, xl: 4 } }}><GlobalTopBar /></Box>}
+<Box sx={isChat ? { position: "relative", zIndex: (theme) => theme.zIndex.appBar, px: { xs: 1.5, sm: 2, md: 2.5, lg: 3, xl: 4 }, pt: { xs: 1.5, sm: 2, md: 2.5, lg: 3, xl: 3.5 }, height: { xs: 62, md: 70 }, boxSizing: "border-box", overflow: "visible", pointerEvents: "none", "& .MuiTextField-root, & input, & button, & [role='button']": { pointerEvents: "auto" } } : { px: { xs: 1.5, sm: 2, md: 2.5, lg: 3, xl: 4 } }}><GlobalTopBar /></Box>
             {forbiddenMessage && <Alert severity="warning" sx={{ mx: { xs: 1.5, sm: 2, md: 2.5, lg: 3, xl: 4 }, mb: 2, borderRadius: 2.5 }} onClose={() => setForbiddenMessage(null)}>{forbiddenMessage}</Alert>}
             <Box
               className="techlead-page-surface futuristic-page"
@@ -184,7 +204,7 @@ function AuthenticatedLayout({
                 px: isChat ? 0 : { xs: 1.5, sm: 2, md: 2.5, lg: 3, xl: 4 },
                 pb: isChat ? 0 : { xs: 3, md: 4 },
                 minHeight: isChat ? 0 : "calc(100vh - 96px)",
-                height: isChat ? "100dvh" : "auto",
+                height: isChat ? { xs: "calc(100dvh - 62px)", md: "calc(100dvh - 70px)" } : "auto",
                 overflow: isChat ? "hidden" : "visible",
                 boxSizing: "border-box",
                 position: "relative",
@@ -209,6 +229,10 @@ function AuthenticatedLayout({
                 "& .MuiCardContent-root": { minWidth: 0 },
                 "& .MuiCard-root + .MuiCard-root": { scrollMarginTop: 96 },
                 "& .MuiButton-root": { whiteSpace: "nowrap" },
+                "& .MuiPagination-root": { maxWidth: "100%", overflowX: "auto", scrollbarWidth: "thin" },
+                "& .MuiPagination-ul": { flexWrap: "nowrap", width: "max-content", minWidth: "100%" },
+                "& .MuiTablePagination-root": { overflowX: "auto" },
+                "& .MuiTablePagination-toolbar": { minWidth: "max-content" },
                 "& .MuiButton-root .MuiButton-startIcon, & .MuiButton-root .MuiButton-endIcon": { flexShrink: 0 },
                 "& .MuiIconButton-root": { flexShrink: 0 },
                 "& .MuiTypography-root": { textWrap: "pretty" },
@@ -307,6 +331,8 @@ function AuthenticatedLayout({
                 "& .MuiTableBody-root .MuiTableRow-root:last-of-type .MuiTableCell-root": { borderBottom: 0 },
                 "& .MuiChip-root": { maxWidth: "100%" },
                 "& .MuiChip-label": { overflow: "hidden", textOverflow: "ellipsis" },
+                "& .MuiCardContent-root > .MuiStack-root": { maxWidth: "100%" },
+                "& .MuiAlert-root, & .MuiAlert-message": { minWidth: 0 },
                 "& .MuiStack-root": { minWidth: 0 },
                 "& .MuiFormControl-root, & .MuiAutocomplete-root, & .MuiTextField-root": { maxWidth: "100%" },
                 "& .MuiAlert-message": { minWidth: 0 },
@@ -420,7 +446,7 @@ function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <Suspense fallback={<Box sx={{ minHeight: "100vh", display: "grid", placeItems: "center" }}><CircularProgress size={32} /></Box>}>
+        <Suspense fallback={<Box sx={{ minHeight: "calc(100vh - 96px)", px: { xs: 1.5, md: 3 }, pt: 2 }}><Box sx={{ width: "34%", minWidth: 220, height: 18, borderRadius: 1, bgcolor: "action.hover", mb: 1.25 }} /><Box sx={{ width: "58%", height: 12, borderRadius: 1, bgcolor: "action.hover", mb: 2 }} /><Box sx={{ height: 220, borderRadius: 3, bgcolor: "action.hover" }} /></Box>}>
         <Routes>
           <Route
             path="/login"
@@ -432,24 +458,35 @@ function App() {
           <Route
             path="/"
             element={
-              <RoutineAccess permission="dashboard"><AuthenticatedLayout><Dashboard /></AuthenticatedLayout></RoutineAccess>
+              <Navigate to="/visao-operacional" replace />
             }
           />
 
           <Route
             path="/tickets"
             element={
-              <RoutineAccess permission="tickets"><AuthenticatedLayout><Tickets /></AuthenticatedLayout></RoutineAccess>
+              <LegacyRedirect to="/operacao/tickets" />
             }
           />
 
+          <Route path="/visao-operacional" element={<RoutineAccess permission="dashboard"><AuthenticatedLayout><OperationalOverview /></AuthenticatedLayout></RoutineAccess>} />
+          <Route path="/visao-operacional/desempenho" element={<RoutineAccess permission="performance"><AuthenticatedLayout><OperationalOverview /></AuthenticatedLayout></RoutineAccess>} />
+          <Route path="/operacao/tickets" element={<RoutineAccess permission="tickets"><AuthenticatedLayout><OperationsHub /></AuthenticatedLayout></RoutineAccess>} />
+          <Route path="/operacao/minha-operacao" element={<RoutineAccess permission="my-operation"><AuthenticatedLayout><OperationsHub /></AuthenticatedLayout></RoutineAccess>} />
+          <Route path="/pendencias-riscos" element={<RoutineAccess permission="attention"><AuthenticatedLayout><RiskPendingHub /></AuthenticatedLayout></RoutineAccess>} />
+          <Route path="/pendencias-riscos/qualidade" element={<RoutineAccess permission="data-quality"><AuthenticatedLayout><RiskPendingHub /></AuthenticatedLayout></RoutineAccess>} />
           <Route path="/chat" element={<AuthenticatedLayout><Chat /></AuthenticatedLayout>} />
-          <Route path="/coordenacao" element={<RoutineAccess permission="coordination"><AuthenticatedLayout><Coordination /></AuthenticatedLayout></RoutineAccess>} />
+          <Route path="/coordenacao" element={<Navigate to="/gestao-inteligencia/coordenacao" replace />} />
           <Route path="/servicos" element={<RoutineAccess permission="services"><AuthenticatedLayout><Services /></AuthenticatedLayout></RoutineAccess>} />
-          <Route path="/lideranca-tecnica" element={<RoutineAccess permission="technical-leadership"><AuthenticatedLayout><TechnicalLeadership /></AuthenticatedLayout></RoutineAccess>} />
-          <Route path="/mapa-simer" element={<RoutineAccess permission="simer-map"><AuthenticatedLayout><SimerMap /></AuthenticatedLayout></RoutineAccess>} />
+          <Route path="/lideranca-tecnica" element={<Navigate to="/gestao-inteligencia/lideranca" replace />} />
+          <Route path="/mapa-simer" element={<Navigate to="/investigacao" replace />} />
           <Route path="/investigacao" element={<AuthenticatedLayout><Investigation /></AuthenticatedLayout>} />
           <Route path="/problemas-conhecidos" element={<RoutineAccess permission="known-problems"><AuthenticatedLayout><KnownProblems /></AuthenticatedLayout></RoutineAccess>} />
+          <Route path="/inteligencia" element={<Navigate to="/gestao-inteligencia/inteligencia" replace />} />
+          <Route path="/gestao-inteligencia" element={<RoutineAccess permission="dashboard"><AuthenticatedLayout><ManagementIntelligence /></AuthenticatedLayout></RoutineAccess>} />
+          <Route path="/gestao-inteligencia/inteligencia" element={<RoutineAccess permission="dashboard"><AuthenticatedLayout><ManagementIntelligence /></AuthenticatedLayout></RoutineAccess>} />
+          <Route path="/gestao-inteligencia/coordenacao" element={<RoutineAccess permission="coordination"><AuthenticatedLayout><ManagementIntelligence /></AuthenticatedLayout></RoutineAccess>} />
+          <Route path="/gestao-inteligencia/lideranca" element={<RoutineAccess permission="technical-leadership"><AuthenticatedLayout><ManagementIntelligence /></AuthenticatedLayout></RoutineAccess>} />
 
           <Route
             path="/analistas"
@@ -468,14 +505,14 @@ function App() {
           <Route
             path="/desempenho"
             element={
-              <RoutineAccess permission="performance"><AuthenticatedLayout><Performance /></AuthenticatedLayout></RoutineAccess>
+              <LegacyRedirect to="/visao-operacional/desempenho" />
             }
           />
 
           <Route
             path="/atencao"
             element={
-              <RoutineAccess permission="attention"><AuthenticatedLayout><Attention /></AuthenticatedLayout></RoutineAccess>
+              <LegacyRedirect to="/pendencias-riscos" />
             }
           />
 
@@ -516,12 +553,7 @@ function App() {
             element={<RoutineAccess permission="knowledge"><AuthenticatedLayout><Knowledge /></AuthenticatedLayout></RoutineAccess>}
           />
 
-          <Route
-            path="/importar"
-            element={
-              <RoutineAccess permission="imports"><AuthenticatedLayout><Import /></AuthenticatedLayout></RoutineAccess>
-            }
-          />
+          <Route path="/importar" element={<Navigate to="/configuracoes#dados" replace />} />
 
           <Route
             path="/relatorios"
@@ -532,12 +564,12 @@ function App() {
 
           <Route
             path="/minha-operacao"
-            element={<RoutineAccess permission="my-operation"><AuthenticatedLayout><MyOperation /></AuthenticatedLayout></RoutineAccess>}
+            element={<LegacyRedirect to="/operacao/minha-operacao" />}
           />
 
           <Route
             path="/qualidade-dados"
-            element={<RoutineAccess permission="data-quality"><AuthenticatedLayout><DataQuality /></AuthenticatedLayout></RoutineAccess>}
+            element={<LegacyRedirect to="/pendencias-riscos/qualidade" />}
           />
 
           {/* =================================================

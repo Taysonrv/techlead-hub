@@ -48,6 +48,7 @@ import {
   TaskAltOutlined,
   TimelineOutlined,
   TuneOutlined,
+  ShareOutlined,
 } from "@mui/icons-material";
 
 import {
@@ -62,6 +63,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 
@@ -1201,6 +1203,13 @@ export function AzureWorkItems({
     useState(true);
 
   const [
+    refreshing,
+    setRefreshing,
+  ] = useState(false);
+
+  const hasLoadedRef = useRef(false);
+
+  const [
     detailLoading,
     setDetailLoading,
   ] =
@@ -1585,10 +1594,10 @@ export function AzureWorkItems({
   const loadAll =
     useCallback(
       async () => {
+        const hasData = hasLoadedRef.current;
         try {
-          setLoading(
-            true,
-          );
+          if (hasData) setRefreshing(true);
+          else setLoading(true);
 
           setError(
             null,
@@ -1610,9 +1619,9 @@ export function AzureWorkItems({
             "Não foi possível carregar os dados sincronizados do Azure DevOps.",
           );
         } finally {
-          setLoading(
-            false,
-          );
+          hasLoadedRef.current = true;
+          setLoading(false);
+          setRefreshing(false);
         }
       },
       [
@@ -2546,7 +2555,7 @@ export function AzureWorkItems({
   return (
     <>
       <Stack
-        spacing={2.5}
+        spacing={{ xs: 1.5, md: 2 }}
       >
         {/* =================================================
             CABEÇALHO
@@ -2557,7 +2566,7 @@ export function AzureWorkItems({
           title={title}
           description={subtitle}
           meta={<>{formatNumber(summary?.total)} Work Item(s) sincronizado(s) • Dados locais sincronizados com Azure DevOps</>}
-          action={<Button variant="outlined" startIcon={<RefreshOutlined />} onClick={() => void loadAll()}>Recarregar</Button>}
+          action={<Button variant="outlined" disabled={refreshing} startIcon={refreshing ? <CircularProgress size={15} /> : <RefreshOutlined />} onClick={() => void loadAll()}>{refreshing ? "Atualizando" : "Recarregar"}</Button>}
         />
 
         {error && (
@@ -2584,6 +2593,8 @@ export function AzureWorkItems({
               sm:
                 "repeat(2, minmax(0, 1fr))",
               lg:
+                "repeat(3, minmax(0, 1fr))",
+              xl:
                 "repeat(5, minmax(0, 1fr))",
             },
             gap: {
@@ -2592,7 +2603,7 @@ export function AzureWorkItems({
               md:
                 1.5,
               xl:
-                2,
+                1.5,
             },
           }}
         >
@@ -2649,7 +2660,7 @@ export function AzureWorkItems({
                     height:
                       "100%",
                     minHeight:
-                      122,
+                      112,
                     border:
                       "1px solid",
                     borderColor:
@@ -2704,16 +2715,16 @@ export function AzureWorkItems({
                     sx={{
                       p: {
                         xs:
-                          1.4,
+                          1.25,
                         md:
-                          1.55,
+                          1.4,
                       },
                       "&:last-child": {
                         pb: {
                           xs:
-                            1.4,
+                            1.25,
                           md:
-                            1.55,
+                            1.4,
                         },
                       },
                     }}
@@ -2750,11 +2761,11 @@ export function AzureWorkItems({
                               0.55,
                             fontSize: {
                               xs:
-                                "1.65rem",
+                                "1.5rem",
                               md:
-                                "1.8rem",
+                                "1.65rem",
                               xl:
-                                "1.9rem",
+                                "1.78rem",
                             },
                             fontWeight:
                               800,
@@ -2830,6 +2841,8 @@ export function AzureWorkItems({
             gridTemplateColumns: {
               xs:
                 "1fr",
+              lg:
+                "repeat(2, minmax(0, 1fr))",
               xl:
                 "repeat(3, minmax(0, 1fr))",
             },
@@ -4022,10 +4035,12 @@ export function AzureWorkItems({
 
                               <TableCell
                                 sx={{
+                                  width:
+                                    360,
                                   minWidth:
-                                    340,
+                                    300,
                                   maxWidth:
-                                    520,
+                                    420,
                                 }}
                               >
                                 <Stack
@@ -4036,7 +4051,20 @@ export function AzureWorkItems({
                                     sx={{
                                       fontWeight:
                                         650,
+                                      lineHeight:
+                                        1.35,
+                                      display:
+                                        "-webkit-box",
+                                      WebkitLineClamp:
+                                        3,
+                                      WebkitBoxOrient:
+                                        "vertical",
+                                      overflow:
+                                        "hidden",
+                                      overflowWrap:
+                                        "anywhere",
                                     }}
+                                    title={item.title}
                                   >
                                     {item.title}
                                   </Typography>
@@ -4265,6 +4293,7 @@ export function AzureWorkItems({
         onClose={
           closeDetail
         }
+        ModalProps={{ disableEnforceFocus: true }}
         slotProps={{
           paper: {
             sx: {
@@ -5165,47 +5194,16 @@ export function AzureWorkItems({
                   "background.paper",
               }}
             >
-              <Stack
-                direction={{
-                  xs:
-                    "column",
-                  sm:
-                    "row",
-                }}
-                spacing={1}
-              >
-                {selectedWorkItem.azureWebUrl && (
-                  <Button
-                    fullWidth
-                    variant="contained"
-                    startIcon={
-                      <OpenInNewOutlined />
-                    }
-                    component="a"
-                    href={
-                      selectedWorkItem.azureWebUrl
-                    }
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    Abrir no Azure DevOps
-                  </Button>
-                )}
-
-                <Button
-                  fullWidth
-                  variant="outlined"
-                  startIcon={
-                    <TaskAltOutlined />
-                  }
-                  onClick={
-                    closeDetail
-                  }
-                >
-                  Voltar à lista
-                </Button>
-              </Stack>
-            </Box>
+              <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 900 }}>Ações rápidas</Typography>
+              <Box sx={{ mt: .45, display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))" }, gap: 1 }}>
+                <Button fullWidth variant="contained" startIcon={<ShareOutlined />} onClick={() => {
+                  const value = selectedWorkItem.workItemType.toLocaleLowerCase("pt-BR");
+                  const route = value.includes("apoio") ? "/apoios" : value.includes("evolu") ? "/evolucoes" : "/correcoes";
+                  window.dispatchEvent(new CustomEvent("techlead-hub:share-chat", { detail: { label: selectedWorkItem.workItemType, recordId: selectedWorkItem.id, title: selectedWorkItem.title, client: selectedWorkItem.client, status: selectedWorkItem.state, path: `${route}?task=${selectedWorkItem.id}` } }));
+                }}>Compartilhar</Button>
+                {selectedWorkItem.azureWebUrl && <Button fullWidth variant="outlined" startIcon={<OpenInNewOutlined />} component="a" href={selectedWorkItem.azureWebUrl} target="_blank" rel="noopener noreferrer">Abrir origem</Button>}
+              </Box>
+              <Button size="small" startIcon={<TaskAltOutlined />} onClick={closeDetail} sx={{ mt: .6, alignSelf: "flex-start" }}>Voltar à lista</Button>     </Box>
           )}
         </Stack>
       </Drawer>

@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import { prisma } from "../database/prisma";
+import { azureOperationalScope, ticketOperationalScope } from "../domain/OperationalScope";
 import { SimerMapService } from "../services/SimerMapService";
 import { SystemRuleService } from "../services/SystemRuleService";
 import { investigationIntelligenceService } from "../services/InvestigationIntelligenceService";
@@ -30,6 +31,7 @@ const navigationItems: NavigationItem[] = [
   { id: "routine-knowledge", type: "Rotina", title: "Base de Conhecimento", subtitle: "Wiki, procedimentos e conhecimento operacional", path: "/conhecimento", keywords: ["conhecimento","wiki","procedimentos","regra do sistema"] },
   { id: "routine-sync", type: "Rotina", title: "Dados e Sincronizações", subtitle: "Sincronizações e cargas de dados", path: "/importar", keywords: ["dados","sincronizacoes","importar","azure","movidesk"] },
   { id: "screen-investigation", type: "Tela", title: "Central de Investigação", subtitle: "Correlação de tickets, Azure, versões, regras e conhecimento", path: "/investigacao", keywords: ["investigacao","diagnostico","correlacao","casos semelhantes","anomalias","regra evidencia"] },
+  { id: "screen-intelligence", type: "Tela", title: "Central de Inteligência", subtitle: "Recorrências, anomalias, clusters e sinais operacionais", path: "/inteligencia", keywords: ["inteligencia","recorrencia","anomalias","clusters","dna tecnico","problemas conhecidos"] },
 ];
 
 const workItemPath = (type: string) => {
@@ -51,7 +53,7 @@ export class GlobalController {
     const navigation = navigationItems.filter((item) => normalizeSearch([item.title, item.subtitle, ...item.keywords].join(" ")).includes(normalizedQuery)).slice(0, 10);
     const [tickets, workItems, versions] = await Promise.all([
       prisma.ticket.findMany({
-        where: { AND: [clientFilter, { OR: [
+        where: { AND: [ticketOperationalScope(), clientFilter, { OR: [
           { subject: { contains: query, mode: "insensitive" } },
           { client: { contains: query, mode: "insensitive" } },
           { category: { contains: query, mode: "insensitive" } },
@@ -62,7 +64,7 @@ export class GlobalController {
         orderBy: { createdDate: "desc" }, take: 8,
       }),
       prisma.azureWorkItem.findMany({
-        where: { AND: [clientFilter, { OR: [
+        where: { AND: [azureOperationalScope(), clientFilter, { OR: [
           { title: { contains: query, mode: "insensitive" } },
           { client: { contains: query, mode: "insensitive" } },
           { module: { contains: query, mode: "insensitive" } },
@@ -73,7 +75,7 @@ export class GlobalController {
         orderBy: { azureChangedAt: "desc" }, take: 8,
       }),
       prisma.azureWorkItem.findMany({
-        where: { deliveredVersion: { contains: query, mode: "insensitive" } },
+        where: { AND: [azureOperationalScope(), { deliveredVersion: { contains: query, mode: "insensitive" } }] },
         select: { deliveredVersion: true }, distinct: ["deliveredVersion"], take: 6,
       }),
     ]);
@@ -155,12 +157,12 @@ export class GlobalController {
 
     const [ticketRows, workItemRows, knownRows] = await Promise.all([
       prisma.ticket.findMany({
-        where: { isDeleted: false, OR: ticketOr },
+        where: { AND: [ticketOperationalScope(), { isDeleted: false }, { OR: ticketOr }] },
         select: { movideskId:true,subject:true,client:true,status:true,category:true,cause:true,causeDetail:true,justification:true,service:true,serviceFirstLevel:true,serviceSecondLevel:true,serviceThirdLevel:true,taskNumber:true,taskType:true,deliveredVersion:true,registeredVersion:true,createdDate:true,lastUpdate:true },
         orderBy: { lastUpdate: "desc" }, take: 120,
       }),
       prisma.azureWorkItem.findMany({
-        where: { OR: workItemOr },
+        where: { AND: [azureOperationalScope(), { OR: workItemOr }] },
         select: { id:true,title:true,workItemType:true,state:true,client:true,module:true,process:true,reason:true,description:true,workaround:true,technicalSolution:true,tags:true,movideskTicket:true,deliveredVersion:true,registeredVersion:true,azureChangedAt:true,remoteUrl:true },
         orderBy: { azureChangedAt: "desc" }, take: 100,
       }),
@@ -262,7 +264,7 @@ export class GlobalController {
       ...words.map((word) => ({ subject: { contains: word, mode: "insensitive" as const } })),
     ];
     const candidates = similarOr.length ? await prisma.ticket.findMany({
-      where: { AND: [{ movideskId: { not: ticket.movideskId } }, { isDeleted: false }, { OR: similarOr }] },
+      where: { AND: [ticketOperationalScope(), { movideskId: { not: ticket.movideskId } }, { isDeleted: false }, { OR: similarOr }] },
       select: { movideskId: true, subject: true, client: true, category: true, cause: true, status: true, service: true, serviceThirdLevel: true, taskNumber: true, deliveredVersion: true, createdDate: true },
       orderBy: { createdDate: "desc" }, take: 80,
     }) : [];
@@ -285,13 +287,23 @@ export class GlobalController {
     }).filter((item)=>item.score>=15).sort((a,b)=>b.score-a.score||b.createdDate.getTime()-a.createdDate.getTime()).slice(0,12);
 
     const workItemIds=[ticket.taskNumber,...similar.map((x)=>x.taskNumber)].filter((v):v is number=>Number.isInteger(v));
-    const workItems=workItemIds.length?await prisma.azureWorkItem.findMany({where:{id:{in:[...new Set(workItemIds)]}},select:{id:true,title:true,workItemType:true,state:true,client:true,module:true,process:true,registeredVersion:true,deliveredVersion:true,azureChangedAt:true,remoteUrl:true}}):[];
+    const workItems=workItemIds.length?await prisma.azureWorkItem.findMany({where:{AND:[azureOperationalScope(),{id:{in:[...new Set(workItemIds)]}}]},select:{id:true,title:true,workItemType:true,state:true,client:true,module:true,process:true,registeredVersion:true,deliveredVersion:true,azureCreatedAt:true,activatedAt:true,stateChangedAt:true,azureChangedAt:true,azureClosedAt:true,remoteUrl:true}}):[];
     const timeline=[
-      {date:ticket.createdDate,kind:"ticket",title:`Atendimento #${ticket.movideskId} aberto`},
-      ...(ticket.lastUpdate?[{date:ticket.lastUpdate,kind:"update",title:"Última atualização do atendimento"}]:[]),
-      ...(ticket.resolvedDate?[{date:ticket.resolvedDate,kind:"resolved",title:"Atendimento resolvido"}]:[]),
-      ...workItems.filter(x=>x.azureChangedAt).map(x=>({date:x.azureChangedAt!,kind:"azure",title:`${x.workItemType} #${x.id} atualizada`})),
-    ].sort((a,b)=>b.date.getTime()-a.date.getTime());
+      {date:ticket.createdDate,kind:"ticket-opened",title:`Atendimento #${ticket.movideskId} aberto`,source:"Movidesk",status:ticket.status,path:`/tickets?movidesk=${ticket.movideskId}`},
+      ...(ticket.lastUpdate?[{date:ticket.lastUpdate,kind:"ticket-updated",title:"Última atualização do atendimento",source:"Movidesk",status:ticket.status,path:`/tickets?movidesk=${ticket.movideskId}`}]:[]),
+      ...(ticket.resolvedDate?[{date:ticket.resolvedDate,kind:"ticket-resolved",title:"Atendimento resolvido",source:"Movidesk",status:"Resolvido",path:`/tickets?movidesk=${ticket.movideskId}`}]:[]),
+      ...workItems.flatMap(x=>{
+        const path=`${workItemPath(x.workItemType)}?task=${x.id}`;
+        const version=x.deliveredVersion??x.registeredVersion??null;
+        return [
+          ...(x.azureCreatedAt?[{date:x.azureCreatedAt,kind:"azure-created",title:`${x.workItemType} #${x.id} criada`,source:"Azure DevOps",status:x.state,path,version:null}]:[]),
+          ...(x.activatedAt?[{date:x.activatedAt,kind:"azure-activated",title:`${x.workItemType} #${x.id} ativada`,source:"Azure DevOps",status:x.state,path,version:null}]:[]),
+          ...(x.stateChangedAt?[{date:x.stateChangedAt,kind:"azure-state",title:`${x.workItemType} #${x.id} movimentada`,source:"Azure DevOps",status:x.state,path,version:null}]:[]),
+          ...(x.azureClosedAt?[{date:x.azureClosedAt,kind:"azure-closed",title:`${x.workItemType} #${x.id} concluída`,source:"Azure DevOps",status:x.state,path,version}]:[]),
+          ...(!x.azureClosedAt&&x.azureChangedAt?[{date:x.azureChangedAt,kind:"azure-updated",title:`${x.workItemType} #${x.id} atualizada`,source:"Azure DevOps",status:x.state,path,version}]:[])
+        ];
+      }),
+    ].sort((a,b)=>a.date.getTime()-b.date.getTime());
 
     const completeness=[ticket.client,ticket.category,ticket.owner,serviceValues[0],ticket.taskNumber||"no-task"].filter(Boolean).length;
     const technicalText=[ticket.subject,ticket.category,ticket.cause,...serviceValues,...workItems.map(x=>x.title)].filter(Boolean).join(" ");
@@ -366,11 +378,11 @@ export class GlobalController {
 
     const [tickets, workItems] = await Promise.all([
       prisma.ticket.findMany({
-        where: { OR: ["createdDate", "resolvedDate", "closedDate"].map((field) => ({ [field]: { gte: start, lt: end } })) },
+        where: { AND: [ticketOperationalScope(), { OR: ["createdDate", "resolvedDate", "closedDate"].map((field) => ({ [field]: { gte: start, lt: end } })) }] },
         select: { movideskId: true, subject: true, createdDate: true, resolvedDate: true, closedDate: true }, take: 500,
       }),
       prisma.azureWorkItem.findMany({
-        where: { OR: ["azureCreatedAt", "stateChangedAt", "azureClosedAt"].map((field) => ({ [field]: { gte: start, lt: end } })) },
+        where: { AND: [azureOperationalScope(), { OR: ["azureCreatedAt", "stateChangedAt", "azureClosedAt"].map((field) => ({ [field]: { gte: start, lt: end } })) }] },
         select: { id: true, title: true, workItemType: true, azureCreatedAt: true, stateChangedAt: true, azureClosedAt: true, deliveredVersion: true }, take: 500,
       }),
     ]);

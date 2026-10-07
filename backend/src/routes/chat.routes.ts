@@ -14,26 +14,48 @@ chatRoutes.get("/events", async (req: AuthenticatedRequest, res) => {
   res.setHeader("Connection", "keep-alive");
   res.flushHeaders();
   let closed = false;
-  req.on("close", () => { closed = true; });
+  let running = false;
   let previous = "";
-  while (!closed) {
+  let timer: ReturnType<typeof setInterval> | null = null;
+  const stop = () => {
+    if (closed) return;
+    closed = true;
+    if (timer) clearInterval(timer);
+  };
+  req.on("close", stop);
+  res.on("close", stop);
+
+  // Mantém o SSE barato: heartbeat frequente não consulta o banco.
+  // O snapshot consulta o banco em cadência própria e nunca sobrepõe execuções.
+  const refresh = async () => {
+    if (closed || running) return;
+    running = true;
     try {
       const snapshot = await chatService.realtimeSnapshot(req.auth!.userId);
       const serialized = JSON.stringify(snapshot);
-      if (serialized !== previous) {
+      if (!closed && serialized !== previous) {
         res.write(`event: chat\ndata: ${serialized}\n\n`);
         previous = serialized;
-      } else {
-        res.write(": heartbeat\n\n");
       }
     } catch {
-      res.write("event: error\ndata: {}\n\n");
+      if (!closed) res.write(": realtime temporarily unavailable\n\n");
+    } finally {
+      running = false;
     }
-    // Evita pressionar o pool do Prisma: cada snapshot consulta presença, digitação e última mensagem.
-    // Cinco segundos mantém a experiência de chat responsiva sem competir com Dashboard/Clientes.
-    await new Promise((resolve) => setTimeout(resolve, 5000));
+  };
+
+  res.write(": connected\n\n");
+  void refresh();
+  timer = setInterval(() => {
+    if (!closed) res.write(": heartbeat\n\n");
+  }, 20_000);
+
+  while (!closed) {
+    await new Promise((resolve) => setTimeout(resolve, 30_000));
+    await refresh();
   }
-  res.end();
+  stop();
+  if (!res.writableEnded) res.end();
 });
 chatRoutes.get("/participants", async (_req, res) => { try { res.json({ participants: await chatService.listParticipants() }); } catch (error) { fail(res, error); } });
 chatRoutes.get("/channels", async (req: AuthenticatedRequest, res) => { try { res.json({ channels: await chatService.listChannels(req.auth!.userId) }); } catch (error) { fail(res, error); } });
@@ -43,6 +65,7 @@ chatRoutes.get("/channels/:channelId/messages", async (req: AuthenticatedRequest
 chatRoutes.post("/channels/:channelId/attachments", async (req: AuthenticatedRequest, res) => { try { res.status(201).json(await chatService.sendAttachment(req.auth!.userId, id(req.params.channelId), req.body ?? {})); } catch (error) { fail(res, error); } });
 chatRoutes.post("/channels/:channelId/messages", async (req: AuthenticatedRequest, res) => { try { res.status(201).json(await chatService.sendMessage(req.auth!.userId, id(req.params.channelId), req.body ?? {})); } catch (error) { fail(res, error); } });
 chatRoutes.delete("/channels/:channelId", async (req: AuthenticatedRequest, res) => { try { await chatService.deleteChannel(req.auth!.userId, req.auth!.role, id(req.params.channelId)); res.status(204).send(); } catch (error) { fail(res, error); } });
+chatRoutes.post("/maintenance/direct-duplicates", async (req: AuthenticatedRequest, res) => { try { res.json(await chatService.consolidateDirectDuplicates(req.auth!.userId, req.auth!.role)); } catch (error) { fail(res, error); } });
 chatRoutes.delete("/messages/:messageId", async (req: AuthenticatedRequest, res) => { try { await chatService.deleteMessage(req.auth!.userId, req.auth!.role, id(req.params.messageId)); res.status(204).send(); } catch (error) { fail(res, error); } });
 
 export { chatRoutes };

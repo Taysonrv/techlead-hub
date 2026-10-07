@@ -32,6 +32,7 @@ import {
   ExpandMoreOutlined,
   Inventory2Outlined,
   OpenInNewOutlined,
+  ShareOutlined,
   SearchOutlined,
   TuneOutlined,
 } from "@mui/icons-material";
@@ -70,6 +71,7 @@ import {
 } from "../theme/theme";
 import { InfoPopover, type InfoPopoverContent } from "../components/InfoPopover";
 import { PageHeader } from "../components/PageHeader";
+import { ContentState } from "../components/ContentState";
 import { useTheme } from "@mui/material/styles";
 import { ExecutiveSection } from "../components/ExecutiveSection";
 import { KpiCard as ExecutiveKpiCard } from "../components/KpiCard";
@@ -1374,29 +1376,8 @@ export function Versions() {
     );
   }
 
-  if (
-    loading &&
-    !data
-  ) {
-    return (
-      <Box
-        sx={{
-          display:
-            "flex",
-          justifyContent:
-            "center",
-          mt:
-            8,
-        }}
-      >
-        <CircularProgress
-          sx={{
-            color:
-              aliareColors.green,
-          }}
-        />
-      </Box>
-    );
+  if (loading && !data) {
+    return <ContentState kind="loading" title="Carregando versões" minHeight={360} />;
   }
 
   return (
@@ -1928,14 +1909,14 @@ export function Versions() {
             xs:
               "1fr",
             sm:
-              "repeat(2, 1fr)",
+              "repeat(2, minmax(0, 1fr))",
             lg:
-              "repeat(4, 1fr)",
+              "repeat(3, minmax(0, 1fr))",
             xl:
-              "repeat(5, 1fr)",
+              "repeat(5, minmax(0, 1fr))",
           },
           gap:
-            1.5,
+            1.25,
           mb:
             2,
           order:
@@ -2926,6 +2907,7 @@ export function Versions() {
         onClose={
           closeDetail
         }
+        ModalProps={{ disableEnforceFocus: true }}
         slotProps={{
           paper: {
             sx: {
@@ -3017,14 +2999,22 @@ export function Versions() {
             {selectedVersion && (
               <>
             {selectedVersion.version && (
-              <Button
-                variant="outlined"
-                endIcon={<OpenInNewOutlined />}
-                onClick={() => openVersionInAzure(selectedVersion.version!)}
-                sx={{ mt: 2 }}
-              >
-                Abrir versão no Azure
-              </Button>
+              <Box sx={{ mt: 2, display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))" }, gap: 1 }}>
+                <Button
+                  variant="outlined"
+                  endIcon={<OpenInNewOutlined />}
+                  onClick={() => openVersionInAzure(selectedVersion.version!)}
+                >
+                  Abrir versão no Azure
+                </Button>
+                <Button
+                  variant="outlined"
+                  startIcon={<ShareOutlined />}
+                  onClick={() => window.dispatchEvent(new CustomEvent("techlead-hub:share-chat", { detail: { label: "Versão", title: selectedVersion.version!, status: selectedVersion.active ? "Ativa" : "Concluída", path: `/versoes?version=${encodeURIComponent(selectedVersion.version!)}` } }))}
+                >
+                  Compartilhar no Chat
+                </Button>
+              </Box>
             )}
             <Box
               sx={{
@@ -3602,14 +3592,8 @@ function DonutCard({
           />
         </Stack>
 
-        <Box
-          sx={{
-            height:
-              210,
-            mt:
-              1,
-          }}
-        >
+        <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "minmax(210px,.82fr) minmax(0,1.18fr)" }, gap: { xs: .75, md: 1.25 }, alignItems: "center", mt: 1 }}>
+          <Box sx={{ height: { xs: 190, sm: 200, md: 210 }, minWidth: 0 }}>
           {data.length >
           0 ? (
             <ResponsiveContainer
@@ -3749,8 +3733,8 @@ function DonutCard({
               </Typography>
             </Box>
           )}
-        </Box>
-
+          </Box>
+          <Box sx={{ minWidth: 0, maxHeight: { sm: 225 }, overflowY: "auto" }}>
         <Stack
           direction="row"
           spacing={1}
@@ -3837,6 +3821,8 @@ function DonutCard({
             ),
           )}
         </Stack>
+          </Box>
+        </Box>
       </ExecutiveSection>
   );
 }
