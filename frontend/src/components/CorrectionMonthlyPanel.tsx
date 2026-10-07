@@ -4,7 +4,7 @@ import {
   InputLabel, MenuItem, Select, Stack as MuiStack, Table, TableBody, TableCell, TableContainer, TableHead,
   TableRow, TextField, Typography, useTheme,
 } from "@mui/material";
-import { RestartAltOutlined } from "@mui/icons-material";
+import { RestartAltOutlined, InfoOutlined } from "@mui/icons-material";
 import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { api } from "../services/api";
 import { KpiCard } from "./KpiCard";
@@ -45,10 +45,11 @@ export function CorrectionMonthlyPanel() {
   const [prioritized,setPrioritized]=useState<""|"true"|"false">("");
   const [search,setSearch]=useState("");
   const [drill,setDrill]=useState<Drill>(null);
+  const [hasLoaded,setHasLoaded]=useState(false);
 
   useEffect(()=>{ let active=true; setLoading(true); setError("");
     api.get<Report>("/azure-work-items/corrections/monthly-report",{params:{month}})
-      .then(({data})=>{if(active)setReport(data);})
+      .then(({data})=>{if(active){setReport(data);setHasLoaded(true);}})
       .catch((e)=>{if(active)setError(e?.response?.data?.message || "Não foi possível carregar o report mensal.");})
       .finally(()=>{if(active)setLoading(false);});
     return()=>{active=false};
@@ -106,7 +107,7 @@ export function CorrectionMonthlyPanel() {
       <Stack direction={{xs:"column",md:"row"}} justifyContent="space-between" gap={2} alignItems={{md:"center"}}>
         <Box><Typography variant="overline" color="primary.main" sx={{fontWeight:900}}>REPORT MENSAL · AZURE DEVOPS</Typography>
           <Typography variant="h5" sx={{fontWeight:900}}>Painel de Tasks de Correção</Typography>
-          <Typography variant="body2" color="text.secondary">Snapshots históricos de Correções Clientes · fuso America/Sao_Paulo · System.Id distinto.</Typography></Box>
+          <Typography variant="body2" color="text.secondary">Correções Clientes · System.Id distinto · snapshots históricos no fuso America/Sao_Paulo.</Typography></Box>
         <TextField label="Período" type="month" value={month} onChange={e=>setMonth(e.target.value)} size="small" sx={{minWidth:180}} slotProps={{inputLabel:{shrink:true}}}/>
       </Stack>
       <Stack direction={{xs:"column",lg:"row"}} gap={1.25} mt={2} flexWrap="wrap">
@@ -120,6 +121,7 @@ export function CorrectionMonthlyPanel() {
     </CardContent></Card>
 
     {error&&<Alert severity="error">{error}</Alert>}
+    {!loading&&hasLoaded&&report&&report.rows.length===0&&<Alert severity="warning" icon={<InfoOutlined/>}>Nenhuma Correção Cliente foi localizada para o período. Se existem tasks no Azure, valide a integração e o histórico de revisões; o painel não deve apresentar zeros silenciosamente.</Alert>}
     {loading?<Box sx={{py:5,textAlign:"center"}}><CircularProgress size={28}/><Typography variant="body2" color="text.secondary" sx={{mt:1}}>Reconstruindo snapshots e histórico de status…</Typography></Box>:report&&<>
       <Box sx={{display:"grid",gridTemplateColumns:{xs:"1fr",sm:"repeat(2,1fr)",lg:"repeat(3,1fr)",xl:"repeat(6,1fr)"},gap:1.25}}>
         {cards.map(c=><Box key={c.key} onClick={()=>setDrill(drill===c.key?null:c.key)} sx={{cursor:"pointer"}}><KpiCard title={c.label} value={c.value} subtitle={c.info} active={drill===c.key}/></Box>)}
@@ -132,7 +134,7 @@ export function CorrectionMonthlyPanel() {
       <Card elevation={0} sx={panelSx}><CardContent>
         <Stack direction={{xs:"column",md:"row"}} justifyContent="space-between" gap={1.5} alignItems={{md:"center"}}><Box><Typography sx={{fontWeight:900}}>Detalhamento rastreável</Typography><Typography variant="body2" color="text.secondary">{detailed.length} task(s) · clique no ID para abrir no Azure</Typography></Box><TextField size="small" label="Buscar ID ou título" value={search} onChange={e=>setSearch(e.target.value)} sx={{minWidth:{md:280}}}/></Stack>
         <TableContainer sx={{mt:1.5,maxHeight:560}}><Table stickyHeader size="small"><TableHead><TableRow>{["ID","Título","Cliente","Criado por","Criação","Status","Última mudança","Urgência","Priorizada","Responsável","Conclusão/Cancelamento"].map(h=><TableCell key={h}>{h}</TableCell>)}</TableRow></TableHead><TableBody>{detailed.map(r=><TableRow hover key={r.id}><TableCell>{r.remoteUrl ? <Button size="small" component="a" href={r.remoteUrl} target="_blank" rel="noreferrer">{r.id}</Button> : <Button size="small" disabled>{r.id}</Button>}</TableCell><TableCell sx={{minWidth:260,maxWidth:380}}>{r.title}</TableCell><TableCell>{r.client||"-"}</TableCell><TableCell>{r.createdBy||"-"}</TableCell><TableCell>{fmt(r.createdAt)}</TableCell><TableCell><Chip size="small" label={r.status}/></TableCell><TableCell>{fmt(r.lastStateChangedAt)}</TableCell><TableCell>{r.urgency||"-"}</TableCell><TableCell>{r.prioritized===null?"-":r.prioritized?"Sim":"Não"}</TableCell><TableCell>{r.assignedTo||"-"}</TableCell><TableCell>{TERMINAL.has(r.status)?fmt(r.terminalAt):"-"}</TableCell></TableRow>)}</TableBody></Table></TableContainer>
-        <Typography variant="caption" color="text.secondary" sx={{display:"block",mt:1.5}}>Fonte: {report.source}. Alterações posteriores ao fechamento não alteram o snapshot do mês selecionado.</Typography>
+        <Typography variant="caption" color="text.secondary" sx={{display:"block",mt:1.5}}>Fonte: {report.source}. Fechamento histórico preservado: alterações posteriores ao período não modificam retroativamente o mês selecionado.</Typography>
       </CardContent></Card>
     </>}
   </Box>;
