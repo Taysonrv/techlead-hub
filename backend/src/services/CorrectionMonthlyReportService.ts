@@ -115,11 +115,20 @@ export class CorrectionMonthlyReportService {
 
   async get(month:string) {
     const {start,endExclusive,close}=saoPauloMonth(month);
-    const fields=await this.resolveFields();
-    const [revisions,current]=await Promise.all([
-      this.revisions(fields),
-      prisma.azureWorkItem.findMany({where:{workItemType:"Correção Clientes"},select:{id:true,title:true,client:true,criticality:true,prioritized:true,assignedToName:true,remoteUrl:true,createdByName:true,azureCreatedAt:true,state:true,stateChangedAt:true,azureClosedAt:true,rawFields:true}}),
-    ]);
+    const currentPromise=prisma.azureWorkItem.findMany({where:{workItemType:"Correção Clientes"},select:{id:true,title:true,client:true,criticality:true,prioritized:true,assignedToName:true,remoteUrl:true,createdByName:true,azureCreatedAt:true,state:true,stateChangedAt:true,azureClosedAt:true,rawFields:true}});
+    let fields={client:AZURE_WORK_ITEM_FIELDS.client,prioritized:AZURE_WORK_ITEM_FIELDS.prioritized,urgency:AZURE_WORK_ITEM_FIELDS.criticality};
+    let revisions:Revision[]=[];
+    let historyAvailable=false;
+    let historyError:string|null=null;
+    try {
+      fields=await this.resolveFields();
+      revisions=await this.revisions(fields);
+      historyAvailable=revisions.length>0;
+    } catch(error) {
+      historyError=error instanceof Error ? error.message : "Histórico do Azure indisponível.";
+      console.warn(`[correction-monthly-report] Histórico do Azure indisponível; usando snapshot local. | ${historyError}`);
+    }
+    const current=await currentPromise;
     const currentById=new Map(current.map(item=>[item.id,item]));
     const grouped=new Map<number,Revision[]>();
     for(const revision of revisions){const id=Number(revision.id??revision.fields?.["System.Id"]);if(!Number.isSafeInteger(id))continue;const list=grouped.get(id)??[];list.push(revision);grouped.set(id,list);}
@@ -156,6 +165,6 @@ export class CorrectionMonthlyReportService {
     }
     const count=(p:(r:Row)=>boolean)=>rows.filter(p).length;
     const by=(selector:(r:Row)=>string|null)=>Object.entries(rows.reduce<Record<string,number>>((acc,row)=>{const key=selector(row)||"Não informado";acc[key]=(acc[key]??0)+1;return acc;},{})).map(([name,total])=>({name,total})).sort((a,b)=>b.total-a.total);
-    return {period:{month,timezone:"America/Sao_Paulo",start:start.toISOString(),close:close.toISOString()},cards:{registered:count(r=>r.registeredInPeriod),delivered:count(r=>r.deliveredInPeriod),canceled:count(r=>r.canceledInPeriod),inRegistration:count(r=>r.enteredRegistrationInPeriod),backlogInitial:count(r=>r.backlogInitial),backlogCurrent:count(r=>r.backlogCurrent)},pipeline:by(r=>r.status),urgency:by(r=>r.urgency),prioritization:[{name:"Priorizadas",total:count(r=>r.prioritized===true)},{name:"Não priorizadas",total:count(r=>r.prioritized===false)},{name:"Não informado",total:count(r=>r.prioritized===null)}],filters:{creators:[...new Set(rows.map(r=>r.createdBy).filter(Boolean))].sort(),clients:[...new Set(rows.map(r=>r.client).filter(Boolean))].sort(),urgencies:[...new Set(rows.map(r=>r.urgency).filter(Boolean))].sort(),states:[...new Set(rows.map(r=>r.status).filter(Boolean))].sort()},rows,generatedAt:new Date().toISOString(),source:rows.length?"Azure DevOps · histórico de revisões/snapshot sincronizado":"Azure DevOps",fieldMapping:fields};
+    return {period:{month,timezone:"America/Sao_Paulo",start:start.toISOString(),close:close.toISOString()},cards:{registered:count(r=>r.registeredInPeriod),delivered:count(r=>r.deliveredInPeriod),canceled:count(r=>r.canceledInPeriod),inRegistration:count(r=>r.enteredRegistrationInPeriod),backlogInitial:count(r=>r.backlogInitial),backlogCurrent:count(r=>r.backlogCurrent)},pipeline:by(r=>r.status),urgency:by(r=>r.urgency),prioritization:[{name:"Priorizadas",total:count(r=>r.prioritized===true)},{name:"Não priorizadas",total:count(r=>r.prioritized===false)},{name:"Não informado",total:count(r=>r.prioritized===null)}],filters:{creators:[...new Set(rows.map(r=>r.createdBy).filter(Boolean))].sort(),clients:[...new Set(rows.map(r=>r.client).filter(Boolean))].sort(),urgencies:[...new Set(rows.map(r=>r.urgency).filter(Boolean))].sort(),states:[...new Set(rows.map(r=>r.status).filter(Boolean))].sort()},rows,generatedAt:new Date().toISOString(),source:historyAvailable?"Azure DevOps · histórico de revisões + snapshot":"Base sincronizada do Azure DevOps · snapshot local",quality:{historyAvailable,historyError,mode:historyAvailable?"historical":"local-snapshot",historicalMetricsReliable:historyAvailable},fieldMapping:fields};
   }
 }
