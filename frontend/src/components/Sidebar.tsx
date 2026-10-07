@@ -489,7 +489,7 @@ export function Sidebar() {
 
   const developmentMenu = useMemo<MenuItemData[]>(
     () => [
-      ...(canAccess("corrections") ? [{ label: "Correções", path: "/correcoes", icon: <BugReportOutlined fontSize="small" /> }] : []),
+      ...(canAccess("corrections") ? [{ label: "Painel de Tasks de Correções", path: "/correcoes", icon: <BugReportOutlined fontSize="small" /> }] : []),
       ...(canAccess("evolutions") ? [{ label: "Evoluções", path: "/evolucoes", icon: <AutoFixHighOutlined fontSize="small" /> }] : []),
       ...(canAccess("support") ? [{ label: "Apoios", path: "/apoios", icon: <SupportAgentOutlined fontSize="small" /> }] : []),
       ...(canAccess("versions") ? [{ label: "Versões", path: "/versoes", icon: <Inventory2Outlined fontSize="small" /> }] : []),
