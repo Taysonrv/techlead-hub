@@ -4,10 +4,7 @@ import {
   InputLabel, MenuItem, Select, Stack, Table, TableBody, TableCell, TableContainer, TableHead,
   TableRow, TextField, Typography, useTheme,
 } from "@mui/material";
-import {
-  AssignmentOutlined, CancelOutlined, Inventory2Outlined, PlaylistAddCheckOutlined,
-  TaskAltOutlined, PendingActionsOutlined, RestartAltOutlined,
-} from "@mui/icons-material";
+import { RestartAltOutlined } from "@mui/icons-material";
 import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { api } from "../services/api";
 import { KpiCard } from "./KpiCard";
@@ -72,12 +69,12 @@ export function CorrectionMonthlyPanel() {
     key==="registration"?r.enteredRegistrationInPeriod:key==="backlogInitial"?r.backlogInitial:r.backlogCurrent
   ).length;
   const cards=[
-    {key:"registered" as const,label:"Tasks registradas",value:metric("registered"),icon:<AssignmentOutlined/>,info:"Criadas dentro do mês selecionado."},
-    {key:"delivered" as const,label:"Tasks entregues",value:metric("delivered"),icon:<TaskAltOutlined/>,info:"Entraram em Concluído no mês e estavam Concluídas no fechamento."},
-    {key:"canceled" as const,label:"Tasks canceladas",value:metric("canceled"),icon:<CancelOutlined/>,info:"Entraram em Cancelado no mês e estavam Canceladas no fechamento."},
-    {key:"registration" as const,label:"Tasks em registro",value:metric("registration"),icon:<PendingActionsOutlined/>,info:"Entraram em Registro no mês e estavam em Registro no fechamento."},
-    {key:"backlogInitial" as const,label:"Backlog inicial",value:metric("backlogInitial"),icon:<Inventory2Outlined/>,info:"Estoque aberto antes do mês, sem Registro, Concluído e Cancelado."},
-    {key:"backlogCurrent" as const,label:"Backlog atual",value:metric("backlogCurrent"),icon:<PlaylistAddCheckOutlined/>,info:"Estoque aberto no fechamento, sem Registro, Concluído e Cancelado."},
+    {key:"registered" as const,label:"Tasks registradas",value:metric("registered"),info:"Criadas dentro do mês selecionado."},
+    {key:"delivered" as const,label:"Tasks entregues",value:metric("delivered"),info:"Entraram em Concluído no mês e estavam Concluídas no fechamento."},
+    {key:"canceled" as const,label:"Tasks canceladas",value:metric("canceled"),info:"Entraram em Cancelado no mês e estavam Canceladas no fechamento."},
+    {key:"registration" as const,label:"Tasks em registro",value:metric("registration"),info:"Entraram em Registro no mês e estavam em Registro no fechamento."},
+    {key:"backlogInitial" as const,label:"Backlog inicial",value:metric("backlogInitial"),info:"Estoque aberto antes do mês, sem Registro, Concluído e Cancelado."},
+    {key:"backlogCurrent" as const,label:"Backlog atual",value:metric("backlogCurrent"),info:"Estoque aberto no fechamento, sem Registro, Concluído e Cancelado."},
   ];
 
   const group=(selector:(r:Row)=>string|null)=>Object.entries(baseRows.reduce<Record<string,number>>((a,r)=>{const k=selector(r)||"Não informado";a[k]=(a[k]??0)+1;return a;},{})).map(([name,total])=>({name,total})).sort((a,b)=>b.total-a.total);
@@ -120,7 +117,7 @@ export function CorrectionMonthlyPanel() {
     {error&&<Alert severity="error">{error}</Alert>}
     {loading?<Box sx={{py:5,textAlign:"center"}}><CircularProgress size={28}/><Typography variant="body2" color="text.secondary" mt={1}>Reconstruindo snapshots e histórico de status…</Typography></Box>:report&&<>
       <Box sx={{display:"grid",gridTemplateColumns:{xs:"1fr",sm:"repeat(2,1fr)",lg:"repeat(3,1fr)",xl:"repeat(6,1fr)"},gap:1.25}}>
-        {cards.map(c=><Box key={c.key} onClick={()=>setDrill(drill===c.key?null:c.key)} sx={{cursor:"pointer"}}><KpiCard title={c.label} value={c.value} subtitle={c.info} icon={c.icon} active={drill===c.key}/></Box>)}
+        {cards.map(c=><Box key={c.key} onClick={()=>setDrill(drill===c.key?null:c.key)} sx={{cursor:"pointer"}}><KpiCard title={c.label} value={c.value} subtitle={c.info} active={drill===c.key}/></Box>)}
       </Box>
       <Box sx={{display:"grid",gridTemplateColumns:{xs:"1fr",xl:"2fr 1fr 1fr"},gap:1.5}}>
         <Card elevation={0} sx={panelSx}><CardContent><Typography fontWeight={900}>Pipeline no fechamento</Typography><Typography variant="caption" color="text.secondary">Registro permanece visível no pipeline, mas não compõe backlog.</Typography><Box sx={{height:Math.max(280,pipeline.length*34),mt:1}}><ResponsiveContainer width="100%" height="100%"><BarChart data={pipeline} layout="vertical" margin={{left:25,right:20}}><CartesianGrid strokeDasharray="3 5" horizontal={false}/><XAxis type="number" allowDecimals={false}/><YAxis type="category" dataKey="name" width={125}/><Tooltip/><Bar dataKey="total" radius={[0,7,7,0]} onClick={(d)=>{const name=(d as {name?:string}).name;if(name)setStates([name]);}}>{pipeline.map((_,i)=><Cell key={i} fill={chartPalette[i%chartPalette.length]}/>)}</Bar></BarChart></ResponsiveContainer></Box></CardContent></Card>
