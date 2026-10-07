@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Alert, Autocomplete, Box, Button, Card, CardContent, Chip, CircularProgress, FormControl, InputLabel, MenuItem, Select, Stack as MuiStack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography, useTheme } from "@mui/material";
 import { AssessmentOutlined, RestartAltOutlined, TrendingDownOutlined, TrendingUpOutlined } from "@mui/icons-material";
 import { Bar, BarChart, CartesianGrid, Cell, LabelList, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { api } from "../services/api";
+import { api, getApiErrorMessage } from "../services/api";
 import { aliareColors } from "../theme/theme";
 import { chartPalette, semanticChartColors } from "../theme/chartPalette";
 
@@ -50,7 +50,7 @@ const metricLabel:Record<Exclude<Drill,null>,string>={registered:"Registradas no
 export function CorrectionMonthlyPanel(){
  const theme=useTheme();const [month,setMonth]=useState(currentMonth());const [report,setReport]=useState<Report|null>(null);const [loading,setLoading]=useState(false);const [error,setError]=useState("");
  const [creators,setCreators]=useState<string[]>([]),[clients,setClients]=useState<string[]>([]),[urgencies,setUrgencies]=useState<string[]>([]),[states,setStates]=useState<string[]>([]);const [prioritized,setPrioritized]=useState<""|"true"|"false">("");const [search,setSearch]=useState("");const [drill,setDrill]=useState<Drill>(null);
- useEffect(()=>{let active=true;setLoading(true);setError("");api.get<Report>("/azure-work-items/corrections/monthly-report",{params:{month}}).then(({data})=>{if(active)setReport(data)}).catch(e=>{if(active)setError(e?.response?.data?.message||"Não foi possível carregar o report mensal.")}).finally(()=>{if(active)setLoading(false)});return()=>{active=false}},[month]);
+ useEffect(()=>{let active=true;setLoading(true);setError("");api.get<Report>("/azure-work-items/corrections/monthly-report",{params:{month},timeout:120000}).then(({data})=>{if(active)setReport(data)}).catch(e=>{if(active)setError(getApiErrorMessage(e,"Não foi possível carregar o report mensal."))}).finally(()=>{if(active)setLoading(false)});return()=>{active=false}},[month]);
  const options=useMemo(()=>({creators:[...new Set((report?.rows??[]).map(r=>r.createdBy).filter((v):v is string=>!!v))].sort(),clients:[...new Set((report?.rows??[]).map(r=>r.client).filter((v):v is string=>!!v))].sort(),urgencies:[...new Set((report?.rows??[]).map(r=>r.urgency).filter((v):v is string=>!!v))].sort(),states:[...new Set((report?.rows??[]).map(r=>r.status).filter(Boolean))].sort()}),[report]);
  const base=useMemo(()=>(report?.rows??[]).filter(r=>(!creators.length||!!r.createdBy&&creators.includes(r.createdBy))&&(!clients.length||!!r.client&&clients.includes(r.client))&&(!urgencies.length||!!r.urgency&&urgencies.includes(r.urgency))&&(!states.length||states.includes(r.status))&&(!prioritized||r.prioritized===(prioritized==="true"))),[report,creators,clients,urgencies,states,prioritized]);
  const match=(r:Row,k:Exclude<Drill,null>)=>k==="registered"?r.registeredInPeriod:k==="delivered"?r.deliveredInPeriod:k==="canceled"?r.canceledInPeriod:k==="registration"?r.enteredRegistrationInPeriod:k==="backlogInitial"?r.backlogInitial:r.backlogCurrent;
@@ -73,7 +73,7 @@ export function CorrectionMonthlyPanel(){
   </CardContent></Card>
   {error&&<Alert severity="error">{error}</Alert>}
   {report?.quality&&!report.quality.historyAvailable&&<Alert severity="warning"><b>Modo snapshot local.</b> O painel permanece disponível, mas os indicadores que dependem do histórico de mudança de status precisam do histórico do Azure para homologação mensal. {report.quality.historyError||""}</Alert>}
-  {loading?<Box sx={{py:5,textAlign:"center"}}><CircularProgress size={28}/><Typography variant="body2" color="text.secondary" sx={{mt:1}}>Reconstruindo o fechamento mensal…</Typography></Box>:report&&<>
+  {loading?<Box sx={{py:5,textAlign:"center"}}><CircularProgress size={28}/><Typography variant="body2" color="text.secondary" sx={{mt:1}}>Reconstruindo snapshots e movimentações do fechamento mensal…</Typography></Box>:report&&<>
    <Box sx={{display:"grid",gridTemplateColumns:{xs:"1fr",sm:"repeat(2,1fr)",lg:"repeat(3,1fr)",xl:"repeat(6,1fr)"},gap:1.25}}>
     {cards.map(([key,label,noteValue,note])=><Card key={key} elevation={0} onClick={()=>setDrill(drill===key?null:key)} sx={{...panel,cursor:"pointer",borderTop:"3px solid",borderTopColor:drill===key?"primary.main":"divider",transition:".18s", "&:hover":{transform:"translateY(-2px)",boxShadow:2}}}><CardContent sx={{p:1.8}}><Typography variant="caption" color="text.secondary" sx={{fontWeight:800}}>{label}</Typography><Typography variant="h4" sx={{fontWeight:950,my:.4}}>{noteValue}</Typography><Typography variant="caption" color="text.secondary">{note}</Typography></CardContent></Card>)}
    </Box>
