@@ -83,6 +83,7 @@ import {
 } from "../theme/chartPalette";
 import { PageHeader } from "../components/PageHeader";
 import { ExecutiveSection } from "../components/ExecutiveSection";
+import { CorrectionMonthlyPanel } from "../components/CorrectionMonthlyPanel";
 import { useTheme } from "@mui/material/styles";
 
 /*
@@ -2568,6 +2569,8 @@ export function AzureWorkItems({
           meta={<>{formatNumber(summary?.total)} Work Item(s) sincronizado(s) • Dados locais sincronizados com Azure DevOps</>}
           action={<Button variant="outlined" disabled={refreshing} startIcon={refreshing ? <CircularProgress size={15} /> : <RefreshOutlined />} onClick={() => void loadAll()}>{refreshing ? "Atualizando" : "Recarregar"}</Button>}
         />
+
+        {type === "Correção Clientes" && <CorrectionMonthlyPanel />}
 
         {error && (
           <Alert
