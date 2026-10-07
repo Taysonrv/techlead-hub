@@ -1411,7 +1411,7 @@ export function AzureWorkItems({
 
   const title =
     isCorrection
-      ? "Correções"
+      ? "Painel de Tasks de Correções"
       : isSupport
         ? "Apoios"
         : "Evoluções";
@@ -1425,7 +1425,7 @@ export function AzureWorkItems({
 
   const subtitle =
     isCorrection
-      ? "Visão operacional e gerencial das correções do SIMER sincronizadas com o Azure DevOps."
+      ? "Visão confiável e rastreável das Correções Clientes, com acompanhamento operacional e apuração do report mensal."
       : isSupport
         ? "Visão operacional e gerencial dos APOIOs vinculados aos atendimentos do Movidesk."
         : "Visão operacional e gerencial das evoluções do SIMER sincronizadas com o Azure DevOps.";
