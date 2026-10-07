@@ -29,8 +29,10 @@ function date(value: unknown): Date | null {
 }
 function saoPauloMonth(month: string) {
   if (!/^\d{4}-\d{2}$/.test(month)) throw new Error("Período inválido. Use YYYY-MM.");
-  const [year, m] = month.split("-").map(Number);
-  if (m < 1 || m > 12) throw new Error("Período inválido.");
+  const parts = month.split("-");
+  const year = Number(parts[0]);
+  const m = Number(parts[1]);
+  if (!Number.isInteger(year) || !Number.isInteger(m) || m < 1 || m > 12) throw new Error("Período inválido.");
   // São Paulo não possui horário de verão no período suportado; boundaries são convertidas para UTC.
   const start = new Date(`${month}-01T03:00:00.000Z`);
   const nextYear = m === 12 ? year + 1 : year;
@@ -117,15 +119,20 @@ export class CorrectionMonthlyReportService {
         const f = revision.fields ?? {};
         return { revision, at: date(f["System.ChangedDate"]) ?? date(f["System.CreatedDate"]), state: text(f["System.State"]) };
       }).filter((item) => item.at && item.state) as Array<{revision:Revision;at:Date;state:string}>;
-      if (!normalized.length) continue;
-      const firstFields = history[0].fields ?? {};
-      const createdAt = date(firstFields["System.CreatedDate"]) ?? normalized[0].at;
+      const firstHistory = history[0];
+      const firstNormalized = normalized[0];
+      if (!firstHistory || !firstNormalized) continue;
+      const firstFields = firstHistory.fields ?? {};
+      const createdAt = date(firstFields["System.CreatedDate"]) ?? firstNormalized.at;
       if (createdAt >= endExclusive) continue;
       const atOpen = [...normalized].reverse().find((event) => event.at < start) ?? null;
       const atClose = [...normalized].reverse().find((event) => event.at < endExclusive) ?? null;
       if (!atClose) continue;
 
-      const stateEvents = normalized.filter((event, index) => index === 0 || event.state !== normalized[index - 1].state);
+      const stateEvents = normalized.filter((event, index) => {
+        const previous = normalized[index - 1];
+        return !previous || event.state !== previous.state;
+      });
       const inPeriod = stateEvents.filter((event) => event.at >= start && event.at < endExclusive);
       const entered = (state: string) => inPeriod.some((event) => event.state === state);
       const stateAtOpen = atOpen?.state ?? null;
