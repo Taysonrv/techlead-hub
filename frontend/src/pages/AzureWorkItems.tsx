@@ -2572,6 +2572,7 @@ export function AzureWorkItems({
 
         {type === "Correção Clientes" && <CorrectionMonthlyPanel />}
 
+        {!isCorrection && <>
         {error && (
           <Alert
             severity="error"
@@ -4282,6 +4283,7 @@ export function AzureWorkItems({
             </Stack>
           </CardContent>
         </Card>
+        </>}
       </Stack>
 
       {/* ===================================================
