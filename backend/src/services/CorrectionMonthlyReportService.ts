@@ -116,7 +116,7 @@ export class CorrectionMonthlyReportService {
   async get(month:string) {
     const {start,endExclusive,close}=saoPauloMonth(month);
     const currentPromise=prisma.azureWorkItem.findMany({where:{workItemType:"Correção Clientes"},select:{id:true,title:true,client:true,criticality:true,prioritized:true,assignedToName:true,remoteUrl:true,createdByName:true,azureCreatedAt:true,state:true,stateChangedAt:true,azureClosedAt:true,rawFields:true}});
-    let fields={client:AZURE_WORK_ITEM_FIELDS.client,prioritized:AZURE_WORK_ITEM_FIELDS.prioritized,urgency:AZURE_WORK_ITEM_FIELDS.criticality};
+    let fields:{client:string;prioritized:string;urgency:string}={client:AZURE_WORK_ITEM_FIELDS.client,prioritized:AZURE_WORK_ITEM_FIELDS.prioritized,urgency:AZURE_WORK_ITEM_FIELDS.criticality};
     let revisions:Revision[]=[];
     let historyAvailable=false;
     let historyError:string|null=null;
