@@ -1,10 +1,43 @@
 import { useEffect, useMemo, useState } from "react";
-import { Alert, Autocomplete, Box, Button, Card, CardContent, Chip, CircularProgress, FormControl, InputLabel, MenuItem, Select, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography, useTheme } from "@mui/material";
+import { Alert, Autocomplete, Box, Button, Card, CardContent, Chip, CircularProgress, FormControl, InputLabel, MenuItem, Select, Stack as MuiStack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography, useTheme } from "@mui/material";
 import { AssessmentOutlined, RestartAltOutlined, TrendingDownOutlined, TrendingUpOutlined } from "@mui/icons-material";
 import { Bar, BarChart, CartesianGrid, Cell, LabelList, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { api } from "../services/api";
 import { aliareColors } from "../theme/theme";
 import { chartPalette, semanticChartColors } from "../theme/chartPalette";
+
+function Stack(
+  props: React.ComponentProps<typeof MuiStack> & {
+    alignItems?: unknown;
+    justifyContent?: unknown;
+    flexWrap?: unknown;
+    gap?: unknown;
+  },
+) {
+  const {
+    alignItems,
+    justifyContent,
+    flexWrap,
+    gap,
+    sx,
+    ...rest
+  } = props;
+
+  return (
+    <MuiStack
+      {...rest}
+      sx={[
+        ...(Array.isArray(sx) ? sx : sx ? [sx] : []),
+        {
+          ...(alignItems !== undefined ? { alignItems } : {}),
+          ...(justifyContent !== undefined ? { justifyContent } : {}),
+          ...(flexWrap !== undefined ? { flexWrap } : {}),
+          ...(gap !== undefined ? { gap } : {}),
+        },
+      ] as React.ComponentProps<typeof MuiStack>["sx"]}
+    />
+  );
+}
 
 type Row={id:number;title:string;client:string|null;createdBy:string|null;createdAt:string|null;status:string;lastStateChangedAt:string|null;urgency:string|null;prioritized:boolean|null;assignedTo:string|null;terminalAt:string|null;remoteUrl:string|null;registeredInPeriod:boolean;deliveredInPeriod:boolean;canceledInPeriod:boolean;enteredRegistrationInPeriod:boolean;backlogInitial:boolean;backlogCurrent:boolean};
 type Report={period:{month:string;timezone:string;start:string;close:string};rows:Row[];source:string;quality?:{historyAvailable:boolean;historyError:string|null;mode:string;historicalMetricsReliable:boolean}};
