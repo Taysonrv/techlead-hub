@@ -261,7 +261,7 @@ export function Sidebar() {
     const refresh = () => void loadChatUnread();
     window.addEventListener("techlead-hub:chat-read", refresh);
     return () => { window.clearInterval(timer); window.removeEventListener("techlead-hub:chat-read", refresh); };
-  }, [user, location.pathname]);
+  }, [user?.id, location.pathname]);
 
   const openFloatingChat = useCallback(async (channelId: number, channelName: string) => {
     try {
@@ -288,24 +288,52 @@ export function Sidebar() {
   useEffect(() => {
     if (!floatingChats.length) return;
     const refresh = async () => {
+      let channels: Array<{ id: number; type: string; members?: Array<{ user: { id: number; name: string } }> }> = [];
+      let presenceRows: Array<{ userId: number; effectiveStatus: "ONLINE" | "AWAY" | "BUSY" | "OFFLINE" }> = [];
+      let typingRows: Array<{ channelId: number; userId: number; name: string }> = [];
+
+      try {
+        const [channelsResponse, realtimeResponse] = await Promise.all([
+          api.get<{ channels: typeof channels }>("/chat/channels"),
+          api.get<{ presence: typeof presenceRows; typing: typeof typingRows }>("/chat/realtime"),
+        ]);
+        channels = channelsResponse.data.channels ?? [];
+        presenceRows = realtimeResponse.data.presence ?? [];
+        typingRows = realtimeResponse.data.typing ?? [];
+      } catch {
+        // Presença é complementar; mensagens continuam sendo atualizadas.
+      }
+
+      const messagesByChannel = new Map<number, FloatingChat["messages"]>();
       await Promise.all(floatingChats.map(async (item) => {
         try {
-          const [messagesResponse, channelsResponse, realtimeResponse] = await Promise.all([
-            api.get<{ messages: FloatingChat["messages"] }>(`/chat/channels/${item.channelId}/messages`),
-            api.get<{ channels: Array<{ id: number; type: string; members?: Array<{ user: { id: number; name: string } }> }> }>("/chat/channels"),
-            api.get<{ presence: Array<{ userId: number; effectiveStatus: "ONLINE" | "AWAY" | "BUSY" | "OFFLINE" }>; typing: Array<{ channelId: number; userId: number; name: string }> }>("/chat/realtime"),
-          ]);
-          const channel = channelsResponse.data.channels.find((candidate) => candidate.id === item.channelId);
-          const peer = channel?.type === "DIRECT" ? channel.members?.find((member) => member.user.id !== user?.id)?.user : undefined;
-          const presence = peer ? realtimeResponse.data.presence.find((entry) => entry.userId === peer.id)?.effectiveStatus : undefined;
-          const typingNames = realtimeResponse.data.typing.filter((entry) => entry.channelId === item.channelId && entry.userId !== user?.id).map((entry) => entry.name);
-          setFloatingChats((current) => current.map((chat) => chat.channelId === item.channelId ? { ...chat, messages: messagesResponse.data.messages, peerId: peer?.id, peerName: peer?.name, presence, typingNames } : chat));
-        } catch { /* janela compacta não deve afetar a tela atual */ }
+          const response = await api.get<{ messages: FloatingChat["messages"] }>(`/chat/channels/${item.channelId}/messages`);
+          messagesByChannel.set(item.channelId, response.data.messages);
+        } catch {
+          // Uma conversa indisponível não deve interromper as demais.
+        }
+      }));
+
+      setFloatingChats((current) => current.map((chat) => {
+        const channel = channels.find((candidate) => candidate.id === chat.channelId);
+        const peer = channel?.type === "DIRECT" ? channel.members?.find((member) => member.user.id !== user?.id)?.user : undefined;
+        const peerPresence = peer ? presenceRows.find((entry) => entry.userId === peer.id)?.effectiveStatus : undefined;
+        const typingNames = typingRows.filter((entry) => entry.channelId === chat.channelId && entry.userId !== user?.id).map((entry) => entry.name);
+        return {
+          ...chat,
+          messages: messagesByChannel.get(chat.channelId) ?? chat.messages,
+          peerId: peer?.id,
+          peerName: peer?.name,
+          presence: peerPresence,
+          typingNames,
+        };
       }));
     };
-    floatingPollRef.current = window.setInterval(() => void refresh(), 5000);
+
+    void refresh();
+    floatingPollRef.current = window.setInterval(() => void refresh(), 8_000);
     return () => { if (floatingPollRef.current) window.clearInterval(floatingPollRef.current); floatingPollRef.current = null; };
-  }, [floatingChats.map((item) => item.channelId).join(",")]);
+  }, [floatingChats.map((item) => item.channelId).join(","), user?.id]);
 
   useEffect(() => {
     const receiveShare = (event: Event) => {
