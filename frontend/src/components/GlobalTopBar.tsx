@@ -1,5 +1,5 @@
-import { CalendarMonthOutlined, ChevronLeft, ChevronRight, DarkModeOutlined, LightModeOutlined, SearchOutlined } from "@mui/icons-material";
-import { Alert, Badge, Box, Button, CircularProgress, IconButton, InputAdornment, List, ListItemButton, ListItemText, Paper, Popover, Stack, TextField, Typography } from "@mui/material";
+import { AddOutlined, CalendarMonthOutlined, ChevronLeft, ChevronRight, DarkModeOutlined, DeleteOutlineOutlined, DownloadOutlined, LightModeOutlined, OpenInNewOutlined, SearchOutlined, VideoCallOutlined } from "@mui/icons-material";
+import { Alert, Autocomplete, Badge, Box, Button, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Divider, IconButton, InputAdornment, List, ListItemButton, ListItemText, Paper, Popover, Stack, TextField, Typography } from "@mui/material";
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
@@ -8,7 +8,14 @@ import { aliareColors } from "../theme/theme";
 import { useColorMode } from "../context/ColorModeContext";
 
 type SearchItem = { id: string; type: string; title: string; subtitle: string; path: string };
-type CalendarEvent = { id: string; date: string; kind: string; title: string; subtitle: string; path: string };
+type CalendarPerson = { id: number; name: string; username: string; email: string | null; role: string };
+type CalendarMeeting = {
+  id:number; title:string; description:string|null; startAt:string; endAt:string; timezone:string;
+  location:string|null; meetingUrl:string|null; externalAttendees:string[]; status:string;
+  createdBy:CalendarPerson; participants:CalendarPerson[]; canManage:boolean;
+};
+type CalendarEvent = { id: string; date: string; kind: string; title: string; subtitle: string; path: string; meeting?: CalendarMeeting };
+type MeetingForm = { title:string; startAt:string; endAt:string; participantIds:number[]; externalAttendees:string; location:string; meetingUrl:string; description:string };
 type Holiday = { date: string; name: string };
 type DesktopUpdateState = { status: "idle" | "disabled" | "checking" | "available" | "not-available" | "downloading" | "downloaded" | "error"; availableVersion: string | null; percent?: number; message?: string | null };
 
@@ -25,6 +32,13 @@ export function GlobalTopBar() {
   const [holidays, setHolidays] = useState<Holiday[]>([]);
   const [selectedDate, setSelectedDate] = useState(() => dateKey(new Date()));
   const [calendarPortal, setCalendarPortal] = useState<HTMLElement | null>(null);
+  const [calendarVersion, setCalendarVersion] = useState(0);
+  const [meetingParticipants, setMeetingParticipants] = useState<CalendarPerson[]>([]);
+  const [meetingDialogOpen, setMeetingDialogOpen] = useState(false);
+  const [meetingSaving, setMeetingSaving] = useState(false);
+  const [meetingError, setMeetingError] = useState("");
+  const [editingMeeting, setEditingMeeting] = useState<CalendarMeeting | null>(null);
+  const [meetingForm, setMeetingForm] = useState<MeetingForm>(() => defaultMeetingForm(dateKey(new Date())));
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const [updateState, setUpdateState] = useState<DesktopUpdateState | null>(null);
 
@@ -78,7 +92,7 @@ export function GlobalTopBar() {
     void api.get<{ events: CalendarEvent[]; holidays: Holiday[] }>("/global/calendar", { params: { start: start.toISOString(), end: end.toISOString() } })
       .then((response) => { setEvents(response.data.events); setHolidays(response.data.holidays); })
       .catch(() => { setEvents([]); setHolidays([]); });
-  }, [month]);
+  }, [month, calendarVersion]);
 
   const days = useMemo(() => calendarDays(month), [month]);
   const selectedEvents = events.filter((item) => dateKey(new Date(item.date)) === selectedDate);
