@@ -7,6 +7,7 @@ type MeetingInput = {
   startAt?: unknown;
   endAt?: unknown;
   timezone?: unknown;
+  reminderMinutes?: unknown;
   location?: unknown;
   meetingUrl?: unknown;
   participantIds?: unknown;
@@ -80,13 +81,15 @@ export class CalendarMeetingService {
     }
 
     const timezone = text(input.timezone, 80) || "America/Sao_Paulo";
+    const reminderCandidate = Number(input.reminderMinutes ?? 15);
+    const reminderMinutes = [5,10,15,30].includes(reminderCandidate) ? reminderCandidate : 15;
     const description = optionalText(input.description, 4000);
     const location = optionalText(input.location, 240);
     const meetingUrl = validateLink(optionalText(input.meetingUrl, 2000));
     const participants = participantIds(input.participantIds, organizerId);
     const external = externalEmails(input.externalAttendees);
 
-    return { title, startAt, endAt, timezone, description, location, meetingUrl, participants, external };
+    return { title, startAt, endAt, timezone, reminderMinutes, description, location, meetingUrl, participants, external };
   }
 
   async participants() {
@@ -136,6 +139,7 @@ export class CalendarMeetingService {
           startAt: normalized.startAt,
           endAt: normalized.endAt,
           timezone: normalized.timezone,
+          reminderMinutes: normalized.reminderMinutes,
           location: normalized.location,
           meetingUrl: normalized.meetingUrl,
           externalAttendees: normalized.external,
@@ -153,6 +157,7 @@ export class CalendarMeetingService {
           metadata: {
             title: created.title,
             startAt: created.startAt.toISOString(),
+            reminderMinutes: normalized.reminderMinutes,
             participantIds: normalized.participants,
             externalAttendees: normalized.external,
           },
@@ -181,6 +186,7 @@ export class CalendarMeetingService {
           startAt: normalized.startAt,
           endAt: normalized.endAt,
           timezone: normalized.timezone,
+          reminderMinutes: normalized.reminderMinutes,
           location: normalized.location,
           meetingUrl: normalized.meetingUrl,
           externalAttendees: normalized.external,
@@ -200,6 +206,7 @@ export class CalendarMeetingService {
           metadata: {
             title: updated.title,
             startAt: updated.startAt.toISOString(),
+            reminderMinutes: normalized.reminderMinutes,
             participantIds: normalized.participants,
           },
         },
@@ -242,6 +249,7 @@ export class CalendarMeetingService {
       startAt: meeting.startAt,
       endAt: meeting.endAt,
       timezone: meeting.timezone,
+      reminderMinutes: meeting.reminderMinutes,
       location: meeting.location,
       meetingUrl: meeting.meetingUrl,
       externalAttendees: external,
