@@ -144,6 +144,7 @@ export function CorrectionMonthlyPanel() {
   const [report,setReport] = useState<Report|null>(null);
   const [loading,setLoading] = useState(false);
   const [error,setError] = useState("");
+  const [reloadToken,setReloadToken] = useState(0);
 
   const [creators,setCreators] = useState<string[]>([]);
   const [clients,setClients] = useState<string[]>([]);
@@ -162,6 +163,7 @@ export function CorrectionMonthlyPanel() {
     let active = true;
     setLoading(true);
     setError("");
+    setReport(null);
     api.get<Report>("/azure-work-items/corrections/monthly-report",{params:{month},timeout:120000})
       .then(({data}) => { if(active) setReport(data); })
       .catch((requestError) => {
@@ -169,7 +171,7 @@ export function CorrectionMonthlyPanel() {
       })
       .finally(() => { if(active) setLoading(false); });
     return () => { active = false; };
-  },[month]);
+  },[month,reloadToken]);
 
   const options = useMemo(() => ({
     creators:[...new Set((report?.rows??[]).map(row=>row.createdBy).filter((value):value is string=>!!value))].sort(),
@@ -432,7 +434,14 @@ export function CorrectionMonthlyPanel() {
       </CardContent>
     </Card>
 
-    {error&&<Alert severity="error">{error}</Alert>}
+    {error&&
+      <Alert
+        severity="error"
+        action={<Button color="inherit" size="small" onClick={()=>setReloadToken(value=>value+1)}>Tentar novamente</Button>}
+      >
+        {error}
+      </Alert>
+    }
     {report?.quality&&(!report.quality.historicalMetricsReliable||!!report.quality.historicalScopeError)&&
       <Alert severity="warning">
         <b>{report.quality.snapshotAvailable?"Histórico parcial.":"Snapshot histórico indisponível."}</b>{" "}
