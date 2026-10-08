@@ -36,6 +36,7 @@ import {
 } from "react";
 
 import {
+  useLocation,
   useNavigate,
 } from "react-router-dom";
 
@@ -102,6 +103,7 @@ type DesktopUpdateState = {
 
 export function NotificationCenter() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
   const [toastQueue, setToastQueue] = useState<HubNotification[]>([]);
   const toast = toastQueue[0] ?? null;
@@ -268,11 +270,7 @@ export function NotificationCenter() {
       const alert = new Notification(toast.title, { body: toast.message });
       alert.onclick = () => {
         window.focus();
-        if (toast.kind === "MEETING_REMINDER" && toast.meetingId) {
-          window.dispatchEvent(new CustomEvent("techlead-hub:open-meeting", { detail: { meetingId: toast.meetingId } }));
-        } else {
-          navigate(toast.path);
-        }
+        navigate(toast.kind === "MEETING_REMINDER" && toast.meetingId ? meetingPath(toast.meetingId) : toast.path);
         alert.close();
       };
     }
@@ -283,6 +281,12 @@ export function NotificationCenter() {
     notificationHydratedRef.current = false;
     setToastQueue([]);
   }, [user?.id]);
+
+  function meetingPath(meetingId: number) {
+    const params = new URLSearchParams(location.search);
+    params.set("meeting", String(meetingId));
+    return `${location.pathname}?${params.toString()}`;
+  }
 
   async function openMenu(event: MouseEvent<HTMLElement>) {
     setAnchor(event.currentTarget);
@@ -298,11 +302,7 @@ export function NotificationCenter() {
       void api.post("/notifications/read", { keys: [item.key] });
     }
     setAnchor(null);
-    if (item.kind === "MEETING_REMINDER" && item.meetingId) {
-      window.dispatchEvent(new CustomEvent("techlead-hub:open-meeting", { detail: { meetingId: item.meetingId } }));
-      return;
-    }
-    navigate(item.path);
+    navigate(item.kind === "MEETING_REMINDER" && item.meetingId ? meetingPath(item.meetingId) : item.path);
   }
 
   function markAllRead() {
