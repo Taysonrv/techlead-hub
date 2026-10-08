@@ -54,7 +54,7 @@ type Row = {
   lastStateChangedAt:string|null; urgency:string|null; prioritized:boolean|null; assignedTo:string|null;
   terminalAt:string|null; remoteUrl:string|null; stateAtOpen:string|null; stateAtClose:string|null;
   registeredInPeriod:boolean; deliveredInPeriod:boolean; canceledInPeriod:boolean; enteredRegistrationInPeriod:boolean;
-  backlogInitial:boolean; backlogCurrent:boolean;
+  backlogInitial:boolean; backlogCurrent:boolean; inPeriodUniverse?:boolean;
 };
 
 export class CorrectionMonthlyReportService {
@@ -99,19 +99,46 @@ export class CorrectionMonthlyReportService {
       urgency:find(["urgencia","criticidade","priority"],AZURE_WORK_ITEM_FIELDS.criticality),
     };
   }
-  private async revisions(fields:{client:string;prioritized:string;urgency:string}):Promise<Revision[]> {
+  private async revisions(
+    fields:{client:string;prioritized:string;urgency:string},
+    start:Date,
+  ):Promise<Revision[]> {
     const {organization,project}=this.azureConfig();
-    const cacheKey=`${organization}/${project}/corrections/${fields.client}/${fields.prioritized}/${fields.urgency}`;
+    const cacheKey=`${organization}/${project}/corrections/${start.toISOString().slice(0,10)}/${fields.client}/${fields.prioritized}/${fields.urgency}`;
     const cached=CorrectionMonthlyReportService.cache.get(cacheKey);
     if(cached&&cached.expiresAt>Date.now()) return cached.revisions;
-    const requested=[ "System.Id","System.WorkItemType","System.Title","System.State","System.CreatedBy","System.CreatedDate","System.ChangedDate","System.AssignedTo","Microsoft.VSTS.Common.Priority",fields.client,fields.prioritized,fields.urgency ].filter((v,i,a)=>a.indexOf(v)===i).join(",");
-    const all:Revision[]=[]; let continuationToken:string|undefined;
+
+    const requested=[
+      "System.Id","System.WorkItemType","System.Title","System.State","System.CreatedBy",
+      "System.CreatedDate","System.ChangedDate","System.AssignedTo",
+      "Microsoft.VSTS.Common.Priority",fields.client,fields.prioritized,fields.urgency,
+    ].filter((value,index,array)=>array.indexOf(value)===index);
+
+    const all:Revision[]=[];
+    let continuationToken:string|undefined;
     do {
-      const response=await this.client().get<ReportingResponse>("/_apis/wit/reporting/workitemrevisions",{params:{fields:requested,types:"Correção Clientes",includeLatestOnly:false,includeIdentityRef:true,"$maxPageSize":2000,continuationToken,"api-version":"7.1-preview.2"}});
+      const response=await this.client().post<ReportingResponse>(
+        "/_apis/wit/reporting/workitemrevisions",
+        {
+          types:["Correção Clientes"],
+          fields:requested,
+          includeIdentityRef:true,
+          includeLatestOnly:false,
+        },
+        {
+          params:{
+            startDateTime:start.toISOString(),
+            continuationToken,
+            "$maxPageSize":2000,
+            "api-version":"7.1",
+          },
+        },
+      );
       all.push(...(response.data.values??response.data.value??[]));
       continuationToken=response.data.continuationToken||response.headers["x-ms-continuationtoken"];
       if(response.data.isLastBatch===true) continuationToken=undefined;
     } while(continuationToken);
+
     CorrectionMonthlyReportService.cache.set(cacheKey,{expiresAt:Date.now()+CACHE_TTL_MS,revisions:all});
     return all;
   }
@@ -125,25 +152,40 @@ export class CorrectionMonthlyReportService {
     const result=new Map<number,SnapshotItem>();
     if(!normalizedIds.length) return result;
 
-    const requested=[
+    const coreFields=[
       "System.Id","System.WorkItemType","System.Title","System.State","System.CreatedBy",
       "System.CreatedDate","System.ChangedDate","System.AssignedTo",
-      "Microsoft.VSTS.Common.Priority",fields.client,fields.prioritized,fields.urgency,
+      "Microsoft.VSTS.Common.Priority",
+    ];
+    const requested=[
+      ...coreFields,fields.client,fields.prioritized,fields.urgency,
     ].filter((value,index,array)=>array.indexOf(value)===index);
 
-    for(let index=0;index<normalizedIds.length;index+=200){
-      const batch=normalizedIds.slice(index,index+200);
+    const loadBatch=async(batch:number[],requestedFields:string[])=>{
       const response=await this.client().post<SnapshotBatchResponse>(
         "/_apis/wit/workitemsbatch",
         {
           ids:batch,
-          fields:requested,
+          fields:requestedFields,
           asOf:asOf.toISOString(),
           errorPolicy:"Omit",
         },
         {params:{"api-version":"7.1"}},
       );
-      for(const item of response.data.value??[]){
+      return response.data.value??[];
+    };
+
+    for(let index=0;index<normalizedIds.length;index+=200){
+      const batch=normalizedIds.slice(index,index+200);
+      let values:SnapshotItem[];
+      try {
+        values=await loadBatch(batch,requested);
+      } catch(error) {
+        // Um campo customizado não reportável não deve derrubar o snapshot histórico.
+        console.warn("[correction-monthly-report] Snapshot completo rejeitado; repetindo com campos centrais.");
+        values=await loadBatch(batch,coreFields);
+      }
+      for(const item of values){
         const id=Number(item.id??item.fields?.["System.Id"]);
         if(Number.isSafeInteger(id)) result.set(id,item);
       }
@@ -161,14 +203,14 @@ export class CorrectionMonthlyReportService {
     let historyError:string|null=null;
     try {
       fields=await this.resolveFields();
-      revisions=await this.revisions(fields);
+      revisions=await this.revisions(fields,start);
       historyAvailable=revisions.length>0;
     } catch(error) {
       historyError=error instanceof Error ? error.message : "Histórico do Azure indisponível.";
       console.warn(`[correction-monthly-report] Histórico do Azure indisponível; usando snapshot local. | ${historyError}`);
     }
     const current=await currentPromise;
-    const candidateIds=current.filter(item=>resolveSimerClient(item.client)).map(item=>item.id);
+    const candidateIds=current.map(item=>item.id);
     let openingSnapshot=new Map<number,SnapshotItem>();
     let closingSnapshot=new Map<number,SnapshotItem>();
     let snapshotAvailable=false;
@@ -218,6 +260,52 @@ export class CorrectionMonthlyReportService {
       rows.push({id,title:text(latestFields["System.Title"])??currentItem?.title??`Task ${id}`,client,createdBy:text(latestFields["System.CreatedBy"])??text(firstFields["System.CreatedBy"])??currentItem?.createdByName??null,createdAt:createdAt.toISOString(),status:stateAtClose,lastStateChangedAt:lastState?.at.toISOString()??text(closingFields["System.ChangedDate"])??null,urgency,prioritized,assignedTo:text(latestFields["System.AssignedTo"])??currentItem?.assignedToName??null,terminalAt:terminal?.at.toISOString()??null,remoteUrl:currentItem?.remoteUrl??null,stateAtOpen,stateAtClose,registeredInPeriod:createdAt>=start&&createdAt<endExclusive,deliveredInPeriod:entered("Concluído")&&stateAtClose==="Concluído",canceledInPeriod:entered("Cancelado")&&stateAtClose==="Cancelado",enteredRegistrationInPeriod:entered("Registro")&&stateAtClose==="Registro",backlogInitial:!!stateAtOpen&&!BACKLOG_EXCLUDED.has(stateAtOpen),backlogCurrent:!BACKLOG_EXCLUDED.has(stateAtClose)});
     }
 
+    // O endpoint de revisões retorna apenas itens que tiveram revisão no período.
+    // Completamos o universo com os snapshots para preservar backlog sem movimentação.
+    if(snapshotAvailable){
+      const existingIds=new Set(rows.map(row=>row.id));
+      for(const item of current){
+        if(existingIds.has(item.id)) continue;
+        const openingFields=openingSnapshot.get(item.id)?.fields??{};
+        const closingFields=closingSnapshot.get(item.id)?.fields??{};
+        if(!Object.keys(closingFields).length) continue;
+
+        const sourceClient=text(closingFields[fields.client])??item.client;
+        const client=resolveSimerClient(sourceClient); if(!client) continue;
+        const createdAt=date(closingFields["System.CreatedDate"])??item.azureCreatedAt;
+        if(!createdAt||createdAt>=endExclusive) continue;
+
+        const stateAtOpen=text(openingFields["System.State"]);
+        const stateAtClose=text(closingFields["System.State"]);
+        if(!stateAtClose) continue;
+        const changedAt=date(closingFields["System.ChangedDate"]);
+        const raw=(item.rawFields&&typeof item.rawFields==="object"&&!Array.isArray(item.rawFields)?item.rawFields:{}) as Record<string,unknown>;
+
+        rows.push({
+          id:item.id,
+          title:text(closingFields["System.Title"])??item.title,
+          client,
+          createdBy:text(closingFields["System.CreatedBy"])??item.createdByName,
+          createdAt:createdAt.toISOString(),
+          status:stateAtClose,
+          lastStateChangedAt:changedAt?.toISOString()??null,
+          urgency:text(closingFields[fields.urgency])??item.criticality??text(raw[fields.urgency]),
+          prioritized:bool(closingFields[fields.prioritized])??item.prioritized,
+          assignedTo:text(closingFields["System.AssignedTo"])??item.assignedToName,
+          terminalAt:TERMINAL.has(stateAtClose)?changedAt?.toISOString()??null:null,
+          remoteUrl:item.remoteUrl,
+          stateAtOpen,
+          stateAtClose,
+          registeredInPeriod:createdAt>=start&&createdAt<endExclusive,
+          deliveredInPeriod:false,
+          canceledInPeriod:false,
+          enteredRegistrationInPeriod:false,
+          backlogInitial:!!stateAtOpen&&!BACKLOG_EXCLUDED.has(stateAtOpen),
+          backlogCurrent:!BACKLOG_EXCLUDED.has(stateAtClose),
+        });
+      }
+    }
+
     // Fallback: usa snapshots asOf para preservar backlog histórico mesmo sem o endpoint de revisões.
     if(rows.length===0){
       for(const item of current){
@@ -253,15 +341,24 @@ export class CorrectionMonthlyReportService {
           stateAtOpen,
           stateAtClose,
           registeredInPeriod:createdInPeriod,
-          deliveredInPeriod:stateAtClose==="Concluído"&&stateAtOpen!=="Concluído",
-          canceledInPeriod:stateAtClose==="Cancelado"&&stateAtOpen!=="Cancelado",
-          enteredRegistrationInPeriod:stateAtClose==="Registro"&&stateAtOpen!=="Registro",
-          backlogInitial:!!stateAtOpen&&!BACKLOG_EXCLUDED.has(stateAtOpen),
-          backlogCurrent:!BACKLOG_EXCLUDED.has(stateAtClose),
+          deliveredInPeriod:false,
+          canceledInPeriod:false,
+          enteredRegistrationInPeriod:false,
+          backlogInitial:snapshotAvailable&&!!stateAtOpen&&!BACKLOG_EXCLUDED.has(stateAtOpen),
+          backlogCurrent:snapshotAvailable&&!BACKLOG_EXCLUDED.has(stateAtClose),
         });
       }
     }
-    const count=(p:(r:Row)=>boolean)=>rows.filter(p).length;
+    for(const row of rows){
+      row.inPeriodUniverse=
+        row.registeredInPeriod||
+        row.deliveredInPeriod||
+        row.canceledInPeriod||
+        row.enteredRegistrationInPeriod||
+        row.backlogInitial||
+        row.backlogCurrent;
+    }
+        const count=(p:(r:Row)=>boolean)=>rows.filter(p).length;
     const by=(selector:(r:Row)=>string|null)=>Object.entries(rows.reduce<Record<string,number>>((acc,row)=>{const key=selector(row)||"Não informado";acc[key]=(acc[key]??0)+1;return acc;},{})).map(([name,total])=>({name,total})).sort((a,b)=>b.total-a.total);
     return {period:{month,timezone:"America/Sao_Paulo",start:start.toISOString(),close:close.toISOString()},cards:{registered:count(r=>r.registeredInPeriod),delivered:count(r=>r.deliveredInPeriod),canceled:count(r=>r.canceledInPeriod),inRegistration:count(r=>r.enteredRegistrationInPeriod),backlogInitial:count(r=>r.backlogInitial),backlogCurrent:count(r=>r.backlogCurrent)},pipeline:by(r=>r.status),urgency:by(r=>r.urgency),prioritization:[{name:"Priorizadas",total:count(r=>r.prioritized===true)},{name:"Não priorizadas",total:count(r=>r.prioritized===false)},{name:"Não informado",total:count(r=>r.prioritized===null)}],filters:{creators:[...new Set(rows.map(r=>r.createdBy).filter(Boolean))].sort(),clients:[...SIMER_CLIENTS],urgencies:[...new Set(rows.map(r=>r.urgency).filter(Boolean))].sort(),states:[...new Set(rows.map(r=>r.status).filter(Boolean))].sort()},rows,generatedAt:new Date().toISOString(),source:snapshotAvailable?(historyAvailable?"Azure DevOps · revisões + snapshots asOf · carteira SIMER":"Azure DevOps · snapshots asOf · carteira SIMER"):"Base sincronizada do Azure DevOps · snapshot local · carteira SIMER",quality:{historyAvailable,historyError,snapshotAvailable,snapshotError,mode:snapshotAvailable?(historyAvailable?"historical":"asof-snapshot"):"local-snapshot",historicalMetricsReliable:historyAvailable&&snapshotAvailable,backlogHistoricalReliable:snapshotAvailable},fieldMapping:fields};
   }
