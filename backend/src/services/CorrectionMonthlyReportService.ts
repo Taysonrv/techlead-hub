@@ -1,7 +1,7 @@
 import axios from "axios";
 import { prisma } from "../database/prisma";
 import { AZURE_WORK_ITEM_FIELDS } from "./AzureWorkItemMapper";
-import { isSimerClient, SIMER_CLIENTS } from "../domain/OperationalScope";
+import { resolveSimerClient, SIMER_CLIENTS } from "../domain/OperationalScope";
 
 type Identity = { displayName?: string; uniqueName?: string };
 type Revision = { id?: number; rev?: number; fields?: Record<string, unknown> };
@@ -116,7 +116,7 @@ export class CorrectionMonthlyReportService {
 
   async get(month:string) {
     const {start,endExclusive,close}=saoPauloMonth(month);
-    const currentPromise=prisma.azureWorkItem.findMany({where:{workItemType:"Correção Clientes",client:{in:[...SIMER_CLIENTS],mode:"insensitive"}},select:{id:true,title:true,client:true,criticality:true,prioritized:true,assignedToName:true,remoteUrl:true,createdByName:true,azureCreatedAt:true,state:true,stateChangedAt:true,azureClosedAt:true,rawFields:true}});
+    const currentPromise=prisma.azureWorkItem.findMany({where:{workItemType:"Correção Clientes"},select:{id:true,title:true,client:true,criticality:true,prioritized:true,assignedToName:true,remoteUrl:true,createdByName:true,azureCreatedAt:true,state:true,stateChangedAt:true,azureClosedAt:true,rawFields:true}});
     let fields:{client:string;prioritized:string;urgency:string}={client:AZURE_WORK_ITEM_FIELDS.client,prioritized:AZURE_WORK_ITEM_FIELDS.prioritized,urgency:AZURE_WORK_ITEM_FIELDS.criticality};
     let revisions:Revision[]=[];
     let historyAvailable=false;
@@ -151,8 +151,9 @@ export class CorrectionMonthlyReportService {
       const urgencyValue=text(latestFields[fields.urgency])??text(latestFields["Microsoft.VSTS.Common.Priority"]);
       const urgency=urgencyValue ? (/^\d+$/.test(urgencyValue)?`P${urgencyValue}`:urgencyValue) : currentItem?.criticality??null;
       const prioritized=bool(latestFields[fields.prioritized])??currentItem?.prioritized??null;
-      const client=text(latestFields[fields.client])??currentItem?.client??null;
-      if(!isSimerClient(client)) continue;
+      const sourceClient=text(latestFields[fields.client])??currentItem?.client??null;
+      const client=resolveSimerClient(sourceClient);
+      if(!client) continue;
       rows.push({id,title:text(latestFields["System.Title"])??currentItem?.title??`Task ${id}`,client,createdBy:text(latestFields["System.CreatedBy"])??text(firstFields["System.CreatedBy"])??currentItem?.createdByName??null,createdAt:createdAt.toISOString(),status:stateAtClose,lastStateChangedAt:lastState?.at.toISOString()??null,urgency,prioritized,assignedTo:text(latestFields["System.AssignedTo"])??currentItem?.assignedToName??null,terminalAt:terminal?.at.toISOString()??null,remoteUrl:currentItem?.remoteUrl??null,stateAtOpen,stateAtClose,registeredInPeriod:createdAt>=start&&createdAt<endExclusive,deliveredInPeriod:entered("Concluído")&&stateAtClose==="Concluído",canceledInPeriod:entered("Cancelado")&&stateAtClose==="Cancelado",enteredRegistrationInPeriod:entered("Registro")&&stateAtClose==="Registro",backlogInitial:!!stateAtOpen&&!BACKLOG_EXCLUDED.has(stateAtOpen),backlogCurrent:!BACKLOG_EXCLUDED.has(stateAtClose)});
     }
 
@@ -163,7 +164,8 @@ export class CorrectionMonthlyReportService {
         const raw=(item.rawFields&&typeof item.rawFields==="object"&&!Array.isArray(item.rawFields)?item.rawFields:{}) as Record<string,unknown>;
         const state=item.state;const createdInPeriod=createdAt>=start&&createdAt<endExclusive;
         const stateChanged=item.stateChangedAt;const changedInPeriod=!!stateChanged&&stateChanged>=start&&stateChanged<endExclusive;
-        rows.push({id:item.id,title:item.title,client:item.client,createdBy:item.createdByName,createdAt:createdAt.toISOString(),status:state,lastStateChangedAt:stateChanged?.toISOString()??null,urgency:item.criticality??text(raw[fields.urgency]),prioritized:item.prioritized,assignedTo:item.assignedToName,terminalAt:item.azureClosedAt?.toISOString()??null,remoteUrl:item.remoteUrl,stateAtOpen:createdInPeriod?null:state,stateAtClose:state,registeredInPeriod:createdInPeriod,deliveredInPeriod:changedInPeriod&&state==="Concluído",canceledInPeriod:changedInPeriod&&state==="Cancelado",enteredRegistrationInPeriod:changedInPeriod&&state==="Registro",backlogInitial:!createdInPeriod&&!BACKLOG_EXCLUDED.has(state),backlogCurrent:!BACKLOG_EXCLUDED.has(state)});
+        const client=resolveSimerClient(item.client); if(!client) continue;
+        rows.push({id:item.id,title:item.title,client,createdBy:item.createdByName,createdAt:createdAt.toISOString(),status:state,lastStateChangedAt:stateChanged?.toISOString()??null,urgency:item.criticality??text(raw[fields.urgency]),prioritized:item.prioritized,assignedTo:item.assignedToName,terminalAt:item.azureClosedAt?.toISOString()??null,remoteUrl:item.remoteUrl,stateAtOpen:createdInPeriod?null:state,stateAtClose:state,registeredInPeriod:createdInPeriod,deliveredInPeriod:changedInPeriod&&state==="Concluído",canceledInPeriod:changedInPeriod&&state==="Cancelado",enteredRegistrationInPeriod:changedInPeriod&&state==="Registro",backlogInitial:!createdInPeriod&&!BACKLOG_EXCLUDED.has(state),backlogCurrent:!BACKLOG_EXCLUDED.has(state)});
       }
     }
     const count=(p:(r:Row)=>boolean)=>rows.filter(p).length;
