@@ -117,6 +117,8 @@ export function NotificationCenter() {
   const alertedKeys = useRef(new Set<string>());
   const notificationHydratedRef = useRef(false);
   const loadingRef = useRef(false);
+  const meetingLoadingRef = useRef(false);
+  const meetingRetryAtRef = useRef(0);
 
   const storageKey = `techlead-hub:notifications:read:${user?.id ?? "anonymous"}`;
 
@@ -190,9 +192,11 @@ export function NotificationCenter() {
   }, [user]);
 
   const loadMeetingReminders = useCallback(async () => {
-    if (!user) return;
+    if (!user || meetingLoadingRef.current || Date.now() < meetingRetryAtRef.current) return;
+    meetingLoadingRef.current = true;
     try {
       const response = await api.get<{ notifications: HubNotification[] }>("/notifications/meetings");
+      meetingRetryAtRef.current = 0;
       const meetingItems = response.data.notifications ?? [];
       setItems((current) => {
         const otherItems = current.filter((item) => item.kind !== "MEETING_REMINDER");
@@ -201,7 +205,20 @@ export function NotificationCenter() {
           .slice(0, 80);
       });
     } catch (error) {
-      console.warn("[notifications] Não foi possível carregar lembretes de reunião:", error);
+      const response = (error as { response?: { status?: number; headers?: Record<string,string>; data?: { retryAfterSeconds?: number } } }).response;
+      if (response?.status === 429) {
+        const headerSeconds = Number(response.headers?.["retry-after"] ?? 0);
+        const retrySeconds = Number.isFinite(response.data?.retryAfterSeconds)
+          ? Number(response.data?.retryAfterSeconds)
+          : Number.isFinite(headerSeconds) && headerSeconds > 0
+            ? headerSeconds
+            : 30;
+        meetingRetryAtRef.current = Date.now() + Math.max(5, retrySeconds) * 1_000;
+      } else {
+        console.warn("[notifications] Não foi possível carregar lembretes de reunião:", error);
+      }
+    } finally {
+      meetingLoadingRef.current = false;
     }
   }, [user]);
 
