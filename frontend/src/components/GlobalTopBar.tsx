@@ -271,7 +271,7 @@ export function GlobalTopBar() {
         >
           {mode === "dark" ? <LightModeOutlined /> : <DarkModeOutlined />}
         </IconButton>
-        <IconButton title="Calendário operacional" onClick={(event: MouseEvent<HTMLElement>) => { setSelectedDate(dateKey(new Date())); setCalendarAnchor(event.currentTarget); }} sx={{ width: 46, height: 46, bgcolor: "background.paper", border: "1px solid", borderColor: "divider", borderRadius: 2, boxShadow: "0 2px 10px rgba(0,0,0,.06)", "&:hover": { bgcolor: "background.paper", borderColor: "rgba(24,199,122,.38)" } }}><Badge color="success" variant={events.length ? "dot" : "standard"}><CalendarMonthOutlined /></Badge></IconButton>
+        <IconButton title="Calendário e reuniões" aria-label="Abrir calendário e reuniões" onClick={(event: MouseEvent<HTMLElement>) => { setSelectedDate(dateKey(new Date())); setCalendarAnchor(event.currentTarget); }} sx={{ width: 46, height: 46, bgcolor: "background.paper", border: "1px solid", borderColor: "divider", borderRadius: 2, boxShadow: "0 2px 10px rgba(0,0,0,.06)", "&:hover": { bgcolor: "background.paper", borderColor: "rgba(24,199,122,.38)" } }}><Badge color="success" variant={events.length ? "dot" : "standard"}><CalendarMonthOutlined /></Badge></IconButton>
 </>, calendarPortal)}
 
       <Popover open={Boolean(calendarAnchor)} anchorEl={calendarAnchor} onClose={() => setCalendarAnchor(null)} anchorOrigin={{ vertical: "bottom", horizontal: "right" }} transformOrigin={{ vertical: "top", horizontal: "right" }} slotProps={{ paper: { sx: { mt: 1, width: { xs: 340, sm: 420 }, maxWidth: "calc(100vw - 24px)", maxHeight: "calc(100vh - 90px)", borderRadius: 2 } } }}>
