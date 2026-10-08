@@ -600,7 +600,7 @@ export class AuthController {
       const userId = request.auth?.userId;
       if (!userId) return response.status(401).json({ message: "Usuário não autenticado." });
       const avatar = await authService.getAvatar(userId);
-      if (!avatar) return response.status(404).end();
+      if (!avatar) return response.status(204).end();
       response.setHeader("Content-Type", avatar.mimeType);
       response.setHeader("Cache-Control", "private, max-age=3600");
       if (avatar.updatedAt) response.setHeader("Last-Modified", avatar.updatedAt.toUTCString());
