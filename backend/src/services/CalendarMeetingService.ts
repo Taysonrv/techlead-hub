@@ -17,7 +17,6 @@ const meetingInclude = {
   createdBy: { select: { id: true, name: true, username: true, email: true, role: true } },
   participants: {
     include: { user: { select: { id: true, name: true, username: true, email: true, role: true } } },
-    orderBy: { user: { name: "asc" as const } },
   },
 } as const;
 
@@ -104,11 +103,12 @@ export class CalendarMeetingService {
         status: "SCHEDULED",
         startAt: { lt: end },
         endAt: { gt: start },
-        OR: [
-          { createdById: userId },
-          { participants: { some: { userId } } },
-          ...(role === "ADMIN" ? [{}] : []),
-        ],
+        ...(role === "ADMIN" ? {} : {
+          OR: [
+            { createdById: userId },
+            { participants: { some: { userId } } },
+          ],
+        }),
       },
       orderBy: { startAt: "asc" },
       include: meetingInclude,
@@ -232,7 +232,7 @@ export class CalendarMeetingService {
       externalProvider: meeting.externalProvider,
       externalEventId: meeting.externalEventId,
       createdBy: meeting.createdBy,
-      participants: meeting.participants.map((item) => item.user),
+      participants: meeting.participants.map((item) => item.user).sort((a,b) => a.name.localeCompare(b.name, "pt-BR")),
       canManage: this.canManage(meeting.createdById, userId, role),
       createdAt: meeting.createdAt,
       updatedAt: meeting.updatedAt,
