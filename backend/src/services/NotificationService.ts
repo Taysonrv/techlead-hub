@@ -79,7 +79,7 @@ export class NotificationService {
         minute: "2-digit",
       }).format(startAt);
 
-      if (meeting.createdAt >= recent) {
+      if (meeting.createdAt >= recent && startAt > soon) {
         notifications.push({
           key: `meeting:scheduled:${meeting.id}:${meeting.createdAt.toISOString()}`,
           kind: "MEETING_REMINDER",
