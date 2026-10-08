@@ -12,6 +12,7 @@ export class CorrectionMonthlyReportController {
       }
       return res.json(await this.service.get(month));
     } catch (error) {
+      console.error("[correction-monthly-report] Falha ao gerar relatório:", error);
       const message = error instanceof Error ? error.message : "Não foi possível gerar o report mensal de Correções.";
       return res.status(message.includes("configurad") ? 503 : 500).json({ message });
     }
