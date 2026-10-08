@@ -161,6 +161,7 @@ model CalendarMeeting {
   startAt           DateTime
   endAt             DateTime
   timezone          String   @default("America/Sao_Paulo") @db.VarChar(80)
+  reminderMinutes   Int      @default(15)
   location          String?  @db.VarChar(240)
   meetingUrl        String?  @db.Text
   externalAttendees Json?
