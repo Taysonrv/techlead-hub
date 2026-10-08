@@ -278,12 +278,154 @@ export function GlobalTopBar() {
         <Box sx={{ p: 1.5 }}>
           <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between", mb: 1 }}><IconButton size="small" onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))}><ChevronLeft /></IconButton><Typography sx={{ fontWeight: 850, textTransform: "capitalize" }}>{month.toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}</Typography><IconButton size="small" onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))}><ChevronRight /></IconButton></Stack>
           <Box sx={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: .25 }}>{["D","S","T","Q","Q","S","S"].map((label, index) => <Typography key={`${label}-${index}`} variant="caption" sx={{ textAlign: "center", fontWeight: 800, color: "text.secondary" }}>{label}</Typography>)}{days.map((day) => { const key = dateKey(day); const count = events.filter((item) => dateKey(new Date(item.date)) === key).length; const holiday = holidays.some((item) => dateKey(new Date(item.date)) === key); const inMonth = day.getMonth() === month.getMonth(); return <Box component="button" key={key} onClick={() => setSelectedDate(key)} sx={{ appearance: "none", border: "1px solid", borderColor: key === selectedDate ? aliareColors.green : "transparent", borderRadius: 1, minHeight: 34, bgcolor: key === selectedDate ? "rgba(24,199,122,.10)" : "transparent", color: inMonth ? "text.primary" : "text.disabled", cursor: "pointer", position: "relative" }}><Typography variant="caption" sx={{ fontWeight: 700 }}>{day.getDate()}</Typography>{count > 0 && <Box sx={{ position: "absolute", bottom: 2, left: "50%", transform: "translateX(-50%)", width: 5, height: 5, borderRadius: "50%", bgcolor: aliareColors.green }} />}{holiday && <Box sx={{ position: "absolute", top: 2, right: 2, width: 4, height: 4, borderRadius: "50%", bgcolor: "warning.main" }} />}</Box>; })}</Box>
-          <Box sx={{ mt: 1, pt: 1, borderTop: "1px solid", borderColor: "divider" }}><Typography sx={{ fontWeight: 800, fontSize: ".88rem" }}>{new Date(`${selectedDate}T12:00:00`).toLocaleDateString("pt-BR", { dateStyle: "full" })}</Typography>{selectedHoliday && <Typography variant="caption" sx={{ color: "warning.dark", fontWeight: 750 }}>Feriado: {selectedHoliday.name}</Typography>}<List dense sx={{ maxHeight: 150, overflowY: "auto" }}>{selectedEvents.map((item) => <ListItemButton key={item.id} onClick={() => go(item.path)} sx={{ px: .5, borderRadius: 1 }}><ListItemText primary={item.title} secondary={item.subtitle} slotProps={{ primary: { sx: { fontSize: ".76rem", fontWeight: 700 } }, secondary: { noWrap: true, sx: { fontSize: ".66rem" } } }} /></ListItemButton>)}{!selectedEvents.length && <Typography variant="body2" color="text.secondary" sx={{ py: 1.5 }}>Nenhum evento operacional nesta data.</Typography>}</List></Box>
+          <Box sx={{ mt: 1, pt: 1, borderTop: "1px solid", borderColor: "divider" }}>
+            <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between", gap: 1 }}>
+              <Box sx={{ minWidth: 0 }}>
+                <Typography sx={{ fontWeight: 800, fontSize: ".88rem" }}>{new Date(`${selectedDate}T12:00:00`).toLocaleDateString("pt-BR", { dateStyle: "full" })}</Typography>
+                {selectedHoliday && <Typography variant="caption" sx={{ color: "warning.dark", fontWeight: 750 }}>Feriado: {selectedHoliday.name}</Typography>}
+              </Box>
+              <Button size="small" variant="contained" startIcon={<AddOutlined />} onClick={() => openCreateMeeting(selectedDate)} sx={{ whiteSpace: "nowrap", textTransform: "none" }}>Reunião</Button>
+            </Stack>
+            <List dense sx={{ maxHeight: 210, overflowY: "auto", mt: .4 }}>
+              {selectedEvents.map((item) => item.kind === "meeting" && item.meeting
+                ? <ListItemButton key={item.id} onClick={() => openMeeting(item.meeting!)} sx={{ px: .7, py: .65, borderRadius: 1.4, mb: .3, border: "1px solid", borderColor: "rgba(24,199,122,.18)", bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(24,199,122,.035)" : "rgba(24,199,122,.025)" }}>
+                    <Box sx={{ width: 30, height: 30, mr: .8, borderRadius: 1.3, display: "grid", placeItems: "center", bgcolor: "rgba(24,199,122,.10)", color: "primary.main", flexShrink: 0 }}><VideoCallOutlined sx={{ fontSize: 18 }} /></Box>
+                    <ListItemText primary={item.title} secondary={item.subtitle} slotProps={{ primary: { sx: { fontSize: ".76rem", fontWeight: 800 } }, secondary: { noWrap: true, sx: { fontSize: ".66rem" } } }} />
+                    <Chip size="small" label="Reunião" color="success" variant="outlined" sx={{ height: 20, fontSize: ".62rem" }} />
+                  </ListItemButton>
+                : <ListItemButton key={item.id} onClick={() => go(item.path)} sx={{ px: .5, borderRadius: 1 }}>
+                    <ListItemText primary={item.title} secondary={item.subtitle} slotProps={{ primary: { sx: { fontSize: ".76rem", fontWeight: 700 } }, secondary: { noWrap: true, sx: { fontSize: ".66rem" } } }} />
+                  </ListItemButton>
+              )}
+              {!selectedEvents.length && <Typography variant="body2" color="text.secondary" sx={{ py: 1.5 }}>Nenhum evento nesta data. Você pode agendar uma reunião.</Typography>}
+            </List>
+          </Box>
         </Box>
       </Popover>
+
+      <Dialog open={meetingDialogOpen} onClose={() => !meetingSaving && setMeetingDialogOpen(false)} fullWidth maxWidth="sm">
+        <DialogTitle sx={{ pb: 1 }}>
+          <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between", gap: 1 }}>
+            <Box>
+              <Typography variant="h6" sx={{ fontWeight: 900 }}>{editingMeeting ? "Detalhes da reunião" : "Agendar reunião"}</Typography>
+              <Typography variant="caption" color="text.secondary">{editingMeeting ? `Organizada por ${editingMeeting.createdBy.name}` : "A reunião ficará visível no calendário dos participantes internos."}</Typography>
+            </Box>
+            {editingMeeting && <Chip size="small" color="success" variant="outlined" label="Reunião" />}
+          </Stack>
+        </DialogTitle>
+        <DialogContent dividers>
+          {meetingError && <Alert severity="error" sx={{ mb: 1.5 }}>{meetingError}</Alert>}
+          <Stack spacing={1.35} sx={{ pt: .3 }}>
+            <TextField
+              autoFocus={!editingMeeting}
+              fullWidth
+              label="Assunto da reunião"
+              value={meetingForm.title}
+              disabled={Boolean(editingMeeting && !editingMeeting.canManage)}
+              onChange={(event) => setMeetingForm((current) => ({ ...current, title: event.target.value }))}
+              slotProps={{ htmlInput: { maxLength: 180 } }}
+            />
+            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" }, gap: 1 }}>
+              <TextField
+                label="Início"
+                type="datetime-local"
+                value={meetingForm.startAt}
+                disabled={Boolean(editingMeeting && !editingMeeting.canManage)}
+                onChange={(event) => setMeetingForm((current) => ({ ...current, startAt: event.target.value }))}
+                slotProps={{ inputLabel: { shrink: true } }}
+              />
+              <TextField
+                label="Término"
+                type="datetime-local"
+                value={meetingForm.endAt}
+                disabled={Boolean(editingMeeting && !editingMeeting.canManage)}
+                onChange={(event) => setMeetingForm((current) => ({ ...current, endAt: event.target.value }))}
+                slotProps={{ inputLabel: { shrink: true } }}
+              />
+            </Box>
+            <Autocomplete
+              multiple
+              options={meetingParticipants}
+              value={meetingParticipants.filter((person) => meetingForm.participantIds.includes(person.id))}
+              getOptionLabel={(person) => `${person.name} · @${person.username}`}
+              isOptionEqualToValue={(option, value) => option.id === value.id}
+              disabled={Boolean(editingMeeting && !editingMeeting.canManage)}
+              onChange={(_, values) => setMeetingForm((current) => ({ ...current, participantIds: values.map((person) => person.id) }))}
+              renderInput={(params) => <TextField {...params} label="Participantes internos" placeholder="Selecione pessoas do Hub" />}
+            />
+            <TextField
+              fullWidth
+              label="Convidados externos"
+              placeholder="email@cliente.com, outro@empresa.com"
+              helperText="Separe os e-mails por vírgula. O Hub não envia e-mail automaticamente nesta versão; use o convite .ics."
+              value={meetingForm.externalAttendees}
+              disabled={Boolean(editingMeeting && !editingMeeting.canManage)}
+              onChange={(event) => setMeetingForm((current) => ({ ...current, externalAttendees: event.target.value }))}
+            />
+            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" }, gap: 1 }}>
+              <TextField
+                fullWidth
+                label="Local"
+                placeholder="Teams, Sala 1, Meet..."
+                value={meetingForm.location}
+                disabled={Boolean(editingMeeting && !editingMeeting.canManage)}
+                onChange={(event) => setMeetingForm((current) => ({ ...current, location: event.target.value }))}
+              />
+              <TextField
+                fullWidth
+                label="Link da reunião"
+                placeholder="https://teams.microsoft.com/..."
+                value={meetingForm.meetingUrl}
+                disabled={Boolean(editingMeeting && !editingMeeting.canManage)}
+                onChange={(event) => setMeetingForm((current) => ({ ...current, meetingUrl: event.target.value }))}
+              />
+            </Box>
+            <TextField
+              fullWidth
+              multiline
+              minRows={3}
+              label="Pauta / descrição"
+              value={meetingForm.description}
+              disabled={Boolean(editingMeeting && !editingMeeting.canManage)}
+              onChange={(event) => setMeetingForm((current) => ({ ...current, description: event.target.value }))}
+              slotProps={{ htmlInput: { maxLength: 4000 } }}
+            />
+            {editingMeeting && <>
+              <Divider />
+              <Stack direction={{ xs: "column", sm: "row" }} spacing={.8}>
+                {editingMeeting.meetingUrl && <Button variant="outlined" startIcon={<OpenInNewOutlined />} component="a" href={editingMeeting.meetingUrl} target="_blank" rel="noopener noreferrer">Abrir reunião</Button>}
+                <Button variant="outlined" startIcon={<DownloadOutlined />} onClick={() => downloadMeetingInvite(editingMeeting)}>Baixar convite .ics</Button>
+              </Stack>
+            </>}
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={{ px: 2.5, py: 1.4, justifyContent: "space-between" }}>
+          <Box>
+            {editingMeeting?.canManage && <Button color="error" startIcon={<DeleteOutlineOutlined />} disabled={meetingSaving} onClick={() => void cancelMeeting()}>Cancelar reunião</Button>}
+          </Box>
+          <Stack direction="row" spacing={1}>
+            <Button disabled={meetingSaving} onClick={() => setMeetingDialogOpen(false)}>Fechar</Button>
+            {(!editingMeeting || editingMeeting.canManage) && <Button variant="contained" disabled={meetingSaving || meetingForm.title.trim().length < 3} onClick={() => void saveMeeting()}>{meetingSaving ? "Salvando..." : editingMeeting ? "Salvar alterações" : "Agendar"}</Button>}
+          </Stack>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }
 
 function dateKey(date: Date) { return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`; }
+function dateTimeLocal(date: Date) { return `${dateKey(date)}T${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`; }
+function defaultMeetingForm(date: string): MeetingForm {
+  const now = new Date();
+  const isToday = date === dateKey(now);
+  const start = isToday ? new Date(now) : new Date(`${date}T09:00:00`);
+  if (isToday) {
+    start.setSeconds(0,0);
+    const minutes = start.getMinutes();
+    const rounded = Math.ceil((minutes + 1) / 30) * 30;
+    start.setMinutes(rounded);
+  }
+  const end = new Date(start.getTime() + 30 * 60_000);
+  return { title:"", startAt:dateTimeLocal(start), endAt:dateTimeLocal(end), participantIds:[], externalAttendees:"", location:"", meetingUrl:"", description:"" };
+}
 function calendarDays(month: Date) { const first = new Date(month.getFullYear(), month.getMonth(), 1); const start = new Date(first); start.setDate(first.getDate() - first.getDay()); return Array.from({ length: 42 }, (_, index) => { const day = new Date(start); day.setDate(start.getDate() + index); return day; }); }
