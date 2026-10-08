@@ -265,6 +265,10 @@ export function CorrectionMonthlyPanel() {
     {name:"Não priorizadas",total:periodRows.filter(row=>row.prioritized===false).length},
     {name:"Não informado",total:periodRows.filter(row=>row.prioritized===null).length},
   ].filter(item=>item.total);
+  const pipelineTotal=pipeline.reduce((sum,item)=>sum+item.total,0);
+  const urgencyTotal=urgency.reduce((sum,item)=>sum+item.total,0);
+  const priorityTotal=priority.reduce((sum,item)=>sum+item.total,0);
+  const distributionConsistent=pipelineTotal===periodUniverse&&urgencyTotal===periodUniverse&&priorityTotal===periodUniverse;
 
   const selectedRows = useMemo(() => base.filter(row => {
     if(drill) return match(row,drill);
@@ -358,6 +362,7 @@ export function CorrectionMonthlyPanel() {
     minHeight:360,
     display:"flex",
     boxShadow:theme.palette.mode==="dark"?"0 14px 34px rgba(0,0,0,.13)":"0 10px 28px rgba(15,23,42,.045)",
+    "& .recharts-bar-rectangle, & .recharts-sector":{cursor:"pointer"},
   };
 
   return <Box sx={{order:.5,display:"grid",gap:1.35}}>
@@ -461,15 +466,18 @@ export function CorrectionMonthlyPanel() {
         }}>
           <CardContent sx={{py:1.25,"&:last-child":{pb:1.25}}}>
             <Stack direction={{xs:"column",lg:"row"}} justifyContent="space-between" alignItems={{lg:"center"}} gap={1.25}>
-              <Box sx={{display:"flex",alignItems:"center",gap:.5}}>
+              <Box sx={{display:"flex",alignItems:"center",gap:.7,flexWrap:"wrap"}}>
                 <Box>
                   <Typography sx={{fontWeight:850}}>Leitura do período</Typography>
                   <Typography variant="caption" color="text.secondary">Balanço operacional do recorte selecionado.</Typography>
                 </Box>
                 <InfoButton
                   title="Leitura do período"
-                  description="Resumo gerencial derivado dos seis indicadores oficiais. Saídas = Entregues + Canceladas; saldo líquido = Registradas − Saídas; variação do backlog = Backlog atual − Backlog inicial."
+                  description="Resumo gerencial derivado dos seis indicadores oficiais. Saídas = Entregues + Canceladas; saldo líquido = Registradas − Saídas; variação do backlog = Backlog atual − Backlog inicial. A checagem de consistência compara o total do Pipeline, Urgência e Priorização com o universo do período."
                 />
+                <MuiTooltip title={distributionConsistent?"Pipeline, Urgência e Priorização fecham com o mesmo universo do período.":`Divergência: universo ${periodUniverse}, pipeline ${pipelineTotal}, urgência ${urgencyTotal}, priorização ${priorityTotal}.`}>
+                  <Chip size="small" color={distributionConsistent?"success":"warning"} variant="outlined" label={distributionConsistent?"Recorte consistente":"Revisar distribuição"}/>
+                </MuiTooltip>
               </Box>
               <Box sx={{display:"grid",gridTemplateColumns:{xs:"repeat(2,minmax(0,1fr))",md:"repeat(4,minmax(110px,1fr))"},gap:{xs:1,md:2.2}}}>
                 {[
@@ -611,7 +619,7 @@ export function CorrectionMonthlyPanel() {
                 <TableBody>
                   {detailed.map(row=>
                     <TableRow hover key={row.id} onClick={()=>{setSelectedTaskId(row.id);setDrawerTitle(`Task #${row.id}`);setDrawerOpen(true)}} sx={{cursor:"pointer"}}>
-                      <TableCell><Button size="small" onClick={event=>{event.stopPropagation();navigate(`/correcoes?task=${row.id}`)}}>{row.id}</Button></TableCell>
+                      <TableCell><Button size="small" onClick={event=>{event.stopPropagation();setDrawerOpen(false);navigate(`/correcoes?task=${row.id}`)}}>{row.id}</Button></TableCell>
                       <TableCell sx={{minWidth:240,maxWidth:360,fontWeight:650}}>{row.title}</TableCell>
                       <TableCell>{row.client||"—"}</TableCell>
                       <TableCell>{row.createdBy||"—"}</TableCell>
@@ -677,7 +685,7 @@ export function CorrectionMonthlyPanel() {
                   ]}/>
                 </Box>
                 <Box sx={{display:"grid",gridTemplateColumns:{xs:"1fr",sm:"repeat(3,minmax(0,1fr))"},gap:.7,mt:1.2}}>
-                  <Button size="small" variant="contained" onClick={()=>navigate(`/correcoes?task=${selectedTask.id}`)}>
+                  <Button size="small" variant="contained" onClick={()=>{setDrawerOpen(false);navigate(`/correcoes?task=${selectedTask.id}`)}}>
                     Ver no Hub
                   </Button>
                   <Button size="small" variant="outlined" startIcon={<ShareOutlined/>} onClick={()=>shareTask(selectedTask)}>
