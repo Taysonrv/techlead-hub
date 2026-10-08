@@ -420,7 +420,10 @@ export class GlobalController {
 
     events.sort((left, right) => new Date(String(left.date)).getTime() - new Date(String(right.date)).getTime());
     const years = Array.from(new Set([start.getUTCFullYear(), end.getUTCFullYear()]));
-    const holidays = years.flatMap(brazilianHolidays).filter((item) => item.date >= start && item.date < end);
+    // Feriados são datas civis, não instantes operacionais. Não aplicamos o
+    // recorte start/end por timestamp para evitar deslocamento no primeiro dia
+    // do mês em fusos negativos (ex.: America/Sao_Paulo).
+    const holidays = years.flatMap(brazilianHolidays);
     return res.json({ events, holidays });
   };
 }
