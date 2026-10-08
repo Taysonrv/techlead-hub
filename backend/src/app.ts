@@ -77,13 +77,39 @@ app.use(
 );
 
 const requestWindows = new Map<string, { startedAt: number; count: number }>();
+
+function requestRateLimitIdentity(req: express.Request) {
+  const authorization = req.get("authorization")?.trim();
+  if (authorization?.toLocaleLowerCase("en-US").startsWith("bearer ") && authorization.length > 20) {
+    const fingerprint = crypto.createHash("sha256").update(authorization).digest("hex").slice(0, 24);
+    return `session:${fingerprint}`;
+  }
+  return `ip:${req.ip || req.socket.remoteAddress || "unknown"}`;
+}
+
+function isBackgroundApiRequest(req: express.Request) {
+  const key = `${req.method.toUpperCase()} ${req.path}`;
+  return new Set([
+    "POST /auth/heartbeat",
+    "GET /notifications",
+    "GET /notifications/meetings",
+    "GET /chat/channels",
+    "GET /chat/events",
+    "POST /chat/presence",
+  ]).has(key);
+}
+
 app.use("/api", (req, res, next) => {
   if (req.path === "/auth/login") return next();
+
   const windowMs = Math.max(Number(process.env.API_RATE_LIMIT_WINDOW_MS ?? 60_000), 10_000);
-  const maxRequests = Math.max(Number(process.env.API_RATE_LIMIT_MAX ?? 600), 60);
+  const configuredMax = Math.max(Number(process.env.API_RATE_LIMIT_MAX ?? 600), 60);
+  const background = isBackgroundApiRequest(req);
+  const maxRequests = background ? Math.max(configuredMax, 240) : configuredMax;
   const now = Date.now();
-  const key = req.ip || req.socket.remoteAddress || "unknown";
+  const key = `${requestRateLimitIdentity(req)}:${background ? "background" : "foreground"}`;
   const current = requestWindows.get(key);
+
   if (!current || current.startedAt <= now - windowMs) {
     requestWindows.set(key, { startedAt: now, count: 1 });
   } else {
@@ -91,9 +117,13 @@ app.use("/api", (req, res, next) => {
     if (current.count > maxRequests) {
       const retryAfter = Math.max(1, Math.ceil((current.startedAt + windowMs - now) / 1000));
       res.setHeader("Retry-After", String(retryAfter));
-      return res.status(429).json({ error: "Muitas requisições. Aguarde alguns instantes e tente novamente." });
+      return res.status(429).json({
+        error: "Muitas requisições. Aguarde alguns instantes e tente novamente.",
+        retryAfterSeconds: retryAfter,
+      });
     }
   }
+
   if (requestWindows.size > 5_000) {
     for (const [entryKey, value] of requestWindows) {
       if (value.startedAt <= now - windowMs) requestWindows.delete(entryKey);
