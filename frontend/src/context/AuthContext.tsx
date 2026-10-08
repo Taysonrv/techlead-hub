@@ -286,8 +286,9 @@ export function AuthProvider({
           setUser((current) => {
             const next = response.data.user!;
             if (!current) return next;
+            const samePermissions = JSON.stringify(current.permissions ?? []) === JSON.stringify(next.permissions ?? []);
             return current.updatedAt === next.updatedAt &&
-              current.permissions === next.permissions &&
+              samePermissions &&
               current.role === next.role &&
               current.active === next.active &&
               current.approvalStatus === next.approvalStatus
