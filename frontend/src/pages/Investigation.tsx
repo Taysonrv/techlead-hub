@@ -40,13 +40,76 @@ function reportScalar(value:unknown):string{
  try{return JSON.stringify(value)}catch{return String(value)}
 }
 
+const reportLabels:Record<string,string>={
+ movideskId:"Atendimento",
+ subject:"Assunto",
+ client:"Cliente",
+ status:"Status",
+ score:"Score",
+ matchedTerms:"Termos correlacionados",
+ deliveredVersion:"Versão entregue",
+ registeredVersion:"Versão registrada",
+ id:"ID",
+ title:"Título",
+ workItemType:"Tipo",
+ state:"Status Azure",
+ severity:"Severidade",
+ symptom:"Sintoma",
+ solution:"Solução",
+ workaround:"Solução de contorno",
+ technicalSolution:"Solução técnica",
+ version:"Versão",
+ kind:"Tipo de evidência",
+ mapName:"Mapa",
+ path:"Caminho",
+ total:"Quantidade",
+ name:"Nome",
+ nodeText:"Regra",
+ date:"Data",
+ source:"Fonte",
+ reasons:"Motivos",
+ signals:"Sinais",
+ explanation:"Explicação",
+ key:"Chave",
+ label:"Indicador",
+ value:"Valor",
+ detail:"Detalhe",
+ query:"Consulta",
+ terms:"Termos",
+ original:"Texto original",
+ concepts:"Conceitos",
+ phrases:"Frases",
+ interpretation:"Interpretação",
+ strategy:"Estratégia",
+ tickets:"Tickets",
+ workItems:"Itens Azure",
+ knownProblems:"Problemas conhecidos",
+ evidence:"Evidências",
+ rules:"Regras",
+ clients:"Clientes",
+ strongRecurrence:"Recorrências fortes",
+ similarCases:"Casos semelhantes",
+ relatedWorkItems:"Itens Azure relacionados",
+ technicalEvidence:"Evidências técnicas",
+ service:"Serviço",
+ quality:"Qualidade",
+ checks:"Validações",
+ owner:"Responsável",
+ category:"Categoria",
+ cause:"Causa",
+};
+
+function reportLabel(key:string){
+ return reportLabels[key]??key.replace(/([a-z])([A-Z])/g,"$1 $2").replace(/^./,value=>value.toUpperCase());
+}
+
 function reportTable(rows:Array<Record<string,unknown>>,preferred?:string[]){
  if(!rows.length) return '<p class="empty">Nenhum registro.</p>';
  const discovered=[...new Set(rows.flatMap(row=>Object.keys(row)))];
  const columns=preferred?.length
   ? [...preferred.filter(key=>discovered.includes(key)),...discovered.filter(key=>!preferred.includes(key))]
   : discovered;
- return `<div class="table-wrap"><table><thead><tr>${columns.map(key=>`<th>${reportEscape(key)}</th>`).join("")}</tr></thead><tbody>${rows.map(row=>`<tr>${columns.map(key=>`<td>${reportEscape(reportScalar(row[key]))}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
+ return `<div class="table-wrap"><table><thead><tr>${columns.map(key=>`<th>${reportEscape(reportLabel(key))}</th>`).join("")}</tr></thead><tbody>${rows.map(row=>`<tr>${columns.map(key=>`<td>${reportEscape(reportScalar(row[key]))}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
 }
 
 function reportObject(title:string,value:unknown){
@@ -58,7 +121,7 @@ function reportObject(title:string,value:unknown){
  }
  if(typeof value==="object"){
   const entries=Object.entries(value as Record<string,unknown>);
-  return `<section><h2>${reportEscape(title)}</h2><div class="kv">${entries.map(([key,item])=>`<div><span>${reportEscape(key)}</span><strong>${reportEscape(reportScalar(item))}</strong></div>`).join("")}</div></section>`;
+  return `<section><h2>${reportEscape(title)}</h2><div class="kv">${entries.map(([key,item])=>`<div><span>${reportEscape(reportLabel(key))}</span><strong>${reportEscape(reportScalar(item))}</strong></div>`).join("")}</div></section>`;
  }
  return `<section><h2>${reportEscape(title)}</h2><div class="text-block">${reportEscape(reportScalar(value))}</div></section>`;
 }
@@ -83,6 +146,7 @@ function buildInvestigationReportHtml(input:InvestigationReportInput){
  if(input.topicData){
   const topic=input.topicData;
   sections.push(reportObject("Contexto interpretado",topic.context??{query:topic.query,terms:topic.terms}));
+  sections.push(reportObject("Termos da investigação",topic.terms));
   sections.push(reportObject("Resumo da investigação",topic.summary));
   sections.push(reportObject("Leitura investigativa",topic.signals));
   sections.push(`<section><h2>Tickets correlacionados</h2>${reportTable(topic.tickets as unknown as Array<Record<string,unknown>>,["movideskId","subject","client","status","score","matchedTerms","registeredVersion","deliveredVersion"])}</section>`);
