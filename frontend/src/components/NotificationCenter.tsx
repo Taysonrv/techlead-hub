@@ -23,6 +23,7 @@ import {
   TaskAltOutlined,
   AlternateEmailOutlined,
   WarningAmberOutlined,
+  VideoCallOutlined,
 } from "@mui/icons-material";
 
 import {
@@ -58,7 +59,8 @@ type NotificationKind =
   | "AZURE_UPDATED"
   | "CHAT_MENTION"
   | "OPERATION_ALERT"
-  | "KNOWN_PROBLEM";
+  | "KNOWN_PROBLEM"
+  | "MEETING_REMINDER";
 
 type HubNotification = {
   key: string;
@@ -67,6 +69,7 @@ type HubNotification = {
   message: string;
   occurredAt: string;
   path: string;
+  meetingId?: number;
   read?: boolean;
 };
 
@@ -182,11 +185,38 @@ export function NotificationCenter() {
     }
   }, [user]);
 
+  const loadMeetingReminders = useCallback(async () => {
+    if (!user) return;
+    try {
+      const response = await api.get<{ notifications: HubNotification[] }>("/notifications/meetings");
+      const meetingItems = response.data.notifications ?? [];
+      setItems((current) => {
+        const otherItems = current.filter((item) => item.kind !== "MEETING_REMINDER");
+        return [...meetingItems, ...otherItems]
+          .sort((left, right) => new Date(right.occurredAt).getTime() - new Date(left.occurredAt).getTime())
+          .slice(0, 80);
+      });
+    } catch (error) {
+      console.warn("[notifications] Não foi possível carregar lembretes de reunião:", error);
+    }
+  }, [user]);
+
   useEffect(() => {
     void load();
     const timer = window.setInterval(() => void load(), 60_000);
     return () => window.clearInterval(timer);
   }, [load]);
+
+  useEffect(() => {
+    void loadMeetingReminders();
+    const timer = window.setInterval(() => void loadMeetingReminders(), 15_000);
+    const refresh = () => { void loadMeetingReminders(); };
+    window.addEventListener("techlead-hub:notifications-refresh", refresh);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("techlead-hub:notifications-refresh", refresh);
+    };
+  }, [loadMeetingReminders]);
 
   useEffect(() => {
     const updates = window.techLeadHub?.updates;
@@ -196,7 +226,7 @@ export function NotificationCenter() {
     return updates.onStateChange(addDesktopUpdate);
   }, [addDesktopUpdate]);
 
-  const enabledForKind = useCallback((kind: NotificationKind) => kind === "CHAT_MENTION" ? localPreferences.chat : (kind === "OPERATION_ALERT" || kind === "KNOWN_PROBLEM") ? localPreferences.operation : kind === "APP_VERSION" ? localPreferences.appVersion : kind === "SIMER_VERSION" ? localPreferences.simerVersion : kind === "AZURE_COMPLETED" ? localPreferences.azureCompleted : localPreferences.azureUpdated, [localPreferences]);
+  const enabledForKind = useCallback((kind: NotificationKind) => kind === "CHAT_MENTION" ? localPreferences.chat : (kind === "OPERATION_ALERT" || kind === "KNOWN_PROBLEM" || kind === "MEETING_REMINDER") ? localPreferences.operation : kind === "APP_VERSION" ? localPreferences.appVersion : kind === "SIMER_VERSION" ? localPreferences.simerVersion : kind === "AZURE_COMPLETED" ? localPreferences.azureCompleted : localPreferences.azureUpdated, [localPreferences]);
   const unread = useMemo(
     () => items.filter((item) => enabledForKind(item.kind) && !readKeys.includes(item.key)),
     [items, readKeys, enabledForKind],
@@ -212,7 +242,15 @@ export function NotificationCenter() {
     playNotificationSound(newest.kind === "CHAT_MENTION" ? "chat" : "system");
     if (preferences.desktopAlerts && "Notification" in window && Notification.permission === "granted") {
       const alert = new Notification(newest.title, { body: newest.message });
-      alert.onclick = () => navigate(newest.path);
+      alert.onclick = () => {
+        window.focus();
+        if (newest.kind === "MEETING_REMINDER" && newest.meetingId) {
+          window.dispatchEvent(new CustomEvent("techlead-hub:open-meeting", { detail: { meetingId: newest.meetingId } }));
+        } else {
+          navigate(newest.path);
+        }
+        alert.close();
+      };
     }
   }, [unread, navigate, preferences.desktopAlerts]);
 
@@ -230,6 +268,10 @@ export function NotificationCenter() {
       void api.post("/notifications/read", { keys: [item.key] });
     }
     setAnchor(null);
+    if (item.kind === "MEETING_REMINDER" && item.meetingId) {
+      window.dispatchEvent(new CustomEvent("techlead-hub:open-meeting", { detail: { meetingId: item.meetingId } }));
+      return;
+    }
     navigate(item.path);
   }
 
@@ -323,6 +365,8 @@ export function NotificationCenter() {
             ? Inventory2Outlined
             : item.kind === "SIMER_VERSION"
               ? OpenInNewOutlined
+              : item.kind === "MEETING_REMINDER"
+                ? VideoCallOutlined
               : item.kind === "CHAT_MENTION"
                 ? AlternateEmailOutlined
                 : (item.kind === "OPERATION_ALERT" || item.kind === "KNOWN_PROBLEM")
@@ -373,7 +417,7 @@ export function NotificationCenter() {
         {showPreferences && (
           <Stack sx={{ px: 2, pb: 1.5 }}>
             <Typography variant="caption" sx={{ fontWeight: 850, color: "text.secondary", mb: .5 }}>Canais e sons</Typography>
-            {([["sound","Som das notificações"],["chat","Chat e menções"],["operation","Alertas operacionais"]] as Array<[keyof LocalNotificationPreferences,string]>).map(([key,label]) => <FormControlLabel key={key} control={<Switch size="small" checked={localPreferences[key]} onChange={(_,checked)=>changeLocalPreference(key,checked)} />} label={label} sx={{ "& .MuiFormControlLabel-label": { fontSize: "0.76rem" } }} />)}
+            {([["sound","Som das notificações"],["chat","Chat e menções"],["operation","Alertas operacionais e reuniões"]] as Array<[keyof LocalNotificationPreferences,string]>).map(([key,label]) => <FormControlLabel key={key} control={<Switch size="small" checked={localPreferences[key]} onChange={(_,checked)=>changeLocalPreference(key,checked)} />} label={label} sx={{ "& .MuiFormControlLabel-label": { fontSize: "0.76rem" } }} />)}
             <Divider sx={{ my: .75 }} />
             <Typography variant="caption" sx={{ fontWeight: 850, color: "text.secondary", mb: .5 }}>Sistema e desenvolvimento</Typography>
             {([
@@ -399,7 +443,7 @@ export function NotificationCenter() {
           </Stack>
         )}
       </Menu>
-      <Snackbar open={Boolean(toast)} autoHideDuration={6500} onClose={()=>setToast(null)} anchorOrigin={{vertical:"bottom",horizontal:"right"}}>
+      <Snackbar open={Boolean(toast)} autoHideDuration={10000} onClose={()=>setToast(null)} anchorOrigin={{vertical:"bottom",horizontal:"right"}}>
         <Alert severity="info" variant="filled" onClose={()=>setToast(null)} onClick={()=>{if(toast){const item=toast;setToast(null);openNotification(item)}}} sx={{cursor:"pointer",minWidth:{sm:360},boxShadow:"0 16px 42px rgba(0,0,0,.28)"}}>
           <Typography sx={{fontWeight:850,fontSize:".82rem"}}>{toast?.title}</Typography>
           <Typography sx={{fontSize:".76rem",opacity:.92}}>{toast?.message}</Typography>
