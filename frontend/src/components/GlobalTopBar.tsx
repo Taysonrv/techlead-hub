@@ -98,6 +98,130 @@ export function GlobalTopBar() {
   const selectedEvents = events.filter((item) => dateKey(new Date(item.date)) === selectedDate);
   const selectedHoliday = holidays.find((item) => dateKey(new Date(item.date)) === selectedDate);
 
+  async function ensureMeetingParticipants() {
+    if (meetingParticipants.length) return;
+    try {
+      const response = await api.get<{ participants: CalendarPerson[] }>("/global/calendar/participants");
+      setMeetingParticipants(response.data.participants ?? []);
+    } catch {
+      setMeetingParticipants([]);
+    }
+  }
+
+  function openCreateMeeting(date = selectedDate) {
+    setEditingMeeting(null);
+    setMeetingError("");
+    setMeetingForm(defaultMeetingForm(date));
+    setCalendarAnchor(null);
+    setMeetingDialogOpen(true);
+    void ensureMeetingParticipants();
+  }
+
+  function openMeeting(meeting: CalendarMeeting) {
+    setEditingMeeting(meeting);
+    setMeetingError("");
+    setMeetingForm({
+      title: meeting.title,
+      startAt: dateTimeLocal(new Date(meeting.startAt)),
+      endAt: dateTimeLocal(new Date(meeting.endAt)),
+      participantIds: meeting.participants.map((person) => person.id),
+      externalAttendees: meeting.externalAttendees.join(", "),
+      location: meeting.location ?? "",
+      meetingUrl: meeting.meetingUrl ?? "",
+      description: meeting.description ?? "",
+    });
+    setCalendarAnchor(null);
+    setMeetingDialogOpen(true);
+    void ensureMeetingParticipants();
+  }
+
+  async function saveMeeting() {
+    setMeetingSaving(true);
+    setMeetingError("");
+    try {
+      const startAt = new Date(meetingForm.startAt);
+      const endAt = new Date(meetingForm.endAt);
+      if (!Number.isFinite(startAt.getTime()) || !Number.isFinite(endAt.getTime())) {
+        setMeetingError("Informe data e horário válidos.");
+        return;
+      }
+      const payload = {
+        title: meetingForm.title,
+        description: meetingForm.description,
+        startAt: startAt.toISOString(),
+        endAt: endAt.toISOString(),
+        timezone: "America/Sao_Paulo",
+        location: meetingForm.location,
+        meetingUrl: meetingForm.meetingUrl,
+        participantIds: meetingForm.participantIds,
+        externalAttendees: meetingForm.externalAttendees.split(/[;,\n]/).map((value) => value.trim()).filter(Boolean),
+      };
+      const response = editingMeeting
+        ? await api.put<{ meeting: CalendarMeeting }>(`/global/calendar/meetings/${editingMeeting.id}`, payload)
+        : await api.post<{ meeting: CalendarMeeting }>("/global/calendar/meetings", payload);
+      const saved = response.data.meeting;
+      const savedDate = new Date(saved.startAt);
+      setSelectedDate(dateKey(savedDate));
+      setMonth(new Date(savedDate.getFullYear(), savedDate.getMonth(), 1));
+      setMeetingDialogOpen(false);
+      setEditingMeeting(null);
+      setCalendarVersion((value) => value + 1);
+    } catch (requestError: any) {
+      setMeetingError(requestError?.response?.data?.message || "Não foi possível salvar a reunião.");
+    } finally {
+      setMeetingSaving(false);
+    }
+  }
+
+  async function cancelMeeting() {
+    if (!editingMeeting?.canManage) return;
+    if (!window.confirm(`Cancelar a reunião “${editingMeeting.title}”?`)) return;
+    setMeetingSaving(true);
+    setMeetingError("");
+    try {
+      await api.delete(`/global/calendar/meetings/${editingMeeting.id}`);
+      setMeetingDialogOpen(false);
+      setEditingMeeting(null);
+      setCalendarVersion((value) => value + 1);
+    } catch (requestError: any) {
+      setMeetingError(requestError?.response?.data?.message || "Não foi possível cancelar a reunião.");
+    } finally {
+      setMeetingSaving(false);
+    }
+  }
+
+  function downloadMeetingInvite(meeting: CalendarMeeting) {
+    const escapeIcs = (value: string) => value.replace(/\\/g, "\\\\").replace(/\n/g, "\\n").replace(/,/g, "\\,").replace(/;/g, "\\;");
+    const utc = (value: string) => new Date(value).toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
+    const attendees = [
+      ...meeting.participants.filter((person) => person.email).map((person) => `ATTENDEE;CN=${escapeIcs(person.name)}:mailto:${person.email}`),
+      ...meeting.externalAttendees.map((email) => `ATTENDEE:mailto:${email}`),
+    ];
+    const body = [
+      "BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//TechLead Hub//Calendar//PT-BR","CALSCALE:GREGORIAN","METHOD:PUBLISH",
+      "BEGIN:VEVENT",
+      `UID:techlead-hub-meeting-${meeting.id}@local`,
+      `DTSTAMP:${utc(new Date().toISOString())}`,
+      `DTSTART:${utc(meeting.startAt)}`,
+      `DTEND:${utc(meeting.endAt)}`,
+      `SUMMARY:${escapeIcs(meeting.title)}`,
+      meeting.description ? `DESCRIPTION:${escapeIcs(meeting.description)}` : "",
+      meeting.location ? `LOCATION:${escapeIcs(meeting.location)}` : "",
+      meeting.meetingUrl ? `URL:${meeting.meetingUrl}` : "",
+      ...attendees,
+      "END:VEVENT","END:VCALENDAR",
+    ].filter(Boolean).join("\r\n");
+    const blob = new Blob([body], { type: "text/calendar;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${meeting.title.replace(/[^a-zA-Z0-9_-]+/g, "_").slice(0,60) || "reuniao"}.ics`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
   function go(path: string) { setQuery(""); setResults([]); setCalendarAnchor(null); navigate(path); }
 
   function handleSearchKeyDown(event: KeyboardEvent<HTMLDivElement>) {
