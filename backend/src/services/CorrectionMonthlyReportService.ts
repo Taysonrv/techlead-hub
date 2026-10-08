@@ -20,6 +20,7 @@ const FIELD_CACHE_TTL_MS = 60 * 60_000;
 const AZURE_REQUEST_TIMEOUT_MS = 12_000;
 const REVISION_STAGE_TIMEOUT_MS = 25_000;
 const SNAPSHOT_STAGE_TIMEOUT_MS = 22_000;
+const REPORT_CACHE_TTL_MS = 2 * 60_000;
 
 function text(value: unknown): string | null {
   if (typeof value === "string") return value.trim() || null;
@@ -65,6 +66,8 @@ type Row = {
 export class CorrectionMonthlyReportService {
   private static cache = new Map<string,{expiresAt:number;revisions:Revision[]}>();
   private static fieldCache = new Map<string,{expiresAt:number;fields:FieldDefinition[]}>();
+  private static reportCache = new Map<string,{expiresAt:number;data:unknown}>();
+  private static inFlight = new Map<string,Promise<unknown>>();
 
   private azureConfig() {
     const organization=(process.env.AZURE_DEVOPS_ORGANIZATION??"").trim();
@@ -236,6 +239,29 @@ ASOF '${asOf.toISOString()}'`;
   }
 
   async get(month:string) {
+    // Em desenvolvimento o React StrictMode pode montar o painel duas vezes.
+    // Reutilizamos a mesma geração por mês para não duplicar as consultas
+    // históricas pesadas no Azure DevOps.
+    const cached=CorrectionMonthlyReportService.reportCache.get(month);
+    if(cached&&cached.expiresAt>Date.now()) return cached.data;
+
+    const existing=CorrectionMonthlyReportService.inFlight.get(month);
+    if(existing) return existing;
+
+    const generation=this.build(month)
+      .then(data=>{
+        CorrectionMonthlyReportService.reportCache.set(month,{expiresAt:Date.now()+REPORT_CACHE_TTL_MS,data});
+        return data;
+      })
+      .finally(()=>{
+        CorrectionMonthlyReportService.inFlight.delete(month);
+      });
+
+    CorrectionMonthlyReportService.inFlight.set(month,generation);
+    return generation;
+  }
+
+  private async build(month:string) {
     const {start,endExclusive,close}=saoPauloMonth(month);
     const currentPromise=prisma.azureWorkItem.findMany({where:{workItemType:"Correção Clientes"},select:{id:true,title:true,client:true,criticality:true,prioritized:true,assignedToName:true,remoteUrl:true,createdByName:true,azureCreatedAt:true,state:true,stateChangedAt:true,azureClosedAt:true,rawFields:true}});
     let fields:{client:string;prioritized:string;urgency:string}={client:AZURE_WORK_ITEM_FIELDS.client,prioritized:AZURE_WORK_ITEM_FIELDS.prioritized,urgency:AZURE_WORK_ITEM_FIELDS.criticality};
