@@ -229,7 +229,7 @@ ASOF '${asOf.toISOString()}'`;
     try {
       fields=await this.resolveFields();
       revisions=await this.revisions(fields,start);
-      historyAvailable=revisions.length>0;
+      historyAvailable=true;
     } catch(error) {
       historyError=error instanceof Error ? error.message : "Histórico do Azure indisponível.";
       console.warn(`[correction-monthly-report] Histórico do Azure indisponível; usando snapshot local. | ${historyError}`);
