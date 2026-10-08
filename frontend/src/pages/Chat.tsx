@@ -16,7 +16,7 @@ type RealtimeSnapshot = { presence: Presence[]; typing: Array<{ channelId: numbe
 export function Chat() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [channels, setChannels] = useState<Channel[]>(() => { try { return JSON.parse(sessionStorage.getItem("techlead-chat-channels") || "[]") as Channel[]; } catch { return []; } });
   const [participants, setParticipants] = useState<Person[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(() => { const value = Number(new URLSearchParams(window.location.search).get("channel")); return Number.isFinite(value) && value > 0 ? value : null; });
@@ -159,10 +159,15 @@ export function Chat() {
     }
     const requestedId = Number(searchParams.get("channel"));
     const requestedChannel = rawChannels.find((channel) => channel.id === requestedId);
-    if (requestedChannel && !nextChannels.some((channel) => channel.id === requestedChannel.id)) {
-      const requestedPeerId = requestedChannel.members?.map((member) => member.user.id).find((id) => id !== user?.id);
-      const canonical = requestedPeerId ? directByPeer.get(requestedPeerId) : undefined;
-      if (canonical) setSelectedId((current) => current === requestedChannel.id ? canonical.id : current);
+    let requestedTargetId: number | null = null;
+    if (requestedChannel) {
+      const directVisible = nextChannels.find((channel) => channel.id === requestedChannel.id);
+      if (directVisible) {
+        requestedTargetId = directVisible.id;
+      } else if (requestedChannel.type === "DIRECT") {
+        const requestedPeerId = requestedChannel.members?.map((member) => member.user.id).find((id) => id !== user?.id);
+        requestedTargetId = requestedPeerId ? directByPeer.get(requestedPeerId)?.id ?? null : null;
+      }
     }
     const previous = previousChannelState.current;
     if (previous.size) {
@@ -190,14 +195,18 @@ export function Chat() {
     }]));
     setChannels(nextChannels);
     try { sessionStorage.setItem("techlead-chat-channels", JSON.stringify(nextChannels)); } catch { /* cache opcional */ }
-    const requested = Number(searchParams.get("channel"));
     setSelectedId((current) =>
+      requestedTargetId ??
       current ??
-      nextChannels.find((channel) => channel.id === requested)?.id ??
       nextChannels[0]?.id ??
       null,
     );
-  }, [searchParams, user?.id]);
+    if (requestedTargetId && searchParams.has("channel")) {
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.delete("channel");
+      setSearchParams(nextParams, { replace: true });
+    }
+  }, [searchParams, setSearchParams, user?.id]);
 
   const loadMessages = useCallback(async (channelId: number, quiet = false) => {
     try {
