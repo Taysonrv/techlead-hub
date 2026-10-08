@@ -26,15 +26,23 @@ export function KnownProblems(){
  useEffect(()=>{void load();const t=window.setInterval(()=>void load(),10000);return()=>window.clearInterval(t)},[load]);
  useEffect(()=>{
    const problemId=Number(searchParams.get("problem"));
-   if(!Number.isSafeInteger(problemId)||problemId<=0||!items.length)return;
+   if(!Number.isSafeInteger(problemId)||problemId<=0)return;
+
+   if(q||status||severity||view!=="all"){
+     setQ("");setStatus("");setSeverity("");setView("all");
+     return;
+   }
+
+   if(!items.length)return;
    const target=items.find(item=>item.id===problemId);
    if(!target)return;
-   setQ("");setStatus("");setSeverity("");setView("all");setFocusedProblem(problemId);
+
+   setFocusedProblem(problemId);
    const scrollTimer=window.setTimeout(()=>document.getElementById(`known-problem-${problemId}`)?.scrollIntoView({behavior:"smooth",block:"center"}),120);
    const clearTimer=window.setTimeout(()=>setFocusedProblem(current=>current===problemId?null:current),5000);
    const next=new URLSearchParams(searchParams);next.delete("problem");setSearchParams(next,{replace:true});
    return()=>{window.clearTimeout(scrollTimer);window.clearTimeout(clearTimer)};
- },[items,searchParams,setSearchParams]);
+ },[items,searchParams,setSearchParams,q,status,severity,view]);
  useEffect(()=>{api.get<{items:Candidate[]}>("/known-problems/candidates").then(r=>setCandidates(r.data.items)).catch(()=>setCandidates([]));},[items.length]);
  async function loadDna(service:string){try{setDnaLoading(true);const r=await api.get<TechnicalDna>("/known-problems/technical-dna",{params:{service}});setDna(r.data)}catch(e:unknown){setError(getApiErrorMessage(e,"Não foi possível consolidar o DNA Técnico."))}finally{setDnaLoading(false)}}
  function edit(item?:Problem){setSourceQuery("");setSources([]);if(item){setEditing(item.id);setForm({title:item.title,symptom:item.symptom,solution:item.solution,cause:item.cause??"",workaround:item.workaround??"",technicalSolution:item.technicalSolution??"",comment:item.comment??"",azureWorkItemType:item.azureWorkItemType??"",azureUrl:item.azureUrl??"",service:item.service??"",client:item.client??"",movideskTicket:item.movideskTicket??"",azureWorkItem:item.azureWorkItem??"",version:item.version??"",status:item.status,severity:item.severity,tags:item.tags??"",pinned:item.pinned})}else{setEditing(null);setForm(empty)}setOpen(true)}
