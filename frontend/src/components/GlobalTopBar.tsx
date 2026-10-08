@@ -48,6 +48,22 @@ export function GlobalTopBar() {
   }, []);
 
   useEffect(() => {
+    const openMeetingFromNotification = (event: Event) => {
+      const detail = (event as CustomEvent<{ meetingId?: number }>).detail;
+      const meetingId = Number(detail?.meetingId);
+      if (!Number.isSafeInteger(meetingId) || meetingId <= 0) return;
+      void api.get<{ meeting: CalendarMeeting }>(`/global/calendar/meetings/${meetingId}`)
+        .then((response) => openMeeting(response.data.meeting))
+        .catch((error) => {
+          console.warn("[calendar] Não foi possível abrir a reunião da notificação:", error);
+        });
+    };
+    window.addEventListener("techlead-hub:open-meeting", openMeetingFromNotification);
+    return () => window.removeEventListener("techlead-hub:open-meeting", openMeetingFromNotification);
+  }, [meetingParticipants]);
+
+
+  useEffect(() => {
     const updates = window.techLeadHub?.updates;
     if (!updates) return;
     void updates.getState().then(setUpdateState).catch(() => undefined);
@@ -166,6 +182,7 @@ export function GlobalTopBar() {
       setMeetingDialogOpen(false);
       setEditingMeeting(null);
       setCalendarVersion((value) => value + 1);
+      window.dispatchEvent(new Event("techlead-hub:notifications-refresh"));
     } catch (requestError) {
       setMeetingError(getApiErrorMessage(requestError, "Não foi possível salvar a reunião."));
     } finally {
