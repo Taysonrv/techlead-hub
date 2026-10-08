@@ -19,6 +19,7 @@ import {
   Typography,
 } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
+import CloseOutlined from "@mui/icons-material/CloseOutlined";
 
 import {
   Bar,
@@ -1101,14 +1102,7 @@ export function Dashboard() {
 
   return (
     <Box sx={{
-      mx: { xs: -1, md: -2 },
-      mt: { xs: -1, md: -2 },
-      p: { xs: 1.5, md: 2.5 },
-      minHeight: "100vh",
-      borderRadius: { xs: 0, md: 3 },
-      background: isDark
-        ? "radial-gradient(circle at 18% 0%, rgba(0,199,142,.08), transparent 26%), radial-gradient(circle at 88% 8%, rgba(47,111,237,.10), transparent 28%), linear-gradient(145deg,#061421 0%,#081A2C 52%,#06111D 100%)"
-        : "linear-gradient(180deg,#F8FAFC,#F4F6F8)",
+      minWidth: 0,
       "& .recharts-cartesian-grid line": { stroke: chartGrid },
       "& .recharts-cartesian-axis-tick text": { fill: chartTick },
       "& .recharts-default-tooltip": chartTooltipStyle,
@@ -1982,7 +1976,7 @@ export function Dashboard() {
           {developmentDrilldown && <>
             <Stack direction="row" sx={{justifyContent:"space-between",alignItems:"flex-start",gap:2}}>
               <Box><Typography variant="h6" sx={{fontWeight:800}}>{developmentDrilldown.title}</Typography><Typography variant="body2" color="text.secondary">{developmentDrilldown.subtitle}</Typography></Box>
-              <IconButton size="small" onClick={()=>setDevelopmentDrilldown(null)}>✕</IconButton>
+              <IconButton size="small" aria-label="Fechar detalhamento" onClick={()=>setDevelopmentDrilldown(null)}><CloseOutlined fontSize="small" /></IconButton>
             </Stack>
             <Stack direction="row" spacing={1} useFlexGap sx={{mt:2,mb:2,alignItems:"center",flexWrap:"wrap"}}>
               <Chip size="small" label={developmentDrilldown.items.length + " task(s)"} variant="outlined"/>
