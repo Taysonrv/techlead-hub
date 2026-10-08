@@ -360,7 +360,7 @@ export class NotificationService {
       title: "Problema conhecido atualizado",
       message: item.title,
       occurredAt: item.updatedAt,
-      path: "/problemas-conhecidos",
+      path: `/problemas-conhecidos?problem=${item.id}`,
     }));
 
     const now = new Date();
