@@ -42,7 +42,7 @@ export class NotificationService {
   public async meetingNotificationsForUser(userId: number): Promise<AppNotification[]> {
     const now = new Date();
     const recent = new Date(now.getTime() - 10 * 60_000);
-    const soon = new Date(now.getTime() + 15 * 60_000);
+    const soon = new Date(now.getTime() + 30 * 60_000);
 
     const meetings = await prisma.calendarMeeting.findMany({
       where: {
@@ -73,13 +73,15 @@ export class NotificationService {
     for (const meeting of meetings) {
       const startAt = meeting.startAt;
       const startIso = startAt.toISOString();
+      const reminderMinutes = [5,10,15,30].includes(meeting.reminderMinutes) ? meeting.reminderMinutes : 15;
+      const reminderAt = new Date(startAt.getTime() - reminderMinutes * 60_000);
       const timeLabel = new Intl.DateTimeFormat("pt-BR", {
         timeZone: meeting.timezone || "America/Sao_Paulo",
         hour: "2-digit",
         minute: "2-digit",
       }).format(startAt);
 
-      if (meeting.createdAt >= recent && startAt > soon) {
+      if (meeting.createdAt >= recent && now < reminderAt) {
         notifications.push({
           key: `meeting:scheduled:${meeting.id}:${meeting.createdAt.toISOString()}`,
           kind: "MEETING_REMINDER",
@@ -91,7 +93,6 @@ export class NotificationService {
         });
       }
 
-      const reminderAt = new Date(startAt.getTime() - 15 * 60_000);
       if (now >= reminderAt && now < startAt) {
         const minutes = Math.max(1, Math.ceil((startAt.getTime() - now.getTime()) / 60_000));
         const effectiveOccurredAt = meeting.createdAt > reminderAt ? meeting.createdAt : reminderAt;
@@ -99,7 +100,7 @@ export class NotificationService {
           key: `meeting:reminder:${meeting.id}:${startIso}`,
           kind: "MEETING_REMINDER",
           title: `Reunião em ${minutes} min`,
-          message: `${meeting.title} · ${timeLabel} · Organizador: ${meeting.createdBy.name}`,
+          message: `${meeting.title} · lembrete configurado: ${reminderMinutes} min · ${timeLabel} · Organizador: ${meeting.createdBy.name}`,
           occurredAt: effectiveOccurredAt,
           path: "/",
           meetingId: meeting.id,
