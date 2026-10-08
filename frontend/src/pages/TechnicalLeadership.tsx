@@ -274,12 +274,8 @@ export function TechnicalLeadership() {
   if (loading && !data) return <Box sx={{ minHeight: 420, display: "grid", placeItems: "center" }}><CircularProgress /></Box>;
 
   return <Box sx={{
-    mx: { xs: -1, md: -2 }, mt: { xs: -1, md: -2 }, p: { xs: 1.5, md: 2.5 }, borderRadius: { xs: 0, md: 3 },
-    minHeight: "100vh",
+    minWidth: 0,
     color: "text.primary",
-    background: mode === "dark"
-      ? "radial-gradient(circle at 20% 0%, rgba(0,199,142,.10), transparent 28%), radial-gradient(circle at 88% 12%, rgba(84,73,255,.12), transparent 30%), linear-gradient(145deg,#071321 0%,#09192B 48%,#07111F 100%)"
-      : "radial-gradient(circle at 18% 0%, rgba(24,199,122,.055), transparent 26%), linear-gradient(180deg,#F8FAFB,#F3F5F6)",
   }}>
     <PageHeader
       eyebrow="Liderança técnica"
