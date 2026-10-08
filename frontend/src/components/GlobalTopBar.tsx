@@ -3,7 +3,7 @@ import { Alert, Autocomplete, Badge, Box, Button, Chip, CircularProgress, Dialog
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
-import { api } from "../services/api";
+import { api, getApiErrorMessage } from "../services/api";
 import { aliareColors } from "../theme/theme";
 import { useColorMode } from "../context/ColorModeContext";
 
@@ -166,8 +166,8 @@ export function GlobalTopBar() {
       setMeetingDialogOpen(false);
       setEditingMeeting(null);
       setCalendarVersion((value) => value + 1);
-    } catch (requestError: any) {
-      setMeetingError(requestError?.response?.data?.message || "Não foi possível salvar a reunião.");
+    } catch (requestError) {
+      setMeetingError(getApiErrorMessage(requestError, "Não foi possível salvar a reunião."));
     } finally {
       setMeetingSaving(false);
     }
@@ -183,8 +183,8 @@ export function GlobalTopBar() {
       setMeetingDialogOpen(false);
       setEditingMeeting(null);
       setCalendarVersion((value) => value + 1);
-    } catch (requestError: any) {
-      setMeetingError(requestError?.response?.data?.message || "Não foi possível cancelar a reunião.");
+    } catch (requestError) {
+      setMeetingError(getApiErrorMessage(requestError, "Não foi possível cancelar a reunião."));
     } finally {
       setMeetingSaving(false);
     }
