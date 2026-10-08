@@ -10,6 +10,7 @@ type FieldDefinition = { name?: string; referenceName?: string };
 type FieldListResponse = { value?: FieldDefinition[] };
 type SnapshotItem = { id?: number; fields?: Record<string, unknown> };
 type SnapshotBatchResponse = { value?: SnapshotItem[] };
+type WiqlResponse = { workItems?: Array<{ id?: number }> };
 
 const TERMINAL = new Set(["Concluído", "Cancelado"]);
 const BACKLOG_EXCLUDED = new Set(["Registro", ...TERMINAL]);
@@ -87,6 +88,8 @@ export class CorrectionMonthlyReportService {
   private async resolveFields() {
     const definitions=await this.fieldDefinitions();
     const find=(terms:string[],fallback:string)=>{
+      const exact=definitions.find(field=>field.referenceName===fallback);
+      if(exact?.referenceName) return exact.referenceName;
       const match=definitions.find(field=>{
         const hay=normalized(`${field.name??""} ${field.referenceName??""}`);
         return terms.some(term=>hay.includes(normalized(term)));
@@ -141,6 +144,27 @@ export class CorrectionMonthlyReportService {
 
     CorrectionMonthlyReportService.cache.set(cacheKey,{expiresAt:Date.now()+CACHE_TTL_MS,revisions:all});
     return all;
+  }
+
+  private async workItemIdsAsOf(asOf:Date):Promise<number[]> {
+    const query = `SELECT [System.Id]
+FROM WorkItems
+WHERE [System.TeamProject] = @project
+  AND [System.WorkItemType] = 'Correção Clientes'
+ASOF '${asOf.toISOString()}'`;
+    const response=await this.client().post<WiqlResponse>(
+      "/_apis/wit/wiql",
+      {query},
+      {params:{"api-version":"7.1"}},
+    );
+    return [...new Set((response.data.workItems??[])
+      .map(item=>Number(item.id))
+      .filter((id):id is number=>Number.isSafeInteger(id)&&id>0))];
+  }
+
+  private workItemUrl(id:number) {
+    const {organization,project}=this.azureConfig();
+    return `https://dev.azure.com/${encodeURIComponent(organization)}/${encodeURIComponent(project)}/_workitems/edit/${id}`;
   }
 
   private async snapshots(
@@ -210,7 +234,26 @@ export class CorrectionMonthlyReportService {
       console.warn(`[correction-monthly-report] Histórico do Azure indisponível; usando snapshot local. | ${historyError}`);
     }
     const current=await currentPromise;
-    const candidateIds=current.map(item=>item.id);
+    const revisionIds=revisions
+      .map(revision=>Number(revision.id??revision.fields?.["System.Id"]))
+      .filter((id):id is number=>Number.isSafeInteger(id)&&id>0);
+    let historicalScopeIds:number[]=[];
+    let historicalScopeError:string|null=null;
+    try {
+      const [openingIds,closingIds]=await Promise.all([
+        this.workItemIdsAsOf(new Date(start.getTime()-1)),
+        this.workItemIdsAsOf(close),
+      ]);
+      historicalScopeIds=[...new Set([...openingIds,...closingIds])];
+    } catch(error) {
+      historicalScopeError=error instanceof Error ? error.message : "Escopo histórico ASOF indisponível.";
+      console.warn(`[correction-monthly-report] WIQL ASOF indisponível; usando revisões e base sincronizada. | ${historicalScopeError}`);
+    }
+    const candidateIds=[...new Set([
+      ...current.map(item=>item.id),
+      ...revisionIds,
+      ...historicalScopeIds,
+    ])];
     let openingSnapshot=new Map<number,SnapshotItem>();
     let closingSnapshot=new Map<number,SnapshotItem>();
     let snapshotAvailable=false;
@@ -238,15 +281,19 @@ export class CorrectionMonthlyReportService {
       const firstFields=firstHistory.fields??{};const createdAt=date(firstFields["System.CreatedDate"])??firstNormalized.at;if(createdAt>=endExclusive)continue;
       const atOpen=[...normalizedHistory].reverse().find(event=>event.at<start)??null;
       const atClose=[...normalizedHistory].reverse().find(event=>event.at<endExclusive)??null;if(!atClose)continue;
-      const stateEvents=normalizedHistory.filter((event,index)=>{const previous=normalizedHistory[index-1];return!previous||event.state!==previous.state;});
-      const inPeriod=stateEvents.filter(event=>event.at>=start&&event.at<endExclusive);
-      const entered=(state:string)=>inPeriod.some(event=>event.state===state);
       const openingFields=openingSnapshot.get(id)?.fields??{};
       const closingFields=closingSnapshot.get(id)?.fields??{};
       const revisionStateAtOpen=atOpen?.state??null;
       const revisionStateAtClose=atClose.state;
       const stateAtOpen=text(openingFields["System.State"])??revisionStateAtOpen;
       const stateAtClose=text(closingFields["System.State"])??revisionStateAtClose;
+      const stateEvents=normalizedHistory.filter((event,index)=>{
+        const previousState=index>0?normalizedHistory[index-1]?.state:stateAtOpen;
+        if(previousState) return event.state!==previousState;
+        return createdAt>=start&&createdAt<endExclusive;
+      });
+      const inPeriod=stateEvents.filter(event=>event.at>=start&&event.at<endExclusive);
+      const entered=(state:string)=>inPeriod.some(event=>event.state===state);
       const latestFields=Object.keys(closingFields).length?closingFields:(atClose.revision.fields??{});
       const currentItem=currentById.get(id);
       const lastState=[...stateEvents].reverse().find(event=>event.at<endExclusive);
@@ -264,36 +311,36 @@ export class CorrectionMonthlyReportService {
     // Completamos o universo com os snapshots para preservar backlog sem movimentação.
     if(snapshotAvailable){
       const existingIds=new Set(rows.map(row=>row.id));
-      for(const item of current){
-        if(existingIds.has(item.id)) continue;
-        const openingFields=openingSnapshot.get(item.id)?.fields??{};
-        const closingFields=closingSnapshot.get(item.id)?.fields??{};
+      for(const id of candidateIds){
+        if(existingIds.has(id)) continue;
+        const item=currentById.get(id);
+        const openingFields=openingSnapshot.get(id)?.fields??{};
+        const closingFields=closingSnapshot.get(id)?.fields??{};
         if(!Object.keys(closingFields).length) continue;
 
-        const sourceClient=text(closingFields[fields.client])??item.client;
+        const sourceClient=text(closingFields[fields.client])??item?.client??null;
         const client=resolveSimerClient(sourceClient); if(!client) continue;
-        const createdAt=date(closingFields["System.CreatedDate"])??item.azureCreatedAt;
+        const createdAt=date(closingFields["System.CreatedDate"])??item?.azureCreatedAt??null;
         if(!createdAt||createdAt>=endExclusive) continue;
 
         const stateAtOpen=text(openingFields["System.State"]);
         const stateAtClose=text(closingFields["System.State"]);
         if(!stateAtClose) continue;
-        const changedAt=date(closingFields["System.ChangedDate"]);
-        const raw=(item.rawFields&&typeof item.rawFields==="object"&&!Array.isArray(item.rawFields)?item.rawFields:{}) as Record<string,unknown>;
+        const raw=(item?.rawFields&&typeof item.rawFields==="object"&&!Array.isArray(item.rawFields)?item.rawFields:{}) as Record<string,unknown>;
 
         rows.push({
-          id:item.id,
-          title:text(closingFields["System.Title"])??item.title,
+          id,
+          title:text(closingFields["System.Title"])??item?.title??`Task ${id}`,
           client,
-          createdBy:text(closingFields["System.CreatedBy"])??item.createdByName,
+          createdBy:text(closingFields["System.CreatedBy"])??item?.createdByName??null,
           createdAt:createdAt.toISOString(),
           status:stateAtClose,
-          lastStateChangedAt:changedAt?.toISOString()??null,
-          urgency:text(closingFields[fields.urgency])??item.criticality??text(raw[fields.urgency]),
-          prioritized:bool(closingFields[fields.prioritized])??item.prioritized,
-          assignedTo:text(closingFields["System.AssignedTo"])??item.assignedToName,
-          terminalAt:TERMINAL.has(stateAtClose)?changedAt?.toISOString()??null:null,
-          remoteUrl:item.remoteUrl,
+          lastStateChangedAt:null,
+          urgency:text(closingFields[fields.urgency])??item?.criticality??text(raw[fields.urgency]),
+          prioritized:bool(closingFields[fields.prioritized])??item?.prioritized??null,
+          assignedTo:text(closingFields["System.AssignedTo"])??item?.assignedToName??null,
+          terminalAt:null,
+          remoteUrl:item?.remoteUrl??this.workItemUrl(id),
           stateAtOpen,
           stateAtClose,
           registeredInPeriod:createdAt>=start&&createdAt<endExclusive,
@@ -308,36 +355,37 @@ export class CorrectionMonthlyReportService {
 
     // Fallback: usa snapshots asOf para preservar backlog histórico mesmo sem o endpoint de revisões.
     if(rows.length===0){
-      for(const item of current){
-        const openingFields=openingSnapshot.get(item.id)?.fields??{};
-        const closingFields=closingSnapshot.get(item.id)?.fields??{};
-        const sourceClient=text(closingFields[fields.client])??item.client;
+      for(const id of candidateIds){
+        const item=currentById.get(id);
+        const openingFields=openingSnapshot.get(id)?.fields??{};
+        const closingFields=closingSnapshot.get(id)?.fields??{};
+        const sourceClient=text(closingFields[fields.client])??item?.client??null;
         const client=resolveSimerClient(sourceClient); if(!client) continue;
 
-        const createdAt=date(closingFields["System.CreatedDate"])??item.azureCreatedAt;
+        const createdAt=date(closingFields["System.CreatedDate"])??item?.azureCreatedAt??null;
         if(!createdAt||createdAt>=endExclusive) continue;
 
         const stateAtOpen=text(openingFields["System.State"]);
-        const stateAtClose=text(closingFields["System.State"])??item.state;
+        const stateAtClose=text(closingFields["System.State"])??item?.state??null;
+        if(!stateAtClose) continue;
         const createdInPeriod=createdAt>=start&&createdAt<endExclusive;
-        const changedAt=date(closingFields["System.ChangedDate"])??item.stateChangedAt;
-        const raw=(item.rawFields&&typeof item.rawFields==="object"&&!Array.isArray(item.rawFields)?item.rawFields:{}) as Record<string,unknown>;
-        const urgencyValue=text(closingFields[fields.urgency])??item.criticality??text(raw[fields.urgency]);
-        const prioritized=bool(closingFields[fields.prioritized])??item.prioritized;
+        const raw=(item?.rawFields&&typeof item.rawFields==="object"&&!Array.isArray(item.rawFields)?item.rawFields:{}) as Record<string,unknown>;
+        const urgencyValue=text(closingFields[fields.urgency])??item?.criticality??text(raw[fields.urgency]);
+        const prioritized=bool(closingFields[fields.prioritized])??item?.prioritized??null;
 
         rows.push({
-          id:item.id,
-          title:text(closingFields["System.Title"])??item.title,
+          id,
+          title:text(closingFields["System.Title"])??item?.title??`Task ${id}`,
           client,
-          createdBy:text(closingFields["System.CreatedBy"])??item.createdByName,
+          createdBy:text(closingFields["System.CreatedBy"])??item?.createdByName??null,
           createdAt:createdAt.toISOString(),
           status:stateAtClose,
-          lastStateChangedAt:changedAt?.toISOString()??null,
+          lastStateChangedAt:null,
           urgency:urgencyValue,
           prioritized,
-          assignedTo:text(closingFields["System.AssignedTo"])??item.assignedToName,
-          terminalAt:TERMINAL.has(stateAtClose)?changedAt?.toISOString()??item.azureClosedAt?.toISOString()??null:null,
-          remoteUrl:item.remoteUrl,
+          assignedTo:text(closingFields["System.AssignedTo"])??item?.assignedToName??null,
+          terminalAt:null,
+          remoteUrl:item?.remoteUrl??this.workItemUrl(id),
           stateAtOpen,
           stateAtClose,
           registeredInPeriod:createdInPeriod,
@@ -360,6 +408,6 @@ export class CorrectionMonthlyReportService {
     }
         const count=(p:(r:Row)=>boolean)=>rows.filter(p).length;
     const by=(selector:(r:Row)=>string|null)=>Object.entries(rows.reduce<Record<string,number>>((acc,row)=>{const key=selector(row)||"Não informado";acc[key]=(acc[key]??0)+1;return acc;},{})).map(([name,total])=>({name,total})).sort((a,b)=>b.total-a.total);
-    return {period:{month,timezone:"America/Sao_Paulo",start:start.toISOString(),close:close.toISOString()},cards:{registered:count(r=>r.registeredInPeriod),delivered:count(r=>r.deliveredInPeriod),canceled:count(r=>r.canceledInPeriod),inRegistration:count(r=>r.enteredRegistrationInPeriod),backlogInitial:count(r=>r.backlogInitial),backlogCurrent:count(r=>r.backlogCurrent)},pipeline:by(r=>r.status),urgency:by(r=>r.urgency),prioritization:[{name:"Priorizadas",total:count(r=>r.prioritized===true)},{name:"Não priorizadas",total:count(r=>r.prioritized===false)},{name:"Não informado",total:count(r=>r.prioritized===null)}],filters:{creators:[...new Set(rows.map(r=>r.createdBy).filter(Boolean))].sort(),clients:[...SIMER_CLIENTS],urgencies:[...new Set(rows.map(r=>r.urgency).filter(Boolean))].sort(),states:[...new Set(rows.map(r=>r.status).filter(Boolean))].sort()},rows,generatedAt:new Date().toISOString(),source:snapshotAvailable?(historyAvailable?"Azure DevOps · revisões + snapshots asOf · carteira SIMER":"Azure DevOps · snapshots asOf · carteira SIMER"):"Base sincronizada do Azure DevOps · snapshot local · carteira SIMER",quality:{historyAvailable,historyError,snapshotAvailable,snapshotError,mode:snapshotAvailable?(historyAvailable?"historical":"asof-snapshot"):"local-snapshot",historicalMetricsReliable:historyAvailable&&snapshotAvailable,backlogHistoricalReliable:snapshotAvailable},fieldMapping:fields};
+    return {period:{month,timezone:"America/Sao_Paulo",start:start.toISOString(),close:close.toISOString()},cards:{registered:count(r=>r.registeredInPeriod),delivered:count(r=>r.deliveredInPeriod),canceled:count(r=>r.canceledInPeriod),inRegistration:count(r=>r.enteredRegistrationInPeriod),backlogInitial:count(r=>r.backlogInitial),backlogCurrent:count(r=>r.backlogCurrent)},pipeline:by(r=>r.status),urgency:by(r=>r.urgency),prioritization:[{name:"Priorizadas",total:count(r=>r.prioritized===true)},{name:"Não priorizadas",total:count(r=>r.prioritized===false)},{name:"Não informado",total:count(r=>r.prioritized===null)}],filters:{creators:[...new Set(rows.map(r=>r.createdBy).filter(Boolean))].sort(),clients:[...SIMER_CLIENTS],urgencies:[...new Set(rows.map(r=>r.urgency).filter(Boolean))].sort(),states:[...new Set(rows.map(r=>r.status).filter(Boolean))].sort()},rows,generatedAt:new Date().toISOString(),source:snapshotAvailable?(historyAvailable?"Azure DevOps · revisões + snapshots asOf · carteira SIMER":"Azure DevOps · snapshots asOf · carteira SIMER"):"Base sincronizada do Azure DevOps · snapshot local · carteira SIMER",quality:{historyAvailable,historyError,snapshotAvailable,snapshotError,historicalScopeError,mode:snapshotAvailable?(historyAvailable?"historical":"asof-snapshot"):"local-snapshot",historicalMetricsReliable:historyAvailable&&snapshotAvailable,backlogHistoricalReliable:snapshotAvailable},fieldMapping:fields};
   }
 }
