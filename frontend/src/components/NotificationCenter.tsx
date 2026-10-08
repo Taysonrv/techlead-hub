@@ -189,7 +189,7 @@ export function NotificationCenter() {
       loadingRef.current = false;
       setLoading(false);
     }
-  }, [user]);
+  }, [user?.id]);
 
   const loadMeetingReminders = useCallback(async () => {
     if (!user || meetingLoadingRef.current || Date.now() < meetingRetryAtRef.current) return;
@@ -221,7 +221,7 @@ export function NotificationCenter() {
     } finally {
       meetingLoadingRef.current = false;
     }
-  }, [user]);
+  }, [user?.id]);
 
   useEffect(() => {
     void load();
