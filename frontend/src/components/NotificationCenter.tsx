@@ -208,8 +208,9 @@ export function NotificationCenter() {
       const response = (error as { response?: { status?: number; headers?: Record<string,string>; data?: { retryAfterSeconds?: number } } }).response;
       if (response?.status === 429) {
         const headerSeconds = Number(response.headers?.["retry-after"] ?? 0);
-        const retrySeconds = Number.isFinite(response.data?.retryAfterSeconds)
-          ? Number(response.data?.retryAfterSeconds)
+        const payloadSeconds = Number(response.data?.retryAfterSeconds ?? 0);
+        const retrySeconds = Number.isFinite(payloadSeconds) && payloadSeconds > 0
+          ? payloadSeconds
           : Number.isFinite(headerSeconds) && headerSeconds > 0
             ? headerSeconds
             : 30;
