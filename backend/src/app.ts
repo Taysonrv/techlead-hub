@@ -81,8 +81,22 @@ const requestWindows = new Map<string, { startedAt: number; count: number }>();
 function requestRateLimitIdentity(req: express.Request) {
   const authorization = req.get("authorization")?.trim();
   if (authorization?.toLocaleLowerCase("en-US").startsWith("bearer ") && authorization.length > 20) {
-    const fingerprint = crypto.createHash("sha256").update(authorization).digest("hex").slice(0, 24);
-    return `session:${fingerprint}`;
+    const token = authorization.slice(7).trim();
+    try {
+      const payloadPart = token.split(".")[1];
+      const payload = payloadPart
+        ? JSON.parse(Buffer.from(payloadPart, "base64url").toString("utf8")) as { sid?: unknown }
+        : null;
+      if (typeof payload?.sid === "string" && payload.sid) {
+        const fingerprint = crypto.createHash("sha256").update(payload.sid).digest("hex").slice(0, 24);
+        return `session:${fingerprint}`;
+      }
+    } catch {
+      // Token inválido será rejeitado pelo authMiddleware; aqui usamos apenas
+      // uma identidade estável para o bucket de volume.
+    }
+    const fingerprint = crypto.createHash("sha256").update(token).digest("hex").slice(0, 24);
+    return `token:${fingerprint}`;
   }
   return `ip:${req.ip || req.socket.remoteAddress || "unknown"}`;
 }
