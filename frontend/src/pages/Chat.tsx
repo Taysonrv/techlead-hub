@@ -294,6 +294,11 @@ export function Chat() {
           const base = getApiBaseUrl();
           const url = new URL(`${base.replace(/\/$/, "")}/chat/events`, window.location.origin);
           const response = await fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : {}, signal: controller.signal });
+          if (response.status === 429) {
+            const retryAfter = Number(response.headers.get("Retry-After") ?? 5);
+            await new Promise((resolve) => window.setTimeout(resolve, Math.max(5, Number.isFinite(retryAfter) ? retryAfter : 5) * 1_000));
+            continue;
+          }
           if (!response.ok || !response.body) throw new Error("stream indisponível");
           const reader = response.body.getReader();
           const decoder = new TextDecoder();
