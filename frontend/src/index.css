@@ -13,7 +13,7 @@ body,
 #root {
   width: 100%;
   min-width: 100%;
-  min-height: 100vh;
+  min-height: 100dvh;
 
   margin: 0;
   padding: 0;
@@ -55,11 +55,11 @@ html {
 
 body {
   min-width: 320px;
-  min-height: 100vh;
+  min-height: 100dvh;
 
   overflow-x: hidden;
 
-  background: #f5f7fa;
+  background: transparent;
 
   font-family:
     Inter,
@@ -86,7 +86,7 @@ body {
 
 #root {
   width: 100%;
-  min-height: 100vh;
+  min-height: 100dvh;
 
   overflow-x: hidden;
 }
@@ -97,7 +97,7 @@ body {
 
 * {
   scrollbar-width: thin;
-  scrollbar-color: #cbd5e1 transparent;
+  scrollbar-color: rgba(100, 116, 139, .58) transparent;
 }
 
 *::-webkit-scrollbar {
@@ -110,12 +110,12 @@ body {
 }
 
 *::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: rgba(100, 116, 139, .58);
   border-radius: 10px;
 }
 
 *::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: rgba(100, 116, 139, .82);
 }
 
 /* =========================================================
@@ -240,9 +240,13 @@ svg {
   outline: none !important;
 }
 
-.MuiCard-root:focus,
-.MuiCard-root:focus-visible {
+.MuiCard-root:focus {
   outline: none;
+}
+
+.MuiCard-root:focus-visible {
+  outline: 2px solid #18C77A;
+  outline-offset: 2px;
 }
 
 
