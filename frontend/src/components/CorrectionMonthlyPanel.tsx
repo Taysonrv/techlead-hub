@@ -293,6 +293,10 @@ export function CorrectionMonthlyPanel() {
     [drawerRows,selectedTaskId],
   );
 
+  useEffect(() => {
+    if(drawerOpen&&selectedTaskId===null&&drawerRows.length) setSelectedTaskId(drawerRows[0].id);
+  },[drawerOpen,drawerRows,selectedTaskId]);
+
   const activeDrillLabel = drill
     ? metricLabel[drill]
     : sliceDrill?.kind==="status"
