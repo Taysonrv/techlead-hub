@@ -278,17 +278,29 @@ export function AuthProvider({
 
   /* Mantém a sessão central ativa e detecta revogação em outra plataforma. */
   useEffect(() => {
-    if (!user) return;
+    if (!user?.id) return;
     const heartbeat = () => void api.post<{ accessToken?: string; user?: AuthUser }>("/auth/heartbeat")
       .then((response) => {
         if (response.data.accessToken) setAccessToken(response.data.accessToken);
-        if (response.data.user) setUser(response.data.user);
+        if (response.data.user) {
+          setUser((current) => {
+            const next = response.data.user!;
+            if (!current) return next;
+            return current.updatedAt === next.updatedAt &&
+              current.permissions === next.permissions &&
+              current.role === next.role &&
+              current.active === next.active &&
+              current.approvalStatus === next.approvalStatus
+              ? current
+              : next;
+          });
+        }
       })
       .catch(() => undefined);
     heartbeat();
     const timer = window.setInterval(heartbeat, 60_000);
     return () => window.clearInterval(timer);
-  }, [user]);
+  }, [user?.id]);
 
   /* =======================================================
      LOGIN
