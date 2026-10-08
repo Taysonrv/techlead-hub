@@ -226,6 +226,7 @@ type CardInfo = InfoPopoverContent;
 
 type DetailRequest = {
   params?: Record<string, string | number>;
+  ignoreCurrentFilters?: boolean;
 };
 
 type DetailContext = {
@@ -256,7 +257,7 @@ const EMPTY_SUMMARY:
 export function Versions() {
   const navigate =
     useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [
     data,
@@ -575,18 +576,60 @@ export function Versions() {
 
   useEffect(() => {
     const requestedVersion = searchParams.get("versao")?.trim();
-    if (!requestedVersion || !data?.items?.length) return;
-    const normalized = requestedVersion.toLocaleLowerCase("pt-BR");
-    const match = data.items.find((item) =>
-      item.version?.trim().toLocaleLowerCase("pt-BR") === normalized ||
-      item.label.trim().toLocaleLowerCase("pt-BR") === normalized
-    );
-    if (!match) return;
-    setVersionChannel("");
-    setActiveMetricFilter("all");
-    setVersionPage(0);
-    void openVersion(match, {}, `Versão ${match.label}`);
-  }, [data, searchParams]);
+    if (!requestedVersion) return;
+
+    let cancelled = false;
+    const openRequestedVersion = async () => {
+      try {
+        const response = await api.get<VersionsResponse>("/azure-work-items/versions/summary");
+        if (cancelled) return;
+
+        const match = response.data.items.find((item) => versionMatchesDeepLink(item, requestedVersion));
+        if (!match) {
+          setError(`A versão ${requestedVersion} da notificação não foi localizada na base sincronizada.`);
+          return;
+        }
+
+        setSearch("");
+        setAppliedSearch("");
+        setType("");
+        setState("");
+        setClient("");
+        setCriticality("");
+        setPrioritized("");
+        setBlockedProcess("");
+        setVersionChannel("");
+        setActiveMetricFilter("all");
+        setVersionPage(0);
+        setData(response.data);
+
+        await loadDetail(
+          {
+            title: `Versão ${requestedVersion}`,
+            subtitle: `${match.total} Task(s) • ${match.clients} cliente(s)`,
+            version: match,
+          },
+          [
+            {
+              params: versionParams(match),
+              ignoreCurrentFilters: true,
+            },
+          ],
+        );
+
+        if (cancelled) return;
+        const next = new URLSearchParams(searchParams);
+        next.delete("versao");
+        setSearchParams(next, { replace: true });
+      } catch (currentError) {
+        console.error("Erro ao abrir versão da notificação:", currentError);
+        if (!cancelled) setError("Não foi possível abrir diretamente a versão da notificação.");
+      }
+    };
+
+    void openRequestedVersion();
+    return () => { cancelled = true; };
+  }, [searchParams, setSearchParams]);
 
   const visibleVersions =
     useMemo(
@@ -1043,9 +1086,17 @@ export function Versions() {
                 "/azure-work-items",
                 {
                   params:
-                    buildScopedParams(
-                      request.params,
-                    ),
+                    request.ignoreCurrentFilters
+                      ? {
+                          page: 1,
+                          pageSize: 100,
+                          sortBy: "stateChangedAt",
+                          sortDirection: "desc",
+                          ...(request.params ?? {}),
+                        }
+                      : buildScopedParams(
+                          request.params,
+                        ),
                 },
               ),
           ),
@@ -4103,6 +4154,27 @@ function normalizeValue(
     )
     .trim()
     .toLowerCase();
+}
+
+function normalizeVersionLink(value: string | null | undefined) {
+  return (value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLocaleLowerCase("pt-BR");
+}
+
+function versionMatchesDeepLink(item: VersionRow, requestedVersion: string) {
+  const requested = normalizeVersionLink(requestedVersion);
+  if (!requested) return false;
+
+  if (normalizeVersionLink(item.version) === requested || normalizeVersionLink(item.label) === requested) {
+    return true;
+  }
+
+  const versionPattern = /\b\d+\.\d+(?:\.\d+)?(?:[-_.]?(?:rc|lte|lts|develop)(?:[-_.]?\d+)?)?\b/gi;
+  const tokens = (item.version ?? item.label).match(versionPattern) ?? [];
+  return tokens.some((token) => normalizeVersionLink(token) === requested);
 }
 
 function toTimestamp(
