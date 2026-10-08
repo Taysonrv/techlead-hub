@@ -991,10 +991,11 @@ function AnalysisDonutCard({
                   {chartData.map(
                     (
                       item,
+                      index,
                     ) => (
                       <Cell
                         key={
-                          item.name
+                          `${item.name}-${index}`
                         }
                         fill={
                           item.color
@@ -1080,12 +1081,13 @@ function AnalysisDonutCard({
           {data.map(
             (
               item,
+              index,
             ) => {
               const active = !hiddenItems.has(item.name);
               return (
               <Box
                 key={
-                  item.name
+                  `${item.name}-${index}`
                 }
                 role={
                   item.clickable ===
