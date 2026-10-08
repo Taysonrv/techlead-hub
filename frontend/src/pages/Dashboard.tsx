@@ -1129,7 +1129,7 @@ export function Dashboard() {
                 </Typography>
               </Box>
               <Stack direction="row" spacing={.7} useFlexGap sx={{flexWrap:"wrap",alignItems:"center"}}>
-                {recurrence.items.slice(0,3).map((item,index) => <Chip key={`${item.service}-${item.category}-${item.cause}-${index}`} size="small" color={item.priority==="high"?"error":"warning"} variant="outlined" label={`${item.service}: ${item.cases} casos · ${item.score}/100`} onClick={()=>navigate(`/problemas-conhecidos?q=${encodeURIComponent(item.service)}`)}/>)}
+                {recurrence.items.slice(0,3).map((item,index) => <Chip key={`${item.service}-${item.cases}-${item.score}-${item.trendPct}-${index}`} size="small" color={item.priority==="high"?"error":"warning"} variant="outlined" label={`${item.service}: ${item.cases} casos · ${item.score}/100`} onClick={()=>navigate(`/problemas-conhecidos?q=${encodeURIComponent(item.service)}`)}/>)}
                 <Button size="small" onClick={()=>navigate("/problemas-conhecidos")}>Ver análise</Button>
               </Stack>
             </Stack>
