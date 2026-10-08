@@ -248,7 +248,7 @@ export function Tickets() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const defaultAnalystApplied = useRef(false);
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [ticketActionsAnchor, setTicketActionsAnchor] = useState<HTMLElement | null>(null);
 
   const [
@@ -419,8 +419,12 @@ export function Tickets() {
 
     if (linkedTicket) {
       setSelectedTicket(linkedTicket);
+      const next = new URLSearchParams(searchParams);
+      next.delete("movidesk");
+      next.delete("task");
+      setSearchParams(next, { replace: true });
     }
-  }, [tickets, searchParams]);
+  }, [tickets, searchParams, setSearchParams]);
 
   useEffect(() => {
     let active = true;
