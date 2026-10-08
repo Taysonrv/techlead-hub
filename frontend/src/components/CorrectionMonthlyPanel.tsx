@@ -492,7 +492,7 @@ export function CorrectionMonthlyPanel() {
                 ].map(([label,val],index)=>
                   <Box key={String(label)} sx={{minWidth:0}}>
                     <Typography variant="caption" color="text.secondary">{label}</Typography>
-                    <Stack direction="row" alignItems="center" gap=.35>
+                    <Stack direction="row" alignItems="center" gap={0.35}>
                       {index===2&&(delta<=0?<TrendingDownOutlined color="success" sx={{fontSize:18}}/>:<TrendingUpOutlined color="warning" sx={{fontSize:18}}/>)}
                       <Typography sx={{fontWeight:900,fontSize:"1.15rem"}}>{val}</Typography>
                     </Stack>
@@ -571,7 +571,7 @@ export function CorrectionMonthlyPanel() {
                   </PieChart>
                 </ResponsiveContainer>
               </Box>
-              <Stack spacing=.65 sx={{mt:"auto"}}>
+              <Stack spacing={0.65} sx={{mt:"auto"}}>
                 {priority.map(item=>
                   <Button key={item.name} size="small" onClick={()=>selectSlice(
                     {kind:"prioritized",value:item.name==="Priorizadas"?true:item.name==="Não priorizadas"?false:null},
@@ -602,7 +602,7 @@ export function CorrectionMonthlyPanel() {
                   {activeDrillLabel} · {detailed.length} task(s){search.trim()?" após busca textual":""}
                 </Typography>
               </Box>
-              <Stack direction={{xs:"column",sm:"row"}} gap=.8 sx={{width:{xs:"100%",lg:"auto"}}}>
+              <Stack direction={{xs:"column",sm:"row"}} gap={0.8} sx={{width:{xs:"100%",lg:"auto"}}}>
                 <TextField size="small" label="Buscar ID ou título" value={search} onChange={event=>setSearch(event.target.value)}
                   sx={{minWidth:{sm:260}}}/>
                 <ExportCorrectionTasksButton
@@ -654,7 +654,7 @@ export function CorrectionMonthlyPanel() {
             onClose={()=>setDrawerOpen(false)}
           />
 
-          <Stack direction={{xs:"column",sm:"row"}} spacing=.8 sx={{mb:2}}>
+          <Stack direction={{xs:"column",sm:"row"}} spacing={0.8} sx={{mb:2}}>
             <ExportCorrectionTasksButton
               rows={drawerRows}
               title={`Correções Azure · ${drawerTitle}`}
@@ -708,7 +708,7 @@ export function CorrectionMonthlyPanel() {
           </>}
 
           <DetailSection title="Tasks">
-            <Stack spacing=.8>
+            <Stack spacing={0.8}>
               {drawerRows.map(row=>
                 <Button
                   key={row.id}
