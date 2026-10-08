@@ -128,29 +128,37 @@ export class CalendarMeetingService {
   async create(userId: number, role: string, input: MeetingInput) {
     const normalized = this.normalize(input, userId);
     await this.assertParticipants(normalized.participants);
-    const meeting = await prisma.calendarMeeting.create({
-      data: {
-        title: normalized.title,
-        description: normalized.description,
-        startAt: normalized.startAt,
-        endAt: normalized.endAt,
-        timezone: normalized.timezone,
-        location: normalized.location,
-        meetingUrl: normalized.meetingUrl,
-        externalAttendees: normalized.external,
-        createdById: userId,
-        participants: { create: normalized.participants.map((participantId) => ({ userId: participantId })) },
-      },
-      include: meetingInclude,
-    });
-    await prisma.auditLog.create({
-      data: {
-        userId,
-        action: "CALENDAR_MEETING_CREATED",
-        entity: "CalendarMeeting",
-        entityId: String(meeting.id),
-        metadata: { title: meeting.title, startAt: meeting.startAt, participantIds: normalized.participants, externalAttendees: normalized.external },
-      },
+    const meeting = await prisma.$transaction(async (tx) => {
+      const created = await tx.calendarMeeting.create({
+        data: {
+          title: normalized.title,
+          description: normalized.description,
+          startAt: normalized.startAt,
+          endAt: normalized.endAt,
+          timezone: normalized.timezone,
+          location: normalized.location,
+          meetingUrl: normalized.meetingUrl,
+          externalAttendees: normalized.external,
+          createdById: userId,
+          participants: { create: normalized.participants.map((participantId) => ({ userId: participantId })) },
+        },
+        include: meetingInclude,
+      });
+      await tx.auditLog.create({
+        data: {
+          userId,
+          action: "CALENDAR_MEETING_CREATED",
+          entity: "CalendarMeeting",
+          entityId: String(created.id),
+          metadata: {
+            title: created.title,
+            startAt: created.startAt.toISOString(),
+            participantIds: normalized.participants,
+            externalAttendees: normalized.external,
+          },
+        },
+      });
+      return created;
     });
     return this.serialize(meeting, userId, role);
   }
@@ -164,32 +172,39 @@ export class CalendarMeetingService {
     const normalized = this.normalize(input, current.createdById);
     await this.assertParticipants(normalized.participants);
 
-    const meeting = await prisma.calendarMeeting.update({
-      where: { id: meetingId },
-      data: {
-        title: normalized.title,
-        description: normalized.description,
-        startAt: normalized.startAt,
-        endAt: normalized.endAt,
-        timezone: normalized.timezone,
-        location: normalized.location,
-        meetingUrl: normalized.meetingUrl,
-        externalAttendees: normalized.external,
-        participants: {
-          deleteMany: {},
-          create: normalized.participants.map((participantId) => ({ userId: participantId })),
+    const meeting = await prisma.$transaction(async (tx) => {
+      const updated = await tx.calendarMeeting.update({
+        where: { id: meetingId },
+        data: {
+          title: normalized.title,
+          description: normalized.description,
+          startAt: normalized.startAt,
+          endAt: normalized.endAt,
+          timezone: normalized.timezone,
+          location: normalized.location,
+          meetingUrl: normalized.meetingUrl,
+          externalAttendees: normalized.external,
+          participants: {
+            deleteMany: {},
+            create: normalized.participants.map((participantId) => ({ userId: participantId })),
+          },
         },
-      },
-      include: meetingInclude,
-    });
-    await prisma.auditLog.create({
-      data: {
-        userId,
-        action: "CALENDAR_MEETING_UPDATED",
-        entity: "CalendarMeeting",
-        entityId: String(meeting.id),
-        metadata: { title: meeting.title, startAt: meeting.startAt, participantIds: normalized.participants },
-      },
+        include: meetingInclude,
+      });
+      await tx.auditLog.create({
+        data: {
+          userId,
+          action: "CALENDAR_MEETING_UPDATED",
+          entity: "CalendarMeeting",
+          entityId: String(updated.id),
+          metadata: {
+            title: updated.title,
+            startAt: updated.startAt.toISOString(),
+            participantIds: normalized.participants,
+          },
+        },
+      });
+      return updated;
     });
     return this.serialize(meeting, userId, role);
   }
@@ -199,9 +214,11 @@ export class CalendarMeetingService {
     if (!current) throw Object.assign(new Error("Reunião não localizada."), { statusCode: 404 });
     if (!this.canManage(current.createdById, userId, role)) throw Object.assign(new Error("Somente o organizador ou um administrador pode cancelar a reunião."), { statusCode: 403 });
     if (current.status !== "CANCELLED") {
-      await prisma.calendarMeeting.update({ where: { id: meetingId }, data: { status: "CANCELLED", cancelledAt: new Date() } });
-      await prisma.auditLog.create({
-        data: { userId, action: "CALENDAR_MEETING_CANCELLED", entity: "CalendarMeeting", entityId: String(meetingId), metadata: { title: current.title } },
+      await prisma.$transaction(async (tx) => {
+        await tx.calendarMeeting.update({ where: { id: meetingId }, data: { status: "CANCELLED", cancelledAt: new Date() } });
+        await tx.auditLog.create({
+          data: { userId, action: "CALENDAR_MEETING_CANCELLED", entity: "CalendarMeeting", entityId: String(meetingId), metadata: { title: current.title } },
+        });
       });
     }
   }
