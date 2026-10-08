@@ -5,7 +5,7 @@ import { isSupportAnalyst, resolveSimerClient, SIMER_CLIENTS } from "../domain/O
 
 type Identity = { displayName?: string; uniqueName?: string };
 type Revision = { id?: number; rev?: number; fields?: Record<string, unknown> };
-type ReportingResponse = { values?: Revision[]; value?: Revision[]; continuationToken?: string; isLastBatch?: boolean };
+type ReportingResponse = { values?: Revision[]; value?: Revision[]; continuationToken?: string; nextLink?: string; isLastBatch?: boolean };
 type FieldDefinition = { name?: string; referenceName?: string };
 type FieldListResponse = { value?: FieldDefinition[] };
 type SnapshotItem = { id?: number; fields?: Record<string, unknown> };
@@ -119,29 +119,28 @@ export class CorrectionMonthlyReportService {
     ].filter((value,index,array)=>array.indexOf(value)===index);
 
     const all:Revision[]=[];
-    let continuationToken:string|undefined;
+    const client=this.client();
+    let nextLink:string|null=null;
+    let first=true;
     do {
-      const response=await this.client().post<ReportingResponse>(
-        "/_apis/wit/reporting/workitemrevisions",
-        {
-          types:["Correção Clientes"],
-          fields:requested,
-          includeIdentityRef:true,
-          includeLatestOnly:false,
-        },
-        {
+      const response=await client.get<ReportingResponse>(
+        nextLink??"/_apis/wit/reporting/workitemrevisions",
+        first ? {
           params:{
+            fields:requested.join(","),
+            types:"Correção Clientes",
             startDateTime:start.toISOString(),
-            continuationToken,
+            includeIdentityRef:true,
+            includeLatestOnly:false,
             "$maxPageSize":2000,
             "api-version":"7.1",
           },
-        },
+        } : undefined,
       );
       all.push(...(response.data.values??response.data.value??[]));
-      continuationToken=response.data.continuationToken||response.headers["x-ms-continuationtoken"];
-      if(response.data.isLastBatch===true) continuationToken=undefined;
-    } while(continuationToken);
+      nextLink=response.data.isLastBatch===true?null:(response.data.nextLink??null);
+      first=false;
+    } while(nextLink);
 
     CorrectionMonthlyReportService.cache.set(cacheKey,{expiresAt:Date.now()+CACHE_TTL_MS,revisions:all});
     return all;
