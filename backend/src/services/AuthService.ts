@@ -1296,7 +1296,7 @@ export class AuthService {
     const tokenHash = hashSessionToken(sessionToken.trim());
     const session = await prisma.userSession.findUnique({
       where: { tokenHash },
-      select: { id: true, revokedAt: true, expiresAt: true, user: { select: { id: true, username: true, role: true, active: true, approvalStatus: true } } },
+      select: { id: true, revokedAt: true, expiresAt: true, user: { select: USER_PUBLIC_SELECT } },
     });
     const now = new Date();
     if (!session || session.revokedAt || session.expiresAt <= now || !session.user.active || session.user.approvalStatus !== "APPROVED") {
@@ -1305,7 +1305,7 @@ export class AuthService {
     const expiresAt = getSessionExpiration();
     await prisma.userSession.update({ where: { id: session.id }, data: { lastActivityAt: now, expiresAt } });
     const accessToken = createAccessToken({ sub: String(session.user.id), sid: sessionToken, username: session.user.username, role: session.user.role });
-    return { active: true, accessToken, expiresAt: expiresAt.toISOString(), serverTime: now.toISOString() };
+    return { active: true, accessToken, expiresAt: expiresAt.toISOString(), serverTime: now.toISOString(), user: session.user };
   }
 
   async getAvatar(userId: number) {
