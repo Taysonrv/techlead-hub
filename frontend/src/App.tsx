@@ -15,6 +15,7 @@ import type { ReactNode } from "react";
 
 import {
   BrowserRouter,
+  Link,
   Navigate,
   Route,
   Routes,
@@ -103,6 +104,12 @@ function AuthenticatedLayout({
   useEffect(() => {
     const routineTitles: Record<string, string> = {
       "/": "Página inicial",
+      "/visao-operacional": "Visão Operacional",
+      "/visao-operacional/desempenho": "Desempenho",
+      "/operacao/tickets": "Tickets",
+      "/operacao/minha-operacao": "Minha Operação",
+      "/pendencias-riscos": "Pendências e Riscos",
+      "/pendencias-riscos/qualidade": "Qualidade dos Dados",
       "/tickets": "Tickets",
       "/chat": "Chat",
       "/coordenacao": "Central da Coordenação",
@@ -376,7 +383,7 @@ function RoutineAccess({ permission, children }: { permission: string; children:
           </Typography>
         </Alert>
         <Box sx={{ mt: 2 }}>
-          <a href="/" style={{ color: "inherit", fontWeight: 700 }}>Voltar para o início</a>
+          <Link to="/visao-operacional" style={{ color: "inherit", fontWeight: 700, textDecoration: "none" }}>Voltar para o início</Link>
         </Box>
       </Box>
     </Box>
