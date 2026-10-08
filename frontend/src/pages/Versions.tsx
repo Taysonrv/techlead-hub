@@ -3707,10 +3707,11 @@ function DonutCard({
                   {chartData.map(
                     (
                       item,
+                      index,
                     ) => (
                       <Cell
                         key={
-                          item.name
+                          `${item.name}-${index}`
                         }
                         fill={
                           item.color
@@ -3800,10 +3801,11 @@ function DonutCard({
           {data.map(
             (
               item,
+              index,
             ) => (
               <Box
                 key={
-                  item.name
+                  `${item.name}-${index}`
                 }
                 role="button"
                 tabIndex={0}
