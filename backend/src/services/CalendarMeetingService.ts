@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "../database/prisma";
 
 type MeetingInput = {
@@ -19,6 +20,8 @@ const meetingInclude = {
     orderBy: { user: { name: "asc" as const } },
   },
 } as const;
+
+type MeetingWithRelations = Prisma.CalendarMeetingGetPayload<{ include: typeof meetingInclude }>;
 
 function text(value: unknown, max: number) {
   return typeof value === "string" ? value.trim().slice(0, max) : "";
@@ -213,7 +216,7 @@ export class CalendarMeetingService {
     return createdById === userId || role === "ADMIN";
   }
 
-  private serialize(meeting: Awaited<ReturnType<typeof prisma.calendarMeeting.findFirst>> & Record<string, any>, userId: number, role: string) {
+  private serialize(meeting: MeetingWithRelations, userId: number, role: string) {
     const external = Array.isArray(meeting.externalAttendees) ? meeting.externalAttendees.map(String) : [];
     return {
       id: meeting.id,
@@ -229,7 +232,7 @@ export class CalendarMeetingService {
       externalProvider: meeting.externalProvider,
       externalEventId: meeting.externalEventId,
       createdBy: meeting.createdBy,
-      participants: meeting.participants.map((item: any) => item.user),
+      participants: meeting.participants.map((item) => item.user),
       canManage: this.canManage(meeting.createdById, userId, role),
       createdAt: meeting.createdAt,
       updatedAt: meeting.updatedAt,
