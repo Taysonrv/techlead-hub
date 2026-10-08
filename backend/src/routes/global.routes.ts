@@ -32,6 +32,7 @@ globalRoutes.post("/calendar/meetings", async (req: AuthenticatedRequest, res) =
     const meeting = await calendarMeetingService.create(req.auth!.userId, req.auth!.role, req.body ?? {});
     return res.status(201).json({ meeting });
   } catch (error) {
+    console.error("[calendar] Falha ao agendar reunião:", error);
     const typed = error as { statusCode?: number; message?: string };
     return res.status(typed.statusCode ?? 500).json({ message: typed.message ?? "Não foi possível agendar a reunião." });
   }
@@ -43,6 +44,7 @@ globalRoutes.put("/calendar/meetings/:meetingId", async (req: AuthenticatedReque
     const meeting = await calendarMeetingService.update(req.auth!.userId, req.auth!.role, meetingId, req.body ?? {});
     return res.json({ meeting });
   } catch (error) {
+    console.error("[calendar] Falha ao atualizar reunião:", error);
     const typed = error as { statusCode?: number; message?: string };
     return res.status(typed.statusCode ?? 500).json({ message: typed.message ?? "Não foi possível atualizar a reunião." });
   }
@@ -54,6 +56,7 @@ globalRoutes.delete("/calendar/meetings/:meetingId", async (req: AuthenticatedRe
     await calendarMeetingService.cancel(req.auth!.userId, req.auth!.role, meetingId);
     return res.status(204).send();
   } catch (error) {
+    console.error("[calendar] Falha ao cancelar reunião:", error);
     const typed = error as { statusCode?: number; message?: string };
     return res.status(typed.statusCode ?? 500).json({ message: typed.message ?? "Não foi possível cancelar a reunião." });
   }
