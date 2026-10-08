@@ -88,7 +88,7 @@ export class NotificationService {
           title: "Reunião agendada",
           message: `${meeting.title} · ${timeLabel}`,
           occurredAt: meeting.createdAt,
-          path: "/",
+          path: `/?meeting=${meeting.id}`,
           meetingId: meeting.id,
         });
       }
@@ -102,7 +102,7 @@ export class NotificationService {
           title: `Reunião em ${minutes} min`,
           message: `${meeting.title} · lembrete configurado: ${reminderMinutes} min · ${timeLabel} · Organizador: ${meeting.createdBy.name}`,
           occurredAt: effectiveOccurredAt,
-          path: "/",
+          path: `/?meeting=${meeting.id}`,
           meetingId: meeting.id,
         });
       }
@@ -114,7 +114,7 @@ export class NotificationService {
           title: "Reunião começando agora",
           message: `${meeting.title} · ${timeLabel} · Organizador: ${meeting.createdBy.name}`,
           occurredAt: startAt,
-          path: "/",
+          path: `/?meeting=${meeting.id}`,
           meetingId: meeting.id,
         });
       }
