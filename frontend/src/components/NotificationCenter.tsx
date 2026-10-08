@@ -103,7 +103,8 @@ type DesktopUpdateState = {
 export function NotificationCenter() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const [toast, setToast] = useState<HubNotification | null>(null);
+  const [toastQueue, setToastQueue] = useState<HubNotification[]>([]);
+  const toast = toastQueue[0] ?? null;
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const [loading, setLoading] = useState(false);
   const [items, setItems] = useState<HubNotification[]>([]);
@@ -112,6 +113,7 @@ export function NotificationCenter() {
   const [showPreferences, setShowPreferences] = useState(false);
   const [localPreferences, setLocalPreferences] = useState<LocalNotificationPreferences>(() => getLocalNotificationPreferences());
   const alertedKeys = useRef(new Set<string>());
+  const notificationHydratedRef = useRef(false);
   const loadingRef = useRef(false);
 
   const storageKey = `techlead-hub:notifications:read:${user?.id ?? "anonymous"}`;
@@ -233,26 +235,54 @@ export function NotificationCenter() {
   );
 
   useEffect(() => {
-    const newest = unread[0];
-    if (!newest || alertedKeys.current.has(newest.key)) return;
-    const age = Date.now() - new Date(newest.occurredAt).getTime();
-    if (age >= 10 * 60_000) return;
-    alertedKeys.current.add(newest.key);
-    setToast(newest);
-    playNotificationSound(newest.kind === "CHAT_MENTION" ? "chat" : "system");
+    const now = Date.now();
+    const candidates = unread
+      .filter((item) => !alertedKeys.current.has(item.key))
+      .filter((item) => {
+        if (notificationHydratedRef.current) return true;
+        const age = now - new Date(item.occurredAt).getTime();
+        return item.kind === "MEETING_REMINDER" || (age >= 0 && age < 10 * 60_000);
+      })
+      .sort((left, right) => new Date(left.occurredAt).getTime() - new Date(right.occurredAt).getTime());
+
+    if (!notificationHydratedRef.current) {
+      const candidateKeys = new Set(candidates.map((item) => item.key));
+      unread.forEach((item) => {
+        if (!candidateKeys.has(item.key)) alertedKeys.current.add(item.key);
+      });
+      notificationHydratedRef.current = true;
+    }
+
+    if (!candidates.length) return;
+    candidates.forEach((item) => alertedKeys.current.add(item.key));
+    setToastQueue((current) => {
+      const existing = new Set(current.map((item) => item.key));
+      return [...current, ...candidates.filter((item) => !existing.has(item.key))].slice(0, 30);
+    });
+  }, [unread]);
+
+  useEffect(() => {
+    if (!toast) return;
+    playNotificationSound(toast.kind === "CHAT_MENTION" ? "chat" : "system");
     if (preferences.desktopAlerts && "Notification" in window && Notification.permission === "granted") {
-      const alert = new Notification(newest.title, { body: newest.message });
+      const alert = new Notification(toast.title, { body: toast.message });
       alert.onclick = () => {
         window.focus();
-        if (newest.kind === "MEETING_REMINDER" && newest.meetingId) {
-          window.dispatchEvent(new CustomEvent("techlead-hub:open-meeting", { detail: { meetingId: newest.meetingId } }));
+        if (toast.kind === "MEETING_REMINDER" && toast.meetingId) {
+          window.dispatchEvent(new CustomEvent("techlead-hub:open-meeting", { detail: { meetingId: toast.meetingId } }));
         } else {
-          navigate(newest.path);
+          navigate(toast.path);
         }
         alert.close();
       };
     }
-  }, [unread, navigate, preferences.desktopAlerts]);
+  }, [toast, navigate, preferences.desktopAlerts]);
+
+  useEffect(() => {
+    alertedKeys.current.clear();
+    notificationHydratedRef.current = false;
+    setToastQueue([]);
+  }, [user?.id]);
 
   async function openMenu(event: MouseEvent<HTMLElement>) {
     setAnchor(event.currentTarget);
@@ -443,10 +473,28 @@ export function NotificationCenter() {
           </Stack>
         )}
       </Menu>
-      <Snackbar open={Boolean(toast)} autoHideDuration={10000} onClose={()=>setToast(null)} anchorOrigin={{vertical:"bottom",horizontal:"right"}}>
-        <Alert severity="info" variant="filled" onClose={()=>setToast(null)} onClick={()=>{if(toast){const item=toast;setToast(null);openNotification(item)}}} sx={{cursor:"pointer",minWidth:{sm:360},boxShadow:"0 16px 42px rgba(0,0,0,.28)"}}>
+      <Snackbar
+        key={toast?.key ?? "notification-toast"}
+        open={Boolean(toast)}
+        autoHideDuration={8000}
+        onClose={(_, reason) => { if (reason !== "clickaway") setToastQueue((current) => current.slice(1)); }}
+        anchorOrigin={{vertical:"bottom",horizontal:"right"}}
+      >
+        <Alert
+          severity={toast?.kind === "OPERATION_ALERT" || toast?.kind === "KNOWN_PROBLEM" ? "warning" : toast?.kind === "AZURE_COMPLETED" ? "success" : "info"}
+          variant="filled"
+          onClose={() => setToastQueue((current) => current.slice(1))}
+          onClick={() => {
+            if (!toast) return;
+            const item = toast;
+            setToastQueue((current) => current.slice(1));
+            openNotification(item);
+          }}
+          sx={{cursor:"pointer",minWidth:{sm:360},maxWidth:{sm:480},boxShadow:"0 16px 42px rgba(0,0,0,.28)"}}
+        >
           <Typography sx={{fontWeight:850,fontSize:".82rem"}}>{toast?.title}</Typography>
           <Typography sx={{fontSize:".76rem",opacity:.92}}>{toast?.message}</Typography>
+          {toastQueue.length > 1 && <Typography variant="caption" sx={{display:"block",mt:.45,opacity:.78}}>{toastQueue.length-1} notificação(ões) aguardando</Typography>}
         </Alert>
       </Snackbar>
     </>
