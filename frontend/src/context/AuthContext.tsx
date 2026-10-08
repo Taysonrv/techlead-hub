@@ -279,15 +279,10 @@ export function AuthProvider({
   /* Mantém a sessão central ativa e detecta revogação em outra plataforma. */
   useEffect(() => {
     if (!user) return;
-    const heartbeat = () => void api.post<{ accessToken?: string }>("/auth/heartbeat")
-      .then(async (response) => {
+    const heartbeat = () => void api.post<{ accessToken?: string; user?: AuthUser }>("/auth/heartbeat")
+      .then((response) => {
         if (response.data.accessToken) setAccessToken(response.data.accessToken);
-        try {
-          const current = await api.get<{ user: AuthUser }>("/auth/me");
-          setUser(current.data.user);
-        } catch {
-          // O interceptor global trata sessão revogada/expirada.
-        }
+        if (response.data.user) setUser(response.data.user);
       })
       .catch(() => undefined);
     heartbeat();
