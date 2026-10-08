@@ -102,15 +102,19 @@ function requestRateLimitIdentity(req: express.Request) {
 }
 
 function isBackgroundApiRequest(req: express.Request) {
-  const key = `${req.method.toUpperCase()} ${req.path}`;
-  return new Set([
+  const method = req.method.toUpperCase();
+  const pathName = req.path;
+  const key = `${method} ${pathName}`;
+  if (new Set([
     "POST /auth/heartbeat",
     "GET /notifications",
     "GET /notifications/meetings",
     "GET /chat/channels",
     "GET /chat/events",
+    "GET /chat/realtime",
     "POST /chat/presence",
-  ]).has(key);
+  ]).has(key)) return true;
+  return method === "GET" && /^\/chat\/channels\/\d+\/messages$/.test(pathName);
 }
 
 app.use("/api", (req, res, next) => {
