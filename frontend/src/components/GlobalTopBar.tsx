@@ -1,5 +1,5 @@
 import { AddOutlined, CalendarMonthOutlined, ChevronLeft, ChevronRight, DarkModeOutlined, DeleteOutlineOutlined, DownloadOutlined, LightModeOutlined, OpenInNewOutlined, SearchOutlined, VideoCallOutlined } from "@mui/icons-material";
-import { Alert, Autocomplete, Badge, Box, Button, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Divider, IconButton, InputAdornment, List, ListItemButton, ListItemText, Paper, Popover, Stack, TextField, Typography } from "@mui/material";
+import { Alert, Autocomplete, Badge, Box, Button, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Divider, IconButton, InputAdornment, List, ListItemButton, ListItemText, MenuItem, Paper, Popover, Stack, TextField, Typography } from "@mui/material";
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
@@ -10,12 +10,12 @@ import { useColorMode } from "../context/ColorModeContext";
 type SearchItem = { id: string; type: string; title: string; subtitle: string; path: string };
 type CalendarPerson = { id: number; name: string; username: string; email: string | null; role: string };
 type CalendarMeeting = {
-  id:number; title:string; description:string|null; startAt:string; endAt:string; timezone:string;
+  id:number; title:string; description:string|null; startAt:string; endAt:string; timezone:string; reminderMinutes:number;
   location:string|null; meetingUrl:string|null; externalAttendees:string[]; status:string;
   createdBy:CalendarPerson; participants:CalendarPerson[]; canManage:boolean;
 };
 type CalendarEvent = { id: string; date: string; kind: string; title: string; subtitle: string; path: string; meeting?: CalendarMeeting };
-type MeetingForm = { title:string; startAt:string; endAt:string; participantIds:number[]; externalAttendees:string; location:string; meetingUrl:string; description:string };
+type MeetingForm = { title:string; startAt:string; endAt:string; reminderMinutes:number; participantIds:number[]; externalAttendees:string; location:string; meetingUrl:string; description:string };
 type Holiday = { date: string; name: string };
 type DesktopUpdateState = { status: "idle" | "disabled" | "checking" | "available" | "not-available" | "downloading" | "downloaded" | "error"; availableVersion: string | null; percent?: number; message?: string | null };
 
@@ -140,6 +140,7 @@ export function GlobalTopBar() {
       title: meeting.title,
       startAt: dateTimeLocal(new Date(meeting.startAt)),
       endAt: dateTimeLocal(new Date(meeting.endAt)),
+      reminderMinutes: meeting.reminderMinutes ?? 15,
       participantIds: meeting.participants.map((person) => person.id),
       externalAttendees: meeting.externalAttendees.join(", "),
       location: meeting.location ?? "",
@@ -167,6 +168,7 @@ export function GlobalTopBar() {
         startAt: startAt.toISOString(),
         endAt: endAt.toISOString(),
         timezone: "America/Sao_Paulo",
+        reminderMinutes: meetingForm.reminderMinutes,
         location: meetingForm.location,
         meetingUrl: meetingForm.meetingUrl,
         participantIds: meetingForm.participantIds,
@@ -226,6 +228,11 @@ export function GlobalTopBar() {
       meeting.location ? `LOCATION:${escapeIcs(meeting.location)}` : "",
       meeting.meetingUrl ? `URL:${meeting.meetingUrl}` : "",
       ...attendees,
+      "BEGIN:VALARM",
+      `TRIGGER:-PT${meeting.reminderMinutes ?? 15}M`,
+      "ACTION:DISPLAY",
+      `DESCRIPTION:${escapeIcs(`Lembrete: ${meeting.title}`)}`,
+      "END:VALARM",
       "END:VEVENT","END:VCALENDAR",
     ].filter(Boolean).join("\r\n");
     const blob = new Blob([body], { type: "text/calendar;charset=utf-8" });
@@ -360,6 +367,20 @@ export function GlobalTopBar() {
                 slotProps={{ inputLabel: { shrink: true } }}
               />
             </Box>
+            <TextField
+              select
+              fullWidth
+              label="Lembrete"
+              value={meetingForm.reminderMinutes}
+              disabled={Boolean(editingMeeting && !editingMeeting.canManage)}
+              onChange={(event) => setMeetingForm((current) => ({ ...current, reminderMinutes: Number(event.target.value) }))}
+              helperText={`Avisar no Hub ${meetingForm.reminderMinutes} minuto(s) antes e novamente no horário da reunião.`}
+            >
+              <MenuItem value={5}>5 minutos antes</MenuItem>
+              <MenuItem value={10}>10 minutos antes</MenuItem>
+              <MenuItem value={15}>15 minutos antes</MenuItem>
+              <MenuItem value={30}>30 minutos antes</MenuItem>
+            </TextField>
             <Autocomplete
               multiple
               options={meetingParticipants}
@@ -443,6 +464,6 @@ function defaultMeetingForm(date: string): MeetingForm {
     start.setMinutes(rounded);
   }
   const end = new Date(start.getTime() + 30 * 60_000);
-  return { title:"", startAt:dateTimeLocal(start), endAt:dateTimeLocal(end), participantIds:[], externalAttendees:"", location:"", meetingUrl:"", description:"" };
+  return { title:"", startAt:dateTimeLocal(start), endAt:dateTimeLocal(end), reminderMinutes:15, participantIds:[], externalAttendees:"", location:"", meetingUrl:"", description:"" };
 }
 function calendarDays(month: Date) { const first = new Date(month.getFullYear(), month.getMonth(), 1); const start = new Date(first); start.setDate(first.getDate() - first.getDay()); return Array.from({ length: 42 }, (_, index) => { const day = new Date(start); day.setDate(start.getDate() + index); return day; }); }
