@@ -114,6 +114,7 @@ export class CorrectionMonthlyReportService {
     const requested=[
       "System.Id","System.WorkItemType","System.Title","System.State","System.CreatedBy",
       "System.CreatedDate","System.ChangedDate","System.AssignedTo",
+      "Microsoft.VSTS.Common.StateChangeDate","Microsoft.VSTS.Common.ClosedDate",
       "Microsoft.VSTS.Common.Priority",fields.client,fields.prioritized,fields.urgency,
     ].filter((value,index,array)=>array.indexOf(value)===index);
 
@@ -179,6 +180,7 @@ ASOF '${asOf.toISOString()}'`;
     const coreFields=[
       "System.Id","System.WorkItemType","System.Title","System.State","System.CreatedBy",
       "System.CreatedDate","System.ChangedDate","System.AssignedTo",
+      "Microsoft.VSTS.Common.StateChangeDate","Microsoft.VSTS.Common.ClosedDate",
       "Microsoft.VSTS.Common.Priority",
     ];
     const requested=[
@@ -298,13 +300,20 @@ ASOF '${asOf.toISOString()}'`;
       const currentItem=currentById.get(id);
       const lastState=[...stateEvents].reverse().find(event=>event.at<endExclusive);
       const terminal=[...stateEvents].reverse().find(event=>event.at<endExclusive&&TERMINAL.has(event.state));
+      const closeStateChangedAt=date(closingFields["Microsoft.VSTS.Common.StateChangeDate"]);
+      const snapshotTransitionInPeriod=!!closeStateChangedAt&&closeStateChangedAt>=start&&closeStateChangedAt<endExclusive;
       const urgencyValue=text(latestFields[fields.urgency])??text(latestFields["Microsoft.VSTS.Common.Priority"]);
       const urgency=urgencyValue ? (/^\d+$/.test(urgencyValue)?`P${urgencyValue}`:urgencyValue) : currentItem?.criticality??null;
       const prioritized=bool(latestFields[fields.prioritized])??currentItem?.prioritized??null;
       const sourceClient=text(latestFields[fields.client])??currentItem?.client??null;
       const client=resolveSimerClient(sourceClient);
       if(!client) continue;
-      rows.push({id,title:text(latestFields["System.Title"])??currentItem?.title??`Task ${id}`,client,createdBy:text(latestFields["System.CreatedBy"])??text(firstFields["System.CreatedBy"])??currentItem?.createdByName??null,createdAt:createdAt.toISOString(),status:stateAtClose,lastStateChangedAt:lastState?.at.toISOString()??text(closingFields["System.ChangedDate"])??null,urgency,prioritized,assignedTo:text(latestFields["System.AssignedTo"])??currentItem?.assignedToName??null,terminalAt:terminal?.at.toISOString()??null,remoteUrl:currentItem?.remoteUrl??null,stateAtOpen,stateAtClose,registeredInPeriod:createdAt>=start&&createdAt<endExclusive,deliveredInPeriod:entered("Concluído")&&stateAtClose==="Concluído",canceledInPeriod:entered("Cancelado")&&stateAtClose==="Cancelado",enteredRegistrationInPeriod:entered("Registro")&&stateAtClose==="Registro",backlogInitial:!!stateAtOpen&&!BACKLOG_EXCLUDED.has(stateAtOpen),backlogCurrent:!BACKLOG_EXCLUDED.has(stateAtClose)});
+      const deliveredInPeriod=stateAtClose==="Concluído"&&(snapshotTransitionInPeriod||entered("Concluído"));
+      const canceledInPeriod=stateAtClose==="Cancelado"&&(snapshotTransitionInPeriod||entered("Cancelado"));
+      const enteredRegistrationInPeriod=stateAtClose==="Registro"&&(snapshotTransitionInPeriod||entered("Registro"));
+      const effectiveStateChangedAt=closeStateChangedAt??lastState?.at??null;
+      const effectiveTerminalAt=TERMINAL.has(stateAtClose)?(closeStateChangedAt??terminal?.at??null):null;
+      rows.push({id,title:text(latestFields["System.Title"])??currentItem?.title??`Task ${id}`,client,createdBy:text(latestFields["System.CreatedBy"])??text(firstFields["System.CreatedBy"])??currentItem?.createdByName??null,createdAt:createdAt.toISOString(),status:stateAtClose,lastStateChangedAt:effectiveStateChangedAt?.toISOString()??null,urgency,prioritized,assignedTo:text(latestFields["System.AssignedTo"])??currentItem?.assignedToName??null,terminalAt:effectiveTerminalAt?.toISOString()??null,remoteUrl:currentItem?.remoteUrl??this.workItemUrl(id),stateAtOpen,stateAtClose,registeredInPeriod:createdAt>=start&&createdAt<endExclusive,deliveredInPeriod,canceledInPeriod,enteredRegistrationInPeriod,backlogInitial:!!stateAtOpen&&!BACKLOG_EXCLUDED.has(stateAtOpen),backlogCurrent:!BACKLOG_EXCLUDED.has(stateAtClose)});
     }
 
     // O endpoint de revisões retorna apenas itens que tiveram revisão no período.
@@ -327,6 +336,9 @@ ASOF '${asOf.toISOString()}'`;
         const stateAtClose=text(closingFields["System.State"]);
         if(!stateAtClose) continue;
         const raw=(item?.rawFields&&typeof item.rawFields==="object"&&!Array.isArray(item.rawFields)?item.rawFields:{}) as Record<string,unknown>;
+        const stateChangedAt=date(closingFields["Microsoft.VSTS.Common.StateChangeDate"]);
+        const transitionInPeriod=!!stateChangedAt&&stateChangedAt>=start&&stateChangedAt<endExclusive;
+        const terminalAt=TERMINAL.has(stateAtClose)?stateChangedAt:null;
 
         rows.push({
           id,
@@ -335,18 +347,18 @@ ASOF '${asOf.toISOString()}'`;
           createdBy:text(closingFields["System.CreatedBy"])??item?.createdByName??null,
           createdAt:createdAt.toISOString(),
           status:stateAtClose,
-          lastStateChangedAt:null,
+          lastStateChangedAt:stateChangedAt?.toISOString()??null,
           urgency:text(closingFields[fields.urgency])??item?.criticality??text(raw[fields.urgency]),
           prioritized:bool(closingFields[fields.prioritized])??item?.prioritized??null,
           assignedTo:text(closingFields["System.AssignedTo"])??item?.assignedToName??null,
-          terminalAt:null,
+          terminalAt:terminalAt?.toISOString()??null,
           remoteUrl:item?.remoteUrl??this.workItemUrl(id),
           stateAtOpen,
           stateAtClose,
           registeredInPeriod:createdAt>=start&&createdAt<endExclusive,
-          deliveredInPeriod:false,
-          canceledInPeriod:false,
-          enteredRegistrationInPeriod:false,
+          deliveredInPeriod:stateAtClose==="Concluído"&&transitionInPeriod,
+          canceledInPeriod:stateAtClose==="Cancelado"&&transitionInPeriod,
+          enteredRegistrationInPeriod:stateAtClose==="Registro"&&transitionInPeriod,
           backlogInitial:!!stateAtOpen&&!BACKLOG_EXCLUDED.has(stateAtOpen),
           backlogCurrent:!BACKLOG_EXCLUDED.has(stateAtClose),
         });
@@ -372,6 +384,9 @@ ASOF '${asOf.toISOString()}'`;
         const raw=(item?.rawFields&&typeof item.rawFields==="object"&&!Array.isArray(item.rawFields)?item.rawFields:{}) as Record<string,unknown>;
         const urgencyValue=text(closingFields[fields.urgency])??item?.criticality??text(raw[fields.urgency]);
         const prioritized=bool(closingFields[fields.prioritized])??item?.prioritized??null;
+        const snapshotStateChangedAt=date(closingFields["Microsoft.VSTS.Common.StateChangeDate"]);
+        const fallbackStateChangedAt=snapshotStateChangedAt??(!snapshotAvailable?item?.stateChangedAt??null:null);
+        const transitionInPeriod=!!fallbackStateChangedAt&&fallbackStateChangedAt>=start&&fallbackStateChangedAt<endExclusive;
 
         rows.push({
           id,
@@ -380,18 +395,18 @@ ASOF '${asOf.toISOString()}'`;
           createdBy:text(closingFields["System.CreatedBy"])??item?.createdByName??null,
           createdAt:createdAt.toISOString(),
           status:stateAtClose,
-          lastStateChangedAt:null,
+          lastStateChangedAt:fallbackStateChangedAt?.toISOString()??null,
           urgency:urgencyValue,
           prioritized,
           assignedTo:text(closingFields["System.AssignedTo"])??item?.assignedToName??null,
-          terminalAt:null,
+          terminalAt:TERMINAL.has(stateAtClose)?fallbackStateChangedAt?.toISOString()??null:null,
           remoteUrl:item?.remoteUrl??this.workItemUrl(id),
           stateAtOpen,
           stateAtClose,
           registeredInPeriod:createdInPeriod,
-          deliveredInPeriod:false,
-          canceledInPeriod:false,
-          enteredRegistrationInPeriod:false,
+          deliveredInPeriod:stateAtClose==="Concluído"&&transitionInPeriod,
+          canceledInPeriod:stateAtClose==="Cancelado"&&transitionInPeriod,
+          enteredRegistrationInPeriod:stateAtClose==="Registro"&&transitionInPeriod,
           backlogInitial:snapshotAvailable&&!!stateAtOpen&&!BACKLOG_EXCLUDED.has(stateAtOpen),
           backlogCurrent:snapshotAvailable&&!BACKLOG_EXCLUDED.has(stateAtClose),
         });
