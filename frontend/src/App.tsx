@@ -203,7 +203,7 @@ function AuthenticatedLayout({
             }}
           >
 <Box sx={isChat ? { position: "relative", zIndex: (theme) => theme.zIndex.appBar, px: { xs: 1.5, sm: 2, md: 2.5, lg: 3, xl: 4 }, pt: { xs: 1.5, sm: 2, md: 2.5, lg: 3, xl: 3.5 }, height: { xs: 62, md: 70 }, boxSizing: "border-box", overflow: "visible", pointerEvents: "none", "& .MuiTextField-root, & input, & button, & [role='button']": { pointerEvents: "auto" } } : { px: { xs: 1.5, sm: 2, md: 2.5, lg: 3, xl: 4 } }}><GlobalTopBar /></Box>
-            {backendUnavailable && <Alert severity="error" variant="outlined" sx={{ mx: { xs: 1.5, sm: 2, md: 2.5, lg: 3, xl: 4 }, mb: 1.25, borderRadius: 2.5 }}><b>Backend indisponível.</b>&nbsp; Algumas informações podem não carregar até a comunicação com a API ser restabelecida.</Alert>}
+            {backendUnavailable && <Alert severity="error" variant="outlined" sx={isChat ? { position: "fixed", top: { xs: 66, md: 74 }, left: { xs: 12, sm: 16 }, right: { xs: 12, sm: 16 }, zIndex: (theme) => theme.zIndex.snackbar, borderRadius: 2.5, boxShadow: "0 14px 34px rgba(0,0,0,.18)" } : { mx: { xs: 1.5, sm: 2, md: 2.5, lg: 3, xl: 4 }, mb: 1.25, borderRadius: 2.5 }}><b>Backend indisponível.</b>&nbsp; Algumas informações podem não carregar até a comunicação com a API ser restabelecida.</Alert>}
             {forbiddenMessage && <Alert severity="warning" sx={{ mx: { xs: 1.5, sm: 2, md: 2.5, lg: 3, xl: 4 }, mb: 2, borderRadius: 2.5 }} onClose={() => setForbiddenMessage(null)}>{forbiddenMessage}</Alert>}
             <Box
               className="techlead-page-surface futuristic-page"
