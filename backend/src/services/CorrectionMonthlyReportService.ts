@@ -1,4 +1,5 @@
 import axios from "axios";
+import type { AxiosResponse } from "axios";
 import { prisma } from "../database/prisma";
 import { AZURE_WORK_ITEM_FIELDS } from "./AzureWorkItemMapper";
 import { isSupportAnalyst, resolveSimerClient, SIMER_CLIENTS } from "../domain/OperationalScope";
@@ -123,7 +124,7 @@ export class CorrectionMonthlyReportService {
     let nextLink:string|null=null;
     let first=true;
     do {
-      const response=await client.get<ReportingResponse>(
+      const response:AxiosResponse<ReportingResponse>=await client.get<ReportingResponse>(
         nextLink??"/_apis/wit/reporting/workitemrevisions",
         first ? {
           params:{
