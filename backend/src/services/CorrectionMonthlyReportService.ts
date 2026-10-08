@@ -17,6 +17,9 @@ const TERMINAL = new Set(["Concluído", "Cancelado"]);
 const BACKLOG_EXCLUDED = new Set(["Registro", ...TERMINAL]);
 const CACHE_TTL_MS = 10 * 60_000;
 const FIELD_CACHE_TTL_MS = 60 * 60_000;
+const AZURE_REQUEST_TIMEOUT_MS = 12_000;
+const REVISION_STAGE_TIMEOUT_MS = 25_000;
+const SNAPSHOT_STAGE_TIMEOUT_MS = 22_000;
 
 function text(value: unknown): string | null {
   if (typeof value === "string") return value.trim() || null;
@@ -72,7 +75,7 @@ export class CorrectionMonthlyReportService {
   }
   private client() {
     const {organization,project,pat}=this.azureConfig();
-    return axios.create({baseURL:`https://dev.azure.com/${encodeURIComponent(organization)}/${encodeURIComponent(project)}`,timeout:60_000,headers:{Accept:"application/json",Authorization:`Basic ${Buffer.from(`:${pat}`).toString("base64")}`}});
+    return axios.create({baseURL:`https://dev.azure.com/${encodeURIComponent(organization)}/${encodeURIComponent(project)}`,timeout:AZURE_REQUEST_TIMEOUT_MS,headers:{Accept:"application/json",Authorization:`Basic ${Buffer.from(`:${pat}`).toString("base64")}`}});
   }
   private async fieldDefinitions() {
     const {organization,project}=this.azureConfig();
@@ -121,9 +124,12 @@ export class CorrectionMonthlyReportService {
 
     const all:Revision[]=[];
     const client=this.client();
+    const deadline=Date.now()+REVISION_STAGE_TIMEOUT_MS;
     let nextLink:string|null=null;
     let first=true;
     do {
+      const remaining=deadline-Date.now();
+      if(remaining<=0) throw new Error("Consulta de revisões do Azure excedeu o limite de tempo.");
       const response:AxiosResponse<ReportingResponse>=await client.get<ReportingResponse>(
         nextLink??"/_apis/wit/reporting/workitemrevisions",
         first ? {
@@ -136,7 +142,10 @@ export class CorrectionMonthlyReportService {
             "$maxPageSize":2000,
             "api-version":"7.1",
           },
-        } : undefined,
+          timeout:Math.max(1_000,Math.min(AZURE_REQUEST_TIMEOUT_MS,remaining)),
+        } : {
+          timeout:Math.max(1_000,Math.min(AZURE_REQUEST_TIMEOUT_MS,remaining)),
+        },
       );
       all.push(...(response.data.values??response.data.value??[]));
       nextLink=response.data.isLastBatch===true?null:(response.data.nextLink??null);
@@ -156,15 +165,17 @@ ASOF '${asOf.toISOString()}'`;
     const response=await this.client().post<WiqlResponse>(
       "/_apis/wit/wiql",
       {query},
-      {params:{"api-version":"7.1"}},
+      {params:{"api-version":"7.1"},timeout:AZURE_REQUEST_TIMEOUT_MS},
     );
     return [...new Set((response.data.workItems??[])
       .map(item=>Number(item.id))
       .filter((id):id is number=>Number.isSafeInteger(id)&&id>0))];
   }
 
-  private workItemUrl(id:number) {
-    const {organization,project}=this.azureConfig();
+  private workItemUrl(id:number):string|null {
+    const organization=(process.env.AZURE_DEVOPS_ORGANIZATION??"").trim();
+    const project=(process.env.AZURE_DEVOPS_PROJECT??"").trim();
+    if(!organization||!project) return null;
     return `https://dev.azure.com/${encodeURIComponent(organization)}/${encodeURIComponent(project)}/_workitems/edit/${id}`;
   }
 
@@ -187,7 +198,10 @@ ASOF '${asOf.toISOString()}'`;
       ...coreFields,fields.client,fields.prioritized,fields.urgency,
     ].filter((value,index,array)=>array.indexOf(value)===index);
 
+    const deadline=Date.now()+SNAPSHOT_STAGE_TIMEOUT_MS;
     const loadBatch=async(batch:number[],requestedFields:string[])=>{
+      const remaining=deadline-Date.now();
+      if(remaining<=0) throw new Error("Consulta de snapshots do Azure excedeu o limite de tempo.");
       const response=await this.client().post<SnapshotBatchResponse>(
         "/_apis/wit/workitemsbatch",
         {
@@ -196,12 +210,13 @@ ASOF '${asOf.toISOString()}'`;
           asOf:asOf.toISOString(),
           errorPolicy:"Omit",
         },
-        {params:{"api-version":"7.1"}},
+        {params:{"api-version":"7.1"},timeout:Math.max(1_000,Math.min(AZURE_REQUEST_TIMEOUT_MS,remaining))},
       );
       return response.data.value??[];
     };
 
     for(let index=0;index<normalizedIds.length;index+=200){
+      if(Date.now()>=deadline) throw new Error("Consulta de snapshots do Azure excedeu o limite de tempo.");
       const batch=normalizedIds.slice(index,index+200);
       let values:SnapshotItem[];
       try {
