@@ -2,7 +2,7 @@ import { AddOutlined, CalendarMonthOutlined, ChevronLeft, ChevronRight, DarkMode
 import { Alert, Autocomplete, Badge, Box, Button, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Divider, IconButton, InputAdornment, List, ListItemButton, ListItemText, MenuItem, Paper, Popover, Stack, TextField, Typography } from "@mui/material";
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
 import { createPortal } from "react-dom";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { api, getApiErrorMessage } from "../services/api";
 import { aliareColors } from "../theme/theme";
 import { useColorMode } from "../context/ColorModeContext";
@@ -21,6 +21,7 @@ type DesktopUpdateState = { status: "idle" | "disabled" | "checking" | "availabl
 
 export function GlobalTopBar() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { mode, toggleMode } = useColorMode();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchItem[]>([]);
@@ -40,6 +41,7 @@ export function GlobalTopBar() {
   const [editingMeeting, setEditingMeeting] = useState<CalendarMeeting | null>(null);
   const [meetingForm, setMeetingForm] = useState<MeetingForm>(() => defaultMeetingForm(dateKey(new Date())));
   const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const openingMeetingIdRef = useRef<number | null>(null);
   const [updateState, setUpdateState] = useState<DesktopUpdateState | null>(null);
 
 
@@ -48,19 +50,30 @@ export function GlobalTopBar() {
   }, []);
 
   useEffect(() => {
-    const openMeetingFromNotification = (event: Event) => {
-      const detail = (event as CustomEvent<{ meetingId?: number }>).detail;
-      const meetingId = Number(detail?.meetingId);
-      if (!Number.isSafeInteger(meetingId) || meetingId <= 0) return;
-      void api.get<{ meeting: CalendarMeeting }>(`/global/calendar/meetings/${meetingId}`)
-        .then((response) => openMeeting(response.data.meeting))
-        .catch((error) => {
-          console.warn("[calendar] Não foi possível abrir a reunião da notificação:", error);
-        });
-    };
-    window.addEventListener("techlead-hub:open-meeting", openMeetingFromNotification);
-    return () => window.removeEventListener("techlead-hub:open-meeting", openMeetingFromNotification);
-  }, [meetingParticipants]);
+    const params = new URLSearchParams(location.search);
+    const meetingId = Number(params.get("meeting"));
+    if (!Number.isSafeInteger(meetingId) || meetingId <= 0 || openingMeetingIdRef.current === meetingId) return;
+
+    openingMeetingIdRef.current = meetingId;
+    void api.get<{ meeting: CalendarMeeting }>(`/global/calendar/meetings/${meetingId}`)
+      .then((response) => {
+        openMeeting(response.data.meeting);
+        const next = new URLSearchParams(location.search);
+        next.delete("meeting");
+        navigate(
+          { pathname: location.pathname, search: next.toString() ? `?${next.toString()}` : "" },
+          { replace: true },
+        );
+      })
+      .catch((error) => {
+        console.warn("[calendar] Não foi possível abrir a reunião da notificação:", error);
+        setMeetingError(getApiErrorMessage(error, "Não foi possível abrir a reunião."));
+        setMeetingDialogOpen(true);
+      })
+      .finally(() => {
+        openingMeetingIdRef.current = null;
+      });
+  }, [location.pathname, location.search, navigate]);
 
 
   useEffect(() => {
