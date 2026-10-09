@@ -141,7 +141,7 @@ export function DataQuality() {
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [load]);
+  }, [load, search]);
 
   async function open(item: Sample) {
     setSelected(item); setDetail(null);
