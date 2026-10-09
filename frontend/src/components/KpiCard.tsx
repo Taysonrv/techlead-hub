@@ -6,9 +6,9 @@ import {
   Stack,
   Tooltip,
   Typography,
-  alpha,
   useTheme,
 } from "@mui/material";
+import { alpha } from "@mui/material/styles";
 import { InfoOutlined } from "@mui/icons-material";
 import type { KeyboardEvent, ReactNode } from "react";
 import { aliareColors } from "../theme/theme";
