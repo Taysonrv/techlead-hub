@@ -730,7 +730,7 @@ export function Settings() {
             <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5} sx={{ alignItems: { sm: "center" }, justifyContent: "space-between" }}>
               <Box>
                 <Typography sx={{ fontWeight: 800 }}>Movidesk</Typography>
-                <Typography variant="body2" color="text.secondary">Fonte operacional de tickets. Sincronização automática incremental a cada 60 minutos.</Typography>
+                <Typography variant="body2" color="text.secondary">Fonte operacional de tickets. Sincronização automática incremental a cada 5 minutos por padrão (configurável no backend).</Typography>
               </Box>
               <Chip icon={configuration?.movideskConfigured ? <CloudDoneOutlined /> : <CloudOffOutlined />} label={configuration?.movideskConfigured ? "Token configurado" : "Não configurado"} color={configuration?.movideskConfigured ? "success" : "default"} variant="outlined" />
             </Stack>
