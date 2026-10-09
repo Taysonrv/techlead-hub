@@ -1,5 +1,6 @@
 import axios from "axios";
 import type { AxiosResponse } from "axios";
+import { Prisma } from "@prisma/client";
 import { prisma } from "../database/prisma";
 import { AZURE_WORK_ITEM_FIELDS } from "./AzureWorkItemMapper";
 import { isSupportAnalyst } from "../domain/OperationalScope";
@@ -416,14 +417,27 @@ ASOF '${asOf.toISOString()}'`;
       snapshotError=error instanceof Error ? error.message : "Snapshots históricos do Azure indisponíveis.";
       console.warn(`[correction-monthly-report] Snapshots asOf indisponíveis; mantendo estratégia de revisões/snapshot local. | ${snapshotError}`);
     }
-    const backlogHistoricalReliable=assessHistoricalBacklog(
+    const localPeriodCandidates=current.filter(item =>
+      [item.azureCreatedAt,item.stateChangedAt,item.azureClosedAt]
+        .some(value=>!!value&&value>=start&&value<=close),
+    ).length;
+    const externalHistorySuspicious =
+      localPeriodCandidates>0 &&
+      revisions.length===0 &&
+      openingScopeIds.length===0 &&
+      closingScopeIds.length===0;
+
+    let backlogHistoricalReliable=assessHistoricalBacklog(
       historicalScopeAvailable,
       snapshotAvailable,
       openingScopeIds,
       closingScopeIds,
       new Set(openingSnapshot.keys()),
       new Set(closingSnapshot.keys()),
-    );
+    ) && !externalHistorySuspicious;
+    let movementHistoryReliable=historyAvailable && !externalHistorySuspicious;
+    let localFallbackUsed=false;
+    let localStateHistoryEvents=0;
 
     const currentById=new Map(current.map(item=>[item.id,item]));
     const grouped=new Map<number,Revision[]>();
@@ -574,6 +588,99 @@ ASOF '${asOf.toISOString()}'`;
         });
       }
     }
+    // Se Azure Reporting/WIQL vierem vazios apesar de existirem Correções
+    // locais no período, reconstrói o snapshot mensal a partir do histórico
+    // persistido pelo sincronizador. Isso evita transformar ausência de
+    // cobertura remota em "zero confiável".
+    if(rows.length===0&&localPeriodCandidates>0&&current.length>0){
+      const ids=current.map(item=>item.id).filter(id=>Number.isSafeInteger(id)&&id>0);
+      type LocalStateHistory={workItemId:number;oldValue:string|null;newValue:string|null;changedAt:Date};
+      let localHistory:LocalStateHistory[]=[];
+      if(ids.length){
+        localHistory=await prisma.$queryRaw<LocalStateHistory[]>(Prisma.sql`
+          SELECT "workItemId", "oldValue", "newValue", "changedAt"
+          FROM "AzureWorkItemHistory"
+          WHERE "field" = 'state'
+            AND "workItemId" IN (${Prisma.join(ids)})
+          ORDER BY "workItemId" ASC, "changedAt" ASC, "id" ASC
+        `);
+      }
+      localStateHistoryEvents=localHistory.length;
+      const historyById=new Map<number,LocalStateHistory[]>();
+      for(const event of localHistory){
+        const list=historyById.get(event.workItemId)??[];
+        list.push(event);
+        historyById.set(event.workItemId,list);
+      }
+
+      for(const item of current){
+        const createdAt=item.azureCreatedAt;
+        if(!createdAt||createdAt>close) continue;
+        const client=item.client?.trim()||null;
+        const events=(historyById.get(item.id)??[])
+          .filter(event=>event.oldValue!==event.newValue);
+
+        // A primeira alteração depois de uma fotografia informa, em oldValue,
+        // qual era o estado imediatamente antes dela.
+        const firstAfterOpen=events.find(event=>event.changedAt>=start);
+        const firstAfterClose=events.find(event=>event.changedAt>close);
+        const stateAtOpen=createdAt>=start
+          ? null
+          : (firstAfterOpen?.oldValue?.trim()||item.state||null);
+        const stateAtClose=firstAfterClose?.oldValue?.trim()||item.state||null;
+        if(!stateAtClose) continue;
+
+        const periodEvents=events
+          .filter(event=>event.changedAt>=start&&event.changedAt<=close&&!!event.newValue?.trim())
+          .map(event=>({at:event.changedAt,state:event.newValue!.trim()}));
+        const movement=classifyMonthlyStateMovement({
+          stateAtClose,
+          createdAt,
+          start,
+          close,
+          stateEvents:periodEvents,
+        });
+        const lastStateEvent=[...events].reverse().find(event=>event.changedAt<=close)??null;
+        const terminalEvent=[...events].reverse().find(event=>
+          event.changedAt<=close&&!!event.newValue&&TERMINAL.has(event.newValue.trim()),
+        )??null;
+
+        rows.push({
+          id:item.id,
+          title:item.title||`Task ${item.id}`,
+          client,
+          createdBy:item.createdByName,
+          createdAt:createdAt.toISOString(),
+          status:stateAtClose,
+          lastStateChangedAt:lastStateEvent?.changedAt.toISOString()??null,
+          urgency:item.criticality,
+          prioritized:item.prioritized,
+          assignedTo:item.assignedToName,
+          terminalAt:TERMINAL.has(stateAtClose)?terminalEvent?.changedAt.toISOString()??null:null,
+          remoteUrl:item.remoteUrl??this.workItemUrl(item.id),
+          stateAtOpen,
+          stateAtClose,
+          registeredInPeriod:movement.createdInPeriod,
+          deliveredInPeriod:movement.deliveredInPeriod,
+          canceledInPeriod:movement.canceledInPeriod,
+          enteredRegistrationInPeriod:movement.enteredRegistrationInPeriod,
+          backlogInitial:isBacklogState(stateAtOpen),
+          backlogCurrent:isBacklogState(stateAtClose),
+        });
+      }
+
+      if(rows.length>0){
+        localFallbackUsed=true;
+        movementHistoryReliable=localStateHistoryEvents>0;
+        // Reconstrução local é útil para operação, porém não recebe o selo
+        // "histórico ASOF confiável" usado para homologação oficial.
+        backlogHistoricalReliable=false;
+        console.warn(
+          `[correction-monthly-report] Azure histórico retornou vazio; fallback local ativado. | mês=${month} | candidatos=${localPeriodCandidates} | linhas=${rows.length} | eventosEstado=${localStateHistoryEvents}`,
+        );
+      }
+    }
+
     for(const row of rows){
       row.inPeriodUniverse=
         row.registeredInPeriod||
@@ -585,6 +692,6 @@ ASOF '${asOf.toISOString()}'`;
     }
         const count=(p:(r:Row)=>boolean)=>rows.filter(p).length;
     const by=(selector:(r:Row)=>string|null)=>Object.entries(rows.reduce<Record<string,number>>((acc,row)=>{const key=selector(row)||"Não informado";acc[key]=(acc[key]??0)+1;return acc;},{})).map(([name,total])=>({name,total})).sort((a,b)=>b.total-a.total);
-    return {period:{month,timezone:"America/Sao_Paulo",start:start.toISOString(),close:close.toISOString()},cards:{registered:count(r=>r.registeredInPeriod),delivered:count(r=>r.deliveredInPeriod),canceled:count(r=>r.canceledInPeriod),inRegistration:count(r=>r.enteredRegistrationInPeriod),backlogInitial:count(r=>r.backlogInitial),backlogCurrent:count(r=>r.backlogCurrent)},pipeline:by(r=>r.status),urgency:by(r=>r.urgency),prioritization:[{name:"Priorizadas",total:count(r=>r.prioritized===true)},{name:"Não priorizadas",total:count(r=>r.prioritized===false)},{name:"Não informado",total:count(r=>r.prioritized===null)}],filters:{creators:[...new Set(rows.map(r=>r.createdBy).filter(Boolean))].sort(),teamCreators:[...new Set(rows.map(r=>r.createdBy).filter((value):value is string=>!!value&&isSupportAnalyst(value)))].sort(),clients:[...new Set(rows.map(r=>r.client).filter((value):value is string=>!!value))].sort(),urgencies:[...new Set(rows.map(r=>r.urgency).filter(Boolean))].sort(),states:[...new Set(rows.map(r=>r.status).filter(Boolean))].sort()},rows,generatedAt:new Date().toISOString(),source:snapshotAvailable?(historyAvailable?"Azure DevOps · revisões + snapshots asOf":"Azure DevOps · snapshots asOf"):"Base sincronizada do Azure DevOps · snapshot local",quality:{historyAvailable,historyError,snapshotAvailable,snapshotError,historicalScopeError,mode:backlogHistoricalReliable&&historyAvailable?"historical":snapshotAvailable?"asof-partial":"local-snapshot",movementHistoryReliable:historyAvailable,historicalMetricsReliable:historyAvailable&&backlogHistoricalReliable,backlogHistoricalReliable,diagnostics:{localRecords:current.length,localPeriodCandidates:current.filter(item=>[item.azureCreatedAt,item.stateChangedAt,item.azureClosedAt].some(value=>!!value&&value>=start&&value<=close)).length,revisions:revisions.length,openingScopeIds:openingScopeIds.length,closingScopeIds:closingScopeIds.length,snapshotCandidates:candidateIds.length,openingSnapshotItems:openingSnapshot.size,closingSnapshotItems:closingSnapshot.size,outputRows:rows.length}},fieldMapping:fields};
+    return {period:{month,timezone:"America/Sao_Paulo",start:start.toISOString(),close:close.toISOString()},cards:{registered:count(r=>r.registeredInPeriod),delivered:count(r=>r.deliveredInPeriod),canceled:count(r=>r.canceledInPeriod),inRegistration:count(r=>r.enteredRegistrationInPeriod),backlogInitial:count(r=>r.backlogInitial),backlogCurrent:count(r=>r.backlogCurrent)},pipeline:by(r=>r.status),urgency:by(r=>r.urgency),prioritization:[{name:"Priorizadas",total:count(r=>r.prioritized===true)},{name:"Não priorizadas",total:count(r=>r.prioritized===false)},{name:"Não informado",total:count(r=>r.prioritized===null)}],filters:{creators:[...new Set(rows.map(r=>r.createdBy).filter(Boolean))].sort(),teamCreators:[...new Set(rows.map(r=>r.createdBy).filter((value):value is string=>!!value&&isSupportAnalyst(value)))].sort(),clients:[...new Set(rows.map(r=>r.client).filter((value):value is string=>!!value))].sort(),urgencies:[...new Set(rows.map(r=>r.urgency).filter(Boolean))].sort(),states:[...new Set(rows.map(r=>r.status).filter(Boolean))].sort()},rows,generatedAt:new Date().toISOString(),source:localFallbackUsed?"Base sincronizada do Azure DevOps · histórico local reconstruído":snapshotAvailable?(historyAvailable?"Azure DevOps · revisões + snapshots asOf":"Azure DevOps · snapshots asOf"):"Base sincronizada do Azure DevOps · snapshot local",quality:{historyAvailable,historyError,snapshotAvailable,snapshotError,historicalScopeError,externalHistorySuspicious,localFallbackUsed,localStateHistoryEvents,mode:localFallbackUsed?"local-history-fallback":backlogHistoricalReliable&&historyAvailable?"historical":snapshotAvailable?"asof-partial":"local-snapshot",movementHistoryReliable,historicalMetricsReliable:!localFallbackUsed&&historyAvailable&&backlogHistoricalReliable,backlogHistoricalReliable,diagnostics:{localRecords:current.length,localPeriodCandidates,revisions:revisions.length,openingScopeIds:openingScopeIds.length,closingScopeIds:closingScopeIds.length,snapshotCandidates:candidateIds.length,openingSnapshotItems:openingSnapshot.size,closingSnapshotItems:closingSnapshot.size,outputRows:rows.length}},fieldMapping:fields};
   }
 }
