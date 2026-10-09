@@ -447,7 +447,6 @@ ASOF '${asOf.toISOString()}'`;
         return createdAt>=start&&createdAt<endExclusive;
       });
       const inPeriod=stateEvents.filter(event=>event.at>=start&&event.at<=close);
-      const entered=(state:string)=>inPeriod.some(event=>event.state===state);
       const latestFields=Object.keys(closingFields).length?closingFields:(atClose?.revision.fields??{});
       const currentItem=currentById.get(id);
       const lastState=[...stateEvents].reverse().find(event=>event.at<=close);
