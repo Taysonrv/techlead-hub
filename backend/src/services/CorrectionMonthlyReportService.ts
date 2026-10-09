@@ -391,7 +391,7 @@ ASOF '${asOf.toISOString()}'`;
       history.sort((a,b)=>(date(a.fields?.["System.ChangedDate"])?.getTime()??0)-(date(b.fields?.["System.ChangedDate"])?.getTime()??0));
       const normalizedHistory=history.map(revision=>{const f=revision.fields??{};return{revision,at:date(f["System.ChangedDate"])??date(f["System.CreatedDate"]),state:text(f["System.State"])}}).filter((item):item is {revision:Revision;at:Date;state:string}=>!!item.at&&!!item.state);
       const firstHistory=history[0];const firstNormalized=normalizedHistory[0];if(!firstHistory||!firstNormalized)continue;
-      const firstFields=firstHistory.fields??{};const createdAt=date(firstFields["System.CreatedDate"])??firstNormalized.at;if(createdAt>=endExclusive)continue;
+      const firstFields=firstHistory.fields??{};const createdAt=date(firstFields["System.CreatedDate"])??firstNormalized.at;if(createdAt>close)continue;
       const atOpen=[...normalizedHistory].reverse().find(event=>event.at<start)??null;
       const atClose=[...normalizedHistory].reverse().find(event=>event.at<=close)??null;
       if(!atClose && !closingSnapshot.has(id)) continue;
@@ -426,7 +426,7 @@ ASOF '${asOf.toISOString()}'`;
       const enteredRegistrationInPeriod=stateAtClose==="Registro"&&(snapshotTransitionInPeriod||entered("Registro"));
       const effectiveStateChangedAt=closeStateChangedAt??lastState?.at??null;
       const effectiveTerminalAt=TERMINAL.has(stateAtClose)?(closeStateChangedAt??terminal?.at??null):null;
-      rows.push({id,title:text(latestFields["System.Title"])??currentItem?.title??`Task ${id}`,client,createdBy:text(latestFields["System.CreatedBy"])??text(firstFields["System.CreatedBy"])??currentItem?.createdByName??null,createdAt:createdAt.toISOString(),status:stateAtClose,lastStateChangedAt:effectiveStateChangedAt?.toISOString()??null,urgency,prioritized,assignedTo:text(latestFields["System.AssignedTo"])??currentItem?.assignedToName??null,terminalAt:effectiveTerminalAt?.toISOString()??null,remoteUrl:currentItem?.remoteUrl??this.workItemUrl(id),stateAtOpen,stateAtClose,registeredInPeriod:createdAt>=start&&createdAt<endExclusive,deliveredInPeriod,canceledInPeriod,enteredRegistrationInPeriod,backlogInitial:!!stateAtOpen&&!BACKLOG_EXCLUDED.has(stateAtOpen),backlogCurrent:!BACKLOG_EXCLUDED.has(stateAtClose)});
+      rows.push({id,title:text(latestFields["System.Title"])??currentItem?.title??`Task ${id}`,client,createdBy:text(latestFields["System.CreatedBy"])??text(firstFields["System.CreatedBy"])??currentItem?.createdByName??null,createdAt:createdAt.toISOString(),status:stateAtClose,lastStateChangedAt:effectiveStateChangedAt?.toISOString()??null,urgency,prioritized,assignedTo:text(latestFields["System.AssignedTo"])??currentItem?.assignedToName??null,terminalAt:effectiveTerminalAt?.toISOString()??null,remoteUrl:currentItem?.remoteUrl??this.workItemUrl(id),stateAtOpen,stateAtClose,registeredInPeriod:createdAt>=start&&createdAt<=close,deliveredInPeriod,canceledInPeriod,enteredRegistrationInPeriod,backlogInitial:!!stateAtOpen&&!BACKLOG_EXCLUDED.has(stateAtOpen),backlogCurrent:!BACKLOG_EXCLUDED.has(stateAtClose)});
     }
 
     // O endpoint de revisões retorna apenas itens que tiveram revisão no período.
@@ -443,7 +443,7 @@ ASOF '${asOf.toISOString()}'`;
         const sourceClient=text(closingFields[fields.client])??item?.client??null;
         const client=resolveSimerClient(sourceClient); if(!client) continue;
         const createdAt=date(closingFields["System.CreatedDate"])??item?.azureCreatedAt??null;
-        if(!createdAt||createdAt>=endExclusive) continue;
+        if(!createdAt||createdAt>close) continue;
 
         const stateAtOpen=text(openingFields["System.State"]);
         const stateAtClose=text(closingFields["System.State"]);
@@ -468,7 +468,7 @@ ASOF '${asOf.toISOString()}'`;
           remoteUrl:item?.remoteUrl??this.workItemUrl(id),
           stateAtOpen,
           stateAtClose,
-          registeredInPeriod:createdAt>=start&&createdAt<endExclusive,
+          registeredInPeriod:createdAt>=start&&createdAt<=close,
           deliveredInPeriod:stateAtClose==="Concluído"&&transitionInPeriod,
           canceledInPeriod:stateAtClose==="Cancelado"&&transitionInPeriod,
           enteredRegistrationInPeriod:stateAtClose==="Registro"&&transitionInPeriod,
@@ -488,12 +488,12 @@ ASOF '${asOf.toISOString()}'`;
         const client=resolveSimerClient(sourceClient); if(!client) continue;
 
         const createdAt=date(closingFields["System.CreatedDate"])??item?.azureCreatedAt??null;
-        if(!createdAt||createdAt>=endExclusive) continue;
+        if(!createdAt||createdAt>close) continue;
 
         const stateAtOpen=text(openingFields["System.State"]);
         const stateAtClose=text(closingFields["System.State"])??item?.state??null;
         if(!stateAtClose) continue;
-        const createdInPeriod=createdAt>=start&&createdAt<endExclusive;
+        const createdInPeriod=createdAt>=start&&createdAt<=close;
         const raw=(item?.rawFields&&typeof item.rawFields==="object"&&!Array.isArray(item.rawFields)?item.rawFields:{}) as Record<string,unknown>;
         const urgencyValue=text(closingFields[fields.urgency])??item?.criticality??text(raw[fields.urgency]);
         const prioritized=bool(closingFields[fields.prioritized])??item?.prioritized??null;
