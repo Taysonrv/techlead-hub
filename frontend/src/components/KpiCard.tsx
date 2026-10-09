@@ -86,12 +86,11 @@ export function KpiCard({
         "&::after": {
           content: '""',
           position: "absolute",
-          width: 108,
-          height: 108,
-          borderRadius: "50%",
-          right: -54,
-          top: -58,
-          background: "radial-gradient(circle, " + alpha(accent, dark ? 0.13 : 0.07) + ", transparent 68%)",
+          width: 84,
+          height: 1,
+          right: 12,
+          top: 0,
+          background: "linear-gradient(90deg, transparent, " + alpha(accent, dark ? 0.22 : 0.12) + ")",
           pointerEvents: "none",
         },
         ...(onClick
