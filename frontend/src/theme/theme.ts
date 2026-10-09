@@ -142,9 +142,13 @@ export function createAppTheme(mode: PaletteMode = "light") {
             backgroundColor: paper,
             transition: "border-color .18s ease, box-shadow .18s ease, transform .18s ease, background-color .18s ease",
             "&::after": dark ? { content: '""', position: "absolute", inset: "0 0 auto", height: 1, background: "linear-gradient(90deg, rgba(24,199,122,.30), rgba(47,141,255,.16), transparent 72%)", pointerEvents: "none" } : undefined,
-            "&:hover": {
-              borderColor: dark ? "rgba(70,194,163,.28)" : "rgba(24,199,122,.20)",
+            "&[role='button']:hover, &:has(.MuiCardActionArea-root):hover": {
+              borderColor: dark ? "rgba(70,194,163,.30)" : "rgba(24,199,122,.22)",
               boxShadow: dark ? "0 18px 46px rgba(0,0,0,.22), inset 0 1px rgba(255,255,255,.035)" : "0 14px 34px rgba(15,23,42,.075)",
+            },
+            "&[role='button']:focus-visible": {
+              outline: "2px solid " + aliareColors.green,
+              outlineOffset: 2,
             },
           },
         },
