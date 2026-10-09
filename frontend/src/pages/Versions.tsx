@@ -629,7 +629,7 @@ export function Versions() {
 
     void openRequestedVersion();
     return () => { cancelled = true; };
-  }, [searchParams, setSearchParams]);
+  }, [searchParams, setSearchParams, loadDetail]);
 
   const visibleVersions =
     useMemo(
