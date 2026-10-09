@@ -213,7 +213,7 @@ function AuthenticatedLayout({
                   position: "fixed",
                   pointerEvents: "none",
                   inset: "96px 0 24px 0",
-                  borderRadius: 28,
+                  borderRadius: 16,
                   border: theme.palette.mode === "dark" ? "1px solid rgba(74,139,199,.055)" : "1px solid transparent",
                   background: theme.palette.mode === "dark" ? "linear-gradient(145deg,rgba(9,29,48,.16),rgba(10,23,43,.04))" : "transparent",
                   boxShadow: theme.palette.mode === "dark" ? "inset 0 1px rgba(255,255,255,.012)" : "none",
