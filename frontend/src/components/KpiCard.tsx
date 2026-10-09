@@ -26,6 +26,7 @@ type KpiCardProps = {
   };
   accent?: string;
   active?: boolean;
+  density?: "default" | "compact";
   onClick?: () => void;
 };
 
@@ -37,6 +38,7 @@ export function KpiCard({
   metadata,
   accent = aliareColors.green,
   active = false,
+  density = "default",
   onClick,
 }: KpiCardProps) {
   const theme = useTheme();
@@ -62,7 +64,7 @@ export function KpiCard({
         overflow: "hidden",
         width: "100%",
         height: "100%",
-        minHeight: { xs: 112, md: 118 },
+        minHeight: density === "compact" ? { xs: 98, md: 104 } : { xs: 112, md: 118 },
         borderColor: active ? accent : "divider",
         cursor: onClick ? "pointer" : "default",
         background: dark
@@ -112,10 +114,10 @@ export function KpiCard({
       <CardContent
         sx={{
           height: "100%",
-          p: { xs: 1.25, md: 1.4 },
+          p: density === "compact" ? { xs: 1.05, md: 1.15 } : { xs: 1.25, md: 1.4 },
           display: "flex",
           flexDirection: "column",
-          "&:last-child": { pb: { xs: 1.25, md: 1.4 } },
+          "&:last-child": { pb: density === "compact" ? { xs: 1.05, md: 1.15 } : { xs: 1.25, md: 1.4 } },
         }}
       >
         <Stack
@@ -188,11 +190,13 @@ export function KpiCard({
 
         <Typography
           sx={{
-            mt: 0.65,
+            mt: density === "compact" ? 0.45 : 0.65,
             fontWeight: 840,
             color: accent,
             letterSpacing: "-.03em",
-            fontSize: { xs: "1.45rem", md: "1.62rem", xl: "1.72rem" },
+            fontSize: density === "compact"
+              ? { xs: "1.35rem", md: "1.48rem", xl: "1.58rem" }
+              : { xs: "1.45rem", md: "1.62rem", xl: "1.72rem" },
             lineHeight: 1,
             fontVariantNumeric: "tabular-nums",
           }}
