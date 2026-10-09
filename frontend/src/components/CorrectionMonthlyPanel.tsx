@@ -262,7 +262,7 @@ export function CorrectionMonthlyPanel() {
       info:"Conta Tasks que entraram efetivamente em Cancelado durante o período e permaneciam em Cancelado no snapshot de fechamento.",
     },
     {
-      key:"registration" as const,label:"Tasks em Registro",value:value("registration"),note:"Fora do backlog",
+      key:"registration" as const,label:"Tasks em Registro",value:value("registration"),note:monthlyMovementVerified?"Fora do backlog":"Prévia parcial · fora do backlog",
       accent:aliareColors.warning,
       info:"Conta Tasks que entraram em Registro durante o período e permaneciam em Registro no fechamento. Registro aparece no pipeline, mas nunca integra backlog.",
     },
@@ -509,6 +509,45 @@ export function CorrectionMonthlyPanel() {
         )}
       </Alert>
     }
+    {!loading&&report&&month==="2026-09"&&
+      <Card elevation={0} sx={{
+        ...panel,
+        borderColor:teamScopeActive?"rgba(24,199,122,.28)":"rgba(47,111,237,.22)",
+        background:theme.palette.mode==="dark"
+          ?"linear-gradient(105deg,rgba(47,111,237,.08),rgba(24,199,122,.045),rgba(255,255,255,.012))"
+          :"linear-gradient(105deg,rgba(47,111,237,.05),rgba(24,199,122,.035),#FFFFFF)",
+      }}>
+        <CardContent sx={{py:1.2,"&:last-child":{pb:1.2}}}>
+          <Stack direction={{xs:"column",lg:"row"}} gap={1.25} justifyContent="space-between" alignItems={{lg:"center"}}>
+            <Box sx={{minWidth:0}}>
+              <Typography sx={{fontWeight:900}}>Homologação · setembro/2026</Typography>
+              <Typography variant="caption" color="text.secondary">
+                {teamScopeActive
+                  ?"Escopo de criadores Time SIMER aplicado. Comparação com a referência validada pela coordenação."
+                  :"Para confrontar a referência oficial, aplique o filtro Criado por → Time SIMER."}
+              </Typography>
+            </Box>
+            <Box sx={{display:"grid",gridTemplateColumns:{xs:"repeat(2,minmax(0,1fr))",sm:"repeat(5,minmax(108px,1fr))"},gap:.7}}>
+              {septemberHomologation.map(item=>{
+                const comparable=teamScopeActive&&item.actual!==null;
+                const matches=comparable&&item.actual===item.expected;
+                return <Box key={item.key} sx={{
+                  px:1,py:.7,border:"1px solid",borderColor:matches?"success.main":comparable?"warning.main":"divider",
+                  borderRadius:"8px",minWidth:0,bgcolor:"background.paper",
+                }}>
+                  <Typography variant="caption" color="text.secondary" sx={{display:"block",whiteSpace:"nowrap"}}>{item.label}</Typography>
+                  <Stack direction="row" gap=.5 alignItems="baseline">
+                    <Typography sx={{fontWeight:900,fontVariantNumeric:"tabular-nums"}}>{item.actual??"—"}</Typography>
+                    <Typography variant="caption" color="text.secondary">/ ref. {item.expected}</Typography>
+                  </Stack>
+                </Box>;
+              })}
+            </Box>
+          </Stack>
+        </CardContent>
+      </Card>
+    }
+
     {!loading&&report&&report.rows.length===0&&
       <Alert severity="warning">Nenhuma Correção Cliente da carteira SIMER foi localizada no recorte carregado.</Alert>
     }
@@ -605,7 +644,7 @@ export function CorrectionMonthlyPanel() {
                     <YAxis type="category" dataKey="name" width={138} axisLine={false} tickLine={false}
                       tick={{fill:theme.palette.text.secondary,fontSize:12,fontWeight:650}}/>
                     <ChartTooltip cursor={{fill:theme.palette.action.hover}}/>
-                    <Bar dataKey="total" barSize={18} radius={[0,6,6,0]}
+                    <Bar dataKey="total" barSize={18} radius={[0,6,6,0]} isAnimationActive={false}
                       onClick={data=>{const name=(data as {name?:string}).name;if(name)selectSlice({kind:"status",value:name},`Status · ${name}`)}}>
                       {pipeline.map((_,index)=><Cell key={index} fill={chartPalette[index%chartPalette.length]}/>)}
                       <LabelList dataKey="total" position="right" fill={theme.palette.text.secondary}
@@ -633,7 +672,7 @@ export function CorrectionMonthlyPanel() {
                     <YAxis type="category" dataKey="name" width={96} axisLine={false} tickLine={false}
                       tick={{fill:theme.palette.text.secondary,fontSize:12,fontWeight:650}}/>
                     <ChartTooltip cursor={{fill:theme.palette.action.hover}}/>
-                    <Bar dataKey="total" fill={semanticChartColors.attention} barSize={24} radius={[0,6,6,0]}
+                    <Bar dataKey="total" fill={semanticChartColors.attention} barSize={24} radius={[0,6,6,0]} isAnimationActive={false}
                       onClick={data=>{const name=(data as {name?:string}).name;if(name)selectSlice({kind:"urgency",value:name},`Urgência · ${name}`)}}>
                       <LabelList dataKey="total" position="right" fill={theme.palette.text.secondary}
                         fontSize={12} fontWeight={800}/>
@@ -655,7 +694,7 @@ export function CorrectionMonthlyPanel() {
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie data={priority} dataKey="total" nameKey="name" innerRadius={68} outerRadius={100} paddingAngle={2}
-                      stroke={theme.palette.background.paper} strokeWidth={2}
+                      stroke={theme.palette.background.paper} strokeWidth={2} isAnimationActive={false}
                       onClick={data=>{const name=(data as {name?:string}).name;if(name)selectSlice({kind:"prioritized",value:name==="Priorizadas"?true:name==="Não priorizadas"?false:null},`Priorização · ${name}`)}}>
                       {priority.map((_,index)=><Cell key={index} fill={[aliareColors.green,aliareColors.info,semanticChartColors.attention][index%3]}/>)}
                     </Pie>
