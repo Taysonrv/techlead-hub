@@ -690,7 +690,18 @@ ASOF '${asOf.toISOString()}'`;
         row.backlogInitial||
         row.backlogCurrent;
     }
-        const count=(p:(r:Row)=>boolean)=>rows.filter(p).length;
+        console.info([
+      "[correction-monthly-report] Apuração concluída.",
+      `mês=${month}`,
+      `locais=${current.length}`,
+      `candidatosPeriodo=${localPeriodCandidates}`,
+      `revisoes=${revisions.length}`,
+      `asofEntrada=${openingScopeIds.length}`,
+      `asofFechamento=${closingScopeIds.length}`,
+      `linhas=${rows.length}`,
+      `fallbackLocal=${localFallbackUsed?"sim":"não"}`,
+    ].join(" | "));
+    const count=(p:(r:Row)=>boolean)=>rows.filter(p).length;
     const by=(selector:(r:Row)=>string|null)=>Object.entries(rows.reduce<Record<string,number>>((acc,row)=>{const key=selector(row)||"Não informado";acc[key]=(acc[key]??0)+1;return acc;},{})).map(([name,total])=>({name,total})).sort((a,b)=>b.total-a.total);
     return {period:{month,timezone:"America/Sao_Paulo",start:start.toISOString(),close:close.toISOString()},cards:{registered:count(r=>r.registeredInPeriod),delivered:count(r=>r.deliveredInPeriod),canceled:count(r=>r.canceledInPeriod),inRegistration:count(r=>r.enteredRegistrationInPeriod),backlogInitial:count(r=>r.backlogInitial),backlogCurrent:count(r=>r.backlogCurrent)},pipeline:by(r=>r.status),urgency:by(r=>r.urgency),prioritization:[{name:"Priorizadas",total:count(r=>r.prioritized===true)},{name:"Não priorizadas",total:count(r=>r.prioritized===false)},{name:"Não informado",total:count(r=>r.prioritized===null)}],filters:{creators:[...new Set(rows.map(r=>r.createdBy).filter(Boolean))].sort(),teamCreators:[...new Set(rows.map(r=>r.createdBy).filter((value):value is string=>!!value&&isSupportAnalyst(value)))].sort(),clients:[...new Set(rows.map(r=>r.client).filter((value):value is string=>!!value))].sort(),urgencies:[...new Set(rows.map(r=>r.urgency).filter(Boolean))].sort(),states:[...new Set(rows.map(r=>r.status).filter(Boolean))].sort()},rows,generatedAt:new Date().toISOString(),source:localFallbackUsed?"Base sincronizada do Azure DevOps · histórico local reconstruído":snapshotAvailable?(historyAvailable?"Azure DevOps · revisões + snapshots asOf":"Azure DevOps · snapshots asOf"):"Base sincronizada do Azure DevOps · snapshot local",quality:{historyAvailable,historyError,snapshotAvailable,snapshotError,historicalScopeError,externalHistorySuspicious,localFallbackUsed,localStateHistoryEvents,mode:localFallbackUsed?"local-history-fallback":backlogHistoricalReliable&&historyAvailable?"historical":snapshotAvailable?"asof-partial":"local-snapshot",movementHistoryReliable,historicalMetricsReliable:!localFallbackUsed&&historyAvailable&&backlogHistoricalReliable,backlogHistoricalReliable,diagnostics:{localRecords:current.length,localPeriodCandidates,revisions:revisions.length,openingScopeIds:openingScopeIds.length,closingScopeIds:closingScopeIds.length,snapshotCandidates:candidateIds.length,openingSnapshotItems:openingSnapshot.size,closingSnapshotItems:closingSnapshot.size,outputRows:rows.length}},fieldMapping:fields};
   }
