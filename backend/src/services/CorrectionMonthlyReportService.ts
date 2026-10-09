@@ -706,7 +706,7 @@ ASOF '${asOf.toISOString()}'`;
     // Normaliza os nomes abreviados do Azure usando a regra compartilhada.
     rows=rows.flatMap(row=>{
       const client=resolveSimerClient(row.client);
-      return client ? [{...row,client}] : [];
+      return client && isCorrectionTeamCreator(row.createdBy) ? [{...row,client}] : [];
     });
     for(const row of rows){
       row.inPeriodUniverse=

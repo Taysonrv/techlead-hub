@@ -13,8 +13,8 @@ test("fallback preserva Tasks locais sem certificar cobertura a partir de um ún
     prisma.$queryRaw = originalQueryRaw;
   });
   prisma.azureWorkItem.findMany = (async () => [
-    { id: 1, title: "Correção com evento", client: "COAP", azureCreatedAt: createdAt, stateChangedAt: changedAt, state: "Concluído" },
-    { id: 2, title: "Correção sem histórico", client: "COAP", azureCreatedAt: createdAt, stateChangedAt: null, state: "Concluído" },
+    { id: 1, title: "Correção com evento", client: "COAP", createdByName: "Tayson Araujo", azureCreatedAt: createdAt, stateChangedAt: changedAt, state: "Concluído" },
+    { id: 2, title: "Correção sem histórico", client: "COAP", createdByName: "Tayson Araujo", azureCreatedAt: createdAt, stateChangedAt: null, state: "Concluído" },
   ]) as typeof originalFindMany;
   prisma.$queryRaw = (async () => [
     { workItemId: 1, oldValue: "Desenvolvimento", newValue: "Concluído", changedAt },
@@ -51,12 +51,14 @@ test("fallback usa StateChangeDate e restringe todas as dimensões à carteira S
   const createdAt = new Date("2026-08-01T12:00:00Z");
   const changedAt = new Date("2026-09-15T12:00:00Z");
   const item = (id: number, client: string, state: string, stateChangedAt: Date | null) =>
-    ({ id, title: `Task ${id}`, client, azureCreatedAt: createdAt, state, stateChangedAt });
+    ({ id, title: `Task ${id}`, client, createdByName: "Tayson Araujo", azureCreatedAt: createdAt, state, stateChangedAt });
   prisma.azureWorkItem.findMany = (async () => [
     item(1, "COAP", "Concluído", changedAt),
     item(2, "COAGRO", "Cancelado", changedAt),
     item(3, "BOM JESUS", "Registro", changedAt),
     item(4, "Cliente fora da carteira", "Concluído", changedAt),
+    ...["Joel Kunrath", "Carina Silva", "Renan Stein", "Lucas Lima"].map((createdByName, index) =>
+      ({ ...item(80 + index, "COAP", "Concluído", changedAt), createdByName })),
     item(5, "COAP", "Concluído", new Date("2026-10-02T12:00:00Z")),
     item(6, "COAP", "Cancelado", null),
     item(7, "COAP", "Concluído", new Date("2026-08-20T12:00:00Z")),
@@ -82,7 +84,7 @@ test("fallback usa StateChangeDate e restringe todas as dimensões à carteira S
   assert.equal(report.cards.canceled, 1);
   assert.equal(report.cards.inRegistration, 1);
   assert.equal(report.cards.backlogCurrent, 0);
-  assert.equal(report.rows.some(row => row.id === 4), false);
+  assert.equal(report.rows.some(row => row.id === 4 || row.id >= 80), false);
   assert.equal(report.filters.clients.includes("Cliente fora da carteira"), false);
   assert.equal(report.pipeline.reduce((sum, entry) => sum + entry.total, 0), 6);
   assert.equal(report.rows.find(row => row.id === 1)?.client, "COAP - SORRISO-MT");

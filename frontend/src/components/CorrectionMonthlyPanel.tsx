@@ -432,12 +432,12 @@ export function CorrectionMonthlyPanel() {
             <Box sx={{minWidth:0}}>
               <Typography variant="h6" sx={{fontWeight:900,letterSpacing:"-.02em"}}>Report mensal de Correções</Typography>
               <Typography variant="caption" color="text.secondary">
-                Carteira SIMER · Snapshots de abertura/fechamento e movimentações reais de status no Azure DevOps.
+                Criadas pelo suporte SIMER · Carteira SIMER · Snapshots de abertura/fechamento e movimentações reais de status no Azure DevOps.
               </Typography>
             </Box>
             <InfoButton
               title="Report mensal de Correções"
-              description="Considera exclusivamente Work Items do tipo Correção Clientes da carteira SIMER, conta System.Id distintos e usa America/Sao_Paulo. Cards, gráficos e listagem respeitam os filtros globais."
+              description="Considera exclusivamente Work Items do tipo Correção Clientes da carteira SIMER criados por Tayson, Alan e Renan, conta System.Id distintos e usa America/Sao_Paulo. Cards, gráficos e listagem respeitam os filtros globais."
             />
           </Box>
           <Stack direction={{xs:"column",sm:"row"}} gap={1} flexWrap="wrap" alignItems={{xs:"stretch",sm:"center"}}>
@@ -501,7 +501,7 @@ export function CorrectionMonthlyPanel() {
           </Stack>
         </Box>
         <Typography variant="caption" color="text.secondary" sx={{display:"block",mt:1.4}}>
-          {teamScopeActive?"Time SIMER selecionado":creators.length?"Criadores selecionados":"Todos os criadores da carteira SIMER"} · {periodUniverse} task(s) no período
+          {teamScopeActive?"Time SIMER selecionado":creators.length?"Criadores selecionados":"Todos os criadores do suporte SIMER"} · {periodUniverse} task(s) no período
         </Typography>
       </CardContent>
     </Card>
