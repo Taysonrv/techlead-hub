@@ -139,7 +139,7 @@ export function Sidebar() {
     isAdmin,
   } =
     useAuth();
-  const userId = userId ?? null;
+  const userId = user?.id ?? null;
 
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [chatUnread, setChatUnread] = useState(0);
