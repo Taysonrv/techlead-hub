@@ -103,6 +103,7 @@ type Report = {
     historyAvailable:boolean;historyError:string|null;snapshotAvailable?:boolean;snapshotError?:string|null;
     historicalScopeError?:string|null;mode:string;movementHistoryReliable?:boolean;
     historicalMetricsReliable:boolean;backlogHistoricalReliable?:boolean;
+    externalHistorySuspicious?:boolean;localFallbackUsed?:boolean;localStateHistoryEvents?:number;
     diagnostics?:{
       localRecords:number;localPeriodCandidates:number;revisions:number;
       openingScopeIds:number;closingScopeIds:number;snapshotCandidates:number;
@@ -225,6 +226,8 @@ export function CorrectionMonthlyPanel() {
   const current = value("backlogCurrent");
   // Snapshot indisponível não é sinônimo de backlog zerado.
   const backlogVerified = report?.quality?.backlogHistoricalReliable === true;
+  const localHistoryFallback = report?.quality?.localFallbackUsed === true;
+  const backlogAvailable = backlogVerified || localHistoryFallback;
   const monthlyMovementVerified =
     report?.quality?.movementHistoryReliable ??
     report?.quality?.historicalMetricsReliable ??
@@ -279,12 +282,12 @@ export function CorrectionMonthlyPanel() {
       info:"Conta Tasks que entraram em Registro durante o período e permaneciam em Registro no fechamento. Registro aparece no pipeline, mas nunca integra backlog.",
     },
     {
-      key:"backlogInitial" as const,label:"Backlog inicial",value:backlogVerified?initial:"—",note:backlogVerified?"Estoque aberto na entrada":"Aguardando snapshot histórico",
+      key:"backlogInitial" as const,label:"Backlog inicial",value:backlogAvailable?initial:"—",note:backlogVerified?"Estoque aberto na entrada":localHistoryFallback?"Reconstruído do histórico local":"Aguardando snapshot histórico",
       accent:aliareColors.purple,
       info:"Fotografia imediatamente anterior ao início do período: itens abertos, excluindo Registro, Concluído e Cancelado. Não exige movimentação no mês.",
     },
     {
-      key:"backlogCurrent" as const,label:"Backlog atual",value:backlogVerified?current:"—",note:backlogVerified?"Estoque aberto no fechamento":"Aguardando snapshot histórico",
+      key:"backlogCurrent" as const,label:"Backlog atual",value:backlogAvailable?current:"—",note:backlogVerified?"Estoque aberto no fechamento":localHistoryFallback?"Reconstruído do histórico local":"Aguardando snapshot histórico",
       accent:aliareColors.green,
       info:"Fotografia no fechamento do período: itens abertos, excluindo Registro, Concluído e Cancelado. Não exige movimentação no mês.",
     },
@@ -443,7 +446,11 @@ export function CorrectionMonthlyPanel() {
                 size="small"
                 color={report.quality.historicalMetricsReliable&&!report.quality.historicalScopeError?"success":"warning"}
                 variant="outlined"
-                label={report.quality.historicalMetricsReliable&&!report.quality.historicalScopeError?"Histórico confiável":"Histórico parcial"}
+                label={report.quality.localFallbackUsed
+                  ?"Histórico local reconstruído"
+                  :report.quality.historicalMetricsReliable&&!report.quality.historicalScopeError
+                    ?"Histórico confiável"
+                    :"Histórico parcial"}
               />
             }
             <TextField label="Período" type="month" value={month} onChange={event=>setMonth(event.target.value)}
@@ -505,8 +512,12 @@ export function CorrectionMonthlyPanel() {
     }
     {report?.quality&&(!report.quality.historicalMetricsReliable||!!report.quality.historicalScopeError)&&
       <Alert severity="warning">
-        <b>{report.quality.snapshotAvailable?"Histórico parcial.":"Snapshot histórico indisponível."}</b>{" "}
-        Os números de movimentações são prévios e NÃO estão homologados. Backlog exige escopo e snapshots de abertura/fechamento completos.{" "}
+        <b>{report.quality.localFallbackUsed
+          ?"Histórico local reconstruído."
+          :report.quality.snapshotAvailable?"Histórico parcial.":"Snapshot histórico indisponível."}</b>{" "}
+        {report.quality.localFallbackUsed
+          ?"O Azure histórico retornou cobertura vazia/incompleta e o Hub reconstruiu o período com os Work Items e mudanças de estado persistidos localmente. Use a régua de homologação para validar o fechamento."
+          :"Os números de movimentações são prévios e NÃO estão homologados. Backlog exige escopo e snapshots de abertura/fechamento completos."}{" "}
         {[
           report.quality.historyError && `Revisões: ${report.quality.historyError}`,
           report.quality.snapshotError && `Snapshots: ${report.quality.snapshotError}`,
@@ -564,7 +575,7 @@ export function CorrectionMonthlyPanel() {
     }
 
     {!loading&&report&&report.rows.length===0&&
-      <Alert severity="warning">Nenhuma Correção Cliente da carteira SIMER foi localizada no recorte carregado.</Alert>
+      <Alert severity="warning">Nenhuma Task do tipo Correção Clientes foi localizada no recorte carregado.</Alert>
     }
 
     {loading
@@ -587,7 +598,7 @@ export function CorrectionMonthlyPanel() {
               active={drill===card.key}
               density="compact"
               onClick={
-                ((!backlogVerified&&(card.key==="backlogInitial"||card.key==="backlogCurrent")) ||
+                ((!backlogAvailable&&(card.key==="backlogInitial"||card.key==="backlogCurrent")) ||
                  (!monthlyMovementVerified&&(card.key==="delivered"||card.key==="canceled"||card.key==="registration")))
                   ? undefined
                   : ()=>openMetric(card.key,card.label)
@@ -626,13 +637,13 @@ export function CorrectionMonthlyPanel() {
                 {[
                   ["Saídas do mês",monthlyMovementVerified?outputs:"—"],
                   ["Saldo líquido",monthlyMovementVerified?`${flowBalance>0?"+":""}${flowBalance}`:"—"],
-                  ["Variação backlog",backlogVerified?`${delta>0?"+":""}${delta}`:"—"],
+                  ["Variação backlog",backlogAvailable?`${delta>0?"+":""}${delta}`:"—"],
                   ["Universo",periodUniverse],
                 ].map(([label,val],index)=>
                   <Box key={String(label)} sx={{minWidth:0}}>
                     <Typography variant="caption" color="text.secondary">{label}</Typography>
                     <Stack direction="row" alignItems="center" gap={0.35}>
-                      {index===2&&backlogVerified&&(delta<=0?<TrendingDownOutlined color="success" sx={{fontSize:18}}/>:<TrendingUpOutlined color="warning" sx={{fontSize:18}}/>)}
+                      {index===2&&backlogAvailable&&(delta<=0?<TrendingDownOutlined color="success" sx={{fontSize:18}}/>:<TrendingUpOutlined color="warning" sx={{fontSize:18}}/>)}
                       <Typography sx={{fontWeight:900,fontSize:"1.15rem"}}>{val}</Typography>
                     </Stack>
                   </Box>
