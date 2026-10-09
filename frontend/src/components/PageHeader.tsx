@@ -145,17 +145,11 @@ export function PageHeader({
             alignSelf: { xs: "stretch", lg: "center" },
             minWidth: 0,
             maxWidth: { lg: "48%" },
-            p: { xs: 0, lg: 0.55 },
-            borderRadius: 2.25,
-            border: { xs: "none", lg: "1px solid" },
-            borderColor: dark
-              ? "rgba(116,166,216,.14)"
-              : "rgba(15,23,42,.07)",
-            bgcolor: {
-              xs: "transparent",
-              lg: dark ? "rgba(6,24,36,.28)" : "rgba(255,255,255,.52)",
-            },
-            backdropFilter: { lg: "blur(8px)" },
+            p: 0,
+            borderRadius: 0,
+            border: 0,
+            bgcolor: "transparent",
+            backdropFilter: "none",
             "& > *": { maxWidth: "100%" },
             "& .MuiButton-root": { width: { xs: "100%", sm: "auto" } },
           }}
