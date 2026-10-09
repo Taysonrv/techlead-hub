@@ -774,24 +774,31 @@ export function CorrectionMonthlyPanel() {
                   {detailed.map(row=>
                     <TableRow hover key={row.id} onClick={()=>{setSelectedTaskId(row.id);setDrawerTitle(`Task #${row.id}`);setDrawerOpen(true)}} sx={{cursor:"pointer"}}>
                       <TableCell>
-                        <Button
-                          size="small"
-                          component={row.remoteUrl?"a":"button"}
-                          href={row.remoteUrl??undefined}
-                          target={row.remoteUrl?"_blank":undefined}
-                          rel={row.remoteUrl?"noreferrer":undefined}
-                          endIcon={row.remoteUrl?<OpenInNewOutlined sx={{fontSize:"14px !important"}}/>:undefined}
-                          onClick={event=>{
-                            event.stopPropagation();
-                            if(!row.remoteUrl){
-                              setDrawerOpen(false);
-                              navigate(`/correcoes?task=${row.id}`);
-                            }
-                          }}
-                          sx={{fontWeight:850,minWidth:0}}
-                        >
-                          {row.id}
-                        </Button>
+                        {row.remoteUrl
+                          ? <Button
+                              size="small"
+                              component="a"
+                              href={row.remoteUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              endIcon={<OpenInNewOutlined sx={{fontSize:"14px !important"}}/>}
+                              onClick={event=>event.stopPropagation()}
+                              sx={{fontWeight:850,minWidth:0}}
+                            >
+                              {row.id}
+                            </Button>
+                          : <Button
+                              size="small"
+                              onClick={event=>{
+                                event.stopPropagation();
+                                setDrawerOpen(false);
+                                navigate(`/correcoes?task=${row.id}`);
+                              }}
+                              sx={{fontWeight:850,minWidth:0}}
+                            >
+                              {row.id}
+                            </Button>
+                        }
                       </TableCell>
                       <TableCell sx={{minWidth:240,maxWidth:360,fontWeight:650}}>{row.title}</TableCell>
                       <TableCell>{row.client||"—"}</TableCell>
