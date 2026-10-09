@@ -303,7 +303,7 @@ export function TechnicalLeadership() {
             <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
               <BoltOutlined sx={{ color: aliareColors.green }} />
               <Typography sx={{ fontWeight: 900, fontSize: "1.05rem", textAlign: "center" }}>Briefing executivo da operação</Typography>
-              <Tooltip title="Resume os sinais que merecem leitura de liderança. Recomendações são apoio à decisão e devem ser validadas antes de qualquer ação."><IconButton size="small" sx={{ color: mode === "dark" ? "rgba(255,255,255,.65)" : "text.secondary" }}><InfoOutlined sx={{ fontSize: 16 }} /></IconButton></Tooltip>
+              <Tooltip title="Resume os sinais que merecem leitura de liderança. Recomendações são apoio à decisão e devem ser validadas antes de qualquer ação."><IconButton size="small" aria-label="Informações sobre o briefing executivo" sx={{ color: mode === "dark" ? "rgba(255,255,255,.65)" : "text.secondary" }}><InfoOutlined sx={{ fontSize: 16 }} /></IconButton></Tooltip>
             </Stack>
             <Typography variant="body2" sx={{ color: mode === "dark" ? "rgba(255,255,255,.62)" : "text.secondary", mt: .5, textAlign: "center" }}>Indicadores → desvios → investigação → gap → ação → acompanhamento.</Typography>
           </Box>
