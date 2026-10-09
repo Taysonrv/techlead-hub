@@ -102,8 +102,9 @@ type Report = {
   quality?:{
     historyAvailable:boolean;historyError:string|null;snapshotAvailable?:boolean;snapshotError?:string|null;
     historicalScopeError?:string|null;mode:string;movementHistoryReliable?:boolean;
-    historicalMetricsReliable:boolean;backlogHistoricalReliable?:boolean;
+    historicalMetricsReliable:boolean;backlogHistoricalReliable?:boolean;backlogInitialAvailable?:boolean;
     externalHistorySuspicious?:boolean;localFallbackUsed?:boolean;localStateHistoryEvents?:number;
+    perItemHistoryRecoveryUsed?:boolean;recoveredHistoryItems?:number;recoveryCandidates?:number;
     diagnostics?:{
       localRecords:number;localPeriodCandidates:number;revisions:number;
       openingScopeIds:number;closingScopeIds:number;snapshotCandidates:number;
@@ -185,7 +186,7 @@ export function CorrectionMonthlyPanel() {
     setLoading(true);
     setError("");
     setReport(null);
-    api.get<Report>("/azure-work-items/corrections/monthly-report",{params:{month,...(reloadToken>0?{refresh:"1"}:{})},timeout:120000})
+    api.get<Report>("/azure-work-items/corrections/monthly-report",{params:{month,...(reloadToken>0?{refresh:"1"}:{})},timeout:180000})
       .then(({data}) => { if(active) setReport(data); })
       .catch((requestError) => {
         if(active) setError(getApiErrorMessage(requestError,"Não foi possível carregar o report mensal."));
@@ -228,6 +229,7 @@ export function CorrectionMonthlyPanel() {
   const backlogVerified = report?.quality?.backlogHistoricalReliable === true;
   const localHistoryFallback = report?.quality?.localFallbackUsed === true;
   const backlogAvailable = backlogVerified || localHistoryFallback;
+  const initialBacklogAvailable = backlogVerified || report?.quality?.backlogInitialAvailable === true;
   const monthlyMovementVerified =
     report?.quality?.movementHistoryReliable ??
     report?.quality?.historicalMetricsReliable ??
@@ -282,9 +284,9 @@ export function CorrectionMonthlyPanel() {
       info:"Conta Tasks que entraram em Registro durante o período e permaneciam em Registro no fechamento. Registro aparece no pipeline, mas nunca integra backlog.",
     },
     {
-      key:"backlogInitial" as const,label:"Backlog inicial",value:backlogAvailable?initial:"—",note:backlogVerified?"Estoque aberto na entrada":localHistoryFallback?"Reconstruído do histórico local":"Aguardando snapshot histórico",
+      key:"backlogInitial" as const,label:"Backlog inicial",value:initialBacklogAvailable?initial:"—",note:backlogVerified?"Fechamento do mês anterior":initialBacklogAvailable?"Prévia · fechamento anterior":"Aguardando fechamento anterior",
       accent:aliareColors.purple,
-      info:"Fotografia imediatamente anterior ao início do período: itens abertos, excluindo Registro, Concluído e Cancelado. Não exige movimentação no mês.",
+      info:"Backlog no fechamento do mês anterior, imediatamente antes do início do período: itens abertos, excluindo Registro, Concluído e Cancelado. Não exige movimentação no mês.",
     },
     {
       key:"backlogCurrent" as const,label:"Backlog atual",value:backlogAvailable?current:"—",note:backlogVerified?"Estoque aberto no fechamento":localHistoryFallback?"Reconstruído do histórico local":"Aguardando snapshot histórico",
@@ -601,12 +603,7 @@ export function CorrectionMonthlyPanel() {
               accent={card.accent}
               active={drill===card.key}
               density="compact"
-              onClick={
-                ((!backlogAvailable&&(card.key==="backlogInitial"||card.key==="backlogCurrent")) ||
-                 (!monthlyMovementVerified&&(card.key==="delivered"||card.key==="canceled"||card.key==="registration")))
-                  ? undefined
-                  : ()=>openMetric(card.key,card.label)
-              }
+              onClick={()=>openMetric(card.key,card.label)}
             />
           )}
         </Box>
@@ -641,13 +638,13 @@ export function CorrectionMonthlyPanel() {
                 {[
                   ["Saídas do mês",monthlyMovementVerified?outputs:"—"],
                   ["Saldo líquido",monthlyMovementVerified?`${flowBalance>0?"+":""}${flowBalance}`:"—"],
-                  ["Variação backlog",backlogAvailable?`${delta>0?"+":""}${delta}`:"—"],
+                  ["Variação backlog",backlogAvailable&&initialBacklogAvailable?`${delta>0?"+":""}${delta}`:"—"],
                   ["Universo",periodUniverse],
                 ].map(([label,val],index)=>
                   <Box key={String(label)} sx={{minWidth:0}}>
                     <Typography variant="caption" color="text.secondary">{label}</Typography>
                     <Stack direction="row" alignItems="center" gap={0.35}>
-                      {index===2&&backlogAvailable&&(delta<=0?<TrendingDownOutlined color="success" sx={{fontSize:18}}/>:<TrendingUpOutlined color="warning" sx={{fontSize:18}}/>)}
+                      {index===2&&backlogAvailable&&initialBacklogAvailable&&(delta<=0?<TrendingDownOutlined color="success" sx={{fontSize:18}}/>:<TrendingUpOutlined color="warning" sx={{fontSize:18}}/>)}
                       <Typography sx={{fontWeight:900,fontSize:"1.15rem"}}>{val}</Typography>
                     </Stack>
                   </Box>
@@ -907,6 +904,9 @@ export function CorrectionMonthlyPanel() {
             <Divider sx={{mb:2}}/>
           </>}
 
+          {!monthlyMovementVerified&&<Alert severity="warning" sx={{mb:2}}>
+            Prévia parcial. A listagem permite conferir os dados disponíveis; ausência de tasks não comprova um total zero.
+          </Alert>}
           <DetailSection title="Tasks">
             <Stack spacing={0.8}>
               {drawerRows.map(row=>

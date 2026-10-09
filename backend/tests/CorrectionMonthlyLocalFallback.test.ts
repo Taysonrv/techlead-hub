@@ -91,3 +91,50 @@ test("fallback usa StateChangeDate e restringe todas as dimensões à carteira S
   assert.equal(report.rows.find(row => row.id === 1)?.terminalAt, changedAt.toISOString());
   assert.equal(report.quality.movementHistoryReliable, false);
 });
+
+
+test("backlog inicial usa fechamento anterior mesmo com entrega posterior e estoque sem movimento", async (t) => {
+  const originalFindMany=prisma.azureWorkItem.findMany;
+  const originalQueryRaw=prisma.$queryRaw;
+  t.after(()=>{prisma.azureWorkItem.findMany=originalFindMany;prisma.$queryRaw=originalQueryRaw;});
+  const createdAt=new Date("2026-08-01T12:00:00Z");
+  const changedAt=new Date("2026-09-15T12:00:00Z");
+  prisma.azureWorkItem.findMany=(async()=>[
+    {id:1,client:"COAP",createdByName:"Tayson Araujo",azureCreatedAt:createdAt,state:"Concluído",stateChangedAt:changedAt},
+    {id:2,client:"COAP",createdByName:"Alan Neto",azureCreatedAt:createdAt,state:"Qualidade",stateChangedAt:createdAt},
+    {id:3,client:"COAP",createdByName:"Renan Sousa",azureCreatedAt:createdAt,state:"Registro",stateChangedAt:createdAt},
+  ]) as typeof originalFindMany;
+  prisma.$queryRaw=(async()=>[]) as typeof originalQueryRaw;
+  const service=new CorrectionMonthlyReportService();
+  t.mock.method(service,"resolveFields",async()=>({client:"client",urgency:"urgency",prioritized:"prioritized"}));
+  t.mock.method(service,"revisions",async()=>[]);
+  t.mock.method(service,"workItemIdsAsOf",async()=>[]);
+  t.mock.method(service,"snapshots",async()=>new Map());
+  t.mock.method(service,"workItemUrl",()=>null);
+  const fields=(state:string,at:string,creator:string)=>({
+    "System.CreatedDate":createdAt.toISOString(),"System.ChangedDate":at,
+    "System.State":state,"System.CreatedBy":creator,client:"COAP",
+  });
+  const initial=[
+    {id:1,rev:1,fields:fields("Desenvolvimento",createdAt.toISOString(),"Tayson Araujo")},
+    {id:2,rev:1,fields:fields("Qualidade",createdAt.toISOString(),"Alan Neto")},
+    {id:3,rev:1,fields:fields("Registro",createdAt.toISOString(),"Renan Sousa")},
+  ];
+  const delivery={id:1,rev:2,fields:fields("Concluído",changedAt.toISOString(),"Tayson Araujo")};
+  t.mock.method(service,"recoverHistoricalSnapshots",async(ids:number[],start:Date)=>{
+    assert.deepEqual(ids,[1,2,3]);
+    assert.equal(new Date(start.getTime()-1).toISOString(),"2026-09-01T02:59:59.999Z");
+    return {opening:new Map(initial.map(x=>[x.id,x])),closing:new Map([[1,delivery],[2,initial[1]!],[3,initial[2]!]]),revisions:[...initial,delivery],completed:new Set(ids),failures:0};
+  });
+  const report=await (service as unknown as {build(month:string):Promise<{
+    cards:{backlogInitial:number;backlogCurrent:number;delivered:number};
+    rows:Array<{id:number;stateAtOpen:string;stateAtClose:string;backlogInitial:boolean}>;
+    quality:{backlogHistoricalReliable:boolean};
+  }>}).build("2026-09");
+  assert.equal(report.cards.backlogInitial,2);
+  assert.equal(report.cards.backlogCurrent,1);
+  assert.equal(report.cards.delivered,1);
+  assert.equal(report.rows.find(row=>row.id===1)?.stateAtOpen,"Desenvolvimento");
+  assert.equal(report.rows.find(row=>row.id===3)?.backlogInitial,false);
+  assert.equal(report.quality.backlogHistoricalReliable,false);
+});
