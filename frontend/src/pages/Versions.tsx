@@ -979,13 +979,13 @@ export function Versions() {
     setActiveMetricFilter("all");
   }
 
-  function buildScopedParams(
+  const buildScopedParams = useCallback((
     overrides:
       Record<
         string,
         string | number
       > = {},
-  ) {
+  ) => {
     const params:
       Record<
         string,
@@ -1042,14 +1042,22 @@ export function Versions() {
     );
 
     return params;
-  }
+  }, [
+    appliedSearch,
+    blockedProcess,
+    client,
+    criticality,
+    prioritized,
+    state,
+    type,
+  ]);
 
-  async function loadDetail(
+  const loadDetail = useCallback(async (
     context:
       DetailContext,
     requests:
       DetailRequest[],
-  ) {
+  ) => {
     setSelectedVersion(
       context.version,
     );
@@ -1156,7 +1164,7 @@ export function Versions() {
         false,
       );
     }
-  }
+  }, [buildScopedParams]);
 
   function versionParams(
     version:
