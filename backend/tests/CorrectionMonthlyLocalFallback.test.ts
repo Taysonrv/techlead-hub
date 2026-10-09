@@ -138,3 +138,38 @@ test("backlog inicial usa fechamento anterior mesmo com entrega posterior e esto
   assert.equal(report.rows.find(row=>row.id===3)?.backlogInitial,false);
   assert.equal(report.quality.backlogHistoricalReliable,false);
 });
+
+test("outubro completa snapshot parcial e herda o fechamento de setembro por Task", async(t)=>{
+  const originalFindMany=prisma.azureWorkItem.findMany;
+  const originalQueryRaw=prisma.$queryRaw;
+  t.after(()=>{prisma.azureWorkItem.findMany=originalFindMany;prisma.$queryRaw=originalQueryRaw;});
+  const old=new Date("2026-08-01T12:00:00Z");
+  const delivered=new Date("2026-10-02T12:00:00Z");
+  prisma.azureWorkItem.findMany=(async()=>[
+    {id:901,client:"COAP",createdByName:"Tayson Araujo",azureCreatedAt:old,state:"Qualidade",stateChangedAt:null},
+    {id:902,client:"COAP",createdByName:"Alan Neto",azureCreatedAt:old,state:"Concluído",stateChangedAt:delivered},
+    {id:903,client:"COAP",createdByName:"Renan Sousa",azureCreatedAt:new Date("2026-10-03T12:00:00Z"),state:"Registro",stateChangedAt:null},
+  ]) as typeof originalFindMany;
+  prisma.$queryRaw=(async()=>[{workItemId:902,oldValue:"Desenvolvimento",newValue:"Concluído",changedAt:delivered}]) as typeof originalQueryRaw;
+  const service=new CorrectionMonthlyReportService();
+  t.mock.method(service,"resolveFields",async()=>({client:"client",urgency:"urgency",prioritized:"prioritized"}));
+  t.mock.method(service,"revisions",async()=>[]);
+  t.mock.method(service,"workItemIdsAsOf",async()=>[]);
+  t.mock.method(service,"snapshots",async()=>new Map());
+  t.mock.method(service,"recoverHistoricalSnapshots",async()=>({opening:new Map(),closing:new Map(),revisions:[],completed:new Set(),failures:1}));
+  t.mock.method(service,"workItemUrl",()=>null);
+  type Result={cards:{backlogInitial:number;backlogCurrent:number;registered:number;delivered:number;inRegistration:number};rows:Array<{id:number;backlogInitial:boolean;backlogCurrent:boolean}>;quality:{localFallbackUsed:boolean;backlogInitialAvailable:boolean}};
+  const september=await service.get("2026-09",true) as Result;
+  assert.equal(september.cards.backlogCurrent,2);
+  // Mesmo sem o evento local na segunda leitura, o fechamento já apurado é preservado.
+  prisma.$queryRaw=(async()=>[]) as typeof originalQueryRaw;
+  const october=await service.get("2026-10",true) as Result;
+  assert.equal(october.cards.backlogInitial,september.cards.backlogCurrent);
+  assert.equal(october.cards.backlogCurrent,1);
+  assert.equal(october.cards.delivered,1);
+  assert.equal(october.cards.registered,1);
+  assert.equal(october.cards.inRegistration,1);
+  assert.equal(october.quality.localFallbackUsed,true);
+  assert.equal(october.quality.backlogInitialAvailable,true);
+  assert.deepEqual(october.rows.filter(row=>row.backlogInitial).map(row=>row.id),[901,902]);
+});

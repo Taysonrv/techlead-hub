@@ -85,7 +85,8 @@ export function classifyMonthlyStateMovement(params: {
     params.stateChangedAt <= close;
 
   // O escopo funcional exige alteração efetiva de System.State.
-  // CreatedDate, por si só, nunca prova Entrega/Cancelamento/Registro.
+  // CreatedDate não prova Entrega/Cancelamento. Uma Task criada no mês
+  // e ainda em Registro integra o estoque de Registro do período.
   const reachedDuringPeriod = (state: string) =>
     stateAtClose === state &&
     (entered(state) || dedicatedStateChangeInPeriod);
@@ -94,7 +95,7 @@ export function classifyMonthlyStateMovement(params: {
     createdInPeriod,
     deliveredInPeriod: reachedDuringPeriod("Concluído"),
     canceledInPeriod: reachedDuringPeriod("Cancelado"),
-    enteredRegistrationInPeriod: reachedDuringPeriod("Registro"),
+    enteredRegistrationInPeriod: reachedDuringPeriod("Registro") || (createdInPeriod && stateAtClose === "Registro"),
   };
 }
 
@@ -119,9 +120,9 @@ export function isBacklogState(state: string | null | undefined): boolean {
 }
 const CACHE_TTL_MS = 10 * 60_000;
 const FIELD_CACHE_TTL_MS = 60 * 60_000;
-const AZURE_REQUEST_TIMEOUT_MS = 18_000;
-const REVISION_STAGE_TIMEOUT_MS = 30_000;
-const SNAPSHOT_STAGE_TIMEOUT_MS = 60_000;
+const AZURE_REQUEST_TIMEOUT_MS = 5_000;
+const REVISION_STAGE_TIMEOUT_MS = 10_000;
+const SNAPSHOT_STAGE_TIMEOUT_MS = 10_000;
 const REPORT_CACHE_TTL_MS = 2 * 60_000;
 
 function text(value: unknown): string | null {
@@ -293,14 +294,14 @@ ASOF '${asOf.toISOString()}'`;
     const closing=new Map<number,SnapshotItem>();
     const recovered:Revision[]=[];
     const completed=new Set<number>();
-    const deadline=Date.now()+45_000;
+    const deadline=Date.now()+8_000;
     let cursor=0;
     let failures=0;
     let client:ReturnType<CorrectionMonthlyReportService["client"]>;
     try { client=this.client(); }
     catch { return {opening,closing,revisions:recovered,completed,failures:ids.length}; }
     const worker=async()=>{
-      while(cursor<ids.length&&Date.now()<deadline){
+      while(cursor<ids.length&&Date.now()<deadline&&failures<4){
         const id=ids[cursor++]!;
         const history:Revision[]=[];
         try {
@@ -429,6 +430,10 @@ ASOF '${asOf.toISOString()}'`;
   private async build(month:string) {
     const {start,endExclusive,close}=saoPauloMonth(month);
     const livePeriod=close.getTime()<endExclusive.getTime()-1;
+    const scopePromise=Promise.all([
+      this.workItemIdsAsOf(new Date(start.getTime()-1)),
+      this.workItemIdsAsOf(close),
+    ]).then(ids=>({ids,error:null as string|null})).catch(error=>({ids:null,error:error instanceof Error?error.message:"Escopo histórico ASOF indisponível."}));
     const currentPromise=prisma.azureWorkItem.findMany({where:{workItemType:"Correção Clientes"},select:{id:true,title:true,client:true,criticality:true,prioritized:true,assignedToName:true,remoteUrl:true,createdByName:true,azureCreatedAt:true,state:true,stateChangedAt:true,azureClosedAt:true,rawFields:true}});
     let fields:{client:string;prioritized:string;urgency:string}={client:AZURE_WORK_ITEM_FIELDS.client,prioritized:AZURE_WORK_ITEM_FIELDS.prioritized,urgency:AZURE_WORK_ITEM_FIELDS.criticality};
     let revisions:Revision[]=[];
@@ -442,7 +447,7 @@ ASOF '${asOf.toISOString()}'`;
       historyError=error instanceof Error ? error.message : "Histórico do Azure indisponível.";
       console.warn(`[correction-monthly-report] Histórico do Azure indisponível; usando snapshot local. | ${historyError}`);
     }
-    const current=await currentPromise;
+    const current=(await currentPromise).filter(item=>!!resolveSimerClient(item.client)&&isCorrectionTeamCreator(item.createdByName));
     const revisionIds=revisions
       .map(revision=>Number(revision.id??revision.fields?.["System.Id"]))
       .filter((id):id is number=>Number.isSafeInteger(id)&&id>0);
@@ -450,15 +455,12 @@ ASOF '${asOf.toISOString()}'`;
     let closingScopeIds:number[]=[];
     let historicalScopeError:string|null=null;
     let historicalScopeAvailable=false;
-    try {
-      [openingScopeIds,closingScopeIds]=await Promise.all([
-        this.workItemIdsAsOf(new Date(start.getTime()-1)),
-        this.workItemIdsAsOf(close),
-      ]);
+    const scope=await scopePromise;
+    if(scope.ids){
+      [openingScopeIds,closingScopeIds]=scope.ids;
       historicalScopeAvailable=true;
-    } catch(error) {
-      historicalScopeError=error instanceof Error ? error.message : "Escopo histórico ASOF indisponível.";
-      console.warn(`[correction-monthly-report] WIQL ASOF indisponível; usando revisões e base sincronizada. | ${historicalScopeError}`);
+    } else {
+      historicalScopeError=scope.error;
     }
     const candidateIds=selectReportCandidateIds(
       current, start, close, revisionIds, openingScopeIds, closingScopeIds,
@@ -680,7 +682,7 @@ ASOF '${asOf.toISOString()}'`;
     // locais no período, reconstrói o snapshot mensal a partir do histórico
     // persistido pelo sincronizador. Isso evita transformar ausência de
     // cobertura remota em "zero confiável".
-    if((rows.length===0||perItemHistoryRecoveryUsed)&&current.length>0){
+    if((!backlogHistoricalReliable||!movementHistoryReliable||rows.length===0)&&current.length>0){
       const ids=current.map(item=>item.id).filter(id=>Number.isSafeInteger(id)&&id>0);
       type LocalStateHistory={workItemId:number;oldValue:string|null;newValue:string|null;changedAt:Date};
       let localHistory:LocalStateHistory[]=[];
@@ -701,7 +703,12 @@ ASOF '${asOf.toISOString()}'`;
         historyById.set(event.workItemId,list);
       }
 
-      const recoveredRowIds=new Set(rows.map(row=>row.id));
+      // Somente fotografias reais ou revisões recuperadas dispensam reconstrução.
+      const recoveredRowIds=new Set(rows.filter(row=>closingSnapshot.has(row.id)||grouped.has(row.id)).map(row=>row.id));
+      rows=rows.filter(row=>recoveredRowIds.has(row.id));
+      const previousMonth=new Date(start.getTime()-24*60*60*1000).toISOString().slice(0,7);
+      const previousReport=CorrectionMonthlyReportService.reportCache.get(previousMonth)?.data as {rows?:Row[]}|undefined;
+      const previousClosing=new Map((previousReport?.rows??[]).map(row=>[row.id,row.stateAtClose]));
       for(const item of current){
         if(recoveredRowIds.has(item.id)) continue;
         const createdAt=item.azureCreatedAt;
@@ -716,9 +723,10 @@ ASOF '${asOf.toISOString()}'`;
         const firstAfterClose=events.find(event=>event.changedAt>close);
         const stateAtOpen=createdAt>=start
           ? null
-          : (firstAfterOpen?.oldValue?.trim()||
+          : (previousClosing.get(item.id)||firstAfterOpen?.oldValue?.trim()||
              [...events].reverse().find(event=>event.changedAt<start)?.newValue?.trim()||
-             (item.stateChangedAt&&item.stateChangedAt<start?item.state:null));
+             (item.stateChangedAt&&item.stateChangedAt<start?item.state:null)||
+             (!item.stateChangedAt&&isBacklogState(item.state)?item.state:null));
         const stateAtClose=firstAfterClose?.oldValue?.trim()||item.state||null;
         if(!stateAtClose) continue;
 
