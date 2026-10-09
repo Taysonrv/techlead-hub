@@ -11,7 +11,7 @@ import { useFilters, type PeriodOption } from "../context/FiltersContext";
 const fieldSx = {
   "& .MuiOutlinedInput-root": {
     minHeight: 40,
-    borderRadius: 1.25,
+    borderRadius: "8px",
     bgcolor: "background.paper",
   },
 } as const;
@@ -69,7 +69,7 @@ export function PeriodFilter() {
           sx={{
             width: "100%",
             minHeight: 40,
-            borderRadius: 1.25,
+            borderRadius: "8px",
             bgcolor: "background.paper",
             "& .MuiSelect-select": {
               py: 1.05,
