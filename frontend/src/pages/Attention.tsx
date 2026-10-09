@@ -658,9 +658,9 @@ export function Attention() {
       );
     }, [
       attentionTickets,
-      level.length,
-      owner.length,
-      client.length,
+      level,
+      owner,
+      client,
       riskFilter,
     ]);
 
