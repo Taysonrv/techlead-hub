@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { assessHistoricalBacklog, saoPauloMonth, selectReportCandidateIds } from "../src/services/CorrectionMonthlyReportService";
+import { assessHistoricalBacklog, classifyMonthlyStateMovement, saoPauloMonth, selectReportCandidateIds } from "../src/services/CorrectionMonthlyReportService";
 
 test("mês corrente usa fechamento provisório anterior ao instante atual", () => {
   const observedAt = new Date("2026-10-09T12:00:00.000Z");
@@ -54,4 +54,71 @@ test("backlog só é certificado quando ASOF e ambas as fotografias cobrem os ID
 
 test("mês com escopo histórico comprovadamente vazio admite backlog zero", () => {
   assert.equal(assessHistoricalBacklog(true, true, [], [], new Set(), new Set()), true);
+});
+
+
+test("movimentação mensal considera apenas o estado-alvo no fechamento e evidência dentro do período", () => {
+  const start = new Date("2026-09-01T03:00:00.000Z");
+  const close = new Date("2026-10-01T02:59:59.999Z");
+
+  const delivered = classifyMonthlyStateMovement({
+    stateAtClose: "Concluído",
+    createdAt: new Date("2026-08-10T12:00:00.000Z"),
+    start,
+    close,
+    stateEvents: [{ at: new Date("2026-09-14T15:00:00.000Z"), state: "Concluído" }],
+  });
+  assert.equal(delivered.deliveredInPeriod, true);
+  assert.equal(delivered.canceledInPeriod, false);
+
+  const reopened = classifyMonthlyStateMovement({
+    stateAtClose: "Qualidade",
+    createdAt: new Date("2026-08-10T12:00:00.000Z"),
+    start,
+    close,
+    stateEvents: [
+      { at: new Date("2026-09-14T15:00:00.000Z"), state: "Concluído" },
+      { at: new Date("2026-09-20T15:00:00.000Z"), state: "Qualidade" },
+    ],
+  });
+  assert.equal(reopened.deliveredInPeriod, false);
+});
+
+test("task criada no mês e terminal no fechamento conta a entrada mesmo sem revisão histórica", () => {
+  const start = new Date("2026-09-01T03:00:00.000Z");
+  const close = new Date("2026-10-01T02:59:59.999Z");
+  const movement = classifyMonthlyStateMovement({
+    stateAtClose: "Cancelado",
+    createdAt: new Date("2026-09-18T12:00:00.000Z"),
+    start,
+    close,
+  });
+  assert.equal(movement.createdInPeriod, true);
+  assert.equal(movement.canceledInPeriod, true);
+});
+
+test("StateChangeDate fora do mês não altera retroativamente o fechamento", () => {
+  const start = new Date("2026-09-01T03:00:00.000Z");
+  const close = new Date("2026-10-01T02:59:59.999Z");
+  const movement = classifyMonthlyStateMovement({
+    stateAtClose: "Concluído",
+    createdAt: new Date("2026-08-01T12:00:00.000Z"),
+    start,
+    close,
+    stateChangedAt: new Date("2026-10-03T12:00:00.000Z"),
+  });
+  assert.equal(movement.deliveredInPeriod, false);
+});
+
+test("Registro pode aparecer no pipeline, mas a regra de movimento é independente do backlog", () => {
+  const start = new Date("2026-09-01T03:00:00.000Z");
+  const close = new Date("2026-10-01T02:59:59.999Z");
+  const movement = classifyMonthlyStateMovement({
+    stateAtClose: "Registro",
+    createdAt: new Date("2026-08-01T12:00:00.000Z"),
+    start,
+    close,
+    stateEvents: [{ at: new Date("2026-09-07T12:00:00.000Z"), state: "Registro" }],
+  });
+  assert.equal(movement.enteredRegistrationInPeriod, true);
 });
