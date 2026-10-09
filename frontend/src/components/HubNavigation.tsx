@@ -1,10 +1,10 @@
 import { Box, Tab, Tabs, Typography, useTheme } from "@mui/material";
-import type { ReactNode } from "react";
+import type { ReactElement } from "react";
 
 export type HubNavigationItem<T extends string = string> = {
   value: T;
   label: string;
-  icon?: ReactNode;
+  icon?: ReactElement;
 };
 
 type HubNavigationProps<T extends string = string> = {
