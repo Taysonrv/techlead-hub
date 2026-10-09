@@ -1101,14 +1101,20 @@ export function Dashboard() {
 
   return (
     <Box sx={{
-      mx: { xs: -1, md: -2 },
-      mt: { xs: -1, md: -2 },
-      p: { xs: 1.5, md: 2.5 },
+      width: "100%",
+      maxWidth: "100%",
+      minWidth: 0,
+      mx: 0,
+      mt: 0,
+      p: 0,
       minHeight: "100vh",
-      borderRadius: { xs: 0, md: 3 },
-      background: isDark
-        ? "radial-gradient(circle at 18% 0%, rgba(0,199,142,.08), transparent 26%), radial-gradient(circle at 88% 8%, rgba(47,111,237,.10), transparent 28%), linear-gradient(145deg,#061421 0%,#081A2C 52%,#06111D 100%)"
-        : "linear-gradient(180deg,#F8FAFC,#F4F6F8)",
+      boxSizing: "border-box",
+      background: "transparent",
+      "& > *": {
+        width: "100%",
+        maxWidth: "100%",
+        boxSizing: "border-box",
+      },
       "& .recharts-cartesian-grid line": { stroke: chartGrid },
       "& .recharts-cartesian-axis-tick text": { fill: chartTick },
       "& .recharts-default-tooltip": chartTooltipStyle,
@@ -1125,7 +1131,16 @@ export function Dashboard() {
         action={<PeriodFilter />}
       />
       {recurrence && recurrence.summary.total > 0 && (
-        <Card elevation={0} sx={{ mb:2, border:"1px solid", borderColor:"rgba(245,158,11,.28)", borderRadius:2 }}>
+        <Card elevation={0} sx={{
+          mb: 2,
+          width: "100%",
+          border: "1px solid",
+          borderColor: "rgba(245,158,11,.28)",
+          borderRadius: 2,
+          background: isDark
+            ? "radial-gradient(circle at 0% 50%, rgba(245,158,11,.08), transparent 42%), linear-gradient(145deg, rgba(9,32,43,.98), rgba(7,25,38,.995))"
+            : "radial-gradient(circle at 0% 50%, rgba(245,158,11,.07), transparent 42%), linear-gradient(145deg, #FFFFFF, #FAFCFD)",
+        }}>
           <CardContent sx={{ py:1.5, "&:last-child":{pb:1.5} }}>
             <Stack direction={{xs:"column",md:"row"}} spacing={1.5} sx={{justifyContent:"space-between",alignItems:{md:"center"}}}>
               <Box>
@@ -1159,7 +1174,7 @@ export function Dashboard() {
           gridTemplateColumns: {
             xs: "1fr",
             sm: "repeat(2, 1fr)",
-            lg: "repeat(4, minmax(0, 1fr))",
+            lg: "repeat(3, minmax(0, 1fr))",
           },
 
           gap: {
@@ -1169,6 +1184,8 @@ export function Dashboard() {
           },
 
           mb: 2.5,
+          width: "100%",
+          alignItems: "stretch",
         }}
       >
         {cards.map(
