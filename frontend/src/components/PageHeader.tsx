@@ -32,6 +32,9 @@ export function PageHeader({
         overflow: "hidden",
         p: { xs: 1.45, sm: 1.65, md: 1.8 },
         minHeight: { md: 102 },
+        width: "100%",
+        maxWidth: "100%",
+        boxSizing: "border-box",
         borderRadius: "14px",
         isolation: "isolate",
         border: "1px solid",
@@ -39,8 +42,8 @@ export function PageHeader({
           ? "rgba(76,190,230,.18)"
           : "rgba(15,118,110,.12)",
         background: dark
-          ? "radial-gradient(circle at 7% 0%, rgba(24,199,122,.11), transparent 34%), linear-gradient(125deg, rgba(8,35,53,.98), rgba(11,29,50,.98) 64%, rgba(15,31,54,.97))"
-          : "radial-gradient(circle at 7% 0%, rgba(24,199,122,.07), transparent 34%), linear-gradient(120deg, #F7FCFA 0%, #F8FBFC 52%, #F5F8FC 100%)",
+          ? "radial-gradient(circle at 0% 35%, rgba(24,199,122,.14) 0%, rgba(24,199,122,.055) 24%, transparent 50%), linear-gradient(100deg, rgba(8,35,53,.99) 0%, rgba(10,31,52,.99) 48%, rgba(12,30,51,.99) 100%)"
+          : "radial-gradient(circle at 0% 35%, rgba(24,199,122,.09) 0%, rgba(24,199,122,.035) 26%, transparent 52%), linear-gradient(100deg, #F7FCFA 0%, #F8FBFC 50%, #F5F8FC 100%)",
         boxShadow: dark
           ? "0 14px 34px rgba(0,0,0,.15), inset 0 1px rgba(255,255,255,.03)"
           : "0 7px 20px rgba(16,24,40,.035)",
