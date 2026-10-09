@@ -2285,7 +2285,7 @@ export function Analysts() {
                 role="button"
                 tabIndex={0}
                 onClick={() => showAnalystTickets(teamBalance.highest.owner)}
-                onKeyDown={(event) => { if (event.key === "Enter") showAnalystTickets(teamBalance.highest.owner); }}
+                onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); showAnalystTickets(teamBalance.highest.owner); } }}
                 sx={{ p: 1.25, border: "1px solid", borderColor: teamBalance.highest.workloadLevel === "alto" ? "warning.main" : "divider", borderRadius: 1.75, bgcolor: "background.default", cursor: "pointer", "&:hover": { borderColor: "primary.main" } }}
               >
                 <Typography variant="caption" color="text.secondary">Maior carteira aberta</Typography>
@@ -2296,7 +2296,7 @@ export function Analysts() {
                 role="button"
                 tabIndex={0}
                 onClick={() => showAnalystTickets(teamBalance.lowest.owner)}
-                onKeyDown={(event) => { if (event.key === "Enter") showAnalystTickets(teamBalance.lowest.owner); }}
+                onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); showAnalystTickets(teamBalance.lowest.owner); } }}
                 sx={{ p: 1.25, border: "1px solid", borderColor: "divider", borderRadius: 1.75, bgcolor: "background.default", cursor: "pointer", "&:hover": { borderColor: "primary.main" } }}
               >
                 <Typography variant="caption" color="text.secondary">Menor carteira aberta</Typography>
