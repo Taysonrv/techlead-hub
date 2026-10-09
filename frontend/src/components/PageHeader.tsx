@@ -41,9 +41,7 @@ export function PageHeader({
         borderColor: dark
           ? "rgba(76,190,230,.18)"
           : "rgba(15,118,110,.12)",
-        background: dark
-          ? "radial-gradient(circle at 0% 35%, rgba(24,199,122,.14) 0%, rgba(24,199,122,.055) 24%, transparent 50%), linear-gradient(100deg, rgba(8,35,53,.99) 0%, rgba(10,31,52,.99) 48%, rgba(12,30,51,.99) 100%)"
-          : "radial-gradient(circle at 0% 35%, rgba(24,199,122,.09) 0%, rgba(24,199,122,.035) 26%, transparent 52%), linear-gradient(100deg, #F7FCFA 0%, #F8FBFC 50%, #F5F8FC 100%)",
+        backgroundColor: dark ? "#0C1E33" : "#F5F8FC",
         boxShadow: dark
           ? "0 14px 34px rgba(0,0,0,.15), inset 0 1px rgba(255,255,255,.03)"
           : "0 7px 20px rgba(16,24,40,.035)",
@@ -56,20 +54,22 @@ export function PageHeader({
             "linear-gradient(180deg, #18C77A 0%, #22D3EE 62%, transparent 100%)",
           opacity: dark ? 0.95 : 0.78,
         },
-        "&::after": {
-          content: '""',
-          position: "absolute",
-          right: 22,
-          top: 0,
-          width: 132,
-          height: 1,
-          background: dark
-            ? "linear-gradient(90deg, transparent, rgba(91,231,173,.18))"
-            : "linear-gradient(90deg, transparent, rgba(16,148,91,.12))",
-          pointerEvents: "none",
-        },
+
       }}
     >
+      <Box
+        aria-hidden
+        sx={{
+          position: "absolute",
+          inset: 0,
+          zIndex: 0,
+          borderRadius: "inherit",
+          pointerEvents: "none",
+          background: dark
+            ? "radial-gradient(circle at 0% 35%, rgba(24,199,122,.14) 0%, rgba(24,199,122,.055) 24%, transparent 50%), linear-gradient(100deg, rgba(8,35,53,.99) 0%, rgba(10,31,52,.99) 48%, #0C1E33 100%)"
+            : "radial-gradient(circle at 0% 35%, rgba(24,199,122,.09) 0%, rgba(24,199,122,.035) 26%, transparent 52%), linear-gradient(100deg, #F7FCFA 0%, #F8FBFC 50%, #F5F8FC 100%)",
+        }}
+      />
       <Box sx={{ position: "relative", zIndex: 1, minWidth: 0, flex: 1 }}>
         <Stack direction="row" spacing={0.9} sx={{ alignItems: "center" }}>
           <Box
@@ -151,6 +151,8 @@ export function PageHeader({
             borderRadius: 0,
             border: 0,
             bgcolor: "transparent",
+            background: "transparent",
+            boxShadow: "none",
             backdropFilter: "none",
             "& > *": { maxWidth: "100%" },
             "& .MuiButton-root": { width: { xs: "100%", sm: "auto" } },
