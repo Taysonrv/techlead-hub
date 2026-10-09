@@ -435,7 +435,7 @@ export function CorrectionMonthlyPanel() {
           <Autocomplete multiple size="small" options={options.states} value={states} onChange={(_,value)=>setStates(value)}
             renderInput={params=><TextField {...params} label="Status"/>}/>
           <FormControl size="small">
-            <InputLabel id="correction-prioritized-label" htmlFor="correction-prioritized">Priorizada</InputLabel>
+            <InputLabel id="correction-prioritized-label">Priorizada</InputLabel>
             <Select labelId="correction-prioritized-label" inputProps={{ id: "correction-prioritized", "aria-labelledby": "correction-prioritized-label" }} label="Priorizada"
               value={prioritized} onChange={event=>setPrioritized(event.target.value as typeof prioritized)}>
               <MenuItem value="">Todas</MenuItem><MenuItem value="true">Sim</MenuItem><MenuItem value="false">Não</MenuItem>
