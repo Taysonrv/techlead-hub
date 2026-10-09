@@ -499,7 +499,12 @@ export function Sidebar() {
 
   const managementMenu = useMemo<MenuItemData[]>(
     () => [
-      ...(canAccess("knowledge") ? [{ label: "Base de Conhecimento", path: "/conhecimento", icon: <MenuBookOutlined fontSize="small" /> }] : []),
+      ...(canAccess("coordination")
+        ? [{ label: "Painel da Coordenação", path: "/gestao-inteligencia/coordenacao", icon: <GroupsOutlined fontSize="small" /> }]
+        : []),
+      ...(canAccess("knowledge")
+        ? [{ label: "Base de Conhecimento", path: "/conhecimento", icon: <MenuBookOutlined fontSize="small" /> }]
+        : []),
     ],
     [user?.role, user?.permissions],
   );
