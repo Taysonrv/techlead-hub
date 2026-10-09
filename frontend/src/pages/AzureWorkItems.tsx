@@ -3365,11 +3365,9 @@ export function AzureWorkItems({
                     },
                   }}
                 >
-                  <InputLabel>
+                  <InputLabel id="azureworkitems-select-1-label" htmlFor="azureworkitems-select-1">
                     Ordenar
-                  </InputLabel>
-
-                  <Select
+                  </InputLabel><Select labelId="azureworkitems-select-1-label" inputProps={{ id: "azureworkitems-select-1", "aria-labelledby": "azureworkitems-select-1-label" }}
                     value={
                       sortDirection
                     }
@@ -3464,11 +3462,9 @@ export function AzureWorkItems({
                   size="small"
                   fullWidth
                 >
-                  <InputLabel>
+                  <InputLabel id="azureworkitems-select-2-label" htmlFor="azureworkitems-select-2">
                     Estado
-                  </InputLabel>
-
-                  <Select
+                  </InputLabel><Select labelId="azureworkitems-select-2-label" inputProps={{ id: "azureworkitems-select-2", "aria-labelledby": "azureworkitems-select-2-label" }}
                     label="Estado"
                     value={
                       state
@@ -3512,11 +3508,9 @@ export function AzureWorkItems({
                   size="small"
                   fullWidth
                 >
-                  <InputLabel>
+                  <InputLabel id="azureworkitems-select-3-label" htmlFor="azureworkitems-select-3">
                     Criticidade
-                  </InputLabel>
-
-                  <Select
+                  </InputLabel><Select labelId="azureworkitems-select-3-label" inputProps={{ id: "azureworkitems-select-3", "aria-labelledby": "azureworkitems-select-3-label" }}
                     label="Criticidade"
                     value={
                       criticality
@@ -3724,11 +3718,9 @@ export function AzureWorkItems({
                     size="small"
                     fullWidth
                   >
-                    <InputLabel>
+                    <InputLabel id="azureworkitems-select-4-label" htmlFor="azureworkitems-select-4">
                       Priorização
-                    </InputLabel>
-
-                    <Select
+                    </InputLabel><Select labelId="azureworkitems-select-4-label" inputProps={{ id: "azureworkitems-select-4", "aria-labelledby": "azureworkitems-select-4-label" }}
                       label="Priorização"
                       value={
                         prioritized
@@ -3763,11 +3755,9 @@ export function AzureWorkItems({
                     size="small"
                     fullWidth
                   >
-                    <InputLabel>
+                    <InputLabel id="azureworkitems-select-5-label" htmlFor="azureworkitems-select-5">
                       Bloqueio
-                    </InputLabel>
-
-                    <Select
+                    </InputLabel><Select labelId="azureworkitems-select-5-label" inputProps={{ id: "azureworkitems-select-5", "aria-labelledby": "azureworkitems-select-5-label" }}
                       label="Bloqueio"
                       value={
                         blockedProcess
@@ -3802,11 +3792,9 @@ export function AzureWorkItems({
                     size="small"
                     fullWidth
                   >
-                    <InputLabel>
+                    <InputLabel id="azureworkitems-select-6-label" htmlFor="azureworkitems-select-6">
                       Responsável
-                    </InputLabel>
-
-                    <Select
+                    </InputLabel><Select labelId="azureworkitems-select-6-label" inputProps={{ id: "azureworkitems-select-6", "aria-labelledby": "azureworkitems-select-6-label" }}
                       label="Responsável"
                       value={
                         hasAssignedTo
@@ -3841,11 +3829,9 @@ export function AzureWorkItems({
                     size="small"
                     fullWidth
                   >
-                    <InputLabel>
+                    <InputLabel id="azureworkitems-select-7-label" htmlFor="azureworkitems-select-7">
                       Movidesk na Task
-                    </InputLabel>
-
-                    <Select
+                    </InputLabel><Select labelId="azureworkitems-select-7-label" inputProps={{ id: "azureworkitems-select-7", "aria-labelledby": "azureworkitems-select-7-label" }}
                       label="Movidesk na Task"
                       value={
                         hasMovideskTicket
