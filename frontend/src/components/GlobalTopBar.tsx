@@ -51,33 +51,6 @@ export function GlobalTopBar() {
   }, []);
 
   useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    const meetingId = Number(params.get("meeting"));
-    if (!Number.isSafeInteger(meetingId) || meetingId <= 0 || openingMeetingIdRef.current === meetingId) return;
-
-    openingMeetingIdRef.current = meetingId;
-    void api.get<{ meeting: CalendarMeeting }>(`/global/calendar/meetings/${meetingId}`)
-      .then((response) => {
-        openMeeting(response.data.meeting);
-        const next = new URLSearchParams(location.search);
-        next.delete("meeting");
-        navigate(
-          { pathname: location.pathname, search: next.toString() ? `?${next.toString()}` : "" },
-          { replace: true },
-        );
-      })
-      .catch((error) => {
-        console.warn("[calendar] Não foi possível abrir a reunião da notificação:", error);
-        setMeetingError(getApiErrorMessage(error, "Não foi possível abrir a reunião."));
-        setMeetingDialogOpen(true);
-      })
-      .finally(() => {
-        openingMeetingIdRef.current = null;
-      });
-  }, [location.pathname, location.search, navigate, openMeeting]);
-
-
-  useEffect(() => {
     const updates = window.techLeadHub?.updates;
     if (!updates) return;
     void updates.getState().then(setUpdateState).catch(() => undefined);
@@ -165,6 +138,33 @@ export function GlobalTopBar() {
     setMeetingDialogOpen(true);
     void ensureMeetingParticipants();
   }, [ensureMeetingParticipants]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const meetingId = Number(params.get("meeting"));
+    if (!Number.isSafeInteger(meetingId) || meetingId <= 0 || openingMeetingIdRef.current === meetingId) return;
+
+    openingMeetingIdRef.current = meetingId;
+    void api.get<{ meeting: CalendarMeeting }>(`/global/calendar/meetings/${meetingId}`)
+      .then((response) => {
+        openMeeting(response.data.meeting);
+        const next = new URLSearchParams(location.search);
+        next.delete("meeting");
+        navigate(
+          { pathname: location.pathname, search: next.toString() ? `?${next.toString()}` : "" },
+          { replace: true },
+        );
+      })
+      .catch((error) => {
+        console.warn("[calendar] Não foi possível abrir a reunião da notificação:", error);
+        setMeetingError(getApiErrorMessage(error, "Não foi possível abrir a reunião."));
+        setMeetingDialogOpen(true);
+      })
+      .finally(() => {
+        openingMeetingIdRef.current = null;
+      });
+  }, [location.pathname, location.search, navigate, openMeeting]);
+
 
   async function saveMeeting() {
     setMeetingSaving(true);
