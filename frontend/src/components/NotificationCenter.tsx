@@ -105,6 +105,7 @@ export function NotificationCenter() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();
+  const userId = user?.id ?? null;
   const [toastQueue, setToastQueue] = useState<HubNotification[]>([]);
   const toast = toastQueue[0] ?? null;
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
@@ -172,7 +173,7 @@ export function NotificationCenter() {
   }, [preferences.appVersion]);
 
   const load = useCallback(async () => {
-    if (!user || loadingRef.current) return;
+    if (!userId || loadingRef.current) return;
     loadingRef.current = true;
     try {
       setLoading(true);
@@ -189,10 +190,10 @@ export function NotificationCenter() {
       loadingRef.current = false;
       setLoading(false);
     }
-  }, [user?.id]);
+  }, [userId]);
 
   const loadMeetingReminders = useCallback(async () => {
-    if (!user || meetingLoadingRef.current || Date.now() < meetingRetryAtRef.current) return;
+    if (!userId || meetingLoadingRef.current || Date.now() < meetingRetryAtRef.current) return;
     meetingLoadingRef.current = true;
     try {
       const response = await api.get<{ notifications: HubNotification[] }>("/notifications/meetings");
@@ -221,7 +222,7 @@ export function NotificationCenter() {
     } finally {
       meetingLoadingRef.current = false;
     }
-  }, [user?.id]);
+  }, [userId]);
 
   useEffect(() => {
     void load();
@@ -281,6 +282,12 @@ export function NotificationCenter() {
     });
   }, [unread]);
 
+  const meetingPath = useCallback((meetingId: number) => {
+    const params = new URLSearchParams(location.search);
+    params.set("meeting", String(meetingId));
+    return `${location.pathname}?${params.toString()}`;
+  }, [location.pathname, location.search]);
+
   useEffect(() => {
     if (!toast) return;
     playNotificationSound(toast.kind === "CHAT_MENTION" ? "chat" : "system");
@@ -292,19 +299,13 @@ export function NotificationCenter() {
         alert.close();
       };
     }
-  }, [toast, navigate, preferences.desktopAlerts]);
+  }, [toast, navigate, preferences.desktopAlerts, meetingPath]);
 
   useEffect(() => {
     alertedKeys.current.clear();
     notificationHydratedRef.current = false;
     setToastQueue([]);
-  }, [user?.id]);
-
-  function meetingPath(meetingId: number) {
-    const params = new URLSearchParams(location.search);
-    params.set("meeting", String(meetingId));
-    return `${location.pathname}?${params.toString()}`;
-  }
+  }, [userId]);
 
   async function openMenu(event: MouseEvent<HTMLElement>) {
     setAnchor(event.currentTarget);
