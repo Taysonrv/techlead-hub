@@ -241,6 +241,12 @@ export function CorrectionMonthlyPanel() {
     teamCreators.length > 0 &&
     creators.length === teamCreators.length &&
     teamCreators.every((creator) => creators.includes(creator));
+  const homologationScopeActive =
+    teamScopeActive &&
+    clients.length===0 &&
+    urgencies.length===0 &&
+    states.length===0 &&
+    prioritized==="";
   const septemberHomologation = month === "2026-09"
     ? [
         {key:"backlogInitial",label:"Backlog inicial",actual:backlogVerified?initial:null,expected:SEPTEMBER_2026_REFERENCE.backlogInitial,verified:backlogVerified},
@@ -521,7 +527,7 @@ export function CorrectionMonthlyPanel() {
     {!loading&&report&&month==="2026-09"&&
       <Card elevation={0} sx={{
         ...panel,
-        borderColor:teamScopeActive?"rgba(24,199,122,.28)":"rgba(47,111,237,.22)",
+        borderColor:homologationScopeActive?"rgba(24,199,122,.28)":"rgba(47,111,237,.22)",
         background:theme.palette.mode==="dark"
           ?"linear-gradient(105deg,rgba(47,111,237,.08),rgba(24,199,122,.045),rgba(255,255,255,.012))"
           :"linear-gradient(105deg,rgba(47,111,237,.05),rgba(24,199,122,.035),#FFFFFF)",
@@ -531,14 +537,14 @@ export function CorrectionMonthlyPanel() {
             <Box sx={{minWidth:0}}>
               <Typography sx={{fontWeight:900}}>Homologação · setembro/2026</Typography>
               <Typography variant="caption" color="text.secondary">
-                {teamScopeActive
-                  ?"Escopo de criadores Time SIMER aplicado. Comparação com a referência validada pela coordenação."
-                  :"Para confrontar a referência oficial, aplique o filtro Criado por → Time SIMER."}
+                {homologationScopeActive
+                  ?"Escopo homologado aplicado: Time SIMER, sem filtros adicionais. Comparação com a referência validada pela coordenação."
+                  :"Para confrontar a referência oficial, use Time SIMER e deixe Cliente, Urgência, Status e Priorizada sem seleção."}
               </Typography>
             </Box>
             <Box sx={{display:"grid",gridTemplateColumns:{xs:"repeat(2,minmax(0,1fr))",sm:"repeat(5,minmax(108px,1fr))"},gap:.7}}>
               {septemberHomologation.map(item=>{
-                const comparable=teamScopeActive&&item.verified&&item.actual!==null;
+                const comparable=homologationScopeActive&&item.verified&&item.actual!==null;
                 const matches=comparable&&item.actual===item.expected;
                 return <Box key={item.key} sx={{
                   px:1,py:.7,border:"1px solid",borderColor:matches?"success.main":comparable?"warning.main":"divider",
