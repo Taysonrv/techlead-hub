@@ -301,8 +301,11 @@ export function createAppTheme(mode: PaletteMode = "light") {
         },
       },
       MuiSelect: {
-        defaultProps: { notched: true },
-        styleOverrides: { select: { backgroundColor: dark ? "rgba(7,20,35,.34)" : undefined } },
+        styleOverrides: {
+          select: {
+            backgroundColor: dark ? "rgba(7,20,35,.34)" : undefined,
+          },
+        },
       },
       MuiChip: {
         defaultProps: { size: "small" },
