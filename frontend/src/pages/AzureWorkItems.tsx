@@ -1195,7 +1195,7 @@ export function AzureWorkItems({
   type,
 }: Props) {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [
     loading,
@@ -2477,9 +2477,13 @@ export function AzureWorkItems({
     const taskParam = Number(searchParams.get("task"));
 
     if (Number.isInteger(taskParam) && taskParam > 0) {
-      void openDetail(taskParam);
+      void openDetail(taskParam).finally(() => {
+        const next = new URLSearchParams(searchParams);
+        next.delete("task");
+        setSearchParams(next, { replace: true });
+      });
     }
-  }, [searchParams, openDetail]);
+  }, [searchParams, setSearchParams, openDetail]);
 
   function openTicketInHub(movideskId: number) {
     navigate(`/tickets?movidesk=${movideskId}`);
