@@ -840,7 +840,7 @@ export function Attention() {
               <Button size="small" variant="outlined" onClick={() => navigate("/problemas-conhecidos")}>Revisar recorrências</Button>
             </Stack>
             <Stack direction="row" spacing={.7} useFlexGap sx={{ mt:1, flexWrap:"wrap", "& .MuiChip-root": { maxWidth: { xs: "100%", md: 360 } }, "& .MuiChip-label": { overflow: "hidden", textOverflow: "ellipsis" } }}>
-              {recurrence.items.slice(0,4).map((item) => <Chip key={item.service+"|"+item.cause} color={item.priority==="high"?"error":"warning"} variant="outlined" label={`${item.service} · ${item.cases} casos · score ${item.score}`} onClick={() => navigate(`/problemas-conhecidos?q=${encodeURIComponent(item.service)}`)} />)}
+              {recurrence.items.slice(0,4).map((item,index) => <Chip key={`${item.service}|${item.cause}|${item.score}|${index}`} color={item.priority==="high"?"error":"warning"} variant="outlined" label={`${item.service} · ${item.cases} casos · score ${item.score}`} onClick={() => navigate(`/problemas-conhecidos?q=${encodeURIComponent(item.service)}`)} />)}
             </Stack>
             {recurrence.anomalies?.[0] && <Alert severity={recurrence.anomalies[0].severity==="critical"?"error":"warning"} variant="outlined" sx={{mt:1}}>
               <strong>Anomalia detectada:</strong> {recurrence.anomalies[0].service} — {recurrence.anomalies[0].reason}.
