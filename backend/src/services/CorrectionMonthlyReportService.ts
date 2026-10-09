@@ -368,6 +368,7 @@ ASOF '${asOf.toISOString()}'`;
 
   private async build(month:string) {
     const {start,endExclusive,close}=saoPauloMonth(month);
+    const livePeriod=close.getTime()<endExclusive.getTime()-1;
     const currentPromise=prisma.azureWorkItem.findMany({where:{workItemType:"Correção Clientes"},select:{id:true,title:true,client:true,criticality:true,prioritized:true,assignedToName:true,remoteUrl:true,createdByName:true,azureCreatedAt:true,state:true,stateChangedAt:true,azureClosedAt:true,rawFields:true}});
     let fields:{client:string;prioritized:string;urgency:string}={client:AZURE_WORK_ITEM_FIELDS.client,prioritized:AZURE_WORK_ITEM_FIELDS.prioritized,urgency:AZURE_WORK_ITEM_FIELDS.criticality};
     let revisions:Revision[]=[];
@@ -538,14 +539,14 @@ ASOF '${asOf.toISOString()}'`;
         if(!createdAt||createdAt>close) continue;
 
         const stateAtOpen=text(openingFields["System.State"]);
-        const stateAtClose=text(closingFields["System.State"])??item?.state??null;
+        const stateAtClose=text(closingFields["System.State"])??(livePeriod?item?.state??null:null);
         if(!stateAtClose) continue;
         const createdInPeriod=createdAt>=start&&createdAt<=close;
         const raw=(item?.rawFields&&typeof item.rawFields==="object"&&!Array.isArray(item.rawFields)?item.rawFields:{}) as Record<string,unknown>;
         const urgencyValue=text(closingFields[fields.urgency])??item?.criticality??text(raw[fields.urgency]);
         const prioritized=bool(closingFields[fields.prioritized])??item?.prioritized??null;
         const snapshotStateChangedAt=date(closingFields["Microsoft.VSTS.Common.StateChangeDate"]);
-        const fallbackStateChangedAt=snapshotStateChangedAt??(!snapshotAvailable?item?.stateChangedAt??null:null);
+        const fallbackStateChangedAt=snapshotStateChangedAt??(!snapshotAvailable&&livePeriod?item?.stateChangedAt??null:null);
         const movement=classifyMonthlyStateMovement({
           stateAtClose,
           createdAt,
