@@ -240,9 +240,14 @@ svg {
   outline: none !important;
 }
 
-.MuiCard-root:focus,
-.MuiCard-root:focus-visible {
+.MuiCard-root:focus {
   outline: none;
+}
+
+.MuiCard-root[role="button"]:focus-visible,
+.MuiCard-root:has(.MuiCardActionArea-root):focus-within {
+  outline: 2px solid #18c77a;
+  outline-offset: 2px;
 }
 
 
@@ -316,6 +321,28 @@ svg {
 
 .techlead-page-surface .recharts-responsive-container {
   min-width: 0;
+}
+
+.techlead-page-surface .techlead-chart-area {
+  container-type: inline-size;
+}
+
+.techlead-page-surface .techlead-chart-area .recharts-wrapper {
+  margin-inline: auto;
+}
+
+.techlead-page-surface .recharts-text,
+.techlead-page-surface .recharts-cartesian-axis-tick-value {
+  font-variant-numeric: tabular-nums;
+}
+
+.techlead-page-surface .recharts-line-curve,
+.techlead-page-surface .recharts-area-curve {
+  stroke-width: 2px;
+}
+
+.techlead-page-surface .recharts-active-dot circle {
+  stroke-width: 2px;
 }
 
 .techlead-page-surface .recharts-wrapper,
