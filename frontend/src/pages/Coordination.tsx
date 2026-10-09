@@ -217,7 +217,8 @@ export function Coordination() {
   }, [slaDays, slaPeriod, slaCustomStart, slaCustomEnd]);
 
   const formatHours = (minutes: number) => minutes ? `${(minutes / 60).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}h` : "—";
-  const rate = (within: number, total: number) => total ? Math.round(within / total * 1000) / 10 : 0;
+  const clampPercent = (value: number) => Math.max(0, Math.min(100, Number.isFinite(value) ? value : 0));
+  const rate = (within: number, total: number) => total ? clampPercent(Math.round(within / total * 1000) / 10) : 0;
 
   useEffect(() => {
     const controller = new AbortController();
@@ -366,7 +367,7 @@ export function Coordination() {
                       <Stack direction="row" spacing={1} sx={{alignItems:"center"}}><Chip color={slaDevelopment.health.status==="stable"?"success":slaDevelopment.health.status==="attention"?"warning":"error"} label={`${slaDevelopment.health.score}% · ${slaDevelopment.health.status==="stable"?"Estável":slaDevelopment.health.status==="attention"?"Atenção":"Crítico"}`}/><Tooltip title={slaDevelopment.health.formula}><InfoOutlined sx={{fontSize:18,color:"text.secondary"}}/></Tooltip></Stack>
                     </Stack>
                     <Box sx={{display:"grid",gridTemplateColumns:{xs:"1fr",sm:"repeat(2,minmax(0,1fr))",xl:"repeat(4,minmax(0,1fr))"},gap:1}}>
-                      {slaDevelopment.health.components.map(component=><Box key={component.key} sx={{p:1.1,border:"1px solid",borderColor:"divider",borderRadius:2,bgcolor:"background.paper"}}><Stack direction="row" sx={{justifyContent:"space-between",gap:1}}><Typography variant="caption" color="text.secondary" sx={{fontWeight:800}}>{component.label}</Typography><Typography variant="caption" color="text.secondary">{component.weight}% peso</Typography></Stack><Typography sx={{fontSize:"1.35rem",fontWeight:900,my:.4}}>{component.score}%</Typography><LinearProgress variant="determinate" value={component.score} sx={{height:5,borderRadius:99,mb:.6}}/><Typography variant="caption" color="text.secondary">{component.detail}</Typography></Box>)}
+                      {slaDevelopment.health.components.map(component=><Box key={component.key} sx={{p:1.1,border:"1px solid",borderColor:"divider",borderRadius:2,bgcolor:"background.paper"}}><Stack direction="row" sx={{justifyContent:"space-between",gap:1}}><Typography variant="caption" color="text.secondary" sx={{fontWeight:800}}>{component.label}</Typography><Typography variant="caption" color="text.secondary">{component.weight}% peso</Typography></Stack><Typography sx={{fontSize:"1.35rem",fontWeight:900,my:.4}}>{component.score}%</Typography><LinearProgress variant="determinate" value={clampPercent(component.score)} sx={{height:5,borderRadius:99,mb:.6}}/><Typography variant="caption" color="text.secondary">{component.detail}</Typography></Box>)}
                     </Box>
                     {slaDevelopment.health.alerts.length>0&&<Stack spacing={.7} sx={{mt:1}}>{slaDevelopment.health.alerts.map((alert,i)=><Alert key={i} severity={alert.severity} variant="outlined"><Typography sx={{fontWeight:800}}>{alert.title}</Typography><Typography variant="body2">{alert.detail}</Typography></Alert>)}</Stack>}
                   </Box>}
@@ -654,7 +655,7 @@ export function Coordination() {
                         {data.serviceAnalytics.moduleRanking.slice(0, 6).map((item,index) => (
                           <Button key={item.module} onClick={() => void openDetails("serviceModule", `Serviço · ${item.module}`, undefined, item.module)} sx={rankingRowSx}>
                             <Box sx={{width:26,height:26,borderRadius:"50%",display:"grid",placeItems:"center",flexShrink:0,fontSize:12,fontWeight:900,color:chartColors[index%chartColors.length],border:"1px solid currentColor",mr:1}}>{index+1}</Box>
-                            <Box sx={{minWidth:0,flex:1,textAlign:"left"}}><Typography variant="body2" noWrap title={item.module} sx={{fontWeight:750}}>{item.module}</Typography><LinearProgress variant="determinate" value={data.serviceAnalytics.moduleRanking[0]?.count ? item.count/data.serviceAnalytics.moduleRanking[0].count*100 : 0} sx={{height:5,borderRadius:5,mt:.55,"& .MuiLinearProgress-bar":{background:chartColors[index%chartColors.length]}}}/></Box>
+                            <Box sx={{minWidth:0,flex:1,textAlign:"left"}}><Typography variant="body2" noWrap title={item.module} sx={{fontWeight:750}}>{item.module}</Typography><LinearProgress variant="determinate" value={clampPercent(data.serviceAnalytics.moduleRanking[0]?.count ? item.count/data.serviceAnalytics.moduleRanking[0].count*100 : 0)} sx={{height:5,borderRadius:5,mt:.55,"& .MuiLinearProgress-bar":{background:chartColors[index%chartColors.length]}}}/></Box>
                             <Chip size="small" label={item.count} variant="outlined" sx={{ml:1,fontWeight:850}} />
                           </Button>
                         ))}
@@ -669,7 +670,7 @@ export function Coordination() {
                         {data.serviceAnalytics.clientQuality.slice(0, 6).map((item,index) => (
                           <Button key={item.client} onClick={() => void openDetails("serviceClient", `Serviços · ${item.client}`, undefined, undefined, item.client)} sx={rankingRowSx}>
                             <Box sx={{width:26,height:26,borderRadius:"50%",display:"grid",placeItems:"center",flexShrink:0,fontSize:12,fontWeight:900,color:chartColors[index%chartColors.length],border:"1px solid currentColor",mr:1}}>{index+1}</Box>
-                            <Box sx={{ minWidth: 0, flex:1, textAlign: "left" }}><Typography variant="body2" noWrap title={item.client} sx={{fontWeight:750}}>{item.client}</Typography><Typography variant="caption" color="text.secondary">{item.issues} revisão(ões) de {item.total}</Typography><LinearProgress variant="determinate" value={item.rate} sx={{height:5,borderRadius:5,mt:.45}}/></Box>
+                            <Box sx={{ minWidth: 0, flex:1, textAlign: "left" }}><Typography variant="body2" noWrap title={item.client} sx={{fontWeight:750}}>{item.client}</Typography><Typography variant="caption" color="text.secondary">{item.issues} revisão(ões) de {item.total}</Typography><LinearProgress variant="determinate" value={clampPercent(item.rate)} sx={{height:5,borderRadius:5,mt:.45}}/></Box>
                             <Chip size="small" label={`${item.rate}%`} color={item.rate >= 90 ? "success" : item.rate >= 75 ? "warning" : "error"} variant="outlined" sx={{ml:1,fontWeight:850}} />
                           </Button>
                         ))}
@@ -683,7 +684,7 @@ export function Coordination() {
                         {data.serviceAnalytics.analystQuality.slice(0, 6).map((item,index) => (
                           <Button key={item.analyst} onClick={() => void openDetails("serviceAnalyst", `Serviços · ${item.analyst}`, item.analyst)} sx={rankingRowSx}>
                             <Box sx={{width:26,height:26,borderRadius:"50%",display:"grid",placeItems:"center",flexShrink:0,fontSize:12,fontWeight:900,color:chartColors[index%chartColors.length],border:"1px solid currentColor",mr:1}}>{index+1}</Box>
-                            <Box sx={{ minWidth: 0, flex:1, textAlign: "left" }}><Typography variant="body2" noWrap title={item.analyst} sx={{fontWeight:750}}>{item.analyst}</Typography><Typography variant="caption" color="text.secondary">{item.issues} revisão(ões) de {item.total}</Typography><LinearProgress variant="determinate" value={item.rate} sx={{height:5,borderRadius:5,mt:.45}}/></Box>
+                            <Box sx={{ minWidth: 0, flex:1, textAlign: "left" }}><Typography variant="body2" noWrap title={item.analyst} sx={{fontWeight:750}}>{item.analyst}</Typography><Typography variant="caption" color="text.secondary">{item.issues} revisão(ões) de {item.total}</Typography><LinearProgress variant="determinate" value={clampPercent(item.rate)} sx={{height:5,borderRadius:5,mt:.45}}/></Box>
                             <Chip size="small" label={`${item.rate}%`} color={item.rate >= 90 ? "success" : item.rate >= 75 ? "warning" : "error"} variant="outlined" sx={{ml:1,fontWeight:850}} />
                           </Button>
                         ))}
