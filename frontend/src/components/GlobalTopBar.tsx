@@ -36,6 +36,7 @@ export function GlobalTopBar() {
   const [calendarVersion, setCalendarVersion] = useState(0);
   const [meetingParticipants, setMeetingParticipants] = useState<CalendarPerson[]>([]);
   const [meetingDialogOpen, setMeetingDialogOpen] = useState(false);
+  const [cancelMeetingDialogOpen, setCancelMeetingDialogOpen] = useState(false);
   const [meetingSaving, setMeetingSaving] = useState(false);
   const [meetingError, setMeetingError] = useState("");
   const [editingMeeting, setEditingMeeting] = useState<CalendarMeeting | null>(null);
@@ -194,6 +195,7 @@ export function GlobalTopBar() {
       const savedDate = new Date(saved.startAt);
       setSelectedDate(dateKey(savedDate));
       setMonth(new Date(savedDate.getFullYear(), savedDate.getMonth(), 1));
+      setCancelMeetingDialogOpen(false);
       setMeetingDialogOpen(false);
       setEditingMeeting(null);
       setCalendarVersion((value) => value + 1);
@@ -207,7 +209,6 @@ export function GlobalTopBar() {
 
   async function cancelMeeting() {
     if (!editingMeeting?.canManage) return;
-    if (!window.confirm(`Cancelar a reunião “${editingMeeting.title}”?`)) return;
     setMeetingSaving(true);
     setMeetingError("");
     try {
@@ -451,12 +452,27 @@ export function GlobalTopBar() {
         </DialogContent>
         <DialogActions sx={{ px: 2.5, py: 1.4, justifyContent: "space-between" }}>
           <Box>
-            {editingMeeting?.canManage && <Button color="error" startIcon={<DeleteOutlineOutlined />} disabled={meetingSaving} onClick={() => void cancelMeeting()}>Cancelar reunião</Button>}
+            {editingMeeting?.canManage && <Button color="error" startIcon={<DeleteOutlineOutlined />} disabled={meetingSaving} onClick={() => setCancelMeetingDialogOpen(true)}>Cancelar reunião</Button>}
           </Box>
           <Stack direction="row" spacing={1}>
             <Button disabled={meetingSaving} onClick={() => setMeetingDialogOpen(false)}>Fechar</Button>
             {(!editingMeeting || editingMeeting.canManage) && <Button variant="contained" disabled={meetingSaving || meetingForm.title.trim().length < 3} onClick={() => void saveMeeting()}>{meetingSaving ? "Salvando..." : editingMeeting ? "Salvar alterações" : "Agendar"}</Button>}
           </Stack>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={cancelMeetingDialogOpen} onClose={() => !meetingSaving && setCancelMeetingDialogOpen(false)} fullWidth maxWidth="xs">
+        <DialogTitle sx={{ fontWeight: 900 }}>Cancelar reunião?</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary">
+            {editingMeeting ? `A reunião “${editingMeeting.title}” será cancelada no Hub para todos os participantes internos.` : "A reunião será cancelada."}
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ px: 2.5, pb: 2 }}>
+          <Button disabled={meetingSaving} onClick={() => setCancelMeetingDialogOpen(false)}>Voltar</Button>
+          <Button color="error" variant="contained" disabled={meetingSaving} onClick={() => void cancelMeeting()}>
+            {meetingSaving ? "Cancelando..." : "Cancelar reunião"}
+          </Button>
         </DialogActions>
       </Dialog>
     </Box>
