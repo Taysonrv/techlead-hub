@@ -243,21 +243,14 @@ export function createAppTheme(mode: PaletteMode = "light") {
         },
       },
       MuiInputLabel: {
+        defaultProps: {
+          shrink: true,
+        },
         styleOverrides: {
           root: {
             color: textSecondary,
-            lineHeight: 1,
             pointerEvents: "none",
             zIndex: 2,
-            "&.MuiInputLabel-outlined": {
-              transform: "translate(12px, -7px) scale(0.75)",
-              transformOrigin: "top left",
-              padding: 0,
-            },
-            "&.MuiInputLabel-outlined.MuiInputLabel-shrink": {
-              transform: "translate(12px, -7px) scale(0.75)",
-              transformOrigin: "top left",
-            },
             "&.Mui-focused": { color: aliareColors.green },
             "&.Mui-disabled": { color: dark ? "#60758C" : "#98A2B3" },
           },
@@ -290,8 +283,8 @@ export function createAppTheme(mode: PaletteMode = "light") {
         styleOverrides: {
           root: {
             transition: "border-color .16s ease, box-shadow .16s ease, background-color .16s ease",
-            borderRadius: 8,
-            "&.MuiInputBase-sizeSmall": { minHeight: 38 },
+            borderRadius: 10,
+            "&.MuiInputBase-sizeSmall": { minHeight: 40 },
             backgroundColor: dark ? "rgba(5,25,34,.62)" : undefined,
             "& .MuiOutlinedInput-notchedOutline": { borderColor: dark ? "rgba(131,175,220,.30)" : undefined },
             "& .MuiOutlinedInput-notchedOutline legend": {
