@@ -375,12 +375,12 @@ export function TechnicalLeadership() {
 
     <Card sx={{ mb: 2.5 }}><Tabs value={tab} onChange={(_, value) => setTab(value)} variant="scrollable" scrollButtons="auto" sx={{ px: 1, "& .MuiTab-root": { minHeight: 56 }, "& .Mui-selected": { bgcolor: mode === "dark" ? "rgba(0,199,142,.08)" : "rgba(24,199,122,.06)" }, "& .MuiTabs-indicator": { height: 3, borderRadius: 3 } }}>
       {([
-        ["indicators", "Indicadores", <InsightsOutlined fontSize="small" />],
-        ["radar", "Radar", <RadarOutlined fontSize="small" />],
-        ["audit", "Auditoria", <AssignmentTurnedInOutlined fontSize="small" />],
-        ["recurrences", "Recorrências", <TrackChangesOutlined fontSize="small" />],
-        ["gaps", "Gaps técnicos", <ErrorOutlineOutlined fontSize="small" />],
-        ["development", "Desenvolvimento", <GroupsOutlined fontSize="small" />],
+        ["indicators", "Indicadores", <InsightsOutlined key="indicators" fontSize="small" />],
+        ["radar", "Radar", <RadarOutlined key="radar" fontSize="small" />],
+        ["audit", "Auditoria", <AssignmentTurnedInOutlined key="audit" fontSize="small" />],
+        ["recurrences", "Recorrências", <TrackChangesOutlined key="recurrences" fontSize="small" />],
+        ["gaps", "Gaps técnicos", <ErrorOutlineOutlined key="gaps" fontSize="small" />],
+        ["development", "Desenvolvimento", <GroupsOutlined key="development" fontSize="small" />],
       ] as Array<[TabKey, string, ReactElement]>).map(([key, label, icon]) => <Tab key={key} value={key} icon={icon} iconPosition="start" label={<Stack direction="row" spacing={.5} sx={{ alignItems: "center" }}><span>{label}</span><Tooltip title={tabInfo[key]}><InfoOutlined onClick={(e) => e.stopPropagation()} sx={{ fontSize: 15, color: "text.secondary" }} /></Tooltip></Stack>} />)}
     </Tabs></Card>
 
