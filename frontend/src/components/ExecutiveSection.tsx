@@ -4,9 +4,9 @@ import {
   CardContent,
   Stack,
   Typography,
-  alpha,
   useTheme,
 } from "@mui/material";
+import { alpha } from "@mui/material/styles";
 import type { ReactNode } from "react";
 import { aliareColors } from "../theme/theme";
 
