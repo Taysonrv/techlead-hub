@@ -6,6 +6,7 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
+import { useId } from "react";
 import { useFilters, type PeriodOption } from "../context/FiltersContext";
 
 const fieldSx = {
@@ -17,6 +18,12 @@ const fieldSx = {
 } as const;
 
 export function PeriodFilter() {
+  const instanceId = useId();
+  const periodId = `${instanceId}-period`;
+  const periodLabelId = `${instanceId}-period-label`;
+  const startDateId = `${instanceId}-start-date`;
+  const endDateId = `${instanceId}-end-date`;
+
   const {
     period,
     setPeriod,
@@ -45,8 +52,8 @@ export function PeriodFilter() {
         }}
       >
         <Typography
-          component="label"
-          htmlFor="period-filter"
+          component="span"
+          id={periodLabelId}
           variant="caption"
           color="text.secondary"
           sx={{
@@ -62,7 +69,8 @@ export function PeriodFilter() {
         </Typography>
 
         <Select
-          id="period-filter"
+          id={periodId}
+          labelId={periodLabelId}
           value={period}
           onChange={(event) => setPeriod(event.target.value as PeriodOption)}
           inputProps={{ "aria-label": "Período" }}
@@ -108,7 +116,7 @@ export function PeriodFilter() {
           <Box>
             <Typography
               component="label"
-              htmlFor="period-start-date"
+              htmlFor={startDateId}
               variant="caption"
               color="text.secondary"
               sx={{
@@ -123,7 +131,7 @@ export function PeriodFilter() {
               Data inicial
             </Typography>
             <TextField
-              id="period-start-date"
+              id={startDateId}
               fullWidth
               size="small"
               type="date"
@@ -137,7 +145,7 @@ export function PeriodFilter() {
           <Box>
             <Typography
               component="label"
-              htmlFor="period-end-date"
+              htmlFor={endDateId}
               variant="caption"
               color="text.secondary"
               sx={{
@@ -152,7 +160,7 @@ export function PeriodFilter() {
               Data final
             </Typography>
             <TextField
-              id="period-end-date"
+              id={endDateId}
               fullWidth
               size="small"
               type="date"
