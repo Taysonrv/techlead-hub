@@ -23,7 +23,7 @@ export function BugReportDialog({ open, onClose }: { open: boolean; onClose: () 
     <DialogTitle>Reportar bug ou melhoria</DialogTitle>
     <DialogContent><Stack spacing={2} sx={{ mt: .5 }}>
       {message && <Alert severity={message.startsWith("Enviado") ? "success" : "warning"}>{message}</Alert>}
-      <FormControl size="small" fullWidth><InputLabel>Tipo</InputLabel><Select value={type} label="Tipo" onChange={(event) => setType(event.target.value as "BUG" | "IMPROVEMENT")}><MenuItem value="BUG">Bug / problema</MenuItem><MenuItem value="IMPROVEMENT">Melhoria / sugestão</MenuItem></Select></FormControl>
+      <FormControl size="small" fullWidth><InputLabel id="bugreportdialog-select-1-label" htmlFor="bugreportdialog-select-1">Tipo</InputLabel><Select labelId="bugreportdialog-select-1-label" inputProps={{ id: "bugreportdialog-select-1", "aria-labelledby": "bugreportdialog-select-1-label" }} value={type} label="Tipo" onChange={(event) => setType(event.target.value as "BUG" | "IMPROVEMENT")}><MenuItem value="BUG">Bug / problema</MenuItem><MenuItem value="IMPROVEMENT">Melhoria / sugestão</MenuItem></Select></FormControl>
       <TextField label="Título" value={title} onChange={(event) => setTitle(event.target.value)} slotProps={{ htmlInput: { maxLength: 160 } }} fullWidth />
       <TextField label="Descrição" value={description} onChange={(event) => setDescription(event.target.value)} multiline minRows={5} helperText={`Tela atual: ${location.pathname}`} fullWidth />
     </Stack></DialogContent>
