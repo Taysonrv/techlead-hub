@@ -38,13 +38,13 @@ export function ContentState({
           py: 2.5,
           border: "1px solid",
           borderColor: "divider",
-          borderRadius: 2.5,
+          borderRadius: "12px",
           bgcolor: "background.paper",
         }}
       >
         <Stack spacing={1.1}>
           <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
-            <Skeleton variant="rounded" width={28} height={28} sx={{ borderRadius: 2 }} />
+            <Skeleton variant="rounded" width={28} height={28} sx={{ borderRadius: "8px" }} />
             <Box sx={{ flex: 1 }}>
               <Skeleton variant="rounded" height={16} width="32%" />
               <Skeleton variant="rounded" height={10} width="48%" sx={{ mt: 0.7 }} />
@@ -53,7 +53,7 @@ export function ContentState({
           <Skeleton
             variant="rounded"
             height={Math.max(74, minHeight - 92)}
-            sx={{ borderRadius: 2.25 }}
+            sx={{ borderRadius: "10px" }}
           />
         </Stack>
       </Box>
@@ -77,7 +77,7 @@ export function ContentState({
             ? "rgba(239,83,80,.42)"
             : "rgba(229,57,53,.28)"
           : "divider",
-        borderRadius: 2.5,
+        borderRadius: "12px",
         background: dark
           ? "linear-gradient(145deg,rgba(9,30,44,.62),rgba(8,24,37,.52))"
           : "linear-gradient(145deg,rgba(248,250,252,.96),rgba(255,255,255,.96))",
@@ -88,7 +88,7 @@ export function ContentState({
           sx={{
             width: 42,
             height: 42,
-            borderRadius: 2.5,
+            borderRadius: "12px",
             display: "grid",
             placeItems: "center",
             color: error ? "error.main" : "text.secondary",
