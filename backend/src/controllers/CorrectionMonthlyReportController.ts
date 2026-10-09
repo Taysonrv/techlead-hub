@@ -11,7 +11,7 @@ export class CorrectionMonthlyReportController {
         return res.status(400).json({ message: "month deve ser informado no formato YYYY-MM." });
       }
       const forceRefresh = req.query.refresh === "1";
-      return res.json(await this.service.get(month, forceRefresh));
+      return res.json(await this.service.getPreview(month, forceRefresh));
     } catch (error) {
       console.error("[correction-monthly-report] Falha ao gerar relatório:", error);
       const message = error instanceof Error ? error.message : "Não foi possível gerar o report mensal de Correções.";

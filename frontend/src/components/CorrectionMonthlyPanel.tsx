@@ -101,12 +101,12 @@ type Report = {
   filters?:{creators:string[];teamCreators?:string[];clients:string[];urgencies:string[];states:string[]};
   quality?:{
     historyAvailable:boolean;historyError:string|null;snapshotAvailable?:boolean;snapshotError?:string|null;
-    historicalScopeError?:string|null;mode:string;movementHistoryReliable?:boolean;
+    historicalScopeError?:string|null;mode:string;refreshing?:boolean;localPreview?:boolean;movementHistoryReliable?:boolean;
     historicalMetricsReliable:boolean;backlogHistoricalReliable?:boolean;backlogInitialAvailable?:boolean;
     externalHistorySuspicious?:boolean;localFallbackUsed?:boolean;localStateHistoryEvents?:number;
     perItemHistoryRecoveryUsed?:boolean;recoveredHistoryItems?:number;recoveryCandidates?:number;
     diagnostics?:{
-      localRecords:number;localPeriodCandidates:number;revisions:number;
+      scopedRecords?:number;localRecords:number;localPeriodCandidates:number;revisions:number;
       openingScopeIds:number;closingScopeIds:number;snapshotCandidates:number;
       openingSnapshotItems:number;closingSnapshotItems:number;outputRows:number;
     };
@@ -186,13 +186,22 @@ export function CorrectionMonthlyPanel() {
     setLoading(true);
     setError("");
     setReport(null);
-    api.get<Report>("/azure-work-items/corrections/monthly-report",{params:{month,...(reloadToken>0?{refresh:"1"}:{})},timeout:180000})
-      .then(({data}) => { if(active) setReport(data); })
-      .catch((requestError) => {
-        if(active) setError(getApiErrorMessage(requestError,"Não foi possível carregar o report mensal."));
-      })
-      .finally(() => { if(active) setLoading(false); });
-    return () => { active = false; };
+    let timer:ReturnType<typeof setTimeout>|undefined;
+    const load=async(first:boolean)=>{
+      try {
+        const {data}=await api.get<Report>("/azure-work-items/corrections/monthly-report",{
+          params:{month,...(first&&reloadToken>0?{refresh:"1"}:{})},timeout:30000,
+        });
+        if(!active) return;
+        setReport(data);
+        setLoading(false);
+        if(data.quality?.refreshing) timer=setTimeout(()=>void load(false),3000);
+      } catch(requestError) {
+        if(active){setError(getApiErrorMessage(requestError,"Não foi possível carregar o report mensal."));setLoading(false);}
+      }
+    };
+    void load(true);
+    return () => { active = false;if(timer)clearTimeout(timer); };
   },[month,reloadToken]);
 
   const options = useMemo(() => ({
@@ -518,12 +527,10 @@ export function CorrectionMonthlyPanel() {
     }
     {report?.quality&&(!report.quality.historicalMetricsReliable||!!report.quality.historicalScopeError)&&
       <Alert severity="warning">
-        <b>{report.quality.localFallbackUsed
-          ?"Histórico local reconstruído."
-          :report.quality.snapshotAvailable?"Histórico parcial.":"Snapshot histórico indisponível."}</b>{" "}
-        {report.quality.localFallbackUsed
-          ?"O Azure histórico retornou cobertura vazia/incompleta e o Hub reconstruiu o período com os Work Items e mudanças de estado persistidos localmente. O backlog é provisório; os cards mostram apenas movimentos comprovados como prévia parcial. Zero na prévia não comprova ausência de movimentos. O fechamento exige validação do histórico Azure."
-          :"Os números de movimentações são prévios e NÃO estão homologados. Backlog exige escopo e snapshots de abertura/fechamento completos."}{" "}
+        <b>{report.quality.refreshing?"Conferindo histórico no Azure.":"Apuração histórica parcial."}</b>{" "}
+        {report.quality.refreshing
+          ?"A prévia local já está disponível. Os números serão atualizados automaticamente quando a consulta terminar."
+          :"O histórico do Azure não foi recuperado por completo. Os valores locais são provisórios; um zero não garante ausência de movimentações. Use Recarregar para tentar novamente."}{" "}
         {[
           report.quality.historyError && `Revisões: ${report.quality.historyError}`,
           report.quality.snapshotError && `Snapshots: ${report.quality.snapshotError}`,
@@ -531,12 +538,12 @@ export function CorrectionMonthlyPanel() {
         ].filter(Boolean).join(" | ")}
         {report.quality.diagnostics && (
           <Typography component="p" variant="caption" sx={{mt:0.8,opacity:0.9}}>
-            Cobertura da apuração: {report.quality.diagnostics.revisions} revisões;{" "}
+            Base consultada: {report.quality.diagnostics.scopedRecords??report.quality.diagnostics.localRecords} tasks; recorte mensal: {periodUniverse} tasks distintas. Histórico Azure: {report.quality.diagnostics.revisions} revisões;{" "}
             {report.quality.diagnostics.openingScopeIds} IDs abertos na entrada;{" "}
             {report.quality.diagnostics.closingScopeIds} IDs abertos no fechamento;{" "}
             {report.quality.diagnostics.snapshotCandidates} candidatos;{" "}
             snapshots {report.quality.diagnostics.openingSnapshotItems}/{report.quality.diagnostics.closingSnapshotItems} (entrada/fechamento);{" "}
-            {report.quality.diagnostics.outputRows} Tasks no relatório.
+            {report.quality.diagnostics.outputRows} tasks no universo mensal antes dos filtros.
           </Typography>
         )}
       </Alert>
@@ -562,6 +569,7 @@ export function CorrectionMonthlyPanel() {
             <Box sx={{display:"grid",gridTemplateColumns:{xs:"repeat(2,minmax(0,1fr))",sm:"repeat(5,minmax(108px,1fr))"},gap:.7}}>
               {septemberHomologation.map(item=>{
                 const comparable=homologationScopeActive&&item.verified&&item.actual!==null;
+                const displayActual=item.key==="registration"?value("registration"):item.actual;
                 const matches=comparable&&item.actual===item.expected;
                 return <Box key={item.key} sx={{
                   px:1,py:.7,border:"1px solid",borderColor:matches?"success.main":comparable?"warning.main":"divider",
@@ -569,7 +577,7 @@ export function CorrectionMonthlyPanel() {
                 }}>
                   <Typography variant="caption" color="text.secondary" sx={{display:"block",whiteSpace:"nowrap"}}>{item.label}</Typography>
                   <Stack direction="row" gap={0.5} alignItems="baseline">
-                    <Typography sx={{fontWeight:900,fontVariantNumeric:"tabular-nums"}}>{item.actual??"—"}</Typography>
+                    <Typography sx={{fontWeight:900,fontVariantNumeric:"tabular-nums"}}>{displayActual??"—"}</Typography>
                     <Typography variant="caption" color="text.secondary">/ ref. {item.expected}</Typography>
                   </Stack>
                 </Box>;
@@ -625,12 +633,12 @@ export function CorrectionMonthlyPanel() {
                   title="Leitura do período"
                   description="Resumo derivado dos indicadores encontrados no recorte. Saídas = Entregues + Canceladas; saldo líquido = Registradas − Saídas; variação do backlog = Backlog atual − Backlog inicial. Os números só são oficiais quando o histórico Azure e os snapshots ASOF tiverem cobertura confirmada."
                 />
-                <MuiTooltip title={distributionConsistent?"Pipeline, Urgência e Priorização fecham com o mesmo universo do período.":`Divergência: universo ${periodUniverse}, pipeline ${pipelineTotal}, urgência ${urgencyTotal}, priorização ${priorityTotal}.`}>
+                <MuiTooltip title={distributionConsistent?"Pipeline, Urgência e Priorização contam tasks distintas. Os cards se sobrepõem: uma task pode ser registrada e entregue no mesmo mês. A consistência dos gráficos não homologa o histórico.":`Divergência: universo ${periodUniverse}, pipeline ${pipelineTotal}, urgência ${urgencyTotal}, priorização ${priorityTotal}.`}>
                   <Chip size="small" color={distributionConsistent?"success":"warning"} variant="outlined"
                     label={distributionConsistent
                       ? (backlogVerified&&monthlyMovementVerified
                           ?"Distribuição consistente · histórico validado"
-                          :"Distribuição interna consistente · histórico parcial")
+                          :"Mesmo universo · histórico parcial")
                       : "Revisar distribuição"}/>
                 </MuiTooltip>
               </Box>
@@ -692,7 +700,7 @@ export function CorrectionMonthlyPanel() {
             <CardContent sx={{flex:1,display:"flex",flexDirection:"column",p:1.7,"&:last-child":{pb:1.7}}}>
               <CardHeading
                 title="Urgência"
-                subtitle="Distribuição do universo do período"
+                subtitle="Tasks distintas do universo mensal"
                 info="Agrupa o mesmo universo do período pela urgência/criticidade registrada no Azure. Respeita todos os filtros globais. Clique em uma barra para abrir as Tasks correspondentes."
               />
               <Box sx={{flex:1,minHeight:340,mt:1}}>

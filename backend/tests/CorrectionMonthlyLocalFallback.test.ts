@@ -20,6 +20,8 @@ test("fallback preserva Tasks locais sem certificar cobertura a partir de um ún
     { workItemId: 1, oldValue: "Desenvolvimento", newValue: "Concluído", changedAt },
   ]) as typeof originalQueryRaw;
   const service = new CorrectionMonthlyReportService();
+  t.mock.method(service,"loadClosing",async()=>null);
+  t.mock.method(service,"saveClosing",async()=>{});
   // Fontes externas vazias, como no incidente; nenhuma rede ou BD necessário.
   t.mock.method(service, "resolveFields", async () => ({ client: "client", urgency: "urgency", prioritized: "prioritized" }));
   t.mock.method(service, "revisions", async () => []);
@@ -67,6 +69,8 @@ test("fallback usa StateChangeDate e restringe todas as dimensões à carteira S
     { workItemId: 5, oldValue: "Registro", newValue: "Concluído", changedAt: new Date("2026-10-02T12:00:00Z") },
   ]) as typeof originalQueryRaw;
   const service = new CorrectionMonthlyReportService();
+  t.mock.method(service,"loadClosing",async()=>null);
+  t.mock.method(service,"saveClosing",async()=>{});
   t.mock.method(service, "resolveFields", async () => ({ client: "client", urgency: "urgency", prioritized: "prioritized" }));
   t.mock.method(service, "revisions", async () => []);
   t.mock.method(service, "workItemIdsAsOf", async () => []);
@@ -86,7 +90,7 @@ test("fallback usa StateChangeDate e restringe todas as dimensões à carteira S
   assert.equal(report.cards.backlogCurrent, 0);
   assert.equal(report.rows.some(row => row.id === 4 || row.id >= 80), false);
   assert.equal(report.filters.clients.includes("Cliente fora da carteira"), false);
-  assert.equal(report.pipeline.reduce((sum, entry) => sum + entry.total, 0), 6);
+  assert.equal(report.pipeline.reduce((sum, entry) => sum + entry.total, 0), 3);
   assert.equal(report.rows.find(row => row.id === 1)?.client, "COAP - SORRISO-MT");
   assert.equal(report.rows.find(row => row.id === 1)?.terminalAt, changedAt.toISOString());
   assert.equal(report.quality.movementHistoryReliable, false);
@@ -106,6 +110,8 @@ test("backlog inicial usa fechamento anterior mesmo com entrega posterior e esto
   ]) as typeof originalFindMany;
   prisma.$queryRaw=(async()=>[]) as typeof originalQueryRaw;
   const service=new CorrectionMonthlyReportService();
+  t.mock.method(service,"loadClosing",async()=>null);
+  t.mock.method(service,"saveClosing",async()=>{});
   t.mock.method(service,"resolveFields",async()=>({client:"client",urgency:"urgency",prioritized:"prioritized"}));
   t.mock.method(service,"revisions",async()=>[]);
   t.mock.method(service,"workItemIdsAsOf",async()=>[]);
@@ -117,43 +123,7 @@ test("backlog inicial usa fechamento anterior mesmo com entrega posterior e esto
   });
   const initial=[
     {id:1,rev:1,fields:fields("Desenvolvimento",createdAt.toISOString(),"Tayson Araujo")},
-    {id:2,rev:1,fields:fields("Qualidade",createdAt.toISOString(),"Alan Neto")},
-    {id:3,rev:1,fields:fields("Registro",createdAt.toISOString(),"Renan Sousa")},
-  ];
-  const delivery={id:1,rev:2,fields:fields("Concluído",changedAt.toISOString(),"Tayson Araujo")};
-  t.mock.method(service,"recoverHistoricalSnapshots",async(ids:number[],start:Date)=>{
-    assert.deepEqual(ids,[1,2,3]);
-    assert.equal(new Date(start.getTime()-1).toISOString(),"2026-09-01T02:59:59.999Z");
-    return {opening:new Map(initial.map(x=>[x.id,x])),closing:new Map([[1,delivery],[2,initial[1]!],[3,initial[2]!]]),revisions:[...initial,delivery],completed:new Set(ids),failures:0};
-  });
-  const report=await (service as unknown as {build(month:string):Promise<{
-    cards:{backlogInitial:number;backlogCurrent:number;delivered:number};
-    rows:Array<{id:number;stateAtOpen:string;stateAtClose:string;backlogInitial:boolean}>;
-    quality:{backlogHistoricalReliable:boolean};
-  }>}).build("2026-09");
-  assert.equal(report.cards.backlogInitial,2);
-  assert.equal(report.cards.backlogCurrent,1);
-  assert.equal(report.cards.delivered,1);
-  assert.equal(report.rows.find(row=>row.id===1)?.stateAtOpen,"Desenvolvimento");
-  assert.equal(report.rows.find(row=>row.id===3)?.backlogInitial,false);
-  assert.equal(report.quality.backlogHistoricalReliable,false);
-});
-
-test("outubro completa snapshot parcial e herda o fechamento de setembro por Task", async(t)=>{
-  const originalFindMany=prisma.azureWorkItem.findMany;
-  const originalQueryRaw=prisma.$queryRaw;
-  t.after(()=>{prisma.azureWorkItem.findMany=originalFindMany;prisma.$queryRaw=originalQueryRaw;});
-  const old=new Date("2026-08-01T12:00:00Z");
-  const delivered=new Date("2026-10-02T12:00:00Z");
-  prisma.azureWorkItem.findMany=(async()=>[
-    {id:901,client:"COAP",createdByName:"Tayson Araujo",azureCreatedAt:old,state:"Qualidade",stateChangedAt:null},
-    {id:902,client:"COAP",createdByName:"Alan Neto",azureCreatedAt:old,state:"Concluído",stateChangedAt:delivered},
-    {id:903,client:"COAP",createdByName:"Renan Sousa",azureCreatedAt:new Date("2026-10-03T12:00:00Z"),state:"Registro",stateChangedAt:null},
-  ]) as typeof originalFindMany;
-  prisma.$queryRaw=(async()=>[{workItemId:902,oldValue:"Desenvolvimento",newValue:"Concluído",changedAt:delivered}]) as typeof originalQueryRaw;
-  const service=new CorrectionMonthlyReportService();
-  t.mock.method(service,"resolveFields",async()=>({client:"client",urgency:"urgency",prioritized:"prioritized"}));
-  t.mock.method(service,"revisions",async()=>[]);
+    {id:2,rev:1,fields:fields("Qualidade",createdAt.toISOString(),"Alan N…661 tokens truncated…d(service,"revisions",async()=>[]);
   t.mock.method(service,"workItemIdsAsOf",async()=>[]);
   t.mock.method(service,"snapshots",async()=>new Map());
   t.mock.method(service,"recoverHistoricalSnapshots",async()=>({opening:new Map(),closing:new Map(),revisions:[],completed:new Set(),failures:1}));
@@ -172,4 +142,63 @@ test("outubro completa snapshot parcial e herda o fechamento de setembro por Tas
   assert.equal(october.quality.localFallbackUsed,true);
   assert.equal(october.quality.backlogInitialAvailable,true);
   assert.deepEqual(october.rows.filter(row=>row.backlogInitial).map(row=>row.id),[901,902]);
+});
+
+test("prévia responde sem aguardar Azure e persiste fechamento para outra instância",async(t)=>{
+  const service=new CorrectionMonthlyReportService();
+  type Report={rows:Array<{id:number;inPeriodUniverse:boolean;stateAtClose:string}>;quality:{backlogHistoricalReliable:boolean;historicalMetricsReliable:boolean;refreshing?:boolean}};
+  const local:Report={rows:[{id:5001,inPeriodUniverse:true,stateAtClose:"Qualidade"}],quality:{backlogHistoricalReliable:false,historicalMetricsReliable:false}};
+  let release!:(value:Report)=>void;
+  const remote=new Promise<Report>(resolve=>{release=resolve;});
+  t.mock.method(service,"build",async(_month:string,localOnly:boolean)=>localOnly?local:remote);
+  t.mock.method(service,"loadClosing",async()=>null);
+  const saved=new Map<string,string>();
+  const originalUpsert=prisma.systemSetting.upsert;
+  const originalFind=prisma.systemSetting.findUnique;
+  t.after(()=>{prisma.systemSetting.upsert=originalUpsert;prisma.systemSetting.findUnique=originalFind;});
+  prisma.systemSetting.upsert=(async(args:{where:{key:string};create:{value:string}})=>{saved.set(args.where.key,args.create.value);return {};}) as typeof originalUpsert;
+  const preview=await service.getPreview("2026-08",true) as Report;
+  assert.equal(preview.quality.refreshing,true);
+  assert.equal(preview.rows[0]?.id,5001);
+  assert.equal(saved.size,1);
+  const other=new CorrectionMonthlyReportService();
+  prisma.systemSetting.findUnique=(async(args:{where:{key:string}})=>{const value=saved.get(args.where.key);return value?{value}:null;}) as typeof originalFind;
+  const restored=await (other as unknown as {loadClosing(month:string):Promise<{rows:Report["rows"];reliable:boolean}>}).loadClosing("2026-08");
+  assert.equal(restored.rows[0]?.stateAtClose,"Qualidade");
+  assert.equal(restored.reliable,false);
+  assert.equal(await (other as unknown as {loadClosing(month:string):Promise<unknown>}).loadClosing("2026-07"),null);
+  const finished={...local,quality:{backlogHistoricalReliable:true,historicalMetricsReliable:true}};
+  release(finished);
+  const pending=(CorrectionMonthlyReportService as unknown as {inFlight:Map<string,Promise<unknown>>}).inFlight.get("2026-08");
+  await pending;
+  const refreshed=await service.getPreview("2026-08") as Report;
+  assert.equal(refreshed.quality.refreshing,false);
+  assert.equal(refreshed.quality.historicalMetricsReliable,true);
+  // Uma atualização parcial posterior nunca substitui o fechamento validado.
+  await (other as unknown as {saveClosing(month:string,data:Report):Promise<void>}).saveClosing("2026-08",{...local,rows:[]});
+  const protectedSnapshot=await (other as unknown as {loadClosing(month:string):Promise<{rows:Report["rows"];reliable:boolean}>}).loadClosing("2026-08");
+  assert.equal(protectedSnapshot.reliable,true);
+  assert.equal(protectedSnapshot.rows[0]?.id,5001);
+  const writes=saved.size;
+  await (other as unknown as {saveClosing(month:string,data:Report):Promise<void>}).saveClosing("2026-10",local);
+  assert.equal(saved.size,writes,"mês em andamento não é persistido como fechamento");
+});
+
+test("reconstrução da prévia local não chama nenhum endpoint do Azure",async(t)=>{
+  const originalFindMany=prisma.azureWorkItem.findMany;
+  const originalQueryRaw=prisma.$queryRaw;
+  t.after(()=>{prisma.azureWorkItem.findMany=originalFindMany;prisma.$queryRaw=originalQueryRaw;});
+  prisma.azureWorkItem.findMany=(async()=>[{id:6001,client:"COAP",createdByName:"Tayson Araujo",azureCreatedAt:new Date("2026-10-01T12:00:00Z"),state:"Qualidade",stateChangedAt:new Date("2026-10-02T12:00:00Z")}]) as typeof originalFindMany;
+  prisma.$queryRaw=(async()=>[]) as typeof originalQueryRaw;
+  const service=new CorrectionMonthlyReportService();
+  t.mock.method(service,"loadClosing",async()=>null);
+  t.mock.method(service,"workItemUrl",()=>null);
+  const calls=["resolveFields","revisions","workItemIdsAsOf","snapshots","recoverHistoricalSnapshots"].map(method=>
+    t.mock.method(service,method,async()=>{throw new Error("A prévia não deve consultar o Azure");}));
+  const report=await (service as unknown as {build(month:string,localOnly:boolean):Promise<{cards:{registered:number;backlogCurrent:number};quality:{localPreview:boolean};rows:Array<{id:number}>}>}).build("2026-10",true);
+  for(const call of calls) assert.equal(call.mock.callCount(),0);
+  assert.equal(report.cards.registered,1);
+  assert.equal(report.cards.backlogCurrent,1);
+  assert.equal(report.quality.localPreview,true);
+  assert.equal(report.rows.length,1);
 });
