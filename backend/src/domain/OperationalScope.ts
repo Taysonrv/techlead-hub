@@ -19,6 +19,72 @@ export const SIMER_CLIENTS = [
   "COPERAMA - ITURAMA-MG",
 ] as const;
 
+const SIMER_CLIENT_ALIASES: ReadonlyArray<{
+  canonical: (typeof SIMER_CLIENTS)[number];
+  aliases: readonly string[];
+}> = [
+  {
+    canonical: "BOM JESUS COOPERATIVA AGROINDUSTRIAL - LAPA-PR",
+    aliases: ["BOM JESUS"],
+  },
+  {
+    canonical: "CAMP - PRUDENTOPOLIS-PR",
+    aliases: ["CAMP"],
+  },
+  {
+    canonical: "COAGRO - CAPANEMA-PR",
+    aliases: ["COAGRO"],
+  },
+  {
+    canonical: "COAP - SORRISO-MT",
+    aliases: ["COAP"],
+  },
+  {
+    canonical: "COOAZUL - COOPERATIVA AGROINDUSTRIAL VALE DO AZUL - SANTA CARMEM-MT",
+    aliases: ["COOAZUL", "VALE DO AZUL"],
+  },
+  {
+    canonical: "COOPERATIVA AGROPECUARIA COMAG - CURITIBA-PR",
+    aliases: ["COMAG"],
+  },
+  {
+    canonical: "COPERAMA - ITURAMA-MG",
+    aliases: ["COPERAMA"],
+  },
+] as const;
+
+function normalizeClientScopeValue(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^A-Z0-9]+/gi, " ")
+    .trim()
+    .replace(/\s+/g, " ")
+    .toLocaleUpperCase("pt-BR");
+}
+
+export function resolveSimerClient(
+  value: string | null | undefined,
+): (typeof SIMER_CLIENTS)[number] | null {
+  if (!value?.trim()) return null;
+
+  const normalized = normalizeClientScopeValue(value);
+
+  const exact = SIMER_CLIENTS.find(
+    (client) => normalizeClientScopeValue(client) === normalized,
+  );
+  if (exact) return exact;
+
+  const aliasMatch = SIMER_CLIENT_ALIASES.find(({ aliases }) =>
+    aliases.some((alias) => {
+      const token = normalizeClientScopeValue(alias);
+      return normalized === token || normalized.includes(token);
+    }),
+  );
+
+  return aliasMatch?.canonical ?? null;
+}
+
 export const OPERATIONAL_SCOPE_START = new Date("2026-01-01T00:00:00.000Z");
 export const SUPPORT_COORDINATOR = "WELLINGTON ALVES GOLD" as const;
 
