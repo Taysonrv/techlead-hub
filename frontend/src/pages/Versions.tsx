@@ -574,63 +574,6 @@ export function Versions() {
     ],
   );
 
-  useEffect(() => {
-    const requestedVersion = searchParams.get("versao")?.trim();
-    if (!requestedVersion) return;
-
-    let cancelled = false;
-    const openRequestedVersion = async () => {
-      try {
-        const response = await api.get<VersionsResponse>("/azure-work-items/versions/summary");
-        if (cancelled) return;
-
-        const match = response.data.items.find((item) => versionMatchesDeepLink(item, requestedVersion));
-        if (!match) {
-          setError(`A versão ${requestedVersion} da notificação não foi localizada na base sincronizada.`);
-          return;
-        }
-
-        setSearch("");
-        setAppliedSearch("");
-        setType("");
-        setState("");
-        setClient("");
-        setCriticality("");
-        setPrioritized("");
-        setBlockedProcess("");
-        setVersionChannel("");
-        setActiveMetricFilter("all");
-        setVersionPage(0);
-        setData(response.data);
-
-        await loadDetail(
-          {
-            title: `Versão ${requestedVersion}`,
-            subtitle: `${match.total} Task(s) • ${match.clients} cliente(s)`,
-            version: match,
-          },
-          [
-            {
-              params: versionParams(match),
-              ignoreCurrentFilters: true,
-            },
-          ],
-        );
-
-        if (cancelled) return;
-        const next = new URLSearchParams(searchParams);
-        next.delete("versao");
-        setSearchParams(next, { replace: true });
-      } catch (currentError) {
-        console.error("Erro ao abrir versão da notificação:", currentError);
-        if (!cancelled) setError("Não foi possível abrir diretamente a versão da notificação.");
-      }
-    };
-
-    void openRequestedVersion();
-    return () => { cancelled = true; };
-  }, [searchParams, setSearchParams, loadDetail]);
-
   const visibleVersions =
     useMemo(
       () => {
@@ -1166,7 +1109,7 @@ export function Versions() {
     }
   }, [buildScopedParams]);
 
-  function versionParams(
+  const versionParams = useCallback((
     version:
       VersionRow,
     overrides:
@@ -1174,22 +1117,78 @@ export function Versions() {
         string,
         string | number
       > = {},
-  ) {
-    return {
-      ...(
-        version.version
-          ? {
-              deliveredVersion:
-                version.version,
-            }
-          : {
-              hasDeliveredVersion:
-                "false",
-            }
-      ),
-      ...overrides,
+  ) => ({
+    ...(
+      version.version
+        ? {
+            deliveredVersion:
+              version.version,
+          }
+        : {
+            hasDeliveredVersion:
+              "false",
+          }
+    ),
+    ...overrides,
+  }), []);
+
+  useEffect(() => {
+    const requestedVersion = searchParams.get("versao")?.trim();
+    if (!requestedVersion) return;
+
+    let cancelled = false;
+    const openRequestedVersion = async () => {
+      try {
+        const response = await api.get<VersionsResponse>("/azure-work-items/versions/summary");
+        if (cancelled) return;
+
+        const match = response.data.items.find((item) => versionMatchesDeepLink(item, requestedVersion));
+        if (!match) {
+          setError(`A versão ${requestedVersion} da notificação não foi localizada na base sincronizada.`);
+          return;
+        }
+
+        setSearch("");
+        setAppliedSearch("");
+        setType("");
+        setState("");
+        setClient("");
+        setCriticality("");
+        setPrioritized("");
+        setBlockedProcess("");
+        setVersionChannel("");
+        setActiveMetricFilter("all");
+        setVersionPage(0);
+        setData(response.data);
+
+        await loadDetail(
+          {
+            title: `Versão ${requestedVersion}`,
+            subtitle: `${match.total} Task(s) • ${match.clients} cliente(s)`,
+            version: match,
+          },
+          [
+            {
+              params: versionParams(match),
+              ignoreCurrentFilters: true,
+            },
+          ],
+        );
+
+        if (cancelled) return;
+        const next = new URLSearchParams(searchParams);
+        next.delete("versao");
+        setSearchParams(next, { replace: true });
+      } catch (currentError) {
+        console.error("Erro ao abrir versão da notificação:", currentError);
+        if (!cancelled) setError("Não foi possível abrir diretamente a versão da notificação.");
+      }
     };
-  }
+
+    void openRequestedVersion();
+    return () => { cancelled = true; };
+  }, [searchParams, setSearchParams, loadDetail, versionParams]);
+
 
   async function openVersion(
     version:
