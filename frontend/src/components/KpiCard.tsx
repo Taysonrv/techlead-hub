@@ -66,8 +66,8 @@ export function KpiCard({
         borderColor: active ? accent : "divider",
         cursor: onClick ? "pointer" : "default",
         background: dark
-          ? "linear-gradient(145deg, rgba(11,34,48,.97), rgba(7,25,38,.99))"
-          : "linear-gradient(145deg, #FFFFFF, #FAFCFD)",
+          ? `radial-gradient(circle at 0% 50%, ${alpha(accent, 0.17)} 0%, ${alpha(accent, 0.075)} 24%, transparent 58%), linear-gradient(145deg, rgba(11,34,48,.98), rgba(7,25,38,.995))`
+          : `radial-gradient(circle at 0% 50%, ${alpha(accent, 0.10)} 0%, ${alpha(accent, 0.04)} 28%, transparent 60%), linear-gradient(145deg, #FFFFFF, #FAFCFD)`,
         boxShadow: active
           ? dark
             ? "0 15px 34px rgba(0,0,0,.18)"
@@ -86,11 +86,10 @@ export function KpiCard({
         "&::after": {
           content: '""',
           position: "absolute",
-          width: 84,
-          height: 1,
-          right: 12,
-          top: 0,
-          background: "linear-gradient(90deg, transparent, " + alpha(accent, dark ? 0.22 : 0.12) + ")",
+          inset: 0,
+          background: dark
+            ? "linear-gradient(180deg, rgba(255,255,255,.018), transparent 32%)"
+            : "linear-gradient(180deg, rgba(255,255,255,.46), transparent 30%)",
           pointerEvents: "none",
         },
         ...(onClick
