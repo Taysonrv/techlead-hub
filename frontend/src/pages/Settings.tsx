@@ -803,7 +803,7 @@ export function Settings() {
                             <Chip size="small" color={item.coveragePct >= 90 ? "success" : item.coveragePct >= 60 ? "warning" : "default"} label={`${item.coveragePct}%`} />
                           </Stack>
                           <Typography variant="caption" color="text.secondary">{item.classified} classificado(s) · {item.missing} sem classificação · {item.total} total</Typography>
-                          <LinearProgress variant="determinate" value={item.coveragePct} sx={{mt:1,height:6,borderRadius:4}} />
+                          <LinearProgress variant="determinate" value={Math.max(0, Math.min(100, item.coveragePct))} sx={{mt:1,height:6,borderRadius:4}} />
                           {item.distribution.length > 0 && <Typography variant="caption" sx={{display:"block",mt:1}}>{item.distribution.slice(0,6).map(v=>`${v.label}: ${v.total}`).join(" · ")}</Typography>}
                           {item.unclassifiedCustomFields.length > 0 && <Typography variant="caption" color="text.secondary" sx={{display:"block",mt:.75}}>Campos candidatos sem classificação: {item.unclassifiedCustomFields.slice(0,4).map(v=>`#${v.customFieldId ?? "?"} (${v.tickets})`).join(" · ")}</Typography>}
                         </Box>;
