@@ -607,7 +607,9 @@ export function CorrectionMonthlyPanel() {
                 <MuiTooltip title={distributionConsistent?"Pipeline, Urgência e Priorização fecham com o mesmo universo do período.":`Divergência: universo ${periodUniverse}, pipeline ${pipelineTotal}, urgência ${urgencyTotal}, priorização ${priorityTotal}.`}>
                   <Chip size="small" color={distributionConsistent?"success":"warning"} variant="outlined"
                     label={distributionConsistent
-                      ? (backlogVerified?"Distribuição consistente":"Distribuição local consistente · histórico parcial")
+                      ? (backlogVerified&&monthlyMovementVerified
+                          ?"Distribuição consistente · histórico validado"
+                          :"Distribuição interna consistente · histórico parcial")
                       : "Revisar distribuição"}/>
                 </MuiTooltip>
               </Box>
