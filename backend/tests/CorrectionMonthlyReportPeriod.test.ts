@@ -146,6 +146,6 @@ test("backlog exclui Registro e estados terminais, mas mantém estados abertos",
 test("seleção Time SIMER reconhece os nomes exibidos no Azure sem incluir outros criadores", () => {
   for (const name of ["Alan Neto", "Renan Sousa", "Tayson Araujo", " TAYSON ARAUJO ", "TAYSON ALVES DE ARAUJO"])
     assert.equal(isCorrectionTeamCreator(name), true);
-  for (const name of ["Renan Stein", "Carina Silva", "Joel Kunrath", "Alan Nascimento", null])
+  for (const name of ["Renan Stein", "Carina Silva", "Joel Kunrath", "Lucas Lima", "LUCAS ANDRADE LIMA", "DÉBORA DAL CORREIA", "LUIZ ANTÔNIO COSTA CUNHA", "Alan Nascimento", null])
     assert.equal(isCorrectionTeamCreator(name), false);
 });

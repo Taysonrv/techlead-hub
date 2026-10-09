@@ -3,7 +3,7 @@ import type { AxiosResponse } from "axios";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../database/prisma";
 import { AZURE_WORK_ITEM_FIELDS } from "./AzureWorkItemMapper";
-import { isSupportAnalyst, resolveSimerClient } from "../domain/OperationalScope";
+import { resolveSimerClient } from "../domain/OperationalScope";
 
 type Identity = { displayName?: string; uniqueName?: string };
 type Revision = { id?: number; rev?: number; fields?: Record<string, unknown> };
@@ -100,11 +100,15 @@ export function classifyMonthlyStateMovement(params: {
 
 // Nomes apresentados por System.CreatedBy nas exportações do Azure do time.
 // Mantém a seleção explícita; pertencer à carteira não implica ser criador do time.
-const CORRECTION_TEAM_DISPLAY_NAMES = new Set(["alan neto", "renan sousa", "tayson araujo"]);
+const CORRECTION_TEAM_DISPLAY_NAMES = new Set([
+  "alan neto", "alan kardek da silva barros neto",
+  "renan sousa", "renan breno carvalho",
+  "tayson araujo", "tayson alves de araujo",
+]);
 export function isCorrectionTeamCreator(value: string | null | undefined): boolean {
-  return !!value && (isSupportAnalyst(value) || CORRECTION_TEAM_DISPLAY_NAMES.has(
+  return !!value && CORRECTION_TEAM_DISPLAY_NAMES.has(
     value.trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR"),
-  ));
+  );
 }
 
 const TERMINAL = new Set(["Concluído", "Cancelado"]);
