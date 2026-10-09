@@ -44,12 +44,13 @@ export function PeriodFilter() {
           flex: { xs: "1 1 100%", sm: "0 1 190px" },
         }}
       >
-        <InputLabel id="period-label">
+        <InputLabel id="period-label" htmlFor="period-select">
           Período
         </InputLabel>
 
         <Select
           labelId="period-label"
+          inputProps={{ id: "period-select", "aria-labelledby": "period-label" }}
           value={period}
           label="Período"
           onChange={(event) =>
