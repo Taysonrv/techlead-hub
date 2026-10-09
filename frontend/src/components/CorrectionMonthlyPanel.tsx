@@ -264,17 +264,17 @@ export function CorrectionMonthlyPanel() {
       info:"Conta System.Id distintos criados dentro do período selecionado, independentemente do status no snapshot de fechamento.",
     },
     {
-      key:"delivered" as const,label:"Tasks entregues",value:delivered,note:monthlyMovementVerified?"Concluídas no período":"Prévia parcial · validar histórico",
+      key:"delivered" as const,label:"Tasks entregues",value:monthlyMovementVerified?delivered:"—",note:monthlyMovementVerified?"Concluídas no período":"Aguardando histórico de status",
       accent:aliareColors.green,
       info:"Conta Tasks que entraram efetivamente em Concluído durante o período e permaneciam em Concluído no snapshot de fechamento.",
     },
     {
-      key:"canceled" as const,label:"Tasks canceladas",value:canceled,note:monthlyMovementVerified?"Canceladas no período":"Prévia parcial · validar histórico",
+      key:"canceled" as const,label:"Tasks canceladas",value:monthlyMovementVerified?canceled:"—",note:monthlyMovementVerified?"Canceladas no período":"Aguardando histórico de status",
       accent:theme.palette.error.main,
       info:"Conta Tasks que entraram efetivamente em Cancelado durante o período e permaneciam em Cancelado no snapshot de fechamento.",
     },
     {
-      key:"registration" as const,label:"Tasks em Registro",value:value("registration"),note:monthlyMovementVerified?"Fora do backlog":"Prévia parcial · fora do backlog",
+      key:"registration" as const,label:"Tasks em Registro",value:monthlyMovementVerified?value("registration"):"—",note:monthlyMovementVerified?"Fora do backlog":"Aguardando histórico de status",
       accent:aliareColors.warning,
       info:"Conta Tasks que entraram em Registro durante o período e permaneciam em Registro no fechamento. Registro aparece no pipeline, mas nunca integra backlog.",
     },
@@ -586,9 +586,12 @@ export function CorrectionMonthlyPanel() {
               accent={card.accent}
               active={drill===card.key}
               density="compact"
-              onClick={!backlogVerified&&(card.key==="backlogInitial"||card.key==="backlogCurrent")
-                ? undefined
-                : ()=>openMetric(card.key,card.label)}
+              onClick={
+                ((!backlogVerified&&(card.key==="backlogInitial"||card.key==="backlogCurrent")) ||
+                 (!monthlyMovementVerified&&(card.key==="delivered"||card.key==="canceled"||card.key==="registration")))
+                  ? undefined
+                  : ()=>openMetric(card.key,card.label)
+              }
             />
           )}
         </Box>
