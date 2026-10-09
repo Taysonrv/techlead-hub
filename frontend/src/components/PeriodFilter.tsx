@@ -1,13 +1,20 @@
 import {
   Box,
-  FormControl,
-  InputLabel,
   MenuItem,
   Select,
   Stack,
   TextField,
+  Typography,
 } from "@mui/material";
 import { useFilters, type PeriodOption } from "../context/FiltersContext";
+
+const fieldSx = {
+  "& .MuiOutlinedInput-root": {
+    minHeight: 40,
+    borderRadius: 1.25,
+    bgcolor: "background.paper",
+  },
+} as const;
 
 export function PeriodFilter() {
   const {
@@ -25,31 +32,51 @@ export function PeriodFilter() {
       spacing={0.8}
       useFlexGap
       sx={{
-        alignItems: { xs: "stretch", sm: "center" },
+        alignItems: { xs: "stretch", sm: "flex-end" },
         flexWrap: "wrap",
         width: "100%",
         minWidth: 0,
       }}
     >
-      <FormControl
-        size="small"
+      <Box
         sx={{
           minWidth: { xs: "100%", sm: 168 },
           flex: { xs: "1 1 100%", sm: "0 1 184px" },
         }}
       >
-        <InputLabel id="period-label" shrink>Período</InputLabel>
+        <Typography
+          component="label"
+          htmlFor="period-filter"
+          variant="caption"
+          color="text.secondary"
+          sx={{
+            display: "block",
+            mb: 0.45,
+            ml: 0.15,
+            fontSize: ".7rem",
+            fontWeight: 700,
+            lineHeight: 1.2,
+          }}
+        >
+          Período
+        </Typography>
 
         <Select
-          labelId="period-label"
+          id="period-filter"
           value={period}
-          label="Período"
           onChange={(event) => setPeriod(event.target.value as PeriodOption)}
+          inputProps={{ "aria-label": "Período" }}
           sx={{
-            bgcolor: "background.paper",
+            width: "100%",
+            minHeight: 40,
             borderRadius: 1.25,
+            bgcolor: "background.paper",
             "& .MuiSelect-select": {
               py: 1.05,
+              px: 1.4,
+              pr: "36px !important",
+              display: "flex",
+              alignItems: "center",
             },
           }}
         >
@@ -63,37 +90,78 @@ export function PeriodFilter() {
           <MenuItem value="year">Este ano</MenuItem>
           <MenuItem value="custom">Personalizado</MenuItem>
         </Select>
-      </FormControl>
+      </Box>
 
       {period === "custom" ? (
         <Box
           sx={{
             display: "grid",
-            gridTemplateColumns: { xs: "1fr", sm: "repeat(2,minmax(145px,1fr))" },
+            gridTemplateColumns: {
+              xs: "1fr",
+              sm: "repeat(2,minmax(145px,1fr))",
+            },
             gap: 0.8,
             flex: "1 1 310px",
             minWidth: 0,
           }}
         >
-          <TextField
-            size="small"
-            type="date"
-            value={startDate}
-            onChange={(event) => setStartDate(event.target.value)}
-            label="Data inicial"
-            sx={{ minWidth: 0, "& .MuiOutlinedInput-root": { bgcolor: "background.paper" } }}
-            slotProps={{ inputLabel: { shrink: true } }}
-          />
+          <Box>
+            <Typography
+              component="label"
+              htmlFor="period-start-date"
+              variant="caption"
+              color="text.secondary"
+              sx={{
+                display: "block",
+                mb: 0.45,
+                ml: 0.15,
+                fontSize: ".7rem",
+                fontWeight: 700,
+                lineHeight: 1.2,
+              }}
+            >
+              Data inicial
+            </Typography>
+            <TextField
+              id="period-start-date"
+              fullWidth
+              size="small"
+              type="date"
+              value={startDate}
+              onChange={(event) => setStartDate(event.target.value)}
+              inputProps={{ "aria-label": "Data inicial" }}
+              sx={fieldSx}
+            />
+          </Box>
 
-          <TextField
-            size="small"
-            type="date"
-            value={endDate}
-            onChange={(event) => setEndDate(event.target.value)}
-            label="Data final"
-            sx={{ minWidth: 0, "& .MuiOutlinedInput-root": { bgcolor: "background.paper" } }}
-            slotProps={{ inputLabel: { shrink: true } }}
-          />
+          <Box>
+            <Typography
+              component="label"
+              htmlFor="period-end-date"
+              variant="caption"
+              color="text.secondary"
+              sx={{
+                display: "block",
+                mb: 0.45,
+                ml: 0.15,
+                fontSize: ".7rem",
+                fontWeight: 700,
+                lineHeight: 1.2,
+              }}
+            >
+              Data final
+            </Typography>
+            <TextField
+              id="period-end-date"
+              fullWidth
+              size="small"
+              type="date"
+              value={endDate}
+              onChange={(event) => setEndDate(event.target.value)}
+              inputProps={{ "aria-label": "Data final" }}
+              sx={fieldSx}
+            />
+          </Box>
         </Box>
       ) : null}
     </Stack>
