@@ -101,7 +101,8 @@ type Report = {
   filters?:{creators:string[];teamCreators?:string[];clients:string[];urgencies:string[];states:string[]};
   quality?:{
     historyAvailable:boolean;historyError:string|null;snapshotAvailable?:boolean;snapshotError?:string|null;
-    historicalScopeError?:string|null;mode:string;historicalMetricsReliable:boolean;backlogHistoricalReliable?:boolean;
+    historicalScopeError?:string|null;mode:string;movementHistoryReliable?:boolean;
+    historicalMetricsReliable:boolean;backlogHistoricalReliable?:boolean;
     diagnostics?:{
       localRecords:number;localPeriodCandidates:number;revisions:number;
       openingScopeIds:number;closingScopeIds:number;snapshotCandidates:number;
@@ -131,6 +132,14 @@ const metricLabel:Record<Exclude<Drill,null>,string> = {
   backlogInitial:"Backlog inicial",
   backlogCurrent:"Backlog atual",
 };
+
+const SEPTEMBER_2026_REFERENCE = {
+  backlogInitial:14,
+  registered:45,
+  delivered:41,
+  canceled:8,
+  registration:1,
+} as const;
 
 const fmt = (value:string|null|undefined) => value
   ? new Intl.DateTimeFormat("pt-BR",{dateStyle:"short",timeStyle:"short"}).format(new Date(value))
@@ -210,13 +219,31 @@ export function CorrectionMonthlyPanel() {
   const current = value("backlogCurrent");
   // Snapshot indisponível não é sinônimo de backlog zerado.
   const backlogVerified = report?.quality?.backlogHistoricalReliable === true;
-  const monthlyMovementVerified = report?.quality?.historicalMetricsReliable === true;
+  const monthlyMovementVerified =
+    report?.quality?.movementHistoryReliable ??
+    report?.quality?.historicalMetricsReliable ??
+    false;
   const delivered = value("delivered");
   const canceled = value("canceled");
   const registered = value("registered");
   const delta = current-initial;
   const outputs = delivered+canceled;
   const flowBalance = registered-outputs;
+
+  const teamCreators = report?.filters?.teamCreators ?? [];
+  const teamScopeActive =
+    teamCreators.length > 0 &&
+    creators.length === teamCreators.length &&
+    teamCreators.every((creator) => creators.includes(creator));
+  const septemberHomologation = month === "2026-09"
+    ? [
+        {key:"backlogInitial",label:"Backlog inicial",actual:backlogVerified?initial:null,expected:SEPTEMBER_2026_REFERENCE.backlogInitial},
+        {key:"registered",label:"Registradas",actual:registered,expected:SEPTEMBER_2026_REFERENCE.registered},
+        {key:"delivered",label:"Entregues",actual:delivered,expected:SEPTEMBER_2026_REFERENCE.delivered},
+        {key:"canceled",label:"Canceladas",actual:canceled,expected:SEPTEMBER_2026_REFERENCE.canceled},
+        {key:"registration",label:"Em Registro",actual:value("registration"),expected:SEPTEMBER_2026_REFERENCE.registration},
+      ]
+    : [];
 
   const cards = [
     {
