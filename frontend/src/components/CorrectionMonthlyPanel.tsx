@@ -124,6 +124,12 @@ const PIPELINE_ORDER = [
   "Desenvolvimento","Fila Qualidade","Qualidade","Integração","Concluído","Cancelado",
 ] as const;
 
+const URGENCY_ORDER = ["P1","Crítica","Critica","P2","Alta","P3","Média","Media","P4","Baixa","Não informado"] as const;
+const urgencyRank = (value:string) => {
+  const index=URGENCY_ORDER.indexOf(value as typeof URGENCY_ORDER[number]);
+  return index===-1?URGENCY_ORDER.length:index;
+};
+
 const metricLabel:Record<Exclude<Drill,null>,string> = {
   registered:"Tasks registradas",
   delivered:"Tasks entregues",
@@ -295,7 +301,10 @@ export function CorrectionMonthlyPanel() {
     const key=row.urgency||"Não informado";
     acc[key]=(acc[key]??0)+1;
     return acc;
-  },{})).map(([name,total])=>({name,total})).sort((a,b)=>b.total-a.total);
+  },{})).map(([name,total])=>({name,total})).sort((a,b)=>{
+    const rank=urgencyRank(a.name)-urgencyRank(b.name);
+    return rank!==0?rank:b.total-a.total;
+  });
 
   const priority = [
     {name:"Priorizadas",total:periodRows.filter(row=>row.prioritized===true).length},
@@ -624,7 +633,7 @@ export function CorrectionMonthlyPanel() {
 
         <Box sx={{
           display:"grid",
-          gridTemplateColumns:{xs:"1fr",lg:"minmax(0,1.55fr) minmax(280px,.9fr)",xl:"minmax(0,1.85fr) minmax(300px,.95fr) minmax(300px,.95fr)"},
+          gridTemplateColumns:{xs:"1fr",lg:"minmax(0,1.65fr) minmax(260px,.85fr) minmax(260px,.85fr)",xl:"minmax(0,1.85fr) minmax(300px,.95fr) minmax(300px,.95fr)"},
           gap:1.15,
           alignItems:"stretch",
         }}>
