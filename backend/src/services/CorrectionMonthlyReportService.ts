@@ -100,6 +100,10 @@ export function classifyMonthlyStateMovement(params: {
 
 const TERMINAL = new Set(["Concluído", "Cancelado"]);
 const BACKLOG_EXCLUDED = new Set(["Registro", ...TERMINAL]);
+
+export function isBacklogState(state: string | null | undefined): boolean {
+  return !!state && !BACKLOG_EXCLUDED.has(state);
+}
 const CACHE_TTL_MS = 10 * 60_000;
 const FIELD_CACHE_TTL_MS = 60 * 60_000;
 const AZURE_REQUEST_TIMEOUT_MS = 18_000;
@@ -469,7 +473,7 @@ ASOF '${asOf.toISOString()}'`;
       const {deliveredInPeriod,canceledInPeriod,enteredRegistrationInPeriod}=movement;
       const effectiveStateChangedAt=closeStateChangedAt??lastState?.at??null;
       const effectiveTerminalAt=TERMINAL.has(stateAtClose)?(closeStateChangedAt??terminal?.at??null):null;
-      rows.push({id,title:text(latestFields["System.Title"])??currentItem?.title??`Task ${id}`,client,createdBy:text(latestFields["System.CreatedBy"])??text(firstFields["System.CreatedBy"])??currentItem?.createdByName??null,createdAt:createdAt.toISOString(),status:stateAtClose,lastStateChangedAt:effectiveStateChangedAt?.toISOString()??null,urgency,prioritized,assignedTo:text(latestFields["System.AssignedTo"])??currentItem?.assignedToName??null,terminalAt:effectiveTerminalAt?.toISOString()??null,remoteUrl:currentItem?.remoteUrl??this.workItemUrl(id),stateAtOpen,stateAtClose,registeredInPeriod:movement.createdInPeriod,deliveredInPeriod,canceledInPeriod,enteredRegistrationInPeriod,backlogInitial:!!stateAtOpen&&!BACKLOG_EXCLUDED.has(stateAtOpen),backlogCurrent:!BACKLOG_EXCLUDED.has(stateAtClose)});
+      rows.push({id,title:text(latestFields["System.Title"])??currentItem?.title??`Task ${id}`,client,createdBy:text(latestFields["System.CreatedBy"])??text(firstFields["System.CreatedBy"])??currentItem?.createdByName??null,createdAt:createdAt.toISOString(),status:stateAtClose,lastStateChangedAt:effectiveStateChangedAt?.toISOString()??null,urgency,prioritized,assignedTo:text(latestFields["System.AssignedTo"])??currentItem?.assignedToName??null,terminalAt:effectiveTerminalAt?.toISOString()??null,remoteUrl:currentItem?.remoteUrl??this.workItemUrl(id),stateAtOpen,stateAtClose,registeredInPeriod:movement.createdInPeriod,deliveredInPeriod,canceledInPeriod,enteredRegistrationInPeriod,backlogInitial:isBacklogState(stateAtOpen),backlogCurrent:isBacklogState(stateAtClose)});
     }
 
     // O endpoint de revisões retorna apenas itens que tiveram revisão no período.
@@ -515,8 +519,8 @@ ASOF '${asOf.toISOString()}'`;
           deliveredInPeriod:movement.deliveredInPeriod,
           canceledInPeriod:movement.canceledInPeriod,
           enteredRegistrationInPeriod:movement.enteredRegistrationInPeriod,
-          backlogInitial:!!stateAtOpen&&!BACKLOG_EXCLUDED.has(stateAtOpen),
-          backlogCurrent:!BACKLOG_EXCLUDED.has(stateAtClose),
+          backlogInitial:isBacklogState(stateAtOpen),
+          backlogCurrent:isBacklogState(stateAtClose),
         });
       }
     }
@@ -569,8 +573,8 @@ ASOF '${asOf.toISOString()}'`;
           deliveredInPeriod:movement.deliveredInPeriod,
           canceledInPeriod:movement.canceledInPeriod,
           enteredRegistrationInPeriod:movement.enteredRegistrationInPeriod,
-          backlogInitial:snapshotAvailable&&!!stateAtOpen&&!BACKLOG_EXCLUDED.has(stateAtOpen),
-          backlogCurrent:snapshotAvailable&&!BACKLOG_EXCLUDED.has(stateAtClose),
+          backlogInitial:snapshotAvailable&&isBacklogState(stateAtOpen),
+          backlogCurrent:snapshotAvailable&&isBacklogState(stateAtClose),
         });
       }
     }
