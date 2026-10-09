@@ -84,17 +84,26 @@ test("movimentação mensal considera apenas o estado-alvo no fechamento e evid�
   assert.equal(reopened.deliveredInPeriod, false);
 });
 
-test("task criada no mês e terminal no fechamento conta a entrada mesmo sem revisão histórica", () => {
+test("criação no mês não substitui alteração efetiva de System.State", () => {
   const start = new Date("2026-09-01T03:00:00.000Z");
   const close = new Date("2026-10-01T02:59:59.999Z");
-  const movement = classifyMonthlyStateMovement({
+  const withoutStateEvidence = classifyMonthlyStateMovement({
     stateAtClose: "Cancelado",
     createdAt: new Date("2026-09-18T12:00:00.000Z"),
     start,
     close,
   });
-  assert.equal(movement.createdInPeriod, true);
-  assert.equal(movement.canceledInPeriod, true);
+  assert.equal(withoutStateEvidence.createdInPeriod, true);
+  assert.equal(withoutStateEvidence.canceledInPeriod, false);
+
+  const withStateEvidence = classifyMonthlyStateMovement({
+    stateAtClose: "Cancelado",
+    createdAt: new Date("2026-09-18T12:00:00.000Z"),
+    start,
+    close,
+    stateChangedAt: new Date("2026-09-22T15:00:00.000Z"),
+  });
+  assert.equal(withStateEvidence.canceledInPeriod, true);
 });
 
 test("StateChangeDate fora do mês não altera retroativamente o fechamento", () => {
