@@ -8,6 +8,9 @@ import { movideskRateLimiter } from "./MovideskRateLimiter";
 
 const PAGE_SIZE = 50;
 const INCREMENTAL_OVERLAP_MINUTES = 10;
+const INCREMENTAL_SAFETY_LOOKBACK_MINUTES = 360;
+const INITIAL_INCREMENTAL_CATCHUP_HOURS = 24;
+const INCREMENTAL_COMPLETED_ACTION = "MOVIDESK_INCREMENTAL_COMPLETED_2026_V1";
 const ANALYTICAL_REFRESH_DAYS = 70;
 const ANALYTICAL_REFRESH_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const ANALYTICAL_BATCH_SIZE = 8;
@@ -1009,6 +1012,10 @@ export class MovideskService {
     return { scanned, updated, causesUpdated, reasonsUpdated, businessAreasUpdated, remaining, skippedByCadence: false };
   }
 
+  async syncAnalyticalMetadataBatch() {
+    return this.refreshRecentClassifications(false);
+  }
+
   async backfillTicketCauses() {
     const remote = await this.refreshRecentClassifications(true);
     const candidates = await prisma.ticket.findMany({
@@ -1345,8 +1352,6 @@ export class MovideskService {
 
   private async latestSuccessfulSyncDate() {
     // Só habilitamos incremental depois que uma carga FULL terminou por inteiro.
-    // Assim, uma interrupção no meio do baseline nunca faz o próximo ciclo
-    // saltar os tickets das páginas que ainda não foram importadas.
     const baseline = await prisma.auditLog.findFirst({
       where: { action: BASELINE_COMPLETED_ACTION },
       orderBy: { createdAt: "desc" },
@@ -1354,21 +1359,40 @@ export class MovideskService {
     });
     if (!baseline) return null;
 
-    // O cursor deve seguir o relógio do dado remoto (lastUpdate), e não o
-    // horário local em que a importação terminou.
-    const latest = await prisma.ticket.aggregate({
-      where: {
-        createdDate: { gte: SYNC_SCOPE_START },
-        client: { in: [...SIMER_CLIENTS], mode: "insensitive" },
-      },
-      _max: { lastUpdate: true },
+    // Não use o maior lastUpdate já existente no banco como cursor.
+    // Esse valor pode pertencer a outro ticket e fazer um ticket novo, ainda
+    // ausente localmente, ficar definitivamente para trás da janela incremental.
+    //
+    // O watermark passa a ser o término do último ciclo incremental bem-sucedido,
+    // com uma janela de segurança de 6h para absorver atrasos de publicação,
+    // diferenças de relógio e tickets que chegaram fora de ordem.
+    const lastIncremental = await prisma.auditLog.findFirst({
+      where: { action: INCREMENTAL_COMPLETED_ACTION },
+      orderBy: { createdAt: "desc" },
+      select: { createdAt: true },
     });
-    const cursor = latest._max.lastUpdate;
-    if (!cursor) return null;
-    return new Date(cursor.getTime() - INCREMENTAL_OVERLAP_MINUTES * 60_000);
+
+    if (lastIncremental?.createdAt) {
+      const since = new Date(
+        lastIncremental.createdAt.getTime() -
+          INCREMENTAL_SAFETY_LOOKBACK_MINUTES * 60_000,
+      );
+      return since < SYNC_SCOPE_START ? SYNC_SCOPE_START : since;
+    }
+
+    // Primeiro ciclo após o upgrade: faz uma recuperação mais ampla para trazer
+    // tickets que possam ter sido perdidos pelo cursor antigo.
+    const catchup = new Date(
+      Date.now() - INITIAL_INCREMENTAL_CATCHUP_HOURS * 60 * 60_000,
+    );
+    return catchup < SYNC_SCOPE_START ? SYNC_SCOPE_START : catchup;
   }
 
-  async syncTickets(userId?: number | null, forceFull = false): Promise<SyncSummary> {
+  async syncTickets(
+    userId?: number | null,
+    forceFull = false,
+    refreshAnalyticalMetadata = true,
+  ): Promise<SyncSummary> {
     const since = forceFull ? null : await this.latestSuccessfulSyncDate();
     const mode: SyncSummary["mode"] = since ? "INCREMENTAL" : "FULL";
     const checkpoint = mode === "FULL" ? await this.loadBaselineCheckpoint() : null;
@@ -1479,8 +1503,27 @@ export class MovideskService {
     }
 
     if (mode === "INCREMENTAL" && summary.errors === 0) {
-      const metadataRefresh = await this.refreshRecentClassifications();
-      summary.analyticalMetadataRemaining = metadataRefresh.remaining;
+      await prisma.auditLog.create({
+        data: {
+          userId: userId ?? null,
+          action: INCREMENTAL_COMPLETED_ACTION,
+          entity: "Ticket",
+          metadata: {
+            since: summary.since,
+            pages: summary.pages,
+            totalRows: summary.totalRows,
+            created: summary.created,
+            updated: summary.updated,
+            ignored: summary.ignored,
+            safetyLookbackMinutes: INCREMENTAL_SAFETY_LOOKBACK_MINUTES,
+          },
+        },
+      });
+
+      if (refreshAnalyticalMetadata) {
+        const metadataRefresh = await this.refreshRecentClassifications();
+        summary.analyticalMetadataRemaining = metadataRefresh.remaining;
+      }
     }
 
     if (mode === "FULL" && summary.errors === 0) {
