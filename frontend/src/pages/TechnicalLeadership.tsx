@@ -189,10 +189,10 @@ export function TechnicalLeadership() {
   const isLeadershipSeriesVisible = (chart: string, key: string) => !(hiddenLeadershipSeries[chart]?.has(key));
   const SeriesSelector = ({ chart, items }: { chart: string; items: Array<{ key: string; label: string; color: string }> }) => (
     <Stack direction="row" spacing={.7} useFlexGap sx={{ flexWrap: "wrap", mt: .9, justifyContent: "center", alignItems: "center" }}>
-      {items.map((item) => {
+      {items.map((item, index) => {
         const active = isLeadershipSeriesVisible(chart, item.key);
         return <Chip
-          key={item.key}
+          key={`${item.key}-${index}`}
           size="small"
           label={item.label}
           onClick={() => toggleLeadershipSeries(chart, item.key, items.length)}
@@ -511,7 +511,7 @@ export function TechnicalLeadership() {
         <FormControl size="small" sx={{ minWidth: 170 }}><InputLabel id="technicalleadership-select-5-label" htmlFor="technicalleadership-select-5">Confiança</InputLabel><Select labelId="technicalleadership-select-5-label" inputProps={{ id: "technicalleadership-select-5", "aria-labelledby": "technicalleadership-select-5-label" }} value={recurrenceConfidence} label="Confiança" onChange={(e) => setRecurrenceConfidence(e.target.value)}><MenuItem value="">Todas</MenuItem><MenuItem value="ALTA">Alta</MenuItem><MenuItem value="MÉDIA">Média</MenuItem></Select></FormControl>
       </Stack>
       <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(2,1fr)", xl: "repeat(3,1fr)" }, gap: 1.5, mt: 1.2 }}>
-        {filteredRecurrences.map((item) => <Card key={item.topic} onClick={() => setDrawer({ kind: "recurrence", title: item.topic, recurrence: item })} sx={{ cursor: "pointer", background: mode === "dark" ? "linear-gradient(145deg, rgba(12,48,70,.96), rgba(14,28,53,.96)) !important" : "linear-gradient(145deg,#FFFFFF,#F3FAFC) !important", "&:hover": { borderColor: `${aliareColors.cyan} !important`, boxShadow: "0 12px 30px rgba(47,208,255,.10)" } }}><CardContent>
+        {filteredRecurrences.map((item,index) => <Card key={`${item.topic}-${index}`} role="button" tabIndex={0} onClick={() => setDrawer({ kind: "recurrence", title: item.topic, recurrence: item })} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setDrawer({ kind: "recurrence", title: item.topic, recurrence: item }); } }} sx={{ cursor: "pointer", background: mode === "dark" ? "linear-gradient(145deg, rgba(12,48,70,.96), rgba(14,28,53,.96)) !important" : "linear-gradient(145deg,#FFFFFF,#F3FAFC) !important", "&:hover": { borderColor: `${aliareColors.cyan} !important`, boxShadow: "0 12px 30px rgba(47,208,255,.10)" } }}><CardContent>
           <Stack direction="row" sx={{ justifyContent: "space-between", gap: 1 }}><Typography sx={{ fontWeight: 850, textTransform: "capitalize" }}>{item.topic}</Typography><Tooltip title="Tema agrupado por classificação/serviço dos tickets do período. Clique para ver evidências e ação sugerida."><InfoOutlined sx={{ fontSize: 17, color: "text.secondary" }} /></Tooltip></Stack>
           <Typography sx={{ fontWeight: 900, fontSize: "1.7rem", color: aliareColors.cyan, mt: .7 }}>{item.count}</Typography>
           <Typography variant="caption" color="text.secondary">{item.clients.length} cliente(s) · {item.analysts.length} analista(s) · {item.linkedExamples ?? 0} evidência(s) com Azure</Typography>{item.reading && <Typography variant="body2" sx={{ mt: .65, fontWeight: 750 }}>{item.reading === "EMERGING_TRANSVERSAL" ? "Leitura: tema emergente e transversal entre clientes." : item.reading === "GROWING_TRANSVERSAL" ? "Leitura: recorrência em crescimento entre clientes." : item.reading === "CLIENT_CONCENTRATED" ? "Leitura: recorrência concentrada no cliente predominante." : item.reading === "DECLINING" ? "Leitura: recorrência em redução no período." : "Leitura: padrão recorrente sem mudança temporal relevante."}</Typography>}{item.concentration && <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: .35 }}>Concentração: {item.concentration.topClient ?? "sem cliente dominante"}{item.concentration.topClient ? ` (${item.concentration.clientSharePct}%)` : ""} · Módulo Azure: {item.concentration.topModule ?? "não identificado"}</Typography>}
