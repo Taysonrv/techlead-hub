@@ -32,7 +32,7 @@ export function PageHeader({
         overflow: "hidden",
         p: { xs: 1.45, sm: 1.65, md: 1.8 },
         minHeight: { md: 102 },
-        borderRadius: { xs: 2.5, md: 3 },
+        borderRadius: "14px",
         isolation: "isolate",
         border: "1px solid",
         borderColor: dark
@@ -56,14 +56,13 @@ export function PageHeader({
         "&::after": {
           content: '""',
           position: "absolute",
-          width: 210,
-          height: 210,
-          right: -88,
-          top: -138,
-          borderRadius: "50%",
-          border: dark
-            ? "1px solid rgba(91,231,173,.075)"
-            : "1px solid rgba(16,148,91,.055)",
+          right: 22,
+          top: 0,
+          width: 132,
+          height: 1,
+          background: dark
+            ? "linear-gradient(90deg, transparent, rgba(91,231,173,.18))"
+            : "linear-gradient(90deg, transparent, rgba(16,148,91,.12))",
           pointerEvents: "none",
         },
       }}
@@ -74,7 +73,7 @@ export function PageHeader({
             sx={{
               width: 28,
               height: 3,
-              borderRadius: 99,
+              borderRadius: "2px",
               bgcolor: aliareColors.green,
               boxShadow: dark ? "0 0 12px rgba(24,199,122,.30)" : "none",
             }}
