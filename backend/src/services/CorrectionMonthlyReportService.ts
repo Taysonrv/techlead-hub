@@ -17,9 +17,9 @@ const TERMINAL = new Set(["Concluído", "Cancelado"]);
 const BACKLOG_EXCLUDED = new Set(["Registro", ...TERMINAL]);
 const CACHE_TTL_MS = 10 * 60_000;
 const FIELD_CACHE_TTL_MS = 60 * 60_000;
-const AZURE_REQUEST_TIMEOUT_MS = 12_000;
-const REVISION_STAGE_TIMEOUT_MS = 25_000;
-const SNAPSHOT_STAGE_TIMEOUT_MS = 22_000;
+const AZURE_REQUEST_TIMEOUT_MS = 18_000;
+const REVISION_STAGE_TIMEOUT_MS = 30_000;
+const SNAPSHOT_STAGE_TIMEOUT_MS = 60_000;
 const REPORT_CACHE_TTL_MS = 2 * 60_000;
 
 function text(value: unknown): string | null {
@@ -238,7 +238,10 @@ ASOF '${asOf.toISOString()}'`;
     return result;
   }
 
-  async get(month:string) {
+  async get(month:string, forceRefresh=false) {
+    // O botão Recarregar deve ignorar resultados parciais em cache quando
+    // o Azure DevOps volta a ficar disponível.
+    if(forceRefresh) CorrectionMonthlyReportService.reportCache.delete(month);
     // Em desenvolvimento o React StrictMode pode montar o painel duas vezes.
     // Reutilizamos a mesma geração por mês para não duplicar as consultas
     // históricas pesadas no Azure DevOps.
