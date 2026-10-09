@@ -67,7 +67,7 @@ export function ChartPanel({
                 sx={{
                   width: 3,
                   height: 18,
-                  borderRadius: 99,
+                  borderRadius: "2px",
                   bgcolor: "primary.main",
                   flexShrink: 0,
                 }}
@@ -121,7 +121,7 @@ export function ChartPanel({
             minHeight,
             minWidth: 0,
             width: "100%",
-            borderRadius: 2,
+            borderRadius: "10px",
             "& > .recharts-responsive-container": {
               minHeight,
             },
