@@ -2,7 +2,7 @@ import axios from "axios";
 import type { AxiosResponse } from "axios";
 import { prisma } from "../database/prisma";
 import { AZURE_WORK_ITEM_FIELDS } from "./AzureWorkItemMapper";
-import { isSupportAnalyst, resolveSimerClient, SIMER_CLIENTS } from "../domain/OperationalScope";
+import { isSupportAnalyst } from "../domain/OperationalScope";
 
 type Identity = { displayName?: string; uniqueName?: string };
 type Revision = { id?: number; rev?: number; fields?: Record<string, unknown> };
@@ -467,9 +467,7 @@ ASOF '${asOf.toISOString()}'`;
       const urgencyValue=text(latestFields[fields.urgency])??text(latestFields["Microsoft.VSTS.Common.Priority"]);
       const urgency=urgencyValue ? (/^\d+$/.test(urgencyValue)?`P${urgencyValue}`:urgencyValue) : currentItem?.criticality??null;
       const prioritized=bool(latestFields[fields.prioritized])??currentItem?.prioritized??null;
-      const sourceClient=text(latestFields[fields.client])??currentItem?.client??null;
-      const client=resolveSimerClient(sourceClient);
-      if(!client) continue;
+      const client=text(latestFields[fields.client])??currentItem?.client??null;
       const {deliveredInPeriod,canceledInPeriod,enteredRegistrationInPeriod}=movement;
       const effectiveStateChangedAt=closeStateChangedAt??lastState?.at??null;
       const effectiveTerminalAt=TERMINAL.has(stateAtClose)?(closeStateChangedAt??terminal?.at??null):null;
@@ -487,8 +485,7 @@ ASOF '${asOf.toISOString()}'`;
         const closingFields=closingSnapshot.get(id)?.fields??{};
         if(!Object.keys(closingFields).length) continue;
 
-        const sourceClient=text(closingFields[fields.client])??item?.client??null;
-        const client=resolveSimerClient(sourceClient); if(!client) continue;
+        const client=text(closingFields[fields.client])??item?.client??null;
         const createdAt=date(closingFields["System.CreatedDate"])??item?.azureCreatedAt??null;
         if(!createdAt||createdAt>close) continue;
 
@@ -531,8 +528,7 @@ ASOF '${asOf.toISOString()}'`;
         const item=currentById.get(id);
         const openingFields=openingSnapshot.get(id)?.fields??{};
         const closingFields=closingSnapshot.get(id)?.fields??{};
-        const sourceClient=text(closingFields[fields.client])??item?.client??null;
-        const client=resolveSimerClient(sourceClient); if(!client) continue;
+        const client=text(closingFields[fields.client])??item?.client??null;
 
         const createdAt=date(closingFields["System.CreatedDate"])??item?.azureCreatedAt??null;
         if(!createdAt||createdAt>close) continue;
@@ -589,6 +585,6 @@ ASOF '${asOf.toISOString()}'`;
     }
         const count=(p:(r:Row)=>boolean)=>rows.filter(p).length;
     const by=(selector:(r:Row)=>string|null)=>Object.entries(rows.reduce<Record<string,number>>((acc,row)=>{const key=selector(row)||"Não informado";acc[key]=(acc[key]??0)+1;return acc;},{})).map(([name,total])=>({name,total})).sort((a,b)=>b.total-a.total);
-    return {period:{month,timezone:"America/Sao_Paulo",start:start.toISOString(),close:close.toISOString()},cards:{registered:count(r=>r.registeredInPeriod),delivered:count(r=>r.deliveredInPeriod),canceled:count(r=>r.canceledInPeriod),inRegistration:count(r=>r.enteredRegistrationInPeriod),backlogInitial:count(r=>r.backlogInitial),backlogCurrent:count(r=>r.backlogCurrent)},pipeline:by(r=>r.status),urgency:by(r=>r.urgency),prioritization:[{name:"Priorizadas",total:count(r=>r.prioritized===true)},{name:"Não priorizadas",total:count(r=>r.prioritized===false)},{name:"Não informado",total:count(r=>r.prioritized===null)}],filters:{creators:[...new Set(rows.map(r=>r.createdBy).filter(Boolean))].sort(),teamCreators:[...new Set(rows.map(r=>r.createdBy).filter((value):value is string=>!!value&&isSupportAnalyst(value)))].sort(),clients:[...SIMER_CLIENTS],urgencies:[...new Set(rows.map(r=>r.urgency).filter(Boolean))].sort(),states:[...new Set(rows.map(r=>r.status).filter(Boolean))].sort()},rows,generatedAt:new Date().toISOString(),source:snapshotAvailable?(historyAvailable?"Azure DevOps · revisões + snapshots asOf · carteira SIMER":"Azure DevOps · snapshots asOf · carteira SIMER"):"Base sincronizada do Azure DevOps · snapshot local · carteira SIMER",quality:{historyAvailable,historyError,snapshotAvailable,snapshotError,historicalScopeError,mode:backlogHistoricalReliable&&historyAvailable?"historical":snapshotAvailable?"asof-partial":"local-snapshot",movementHistoryReliable:historyAvailable,historicalMetricsReliable:historyAvailable&&backlogHistoricalReliable,backlogHistoricalReliable,diagnostics:{localRecords:current.length,localPeriodCandidates:current.filter(item=>[item.azureCreatedAt,item.stateChangedAt,item.azureClosedAt].some(value=>!!value&&value>=start&&value<=close)).length,revisions:revisions.length,openingScopeIds:openingScopeIds.length,closingScopeIds:closingScopeIds.length,snapshotCandidates:candidateIds.length,openingSnapshotItems:openingSnapshot.size,closingSnapshotItems:closingSnapshot.size,outputRows:rows.length}},fieldMapping:fields};
+    return {period:{month,timezone:"America/Sao_Paulo",start:start.toISOString(),close:close.toISOString()},cards:{registered:count(r=>r.registeredInPeriod),delivered:count(r=>r.deliveredInPeriod),canceled:count(r=>r.canceledInPeriod),inRegistration:count(r=>r.enteredRegistrationInPeriod),backlogInitial:count(r=>r.backlogInitial),backlogCurrent:count(r=>r.backlogCurrent)},pipeline:by(r=>r.status),urgency:by(r=>r.urgency),prioritization:[{name:"Priorizadas",total:count(r=>r.prioritized===true)},{name:"Não priorizadas",total:count(r=>r.prioritized===false)},{name:"Não informado",total:count(r=>r.prioritized===null)}],filters:{creators:[...new Set(rows.map(r=>r.createdBy).filter(Boolean))].sort(),teamCreators:[...new Set(rows.map(r=>r.createdBy).filter((value):value is string=>!!value&&isSupportAnalyst(value)))].sort(),clients:[...new Set(rows.map(r=>r.client).filter((value):value is string=>!!value))].sort(),urgencies:[...new Set(rows.map(r=>r.urgency).filter(Boolean))].sort(),states:[...new Set(rows.map(r=>r.status).filter(Boolean))].sort()},rows,generatedAt:new Date().toISOString(),source:snapshotAvailable?(historyAvailable?"Azure DevOps · revisões + snapshots asOf":"Azure DevOps · snapshots asOf"):"Base sincronizada do Azure DevOps · snapshot local",quality:{historyAvailable,historyError,snapshotAvailable,snapshotError,historicalScopeError,mode:backlogHistoricalReliable&&historyAvailable?"historical":snapshotAvailable?"asof-partial":"local-snapshot",movementHistoryReliable:historyAvailable,historicalMetricsReliable:historyAvailable&&backlogHistoricalReliable,backlogHistoricalReliable,diagnostics:{localRecords:current.length,localPeriodCandidates:current.filter(item=>[item.azureCreatedAt,item.stateChangedAt,item.azureClosedAt].some(value=>!!value&&value>=start&&value<=close)).length,revisions:revisions.length,openingScopeIds:openingScopeIds.length,closingScopeIds:closingScopeIds.length,snapshotCandidates:candidateIds.length,openingSnapshotItems:openingSnapshot.size,closingSnapshotItems:closingSnapshot.size,outputRows:rows.length}},fieldMapping:fields};
   }
 }
