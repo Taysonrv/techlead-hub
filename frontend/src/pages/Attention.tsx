@@ -1114,7 +1114,7 @@ export function Attention() {
                 },
               }}
             >
-              <InputLabel shrink id="attention-select-1-label" htmlFor="attention-select-1">
+              <InputLabel shrink id="attention-select-1-label">
                 Situação do prazo
               </InputLabel><Select labelId="attention-select-1-label" inputProps={{ id: "attention-select-1", "aria-labelledby": "attention-select-1-label" }} multiple displayEmpty value={level} label="Situação do prazo"
                 onChange={(event) => { const next = typeof event.target.value === "string" ? event.target.value.split(",") : event.target.value as string[]; setLevel((next.includes("__all__") ? ["vencido","critico","atencao"] : next.filter((item) => item !== "__all__")) as AttentionLevel[]); }}
@@ -1135,7 +1135,7 @@ export function Attention() {
                 },
               }}
             >
-              <InputLabel shrink id="attention-select-2-label" htmlFor="attention-select-2">
+              <InputLabel shrink id="attention-select-2-label">
                 Responsável
               </InputLabel><Select labelId="attention-select-2-label" inputProps={{ id: "attention-select-2", "aria-labelledby": "attention-select-2-label" }} multiple displayEmpty value={owner} label="Responsável"
                 onChange={(event) => { const next = typeof event.target.value === "string" ? event.target.value.split(",") : event.target.value as string[]; setOwner(next.includes("__all__") ? [...owners] : next.filter((item) => item !== "__all__")); }}
@@ -1156,7 +1156,7 @@ export function Attention() {
                 },
               }}
             >
-              <InputLabel shrink id="attention-select-3-label" htmlFor="attention-select-3">
+              <InputLabel shrink id="attention-select-3-label">
                 Cliente
               </InputLabel><Select labelId="attention-select-3-label" inputProps={{ id: "attention-select-3", "aria-labelledby": "attention-select-3-label" }} multiple displayEmpty value={client} label="Cliente"
                 onChange={(event) => { const next = typeof event.target.value === "string" ? event.target.value.split(",") : event.target.value as string[]; setClient(next.includes("__all__") ? [...clients] : next.filter((item) => item !== "__all__")); }}
@@ -1177,7 +1177,7 @@ export function Attention() {
                 },
               }}
             >
-              <InputLabel shrink id="attention-select-4-label" htmlFor="attention-select-4">
+              <InputLabel shrink id="attention-select-4-label">
                 Origem do risco
               </InputLabel><Select labelId="attention-select-4-label" inputProps={{ id: "attention-select-4", "aria-labelledby": "attention-select-4-label" }}
                 value={riskFilter}
