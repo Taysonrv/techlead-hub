@@ -671,7 +671,9 @@ ASOF '${asOf.toISOString()}'`;
 
       if(rows.length>0){
         localFallbackUsed=true;
-        movementHistoryReliable=localStateHistoryEvents>0;
+        // Eventos locais provam movimentos individuais, não a cobertura de
+        // todas as Tasks. Uma fila parcialmente enriquecida não certifica zeros.
+        movementHistoryReliable=false;
         // Reconstrução local é útil para operação, porém não recebe o selo
         // "histórico ASOF confiável" usado para homologação oficial.
         backlogHistoricalReliable=false;

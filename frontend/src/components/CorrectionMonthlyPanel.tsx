@@ -516,7 +516,7 @@ export function CorrectionMonthlyPanel() {
           ?"Histórico local reconstruído."
           :report.quality.snapshotAvailable?"Histórico parcial.":"Snapshot histórico indisponível."}</b>{" "}
         {report.quality.localFallbackUsed
-          ?"O Azure histórico retornou cobertura vazia/incompleta e o Hub reconstruiu o período com os Work Items e mudanças de estado persistidos localmente. Use a régua de homologação para validar o fechamento."
+          ?"O Azure histórico retornou cobertura vazia/incompleta e o Hub reconstruiu o período com os Work Items e mudanças de estado persistidos localmente. O backlog é provisório; movimentações sem cobertura completa ficam indisponíveis. O fechamento exige validação do histórico Azure."
           :"Os números de movimentações são prévios e NÃO estão homologados. Backlog exige escopo e snapshots de abertura/fechamento completos."}{" "}
         {[
           report.quality.historyError && `Revisões: ${report.quality.historyError}`,
