@@ -1,6 +1,6 @@
 import { AddOutlined, CalendarMonthOutlined, ChevronLeft, ChevronRight, DarkModeOutlined, DeleteOutlineOutlined, DownloadOutlined, LightModeOutlined, OpenInNewOutlined, SearchOutlined, VideoCallOutlined } from "@mui/icons-material";
 import { Alert, Autocomplete, Badge, Box, Button, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Divider, IconButton, InputAdornment, List, ListItemButton, ListItemText, MenuItem, Paper, Popover, Stack, TextField, Typography } from "@mui/material";
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
 import { createPortal } from "react-dom";
 import { useLocation, useNavigate } from "react-router-dom";
 import { api, getApiErrorMessage } from "../services/api";
@@ -74,7 +74,7 @@ export function GlobalTopBar() {
       .finally(() => {
         openingMeetingIdRef.current = null;
       });
-  }, [location.pathname, location.search, navigate]);
+  }, [location.pathname, location.search, navigate, openMeeting]);
 
 
   useEffect(() => {
@@ -128,7 +128,7 @@ export function GlobalTopBar() {
   const selectedEvents = events.filter((item) => dateKey(new Date(item.date)) === selectedDate);
   const selectedHoliday = holidays.find((item) => holidayDateKey(item.date) === selectedDate);
 
-  async function ensureMeetingParticipants() {
+  const ensureMeetingParticipants = useCallback(async () => {
     if (meetingParticipants.length) return;
     try {
       const response = await api.get<{ participants: CalendarPerson[] }>("/global/calendar/participants");
@@ -136,7 +136,7 @@ export function GlobalTopBar() {
     } catch {
       setMeetingParticipants([]);
     }
-  }
+  }, [meetingParticipants.length]);
 
   function openCreateMeeting(date = selectedDate) {
     setEditingMeeting(null);
@@ -147,7 +147,7 @@ export function GlobalTopBar() {
     void ensureMeetingParticipants();
   }
 
-  function openMeeting(meeting: CalendarMeeting) {
+  const openMeeting = useCallback((meeting: CalendarMeeting) => {
     setEditingMeeting(meeting);
     setMeetingError("");
     setMeetingForm({
@@ -164,7 +164,7 @@ export function GlobalTopBar() {
     setCalendarAnchor(null);
     setMeetingDialogOpen(true);
     void ensureMeetingParticipants();
-  }
+  }, [ensureMeetingParticipants]);
 
   async function saveMeeting() {
     setMeetingSaving(true);
