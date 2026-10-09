@@ -3333,6 +3333,7 @@ export function AzureWorkItems({
                     }
                   }}
                   slotProps={{
+                    htmlInput: { "aria-label": "Pesquisar tarefas Azure" },
                     input: {
                       startAdornment: (
                         <SearchOutlined
