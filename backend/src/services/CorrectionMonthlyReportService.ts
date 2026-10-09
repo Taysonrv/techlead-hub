@@ -52,7 +52,14 @@ function saoPauloMonth(month: string) {
   const nextYear = m === 12 ? year + 1 : year;
   const nextMonth = m === 12 ? 1 : m + 1;
   const endExclusive = new Date(`${nextYear}-${String(nextMonth).padStart(2, "0")}-01T03:00:00.000Z`);
-  return { start, endExclusive, close: new Date(endExclusive.getTime() - 1) };
+  // Meses encerrados usam 23:59:59.999 do último dia em São Paulo.
+  // No mês corrente, ASOF futuro é inválido no Azure DevOps: utilizamos
+  // uma fotografia de "agora" com pequena margem contra diferença de relógio.
+  const now = new Date(Date.now() - 60_000);
+  if (now < start) throw new Error("Não é possível consultar um período que ainda não começou.");
+  const periodEnd = new Date(endExclusive.getTime() - 1);
+  const close = periodEnd < now ? periodEnd : now;
+  return { start, endExclusive, close };
 }
 
 type Row = {
