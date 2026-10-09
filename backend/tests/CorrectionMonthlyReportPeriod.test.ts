@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { assessHistoricalBacklog, classifyMonthlyStateMovement, isBacklogState, saoPauloMonth, selectReportCandidateIds } from "../src/services/CorrectionMonthlyReportService";
+import { isCorrectionTeamCreator, assessHistoricalBacklog, classifyMonthlyStateMovement, isBacklogState, saoPauloMonth, selectReportCandidateIds } from "../src/services/CorrectionMonthlyReportService";
 
 test("mês corrente usa fechamento provisório anterior ao instante atual", () => {
   const observedAt = new Date("2026-10-09T12:00:00.000Z");
@@ -140,4 +140,12 @@ test("backlog exclui Registro e estados terminais, mas mantém estados abertos",
   assert.equal(isBacklogState("Qualificação"), true);
   assert.equal(isBacklogState("Fila Desenvolvimento"), true);
   assert.equal(isBacklogState(null), false);
+});
+
+
+test("seleção Time SIMER reconhece os nomes exibidos no Azure sem incluir outros criadores", () => {
+  for (const name of ["Alan Neto", "Renan Sousa", "Tayson Araujo", " TAYSON ARAUJO ", "TAYSON ALVES DE ARAUJO"])
+    assert.equal(isCorrectionTeamCreator(name), true);
+  for (const name of ["Renan Stein", "Carina Silva", "Joel Kunrath", "Alan Nascimento", null])
+    assert.equal(isCorrectionTeamCreator(name), false);
 });

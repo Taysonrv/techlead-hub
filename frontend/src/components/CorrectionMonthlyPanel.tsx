@@ -440,7 +440,7 @@ export function CorrectionMonthlyPanel() {
               description="Considera exclusivamente Work Items do tipo Correção Clientes da carteira SIMER, conta System.Id distintos e usa America/Sao_Paulo. Cards, gráficos e listagem respeitam os filtros globais."
             />
           </Box>
-          <Stack direction="row" gap={1} alignItems="center">
+          <Stack direction={{xs:"column",sm:"row"}} gap={1} flexWrap="wrap" alignItems={{xs:"stretch",sm:"center"}}>
             {report?.quality&&
               <Chip
                 size="small"
@@ -464,41 +464,45 @@ export function CorrectionMonthlyPanel() {
 
         <Box sx={{
           mt:1.6,
+          pt:.6,
           display:"grid",
-          gridTemplateColumns:{xs:"1fr",md:"repeat(2,minmax(0,1fr))",xl:"1.35fr 1.35fr 1fr 1fr .85fr auto"},
-          gap:1,
+          gridTemplateColumns:"repeat(12,minmax(0,1fr))",
+          gap:1.5,
           alignItems:"start",
+          "& > *":{minWidth:0,gridColumn:{xs:"span 12",sm:"span 6",lg:"span 4"}},
         }}>
-          <Box sx={{display:"grid",gridTemplateColumns:"minmax(0,1fr) auto",gap:.7}}>
-            <Autocomplete multiple size="small" options={options.creators} value={creators} onChange={(_,value)=>setCreators(value)}
-              renderInput={params=><TextField {...params} label="Criado por"/>}/>
-            <MuiTooltip title="Aplicar exatamente o escopo de criadores do time SIMER usado na homologação">
+          <Autocomplete multiple limitTags={2} size="small" options={options.creators} value={creators} onChange={(_,value)=>setCreators(value)}
+            renderInput={params=><TextField {...params} label="Criado por"/>}/>
+          <Autocomplete multiple limitTags={2} size="small" options={options.clients} value={clients} onChange={(_,value)=>setClients(value)}
+            renderInput={params=><TextField {...params} label="Cliente"/>}/>
+          <Autocomplete multiple limitTags={2} size="small" options={options.urgencies} value={urgencies} onChange={(_,value)=>setUrgencies(value)}
+            renderInput={params=><TextField {...params} label="Urgência"/>}/>
+          <Autocomplete multiple limitTags={2} size="small" options={options.states} value={states} onChange={(_,value)=>setStates(value)}
+            renderInput={params=><TextField {...params} label="Status"/>}/>
+          <FormControl size="small" fullWidth>
+            <InputLabel id="correction-prioritized-label" shrink>Priorizada</InputLabel>
+            <Select labelId="correction-prioritized-label" inputProps={{ id: "correction-prioritized", "aria-labelledby": "correction-prioritized-label" }} label="Priorizada"
+              notched displayEmpty renderValue={value=>value==="true"?"Sim":value==="false"?"Não":"Todas"}
+              value={prioritized} onChange={event=>setPrioritized(event.target.value as typeof prioritized)}>
+              <MenuItem value="">Todas</MenuItem><MenuItem value="true">Sim</MenuItem><MenuItem value="false">Não</MenuItem>
+            </Select>
+          </FormControl>
+          <Stack direction="row" gap={1} flexWrap="wrap" alignItems="center" sx={{minHeight:40}}>
+            <MuiTooltip title="Selecionar os criadores do time SIMER, incluindo os nomes exibidos no Azure">
               <span><Button
                 size="small"
                 variant={teamScopeActive?"contained":"outlined"}
                 disabled={!teamCreators.length}
                 onClick={()=>setCreators(teamCreators)}
-                sx={{height:40,whiteSpace:"nowrap"}}
-              >
-                Time SIMER
-              </Button></span>
+                sx={{minHeight:40,whiteSpace:"nowrap"}}
+              >Time SIMER</Button></span>
             </MuiTooltip>
-          </Box>
-          <Autocomplete multiple size="small" options={options.clients} value={clients} onChange={(_,value)=>setClients(value)}
-            renderInput={params=><TextField {...params} label="Cliente"/>}/>
-          <Autocomplete multiple size="small" options={options.urgencies} value={urgencies} onChange={(_,value)=>setUrgencies(value)}
-            renderInput={params=><TextField {...params} label="Urgência"/>}/>
-          <Autocomplete multiple size="small" options={options.states} value={states} onChange={(_,value)=>setStates(value)}
-            renderInput={params=><TextField {...params} label="Status"/>}/>
-          <FormControl size="small">
-            <InputLabel id="correction-prioritized-label">Priorizada</InputLabel>
-            <Select labelId="correction-prioritized-label" inputProps={{ id: "correction-prioritized", "aria-labelledby": "correction-prioritized-label" }} label="Priorizada"
-              value={prioritized} onChange={event=>setPrioritized(event.target.value as typeof prioritized)}>
-              <MenuItem value="">Todas</MenuItem><MenuItem value="true">Sim</MenuItem><MenuItem value="false">Não</MenuItem>
-            </Select>
-          </FormControl>
-          <Button startIcon={<RestartAltOutlined/>} onClick={clear} sx={{height:40}}>Limpar</Button>
+            <Button startIcon={<RestartAltOutlined/>} onClick={clear} sx={{minHeight:40}}>Limpar filtros</Button>
+          </Stack>
         </Box>
+        <Typography variant="caption" color="text.secondary" sx={{display:"block",mt:1.4}}>
+          {teamScopeActive?"Time SIMER selecionado":creators.length?"Criadores selecionados":"Todos os criadores da carteira SIMER"} · {periodUniverse} task(s) no período
+        </Typography>
       </CardContent>
     </Card>
 
