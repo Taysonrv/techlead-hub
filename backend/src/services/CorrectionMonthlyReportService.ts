@@ -284,8 +284,11 @@ ASOF '${asOf.toISOString()}'`;
       try {
         values=await loadBatch(batch,requested);
       } catch(error) {
-        // Um campo customizado não reportável não deve derrubar o snapshot histórico.
-        console.warn("[correction-monthly-report] Snapshot completo rejeitado; repetindo com campos centrais.");
+        // Apenas erro de campo inválido admite tentar novamente com campos
+        // centrais. Retentar 429/401/403/timeout duplicava a carga no Azure.
+        const status=axios.isAxiosError(error)?error.response?.status:null;
+        if(status!==400&&status!==422) throw error;
+        console.warn("[correction-monthly-report] Campos customizados rejeitados; repetindo somente campos centrais.");
         values=await loadBatch(batch,coreFields);
       }
       for(const item of values){
