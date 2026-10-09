@@ -2988,9 +2988,9 @@ function DonutAnalysisCard({
                 }}
                 style={{ cursor: onItemClick ? "pointer" : "default" }}
               >
-                {chartData.map((item) => {
+                {chartData.map((item, chartIndex) => {
                   const index = data.findIndex((row) => row.label === item.label);
-                  return <Cell key={item.label} fill={colors[index % colors.length]} />;
+                  return <Cell key={`${item.label}-${chartIndex}`} fill={colors[index % colors.length]} />;
                 })}
               </Pie>
               <Tooltip cursor={false} />
@@ -3015,7 +3015,7 @@ function DonutAnalysisCard({
             const percentage = total > 0 && active ? Math.round((item.total / total) * 100) : 0;
             return (
               <Box
-                key={item.label}
+                key={`${item.label}-${index}`}
                 onClick={() => toggleItem(item.label)}
                 sx={{
                   display: "grid",
