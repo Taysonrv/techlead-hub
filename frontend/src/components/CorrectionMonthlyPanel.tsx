@@ -267,17 +267,17 @@ export function CorrectionMonthlyPanel() {
       info:"Conta System.Id distintos criados dentro do período selecionado, independentemente do status no snapshot de fechamento.",
     },
     {
-      key:"delivered" as const,label:"Tasks entregues",value:monthlyMovementVerified?delivered:"—",note:monthlyMovementVerified?"Concluídas no período":"Aguardando histórico de status",
+      key:"delivered" as const,label:"Tasks entregues",value:report?delivered:"—",note:monthlyMovementVerified?"Concluídas no período":"Prévia parcial · movimentos comprovados",
       accent:aliareColors.green,
       info:"Conta Tasks que entraram efetivamente em Concluído durante o período e permaneciam em Concluído no snapshot de fechamento.",
     },
     {
-      key:"canceled" as const,label:"Tasks canceladas",value:monthlyMovementVerified?canceled:"—",note:monthlyMovementVerified?"Canceladas no período":"Aguardando histórico de status",
+      key:"canceled" as const,label:"Tasks canceladas",value:report?canceled:"—",note:monthlyMovementVerified?"Canceladas no período":"Prévia parcial · movimentos comprovados",
       accent:theme.palette.error.main,
       info:"Conta Tasks que entraram efetivamente em Cancelado durante o período e permaneciam em Cancelado no snapshot de fechamento.",
     },
     {
-      key:"registration" as const,label:"Tasks em Registro",value:monthlyMovementVerified?value("registration"):"—",note:monthlyMovementVerified?"Fora do backlog":"Aguardando histórico de status",
+      key:"registration" as const,label:"Tasks em Registro",value:report?value("registration"):"—",note:monthlyMovementVerified?"Fora do backlog":"Prévia parcial · fora do backlog",
       accent:aliareColors.warning,
       info:"Conta Tasks que entraram em Registro durante o período e permaneciam em Registro no fechamento. Registro aparece no pipeline, mas nunca integra backlog.",
     },
@@ -432,12 +432,12 @@ export function CorrectionMonthlyPanel() {
             <Box sx={{minWidth:0}}>
               <Typography variant="h6" sx={{fontWeight:900,letterSpacing:"-.02em"}}>Report mensal de Correções</Typography>
               <Typography variant="caption" color="text.secondary">
-                Snapshots de abertura/fechamento e movimentações reais de status no Azure DevOps.
+                Carteira SIMER · Snapshots de abertura/fechamento e movimentações reais de status no Azure DevOps.
               </Typography>
             </Box>
             <InfoButton
               title="Report mensal de Correções"
-              description="Considera exclusivamente Work Items do tipo Correção Clientes, conta System.Id distintos e usa America/Sao_Paulo. Cards, gráficos e listagem respeitam os filtros globais."
+              description="Considera exclusivamente Work Items do tipo Correção Clientes da carteira SIMER, conta System.Id distintos e usa America/Sao_Paulo. Cards, gráficos e listagem respeitam os filtros globais."
             />
           </Box>
           <Stack direction="row" gap={1} alignItems="center">
@@ -516,7 +516,7 @@ export function CorrectionMonthlyPanel() {
           ?"Histórico local reconstruído."
           :report.quality.snapshotAvailable?"Histórico parcial.":"Snapshot histórico indisponível."}</b>{" "}
         {report.quality.localFallbackUsed
-          ?"O Azure histórico retornou cobertura vazia/incompleta e o Hub reconstruiu o período com os Work Items e mudanças de estado persistidos localmente. O backlog é provisório; movimentações sem cobertura completa ficam indisponíveis. O fechamento exige validação do histórico Azure."
+          ?"O Azure histórico retornou cobertura vazia/incompleta e o Hub reconstruiu o período com os Work Items e mudanças de estado persistidos localmente. O backlog é provisório; os cards mostram apenas movimentos comprovados como prévia parcial. Zero na prévia não comprova ausência de movimentos. O fechamento exige validação do histórico Azure."
           :"Os números de movimentações são prévios e NÃO estão homologados. Backlog exige escopo e snapshots de abertura/fechamento completos."}{" "}
         {[
           report.quality.historyError && `Revisões: ${report.quality.historyError}`,

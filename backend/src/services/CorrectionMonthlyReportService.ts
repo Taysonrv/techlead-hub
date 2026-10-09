@@ -3,7 +3,7 @@ import type { AxiosResponse } from "axios";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../database/prisma";
 import { AZURE_WORK_ITEM_FIELDS } from "./AzureWorkItemMapper";
-import { isSupportAnalyst } from "../domain/OperationalScope";
+import { isSupportAnalyst, resolveSimerClient } from "../domain/OperationalScope";
 
 type Identity = { displayName?: string; uniqueName?: string };
 type Revision = { id?: number; rev?: number; fields?: Record<string, unknown> };
@@ -443,7 +443,7 @@ ASOF '${asOf.toISOString()}'`;
     const grouped=new Map<number,Revision[]>();
     for(const revision of revisions){const id=Number(revision.id??revision.fields?.["System.Id"]);if(!Number.isSafeInteger(id))continue;const list=grouped.get(id)??[];list.push(revision);grouped.set(id,list);}
 
-    const rows:Row[]=[];
+    let rows:Row[]=[];
     for(const [id,history] of grouped){
       history.sort((a,b)=>(date(a.fields?.["System.ChangedDate"])?.getTime()??0)-(date(b.fields?.["System.ChangedDate"])?.getTime()??0));
       const normalizedHistory=history.map(revision=>{const f=revision.fields??{};return{revision,at:date(f["System.ChangedDate"])??date(f["System.CreatedDate"]),state:text(f["System.State"])}}).filter((item):item is {revision:Revision;at:Date;state:string}=>!!item.at&&!!item.state);
@@ -639,8 +639,14 @@ ASOF '${asOf.toISOString()}'`;
           start,
           close,
           stateEvents:periodEvents,
+          // StateChangeDate pertence ao estado atual. Só serve como evidência
+          // histórica quando esse estado já existia no fechamento consultado.
+          stateChangedAt:item.state===stateAtClose&&item.stateChangedAt&&item.stateChangedAt<=close
+            ? item.stateChangedAt : null,
         });
         const lastStateEvent=[...events].reverse().find(event=>event.changedAt<=close)??null;
+        const effectiveStateChangedAt=item.state===stateAtClose&&item.stateChangedAt&&item.stateChangedAt<=close
+          ? item.stateChangedAt : lastStateEvent?.changedAt??null;
         const terminalEvent=[...events].reverse().find(event=>
           event.changedAt<=close&&!!event.newValue&&TERMINAL.has(event.newValue.trim()),
         )??null;
@@ -652,11 +658,11 @@ ASOF '${asOf.toISOString()}'`;
           createdBy:item.createdByName,
           createdAt:createdAt.toISOString(),
           status:stateAtClose,
-          lastStateChangedAt:lastStateEvent?.changedAt.toISOString()??null,
+          lastStateChangedAt:effectiveStateChangedAt?.toISOString()??null,
           urgency:item.criticality,
           prioritized:item.prioritized,
           assignedTo:item.assignedToName,
-          terminalAt:TERMINAL.has(stateAtClose)?terminalEvent?.changedAt.toISOString()??null:null,
+          terminalAt:TERMINAL.has(stateAtClose)?(effectiveStateChangedAt??terminalEvent?.changedAt)?.toISOString()??null:null,
           remoteUrl:item.remoteUrl??this.workItemUrl(item.id),
           stateAtOpen,
           stateAtClose,
@@ -683,6 +689,12 @@ ASOF '${asOf.toISOString()}'`;
       }
     }
 
+    // Uma única carteira para cards, gráficos, filtros, detalhamento e exportação.
+    // Normaliza os nomes abreviados do Azure usando a regra compartilhada.
+    rows=rows.flatMap(row=>{
+      const client=resolveSimerClient(row.client);
+      return client ? [{...row,client}] : [];
+    });
     for(const row of rows){
       row.inPeriodUniverse=
         row.registeredInPeriod||
