@@ -190,7 +190,7 @@ export function Coordination() {
         .catch(() => { if (!controller.signal.aborted) setCapacity(null); });
     }, 120);
     return () => { window.clearTimeout(timer); controller.abort(); };
-  }, [Boolean(data), serviceDays]);
+  }, [data, serviceDays]);
 
   useEffect(() => {
     const controller = new AbortController();
