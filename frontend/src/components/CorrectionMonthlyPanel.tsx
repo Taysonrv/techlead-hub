@@ -164,7 +164,7 @@ export function CorrectionMonthlyPanel() {
     setLoading(true);
     setError("");
     setReport(null);
-    api.get<Report>("/azure-work-items/corrections/monthly-report",{params:{month},timeout:120000})
+    api.get<Report>("/azure-work-items/corrections/monthly-report",{params:{month,...(reloadToken>0?{refresh:"1"}:{})},timeout:120000})
       .then(({data}) => { if(active) setReport(data); })
       .catch((requestError) => {
         if(active) setError(getApiErrorMessage(requestError,"Não foi possível carregar o report mensal."));
@@ -203,6 +203,8 @@ export function CorrectionMonthlyPanel() {
   const value = (key:Exclude<Drill,null>) => base.filter(row=>match(row,key)).length;
   const initial = value("backlogInitial");
   const current = value("backlogCurrent");
+  // Snapshot indisponível não é sinônimo de backlog zerado.
+  const backlogVerified = report?.quality?.backlogHistoricalReliable === true;
   const delivered = value("delivered");
   const canceled = value("canceled");
   const registered = value("registered");
@@ -232,12 +234,12 @@ export function CorrectionMonthlyPanel() {
       info:"Conta Tasks que entraram em Registro durante o período e permaneciam em Registro no fechamento. Registro aparece no pipeline, mas nunca integra backlog.",
     },
     {
-      key:"backlogInitial" as const,label:"Backlog inicial",value:initial,note:"Estoque aberto na entrada",
+      key:"backlogInitial" as const,label:"Backlog inicial",value:backlogVerified?initial:"—",note:backlogVerified?"Estoque aberto na entrada":"Aguardando snapshot histórico",
       accent:aliareColors.purple,
       info:"Fotografia imediatamente anterior ao início do período: itens abertos, excluindo Registro, Concluído e Cancelado. Não exige movimentação no mês.",
     },
     {
-      key:"backlogCurrent" as const,label:"Backlog atual",value:current,note:"Estoque aberto no fechamento",
+      key:"backlogCurrent" as const,label:"Backlog atual",value:backlogVerified?current:"—",note:backlogVerified?"Estoque aberto no fechamento":"Aguardando snapshot histórico",
       accent:aliareColors.green,
       info:"Fotografia no fechamento do período: itens abertos, excluindo Registro, Concluído e Cancelado. Não exige movimentação no mês.",
     },
@@ -470,7 +472,9 @@ export function CorrectionMonthlyPanel() {
               info={card.info}
               accent={card.accent}
               active={drill===card.key}
-              onClick={()=>openMetric(card.key,card.label)}
+              onClick={!backlogVerified&&(card.key==="backlogInitial"||card.key==="backlogCurrent")
+                ? undefined
+                : ()=>openMetric(card.key,card.label)}
             />
           )}
         </Box>
@@ -493,20 +497,23 @@ export function CorrectionMonthlyPanel() {
                   description="Resumo gerencial derivado dos seis indicadores oficiais. Saídas = Entregues + Canceladas; saldo líquido = Registradas − Saídas; variação do backlog = Backlog atual − Backlog inicial. A checagem de consistência compara o total do Pipeline, Urgência e Priorização com o universo do período."
                 />
                 <MuiTooltip title={distributionConsistent?"Pipeline, Urgência e Priorização fecham com o mesmo universo do período.":`Divergência: universo ${periodUniverse}, pipeline ${pipelineTotal}, urgência ${urgencyTotal}, priorização ${priorityTotal}.`}>
-                  <Chip size="small" color={distributionConsistent?"success":"warning"} variant="outlined" label={distributionConsistent?"Recorte consistente":"Revisar distribuição"}/>
+                  <Chip size="small" color={distributionConsistent?"success":"warning"} variant="outlined"
+                    label={distributionConsistent
+                      ? (backlogVerified?"Distribuição consistente":"Distribuição local consistente · histórico parcial")
+                      : "Revisar distribuição"}/>
                 </MuiTooltip>
               </Box>
               <Box sx={{display:"grid",gridTemplateColumns:{xs:"repeat(2,minmax(0,1fr))",md:"repeat(4,minmax(110px,1fr))"},gap:{xs:1,md:2.2}}}>
                 {[
                   ["Saídas do mês",outputs],
                   ["Saldo líquido",`${flowBalance>0?"+":""}${flowBalance}`],
-                  ["Variação backlog",`${delta>0?"+":""}${delta}`],
+                  ["Variação backlog",backlogVerified?`${delta>0?"+":""}${delta}`:"—"],
                   ["Universo",periodUniverse],
                 ].map(([label,val],index)=>
                   <Box key={String(label)} sx={{minWidth:0}}>
                     <Typography variant="caption" color="text.secondary">{label}</Typography>
                     <Stack direction="row" alignItems="center" gap={0.35}>
-                      {index===2&&(delta<=0?<TrendingDownOutlined color="success" sx={{fontSize:18}}/>:<TrendingUpOutlined color="warning" sx={{fontSize:18}}/>)}
+                      {index===2&&backlogVerified&&(delta<=0?<TrendingDownOutlined color="success" sx={{fontSize:18}}/>:<TrendingUpOutlined color="warning" sx={{fontSize:18}}/>)}
                       <Typography sx={{fontWeight:900,fontSize:"1.15rem"}}>{val}</Typography>
                     </Stack>
                   </Box>
