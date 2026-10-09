@@ -1543,6 +1543,7 @@ export function Versions() {
                 },
               }}
               slotProps={{
+                htmlInput: { "aria-label": "Pesquisar versões e tarefas" },
                 input: {
                   startAdornment:
                     (
