@@ -243,11 +243,11 @@ export function CorrectionMonthlyPanel() {
     teamCreators.every((creator) => creators.includes(creator));
   const septemberHomologation = month === "2026-09"
     ? [
-        {key:"backlogInitial",label:"Backlog inicial",actual:backlogVerified?initial:null,expected:SEPTEMBER_2026_REFERENCE.backlogInitial},
-        {key:"registered",label:"Registradas",actual:registered,expected:SEPTEMBER_2026_REFERENCE.registered},
-        {key:"delivered",label:"Entregues",actual:delivered,expected:SEPTEMBER_2026_REFERENCE.delivered},
-        {key:"canceled",label:"Canceladas",actual:canceled,expected:SEPTEMBER_2026_REFERENCE.canceled},
-        {key:"registration",label:"Em Registro",actual:value("registration"),expected:SEPTEMBER_2026_REFERENCE.registration},
+        {key:"backlogInitial",label:"Backlog inicial",actual:backlogVerified?initial:null,expected:SEPTEMBER_2026_REFERENCE.backlogInitial,verified:backlogVerified},
+        {key:"registered",label:"Registradas",actual:registered,expected:SEPTEMBER_2026_REFERENCE.registered,verified:true},
+        {key:"delivered",label:"Entregues",actual:delivered,expected:SEPTEMBER_2026_REFERENCE.delivered,verified:monthlyMovementVerified},
+        {key:"canceled",label:"Canceladas",actual:canceled,expected:SEPTEMBER_2026_REFERENCE.canceled,verified:monthlyMovementVerified},
+        {key:"registration",label:"Em Registro",actual:value("registration"),expected:SEPTEMBER_2026_REFERENCE.registration,verified:monthlyMovementVerified},
       ]
     : [];
 
@@ -538,7 +538,7 @@ export function CorrectionMonthlyPanel() {
             </Box>
             <Box sx={{display:"grid",gridTemplateColumns:{xs:"repeat(2,minmax(0,1fr))",sm:"repeat(5,minmax(108px,1fr))"},gap:.7}}>
               {septemberHomologation.map(item=>{
-                const comparable=teamScopeActive&&item.actual!==null;
+                const comparable=teamScopeActive&&item.verified&&item.actual!==null;
                 const matches=comparable&&item.actual===item.expected;
                 return <Box key={item.key} sx={{
                   px:1,py:.7,border:"1px solid",borderColor:matches?"success.main":comparable?"warning.main":"divider",
@@ -613,8 +613,8 @@ export function CorrectionMonthlyPanel() {
               </Box>
               <Box sx={{display:"grid",gridTemplateColumns:{xs:"repeat(2,minmax(0,1fr))",md:"repeat(4,minmax(110px,1fr))"},gap:{xs:1,md:2.2}}}>
                 {[
-                  ["Saídas do mês",outputs],
-                  ["Saldo líquido",`${flowBalance>0?"+":""}${flowBalance}`],
+                  ["Saídas do mês",monthlyMovementVerified?outputs:"—"],
+                  ["Saldo líquido",monthlyMovementVerified?`${flowBalance>0?"+":""}${flowBalance}`:"—"],
                   ["Variação backlog",backlogVerified?`${delta>0?"+":""}${delta}`:"—"],
                   ["Universo",periodUniverse],
                 ].map(([label,val],index)=>
