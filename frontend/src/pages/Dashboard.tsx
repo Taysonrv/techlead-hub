@@ -2066,13 +2066,14 @@ export function Dashboard() {
 
                 <IconButton
                   size="small"
+                  aria-label="Fechar detalhamento"
                   onClick={() =>
                     setDrilldown(
                       null
                     )
                   }
                 >
-                  ✕
+                  <CloseOutlined fontSize="small" />
                 </IconButton>
               </Stack>
 
@@ -2340,13 +2341,14 @@ export function Dashboard() {
 
                 <IconButton
                   size="small"
+                  aria-label="Fechar ticket"
                   onClick={() =>
                     setSelectedTicket(
                       null
                     )
                   }
                 >
-                  ✕
+                  <CloseOutlined fontSize="small" />
                 </IconButton>
               </Stack>
 
