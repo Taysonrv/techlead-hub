@@ -82,6 +82,7 @@ import {
   semanticChartColors,
 } from "../theme/chartPalette";
 import { PageHeader } from "../components/PageHeader";
+import { CorrectionMonthlyPanel } from "../components/CorrectionMonthlyPanel";
 import { ExecutiveSection } from "../components/ExecutiveSection";
 import { useTheme } from "@mui/material/styles";
 
@@ -1410,7 +1411,7 @@ export function AzureWorkItems({
 
   const title =
     isCorrection
-      ? "Correções"
+      ? "Painel de Tasks de Correções"
       : isSupport
         ? "Apoios"
         : "Evoluções";
@@ -1424,7 +1425,7 @@ export function AzureWorkItems({
 
   const subtitle =
     isCorrection
-      ? "Visão operacional e gerencial das correções do SIMER sincronizadas com o Azure DevOps."
+      ? "Visão confiável e rastreável das Correções Clientes, com acompanhamento operacional e apuração do report mensal."
       : isSupport
         ? "Visão operacional e gerencial dos APOIOs vinculados aos atendimentos do Movidesk."
         : "Visão operacional e gerencial das evoluções do SIMER sincronizadas com o Azure DevOps.";
@@ -1631,14 +1632,14 @@ export function AzureWorkItems({
     );
 
   useEffect(() => {
-    void loadAll();
-  }, [
-    loadAll,
-  ]);
+    // O painel mensal tem consulta e cache próprios: evitar três requisições
+    // genéricas desnecessárias ao abrir Correções.
+    if (!isCorrection) void loadAll();
+  }, [isCorrection, loadAll]);
 
   useEffect(() => {
-    void loadFilters();
-  }, [loadFilters]);
+    if (!isCorrection) void loadFilters();
+  }, [isCorrection, loadFilters]);
 
   useEffect(() => {
     const timeout =
@@ -2565,8 +2566,12 @@ export function AzureWorkItems({
           eyebrow="Desenvolvimento"
           title={title}
           description={subtitle}
-          meta={<>{formatNumber(summary?.total)} Work Item(s) sincronizado(s) • Dados locais sincronizados com Azure DevOps</>}
-          action={<Button variant="outlined" disabled={refreshing} startIcon={refreshing ? <CircularProgress size={15} /> : <RefreshOutlined />} onClick={() => void loadAll()}>{refreshing ? "Atualizando" : "Recarregar"}</Button>}
+          meta={isCorrection
+            ? "Report de Correções Clientes · apuração por snapshots e histórico do Azure DevOps"
+            : <>{formatNumber(summary?.total)} Work Item(s) sincronizado(s) • Dados locais sincronizados com Azure DevOps</>}
+          action={isCorrection
+            ? undefined
+            : <Button variant="outlined" disabled={refreshing} startIcon={refreshing ? <CircularProgress size={15} /> : <RefreshOutlined />} onClick={() => void loadAll()}>{refreshing ? "Atualizando" : "Recarregar"}</Button>}
         />
 
         {error && (
@@ -2577,6 +2582,9 @@ export function AzureWorkItems({
           </Alert>
         )}
 
+        {isCorrection && <CorrectionMonthlyPanel />}
+
+        {!isCorrection && <>
         {/* =================================================
             KPIs
         ================================================= */}
@@ -4279,6 +4287,7 @@ export function AzureWorkItems({
             </Stack>
           </CardContent>
         </Card>
+        </>}
       </Stack>
 
       {/* ===================================================
