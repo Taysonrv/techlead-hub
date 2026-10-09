@@ -1013,7 +1013,7 @@ export function Sidebar() {
               <Typography variant="body2" sx={{ mt: .55, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{chatPopup.preview}</Typography>
               <Button size="small" sx={{ mt: .7, px: 0, fontWeight: 850 }} onClick={() => { const popup = chatPopup; setChatPopup(null); if (location.pathname === "/chat") navigate(`/chat?channel=${popup.channelId}`); else void openFloatingChat(popup.channelId, popup.channelName); }}>Abrir conversa</Button>
             </Box>
-            <IconButton size="small" aria-label="Fechar notificação" onClick={() => setChatPopup(null)}><Box component="span" sx={{ fontSize: 18, lineHeight: 1 }}>×</Box></IconButton>
+            <IconButton size="small" aria-label="Fechar notificação" onClick={() => setChatPopup(null)}><CloseRounded fontSize="small" /></IconButton>
           </Stack>}
         </Paper>
       </Snackbar>
