@@ -213,10 +213,12 @@ export function GlobalTopBar() {
     setMeetingError("");
     try {
       await api.delete(`/global/calendar/meetings/${editingMeeting.id}`);
+      setCancelMeetingDialogOpen(false);
       setMeetingDialogOpen(false);
       setEditingMeeting(null);
       setCalendarVersion((value) => value + 1);
     } catch (requestError) {
+      setCancelMeetingDialogOpen(false);
       setMeetingError(getApiErrorMessage(requestError, "Não foi possível cancelar a reunião."));
     } finally {
       setMeetingSaving(false);
