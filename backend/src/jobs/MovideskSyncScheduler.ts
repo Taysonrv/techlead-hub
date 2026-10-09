@@ -60,8 +60,8 @@ export class MovideskSyncScheduler {
     }
     if (!tryAcquireMovideskApi("TICKETS")) {
       requestMovideskApiPriority();
-      console.log("[movidesk-sync] API ocupada: sincronização principal ganhou prioridade e tentará novamente em 2 minuto(s).");
-      return 2 * 60_000;
+      console.log("[movidesk-sync] API ocupada: sincronização principal ganhou prioridade e tentará novamente em 30s.");
+      return 30_000;
     }
     this.running = true;
     const started = Date.now();
@@ -82,7 +82,8 @@ export class MovideskSyncScheduler {
       const s = await service.syncTickets(null, false, false);
       console.log([
         "[movidesk-sync] Sincronização concluída.",
-        `modo=${s.mode}`, `paginas=${s.pages}`, `total=${s.totalRows}`,
+        `modo=${s.mode}`, `desde=${s.since??"baseline"}`,
+        `paginas=${s.pages}`, `total=${s.totalRows}`,
         `inseridos=${s.created}`, `atualizados=${s.updated}`,
         `ignorados=${s.ignored}`, `erros=${s.errors}`,
         `duração=${Math.round((Date.now()-started)/1000)}s`
