@@ -35,13 +35,13 @@ export function HubNavigation<T extends string>({
         minWidth: 0,
         border: "1px solid",
         borderColor: dark ? "rgba(116,166,216,.18)" : "rgba(15,23,42,.08)",
-        borderRadius: 2.5,
+        borderRadius: "12px",
         background: dark
           ? "linear-gradient(145deg, rgba(8,29,43,.88), rgba(7,22,35,.76))"
           : "linear-gradient(180deg, rgba(255,255,255,.94), rgba(248,250,252,.92))",
         boxShadow: dark
-          ? "0 10px 28px rgba(0,0,0,.12), inset 0 1px rgba(255,255,255,.025)"
-          : "0 6px 20px rgba(15,23,42,.035)",
+          ? "0 8px 22px rgba(0,0,0,.10), inset 0 1px rgba(255,255,255,.025)"
+          : "0 5px 16px rgba(15,23,42,.03)",
         backdropFilter: "blur(14px)",
       }}
     >
@@ -81,7 +81,7 @@ export function HubNavigation<T extends string>({
             minWidth: "auto",
             px: { xs: 1.15, sm: 1.5 },
             py: 0.7,
-            borderRadius: 2,
+            borderRadius: "8px",
             color: "text.secondary",
             fontSize: ".82rem",
             fontWeight: 760,
