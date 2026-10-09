@@ -1429,6 +1429,7 @@ export function Attention() {
                         <Tooltip title="Copiar número do ticket">
                           <IconButton
                             size="small"
+                            aria-label="Copiar número do ticket"
                             onClick={(
                               event
                             ) => {
