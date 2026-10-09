@@ -392,7 +392,7 @@ export function CorrectionMonthlyPanel() {
   const panel = {
     border:"1px solid",
     borderColor:"divider",
-    borderRadius:3,
+    borderRadius:"12px",
     bgcolor:"background.paper",
     overflow:"hidden",
   };
@@ -400,7 +400,7 @@ export function CorrectionMonthlyPanel() {
   const chartPanel = {
     ...panel,
     height:"100%",
-    minHeight:360,
+    minHeight:390,
     display:"flex",
     boxShadow:theme.palette.mode==="dark"?"0 14px 34px rgba(0,0,0,.13)":"0 10px 28px rgba(15,23,42,.045)",
     "& .recharts-bar-rectangle, & .recharts-sector":{cursor:"pointer"},
@@ -450,9 +450,16 @@ export function CorrectionMonthlyPanel() {
           <Box sx={{display:"grid",gridTemplateColumns:"minmax(0,1fr) auto",gap:.7}}>
             <Autocomplete multiple size="small" options={options.creators} value={creators} onChange={(_,value)=>setCreators(value)}
               renderInput={params=><TextField {...params} label="Criado por"/>}/>
-            <MuiTooltip title="Selecionar os criadores pertencentes ao time SIMER">
-              <span><Button size="small" variant="outlined" disabled={!report?.filters?.teamCreators?.length}
-                onClick={()=>setCreators(report?.filters?.teamCreators??[])} sx={{height:40,whiteSpace:"nowrap"}}>Time SIMER</Button></span>
+            <MuiTooltip title="Aplicar exatamente o escopo de criadores do time SIMER usado na homologação">
+              <span><Button
+                size="small"
+                variant={teamScopeActive?"contained":"outlined"}
+                disabled={!teamCreators.length}
+                onClick={()=>setCreators(teamCreators)}
+                sx={{height:40,whiteSpace:"nowrap"}}
+              >
+                Time SIMER
+              </Button></span>
             </MuiTooltip>
           </Box>
           <Autocomplete multiple size="small" options={options.clients} value={clients} onChange={(_,value)=>setClients(value)}
@@ -509,7 +516,12 @@ export function CorrectionMonthlyPanel() {
     {loading
       ? <Box sx={{py:5,textAlign:"center"}}><CircularProgress size={28}/><Typography variant="body2" color="text.secondary" sx={{mt:1}}>Reconstruindo o fechamento mensal…</Typography></Box>
       : report&&<>
-        <Box sx={{display:"grid",gridTemplateColumns:{xs:"1fr",sm:"repeat(2,1fr)",lg:"repeat(3,1fr)",xl:"repeat(6,1fr)"},gap:1}}>
+        <Box sx={{
+          display:"grid",
+          gridTemplateColumns:{xs:"1fr",sm:"repeat(2,minmax(0,1fr))",lg:"repeat(3,minmax(0,1fr))",xl:"repeat(6,minmax(0,1fr))"},
+          gap:1,
+          alignItems:"stretch",
+        }}>
           {cards.map(card=>
             <KpiCard
               key={card.key}
@@ -519,6 +531,7 @@ export function CorrectionMonthlyPanel() {
               info={card.info}
               accent={card.accent}
               active={drill===card.key}
+              density="compact"
               onClick={!backlogVerified&&(card.key==="backlogInitial"||card.key==="backlogCurrent")
                 ? undefined
                 : ()=>openMetric(card.key,card.label)}
@@ -570,7 +583,12 @@ export function CorrectionMonthlyPanel() {
           </CardContent>
         </Card>
 
-        <Box sx={{display:"grid",gridTemplateColumns:{xs:"1fr",xl:"2fr 1fr 1fr"},gap:1.25,alignItems:"stretch"}}>
+        <Box sx={{
+          display:"grid",
+          gridTemplateColumns:{xs:"1fr",lg:"minmax(0,1.55fr) minmax(280px,.9fr)",xl:"minmax(0,1.85fr) minmax(300px,.95fr) minmax(300px,.95fr)"},
+          gap:1.15,
+          alignItems:"stretch",
+        }}>
           <Card elevation={0} sx={chartPanel}>
             <CardContent sx={{flex:1,display:"flex",flexDirection:"column",p:1.7,"&:last-child":{pb:1.7}}}>
               <CardHeading
@@ -578,17 +596,20 @@ export function CorrectionMonthlyPanel() {
                 subtitle={backlogVerified?`${periodUniverse} task(s) no snapshot final`:`${periodUniverse} task(s) com status recuperado no recorte parcial`}
                 info="Distribui pelo status no snapshot de fechamento somente as Correções Clientes que participam do universo do período e filtros atuais. A soma das barras corresponde ao universo do período. Registro aparece no pipeline, mas é excluído de backlog."
               />
-              <Box sx={{flex:1,minHeight:Math.max(290,pipeline.length*29),mt:.8}}>
+              <Box sx={{flex:1,minHeight:Math.max(340,pipeline.length*31),mt:1}}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={pipeline} layout="vertical" margin={{left:12,right:38,top:4,bottom:4}}>
+                  <BarChart data={pipeline} layout="vertical" margin={{left:14,right:46,top:6,bottom:6}}>
                     <CartesianGrid strokeDasharray="3 5" horizontal={false} stroke={theme.palette.divider} opacity={.55}/>
-                    <XAxis type="number" allowDecimals={false} tick={{fill:theme.palette.text.secondary,fontSize:11}}/>
-                    <YAxis type="category" dataKey="name" width={122} tick={{fill:theme.palette.text.secondary,fontSize:11}}/>
+                    <XAxis type="number" allowDecimals={false} axisLine={false} tickLine={false}
+                      tick={{fill:theme.palette.text.secondary,fontSize:12,fontWeight:650}}/>
+                    <YAxis type="category" dataKey="name" width={138} axisLine={false} tickLine={false}
+                      tick={{fill:theme.palette.text.secondary,fontSize:12,fontWeight:650}}/>
                     <ChartTooltip cursor={{fill:theme.palette.action.hover}}/>
-                    <Bar dataKey="total" radius={[0,6,6,0]}
+                    <Bar dataKey="total" barSize={18} radius={[0,6,6,0]}
                       onClick={data=>{const name=(data as {name?:string}).name;if(name)selectSlice({kind:"status",value:name},`Status · ${name}`)}}>
                       {pipeline.map((_,index)=><Cell key={index} fill={chartPalette[index%chartPalette.length]}/>)}
-                      <LabelList dataKey="total" position="right" fill={theme.palette.text.secondary}/>
+                      <LabelList dataKey="total" position="right" fill={theme.palette.text.secondary}
+                        fontSize={12} fontWeight={800}/>
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
@@ -603,16 +624,19 @@ export function CorrectionMonthlyPanel() {
                 subtitle="Distribuição do universo do período"
                 info="Agrupa o mesmo universo do período pela urgência/criticidade registrada no Azure. Respeita todos os filtros globais. Clique em uma barra para abrir as Tasks correspondentes."
               />
-              <Box sx={{flex:1,minHeight:300,mt:.8}}>
+              <Box sx={{flex:1,minHeight:340,mt:1}}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={urgency} layout="vertical" margin={{left:10,right:34,top:8,bottom:8}}>
+                  <BarChart data={urgency} layout="vertical" margin={{left:12,right:42,top:8,bottom:8}}>
                     <CartesianGrid strokeDasharray="3 5" horizontal={false} stroke={theme.palette.divider} opacity={.55}/>
-                    <XAxis type="number" allowDecimals={false} tick={{fill:theme.palette.text.secondary,fontSize:11}}/>
-                    <YAxis type="category" dataKey="name" width={88} tick={{fill:theme.palette.text.secondary,fontSize:11}}/>
+                    <XAxis type="number" allowDecimals={false} axisLine={false} tickLine={false}
+                      tick={{fill:theme.palette.text.secondary,fontSize:12,fontWeight:650}}/>
+                    <YAxis type="category" dataKey="name" width={96} axisLine={false} tickLine={false}
+                      tick={{fill:theme.palette.text.secondary,fontSize:12,fontWeight:650}}/>
                     <ChartTooltip cursor={{fill:theme.palette.action.hover}}/>
-                    <Bar dataKey="total" fill={semanticChartColors.attention} radius={[0,6,6,0]}
+                    <Bar dataKey="total" fill={semanticChartColors.attention} barSize={24} radius={[0,6,6,0]}
                       onClick={data=>{const name=(data as {name?:string}).name;if(name)selectSlice({kind:"urgency",value:name},`Urgência · ${name}`)}}>
-                      <LabelList dataKey="total" position="right" fill={theme.palette.text.secondary}/>
+                      <LabelList dataKey="total" position="right" fill={theme.palette.text.secondary}
+                        fontSize={12} fontWeight={800}/>
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
@@ -627,16 +651,25 @@ export function CorrectionMonthlyPanel() {
                 subtitle="Priorizadas x não priorizadas"
                 info="Agrupa o mesmo universo do período pelo campo Priorizada do Azure. Respeita os filtros globais. Clique em um segmento para abrir as Tasks correspondentes."
               />
-              <Box sx={{height:220,mt:.5}}>
+              <Box sx={{height:250,mt:.8,position:"relative"}}>
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
-                    <Pie data={priority} dataKey="total" nameKey="name" innerRadius={58} outerRadius={88} paddingAngle={3}
+                    <Pie data={priority} dataKey="total" nameKey="name" innerRadius={68} outerRadius={100} paddingAngle={2}
+                      stroke={theme.palette.background.paper} strokeWidth={2}
                       onClick={data=>{const name=(data as {name?:string}).name;if(name)selectSlice({kind:"prioritized",value:name==="Priorizadas"?true:name==="Não priorizadas"?false:null},`Priorização · ${name}`)}}>
                       {priority.map((_,index)=><Cell key={index} fill={[aliareColors.green,aliareColors.info,semanticChartColors.attention][index%3]}/>)}
                     </Pie>
                     <ChartTooltip/>
                   </PieChart>
                 </ResponsiveContainer>
+                <Box sx={{
+                  position:"absolute",inset:0,display:"grid",placeItems:"center",pointerEvents:"none",
+                }}>
+                  <Box sx={{textAlign:"center"}}>
+                    <Typography sx={{fontWeight:900,fontSize:"1.45rem",lineHeight:1,fontVariantNumeric:"tabular-nums"}}>{periodUniverse}</Typography>
+                    <Typography variant="caption" color="text.secondary">Tasks</Typography>
+                  </Box>
+                </Box>
               </Box>
               <Stack spacing={0.65} sx={{mt:"auto"}}>
                 {priority.map(item=>
@@ -680,7 +713,7 @@ export function CorrectionMonthlyPanel() {
               </Stack>
             </Stack>
 
-            <TableContainer sx={{mt:1.2,maxHeight:520,border:"1px solid",borderColor:"divider",borderRadius:2,overflow:"auto"}}>
+            <TableContainer sx={{mt:1.2,maxHeight:560,border:"1px solid",borderColor:"divider",borderRadius:"10px",overflow:"auto"}}>
               <Table stickyHeader size="small">
                 <TableHead sx={{"& .MuiTableCell-head":{bgcolor:theme.palette.mode==="dark"?"#111827":"#172033",color:"#fff",fontWeight:850,borderBottom:"none",whiteSpace:"nowrap"}}}>
                   <TableRow>
@@ -690,7 +723,26 @@ export function CorrectionMonthlyPanel() {
                 <TableBody>
                   {detailed.map(row=>
                     <TableRow hover key={row.id} onClick={()=>{setSelectedTaskId(row.id);setDrawerTitle(`Task #${row.id}`);setDrawerOpen(true)}} sx={{cursor:"pointer"}}>
-                      <TableCell><Button size="small" onClick={event=>{event.stopPropagation();setDrawerOpen(false);navigate(`/correcoes?task=${row.id}`)}}>{row.id}</Button></TableCell>
+                      <TableCell>
+                        <Button
+                          size="small"
+                          component={row.remoteUrl?"a":"button"}
+                          href={row.remoteUrl??undefined}
+                          target={row.remoteUrl?"_blank":undefined}
+                          rel={row.remoteUrl?"noreferrer":undefined}
+                          endIcon={row.remoteUrl?<OpenInNewOutlined sx={{fontSize:"14px !important"}}/>:undefined}
+                          onClick={event=>{
+                            event.stopPropagation();
+                            if(!row.remoteUrl){
+                              setDrawerOpen(false);
+                              navigate(`/correcoes?task=${row.id}`);
+                            }
+                          }}
+                          sx={{fontWeight:850,minWidth:0}}
+                        >
+                          {row.id}
+                        </Button>
+                      </TableCell>
                       <TableCell sx={{minWidth:240,maxWidth:360,fontWeight:650}}>{row.title}</TableCell>
                       <TableCell>{row.client||"—"}</TableCell>
                       <TableCell>{row.createdBy||"—"}</TableCell>
