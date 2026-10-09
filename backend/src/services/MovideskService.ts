@@ -5,6 +5,7 @@ import { prisma } from "../database/prisma";
 import { MovideskJsonImportService } from "./MovideskJsonImportService";
 import { isSimerClient, SIMER_CLIENTS } from "../domain/OperationalScope";
 import { movideskRateLimiter } from "./MovideskRateLimiter";
+import { hasMovideskApiPriorityRequest } from "../jobs/MovideskSyncCoordinator";
 
 const PAGE_SIZE = 50;
 const INCREMENTAL_OVERLAP_MINUTES = 10;
@@ -1579,8 +1580,15 @@ export class MovideskService {
     const errorDetails: Array<{ ticketId: number; message: string }> = [];
 
     const enrichmentStartedAt = Date.now();
+    let attempted = 0;
+    let yieldedToSync = false;
     for (let index = 0; index < tickets.length; index += 1) {
+      if (hasMovideskApiPriorityRequest()) {
+        yieldedToSync = true;
+        break;
+      }
       const ticket = tickets[index]!;
+      attempted += 1;
       try {
         const response = await this.getWithRetry(`${this.url}/tickets`, {
           params: {
@@ -1843,18 +1851,17 @@ export class MovideskService {
         });
       }
 
-      if (index < tickets.length - 1) {
-      }
     }
 
-    const processed = Math.max(0, tickets.length - errors);
+    const processed = Math.max(0, attempted - errors);
     const pendingAfterRun = Math.max(0, pendingBeforeRun - processed);
     const elapsedMinutes = Math.max((Date.now() - enrichmentStartedAt) / 60_000, 1 / 60);
     const throughputPerMinute = processed / elapsedMinutes;
     const estimatedMinutesRemaining = throughputPerMinute > 0 && pendingAfterRun > 0 ? Math.ceil(pendingAfterRun / throughputPerMinute) : null;
 
     return {
-      tickets: tickets.length,
+      tickets: attempted,
+      yieldedToSync,
       pendingBeforeRun,
       pendingAfterRun,
       actions,

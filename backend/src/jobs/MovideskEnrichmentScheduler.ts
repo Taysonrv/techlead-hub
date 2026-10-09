@@ -108,6 +108,7 @@ export class MovideskEnrichmentScheduler {
         console.log([
           "[movidesk-enrichment] Lote concluído.",
           `tickets=${result.tickets}`,
+          `cedeuParaSync=${result.yieldedToSync ? "sim" : "não"}`,
           `pendentesAntes=${result.pendingBeforeRun}`,
           `pendentesDepois=${result.pendingAfterRun}`,
           `acoes=${result.actions}`,

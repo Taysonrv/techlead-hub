@@ -6,6 +6,11 @@ import { clearMovideskApiPriority, releaseMovideskApi, requestMovideskApiPriorit
 const DEFAULT_INTERVAL_MINUTES = 5;
 const DEFAULT_INITIAL_DELAY_SECONDS = 5;
 
+export function movideskNextCycleDelay(intervalMs: number, elapsedMs: number) {
+  // Mantém cadência entre inícios, sem sobreposição ou loop imediato.
+  return Math.max(30_000, intervalMs - Math.max(0, elapsedMs));
+}
+
 export class MovideskSyncScheduler {
   private timer: NodeJS.Timeout | null = null;
   private running = false;
@@ -47,9 +52,14 @@ export class MovideskSyncScheduler {
   }
 
   private async runAndReschedule() {
+    const started = Date.now();
     let nextDelay: number | null = null;
     try { nextDelay = await this.execute(); }
-    finally { this.schedule(nextDelay ?? this.intervalMinutes() * 60_000); }
+    finally {
+      const delay = nextDelay ?? movideskNextCycleDelay(this.intervalMinutes() * 60_000, Date.now() - started);
+      if (!this.stopped) console.log(`[movidesk-sync] Próxima tentativa em ${Math.ceil(delay / 1000)}s.`);
+      this.schedule(delay);
+    }
   }
 
   private async execute(): Promise<number | null> {
