@@ -102,6 +102,11 @@ type Report = {
   quality?:{
     historyAvailable:boolean;historyError:string|null;snapshotAvailable?:boolean;snapshotError?:string|null;
     historicalScopeError?:string|null;mode:string;historicalMetricsReliable:boolean;backlogHistoricalReliable?:boolean;
+    diagnostics?:{
+      localRecords:number;localPeriodCandidates:number;revisions:number;
+      openingScopeIds:number;closingScopeIds:number;snapshotCandidates:number;
+      openingSnapshotItems:number;closingSnapshotItems:number;outputRows:number;
+    };
   };
 };
 
@@ -205,6 +210,7 @@ export function CorrectionMonthlyPanel() {
   const current = value("backlogCurrent");
   // Snapshot indisponível não é sinônimo de backlog zerado.
   const backlogVerified = report?.quality?.backlogHistoricalReliable === true;
+  const monthlyMovementVerified = report?.quality?.historicalMetricsReliable === true;
   const delivered = value("delivered");
   const canceled = value("canceled");
   const registered = value("registered");
@@ -214,17 +220,17 @@ export function CorrectionMonthlyPanel() {
 
   const cards = [
     {
-      key:"registered" as const,label:"Tasks registradas",value:registered,note:"Criadas no período",
+      key:"registered" as const,label:"Tasks registradas",value:registered,note:monthlyMovementVerified?"Criadas no período":"Prévia parcial · validar histórico",
       accent:aliareColors.info,
       info:"Conta System.Id distintos criados dentro do período selecionado, independentemente do status no snapshot de fechamento.",
     },
     {
-      key:"delivered" as const,label:"Tasks entregues",value:delivered,note:"Concluídas no período",
+      key:"delivered" as const,label:"Tasks entregues",value:delivered,note:monthlyMovementVerified?"Concluídas no período":"Prévia parcial · validar histórico",
       accent:aliareColors.green,
       info:"Conta Tasks que entraram efetivamente em Concluído durante o período e permaneciam em Concluído no snapshot de fechamento.",
     },
     {
-      key:"canceled" as const,label:"Tasks canceladas",value:canceled,note:"Canceladas no período",
+      key:"canceled" as const,label:"Tasks canceladas",value:canceled,note:monthlyMovementVerified?"Canceladas no período":"Prévia parcial · validar histórico",
       accent:theme.palette.error.main,
       info:"Conta Tasks que entraram efetivamente em Cancelado durante o período e permaneciam em Cancelado no snapshot de fechamento.",
     },
@@ -451,8 +457,22 @@ export function CorrectionMonthlyPanel() {
     {report?.quality&&(!report.quality.historicalMetricsReliable||!!report.quality.historicalScopeError)&&
       <Alert severity="warning">
         <b>{report.quality.snapshotAvailable?"Histórico parcial.":"Snapshot histórico indisponível."}</b>{" "}
-        Movimentações mensais só devem ser homologadas com histórico de System.State, snapshots e escopo ASOF disponíveis.{" "}
-        {report.quality.historyError||report.quality.snapshotError||report.quality.historicalScopeError||""}
+        Os números de movimentações são prévios e NÃO estão homologados. Backlog exige escopo e snapshots de abertura/fechamento completos.{" "}
+        {[
+          report.quality.historyError && `Revisões: ${report.quality.historyError}`,
+          report.quality.snapshotError && `Snapshots: ${report.quality.snapshotError}`,
+          report.quality.historicalScopeError && `Escopo ASOF: ${report.quality.historicalScopeError}`,
+        ].filter(Boolean).join(" | ")}
+        {report.quality.diagnostics && (
+          <Typography component="p" variant="caption" sx={{mt:0.8,opacity:0.9}}>
+            Cobertura da apuração: {report.quality.diagnostics.revisions} revisões;{" "}
+            {report.quality.diagnostics.openingScopeIds} IDs abertos na entrada;{" "}
+            {report.quality.diagnostics.closingScopeIds} IDs abertos no fechamento;{" "}
+            {report.quality.diagnostics.snapshotCandidates} candidatos;{" "}
+            snapshots {report.quality.diagnostics.openingSnapshotItems}/{report.quality.diagnostics.closingSnapshotItems} (entrada/fechamento);{" "}
+            {report.quality.diagnostics.outputRows} Tasks no relatório.
+          </Typography>
+        )}
       </Alert>
     }
     {!loading&&report&&report.rows.length===0&&
