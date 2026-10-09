@@ -129,7 +129,7 @@ export function PeriodFilter() {
               type="date"
               value={startDate}
               onChange={(event) => setStartDate(event.target.value)}
-              inputProps={{ "aria-label": "Data inicial" }}
+              slotProps={{ htmlInput: { "aria-label": "Data inicial" } }}
               sx={fieldSx}
             />
           </Box>
@@ -158,7 +158,7 @@ export function PeriodFilter() {
               type="date"
               value={endDate}
               onChange={(event) => setEndDate(event.target.value)}
-              inputProps={{ "aria-label": "Data final" }}
+              slotProps={{ htmlInput: { "aria-label": "Data final" } }}
               sx={fieldSx}
             />
           </Box>
