@@ -42,7 +42,7 @@ function date(value: unknown): Date | null {
 function normalized(value: string) {
   return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR");
 }
-function saoPauloMonth(month: string) {
+export function saoPauloMonth(month: string, nowUtc: Date = new Date()) {
   if (!/^\d{4}-\d{2}$/.test(month)) throw new Error("Período inválido. Use YYYY-MM.");
   const parts = month.split("-");
   const year = Number(parts[0]);
@@ -55,7 +55,7 @@ function saoPauloMonth(month: string) {
   // Meses encerrados usam 23:59:59.999 do último dia em São Paulo.
   // No mês corrente, ASOF futuro é inválido no Azure DevOps: utilizamos
   // uma fotografia de "agora" com pequena margem contra diferença de relógio.
-  const now = new Date(Date.now() - 60_000);
+  const now = new Date(nowUtc.getTime() - 60_000);
   if (now < start) throw new Error("Não é possível consultar um período que ainda não começou.");
   const periodEnd = new Date(endExclusive.getTime() - 1);
   const close = periodEnd < now ? periodEnd : now;
