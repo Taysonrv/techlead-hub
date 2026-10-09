@@ -28,8 +28,7 @@ import {
   RuleOutlined,
   SearchOutlined,
   SchemaOutlined,
-  SettingsOutlined,
-} from "@mui/icons-material";
+ } from "@mui/icons-material";
 import { api } from "../services/api";
 import { SimerMapTree, type SimerTreeNode } from "./SimerMapTree";
 
@@ -353,7 +352,7 @@ export function SystemExplorer({
           borderRadius: 3,
           position: { lg: "sticky" },
           top: { lg: 8 },
-          maxHeight: { lg: "calc(100vh - 92px)" },
+          maxHeight: { lg: "calc(100dvh - 92px)" },
           overflow: "auto",
         }}
       >
@@ -370,12 +369,14 @@ export function SystemExplorer({
 
           <Stack direction="row" spacing={0.7}>
             <TextField
+              id="system-explorer-search"
               fullWidth
               size="small"
               value={filter}
               onChange={(event) => setFilter(event.target.value)}
               placeholder="Buscar no sistema..."
               slotProps={{
+                htmlInput: { "aria-label": "Buscar na estrutura do sistema" },
                 input: {
                   startAdornment: (
                     <InputAdornment position="start">
@@ -385,9 +386,6 @@ export function SystemExplorer({
                 },
               }}
             />
-            <Button variant="outlined" sx={{ minWidth: 40, p: 0 }}>
-              <SettingsOutlined fontSize="small" />
-            </Button>
           </Stack>
 
           <Divider sx={{ my: 1.1 }} />
@@ -408,7 +406,7 @@ export function SystemExplorer({
               </Typography>
               <Stack spacing={.35}>
                 {technicalMaps.filter((item)=>!filter.trim()||`${item.mapName} ${item.nodeText} ${item.path}`.toLocaleLowerCase("pt-BR").includes(filter.toLocaleLowerCase("pt-BR").trim())).slice(0,120).map((item)=>(
-                  <Button key={item.sourceFile} size="small" variant="text" onClick={()=>void openMap(item)} sx={{justifyContent:"flex-start",textTransform:"none",textAlign:"left"}}>
+                  <Button key={`${item.sourceFile}-${item.id}`} size="small" variant="text" onClick={()=>void openMap(item)} sx={{justifyContent:"flex-start",textTransform:"none",textAlign:"left"}}>
                     <SchemaOutlined sx={{fontSize:16,mr:.7,flexShrink:0}}/><Typography variant="body2" noWrap title={item.path||item.sourceFile}>{item.mapName||item.nodeText}</Typography>
                   </Button>
                 ))}
