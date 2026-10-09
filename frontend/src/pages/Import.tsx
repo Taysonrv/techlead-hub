@@ -888,7 +888,7 @@ export function Import({ embedded = false }: { embedded?: boolean }) {
                       <Chip size="small" color={item.coveragePct >= 90 ? "success" : item.coveragePct >= 60 ? "warning" : "default"} label={`${item.coveragePct}%`} />
                     </Stack>
                     <Typography variant="body2" color="text.secondary" sx={{ mt: .5 }}>{item.classified} classificado(s) · {item.missing} pendente(s) · {item.total} total</Typography>
-                    <LinearProgress variant="determinate" value={item.coveragePct} sx={{ mt: 1, height: 6, borderRadius: 99 }} />
+                    <LinearProgress variant="determinate" value={Math.max(0, Math.min(100, item.coveragePct))} sx={{ mt: 1, height: 6, borderRadius: 99 }} />
                   </Box>
                 ))}
               </Box>
