@@ -6,7 +6,7 @@ import {
   useTheme,
 } from "@mui/material";
 import {
-  AssessmentOutlined, InfoOutlined, OpenInNewOutlined, RestartAltOutlined, ShareOutlined,
+  AssessmentOutlined, InfoOutlined, OpenInNewOutlined, RefreshOutlined, RestartAltOutlined, ShareOutlined,
   TrendingDownOutlined, TrendingUpOutlined,
 } from "@mui/icons-material";
 import {
@@ -398,6 +398,10 @@ export function CorrectionMonthlyPanel() {
             }
             <TextField label="Período" type="month" value={month} onChange={event=>setMonth(event.target.value)}
               size="small" sx={{minWidth:190}} slotProps={{inputLabel:{shrink:true}}}/>
+            <Button size="small" variant="outlined" startIcon={<RefreshOutlined fontSize="small" />}
+              disabled={loading} onClick={()=>setReloadToken(value=>value+1)} sx={{minHeight:40,whiteSpace:"nowrap"}}>
+              Recarregar
+            </Button>
           </Stack>
         </Stack>
 
