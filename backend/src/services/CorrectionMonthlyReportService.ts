@@ -83,12 +83,11 @@ export function classifyMonthlyStateMovement(params: {
     params.stateChangedAt >= start &&
     params.stateChangedAt <= close;
 
-  // Uma Task criada no período e encerrada/registrada no snapshot de fechamento
-  // necessariamente entrou nesse estado dentro do mesmo recorte. Para Tasks já
-  // existentes, exigimos delta histórico ou StateChangeDate dentro do período.
+  // O escopo funcional exige alteração efetiva de System.State.
+  // CreatedDate, por si só, nunca prova Entrega/Cancelamento/Registro.
   const reachedDuringPeriod = (state: string) =>
     stateAtClose === state &&
-    (entered(state) || dedicatedStateChangeInPeriod || createdInPeriod);
+    (entered(state) || dedicatedStateChangeInPeriod);
 
   return {
     createdInPeriod,
