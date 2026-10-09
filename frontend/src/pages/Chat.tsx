@@ -260,7 +260,7 @@ export function Chat() {
       container.scrollTo({ top: container.scrollHeight, behavior: selectedId ? "auto" : "smooth" });
       setShowJumpToLatest(false);
     }
-  }, [messages, selectedId]);
+  }, [messages, selectedId, showJumpToLatest]);
 
   const handleMessagesScroll = useCallback(() => {
     const container = messagesRef.current;
