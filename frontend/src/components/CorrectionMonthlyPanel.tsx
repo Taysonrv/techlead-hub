@@ -545,7 +545,7 @@ export function CorrectionMonthlyPanel() {
                   borderRadius:"8px",minWidth:0,bgcolor:"background.paper",
                 }}>
                   <Typography variant="caption" color="text.secondary" sx={{display:"block",whiteSpace:"nowrap"}}>{item.label}</Typography>
-                  <Stack direction="row" gap=.5 alignItems="baseline">
+                  <Stack direction="row" gap={0.5} alignItems="baseline">
                     <Typography sx={{fontWeight:900,fontVariantNumeric:"tabular-nums"}}>{item.actual??"—"}</Typography>
                     <Typography variant="caption" color="text.secondary">/ ref. {item.expected}</Typography>
                   </Stack>
