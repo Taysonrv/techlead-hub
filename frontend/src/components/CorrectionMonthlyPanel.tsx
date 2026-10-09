@@ -514,7 +514,7 @@ export function CorrectionMonthlyPanel() {
                 </Box>
                 <InfoButton
                   title="Leitura do período"
-                  description="Resumo gerencial derivado dos seis indicadores oficiais. Saídas = Entregues + Canceladas; saldo líquido = Registradas − Saídas; variação do backlog = Backlog atual − Backlog inicial. A checagem de consistência compara o total do Pipeline, Urgência e Priorização com o universo do período."
+                  description="Resumo derivado dos indicadores encontrados no recorte. Saídas = Entregues + Canceladas; saldo líquido = Registradas − Saídas; variação do backlog = Backlog atual − Backlog inicial. Os números só são oficiais quando o histórico Azure e os snapshots ASOF tiverem cobertura confirmada."
                 />
                 <MuiTooltip title={distributionConsistent?"Pipeline, Urgência e Priorização fecham com o mesmo universo do período.":`Divergência: universo ${periodUniverse}, pipeline ${pipelineTotal}, urgência ${urgencyTotal}, priorização ${priorityTotal}.`}>
                   <Chip size="small" color={distributionConsistent?"success":"warning"} variant="outlined"
@@ -547,8 +547,8 @@ export function CorrectionMonthlyPanel() {
           <Card elevation={0} sx={chartPanel}>
             <CardContent sx={{flex:1,display:"flex",flexDirection:"column",p:1.7,"&:last-child":{pb:1.7}}}>
               <CardHeading
-                title="Pipeline no fechamento"
-                subtitle={`${periodUniverse} task(s) distribuídas pelo status no snapshot final`}
+                title={backlogVerified?"Pipeline no fechamento":"Pipeline · prévia não homologada"}
+                subtitle={backlogVerified?`${periodUniverse} task(s) no snapshot final`:`${periodUniverse} task(s) com status recuperado no recorte parcial`}
                 info="Distribui pelo status no snapshot de fechamento somente as Correções Clientes que participam do universo do período e filtros atuais. A soma das barras corresponde ao universo do período. Registro aparece no pipeline, mas é excluído de backlog."
               />
               <Box sx={{flex:1,minHeight:Math.max(290,pipeline.length*29),mt:.8}}>
