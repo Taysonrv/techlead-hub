@@ -62,6 +62,42 @@ export function assessHistoricalBacklog(
     closingIds.every((id) => closingSnapshotIds.has(id));
 }
 
+export type MonthlyStateEvent = { at: Date; state: string };
+
+export function classifyMonthlyStateMovement(params: {
+  stateAtClose: string;
+  createdAt: Date;
+  start: Date;
+  close: Date;
+  stateEvents?: ReadonlyArray<MonthlyStateEvent>;
+  stateChangedAt?: Date | null;
+}) {
+  const { stateAtClose, createdAt, start, close } = params;
+  const createdInPeriod = createdAt >= start && createdAt <= close;
+  const events = (params.stateEvents ?? []).filter(
+    (event) => event.at >= start && event.at <= close,
+  );
+  const entered = (state: string) => events.some((event) => event.state === state);
+  const dedicatedStateChangeInPeriod =
+    !!params.stateChangedAt &&
+    params.stateChangedAt >= start &&
+    params.stateChangedAt <= close;
+
+  // Uma Task criada no período e encerrada/registrada no snapshot de fechamento
+  // necessariamente entrou nesse estado dentro do mesmo recorte. Para Tasks já
+  // existentes, exigimos delta histórico ou StateChangeDate dentro do período.
+  const reachedDuringPeriod = (state: string) =>
+    stateAtClose === state &&
+    (entered(state) || dedicatedStateChangeInPeriod || createdInPeriod);
+
+  return {
+    createdInPeriod,
+    deliveredInPeriod: reachedDuringPeriod("Concluído"),
+    canceledInPeriod: reachedDuringPeriod("Cancelado"),
+    enteredRegistrationInPeriod: reachedDuringPeriod("Registro"),
+  };
+}
+
 const TERMINAL = new Set(["Concluído", "Cancelado"]);
 const BACKLOG_EXCLUDED = new Set(["Registro", ...TERMINAL]);
 const CACHE_TTL_MS = 10 * 60_000;
@@ -417,19 +453,24 @@ ASOF '${asOf.toISOString()}'`;
       const lastState=[...stateEvents].reverse().find(event=>event.at<=close);
       const terminal=[...stateEvents].reverse().find(event=>event.at<=close&&TERMINAL.has(event.state));
       const closeStateChangedAt=date(closingFields["Microsoft.VSTS.Common.StateChangeDate"]);
-      const snapshotTransitionInPeriod=!!closeStateChangedAt&&closeStateChangedAt>=start&&closeStateChangedAt<=close;
+      const movement=classifyMonthlyStateMovement({
+        stateAtClose,
+        createdAt,
+        start,
+        close,
+        stateEvents:inPeriod,
+        stateChangedAt:closeStateChangedAt,
+      });
       const urgencyValue=text(latestFields[fields.urgency])??text(latestFields["Microsoft.VSTS.Common.Priority"]);
       const urgency=urgencyValue ? (/^\d+$/.test(urgencyValue)?`P${urgencyValue}`:urgencyValue) : currentItem?.criticality??null;
       const prioritized=bool(latestFields[fields.prioritized])??currentItem?.prioritized??null;
       const sourceClient=text(latestFields[fields.client])??currentItem?.client??null;
       const client=resolveSimerClient(sourceClient);
       if(!client) continue;
-      const deliveredInPeriod=stateAtClose==="Concluído"&&(snapshotTransitionInPeriod||entered("Concluído"));
-      const canceledInPeriod=stateAtClose==="Cancelado"&&(snapshotTransitionInPeriod||entered("Cancelado"));
-      const enteredRegistrationInPeriod=stateAtClose==="Registro"&&(snapshotTransitionInPeriod||entered("Registro"));
+      const {deliveredInPeriod,canceledInPeriod,enteredRegistrationInPeriod}=movement;
       const effectiveStateChangedAt=closeStateChangedAt??lastState?.at??null;
       const effectiveTerminalAt=TERMINAL.has(stateAtClose)?(closeStateChangedAt??terminal?.at??null):null;
-      rows.push({id,title:text(latestFields["System.Title"])??currentItem?.title??`Task ${id}`,client,createdBy:text(latestFields["System.CreatedBy"])??text(firstFields["System.CreatedBy"])??currentItem?.createdByName??null,createdAt:createdAt.toISOString(),status:stateAtClose,lastStateChangedAt:effectiveStateChangedAt?.toISOString()??null,urgency,prioritized,assignedTo:text(latestFields["System.AssignedTo"])??currentItem?.assignedToName??null,terminalAt:effectiveTerminalAt?.toISOString()??null,remoteUrl:currentItem?.remoteUrl??this.workItemUrl(id),stateAtOpen,stateAtClose,registeredInPeriod:createdAt>=start&&createdAt<=close,deliveredInPeriod,canceledInPeriod,enteredRegistrationInPeriod,backlogInitial:!!stateAtOpen&&!BACKLOG_EXCLUDED.has(stateAtOpen),backlogCurrent:!BACKLOG_EXCLUDED.has(stateAtClose)});
+      rows.push({id,title:text(latestFields["System.Title"])??currentItem?.title??`Task ${id}`,client,createdBy:text(latestFields["System.CreatedBy"])??text(firstFields["System.CreatedBy"])??currentItem?.createdByName??null,createdAt:createdAt.toISOString(),status:stateAtClose,lastStateChangedAt:effectiveStateChangedAt?.toISOString()??null,urgency,prioritized,assignedTo:text(latestFields["System.AssignedTo"])??currentItem?.assignedToName??null,terminalAt:effectiveTerminalAt?.toISOString()??null,remoteUrl:currentItem?.remoteUrl??this.workItemUrl(id),stateAtOpen,stateAtClose,registeredInPeriod:movement.createdInPeriod,deliveredInPeriod,canceledInPeriod,enteredRegistrationInPeriod,backlogInitial:!!stateAtOpen&&!BACKLOG_EXCLUDED.has(stateAtOpen),backlogCurrent:!BACKLOG_EXCLUDED.has(stateAtClose)});
     }
 
     // O endpoint de revisões retorna apenas itens que tiveram revisão no período.
@@ -453,7 +494,7 @@ ASOF '${asOf.toISOString()}'`;
         if(!stateAtClose) continue;
         const raw=(item?.rawFields&&typeof item.rawFields==="object"&&!Array.isArray(item.rawFields)?item.rawFields:{}) as Record<string,unknown>;
         const stateChangedAt=date(closingFields["Microsoft.VSTS.Common.StateChangeDate"]);
-        const transitionInPeriod=!!stateChangedAt&&stateChangedAt>=start&&stateChangedAt<=close;
+        const movement=classifyMonthlyStateMovement({stateAtClose,createdAt,start,close,stateChangedAt});
         const terminalAt=TERMINAL.has(stateAtClose)?stateChangedAt:null;
 
         rows.push({
@@ -471,10 +512,10 @@ ASOF '${asOf.toISOString()}'`;
           remoteUrl:item?.remoteUrl??this.workItemUrl(id),
           stateAtOpen,
           stateAtClose,
-          registeredInPeriod:createdAt>=start&&createdAt<=close,
-          deliveredInPeriod:stateAtClose==="Concluído"&&transitionInPeriod,
-          canceledInPeriod:stateAtClose==="Cancelado"&&transitionInPeriod,
-          enteredRegistrationInPeriod:stateAtClose==="Registro"&&transitionInPeriod,
+          registeredInPeriod:movement.createdInPeriod,
+          deliveredInPeriod:movement.deliveredInPeriod,
+          canceledInPeriod:movement.canceledInPeriod,
+          enteredRegistrationInPeriod:movement.enteredRegistrationInPeriod,
           backlogInitial:!!stateAtOpen&&!BACKLOG_EXCLUDED.has(stateAtOpen),
           backlogCurrent:!BACKLOG_EXCLUDED.has(stateAtClose),
         });
@@ -502,7 +543,13 @@ ASOF '${asOf.toISOString()}'`;
         const prioritized=bool(closingFields[fields.prioritized])??item?.prioritized??null;
         const snapshotStateChangedAt=date(closingFields["Microsoft.VSTS.Common.StateChangeDate"]);
         const fallbackStateChangedAt=snapshotStateChangedAt??(!snapshotAvailable?item?.stateChangedAt??null:null);
-        const transitionInPeriod=!!fallbackStateChangedAt&&fallbackStateChangedAt>=start&&fallbackStateChangedAt<=close;
+        const movement=classifyMonthlyStateMovement({
+          stateAtClose,
+          createdAt,
+          start,
+          close,
+          stateChangedAt:fallbackStateChangedAt,
+        });
 
         rows.push({
           id,
@@ -520,9 +567,9 @@ ASOF '${asOf.toISOString()}'`;
           stateAtOpen,
           stateAtClose,
           registeredInPeriod:createdInPeriod,
-          deliveredInPeriod:stateAtClose==="Concluído"&&transitionInPeriod,
-          canceledInPeriod:stateAtClose==="Cancelado"&&transitionInPeriod,
-          enteredRegistrationInPeriod:stateAtClose==="Registro"&&transitionInPeriod,
+          deliveredInPeriod:movement.deliveredInPeriod,
+          canceledInPeriod:movement.canceledInPeriod,
+          enteredRegistrationInPeriod:movement.enteredRegistrationInPeriod,
           backlogInitial:snapshotAvailable&&!!stateAtOpen&&!BACKLOG_EXCLUDED.has(stateAtOpen),
           backlogCurrent:snapshotAvailable&&!BACKLOG_EXCLUDED.has(stateAtClose),
         });
@@ -539,6 +586,6 @@ ASOF '${asOf.toISOString()}'`;
     }
         const count=(p:(r:Row)=>boolean)=>rows.filter(p).length;
     const by=(selector:(r:Row)=>string|null)=>Object.entries(rows.reduce<Record<string,number>>((acc,row)=>{const key=selector(row)||"Não informado";acc[key]=(acc[key]??0)+1;return acc;},{})).map(([name,total])=>({name,total})).sort((a,b)=>b.total-a.total);
-    return {period:{month,timezone:"America/Sao_Paulo",start:start.toISOString(),close:close.toISOString()},cards:{registered:count(r=>r.registeredInPeriod),delivered:count(r=>r.deliveredInPeriod),canceled:count(r=>r.canceledInPeriod),inRegistration:count(r=>r.enteredRegistrationInPeriod),backlogInitial:count(r=>r.backlogInitial),backlogCurrent:count(r=>r.backlogCurrent)},pipeline:by(r=>r.status),urgency:by(r=>r.urgency),prioritization:[{name:"Priorizadas",total:count(r=>r.prioritized===true)},{name:"Não priorizadas",total:count(r=>r.prioritized===false)},{name:"Não informado",total:count(r=>r.prioritized===null)}],filters:{creators:[...new Set(rows.map(r=>r.createdBy).filter(Boolean))].sort(),teamCreators:[...new Set(rows.map(r=>r.createdBy).filter((value):value is string=>!!value&&isSupportAnalyst(value)))].sort(),clients:[...SIMER_CLIENTS],urgencies:[...new Set(rows.map(r=>r.urgency).filter(Boolean))].sort(),states:[...new Set(rows.map(r=>r.status).filter(Boolean))].sort()},rows,generatedAt:new Date().toISOString(),source:snapshotAvailable?(historyAvailable?"Azure DevOps · revisões + snapshots asOf · carteira SIMER":"Azure DevOps · snapshots asOf · carteira SIMER"):"Base sincronizada do Azure DevOps · snapshot local · carteira SIMER",quality:{historyAvailable,historyError,snapshotAvailable,snapshotError,historicalScopeError,mode:backlogHistoricalReliable&&historyAvailable?"historical":snapshotAvailable?"asof-partial":"local-snapshot",historicalMetricsReliable:historyAvailable&&backlogHistoricalReliable,backlogHistoricalReliable,diagnostics:{localRecords:current.length,localPeriodCandidates:current.filter(item=>[item.azureCreatedAt,item.stateChangedAt,item.azureClosedAt].some(value=>!!value&&value>=start&&value<=close)).length,revisions:revisions.length,openingScopeIds:openingScopeIds.length,closingScopeIds:closingScopeIds.length,snapshotCandidates:candidateIds.length,openingSnapshotItems:openingSnapshot.size,closingSnapshotItems:closingSnapshot.size,outputRows:rows.length}},fieldMapping:fields};
+    return {period:{month,timezone:"America/Sao_Paulo",start:start.toISOString(),close:close.toISOString()},cards:{registered:count(r=>r.registeredInPeriod),delivered:count(r=>r.deliveredInPeriod),canceled:count(r=>r.canceledInPeriod),inRegistration:count(r=>r.enteredRegistrationInPeriod),backlogInitial:count(r=>r.backlogInitial),backlogCurrent:count(r=>r.backlogCurrent)},pipeline:by(r=>r.status),urgency:by(r=>r.urgency),prioritization:[{name:"Priorizadas",total:count(r=>r.prioritized===true)},{name:"Não priorizadas",total:count(r=>r.prioritized===false)},{name:"Não informado",total:count(r=>r.prioritized===null)}],filters:{creators:[...new Set(rows.map(r=>r.createdBy).filter(Boolean))].sort(),teamCreators:[...new Set(rows.map(r=>r.createdBy).filter((value):value is string=>!!value&&isSupportAnalyst(value)))].sort(),clients:[...SIMER_CLIENTS],urgencies:[...new Set(rows.map(r=>r.urgency).filter(Boolean))].sort(),states:[...new Set(rows.map(r=>r.status).filter(Boolean))].sort()},rows,generatedAt:new Date().toISOString(),source:snapshotAvailable?(historyAvailable?"Azure DevOps · revisões + snapshots asOf · carteira SIMER":"Azure DevOps · snapshots asOf · carteira SIMER"):"Base sincronizada do Azure DevOps · snapshot local · carteira SIMER",quality:{historyAvailable,historyError,snapshotAvailable,snapshotError,historicalScopeError,mode:backlogHistoricalReliable&&historyAvailable?"historical":snapshotAvailable?"asof-partial":"local-snapshot",movementHistoryReliable:historyAvailable,historicalMetricsReliable:historyAvailable&&backlogHistoricalReliable,backlogHistoricalReliable,diagnostics:{localRecords:current.length,localPeriodCandidates:current.filter(item=>[item.azureCreatedAt,item.stateChangedAt,item.azureClosedAt].some(value=>!!value&&value>=start&&value<=close)).length,revisions:revisions.length,openingScopeIds:openingScopeIds.length,closingScopeIds:closingScopeIds.length,snapshotCandidates:candidateIds.length,openingSnapshotItems:openingSnapshot.size,closingSnapshotItems:closingSnapshot.size,outputRows:rows.length}},fieldMapping:fields};
   }
 }
