@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { assessHistoricalBacklog, classifyMonthlyStateMovement, saoPauloMonth, selectReportCandidateIds } from "../src/services/CorrectionMonthlyReportService";
+import { assessHistoricalBacklog, classifyMonthlyStateMovement, isBacklogState, saoPauloMonth, selectReportCandidateIds } from "../src/services/CorrectionMonthlyReportService";
 
 test("mês corrente usa fechamento provisório anterior ao instante atual", () => {
   const observedAt = new Date("2026-10-09T12:00:00.000Z");
@@ -121,4 +121,14 @@ test("Registro pode aparecer no pipeline, mas a regra de movimento é independen
     stateEvents: [{ at: new Date("2026-09-07T12:00:00.000Z"), state: "Registro" }],
   });
   assert.equal(movement.enteredRegistrationInPeriod, true);
+});
+
+
+test("backlog exclui Registro e estados terminais, mas mantém estados abertos", () => {
+  assert.equal(isBacklogState("Registro"), false);
+  assert.equal(isBacklogState("Concluído"), false);
+  assert.equal(isBacklogState("Cancelado"), false);
+  assert.equal(isBacklogState("Qualificação"), true);
+  assert.equal(isBacklogState("Fila Desenvolvimento"), true);
+  assert.equal(isBacklogState(null), false);
 });
