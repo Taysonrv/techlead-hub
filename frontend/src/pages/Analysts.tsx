@@ -1906,7 +1906,7 @@ export function Analysts() {
                 },
               }}
             >
-              <InputLabel shrink id="analysts-select-1-label" htmlFor="analysts-select-1">Squad</InputLabel><Select labelId="analysts-select-1-label" inputProps={{ id: "analysts-select-1", "aria-labelledby": "analysts-select-1-label" }}
+              <InputLabel shrink id="analysts-select-1-label">Squad</InputLabel><Select labelId="analysts-select-1-label" inputProps={{ id: "analysts-select-1", "aria-labelledby": "analysts-select-1-label" }}
                 value={
                   selectedSquad
                 }
@@ -1948,7 +1948,7 @@ export function Analysts() {
                 },
               }}
             >
-              <InputLabel shrink id="analysts-select-2-label" htmlFor="analysts-select-2">Analista</InputLabel><Select labelId="analysts-select-2-label" inputProps={{ id: "analysts-select-2", "aria-labelledby": "analysts-select-2-label" }}
+              <InputLabel shrink id="analysts-select-2-label">Analista</InputLabel><Select labelId="analysts-select-2-label" inputProps={{ id: "analysts-select-2", "aria-labelledby": "analysts-select-2-label" }}
                 value={
                   selectedAnalyst
                 }
@@ -1986,14 +1986,14 @@ export function Analysts() {
             </FormControl>
 
             <FormControl size="small" sx={{ minWidth: { xs: "100%", md: 200 } }}>
-              <InputLabel shrink id="analysts-select-3-label" htmlFor="analysts-select-3">Área de negócio</InputLabel><Select labelId="analysts-select-3-label" inputProps={{ id: "analysts-select-3", "aria-labelledby": "analysts-select-3-label" }} value={selectedBusinessArea} label="Área de negócio" onChange={(event) => setSelectedBusinessArea(event.target.value)}>
+              <InputLabel shrink id="analysts-select-3-label">Área de negócio</InputLabel><Select labelId="analysts-select-3-label" inputProps={{ id: "analysts-select-3", "aria-labelledby": "analysts-select-3-label" }} value={selectedBusinessArea} label="Área de negócio" onChange={(event) => setSelectedBusinessArea(event.target.value)}>
                 <MenuItem value="">Todas as áreas</MenuItem>
                 {businessAreas.map((area) => <MenuItem key={area} value={area}>{area}</MenuItem>)}
               </Select>
             </FormControl>
 
             <FormControl size="small" sx={{ minWidth: { xs: "100%", md: 200 } }}>
-              <InputLabel shrink id="analysts-select-4-label" htmlFor="analysts-select-4">Serviço N2</InputLabel><Select labelId="analysts-select-4-label" inputProps={{ id: "analysts-select-4", "aria-labelledby": "analysts-select-4-label" }} value={selectedService} label="Serviço N2" onChange={(event) => setSelectedService(event.target.value)}>
+              <InputLabel shrink id="analysts-select-4-label">Serviço N2</InputLabel><Select labelId="analysts-select-4-label" inputProps={{ id: "analysts-select-4", "aria-labelledby": "analysts-select-4-label" }} value={selectedService} label="Serviço N2" onChange={(event) => setSelectedService(event.target.value)}>
                 <MenuItem value="">Todos os serviços</MenuItem>
                 {services.map((service) => <MenuItem key={service} value={service}>{service}</MenuItem>)}
               </Select>
