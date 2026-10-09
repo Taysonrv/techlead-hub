@@ -1445,6 +1445,7 @@ export function Tickets() {
                 },
               }}
               slotProps={{
+                htmlInput: { "aria-label": "Pesquisar tickets" },
                 input: {
                   startAdornment:
                     (
