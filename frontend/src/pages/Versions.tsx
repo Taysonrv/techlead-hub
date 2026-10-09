@@ -1567,11 +1567,9 @@ export function Versions() {
                 },
               }}
             >
-              <InputLabel>
+              <InputLabel id="versions-select-1-label" htmlFor="versions-select-1">
                 Tipo
-              </InputLabel>
-
-              <Select
+              </InputLabel><Select labelId="versions-select-1-label" inputProps={{ id: "versions-select-1", "aria-labelledby": "versions-select-1-label" }}
                 value={
                   type
                 }
@@ -1609,11 +1607,9 @@ export function Versions() {
                 },
               }}
             >
-              <InputLabel>
+              <InputLabel id="versions-select-2-label" htmlFor="versions-select-2">
                 Estado
-              </InputLabel>
-
-              <Select
+              </InputLabel><Select labelId="versions-select-2-label" inputProps={{ id: "versions-select-2", "aria-labelledby": "versions-select-2-label" }}
                 value={
                   state
                 }
@@ -1816,11 +1812,9 @@ export function Versions() {
               <FormControl
                 size="small"
               >
-                <InputLabel>
+                <InputLabel id="versions-select-3-label" htmlFor="versions-select-3">
                   Criticidade
-                </InputLabel>
-
-                <Select
+                </InputLabel><Select labelId="versions-select-3-label" inputProps={{ id: "versions-select-3", "aria-labelledby": "versions-select-3-label" }}
                   value={
                     criticality
                   }
@@ -1859,11 +1853,9 @@ export function Versions() {
               <FormControl
                 size="small"
               >
-                <InputLabel>
+                <InputLabel id="versions-select-4-label" htmlFor="versions-select-4">
                   Priorização
-                </InputLabel>
-
-                <Select
+                </InputLabel><Select labelId="versions-select-4-label" inputProps={{ id: "versions-select-4", "aria-labelledby": "versions-select-4-label" }}
                   value={
                     prioritized
                   }
@@ -1892,11 +1884,9 @@ export function Versions() {
               <FormControl
                 size="small"
               >
-                <InputLabel>
+                <InputLabel id="versions-select-5-label" htmlFor="versions-select-5">
                   Bloqueio
-                </InputLabel>
-
-                <Select
+                </InputLabel><Select labelId="versions-select-5-label" inputProps={{ id: "versions-select-5", "aria-labelledby": "versions-select-5-label" }}
                   value={
                     blockedProcess
                   }
@@ -1923,8 +1913,7 @@ export function Versions() {
               </FormControl>
 
               <FormControl size="small">
-                <InputLabel>Canal da versão</InputLabel>
-                <Select value={versionChannel} label="Canal da versão" onChange={(event) => setVersionChannel(event.target.value as VersionChannel)}>
+                <InputLabel id="versions-select-6-label" htmlFor="versions-select-6">Canal da versão</InputLabel><Select labelId="versions-select-6-label" inputProps={{ id: "versions-select-6", "aria-labelledby": "versions-select-6-label" }} value={versionChannel} label="Canal da versão" onChange={(event) => setVersionChannel(event.target.value as VersionChannel)}>
                   <MenuItem value="">Todos os canais</MenuItem>
                   <MenuItem value="lts">LTS</MenuItem>
                   <MenuItem value="lte">LTE</MenuItem>
@@ -1935,8 +1924,7 @@ export function Versions() {
               </FormControl>
 
               <FormControl size="small">
-                <InputLabel>Ordenar versões</InputLabel>
-                <Select value={versionSort} label="Ordenar versões" onChange={(event) => setVersionSort(event.target.value as VersionSort)}>
+                <InputLabel id="versions-select-7-label" htmlFor="versions-select-7">Ordenar versões</InputLabel><Select labelId="versions-select-7-label" inputProps={{ id: "versions-select-7", "aria-labelledby": "versions-select-7-label" }} value={versionSort} label="Ordenar versões" onChange={(event) => setVersionSort(event.target.value as VersionSort)}>
                   <MenuItem value="version-desc">Versão mais recente</MenuItem>
                   <MenuItem value="latest-desc">Movimentação mais recente</MenuItem>
                   <MenuItem value="total-desc">Maior volume</MenuItem>
