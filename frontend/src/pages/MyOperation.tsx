@@ -77,7 +77,7 @@ export function MyOperation() {
       setData(response.data);
     } catch { setError("Não foi possível carregar sua operação."); } finally { setLoading(false); }
   }, [client, analyst, team, type, search]);
-  useEffect(() => { const timer = window.setTimeout(() => void load(), search ? 550 : 180); return () => window.clearTimeout(timer); }, [load]);
+  useEffect(() => { const timer = window.setTimeout(() => void load(), search ? 550 : 180); return () => window.clearTimeout(timer); }, [load, search]);
 
   const items = useMemo<Unified[]>(() => {
     if (!data) return [];
