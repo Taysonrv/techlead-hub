@@ -309,23 +309,5 @@ export function isSimerClient(
     null |
     undefined,
 ) {
-  const normalized =
-    value
-      ?.trim()
-      .toLocaleUpperCase(
-        "pt-BR",
-      );
-
-  return Boolean(
-    normalized &&
-    SIMER_CLIENTS.some(
-      (
-        client,
-      ) =>
-        client.toLocaleUpperCase(
-          "pt-BR",
-        ) ===
-        normalized,
-    ),
-  );
+  return resolveSimerClient(value) !== null;
 }

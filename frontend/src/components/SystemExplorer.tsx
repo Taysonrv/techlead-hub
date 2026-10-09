@@ -28,8 +28,7 @@ import {
   RuleOutlined,
   SearchOutlined,
   SchemaOutlined,
-  SettingsOutlined,
-} from "@mui/icons-material";
+ } from "@mui/icons-material";
 import { api } from "../services/api";
 import { SimerMapTree, type SimerTreeNode } from "./SimerMapTree";
 
@@ -353,7 +352,7 @@ export function SystemExplorer({
           borderRadius: 3,
           position: { lg: "sticky" },
           top: { lg: 8 },
-          maxHeight: { lg: "calc(100vh - 92px)" },
+          maxHeight: { lg: "calc(100dvh - 92px)" },
           overflow: "auto",
         }}
       >
@@ -370,12 +369,14 @@ export function SystemExplorer({
 
           <Stack direction="row" spacing={0.7}>
             <TextField
+              id="system-explorer-search"
               fullWidth
               size="small"
               value={filter}
               onChange={(event) => setFilter(event.target.value)}
               placeholder="Buscar no sistema..."
               slotProps={{
+                htmlInput: { "aria-label": "Buscar na estrutura do sistema" },
                 input: {
                   startAdornment: (
                     <InputAdornment position="start">
@@ -385,9 +386,6 @@ export function SystemExplorer({
                 },
               }}
             />
-            <Button variant="outlined" sx={{ minWidth: 40, p: 0 }}>
-              <SettingsOutlined fontSize="small" />
-            </Button>
           </Stack>
 
           <Divider sx={{ my: 1.1 }} />
@@ -408,7 +406,7 @@ export function SystemExplorer({
               </Typography>
               <Stack spacing={.35}>
                 {technicalMaps.filter((item)=>!filter.trim()||`${item.mapName} ${item.nodeText} ${item.path}`.toLocaleLowerCase("pt-BR").includes(filter.toLocaleLowerCase("pt-BR").trim())).slice(0,120).map((item)=>(
-                  <Button key={item.sourceFile} size="small" variant="text" onClick={()=>void openMap(item)} sx={{justifyContent:"flex-start",textTransform:"none",textAlign:"left"}}>
+                  <Button key={`${item.sourceFile}-${item.id}`} size="small" variant="text" onClick={()=>void openMap(item)} sx={{justifyContent:"flex-start",textTransform:"none",textAlign:"left"}}>
                     <SchemaOutlined sx={{fontSize:16,mr:.7,flexShrink:0}}/><Typography variant="body2" noWrap title={item.path||item.sourceFile}>{item.mapName||item.nodeText}</Typography>
                   </Button>
                 ))}
@@ -667,7 +665,7 @@ export function SystemExplorer({
                         border: "1px solid",
                         borderColor: "divider",
                         borderRadius: 2.2,
-                        bgcolor: "#fbfdff",
+                        bgcolor: "background.default",
                         overflow: "hidden",
                       }}
                     >
@@ -711,13 +709,14 @@ export function SystemExplorer({
                                         : "#0879e8",
                                   borderRadius: isStart || isEnd ? "50%" : isGateway ? 1 : 1.8,
                                   transform: isGateway ? "rotate(45deg) scale(.72)" : "none",
-                                  bgcolor: isStart
-                                    ? "#e9f8df"
-                                    : isEnd
-                                      ? "#ffe1e1"
-                                      : isGateway
-                                        ? "#fff7d6"
-                                        : "#f4f9ff",
+                                  bgcolor: (theme) =>
+                                    isStart
+                                      ? theme.palette.mode === "dark" ? "rgba(46,204,113,.12)" : "#e9f8df"
+                                      : isEnd
+                                        ? theme.palette.mode === "dark" ? "rgba(239,68,68,.12)" : "#ffe1e1"
+                                        : isGateway
+                                          ? theme.palette.mode === "dark" ? "rgba(245,158,11,.12)" : "#fff7d6"
+                                          : theme.palette.mode === "dark" ? "rgba(47,111,237,.12)" : "#f4f9ff",
                                   boxShadow: "0 2px 7px rgba(15,23,42,.08)",
                                 }}
                               >
@@ -763,49 +762,6 @@ export function SystemExplorer({
                         })}
                       </Box>
 
-                      <Stack
-                        direction="row"
-                        spacing={0.5}
-                        sx={{ position: "absolute", left: 10, bottom: 9 }}
-                      >
-                        {["+", "−", "↻"].map((label) => (
-                          <Button
-                            key={label}
-                            size="small"
-                            variant="outlined"
-                            sx={{
-                              minWidth: 30,
-                              width: 30,
-                              height: 30,
-                              p: 0,
-                              color: "text.primary",
-                              borderColor: "divider",
-                              bgcolor: "background.paper",
-                            }}
-                          >
-                            {label}
-                          </Button>
-                        ))}
-                      </Stack>
-                      <Button
-                        size="small"
-                        variant="outlined"
-                        sx={{
-                          position: "absolute",
-                          right: 10,
-                          bottom: 9,
-                          minWidth: 30,
-                          width: 30,
-                          height: 30,
-                          p: 0,
-                          color: "text.primary",
-                          borderColor: "divider",
-                          bgcolor: "background.paper",
-                        }}
-                        onClick={() => setTab(1)}
-                      >
-                        ⛶
-                      </Button>
                     </Box>
 
                     <Box sx={{ mt: 1.1 }}>
@@ -828,8 +784,9 @@ export function SystemExplorer({
                                   borderRadius: "50%",
                                   display: "grid",
                                   placeItems: "center",
-                                  bgcolor: "#eef3f8",
-                                  border: "1px solid #d7e0e8",
+                                  bgcolor: "action.hover",
+                                  border: "1px solid",
+                                  borderColor: "divider",
                                   fontSize: 11,
                                   fontWeight: 900,
                                 }}
@@ -856,7 +813,7 @@ export function SystemExplorer({
 
                     {detail.maps.slice(0, 4).map((map) => (
                       <Box
-                        key={map.sourceFile}
+                        key={`${map.sourceFile}-${map.id}`}
                         sx={{ py: 0.7, borderBottom: "1px solid", borderColor: "divider" }}
                       >
                         <Stack direction="row" spacing={0.7} sx={{ alignItems: "center" }}>
@@ -1056,9 +1013,6 @@ export function SystemExplorer({
                 onClick={() => setTab(0)}
               >
                 Investigar
-              </Button>
-              <Button variant="outlined" disabled={!detail}>
-                ☆
               </Button>
             </Stack>
           </CardContent>

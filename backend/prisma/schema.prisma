@@ -89,6 +89,8 @@ model User {
   auditLogs           AuditLog[]
   chatMemberships     ChatChannelMember[]
   chatMessages        ChatMessage[] @relation("ChatMessageAuthor")
+  calendarMeetingsCreated CalendarMeeting[] @relation("CalendarMeetingOrganizer")
+  calendarMeetingParticipants CalendarMeetingParticipant[]
 
   @@index([name])
   @@index([role])
@@ -145,6 +147,52 @@ model ChatMessage {
   @@index([channelId, createdAt])
   @@index([authorId, createdAt])
   @@index([parentId])
+}
+
+
+// =========================================================
+// CALENDÁRIO / REUNIÕES
+// =========================================================
+
+model CalendarMeeting {
+  id                Int      @id @default(autoincrement())
+  title             String   @db.VarChar(180)
+  description       String?  @db.Text
+  startAt           DateTime
+  endAt             DateTime
+  timezone          String   @default("America/Sao_Paulo") @db.VarChar(80)
+  reminderMinutes   Int      @default(15)
+  location          String?  @db.VarChar(240)
+  meetingUrl        String?  @db.Text
+  externalAttendees Json?
+  status            String   @default("SCHEDULED") @db.VarChar(20)
+  externalProvider  String?  @db.VarChar(40)
+  externalEventId   String?  @db.VarChar(240)
+  cancelledAt       DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  createdById Int
+  createdBy   User @relation("CalendarMeetingOrganizer", fields: [createdById], references: [id], onDelete: Restrict)
+  participants CalendarMeetingParticipant[]
+
+  @@index([startAt])
+  @@index([endAt])
+  @@index([createdById, startAt])
+  @@index([status, startAt])
+}
+
+model CalendarMeetingParticipant {
+  meetingId Int
+  userId    Int
+  required  Boolean @default(true)
+  createdAt DateTime @default(now())
+
+  meeting CalendarMeeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  user    User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([meetingId, userId])
+  @@index([userId, meetingId])
 }
 
 // =========================================================

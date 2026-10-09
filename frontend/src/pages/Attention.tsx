@@ -840,7 +840,7 @@ export function Attention() {
               <Button size="small" variant="outlined" onClick={() => navigate("/problemas-conhecidos")}>Revisar recorrências</Button>
             </Stack>
             <Stack direction="row" spacing={.7} useFlexGap sx={{ mt:1, flexWrap:"wrap", "& .MuiChip-root": { maxWidth: { xs: "100%", md: 360 } }, "& .MuiChip-label": { overflow: "hidden", textOverflow: "ellipsis" } }}>
-              {recurrence.items.slice(0,4).map((item) => <Chip key={item.service+"|"+item.cause} color={item.priority==="high"?"error":"warning"} variant="outlined" label={`${item.service} · ${item.cases} casos · score ${item.score}`} onClick={() => navigate(`/problemas-conhecidos?q=${encodeURIComponent(item.service)}`)} />)}
+              {recurrence.items.slice(0,4).map((item,index) => <Chip key={`${item.service}|${item.cause}|${item.score}|${index}`} color={item.priority==="high"?"error":"warning"} variant="outlined" label={`${item.service} · ${item.cases} casos · score ${item.score}`} onClick={() => navigate(`/problemas-conhecidos?q=${encodeURIComponent(item.service)}`)} />)}
             </Stack>
             {recurrence.anomalies?.[0] && <Alert severity={recurrence.anomalies[0].severity==="critical"?"error":"warning"} variant="outlined" sx={{mt:1}}>
               <strong>Anomalia detectada:</strong> {recurrence.anomalies[0].service} — {recurrence.anomalies[0].reason}.
@@ -1114,11 +1114,9 @@ export function Attention() {
                 },
               }}
             >
-              <InputLabel shrink>
+              <InputLabel shrink id="attention-select-1-label" htmlFor="attention-select-1">
                 Situação do prazo
-              </InputLabel>
-
-              <Select multiple displayEmpty value={level} label="Situação do prazo"
+              </InputLabel><Select labelId="attention-select-1-label" inputProps={{ id: "attention-select-1", "aria-labelledby": "attention-select-1-label" }} multiple displayEmpty value={level} label="Situação do prazo"
                 onChange={(event) => { const next = typeof event.target.value === "string" ? event.target.value.split(",") : event.target.value as string[]; setLevel((next.includes("__all__") ? ["vencido","critico","atencao"] : next.filter((item) => item !== "__all__")) as AttentionLevel[]); }}
                 renderValue={(selected) => !selected.length ? "Todos" : selected.length === 1 ? selected[0] : `${selected.length} selecionados`}>
                 <MenuItem value="__all__"><Checkbox size="small" checked={level.length === 3} indeterminate={level.length > 0 && level.length < 3} />Todos</MenuItem>
@@ -1137,11 +1135,9 @@ export function Attention() {
                 },
               }}
             >
-              <InputLabel shrink>
+              <InputLabel shrink id="attention-select-2-label" htmlFor="attention-select-2">
                 Responsável
-              </InputLabel>
-
-              <Select multiple displayEmpty value={owner} label="Responsável"
+              </InputLabel><Select labelId="attention-select-2-label" inputProps={{ id: "attention-select-2", "aria-labelledby": "attention-select-2-label" }} multiple displayEmpty value={owner} label="Responsável"
                 onChange={(event) => { const next = typeof event.target.value === "string" ? event.target.value.split(",") : event.target.value as string[]; setOwner(next.includes("__all__") ? [...owners] : next.filter((item) => item !== "__all__")); }}
                 renderValue={(selected) => !selected.length ? "Todos" : selected.length === 1 ? selected[0] : `${selected.length} selecionados`}>
                 <MenuItem value="__all__"><Checkbox size="small" checked={owners.length > 0 && owner.length === owners.length} indeterminate={owner.length > 0 && owner.length < owners.length} />Todos</MenuItem>
@@ -1160,11 +1156,9 @@ export function Attention() {
                 },
               }}
             >
-              <InputLabel shrink>
+              <InputLabel shrink id="attention-select-3-label" htmlFor="attention-select-3">
                 Cliente
-              </InputLabel>
-
-              <Select multiple displayEmpty value={client} label="Cliente"
+              </InputLabel><Select labelId="attention-select-3-label" inputProps={{ id: "attention-select-3", "aria-labelledby": "attention-select-3-label" }} multiple displayEmpty value={client} label="Cliente"
                 onChange={(event) => { const next = typeof event.target.value === "string" ? event.target.value.split(",") : event.target.value as string[]; setClient(next.includes("__all__") ? [...clients] : next.filter((item) => item !== "__all__")); }}
                 renderValue={(selected) => !selected.length ? "Todos" : selected.length === 1 ? selected[0] : `${selected.length} selecionados`}>
                 <MenuItem value="__all__"><Checkbox size="small" checked={clients.length > 0 && client.length === clients.length} indeterminate={client.length > 0 && client.length < clients.length} />Todos</MenuItem>
@@ -1183,11 +1177,9 @@ export function Attention() {
                 },
               }}
             >
-              <InputLabel shrink>
+              <InputLabel shrink id="attention-select-4-label" htmlFor="attention-select-4">
                 Origem do risco
-              </InputLabel>
-
-              <Select
+              </InputLabel><Select labelId="attention-select-4-label" inputProps={{ id: "attention-select-4", "aria-labelledby": "attention-select-4-label" }}
                 value={riskFilter}
                 label="Origem do risco"
                 onChange={(event) =>
@@ -1437,6 +1429,7 @@ export function Attention() {
                         <Tooltip title="Copiar número do ticket">
                           <IconButton
                             size="small"
+                            aria-label="Copiar número do ticket"
                             onClick={(
                               event
                             ) => {
