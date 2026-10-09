@@ -23,6 +23,16 @@ const BASELINE_COMPLETED_ACTION = "MOVIDESK_SCOPED_BASELINE_COMPLETED_2026_V5";
 const SYNC_SCOPE_START = new Date("2026-01-01T00:00:00.000Z");
 const BASELINE_FAILED_ACTION = "MOVIDESK_BASELINE_FAILED";
 
+export function computeMovideskIncrementalSince(
+  lastIncrementalAt: Date | null,
+  nowUtc: Date = new Date(),
+) {
+  const anchor = lastIncrementalAt
+    ? new Date(lastIncrementalAt.getTime() - INCREMENTAL_SAFETY_LOOKBACK_MINUTES * 60_000)
+    : new Date(nowUtc.getTime() - INITIAL_INCREMENTAL_CATCHUP_HOURS * 60 * 60_000);
+  return anchor < SYNC_SCOPE_START ? new Date(SYNC_SCOPE_START) : anchor;
+}
+
 function normalizeMovideskDateTimeOffset(value: string) {
   const trimmed = value.trim();
   const withTimezone = /(?:Z|[+-]\d{2}:\d{2})$/i.test(trimmed) ? trimmed : `${trimmed}Z`;
@@ -1372,20 +1382,9 @@ export class MovideskService {
       select: { createdAt: true },
     });
 
-    if (lastIncremental?.createdAt) {
-      const since = new Date(
-        lastIncremental.createdAt.getTime() -
-          INCREMENTAL_SAFETY_LOOKBACK_MINUTES * 60_000,
-      );
-      return since < SYNC_SCOPE_START ? SYNC_SCOPE_START : since;
-    }
-
-    // Primeiro ciclo após o upgrade: faz uma recuperação mais ampla para trazer
-    // tickets que possam ter sido perdidos pelo cursor antigo.
-    const catchup = new Date(
-      Date.now() - INITIAL_INCREMENTAL_CATCHUP_HOURS * 60 * 60_000,
-    );
-    return catchup < SYNC_SCOPE_START ? SYNC_SCOPE_START : catchup;
+    // Primeiro ciclo após o upgrade usa 24h; ciclos seguintes recuam 6h
+    // a partir do watermark persistido. O helper puro é coberto por teste.
+    return computeMovideskIncrementalSince(lastIncremental?.createdAt ?? null);
   }
 
   async syncTickets(
