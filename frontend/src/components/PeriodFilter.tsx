@@ -38,14 +38,20 @@ export function PeriodFilter() {
           flex: { xs: "1 1 100%", sm: "0 1 184px" },
         }}
       >
-        <InputLabel id="period-label">Período</InputLabel>
+        <InputLabel id="period-label" shrink>Período</InputLabel>
 
         <Select
           labelId="period-label"
           value={period}
           label="Período"
           onChange={(event) => setPeriod(event.target.value as PeriodOption)}
-          sx={{ bgcolor: "background.paper" }}
+          sx={{
+            bgcolor: "background.paper",
+            borderRadius: 1.25,
+            "& .MuiSelect-select": {
+              py: 1.05,
+            },
+          }}
         >
           <MenuItem value="7d">Últimos 7 dias</MenuItem>
           <MenuItem value="30d">Últimos 30 dias</MenuItem>
