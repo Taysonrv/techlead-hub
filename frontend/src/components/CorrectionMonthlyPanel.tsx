@@ -102,7 +102,7 @@ type Report = {
   quality?:{
     historyAvailable:boolean;historyError:string|null;snapshotAvailable?:boolean;snapshotError?:string|null;
     historicalScopeError?:string|null;mode:string;refreshing?:boolean;localPreview?:boolean;movementHistoryReliable?:boolean;
-    historicalMetricsReliable:boolean;backlogHistoricalReliable?:boolean;backlogInitialAvailable?:boolean;
+    historicalMetricsReliable:boolean;backlogHistoricalReliable?:boolean;backlogInitialAvailable?:boolean;backlogCurrentAvailable?:boolean;unknownClosingStates?:number;
     externalHistorySuspicious?:boolean;localFallbackUsed?:boolean;localStateHistoryEvents?:number;
     perItemHistoryRecoveryUsed?:boolean;recoveredHistoryItems?:number;recoveryCandidates?:number;
     diagnostics?:{
@@ -237,7 +237,7 @@ export function CorrectionMonthlyPanel() {
   // Snapshot indisponível não é sinônimo de backlog zerado.
   const backlogVerified = report?.quality?.backlogHistoricalReliable === true;
   const localHistoryFallback = report?.quality?.localFallbackUsed === true;
-  const backlogAvailable = backlogVerified || localHistoryFallback;
+  const backlogAvailable = backlogVerified || report?.quality?.backlogCurrentAvailable === true;
   const initialBacklogAvailable = backlogVerified || report?.quality?.backlogInitialAvailable === true;
   const monthlyMovementVerified =
     report?.quality?.movementHistoryReliable ??
@@ -530,7 +530,7 @@ export function CorrectionMonthlyPanel() {
         <b>{report.quality.refreshing?"Conferindo histórico no Azure.":"Apuração histórica parcial."}</b>{" "}
         {report.quality.refreshing
           ?"A prévia local já está disponível. Os números serão atualizados automaticamente quando a consulta terminar."
-          :"O histórico do Azure não foi recuperado por completo. Os valores locais são provisórios; um zero não garante ausência de movimentações. Use Recarregar para tentar novamente."}{" "}
+          :"O histórico do Azure não foi recuperado por completo. Estados sem evidência histórica aparecem como indisponíveis. Backlog parcial não comprova o estoque total; use Recarregar para tentar novamente."}{" "}
         {[
           report.quality.historyError && `Revisões: ${report.quality.historyError}`,
           report.quality.snapshotError && `Snapshots: ${report.quality.snapshotError}`,
@@ -543,7 +543,7 @@ export function CorrectionMonthlyPanel() {
             {report.quality.diagnostics.closingScopeIds} IDs abertos no fechamento;{" "}
             {report.quality.diagnostics.snapshotCandidates} candidatos;{" "}
             snapshots {report.quality.diagnostics.openingSnapshotItems}/{report.quality.diagnostics.closingSnapshotItems} (entrada/fechamento);{" "}
-            {report.quality.diagnostics.outputRows} tasks no universo mensal antes dos filtros.
+            {report.quality.diagnostics.outputRows} tasks no universo mensal antes dos filtros; {report.quality.unknownClosingStates??0} sem estado histórico no fechamento.
           </Typography>
         )}
       </Alert>

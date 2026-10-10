@@ -152,9 +152,9 @@ test("outubro completa snapshot parcial e herda o fechamento de setembro por Tas
   const old=new Date("2026-08-01T12:00:00Z");
   const delivered=new Date("2026-10-02T12:00:00Z");
   prisma.azureWorkItem.findMany=(async()=>[
-    {id:901,client:"COAP",createdByName:"Tayson Araujo",azureCreatedAt:old,state:"Qualidade",stateChangedAt:null},
+    {id:901,client:"COAP",createdByName:"Tayson Araujo",azureCreatedAt:old,state:"Qualidade",stateChangedAt:old},
     {id:902,client:"COAP",createdByName:"Alan Neto",azureCreatedAt:old,state:"Concluído",stateChangedAt:delivered},
-    {id:903,client:"COAP",createdByName:"Renan Sousa",azureCreatedAt:new Date("2026-10-03T12:00:00Z"),state:"Registro",stateChangedAt:null},
+    {id:903,client:"COAP",createdByName:"Renan Sousa",azureCreatedAt:new Date("2026-10-03T12:00:00Z"),state:"Registro",stateChangedAt:new Date("2026-10-03T12:00:00Z")},
   ]) as typeof originalFindMany;
   prisma.$queryRaw=(async()=>[{workItemId:902,oldValue:"Desenvolvimento",newValue:"Concluído",changedAt:delivered}]) as typeof originalQueryRaw;
   const service=new CorrectionMonthlyReportService();
@@ -239,4 +239,29 @@ test("reconstrução da prévia local não chama nenhum endpoint do Azure",async
   assert.equal(report.cards.backlogCurrent,1);
   assert.equal(report.quality.localPreview,true);
   assert.equal(report.rows.length,1);
+});
+
+test("estado alterado após agosto não vira fechamento retroativo nem backlog zero disponível",async(t)=>{
+  const originalFindMany=prisma.azureWorkItem.findMany;
+  const originalQueryRaw=prisma.$queryRaw;
+  t.after(()=>{prisma.azureWorkItem.findMany=originalFindMany;prisma.$queryRaw=originalQueryRaw;});
+  prisma.azureWorkItem.findMany=(async()=>[{id:7001,client:"COAP",createdByName:"Tayson Araujo",azureCreatedAt:new Date("2026-08-01T12:00:00Z"),state:"Concluído",stateChangedAt:new Date("2026-09-20T12:00:00Z")}]) as typeof originalFindMany;
+  prisma.$queryRaw=(async()=>[]) as typeof originalQueryRaw;
+  const service=new CorrectionMonthlyReportService();
+  t.mock.method(service,"loadClosing",async()=>null);
+  t.mock.method(service,"workItemUrl",()=>null);
+  const report=await (service as unknown as {build(month:string,localOnly:boolean):Promise<{
+    cards:{registered:number;delivered:number;backlogCurrent:number};
+    quality:{backlogCurrentAvailable:boolean;unknownClosingStates:number};
+    rows:Array<{stateAtClose:string|null;status:string}>;
+    pipeline:Array<{name:string;total:number}>;
+  }>}).build("2026-08",true);
+  assert.equal(report.cards.registered,1);
+  assert.equal(report.cards.delivered,0);
+  assert.equal(report.cards.backlogCurrent,0);
+  assert.equal(report.quality.backlogCurrentAvailable,false);
+  assert.equal(report.quality.unknownClosingStates,1);
+  assert.equal(report.rows[0]?.stateAtClose,null);
+  assert.equal(report.rows[0]?.status,"Histórico indisponível");
+  assert.equal(report.pipeline.some(row=>row.name==="Concluído"),false);
 });

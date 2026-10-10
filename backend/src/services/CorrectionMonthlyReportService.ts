@@ -86,8 +86,7 @@ export function classifyMonthlyStateMovement(params: {
     params.stateChangedAt <= close;
 
   // O escopo funcional exige alteração efetiva de System.State.
-  // CreatedDate não prova Entrega/Cancelamento. Uma Task criada no mês
-  // e ainda em Registro integra o estoque de Registro do período.
+  // CreatedDate isoladamente não comprova entrada em nenhum estado.
   const reachedDuringPeriod = (state: string) =>
     stateAtClose === state &&
     (entered(state) || dedicatedStateChangeInPeriod);
@@ -96,7 +95,7 @@ export function classifyMonthlyStateMovement(params: {
     createdInPeriod,
     deliveredInPeriod: reachedDuringPeriod("Concluído"),
     canceledInPeriod: reachedDuringPeriod("Cancelado"),
-    enteredRegistrationInPeriod: reachedDuringPeriod("Registro") || (createdInPeriod && stateAtClose === "Registro"),
+    enteredRegistrationInPeriod: reachedDuringPeriod("Registro"),
   };
 }
 
@@ -409,16 +408,17 @@ ASOF '${asOf.toISOString()}'`;
     return `correction-monthly-close:${scope}:${month}`;
   }
 
-  private async loadClosing(month:string):Promise<{rows:Row[];reliable:boolean}|null> {
+  private async loadClosing(month:string):Promise<{rows:Row[];reliable:boolean;coverage?:Record<string,unknown>}|null> {
     try {
       const saved=await prisma.systemSetting.findUnique({where:{key:this.snapshotKey(month)}});
       if(!saved) return null;
       const parsed=JSON.parse(saved.value);
-      return parsed.version===1&&Array.isArray(parsed.rows)?parsed:null;
+      // Descarta prévias antigas que podiam usar o estado atual em meses passados.
+      return (parsed.version===2||(parsed.version===1&&parsed.reliable===true))&&Array.isArray(parsed.rows)?parsed:null;
     } catch { return null; }
   }
 
-  private async saveClosing(month:string,data:{rows:Row[];quality:{backlogHistoricalReliable:boolean}}) {
+  private async saveClosing(month:string,data:{rows:Row[];quality:{backlogHistoricalReliable:boolean;movementHistoryReliable?:boolean;backlogInitialAvailable?:boolean;backlogCurrentAvailable?:boolean}}) {
     // Um mês em andamento não representa fechamento para o próximo mês.
     const period=saoPauloMonth(month);
     if(period.close.getTime()!==period.endExclusive.getTime()-1) return;
@@ -426,7 +426,7 @@ ASOF '${asOf.toISOString()}'`;
       const previous=await this.loadClosing(month);
       const reliable=data.quality.backlogHistoricalReliable;
       if(previous?.reliable&&!reliable) return;
-      const value=JSON.stringify({version:1,reliable,savedAt:new Date().toISOString(),rows:data.rows.filter(row=>row.inPeriodUniverse)});
+      const value=JSON.stringify({version:2,reliable,coverage:{movementHistoryReliable:data.quality.movementHistoryReliable??false,backlogInitialAvailable:data.quality.backlogInitialAvailable??reliable,backlogCurrentAvailable:data.quality.backlogCurrentAvailable??reliable},savedAt:new Date().toISOString(),rows:data.rows.filter(row=>row.inPeriodUniverse)});
       await prisma.systemSetting.upsert({where:{key:this.snapshotKey(month)},create:{key:this.snapshotKey(month),value,encrypted:false},update:{value,encrypted:false}});
     } catch(error) {
       console.warn("[correction-monthly-report] Não foi possível persistir fechamento:",error instanceof Error?error.message:String(error));
@@ -804,16 +804,18 @@ ASOF '${asOf.toISOString()}'`;
           ? null
           : (previousClosing.get(item.id)||firstAfterOpen?.oldValue?.trim()||
              [...events].reverse().find(event=>event.changedAt<start)?.newValue?.trim()||
-             (item.stateChangedAt&&item.stateChangedAt<start?item.state:null)||
-             (!item.stateChangedAt&&isBacklogState(item.state)?item.state:null));
-        const stateAtClose=firstAfterClose?.oldValue?.trim()||archivedRows.get(item.id)?.stateAtClose||item.state||null;
-        if(!stateAtClose) continue;
+             (item.stateChangedAt&&item.stateChangedAt<start?item.state:null));
+        const stateAtClose=firstAfterClose?.oldValue?.trim()||
+          archivedRows.get(item.id)?.stateAtClose||
+          [...events].reverse().find(event=>event.changedAt<=close)?.newValue?.trim()||
+          (livePeriod||(item.stateChangedAt&&item.stateChangedAt<=close)?item.state:null);
+        // Mantém criação comprovada na tabela mesmo sem estado histórico conhecido.
 
         const periodEvents=events
           .filter(event=>event.changedAt>=start&&event.changedAt<=close&&!!event.newValue?.trim())
           .map(event=>({at:event.changedAt,state:event.newValue!.trim()}));
         const movement=classifyMonthlyStateMovement({
-          stateAtClose,
+          stateAtClose:stateAtClose??"",
           createdAt,
           start,
           close,
@@ -836,12 +838,12 @@ ASOF '${asOf.toISOString()}'`;
           client,
           createdBy:item.createdByName,
           createdAt:createdAt.toISOString(),
-          status:stateAtClose,
+          status:stateAtClose??"Histórico indisponível",
           lastStateChangedAt:effectiveStateChangedAt?.toISOString()??null,
           urgency:item.criticality,
           prioritized:item.prioritized,
           assignedTo:item.assignedToName,
-          terminalAt:TERMINAL.has(stateAtClose)?(effectiveStateChangedAt??terminalEvent?.changedAt)?.toISOString()??null:null,
+          terminalAt:TERMINAL.has(stateAtClose??"")?(effectiveStateChangedAt??terminalEvent?.changedAt)?.toISOString()??null:null,
           remoteUrl:item.remoteUrl??this.workItemUrl(item.id),
           stateAtOpen,
           stateAtClose,
@@ -870,7 +872,13 @@ ASOF '${asOf.toISOString()}'`;
 
     // Preserva a fotografia já gravada de um mês encerrado durante a prévia.
     // Atualizações no estado atual não reescrevem retroativamente esse fechamento.
-    if(localOnly&&savedClosing){
+    let persistedClosingUsed=false;
+    if(savedClosing?.reliable&&!backlogHistoricalReliable){
+      rows=savedClosing.rows;
+      backlogHistoricalReliable=true;
+      movementHistoryReliable=savedClosing.coverage?.movementHistoryReliable===true;
+      persistedClosingUsed=true;
+    } else if(localOnly&&savedClosing){
       const preserved=new Map(rows.map(row=>[row.id,row]));
       for(const row of savedClosing.rows) preserved.set(row.id,row);
       rows=[...preserved.values()];
@@ -905,6 +913,6 @@ ASOF '${asOf.toISOString()}'`;
     ].join(" | "));
     const count=(p:(r:Row)=>boolean)=>rows.filter(p).length;
     const by=(selector:(r:Row)=>string|null)=>Object.entries(rows.reduce<Record<string,number>>((acc,row)=>{const key=selector(row)||"Não informado";acc[key]=(acc[key]??0)+1;return acc;},{})).map(([name,total])=>({name,total})).sort((a,b)=>b.total-a.total);
-    return {period:{month,timezone:"America/Sao_Paulo",start:start.toISOString(),close:close.toISOString()},cards:{registered:count(r=>r.registeredInPeriod),delivered:count(r=>r.deliveredInPeriod),canceled:count(r=>r.canceledInPeriod),inRegistration:count(r=>r.enteredRegistrationInPeriod),backlogInitial:count(r=>r.backlogInitial),backlogCurrent:count(r=>r.backlogCurrent)},pipeline:by(r=>r.status),urgency:by(r=>r.urgency),prioritization:[{name:"Priorizadas",total:count(r=>r.prioritized===true)},{name:"Não priorizadas",total:count(r=>r.prioritized===false)},{name:"Não informado",total:count(r=>r.prioritized===null)}],filters:{creators:[...new Set(rows.map(r=>r.createdBy).filter(Boolean))].sort(),teamCreators:[...new Set(rows.map(r=>r.createdBy).filter((value):value is string=>!!value&&isCorrectionTeamCreator(value)))].sort(),clients:[...new Set(rows.map(r=>r.client).filter((value):value is string=>!!value))].sort(),urgencies:[...new Set(rows.map(r=>r.urgency).filter(Boolean))].sort(),states:[...new Set(rows.map(r=>r.status).filter(Boolean))].sort()},rows,generatedAt:new Date().toISOString(),source:perItemHistoryRecoveryUsed?"Azure DevOps · revisões por Task + prévia local":localFallbackUsed?"Base sincronizada do Azure DevOps · histórico local reconstruído":snapshotAvailable?(historyAvailable?"Azure DevOps · revisões + snapshots asOf":"Azure DevOps · snapshots asOf"):"Base sincronizada do Azure DevOps · snapshot local",quality:{localPreview:localOnly,backlogInitialAvailable:backlogHistoricalReliable||openingSnapshot.size>0||rows.some(row=>row.backlogInitial),perItemHistoryRecoveryUsed,recoveredHistoryItems,recoveryCandidates,historyAvailable,historyError,snapshotAvailable,snapshotError,historicalScopeError,externalHistorySuspicious,localFallbackUsed,localStateHistoryEvents,mode:localFallbackUsed?"local-history-fallback":backlogHistoricalReliable&&historyAvailable?"historical":snapshotAvailable?"asof-partial":"local-snapshot",movementHistoryReliable,historicalMetricsReliable:!localFallbackUsed&&historyAvailable&&backlogHistoricalReliable,backlogHistoricalReliable,diagnostics:{scopedRecords:scopedRows,localRecords:current.length,localPeriodCandidates,revisions:revisions.length,openingScopeIds:openingScopeIds.length,closingScopeIds:closingScopeIds.length,snapshotCandidates:candidateIds.length,openingSnapshotItems:openingSnapshot.size,closingSnapshotItems:closingSnapshot.size,outputRows:rows.length}},fieldMapping:fields};
+    return {period:{month,timezone:"America/Sao_Paulo",start:start.toISOString(),close:close.toISOString()},cards:{registered:count(r=>r.registeredInPeriod),delivered:count(r=>r.deliveredInPeriod),canceled:count(r=>r.canceledInPeriod),inRegistration:count(r=>r.enteredRegistrationInPeriod),backlogInitial:count(r=>r.backlogInitial),backlogCurrent:count(r=>r.backlogCurrent)},pipeline:by(r=>r.status),urgency:by(r=>r.urgency),prioritization:[{name:"Priorizadas",total:count(r=>r.prioritized===true)},{name:"Não priorizadas",total:count(r=>r.prioritized===false)},{name:"Não informado",total:count(r=>r.prioritized===null)}],filters:{creators:[...new Set(rows.map(r=>r.createdBy).filter(Boolean))].sort(),teamCreators:[...new Set(rows.map(r=>r.createdBy).filter((value):value is string=>!!value&&isCorrectionTeamCreator(value)))].sort(),clients:[...new Set(rows.map(r=>r.client).filter((value):value is string=>!!value))].sort(),urgencies:[...new Set(rows.map(r=>r.urgency).filter(Boolean))].sort(),states:[...new Set(rows.map(r=>r.status).filter(Boolean))].sort()},rows,generatedAt:new Date().toISOString(),source:persistedClosingUsed?"Fechamento histórico salvo · Azure DevOps":perItemHistoryRecoveryUsed?"Azure DevOps · revisões por Task + prévia local":localFallbackUsed?"Base sincronizada do Azure DevOps · histórico local reconstruído":snapshotAvailable?(historyAvailable?"Azure DevOps · revisões + snapshots asOf":"Azure DevOps · snapshots asOf"):"Base sincronizada do Azure DevOps · snapshot local",quality:{persistedClosingUsed,localPreview:localOnly,backlogCurrentAvailable:backlogHistoricalReliable||livePeriod||rows.some(row=>row.backlogCurrent),unknownClosingStates:rows.filter(row=>!row.stateAtClose).length,backlogInitialAvailable:backlogHistoricalReliable||openingSnapshot.size>0||rows.some(row=>row.backlogInitial),perItemHistoryRecoveryUsed,recoveredHistoryItems,recoveryCandidates,historyAvailable,historyError,snapshotAvailable,snapshotError,historicalScopeError,externalHistorySuspicious,localFallbackUsed,localStateHistoryEvents,mode:localFallbackUsed?"local-history-fallback":backlogHistoricalReliable&&historyAvailable?"historical":snapshotAvailable?"asof-partial":"local-snapshot",movementHistoryReliable,historicalMetricsReliable:movementHistoryReliable&&backlogHistoricalReliable,backlogHistoricalReliable,diagnostics:{scopedRecords:scopedRows,localRecords:current.length,localPeriodCandidates,revisions:revisions.length,openingScopeIds:openingScopeIds.length,closingScopeIds:closingScopeIds.length,snapshotCandidates:candidateIds.length,openingSnapshotItems:openingSnapshot.size,closingSnapshotItems:closingSnapshot.size,outputRows:rows.length}},fieldMapping:fields};
   }
 }
