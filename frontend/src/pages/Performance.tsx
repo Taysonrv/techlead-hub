@@ -192,9 +192,12 @@ export function Performance() {
     loadRequestRef.current?.abort();
     loadRequestRef.current = controller;
 
-    async function loadTickets() {
+    let refreshing = false;
+    async function loadTickets(initial = false) {
+      if (refreshing) return;
+      refreshing = true;
       try {
-        setLoading(true);
+        if (initial) setLoading(true);
         setError(null);
         const snapshot = await getTicketSnapshot<Ticket>();
         if (!controller.signal.aborted) setTickets(snapshot);
@@ -203,12 +206,22 @@ export function Performance() {
         console.error("Erro ao carregar desempenho:", requestError);
         setError("Não foi possível carregar os indicadores de desempenho.");
       } finally {
+        refreshing = false;
         if (!controller.signal.aborted) setLoading(false);
       }
     }
 
-    void loadTickets();
-    return () => controller.abort();
+    void loadTickets(true);
+    const refreshTimer = window.setInterval(() => {
+      if (document.visibilityState === "visible") void loadTickets();
+    }, 30_000);
+    const refreshOnFocus = () => { void loadTickets(); };
+    window.addEventListener("focus", refreshOnFocus);
+    return () => {
+      window.clearInterval(refreshTimer);
+      window.removeEventListener("focus", refreshOnFocus);
+      controller.abort();
+    };
   }, []);
 
   useEffect(() => {

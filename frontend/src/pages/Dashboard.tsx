@@ -257,9 +257,12 @@ export function Dashboard() {
     loadRequestRef.current?.abort();
     loadRequestRef.current = controller;
 
-    async function loadTickets() {
+    let refreshing = false;
+    async function loadTickets(initial = false) {
+      if (refreshing) return;
+      refreshing = true;
       try {
-        setLoading(true);
+        if (initial) setLoading(true);
         setError(null);
         const snapshot = await getTicketSnapshot<Ticket>();
         if (!controller.signal.aborted) setTickets(snapshot);
@@ -268,13 +271,23 @@ export function Dashboard() {
         console.error("Erro ao carregar dashboard:", err);
         setError("Não foi possível carregar os dados do Dashboard. Verifique se o backend está rodando.");
       } finally {
+        refreshing = false;
         if (!controller.signal.aborted) setLoading(false);
       }
     }
 
-    void loadTickets();
+    void loadTickets(true);
+    const refreshTimer = window.setInterval(() => {
+      if (document.visibilityState === "visible") void loadTickets();
+    }, 30_000);
+    const refreshOnFocus = () => { void loadTickets(); };
+    window.addEventListener("focus", refreshOnFocus);
     apiRecurrence();
-    return () => controller.abort();
+    return () => {
+      window.clearInterval(refreshTimer);
+      window.removeEventListener("focus", refreshOnFocus);
+      controller.abort();
+    };
   }, []);
 
   async function apiRecurrence() {
@@ -969,12 +982,12 @@ export function Dashboard() {
     {
       title: "Resolvidos",
       value: summary.resolvidosNoPeriodo,
-      description: "Abertos no período e resolvidos no mesmo recorte",
+      description: "Resolvidos no período, incluindo entradas de meses anteriores",
       severity: "success" as Severity,
       info: {
         title: "Resolvidos",
-        summary: "Tickets abertos no período selecionado que também foram resolvidos dentro desse mesmo recorte.",
-        calculation: "Cohort de createdDate no período, filtrado por resolvedDate dentro do período.",
+        summary: "Tickets com resolução no período e status resolvido ou fechado, independentemente da data de abertura.",
+        calculation: "resolvedDate no período + status resolvido/fechado + escopo SIMER.",
         source: "Movidesk",
         reference: "Ticket.resolvedDate",
         periodRule: "Usa a data de resolução, e não a data de abertura.",
@@ -985,7 +998,7 @@ export function Dashboard() {
     {
       title: "Fechados",
       value: summary.fechadosNoPeriodo,
-      description: "Abertos no período e fechados no mesmo recorte",
+      description: "Fechados no período, incluindo entradas de meses anteriores",
       severity: "success" as Severity,
       info: {
         title: "Fechados",

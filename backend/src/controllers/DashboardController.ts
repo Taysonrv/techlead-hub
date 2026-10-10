@@ -142,6 +142,7 @@ export class DashboardController {
           where: {
             ...snapshotWhere,
             ...resolvedDateWhere,
+            baseStatus: { in: ["Resolved", "Closed"] },
           },
         }),
 
