@@ -100,7 +100,26 @@ function scheduleDatabaseRecovery() {
   databaseRecoveryTimer.unref();
 }
 
+function assertPrismaClientUpToDate() {
+  // Estas entidades foram adicionadas junto ao calendário e seus lembretes.
+  // O tsx executa TypeScript sem regenerar o Prisma Client após um git pull.
+  // Uma geração antiga deixaria prisma.calendarMeeting como undefined e
+  // causaria erros findMany repetidos em calendário e notificações.
+  if (
+    typeof prisma.calendarMeeting?.findMany !== "function" ||
+    typeof prisma.calendarMeetingParticipant?.findMany !== "function"
+  ) {
+    throw new Error(
+      "[prisma] Prisma Client desatualizado para as reuniões. " +
+      "Execute 'npm run prisma:generate' na pasta backend, " +
+      "confira as migrações com 'npm run prisma:migrate:deploy' " +
+      "e reinicie o servidor.",
+    );
+  }
+}
+
 async function start() {
+  assertPrismaClientUpToDate();
   let databaseReady = false;
   try {
     await ensureApplicationSchema();

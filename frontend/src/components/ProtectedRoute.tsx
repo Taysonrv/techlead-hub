@@ -40,7 +40,7 @@ export function ProtectedRoute({
       <Box
         sx={{
           minHeight:
-            "100vh",
+            "100dvh",
 
           display:
             "flex",
@@ -52,7 +52,7 @@ export function ProtectedRoute({
             "center",
 
           backgroundColor:
-            "#f5f7fa",
+            "background.default",
         }}
       >
         <CircularProgress />

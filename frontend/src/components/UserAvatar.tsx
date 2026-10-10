@@ -10,7 +10,14 @@ export function UserAvatar({ user, size = 40, sx }: { user: AuthUser; size?: num
     let objectUrl: string | undefined;
     if (!user.avatarUpdatedAt) { setSrc(undefined); return; }
     void api.get<Blob>("/auth/me/avatar", { responseType: "blob" })
-      .then((response) => { objectUrl = URL.createObjectURL(response.data); setSrc(objectUrl); })
+      .then((response) => {
+        if (response.status === 204 || !response.data || response.data.size === 0) {
+          setSrc(undefined);
+          return;
+        }
+        objectUrl = URL.createObjectURL(response.data);
+        setSrc(objectUrl);
+      })
       .catch(() => setSrc(undefined));
     return () => { if (objectUrl) URL.revokeObjectURL(objectUrl); };
   }, [user.avatarUpdatedAt]);

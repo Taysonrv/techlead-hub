@@ -4,6 +4,7 @@
   "description": "TechLead Hub Backend",
   "main": "src/server.ts",
   "scripts": {
+    "predev": "npm run prisma:generate",
     "dev": "tsx watch src/server.ts",
     "seed": "tsx prisma/seed.ts",
     "start": "node dist/server.js",

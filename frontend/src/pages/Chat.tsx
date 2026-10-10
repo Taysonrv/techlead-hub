@@ -16,7 +16,7 @@ type RealtimeSnapshot = { presence: Presence[]; typing: Array<{ channelId: numbe
 export function Chat() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [channels, setChannels] = useState<Channel[]>(() => { try { return JSON.parse(sessionStorage.getItem("techlead-chat-channels") || "[]") as Channel[]; } catch { return []; } });
   const [participants, setParticipants] = useState<Person[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(() => { const value = Number(new URLSearchParams(window.location.search).get("channel")); return Number.isFinite(value) && value > 0 ? value : null; });
@@ -65,6 +65,7 @@ export function Chat() {
   const [maintenanceMessage, setMaintenanceMessage] = useState("");
   const [conversationInfoOpen, setConversationInfoOpen] = useState(false);
   const [teamPanelOpen, setTeamPanelOpen] = useState(true);
+  const [onlineAnchor, setOnlineAnchor] = useState<HTMLElement | null>(null);
   const [statusMessage] = useState(() => localStorage.getItem("techlead-chat-status-message") || "");
   const [incomingPopup, setIncomingPopup] = useState<{ channelId: number; channelName: string; authorName: string; preview: string } | null>(null);
   const previousChannelState = useRef<Map<number, { unread: number; lastMessageId: number | null }>>(new Map());
@@ -97,6 +98,21 @@ export function Chat() {
   const coordinationHighlights = useMemo(() => visibleMessages.filter((message) => /PRIORIDADE DO TIME|ALINHAMENTO \/ DECISÃO|ESCALONAMENTO PARA COORDENAÇÃO/.test(message.content)).slice(-5).reverse(), [visibleMessages]);
   const channelPendencies = useMemo(() => visibleMessages.filter((message) => /PRIORIDADE DO TIME|ESCALONAMENTO PARA COORDENAÇÃO|PASSAGEM DE TURNO/.test(message.content)).slice(-4).reverse(), [visibleMessages]);
   const selectedOnlineCount = useMemo(() => selected?.members?.filter((member) => presence.find((item) => item.userId === member.user.id)?.effectiveStatus === "ONLINE").length ?? 0, [selected, presence]);
+  const participantPresence = useMemo(() => participants
+    .filter((person) => person.id !== user?.id)
+    .map((person) => ({
+      person,
+      presence: presence.find((item) => item.userId === person.id) ?? null,
+    })), [participants, presence, user?.id]);
+  const onlinePeople = useMemo(() => participantPresence
+    .filter((item) => item.presence?.effectiveStatus === "ONLINE")
+    .sort((a,b) => a.person.name.localeCompare(b.person.name, "pt-BR")), [participantPresence]);
+  const connectedUnavailablePeople = useMemo(() => participantPresence
+    .filter((item) => item.presence?.effectiveStatus === "AWAY" || item.presence?.effectiveStatus === "BUSY")
+    .sort((a,b) => {
+      const weight = (status: Presence["effectiveStatus"] | undefined) => status === "BUSY" ? 0 : 1;
+      return weight(a.presence?.effectiveStatus)-weight(b.presence?.effectiveStatus) || a.person.name.localeCompare(b.person.name, "pt-BR");
+    }), [participantPresence]);
   const totalUnread = useMemo(() => channels.reduce((sum, channel) => sum + channel.unread, 0), [channels]);
   const sortedVisibleChannels = useMemo(() => visibleChannels.slice().sort((a, b) => {
     const group = (channel: Channel) => favorites.includes(channel.id) ? 0 : channel.type === "DIRECT" ? 1 : 2;
@@ -143,10 +159,15 @@ export function Chat() {
     }
     const requestedId = Number(searchParams.get("channel"));
     const requestedChannel = rawChannels.find((channel) => channel.id === requestedId);
-    if (requestedChannel && !nextChannels.some((channel) => channel.id === requestedChannel.id)) {
-      const requestedPeerId = requestedChannel.members?.map((member) => member.user.id).find((id) => id !== user?.id);
-      const canonical = requestedPeerId ? directByPeer.get(requestedPeerId) : undefined;
-      if (canonical) setSelectedId((current) => current === requestedChannel.id ? canonical.id : current);
+    let requestedTargetId: number | null = null;
+    if (requestedChannel) {
+      const directVisible = nextChannels.find((channel) => channel.id === requestedChannel.id);
+      if (directVisible) {
+        requestedTargetId = directVisible.id;
+      } else if (requestedChannel.type === "DIRECT") {
+        const requestedPeerId = requestedChannel.members?.map((member) => member.user.id).find((id) => id !== user?.id);
+        requestedTargetId = requestedPeerId ? directByPeer.get(requestedPeerId)?.id ?? null : null;
+      }
     }
     const previous = previousChannelState.current;
     if (previous.size) {
@@ -174,14 +195,18 @@ export function Chat() {
     }]));
     setChannels(nextChannels);
     try { sessionStorage.setItem("techlead-chat-channels", JSON.stringify(nextChannels)); } catch { /* cache opcional */ }
-    const requested = Number(searchParams.get("channel"));
     setSelectedId((current) =>
+      requestedTargetId ??
       current ??
-      nextChannels.find((channel) => channel.id === requested)?.id ??
       nextChannels[0]?.id ??
       null,
     );
-  }, [searchParams, user?.id]);
+    if (requestedTargetId && searchParams.has("channel")) {
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.delete("channel");
+      setSearchParams(nextParams, { replace: true });
+    }
+  }, [searchParams, setSearchParams, user?.id]);
 
   const loadMessages = useCallback(async (channelId: number, quiet = false) => {
     try {
@@ -235,7 +260,7 @@ export function Chat() {
       container.scrollTo({ top: container.scrollHeight, behavior: selectedId ? "auto" : "smooth" });
       setShowJumpToLatest(false);
     }
-  }, [messages, selectedId]);
+  }, [messages, selectedId, showJumpToLatest]);
 
   const handleMessagesScroll = useCallback(() => {
     const container = messagesRef.current;
@@ -269,6 +294,11 @@ export function Chat() {
           const base = getApiBaseUrl();
           const url = new URL(`${base.replace(/\/$/, "")}/chat/events`, window.location.origin);
           const response = await fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : {}, signal: controller.signal });
+          if (response.status === 429) {
+            const retryAfter = Number(response.headers.get("Retry-After") ?? 5);
+            await new Promise((resolve) => window.setTimeout(resolve, Math.max(5, Number.isFinite(retryAfter) ? retryAfter : 5) * 1_000));
+            continue;
+          }
           if (!response.ok || !response.body) throw new Error("stream indisponível");
           const reader = response.body.getReader();
           const decoder = new TextDecoder();
@@ -539,11 +569,84 @@ export function Chat() {
         <Box sx={{ width: 40, height: 40, borderRadius: 2.4, display: "grid", placeItems: "center", flexShrink: 0, color: "primary.main", bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(24,199,122,.08)" : "rgba(24,199,122,.07)", border: "1px solid rgba(24,199,122,.24)", boxShadow: "0 8px 22px rgba(24,199,122,.10)" }}><ForumOutlined /></Box>
         <Box sx={{ minWidth: 0, flex: 1 }}>
           <Typography variant="overline" sx={{ display: "block", mb: .15, color: "primary.main", fontSize: ".58rem", lineHeight: 1, letterSpacing: ".14em", fontWeight: 950 }}>COLABORAÇÃO</Typography>
-          <Stack direction="row" spacing={.8} sx={{ alignItems: "center" }}><Typography sx={{ fontWeight: 950, fontSize: "1.08rem", lineHeight: 1.05, letterSpacing: "-.025em", whiteSpace: "nowrap" }}>Hub de Conversas</Typography><Chip size="small" label={{ ONLINE: "Online", AWAY: "Ausente", BUSY: "Ocupado" }[availability]} color={availability === "BUSY" ? "error" : availability === "AWAY" ? "warning" : "success"} onClick={() => { const next = availability === "ONLINE" ? "AWAY" : availability === "AWAY" ? "BUSY" : "ONLINE"; setAvailability(next); localStorage.setItem("techlead-chat-status", next); }} sx={{ height: 22, fontWeight: 850 }} /></Stack>
+          <Stack direction="row" spacing={.8} sx={{ alignItems: "center", flexWrap: "wrap", rowGap: .5 }}><Typography sx={{ fontWeight: 950, fontSize: "1.08rem", lineHeight: 1.05, letterSpacing: "-.025em", whiteSpace: "nowrap" }}>Hub de Conversas</Typography><Chip size="small" label={{ ONLINE: "Online", AWAY: "Ausente", BUSY: "Ocupado" }[availability]} color={availability === "BUSY" ? "error" : availability === "AWAY" ? "warning" : "success"} onClick={() => { const next = availability === "ONLINE" ? "AWAY" : availability === "AWAY" ? "BUSY" : "ONLINE"; setAvailability(next); localStorage.setItem("techlead-chat-status", next); }} sx={{ height: 22, fontWeight: 850 }} /><Tooltip title="Ver quem está online"><Chip size="small" clickable icon={<GroupsOutlined sx={{ fontSize: "15px !important" }} />} label={`${onlinePeople.length} online`} color={onlinePeople.length ? "success" : "default"} variant="outlined" onClick={(event) => setOnlineAnchor(event.currentTarget)} sx={{ height: 22, fontWeight: 850 }} /></Tooltip></Stack>
           <Stack direction="row" spacing={.8} sx={{ alignItems: "center", minWidth: 0 }}><Typography variant="caption" color="text.secondary" noWrap>Mensagens, presença e colaboração em tempo real</Typography>{statusMessage && <Typography variant="caption" color="text.secondary" noWrap sx={{ opacity: .75 }}>· {statusMessage}</Typography>}</Stack>
         </Box>
       </Stack>
     </Paper>
+    <Popover
+      open={Boolean(onlineAnchor)}
+      anchorEl={onlineAnchor}
+      onClose={() => setOnlineAnchor(null)}
+      anchorOrigin={{ vertical: "bottom", horizontal: "left" }}
+      transformOrigin={{ vertical: "top", horizontal: "left" }}
+      slotProps={{ paper: { sx: { width: 330, maxWidth: "calc(100vw - 24px)", mt: .8, borderRadius: 2.5, border: "1px solid", borderColor: "divider", boxShadow: "0 18px 48px rgba(15,23,42,.16)", overflow: "hidden" } } }}
+    >
+      <Box sx={{ px: 1.5, py: 1.25, bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(24,199,122,.05)" : "rgba(24,199,122,.035)" }}>
+        <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between", gap: 1 }}>
+          <Box>
+            <Typography sx={{ fontWeight: 900 }}>Online agora</Typography>
+            <Typography variant="caption" color="text.secondary">{onlinePeople.length} pessoa(s) disponível(is)</Typography>
+          </Box>
+          <Chip size="small" color="success" icon={<Circle sx={{ fontSize: "9px !important" }} />} label={onlinePeople.length} sx={{ fontWeight: 900 }} />
+        </Stack>
+      </Box>
+      <Divider />
+      <Box sx={{ maxHeight: 390, overflowY: "auto", p: .75 }}>
+        {onlinePeople.length ? (
+          <List disablePadding>
+            {onlinePeople.map(({person,presence:personPresence}) => (
+              <ListItemButton
+                key={person.id}
+                disabled={openingDirectId === person.id}
+                onClick={() => { setOnlineAnchor(null); void openDirect(person); }}
+                sx={{ borderRadius: 2, mb: .35, px: 1, py: .7 }}
+              >
+                <Box sx={{ position: "relative", width: 34, height: 34, minWidth: 34, borderRadius: "50%", bgcolor: "action.hover", display: "grid", placeItems: "center", mr: 1.1, fontWeight: 900 }}>
+                  {person.name.slice(0,1).toUpperCase()}
+                  <Circle sx={{ position: "absolute", right: -1, bottom: -1, fontSize: 10, color: "success.main", stroke: "background.paper", strokeWidth: 4 }} />
+                </Box>
+                <ListItemText
+                  primary={<Typography variant="body2" sx={{ fontWeight: 800 }}>{person.name}</Typography>}
+                  secondary={<Typography variant="caption" color="text.secondary">@{person.username} · {person.role}{personPresence?.statusMessage ? ` · ${personPresence.statusMessage}` : ""}</Typography>}
+                />
+                {openingDirectId === person.id ? <CircularProgress size={17} /> : <Chip size="small" color="success" variant="outlined" label="Online" sx={{ height: 20, fontSize: ".64rem" }} />}
+              </ListItemButton>
+            ))}
+          </List>
+        ) : (
+          <Box sx={{ px: 1.25, py: 2.4, textAlign: "center" }}>
+            <Circle sx={{ fontSize: 12, color: "text.disabled", mb: .7 }} />
+            <Typography variant="body2" sx={{ fontWeight: 800 }}>Ninguém disponível agora</Typography>
+            <Typography variant="caption" color="text.secondary">A presença é atualizada automaticamente enquanto o Hub está aberto.</Typography>
+          </Box>
+        )}
+        {connectedUnavailablePeople.length > 0 && <>
+          <Divider sx={{ my: .8 }} />
+          <Typography variant="overline" color="text.secondary" sx={{ display: "block", px: 1, pb: .35, fontWeight: 900, fontSize: ".62rem" }}>CONECTADOS · OUTRO STATUS</Typography>
+          <List disablePadding>
+            {connectedUnavailablePeople.map(({person,presence:personPresence}) => (
+              <ListItemButton
+                key={person.id}
+                disabled={openingDirectId === person.id}
+                onClick={() => { setOnlineAnchor(null); void openDirect(person); }}
+                sx={{ borderRadius: 2, mb: .25, px: 1, py: .6 }}
+              >
+                <Box sx={{ position: "relative", width: 30, height: 30, minWidth: 30, borderRadius: "50%", bgcolor: "action.hover", display: "grid", placeItems: "center", mr: 1, fontWeight: 850 }}>
+                  {person.name.slice(0,1).toUpperCase()}
+                  <Circle sx={{ position: "absolute", right: -1, bottom: -1, fontSize: 9, color: presenceColor(personPresence?.effectiveStatus), stroke: "background.paper", strokeWidth: 4 }} />
+                </Box>
+                <ListItemText
+                  primary={<Typography variant="body2" sx={{ fontWeight: 750 }}>{person.name}</Typography>}
+                  secondary={`@${person.username} · ${personPresence?.effectiveStatus === "BUSY" ? "ocupado" : "ausente"}`}
+                  slotProps={{ secondary: { sx: { fontSize: ".69rem" } } }}
+                />
+              </ListItemButton>
+            ))}
+          </List>
+        </>}
+      </Box>
+    </Popover>
     {error && <Alert severity="error" onClose={() => setError("")}>{error}</Alert>}
     <Paper elevation={0} sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "244px minmax(0,1fr)", lg: "252px minmax(0,1fr)", xl: (conversationInfoOpen || (selected?.type === "TEAM" && teamPanelOpen)) ? "258px minmax(0,1fr) 292px" : "258px minmax(0,1fr)" }, gap: { xs: 0, md: .9 }, p: { xs: 0, md: .8 }, minHeight: 0, flex: 1, overflow: "hidden", borderRadius: 3.5, maxHeight: "100%", height: "100%", border: "1px solid", borderColor: "divider", boxShadow: "0 16px 42px rgba(15,23,42,.075)", bgcolor: "background.paper", backgroundImage: (theme) => theme.palette.mode === "dark" ? "linear-gradient(145deg,rgba(12,31,46,.98),rgba(11,27,42,.98))" : "linear-gradient(145deg,#ffffff,#fbfdff)" }}>
       <Box sx={{ position: "relative", minHeight: 0, overflow: "hidden", display: "grid", gridTemplateRows: "auto auto 1px minmax(0, 1fr)", alignContent: "stretch", borderRadius: { xs: 0, md: 3.25 }, bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(255,255,255,.022)" : "rgba(248,250,252,.76)", border: { md: "1px solid" }, borderColor: { md: "divider" }, boxShadow: (theme) => theme.palette.mode === "dark" ? "0 10px 28px rgba(0,0,0,.10), inset 0 1px rgba(255,255,255,.02)" : "0 8px 24px rgba(15,23,42,.045)" }}>

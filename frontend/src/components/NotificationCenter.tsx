@@ -23,6 +23,7 @@ import {
   TaskAltOutlined,
   AlternateEmailOutlined,
   WarningAmberOutlined,
+  VideoCallOutlined,
 } from "@mui/icons-material";
 
 import {
@@ -35,6 +36,7 @@ import {
 } from "react";
 
 import {
+  useLocation,
   useNavigate,
 } from "react-router-dom";
 
@@ -58,7 +60,8 @@ type NotificationKind =
   | "AZURE_UPDATED"
   | "CHAT_MENTION"
   | "OPERATION_ALERT"
-  | "KNOWN_PROBLEM";
+  | "KNOWN_PROBLEM"
+  | "MEETING_REMINDER";
 
 type HubNotification = {
   key: string;
@@ -67,6 +70,7 @@ type HubNotification = {
   message: string;
   occurredAt: string;
   path: string;
+  meetingId?: number;
   read?: boolean;
 };
 
@@ -99,8 +103,11 @@ type DesktopUpdateState = {
 
 export function NotificationCenter() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
-  const [toast, setToast] = useState<HubNotification | null>(null);
+  const userId = user?.id ?? null;
+  const [toastQueue, setToastQueue] = useState<HubNotification[]>([]);
+  const toast = toastQueue[0] ?? null;
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const [loading, setLoading] = useState(false);
   const [items, setItems] = useState<HubNotification[]>([]);
@@ -109,7 +116,10 @@ export function NotificationCenter() {
   const [showPreferences, setShowPreferences] = useState(false);
   const [localPreferences, setLocalPreferences] = useState<LocalNotificationPreferences>(() => getLocalNotificationPreferences());
   const alertedKeys = useRef(new Set<string>());
+  const notificationHydratedRef = useRef(false);
   const loadingRef = useRef(false);
+  const meetingLoadingRef = useRef(false);
+  const meetingRetryAtRef = useRef(0);
 
   const storageKey = `techlead-hub:notifications:read:${user?.id ?? "anonymous"}`;
 
@@ -163,7 +173,7 @@ export function NotificationCenter() {
   }, [preferences.appVersion]);
 
   const load = useCallback(async () => {
-    if (!user || loadingRef.current) return;
+    if (!userId || loadingRef.current) return;
     loadingRef.current = true;
     try {
       setLoading(true);
@@ -180,13 +190,56 @@ export function NotificationCenter() {
       loadingRef.current = false;
       setLoading(false);
     }
-  }, [user]);
+  }, [userId]);
+
+  const loadMeetingReminders = useCallback(async () => {
+    if (!userId || meetingLoadingRef.current || Date.now() < meetingRetryAtRef.current) return;
+    meetingLoadingRef.current = true;
+    try {
+      const response = await api.get<{ notifications: HubNotification[] }>("/notifications/meetings");
+      meetingRetryAtRef.current = 0;
+      const meetingItems = response.data.notifications ?? [];
+      setItems((current) => {
+        const otherItems = current.filter((item) => item.kind !== "MEETING_REMINDER");
+        return [...meetingItems, ...otherItems]
+          .sort((left, right) => new Date(right.occurredAt).getTime() - new Date(left.occurredAt).getTime())
+          .slice(0, 80);
+      });
+    } catch (error) {
+      const response = (error as { response?: { status?: number; headers?: Record<string,string>; data?: { retryAfterSeconds?: number } } }).response;
+      if (response?.status === 429) {
+        const headerSeconds = Number(response.headers?.["retry-after"] ?? 0);
+        const payloadSeconds = Number(response.data?.retryAfterSeconds ?? 0);
+        const retrySeconds = Number.isFinite(payloadSeconds) && payloadSeconds > 0
+          ? payloadSeconds
+          : Number.isFinite(headerSeconds) && headerSeconds > 0
+            ? headerSeconds
+            : 30;
+        meetingRetryAtRef.current = Date.now() + Math.max(5, retrySeconds) * 1_000;
+      } else {
+        console.warn("[notifications] Não foi possível carregar lembretes de reunião:", error);
+      }
+    } finally {
+      meetingLoadingRef.current = false;
+    }
+  }, [userId]);
 
   useEffect(() => {
     void load();
     const timer = window.setInterval(() => void load(), 60_000);
     return () => window.clearInterval(timer);
   }, [load]);
+
+  useEffect(() => {
+    void loadMeetingReminders();
+    const timer = window.setInterval(() => void loadMeetingReminders(), 15_000);
+    const refresh = () => { void loadMeetingReminders(); };
+    window.addEventListener("techlead-hub:notifications-refresh", refresh);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("techlead-hub:notifications-refresh", refresh);
+    };
+  }, [loadMeetingReminders]);
 
   useEffect(() => {
     const updates = window.techLeadHub?.updates;
@@ -196,25 +249,63 @@ export function NotificationCenter() {
     return updates.onStateChange(addDesktopUpdate);
   }, [addDesktopUpdate]);
 
-  const enabledForKind = useCallback((kind: NotificationKind) => kind === "CHAT_MENTION" ? localPreferences.chat : (kind === "OPERATION_ALERT" || kind === "KNOWN_PROBLEM") ? localPreferences.operation : kind === "APP_VERSION" ? localPreferences.appVersion : kind === "SIMER_VERSION" ? localPreferences.simerVersion : kind === "AZURE_COMPLETED" ? localPreferences.azureCompleted : localPreferences.azureUpdated, [localPreferences]);
+  const enabledForKind = useCallback((kind: NotificationKind) => kind === "CHAT_MENTION" ? localPreferences.chat : (kind === "OPERATION_ALERT" || kind === "KNOWN_PROBLEM" || kind === "MEETING_REMINDER") ? localPreferences.operation : kind === "APP_VERSION" ? localPreferences.appVersion : kind === "SIMER_VERSION" ? localPreferences.simerVersion : kind === "AZURE_COMPLETED" ? localPreferences.azureCompleted : localPreferences.azureUpdated, [localPreferences]);
   const unread = useMemo(
     () => items.filter((item) => enabledForKind(item.kind) && !readKeys.includes(item.key)),
     [items, readKeys, enabledForKind],
   );
 
   useEffect(() => {
-    const newest = unread[0];
-    if (!newest || alertedKeys.current.has(newest.key)) return;
-    const age = Date.now() - new Date(newest.occurredAt).getTime();
-    if (age >= 10 * 60_000) return;
-    alertedKeys.current.add(newest.key);
-    setToast(newest);
-    playNotificationSound(newest.kind === "CHAT_MENTION" ? "chat" : "system");
-    if (preferences.desktopAlerts && "Notification" in window && Notification.permission === "granted") {
-      const alert = new Notification(newest.title, { body: newest.message });
-      alert.onclick = () => navigate(newest.path);
+    const now = Date.now();
+    const candidates = unread
+      .filter((item) => !alertedKeys.current.has(item.key))
+      .filter((item) => {
+        if (notificationHydratedRef.current) return true;
+        const age = now - new Date(item.occurredAt).getTime();
+        return item.kind === "MEETING_REMINDER" || (age >= 0 && age < 10 * 60_000);
+      })
+      .sort((left, right) => new Date(left.occurredAt).getTime() - new Date(right.occurredAt).getTime());
+
+    if (!notificationHydratedRef.current) {
+      const candidateKeys = new Set(candidates.map((item) => item.key));
+      unread.forEach((item) => {
+        if (!candidateKeys.has(item.key)) alertedKeys.current.add(item.key);
+      });
+      notificationHydratedRef.current = true;
     }
-  }, [unread, navigate, preferences.desktopAlerts]);
+
+    if (!candidates.length) return;
+    candidates.forEach((item) => alertedKeys.current.add(item.key));
+    setToastQueue((current) => {
+      const existing = new Set(current.map((item) => item.key));
+      return [...current, ...candidates.filter((item) => !existing.has(item.key))].slice(0, 30);
+    });
+  }, [unread]);
+
+  const meetingPath = useCallback((meetingId: number) => {
+    const params = new URLSearchParams(location.search);
+    params.set("meeting", String(meetingId));
+    return `${location.pathname}?${params.toString()}`;
+  }, [location.pathname, location.search]);
+
+  useEffect(() => {
+    if (!toast) return;
+    playNotificationSound(toast.kind === "CHAT_MENTION" ? "chat" : "system");
+    if (preferences.desktopAlerts && "Notification" in window && Notification.permission === "granted") {
+      const alert = new Notification(toast.title, { body: toast.message });
+      alert.onclick = () => {
+        window.focus();
+        navigate(toast.kind === "MEETING_REMINDER" && toast.meetingId ? meetingPath(toast.meetingId) : toast.path);
+        alert.close();
+      };
+    }
+  }, [toast, navigate, preferences.desktopAlerts, meetingPath]);
+
+  useEffect(() => {
+    alertedKeys.current.clear();
+    notificationHydratedRef.current = false;
+    setToastQueue([]);
+  }, [userId]);
 
   async function openMenu(event: MouseEvent<HTMLElement>) {
     setAnchor(event.currentTarget);
@@ -230,7 +321,7 @@ export function NotificationCenter() {
       void api.post("/notifications/read", { keys: [item.key] });
     }
     setAnchor(null);
-    navigate(item.path);
+    navigate(item.kind === "MEETING_REMINDER" && item.meetingId ? meetingPath(item.meetingId) : item.path);
   }
 
   function markAllRead() {
@@ -323,6 +414,8 @@ export function NotificationCenter() {
             ? Inventory2Outlined
             : item.kind === "SIMER_VERSION"
               ? OpenInNewOutlined
+              : item.kind === "MEETING_REMINDER"
+                ? VideoCallOutlined
               : item.kind === "CHAT_MENTION"
                 ? AlternateEmailOutlined
                 : (item.kind === "OPERATION_ALERT" || item.kind === "KNOWN_PROBLEM")
@@ -373,7 +466,7 @@ export function NotificationCenter() {
         {showPreferences && (
           <Stack sx={{ px: 2, pb: 1.5 }}>
             <Typography variant="caption" sx={{ fontWeight: 850, color: "text.secondary", mb: .5 }}>Canais e sons</Typography>
-            {([["sound","Som das notificações"],["chat","Chat e menções"],["operation","Alertas operacionais"]] as Array<[keyof LocalNotificationPreferences,string]>).map(([key,label]) => <FormControlLabel key={key} control={<Switch size="small" checked={localPreferences[key]} onChange={(_,checked)=>changeLocalPreference(key,checked)} />} label={label} sx={{ "& .MuiFormControlLabel-label": { fontSize: "0.76rem" } }} />)}
+            {([["sound","Som das notificações"],["chat","Chat e menções"],["operation","Alertas operacionais e reuniões"]] as Array<[keyof LocalNotificationPreferences,string]>).map(([key,label]) => <FormControlLabel key={key} control={<Switch size="small" checked={localPreferences[key]} onChange={(_,checked)=>changeLocalPreference(key,checked)} />} label={label} sx={{ "& .MuiFormControlLabel-label": { fontSize: "0.76rem" } }} />)}
             <Divider sx={{ my: .75 }} />
             <Typography variant="caption" sx={{ fontWeight: 850, color: "text.secondary", mb: .5 }}>Sistema e desenvolvimento</Typography>
             {([
@@ -399,10 +492,28 @@ export function NotificationCenter() {
           </Stack>
         )}
       </Menu>
-      <Snackbar open={Boolean(toast)} autoHideDuration={6500} onClose={()=>setToast(null)} anchorOrigin={{vertical:"bottom",horizontal:"right"}}>
-        <Alert severity="info" variant="filled" onClose={()=>setToast(null)} onClick={()=>{if(toast){const item=toast;setToast(null);openNotification(item)}}} sx={{cursor:"pointer",minWidth:{sm:360},boxShadow:"0 16px 42px rgba(0,0,0,.28)"}}>
+      <Snackbar
+        key={toast?.key ?? "notification-toast"}
+        open={Boolean(toast)}
+        autoHideDuration={8000}
+        onClose={(_, reason) => { if (reason !== "clickaway") setToastQueue((current) => current.slice(1)); }}
+        anchorOrigin={{vertical:"bottom",horizontal:"right"}}
+      >
+        <Alert
+          severity={toast?.kind === "OPERATION_ALERT" || toast?.kind === "KNOWN_PROBLEM" ? "warning" : toast?.kind === "AZURE_COMPLETED" ? "success" : "info"}
+          variant="filled"
+          onClose={() => setToastQueue((current) => current.slice(1))}
+          onClick={() => {
+            if (!toast) return;
+            const item = toast;
+            setToastQueue((current) => current.slice(1));
+            openNotification(item);
+          }}
+          sx={{cursor:"pointer",minWidth:{sm:360},maxWidth:{sm:480},boxShadow:"0 16px 42px rgba(0,0,0,.28)"}}
+        >
           <Typography sx={{fontWeight:850,fontSize:".82rem"}}>{toast?.title}</Typography>
           <Typography sx={{fontSize:".76rem",opacity:.92}}>{toast?.message}</Typography>
+          {toastQueue.length > 1 && <Typography variant="caption" sx={{display:"block",mt:.45,opacity:.78}}>{toastQueue.length-1} notificação(ões) aguardando</Typography>}
         </Alert>
       </Snackbar>
     </>

@@ -1,0 +1,948 @@
+import { useEffect, useMemo, useState } from "react";
+import {
+  Alert, Autocomplete, Box, Button, Card, CardContent, Chip, CircularProgress, Divider, Drawer,
+  FormControl, IconButton, InputLabel, MenuItem, Select, Stack as MuiStack, Table, TableBody,
+  TableCell, TableContainer, TableHead, TableRow, TextField, Tooltip as MuiTooltip, Typography,
+  useTheme,
+} from "@mui/material";
+import {
+  AssessmentOutlined, InfoOutlined, OpenInNewOutlined, RefreshOutlined, RestartAltOutlined, ShareOutlined,
+  TrendingDownOutlined, TrendingUpOutlined,
+} from "@mui/icons-material";
+import {
+  Bar, BarChart, CartesianGrid, Cell, LabelList, Pie, PieChart, ResponsiveContainer,
+  Tooltip as ChartTooltip, XAxis, YAxis,
+} from "recharts";
+import { useNavigate } from "react-router-dom";
+import { api, getApiErrorMessage } from "../services/api";
+import { aliareColors } from "../theme/theme";
+import { chartPalette, semanticChartColors } from "../theme/chartPalette";
+import { KpiCard } from "./KpiCard";
+import { DetailFieldGrid, DetailPanelHeader, DetailSection } from "./DetailPanel";
+import { detailDrawerPaperSx } from "../theme/layoutTokens";
+import { ExportCorrectionTasksButton } from "./ExportCorrectionTasksButton";
+
+function Stack(
+  props: React.ComponentProps<typeof MuiStack> & {
+    alignItems?: unknown;
+    justifyContent?: unknown;
+    flexWrap?: unknown;
+    gap?: unknown;
+  },
+) {
+  const { alignItems, justifyContent, flexWrap, gap, sx, ...rest } = props;
+  return (
+    <MuiStack
+      {...rest}
+      sx={[
+        ...(Array.isArray(sx) ? sx : sx ? [sx] : []),
+        {
+          ...(alignItems !== undefined ? { alignItems } : {}),
+          ...(justifyContent !== undefined ? { justifyContent } : {}),
+          ...(flexWrap !== undefined ? { flexWrap } : {}),
+          ...(gap !== undefined ? { gap } : {}),
+        },
+      ] as React.ComponentProps<typeof MuiStack>["sx"]}
+    />
+  );
+}
+
+function InfoButton({ title, description }: { title: string; description: string }) {
+  return (
+    <MuiTooltip
+      arrow
+      placement="top"
+      title={
+        <Box sx={{ maxWidth: 360 }}>
+          <Typography variant="caption" sx={{ fontWeight: 900, display: "block", mb: 0.45 }}>
+            {title}
+          </Typography>
+          <Typography variant="caption">{description}</Typography>
+        </Box>
+      }
+    >
+      <IconButton
+        size="small"
+        aria-label={`Informações sobre ${title}`}
+        onClick={(event) => event.stopPropagation()}
+        sx={{ p: 0.35, color: "text.secondary", flexShrink: 0 }}
+      >
+        <InfoOutlined sx={{ fontSize: 17 }} />
+      </IconButton>
+    </MuiTooltip>
+  );
+}
+
+function CardHeading({ title, subtitle, info }: { title: string; subtitle?: string; info: string }) {
+  return (
+    <Box sx={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 1 }}>
+      <Box sx={{ minWidth: 0 }}>
+        <Typography sx={{ fontWeight: 850, fontSize: ".98rem" }}>{title}</Typography>
+        {subtitle && <Typography variant="caption" color="text.secondary">{subtitle}</Typography>}
+      </Box>
+      <InfoButton title={title} description={info} />
+    </Box>
+  );
+}
+
+type Row = {
+  id:number; title:string; client:string|null; createdBy:string|null; createdAt:string|null; status:string;
+  lastStateChangedAt:string|null; urgency:string|null; prioritized:boolean|null; assignedTo:string|null;
+  terminalAt:string|null; remoteUrl:string|null; stateAtOpen?:string|null; stateAtClose?:string|null;
+  registeredInPeriod:boolean; deliveredInPeriod:boolean; canceledInPeriod:boolean;
+  enteredRegistrationInPeriod:boolean; backlogInitial:boolean; backlogCurrent:boolean;
+  inPeriodUniverse?:boolean;
+};
+
+type Report = {
+  period:{month:string;timezone:string;start:string;close:string};
+  rows:Row[];
+  source:string;
+  filters?:{creators:string[];teamCreators?:string[];clients:string[];urgencies:string[];states:string[]};
+  quality?:{
+    historyAvailable:boolean;historyError:string|null;snapshotAvailable?:boolean;snapshotError?:string|null;
+    historicalScopeError?:string|null;mode:string;refreshing?:boolean;localPreview?:boolean;movementHistoryReliable?:boolean;
+    historicalMetricsReliable:boolean;backlogHistoricalReliable?:boolean;backlogInitialAvailable?:boolean;backlogCurrentAvailable?:boolean;unknownClosingStates?:number;
+    externalHistorySuspicious?:boolean;localFallbackUsed?:boolean;localStateHistoryEvents?:number;
+    perItemHistoryRecoveryUsed?:boolean;recoveredHistoryItems?:number;recoveryCandidates?:number;
+    diagnostics?:{
+      scopedRecords?:number;localRecords:number;localPeriodCandidates:number;revisions:number;
+      openingScopeIds:number;closingScopeIds:number;snapshotCandidates:number;
+      openingSnapshotItems:number;closingSnapshotItems:number;outputRows:number;
+    };
+  };
+};
+
+type Drill = "registered"|"delivered"|"canceled"|"registration"|"backlogInitial"|"backlogCurrent"|null;
+type SliceDrill =
+  | {kind:"status";value:string}
+  | {kind:"urgency";value:string}
+  | {kind:"prioritized";value:boolean|null}
+  | null;
+
+const TERMINAL = new Set(["Concluído","Cancelado"]);
+const PIPELINE_ORDER = [
+  "Registro","Qualificação","Fila de Negócio","Negócio","Fila Desenvolvimento",
+  "Desenvolvimento","Fila Qualidade","Qualidade","Integração","Concluído","Cancelado",
+] as const;
+
+const URGENCY_ORDER = ["P1","Crítica","Critica","P2","Alta","P3","Média","Media","P4","Baixa","Não informado"] as const;
+const urgencyRank = (value:string) => {
+  const index=URGENCY_ORDER.indexOf(value as typeof URGENCY_ORDER[number]);
+  return index===-1?URGENCY_ORDER.length:index;
+};
+
+const metricLabel:Record<Exclude<Drill,null>,string> = {
+  registered:"Tasks registradas",
+  delivered:"Tasks entregues",
+  canceled:"Tasks canceladas",
+  registration:"Tasks em Registro",
+  backlogInitial:"Backlog inicial",
+  backlogCurrent:"Backlog atual",
+};
+
+const SEPTEMBER_2026_REFERENCE = {
+  backlogInitial:14,
+  registered:45,
+  delivered:41,
+  canceled:8,
+  registration:1,
+} as const;
+
+const fmt = (value:string|null|undefined) => value
+  ? new Intl.DateTimeFormat("pt-BR",{dateStyle:"short",timeStyle:"short"}).format(new Date(value))
+  : "—";
+
+const currentMonth = () => {
+  const date = new Date();
+  return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}`;
+};
+
+export function CorrectionMonthlyPanel() {
+  const theme = useTheme();
+  const navigate = useNavigate();
+
+  const [month,setMonth] = useState(currentMonth());
+  const [report,setReport] = useState<Report|null>(null);
+  const [loading,setLoading] = useState(false);
+  const [error,setError] = useState("");
+  const [reloadToken,setReloadToken] = useState(0);
+
+  const [creators,setCreators] = useState<string[]>([]);
+  const [clients,setClients] = useState<string[]>([]);
+  const [urgencies,setUrgencies] = useState<string[]>([]);
+  const [states,setStates] = useState<string[]>([]);
+  const [prioritized,setPrioritized] = useState<""|"true"|"false">("");
+  const [search,setSearch] = useState("");
+  const [drill,setDrill] = useState<Drill>(null);
+  const [sliceDrill,setSliceDrill] = useState<SliceDrill>(null);
+
+  const [drawerOpen,setDrawerOpen] = useState(false);
+  const [drawerTitle,setDrawerTitle] = useState("Detalhamento");
+  const [selectedTaskId,setSelectedTaskId] = useState<number|null>(null);
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    setError("");
+    setReport(null);
+    let timer:ReturnType<typeof setTimeout>|undefined;
+    const load=async(first:boolean)=>{
+      try {
+        const {data}=await api.get<Report>("/azure-work-items/corrections/monthly-report",{
+          params:{month,...(first&&reloadToken>0?{refresh:"1"}:{})},timeout:30000,
+        });
+        if(!active) return;
+        setReport(data);
+        setLoading(false);
+        if(data.quality?.refreshing) timer=setTimeout(()=>void load(false),3000);
+      } catch(requestError) {
+        if(active){setError(getApiErrorMessage(requestError,"Não foi possível carregar o report mensal."));setLoading(false);}
+      }
+    };
+    void load(true);
+    return () => { active = false;if(timer)clearTimeout(timer); };
+  },[month,reloadToken]);
+
+  const options = useMemo(() => ({
+    creators:[...new Set((report?.rows??[]).map(row=>row.createdBy).filter((value):value is string=>!!value))].sort(),
+    clients:report?.filters?.clients??[...new Set((report?.rows??[]).map(row=>row.client).filter((value):value is string=>!!value))].sort(),
+    urgencies:[...new Set((report?.rows??[]).map(row=>row.urgency).filter((value):value is string=>!!value))].sort(),
+    states:[...new Set((report?.rows??[]).map(row=>row.status).filter(Boolean))].sort(),
+  }),[report]);
+
+  const base = useMemo(() => (report?.rows??[]).filter(row =>
+    (!creators.length || (!!row.createdBy && creators.includes(row.createdBy))) &&
+    (!clients.length || (!!row.client && clients.includes(row.client))) &&
+    (!urgencies.length || (!!row.urgency && urgencies.includes(row.urgency))) &&
+    (!states.length || states.includes(row.status)) &&
+    (!prioritized || row.prioritized === (prioritized==="true"))
+  ),[report,creators,clients,urgencies,states,prioritized]);
+
+  const match = (row:Row,key:Exclude<Drill,null>) =>
+    key==="registered" ? row.registeredInPeriod :
+    key==="delivered" ? row.deliveredInPeriod :
+    key==="canceled" ? row.canceledInPeriod :
+    key==="registration" ? row.enteredRegistrationInPeriod :
+    key==="backlogInitial" ? row.backlogInitial :
+    row.backlogCurrent;
+
+  const isPeriodRow = (row:Row) => row.inPeriodUniverse ??
+    (row.registeredInPeriod || row.deliveredInPeriod || row.canceledInPeriod ||
+      row.enteredRegistrationInPeriod || row.backlogInitial || row.backlogCurrent);
+
+  const value = (key:Exclude<Drill,null>) => base.filter(row=>match(row,key)).length;
+  const initial = value("backlogInitial");
+  const current = value("backlogCurrent");
+  // Snapshot indisponível não é sinônimo de backlog zerado.
+  const backlogVerified = report?.quality?.backlogHistoricalReliable === true;
+  const localHistoryFallback = report?.quality?.localFallbackUsed === true;
+  const backlogAvailable = backlogVerified || report?.quality?.backlogCurrentAvailable === true;
+  const initialBacklogAvailable = backlogVerified || report?.quality?.backlogInitialAvailable === true;
+  const monthlyMovementVerified =
+    report?.quality?.movementHistoryReliable ??
+    report?.quality?.historicalMetricsReliable ??
+    false;
+  const delivered = value("delivered");
+  const canceled = value("canceled");
+  const registered = value("registered");
+  const delta = current-initial;
+  const outputs = delivered+canceled;
+  const flowBalance = registered-outputs;
+
+  const teamCreators = report?.filters?.teamCreators ?? [];
+  const teamScopeActive =
+    teamCreators.length > 0 &&
+    creators.length === teamCreators.length &&
+    teamCreators.every((creator) => creators.includes(creator));
+  const homologationScopeActive =
+    teamScopeActive &&
+    clients.length===0 &&
+    urgencies.length===0 &&
+    states.length===0 &&
+    prioritized==="";
+  const septemberHomologation = month === "2026-09"
+    ? [
+        {key:"backlogInitial",label:"Backlog inicial",actual:backlogVerified?initial:null,expected:SEPTEMBER_2026_REFERENCE.backlogInitial,verified:backlogVerified},
+        {key:"registered",label:"Registradas",actual:registered,expected:SEPTEMBER_2026_REFERENCE.registered,verified:true},
+        {key:"delivered",label:"Entregues",actual:delivered,expected:SEPTEMBER_2026_REFERENCE.delivered,verified:monthlyMovementVerified},
+        {key:"canceled",label:"Canceladas",actual:canceled,expected:SEPTEMBER_2026_REFERENCE.canceled,verified:monthlyMovementVerified},
+        {key:"registration",label:"Em Registro",actual:value("registration"),expected:SEPTEMBER_2026_REFERENCE.registration,verified:monthlyMovementVerified},
+      ]
+    : [];
+
+  const cards = [
+    {
+      key:"registered" as const,label:"Tasks registradas",value:registered,note:monthlyMovementVerified?"Criadas no período":"Prévia parcial · validar histórico",
+      accent:aliareColors.info,
+      info:"Conta System.Id distintos criados dentro do período selecionado, independentemente do status no snapshot de fechamento.",
+    },
+    {
+      key:"delivered" as const,label:"Tasks entregues",value:report?delivered:"—",note:monthlyMovementVerified?"Concluídas no período":"Prévia parcial · movimentos comprovados",
+      accent:aliareColors.green,
+      info:"Conta Tasks que entraram efetivamente em Concluído durante o período e permaneciam em Concluído no snapshot de fechamento.",
+    },
+    {
+      key:"canceled" as const,label:"Tasks canceladas",value:report?canceled:"—",note:monthlyMovementVerified?"Canceladas no período":"Prévia parcial · movimentos comprovados",
+      accent:theme.palette.error.main,
+      info:"Conta Tasks que entraram efetivamente em Cancelado durante o período e permaneciam em Cancelado no snapshot de fechamento.",
+    },
+    {
+      key:"registration" as const,label:"Tasks em Registro",value:report?value("registration"):"—",note:monthlyMovementVerified?"Fora do backlog":"Prévia parcial · fora do backlog",
+      accent:aliareColors.warning,
+      info:"Conta Tasks que entraram em Registro durante o período e permaneciam em Registro no fechamento. Registro aparece no pipeline, mas nunca integra backlog.",
+    },
+    {
+      key:"backlogInitial" as const,label:"Backlog inicial",value:initialBacklogAvailable?initial:"—",note:backlogVerified?"Fechamento do mês anterior":initialBacklogAvailable?"Prévia · fechamento anterior":"Aguardando fechamento anterior",
+      accent:aliareColors.purple,
+      info:"Backlog no fechamento do mês anterior, imediatamente antes do início do período: itens abertos, excluindo Registro, Concluído e Cancelado. Não exige movimentação no mês.",
+    },
+    {
+      key:"backlogCurrent" as const,label:"Backlog atual",value:backlogAvailable?current:"—",note:backlogVerified?"Estoque aberto no fechamento":localHistoryFallback?"Reconstruído do histórico local":"Aguardando snapshot histórico",
+      accent:aliareColors.green,
+      info:"Fotografia no fechamento do período: itens abertos, excluindo Registro, Concluído e Cancelado. Não exige movimentação no mês.",
+    },
+  ] as const;
+
+  const periodRows = base.filter(isPeriodRow);
+  const periodUniverse = periodRows.length;
+
+  const statusCounts = periodRows.reduce<Record<string,number>>((acc,row) => {
+    acc[row.status]=(acc[row.status]??0)+1;
+    return acc;
+  },{});
+  const expectedPipeline = PIPELINE_ORDER.map(name=>({name,total:statusCounts[name]??0}));
+  const extraPipeline = Object.entries(statusCounts)
+    .filter(([name])=>!PIPELINE_ORDER.includes(name as typeof PIPELINE_ORDER[number]))
+    .map(([name,total])=>({name,total}));
+  const pipeline = [...expectedPipeline,...extraPipeline];
+
+  const urgency = Object.entries(periodRows.reduce<Record<string,number>>((acc,row) => {
+    const key=row.urgency||"Não informado";
+    acc[key]=(acc[key]??0)+1;
+    return acc;
+  },{})).map(([name,total])=>({name,total})).sort((a,b)=>{
+    const rank=urgencyRank(a.name)-urgencyRank(b.name);
+    return rank!==0?rank:b.total-a.total;
+  });
+
+  const priority = [
+    {name:"Priorizadas",total:periodRows.filter(row=>row.prioritized===true).length},
+    {name:"Não priorizadas",total:periodRows.filter(row=>row.prioritized===false).length},
+    {name:"Não informado",total:periodRows.filter(row=>row.prioritized===null).length},
+  ].filter(item=>item.total);
+  const pipelineTotal=pipeline.reduce((sum,item)=>sum+item.total,0);
+  const urgencyTotal=urgency.reduce((sum,item)=>sum+item.total,0);
+  const priorityTotal=priority.reduce((sum,item)=>sum+item.total,0);
+  const distributionConsistent=pipelineTotal===periodUniverse&&urgencyTotal===periodUniverse&&priorityTotal===periodUniverse;
+
+  const selectedRows = useMemo(() => base.filter(row => {
+    if(drill) return match(row,drill);
+    if(sliceDrill?.kind==="status") return isPeriodRow(row)&&row.status===sliceDrill.value;
+    if(sliceDrill?.kind==="urgency") return isPeriodRow(row)&&(row.urgency||"Não informado")===sliceDrill.value;
+    if(sliceDrill?.kind==="prioritized") return isPeriodRow(row)&&row.prioritized===sliceDrill.value;
+    return isPeriodRow(row);
+  }),[base,drill,sliceDrill]);
+
+  const detailed = useMemo(() => selectedRows.filter(row =>
+    !search.trim() ||
+    String(row.id).includes(search.trim()) ||
+    row.title.toLocaleLowerCase("pt-BR").includes(search.trim().toLocaleLowerCase("pt-BR"))
+  ),[selectedRows,search]);
+
+  const drawerRows = useMemo(() => [...selectedRows].sort((a,b) =>
+    (b.lastStateChangedAt??b.createdAt??"").localeCompare(a.lastStateChangedAt??a.createdAt??"")
+  ),[selectedRows]);
+
+  const selectedTask = useMemo(
+    () => drawerRows.find(row=>row.id===selectedTaskId)??null,
+    [drawerRows,selectedTaskId],
+  );
+
+  useEffect(() => {
+    if(drawerOpen&&selectedTaskId===null&&drawerRows.length) setSelectedTaskId(drawerRows[0].id);
+  },[drawerOpen,drawerRows,selectedTaskId]);
+
+  const activeDrillLabel = drill
+    ? metricLabel[drill]
+    : sliceDrill?.kind==="status"
+      ? `Status · ${sliceDrill.value}`
+      : sliceDrill?.kind==="urgency"
+        ? `Urgência · ${sliceDrill.value}`
+        : sliceDrill?.kind==="prioritized"
+          ? `Priorização · ${sliceDrill.value===true?"Sim":sliceDrill.value===false?"Não":"Não informado"}`
+          : "Universo do período";
+
+  const openMetric = (key:Exclude<Drill,null>,label:string) => {
+    setSliceDrill(null);
+    setDrill(key);
+    setDrawerTitle(label);
+    setSelectedTaskId(null);
+    setDrawerOpen(true);
+  };
+
+  const selectSlice = (next:Exclude<SliceDrill,null>,label:string) => {
+    setDrill(null);
+    setSliceDrill(next);
+    setDrawerTitle(label);
+    setSelectedTaskId(null);
+    setDrawerOpen(true);
+  };
+
+  const clear = () => {
+    setCreators([]);setClients([]);setUrgencies([]);setStates([]);setPrioritized("");
+    setSearch("");setDrill(null);setSliceDrill(null);setDrawerOpen(false);setSelectedTaskId(null);
+  };
+
+  const shareSelection = () => {
+    window.dispatchEvent(new CustomEvent("techlead-hub:share-chat",{
+      detail:{
+        label:"Correções Clientes",
+        title:`${drawerTitle} · ${month}`,
+        status:`${selectedRows.length} task(s)`,
+        path:"/correcoes",
+      },
+    }));
+  };
+
+  const shareTask = (row:Row) => {
+    window.dispatchEvent(new CustomEvent("techlead-hub:share-chat",{
+      detail:{
+        label:"Correção Clientes",
+        recordId:row.id,
+        title:row.title,
+        client:row.client,
+        status:row.status,
+        path:`/correcoes?task=${row.id}`,
+      },
+    }));
+  };
+
+  const panel = {
+    border:"1px solid",
+    borderColor:"divider",
+    borderRadius:"12px",
+    bgcolor:"background.paper",
+    overflow:"hidden",
+  };
+
+  const chartPanel = {
+    ...panel,
+    height:"100%",
+    minHeight:390,
+    display:"flex",
+    boxShadow:theme.palette.mode==="dark"?"0 14px 34px rgba(0,0,0,.13)":"0 10px 28px rgba(15,23,42,.045)",
+    "& .recharts-bar-rectangle, & .recharts-sector":{cursor:"pointer"},
+  };
+
+  return <Box sx={{order:.5,display:"grid",gap:1.35}}>
+    <Card elevation={0} sx={panel}>
+      <CardContent sx={{p:{xs:1.6,md:2},"&:last-child":{pb:{xs:1.6,md:2}}}}>
+        <Stack direction={{xs:"column",lg:"row"}} justifyContent="space-between" alignItems={{lg:"center"}} gap={1.5}>
+          <Box sx={{display:"flex",alignItems:"center",gap:.6,minWidth:0}}>
+            <Box sx={{minWidth:0}}>
+              <Typography variant="h6" sx={{fontWeight:900,letterSpacing:"-.02em"}}>Report mensal de Correções</Typography>
+              <Typography variant="caption" color="text.secondary">
+                Criadas pelo suporte SIMER · Carteira SIMER · Snapshots de abertura/fechamento e movimentações reais de status no Azure DevOps.
+              </Typography>
+            </Box>
+            <InfoButton
+              title="Report mensal de Correções"
+              description="Considera exclusivamente Work Items do tipo Correção Clientes da carteira SIMER criados por Tayson, Alan e Renan, conta System.Id distintos e usa America/Sao_Paulo. Cards, gráficos e listagem respeitam os filtros globais."
+            />
+          </Box>
+          <Stack direction={{xs:"column",sm:"row"}} gap={1} flexWrap="wrap" alignItems={{xs:"stretch",sm:"center"}}>
+            {report?.quality&&
+              <Chip
+                size="small"
+                color={report.quality.historicalMetricsReliable&&!report.quality.historicalScopeError?"success":"warning"}
+                variant="outlined"
+                label={report.quality.localFallbackUsed
+                  ?"Histórico local reconstruído"
+                  :report.quality.historicalMetricsReliable&&!report.quality.historicalScopeError
+                    ?"Histórico confiável"
+                    :"Histórico parcial"}
+              />
+            }
+            <TextField label="Período" type="month" value={month} onChange={event=>setMonth(event.target.value)}
+              size="small" sx={{minWidth:190}} slotProps={{inputLabel:{shrink:true}}}/>
+            <Button size="small" variant="outlined" startIcon={<RefreshOutlined fontSize="small" />}
+              disabled={loading} onClick={()=>setReloadToken(value=>value+1)} sx={{minHeight:40,whiteSpace:"nowrap"}}>
+              Recarregar
+            </Button>
+          </Stack>
+        </Stack>
+
+        <Box sx={{
+          mt:1.6,
+          pt:.6,
+          display:"grid",
+          gridTemplateColumns:"repeat(12,minmax(0,1fr))",
+          gap:1.5,
+          alignItems:"start",
+          "& > *":{minWidth:0,gridColumn:{xs:"span 12",sm:"span 6",lg:"span 4"}},
+        }}>
+          <Autocomplete multiple limitTags={2} size="small" options={options.creators} value={creators} onChange={(_,value)=>setCreators(value)}
+            renderInput={params=><TextField {...params} label="Criado por"/>}/>
+          <Autocomplete multiple limitTags={2} size="small" options={options.clients} value={clients} onChange={(_,value)=>setClients(value)}
+            renderInput={params=><TextField {...params} label="Cliente"/>}/>
+          <Autocomplete multiple limitTags={2} size="small" options={options.urgencies} value={urgencies} onChange={(_,value)=>setUrgencies(value)}
+            renderInput={params=><TextField {...params} label="Urgência"/>}/>
+          <Autocomplete multiple limitTags={2} size="small" options={options.states} value={states} onChange={(_,value)=>setStates(value)}
+            renderInput={params=><TextField {...params} label="Status"/>}/>
+          <FormControl size="small" fullWidth>
+            <InputLabel id="correction-prioritized-label" shrink>Priorizada</InputLabel>
+            <Select labelId="correction-prioritized-label" inputProps={{ id: "correction-prioritized", "aria-labelledby": "correction-prioritized-label" }} label="Priorizada"
+              notched displayEmpty renderValue={value=>value==="true"?"Sim":value==="false"?"Não":"Todas"}
+              value={prioritized} onChange={event=>setPrioritized(event.target.value as typeof prioritized)}>
+              <MenuItem value="">Todas</MenuItem><MenuItem value="true">Sim</MenuItem><MenuItem value="false">Não</MenuItem>
+            </Select>
+          </FormControl>
+          <Stack direction="row" gap={1} flexWrap="wrap" alignItems="center" sx={{minHeight:40}}>
+            <MuiTooltip title="Selecionar os criadores do time SIMER, incluindo os nomes exibidos no Azure">
+              <span><Button
+                size="small"
+                variant={teamScopeActive?"contained":"outlined"}
+                disabled={!teamCreators.length}
+                onClick={()=>setCreators(teamCreators)}
+                sx={{minHeight:40,whiteSpace:"nowrap"}}
+              >Time SIMER</Button></span>
+            </MuiTooltip>
+            <Button startIcon={<RestartAltOutlined/>} onClick={clear} sx={{minHeight:40}}>Limpar filtros</Button>
+          </Stack>
+        </Box>
+        <Typography variant="caption" color="text.secondary" sx={{display:"block",mt:1.4}}>
+          {teamScopeActive?"Time SIMER selecionado":creators.length?"Criadores selecionados":"Todos os criadores do suporte SIMER"} · {periodUniverse} task(s) no período
+        </Typography>
+      </CardContent>
+    </Card>
+
+    {error&&
+      <Alert
+        severity="error"
+        action={<Button color="inherit" size="small" onClick={()=>setReloadToken(value=>value+1)}>Tentar novamente</Button>}
+      >
+        {error}
+      </Alert>
+    }
+    {report?.quality&&(!report.quality.historicalMetricsReliable||!!report.quality.historicalScopeError)&&
+      <Alert severity="warning">
+        <b>{report.quality.refreshing?"Conferindo histórico no Azure.":"Apuração histórica parcial."}</b>{" "}
+        {report.quality.refreshing
+          ?"A prévia local já está disponível. Os números serão atualizados automaticamente quando a consulta terminar."
+          :"O histórico do Azure não foi recuperado por completo. Estados sem evidência histórica aparecem como indisponíveis. Backlog parcial não comprova o estoque total; use Recarregar para tentar novamente."}{" "}
+        {[
+          report.quality.historyError && `Revisões: ${report.quality.historyError}`,
+          report.quality.snapshotError && `Snapshots: ${report.quality.snapshotError}`,
+          report.quality.historicalScopeError && `Escopo ASOF: ${report.quality.historicalScopeError}`,
+        ].filter(Boolean).join(" | ")}
+        {report.quality.diagnostics && (
+          <Typography component="p" variant="caption" sx={{mt:0.8,opacity:0.9}}>
+            Base consultada: {report.quality.diagnostics.scopedRecords??report.quality.diagnostics.localRecords} tasks; recorte mensal: {periodUniverse} tasks distintas. Histórico Azure: {report.quality.diagnostics.revisions} revisões;{" "}
+            {report.quality.diagnostics.openingScopeIds} IDs abertos na entrada;{" "}
+            {report.quality.diagnostics.closingScopeIds} IDs abertos no fechamento;{" "}
+            {report.quality.diagnostics.snapshotCandidates} candidatos;{" "}
+            snapshots {report.quality.diagnostics.openingSnapshotItems}/{report.quality.diagnostics.closingSnapshotItems} (entrada/fechamento);{" "}
+            {report.quality.diagnostics.outputRows} tasks no universo mensal antes dos filtros; {report.quality.unknownClosingStates??0} sem estado histórico no fechamento.
+          </Typography>
+        )}
+      </Alert>
+    }
+    {!loading&&report&&month==="2026-09"&&
+      <Card elevation={0} sx={{
+        ...panel,
+        borderColor:homologationScopeActive?"rgba(24,199,122,.28)":"rgba(47,111,237,.22)",
+        background:theme.palette.mode==="dark"
+          ?"linear-gradient(105deg,rgba(47,111,237,.08),rgba(24,199,122,.045),rgba(255,255,255,.012))"
+          :"linear-gradient(105deg,rgba(47,111,237,.05),rgba(24,199,122,.035),#FFFFFF)",
+      }}>
+        <CardContent sx={{py:1.2,"&:last-child":{pb:1.2}}}>
+          <Stack direction={{xs:"column",lg:"row"}} gap={1.25} justifyContent="space-between" alignItems={{lg:"center"}}>
+            <Box sx={{minWidth:0}}>
+              <Typography sx={{fontWeight:900}}>Homologação · setembro/2026</Typography>
+              <Typography variant="caption" color="text.secondary">
+                {homologationScopeActive
+                  ?"Escopo homologado aplicado: Time SIMER, sem filtros adicionais. Comparação com a referência validada pela coordenação."
+                  :"Para confrontar a referência oficial, use Time SIMER e deixe Cliente, Urgência, Status e Priorizada sem seleção."}
+              </Typography>
+            </Box>
+            <Box sx={{display:"grid",gridTemplateColumns:{xs:"repeat(2,minmax(0,1fr))",sm:"repeat(5,minmax(108px,1fr))"},gap:.7}}>
+              {septemberHomologation.map(item=>{
+                const comparable=homologationScopeActive&&item.verified&&item.actual!==null;
+                const displayActual=item.key==="registration"?value("registration"):item.actual;
+                const matches=comparable&&item.actual===item.expected;
+                return <Box key={item.key} sx={{
+                  px:1,py:.7,border:"1px solid",borderColor:matches?"success.main":comparable?"warning.main":"divider",
+                  borderRadius:"8px",minWidth:0,bgcolor:"background.paper",
+                }}>
+                  <Typography variant="caption" color="text.secondary" sx={{display:"block",whiteSpace:"nowrap"}}>{item.label}</Typography>
+                  <Stack direction="row" gap={0.5} alignItems="baseline">
+                    <Typography sx={{fontWeight:900,fontVariantNumeric:"tabular-nums"}}>{displayActual??"—"}</Typography>
+                    <Typography variant="caption" color="text.secondary">/ ref. {item.expected}</Typography>
+                  </Stack>
+                </Box>;
+              })}
+            </Box>
+          </Stack>
+        </CardContent>
+      </Card>
+    }
+
+    {!loading&&report&&report.rows.length===0&&
+      <Alert severity="warning">Nenhuma Task do tipo Correção Clientes foi localizada no recorte carregado.</Alert>
+    }
+
+    {loading
+      ? <Box sx={{py:5,textAlign:"center"}}><CircularProgress size={28}/><Typography variant="body2" color="text.secondary" sx={{mt:1}}>Reconstruindo o fechamento mensal…</Typography></Box>
+      : report&&<>
+        <Box sx={{
+          display:"grid",
+          gridTemplateColumns:{xs:"1fr",sm:"repeat(2,minmax(0,1fr))",lg:"repeat(3,minmax(0,1fr))",xl:"repeat(6,minmax(0,1fr))"},
+          gap:1,
+          alignItems:"stretch",
+        }}>
+          {cards.map(card=>
+            <KpiCard
+              key={card.key}
+              title={card.label}
+              value={card.value}
+              subtitle={card.note}
+              info={card.info}
+              accent={card.accent}
+              active={drill===card.key}
+              density="compact"
+              onClick={()=>openMetric(card.key,card.label)}
+            />
+          )}
+        </Box>
+
+        <Card elevation={0} sx={{
+          ...panel,
+          background:theme.palette.mode==="dark"
+            ?"linear-gradient(110deg,rgba(24,199,122,.08),rgba(255,255,255,.015))"
+            :"linear-gradient(110deg,rgba(24,199,122,.07),rgba(255,255,255,.98))",
+        }}>
+          <CardContent sx={{py:1.25,"&:last-child":{pb:1.25}}}>
+            <Stack direction={{xs:"column",lg:"row"}} justifyContent="space-between" alignItems={{lg:"center"}} gap={1.25}>
+              <Box sx={{display:"flex",alignItems:"center",gap:.7,flexWrap:"wrap"}}>
+                <Box>
+                  <Typography sx={{fontWeight:850}}>Leitura do período</Typography>
+                  <Typography variant="caption" color="text.secondary">Balanço operacional do recorte selecionado.</Typography>
+                </Box>
+                <InfoButton
+                  title="Leitura do período"
+                  description="Resumo derivado dos indicadores encontrados no recorte. Saídas = Entregues + Canceladas; saldo líquido = Registradas − Saídas; variação do backlog = Backlog atual − Backlog inicial. Os números só são oficiais quando o histórico Azure e os snapshots ASOF tiverem cobertura confirmada."
+                />
+                <MuiTooltip title={distributionConsistent?"Pipeline, Urgência e Priorização contam tasks distintas. Os cards se sobrepõem: uma task pode ser registrada e entregue no mesmo mês. A consistência dos gráficos não homologa o histórico.":`Divergência: universo ${periodUniverse}, pipeline ${pipelineTotal}, urgência ${urgencyTotal}, priorização ${priorityTotal}.`}>
+                  <Chip size="small" color={distributionConsistent?"success":"warning"} variant="outlined"
+                    label={distributionConsistent
+                      ? (backlogVerified&&monthlyMovementVerified
+                          ?"Distribuição consistente · histórico validado"
+                          :"Mesmo universo · histórico parcial")
+                      : "Revisar distribuição"}/>
+                </MuiTooltip>
+              </Box>
+              <Box sx={{display:"grid",gridTemplateColumns:{xs:"repeat(2,minmax(0,1fr))",md:"repeat(4,minmax(110px,1fr))"},gap:{xs:1,md:2.2}}}>
+                {[
+                  ["Saídas do mês",monthlyMovementVerified?outputs:"—"],
+                  ["Saldo líquido",monthlyMovementVerified?`${flowBalance>0?"+":""}${flowBalance}`:"—"],
+                  ["Variação backlog",backlogAvailable&&initialBacklogAvailable?`${delta>0?"+":""}${delta}`:"—"],
+                  ["Universo",periodUniverse],
+                ].map(([label,val],index)=>
+                  <Box key={String(label)} sx={{minWidth:0}}>
+                    <Typography variant="caption" color="text.secondary">{label}</Typography>
+                    <Stack direction="row" alignItems="center" gap={0.35}>
+                      {index===2&&backlogAvailable&&initialBacklogAvailable&&(delta<=0?<TrendingDownOutlined color="success" sx={{fontSize:18}}/>:<TrendingUpOutlined color="warning" sx={{fontSize:18}}/>)}
+                      <Typography sx={{fontWeight:900,fontSize:"1.15rem"}}>{val}</Typography>
+                    </Stack>
+                  </Box>
+                )}
+              </Box>
+            </Stack>
+          </CardContent>
+        </Card>
+
+        <Box sx={{
+          display:"grid",
+          gridTemplateColumns:{xs:"1fr",lg:"minmax(0,1.65fr) minmax(260px,.85fr) minmax(260px,.85fr)",xl:"minmax(0,1.85fr) minmax(300px,.95fr) minmax(300px,.95fr)"},
+          gap:1.15,
+          alignItems:"stretch",
+        }}>
+          <Card elevation={0} sx={chartPanel}>
+            <CardContent sx={{flex:1,display:"flex",flexDirection:"column",p:1.7,"&:last-child":{pb:1.7}}}>
+              <CardHeading
+                title={backlogVerified?"Pipeline no fechamento":"Pipeline · prévia não homologada"}
+                subtitle={backlogVerified?`${periodUniverse} task(s) no snapshot final`:`${periodUniverse} task(s) com status recuperado no recorte parcial`}
+                info="Distribui pelo status no snapshot de fechamento somente as Correções Clientes que participam do universo do período e filtros atuais. A soma das barras corresponde ao universo do período. Registro aparece no pipeline, mas é excluído de backlog."
+              />
+              <Box sx={{flex:1,minHeight:Math.max(340,pipeline.length*31),mt:1}}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={pipeline} layout="vertical" margin={{left:14,right:46,top:6,bottom:6}}>
+                    <CartesianGrid strokeDasharray="3 5" horizontal={false} stroke={theme.palette.divider} opacity={.55}/>
+                    <XAxis type="number" allowDecimals={false} axisLine={false} tickLine={false}
+                      tick={{fill:theme.palette.text.secondary,fontSize:12,fontWeight:650}}/>
+                    <YAxis type="category" dataKey="name" width={138} axisLine={false} tickLine={false}
+                      tick={{fill:theme.palette.text.secondary,fontSize:12,fontWeight:650}}/>
+                    <ChartTooltip cursor={{fill:theme.palette.action.hover}}/>
+                    <Bar dataKey="total" barSize={18} radius={[0,6,6,0]} isAnimationActive={false}
+                      onClick={data=>{const name=(data as {name?:string}).name;if(name)selectSlice({kind:"status",value:name},`Status · ${name}`)}}>
+                      {pipeline.map((_,index)=><Cell key={index} fill={chartPalette[index%chartPalette.length]}/>)}
+                      <LabelList dataKey="total" position="right" fill={theme.palette.text.secondary}
+                        fontSize={12} fontWeight={800}/>
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </Box>
+            </CardContent>
+          </Card>
+
+          <Card elevation={0} sx={chartPanel}>
+            <CardContent sx={{flex:1,display:"flex",flexDirection:"column",p:1.7,"&:last-child":{pb:1.7}}}>
+              <CardHeading
+                title="Urgência"
+                subtitle="Tasks distintas do universo mensal"
+                info="Agrupa o mesmo universo do período pela urgência/criticidade registrada no Azure. Respeita todos os filtros globais. Clique em uma barra para abrir as Tasks correspondentes."
+              />
+              <Box sx={{flex:1,minHeight:340,mt:1}}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={urgency} layout="vertical" margin={{left:12,right:42,top:8,bottom:8}}>
+                    <CartesianGrid strokeDasharray="3 5" horizontal={false} stroke={theme.palette.divider} opacity={.55}/>
+                    <XAxis type="number" allowDecimals={false} axisLine={false} tickLine={false}
+                      tick={{fill:theme.palette.text.secondary,fontSize:12,fontWeight:650}}/>
+                    <YAxis type="category" dataKey="name" width={96} axisLine={false} tickLine={false}
+                      tick={{fill:theme.palette.text.secondary,fontSize:12,fontWeight:650}}/>
+                    <ChartTooltip cursor={{fill:theme.palette.action.hover}}/>
+                    <Bar dataKey="total" fill={semanticChartColors.attention} barSize={24} radius={[0,6,6,0]} isAnimationActive={false}
+                      onClick={data=>{const name=(data as {name?:string}).name;if(name)selectSlice({kind:"urgency",value:name},`Urgência · ${name}`)}}>
+                      <LabelList dataKey="total" position="right" fill={theme.palette.text.secondary}
+                        fontSize={12} fontWeight={800}/>
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </Box>
+            </CardContent>
+          </Card>
+
+          <Card elevation={0} sx={chartPanel}>
+            <CardContent sx={{flex:1,display:"flex",flexDirection:"column",p:1.7,"&:last-child":{pb:1.7}}}>
+              <CardHeading
+                title="Priorização"
+                subtitle="Priorizadas x não priorizadas"
+                info="Agrupa o mesmo universo do período pelo campo Priorizada do Azure. Respeita os filtros globais. Clique em um segmento para abrir as Tasks correspondentes."
+              />
+              <Box sx={{height:250,mt:.8,position:"relative"}}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={priority} dataKey="total" nameKey="name" innerRadius={68} outerRadius={100} paddingAngle={2}
+                      stroke={theme.palette.background.paper} strokeWidth={2} isAnimationActive={false}
+                      onClick={data=>{const name=(data as {name?:string}).name;if(name)selectSlice({kind:"prioritized",value:name==="Priorizadas"?true:name==="Não priorizadas"?false:null},`Priorização · ${name}`)}}>
+                      {priority.map((_,index)=><Cell key={index} fill={[aliareColors.green,aliareColors.info,semanticChartColors.attention][index%3]}/>)}
+                    </Pie>
+                    <ChartTooltip/>
+                  </PieChart>
+                </ResponsiveContainer>
+                <Box sx={{
+                  position:"absolute",inset:0,display:"grid",placeItems:"center",pointerEvents:"none",
+                }}>
+                  <Box sx={{textAlign:"center"}}>
+                    <Typography sx={{fontWeight:900,fontSize:"1.45rem",lineHeight:1,fontVariantNumeric:"tabular-nums"}}>{periodUniverse}</Typography>
+                    <Typography variant="caption" color="text.secondary">Tasks</Typography>
+                  </Box>
+                </Box>
+              </Box>
+              <Stack spacing={0.65} sx={{mt:"auto"}}>
+                {priority.map(item=>
+                  <Button key={item.name} size="small" onClick={()=>selectSlice(
+                    {kind:"prioritized",value:item.name==="Priorizadas"?true:item.name==="Não priorizadas"?false:null},
+                    `Priorização · ${item.name}`,
+                  )} sx={{justifyContent:"space-between",textTransform:"none",color:"text.primary",px:.8,borderRadius:1.5}}>
+                    <Typography variant="body2">{item.name}</Typography>
+                    <Chip size="small" label={item.total}/>
+                  </Button>
+                )}
+              </Stack>
+            </CardContent>
+          </Card>
+        </Box>
+
+        <Card elevation={0} sx={panel}>
+          <CardContent sx={{p:{xs:1.4,md:1.7},"&:last-child":{pb:{xs:1.4,md:1.7}}}}>
+            <Stack direction={{xs:"column",lg:"row"}} justifyContent="space-between" alignItems={{lg:"center"}} gap={1}>
+              <Box sx={{minWidth:0}}>
+                <Box sx={{display:"flex",alignItems:"center",gap:.55}}>
+                  <AssessmentOutlined color="primary" sx={{fontSize:20}}/>
+                  <Typography sx={{fontWeight:900}}>Tasks do recorte</Typography>
+                  <InfoButton
+                    title="Tasks do recorte"
+                    description="Lista as Tasks correspondentes aos filtros globais e ao card/gráfico selecionado. A exportação respeita também a busca textual atual. Clique em uma linha para abrir o detalhamento lateral."
+                  />
+                </Box>
+                <Typography variant="caption" color="text.secondary">
+                  {activeDrillLabel} · {detailed.length} task(s){search.trim()?" após busca textual":""}
+                </Typography>
+              </Box>
+              <Stack direction={{xs:"column",sm:"row"}} gap={0.8} sx={{width:{xs:"100%",lg:"auto"}}}>
+                <TextField size="small" label="Buscar ID ou título" value={search} onChange={event=>setSearch(event.target.value)}
+                  sx={{minWidth:{sm:260}}}/>
+                <ExportCorrectionTasksButton
+                  rows={detailed}
+                  title={`Correções Azure · ${activeDrillLabel}`}
+                  subtitle={`Período ${month} · filtros e busca atuais`}
+                />
+              </Stack>
+            </Stack>
+
+            <TableContainer sx={{mt:1.2,maxHeight:560,border:"1px solid",borderColor:"divider",borderRadius:"10px",overflow:"auto"}}>
+              <Table stickyHeader size="small">
+                <TableHead sx={{"& .MuiTableCell-head":{bgcolor:theme.palette.mode==="dark"?"#111827":"#172033",color:"#fff",fontWeight:850,borderBottom:"none",whiteSpace:"nowrap"}}}>
+                  <TableRow>
+                    {["ID","Título","Cliente","Criado por","Criação","Status","Última mudança","Urgência","Priorizada","Responsável","Conclusão/Cancelamento"].map(header=><TableCell key={header}>{header}</TableCell>)}
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {detailed.map(row=>
+                    <TableRow hover key={row.id} onClick={()=>{setSelectedTaskId(row.id);setDrawerTitle(`Task #${row.id}`);setDrawerOpen(true)}} sx={{cursor:"pointer"}}>
+                      <TableCell>
+                        {row.remoteUrl
+                          ? <Button
+                              size="small"
+                              component="a"
+                              href={row.remoteUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              endIcon={<OpenInNewOutlined sx={{fontSize:"14px !important"}}/>}
+                              onClick={event=>event.stopPropagation()}
+                              sx={{fontWeight:850,minWidth:0}}
+                            >
+                              {row.id}
+                            </Button>
+                          : <Button
+                              size="small"
+                              onClick={event=>{
+                                event.stopPropagation();
+                                setDrawerOpen(false);
+                                navigate(`/correcoes?task=${row.id}`);
+                              }}
+                              sx={{fontWeight:850,minWidth:0}}
+                            >
+                              {row.id}
+                            </Button>
+                        }
+                      </TableCell>
+                      <TableCell sx={{minWidth:240,maxWidth:360,fontWeight:650}}>{row.title}</TableCell>
+                      <TableCell>{row.client||"—"}</TableCell>
+                      <TableCell>{row.createdBy||"—"}</TableCell>
+                      <TableCell>{fmt(row.createdAt)}</TableCell>
+                      <TableCell><Chip size="small" label={row.status}/></TableCell>
+                      <TableCell>{fmt(row.lastStateChangedAt)}</TableCell>
+                      <TableCell>{row.urgency||"—"}</TableCell>
+                      <TableCell>{row.prioritized===null?"—":row.prioritized?"Sim":"Não"}</TableCell>
+                      <TableCell>{row.assignedTo||"—"}</TableCell>
+                      <TableCell>{TERMINAL.has(row.status)?fmt(row.terminalAt):"—"}</TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
+            <Typography variant="caption" color="text.secondary" sx={{display:"block",mt:.9}}>
+              Fonte: {report.source}. O fechamento histórico não deve ser alterado por movimentações posteriores ao período.
+            </Typography>
+          </CardContent>
+        </Card>
+
+        <Drawer anchor="right" open={drawerOpen} onClose={()=>setDrawerOpen(false)}
+          slotProps={{paper:{sx:detailDrawerPaperSx}}}>
+          <DetailPanelHeader
+            eyebrow={`Correções Clientes · ${month}`}
+            title={drawerTitle}
+            identifier={`${drawerRows.length} task(s) no recorte`}
+            onClose={()=>setDrawerOpen(false)}
+          />
+
+          <Stack direction={{xs:"column",sm:"row"}} spacing={0.8} sx={{mb:2}}>
+            <ExportCorrectionTasksButton
+              rows={drawerRows}
+              title={`Correções Azure · ${drawerTitle}`}
+              subtitle={`Período ${month} · recorte do painel mensal`}
+              fullWidth
+            />
+            <Button fullWidth size="small" variant="outlined" startIcon={<ShareOutlined/>} onClick={shareSelection}>
+              Compartilhar recorte
+            </Button>
+          </Stack>
+
+          {selectedTask&&<>
+            <DetailSection title="Task selecionada">
+              <Box sx={{p:1.2,border:"1px solid",borderColor:"primary.main",borderRadius:2,bgcolor:"action.hover"}}>
+                <Stack direction="row" justifyContent="space-between" gap={1} alignItems="flex-start">
+                  <Box sx={{minWidth:0}}>
+                    <Typography variant="caption" color="text.secondary">Correção Clientes #{selectedTask.id}</Typography>
+                    <Typography sx={{fontWeight:850,mt:.25}}>{selectedTask.title}</Typography>
+                  </Box>
+                  <Chip size="small" label={selectedTask.status}/>
+                </Stack>
+                <Box sx={{mt:1.2}}>
+                  <DetailFieldGrid fields={[
+                    ["Cliente",selectedTask.client||"Não informado"],
+                    ["Urgência",selectedTask.urgency||"Não informado"],
+                    ["Criado por",selectedTask.createdBy||"Não informado"],
+                    ["Responsável atual",selectedTask.assignedTo||"Não informado"],
+                    ["Data de criação",fmt(selectedTask.createdAt)],
+                    ["Última mudança de status",fmt(selectedTask.lastStateChangedAt)],
+                    ["Priorizada",selectedTask.prioritized===null?"Não informado":selectedTask.prioritized?"Sim":"Não"],
+                    ["Conclusão/Cancelamento",TERMINAL.has(selectedTask.status)?fmt(selectedTask.terminalAt):"Não aplicável"],
+                  ]}/>
+                </Box>
+                <Box sx={{display:"grid",gridTemplateColumns:{xs:"1fr",sm:"repeat(3,minmax(0,1fr))"},gap:.7,mt:1.2}}>
+                  <Button size="small" variant="contained" onClick={()=>{setDrawerOpen(false);navigate(`/correcoes?task=${selectedTask.id}`)}}>
+                    Ver no Hub
+                  </Button>
+                  <Button size="small" variant="outlined" startIcon={<ShareOutlined/>} onClick={()=>shareTask(selectedTask)}>
+                    Compartilhar
+                  </Button>
+                  {selectedTask.remoteUrl&&
+                    <Button size="small" variant="outlined" endIcon={<OpenInNewOutlined/>} component="a"
+                      href={selectedTask.remoteUrl} target="_blank" rel="noopener noreferrer">
+                      Azure
+                    </Button>
+                  }
+                </Box>
+              </Box>
+            </DetailSection>
+            <Divider sx={{mb:2}}/>
+          </>}
+
+          {!monthlyMovementVerified&&<Alert severity="warning" sx={{mb:2}}>
+            Prévia parcial. A listagem permite conferir os dados disponíveis; ausência de tasks não comprova um total zero.
+          </Alert>}
+          <DetailSection title="Tasks">
+            <Stack spacing={0.8}>
+              {drawerRows.map(row=>
+                <Button
+                  key={row.id}
+                  variant={selectedTaskId===row.id?"contained":"outlined"}
+                  color={selectedTaskId===row.id?"primary":"inherit"}
+                  onClick={()=>setSelectedTaskId(row.id)}
+                  sx={{justifyContent:"flex-start",textTransform:"none",textAlign:"left",p:1.05,borderRadius:2}}
+                >
+                  <Box sx={{minWidth:0,width:"100%"}}>
+                    <Stack direction="row" justifyContent="space-between" gap={1} alignItems="center">
+                      <Typography sx={{fontWeight:800,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                        #{row.id} · {row.title}
+                      </Typography>
+                      <Chip size="small" label={row.status} sx={{flexShrink:0}}/>
+                    </Stack>
+                    <Typography variant="caption" color={selectedTaskId===row.id?"inherit":"text.secondary"} sx={{display:"block",mt:.25}}>
+                      {[row.client,row.urgency,row.assignedTo].filter(Boolean).join(" · ")||"Sem dimensões adicionais"}
+                    </Typography>
+                  </Box>
+                </Button>
+              )}
+              {!drawerRows.length&&<Alert severity="info">Nenhuma Task encontrada neste recorte.</Alert>}
+            </Stack>
+          </DetailSection>
+        </Drawer>
+      </>
+    }
+  </Box>;
+}

@@ -1602,9 +1602,7 @@ export function Clients() {
                 minWidth: 0,
               }}
             >
-              <InputLabel shrink>Cliente</InputLabel>
-
-              <Select
+              <InputLabel shrink id="clients-select-1-label">Cliente</InputLabel><Select labelId="clients-select-1-label" inputProps={{ id: "clients-select-1", "aria-labelledby": "clients-select-1-label" }}
                 value={
                   selectedClient
                 }
@@ -1649,9 +1647,7 @@ export function Clients() {
                 minWidth: 0,
               }}
             >
-              <InputLabel shrink>Categoria</InputLabel>
-
-              <Select
+              <InputLabel shrink id="clients-select-2-label">Categoria</InputLabel><Select labelId="clients-select-2-label" inputProps={{ id: "clients-select-2", "aria-labelledby": "clients-select-2-label" }}
                 value={
                   category
                 }
@@ -1683,32 +1679,28 @@ export function Clients() {
             </FormControl>
 
             <FormControl size="small" sx={{ minWidth: 0 }}>
-              <InputLabel shrink>Status</InputLabel>
-              <Select value={status} label="Status" onChange={(event) => setStatus(event.target.value)}>
+              <InputLabel shrink id="clients-select-3-label">Status</InputLabel><Select labelId="clients-select-3-label" inputProps={{ id: "clients-select-3", "aria-labelledby": "clients-select-3-label" }} value={status} label="Status" onChange={(event) => setStatus(event.target.value)}>
                 <MenuItem value="">Todos os status</MenuItem>
                 {statuses.map((item) => <MenuItem key={item} value={item}>{item}</MenuItem>)}
               </Select>
             </FormControl>
 
             <FormControl size="small" sx={{ minWidth: 0 }}>
-              <InputLabel shrink>Responsável</InputLabel>
-              <Select value={owner} label="Responsável" onChange={(event) => setOwner(event.target.value)}>
+              <InputLabel shrink id="clients-select-4-label">Responsável</InputLabel><Select labelId="clients-select-4-label" inputProps={{ id: "clients-select-4", "aria-labelledby": "clients-select-4-label" }} value={owner} label="Responsável" onChange={(event) => setOwner(event.target.value)}>
                 <MenuItem value="">Todos os responsáveis</MenuItem>
                 {owners.map((item) => <MenuItem key={item} value={item}>{item}</MenuItem>)}
               </Select>
             </FormControl>
 
             <FormControl size="small" sx={{ minWidth: 0 }}>
-              <InputLabel shrink>Área de negócio</InputLabel>
-              <Select value={businessArea} label="Área de negócio" onChange={(event) => setBusinessArea(event.target.value)}>
+              <InputLabel shrink id="clients-select-5-label">Área de negócio</InputLabel><Select labelId="clients-select-5-label" inputProps={{ id: "clients-select-5", "aria-labelledby": "clients-select-5-label" }} value={businessArea} label="Área de negócio" onChange={(event) => setBusinessArea(event.target.value)}>
                 <MenuItem value="">Todas as áreas</MenuItem>
                 {businessAreas.map((item) => <MenuItem key={item} value={item}>{item}</MenuItem>)}
               </Select>
             </FormControl>
 
             <FormControl size="small" sx={{ minWidth: 0 }}>
-              <InputLabel shrink>Frente de atendimento</InputLabel>
-              <Select value={executiveArea} label="Frente de atendimento" onChange={(event) => setExecutiveArea(event.target.value)}>
+              <InputLabel shrink id="clients-select-6-label">Frente de atendimento</InputLabel><Select labelId="clients-select-6-label" inputProps={{ id: "clients-select-6", "aria-labelledby": "clients-select-6-label" }} value={executiveArea} label="Frente de atendimento" onChange={(event) => setExecutiveArea(event.target.value)}>
                 <MenuItem value="">Todas as frentes</MenuItem>
                 {executiveAreas.map((item) => <MenuItem key={item} value={item}>{item}</MenuItem>)}
               </Select>
@@ -1975,7 +1967,7 @@ export function Clients() {
 
       {/* PAINEL PARA APRESENTAÇÃO AO CLIENTE */}
       {selectedClient && (
-        <Card id="client-export-content" ref={presentationRef} elevation={0} sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2.25, mb: 2, overflow: "hidden", bgcolor: "background.default", "@media print": { breakInside: "avoid", "& .presentation-actions": { display: "none !important" } }, "&:fullscreen": { position: "fixed", inset: 0, width: "100vw", height: "100vh", maxWidth: "none", borderRadius: 0, m: 0, zIndex: 99999, display: "flex", flexDirection: "column" } }}>
+        <Card id="client-export-content" ref={presentationRef} elevation={0} sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2.25, mb: 2, overflow: "hidden", bgcolor: "background.default", "@media print": { breakInside: "avoid", "& .presentation-actions": { display: "none !important" } }, "&:fullscreen": { position: "fixed", inset: 0, width: "100vw", height: "100dvh", maxWidth: "none", borderRadius: 0, m: 0, zIndex: 99999, display: "flex", flexDirection: "column" } }}>
           <Box sx={{ px: { xs: 2, md: 3 }, py: 2, color: "white", background: `linear-gradient(110deg, ${aliareColors.greenDark}, ${aliareColors.green})` }}>
             <Stack direction={{ xs: "column", md: "row" }} spacing={1.5} sx={{ alignItems: { md: "center" }, justifyContent: "space-between" }}>
               <Box>
@@ -4062,8 +4054,8 @@ function ExecutiveBarPanel({ title, data, onClick }: { title: string; data: PieD
       <Typography sx={{ fontWeight: 850 }}>{title}</Typography>
       {data.length ? (
         <Stack spacing={0.8} sx={{ mt: 1.5 }}>
-          {data.map((item) => (
-            <Box key={item.name} role={item.name !== "Outros" ? "button" : undefined} tabIndex={item.name !== "Outros" ? 0 : undefined}
+          {data.map((item, index) => (
+            <Box key={`${item.name}-${index}`} role={item.name !== "Outros" ? "button" : undefined} tabIndex={item.name !== "Outros" ? 0 : undefined}
               onClick={() => item.name !== "Outros" && onClick(item.name)}
               onKeyDown={(event) => (event.key === "Enter" || event.key === " ") && item.name !== "Outros" && onClick(item.name)}
               sx={{ display: "grid", gridTemplateColumns: { xs: "115px minmax(0,1fr) 30px", sm: "190px minmax(0,1fr) 38px" }, gap: 1, alignItems: "center", cursor: item.name !== "Outros" ? "pointer" : "default" }}>

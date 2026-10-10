@@ -1,3 +1,4 @@
+/* oxlint-disable react/only-export-components -- provider/hook/helper exports are intentional in this module */
 import {
   createContext,
   useCallback,
@@ -278,22 +279,30 @@ export function AuthProvider({
 
   /* Mantém a sessão central ativa e detecta revogação em outra plataforma. */
   useEffect(() => {
-    if (!user) return;
-    const heartbeat = () => void api.post<{ accessToken?: string }>("/auth/heartbeat")
-      .then(async (response) => {
+    if (!user?.id) return;
+    const heartbeat = () => void api.post<{ accessToken?: string; user?: AuthUser }>("/auth/heartbeat")
+      .then((response) => {
         if (response.data.accessToken) setAccessToken(response.data.accessToken);
-        try {
-          const current = await api.get<{ user: AuthUser }>("/auth/me");
-          setUser(current.data.user);
-        } catch {
-          // O interceptor global trata sessão revogada/expirada.
+        if (response.data.user) {
+          setUser((current) => {
+            const next = response.data.user!;
+            if (!current) return next;
+            const samePermissions = JSON.stringify(current.permissions ?? []) === JSON.stringify(next.permissions ?? []);
+            return current.updatedAt === next.updatedAt &&
+              samePermissions &&
+              current.role === next.role &&
+              current.active === next.active &&
+              current.approvalStatus === next.approvalStatus
+              ? current
+              : next;
+          });
         }
       })
       .catch(() => undefined);
     heartbeat();
     const timer = window.setInterval(heartbeat, 60_000);
     return () => window.clearInterval(timer);
-  }, [user]);
+  }, [user?.id]);
 
   /* =======================================================
      LOGIN

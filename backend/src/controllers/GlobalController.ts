@@ -1,9 +1,11 @@
 import type { Request, Response } from "express";
+import type { AuthenticatedRequest } from "../middlewares/authMiddleware";
 import { prisma } from "../database/prisma";
 import { azureOperationalScope, ticketOperationalScope } from "../domain/OperationalScope";
 import { SimerMapService } from "../services/SimerMapService";
 import { SystemRuleService } from "../services/SystemRuleService";
 import { investigationIntelligenceService } from "../services/InvestigationIntelligenceService";
+import { calendarMeetingService } from "../services/CalendarMeetingService";
 
 
 const normalizeSearch = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR");
@@ -371,12 +373,12 @@ export class GlobalController {
     });
   };
 
-  calendar = async (req: Request, res: Response) => {
+  calendar = async (req: AuthenticatedRequest, res: Response) => {
     const start = new Date(String(req.query.start ?? ""));
     const end = new Date(String(req.query.end ?? ""));
     if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime()) || end <= start) return res.status(400).json({ message: "Período inválido." });
 
-    const [tickets, workItems] = await Promise.all([
+    const [tickets, workItems, meetings] = await Promise.all([
       prisma.ticket.findMany({
         where: { AND: [ticketOperationalScope(), { OR: ["createdDate", "resolvedDate", "closedDate"].map((field) => ({ [field]: { gte: start, lt: end } })) }] },
         select: { movideskId: true, subject: true, createdDate: true, resolvedDate: true, closedDate: true }, take: 500,
@@ -385,6 +387,7 @@ export class GlobalController {
         where: { AND: [azureOperationalScope(), { OR: ["azureCreatedAt", "stateChangedAt", "azureClosedAt"].map((field) => ({ [field]: { gte: start, lt: end } })) }] },
         select: { id: true, title: true, workItemType: true, azureCreatedAt: true, stateChangedAt: true, azureClosedAt: true, deliveredVersion: true }, take: 500,
       }),
+      calendarMeetingService.listForRange(req.auth!.userId, req.auth!.role, start, end),
     ]);
 
     const inRange = (date: Date | null) => date && date >= start && date < end;
@@ -400,9 +403,27 @@ export class GlobalController {
       if (inRange(item.stateChangedAt)) events.push({ id: `ws-${item.id}`, date: item.stateChangedAt, kind: "work-item-changed", title: `${item.workItemType} #${item.id} movimentada`, subtitle: item.title, path });
       if (inRange(item.azureClosedAt)) events.push({ id: `wc-${item.id}`, date: item.azureClosedAt, kind: "work-item-closed", title: `${item.workItemType} #${item.id} concluída`, subtitle: item.deliveredVersion ? `${item.title} · ${item.deliveredVersion}` : item.title, path });
     });
+    meetings.forEach((meeting) => {
+      const startLabel = new Intl.DateTimeFormat("pt-BR", { timeZone: meeting.timezone, hour: "2-digit", minute: "2-digit" }).format(new Date(meeting.startAt));
+      const endLabel = new Intl.DateTimeFormat("pt-BR", { timeZone: meeting.timezone, hour: "2-digit", minute: "2-digit" }).format(new Date(meeting.endAt));
+      const participants = meeting.participants.map((person) => person.name);
+      events.push({
+        id: `meeting-${meeting.id}`,
+        date: meeting.startAt,
+        kind: "meeting",
+        title: meeting.title,
+        subtitle: [`${startLabel}–${endLabel}`, meeting.location, participants.length ? `${participants.length} participante(s)` : null].filter(Boolean).join(" · "),
+        path: "",
+        meeting,
+      });
+    });
 
+    events.sort((left, right) => new Date(String(left.date)).getTime() - new Date(String(right.date)).getTime());
     const years = Array.from(new Set([start.getUTCFullYear(), end.getUTCFullYear()]));
-    const holidays = years.flatMap(brazilianHolidays).filter((item) => item.date >= start && item.date < end);
+    // Feriados são datas civis, não instantes operacionais. Não aplicamos o
+    // recorte start/end por timestamp para evitar deslocamento no primeiro dia
+    // do mês em fusos negativos (ex.: America/Sao_Paulo).
+    const holidays = years.flatMap(brazilianHolidays);
     return res.json({ events, holidays });
   };
 }

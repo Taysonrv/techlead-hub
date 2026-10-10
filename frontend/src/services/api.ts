@@ -157,6 +157,12 @@ api.interceptors.response.use(
         "/auth/login"
       );
 
+    if (status === 404) {
+      console.warn(
+        `[api] 404 ${error.config?.method?.toUpperCase() ?? "REQUEST"} ${requestUrl || "(URL não identificada)"}`,
+      );
+    }
+
     if (status === 403) {
       const payload = error.response?.data as { permission?: string; message?: string } | undefined;
       window.dispatchEvent(new CustomEvent("techlead-hub:forbidden", {

@@ -1906,9 +1906,7 @@ export function Analysts() {
                 },
               }}
             >
-              <InputLabel shrink>Squad</InputLabel>
-
-              <Select
+              <InputLabel shrink id="analysts-select-1-label">Squad</InputLabel><Select labelId="analysts-select-1-label" inputProps={{ id: "analysts-select-1", "aria-labelledby": "analysts-select-1-label" }}
                 value={
                   selectedSquad
                 }
@@ -1950,9 +1948,7 @@ export function Analysts() {
                 },
               }}
             >
-              <InputLabel shrink>Analista</InputLabel>
-
-              <Select
+              <InputLabel shrink id="analysts-select-2-label">Analista</InputLabel><Select labelId="analysts-select-2-label" inputProps={{ id: "analysts-select-2", "aria-labelledby": "analysts-select-2-label" }}
                 value={
                   selectedAnalyst
                 }
@@ -1990,16 +1986,14 @@ export function Analysts() {
             </FormControl>
 
             <FormControl size="small" sx={{ minWidth: { xs: "100%", md: 200 } }}>
-              <InputLabel shrink>Área de negócio</InputLabel>
-              <Select value={selectedBusinessArea} label="Área de negócio" onChange={(event) => setSelectedBusinessArea(event.target.value)}>
+              <InputLabel shrink id="analysts-select-3-label">Área de negócio</InputLabel><Select labelId="analysts-select-3-label" inputProps={{ id: "analysts-select-3", "aria-labelledby": "analysts-select-3-label" }} value={selectedBusinessArea} label="Área de negócio" onChange={(event) => setSelectedBusinessArea(event.target.value)}>
                 <MenuItem value="">Todas as áreas</MenuItem>
                 {businessAreas.map((area) => <MenuItem key={area} value={area}>{area}</MenuItem>)}
               </Select>
             </FormControl>
 
             <FormControl size="small" sx={{ minWidth: { xs: "100%", md: 200 } }}>
-              <InputLabel shrink>Serviço N2</InputLabel>
-              <Select value={selectedService} label="Serviço N2" onChange={(event) => setSelectedService(event.target.value)}>
+              <InputLabel shrink id="analysts-select-4-label">Serviço N2</InputLabel><Select labelId="analysts-select-4-label" inputProps={{ id: "analysts-select-4", "aria-labelledby": "analysts-select-4-label" }} value={selectedService} label="Serviço N2" onChange={(event) => setSelectedService(event.target.value)}>
                 <MenuItem value="">Todos os serviços</MenuItem>
                 {services.map((service) => <MenuItem key={service} value={service}>{service}</MenuItem>)}
               </Select>
@@ -2291,7 +2285,7 @@ export function Analysts() {
                 role="button"
                 tabIndex={0}
                 onClick={() => showAnalystTickets(teamBalance.highest.owner)}
-                onKeyDown={(event) => { if (event.key === "Enter") showAnalystTickets(teamBalance.highest.owner); }}
+                onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); showAnalystTickets(teamBalance.highest.owner); } }}
                 sx={{ p: 1.25, border: "1px solid", borderColor: teamBalance.highest.workloadLevel === "alto" ? "warning.main" : "divider", borderRadius: 1.75, bgcolor: "background.default", cursor: "pointer", "&:hover": { borderColor: "primary.main" } }}
               >
                 <Typography variant="caption" color="text.secondary">Maior carteira aberta</Typography>
@@ -2302,7 +2296,7 @@ export function Analysts() {
                 role="button"
                 tabIndex={0}
                 onClick={() => showAnalystTickets(teamBalance.lowest.owner)}
-                onKeyDown={(event) => { if (event.key === "Enter") showAnalystTickets(teamBalance.lowest.owner); }}
+                onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); showAnalystTickets(teamBalance.lowest.owner); } }}
                 sx={{ p: 1.25, border: "1px solid", borderColor: "divider", borderRadius: 1.75, bgcolor: "background.default", cursor: "pointer", "&:hover": { borderColor: "primary.main" } }}
               >
                 <Typography variant="caption" color="text.secondary">Menor carteira aberta</Typography>
