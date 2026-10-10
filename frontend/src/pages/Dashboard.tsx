@@ -39,7 +39,7 @@ import { useColorMode } from "../context/ColorModeContext";
 
 import { useNavigate } from "react-router-dom";
 
-import { getTicketSnapshot } from "../services/ticketSnapshot";
+import { getTicketSnapshot, getTicketSnapshotState, subscribeTicketSnapshotRefresh } from "../services/ticketSnapshot";
 import { PeriodFilter } from "../components/PeriodFilter";
 import { PageHeader } from "../components/PageHeader";
 import { ContentState } from "../components/ContentState";
@@ -265,7 +265,10 @@ export function Dashboard() {
         if (initial) setLoading(true);
         setError(null);
         const snapshot = await getTicketSnapshot<Ticket>();
-        if (!controller.signal.aborted) setTickets(snapshot);
+        if (!controller.signal.aborted) {
+          setTickets(snapshot);
+          setError(getTicketSnapshotState().lastErrorAt ? "A atualização falhou. Exibindo os últimos dados carregados; uma nova tentativa será feita automaticamente." : null);
+        }
       } catch (err) {
         if (controller.signal.aborted) return;
         console.error("Erro ao carregar dashboard:", err);
@@ -277,15 +280,10 @@ export function Dashboard() {
     }
 
     void loadTickets(true);
-    const refreshTimer = window.setInterval(() => {
-      if (document.visibilityState === "visible") void loadTickets();
-    }, 30_000);
-    const refreshOnFocus = () => { void loadTickets(); };
-    window.addEventListener("focus", refreshOnFocus);
+    const unsubscribeRefresh = subscribeTicketSnapshotRefresh(() => { void loadTickets(); });
     apiRecurrence();
     return () => {
-      window.clearInterval(refreshTimer);
-      window.removeEventListener("focus", refreshOnFocus);
+      unsubscribeRefresh();
       controller.abort();
     };
   }, []);
@@ -1100,7 +1098,7 @@ export function Dashboard() {
     return <ContentState kind="loading" title="Carregando visão executiva" minHeight={360} />;
   }
 
-  if (error) {
+  if (error && tickets.length === 0) {
     return (
       <Alert severity="error">
         {error}
@@ -1136,6 +1134,7 @@ export function Dashboard() {
           CABEÇALHO
       ================================================= */}
 
+      {error && <Alert severity="warning" sx={{ mb: 2 }}>{error}</Alert>}
       <PageHeader
         eyebrow="Operação"
         title="Dashboard Executivo"

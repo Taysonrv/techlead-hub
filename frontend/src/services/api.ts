@@ -51,6 +51,7 @@ export function setAccessToken(
       ACCESS_TOKEN_KEY,
       token
     );
+    window.dispatchEvent(new Event("techlead-hub:session-changed"));
   } catch {
     console.warn(
       "[auth] Não foi possível armazenar o token."
@@ -64,6 +65,7 @@ export function removeAccessToken() {
       ACCESS_TOKEN_KEY
     );
     localStorage.removeItem(ACCESS_TOKEN_KEY);
+    window.dispatchEvent(new Event("techlead-hub:session-changed"));
   } catch {
     console.warn(
       "[auth] Não foi possível remover o token."

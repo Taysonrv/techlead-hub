@@ -46,7 +46,7 @@ import {
 
 import { useNavigate } from "react-router-dom";
 import { api } from "../services/api";
-import { getTicketSnapshot } from "../services/ticketSnapshot";
+import { getTicketSnapshot, getTicketSnapshotState, subscribeTicketSnapshotRefresh } from "../services/ticketSnapshot";
 import { useFilters } from "../context/FiltersContext";
 import { PeriodFilter } from "../components/PeriodFilter";
 import { PageHeader } from "../components/PageHeader";
@@ -200,7 +200,10 @@ export function Performance() {
         if (initial) setLoading(true);
         setError(null);
         const snapshot = await getTicketSnapshot<Ticket>();
-        if (!controller.signal.aborted) setTickets(snapshot);
+        if (!controller.signal.aborted) {
+          setTickets(snapshot);
+          setError(getTicketSnapshotState().lastErrorAt ? "A atualização falhou. Exibindo os últimos dados carregados; uma nova tentativa será feita automaticamente." : null);
+        }
       } catch (requestError) {
         if (controller.signal.aborted) return;
         console.error("Erro ao carregar desempenho:", requestError);
@@ -212,14 +215,9 @@ export function Performance() {
     }
 
     void loadTickets(true);
-    const refreshTimer = window.setInterval(() => {
-      if (document.visibilityState === "visible") void loadTickets();
-    }, 30_000);
-    const refreshOnFocus = () => { void loadTickets(); };
-    window.addEventListener("focus", refreshOnFocus);
+    const unsubscribeRefresh = subscribeTicketSnapshotRefresh(() => { void loadTickets(); });
     return () => {
-      window.clearInterval(refreshTimer);
-      window.removeEventListener("focus", refreshOnFocus);
+      unsubscribeRefresh();
       controller.abort();
     };
   }, []);
@@ -604,12 +602,13 @@ export function Performance() {
     return <ContentState kind="loading" title="Carregando desempenho" minHeight={360} />;
   }
 
-  if (error) {
+  if (error && tickets.length === 0) {
     return <Alert severity="error">{error}</Alert>;
   }
 
   return (
     <>
+      {error && <Alert severity="warning" sx={{ mb: 2 }}>{error}</Alert>}
       <PageHeader
         eyebrow="Qualidade operacional"
         title="Desempenho do Atendimento"
@@ -629,7 +628,7 @@ export function Performance() {
         sx={{ mb: 1.5, borderRadius: 2 }}
       >
         <strong>SLA do suporte:</strong> usa os prazos e timestamps sincronizados do Movidesk. A 1ª resposta segue as entradas do período; a solução segue os tickets resolvidos no período. Atendimentos
-        sem medição e as categorias Adequação e Solicitação de Serviço não entram no denominador.
+        sem prazo ou data de conclusão válidos não entram no denominador, independentemente da categoria.
         Os prazos calculados em horas úteis são exibidos separadamente como risco operacional.
       </Alert>
 

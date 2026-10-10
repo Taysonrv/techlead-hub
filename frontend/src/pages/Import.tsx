@@ -30,6 +30,7 @@ import {
 } from "@mui/material";
 
 import { api, getApiErrorMessage } from "../services/api";
+import { invalidateTicketSnapshot } from "../services/ticketSnapshot";
 
 import {
   useAuth,
@@ -246,6 +247,8 @@ export function Import({ embedded = false }: { embedded?: boolean }) {
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [movideskStatus, setMovideskStatus] = useState<MovideskBaselineStatus | null>(null);
+  const movideskStatusRequest = useRef(false);
+  const lastMovideskImport = useRef<string | null>(null);
   const [movideskStatusLoading, setMovideskStatusLoading] = useState(false);
   const [movideskFullStarting, setMovideskFullStarting] = useState(false);
   const [referenceNextAt, setReferenceNextAt] = useState<string | null>(null);
@@ -662,6 +665,7 @@ export function Import({ embedded = false }: { embedded?: boolean }) {
           },
         );
 
+      invalidateTicketSnapshot();
       setResult(
         response.data,
       );
@@ -698,20 +702,30 @@ export function Import({ embedded = false }: { embedded?: boolean }) {
   }
 
   const loadMovideskStatus = useCallback(async (showLoading = false) => {
+    if (movideskStatusRequest.current) return;
+    movideskStatusRequest.current = true;
     try {
       if (showLoading) setMovideskStatusLoading(true);
       const response = await api.get<MovideskBaselineStatus>("/movidesk/baseline/status", { timeout: 30_000 });
+      const importStamp = response.data.lastImport?.finishedAt ?? null;
+      if (importStamp && lastMovideskImport.current && importStamp !== lastMovideskImport.current) {
+        invalidateTicketSnapshot();
+      }
+      lastMovideskImport.current = importStamp;
       setMovideskStatus(response.data);
     } catch (err: unknown) {
       setError(getApiErrorMessage(err, "Não foi possível consultar o scheduler Movidesk."));
     } finally {
+      movideskStatusRequest.current = false;
       setMovideskStatusLoading(false);
     }
   }, []);
 
   useEffect(() => {
     void loadMovideskStatus(true);
-    const timer = window.setInterval(() => { void loadMovideskStatus(false); }, 15_000);
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible") void loadMovideskStatus(false);
+    }, 15_000);
     return () => window.clearInterval(timer);
   }, [loadMovideskStatus]);
 
