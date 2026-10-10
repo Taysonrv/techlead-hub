@@ -1697,8 +1697,8 @@ function DonutCard({
                                 }
                               }}
                             >
-                              {chartData.map((item) => (
-                                <Cell key={item.name} fill={item.color} />
+                              {chartData.map((item, index) => (
+                                <Cell key={`${item.name}-${index}`} fill={item.color} />
                               ))}
                             </Pie>
             
@@ -1747,11 +1747,11 @@ function DonutCard({
           <Box sx={{ minWidth: 0, maxHeight: { md: 210 }, overflowY: "auto", pr: { sm: .5 } }}>
                     {data.length > 0 && (
                       <Stack spacing={0.55}>
-                        {data.map((item) => {
+                        {data.map((item, index) => {
                           const active = !hiddenItems.has(item.name);
                           return (
                             <Box
-                              key={item.name}
+                              key={`${item.name}-${index}`}
                               role="button"
                               tabIndex={0}
                               onClick={() => toggleItem(item.name)}

@@ -226,6 +226,7 @@ type CardInfo = InfoPopoverContent;
 
 type DetailRequest = {
   params?: Record<string, string | number>;
+  ignoreCurrentFilters?: boolean;
 };
 
 type DetailContext = {
@@ -256,7 +257,7 @@ const EMPTY_SUMMARY:
 export function Versions() {
   const navigate =
     useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [
     data,
@@ -572,21 +573,6 @@ export function Versions() {
       load,
     ],
   );
-
-  useEffect(() => {
-    const requestedVersion = searchParams.get("versao")?.trim();
-    if (!requestedVersion || !data?.items?.length) return;
-    const normalized = requestedVersion.toLocaleLowerCase("pt-BR");
-    const match = data.items.find((item) =>
-      item.version?.trim().toLocaleLowerCase("pt-BR") === normalized ||
-      item.label.trim().toLocaleLowerCase("pt-BR") === normalized
-    );
-    if (!match) return;
-    setVersionChannel("");
-    setActiveMetricFilter("all");
-    setVersionPage(0);
-    void openVersion(match, {}, `Versão ${match.label}`);
-  }, [data, searchParams]);
 
   const visibleVersions =
     useMemo(
@@ -936,13 +922,13 @@ export function Versions() {
     setActiveMetricFilter("all");
   }
 
-  function buildScopedParams(
+  const buildScopedParams = useCallback((
     overrides:
       Record<
         string,
         string | number
       > = {},
-  ) {
+  ) => {
     const params:
       Record<
         string,
@@ -999,14 +985,22 @@ export function Versions() {
     );
 
     return params;
-  }
+  }, [
+    appliedSearch,
+    blockedProcess,
+    client,
+    criticality,
+    prioritized,
+    state,
+    type,
+  ]);
 
-  async function loadDetail(
+  const loadDetail = useCallback(async (
     context:
       DetailContext,
     requests:
       DetailRequest[],
-  ) {
+  ) => {
     setSelectedVersion(
       context.version,
     );
@@ -1043,9 +1037,17 @@ export function Versions() {
                 "/azure-work-items",
                 {
                   params:
-                    buildScopedParams(
-                      request.params,
-                    ),
+                    request.ignoreCurrentFilters
+                      ? {
+                          page: 1,
+                          pageSize: 100,
+                          sortBy: "stateChangedAt",
+                          sortDirection: "desc",
+                          ...(request.params ?? {}),
+                        }
+                      : buildScopedParams(
+                          request.params,
+                        ),
                 },
               ),
           ),
@@ -1105,9 +1107,9 @@ export function Versions() {
         false,
       );
     }
-  }
+  }, [buildScopedParams]);
 
-  function versionParams(
+  const versionParams = useCallback((
     version:
       VersionRow,
     overrides:
@@ -1115,22 +1117,78 @@ export function Versions() {
         string,
         string | number
       > = {},
-  ) {
-    return {
-      ...(
-        version.version
-          ? {
-              deliveredVersion:
-                version.version,
-            }
-          : {
-              hasDeliveredVersion:
-                "false",
-            }
-      ),
-      ...overrides,
+  ) => ({
+    ...(
+      version.version
+        ? {
+            deliveredVersion:
+              version.version,
+          }
+        : {
+            hasDeliveredVersion:
+              "false",
+          }
+    ),
+    ...overrides,
+  }), []);
+
+  useEffect(() => {
+    const requestedVersion = searchParams.get("versao")?.trim();
+    if (!requestedVersion) return;
+
+    let cancelled = false;
+    const openRequestedVersion = async () => {
+      try {
+        const response = await api.get<VersionsResponse>("/azure-work-items/versions/summary");
+        if (cancelled) return;
+
+        const match = response.data.items.find((item) => versionMatchesDeepLink(item, requestedVersion));
+        if (!match) {
+          setError(`A versão ${requestedVersion} da notificação não foi localizada na base sincronizada.`);
+          return;
+        }
+
+        setSearch("");
+        setAppliedSearch("");
+        setType("");
+        setState("");
+        setClient("");
+        setCriticality("");
+        setPrioritized("");
+        setBlockedProcess("");
+        setVersionChannel("");
+        setActiveMetricFilter("all");
+        setVersionPage(0);
+        setData(response.data);
+
+        await loadDetail(
+          {
+            title: `Versão ${requestedVersion}`,
+            subtitle: `${match.total} Task(s) • ${match.clients} cliente(s)`,
+            version: match,
+          },
+          [
+            {
+              params: versionParams(match),
+              ignoreCurrentFilters: true,
+            },
+          ],
+        );
+
+        if (cancelled) return;
+        const next = new URLSearchParams(searchParams);
+        next.delete("versao");
+        setSearchParams(next, { replace: true });
+      } catch (currentError) {
+        console.error("Erro ao abrir versão da notificação:", currentError);
+        if (!cancelled) setError("Não foi possível abrir diretamente a versão da notificação.");
+      }
     };
-  }
+
+    void openRequestedVersion();
+    return () => { cancelled = true; };
+  }, [searchParams, setSearchParams, loadDetail, versionParams]);
+
 
   async function openVersion(
     version:
@@ -1492,6 +1550,7 @@ export function Versions() {
                 },
               }}
               slotProps={{
+                htmlInput: { "aria-label": "Pesquisar versões e tarefas" },
                 input: {
                   startAdornment:
                     (
@@ -1516,11 +1575,9 @@ export function Versions() {
                 },
               }}
             >
-              <InputLabel>
+              <InputLabel id="versions-select-1-label">
                 Tipo
-              </InputLabel>
-
-              <Select
+              </InputLabel><Select labelId="versions-select-1-label" inputProps={{ id: "versions-select-1", "aria-labelledby": "versions-select-1-label" }}
                 value={
                   type
                 }
@@ -1558,11 +1615,9 @@ export function Versions() {
                 },
               }}
             >
-              <InputLabel>
+              <InputLabel id="versions-select-2-label">
                 Estado
-              </InputLabel>
-
-              <Select
+              </InputLabel><Select labelId="versions-select-2-label" inputProps={{ id: "versions-select-2", "aria-labelledby": "versions-select-2-label" }}
                 value={
                   state
                 }
@@ -1765,11 +1820,9 @@ export function Versions() {
               <FormControl
                 size="small"
               >
-                <InputLabel>
+                <InputLabel id="versions-select-3-label">
                   Criticidade
-                </InputLabel>
-
-                <Select
+                </InputLabel><Select labelId="versions-select-3-label" inputProps={{ id: "versions-select-3", "aria-labelledby": "versions-select-3-label" }}
                   value={
                     criticality
                   }
@@ -1808,11 +1861,9 @@ export function Versions() {
               <FormControl
                 size="small"
               >
-                <InputLabel>
+                <InputLabel id="versions-select-4-label">
                   Priorização
-                </InputLabel>
-
-                <Select
+                </InputLabel><Select labelId="versions-select-4-label" inputProps={{ id: "versions-select-4", "aria-labelledby": "versions-select-4-label" }}
                   value={
                     prioritized
                   }
@@ -1841,11 +1892,9 @@ export function Versions() {
               <FormControl
                 size="small"
               >
-                <InputLabel>
+                <InputLabel id="versions-select-5-label">
                   Bloqueio
-                </InputLabel>
-
-                <Select
+                </InputLabel><Select labelId="versions-select-5-label" inputProps={{ id: "versions-select-5", "aria-labelledby": "versions-select-5-label" }}
                   value={
                     blockedProcess
                   }
@@ -1872,8 +1921,7 @@ export function Versions() {
               </FormControl>
 
               <FormControl size="small">
-                <InputLabel>Canal da versão</InputLabel>
-                <Select value={versionChannel} label="Canal da versão" onChange={(event) => setVersionChannel(event.target.value as VersionChannel)}>
+                <InputLabel id="versions-select-6-label">Canal da versão</InputLabel><Select labelId="versions-select-6-label" inputProps={{ id: "versions-select-6", "aria-labelledby": "versions-select-6-label" }} value={versionChannel} label="Canal da versão" onChange={(event) => setVersionChannel(event.target.value as VersionChannel)}>
                   <MenuItem value="">Todos os canais</MenuItem>
                   <MenuItem value="lts">LTS</MenuItem>
                   <MenuItem value="lte">LTE</MenuItem>
@@ -1884,8 +1932,7 @@ export function Versions() {
               </FormControl>
 
               <FormControl size="small">
-                <InputLabel>Ordenar versões</InputLabel>
-                <Select value={versionSort} label="Ordenar versões" onChange={(event) => setVersionSort(event.target.value as VersionSort)}>
+                <InputLabel id="versions-select-7-label">Ordenar versões</InputLabel><Select labelId="versions-select-7-label" inputProps={{ id: "versions-select-7", "aria-labelledby": "versions-select-7-label" }} value={versionSort} label="Ordenar versões" onChange={(event) => setVersionSort(event.target.value as VersionSort)}>
                   <MenuItem value="version-desc">Versão mais recente</MenuItem>
                   <MenuItem value="latest-desc">Movimentação mais recente</MenuItem>
                   <MenuItem value="total-desc">Maior volume</MenuItem>
@@ -3656,10 +3703,11 @@ function DonutCard({
                   {chartData.map(
                     (
                       item,
+                      index,
                     ) => (
                       <Cell
                         key={
-                          item.name
+                          `${item.name}-${index}`
                         }
                         fill={
                           item.color
@@ -3749,10 +3797,11 @@ function DonutCard({
           {data.map(
             (
               item,
+              index,
             ) => (
               <Box
                 key={
-                  item.name
+                  `${item.name}-${index}`
                 }
                 role="button"
                 tabIndex={0}
@@ -4103,6 +4152,27 @@ function normalizeValue(
     )
     .trim()
     .toLowerCase();
+}
+
+function normalizeVersionLink(value: string | null | undefined) {
+  return (value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLocaleLowerCase("pt-BR");
+}
+
+function versionMatchesDeepLink(item: VersionRow, requestedVersion: string) {
+  const requested = normalizeVersionLink(requestedVersion);
+  if (!requested) return false;
+
+  if (normalizeVersionLink(item.version) === requested || normalizeVersionLink(item.label) === requested) {
+    return true;
+  }
+
+  const versionPattern = /\b\d+\.\d+(?:\.\d+)?(?:[-_.]?(?:rc|lte|lts|develop)(?:[-_.]?\d+)?)?\b/gi;
+  const tokens = (item.version ?? item.label).match(versionPattern) ?? [];
+  return tokens.some((token) => normalizeVersionLink(token) === requested);
 }
 
 function toTimestamp(

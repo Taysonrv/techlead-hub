@@ -108,6 +108,7 @@ export class MovideskEnrichmentScheduler {
         console.log([
           "[movidesk-enrichment] Lote concluído.",
           `tickets=${result.tickets}`,
+          `cedeuParaSync=${result.yieldedToSync ? "sim" : "não"}`,
           `pendentesAntes=${result.pendingBeforeRun}`,
           `pendentesDepois=${result.pendingAfterRun}`,
           `acoes=${result.actions}`,
@@ -121,7 +122,21 @@ export class MovideskEnrichmentScheduler {
           result.pendingAfterRun > 0 ? `continuaEm=${DEFAULT_CONTINUATION_SECONDS}s` : "fila=concluida",
         ].join(" | "));
       }
-      return result.pendingAfterRun > 0 ? "PENDING" : "IDLE";
+
+      if (result.pendingAfterRun > 0) return "PENDING";
+
+      // A reconciliação de causa/motivo/área não participa mais do ciclo
+      // principal de tickets. Executa aqui, em baixa prioridade, somente quando
+      // o enriquecimento estrutural estiver em dia.
+      const metadata = await service.syncAnalyticalMetadataBatch();
+      if (metadata.remaining > 0) {
+        console.log(
+          `[movidesk-enrichment] Metadados analíticos pendentes=${metadata.remaining}; novo lote em ${DEFAULT_CONTINUATION_SECONDS}s.`,
+        );
+        return "PENDING";
+      }
+
+      return "IDLE";
     } catch (error) {
       if (!reportDatabaseFailure(error)) console.error("[movidesk-enrichment] Falha no enriquecimento automático:", error);
       return "ERROR";

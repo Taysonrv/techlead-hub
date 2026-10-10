@@ -248,7 +248,7 @@ export function Tickets() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const defaultAnalystApplied = useRef(false);
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [ticketActionsAnchor, setTicketActionsAnchor] = useState<HTMLElement | null>(null);
 
   const [
@@ -419,8 +419,12 @@ export function Tickets() {
 
     if (linkedTicket) {
       setSelectedTicket(linkedTicket);
+      const next = new URLSearchParams(searchParams);
+      next.delete("movidesk");
+      next.delete("task");
+      setSearchParams(next, { replace: true });
     }
-  }, [tickets, searchParams]);
+  }, [tickets, searchParams, setSearchParams]);
 
   useEffect(() => {
     let active = true;
@@ -858,17 +862,17 @@ export function Tickets() {
     }, [
       periodTickets,
       search,
-      status.length,
-      urgency.length,
-      category.length,
-      owner.length,
-      client.length,
-      team.length,
-      service.length,
-      businessArea.length,
-      serviceLevel1.length,
-      serviceLevel3.length,
-      origin.length,
+      status,
+      urgency,
+      category,
+      owner,
+      client,
+      team,
+      service,
+      businessArea,
+      serviceLevel1,
+      serviceLevel3,
+      origin,
       quickFilter,
     ]);
 
@@ -1441,6 +1445,7 @@ export function Tickets() {
                 },
               }}
               slotProps={{
+                htmlInput: { "aria-label": "Pesquisar tickets" },
                 input: {
                   startAdornment:
                     (
@@ -1471,11 +1476,9 @@ export function Tickets() {
                 },
               }}
             >
-              <InputLabel>
+              <InputLabel id="tickets-select-1-label">
                 Ordenar
-              </InputLabel>
-
-              <Select
+              </InputLabel><Select labelId="tickets-select-1-label" inputProps={{ id: "tickets-select-1", "aria-labelledby": "tickets-select-1-label" }}
                 value={
                   sortMode
                 }
@@ -3124,8 +3127,7 @@ function KpiCard({
 ========================================================= */
 
 function FilterSelect({ label, value, options, onChange }: FilterSelectProps) {
-  return <FormControl fullWidth size="small"><InputLabel shrink>{label}</InputLabel>
-    <Select multiple displayEmpty value={value} label={label}
+  return <FormControl fullWidth size="small"><InputLabel shrink id="tickets-select-2-label">{label}</InputLabel><Select labelId="tickets-select-2-label" inputProps={{ id: "tickets-select-2", "aria-labelledby": "tickets-select-2-label" }} multiple displayEmpty value={value} label={label}
       onChange={(event) => { const next = typeof event.target.value === "string" ? event.target.value.split(",") : event.target.value; onChange(next.includes("__all__") ? [...options] : next.filter((item) => item !== "__all__")); }}
       renderValue={(selected) => !selected.length ? "Todos" : selected.length === 1 ? selected[0] : `${selected.length} selecionados`}>
       <MenuItem value="__all__"><Checkbox size="small" checked={options.length > 0 && value.length === options.length} indeterminate={value.length > 0 && value.length < options.length} />Todos</MenuItem>

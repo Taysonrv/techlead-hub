@@ -95,7 +95,7 @@ export function createAppTheme(mode: PaletteMode = "light") {
       text: { primary: text, secondary: textSecondary },
       divider: border,
     },
-    shape: { borderRadius: 12 },
+    shape: { borderRadius: 6 },
     typography: {
       fontFamily: ["Inter", "Segoe UI", "Roboto", "Arial", "sans-serif"].join(","),
       h1: { fontWeight: 800 }, h2: { fontWeight: 800 },
@@ -135,16 +135,20 @@ export function createAppTheme(mode: PaletteMode = "light") {
             position: "relative",
             border: `1px solid ${border}`,
             boxShadow: dark ? "0 16px 42px rgba(0,0,0,.18), inset 0 1px rgba(255,255,255,.025)" : "0 8px 24px rgba(15,23,42,.055)",
-            borderRadius: 16,
+            borderRadius: 12,
             overflow: "hidden",
             backdropFilter: dark ? "blur(16px)" : undefined,
             background: dark ? "linear-gradient(145deg, rgba(10,35,45,.94), rgba(7,27,39,.97))" : "linear-gradient(180deg,#FFFFFF,#FBFCFD)",
             backgroundColor: paper,
             transition: "border-color .18s ease, box-shadow .18s ease, transform .18s ease, background-color .18s ease",
             "&::after": dark ? { content: '""', position: "absolute", inset: "0 0 auto", height: 1, background: "linear-gradient(90deg, rgba(24,199,122,.30), rgba(47,141,255,.16), transparent 72%)", pointerEvents: "none" } : undefined,
-            "&:hover": {
-              borderColor: dark ? "rgba(70,194,163,.28)" : "rgba(24,199,122,.20)",
+            "&[role='button']:hover, &:has(.MuiCardActionArea-root):hover": {
+              borderColor: dark ? "rgba(70,194,163,.30)" : "rgba(24,199,122,.22)",
               boxShadow: dark ? "0 18px 46px rgba(0,0,0,.22), inset 0 1px rgba(255,255,255,.035)" : "0 14px 34px rgba(15,23,42,.075)",
+            },
+            "&[role='button']:focus-visible": {
+              outline: "2px solid " + aliareColors.green,
+              outlineOffset: 2,
             },
           },
         },
@@ -183,7 +187,7 @@ export function createAppTheme(mode: PaletteMode = "light") {
       MuiIconButton: {
         styleOverrides: {
           root: {
-            borderRadius: 11,
+            borderRadius: 8,
             transition: "background-color .16s ease, border-color .16s ease, color .16s ease, transform .16s ease",
             ...(dark && {
               color: "#AFC2D8",
@@ -213,7 +217,7 @@ export function createAppTheme(mode: PaletteMode = "light") {
         defaultProps: { disableElevation: true, size: "small" },
         styleOverrides: {
           root: {
-            borderRadius: 8,
+            borderRadius: 7,
             minHeight: 36,
             fontSize: ".88rem",
             textTransform: "none",
@@ -239,21 +243,14 @@ export function createAppTheme(mode: PaletteMode = "light") {
         },
       },
       MuiInputLabel: {
+        defaultProps: {
+          shrink: true,
+        },
         styleOverrides: {
           root: {
             color: textSecondary,
-            lineHeight: 1,
             pointerEvents: "none",
             zIndex: 2,
-            "&.MuiInputLabel-outlined": {
-              transform: "translate(12px, -7px) scale(0.75)",
-              transformOrigin: "top left",
-              padding: 0,
-            },
-            "&.MuiInputLabel-outlined.MuiInputLabel-shrink": {
-              transform: "translate(12px, -7px) scale(0.75)",
-              transformOrigin: "top left",
-            },
             "&.Mui-focused": { color: aliareColors.green },
             "&.Mui-disabled": { color: dark ? "#60758C" : "#98A2B3" },
           },
@@ -276,7 +273,7 @@ export function createAppTheme(mode: PaletteMode = "light") {
           tagSizeSmall: { height: 24, maxWidth: 180 },
           paper: {
             border: `1px solid ${border}`,
-            borderRadius: 12,
+            borderRadius: 10,
             backgroundColor: paper,
             ...(dark && { boxShadow: "0 18px 44px rgba(0,0,0,.34)" }),
           },
@@ -287,7 +284,7 @@ export function createAppTheme(mode: PaletteMode = "light") {
           root: {
             transition: "border-color .16s ease, box-shadow .16s ease, background-color .16s ease",
             borderRadius: 8,
-            "&.MuiInputBase-sizeSmall": { minHeight: 38 },
+            "&.MuiInputBase-sizeSmall": { minHeight: 40 },
             backgroundColor: dark ? "rgba(5,25,34,.62)" : undefined,
             "& .MuiOutlinedInput-notchedOutline": { borderColor: dark ? "rgba(131,175,220,.30)" : undefined },
             "& .MuiOutlinedInput-notchedOutline legend": {
@@ -304,14 +301,17 @@ export function createAppTheme(mode: PaletteMode = "light") {
         },
       },
       MuiSelect: {
-        defaultProps: { notched: true },
-        styleOverrides: { select: { backgroundColor: dark ? "rgba(7,20,35,.34)" : undefined } },
+        styleOverrides: {
+          select: {
+            backgroundColor: dark ? "rgba(7,20,35,.34)" : undefined,
+          },
+        },
       },
       MuiChip: {
         defaultProps: { size: "small" },
         styleOverrides: {
           root: {
-            borderRadius: 9,
+            borderRadius: 7,
             minHeight: 25,
             fontWeight: 700,
             fontSize: ".78rem",
@@ -340,7 +340,7 @@ export function createAppTheme(mode: PaletteMode = "light") {
             "&::-webkit-scrollbar": { height: 9, width: 9 },
             "&::-webkit-scrollbar-track": { background: dark ? "#091827" : "#EEF1F3" },
             "&::-webkit-scrollbar-thumb": { background: dark ? "#31516E" : "#C7CDD3", borderRadius: 99 },
-            borderRadius: 14,
+            borderRadius: 10,
             border: `1px solid ${border}`,
             overflowX: "auto",
             overscrollBehaviorX: "contain",
@@ -388,7 +388,7 @@ export function createAppTheme(mode: PaletteMode = "light") {
       MuiAlert: {
         styleOverrides: {
           root: {
-            borderRadius: 14,
+            borderRadius: 10,
             border: `1px solid ${border}`,
             alignItems: "center",
             ...(dark && { backdropFilter: "blur(12px)", boxShadow: "inset 0 1px rgba(255,255,255,.025)" }),
@@ -419,13 +419,13 @@ export function createAppTheme(mode: PaletteMode = "light") {
       MuiSnackbarContent: {
         styleOverrides: {
           root: {
-            borderRadius: 12,
+            borderRadius: 10,
             ...(dark && { background: "linear-gradient(145deg,#0C3340,#081F2C)", border: `1px solid ${border}` }),
           },
         },
       },
       MuiSvgIcon: { styleOverrides: { root: { transition: "transform .16s ease, filter .16s ease", filter: dark ? "drop-shadow(0 2px 5px rgba(0,0,0,.18))" : "drop-shadow(0 1px 1px rgba(15,23,42,.08))" } } },
-      MuiTooltip: { defaultProps: { arrow: true, enterDelay: 350 }, styleOverrides: { tooltip: { backgroundColor: dark ? "#162D43" : aliareColors.graphite, fontSize: ".76rem", lineHeight: 1.45, padding: "7px 10px", borderRadius: 9, border: dark ? "1px solid rgba(116,166,216,.20)" : undefined, boxShadow: dark ? "0 10px 28px rgba(0,0,0,.32)" : "0 8px 22px rgba(15,23,42,.14)" } } },
+      MuiTooltip: { defaultProps: { arrow: true, enterDelay: 350 }, styleOverrides: { tooltip: { backgroundColor: dark ? "#162D43" : aliareColors.graphite, fontSize: ".76rem", lineHeight: 1.45, padding: "7px 10px", borderRadius: 8, border: dark ? "1px solid rgba(116,166,216,.20)" : undefined, boxShadow: dark ? "0 10px 28px rgba(0,0,0,.32)" : "0 8px 22px rgba(15,23,42,.14)" } } },
       MuiTabs: {
         styleOverrides: {
           root: {
@@ -433,7 +433,7 @@ export function createAppTheme(mode: PaletteMode = "light") {
             ...(dark && {
               border: "1px solid rgba(116,166,216,.16)",
               backgroundColor: "rgba(7,20,35,.44)",
-              borderRadius: 12,
+              borderRadius: 10,
               padding: 3,
             }),
           },
@@ -444,7 +444,7 @@ export function createAppTheme(mode: PaletteMode = "light") {
         styleOverrides: {
           root: {
             minHeight: 36,
-            borderRadius: 9,
+            borderRadius: 7,
             fontWeight: 750,
             "&.Mui-selected": {
               color: dark ? "#42E6C1" : aliareColors.greenDark,
@@ -457,7 +457,7 @@ export function createAppTheme(mode: PaletteMode = "light") {
         styleOverrides: {
           root: {
             border: `1px solid ${border}`,
-            borderRadius: "14px !important",
+            borderRadius: "10px !important",
             overflow: "hidden",
             ...(dark && { background: "linear-gradient(145deg,rgba(14,35,56,.94),rgba(9,25,43,.96))" }),
             "&::before": { display: "none" },
@@ -467,7 +467,7 @@ export function createAppTheme(mode: PaletteMode = "light") {
       MuiPaginationItem: {
         styleOverrides: {
           root: {
-            borderRadius: 9,
+            borderRadius: 7,
             ...(dark && {
               borderColor: "rgba(124,172,218,.22)",
               "&.Mui-selected": { backgroundColor: "rgba(24,199,122,.16)", color: "#5BE7AD" },
@@ -490,11 +490,11 @@ export function createAppTheme(mode: PaletteMode = "light") {
         styleOverrides: {
           root: {
             padding: 3,
-            borderRadius: 12,
+            borderRadius: 9,
             border: `1px solid ${border}`,
             backgroundColor: dark ? "rgba(7,20,35,.46)" : "rgba(248,250,252,.9)",
           },
-          grouped: { border: 0, borderRadius: "9px !important", margin: 1 },
+          grouped: { border: 0, borderRadius: "7px !important", margin: 1 },
         },
       },
       MuiToggleButton: {
@@ -515,7 +515,7 @@ export function createAppTheme(mode: PaletteMode = "light") {
       MuiMenuItem: {
         styleOverrides: {
           root: {
-            borderRadius: 8,
+            borderRadius: 7,
             margin: "2px 5px",
             minHeight: 38,
             "&.Mui-selected": { backgroundColor: dark ? "rgba(24,199,122,.12)" : "rgba(24,199,122,.08)" },
@@ -527,7 +527,7 @@ export function createAppTheme(mode: PaletteMode = "light") {
         styleOverrides: {
           paper: {
             border: `1px solid ${border}`,
-            borderRadius: 18,
+            borderRadius: 14,
             background: dark ? "linear-gradient(145deg,#0E2338,#0A192B)" : undefined,
             boxShadow: dark ? "0 28px 80px rgba(0,0,0,.42)" : "0 24px 64px rgba(16,24,40,.18)",
           },

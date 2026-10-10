@@ -1,3 +1,4 @@
+/* oxlint-disable react/only-export-components -- provider/hook/helper exports are intentional in this module */
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { CssBaseline, ThemeProvider } from "@mui/material";
 import { createAppTheme } from "../theme/theme";

@@ -3,9 +3,13 @@ import { ensureDatabaseAvailable, reportDatabaseFailure } from "../database/pris
 import { MovideskService } from "../services/MovideskService";
 import { clearMovideskApiPriority, releaseMovideskApi, requestMovideskApiPriority, tryAcquireMovideskApi } from "./MovideskSyncCoordinator";
 
-const DEFAULT_INTERVAL_MINUTES = 60;
+const DEFAULT_INTERVAL_MINUTES = 5;
 const DEFAULT_INITIAL_DELAY_SECONDS = 5;
-const METADATA_CONTINUATION_SECONDS = 45;
+
+export function movideskNextCycleDelay(intervalMs: number, elapsedMs: number) {
+  // Mantém cadência entre inícios, sem sobreposição ou loop imediato.
+  return Math.max(30_000, intervalMs - Math.max(0, elapsedMs));
+}
 
 export class MovideskSyncScheduler {
   private timer: NodeJS.Timeout | null = null;
@@ -20,7 +24,7 @@ export class MovideskSyncScheduler {
 
   private intervalMinutes() {
     const parsed = Number(process.env.MOVIDESK_SYNC_INTERVAL_MINUTES ?? DEFAULT_INTERVAL_MINUTES);
-    return Number.isSafeInteger(parsed) && parsed >= 15 && parsed <= 1440 ? parsed : DEFAULT_INTERVAL_MINUTES;
+    return Number.isSafeInteger(parsed) && parsed >= 2 && parsed <= 1440 ? parsed : DEFAULT_INTERVAL_MINUTES;
   }
 
   start() {
@@ -48,9 +52,14 @@ export class MovideskSyncScheduler {
   }
 
   private async runAndReschedule() {
+    const started = Date.now();
     let nextDelay: number | null = null;
     try { nextDelay = await this.execute(); }
-    finally { this.schedule(nextDelay ?? this.intervalMinutes() * 60_000); }
+    finally {
+      const delay = nextDelay ?? movideskNextCycleDelay(this.intervalMinutes() * 60_000, Date.now() - started);
+      if (!this.stopped) console.log(`[movidesk-sync] Próxima tentativa em ${Math.ceil(delay / 1000)}s.`);
+      this.schedule(delay);
+    }
   }
 
   private async execute(): Promise<number | null> {
@@ -61,8 +70,8 @@ export class MovideskSyncScheduler {
     }
     if (!tryAcquireMovideskApi("TICKETS")) {
       requestMovideskApiPriority();
-      console.log("[movidesk-sync] API ocupada: sincronização principal ganhou prioridade e tentará novamente em 2 minuto(s).");
-      return 2 * 60_000;
+      console.log("[movidesk-sync] API ocupada: sincronização principal ganhou prioridade e tentará novamente em 30s.");
+      return 30_000;
     }
     this.running = true;
     const started = Date.now();
@@ -77,20 +86,18 @@ export class MovideskSyncScheduler {
       // Uma interactive transaction reserva uma conexão do pool enquanto syncTickets()
       // executa chamadas externas e centenas de operações, podendo bloquear autenticação e Chat.
       // A exclusão local já é garantida por this.running + MovideskSyncCoordinator.
-      const s = await service.syncTickets(null, false);
-      const metadataRemaining = s.analyticalMetadataRemaining ?? 0;
+      // O ciclo principal deve permanecer curto e previsível. Metadados
+      // analíticos são reconciliados pelo scheduler de enriquecimento, em baixa
+      // prioridade, para não atrasar a chegada de tickets novos.
+      const s = await service.syncTickets(null, false, false);
       console.log([
         "[movidesk-sync] Sincronização concluída.",
-        `modo=${s.mode}`, `paginas=${s.pages}`, `total=${s.totalRows}`,
+        `modo=${s.mode}`, `desde=${s.since??"baseline"}`,
+        `paginas=${s.pages}`, `total=${s.totalRows}`,
         `inseridos=${s.created}`, `atualizados=${s.updated}`,
         `ignorados=${s.ignored}`, `erros=${s.errors}`,
-        `duração=${Math.round((Date.now()-started)/1000)}s`,
-        metadataRemaining > 0 ? `metadadosRestantes=${metadataRemaining}` : "metadados=em-dia"
+        `duração=${Math.round((Date.now()-started)/1000)}s`
       ].join(" | "));
-      if (metadataRemaining > 0) {
-        console.log(`[movidesk-sync] Reconciliação analítica continuará em ${METADATA_CONTINUATION_SECONDS}s para preservar capacidade do banco. | restantes=${metadataRemaining}`);
-        return METADATA_CONTINUATION_SECONDS * 1000;
-      }
     } catch (error) {
       if (!reportDatabaseFailure(error)) console.error("[movidesk-sync] Falha na sincronização automática:", error);
     } finally {

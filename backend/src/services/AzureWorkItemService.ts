@@ -1860,6 +1860,16 @@ export class AzureWorkItemService {
     type?:
       string | null,
   ) {
+    const uniqueStrings = (values: Array<string | null | undefined>) => {
+      const byNormalized = new Map<string,string>();
+      for (const raw of values) {
+        const value = raw?.trim();
+        if (!value) continue;
+        const key = value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR");
+        if (!byNormalized.has(key)) byNormalized.set(key,value);
+      }
+      return [...byNormalized.values()].sort((left,right)=>left.localeCompare(right,"pt-BR"));
+    };
     const normalizedType =
       this.normalizeString(
         type,
@@ -2081,102 +2091,18 @@ export class AzureWorkItemService {
       ]);
 
     return {
-      types:
-        types
-          .map(
-            (item) =>
-              item.workItemType,
-          )
-          .filter(Boolean),
-
-      states:
-        states
-          .map(
-            (item) =>
-              item.state,
-          )
-          .filter(Boolean),
-
-      assignedTo:
-        assignedTo
-          .map(
-            (item) =>
-              item.assignedToName,
-          )
-          .filter(
-            (
-              value,
-            ): value is string =>
-              Boolean(value),
-          ),
-
-      clients:
-        [...new Set([
-          ...clients.map((item) => item.client).filter((value): value is string => Boolean(value)),
-          ...participantClientRows.flatMap((item) => this.stringLines(item.participantClients)),
-        ])].sort((left, right) => left.localeCompare(right, "pt-BR")),
-
-      criticalities:
-        criticalities
-          .map(
-            (item) =>
-              item.criticality,
-          )
-          .filter(
-            (
-              value,
-            ): value is string =>
-              Boolean(value),
-          ),
-
-      modules:
-        modules
-          .map(
-            (item) =>
-              item.module,
-          )
-          .filter(
-            (
-              value,
-            ): value is string =>
-              Boolean(value),
-          ),
-
-      processes:
-        processes
-          .map(
-            (item) =>
-              item.process,
-          )
-          .filter(
-            (
-              value,
-            ): value is string =>
-              Boolean(value),
-          ),
-
-      versions:
-        versions
-          .map(
-            (item) =>
-              item.deliveredVersion,
-          )
-          .filter(
-            (
-              value,
-            ): value is string =>
-              Boolean(value),
-          )
-          .map(
-            (value) =>
-              value.trim(),
-          )
-          .filter(
-            (value) =>
-              !INVALID_VERSION_VALUES.has(
-                value,
-              ),
-          ),
+      types: uniqueStrings(types.map((item)=>item.workItemType)),
+      states: uniqueStrings(states.map((item)=>item.state)),
+      assignedTo: uniqueStrings(assignedTo.map((item)=>item.assignedToName)),
+      clients: uniqueStrings([
+        ...clients.map((item)=>item.client),
+        ...participantClientRows.flatMap((item)=>this.stringLines(item.participantClients)),
+      ]),
+      criticalities: uniqueStrings(criticalities.map((item)=>item.criticality)),
+      modules: uniqueStrings(modules.map((item)=>item.module)),
+      processes: uniqueStrings(processes.map((item)=>item.process)),
+      versions: uniqueStrings(versions.map((item)=>item.deliveredVersion))
+        .filter((value)=>!INVALID_VERSION_VALUES.has(value)),
     };
   }
 

@@ -1,3 +1,4 @@
+/* oxlint-disable react/only-export-components -- provider/hook/helper exports are intentional in this module */
 import type { ReactNode } from "react";
 import { Box, Button, Tooltip } from "@mui/material";
 import { DownloadOutlined } from "@mui/icons-material";

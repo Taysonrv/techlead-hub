@@ -6,12 +6,14 @@ import {
   AzureWorkItemController,
 } from "../controllers/AzureWorkItemController";
 import { requireAnyPermission } from "../middlewares/routinePermissionMiddleware";
+import { CorrectionMonthlyReportController } from "../controllers/CorrectionMonthlyReportController";
 
 const azureWorkItemRoutes =
   Router();
 
 const controller =
   new AzureWorkItemController();
+const correctionReportController = new CorrectionMonthlyReportController();
 
 const azureReadAccess = requireAnyPermission(
   "corrections", "evolutions", "support", "versions", "tickets",
@@ -40,6 +42,12 @@ azureWorkItemRoutes.get(
  * Deve permanecer antes de "/:id", pois "versions" não é
  * um identificador numérico de Work Item.
  */
+azureWorkItemRoutes.get(
+  "/corrections/monthly-report",
+  requireAnyPermission("corrections", "coordination"),
+  correctionReportController.get,
+);
+
 azureWorkItemRoutes.get(
   "/versions/summary",
   requireAnyPermission("versions"),

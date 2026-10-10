@@ -1,4 +1,14 @@
-import { Card, CardContent, IconButton, Stack, Tooltip, Typography, useTheme } from "@mui/material";
+import {
+  Box,
+  Card,
+  CardContent,
+  IconButton,
+  Stack,
+  Tooltip,
+  Typography,
+  useTheme,
+} from "@mui/material";
+import { alpha } from "@mui/material/styles";
 import { InfoOutlined } from "@mui/icons-material";
 import type { KeyboardEvent, ReactNode } from "react";
 import { aliareColors } from "../theme/theme";
@@ -8,35 +18,208 @@ type KpiCardProps = {
   value: ReactNode;
   subtitle?: string;
   info?: string;
-  metadata?: { source?: string; periodRule?: string; denominator?: string; updatedAt?: string };
+  metadata?: {
+    source?: string;
+    periodRule?: string;
+    denominator?: string;
+    updatedAt?: string;
+  };
   accent?: string;
   active?: boolean;
+  density?: "default" | "compact";
   onClick?: () => void;
 };
 
-export function KpiCard({ title, value, subtitle, info, metadata, accent = aliareColors.green, active = false, onClick }: KpiCardProps) {
+export function KpiCard({
+  title,
+  value,
+  subtitle,
+  info,
+  metadata,
+  accent = aliareColors.green,
+  active = false,
+  density = "default",
+  onClick,
+}: KpiCardProps) {
   const theme = useTheme();
   const dark = theme.palette.mode === "dark";
-  const cardBackground = dark
-    ? active
-      ? `linear-gradient(145deg, color-mix(in srgb, ${accent} 17%, #102B42), rgba(8,24,41,.98) 74%)`
-      : `linear-gradient(145deg, color-mix(in srgb, ${accent} 7%, #102B42), rgba(8,24,41,.98) 76%)`
-    : active
-      ? `linear-gradient(145deg, color-mix(in srgb, ${accent} 13%, white), color-mix(in srgb, ${accent} 4%, white))`
-      : `linear-gradient(145deg, color-mix(in srgb, ${accent} 6%, white), #FFFFFF 72%)`;
+
   const activate = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (onClick && (event.key === "Enter" || event.key === " ")) onClick();
+    if (onClick && (event.key === "Enter" || event.key === " ")) {
+      event.preventDefault();
+      onClick();
+    }
   };
 
-  return <Card elevation={0} role={onClick ? "button" : undefined} tabIndex={onClick ? 0 : undefined} onClick={onClick} onKeyDown={activate}
-    sx={{ position: "relative", overflow: "hidden", width: "100%", height: "100%", borderColor: active ? accent : "divider", cursor: onClick ? "pointer" : "default", background: cardBackground, boxShadow: dark ? "0 14px 34px rgba(0,0,0,.16), inset 0 1px rgba(255,255,255,.025)" : undefined, transition: "transform .15s ease, box-shadow .15s ease, border-color .15s ease", "&::before": { content: '""', position: "absolute", inset: "0 0 auto", height: 3, bgcolor: accent, boxShadow: `0 1px 8px color-mix(in srgb, ${accent} 35%, transparent)` }, "&::after": dark ? { content: '""', position: "absolute", width: 96, height: 96, borderRadius: "50%", right: -42, top: -48, background: `radial-gradient(circle, color-mix(in srgb, ${accent} 16%, transparent), transparent 68%)`, pointerEvents: "none" } : undefined, ...(onClick && { "&:hover": { transform: "translateY(-2px)", borderColor: accent, boxShadow: dark ? `0 16px 34px color-mix(in srgb, ${accent} 12%, rgba(0,0,0,.30))` : "0 8px 24px rgba(16,24,40,.08)" }, "&:focus-visible": { outline: `2px solid ${accent}`, outlineOffset: 2 } }) }}>
-    <CardContent sx={{ p: { xs: 1.25, md: 1.4 }, textAlign: "center", "&:last-child": { pb: { xs: 1.25, md: 1.4 } } }}>
-      <Stack direction="row" sx={{ alignItems: "center", justifyContent: "center", gap: .5, position: "relative" }}>
-        <Typography variant="body2" sx={{ fontWeight: 700, fontSize: ".82rem", letterSpacing: "-.005em", minWidth: 0, textAlign: "center" }}>{title}</Typography>
-        {(info || metadata) && <Tooltip title={<Stack spacing={.45}>{info && <Typography variant="caption">{info}</Typography>}{metadata?.source && <Typography variant="caption"><b>Fonte:</b> {metadata.source}</Typography>}{metadata?.periodRule && <Typography variant="caption"><b>Período:</b> {metadata.periodRule}</Typography>}{metadata?.denominator && <Typography variant="caption"><b>Denominador:</b> {metadata.denominator}</Typography>}{metadata?.updatedAt && <Typography variant="caption"><b>Atualização:</b> {metadata.updatedAt}</Typography>}</Stack>}><IconButton size="small" aria-label={`Informações sobre ${title}`} onClick={(event) => event.stopPropagation()} sx={{ p: .3, color: "text.secondary", position: "absolute", right: 0 }}><InfoOutlined sx={{ fontSize: 16 }} /></IconButton></Tooltip>}
-      </Stack>
-      <Typography sx={{ mt: .6, fontWeight: 780, color: accent, letterSpacing: "-.025em", fontSize: { xs: "1.45rem", md: "1.65rem", xl: "1.78rem" }, lineHeight: 1.05 }}>{value}</Typography>
-      {subtitle && <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: .75, minHeight: 16 }}>{subtitle}</Typography>}
-    </CardContent>
-  </Card>;
+  return (
+    <Card
+      elevation={0}
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      aria-pressed={onClick ? active : undefined}
+      onClick={onClick}
+      onKeyDown={activate}
+      sx={{
+        position: "relative",
+        overflow: "hidden",
+        width: "100%",
+        height: "100%",
+        minHeight: density === "compact" ? { xs: 98, md: 104 } : { xs: 112, md: 118 },
+        borderColor: active ? accent : "divider",
+        cursor: onClick ? "pointer" : "default",
+        background: dark
+          ? `radial-gradient(circle at 0% 50%, ${alpha(accent, 0.17)} 0%, ${alpha(accent, 0.075)} 24%, transparent 58%), linear-gradient(145deg, rgba(11,34,48,.98), rgba(7,25,38,.995))`
+          : `radial-gradient(circle at 0% 50%, ${alpha(accent, 0.10)} 0%, ${alpha(accent, 0.04)} 28%, transparent 60%), linear-gradient(145deg, #FFFFFF, #FAFCFD)`,
+        boxShadow: active
+          ? dark
+            ? "0 15px 34px rgba(0,0,0,.18)"
+            : "0 10px 26px rgba(15,23,42,.07)"
+          : "none",
+        transition:
+          "transform .15s ease, box-shadow .15s ease, border-color .15s ease",
+        "&::before": {
+          content: '""',
+          position: "absolute",
+          inset: "0 auto 0 0",
+          width: 3,
+          bgcolor: accent,
+          opacity: active ? 1 : 0.82,
+        },
+        "&::after": {
+          content: '""',
+          position: "absolute",
+          inset: 0,
+          background: dark
+            ? "linear-gradient(180deg, rgba(255,255,255,.018), transparent 32%)"
+            : "linear-gradient(180deg, rgba(255,255,255,.46), transparent 30%)",
+          pointerEvents: "none",
+        },
+        ...(onClick
+          ? {
+              "&:hover": {
+                transform: "translateY(-2px)",
+                borderColor: alpha(accent, dark ? 0.5 : 0.36),
+                boxShadow: dark
+                  ? "0 17px 36px rgba(0,0,0,.20)"
+                  : "0 10px 26px rgba(15,23,42,.075)",
+              },
+              "&:focus-visible": {
+                outline: "2px solid " + accent,
+                outlineOffset: 2,
+              },
+            }
+          : {}),
+      }}
+    >
+      <CardContent
+        sx={{
+          height: "100%",
+          p: density === "compact" ? { xs: 1.05, md: 1.15 } : { xs: 1.25, md: 1.4 },
+          display: "flex",
+          flexDirection: "column",
+          "&:last-child": { pb: density === "compact" ? { xs: 1.05, md: 1.15 } : { xs: 1.25, md: 1.4 } },
+        }}
+      >
+        <Stack
+          direction="row"
+          sx={{
+            alignItems: "flex-start",
+            justifyContent: "space-between",
+            gap: 0.7,
+            minWidth: 0,
+          }}
+        >
+          <Typography
+            variant="body2"
+            sx={{
+              fontWeight: 750,
+              fontSize: ".8rem",
+              letterSpacing: "-.004em",
+              lineHeight: 1.3,
+              minWidth: 0,
+            }}
+          >
+            {title}
+          </Typography>
+
+          {info || metadata ? (
+            <Tooltip
+              title={
+                <Stack spacing={0.45}>
+                  {info ? <Typography variant="caption">{info}</Typography> : null}
+                  {metadata?.source ? (
+                    <Typography variant="caption">
+                      <b>Fonte:</b> {metadata.source}
+                    </Typography>
+                  ) : null}
+                  {metadata?.periodRule ? (
+                    <Typography variant="caption">
+                      <b>Período:</b> {metadata.periodRule}
+                    </Typography>
+                  ) : null}
+                  {metadata?.denominator ? (
+                    <Typography variant="caption">
+                      <b>Denominador:</b> {metadata.denominator}
+                    </Typography>
+                  ) : null}
+                  {metadata?.updatedAt ? (
+                    <Typography variant="caption">
+                      <b>Atualização:</b> {metadata.updatedAt}
+                    </Typography>
+                  ) : null}
+                </Stack>
+              }
+            >
+              <IconButton
+                size="small"
+                aria-label={"Informações sobre " + title}
+                onClick={(event) => event.stopPropagation()}
+                sx={{
+                  p: 0.25,
+                  mt: -0.25,
+                  mr: -0.25,
+                  color: "text.secondary",
+                  flexShrink: 0,
+                }}
+              >
+                <InfoOutlined sx={{ fontSize: 16 }} />
+              </IconButton>
+            </Tooltip>
+          ) : null}
+        </Stack>
+
+        <Typography
+          sx={{
+            mt: density === "compact" ? 0.45 : 0.65,
+            fontWeight: 840,
+            color: accent,
+            letterSpacing: "-.03em",
+            fontSize: density === "compact"
+              ? { xs: "1.35rem", md: "1.48rem", xl: "1.58rem" }
+              : { xs: "1.45rem", md: "1.62rem", xl: "1.72rem" },
+            lineHeight: 1,
+            fontVariantNumeric: "tabular-nums",
+          }}
+        >
+          {value}
+        </Typography>
+
+        <Box sx={{ mt: "auto", pt: subtitle ? 0.7 : 0.25 }}>
+          {subtitle ? (
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{
+                display: "block",
+                minHeight: 16,
+                lineHeight: 1.35,
+              }}
+            >
+              {subtitle}
+            </Typography>
+          ) : null}
+        </Box>
+      </CardContent>
+    </Card>
+  );
 }

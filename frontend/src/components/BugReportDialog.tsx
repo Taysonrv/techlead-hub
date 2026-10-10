@@ -1,10 +1,12 @@
 import { Alert, Button, Dialog, DialogActions, DialogContent, DialogTitle, FormControl, InputLabel, MenuItem, Select, Stack, TextField } from "@mui/material";
-import { useState } from "react";
+import { useId, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { api } from "../services/api";
 
 export function BugReportDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const location = useLocation();
+  const selectId = useId();
+  const selectLabelId = `${selectId}-label`;
   const [type, setType] = useState<"BUG" | "IMPROVEMENT">("BUG");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -23,7 +25,7 @@ export function BugReportDialog({ open, onClose }: { open: boolean; onClose: () 
     <DialogTitle>Reportar bug ou melhoria</DialogTitle>
     <DialogContent><Stack spacing={2} sx={{ mt: .5 }}>
       {message && <Alert severity={message.startsWith("Enviado") ? "success" : "warning"}>{message}</Alert>}
-      <FormControl size="small" fullWidth><InputLabel>Tipo</InputLabel><Select value={type} label="Tipo" onChange={(event) => setType(event.target.value as "BUG" | "IMPROVEMENT")}><MenuItem value="BUG">Bug / problema</MenuItem><MenuItem value="IMPROVEMENT">Melhoria / sugestão</MenuItem></Select></FormControl>
+      <FormControl size="small" fullWidth><InputLabel id={selectLabelId}>Tipo</InputLabel><Select labelId={selectLabelId} inputProps={{ id: selectId, "aria-labelledby": selectLabelId }} value={type} label="Tipo" onChange={(event) => setType(event.target.value as "BUG" | "IMPROVEMENT")}><MenuItem value="BUG">Bug / problema</MenuItem><MenuItem value="IMPROVEMENT">Melhoria / sugestão</MenuItem></Select></FormControl>
       <TextField label="Título" value={title} onChange={(event) => setTitle(event.target.value)} slotProps={{ htmlInput: { maxLength: 160 } }} fullWidth />
       <TextField label="Descrição" value={description} onChange={(event) => setDescription(event.target.value)} multiline minRows={5} helperText={`Tela atual: ${location.pathname}`} fullWidth />
     </Stack></DialogContent>

@@ -5,9 +5,13 @@ import { prisma } from "../database/prisma";
 import { MovideskJsonImportService } from "./MovideskJsonImportService";
 import { isSimerClient, SIMER_CLIENTS } from "../domain/OperationalScope";
 import { movideskRateLimiter } from "./MovideskRateLimiter";
+import { hasMovideskApiPriorityRequest } from "../jobs/MovideskSyncCoordinator";
 
 const PAGE_SIZE = 50;
 const INCREMENTAL_OVERLAP_MINUTES = 10;
+const INCREMENTAL_SAFETY_LOOKBACK_MINUTES = 360;
+const INITIAL_INCREMENTAL_CATCHUP_HOURS = 24;
+const INCREMENTAL_COMPLETED_ACTION = "MOVIDESK_INCREMENTAL_COMPLETED_2026_V1";
 const ANALYTICAL_REFRESH_DAYS = 70;
 const ANALYTICAL_REFRESH_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const ANALYTICAL_BATCH_SIZE = 8;
@@ -19,6 +23,16 @@ const BASELINE_CHECKPOINT_ACTION = "MOVIDESK_SCOPED_BASELINE_CHECKPOINT_2026_V5"
 const BASELINE_COMPLETED_ACTION = "MOVIDESK_SCOPED_BASELINE_COMPLETED_2026_V5";
 const SYNC_SCOPE_START = new Date("2026-01-01T00:00:00.000Z");
 const BASELINE_FAILED_ACTION = "MOVIDESK_BASELINE_FAILED";
+
+export function computeMovideskIncrementalSince(
+  lastIncrementalAt: Date | null,
+  nowUtc: Date = new Date(),
+) {
+  const anchor = lastIncrementalAt
+    ? new Date(lastIncrementalAt.getTime() - INCREMENTAL_SAFETY_LOOKBACK_MINUTES * 60_000)
+    : new Date(nowUtc.getTime() - INITIAL_INCREMENTAL_CATCHUP_HOURS * 60 * 60_000);
+  return anchor < SYNC_SCOPE_START ? new Date(SYNC_SCOPE_START) : anchor;
+}
 
 function normalizeMovideskDateTimeOffset(value: string) {
   const trimmed = value.trim();
@@ -1009,6 +1023,10 @@ export class MovideskService {
     return { scanned, updated, causesUpdated, reasonsUpdated, businessAreasUpdated, remaining, skippedByCadence: false };
   }
 
+  async syncAnalyticalMetadataBatch() {
+    return this.refreshRecentClassifications(false);
+  }
+
   async backfillTicketCauses() {
     const remote = await this.refreshRecentClassifications(true);
     const candidates = await prisma.ticket.findMany({
@@ -1345,8 +1363,6 @@ export class MovideskService {
 
   private async latestSuccessfulSyncDate() {
     // Só habilitamos incremental depois que uma carga FULL terminou por inteiro.
-    // Assim, uma interrupção no meio do baseline nunca faz o próximo ciclo
-    // saltar os tickets das páginas que ainda não foram importadas.
     const baseline = await prisma.auditLog.findFirst({
       where: { action: BASELINE_COMPLETED_ACTION },
       orderBy: { createdAt: "desc" },
@@ -1354,21 +1370,29 @@ export class MovideskService {
     });
     if (!baseline) return null;
 
-    // O cursor deve seguir o relógio do dado remoto (lastUpdate), e não o
-    // horário local em que a importação terminou.
-    const latest = await prisma.ticket.aggregate({
-      where: {
-        createdDate: { gte: SYNC_SCOPE_START },
-        client: { in: [...SIMER_CLIENTS], mode: "insensitive" },
-      },
-      _max: { lastUpdate: true },
+    // Não use o maior lastUpdate já existente no banco como cursor.
+    // Esse valor pode pertencer a outro ticket e fazer um ticket novo, ainda
+    // ausente localmente, ficar definitivamente para trás da janela incremental.
+    //
+    // O watermark passa a ser o término do último ciclo incremental bem-sucedido,
+    // com uma janela de segurança de 6h para absorver atrasos de publicação,
+    // diferenças de relógio e tickets que chegaram fora de ordem.
+    const lastIncremental = await prisma.auditLog.findFirst({
+      where: { action: INCREMENTAL_COMPLETED_ACTION },
+      orderBy: { createdAt: "desc" },
+      select: { createdAt: true },
     });
-    const cursor = latest._max.lastUpdate;
-    if (!cursor) return null;
-    return new Date(cursor.getTime() - INCREMENTAL_OVERLAP_MINUTES * 60_000);
+
+    // Primeiro ciclo após o upgrade usa 24h; ciclos seguintes recuam 6h
+    // a partir do watermark persistido. O helper puro é coberto por teste.
+    return computeMovideskIncrementalSince(lastIncremental?.createdAt ?? null);
   }
 
-  async syncTickets(userId?: number | null, forceFull = false): Promise<SyncSummary> {
+  async syncTickets(
+    userId?: number | null,
+    forceFull = false,
+    refreshAnalyticalMetadata = true,
+  ): Promise<SyncSummary> {
     const since = forceFull ? null : await this.latestSuccessfulSyncDate();
     const mode: SyncSummary["mode"] = since ? "INCREMENTAL" : "FULL";
     const checkpoint = mode === "FULL" ? await this.loadBaselineCheckpoint() : null;
@@ -1479,8 +1503,27 @@ export class MovideskService {
     }
 
     if (mode === "INCREMENTAL" && summary.errors === 0) {
-      const metadataRefresh = await this.refreshRecentClassifications();
-      summary.analyticalMetadataRemaining = metadataRefresh.remaining;
+      await prisma.auditLog.create({
+        data: {
+          userId: userId ?? null,
+          action: INCREMENTAL_COMPLETED_ACTION,
+          entity: "Ticket",
+          metadata: {
+            since: summary.since,
+            pages: summary.pages,
+            totalRows: summary.totalRows,
+            created: summary.created,
+            updated: summary.updated,
+            ignored: summary.ignored,
+            safetyLookbackMinutes: INCREMENTAL_SAFETY_LOOKBACK_MINUTES,
+          },
+        },
+      });
+
+      if (refreshAnalyticalMetadata) {
+        const metadataRefresh = await this.refreshRecentClassifications();
+        summary.analyticalMetadataRemaining = metadataRefresh.remaining;
+      }
     }
 
     if (mode === "FULL" && summary.errors === 0) {
@@ -1537,8 +1580,15 @@ export class MovideskService {
     const errorDetails: Array<{ ticketId: number; message: string }> = [];
 
     const enrichmentStartedAt = Date.now();
+    let attempted = 0;
+    let yieldedToSync = false;
     for (let index = 0; index < tickets.length; index += 1) {
+      if (hasMovideskApiPriorityRequest()) {
+        yieldedToSync = true;
+        break;
+      }
       const ticket = tickets[index]!;
+      attempted += 1;
       try {
         const response = await this.getWithRetry(`${this.url}/tickets`, {
           params: {
@@ -1801,18 +1851,17 @@ export class MovideskService {
         });
       }
 
-      if (index < tickets.length - 1) {
-      }
     }
 
-    const processed = Math.max(0, tickets.length - errors);
+    const processed = Math.max(0, attempted - errors);
     const pendingAfterRun = Math.max(0, pendingBeforeRun - processed);
     const elapsedMinutes = Math.max((Date.now() - enrichmentStartedAt) / 60_000, 1 / 60);
     const throughputPerMinute = processed / elapsedMinutes;
     const estimatedMinutesRemaining = throughputPerMinute > 0 && pendingAfterRun > 0 ? Math.ceil(pendingAfterRun / throughputPerMinute) : null;
 
     return {
-      tickets: tickets.length,
+      tickets: attempted,
+      yieldedToSync,
       pendingBeforeRun,
       pendingAfterRun,
       actions,

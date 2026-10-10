@@ -10,6 +10,7 @@ const notificationRoutes = Router();
 const controller = new NotificationController();
 
 notificationRoutes.get("/", controller.list);
+notificationRoutes.get("/meetings", controller.listMeetingReminders);
 notificationRoutes.post("/read", controller.markRead);
 notificationRoutes.put("/preferences", controller.savePreferences);
 

@@ -139,6 +139,7 @@ export function Sidebar() {
     isAdmin,
   } =
     useAuth();
+  const userId = user?.id ?? null;
 
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [chatUnread, setChatUnread] = useState(0);
@@ -163,18 +164,18 @@ export function Sidebar() {
   const floatingHydratedRef = useRef(false);
 
   useEffect(() => {
-    if (!user || floatingHydratedRef.current) return;
+    if (!userId || floatingHydratedRef.current) return;
     floatingHydratedRef.current = true;
     try {
       // Janelas flutuantes são transitórias. Não devem reaparecer ao navegar ou recarregar.
-      localStorage.removeItem(`techlead-floating-chats-${user.id}`);
+      localStorage.removeItem(`techlead-floating-chats-${userId}`);
       setFloatingChats([]);
-    } catch { localStorage.removeItem(`techlead-floating-chats-${user.id}`); }
-  }, [user]);
+    } catch { localStorage.removeItem(`techlead-floating-chats-${userId}`); }
+  }, [userId]);
 
   useEffect(() => {
     // Não persiste mini-chats: abrir/fechar é uma decisão da sessão de navegação atual.
-  }, [floatingChats, user]);
+  }, [floatingChats, userId]);
 
   const [
     appVersion,
@@ -219,7 +220,7 @@ export function Sidebar() {
   // de uma seção; o usuário decide quais grupos deseja expandir.
 
   useEffect(() => {
-    if (!user) { setChatUnread(0); chatSnapshotRef.current.clear(); return; }
+    if (!userId) { setChatUnread(0); chatSnapshotRef.current.clear(); return; }
     type GlobalChatMessage = { id: number; content: string; author: { id: number; name: string } };
     type GlobalChatChannel = { id: number; name: string; type?: string; unread?: number; updatedAt?: string; members?: Array<{ user: SharePerson }>; messages?: GlobalChatMessage[] };
     const loadChatUnread = async () => {
@@ -234,7 +235,7 @@ export function Sidebar() {
           const incoming = channels.flatMap((channel) => {
             const latest = channel.messages?.[channel.messages.length - 1];
             const before = previous.get(channel.id);
-            return before && latest && latest.author.id !== user.id && (channel.unread ?? 0) > before.unread && latest.id !== before.lastMessageId
+            return before && latest && latest.author.id !== userId && (channel.unread ?? 0) > before.unread && latest.id !== before.lastMessageId
               ? [{ channel, latest }]
               : [];
           });
@@ -261,7 +262,7 @@ export function Sidebar() {
     const refresh = () => void loadChatUnread();
     window.addEventListener("techlead-hub:chat-read", refresh);
     return () => { window.clearInterval(timer); window.removeEventListener("techlead-hub:chat-read", refresh); };
-  }, [user, location.pathname]);
+  }, [userId, location.pathname]);
 
   const openFloatingChat = useCallback(async (channelId: number, channelName: string) => {
     try {
@@ -285,27 +286,63 @@ export function Sidebar() {
     } catch { navigate(`/chat?channel=${channelId}`); }
   }, [floatingDrafts, navigate]);
 
+  const floatingChannelIdsKey = useMemo(
+    () => floatingChats.map((item) => item.channelId).join(","),
+    [floatingChats],
+  );
+
   useEffect(() => {
-    if (!floatingChats.length) return;
+    const channelIds = floatingChannelIdsKey
+      ? floatingChannelIdsKey.split(",").map(Number).filter((id) => Number.isSafeInteger(id) && id > 0)
+      : [];
+    if (!channelIds.length) return;
     const refresh = async () => {
-      await Promise.all(floatingChats.map(async (item) => {
+      let channels: Array<{ id: number; type: string; members?: Array<{ user: { id: number; name: string } }> }> = [];
+      let presenceRows: Array<{ userId: number; effectiveStatus: "ONLINE" | "AWAY" | "BUSY" | "OFFLINE" }> = [];
+      let typingRows: Array<{ channelId: number; userId: number; name: string }> = [];
+
+      try {
+        const [channelsResponse, realtimeResponse] = await Promise.all([
+          api.get<{ channels: typeof channels }>("/chat/channels"),
+          api.get<{ presence: typeof presenceRows; typing: typeof typingRows }>("/chat/realtime"),
+        ]);
+        channels = channelsResponse.data.channels ?? [];
+        presenceRows = realtimeResponse.data.presence ?? [];
+        typingRows = realtimeResponse.data.typing ?? [];
+      } catch {
+        // Presença é complementar; mensagens continuam sendo atualizadas.
+      }
+
+      const messagesByChannel = new Map<number, FloatingChat["messages"]>();
+      await Promise.all(channelIds.map(async (channelId) => {
         try {
-          const [messagesResponse, channelsResponse, realtimeResponse] = await Promise.all([
-            api.get<{ messages: FloatingChat["messages"] }>(`/chat/channels/${item.channelId}/messages`),
-            api.get<{ channels: Array<{ id: number; type: string; members?: Array<{ user: { id: number; name: string } }> }> }>("/chat/channels"),
-            api.get<{ presence: Array<{ userId: number; effectiveStatus: "ONLINE" | "AWAY" | "BUSY" | "OFFLINE" }>; typing: Array<{ channelId: number; userId: number; name: string }> }>("/chat/realtime"),
-          ]);
-          const channel = channelsResponse.data.channels.find((candidate) => candidate.id === item.channelId);
-          const peer = channel?.type === "DIRECT" ? channel.members?.find((member) => member.user.id !== user?.id)?.user : undefined;
-          const presence = peer ? realtimeResponse.data.presence.find((entry) => entry.userId === peer.id)?.effectiveStatus : undefined;
-          const typingNames = realtimeResponse.data.typing.filter((entry) => entry.channelId === item.channelId && entry.userId !== user?.id).map((entry) => entry.name);
-          setFloatingChats((current) => current.map((chat) => chat.channelId === item.channelId ? { ...chat, messages: messagesResponse.data.messages, peerId: peer?.id, peerName: peer?.name, presence, typingNames } : chat));
-        } catch { /* janela compacta não deve afetar a tela atual */ }
+          const response = await api.get<{ messages: FloatingChat["messages"] }>(`/chat/channels/${channelId}/messages`);
+          messagesByChannel.set(channelId, response.data.messages);
+        } catch {
+          // Uma conversa indisponível não deve interromper as demais.
+        }
+      }));
+
+      setFloatingChats((current) => current.map((chat) => {
+        const channel = channels.find((candidate) => candidate.id === chat.channelId);
+        const peer = channel?.type === "DIRECT" ? channel.members?.find((member) => member.user.id !== userId)?.user : undefined;
+        const peerPresence = peer ? presenceRows.find((entry) => entry.userId === peer.id)?.effectiveStatus : undefined;
+        const typingNames = typingRows.filter((entry) => entry.channelId === chat.channelId && entry.userId !== userId).map((entry) => entry.name);
+        return {
+          ...chat,
+          messages: messagesByChannel.get(chat.channelId) ?? chat.messages,
+          peerId: peer?.id,
+          peerName: peer?.name,
+          presence: peerPresence,
+          typingNames,
+        };
       }));
     };
-    floatingPollRef.current = window.setInterval(() => void refresh(), 5000);
+
+    void refresh();
+    floatingPollRef.current = window.setInterval(() => void refresh(), 8_000);
     return () => { if (floatingPollRef.current) window.clearInterval(floatingPollRef.current); floatingPollRef.current = null; };
-  }, [floatingChats.map((item) => item.channelId).join(",")]);
+  }, [floatingChannelIdsKey, userId]);
 
   useEffect(() => {
     const receiveShare = (event: Event) => {
@@ -330,7 +367,7 @@ export function Sidebar() {
     if (!shareContext || shareSendingTo) return;
     setShareSendingTo(person.id);
     try {
-      const existing = shareChannels.find((channel) => channel.type === "DIRECT" && channel.members?.some((member) => member.user.id === person.id) && channel.members?.some((member) => member.user.id === user?.id));
+      const existing = shareChannels.find((channel) => channel.type === "DIRECT" && channel.members?.some((member) => member.user.id === person.id) && channel.members?.some((member) => member.user.id === userId));
       const channel = existing ?? (await api.post<ShareChannel>(`/chat/direct/${person.id}`)).data;
       const content = `[hub-card]${JSON.stringify({ type: shareContext.label, id: shareContext.recordId, title: shareContext.title, client: shareContext.client || null, status: shareContext.status || null, path: shareContext.path })}`;
       await api.post(`/chat/channels/${channel.id}/messages`, { content });
@@ -341,7 +378,7 @@ export function Sidebar() {
     } catch {
       navigate(`/chat?share=${encodeURIComponent(JSON.stringify(shareContext))}`);
     } finally { setShareSendingTo(null); }
-  }, [shareContext, shareSendingTo, shareChannels, user?.id, openFloatingChat, navigate]);
+  }, [shareContext, shareSendingTo, shareChannels, userId, openFloatingChat, navigate]);
 
   const shareIntoFloatingChat = useCallback((channelId: number) => {
     if (!shareContext) return;
@@ -451,19 +488,21 @@ export function Sidebar() {
      ROTINAS - MESMO AGRUPAMENTO DA CENTRAL DA COORDENAÇÃO
   ======================================================= */
 
-  const canAccess = (permission: string) =>
+  const canAccess = useCallback((permission: string) =>
     user?.role === "ADMIN" ||
     (Array.isArray(user?.permissions)
       ? user.permissions.includes(permission)
       : user?.role === "COORDENADOR" ||
-        ["dashboard","tickets","my-operation","known-problems","attention","data-quality","clients","simer-map","performance","reports","corrections","evolutions","support","versions","knowledge"].includes(permission));
+        ["dashboard","tickets","my-operation","known-problems","attention","data-quality","clients","simer-map","performance","reports","corrections","evolutions","support","versions","knowledge"].includes(permission)),
+    [user?.permissions, user?.role],
+  );
 
   const registrationMenu = useMemo<MenuItemData[]>(
     () => [
       ...(canAccess("analysts") ? [{ label: "Analistas", path: "/analistas", icon: <GroupsOutlined fontSize="small" /> }] : []),
       ...(canAccess("clients") ? [{ label: "Clientes", path: "/clientes", icon: <BusinessOutlined fontSize="small" /> }] : []),
     ],
-    [user?.role, user?.permissions],
+    [canAccess],
   );
 
   const movementMenu = useMemo<MenuItemData[]>(
@@ -472,7 +511,7 @@ export function Sidebar() {
       ...(canAccess("known-problems") ? [{ label: "Problemas Conhecidos", path: "/problemas-conhecidos", icon: <CampaignOutlined fontSize="small" /> }] : []),
       ...(canAccess("attention") ? [{ label: "Pendências & Riscos", path: "/pendencias-riscos", icon: <WarningAmberOutlined fontSize="small" /> }] : []),
     ],
-    [user?.role, user?.permissions],
+    [canAccess],
   );
 
   const analysisMenu = useMemo<MenuItemData[]>(
@@ -484,24 +523,25 @@ export function Sidebar() {
         : []),
 
     ],
-    [user?.role, user?.permissions],
+    [canAccess],
   );
 
   const developmentMenu = useMemo<MenuItemData[]>(
     () => [
-      ...(canAccess("corrections") ? [{ label: "Correções", path: "/correcoes", icon: <BugReportOutlined fontSize="small" /> }] : []),
+      ...(canAccess("corrections") ? [{ label: "Painel de Tasks de Correções", path: "/correcoes", icon: <BugReportOutlined fontSize="small" /> }] : []),
       ...(canAccess("evolutions") ? [{ label: "Evoluções", path: "/evolucoes", icon: <AutoFixHighOutlined fontSize="small" /> }] : []),
       ...(canAccess("support") ? [{ label: "Apoios", path: "/apoios", icon: <SupportAgentOutlined fontSize="small" /> }] : []),
       ...(canAccess("versions") ? [{ label: "Versões", path: "/versoes", icon: <Inventory2Outlined fontSize="small" /> }] : []),
     ],
-    [user?.role, user?.permissions],
+    [canAccess],
   );
 
   const managementMenu = useMemo<MenuItemData[]>(
     () => [
+      ...(canAccess("coordination") ? [{ label: "Painel da Coordenação", path: "/gestao-inteligencia/coordenacao", icon: <GroupsOutlined fontSize="small" /> }] : []),
       ...(canAccess("knowledge") ? [{ label: "Base de Conhecimento", path: "/conhecimento", icon: <MenuBookOutlined fontSize="small" /> }] : []),
     ],
-    [user?.role, user?.permissions],
+    [canAccess],
   );
 
   /* =======================================================
@@ -985,7 +1025,7 @@ export function Sidebar() {
               <Typography variant="body2" sx={{ mt: .55, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{chatPopup.preview}</Typography>
               <Button size="small" sx={{ mt: .7, px: 0, fontWeight: 850 }} onClick={() => { const popup = chatPopup; setChatPopup(null); if (location.pathname === "/chat") navigate(`/chat?channel=${popup.channelId}`); else void openFloatingChat(popup.channelId, popup.channelName); }}>Abrir conversa</Button>
             </Box>
-            <IconButton size="small" aria-label="Fechar notificação" onClick={() => setChatPopup(null)}><Box component="span" sx={{ fontSize: 18, lineHeight: 1 }}>×</Box></IconButton>
+            <IconButton size="small" aria-label="Fechar notificação" onClick={() => setChatPopup(null)}><CloseRounded fontSize="small" /></IconButton>
           </Stack>}
         </Paper>
       </Snackbar>
@@ -996,22 +1036,22 @@ export function Sidebar() {
             <Box sx={{ position: "relative", width: 30, height: 30, mr: .8, borderRadius: "50%", bgcolor: "action.selected", color: "text.primary", border: "1px solid", borderColor: "divider", display: "grid", placeItems: "center", fontWeight: 900 }}>{(chat.peerName || chat.channelName).slice(0,1).toUpperCase()}{chat.peerId && <Circle sx={{ position: "absolute", right: -1, bottom: -1, fontSize: 9, color: chat.presence === "ONLINE" ? "success.main" : chat.presence === "AWAY" ? "warning.main" : chat.presence === "BUSY" ? "error.main" : "text.disabled", stroke: "background.paper", strokeWidth: 4 }} />}</Box>
             <Box onClick={() => setFloatingChats((current) => current.map((item) => item.channelId === chat.channelId ? { ...item, minimized: !item.minimized, unread: 0 } : item))} sx={{ minWidth: 0, flex: 1, cursor: "pointer" }}><Typography variant="body2" noWrap sx={{ fontWeight: 850 }}>{chat.channelName}</Typography>{chat.peerId && <Typography variant="caption" sx={{ display: "block", lineHeight: 1, opacity: .72 }}>{chat.presence === "ONLINE" ? "Online" : chat.presence === "AWAY" ? "Ausente" : chat.presence === "BUSY" ? "Ocupado" : "Offline"}</Typography>}</Box>
             {chat.unread > 0 && <Badge badgeContent={chat.unread} color="error" sx={{ mr: 1 }} />}
-            <Tooltip title="Buscar nesta conversa"><IconButton size="small" color="inherit" onClick={(event) => { event.stopPropagation(); setFloatingSearchOpen((current) => ({ ...current, [chat.channelId]: !current[chat.channelId] })); }}><SearchOutlined fontSize="small" /></IconButton></Tooltip><Tooltip title="Abrir no Hub de Conversas"><IconButton size="small" color="inherit" onClick={(event) => { event.stopPropagation(); navigate(`/chat?channel=${chat.channelId}`); }}><OpenInFullRounded fontSize="small" /></IconButton></Tooltip><Tooltip title={chat.minimized ? "Restaurar" : "Minimizar"}><IconButton size="small" color="inherit"><RemoveRounded fontSize="small" /></IconButton></Tooltip>
-            <Tooltip title="Fechar"><IconButton size="small" color="inherit" onClick={(event) => { event.stopPropagation(); setFloatingChats((current) => current.filter((item) => item.channelId !== chat.channelId)); }}><CloseRounded fontSize="small" /></IconButton></Tooltip>
+            <Tooltip title="Buscar nesta conversa"><IconButton size="small" color="inherit" aria-label="Buscar nesta conversa" onClick={(event) => { event.stopPropagation(); setFloatingSearchOpen((current) => ({ ...current, [chat.channelId]: !current[chat.channelId] })); }}><SearchOutlined fontSize="small" /></IconButton></Tooltip><Tooltip title="Abrir no Hub de Conversas"><IconButton size="small" color="inherit" aria-label="Abrir no Hub de Conversas" onClick={(event) => { event.stopPropagation(); navigate(`/chat?channel=${chat.channelId}`); }}><OpenInFullRounded fontSize="small" /></IconButton></Tooltip><Tooltip title={chat.minimized ? "Restaurar" : "Minimizar"}><IconButton size="small" color="inherit" aria-label={chat.minimized ? "Restaurar conversa" : "Minimizar conversa"} onClick={(event) => { event.stopPropagation(); setFloatingChats((current) => current.map((item) => item.channelId === chat.channelId ? { ...item, minimized: !item.minimized, unread: 0 } : item)); }}><RemoveRounded fontSize="small" /></IconButton></Tooltip>
+            <Tooltip title="Fechar"><IconButton size="small" color="inherit" aria-label="Fechar conversa flutuante" onClick={(event) => { event.stopPropagation(); setFloatingChats((current) => current.filter((item) => item.channelId !== chat.channelId)); }}><CloseRounded fontSize="small" /></IconButton></Tooltip>
           </Stack>
           {!chat.minimized && <>
-            {floatingSearchOpen[chat.channelId] && <Box sx={{ p: .75, borderBottom: "1px solid", borderColor: "divider", bgcolor: "background.paper" }}><TextField autoFocus size="small" fullWidth placeholder="Buscar nesta conversa..." value={floatingSearch[chat.channelId] ?? ""} onChange={(event) => setFloatingSearch((current) => ({ ...current, [chat.channelId]: event.target.value }))} slotProps={{ input: { startAdornment: <SearchOutlined sx={{ mr: .6, fontSize: 17, color: "text.secondary" }} /> } }} /></Box>}
+            {floatingSearchOpen[chat.channelId] && <Box sx={{ p: .75, borderBottom: "1px solid", borderColor: "divider", bgcolor: "background.paper" }}><TextField autoFocus size="small" fullWidth placeholder="Buscar nesta conversa..." value={floatingSearch[chat.channelId] ?? ""} onChange={(event) => setFloatingSearch((current) => ({ ...current, [chat.channelId]: event.target.value }))} slotProps={{ htmlInput: { "aria-label": "Buscar nesta conversa" }, input: { startAdornment: <SearchOutlined sx={{ mr: .6, fontSize: 17, color: "text.secondary" }} /> } }} /></Box>}
             {shareContext && <Box sx={{ px: 1, py: .65, bgcolor: "action.hover", borderBottom: "1px solid", borderColor: "divider" }}><Stack direction="row" spacing={.7} sx={{ alignItems: "center" }}><ShareOutlined sx={{ fontSize: 16, color: "primary.main" }} /><Box sx={{ minWidth: 0, flex: 1 }}><Typography variant="caption" noWrap sx={{ display: "block", fontWeight: 900 }}>{shareContext.label}{shareContext.recordId ? ` #${shareContext.recordId}` : ""}</Typography><Typography variant="caption" noWrap sx={{ display: "block", color: "text.secondary" }}>{shareContext.title}</Typography></Box><Button size="small" onClick={() => shareIntoFloatingChat(chat.channelId)}>Inserir</Button></Stack></Box>}
             <Box sx={{ flex: 1, overflowY: "auto", p: 1, bgcolor: "background.default" }}>
               {chat.messages.filter((message) => !floatingSearch[chat.channelId]?.trim() || message.content.toLowerCase().includes(floatingSearch[chat.channelId].trim().toLowerCase())).slice(-30).map((message) => {
-                const mine = message.author.id === user?.id;
+                const mine = message.author.id === userId;
                 return <Box key={message.id} sx={{ display: "flex", justifyContent: mine ? "flex-end" : "flex-start", mb: .65 }}><Box sx={{ maxWidth: "82%", px: 1, py: .65, borderRadius: mine ? "12px 12px 3px 12px" : "12px 12px 12px 3px", bgcolor: mine ? (theme) => theme.palette.mode === "dark" ? "rgba(24,199,122,.16)" : "rgba(24,199,122,.10)" : "background.paper", color: "text.primary", border: "1px solid", borderColor: mine ? "rgba(24,199,122,.28)" : "divider" }}><Typography variant="caption" sx={{ fontWeight: 800, opacity: .72 }}>{mine ? "Você" : message.author.name}</Typography>{message.content.startsWith("[hub-card]") ? (() => { try { const card = JSON.parse(message.content.slice(10)) as { type: string; id?: number; title: string; client?: string | null; status?: string | null; path: string }; return <Paper elevation={0} sx={{ mt: .35, p: 1, minWidth: 220, bgcolor: "background.paper", color: "text.primary", border: "1px solid", borderColor: mine ? "rgba(24,199,122,.30)" : "divider", borderRadius: 1.75 }}><Stack direction="row" spacing={.7} sx={{ alignItems: "center", mb: .5 }}><ShareOutlined sx={{ fontSize: 15 }} /><Typography variant="caption" sx={{ fontWeight: 900 }}>{card.type}{card.id ? ` #${card.id}` : ""}</Typography></Stack><Typography variant="body2" sx={{ fontWeight: 850, lineHeight: 1.3 }}>{card.title}</Typography>{card.client && <Typography variant="caption" sx={{ display: "block", mt: .35, opacity: .75 }}>Cliente: {card.client}</Typography>}{card.status && <Typography variant="caption" sx={{ display: "block", opacity: .75 }}>Status: {card.status}</Typography>}<Button size="small" variant="text" sx={{ mt: .7, px: 0, color: "primary.main" }} onClick={() => navigate(card.path)}>Abrir registro</Button></Paper>; } catch { return <Typography variant="body2">Registro compartilhado</Typography>; } })() : <Typography variant="body2" sx={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{message.content.startsWith("[anexo] ") ? "📎 Arquivo" : message.content}</Typography>}<Stack direction="row" spacing={.35} sx={{ mt: .25, justifyContent: "flex-end", alignItems: "center", opacity: .68 }}><Typography variant="caption" sx={{ fontSize: ".62rem" }}>{new Date(message.createdAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</Typography>{mine && <DoneAllRounded sx={{ fontSize: 13 }} />}</Stack></Box></Box>;
               })}
             </Box>
             {chat.typingNames.length > 0 && <Typography variant="caption" sx={{ px: 1.1, py: .35, color: "primary.main", fontWeight: 750, bgcolor: "background.default" }}>{chat.typingNames.join(", ")} {chat.typingNames.length > 1 ? "estão digitando..." : "está digitando..."}</Typography>}
             <Stack direction="row" spacing={.65} sx={{ p: .8, borderTop: "1px solid", borderColor: "divider", bgcolor: "background.paper", position: "relative", zIndex: 2, pointerEvents: "auto", alignItems: "flex-end" }} onClick={(event) => event.stopPropagation()}>
-              <TextField size="small" fullWidth multiline maxRows={3} value={floatingDrafts[chat.channelId] ?? ""} placeholder="Digite uma mensagem..." onChange={(event) => { setFloatingDrafts((current) => ({ ...current, [chat.channelId]: event.target.value })); void api.post(`/chat/channels/${chat.channelId}/typing`, { typing: Boolean(event.target.value.trim()) }).catch(() => undefined); }} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void sendFloatingMessage(chat.channelId); } }} />
-              <IconButton color="primary" disabled={!floatingDrafts[chat.channelId]?.trim()} onMouseDown={(event) => event.preventDefault()} onClick={() => void sendFloatingMessage(chat.channelId)} sx={{ width: 36, height: 36, bgcolor: "action.hover" }}><SendRounded fontSize="small" /></IconButton>
+              <TextField size="small" fullWidth multiline maxRows={3} value={floatingDrafts[chat.channelId] ?? ""} placeholder="Digite uma mensagem..." slotProps={{ htmlInput: { "aria-label": "Mensagem da conversa" } }} onChange={(event) => { setFloatingDrafts((current) => ({ ...current, [chat.channelId]: event.target.value })); void api.post(`/chat/channels/${chat.channelId}/typing`, { typing: Boolean(event.target.value.trim()) }).catch(() => undefined); }} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void sendFloatingMessage(chat.channelId); } }} />
+              <IconButton color="primary" aria-label="Enviar mensagem" disabled={!floatingDrafts[chat.channelId]?.trim()} onMouseDown={(event) => event.preventDefault()} onClick={() => void sendFloatingMessage(chat.channelId)} sx={{ width: 36, height: 36, bgcolor: "action.hover" }}><SendRounded fontSize="small" /></IconButton>
             </Stack>
           </>}
         </Paper>)}
@@ -1020,13 +1060,13 @@ export function Sidebar() {
       <Dialog open={sharePickerOpen} onClose={() => { if (!shareSendingTo) { setSharePickerOpen(false); setShareContext(null); } }} fullWidth maxWidth="xs">
         <DialogTitle sx={{ pb: 1 }}><Typography variant="h6" sx={{ fontWeight: 900 }}>Enviar para...</Typography>{shareContext && <Typography variant="body2" color="text.secondary" noWrap>{shareContext.label}{shareContext.recordId ? ` #${shareContext.recordId}` : ""} · {shareContext.title}</Typography>}</DialogTitle>
         <DialogContent>
-          <TextField autoFocus fullWidth size="small" placeholder="Buscar pessoa..." value={shareSearch} onChange={(event) => setShareSearch(event.target.value)} sx={{ mb: 1.25 }} slotProps={{ input: { startAdornment: <SearchOutlined sx={{ mr: .7, fontSize: 18, color: "text.secondary" }} /> } }} />
+          <TextField autoFocus fullWidth size="small" placeholder="Buscar pessoa..." value={shareSearch} onChange={(event) => setShareSearch(event.target.value)} sx={{ mb: 1.25 }} slotProps={{ htmlInput: { "aria-label": "Buscar pessoa para compartilhar" }, input: { startAdornment: <SearchOutlined sx={{ mr: .7, fontSize: 18, color: "text.secondary" }} /> } }} />
           {sharePickerLoading ? <Box sx={{ py: 5, display: "grid", placeItems: "center" }}><CircularProgress size={26} /></Box> : <>
             {(() => {
-              const directPeerIds = shareChannels.filter((channel) => channel.type === "DIRECT").flatMap((channel) => channel.members?.map((member) => member.user.id).filter((id) => id !== user?.id) || []);
+              const directPeerIds = shareChannels.filter((channel) => channel.type === "DIRECT").flatMap((channel) => channel.members?.map((member) => member.user.id).filter((id) => id !== userId) || []);
               const normalize = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR").trim();
               const query = normalize(shareSearch);
-              const filtered = sharePeople.filter((person) => person.id !== user?.id && [person.name, person.username, person.role].some((value) => normalize(value || "").includes(query)));
+              const filtered = sharePeople.filter((person) => person.id !== userId && [person.name, person.username, person.role].some((value) => normalize(value || "").includes(query)));
               const recent = filtered.filter((person) => directPeerIds.includes(person.id)).slice(0, 6);
               const online = filtered.filter((person) => !directPeerIds.includes(person.id) && sharePresence.some((entry) => entry.userId === person.id && entry.effectiveStatus === "ONLINE"));
               const others = filtered.filter((person) => !recent.includes(person) && !online.includes(person));

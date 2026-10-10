@@ -4,12 +4,13 @@ import {
 
 export type AppNotification = {
   key: string;
-  kind: "SIMER_VERSION" | "AZURE_COMPLETED" | "AZURE_UPDATED" | "CHAT_MENTION" | "OPERATION_ALERT" | "KNOWN_PROBLEM";
+  kind: "SIMER_VERSION" | "AZURE_COMPLETED" | "AZURE_UPDATED" | "CHAT_MENTION" | "OPERATION_ALERT" | "KNOWN_PROBLEM" | "MEETING_REMINDER";
   title: string;
   message: string;
   occurredAt: Date;
   path: string;
   workItemId?: number;
+  meetingId?: number;
   read?: boolean;
 };
 
@@ -38,6 +39,92 @@ const TERMINAL_STATES = [
 ];
 
 export class NotificationService {
+  public async meetingNotificationsForUser(userId: number): Promise<AppNotification[]> {
+    const now = new Date();
+    const recent = new Date(now.getTime() - 10 * 60_000);
+    const soon = new Date(now.getTime() + 30 * 60_000);
+
+    const meetings = await prisma.calendarMeeting.findMany({
+      where: {
+        status: "SCHEDULED",
+        AND: [
+          {
+            OR: [
+              { createdById: userId },
+              { participants: { some: { userId } } },
+            ],
+          },
+          {
+            OR: [
+              { createdAt: { gte: recent } },
+              { startAt: { gte: recent, lte: soon } },
+            ],
+          },
+        ],
+      },
+      orderBy: { startAt: "asc" },
+      take: 50,
+      include: {
+        createdBy: { select: { name: true } },
+      },
+    });
+
+    const notifications: AppNotification[] = [];
+    for (const meeting of meetings) {
+      const startAt = meeting.startAt;
+      const startIso = startAt.toISOString();
+      const reminderMinutes = [5,10,15,30].includes(meeting.reminderMinutes) ? meeting.reminderMinutes : 15;
+      const reminderAt = new Date(startAt.getTime() - reminderMinutes * 60_000);
+      const timeLabel = new Intl.DateTimeFormat("pt-BR", {
+        timeZone: meeting.timezone || "America/Sao_Paulo",
+        hour: "2-digit",
+        minute: "2-digit",
+      }).format(startAt);
+
+      if (meeting.createdAt >= recent && now < reminderAt) {
+        notifications.push({
+          key: `meeting:scheduled:${meeting.id}:${meeting.createdAt.toISOString()}`,
+          kind: "MEETING_REMINDER",
+          title: "Reunião agendada",
+          message: `${meeting.title} · ${timeLabel}`,
+          occurredAt: meeting.createdAt,
+          path: `/?meeting=${meeting.id}`,
+          meetingId: meeting.id,
+        });
+      }
+
+      if (now >= reminderAt && now < startAt) {
+        const minutes = Math.max(1, Math.ceil((startAt.getTime() - now.getTime()) / 60_000));
+        const effectiveOccurredAt = meeting.createdAt > reminderAt ? meeting.createdAt : reminderAt;
+        notifications.push({
+          key: `meeting:reminder:${meeting.id}:${startIso}`,
+          kind: "MEETING_REMINDER",
+          title: `Reunião em ${minutes} min`,
+          message: `${meeting.title} · lembrete configurado: ${reminderMinutes} min · ${timeLabel} · Organizador: ${meeting.createdBy.name}`,
+          occurredAt: effectiveOccurredAt,
+          path: `/?meeting=${meeting.id}`,
+          meetingId: meeting.id,
+        });
+      }
+
+      if (now >= startAt && now.getTime() - startAt.getTime() < 10 * 60_000) {
+        notifications.push({
+          key: `meeting:start:${meeting.id}:${startIso}`,
+          kind: "MEETING_REMINDER",
+          title: "Reunião começando agora",
+          message: `${meeting.title} · ${timeLabel} · Organizador: ${meeting.createdBy.name}`,
+          occurredAt: startAt,
+          path: `/?meeting=${meeting.id}`,
+          meetingId: meeting.id,
+        });
+      }
+    }
+
+    return notifications
+      .sort((left, right) => right.occurredAt.getTime() - left.occurredAt.getTime())
+      .slice(0, 30);
+  }
+
   public async listForUser(
     userId: number,
   ) {
@@ -132,7 +219,7 @@ export class NotificationService {
       })),
     ];
 
-    const [workItems, versions, chatMentions, knownProblems] =
+    const [workItems, versions, chatMentions, knownProblems, meetingNotifications] =
       await Promise.all([
         prisma.azureWorkItem.findMany({
           where: {
@@ -200,6 +287,7 @@ export class NotificationService {
           ORDER BY "updatedAt" DESC
           LIMIT 30
         `,
+        this.meetingNotificationsForUser(userId),
       ]);
 
     const itemNotifications = workItems.map((item) => {
@@ -272,7 +360,7 @@ export class NotificationService {
       title: "Problema conhecido atualizado",
       message: item.title,
       occurredAt: item.updatedAt,
-      path: "/problemas-conhecidos",
+      path: `/problemas-conhecidos?problem=${item.id}`,
     }));
 
     const now = new Date();
@@ -313,9 +401,9 @@ export class NotificationService {
     `;
     const readKeys = new Set(readRows.map((row) => row.notificationKey));
 
-    const notifications = [...knownProblemNotifications, ...operationalAlerts, ...mentionNotifications, ...itemNotifications, ...versionNotifications]
+    const notifications = [...meetingNotifications, ...knownProblemNotifications, ...operationalAlerts, ...mentionNotifications, ...itemNotifications, ...versionNotifications]
       .filter((item) =>
-        item.kind === "CHAT_MENTION" || item.kind === "OPERATION_ALERT" || item.kind === "KNOWN_PROBLEM"
+        item.kind === "CHAT_MENTION" || item.kind === "OPERATION_ALERT" || item.kind === "KNOWN_PROBLEM" || item.kind === "MEETING_REMINDER"
           ? true
           : item.kind === "SIMER_VERSION"
           ? preferences.simerVersion
