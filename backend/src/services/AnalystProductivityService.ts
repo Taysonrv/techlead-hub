@@ -1,3 +1,4 @@
+import { scopedTicketWhere } from "../domain/OperationalScope";
 import {
   isProductivityBusinessDay,
   productivityExpectedHours,
@@ -23,7 +24,7 @@ export class AnalystProductivityService {
       : [...SUPPORT_ANALYSTS];
     const [tickets, appointments] = await Promise.all([
       prisma.ticket.findMany({
-        where: { AND: [ticketOperationalScope(), { isDeleted: false }] },
+        where: scopedTicketWhere({ AND: [ticketOperationalScope(), { isDeleted: false }] }),
         select: { id: true, movideskId: true, subject: true, owner: true },
       }),
       prisma.movideskTimeAppointment.findMany({

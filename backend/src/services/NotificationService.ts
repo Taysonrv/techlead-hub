@@ -1,3 +1,5 @@
+import { filterKnownProblemsToScope } from "./KnownProblemScopeService";
+import { scopedTicketWhere, scopedAzureWhere } from "../domain/OperationalScope";
 import {
   prisma,
 } from "../database/prisma";
@@ -150,7 +152,7 @@ export class NotificationService {
 
     const relatedTickets =
       await prisma.ticket.findMany({
-        where: {
+        where: scopedTicketWhere({
           AND: [
             {
               owner: {
@@ -161,7 +163,7 @@ export class NotificationService {
             { isDeleted: false },
             { baseStatus: { in: ["New", "InAttendance", "Stopped"] } },
           ],
-        },
+        }),
         select: {
           taskNumber: true,
           movideskId: true,
@@ -219,10 +221,10 @@ export class NotificationService {
       })),
     ];
 
-    const [workItems, versions, chatMentions, knownProblems, meetingNotifications] =
+    const [workItems, versions, chatMentions, rawKnownProblems, meetingNotifications] =
       await Promise.all([
         prisma.azureWorkItem.findMany({
-          where: {
+          where: scopedAzureWhere({
             AND: [
               { OR: identities },
               {
@@ -231,7 +233,7 @@ export class NotificationService {
                 },
               },
             ],
-          },
+          }),
           orderBy: {
             azureChangedAt: "desc",
           },
@@ -246,7 +248,7 @@ export class NotificationService {
           },
         }),
         prisma.azureWorkItem.findMany({
-          where: { deliveredVersion: { not: null } },
+          where: scopedAzureWhere({ deliveredVersion: { not: null } }),
           orderBy: { azureChangedAt: "desc" },
           select: {
             deliveredVersion: true,
@@ -280,8 +282,8 @@ export class NotificationService {
             author: { select: { name: true } },
           },
         }),
-        prisma.$queryRaw<Array<{ id: number; title: string; updatedAt: Date }>>`
-          SELECT "id", "title", "updatedAt"
+        prisma.$queryRaw<Array<{ id: number; title: string; updatedAt: Date; client: string | null; movideskTicket: string | null; azureWorkItem: string | null }>>`
+          SELECT "id", "title", "updatedAt", "client", "movideskTicket", "azureWorkItem"
           FROM "KnownProblem"
           WHERE "archived" = FALSE AND "updatedAt" >= ${since}
           ORDER BY "updatedAt" DESC
@@ -289,6 +291,8 @@ export class NotificationService {
         `,
         this.meetingNotificationsForUser(userId),
       ]);
+
+    const knownProblems = await filterKnownProblemsToScope(rawKnownProblems);
 
     const itemNotifications = workItems.map((item) => {
       const completed = TERMINAL_STATES.some(

@@ -1,3 +1,4 @@
+import { scopedTicketWhere, scopedAzureWhere } from "../domain/OperationalScope";
 import { prisma } from "../database/prisma";
 import type { Prisma } from "@prisma/client";
 import { SIMER_CLIENTS, SUPPORT_ANALYSTS, OPERATIONAL_SCOPE_START, coordinationAzureScope, coordinationTicketScope } from "../domain/OperationalScope";
@@ -55,7 +56,7 @@ export class TechnicalLeadershipService {
       ],
     };
     const tickets = await prisma.ticket.findMany({
-      where: ticketWhere,
+      where: scopedTicketWhere(ticketWhere),
       orderBy: [{ lastUpdate: "asc" }, { createdDate: "asc" }],
       take: 5000,
       select: {
@@ -71,7 +72,7 @@ export class TechnicalLeadershipService {
     const ticketIds = tickets.map((ticket) => ticket.movideskId);
     const taskIds = tickets.map((ticket) => ticket.taskNumber).filter((id): id is number => id !== null);
     const tasks = await prisma.azureWorkItem.findMany({
-      where: {
+      where: scopedAzureWhere({
         OR: [
           // Sem filtro, considera o portfólio SIMER da Coordenação. Com Cliente/Analista,
           // restringe o Azure às evidências vinculadas aos tickets já filtrados para
@@ -80,7 +81,7 @@ export class TechnicalLeadershipService {
           ...(taskIds.length ? [{ id: { in: taskIds } }] : []),
           ...(ticketIds.length ? [{ movideskTicket: { in: ticketIds } }] : []),
         ],
-      },
+      }),
       orderBy: [{ azureChangedAt: "asc" }, { id: "asc" }],
       take: 5000,
       select: {

@@ -1,3 +1,4 @@
+import { scopedTicketWhere, scopedAzureWhere } from "../domain/OperationalScope";
 import ExcelJS from "exceljs";
 
 import {
@@ -141,21 +142,21 @@ export class ExecutiveReportService {
 
         prisma.ticket.count({
           where:
-            ticketWhere,
+            scopedTicketWhere(ticketWhere),
         }),
 
         prisma.ticket.count({
-          where: {
+          where: scopedTicketWhere({
             ...ticketWhere,
             resolvedDate:
               null,
             closedDate:
               null,
-          },
+          }),
         }),
 
         prisma.ticket.count({
-          where: {
+          where: scopedTicketWhere({
             ...ticketWhere,
             resolvedDate: {
               not:
@@ -163,22 +164,22 @@ export class ExecutiveReportService {
             },
             closedDate:
               null,
-          },
+          }),
         }),
 
         prisma.ticket.count({
-          where: {
+          where: scopedTicketWhere({
             ...ticketWhere,
             closedDate: {
               not:
                 null,
             },
-          },
+          }),
         }),
 
         prisma.ticket.findMany({
           where:
-            ticketWhere,
+            scopedTicketWhere(ticketWhere),
           select: {
             solutionSlaIndicator: true,
             dueDate: true,
@@ -191,13 +192,13 @@ export class ExecutiveReportService {
           by: [
             "owner",
           ],
-          where: {
+          where: scopedTicketWhere({
             ...ticketWhere,
             owner: {
               not:
                 null,
             },
-          },
+          }),
           _count: {
             _all:
               true,
@@ -216,13 +217,13 @@ export class ExecutiveReportService {
           by: [
             "client",
           ],
-          where: {
+          where: scopedTicketWhere({
             ...ticketWhere,
             client: {
               not:
                 null,
             },
-          },
+          }),
           _count: {
             _all:
               true,
@@ -241,13 +242,13 @@ export class ExecutiveReportService {
           by: [
             "category",
           ],
-          where: {
+          where: scopedTicketWhere({
             ...ticketWhere,
             category: {
               not:
                 null,
             },
-          },
+          }),
           _count: {
             _all:
               true,
@@ -264,7 +265,7 @@ export class ExecutiveReportService {
 
         prisma.azureWorkItem.count({
           where:
-            azureWhere,
+            scopedAzureWhere(azureWhere),
         }),
 
         this.countAzureType(
@@ -283,19 +284,19 @@ export class ExecutiveReportService {
         ),
 
         prisma.azureWorkItem.count({
-          where: {
+          where: scopedAzureWhere({
             ...azureWhere,
             prioritized:
               true,
-          },
+          }),
         }),
 
         prisma.azureWorkItem.count({
-          where: {
+          where: scopedAzureWhere({
             ...azureWhere,
             blockedProcess:
               true,
-          },
+          }),
         }),
 
         prisma.azureWorkItem.groupBy({
@@ -303,7 +304,7 @@ export class ExecutiveReportService {
             "state",
           ],
           where:
-            azureWhere,
+            scopedAzureWhere(azureWhere),
           _count: {
             _all:
               true,
@@ -320,13 +321,13 @@ export class ExecutiveReportService {
           by: [
             "deliveredVersion",
           ],
-          where: {
+          where: scopedAzureWhere({
             ...azureWhere,
             deliveredVersion: {
               not:
                 null,
             },
-          },
+          }),
           _count: {
             _all:
               true,
@@ -341,7 +342,7 @@ export class ExecutiveReportService {
             20,
         }),
         prisma.ticket.findMany({
-          where: ticketWhere,
+          where: scopedTicketWhere(ticketWhere),
           select: {
             createdDate: true, resolvedDate: true, closedDate: true, category: true,
             cause: true, client: true, serviceSecondLevel: true,
@@ -350,7 +351,7 @@ export class ExecutiveReportService {
           orderBy: { createdDate: "asc" },
         }),
         prisma.ticket.findMany({
-          where: ticketWhere,
+          where: scopedTicketWhere(ticketWhere),
           select: {
             movideskId: true,
             subject: true,
@@ -824,7 +825,7 @@ export class ExecutiveReportService {
     type: string,
   ) {
     return prisma.azureWorkItem.count({
-      where: {
+      where: scopedAzureWhere({
         AND: [
           baseWhere,
           {
@@ -836,7 +837,7 @@ export class ExecutiveReportService {
             },
           },
         ],
-      },
+      }),
     });
   }
 

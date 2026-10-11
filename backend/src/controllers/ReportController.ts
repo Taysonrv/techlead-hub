@@ -1,3 +1,4 @@
+import { scopedTicketWhere, scopedAzureWhere } from "../domain/OperationalScope";
 import type {
   Response,
 } from "express";
@@ -40,11 +41,11 @@ export class ReportController {
   public filters = async (_request: AuthenticatedRequest, response: Response) => {
     try {
       const [categories, ticketStatuses, workItemTypes, azureStates, versions] = await Promise.all([
-        prisma.ticket.findMany({ where: { AND: [ticketOperationalScope(), { category: { not: null } }] }, select: { category: true }, distinct: ["category"], orderBy: { category: "asc" } }),
-        prisma.ticket.findMany({ where: ticketOperationalScope(), select: { status: true }, distinct: ["status"], orderBy: { status: "asc" } }),
-        prisma.azureWorkItem.findMany({ where: azureOperationalScope(), select: { workItemType: true }, distinct: ["workItemType"], orderBy: { workItemType: "asc" } }),
-        prisma.azureWorkItem.findMany({ where: azureOperationalScope(), select: { state: true }, distinct: ["state"], orderBy: { state: "asc" } }),
-        prisma.azureWorkItem.findMany({ where: { AND: [azureOperationalScope(), { deliveredVersion: { not: null } }] }, select: { deliveredVersion: true }, distinct: ["deliveredVersion"], orderBy: { deliveredVersion: "desc" }, take: 100 }),
+        prisma.ticket.findMany({ where: scopedTicketWhere({ AND: [ticketOperationalScope(), { category: { not: null } }] }), select: { category: true }, distinct: ["category"], orderBy: { category: "asc" } }),
+        prisma.ticket.findMany({ where: scopedTicketWhere(ticketOperationalScope()), select: { status: true }, distinct: ["status"], orderBy: { status: "asc" } }),
+        prisma.azureWorkItem.findMany({ where: scopedAzureWhere(azureOperationalScope()), select: { workItemType: true }, distinct: ["workItemType"], orderBy: { workItemType: "asc" } }),
+        prisma.azureWorkItem.findMany({ where: scopedAzureWhere(azureOperationalScope()), select: { state: true }, distinct: ["state"], orderBy: { state: "asc" } }),
+        prisma.azureWorkItem.findMany({ where: scopedAzureWhere({ AND: [azureOperationalScope(), { deliveredVersion: { not: null } }] }), select: { deliveredVersion: true }, distinct: ["deliveredVersion"], orderBy: { deliveredVersion: "desc" }, take: 100 }),
       ]);
       return response.json({
         clients: [...SIMER_CLIENTS], analysts: [...SUPPORT_ANALYSTS],

@@ -1,3 +1,4 @@
+import { scopedTicketWhere, scopedAzureWhere } from "../domain/OperationalScope";
 import { prisma } from "../database/prisma";
 import type { Prisma } from "@prisma/client";
 import { SIMER_CLIENTS, SUPPORT_ANALYSTS, ticketOperationalScope, azureOperationalScope } from "../domain/OperationalScope";
@@ -35,13 +36,13 @@ export class DataQualityService {
 
     const [scopedTickets, allTicketLinks] = await Promise.all([
       prisma.ticket.findMany({
-      where: {
+      where: scopedTicketWhere({
         AND: [
           ticketOperationalScope(),
           ...(clients.length ? [{ client: { in: clients, mode: "insensitive" as const } }] : []),
           ...(users.length ? [{ owner: { in: users, mode: "insensitive" as const } }] : []),
         ],
-      },
+      }),
       select: {
         id: true, taskNumber: true, movideskId: true, subject: true,
         status: true, baseStatus: true, client: true, owner: true,
@@ -52,7 +53,7 @@ export class DataQualityService {
       },
     }),
       prisma.ticket.findMany({
-        where: { AND: [ticketOperationalScope(), { taskNumber: { not: null } }] },
+        where: scopedTicketWhere({ AND: [ticketOperationalScope(), { taskNumber: { not: null } }] }),
         select: { taskNumber: true },
       }),
     ]);
@@ -71,7 +72,7 @@ export class DataQualityService {
 
     if (params.issue === "__coordinationOverview") {
       const linked = taskIds.length ? await prisma.azureWorkItem.findMany({
-        where: { id: { in: taskIds } },
+        where: scopedAzureWhere({ id: { in: taskIds } }),
         select: { id: true, workItemType: true, state: true, deliveredVersion: true },
       }) : [];
       const byId = new Map(linked.map((item) => [item.id, item]));
@@ -155,7 +156,7 @@ export class DataQualityService {
 
     /* Uma única leitura substitui cinco counts e duas listagens do mesmo escopo. */
     const linkedTaskCandidates = await prisma.azureWorkItem.findMany({
-      where: { AND: [scope] },
+      where: scopedAzureWhere({ AND: [scope] }),
       orderBy: [{ azureClosedAt: "desc" }, { azureChangedAt: "desc" }],
       select: {
         id: true, workItemType: true, title: true, state: true,

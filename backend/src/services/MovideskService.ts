@@ -1,3 +1,4 @@
+import { scopedTicketWhere, ticketOperationalScope, SUPPORT_ANALYSTS, isSupportAnalyst } from "../domain/OperationalScope";
 import axios from "axios";
 import crypto from "node:crypto";
 import { Prisma } from "@prisma/client";
@@ -263,11 +264,11 @@ export class MovideskService {
 
   async analyticalMetadataTimeline(start: Date, end: Date) {
     const tickets = await prisma.ticket.findMany({
-      where: {
+      where: scopedTicketWhere({
         createdDate: { gte: start, lte: end },
         client: { in: [...SIMER_CLIENTS], mode: "insensitive" },
         isDeleted: false,
-      },
+      }),
       select: {
         movideskId: true, createdDate: true, category: true,
         cause: true, reason: true, businessArea: true,
@@ -352,11 +353,11 @@ export class MovideskService {
     if (!ids.length) throw new Error("Informe ao menos um ticket válido para o diagnóstico.");
 
     const local = await prisma.ticket.findMany({
-      where: {
+      where: scopedTicketWhere({
         movideskId: { in: ids },
         createdDate: { gte: SYNC_SCOPE_START },
         client: { in: [...SIMER_CLIENTS], mode: "insensitive" },
-      },
+      }),
       select: {
         movideskId: true, createdDate: true, lastUpdate: true, category: true,
         client: true, cause: true, reason: true, businessArea: true, rawData: true,
@@ -548,11 +549,11 @@ export class MovideskService {
   async diagnoseTicketEnrichment(ticketId?: number | null) {
     const scopedTicket = ticketId
       ? await prisma.ticket.findFirst({
-          where: { movideskId: ticketId, createdDate: { gte: SYNC_SCOPE_START }, client: { in: [...SIMER_CLIENTS], mode: "insensitive" } },
+          where: scopedTicketWhere({ movideskId: ticketId, createdDate: { gte: SYNC_SCOPE_START }, client: { in: [...SIMER_CLIENTS], mode: "insensitive" } }),
           select: { movideskId: true, client: true, contact: true },
         })
       : await prisma.ticket.findFirst({
-          where: { createdDate: { gte: SYNC_SCOPE_START }, client: { in: [...SIMER_CLIENTS], mode: "insensitive" } },
+          where: scopedTicketWhere({ createdDate: { gte: SYNC_SCOPE_START }, client: { in: [...SIMER_CLIENTS], mode: "insensitive" } }),
           orderBy: { lastUpdate: "desc" },
           select: { movideskId: true, client: true, contact: true },
         });
@@ -649,7 +650,10 @@ export class MovideskService {
     }, "diagnóstico do escopo remoto SIMER");
     if (!Array.isArray(response.data)) throw new Error("Resposta inesperada da API Movidesk no diagnóstico.");
 
-    const rows = response.data as Array<Record<string, unknown>>;
+    const rows = (response.data as Array<Record<string, unknown>>).filter(row => {
+      const owner = row.owner as { businessName?: string } | null;
+      return isSimerClient(this.ticketClientName(row)) && isSupportAnalyst(owner?.businessName);
+    });
     return {
       readOnly: true,
       filterAccepted: true,
@@ -689,6 +693,7 @@ export class MovideskService {
     const token = this.token();
     const query = new URLSearchParams();
     query.set("token", token);
+    query.set("$filter", this.remoteScopeFilter());
     query.set("$select", TICKET_SELECT);
     query.set("$expand", TICKET_EXPAND);
     query.set("$orderby", "lastUpdate desc");
@@ -697,7 +702,10 @@ export class MovideskService {
     const response = await this.getWithRetry(`${this.url}/tickets?${query.toString()}`, { timeout: 120_000 }, "pré-validação");
     if (!Array.isArray(response.data)) throw new Error("Resposta inesperada da API Movidesk.");
 
-    const rows = response.data as Array<Record<string, unknown>>;
+    const rows = (response.data as Array<Record<string, unknown>>).filter(row => {
+      const owner = row.owner as { businessName?: string } | null;
+      return isSimerClient(this.ticketClientName(row)) && isSupportAnalyst(owner?.businessName);
+    });
     const required = ["id", "subject", "createdDate"] as const;
     const observed = [
       "id", "subject", "createdDate", "lastUpdate", "owner", "clients", "category",
@@ -755,9 +763,9 @@ export class MovideskService {
     try {
       completed = await this.hasCompletedBaseline();
       [tickets, scopedTickets, linkedTasks, lastImport] = await Promise.all([
-        prisma.ticket.count(),
-        prisma.ticket.count({ where: { createdDate: { gte: SYNC_SCOPE_START }, client: { in: [...SIMER_CLIENTS], mode: "insensitive" } } }),
-        prisma.ticket.count({ where: { taskNumber: { not: null }, createdDate: { gte: SYNC_SCOPE_START }, client: { in: [...SIMER_CLIENTS], mode: "insensitive" } } }),
+        prisma.ticket.count({ where: scopedTicketWhere() }),
+        prisma.ticket.count({ where: scopedTicketWhere({ createdDate: { gte: SYNC_SCOPE_START }, client: { in: [...SIMER_CLIENTS], mode: "insensitive" } }) }),
+        prisma.ticket.count({ where: scopedTicketWhere({ taskNumber: { not: null }, createdDate: { gte: SYNC_SCOPE_START }, client: { in: [...SIMER_CLIENTS], mode: "insensitive" } }) }),
         prisma.importRun.findFirst({
           where: { source: "MOVIDESK_API" },
           orderBy: { startedAt: "desc" },
@@ -837,6 +845,7 @@ export class MovideskService {
   async recentEnrichments(limit = 10) {
     const safeLimit = Math.max(1, Math.min(50, Number.isSafeInteger(limit) ? limit : 10));
     const rows = await prisma.movideskTicketEnrichment.findMany({
+      where: { ticket: ticketOperationalScope() },
       orderBy: [{ enrichedAt: "desc" }, { id: "desc" }],
       take: safeLimit,
       include: {
@@ -1076,14 +1085,14 @@ export class MovideskService {
 
   async classificationCoverage() {
     const tickets = await prisma.ticket.findMany({
-      where: {
+      where: scopedTicketWhere({
         AND: [
           { createdDate: { gte: SYNC_SCOPE_START } },
           { client: { in: [...SIMER_CLIENTS], mode: "insensitive" } },
           { category: { in: ["Problema", "Dúvida", "Duvida"], mode: "insensitive" } },
           { isDeleted: false },
         ],
-      },
+      }),
       select: { movideskId: true, category: true, cause: true, reason: true, rawData: true },
     });
     const normalize = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLocaleLowerCase("pt-BR");
@@ -1154,7 +1163,7 @@ export class MovideskService {
   }
 
   async dataCoverage() {
-    const total = await prisma.ticket.count();
+    const total = await prisma.ticket.count({ where: scopedTicketWhere() });
     const fields = [
       "client", "contact", "owner", "ownerTeam", "category", "cause", "reason", "urgency",
       "serviceFirstLevel", "serviceSecondLevel", "serviceThirdLevel", "businessArea",
@@ -1163,26 +1172,26 @@ export class MovideskService {
     ] as const;
     const coverage: Record<string, number> = {};
     for (const field of fields) {
-      coverage[field] = await prisma.ticket.count({ where: { [field]: { not: null } } });
+      coverage[field] = await prisma.ticket.count({ where: scopedTicketWhere({ [field]: { not: null } }) });
     }
     const [deleted, withRawData, actionCount, appointmentCount, ownerHistoryCount, statusHistoryCount, ticketsWithActions, ticketsWithAppointments, enrichmentCheckpoints, enrichmentErrors] = await Promise.all([
-      prisma.ticket.count({ where: { isDeleted: true } }),
-      prisma.ticket.count({ where: { rawData: { not: Prisma.DbNull } } }),
-      prisma.movideskTicketAction.count(),
-      prisma.movideskTimeAppointment.count(),
-      prisma.movideskOwnerHistory.count(),
-      prisma.movideskStatusHistory.count(),
-      prisma.ticket.count({ where: { actions: { some: {} } } }),
-      prisma.ticket.count({ where: { actions: { some: { timeAppointments: { some: {} } } } } }),
-      prisma.movideskTicketEnrichment.count(),
-      prisma.movideskTicketEnrichment.count({ where: { lastError: { not: null } } }),
+      prisma.ticket.count({ where: scopedTicketWhere({ isDeleted: true }, true) }),
+      prisma.ticket.count({ where: scopedTicketWhere({ rawData: { not: Prisma.DbNull } }) }),
+      prisma.movideskTicketAction.count({ where: { ticket: ticketOperationalScope() } }),
+      prisma.movideskTimeAppointment.count({ where: { action: { ticket: ticketOperationalScope() }, createdByName: { in: [...SUPPORT_ANALYSTS], mode: "insensitive" } } }),
+      prisma.movideskOwnerHistory.count({ where: { ticket: ticketOperationalScope() } }),
+      prisma.movideskStatusHistory.count({ where: { ticket: ticketOperationalScope() } }),
+      prisma.ticket.count({ where: scopedTicketWhere({ actions: { some: {} } }) }),
+      prisma.ticket.count({ where: scopedTicketWhere({ actions: { some: { timeAppointments: { some: {} } } } }) }),
+      prisma.movideskTicketEnrichment.count({ where: { ticket: ticketOperationalScope() } }),
+      prisma.movideskTicketEnrichment.count({ where: { ticket: ticketOperationalScope(), lastError: { not: null } } }),
     ]);
     const enrichmentStates = await prisma.ticket.findMany({
-      where: {
+      where: scopedTicketWhere({
         createdDate: { gte: SYNC_SCOPE_START },
         client: { in: [...SIMER_CLIENTS], mode: "insensitive" },
         isDeleted: false,
-      },
+      }),
       select: {
         lastUpdate: true,
         movideskEnrichment: { select: { sourceLastUpdate: true, lastError: true } },
