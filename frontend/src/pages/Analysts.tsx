@@ -47,7 +47,7 @@ import { useAuth } from "../context/AuthContext";
 import { useTheme } from "@mui/material/styles";
 
 import { api } from "../services/api";
-import { getTicketSnapshot } from "../services/ticketSnapshot";
+import { getTicketSnapshot, getTicketSnapshotState, subscribeTicketSnapshotRefresh } from "../services/ticketSnapshot";
 import { useFilters } from "../context/FiltersContext";
 import { PeriodFilter } from "../components/PeriodFilter";
 import { PageHeader } from "../components/PageHeader";
@@ -463,28 +463,31 @@ export function Analysts() {
   ===================================================== */
 
   useEffect(() => {
-    async function loadTickets() {
+    const controller = new AbortController();
+    let refreshing = false;
+    async function loadTickets(initial = false) {
+      if (refreshing) return;
+      refreshing = true;
       try {
-        setLoading(true);
-        setError(null);
-
+        if (initial) setLoading(true);
         const snapshot = await getTicketSnapshot<Ticket>();
-        setTickets(snapshot);
+        if (!controller.signal.aborted) {
+          setTickets(snapshot);
+          setError(getTicketSnapshotState().lastErrorAt ? "A atualização falhou. Exibindo os últimos dados disponíveis." : null);
+        }
       } catch (err) {
-        console.error(
-          "Erro ao carregar dados dos analistas:",
-          err
-        );
-
-        setError(
-          "Não foi possível carregar os indicadores dos analistas."
-        );
+        if (!controller.signal.aborted) {
+          console.error("Erro ao carregar analistas:", err);
+          setError("Não foi possível atualizar os indicadores dos analistas.");
+        }
       } finally {
-        setLoading(false);
+        refreshing = false;
+        if (!controller.signal.aborted) setLoading(false);
       }
     }
-
-    loadTickets();
+    void loadTickets(true);
+    const unsubscribe = subscribeTicketSnapshotRefresh(() => { void loadTickets(); });
+    return () => { unsubscribe(); controller.abort(); };
   }, []);
 
   /* =====================================================
@@ -492,6 +495,7 @@ export function Analysts() {
   ===================================================== */
 
   useEffect(() => {
+    const controller = new AbortController();
     async function loadProductivity() {
       try {
         setProductivityLoading(true);
@@ -501,6 +505,7 @@ export function Analysts() {
           await api.get<ProductivityResponse>(
             "/azure-work-items/productivity/analysts",
             {
+              signal: controller.signal,
               params: {
                 createdFrom:
                   formatDateForApi(
@@ -514,10 +519,12 @@ export function Analysts() {
             }
           );
 
+        if (controller.signal.aborted) return;
         setProductivity(
           response.data
         );
       } catch (err) {
+        if (controller.signal.aborted) return;
         console.error(
           "Erro ao carregar produtividade Azure:",
           err
@@ -527,11 +534,12 @@ export function Analysts() {
           "Não foi possível carregar a produtividade de abertura de Tasks."
         );
       } finally {
-        setProductivityLoading(false);
+        if (!controller.signal.aborted) setProductivityLoading(false);
       }
     }
 
     void loadProductivity();
+    return () => controller.abort();
   }, [
     effectiveStartDate,
     effectiveEndDate,
@@ -629,6 +637,11 @@ export function Analysts() {
   const services = useMemo(() => Array.from(new Set(
     periodTickets.map((ticket) => (ticket.serviceSecondLevel ?? ticket.service)?.trim()).filter((value): value is string => Boolean(value))
   )).sort((a, b) => a.localeCompare(b, "pt-BR")), [periodTickets]);
+
+  useEffect(() => {
+    if (selectedBusinessArea && !businessAreas.includes(selectedBusinessArea)) setSelectedBusinessArea("");
+    if (selectedService && !services.includes(selectedService)) setSelectedService("");
+  }, [selectedBusinessArea, businessAreas, selectedService, services]);
 
   const squadTickets = useMemo(() => {
     return periodTickets.filter((ticket) => {
@@ -1787,7 +1800,7 @@ export function Analysts() {
     );
   }
 
-  if (error) {
+  if (error && tickets.length === 0) {
     return (
       <Alert severity="error">
         {error}
@@ -1820,6 +1833,7 @@ export function Analysts() {
           CABEÇALHO
       ================================================ */}
 
+      {error && <Alert severity="warning" sx={{ mb: 2 }}>{error}</Alert>}
       <PageHeader
         eyebrow="Equipe"
         title="Analistas"
@@ -1864,12 +1878,11 @@ export function Analysts() {
             },
           }}
         >
-          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2,minmax(0,1fr))", lg: "180px repeat(2,minmax(170px,1fr))", xl: "180px repeat(4,minmax(150px,1fr)) auto" }, gap: 1.25, alignItems: "center" }}>
+          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "minmax(0,1fr)", sm: "repeat(2,minmax(0,1fr))", xl: "repeat(4,minmax(0,1fr))" }, "& .MuiFormControl-root": { width: "100%", minWidth: "0 !important" }, "& .MuiSelect-select": { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }, gap: 2, alignItems: "center" }}>
             <Box
               sx={{
-                minWidth: {
-                  md: 180,
-                },
+                minWidth: 0,
+                gridColumn: "1 / -1",
               }}
             >
               <Typography
@@ -1906,7 +1919,7 @@ export function Analysts() {
                 },
               }}
             >
-              <InputLabel shrink id="analysts-select-1-label">Squad</InputLabel><Select labelId="analysts-select-1-label" inputProps={{ id: "analysts-select-1", "aria-labelledby": "analysts-select-1-label" }}
+              <InputLabel shrink id="analysts-select-1-label">Squad</InputLabel><Select notched displayEmpty renderValue={(value) => value || "Todos os squads"} MenuProps={{ sx: { "& .MuiPaper-root": { maxWidth: "min(640px, calc(100vw - 32px))" }, "& .MuiMenuItem-root": { whiteSpace: "normal", overflowWrap: "anywhere" } } }} labelId="analysts-select-1-label" inputProps={{ id: "analysts-select-1", "aria-labelledby": "analysts-select-1-label" }}
                 value={
                   selectedSquad
                 }
@@ -1948,7 +1961,7 @@ export function Analysts() {
                 },
               }}
             >
-              <InputLabel shrink id="analysts-select-2-label">Analista</InputLabel><Select labelId="analysts-select-2-label" inputProps={{ id: "analysts-select-2", "aria-labelledby": "analysts-select-2-label" }}
+              <InputLabel shrink id="analysts-select-2-label">Analista</InputLabel><Select notched displayEmpty renderValue={(value) => value || "Todos os analistas"} MenuProps={{ sx: { "& .MuiPaper-root": { maxWidth: "min(640px, calc(100vw - 32px))" }, "& .MuiMenuItem-root": { whiteSpace: "normal", overflowWrap: "anywhere" } } }} labelId="analysts-select-2-label" inputProps={{ id: "analysts-select-2", "aria-labelledby": "analysts-select-2-label" }}
                 value={
                   selectedAnalyst
                 }
@@ -1986,14 +1999,14 @@ export function Analysts() {
             </FormControl>
 
             <FormControl size="small" sx={{ minWidth: { xs: "100%", md: 200 } }}>
-              <InputLabel shrink id="analysts-select-3-label">Área de negócio</InputLabel><Select labelId="analysts-select-3-label" inputProps={{ id: "analysts-select-3", "aria-labelledby": "analysts-select-3-label" }} value={selectedBusinessArea} label="Área de negócio" onChange={(event) => setSelectedBusinessArea(event.target.value)}>
+              <InputLabel shrink id="analysts-select-3-label">Área de negócio</InputLabel><Select notched displayEmpty renderValue={(value) => value || "Todas as áreas"} MenuProps={{ sx: { "& .MuiPaper-root": { maxWidth: "min(640px, calc(100vw - 32px))" }, "& .MuiMenuItem-root": { whiteSpace: "normal", overflowWrap: "anywhere" } } }} labelId="analysts-select-3-label" inputProps={{ id: "analysts-select-3", "aria-labelledby": "analysts-select-3-label" }} value={selectedBusinessArea} label="Área de negócio" onChange={(event) => setSelectedBusinessArea(event.target.value)}>
                 <MenuItem value="">Todas as áreas</MenuItem>
                 {businessAreas.map((area) => <MenuItem key={area} value={area}>{area}</MenuItem>)}
               </Select>
             </FormControl>
 
             <FormControl size="small" sx={{ minWidth: { xs: "100%", md: 200 } }}>
-              <InputLabel shrink id="analysts-select-4-label">Serviço N2</InputLabel><Select labelId="analysts-select-4-label" inputProps={{ id: "analysts-select-4", "aria-labelledby": "analysts-select-4-label" }} value={selectedService} label="Serviço N2" onChange={(event) => setSelectedService(event.target.value)}>
+              <InputLabel shrink id="analysts-select-4-label">Serviço N2</InputLabel><Select notched displayEmpty renderValue={(value) => value || "Todos os serviços"} MenuProps={{ sx: { "& .MuiPaper-root": { maxWidth: "min(640px, calc(100vw - 32px))" }, "& .MuiMenuItem-root": { whiteSpace: "normal", overflowWrap: "anywhere" } } }} labelId="analysts-select-4-label" inputProps={{ id: "analysts-select-4", "aria-labelledby": "analysts-select-4-label" }} value={selectedService} label="Serviço N2" onChange={(event) => setSelectedService(event.target.value)}>
                 <MenuItem value="">Todos os serviços</MenuItem>
                 {services.map((service) => <MenuItem key={service} value={service}>{service}</MenuItem>)}
               </Select>

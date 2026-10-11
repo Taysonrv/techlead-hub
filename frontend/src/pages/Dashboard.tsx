@@ -2884,8 +2884,8 @@ function CardPeriodHeader({ title, subtitle, value, onChange }: { title: string;
       <Typography sx={{ fontWeight: 850, fontSize: "1.05rem", lineHeight: 1.25 }}>{title}</Typography>
       <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: .35 }}>{subtitle}</Typography>
     </Box>
-    {value && onChange && <FormControl size="small" sx={{ width: 126 }}>
-      <Select value={value} onChange={(event) => onChange(event.target.value as CardPeriod)} sx={{ height: 32, fontSize: ".75rem", fontWeight: 750, textAlign: "center" }}>
+    {value && onChange && <FormControl size="small" sx={{ width: { xs: "100%", sm: 152 }, maxWidth: "100%", minWidth: 0 }}>
+      <Select inputProps={{ "aria-label": `Período de ${title}` }} value={value} onChange={(event) => onChange(event.target.value as CardPeriod)} sx={{ height: 32, fontSize: ".75rem", fontWeight: 750, textAlign: "center" }}>
         <MenuItem value="7d">7 dias</MenuItem><MenuItem value="30d">30 dias</MenuItem><MenuItem value="60d">60 dias</MenuItem><MenuItem value="90d">90 dias</MenuItem><MenuItem value="month">Este mês</MenuItem><MenuItem value="semester">Semestre</MenuItem><MenuItem value="year">Este ano</MenuItem>
       </Select>
     </FormControl>}
