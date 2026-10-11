@@ -502,7 +502,7 @@ export function Clients() {
 
   useEffect(() => {
     if (businessArea && !businessAreas.includes(businessArea)) setBusinessArea("");
-    if (executiveArea && !executiveAreas.includes(executiveArea)) setExecutiveArea("");
+    if (executiveArea && !executiveAreas.some((area) => area === executiveArea)) setExecutiveArea("");
   }, [businessArea, businessAreas, executiveArea, executiveAreas]);
 
   /* =======================================================
@@ -1619,7 +1619,7 @@ export function Clients() {
                 minWidth: 0,
               }}
             >
-              <InputLabel shrink id="clients-select-1-label">Cliente</InputLabel><Select notched displayEmpty renderValue={(value) => value || "Todos os clientes"} MenuProps={{ PaperProps: { sx: { maxWidth: "min(640px, calc(100vw - 32px))", "& .MuiMenuItem-root": { whiteSpace: "normal", overflowWrap: "anywhere" } } } }} labelId="clients-select-1-label" inputProps={{ id: "clients-select-1", "aria-labelledby": "clients-select-1-label" }}
+              <InputLabel shrink id="clients-select-1-label">Cliente</InputLabel><Select notched displayEmpty renderValue={(value) => value || "Todos os clientes"} MenuProps={{ sx: { "& .MuiPaper-root": { maxWidth: "min(640px, calc(100vw - 32px))" }, "& .MuiMenuItem-root": { whiteSpace: "normal", overflowWrap: "anywhere" } } }} labelId="clients-select-1-label" inputProps={{ id: "clients-select-1", "aria-labelledby": "clients-select-1-label" }}
                 value={
                   selectedClient
                 }
@@ -1664,7 +1664,7 @@ export function Clients() {
                 minWidth: 0,
               }}
             >
-              <InputLabel shrink id="clients-select-2-label">Categoria</InputLabel><Select notched displayEmpty renderValue={(value) => value || "Todas as categorias"} MenuProps={{ PaperProps: { sx: { maxWidth: "min(640px, calc(100vw - 32px))", "& .MuiMenuItem-root": { whiteSpace: "normal", overflowWrap: "anywhere" } } } }} labelId="clients-select-2-label" inputProps={{ id: "clients-select-2", "aria-labelledby": "clients-select-2-label" }}
+              <InputLabel shrink id="clients-select-2-label">Categoria</InputLabel><Select notched displayEmpty renderValue={(value) => value || "Todas as categorias"} MenuProps={{ sx: { "& .MuiPaper-root": { maxWidth: "min(640px, calc(100vw - 32px))" }, "& .MuiMenuItem-root": { whiteSpace: "normal", overflowWrap: "anywhere" } } }} labelId="clients-select-2-label" inputProps={{ id: "clients-select-2", "aria-labelledby": "clients-select-2-label" }}
                 value={
                   category
                 }
@@ -1696,28 +1696,28 @@ export function Clients() {
             </FormControl>
 
             <FormControl size="small" sx={{ minWidth: 0 }}>
-              <InputLabel shrink id="clients-select-3-label">Status</InputLabel><Select notched displayEmpty renderValue={(value) => value || "Todos os status"} MenuProps={{ PaperProps: { sx: { maxWidth: "min(640px, calc(100vw - 32px))", "& .MuiMenuItem-root": { whiteSpace: "normal", overflowWrap: "anywhere" } } } }} labelId="clients-select-3-label" inputProps={{ id: "clients-select-3", "aria-labelledby": "clients-select-3-label" }} value={status} label="Status" onChange={(event) => setStatus(event.target.value)}>
+              <InputLabel shrink id="clients-select-3-label">Status</InputLabel><Select notched displayEmpty renderValue={(value) => value || "Todos os status"} MenuProps={{ sx: { "& .MuiPaper-root": { maxWidth: "min(640px, calc(100vw - 32px))" }, "& .MuiMenuItem-root": { whiteSpace: "normal", overflowWrap: "anywhere" } } }} labelId="clients-select-3-label" inputProps={{ id: "clients-select-3", "aria-labelledby": "clients-select-3-label" }} value={status} label="Status" onChange={(event) => setStatus(event.target.value)}>
                 <MenuItem value="">Todos os status</MenuItem>
                 {statuses.map((item) => <MenuItem key={item} value={item}>{item}</MenuItem>)}
               </Select>
             </FormControl>
 
             <FormControl size="small" sx={{ minWidth: 0 }}>
-              <InputLabel shrink id="clients-select-4-label">Responsável</InputLabel><Select notched displayEmpty renderValue={(value) => value || "Todos os responsáveis"} MenuProps={{ PaperProps: { sx: { maxWidth: "min(640px, calc(100vw - 32px))", "& .MuiMenuItem-root": { whiteSpace: "normal", overflowWrap: "anywhere" } } } }} labelId="clients-select-4-label" inputProps={{ id: "clients-select-4", "aria-labelledby": "clients-select-4-label" }} value={owner} label="Responsável" onChange={(event) => setOwner(event.target.value)}>
+              <InputLabel shrink id="clients-select-4-label">Responsável</InputLabel><Select notched displayEmpty renderValue={(value) => value || "Todos os responsáveis"} MenuProps={{ sx: { "& .MuiPaper-root": { maxWidth: "min(640px, calc(100vw - 32px))" }, "& .MuiMenuItem-root": { whiteSpace: "normal", overflowWrap: "anywhere" } } }} labelId="clients-select-4-label" inputProps={{ id: "clients-select-4", "aria-labelledby": "clients-select-4-label" }} value={owner} label="Responsável" onChange={(event) => setOwner(event.target.value)}>
                 <MenuItem value="">Todos os responsáveis</MenuItem>
                 {owners.map((item) => <MenuItem key={item} value={item}>{item}</MenuItem>)}
               </Select>
             </FormControl>
 
             <FormControl size="small" sx={{ minWidth: 0 }}>
-              <InputLabel shrink id="clients-select-5-label">Área de negócio</InputLabel><Select notched displayEmpty renderValue={(value) => value || "Todas as áreas"} MenuProps={{ PaperProps: { sx: { maxWidth: "min(640px, calc(100vw - 32px))", "& .MuiMenuItem-root": { whiteSpace: "normal", overflowWrap: "anywhere" } } } }} labelId="clients-select-5-label" inputProps={{ id: "clients-select-5", "aria-labelledby": "clients-select-5-label" }} value={businessArea} label="Área de negócio" onChange={(event) => setBusinessArea(event.target.value)}>
+              <InputLabel shrink id="clients-select-5-label">Área de negócio</InputLabel><Select notched displayEmpty renderValue={(value) => value || "Todas as áreas"} MenuProps={{ sx: { "& .MuiPaper-root": { maxWidth: "min(640px, calc(100vw - 32px))" }, "& .MuiMenuItem-root": { whiteSpace: "normal", overflowWrap: "anywhere" } } }} labelId="clients-select-5-label" inputProps={{ id: "clients-select-5", "aria-labelledby": "clients-select-5-label" }} value={businessArea} label="Área de negócio" onChange={(event) => setBusinessArea(event.target.value)}>
                 <MenuItem value="">Todas as áreas</MenuItem>
                 {businessAreas.map((item) => <MenuItem key={item} value={item}>{item}</MenuItem>)}
               </Select>
             </FormControl>
 
             <FormControl size="small" sx={{ minWidth: 0 }}>
-              <InputLabel shrink id="clients-select-6-label">Frente de atendimento</InputLabel><Select notched displayEmpty renderValue={(value) => value || "Todas as frentes"} MenuProps={{ PaperProps: { sx: { maxWidth: "min(640px, calc(100vw - 32px))", "& .MuiMenuItem-root": { whiteSpace: "normal", overflowWrap: "anywhere" } } } }} labelId="clients-select-6-label" inputProps={{ id: "clients-select-6", "aria-labelledby": "clients-select-6-label" }} value={executiveArea} label="Frente de atendimento" onChange={(event) => setExecutiveArea(event.target.value)}>
+              <InputLabel shrink id="clients-select-6-label">Frente de atendimento</InputLabel><Select notched displayEmpty renderValue={(value) => value || "Todas as frentes"} MenuProps={{ sx: { "& .MuiPaper-root": { maxWidth: "min(640px, calc(100vw - 32px))" }, "& .MuiMenuItem-root": { whiteSpace: "normal", overflowWrap: "anywhere" } } }} labelId="clients-select-6-label" inputProps={{ id: "clients-select-6", "aria-labelledby": "clients-select-6-label" }} value={executiveArea} label="Frente de atendimento" onChange={(event) => setExecutiveArea(event.target.value)}>
                 <MenuItem value="">Todas as frentes</MenuItem>
                 {executiveAreas.map((item) => <MenuItem key={item} value={item}>{item}</MenuItem>)}
               </Select>
