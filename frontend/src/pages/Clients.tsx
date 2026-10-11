@@ -51,7 +51,7 @@ import {
 
 import { useNavigate } from "react-router-dom";
 
-import { getTicketSnapshot } from "../services/ticketSnapshot";
+import { getTicketSnapshot, getTicketSnapshotState, subscribeTicketSnapshotRefresh } from "../services/ticketSnapshot";
 import { calculateTimestampSla } from "../utils/timestampSla";
 import { useFilters } from "../context/FiltersContext";
 import { PeriodFilter } from "../components/PeriodFilter";
@@ -279,23 +279,31 @@ export function Clients() {
     loadRequestRef.current?.abort();
     loadRequestRef.current = controller;
 
-    async function loadTickets() {
+    let refreshing = false;
+    async function loadTickets(initial = false) {
+      if (refreshing) return;
+      refreshing = true;
       try {
-        setLoading(true);
+        if (initial) setLoading(true);
         setError(null);
         const snapshot = await getTicketSnapshot<Ticket>();
-        if (!controller.signal.aborted) setTickets(snapshot);
+        if (!controller.signal.aborted) {
+          setTickets(snapshot);
+          setError(getTicketSnapshotState().lastErrorAt ? "A atualização falhou. Exibindo os últimos dados disponíveis." : null);
+        }
       } catch (err) {
         if (controller.signal.aborted) return;
         console.error("Erro ao carregar indicadores dos clientes:", err);
         setError("Não foi possível carregar os indicadores dos clientes.");
       } finally {
+        refreshing = false;
         if (!controller.signal.aborted) setLoading(false);
       }
     }
 
-    void loadTickets();
-    return () => controller.abort();
+    void loadTickets(true);
+    const unsubscribe = subscribeTicketSnapshotRefresh(() => { void loadTickets(); });
+    return () => { unsubscribe(); controller.abort(); };
   }, []);
 
   useEffect(() => {
@@ -492,6 +500,11 @@ export function Clients() {
     if (status && !statuses.includes(status)) setStatus("");
   }, [owner, owners, status, statuses]);
 
+  useEffect(() => {
+    if (businessArea && !businessAreas.includes(businessArea)) setBusinessArea("");
+    if (executiveArea && !executiveAreas.includes(executiveArea)) setExecutiveArea("");
+  }, [businessArea, businessAreas, executiveArea, executiveAreas]);
+
   /* =======================================================
      ESCOPO FINAL
   ======================================================= */
@@ -520,9 +533,9 @@ export function Clients() {
     const start = startOfDay(effectiveStartDate);
     const end = endOfDay(effectiveEndDate);
     return tickets.filter((ticket) => {
-      if (ticket.isWithSimer !== true || !ticket.resolvedDate) return false;
+      if (ticket.isWithSimer !== true || !ticket.resolvedDate || !["Resolved", "Closed"].includes(ticket.baseStatus ?? "")) return false;
       const resolved = new Date(ticket.resolvedDate);
-      if (resolved < start || resolved > end) return false;
+      if (!Number.isFinite(resolved.getTime()) || resolved < start || resolved > end) return false;
       return (!selectedClient || ticket.client === selectedClient)
         && (!category || ticket.category === category)
         && (!status || ticket.status === status)
@@ -1390,7 +1403,7 @@ export function Clients() {
     return <ContentState kind="loading" title="Carregando visão executiva" minHeight={360} />;
   }
 
-  if (error) {
+  if (error && tickets.length === 0) {
     return (
       <Alert severity="error">
         {error}
@@ -1507,7 +1520,8 @@ export function Clients() {
           CABEÇALHO
       ================================================= */}
 
-      <Stack direction="row" spacing={2} sx={{ alignItems: "center", mb: 2.5 }}>
+      {error && <Alert severity="warning" sx={{ mb: 2 }}>{error}</Alert>}
+      <Stack direction="row" spacing={2} sx={{ alignItems: "center", mb: 2.5, flexWrap: "wrap" }}>
         {selectedClient && (
           <Avatar variant="rounded" sx={{ width: 64, height: 64, bgcolor: aliareColors.greenDark, color: "white", fontSize: "1.1rem", fontWeight: 900, boxShadow: "0 10px 28px rgba(0,91,73,.22)" }}>
             {clientInitials(selectedClient)}
@@ -1569,9 +1583,12 @@ export function Clients() {
                 xs: "minmax(0, 1fr)",
                 md: "repeat(2, minmax(0, 1fr))",
                 lg: "repeat(3, minmax(0, 1fr))",
-                xl: "repeat(4, minmax(0, 1fr))",
+                xl: "repeat(3, minmax(0, 1fr))",
               },
-              gap: 1.5,
+              gap: 2,
+              "& .MuiFormControl-root": { width: "100%", minWidth: 0 },
+              "& .MuiInputLabel-root": { maxWidth: "calc(100% - 32px)" },
+              "& .MuiSelect-select": { minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
               alignItems: {
                 xs: "stretch",
                 md: "center",
@@ -1602,7 +1619,7 @@ export function Clients() {
                 minWidth: 0,
               }}
             >
-              <InputLabel shrink id="clients-select-1-label">Cliente</InputLabel><Select labelId="clients-select-1-label" inputProps={{ id: "clients-select-1", "aria-labelledby": "clients-select-1-label" }}
+              <InputLabel shrink id="clients-select-1-label">Cliente</InputLabel><Select notched displayEmpty renderValue={(value) => value || "Todos os clientes"} MenuProps={{ PaperProps: { sx: { maxWidth: "min(640px, calc(100vw - 32px))", "& .MuiMenuItem-root": { whiteSpace: "normal", overflowWrap: "anywhere" } } } }} labelId="clients-select-1-label" inputProps={{ id: "clients-select-1", "aria-labelledby": "clients-select-1-label" }}
                 value={
                   selectedClient
                 }
@@ -1647,7 +1664,7 @@ export function Clients() {
                 minWidth: 0,
               }}
             >
-              <InputLabel shrink id="clients-select-2-label">Categoria</InputLabel><Select labelId="clients-select-2-label" inputProps={{ id: "clients-select-2", "aria-labelledby": "clients-select-2-label" }}
+              <InputLabel shrink id="clients-select-2-label">Categoria</InputLabel><Select notched displayEmpty renderValue={(value) => value || "Todas as categorias"} MenuProps={{ PaperProps: { sx: { maxWidth: "min(640px, calc(100vw - 32px))", "& .MuiMenuItem-root": { whiteSpace: "normal", overflowWrap: "anywhere" } } } }} labelId="clients-select-2-label" inputProps={{ id: "clients-select-2", "aria-labelledby": "clients-select-2-label" }}
                 value={
                   category
                 }
@@ -1679,28 +1696,28 @@ export function Clients() {
             </FormControl>
 
             <FormControl size="small" sx={{ minWidth: 0 }}>
-              <InputLabel shrink id="clients-select-3-label">Status</InputLabel><Select labelId="clients-select-3-label" inputProps={{ id: "clients-select-3", "aria-labelledby": "clients-select-3-label" }} value={status} label="Status" onChange={(event) => setStatus(event.target.value)}>
+              <InputLabel shrink id="clients-select-3-label">Status</InputLabel><Select notched displayEmpty renderValue={(value) => value || "Todos os status"} MenuProps={{ PaperProps: { sx: { maxWidth: "min(640px, calc(100vw - 32px))", "& .MuiMenuItem-root": { whiteSpace: "normal", overflowWrap: "anywhere" } } } }} labelId="clients-select-3-label" inputProps={{ id: "clients-select-3", "aria-labelledby": "clients-select-3-label" }} value={status} label="Status" onChange={(event) => setStatus(event.target.value)}>
                 <MenuItem value="">Todos os status</MenuItem>
                 {statuses.map((item) => <MenuItem key={item} value={item}>{item}</MenuItem>)}
               </Select>
             </FormControl>
 
             <FormControl size="small" sx={{ minWidth: 0 }}>
-              <InputLabel shrink id="clients-select-4-label">Responsável</InputLabel><Select labelId="clients-select-4-label" inputProps={{ id: "clients-select-4", "aria-labelledby": "clients-select-4-label" }} value={owner} label="Responsável" onChange={(event) => setOwner(event.target.value)}>
+              <InputLabel shrink id="clients-select-4-label">Responsável</InputLabel><Select notched displayEmpty renderValue={(value) => value || "Todos os responsáveis"} MenuProps={{ PaperProps: { sx: { maxWidth: "min(640px, calc(100vw - 32px))", "& .MuiMenuItem-root": { whiteSpace: "normal", overflowWrap: "anywhere" } } } }} labelId="clients-select-4-label" inputProps={{ id: "clients-select-4", "aria-labelledby": "clients-select-4-label" }} value={owner} label="Responsável" onChange={(event) => setOwner(event.target.value)}>
                 <MenuItem value="">Todos os responsáveis</MenuItem>
                 {owners.map((item) => <MenuItem key={item} value={item}>{item}</MenuItem>)}
               </Select>
             </FormControl>
 
             <FormControl size="small" sx={{ minWidth: 0 }}>
-              <InputLabel shrink id="clients-select-5-label">Área de negócio</InputLabel><Select labelId="clients-select-5-label" inputProps={{ id: "clients-select-5", "aria-labelledby": "clients-select-5-label" }} value={businessArea} label="Área de negócio" onChange={(event) => setBusinessArea(event.target.value)}>
+              <InputLabel shrink id="clients-select-5-label">Área de negócio</InputLabel><Select notched displayEmpty renderValue={(value) => value || "Todas as áreas"} MenuProps={{ PaperProps: { sx: { maxWidth: "min(640px, calc(100vw - 32px))", "& .MuiMenuItem-root": { whiteSpace: "normal", overflowWrap: "anywhere" } } } }} labelId="clients-select-5-label" inputProps={{ id: "clients-select-5", "aria-labelledby": "clients-select-5-label" }} value={businessArea} label="Área de negócio" onChange={(event) => setBusinessArea(event.target.value)}>
                 <MenuItem value="">Todas as áreas</MenuItem>
                 {businessAreas.map((item) => <MenuItem key={item} value={item}>{item}</MenuItem>)}
               </Select>
             </FormControl>
 
             <FormControl size="small" sx={{ minWidth: 0 }}>
-              <InputLabel shrink id="clients-select-6-label">Frente de atendimento</InputLabel><Select labelId="clients-select-6-label" inputProps={{ id: "clients-select-6", "aria-labelledby": "clients-select-6-label" }} value={executiveArea} label="Frente de atendimento" onChange={(event) => setExecutiveArea(event.target.value)}>
+              <InputLabel shrink id="clients-select-6-label">Frente de atendimento</InputLabel><Select notched displayEmpty renderValue={(value) => value || "Todas as frentes"} MenuProps={{ PaperProps: { sx: { maxWidth: "min(640px, calc(100vw - 32px))", "& .MuiMenuItem-root": { whiteSpace: "normal", overflowWrap: "anywhere" } } } }} labelId="clients-select-6-label" inputProps={{ id: "clients-select-6", "aria-labelledby": "clients-select-6-label" }} value={executiveArea} label="Frente de atendimento" onChange={(event) => setExecutiveArea(event.target.value)}>
                 <MenuItem value="">Todas as frentes</MenuItem>
                 {executiveAreas.map((item) => <MenuItem key={item} value={item}>{item}</MenuItem>)}
               </Select>
@@ -1926,7 +1943,7 @@ export function Clients() {
                 reference: "resolvedDate/closedDate ≤ dueDate",
                 periodRule: "Usa a data de resolução para pertencer ao período; itens sem os timestamps necessários ficam fora do denominador.",
               }}
-              onClick={() => showTickets("SLA solução - tickets medidos", solutionScopedTickets.filter((ticket) => Boolean(ticket.dueDate && ticket.resolvedDate)), "Tickets com timestamps suficientes para medição")}
+              onClick={() => showTickets("SLA solução - tickets medidos", calculateTimestampSla(solutionScopedTickets, "solution").measuredTickets, "Tickets com timestamps suficientes para medição")}
             />
             <ExecutiveMetric
               title="CSAT"
@@ -1997,7 +2014,7 @@ export function Clients() {
                 <PresentationKpi title="Bugs" value={presentationSummary.bugs.length} detail={`${presentationSummary.bugs.filter((ticket) => ticket.azureWorkItem || ticket.taskNumber).length} com Task`} color="#008A68" onClick={() => showTickets("Bugs identificados", presentationSummary.bugs)} />
                 <PresentationKpi title="Com Task" value={presentationSummary.withTask.length} detail="correção, evolução ou apoio" color="#2676B9" onClick={() => showTickets("Atendimentos com Task", presentationSummary.withTask)} />
                 <PresentationKpi title="Pendências" value={presentationSummary.pending.length} detail="em acompanhamento" color="#B7791F" onClick={() => showTickets("Pendências ativas", presentationSummary.pending)} />
-                <PresentationKpi title="SLA solução" value={formatSlaPercent(portfolioSummary.solutionSla.percent)} detail={`${portfolioSummary.solutionSla.onTime} de ${portfolioSummary.solutionSla.measured} medidos`} color="#159A68" onClick={() => showTickets("SLA solução", solutionScopedTickets.filter((ticket) => Boolean(ticket.dueDate && ticket.resolvedDate)))} />
+                <PresentationKpi title="SLA solução" value={formatSlaPercent(portfolioSummary.solutionSla.percent)} detail={`${portfolioSummary.solutionSla.onTime} de ${portfolioSummary.solutionSla.measured} medidos`} color="#159A68" onClick={() => showTickets("SLA solução", calculateTimestampSla(solutionScopedTickets, "solution").measuredTickets)} />
                 <PresentationKpi title="Tempo médio de solução" value={formatMinutes(clients.find((item) => item.client === selectedClient)?.averageResolutionMinutes ?? null)} detail={`${clients.find((item) => item.client === selectedClient)?.measuredResolutionTimes ?? 0} atendimento(s) medido(s)`} color="#7C3AED" onClick={() => showTickets("Atendimentos com tempo de solução", scopedTickets.filter((ticket) => ticketResolutionMinutes(ticket) !== null))} />
               </Box>
               <Box sx={{ p: 2.25, border: "1px solid", borderColor: "divider", borderRadius: 2, bgcolor: "background.paper" }}>
