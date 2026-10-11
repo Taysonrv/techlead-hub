@@ -229,7 +229,7 @@ export function CorrectionMonthlyPanel() {
 
   const isPeriodRow = (row:Row) => row.inPeriodUniverse ??
     (row.registeredInPeriod || row.deliveredInPeriod || row.canceledInPeriod ||
-      row.enteredRegistrationInPeriod || row.backlogInitial || row.backlogCurrent);
+      row.enteredRegistrationInPeriod || row.backlogInitial || row.backlogCurrent || Boolean(row.stateAtClose));
 
   const value = (key:Exclude<Drill,null>) => base.filter(row=>match(row,key)).length;
   const initial = value("backlogInitial");
@@ -273,7 +273,7 @@ export function CorrectionMonthlyPanel() {
 
   const cards = [
     {
-      key:"registered" as const,label:"Tasks registradas",value:registered,note:monthlyMovementVerified?"Criadas no período":"Prévia parcial · validar histórico",
+      key:"registered" as const,label:"Tasks registradas",value:registered,note:"Criadas no período · qualquer estado no fechamento",
       accent:aliareColors.info,
       info:"Conta System.Id distintos criados dentro do período selecionado, independentemente do status no snapshot de fechamento.",
     },
@@ -304,7 +304,7 @@ export function CorrectionMonthlyPanel() {
     },
   ] as const;
 
-  const periodRows = base.filter(isPeriodRow);
+  const periodRows = base.filter(row=>isPeriodRow(row)&&Boolean(row.stateAtClose));
   const periodUniverse = periodRows.length;
 
   const statusCounts = periodRows.reduce<Record<string,number>>((acc,row) => {
@@ -338,9 +338,9 @@ export function CorrectionMonthlyPanel() {
 
   const selectedRows = useMemo(() => base.filter(row => {
     if(drill) return match(row,drill);
-    if(sliceDrill?.kind==="status") return isPeriodRow(row)&&row.status===sliceDrill.value;
-    if(sliceDrill?.kind==="urgency") return isPeriodRow(row)&&(row.urgency||"Não informado")===sliceDrill.value;
-    if(sliceDrill?.kind==="prioritized") return isPeriodRow(row)&&row.prioritized===sliceDrill.value;
+    if(sliceDrill?.kind==="status") return isPeriodRow(row)&&Boolean(row.stateAtClose)&&row.status===sliceDrill.value;
+    if(sliceDrill?.kind==="urgency") return isPeriodRow(row)&&Boolean(row.stateAtClose)&&(row.urgency||"Não informado")===sliceDrill.value;
+    if(sliceDrill?.kind==="prioritized") return isPeriodRow(row)&&Boolean(row.stateAtClose)&&row.prioritized===sliceDrill.value;
     return isPeriodRow(row);
   }),[base,drill,sliceDrill]);
 
@@ -597,7 +597,7 @@ export function CorrectionMonthlyPanel() {
       : report&&<>
         <Box sx={{
           display:"grid",
-          gridTemplateColumns:{xs:"1fr",sm:"repeat(2,minmax(0,1fr))",lg:"repeat(3,minmax(0,1fr))",xl:"repeat(6,minmax(0,1fr))"},
+          gridTemplateColumns:{xs:"1fr",sm:"repeat(2,minmax(0,1fr))",lg:"repeat(3,minmax(0,1fr))",xl:"repeat(3,minmax(0,1fr))"},
           gap:1,
           alignItems:"stretch",
         }}>
@@ -664,7 +664,7 @@ export function CorrectionMonthlyPanel() {
 
         <Box sx={{
           display:"grid",
-          gridTemplateColumns:{xs:"1fr",lg:"minmax(0,1.65fr) minmax(260px,.85fr) minmax(260px,.85fr)",xl:"minmax(0,1.85fr) minmax(300px,.95fr) minmax(300px,.95fr)"},
+          gridTemplateColumns:{xs:"minmax(0,1fr)",lg:"repeat(2,minmax(0,1fr))",xl:"minmax(0,1.5fr) repeat(2,minmax(0,1fr))"},
           gap:1.15,
           alignItems:"stretch",
         }}>
@@ -673,7 +673,7 @@ export function CorrectionMonthlyPanel() {
               <CardHeading
                 title={backlogVerified?"Pipeline no fechamento":"Pipeline · prévia não homologada"}
                 subtitle={backlogVerified?`${periodUniverse} task(s) no snapshot final`:`${periodUniverse} task(s) com status recuperado no recorte parcial`}
-                info="Distribui pelo status no snapshot de fechamento somente as Correções Clientes que participam do universo do período e filtros atuais. A soma das barras corresponde ao universo do período. Registro aparece no pipeline, mas é excluído de backlog."
+                info="Distribui as Correções Clientes com estado comprovado no snapshot de fechamento, incluindo tasks sem movimentação no mês. Os cards de movimento usam universos diferentes e não devem ser somados para reproduzir o pipeline. Registro aparece no pipeline, mas é excluído de backlog."
               />
               <Box sx={{flex:1,minHeight:Math.max(340,pipeline.length*31),mt:1}}>
                 <ResponsiveContainer width="100%" height="100%">
