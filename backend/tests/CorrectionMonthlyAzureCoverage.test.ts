@@ -99,6 +99,8 @@ test("payload inválido do Azure não é tratado como consulta histórica vazia"
 
 test("falha em segundo plano fica disponível à tela e recarga remove o erro após sucesso",async(t)=>{
   const service=new CorrectionMonthlyReportService();
+  let now=Date.now();
+  t.mock.method(Date,"now",()=>now);
   const preview={rows:[],quality:{historicalMetricsReliable:false,localPreview:true}};
   let fail=true;
   t.mock.method(service,"saveClosing",async()=>{});
@@ -114,12 +116,93 @@ test("falha em segundo plano fica disponível à tela e recarga remove o erro ap
   assert.equal(failed.quality.refreshing,false);
   assert.equal(failed.quality.refreshError,"Falha ao processar histórico de teste");
   assert.equal(failed.quality.historicalMetricsReliable,false);
+  now+=2*60_000+1;
+  const retained=asReport(await service.getPreview("2026-06"));
+  assert.equal(retained.quality.refreshError,"Falha ao processar histórico de teste","a expiração do cache não deve apagar o diagnóstico durante a espera pela próxima tentativa");
+  assert.equal(retained.quality.refreshing,false);
   fail=false;
   await service.getPreview("2026-06",true);
   await new Promise(resolve=>setImmediate(resolve));
   const completed=asReport(await service.getPreview("2026-06"));
   assert.equal(completed.quality.historicalMetricsReliable,true);
   assert.equal(completed.quality.refreshError,undefined);
+});
+
+test("apuração parcial preserva IDs e cobertura após expirar o cache e tenta novamente ao fim da espera",async(t)=>{
+  const service=new CorrectionMonthlyReportService();
+  let now=Date.now();
+  t.mock.method(Date,"now",()=>now);
+  const local={rows:[{id:1}],quality:{historicalMetricsReliable:false,localPreview:true}};
+  const partial={rows:[{id:1},{id:2}],quality:{historicalMetricsReliable:false,localPreview:false,snapshotError:"Abertura indisponível",diagnostics:{closingSnapshotItems:2}}};
+  let localCalls=0,remoteCalls=0;
+  let complete=false;
+  t.mock.method(service,"saveClosing",async()=>{});
+  t.mock.method(service,"build",async(_month:string,localOnly:boolean)=>{
+    if(localOnly){localCalls++;return local;}
+    remoteCalls++;
+    return complete?{...partial,quality:{historicalMetricsReliable:true,localPreview:false}}:partial;
+  });
+  const asReport=(value:unknown)=>value as {rows:Array<{id:number}>;quality:{refreshing:boolean;historicalMetricsReliable:boolean;snapshotError?:string;diagnostics?:{closingSnapshotItems:number}}};
+  await service.getPreview("2026-05",true);
+  await new Promise(resolve=>setImmediate(resolve));
+  now+=2*60_000+1;
+  const retained=asReport(await service.getPreview("2026-05"));
+  assert.deepEqual(retained.rows.map(row=>row.id),[1,2]);
+  assert.equal(retained.quality.snapshotError,"Abertura indisponível");
+  assert.equal(retained.quality.diagnostics?.closingSnapshotItems,2);
+  assert.equal(retained.quality.refreshing,false);
+  assert.equal(localCalls,1);
+  assert.equal(remoteCalls,1);
+  // Mesmo uma leitura pouco antes da próxima tentativa não adia a recuperação.
+  now+=7*60_000;
+  await service.getPreview("2026-05");
+  complete=true;
+  now+=60_000;
+  assert.equal(asReport(await service.getPreview("2026-05")).quality.refreshing,true);
+  await new Promise(resolve=>setImmediate(resolve));
+  const finished=asReport(await service.getPreview("2026-05"));
+  assert.equal(finished.quality.historicalMetricsReliable,true);
+  assert.equal(finished.quality.snapshotError,undefined);
+  assert.equal(localCalls,1);
+  assert.equal(remoteCalls,2);
+});
+
+test("recarga mantém a apuração anterior enquanto consulta o Azure e quando a atualização falha",async(t)=>{
+  const service=new CorrectionMonthlyReportService();
+  const local={rows:[{id:1}],quality:{historicalMetricsReliable:false,localPreview:true}};
+  const historical={rows:[{id:1},{id:2}],quality:{historicalMetricsReliable:true,localPreview:false,diagnostics:{closingSnapshotItems:2}}};
+  let release!:(value:typeof historical)=>void;
+  let reject!:(reason:Error)=>void;
+  let update:Promise<typeof historical>=Promise.resolve(historical);
+  let localCalls=0,remoteCalls=0;
+  t.mock.method(service,"saveClosing",async()=>{});
+  t.mock.method(service,"build",async(_month:string,localOnly:boolean)=>{
+    if(localOnly){localCalls++;return local;}
+    remoteCalls++;return update;
+  });
+  const asReport=(value:unknown)=>value as {rows:Array<{id:number}>;quality:{refreshing:boolean;historicalMetricsReliable:boolean;refreshError?:string}};
+  await service.getPreview("2026-04",true);
+  await new Promise(resolve=>setImmediate(resolve));
+  update=new Promise((resolve,onReject)=>{release=resolve;reject=onReject;});
+  const refreshing=asReport(await service.getPreview("2026-04",true));
+  assert.deepEqual(refreshing.rows.map(row=>row.id),[1,2]);
+  assert.equal(refreshing.quality.refreshing,true);
+  const concurrent=asReport(await service.getPreview("2026-04",true));
+  assert.deepEqual(concurrent.rows,refreshing.rows);
+  assert.equal(remoteCalls,2,"recargas simultâneas compartilham a consulta em andamento");
+  reject(new Error("Atualização indisponível"));
+  await new Promise(resolve=>setImmediate(resolve));
+  const retained=asReport(await service.getPreview("2026-04"));
+  assert.deepEqual(retained.rows.map(row=>row.id),[1,2]);
+  assert.equal(retained.quality.historicalMetricsReliable,true);
+  assert.equal(retained.quality.refreshError,"Atualização indisponível");
+  assert.equal(retained.quality.refreshing,false);
+  assert.equal(localCalls,1);
+  update=new Promise(resolve=>{release=resolve;});
+  await service.getPreview("2026-04",true);
+  release(historical);
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(asReport(await service.getPreview("2026-04")).quality.refreshError,undefined);
 });
 
 test("setembro reproduz referência por snapshots completos sem depender de Tasks sincronizadas",async(t)=>{

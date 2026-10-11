@@ -8,6 +8,8 @@ O Reporting percorre nextLink ou continuationToken até concluir a consulta. Ide
 
 Respostas sem a coleção JSON esperada são rejeitadas; HTML ou outro payload inválido não equivale a consulta vazia. Falhas da atualização em segundo plano preservam a última apuração e mostram a causa na tela. Escopo histórico totalmente vazio com Tasks locais no período gera diagnóstico explícito para conferência da organização, projeto e acesso. Esse sinal não identifica sozinho a causa da falha na instalação.
 
+A expiração do cache de dois minutos agenda uma consulta e preserva a última apuração, seus IDs remotos, cobertura e erros. Ela não reconstrói uma prévia local por cima da consulta anterior. Após resultado parcial ou falha, novas tentativas automáticas respeitam dez minutos; a tela aberta agenda a próxima consulta e informa o horário da última tentativa. Recarregar permite tentar imediatamente, preserva os dados durante a consulta e compartilha uma geração já em andamento. Uma prévia exclusivamente local identifica que seus números não representam cobertura histórica do Azure.
+
 ## Leitura dos números
 
 “Carteira no fechamento” inclui Tasks antigas, inclusive concluídas e canceladas antes do mês. Pipeline, Urgência e Priorização distribuem essa carteira. “Movimentos e backlog do mês” mostra a união distinta dos seis indicadores e abre seu detalhamento. A soma dos cards não representa esse total: uma Task pode aparecer em mais de um indicador.

@@ -462,39 +462,55 @@ ASOF '${asOf.toISOString()}'`;
   /** A tela recebe a prévia local; o Azure atualiza o mesmo mês em background. */
   async getPreview(month:string,forceRefresh=false) {
     saoPauloMonth(month);
-    if(forceRefresh&&!CorrectionMonthlyReportService.inFlight.has(month)) this.invalidateMonth(month);
     const cache=CorrectionMonthlyReportService.reportCache;
     const pending=CorrectionMonthlyReportService.inFlight;
+    if(forceRefresh&&!pending.has(month)) {
+      const previous=cache.get(month);
+      this.invalidateMonth(month);
+      // A recarga ignora caches do Azure, mas mantém a última apuração
+      // visível enquanto consulta novamente e se a atualização falhar.
+      if(previous) cache.set(month,{...previous,expiresAt:0});
+    }
     const withStatus=(data:unknown)=>{
       const report=data as {quality:Record<string,unknown>};
-      return {...report,quality:{...report.quality,refreshing:pending.has(month)}};
+      const refreshing=pending.has(month);
+      const retryAt=CorrectionMonthlyReportService.retryAfter.get(month)??0;
+      return {...report,quality:{...report.quality,refreshing,
+        nextHistoryRetryAt:!refreshing&&retryAt>Date.now()?new Date(retryAt).toISOString():undefined}};
     };
     const cached=cache.get(month);
-    if(cached&&cached.expiresAt>Date.now()&&(!forceRefresh||pending.has(month))) return withStatus(cached.data);
-    let preview=CorrectionMonthlyReportService.previews.get(month);
-    if(!preview){
-      preview=this.build(month,true).then(async data=>{
-        await this.saveClosing(month,data);
-        cache.set(month,{expiresAt:Date.now()+REPORT_CACHE_TTL_MS,data});
-        return data;
-      }).finally(()=>CorrectionMonthlyReportService.previews.delete(month));
-      CorrectionMonthlyReportService.previews.set(month,preview);
-    }
-    const data=await preview;
     const retryAt=CorrectionMonthlyReportService.retryAfter.get(month)??0;
+    const needsRefresh=forceRefresh||!cached||cached.expiresAt<=Date.now()||(retryAt>0&&Date.now()>=retryAt);
+    if(cached&&(!needsRefresh||pending.has(month))) return withStatus(cached.data);
+    let data=cached?.data;
+    if(!cached){
+      let preview=CorrectionMonthlyReportService.previews.get(month);
+      if(!preview){
+        preview=this.build(month,true).then(async local=>{
+          await this.saveClosing(month,local);
+          cache.set(month,{expiresAt:Date.now()+REPORT_CACHE_TTL_MS,data:local});
+          return local;
+        }).finally(()=>CorrectionMonthlyReportService.previews.delete(month));
+        CorrectionMonthlyReportService.previews.set(month,preview);
+      }
+      data=await preview;
+    }
+    // A expiração só agenda nova consulta: não substitui a cobertura remota
+    // por uma prévia local durante os dez minutos entre tentativas parciais.
     if(!pending.has(month)&&(forceRefresh||Date.now()>=retryAt)){
       const refresh=this.build(month).then(async updated=>{
         await this.saveClosing(month,updated);
-        cache.set(month,{expiresAt:Date.now()+REPORT_CACHE_TTL_MS,data:updated});
+        const completed={...updated,quality:{...updated.quality,lastHistoryAttemptAt:new Date(Date.now()).toISOString()}};
+        cache.set(month,{expiresAt:Date.now()+REPORT_CACHE_TTL_MS,data:completed});
         if(!updated.quality.historicalMetricsReliable) CorrectionMonthlyReportService.retryAfter.set(month,Date.now()+10*60_000);
         else CorrectionMonthlyReportService.retryAfter.delete(month);
-        return updated;
+        return completed;
       }).catch(error=>{
         CorrectionMonthlyReportService.retryAfter.set(month,Date.now()+10*60_000);
         const refreshError=error instanceof Error?error.message:String(error);
         console.warn("[correction-monthly-report] Atualização histórica em background falhou:",refreshError);
         const report=data as {quality:Record<string,unknown>};
-        const failed={...report,quality:{...report.quality,refreshError}};
+        const failed={...report,quality:{...report.quality,refreshError,lastHistoryAttemptAt:new Date(Date.now()).toISOString()}};
         cache.set(month,{expiresAt:Date.now()+REPORT_CACHE_TTL_MS,data:failed});
         return failed;
       }).finally(()=>pending.delete(month));

@@ -104,6 +104,7 @@ type Report = {
   quality?:{
     historyAvailable:boolean;historyError:string|null;snapshotAvailable?:boolean;snapshotError?:string|null;
     historicalScopeError?:string|null;refreshError?:string|null;mode:string;refreshing?:boolean;localPreview?:boolean;movementHistoryReliable?:boolean;
+    lastHistoryAttemptAt?:string;nextHistoryRetryAt?:string;
     historicalMetricsReliable:boolean;backlogHistoricalReliable?:boolean;backlogInitialAvailable?:boolean;backlogCurrentAvailable?:boolean;unknownClosingStates?:number;
     externalHistorySuspicious?:boolean;localFallbackUsed?:boolean;localStateHistoryEvents?:number;
     perItemHistoryRecoveryUsed?:boolean;recoveredHistoryItems?:number;recoveryCandidates?:number;missingClosingFields?:number;
@@ -199,6 +200,10 @@ export function CorrectionMonthlyPanel() {
         setReport(data);
         setLoading(false);
         if(data.quality?.refreshing) timer=setTimeout(()=>void load(false),3000);
+        else if(data.quality?.nextHistoryRetryAt){
+          const retryAt=Date.parse(data.quality.nextHistoryRetryAt);
+          if(Number.isFinite(retryAt)) timer=setTimeout(()=>void load(false),Math.max(3000,retryAt-Date.now()));
+        }
       } catch(requestError) {
         if(active){setError(getApiErrorMessage(requestError,"Não foi possível carregar o report mensal."));setLoading(false);}
       }
@@ -480,7 +485,9 @@ export function CorrectionMonthlyPanel() {
                 size="small"
                 color={report.quality.historicalMetricsReliable&&!report.quality.historicalScopeError?"success":"warning"}
                 variant="outlined"
-                label={report.quality.localFallbackUsed
+                label={report.quality.refreshing
+                  ?"Atualizando histórico"
+                  :report.quality.localFallbackUsed
                   ?"Histórico local reconstruído"
                   :report.quality.historicalMetricsReliable&&!report.quality.historicalScopeError
                     ?"Histórico confiável"
@@ -556,7 +563,7 @@ export function CorrectionMonthlyPanel() {
       <Alert severity="warning">
         <b>{report.quality.refreshing?"Conferindo histórico no Azure.":"Apuração histórica parcial."}</b>{" "}
         {report.quality.refreshing
-          ?"A prévia local já está disponível. Os números serão atualizados automaticamente quando a consulta terminar."
+          ?"A última apuração disponível permanece na tela. Os números serão atualizados automaticamente quando a consulta terminar."
           :"O histórico do Azure não foi recuperado por completo. Estados sem evidência histórica aparecem como indisponíveis. Backlog parcial não comprova o estoque total; use Recarregar para tentar novamente."}{" "}
         {[
           report.quality.historyError && `Revisões: ${report.quality.historyError}`,
@@ -565,16 +572,21 @@ export function CorrectionMonthlyPanel() {
         ].filter(Boolean).join(" | ")}
         {report.quality.diagnostics && (
           <Typography component="p" variant="caption" sx={{mt:0.8,opacity:0.9}}>
-            Carteira consultada: {report.quality.diagnostics.scopedRecords??report.quality.diagnostics.localRecords} tasks; com estado no fechamento: {periodUniverse}; movimentos/backlog do mês: {monthlyIndicatorRows.length}. Histórico Azure: {report.quality.diagnostics.revisions} revisões;{" "}
+            Carteira consultada: {report.quality.diagnostics.scopedRecords??report.quality.diagnostics.localRecords} tasks; com estado no fechamento: {periodUniverse}; movimentos/backlog do mês: {monthlyIndicatorRows.length}.{" "}
+            {report.quality.localPreview?"Prévia local: esses números não representam a cobertura histórica do Azure.":<>Histórico Azure: {report.quality.diagnostics.revisions} revisões;{" "}
             {report.quality.diagnostics.openingScopeIds} IDs abertos na entrada, incluindo Registro;{" "}
             {report.quality.diagnostics.closingScopeIds} IDs na carteira do fechamento;{" "}
             {report.quality.diagnostics.snapshotCandidates} candidatos;{" "}
             snapshots {report.quality.diagnostics.openingSnapshotItems}/{report.quality.diagnostics.closingSnapshotItems} (entrada/fechamento);{" "}
-            {report.quality.unknownClosingStates??0} sem estado histórico no fechamento.
+            {report.quality.unknownClosingStates??0} sem estado histórico no fechamento.</>}
           </Typography>
         )}
       </Alert>
     }
+    {report?.quality?.lastHistoryAttemptAt&&<Typography variant="caption" color="text.secondary">
+      Última tentativa de atualização do histórico: {fmt(report.quality.lastHistoryAttemptAt)} (São Paulo).{" "}
+      {report.quality.nextHistoryRetryAt&&<>Nova tentativa automática às {fmt(report.quality.nextHistoryRetryAt)}; Recarregar permite tentar agora.</>}
+    </Typography>}
     {!!report?.quality?.missingClosingFields&&<Alert severity="warning">
       Há {report.quality.missingClosingFields} task(s) sem os campos históricos necessários para confirmar a carteira. Verifique o campo Cliente Principal e a permissão de leitura do Azure antes de entregar o report.
     </Alert>}
