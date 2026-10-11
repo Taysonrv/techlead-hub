@@ -1,3 +1,4 @@
+import { KpiGrid } from "../components/KpiGrid";
 import { useId } from "react";
 import {
   Alert,
@@ -1198,29 +1199,7 @@ export function Tickets() {
           KPIs OPERACIONAIS
       =================================================== */}
 
-      <Box
-        sx={{
-          display:
-            "grid",
-
-          gridTemplateColumns: {
-            xs:
-              "1fr",
-            sm:
-              "repeat(2, minmax(0, 1fr))",
-            lg:
-              "repeat(3, minmax(0, 1fr))",
-            xl:
-              "repeat(5, minmax(0, 1fr))",
-          },
-
-          gap:
-            1.25,
-
-          mb:
-            1.5,
-        }}
-      >
+      <KpiGrid sx={{mb: 1.5}}>
         <KpiCard
           title="Entradas no período"
           value={
@@ -1340,7 +1319,7 @@ export function Tickets() {
             );
           }}
         />
-      </Box>
+      </KpiGrid>
 
       {/* ===================================================
           FILTROS COMPACTOS

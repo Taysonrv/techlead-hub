@@ -1,3 +1,4 @@
+import { KpiGrid } from "../components/KpiGrid";
 import {
   Alert,
   Autocomplete,
@@ -1950,28 +1951,7 @@ export function Versions() {
         </CardContent>
       </Card>
 
-      <Box
-        sx={{
-          display:
-            "grid",
-          gridTemplateColumns: {
-            xs:
-              "1fr",
-            sm:
-              "repeat(2, minmax(0, 1fr))",
-            lg:
-              "repeat(3, minmax(0, 1fr))",
-            xl:
-              "repeat(3, minmax(0, 1fr))",
-          },
-          gap:
-            1.25,
-          mb:
-            2,
-          order:
-            1,
-        }}
-      >
+      <KpiGrid sx={{mb: 2, order: 1}}>
         <MetricCard
           title="Total de Tasks"
           active={
@@ -2345,7 +2325,7 @@ export function Versions() {
             )
           }
         />
-      </Box>
+      </KpiGrid>
       </Box>
 
       <Box
@@ -2971,12 +2951,7 @@ export function Versions() {
         }}
       >
         {detailContext && (
-          <Box
-            sx={{
-              p:
-                2.5,
-            }}
-          >
+          <Box sx={{ p: 2.5 }}>
             <Stack
               direction="row"
               spacing={1}
@@ -3065,18 +3040,7 @@ export function Versions() {
                 </Button>
               </Box>
             )}
-            <Box
-              sx={{
-                display:
-                  "grid",
-                gridTemplateColumns:
-                  "repeat(3, minmax(0, 1fr))",
-                gap:
-                  1,
-                mt:
-                  2,
-              }}
-            >
+            <KpiGrid sx={{ mt: 2 }}>
               <MiniMetric
                 label="Correções"
                 value={
@@ -3113,7 +3077,7 @@ export function Versions() {
                   selectedVersion.highOrCritical
                 }
               />
-            </Box>
+            </KpiGrid>
 
             <Divider
               sx={{
@@ -3468,40 +3432,7 @@ function MiniMetric({
   label: string;
   value: number;
 }) {
-  return (
-    <Box
-      sx={{
-        border:
-          "1px solid",
-        borderColor:
-          "divider",
-        borderRadius:
-          1.5,
-        p:
-          1,
-      }}
-    >
-      <Typography
-        variant="caption"
-        color="text.secondary"
-      >
-        {label}
-      </Typography>
-
-      <Typography
-        sx={{
-          mt:
-            0.2,
-          fontWeight:
-            800,
-          fontSize:
-            "1.1rem",
-        }}
-      >
-        {value}
-      </Typography>
-    </Box>
-  );
+  return <ExecutiveKpiCard title={label} value={value} />;
 }
 
 function RiskNumber({

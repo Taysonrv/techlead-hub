@@ -1,3 +1,5 @@
+import { KpiGrid } from "../components/KpiGrid";
+import { KpiCard as ExecutiveKpiCard } from "../components/KpiCard";
 import {
   Accordion,
   AccordionDetails,
@@ -2613,32 +2615,7 @@ export function AzureWorkItems({
             KPIs
         ================================================= */}
 
-        <Box
-          sx={{
-            order:
-              1,
-            display:
-              "grid",
-            gridTemplateColumns: {
-              xs:
-                "1fr",
-              sm:
-                "repeat(2, minmax(0, 1fr))",
-              lg:
-                "repeat(3, minmax(0, 1fr))",
-              xl:
-                "repeat(5, minmax(0, 1fr))",
-            },
-            gap: {
-              xs:
-                1.25,
-              md:
-                1.5,
-              xl:
-                1.5,
-            },
-          }}
-        >
+        <KpiGrid sx={{order: 1}}>
           {cards.map(
             (
               card,
@@ -2660,205 +2637,11 @@ export function AzureWorkItems({
                   : aliareColors.green;
 
               return (
-                <Card
-                  key={
-                    card.key
-                  }
-                  elevation={0}
-                  role="button"
-                  tabIndex={0}
-                  onClick={() =>
-                    handleCardClick(
-                      card.key,
-                    )
-                  }
-                  onKeyDown={(event) => {
-                    if (
-                      event.key ===
-                        "Enter" ||
-                      event.key ===
-                        " "
-                    ) {
-                      handleCardClick(
-                        card.key,
-                      );
-                    }
-                  }}
-                  sx={{
-                    position:
-                      "relative",
-                    overflow:
-                      "hidden",
-                    height:
-                      "100%",
-                    minHeight:
-                      112,
-                    border:
-                      "1px solid",
-                    borderColor:
-                      active
-                        ? accentColor
-                        : "divider",
-                    borderRadius:
-                      2.25,
-                    cursor:
-                      "pointer",
-                    backgroundColor:
-                      "background.paper",
-                    boxShadow:
-                      active
-                        ? `0 0 0 1px ${accentColor}`
-                        : "none",
-                    transition:
-                      "transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease",
-                    "&::before": {
-                      content:
-                        '""',
-                      position:
-                        "absolute",
-                      top:
-                        0,
-                      left:
-                        0,
-                      width:
-                        "100%",
-                      height:
-                        3,
-                      backgroundColor:
-                        accentColor,
-                    },
-                    "&:hover": {
-                      transform:
-                        "translateY(-2px)",
-                      borderColor:
-                        accentColor,
-                      boxShadow:
-                        "0 8px 24px rgba(16,24,40,0.08)",
-                    },
-                    "&:focus-visible": {
-                      outline:
-                        `2px solid ${accentColor}`,
-                      outlineOffset:
-                        "2px",
-                    },
-                  }}
-                >
-                  <CardContent
-                    sx={{
-                      p: {
-                        xs:
-                          1.25,
-                        md:
-                          1.4,
-                      },
-                      "&:last-child": {
-                        pb: {
-                          xs:
-                            1.25,
-                          md:
-                            1.4,
-                        },
-                      },
-                    }}
-                  >
-                    <Stack
-                      direction="row"
-                      spacing={1}
-                      sx={{
-                        alignItems:
-                          "flex-start",
-                        justifyContent:
-                          "space-between",
-                      }}
-                    >
-                      <Box
-                        sx={{
-                          minWidth:
-                            0,
-                        }}
-                      >
-                        <Typography
-                          variant="body2"
-                          sx={{
-                            fontWeight:
-                              750,
-                          }}
-                        >
-                          {card.label}
-                        </Typography>
-
-                        <Typography
-                          sx={{
-                            mt:
-                              0.55,
-                            fontSize: {
-                              xs:
-                                "1.5rem",
-                              md:
-                                "1.65rem",
-                              xl:
-                                "1.78rem",
-                            },
-                            fontWeight:
-                              800,
-                            lineHeight:
-                              1.1,
-                            fontVariantNumeric:
-                              "tabular-nums",
-                          }}
-                        >
-                          {formatNumber(
-                            card.value,
-                          )}
-                        </Typography>
-                      </Box>
-
-                      <Stack
-                        direction="row"
-                        spacing={0.25}
-                        sx={{
-                          alignItems:
-                            "center",
-                        }}
-                      >
-                        <Box
-                          sx={{
-                            display:
-                              "flex",
-                            color:
-                              accentColor,
-                          }}
-                        >
-                          {card.icon}
-                        </Box>
-
-                        <CardInfoButton
-                          info={
-                            card.info
-                          }
-                        />
-                      </Stack>
-                    </Stack>
-
-                    <Typography
-                      variant="caption"
-                      color="text.secondary"
-                      sx={{
-                        display:
-                          "block",
-                        mt:
-                          0.75,
-                      }}
-                    >
-                      {card.description}
-                    </Typography>
-
-                  </CardContent>
-                </Card>
+                <ExecutiveKpiCard key={card.key} title={card.label} value={formatNumber(card.value)} subtitle={card.description} accent={accentColor} active={active} icon={card.icon} infoContent={<CardInfoButton info={card.info} />} onClick={() => handleCardClick(card.key)} />
               );
             },
           )}
-        </Box>
+        </KpiGrid>
 
         {/* =================================================
             ANÁLISE EXECUTIVA

@@ -1,3 +1,4 @@
+import { KpiGrid } from "../components/KpiGrid";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
@@ -2047,26 +2048,7 @@ export function Analysts() {
           INDICADORES
       ================================================ */}
 
-      <Box
-        sx={{
-          display: "grid",
-
-          gridTemplateColumns: {
-            xs: "1fr",
-            sm: "repeat(2, minmax(0,1fr))",
-            lg: "repeat(3, minmax(0,1fr))",
-            xl: "repeat(5, minmax(0,1fr))",
-          },
-
-          gap: {
-            xs: 1.25,
-            md: 1.5,
-            xl: 2,
-          },
-
-          mb: 2,
-        }}
-      >
+      <KpiGrid sx={{mb: 2}}>
         <MetricCard
           title="Tickets analisados"
           value={
@@ -2225,7 +2207,7 @@ export function Analysts() {
           info={{ title:"CSAT", summary:"Percentual de avaliações positivas vinculadas aos tickets da equipe.", calculation:"Respostas com nota 4 ou 5 ÷ total de respostas válidas × 100.", source:"Pesquisa de Satisfação Movidesk", reference:"MovideskSurveyResponse → Ticket.movideskId", periodRule:"Respeita período, Squad, Analista, área e serviço selecionados." }}
           onClick={()=>showTickets("Tickets com avaliação CSAT", scopedTickets.filter((ticket)=>ticket.satisfactionScore != null), "Pesquisa de Satisfação Movidesk")}
         />
-      </Box>
+      </KpiGrid>
 
       <Card elevation={0} sx={{ mb: 2, border: "1px solid", borderColor: "divider", borderRadius: 2.25 }}>
         <CardContent sx={{ p: { xs: 1.5, md: 1.75 }, "&:last-child": { pb: { xs: 1.5, md: 1.75 } } }}>
@@ -2419,18 +2401,7 @@ export function Analysts() {
             </Stack>
           </Stack>
 
-          <Box
-            sx={{
-              display: "grid",
-              gridTemplateColumns: {
-                xs: "1fr",
-                sm: "repeat(2, minmax(0,1fr))",
-                lg: "repeat(3, minmax(0,1fr))",
-                xl: "repeat(4, minmax(0,1fr))",
-              },
-              gap: 1.25,
-            }}
-          >
+          <KpiGrid>
             <AzureMetricCard
               title="Tasks vinculadas"
               value={summary.azureTasks}
@@ -2564,7 +2535,7 @@ export function Analysts() {
                 )
               }
             />
-          </Box>
+          </KpiGrid>
         </CardContent>
       </Card>
 
@@ -2692,19 +2663,7 @@ export function Analysts() {
             </Box>
           ) : (
             <>
-              <Box
-                sx={{
-                  display: "grid",
-                  gridTemplateColumns: {
-                    xs: "1fr",
-                    sm: "repeat(2, minmax(0,1fr))",
-                    lg: "repeat(3, minmax(0,1fr))",
-                    xl: "repeat(4, minmax(0,1fr))",
-                  },
-                  gap: 1.25,
-                  mt: 2,
-                }}
-              >
+              <KpiGrid sx={{mt: 2}}>
                 <ProductivityCard
                   title="Tasks abertas"
                   value={
@@ -2978,7 +2937,7 @@ export function Analysts() {
                 />
 
 
-              </Box>
+              </KpiGrid>
 
               <Alert
                 severity="info"

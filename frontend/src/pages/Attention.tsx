@@ -1,3 +1,4 @@
+import { KpiGrid } from "../components/KpiGrid";
 import { subscribeTicketSnapshotRefresh } from "../services/ticketSnapshot";
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -874,26 +875,7 @@ export function Attention() {
 
       {/* INDICADORES */}
 
-      <Box
-        sx={{
-          display: "grid",
-
-          gridTemplateColumns: {
-            xs: "1fr",
-            sm: "repeat(2, minmax(0, 1fr))",
-            lg: "repeat(3, minmax(0, 1fr))",
-            xl: "repeat(5, minmax(0, 1fr))",
-          },
-
-          gap: {
-            xs: 1.25,
-            md: 1.5,
-            xl: 1.5,
-          },
-
-          mb: 2,
-        }}
-      >
+      <KpiGrid sx={{mb: 2}}>
         <IndicatorCard
           title="Requerem atenção"
           value={summary.total}
@@ -1036,7 +1018,7 @@ export function Attention() {
             )
           }
         />
-      </Box>
+      </KpiGrid>
 
       {summary.vencidos > 0 && (
         <Alert

@@ -1,3 +1,4 @@
+import { KpiGrid } from "../components/KpiGrid";
 import {
   Alert, Box, Button, Card, CardContent, Chip, CircularProgress, Drawer,
   FormControl, IconButton, InputLabel, MenuItem, Select, Stack, Tab, Tabs, Tooltip, Typography,
@@ -322,12 +323,12 @@ export function TechnicalLeadership() {
           </Box>
         </Stack>}
 
-        {data && <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2,1fr)", lg: "repeat(4,1fr)" }, gap: 1.25, mt: 2 }}>
+        {data && <KpiGrid sx={{mt: 2}}>
           <KpiCard title="Atendimentos no período" value={data.weekly.current} subtitle="Clique para ver os atendimentos" info="Tickets criados no período selecionado." accent={aliareColors.info} onClick={() => setDrawer({ kind: "radar", key: "opened", title: "Atendimentos no período", items: (data.analytics.samples.opened as Ticket[]) ?? [] })} />
           <KpiCard title="Backlog atual" value={data.weekly.open} subtitle="Clique para investigar" info="Snapshot dos atendimentos ainda abertos na carteira filtrada; não representa apenas entradas do período." accent={aliareColors.cyan} onClick={() => setDrawer({ kind: "radar", key: "backlog", title: "Backlog aberto", items: data.analytics.samples.backlog ?? [] })} />
           <KpiCard title="Prazos vencidos" value={data.weekly.overdue} subtitle="Clique para investigar" info="Atendimentos abertos cujo prazo operacional (dueDate) já foi ultrapassado. Mesmo conceito usado na Coordenação." accent={aliareColors.error} onClick={() => setDrawer({ kind: "radar", key: "overdue", title: "Prazos vencidos", items: data.radarSamples.overdue ?? [] })} />
           <KpiCard title="Tasks bloqueadas" value={data.weekly.blocked} subtitle="Clique para investigar" info="Work Items ativos com bloqueio de processo." accent={aliareColors.purple} onClick={() => setDrawer({ kind: "radar", key: "blocked", title: "Tasks bloqueadas", items: data.radarSamples.blocked ?? [] })} />
-        </Box>}
+        </KpiGrid>}
       </CardContent>
     </Card>
 
@@ -390,14 +391,14 @@ export function TechnicalLeadership() {
         <Chip size="small" variant="outlined" label="Movidesk + inteligência operacional" />
       </Stack>
 
-      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2,1fr)", xl: "repeat(6,1fr)" }, gap: 1.25, mb: 2 }}>
+      <KpiGrid sx={{mb: 2}}>
         <KpiCard title="SLA solução" value={data.analytics.operational.resolutionSlaRate === null ? "—" : `${data.analytics.operational.resolutionSlaRate}%`} subtitle="Resolvidos no prazo" accent={aliareColors.green} onClick={() => setDrawer({ kind: "radar", key: "resolutionOutside", title: "Solução fora do SLA", items: data.analytics.samples.resolutionOutside ?? [] })} />
         <KpiCard title="SLA 1ª resposta" value={data.analytics.operational.responseSlaRate === null ? "—" : `${data.analytics.operational.responseSlaRate}%`} subtitle="Primeiras respostas no prazo" accent={aliareColors.info} onClick={() => setDrawer({ kind: "radar", key: "responseOutside", title: "Primeira resposta fora do SLA", items: data.analytics.samples.responseOutside ?? [] })} />
         <KpiCard title="Reabertura" value={data.analytics.operational.reopenRate === null ? "—" : `${data.analytics.operational.reopenRate}%`} subtitle="Resolvidos que reabriram" accent={aliareColors.warning} onClick={() => setDrawer({ kind: "radar", key: "reopened", title: "Atendimentos reabertos", items: data.analytics.samples.reopened ?? [] })} />
         <KpiCard title="1º contato" value={data.analytics.operational.firstContactResolutionRate === null ? "—" : `${data.analytics.operational.firstContactResolutionRate}%`} subtitle="Resolução no primeiro contato" accent={aliareColors.cyan} onClick={() => setDrawer({ kind: "radar", key: "firstContact", title: "Resolvidos no primeiro contato", items: (data.analytics.samples.firstContact as Ticket[]) ?? [] })} />
         <KpiCard title="Balanço de fluxo" value={data.analytics.operational.flowBalance === null ? "—" : `${data.analytics.operational.flowBalance > 0 ? "+" : ""}${data.analytics.operational.flowBalance}%`} subtitle="Resolvidos − entradas / entradas" accent={data.analytics.operational.flowBalance !== null && data.analytics.operational.flowBalance >= 0 ? aliareColors.green : aliareColors.error} onClick={() => setDrawer({ kind: "radar", key: "opened", title: "Entradas do período", items: data.analytics.samples.opened ?? [] })} />
         <KpiCard title="Aging crítico" value={data.analytics.operational.criticalAging} subtitle="Backlog aberto há +15 dias" accent={aliareColors.error} onClick={() => setDrawer({ kind: "radar", key: "criticalAging", title: "Backlog com mais de 15 dias", items: data.analytics.samples.criticalAging ?? [] })} />
-      </Box>
+      </KpiGrid>
 
       <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", xl: "1.55fr 1fr" }, gap: 1.5, mb: 1.5 }}>
         <Card><CardContent>
@@ -482,9 +483,9 @@ export function TechnicalLeadership() {
         <AreaTitle title="Radar operacional" info={tabInfo.radar} icon={<RadarOutlined color="primary" />} />
         <Chip size="small" variant="outlined" label="Snapshot atual · cliente/analista" />
       </Stack>
-      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2,1fr)", lg: "repeat(5,1fr)" }, gap: 1.5, mt: 1.2 }}>
+      <KpiGrid sx={{mt: 1.2}}>
         {radarMeta.map(([key, title, info, accent]) => <KpiCard key={key} title={title} value={data.radar[key] ?? 0} subtitle="Clique para investigar" info={info} accent={accent} onClick={() => setDrawer({ kind: "radar", key, title, items: data.radarSamples[key] ?? [] })} />)}
-      </Box>
+      </KpiGrid>
     </Box>}
 
     {data && tab === "audit" && <Box>
@@ -535,16 +536,11 @@ export function TechnicalLeadership() {
         ele indica um tema que merece validação da liderança antes de definir uma ação.
       </Alert>
 
-      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(3,1fr)" }, gap: 1.2, mb: 1.5 }}>
-        {[
+      <KpiGrid sx={{ mb: 1.5 }}>{[
           ["Pontos identificados", filteredGaps.length],
           ["Impacto alto", filteredGaps.filter((gap) => gap.impact === "Alto").length],
           ["Demais impactos", filteredGaps.filter((gap) => gap.impact !== "Alto").length],
-        ].map(([label, value]) => <Box key={String(label)} sx={{ p: 1.35, borderRadius: 2, border: "1px solid", borderColor: "divider", bgcolor: mode === "dark" ? "rgba(15,36,58,.72)" : "background.paper" }}>
-          <Typography variant="caption" color="text.secondary">{label}</Typography>
-          <Typography sx={{ fontWeight: 900, fontSize: "1.45rem", mt: .15 }}>{value}</Typography>
-        </Box>)}
-      </Box>
+        ].map(([label, value]) => <KpiCard key={String(label)} title={String(label)} value={value} />)}</KpiGrid>
 
       <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "repeat(2,1fr)" }, gap: 1.5 }}>
         {filteredGaps.map((gap) => <Card key={gap.id} onClick={() => setDrawer({ kind: "gap", title: gap.title, gap })} sx={{ cursor: "pointer", background: mode === "dark" ? "linear-gradient(145deg, rgba(29,32,72,.96), rgba(13,28,49,.96)) !important" : "linear-gradient(145deg,#FFFFFF,#F7F5FF) !important", "&:hover": { borderColor: `${aliareColors.purple} !important`, boxShadow: "0 12px 30px rgba(124,92,255,.11)", transform: "translateY(-2px)" }, transition: ".15s" }}>

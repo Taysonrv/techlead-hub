@@ -1,3 +1,4 @@
+import { KpiGrid } from "../components/KpiGrid";
 import {
   Alert, Autocomplete, Box, Button, Card, CardContent, Checkbox, Chip, CircularProgress,
   Drawer, FormControl, InputLabel, MenuItem, Select, Stack,
@@ -283,9 +284,9 @@ export function DataQuality() {
         <Box><Typography variant="h6" sx={{ fontWeight: 900 }}>Fila prioritária</Typography><Typography variant="body2" color="text.secondary">Sinais com ação operacional direta. Clique em um card para abrir as evidências.</Typography></Box>
         <Chip size="small" variant="outlined" label="Movidesk + Azure · SIMER" />
       </Stack>
-      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2,minmax(0,1fr))", lg: "repeat(3,minmax(0,1fr))", xl: "repeat(4,minmax(0,1fr))" }, gap: 1.25 }}>
+      <KpiGrid>
         {coordinationMetrics.map(([key, label, info, group]) => <KpiCard key={key} title={label} value={data?.summary[key] ?? 0} subtitle={group} info={info} accent={issue === key ? aliareColors.green : group === "Fluxo" ? "#ef4444" : group === "Versão" ? "#8b5cf6" : group === "Vínculo" ? "#f59e0b" : group === "Serviço" ? "#0891b2" : "#2676b9"} active={issue === key} onClick={() => setIssue(issue === key ? "" : key)} />)}
-      </Box>
+      </KpiGrid>
     </Box>
 
     <Card variant="outlined" sx={{ mt: 2 }}><CardContent>

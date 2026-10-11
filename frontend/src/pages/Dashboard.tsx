@@ -1,3 +1,4 @@
+import { KpiGrid } from "../components/KpiGrid";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
@@ -1179,27 +1180,7 @@ export function Dashboard() {
           KPIs
       ================================================= */}
 
-      <Box
-        sx={{
-          display: "grid",
-
-          gridTemplateColumns: {
-            xs: "1fr",
-            sm: "repeat(2, 1fr)",
-            lg: "repeat(3, minmax(0, 1fr))",
-          },
-
-          gap: {
-            xs: 1.25,
-            md: 1.5,
-            xl: 2,
-          },
-
-          mb: 2.5,
-          width: "100%",
-          alignItems: "stretch",
-        }}
-      >
+      <KpiGrid sx={{mb: 2.5}}>
         {cards.map(
           (card) => (
             <KpiCard
@@ -1225,7 +1206,7 @@ export function Dashboard() {
             />
           )
         )}
-      </Box>
+      </KpiGrid>
 
       {/* =================================================
           DESENVOLVIMENTO / AZURE DEVOPS
@@ -1323,18 +1304,7 @@ export function Dashboard() {
               Nenhum Work Item do Azure foi localizado nos atendimentos do snapshot atual.
             </Alert>
           ) : (
-            <Box
-              sx={{
-                display: "grid",
-                gridTemplateColumns: {
-                  xs: "1fr",
-                  sm: "repeat(2, minmax(0, 1fr))",
-                  lg: "repeat(3, minmax(0, 1fr))",
-                  xl: "repeat(3, minmax(0, 1fr))",
-                },
-                gap: 1.25,
-              }}
-            >
+            <KpiGrid>
               <DevelopmentMetric
                 title="Correções"
                 value={azureDevelopment.corrections.length}
@@ -1421,7 +1391,7 @@ export function Dashboard() {
                 }}
                 onClick={() => showTickets("Tasks de alta criticidade", tickets.filter((ticket) => { const value = normalize(ticket.azureWorkItem?.criticality); return value === "alta" || value === "critica"; }), "Tickets vinculados a Work Items de criticidade Alta ou Crítica")}
               />
-            </Box>
+            </KpiGrid>
           )}
         </CardContent>
       </Card>

@@ -1,3 +1,4 @@
+import { KpiGrid } from "./KpiGrid";
 import { useEffect, useMemo, useState } from "react";
 import {
   Alert, Autocomplete, Box, Button, Card, CardContent, Chip, CircularProgress, Divider, Drawer,
@@ -429,7 +430,7 @@ export function CorrectionMonthlyPanel() {
   const chartPanel = {
     ...panel,
     height:"100%",
-    minHeight:390,
+    minHeight:310,
     display:"flex",
     boxShadow:theme.palette.mode==="dark"?"0 14px 34px rgba(0,0,0,.13)":"0 10px 28px rgba(15,23,42,.045)",
     "& .recharts-bar-rectangle, & .recharts-sector":{cursor:"pointer"},
@@ -595,12 +596,7 @@ export function CorrectionMonthlyPanel() {
     {loading
       ? <Box sx={{py:5,textAlign:"center"}}><CircularProgress size={28}/><Typography variant="body2" color="text.secondary" sx={{mt:1}}>Reconstruindo o fechamento mensal…</Typography></Box>
       : report&&<>
-        <Box sx={{
-          display:"grid",
-          gridTemplateColumns:{xs:"1fr",sm:"repeat(2,minmax(0,1fr))",lg:"repeat(3,minmax(0,1fr))",xl:"repeat(3,minmax(0,1fr))"},
-          gap:1,
-          alignItems:"stretch",
-        }}>
+        <KpiGrid>
           {cards.map(card=>
             <KpiCard
               key={card.key}
@@ -610,11 +606,10 @@ export function CorrectionMonthlyPanel() {
               info={card.info}
               accent={card.accent}
               active={drill===card.key}
-              density="compact"
               onClick={()=>openMetric(card.key,card.label)}
             />
           )}
-        </Box>
+        </KpiGrid>
 
         <Card elevation={0} sx={{
           ...panel,
@@ -664,7 +659,7 @@ export function CorrectionMonthlyPanel() {
 
         <Box sx={{
           display:"grid",
-          gridTemplateColumns:{xs:"minmax(0,1fr)",lg:"repeat(2,minmax(0,1fr))",xl:"minmax(0,1.5fr) repeat(2,minmax(0,1fr))"},
+          gridTemplateColumns:{xs:"minmax(0,1fr)",lg:"repeat(2,minmax(0,1fr))",xl:"repeat(3,minmax(0,1fr))"},
           gap:1.15,
           alignItems:"stretch",
         }}>
@@ -675,7 +670,7 @@ export function CorrectionMonthlyPanel() {
                 subtitle={backlogVerified?`${periodUniverse} task(s) no snapshot final`:`${periodUniverse} task(s) com status recuperado no recorte parcial`}
                 info="Distribui as Correções Clientes com estado comprovado no snapshot de fechamento, incluindo tasks sem movimentação no mês. Os cards de movimento usam universos diferentes e não devem ser somados para reproduzir o pipeline. Registro aparece no pipeline, mas é excluído de backlog."
               />
-              <Box sx={{flex:1,minHeight:Math.max(340,pipeline.length*31),mt:1}}>
+              <Box sx={{flex:1,minHeight:Math.max(230,pipeline.length*31),mt:1}}>
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={pipeline} layout="vertical" margin={{left:14,right:46,top:6,bottom:6}}>
                     <CartesianGrid strokeDasharray="3 5" horizontal={false} stroke={theme.palette.divider} opacity={.55}/>
@@ -703,7 +698,7 @@ export function CorrectionMonthlyPanel() {
                 subtitle="Tasks distintas do universo mensal"
                 info="Agrupa o mesmo universo do período pela urgência/criticidade registrada no Azure. Respeita todos os filtros globais. Clique em uma barra para abrir as Tasks correspondentes."
               />
-              <Box sx={{flex:1,minHeight:340,mt:1}}>
+              <Box sx={{flex:1,minHeight:230,mt:1}}>
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={urgency} layout="vertical" margin={{left:12,right:42,top:8,bottom:8}}>
                     <CartesianGrid strokeDasharray="3 5" horizontal={false} stroke={theme.palette.divider} opacity={.55}/>
@@ -730,10 +725,10 @@ export function CorrectionMonthlyPanel() {
                 subtitle="Priorizadas x não priorizadas"
                 info="Agrupa o mesmo universo do período pelo campo Priorizada do Azure. Respeita os filtros globais. Clique em um segmento para abrir as Tasks correspondentes."
               />
-              <Box sx={{height:250,mt:.8,position:"relative"}}>
+              <Box sx={{height:210,mt:.8,position:"relative"}}>
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
-                    <Pie data={priority} dataKey="total" nameKey="name" innerRadius={68} outerRadius={100} paddingAngle={2}
+                    <Pie data={priority} dataKey="total" nameKey="name" innerRadius={58} outerRadius={82} paddingAngle={2}
                       stroke={theme.palette.background.paper} strokeWidth={2} isAnimationActive={false}
                       onClick={data=>{const name=(data as {name?:string}).name;if(name)selectSlice({kind:"prioritized",value:name==="Priorizadas"?true:name==="Não priorizadas"?false:null},`Priorização · ${name}`)}}>
                       {priority.map((_,index)=><Cell key={index} fill={[aliareColors.green,aliareColors.info,semanticChartColors.attention][index%3]}/>)}

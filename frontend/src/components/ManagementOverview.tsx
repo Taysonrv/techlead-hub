@@ -1,6 +1,8 @@
+import { KpiGrid } from "./KpiGrid";
+import { KpiCard as ExecutiveKpiCard } from "./KpiCard";
 import { ExportTicketsButton } from "./ExportTicketsButton";
 import { useEffect, useMemo, useState } from "react";
-import { Alert, Box, Button, Card, CardContent, Drawer, LinearProgress, Stack, Typography } from "@mui/material";
+import { Alert, Box, Button, Drawer, LinearProgress, Stack, Typography } from "@mui/material";
 import { useFilters } from "../context/FiltersContext";
 import { PeriodFilter } from "./PeriodFilter";
 import { buildOperationalCohorts } from "../utils/operationalMetrics";
@@ -48,12 +50,9 @@ export function ManagementOverview() {
       <Box sx={{ minWidth: 0, maxWidth: "100%" }}><PeriodFilter /></Box>
     </Stack>
     {error && <Alert severity="warning" sx={{ mb: 2 }}>{error}</Alert>}
-    {!loaded ? !error && <LinearProgress /> : <Box sx={{ display: "grid", gridTemplateColumns: { xs: "minmax(0,1fr)", sm: "repeat(2,minmax(0,1fr))", xl: "repeat(4,minmax(0,1fr))" }, gap: 2 }}>
-      {metrics.map((metric) => <Card key={metric.title} variant="outlined" sx={{ minWidth: 0, borderTop: "3px solid", borderTopColor: "primary.main" }}><CardContent>
-        <Typography variant="body2" color="text.secondary">{metric.title}</Typography><Typography sx={{ fontSize: "2rem", fontWeight: 900, my: 1 }}>{metric.value}</Typography><Typography variant="body2" color="text.secondary" sx={{ minHeight: 44 }}>{metric.description}</Typography>
-        <Button size="small" onClick={() => setDetail({ title: metric.title, rows: metric.rows })}>Detalhar {metric.rows.length} tickets</Button>
-      </CardContent></Card>)}
-    </Box>}
+    {!loaded ? !error && <LinearProgress /> : <KpiGrid>
+      {metrics.map((metric) => <ExecutiveKpiCard key={metric.title} title={metric.title} value={metric.value} subtitle={metric.description} info={metric.description} onClick={() => setDetail({ title: metric.title, rows: metric.rows })} />)}
+    </KpiGrid>}
     <Drawer anchor="right" open={Boolean(detail)} onClose={() => setDetail(null)} slotProps={{ paper: { sx: { width: { xs: "100%", sm: 520 }, p: 2 } } }}>
       <Stack direction="row" sx={{ justifyContent: "space-between", mb: 2 }}><Typography variant="h6">{detail?.title}</Typography><Button onClick={() => setDetail(null)}>Fechar</Button></Stack>
       {detail && <ExportTicketsButton tickets={detail.rows} title={detail.title} />}

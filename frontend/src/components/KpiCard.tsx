@@ -3,6 +3,7 @@ import {
   Card,
   CardContent,
   IconButton,
+  LinearProgress,
   Stack,
   Tooltip,
   Typography,
@@ -11,6 +12,7 @@ import {
 import { alpha } from "@mui/material/styles";
 import { InfoOutlined } from "@mui/icons-material";
 import type { KeyboardEvent, ReactNode } from "react";
+import { kpiLayout } from "../theme/layoutTokens";
 import { aliareColors } from "../theme/theme";
 
 type KpiCardProps = {
@@ -18,6 +20,9 @@ type KpiCardProps = {
   value: ReactNode;
   subtitle?: string;
   info?: string;
+  infoContent?: ReactNode;
+  icon?: ReactNode;
+  progress?: number;
   metadata?: {
     source?: string;
     periodRule?: string;
@@ -36,6 +41,9 @@ export function KpiCard({
   subtitle,
   info,
   metadata,
+  infoContent,
+  icon,
+  progress,
   accent = aliareColors.green,
   active = false,
   density = "default",
@@ -45,7 +53,7 @@ export function KpiCard({
   const dark = theme.palette.mode === "dark";
 
   const activate = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (onClick && (event.key === "Enter" || event.key === " ")) {
+    if (event.target === event.currentTarget && onClick && (event.key === "Enter" || event.key === " ")) {
       event.preventDefault();
       onClick();
     }
@@ -54,6 +62,7 @@ export function KpiCard({
   return (
     <Card
       elevation={0}
+      data-kpi-card
       role={onClick ? "button" : undefined}
       tabIndex={onClick ? 0 : undefined}
       aria-pressed={onClick ? active : undefined}
@@ -63,8 +72,9 @@ export function KpiCard({
         position: "relative",
         overflow: "hidden",
         width: "100%",
-        height: "100%",
-        minHeight: density === "compact" ? { xs: 98, md: 104 } : { xs: 112, md: 118 },
+        minWidth: 0,
+        height: density === "compact" ? { xs: 98, md: 104 } : kpiLayout.height,
+        minHeight: density === "compact" ? { xs: 98, md: 104 } : kpiLayout.height,
         borderColor: active ? accent : "divider",
         cursor: onClick ? "pointer" : "default",
         background: dark
@@ -114,10 +124,10 @@ export function KpiCard({
       <CardContent
         sx={{
           height: "100%",
-          p: density === "compact" ? { xs: 1.05, md: 1.15 } : { xs: 1.25, md: 1.4 },
+          p: density === "compact" ? { xs: 1.05, md: 1.15 } : kpiLayout.padding,
           display: "flex",
           flexDirection: "column",
-          "&:last-child": { pb: density === "compact" ? { xs: 1.05, md: 1.15 } : { xs: 1.25, md: 1.4 } },
+          "&:last-child": { pb: density === "compact" ? { xs: 1.05, md: 1.15 } : kpiLayout.padding },
         }}
       >
         <Stack
@@ -130,19 +140,26 @@ export function KpiCard({
           }}
         >
           <Typography
+            title={title}
             variant="body2"
             sx={{
               fontWeight: 750,
-              fontSize: ".8rem",
+              fontSize: kpiLayout.titleSize,
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
               letterSpacing: "-.004em",
               lineHeight: 1.3,
               minWidth: 0,
+              flex: 1,
             }}
           >
             {title}
           </Typography>
 
-          {info || metadata ? (
+          <Stack direction="row" sx={{ flexShrink: 0, gap: 0.35 }}>
+          {icon ? <Box sx={{ display: "flex", color: accent, flexShrink: 0, "& .MuiSvgIcon-root": { fontSize: 18 } }}>{icon}</Box> : null}
+          {infoContent ? <Box onClick={(event) => event.stopPropagation()} sx={{ flexShrink: 0, mt: -.25, "& .MuiIconButton-root": { width: 22, height: 22, p: .25 }, "& .MuiSvgIcon-root": { fontSize: 16 } }}>{infoContent}</Box> : info || metadata ? (
             <Tooltip
               title={
                 <Stack spacing={0.45}>
@@ -186,31 +203,50 @@ export function KpiCard({
               </IconButton>
             </Tooltip>
           ) : null}
+          </Stack>
         </Stack>
 
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1.25, mt: density === "compact" ? 0.45 : 0.65 }}>
         <Typography
+          title={typeof value === "string" || typeof value === "number" ? String(value) : undefined}
           sx={{
-            mt: density === "compact" ? 0.45 : 0.65,
+            flexShrink: 0,
+            flex: 1,
+            minWidth: 0,
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
             fontWeight: 840,
             color: accent,
             letterSpacing: "-.03em",
             fontSize: density === "compact"
               ? { xs: "1.35rem", md: "1.48rem", xl: "1.58rem" }
-              : { xs: "1.45rem", md: "1.62rem", xl: "1.72rem" },
+              : kpiLayout.valueSize,
             lineHeight: 1,
             fontVariantNumeric: "tabular-nums",
           }}
         >
           {value}
         </Typography>
+        {progress !== undefined ? <LinearProgress
+          variant="determinate"
+          value={Number.isFinite(progress) ? Math.max(0, Math.min(100, progress)) : 0}
+          aria-label={"Percentual de " + title}
+          sx={{ width: "38%", flexShrink: 0, height: 5, borderRadius: 99, bgcolor: alpha(accent, 0.12), "& .MuiLinearProgress-bar": { bgcolor: accent } }}
+        /> : null}
+        </Box>
 
         <Box sx={{ mt: "auto", pt: subtitle ? 0.7 : 0.25 }}>
           {subtitle ? (
             <Typography
+              title={subtitle}
               variant="caption"
               color="text.secondary"
               sx={{
-                display: "block",
+                display: "-webkit-box",
+                WebkitLineClamp: 2,
+                WebkitBoxOrient: "vertical",
+                overflow: "hidden",
                 minHeight: 16,
                 lineHeight: 1.35,
               }}

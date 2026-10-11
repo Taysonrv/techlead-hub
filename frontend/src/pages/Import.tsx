@@ -1,3 +1,6 @@
+import { KpiGrid } from "../components/KpiGrid";
+import { aliareColors } from "../theme/theme";
+import { KpiCard as ExecutiveKpiCard } from "../components/KpiCard";
 import {
   useCallback,
   useEffect,
@@ -779,15 +782,11 @@ export function Import({ embedded = false }: { embedded?: boolean }) {
                 label={syncHealth.health === "critical" ? "Ação necessária" : syncHealth.health === "attention" ? "Requer atenção" : "Integrações saudáveis"}
               />
             </Stack>
-            <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(3,minmax(0,1fr))" }, gap: 1.25 }}>
+            <KpiGrid sx={{mt: 1.5}}>
               <IntegrationHealthCard title="Movidesk · Tickets" configured={syncHealth.providers.movidesk.configured} health={syncHealth.providers.movidesk.health} />
               <IntegrationHealthCard title="Azure DevOps" configured={syncHealth.providers.azureDevOps.configured} health={syncHealth.providers.azureDevOps.health} />
-              <Box sx={{ p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: 2.25, bgcolor: "background.default" }}>
-                <Typography variant="caption" color="text.secondary">Movidesk · Catálogo + CSAT</Typography>
-                <Typography sx={{ mt: .35, fontWeight: 750 }}>{referenceSchedule ? `Diário às ${String(referenceSchedule.hour).padStart(2,"0")}:${String(referenceSchedule.minute).padStart(2,"0")}` : "Agenda diária"}</Typography>
-                <Typography variant="caption" color="text.secondary">Próxima: {formatDateTime(referenceNextAt)} · horário configurado no ambiente</Typography>
-              </Box>
-            </Box>
+              <ExecutiveKpiCard title="Movidesk · Catálogo + CSAT" value={referenceSchedule ? `Diário às ${String(referenceSchedule.hour).padStart(2,"0")}:${String(referenceSchedule.minute).padStart(2,"0")}` : "Agenda diária"} subtitle={`Próxima: ${formatDateTime(referenceNextAt)} · horário configurado no ambiente`} accent={aliareColors.info} />
+            </KpiGrid>
             {syncHealth.running > 0 && <Alert severity="info" sx={{ mt: 1.5 }}>
               {syncHealth.running === 1 ? "1 sincronização em processamento" : `${syncHealth.running} sincronizações em processamento`}
               {syncHealth.runningProviders?.length ? ` · ${syncHealth.runningProviders.map((provider) => provider === "MOVIDESK" ? "Movidesk" : "Azure DevOps").join(" + ")}` : ""}.
@@ -833,12 +832,12 @@ export function Import({ embedded = false }: { embedded?: boolean }) {
 
           {movideskStatus && <>
             <Divider sx={{ my: 2 }} />
-            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr 1fr", lg: "repeat(4,1fr)" }, gap: 1.5 }}>
+            <KpiGrid>
               <InfoCard label="Tickets no escopo 2026" value={String(movideskStatus.database.scopedTickets ?? 0)} />
               <InfoCard label="Tickets com Task no escopo" value={String(movideskStatus.database.linkedTasks)} />
               <InfoCard label="Última execução" value={formatDateTime(movideskStatus.lastImport?.finishedAt ?? movideskStatus.lastImport?.startedAt)} />
               <InfoCard label="Próxima incremental" value={formatDateTime(movideskStatus.scheduler.nextEstimatedAt)} />
-            </Box>
+            </KpiGrid>
             {movideskStatus.apiCompliance && <Box sx={{ mt: 2, p: 1.75, border: "1px solid", borderColor: "divider", borderRadius: 2.5, bgcolor: "background.default" }}>
               <Stack direction={{ xs: "column", md: "row" }} spacing={1} useFlexGap sx={{ alignItems: { md: "center" }, justifyContent: "space-between", flexWrap: "wrap" }}>
                 <Box>
@@ -853,12 +852,12 @@ export function Import({ embedded = false }: { embedded?: boolean }) {
                   <Chip size="small" color={movideskStatus.apiCompliance.conditionalCustomFieldsPreserved ? "success" : "warning"} variant="outlined" label="Metadados preservados" />
                 </Stack>
               </Stack>
-              <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: { xs: "1fr 1fr", md: "repeat(4,1fr)" }, gap: 1 }}>
+              <KpiGrid sx={{mt: 1.5}}>
                 <InfoCard label="Limite oficial" value={`${movideskStatus.apiCompliance.rateLimit.limitPerMinute}/min`} />
                 <InfoCard label="Vazão configurada" value={`${movideskStatus.apiCompliance.rateLimit.effectiveMaxPerMinute}/min`} />
                 <InfoCard label="Fila API" value={String(movideskStatus.apiCompliance.rateLimit.queueDepth)} />
                 <InfoCard label="429 desde o início" value={String(movideskStatus.apiCompliance.rateLimit.throttledResponsesSinceStartup)} />
-              </Box>
+              </KpiGrid>
               {movideskStatus.apiCompliance.rateLimit.retryAfterUntil && <Alert severity="warning" sx={{ mt: 1.25 }}>
                 Movidesk solicitou pausa até {formatDateTime(movideskStatus.apiCompliance.rateLimit.retryAfterUntil)}. A fila global respeitará automaticamente o Retry-After.
               </Alert>}
@@ -870,12 +869,12 @@ export function Import({ embedded = false }: { embedded?: boolean }) {
                 </Typography>
                 <Chip size="small" variant="outlined" label={`${movideskStatus.progress.pages} página(s) concluída(s)`} />
               </Stack>
-              <Box sx={{ display: "grid", gridTemplateColumns: { xs: "repeat(2,1fr)", md: "repeat(4,1fr)" }, gap: 1 }}>
+              <KpiGrid>
                 <InfoCard label="Processados" value={String(movideskStatus.progress.processedRows)} />
                 <InfoCard label="Próximo skip" value={String(movideskStatus.progress.nextSkip)} />
                 <InfoCard label="Novos" value={String(movideskStatus.progress.created)} />
                 <InfoCard label="Atualizados" value={String(movideskStatus.progress.updated)} />
-              </Box>
+              </KpiGrid>
               {movideskStatus.status === "RUNNING" && <LinearProgress sx={{ mt: 1.5, borderRadius: 99 }} />}
             </Box>}
             {movideskStatus.result && <Alert severity={movideskStatus.result.errors ? "warning" : "success"} sx={{ mt: 2 }}>
@@ -1502,22 +1501,7 @@ export function Import({ embedded = false }: { embedded?: boolean }) {
                 }}
               />
 
-              <Box
-                sx={{
-                  display:
-                    "grid",
-                  gridTemplateColumns: {
-                    xs:
-                      "1fr",
-                    sm:
-                      "repeat(2, 1fr)",
-                    lg:
-                      "repeat(3, 1fr)",
-                  },
-                  gap:
-                    1.5,
-                }}
-              >
+              <KpiGrid>
                 <InfoCard
                   label="Última tentativa"
                   value={
@@ -1550,7 +1534,7 @@ export function Import({ embedded = false }: { embedded?: boolean }) {
                     )
                   }
                 />
-              </Box>
+              </KpiGrid>
 
               {azureStatus.latestRun ? (
                 <>
@@ -1584,24 +1568,7 @@ export function Import({ embedded = false }: { embedded?: boolean }) {
                     }
                   </Typography>
 
-                  <Box
-                    sx={{
-                      display:
-                        "grid",
-                      gridTemplateColumns: {
-                        xs:
-                          "1fr",
-                        sm:
-                          "repeat(2, 1fr)",
-                        lg:
-                          "repeat(5, 1fr)",
-                      },
-                      gap:
-                        1.5,
-                      mt:
-                        2,
-                    }}
-                  >
+                  <KpiGrid sx={{mt: 2}}>
                     <ResultCard
                       title="Work Items"
                       value={
@@ -1656,7 +1623,7 @@ export function Import({ embedded = false }: { embedded?: boolean }) {
                           : "success"
                       }
                     />
-                  </Box>
+                  </KpiGrid>
 
                   {azureStatus
                     .latestRun
@@ -1881,24 +1848,7 @@ export function Import({ embedded = false }: { embedded?: boolean }) {
               : "Importação concluída com sucesso."}
           </Alert>
 
-          <Box
-            sx={{
-              display:
-                "grid",
-              gridTemplateColumns: {
-                xs:
-                  "1fr",
-                sm:
-                  "repeat(2, 1fr)",
-                lg:
-                  "repeat(5, 1fr)",
-              },
-              gap:
-                1.5,
-              mt:
-                2,
-            }}
-          >
+          <KpiGrid sx={{mt: 2}}>
             <ResultCard
               title="Linhas"
               value={
@@ -1941,7 +1891,7 @@ export function Import({ embedded = false }: { embedded?: boolean }) {
                   : "success"
               }
             />
-          </Box>
+          </KpiGrid>
 
           <Card
             elevation={0}
@@ -1982,22 +1932,7 @@ export function Import({ embedded = false }: { embedded?: boolean }) {
                 }}
               />
 
-              <Box
-                sx={{
-                  display:
-                    "grid",
-                  gridTemplateColumns: {
-                    xs:
-                      "1fr",
-                    sm:
-                      "repeat(2, 1fr)",
-                    lg:
-                      "repeat(4, 1fr)",
-                  },
-                  gap:
-                    2,
-                }}
-              >
+              <KpiGrid>
                 <InfoMetric
                   label="Analistas"
                   value={
@@ -2033,7 +1968,7 @@ export function Import({ embedded = false }: { embedded?: boolean }) {
                       .length
                   }
                 />
-              </Box>
+              </KpiGrid>
 
               <Divider
                 sx={{
@@ -2151,10 +2086,7 @@ function IntegrationHealthCard({ title, configured, health }: { title: string; c
   const color = !configured ? "default" : health.state === "critical" ? "error" : health.state === "attention" || health.state === "unknown" ? "warning" : "success";
   const label = !configured ? "Não configurado" : health.state === "critical" ? "Crítico" : health.state === "attention" ? "Atenção" : health.state === "unknown" ? "Sem histórico" : "Saudável";
   const age = health.ageMinutes == null ? "Sem execução registrada" : health.ageMinutes < 60 ? `Atualizado há ${health.ageMinutes} min` : health.ageMinutes < 1440 ? `Atualizado há ${Math.round(health.ageMinutes / 60)} h` : `Atualizado há ${Math.round(health.ageMinutes / 1440)} dia(s)`;
-  return <Box sx={{ p: 1.75, minHeight: 78, height: "100%", border: "1px solid", borderColor: "divider", borderRadius: 2.5, bgcolor: "background.paper" }}>
-    <Stack direction="row" spacing={1} sx={{ justifyContent: "space-between", alignItems: "center" }}><Typography sx={{ fontWeight: 800 }}>{title}</Typography><Chip size="small" color={color} variant="outlined" label={label} /></Stack>
-    <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: .6 }}>{age}</Typography>
-  </Box>;
+  return <ExecutiveKpiCard title={title} value={label} subtitle={age} accent={color === "error" ? aliareColors.error : color === "warning" ? aliareColors.warning : color === "success" ? aliareColors.green : aliareColors.info} />;
 }
 
 function SectionHeader({
@@ -2249,46 +2181,7 @@ function InfoCard({
   label: string;
   value: string;
 }) {
-  return (
-    <Box
-      sx={{
-        p: 1.75,
-        minHeight: 78,
-        height: "100%",
-        display: "flex",
-        flexDirection: "column",
-        justifyContent: "center",
-        border: "1px solid",
-        borderColor: "divider",
-        borderRadius: 2.5,
-        bgcolor: "background.paper",
-      }}
-    >
-      <Typography
-        variant="caption"
-        color="text.secondary"
-        sx={{ fontWeight: 600, letterSpacing: ".01em" }}
-      >
-        {label}
-      </Typography>
-
-      <Typography
-        variant="body2"
-        sx={{
-          fontWeight:
-            750,
-          mt:
-            0.4,
-          fontSize:
-            ".95rem",
-          letterSpacing:
-            "-0.01em",
-        }}
-      >
-        {value}
-      </Typography>
-    </Box>
-  );
+  return <ExecutiveKpiCard title={label} value={value} />;
 }
 
 function ResultCard({
@@ -2304,59 +2197,7 @@ function ResultCard({
     | "warning"
     | "error";
 }) {
-  const borderColor = "divider";
-
-  return (
-    <Card
-      elevation={0}
-      sx={{
-        border:
-          "1px solid",
-        borderColor,
-        borderRadius:
-          2.5,
-        height:
-          "100%",
-      }}
-    >
-      <CardContent
-        sx={{
-          p:
-            1.75,
-          "&:last-child": {
-            pb:
-              1.75,
-          },
-        }}
-      >
-        <Typography
-          variant="body2"
-          color="text.secondary"
-          sx={{
-            fontWeight:
-              650,
-          }}
-        >
-          {title}
-        </Typography>
-
-        <Typography
-          sx={{
-            fontWeight:
-              750,
-            mt:
-              0.5,
-            fontSize:
-              "1.55rem",
-            lineHeight:
-              1.1,
-          }}
-        >
-          {value}
-        </Typography>
-      </CardContent>
-    </Card>
-  );
+  return <ExecutiveKpiCard title={title} value={value} accent={_severity === "error" ? aliareColors.error : _severity === "warning" ? aliareColors.warning : aliareColors.green} />;
 }
 
 function InfoMetric({
@@ -2366,27 +2207,7 @@ function InfoMetric({
   label: string;
   value: number;
 }) {
-  return (
-    <Box>
-      <Typography
-        variant="caption"
-        color="text.secondary"
-      >
-        {label}
-      </Typography>
-
-      <Typography
-        sx={{
-          fontWeight:
-            800,
-          fontSize:
-            "1.35rem",
-        }}
-      >
-        {value}
-      </Typography>
-    </Box>
-  );
+  return <ExecutiveKpiCard title={label} value={value} />;
 }
 
 /* =========================================================

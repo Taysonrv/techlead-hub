@@ -1,3 +1,4 @@
+import { KpiGrid } from "../components/KpiGrid";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
@@ -1747,25 +1748,7 @@ export function Clients() {
           KPIs DE CLIENTES
       ================================================= */}
 
-      <Box
-        sx={{
-          display: "grid",
-
-          gridTemplateColumns: {
-            xs: "1fr",
-            sm: "repeat(2, 1fr)",
-            lg: "repeat(4, 1fr)",
-          },
-
-          gap: {
-            xs: 1.25,
-            md: 1.5,
-            xl: 2,
-          },
-
-          mb: 2,
-        }}
-      >
+      <KpiGrid sx={{mb: 2}}>
         <MetricCard
           title="Tickets no período"
           value={
@@ -1883,7 +1866,7 @@ export function Clients() {
             )
           }
         />
-      </Box>
+      </KpiGrid>
 
       {/* =================================================
           RESUMO EXECUTIVO / CLIENTE
@@ -1902,7 +1885,7 @@ export function Clients() {
             <Chip size="small" variant="outlined" label={selectedClient || `${summary.totalClients} cliente(s) na carteira`} />
           </Stack>
 
-          <Box className="client-print-kpi-grid" sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0,1fr))", lg: "repeat(3, minmax(0,1fr))", xl: "repeat(5, minmax(0,1fr))" }, gap: 1.25 }}>
+          <KpiGrid className="client-print-kpi-grid">
             <ExecutiveMetric
               title="Taxa de resolução"
               value={`${portfolioSummary.resolutionRate}%`}
@@ -1966,7 +1949,7 @@ export function Clients() {
               }}
               onClick={() => showTickets("Tickets com desenvolvimento vinculado", scopedTickets.filter((ticket) => Boolean(ticket.azureWorkItem)), "Atendimentos com Work Item do Azure vinculado")}
             />
-          </Box>
+          </KpiGrid>
 
           <Divider sx={{ my: 1.5 }} />
           <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap", alignItems: "center" }}>
@@ -2009,14 +1992,14 @@ export function Clients() {
           <CardContent sx={{ p: { xs: 1.5, md: isPresenting ? 3 : 2 }, flex: isPresenting ? 1 : undefined, overflow: isPresenting ? "hidden" : undefined, display: "flex", flexDirection: "column" }}>
             {(!isPresenting || presentationPage === 0) && <Box sx={{ height: isPresenting ? "100%" : "auto", display: "flex", flexDirection: "column", justifyContent: isPresenting ? "center" : undefined }}>
               <Typography variant="h5" sx={{ fontWeight: 900, mb: 2 }}>Resumo executivo</Typography>
-              <Box className="client-print-kpi-grid" sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2,minmax(0,1fr))", lg: "repeat(3,minmax(0,1fr))", xl: "repeat(6,minmax(0,1fr))" }, gap: 1.25, mb: 2 }}>
+              <KpiGrid className="client-print-kpi-grid" sx={{mb: 2}}>
                 <PresentationKpi title="Atendimentos" value={scopedTickets.length} detail="no período" color="#075985" onClick={() => showTickets("Atendimentos no foco", scopedTickets)} />
                 <PresentationKpi title="Bugs" value={presentationSummary.bugs.length} detail={`${presentationSummary.bugs.filter((ticket) => ticket.azureWorkItem || ticket.taskNumber).length} com Task`} color="#008A68" onClick={() => showTickets("Bugs identificados", presentationSummary.bugs)} />
                 <PresentationKpi title="Com Task" value={presentationSummary.withTask.length} detail="correção, evolução ou apoio" color="#2676B9" onClick={() => showTickets("Atendimentos com Task", presentationSummary.withTask)} />
                 <PresentationKpi title="Pendências" value={presentationSummary.pending.length} detail="em acompanhamento" color="#B7791F" onClick={() => showTickets("Pendências ativas", presentationSummary.pending)} />
                 <PresentationKpi title="SLA solução" value={formatSlaPercent(portfolioSummary.solutionSla.percent)} detail={`${portfolioSummary.solutionSla.onTime} de ${portfolioSummary.solutionSla.measured} medidos`} color="#159A68" onClick={() => showTickets("SLA solução", calculateTimestampSla(solutionScopedTickets, "solution").measuredTickets)} />
                 <PresentationKpi title="Tempo médio de solução" value={formatMinutes(clients.find((item) => item.client === selectedClient)?.averageResolutionMinutes ?? null)} detail={`${clients.find((item) => item.client === selectedClient)?.measuredResolutionTimes ?? 0} atendimento(s) medido(s)`} color="#7C3AED" onClick={() => showTickets("Atendimentos com tempo de solução", scopedTickets.filter((ticket) => ticketResolutionMinutes(ticket) !== null))} />
-              </Box>
+              </KpiGrid>
               <Box sx={{ p: 2.25, border: "1px solid", borderColor: "divider", borderRadius: 2, bgcolor: "background.paper" }}>
                 <Typography sx={{ fontWeight: 850 }}>Principais insights</Typography>
                 <Stack spacing={1} sx={{ mt: 1.25 }}>{executiveInsights.slice(0, 5).map((item) => <Typography key={item} variant="body1" sx={{ lineHeight: 1.55 }}>• {item}</Typography>)}</Stack>
@@ -4018,17 +4001,7 @@ function StandardMetricCard({
 function PresentationKpi({ title, value, detail, color, onClick }: {
   title: string; value: ReactNode; detail: string; color: string; onClick: () => void;
 }) {
-  return (
-    <Card elevation={0} role="button" tabIndex={0} onClick={onClick}
-      onKeyDown={(event) => (event.key === "Enter" || event.key === " ") && onClick()}
-      sx={{ border: "1px solid", borderColor: "divider", borderTop: `4px solid ${color}`, cursor: "pointer", height: "100%", "&:hover": { boxShadow: "0 8px 22px rgba(16,24,40,.09)", transform: "translateY(-2px)" }, transition: ".15s" }}>
-      <CardContent sx={{ p: 1.5, "&:last-child": { pb: 1.5 } }}>
-        <Typography variant="body2" sx={{ fontWeight: 800 }}>{title}</Typography>
-        <Typography sx={{ mt: .4, fontSize: "1.8rem", lineHeight: 1, fontWeight: 900, color }}>{value}</Typography>
-        <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: .7 }}>{detail}</Typography>
-      </CardContent>
-    </Card>
-  );
+  return <ExecutiveKpiCard title={title} value={value} subtitle={detail} accent={color} onClick={onClick} />;
 }
 
 function ExecutiveDonutPanel({ title, data, total }: { title: string; data: PieDataItem[]; total: number }) {
