@@ -1,3 +1,4 @@
+import { useId } from "react";
 import {
   Alert,
   Box,
@@ -48,7 +49,7 @@ import {
 } from "react";
 
 import { api } from "../services/api";
-import { getTicketSnapshot } from "../services/ticketSnapshot";
+import { getTicketSnapshot, getTicketSnapshotState, subscribeTicketSnapshotRefresh } from "../services/ticketSnapshot";
 import { useFilters } from "../context/FiltersContext";
 import { PeriodFilter } from "../components/PeriodFilter";
 import { PageHeader } from "../components/PageHeader";
@@ -366,40 +367,25 @@ export function Tickets() {
   ======================================================= */
 
   useEffect(() => {
-    async function loadTickets() {
+    const controller = new AbortController();
+    let refreshing = false;
+    async function loadTickets(initial = false) {
+      if (refreshing) return;
+      refreshing = true;
       try {
-        setLoading(
-          true
-        );
-
-        setError(
-          null
-        );
-
+        if (initial) setLoading(true);
         const snapshot = await getTicketSnapshot<Ticket>();
-
-        setTickets(
-          snapshot
-        );
-      } catch (
-        requestError
-      ) {
-        console.error(
-          "Erro ao carregar tickets:",
-          requestError
-        );
-
-        setError(
-          "Não foi possível carregar os tickets. Verifique se o backend está rodando."
-        );
+        if (!controller.signal.aborted) { setTickets(snapshot); setError(getTicketSnapshotState().lastErrorAt ? "A atualização falhou. Exibindo os últimos dados disponíveis." : null); }
+      } catch {
+        if (!controller.signal.aborted) setError("Não foi possível atualizar os tickets. Os últimos dados disponíveis foram preservados.");
       } finally {
-        setLoading(
-          false
-        );
+        refreshing = false;
+        if (!controller.signal.aborted) setLoading(false);
       }
     }
-
-    void loadTickets();
+    void loadTickets(true);
+    const unsubscribe = subscribeTicketSnapshotRefresh(() => { void loadTickets(); });
+    return () => { unsubscribe(); controller.abort(); };
   }, []);
 
   /* =======================================================
@@ -1162,7 +1148,7 @@ export function Tickets() {
   }
 
   if (
-    error
+    error && tickets.length === 0
   ) {
     return (
       <Alert severity="error">
@@ -1181,6 +1167,7 @@ export function Tickets() {
           CABEÇALHO
       =================================================== */}
 
+      {error && <Alert severity="warning" sx={{ mb: 2 }}>{error}</Alert>}
       <PageHeader
         eyebrow="Operação"
         title="Tickets"
@@ -3127,8 +3114,9 @@ function KpiCard({
 ========================================================= */
 
 function FilterSelect({ label, value, options, onChange }: FilterSelectProps) {
-  return <FormControl fullWidth size="small"><InputLabel shrink id="tickets-select-2-label">{label}</InputLabel><Select labelId="tickets-select-2-label" inputProps={{ id: "tickets-select-2", "aria-labelledby": "tickets-select-2-label" }} multiple displayEmpty value={value} label={label}
-      onChange={(event) => { const next = typeof event.target.value === "string" ? event.target.value.split(",") : event.target.value; onChange(next.includes("__all__") ? [...options] : next.filter((item) => item !== "__all__")); }}
+  const id = useId();
+  return <FormControl fullWidth size="small"><InputLabel shrink id={`${id}-label`}>{label}</InputLabel><Select labelId={`${id}-label`} inputProps={{ id, "aria-labelledby": `${id}-label` }} notched multiple displayEmpty value={value} label={label}
+      onChange={(event) => { const next = typeof event.target.value === "string" ? event.target.value.split(",") : event.target.value; onChange(next.includes("__all__") ? (options.every((item) => value.includes(item)) ? [] : [...options]) : next.filter((item) => item !== "__all__")); }}
       renderValue={(selected) => !selected.length ? "Todos" : selected.length === 1 ? selected[0] : `${selected.length} selecionados`}>
       <MenuItem value="__all__"><Checkbox size="small" checked={options.length > 0 && value.length === options.length} indeterminate={value.length > 0 && value.length < options.length} />Todos</MenuItem>
       {options.map((option) => <MenuItem key={option} value={option}><Checkbox size="small" checked={value.includes(option)} />{option}</MenuItem>)}
