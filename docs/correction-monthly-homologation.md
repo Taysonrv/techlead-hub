@@ -10,6 +10,10 @@ Respostas sem a coleção JSON esperada são rejeitadas; HTML ou outro payload i
 
 A expiração do cache de dois minutos agenda uma consulta e preserva a última apuração, seus IDs remotos, cobertura e erros. Ela não reconstrói uma prévia local por cima da consulta anterior. Após resultado parcial ou falha, novas tentativas automáticas respeitam dez minutos; a tela aberta agenda a próxima consulta e informa o horário da última tentativa. Recarregar permite tentar imediatamente, preserva os dados durante a consulta e compartilha uma geração já em andamento. Uma prévia exclusivamente local identifica que seus números não representam cobertura histórica do Azure.
 
+Se a preparação inicial levar mais de quatro segundos depois de autenticar a requisição, a API responde HTTP 202 com o estado de geração, sem cards ou totais. A tela acompanha a mesma geração a cada três segundos e só exibe números quando recebe um relatório. Falhas na preparação local permanecem disponíveis à consulta de acompanhamento; Recarregar permite recuperar após corrigir a causa. Na recarga, os dados já exibidos permanecem visíveis inclusive se a nova requisição falhar.
+
+A primeira prévia não aguarda a gravação do fechamento. Essa gravação acontece no fluxo de background, antes da apuração remota, mantendo a ordem dos fechamentos. A leitura do fechamento salvo e das Tasks começa em paralelo; a prévia consulta apenas os campos necessários, sem transportar rawFields de todas as Correções. O terminal registra início da prévia e duração da apuração. Um timeout de 30 segundos no navegador indica que a chamada ao Hub não respondeu; isoladamente, ele não identifica falha do Azure. Se persistir, conferir logs do backend, versão executada, proxy do Vite e acesso ao PostgreSQL/autenticação antes do controller.
+
 ## Leitura dos números
 
 “Carteira no fechamento” inclui Tasks antigas, inclusive concluídas e canceladas antes do mês. Pipeline, Urgência e Priorização distribuem essa carteira. “Movimentos e backlog do mês” mostra a união distinta dos seis indicadores e abre seu detalhamento. A soma dos cards não representa esse total: uma Task pode aparecer em mais de um indicador.

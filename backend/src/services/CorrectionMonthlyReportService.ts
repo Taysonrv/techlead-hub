@@ -193,6 +193,7 @@ export class CorrectionMonthlyReportService {
   private static fieldCache = new Map<string,{expiresAt:number;fields:FieldDefinition[]}>();
   private static reportCache = new Map<string,{expiresAt:number;data:unknown}>();
   private static previews = new Map<string,Promise<unknown>>();
+  private static previewErrors = new Map<string,{error:unknown;expiresAt:number}>();
   private static retryAfter = new Map<string,number>();
   private static inFlight = new Map<string,Promise<unknown>>();
 
@@ -479,6 +480,8 @@ ASOF '${asOf.toISOString()}'`;
         nextHistoryRetryAt:!refreshing&&retryAt>Date.now()?new Date(retryAt).toISOString():undefined}};
     };
     const cached=cache.get(month);
+    const previewError=CorrectionMonthlyReportService.previewErrors.get(month);
+    if(!cached&&previewError&&previewError.expiresAt>Date.now()) throw previewError.error;
     const retryAt=CorrectionMonthlyReportService.retryAfter.get(month)??0;
     const needsRefresh=forceRefresh||!cached||cached.expiresAt<=Date.now()||(retryAt>0&&Date.now()>=retryAt);
     if(cached&&(!needsRefresh||pending.has(month))) return withStatus(cached.data);
@@ -486,10 +489,14 @@ ASOF '${asOf.toISOString()}'`;
     if(!cached){
       let preview=CorrectionMonthlyReportService.previews.get(month);
       if(!preview){
-        preview=this.build(month,true).then(async local=>{
-          await this.saveClosing(month,local);
+        preview=this.build(month,true).then(local=>{
+          CorrectionMonthlyReportService.previewErrors.delete(month);
           cache.set(month,{expiresAt:Date.now()+REPORT_CACHE_TTL_MS,data:local});
           return local;
+        }).catch(error=>{
+          CorrectionMonthlyReportService.previewErrors.set(month,{error,expiresAt:Date.now()+CACHE_TTL_MS});
+          console.warn(`[correction-monthly-report] Falha ao preparar prévia local. | mês=${month} | ${error instanceof Error?error.message:String(error)}`);
+          throw error;
         }).finally(()=>CorrectionMonthlyReportService.previews.delete(month));
         CorrectionMonthlyReportService.previews.set(month,preview);
       }
@@ -498,7 +505,12 @@ ASOF '${asOf.toISOString()}'`;
     // A expiração só agenda nova consulta: não substitui a cobertura remota
     // por uma prévia local durante os dez minutos entre tentativas parciais.
     if(!pending.has(month)&&(forceRefresh||Date.now()>=retryAt)){
-      const refresh=this.build(month).then(async updated=>{
+      const refresh=(async()=>{
+        // Persistir a prévia não bloqueia a primeira resposta. A gravação
+        // antecede a apuração remota para não sobrescrever seu fechamento.
+        if(!cached)await this.saveClosing(month,data as Awaited<ReturnType<CorrectionMonthlyReportService["build"]>>);
+        return this.build(month);
+      })().then(async updated=>{
         await this.saveClosing(month,updated);
         const completed={...updated,quality:{...updated.quality,lastHistoryAttemptAt:new Date(Date.now()).toISOString()}};
         cache.set(month,{expiresAt:Date.now()+REPORT_CACHE_TTL_MS,data:completed});
@@ -548,16 +560,18 @@ ASOF '${asOf.toISOString()}'`;
 
   private invalidateMonth(month:string) {
     CorrectionMonthlyReportService.reportCache.delete(month);
+    CorrectionMonthlyReportService.previewErrors.delete(month);
     CorrectionMonthlyReportService.fieldCache.delete(`${process.env.AZURE_DEVOPS_ORGANIZATION??""}/${process.env.AZURE_DEVOPS_PROJECT??""}`);
     for(const key of CorrectionMonthlyReportService.cache.keys())
       if(key.includes(`/corrections/${month}-01/`)) CorrectionMonthlyReportService.cache.delete(key);
   }
 
   private async build(month:string,localOnly=false) {
+    const startedAt=Date.now();
+    if(localOnly) console.info(`[correction-monthly-report] Preparando prévia local. | mês=${month}`);
     const {start,endExclusive,close}=saoPauloMonth(month);
     const livePeriod=close.getTime()<endExclusive.getTime()-1;
-    const savedClosing=!livePeriod?await this.loadClosing(month):null;
-    const archivedRows=new Map((savedClosing?.rows??[]).map(row=>[row.id,row]));
+    const savedClosingPromise=!livePeriod?this.loadClosing(month):Promise.resolve(null);
     const scopePromise=localOnly?Promise.resolve({ids:null,complete:false,error:null}):Promise.allSettled([
       this.workItemIdsAsOf(new Date(start.getTime()-1)),
       // O pipeline é a carteira inteira no fechamento, inclusive Registro
@@ -568,7 +582,7 @@ ASOF '${asOf.toISOString()}'`;
       complete:results.every(result=>result.status==="fulfilled"),
       error:results.flatMap((result,index)=>result.status==="rejected"?[`${index===0?"Abertura":"Fechamento"}: ${result.reason instanceof Error?result.reason.message:"Escopo ASOF indisponível"}`]:[]).join(" | ")||null,
     }));
-    const currentPromise=prisma.azureWorkItem.findMany({where:{workItemType:"Correção Clientes"},select:{id:true,title:true,client:true,criticality:true,prioritized:true,assignedToName:true,remoteUrl:true,createdByName:true,azureCreatedAt:true,state:true,stateChangedAt:true,azureClosedAt:true,rawFields:true}});
+    const currentPromise=prisma.azureWorkItem.findMany({where:{workItemType:"Correção Clientes"},select:{id:true,title:true,client:true,criticality:true,prioritized:true,assignedToName:true,remoteUrl:true,createdByName:true,azureCreatedAt:true,state:true,stateChangedAt:true,azureClosedAt:true,rawFields:!localOnly}});
     let fields:{client:string;prioritized:string;urgency:string}={client:AZURE_WORK_ITEM_FIELDS.client,prioritized:AZURE_WORK_ITEM_FIELDS.prioritized,urgency:AZURE_WORK_ITEM_FIELDS.criticality};
     let revisions:Revision[]=[];
     let historyAvailable=false;
@@ -583,7 +597,9 @@ ASOF '${asOf.toISOString()}'`;
       historyError=error instanceof Error ? error.message : "Histórico do Azure indisponível.";
       console.warn(`[correction-monthly-report] Histórico do Azure indisponível; usando snapshot local. | ${historyError}`);
     }
-    const current=(await currentPromise).filter(item=>!!resolveSimerClient(item.client)&&isCorrectionTeamCreator(item.createdByName));
+    const [savedClosing,currentItems]=await Promise.all([savedClosingPromise,currentPromise]);
+    const archivedRows=new Map((savedClosing?.rows??[]).map(row=>[row.id,row]));
+    const current=currentItems.filter(item=>!!resolveSimerClient(item.client)&&isCorrectionTeamCreator(item.createdByName));
     const revisionIds=revisions
       .map(revision=>Number(revision.id??revision.fields?.["System.Id"]))
       .filter((id):id is number=>Number.isSafeInteger(id)&&id>0);
@@ -1021,6 +1037,7 @@ ASOF '${asOf.toISOString()}'`;
       `asofFechamento=${closingScopeIds.length}`,
       `linhas=${rows.length}`,
       `fallbackLocal=${localFallbackUsed?"sim":"não"}`,
+      `duraçãoMs=${Date.now()-startedAt}`,
     ].join(" | "));
     const count=(p:(r:Row)=>boolean)=>rows.filter(p).length;
     const by=(selector:(r:Row)=>string|null)=>Object.entries(rows.filter(row=>Boolean(row.stateAtClose)).reduce<Record<string,number>>((acc,row)=>{const key=selector(row)||"Não informado";acc[key]=(acc[key]??0)+1;return acc;},{})).map(([name,total])=>({name,total})).sort((a,b)=>b.total-a.total);

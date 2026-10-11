@@ -1,5 +1,6 @@
 import { KpiGrid } from "./KpiGrid";
 import { useEffect, useMemo, useState } from "react";
+import { isAxiosError } from "axios";
 import {
   Alert, Autocomplete, Box, Button, Card, CardContent, Chip, CircularProgress, Divider, Drawer,
   FormControl, IconButton, InputLabel, MenuItem, Select, Stack as MuiStack, Table, TableBody,
@@ -116,6 +117,8 @@ type Report = {
   };
 };
 
+type GeneratingReport={status:"generating";month:string;retryAfterMs:number};
+
 type Drill = "registered"|"delivered"|"canceled"|"registration"|"backlogInitial"|"backlogCurrent"|null;
 type SliceDrill =
   | {kind:"status";value:string}
@@ -170,6 +173,7 @@ export function CorrectionMonthlyPanel() {
   const [report,setReport] = useState<Report|null>(null);
   const [loading,setLoading] = useState(false);
   const [error,setError] = useState("");
+  const [preparing,setPreparing] = useState(false);
   const [reloadToken,setReloadToken] = useState(0);
 
   const [creators,setCreators] = useState<string[]>([]);
@@ -188,15 +192,25 @@ export function CorrectionMonthlyPanel() {
   useEffect(() => {
     let active = true;
     setLoading(true);
+    setPreparing(false);
     setError("");
-    setReport(null);
+    setReport(current=>current?.period.month===month?current:null);
     let timer:ReturnType<typeof setTimeout>|undefined;
     const load=async(first:boolean)=>{
       try {
-        const {data}=await api.get<Report>("/azure-work-items/corrections/monthly-report",{
+        const {data,status}=await api.get<Report|GeneratingReport>("/azure-work-items/corrections/monthly-report",{
           params:{month,...(first&&reloadToken>0?{refresh:"1"}:{})},timeout:30000,
         });
         if(!active) return;
+        if(status===202&&data&&typeof data==="object"&&"status" in data&&data.status==="generating"){
+          setLoading(true);
+          setPreparing(true);
+          timer=setTimeout(()=>void load(false),3000);
+          return;
+        }
+        if(!data||typeof data!=="object"||!("rows" in data)||!Array.isArray(data.rows)||data.period?.month!==month)
+          throw new Error("A API não retornou um relatório válido para o período solicitado.");
+        setPreparing(false);
         setReport(data);
         setLoading(false);
         if(data.quality?.refreshing) timer=setTimeout(()=>void load(false),3000);
@@ -205,7 +219,12 @@ export function CorrectionMonthlyPanel() {
           if(Number.isFinite(retryAt)) timer=setTimeout(()=>void load(false),Math.max(3000,retryAt-Date.now()));
         }
       } catch(requestError) {
-        if(active){setError(getApiErrorMessage(requestError,"Não foi possível carregar o report mensal."));setLoading(false);}
+        if(active){
+          const message=getApiErrorMessage(requestError,"Não foi possível carregar o report mensal.");
+          const timedOut=isAxiosError(requestError)&&(requestError.code==="ECONNABORTED"||requestError.code==="ETIMEDOUT");
+          setError(timedOut?"A API não respondeu em 30 segundos. Verifique o terminal do backend e se ele foi reiniciado com a atualização do relatório.":message);
+          setLoading(false);setPreparing(false);
+        }
       }
     };
     void load(true);
@@ -542,7 +561,7 @@ export function CorrectionMonthlyPanel() {
           </Stack>
         </Box>
         <Typography variant="caption" color="text.secondary" sx={{display:"block",mt:1.4}}>
-          {teamScopeActive?"Time SIMER":creators.length?"Criadores selecionados":"Todos os criadores do suporte SIMER"} · {periodUniverse} task(s) com estado no fechamento · {monthlyIndicatorRows.length} nos movimentos/backlog do mês
+          {teamScopeActive?"Time SIMER":creators.length?"Criadores selecionados":"Todos os criadores do suporte SIMER"} · {report?`${periodUniverse} task(s) com estado no fechamento · ${monthlyIndicatorRows.length} nos movimentos/backlog do mês`:loading?"Preparando relatório…":"Relatório indisponível; totais não apurados"}
         </Typography>
       </CardContent>
     </Card>
@@ -552,9 +571,10 @@ export function CorrectionMonthlyPanel() {
         severity="error"
         action={<Button color="inherit" size="small" onClick={()=>setReloadToken(value=>value+1)}>Tentar novamente</Button>}
       >
-        {error}
+        {error}{report&&" A última apuração disponível foi preservada."}
       </Alert>
     }
+    {loading&&report&&<Alert severity="info">Atualizando o relatório. A última apuração disponível permanece na tela.</Alert>}
     {!!report?.quality?.refreshError&&<Alert severity="warning">
       <b>A atualização histórica falhou.</b>{" "}{report.quality.refreshError}{" "}
       A última apuração disponível foi preservada. Verifique a falha e use Recarregar para consultar novamente o Azure.
@@ -590,8 +610,8 @@ export function CorrectionMonthlyPanel() {
     {!!report?.quality?.missingClosingFields&&<Alert severity="warning">
       Há {report.quality.missingClosingFields} task(s) sem os campos históricos necessários para confirmar a carteira. Verifique o campo Cliente Principal e a permissão de leitura do Azure antes de entregar o report.
     </Alert>}
-    {!loading&&report&&<ExportCorrectionTasksButton rows={base} title={`Report mensal de Correções ${month}`} subtitle={exportContext} summary={reportSummary}/>}
-    {!loading&&report&&month==="2026-09"&&
+    {report&&<ExportCorrectionTasksButton rows={base} title={`Report mensal de Correções ${month}`} subtitle={exportContext} summary={reportSummary}/>}
+    {report&&month==="2026-09"&&
       <Card elevation={0} sx={{
         ...panel,
         borderColor:homologationPassed?"rgba(24,199,122,.28)":"rgba(237,151,47,.3)",
@@ -641,8 +661,8 @@ export function CorrectionMonthlyPanel() {
       <Alert severity="warning">Nenhuma Task do tipo Correção Clientes foi localizada no recorte carregado.</Alert>
     }
 
-    {loading
-      ? <Box sx={{py:5,textAlign:"center"}}><CircularProgress size={28}/><Typography variant="body2" color="text.secondary" sx={{mt:1}}>Reconstruindo o fechamento mensal…</Typography></Box>
+    {loading&&!report
+      ? <Box sx={{py:5,textAlign:"center"}}><CircularProgress size={28}/><Typography variant="body2" color="text.secondary" sx={{mt:1}}>{preparing?"Preparando a apuração local. O relatório será atualizado automaticamente quando a consulta terminar.":"Carregando a apuração mensal…"}</Typography></Box>
       : report&&<>
         <KpiGrid>
           {cards.map(card=>
