@@ -103,7 +103,7 @@ type Report = {
   filters?:{creators:string[];teamCreators?:string[];clients:string[];urgencies:string[];states:string[]};
   quality?:{
     historyAvailable:boolean;historyError:string|null;snapshotAvailable?:boolean;snapshotError?:string|null;
-    historicalScopeError?:string|null;mode:string;refreshing?:boolean;localPreview?:boolean;movementHistoryReliable?:boolean;
+    historicalScopeError?:string|null;refreshError?:string|null;mode:string;refreshing?:boolean;localPreview?:boolean;movementHistoryReliable?:boolean;
     historicalMetricsReliable:boolean;backlogHistoricalReliable?:boolean;backlogInitialAvailable?:boolean;backlogCurrentAvailable?:boolean;unknownClosingStates?:number;
     externalHistorySuspicious?:boolean;localFallbackUsed?:boolean;localStateHistoryEvents?:number;
     perItemHistoryRecoveryUsed?:boolean;recoveredHistoryItems?:number;recoveryCandidates?:number;missingClosingFields?:number;
@@ -548,6 +548,10 @@ export function CorrectionMonthlyPanel() {
         {error}
       </Alert>
     }
+    {!!report?.quality?.refreshError&&<Alert severity="warning">
+      <b>A atualização histórica falhou.</b>{" "}{report.quality.refreshError}{" "}
+      A última apuração disponível foi preservada. Verifique a falha e use Recarregar para consultar novamente o Azure.
+    </Alert>}
     {report?.quality&&(!report.quality.historicalMetricsReliable||!!report.quality.historicalScopeError)&&
       <Alert severity="warning">
         <b>{report.quality.refreshing?"Conferindo histórico no Azure.":"Apuração histórica parcial."}</b>{" "}

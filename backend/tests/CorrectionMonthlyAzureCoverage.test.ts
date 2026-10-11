@@ -78,6 +78,50 @@ test("WIQL inclui Registro na abertura e terminais na descoberta do fechamento",
   assert.match(queries[1],/ASOF '2026-10-01T02:59:59.999Z'/);
 });
 
+test("payload inválido do Azure não é tratado como consulta histórica vazia",async(t)=>{
+  const service=new CorrectionMonthlyReportService();
+  t.mock.method(service,"azureConfig",()=>({organization:"invalid-payload-test",project:"test",pat:"test"}));
+  t.mock.method(service,"client",()=>({get:async()=>({data:"<html>Sign in</html>"}),post:async()=>({data:{message:"Resposta inesperada"}})}));
+  const reader=service as unknown as {
+    revisions(f:typeof fields,start:Date):Promise<Snapshot[]>;
+    workItemIdsAsOf(at:Date):Promise<number[]>;
+    snapshots(ids:number[],at:Date,f:typeof fields):Promise<Map<number,Snapshot>>;
+  };
+  const at=new Date("2026-09-01T03:00:00Z");
+  await assert.rejects(reader.revisions(fields,at),/Resposta inválida.*Reporting/);
+  await assert.rejects(reader.workItemIdsAsOf(at),/Resposta inválida.*WIQL/);
+  await assert.rejects(reader.snapshots([1],at,fields),/Resposta inválida.*snapshots/);
+  t.mock.method(service,"client",()=>({get:async()=>({data:{values:[],isLastBatch:true}}),post:async()=>({data:{workItems:[],value:[]}})}));
+  assert.deepEqual(await reader.revisions(fields,at),[]);
+  assert.deepEqual(await reader.workItemIdsAsOf(at),[]);
+  assert.equal((await reader.snapshots([1],at,fields)).size,0);
+});
+
+test("falha em segundo plano fica disponível à tela e recarga remove o erro após sucesso",async(t)=>{
+  const service=new CorrectionMonthlyReportService();
+  const preview={rows:[],quality:{historicalMetricsReliable:false,localPreview:true}};
+  let fail=true;
+  t.mock.method(service,"saveClosing",async()=>{});
+  t.mock.method(service,"build",async(_month:string,localOnly:boolean)=>{
+    if(localOnly)return preview;
+    if(fail)throw new Error("Falha ao processar histórico de teste");
+    return {rows:[],quality:{historicalMetricsReliable:true}};
+  });
+  const asReport=(value:unknown)=>value as {quality:{refreshing:boolean;refreshError?:string;historicalMetricsReliable:boolean}};
+  assert.equal(asReport(await service.getPreview("2026-06",true)).quality.refreshing,true);
+  await new Promise(resolve=>setImmediate(resolve));
+  const failed=asReport(await service.getPreview("2026-06"));
+  assert.equal(failed.quality.refreshing,false);
+  assert.equal(failed.quality.refreshError,"Falha ao processar histórico de teste");
+  assert.equal(failed.quality.historicalMetricsReliable,false);
+  fail=false;
+  await service.getPreview("2026-06",true);
+  await new Promise(resolve=>setImmediate(resolve));
+  const completed=asReport(await service.getPreview("2026-06"));
+  assert.equal(completed.quality.historicalMetricsReliable,true);
+  assert.equal(completed.quality.refreshError,undefined);
+});
+
 test("setembro reproduz referência por snapshots completos sem depender de Tasks sincronizadas",async(t)=>{
   localDb(t);
   const service=reportService(t);

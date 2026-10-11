@@ -6,6 +6,8 @@ A descoberta de IDs consulta o Azure no fechamento, incluindo estados terminais 
 
 O Reporting percorre nextLink ou continuationToken até concluir a consulta. Identidades com displayName, uniqueName e nome acompanhado de email são reconhecidas. Snapshots usam até três lotes simultâneos de no máximo 200 IDs por fotografia. Quando faltam estados ou campos customizados, as revisões completas por ID complementam os dados. Uma consulta de abertura malsucedida não descarta um fechamento obtido com sucesso. Recarregar invalida também revisões e descoberta de campos em cache.
 
+Respostas sem a coleção JSON esperada são rejeitadas; HTML ou outro payload inválido não equivale a consulta vazia. Falhas da atualização em segundo plano preservam a última apuração e mostram a causa na tela. Escopo histórico totalmente vazio com Tasks locais no período gera diagnóstico explícito para conferência da organização, projeto e acesso. Esse sinal não identifica sozinho a causa da falha na instalação.
+
 ## Leitura dos números
 
 “Carteira no fechamento” inclui Tasks antigas, inclusive concluídas e canceladas antes do mês. Pipeline, Urgência e Priorização distribuem essa carteira. “Movimentos e backlog do mês” mostra a união distinta dos seis indicadores e abre seu detalhamento. A soma dos cards não representa esse total: uma Task pode aparecer em mais de um indicador.

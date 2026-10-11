@@ -15,6 +15,12 @@ type SnapshotItem = { id?: number; fields?: Record<string, unknown> };
 type SnapshotBatchResponse = { value?: SnapshotItem[] };
 type WiqlResponse = { workItems?: Array<{ id?: number }> };
 
+function azureCollection<T>(value:unknown,operation:string):T[] {
+  if(!Array.isArray(value))
+    throw new Error(`Resposta inválida do Azure em ${operation}: a coleção esperada não foi retornada. Verifique organização, projeto e acesso da integração.`);
+  return value as T[];
+}
+
 export type LocalReportCandidate = {
   id: number;
   azureCreatedAt: Date | null;
@@ -208,7 +214,7 @@ export class CorrectionMonthlyReportService {
     if(cached&&cached.expiresAt>Date.now()) return cached.fields;
     try {
       const response=await this.client().get<FieldListResponse>("/_apis/wit/fields",{params:{"api-version":"7.1"}});
-      const fields=response.data.value??[];
+      const fields=azureCollection<FieldDefinition>(response.data?.value,"campos");
       CorrectionMonthlyReportService.fieldCache.set(key,{expiresAt:Date.now()+FIELD_CACHE_TTL_MS,fields});
       return fields;
     } catch { return []; }
@@ -273,7 +279,7 @@ export class CorrectionMonthlyReportService {
           timeout:Math.max(1_000,Math.min(AZURE_REQUEST_TIMEOUT_MS,remaining)),
         },
       );
-      all.push(...(response.data.values??response.data.value??[]));
+      all.push(...azureCollection<Revision>(response.data?.values??response.data?.value,"Reporting de revisões"));
       nextLink=response.data.isLastBatch===true?null:(response.data.nextLink??null);
       continuationToken=response.data.isLastBatch===true?undefined:response.data.continuationToken;
       if(response.data.isLastBatch===false&&!nextLink&&!continuationToken)
@@ -300,7 +306,7 @@ ASOF '${asOf.toISOString()}'`;
       {query},
       {params:{"api-version":"7.1"},timeout:AZURE_REQUEST_TIMEOUT_MS},
     );
-    return [...new Set((response.data.workItems??[])
+    return [...new Set(azureCollection<{id?:number}>(response.data?.workItems,"escopo WIQL ASOF")
       .map(item=>Number(item.id))
       .filter((id):id is number=>Number.isSafeInteger(id)&&id>0))];
   }
@@ -330,7 +336,7 @@ ASOF '${asOf.toISOString()}'`;
               params:{"$top":200,"$skip":skip,"api-version":"7.1"},
               timeout:Math.max(1,Math.min(AZURE_REQUEST_TIMEOUT_MS,remaining)),
             });
-            const page=response.data.value??[];
+            const page=azureCollection<Revision>(response.data?.value,"revisões por Task");
             history.push(...page.map(revision=>({...revision,id})));
             if(page.length<200) break;
             skip+=page.length;
@@ -392,7 +398,7 @@ ASOF '${asOf.toISOString()}'`;
         },
         {params:{"api-version":"7.1"},timeout:Math.max(1_000,Math.min(AZURE_REQUEST_TIMEOUT_MS,remaining))},
       );
-      return response.data.value??[];
+      return azureCollection<SnapshotItem>(response.data?.value,"snapshots ASOF");
     };
 
     let cursor=0;
@@ -485,8 +491,12 @@ ASOF '${asOf.toISOString()}'`;
         return updated;
       }).catch(error=>{
         CorrectionMonthlyReportService.retryAfter.set(month,Date.now()+10*60_000);
-        console.warn("[correction-monthly-report] Atualização histórica em background falhou:",error instanceof Error?error.message:String(error));
-        return data;
+        const refreshError=error instanceof Error?error.message:String(error);
+        console.warn("[correction-monthly-report] Atualização histórica em background falhou:",refreshError);
+        const report=data as {quality:Record<string,unknown>};
+        const failed={...report,quality:{...report.quality,refreshError}};
+        cache.set(month,{expiresAt:Date.now()+REPORT_CACHE_TTL_MS,data:failed});
+        return failed;
       }).finally(()=>pending.delete(month));
       pending.set(month,refresh);
     }
@@ -605,6 +615,8 @@ ASOF '${asOf.toISOString()}'`;
       revisions.length===0 &&
       openingScopeIds.length===0 &&
       closingScopeIds.length===0;
+    if(!localOnly&&externalHistorySuspicious&&!historicalScopeError)
+      historicalScopeError="O Azure retornou escopo histórico vazio apesar de existirem Tasks locais no período. Confirme organização, projeto e acesso da integração; essa resposta não comprova carteira ou backlog zerados.";
 
     let perItemHistoryRecoveryUsed=false;
     let recoveredHistoryItems=0;
