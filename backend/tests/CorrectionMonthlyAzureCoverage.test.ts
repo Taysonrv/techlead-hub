@@ -147,7 +147,8 @@ test("Reporting percorre continuação sem nextLink e não certifica página tru
 test("WIQL inclui Registro na abertura e terminais na descoberta do fechamento",async(t)=>{
   const service=new CorrectionMonthlyReportService();
   const queries:string[]=[];
-  t.mock.method(service,"client",()=>({post:async(_url:string,body:{query:string})=>{
+  t.mock.method(service,"client",()=>({post:async(_url:string,body:{query:string},options:{params:{timePrecision:boolean}})=>{
+    assert.equal(options.params.timePrecision,true,"ASOF usa o corte de horário, além da data");
     queries.push(body.query);return {data:{workItems:[{id:1},{id:1}]}};
   }}));
   const reader=service as unknown as {workItemIdsAsOf(at:Date,all?:boolean):Promise<number[]>};

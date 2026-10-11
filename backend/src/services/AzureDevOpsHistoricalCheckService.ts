@@ -32,11 +32,11 @@ export async function checkAzureMonthlyAccess(configuration: AzureDevOpsConfigur
   if (!failure) {
     const probes = [
       { key: "openingScope", label: "Carteira na abertura", run: async () => {
-        const response = await client.post("/_apis/wit/wiql", { query: `SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = @project AND [System.WorkItemType] = 'Correção Clientes' AND [System.State] <> 'Concluído' AND [System.State] <> 'Cancelado' ASOF '${opening.toISOString()}'` }, { params: { "api-version": "7.1", "$top": 1 } });
+        const response = await client.post("/_apis/wit/wiql", { query: `SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = @project AND [System.WorkItemType] = 'Correção Clientes' AND [System.State] <> 'Concluído' AND [System.State] <> 'Cancelado' ASOF '${opening.toISOString()}'` }, { params: { "api-version": "7.1", "$top": 1, timePrecision: true } });
         scopes[0] = azureCollection<ScopeItem>(response, "workItems", "abertura WIQL ASOF"); scopeReady[0] = true; return scopes[0];
       } },
       { key: "closingScope", label: "Carteira no fechamento", run: async () => {
-        const response = await client.post("/_apis/wit/wiql", { query: `SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = @project AND [System.WorkItemType] = 'Correção Clientes' ASOF '${close.toISOString()}'` }, { params: { "api-version": "7.1", "$top": 1 } });
+        const response = await client.post("/_apis/wit/wiql", { query: `SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = @project AND [System.WorkItemType] = 'Correção Clientes' ASOF '${close.toISOString()}'` }, { params: { "api-version": "7.1", "$top": 1, timePrecision: true } });
         scopes[1] = azureCollection<ScopeItem>(response, "workItems", "fechamento WIQL ASOF"); scopeReady[1] = true; return scopes[1];
       } },
       { key: "revisions", label: "Reporting de revisões", run: async () => {

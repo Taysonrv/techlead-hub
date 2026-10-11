@@ -281,7 +281,7 @@ ASOF '${asOf.toISOString()}'`;
     const response=await this.client().post<WiqlResponse>(
       "/_apis/wit/wiql",
       {query},
-      {params:{"api-version":"7.1"},timeout:AZURE_REQUEST_TIMEOUT_MS},
+      {params:{"api-version":"7.1",timePrecision:true},timeout:AZURE_REQUEST_TIMEOUT_MS},
     );
     return [...new Set(azureCollection<{id?:number}>(response,"workItems","escopo WIQL ASOF")
       .map(item=>Number(item.id))

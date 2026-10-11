@@ -95,8 +95,8 @@ test("teste histórico consulta amostras de Reporting, WIQL e dois snapshots com
   const queries: string[] = [];
   t.mock.method(axios, "create", () => ({
     get: async (url: string) => ({ data: url.endsWith("/fields") ? { value: definitions } : { values: [{ id: 10 }] } }),
-    post: async (url: string, body: any) => {
-      if (url.endsWith("/wiql")) { queries.push(body.query); return { data: { workItems: [{ id: 10 }] } }; }
+    post: async (url: string, body: any, options: any) => {
+      if (url.endsWith("/wiql")) { assert.equal(options.params.timePrecision, true); queries.push(body.query); return { data: { workItems: [{ id: 10 }] } }; }
       photographs.push(body); return { data: { value: [{ id: 10, fields: { "System.State": "Qualidade" } }] } };
     },
   }));

@@ -1,6 +1,6 @@
 # Report mensal de Correções — conferência e entrega
 
-O report considera exclusivamente Correções Clientes da carteira SIMER, criadas por Alan, Renan e Tayson. O responsável atual pode pertencer ao desenvolvimento. Os limites de abertura e fechamento usam America/Sao_Paulo.
+O report considera exclusivamente Correções Clientes da carteira SIMER, criadas por Alan, Renan e Tayson. O responsável atual pode pertencer ao desenvolvimento. Os limites de abertura e fechamento usam America/Sao_Paulo. Consultas WIQL ASOF usam timePrecision=true para explicitar a precisão de horário dos cortes, inclusive no teste histórico de Integrações.
 
 A descoberta de IDs consulta o Azure no fechamento, incluindo estados terminais e Registro. Portanto, Tasks ainda ausentes da sincronização local podem participar do relatório. Na abertura, Registro é consultado para reconstrução do pipeline, mas não integra o backlog. O fechamento anterior e a abertura do mês seguinte representam a mesma fotografia.
 
@@ -65,3 +65,4 @@ Fechamentos anteriores ao formato v5 são reapurados, pois podiam conter metadad
 
 - [Reporting Work Item Revisions](https://learn.microsoft.com/en-us/rest/api/azure/devops/wit/reporting-work-item-revisions/read-reporting-revisions-get?view=azure-devops-rest-7.1)
 - [Work Items Batch / ASOF](https://learn.microsoft.com/en-us/rest/api/azure/devops/wit/work-items/get-work-items-batch?view=azure-devops-rest-7.1)
+- [WIQL / precisão de horário](https://learn.microsoft.com/en-us/rest/api/azure/devops/wit/wiql/query-by-wiql?view=azure-devops-rest-7.1)
