@@ -1,3 +1,4 @@
+import { subscribeTicketSnapshotRefresh } from "../services/ticketSnapshot";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
@@ -198,9 +199,12 @@ export function Attention() {
     loadRequestRef.current?.abort();
     loadRequestRef.current = controller;
 
-    async function loadTickets() {
+    let refreshing = false;
+    async function loadTickets(initial = false) {
+      if (refreshing) return;
+      refreshing = true;
       try {
-        setLoading(true);
+        if (initial) setLoading(true);
         setError(null);
         const response = await api.get<Ticket[]>("/dashboard/pending-tickets", { signal: controller.signal });
         if (!controller.signal.aborted) setTickets(response.data);
@@ -209,13 +213,15 @@ export function Attention() {
         console.error("Erro ao carregar pontos de atenção:", err);
         setError("Não foi possível carregar os pontos de atenção.");
       } finally {
+        refreshing = false;
         if (!controller.signal.aborted) setLoading(false);
       }
     }
 
-    void loadTickets();
+    void loadTickets(true);
+    const unsubscribe = subscribeTicketSnapshotRefresh(() => { void loadTickets(); });
     api.get<RecurrenceResponse>("/known-problems/candidates").then(r => setRecurrence(r.data)).catch(() => setRecurrence(null));
-    return () => controller.abort();
+    return () => { unsubscribe(); controller.abort(); };
   }, []);
 
   /* =====================================================
@@ -803,7 +809,7 @@ export function Attention() {
     );
   }
 
-  if (error) {
+  if (error && tickets.length === 0) {
     return (
       <Alert severity="error">
         {error}
@@ -819,6 +825,7 @@ export function Attention() {
     <>
       {/* CABEÇALHO */}
 
+      {error && <Alert severity="warning" sx={{ mb: 2 }}>{error}</Alert>}
       <PageHeader
         eyebrow="Gestão de risco"
         title="Pontos de Atenção"
@@ -1097,7 +1104,7 @@ export function Attention() {
                 xs: "1fr",
                 sm: "repeat(2, minmax(0, 1fr))",
                 lg: "repeat(2, minmax(0, 1fr))",
-                xl: "repeat(4, minmax(0, 1fr)) auto",
+                xl: "repeat(3, minmax(0, 1fr))",
               },
               gap: 1.25,
               alignItems: "center",
@@ -1116,7 +1123,7 @@ export function Attention() {
             >
               <InputLabel shrink id="attention-select-1-label">
                 Situação do prazo
-              </InputLabel><Select labelId="attention-select-1-label" inputProps={{ id: "attention-select-1", "aria-labelledby": "attention-select-1-label" }} multiple displayEmpty value={level} label="Situação do prazo"
+              </InputLabel><Select notched labelId="attention-select-1-label" inputProps={{ id: "attention-select-1", "aria-labelledby": "attention-select-1-label" }} multiple displayEmpty value={level} label="Situação do prazo"
                 onChange={(event) => { const next = typeof event.target.value === "string" ? event.target.value.split(",") : event.target.value as string[]; setLevel((next.includes("__all__") ? ["vencido","critico","atencao"] : next.filter((item) => item !== "__all__")) as AttentionLevel[]); }}
                 renderValue={(selected) => !selected.length ? "Todos" : selected.length === 1 ? selected[0] : `${selected.length} selecionados`}>
                 <MenuItem value="__all__"><Checkbox size="small" checked={level.length === 3} indeterminate={level.length > 0 && level.length < 3} />Todos</MenuItem>
@@ -1137,7 +1144,7 @@ export function Attention() {
             >
               <InputLabel shrink id="attention-select-2-label">
                 Responsável
-              </InputLabel><Select labelId="attention-select-2-label" inputProps={{ id: "attention-select-2", "aria-labelledby": "attention-select-2-label" }} multiple displayEmpty value={owner} label="Responsável"
+              </InputLabel><Select notched labelId="attention-select-2-label" inputProps={{ id: "attention-select-2", "aria-labelledby": "attention-select-2-label" }} multiple displayEmpty value={owner} label="Responsável"
                 onChange={(event) => { const next = typeof event.target.value === "string" ? event.target.value.split(",") : event.target.value as string[]; setOwner(next.includes("__all__") ? [...owners] : next.filter((item) => item !== "__all__")); }}
                 renderValue={(selected) => !selected.length ? "Todos" : selected.length === 1 ? selected[0] : `${selected.length} selecionados`}>
                 <MenuItem value="__all__"><Checkbox size="small" checked={owners.length > 0 && owner.length === owners.length} indeterminate={owner.length > 0 && owner.length < owners.length} />Todos</MenuItem>
@@ -1158,7 +1165,7 @@ export function Attention() {
             >
               <InputLabel shrink id="attention-select-3-label">
                 Cliente
-              </InputLabel><Select labelId="attention-select-3-label" inputProps={{ id: "attention-select-3", "aria-labelledby": "attention-select-3-label" }} multiple displayEmpty value={client} label="Cliente"
+              </InputLabel><Select notched labelId="attention-select-3-label" inputProps={{ id: "attention-select-3", "aria-labelledby": "attention-select-3-label" }} multiple displayEmpty value={client} label="Cliente"
                 onChange={(event) => { const next = typeof event.target.value === "string" ? event.target.value.split(",") : event.target.value as string[]; setClient(next.includes("__all__") ? [...clients] : next.filter((item) => item !== "__all__")); }}
                 renderValue={(selected) => !selected.length ? "Todos" : selected.length === 1 ? selected[0] : `${selected.length} selecionados`}>
                 <MenuItem value="__all__"><Checkbox size="small" checked={clients.length > 0 && client.length === clients.length} indeterminate={client.length > 0 && client.length < clients.length} />Todos</MenuItem>
@@ -1179,7 +1186,7 @@ export function Attention() {
             >
               <InputLabel shrink id="attention-select-4-label">
                 Origem do risco
-              </InputLabel><Select labelId="attention-select-4-label" inputProps={{ id: "attention-select-4", "aria-labelledby": "attention-select-4-label" }}
+              </InputLabel><Select notched labelId="attention-select-4-label" inputProps={{ id: "attention-select-4", "aria-labelledby": "attention-select-4-label" }}
                 value={riskFilter}
                 label="Origem do risco"
                 onChange={(event) =>
