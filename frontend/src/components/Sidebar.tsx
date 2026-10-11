@@ -57,6 +57,8 @@ import {
   SearchOutlined,
   ShareOutlined,
   DoneAllRounded,
+  InsightsOutlined,
+  SpeedOutlined,
 } from "@mui/icons-material";
 
 import {
@@ -98,6 +100,7 @@ import {
 import {
   NotificationCenter,
 } from "./NotificationCenter";
+import { TopBarActionButton } from "./TopBarActionButton";
 
 /* =========================================================
    CONFIGURAÇÃO
@@ -203,7 +206,7 @@ export function Sidebar() {
   ] =
     useState<HTMLElement | null>(null);
 
-  const [openSections, setOpenSections] = useState<Record<"cadastros" | "movimentos" | "analises" | "development" | "gestao", boolean>>(() => ({
+  const [openSections, setOpenSections] = useState<Record<"cadastros" | "movimentos" | "analises" | "development" | "gestao" | "conhecimento", boolean>>(() => ({
     // O sidebar sempre inicia com os grupos de rotinas recolhidos.
     // A expansão passa a ser uma ação explícita do usuário durante a sessão.
     cadastros: false,
@@ -211,6 +214,7 @@ export function Sidebar() {
     analises: false,
     development: false,
     gestao: false,
+    conhecimento: false,
   }));
 
   const profileMenuOpen =
@@ -485,7 +489,7 @@ export function Sidebar() {
   ]);
 
   /* =======================================================
-     ROTINAS - MESMO AGRUPAMENTO DA CENTRAL DA COORDENAÇÃO
+     ROTINAS AGRUPADAS POR FINALIDADE, RESPEITANDO AS PERMISSÕES
   ======================================================= */
 
   const canAccess = useCallback((permission: string) =>
@@ -507,21 +511,23 @@ export function Sidebar() {
 
   const movementMenu = useMemo<MenuItemData[]>(
     () => [
-      ...(canAccess("tickets") ? [{ label: "Operação", path: "/operacao/tickets", icon: <ConfirmationNumberOutlined fontSize="small" /> }] : []),
+      ...(canAccess("tickets") ? [{ label: "Tickets", path: "/operacao/tickets", icon: <ConfirmationNumberOutlined fontSize="small" /> }] : []),
+      ...(canAccess("my-operation") ? [{ label: "Minha Operação", path: "/operacao/minha-operacao", icon: <PersonOutlined fontSize="small" /> }] : []),
       ...(canAccess("known-problems") ? [{ label: "Problemas Conhecidos", path: "/problemas-conhecidos", icon: <CampaignOutlined fontSize="small" /> }] : []),
       ...(canAccess("attention") ? [{ label: "Pendências & Riscos", path: "/pendencias-riscos", icon: <WarningAmberOutlined fontSize="small" /> }] : []),
+      ...(canAccess("data-quality") ? [{ label: "Qualidade dos Dados", path: "/pendencias-riscos/qualidade", icon: <FactCheckOutlined fontSize="small" /> }] : []),
     ],
     [canAccess],
   );
 
   const analysisMenu = useMemo<MenuItemData[]>(
     () => [
-      ...(canAccess("dashboard") ? [{ label: "Gestão & Inteligência", path: "/gestao-inteligencia", icon: <PsychologyOutlined fontSize="small" /> }] : []),
+      ...(canAccess("performance") ? [{ label: "Desempenho & SLA", path: "/visao-operacional/desempenho", icon: <SpeedOutlined fontSize="small" /> }] : []),
       ...(canAccess("reports") ? [{ label: "Relatórios", path: "/relatorios", icon: <AssessmentOutlined fontSize="small" /> }] : []),
       ...(canAccess("services")
         ? [{ label: "Serviços SIMER", path: "/servicos", icon: <FactCheckOutlined fontSize="small" /> }]
         : []),
-
+      ...(canAccess("simer-map") ? [{ label: "Investigação SIMER", path: "/investigacao", icon: <SearchOutlined fontSize="small" /> }] : []),
     ],
     [canAccess],
   );
@@ -538,7 +544,18 @@ export function Sidebar() {
 
   const managementMenu = useMemo<MenuItemData[]>(
     () => [
+      ...(canAccess("dashboard") ? [
+        { label: "Gestão & Inteligência", path: "/gestao-inteligencia", icon: <PsychologyOutlined fontSize="small" /> },
+        { label: "Inteligência Operacional", path: "/gestao-inteligencia/inteligencia", icon: <InsightsOutlined fontSize="small" /> },
+      ] : []),
       ...(canAccess("coordination") ? [{ label: "Painel da Coordenação", path: "/gestao-inteligencia/coordenacao", icon: <GroupsOutlined fontSize="small" /> }] : []),
+      ...(canAccess("technical-leadership") ? [{ label: "Liderança Técnica", path: "/gestao-inteligencia/lideranca", icon: <ManageAccountsOutlined fontSize="small" /> }] : []),
+    ],
+    [canAccess],
+  );
+
+  const knowledgeMenu = useMemo<MenuItemData[]>(
+    () => [
       ...(canAccess("knowledge") ? [{ label: "Base de Conhecimento", path: "/conhecimento", icon: <MenuBookOutlined fontSize="small" /> }] : []),
     ],
     [canAccess],
@@ -871,28 +888,28 @@ export function Sidebar() {
           </Box>
         </Box>
 
-        <Box sx={{ px: 1, mb: .5 }}>
-          <ListItemButton component={NavLink} to="/visao-operacional" title="Visão Operacional" sx={{ minHeight: 40, px: 1.15, borderRadius: 1.5, color: "rgba(255,255,255,.72)", "&:hover": { bgcolor: "rgba(24,199,122,.08)", color: "#fff" }, "&.active": { bgcolor: "rgba(24,199,122,.13)", color: "#fff" }, "&.active .MuiListItemIcon-root": { color: aliareColors.green } }}>
+        {canAccess("dashboard") && <Box sx={{ px: 1, mb: .5 }}>
+          <ListItemButton component={NavLink} to="/visao-operacional" end title="Visão Operacional" sx={{ minHeight: 40, px: 1.15, borderRadius: 1.5, color: "rgba(255,255,255,.72)", "&:hover": { bgcolor: "rgba(24,199,122,.08)", color: "#fff" }, "&.active": { bgcolor: "rgba(24,199,122,.13)", color: "#fff" }, "&.active .MuiListItemIcon-root": { color: aliareColors.green } }}>
             <ListItemIcon sx={{ minWidth: 34, color: "rgba(255,255,255,.44)", "& .MuiSvgIcon-root": { fontSize: 19 } }}><HomeOutlined fontSize="small" /></ListItemIcon>
             <ListItemText primary="Início" slotProps={{ primary: { sx: { fontSize: ".8rem", fontWeight: 600, lineHeight: 1.35 } } }} />
             {!window.techLeadHub?.desktop && <RoutineNewTabButton path="/visao-operacional" label="Visão Operacional" />}
           </ListItemButton>
-        </Box>
+        </Box>}
 
         <MenuSection
-          title="Cadastros"
-          ariaLabel="Navegação de cadastros"
-          items={registrationMenu}
-          open={openSections.cadastros}
-          onToggle={() => setOpenSections((current) => ({ ...current, cadastros: !current.cadastros }))}
-        />
-
-        <MenuSection
-          title="Movimentos"
-          ariaLabel="Navegação de movimentos"
+          title="Operação"
+          ariaLabel="Navegação de operação"
           items={movementMenu}
           open={openSections.movimentos}
           onToggle={() => setOpenSections((current) => ({ ...current, movimentos: !current.movimentos }))}
+        />
+
+        <MenuSection
+          title="Gestão"
+          ariaLabel="Navegação de gestão"
+          items={managementMenu}
+          open={openSections.gestao}
+          onToggle={() => setOpenSections((current) => ({ ...current, gestao: !current.gestao }))}
         />
 
         <MenuSection
@@ -912,11 +929,19 @@ export function Sidebar() {
         />
 
         <MenuSection
-          title="Gestão"
-          ariaLabel="Navegação de gestão"
-          items={managementMenu}
-          open={openSections.gestao}
-          onToggle={() => setOpenSections((current) => ({ ...current, gestao: !current.gestao }))}
+          title="Cadastros"
+          ariaLabel="Navegação de cadastros"
+          items={registrationMenu}
+          open={openSections.cadastros}
+          onToggle={() => setOpenSections((current) => ({ ...current, cadastros: !current.cadastros }))}
+        />
+
+        <MenuSection
+          title="Conhecimento"
+          ariaLabel="Navegação de conhecimento"
+          items={knowledgeMenu}
+          open={openSections.conhecimento}
+          onToggle={() => setOpenSections((current) => ({ ...current, conhecimento: !current.conhecimento }))}
         />
 
         <Box
@@ -1086,22 +1111,22 @@ export function Sidebar() {
             position: "fixed",
             top: 14,
             right: 20,
-            zIndex: (theme) => theme.zIndex.appBar,
+            zIndex: (theme) => theme.zIndex.appBar + 1,
             display: "flex",
             alignItems: "center",
             gap: 1,
           }}
         >
-          <Box id="global-calendar-slot" sx={{ display: "flex", alignItems: "center" }} />
+          <Box id="global-calendar-slot" sx={{ display: "flex", alignItems: "center", gap: 1 }} />
 
-          <IconButton
+          <TopBarActionButton
             title="Chat"
             aria-label="Abrir chat"
             onClick={() => navigate("/chat")}
-            sx={{ width: 46, height: 46, bgcolor: "background.paper", border: "1px solid", borderColor: location.pathname === "/chat" ? "rgba(24,199,122,.55)" : "divider", borderRadius: 2, boxShadow: "0 2px 10px rgba(0,0,0,.06)", color: location.pathname === "/chat" ? aliareColors.green : "text.primary", "&:hover": { bgcolor: "background.paper", borderColor: "rgba(24,199,122,.45)" } }}
+            active={location.pathname === "/chat"}
           >
-            <Badge badgeContent={location.pathname === "/chat" ? 0 : chatUnread} color="error" max={99} overlap="circular" sx={{ "& .MuiBadge-badge": { fontSize: ".62rem", minWidth: 18, height: 18, fontWeight: 900, boxShadow: "0 0 0 2px", boxShadowColor: "background.paper" } }}><ChatBubbleOutlineRounded /></Badge>
-          </IconButton>
+            <Badge badgeContent={location.pathname === "/chat" ? 0 : chatUnread} color="error" max={99}><ChatBubbleOutlineRounded /></Badge>
+          </TopBarActionButton>
 
           <NotificationCenter />
 
@@ -1452,9 +1477,7 @@ function MenuItem({
       }
       to={path}
       title={label}
-      end={
-        path === "/"
-      }
+      end
       sx={{
         position:
           "relative",

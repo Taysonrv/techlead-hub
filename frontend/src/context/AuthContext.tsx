@@ -5,6 +5,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -171,6 +172,9 @@ export function AuthProvider({
   ] =
     useState(true);
 
+  const userRef = useRef(user);
+  useEffect(() => { userRef.current = user; }, [user]);
+
   /* =======================================================
      LIMPAR SESSÃO LOCAL
   ======================================================= */
@@ -280,9 +284,28 @@ export function AuthProvider({
   /* Mantém a sessão central ativa e detecta revogação em outra plataforma. */
   useEffect(() => {
     if (!user?.id) return;
-    const heartbeat = () => void api.post<{ accessToken?: string; user?: AuthUser }>("/auth/heartbeat")
-      .then((response) => {
-        if (response.data.accessToken) setAccessToken(response.data.accessToken);
+    let active = true;
+    let pending = false;
+    const heartbeat = async () => {
+      if (pending) return;
+      const token = getAccessToken();
+      if (!token) return;
+      pending = true;
+      try {
+        const response = await api.post<{ accessToken?: string; user?: AuthUser }>("/auth/heartbeat");
+        // Do not restore a session after logout or replace a newer login.
+        if (!active || getAccessToken() !== token) return;
+        const currentUser = userRef.current;
+        if (!currentUser) return;
+        const nextUser = response.data.user;
+        const sameAccess = !nextUser || (
+          currentUser.id === nextUser.id &&
+          currentUser.role === nextUser.role &&
+          currentUser.active === nextUser.active &&
+          currentUser.approvalStatus === nextUser.approvalStatus &&
+          JSON.stringify(currentUser.permissions ?? []) === JSON.stringify(nextUser.permissions ?? [])
+        );
+        if (response.data.accessToken) setAccessToken(response.data.accessToken, { renewal: sameAccess });
         if (response.data.user) {
           setUser((current) => {
             const next = response.data.user!;
@@ -297,11 +320,15 @@ export function AuthProvider({
               : next;
           });
         }
-      })
-      .catch(() => undefined);
-    heartbeat();
-    const timer = window.setInterval(heartbeat, 60_000);
-    return () => window.clearInterval(timer);
+      } catch {
+        // Session revocations are handled centrally by the API interceptor.
+      } finally {
+        pending = false;
+      }
+    };
+    void heartbeat();
+    const timer = window.setInterval(() => void heartbeat(), 60_000);
+    return () => { active = false; window.clearInterval(timer); };
   }, [user?.id]);
 
   /* =======================================================

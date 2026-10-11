@@ -1,4 +1,6 @@
 import axios from "axios";
+import { BackendAvailability } from "./backendAvailability";
+import { isSameSession } from "./sessionToken";
 
 import type {
   AxiosError,
@@ -44,14 +46,16 @@ export function getAccessToken() {
 
 export function setAccessToken(
   token:
-    string
+    string,
+  options: { renewal?: boolean } = {},
 ) {
   try {
+    const sameSession = options.renewal && isSameSession(getAccessToken(), token);
     sessionStorage.setItem(
       ACCESS_TOKEN_KEY,
       token
     );
-    window.dispatchEvent(new Event("techlead-hub:session-changed"));
+    if (!sameSession) window.dispatchEvent(new Event("techlead-hub:session-changed"));
   } catch {
     console.warn(
       "[auth] Não foi possível armazenar o token."
@@ -91,6 +95,22 @@ export const api =
     },
   });
 
+const backendAvailability = new BackendAvailability(async () => {
+  // Use a separate client so health checks cannot recursively trigger the interceptor.
+  const baseUrl = API_URL.replace(/\/+$/, "").replace(/\/api$/, "");
+  const { data } = await axios.get<{ status?: string; database?: string }>(`${baseUrl}/health`, {
+    timeout: 5_000,
+    headers: { Accept: "application/json" },
+  });
+  return (data?.status === "ok" || data?.status === "online") && data.database === "ready";
+}, (unavailable) => {
+  window.dispatchEvent(new CustomEvent(unavailable
+    ? "techlead-hub:backend-unavailable"
+    : "techlead-hub:backend-available"));
+});
+
+export function isBackendUnavailable() { return backendAvailability.isUnavailable(); }
+
 /* =========================================================
    REQUEST INTERCEPTOR
 
@@ -129,7 +149,7 @@ api.interceptors.request.use(
 
 api.interceptors.response.use(
   (response) => {
-    window.dispatchEvent(new CustomEvent("techlead-hub:backend-available"));
+    backendAvailability.reportSuccess();
     return response;
   },
 
@@ -141,9 +161,10 @@ api.interceptors.response.use(
       error.response
         ?.status;
 
-    if (!error.response || status === 503) {
-      window.dispatchEvent(new CustomEvent("techlead-hub:backend-unavailable"));
-    }
+    void backendAvailability.reportFailure({
+      status,
+      canceled: axios.isCancel(error) || error.code === "ERR_CANCELED",
+    });
 
     /*
      * Não removemos token quando o próprio endpoint

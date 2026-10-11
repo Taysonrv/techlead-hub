@@ -5,7 +5,6 @@ import {
   CircularProgress,
   Divider,
   FormControlLabel,
-  IconButton,
   Menu,
   MenuItem,
   Stack,
@@ -52,6 +51,7 @@ import {
   aliareColors,
 } from "../theme/theme";
 import { getLocalNotificationPreferences, saveLocalNotificationPreferences, playNotificationSound, type LocalNotificationPreferences } from "../utils/notificationSound";
+import { TopBarActionButton } from "./TopBarActionButton";
 
 type NotificationKind =
   | "APP_VERSION"
@@ -342,24 +342,18 @@ export function NotificationCenter() {
 
   return (
     <>
-      <IconButton
+      <TopBarActionButton
+        title="Notificações"
         aria-label="Abrir notificações"
+        aria-haspopup="menu"
+        aria-expanded={Boolean(anchor)}
+        active={Boolean(anchor)}
         onClick={openMenu}
-        sx={{
-          width: 46,
-          height: 46,
-          border: "1px solid",
-          borderColor: "divider",
-          backgroundColor: "background.paper",
-          borderRadius: "50%",
-          boxShadow: "0 2px 10px rgba(0,0,0,0.06)",
-          "&:hover": { backgroundColor: "background.paper", borderColor: "rgba(24,199,122,.45)" },
-        }}
       >
         <Badge badgeContent={unread.length} color="error" max={99}>
           <NotificationsNoneOutlined />
         </Badge>
-      </IconButton>
+      </TopBarActionButton>
 
       <Menu
         anchorEl={anchor}

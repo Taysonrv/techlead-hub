@@ -4,6 +4,7 @@ export class SnapshotCache<T> {
   private rows: T[] | null = null;
   private pending: Promise<T[]> | null = null;
   private generation = 0;
+  private sessionGeneration = 0;
   private lastErrorAt = 0;
 
   private readonly load: () => Promise<T[]>;
@@ -27,14 +28,17 @@ export class SnapshotCache<T> {
     if (this.rows && this.now() - this.cachedAt < this.ttl) return Promise.resolve(this.rows);
     if (this.pending) return this.pending;
     const generation = this.generation;
+    const sessionGeneration = this.sessionGeneration;
     const request = this.load().then((rows) => {
-      if (generation !== this.generation) throw new SnapshotInvalidatedError();
+      if (sessionGeneration !== this.sessionGeneration) throw new SnapshotInvalidatedError();
+      if (generation !== this.generation) return this.get();
       this.rows = rows;
       this.cachedAt = this.now();
       this.lastErrorAt = 0;
       return rows;
-    }).catch((error: unknown) => {
-      if (generation !== this.generation) throw new SnapshotInvalidatedError();
+    }, (error: unknown) => {
+      if (sessionGeneration !== this.sessionGeneration) throw new SnapshotInvalidatedError();
+      if (generation !== this.generation) return this.get();
       this.lastErrorAt = this.now();
       if (this.rows && this.now() - this.cachedAt < this.staleLimit) return this.rows;
       throw error;
@@ -46,6 +50,12 @@ export class SnapshotCache<T> {
   }
 
   invalidate() {
+    this.sessionGeneration++;
+    this.refresh();
+  }
+
+  /** Reloads within the same session, transparently replacing obsolete requests. */
+  refresh() {
     this.generation++;
     this.rows = null;
     this.cachedAt = 0;
@@ -63,5 +73,8 @@ export class SnapshotCache<T> {
 }
 
 export class SnapshotInvalidatedError extends Error {
-  constructor() { super("O snapshot foi invalidado durante a atualização."); }
+  constructor() {
+    super("O snapshot foi invalidado durante a atualização.");
+    this.name = "SnapshotInvalidatedError";
+  }
 }

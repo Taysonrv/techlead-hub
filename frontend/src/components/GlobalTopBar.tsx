@@ -6,6 +6,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { api, getApiErrorMessage } from "../services/api";
 import { aliareColors } from "../theme/theme";
 import { useColorMode } from "../context/ColorModeContext";
+import { TopBarActionButton } from "./TopBarActionButton";
 
 type SearchItem = { id: string; type: string; title: string; subtitle: string; path: string };
 type CalendarPerson = { id: number; name: string; username: string; email: string | null; role: string };
@@ -270,8 +271,8 @@ export function GlobalTopBar() {
   }
 
   return (
-    <Box sx={{ position: "relative", zIndex: (theme) => theme.zIndex.appBar, mb: 3, minHeight: 46, height: "auto", opacity: 1, transform: "translateY(0)", overflow: "visible", boxSizing: "border-box", bgcolor: "transparent", pointerEvents: "none" }}>
-      <Box sx={{ position: "relative", width: { xs: "calc(100% - 72px)", md: "calc(100% - 340px)" }, maxWidth: 620, minWidth: { md: 420 }, mr: "auto", minHeight: 44, pointerEvents: "auto" }}>
+    <Box sx={{ position: "relative", zIndex: (theme) => theme.zIndex.appBar, pt: { xs: 6.5, lg: 0 }, mb: 3, minHeight: 46, height: "auto", opacity: 1, transform: "translateY(0)", overflow: "visible", boxSizing: "border-box", bgcolor: "transparent", pointerEvents: "none" }}>
+      <Box sx={{ position: "relative", width: { xs: "100%", lg: "calc(100% - 500px)" }, maxWidth: 620, minWidth: 0, mr: "auto", minHeight: 44, pointerEvents: "auto" }}>
           <TextField id="global-search" inputRef={searchInputRef} fullWidth size="small" value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={handleSearchKeyDown} placeholder="Busque telas, rotinas, cards, tickets, clientes, tarefas ou versões..." slotProps={{ htmlInput: { "aria-label": "Busca global do Hub" }, input: { startAdornment: <InputAdornment position="start"><SearchOutlined fontSize="small" /></InputAdornment>, endAdornment: searching ? <CircularProgress size={16} /> : <Box component="span" sx={{px:.7,py:.25,border:"1px solid",borderColor:"divider",borderRadius:1,color:"text.secondary",fontSize:".68rem",fontWeight:800,whiteSpace:"nowrap"}}>Ctrl K</Box>, sx: { height: 44, bgcolor: "background.paper", borderRadius: 2, boxShadow: "0 2px 10px rgba(0,0,0,.04)" } } }} data-accessibility-patched="global-search" />
           {query.trim().length >= 2 && (
             <Paper elevation={8} sx={{ position: "absolute", top: 46, left: 0, right: 0, maxHeight: 430, overflowY: "auto", border: "1px solid", borderColor: "divider", zIndex: 20 }}>
@@ -284,7 +285,7 @@ export function GlobalTopBar() {
         <Alert
           severity={updateState.status === "downloaded" ? "success" : "info"}
           variant="outlined"
-          sx={{ mt: 1, width: { xs: "100%", md: "calc(100% - 340px)" }, maxWidth: 620, pointerEvents: "auto", borderRadius: 2, py: .25, "& .MuiAlert-message": { width: "100%" } }}
+          sx={{ mt: 1, width: { xs: "100%", lg: "calc(100% - 500px)" }, maxWidth: 620, pointerEvents: "auto", borderRadius: 2, py: .25, "& .MuiAlert-message": { width: "100%" } }}
           action={
             updateState.status === "available" || updateState.status === "downloaded"
               ? <Button size="small" color="inherit" onClick={() => void handleUpdateAction()}>{updateState.status === "downloaded" ? "Instalar e reiniciar" : "Baixar"}</Button>
@@ -302,15 +303,14 @@ export function GlobalTopBar() {
       )}
 
       {calendarPortal && createPortal(<>
-        <IconButton
+        <TopBarActionButton
           title={mode === "dark" ? "Usar modo claro" : "Usar modo escuro"}
           aria-label={mode === "dark" ? "Ativar modo claro" : "Ativar modo escuro"}
           onClick={toggleMode}
-          sx={{ width: 46, height: 46, bgcolor: "background.paper", border: "1px solid", borderColor: "divider", borderRadius: 2, boxShadow: "0 2px 10px rgba(0,0,0,.06)", "&:hover": { bgcolor: "background.paper", borderColor: "rgba(24,199,122,.45)" } }}
         >
           {mode === "dark" ? <LightModeOutlined /> : <DarkModeOutlined />}
-        </IconButton>
-        <IconButton title="Calendário e reuniões" aria-label="Abrir calendário e reuniões" onClick={(event: MouseEvent<HTMLElement>) => { setSelectedDate(dateKey(new Date())); setCalendarAnchor(event.currentTarget); }} sx={{ width: 46, height: 46, bgcolor: "background.paper", border: "1px solid", borderColor: "divider", borderRadius: 2, boxShadow: "0 2px 10px rgba(0,0,0,.06)", "&:hover": { bgcolor: "background.paper", borderColor: "rgba(24,199,122,.38)" } }}><Badge color="success" variant={events.length ? "dot" : "standard"}><CalendarMonthOutlined /></Badge></IconButton>
+        </TopBarActionButton>
+        <TopBarActionButton title="Calendário e reuniões" aria-label="Abrir calendário e reuniões" aria-haspopup="dialog" aria-expanded={Boolean(calendarAnchor)} active={Boolean(calendarAnchor)} onClick={(event: MouseEvent<HTMLElement>) => { setSelectedDate(dateKey(new Date())); setCalendarAnchor(event.currentTarget); }}><Badge color="success" variant={events.length ? "dot" : "standard"}><CalendarMonthOutlined /></Badge></TopBarActionButton>
 </>, calendarPortal)}
 
       <Popover open={Boolean(calendarAnchor)} anchorEl={calendarAnchor} onClose={() => setCalendarAnchor(null)} anchorOrigin={{ vertical: "bottom", horizontal: "right" }} transformOrigin={{ vertical: "top", horizontal: "right" }} slotProps={{ paper: { sx: { mt: 1, width: { xs: 340, sm: 420 }, maxWidth: "calc(100vw - 24px)", maxHeight: "calc(100dvh - 90px)", borderRadius: 2 } } }}>

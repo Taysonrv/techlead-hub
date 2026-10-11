@@ -14,7 +14,7 @@ export async function getTicketSnapshot<T>(): Promise<T[]> {
 export function getTicketSnapshotState() { return cache.state(); }
 
 export function invalidateTicketSnapshot() {
-  cache.invalidate();
+  cache.refresh();
   window.dispatchEvent(new Event("techlead-hub:tickets-changed"));
 }
 
@@ -27,11 +27,13 @@ export function subscribeTicketSnapshotRefresh(refresh: () => void) {
   const timer = window.setInterval(visibleRefresh, 30_000);
   window.addEventListener("focus", visibleRefresh);
   window.addEventListener("techlead-hub:tickets-changed", visibleRefresh);
+  window.addEventListener("techlead-hub:backend-available", visibleRefresh);
   document.addEventListener("visibilitychange", visibleRefresh);
   return () => {
     window.clearInterval(timer);
     window.removeEventListener("focus", visibleRefresh);
     window.removeEventListener("techlead-hub:tickets-changed", visibleRefresh);
+    window.removeEventListener("techlead-hub:backend-available", visibleRefresh);
     document.removeEventListener("visibilitychange", visibleRefresh);
   };
 }
