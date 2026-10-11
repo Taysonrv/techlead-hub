@@ -2,6 +2,8 @@ import crypto from "node:crypto";
 import axios from "axios";
 import { prisma } from "../database/prisma";
 import { azureCollection, azureFailureMessage } from "./AzureDevOpsResponse";
+import { azureDevOpsConfiguration, azureRequestOptions } from "./AzureDevOpsClient";
+import { checkAzureMonthlyAccess } from "./AzureDevOpsHistoricalCheckService";
 
 const SETTING_ENV = {
   organization: "AZURE_DEVOPS_ORGANIZATION",
@@ -13,6 +15,7 @@ const SETTING_ENV = {
 } as const;
 
 export type SystemConfigurationInput = Partial<Record<keyof typeof SETTING_ENV, string>>;
+export type SystemConfigurationTestInput = SystemConfigurationInput & { integration?: "azure" | "movidesk"; reportMonth?: string };
 
 type SettingRow = { key: string; value: string };
 
@@ -54,20 +57,26 @@ class SystemConfigurationService {
 
   async loadIntoEnvironment() {
     const rows = await prisma.$queryRawUnsafe<SettingRow[]>(`SELECT "key", "value" FROM "SystemSetting"`);
+    const persistedKeys = new Set<string>();
     for (const row of rows) {
       const envName = SETTING_ENV[row.key as keyof typeof SETTING_ENV];
-      if (envName) process.env[envName] = this.decrypt(row.value);
+      if (envName) {
+        process.env[envName] = this.decrypt(row.value);
+        persistedKeys.add(row.key);
+      }
     }
+    return persistedKeys;
   }
 
   async status() {
-    await this.loadIntoEnvironment();
+    const persistedKeys = await this.loadIntoEnvironment();
     return {
       databaseConfigured: Boolean(process.env.DATABASE_URL),
       organization: process.env.AZURE_DEVOPS_ORGANIZATION ?? "",
       project: process.env.AZURE_DEVOPS_PROJECT ?? "",
       wiki: process.env.AZURE_DEVOPS_WIKI ?? "",
       patConfigured: Boolean(process.env.AZURE_DEVOPS_PAT),
+      azureCredentialSource: persistedKeys.has("pat") ? "central" : process.env.AZURE_DEVOPS_PAT?.trim() ? "environment" : "missing",
       movideskConfigured: Boolean(process.env.MOVIDESK_TOKEN),
       movideskUrl: process.env.MOVIDESK_URL?.trim() || "https://api.movidesk.com/public/v1",
       runtime: process.env.APP_RUNTIME?.trim() || "desktop",
@@ -75,23 +84,20 @@ class SystemConfigurationService {
   }
 
   private async validateAzureCandidate(input: SystemConfigurationInput) {
-    const organization = input.organization?.trim() || process.env.AZURE_DEVOPS_ORGANIZATION?.trim() || "";
-    const project = input.project?.trim() || process.env.AZURE_DEVOPS_PROJECT?.trim() || "";
-    const pat = input.pat?.trim() || process.env.AZURE_DEVOPS_PAT?.trim() || "";
+    const configuration = azureDevOpsConfiguration(input);
+    const { organization, project, pat } = configuration;
     if (!organization || !project || !pat) throw new Error("Azure DevOps: organização, projeto e PAT são obrigatórios para validar a conexão.");
-    const auth = Buffer.from(`:${pat}`, "utf8").toString("base64");
+    const options = azureRequestOptions(configuration);
     try {
       // WIQL is a POST-only endpoint in Azure DevOps. Use a minimal valid
       // query so the credential is tested against the same Work Items API
       // consumed by the synchronization service.
       const response=await axios.post(
-        `https://dev.azure.com/${encodeURIComponent(organization)}/${encodeURIComponent(project)}/_apis/wit/wiql`,
+        `${options.baseURL}/_apis/wit/wiql`,
         { query: "SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = @project ORDER BY [System.ChangedDate] DESC" },
         {
-          headers: { Accept: "application/json", "Content-Type": "application/json", Authorization: `Basic ${auth}` },
+          ...options,
           params: { "api-version": "7.1", "$top": "1" },
-          timeout: 15_000,
-          maxRedirects: 0,
           validateStatus: (status) => status >= 200 && status < 300,
         },
       );
@@ -140,11 +146,16 @@ class SystemConfigurationService {
     }
   }
 
-  async test(input: SystemConfigurationInput) {
-    await this.loadIntoEnvironment();
+  async test(input: SystemConfigurationTestInput) {
+    const persistedKeys = await this.loadIntoEnvironment();
     const result: Record<string, unknown> = {};
-    if (input.pat?.trim() || input.organization?.trim() || input.project?.trim()) result.azure = await this.validateAzureCandidate(input);
-    if (input.movideskToken?.trim() || input.movideskUrl?.trim()) result.movidesk = await this.validateMovideskCandidate(input);
+    if (input.integration === "azure" || input.reportMonth || input.pat?.trim() || input.organization?.trim() || input.project?.trim()) {
+      const azure = await this.validateAzureCandidate(input);
+      result.azure = { ...azure, credentialSource: input.pat?.trim() ? "candidate" : persistedKeys.has("pat") ? "central" : "environment",
+        ...(input.reportMonth ? { history: await checkAzureMonthlyAccess(azureDevOpsConfiguration(input), input.reportMonth) } : {}) };
+    }
+    if (input.integration === "movidesk" || input.movideskToken?.trim() || input.movideskUrl?.trim()) result.movidesk = await this.validateMovideskCandidate(input);
+    if (!Object.keys(result).length) throw new Error("Selecione a integração que deseja testar.");
     return result;
   }
 
@@ -152,14 +163,20 @@ class SystemConfigurationService {
     await this.loadIntoEnvironment();
     // Validate replacement credentials before writing anything. A rejected candidate
     // must never overwrite a known-good integration credential.
-    if (input.pat?.trim()) await this.validateAzureCandidate(input);
+    const azureRequested = Boolean(input.pat?.trim() || input.organization?.trim() || input.project?.trim());
+    const azure = azureRequested ? azureDevOpsConfiguration(input) : null;
+    let currentAzure: ReturnType<typeof azureDevOpsConfiguration> | null = null;
+    try { if (azureRequested) currentAzure = azureDevOpsConfiguration(); }
+    catch { /* A valid replacement must be able to repair an invalid saved URL. */ }
+    if (azure && (input.pat?.trim() || azure.organization !== currentAzure?.organization || azure.project !== currentAzure?.project))
+      await this.validateAzureCandidate(input);
     if (input.movideskToken?.trim()) await this.validateMovideskCandidate(input);
 
     const changedKeys: string[] = [];
     for (const key of Object.keys(SETTING_ENV) as Array<keyof typeof SETTING_ENV>) {
       const rawValue = input[key]?.trim();
       if (!rawValue) continue;
-      const value = key === "movideskToken" ? normalizeMovideskToken(rawValue) : rawValue;
+      const value = key === "movideskToken" ? normalizeMovideskToken(rawValue) : key === "organization" ? azure!.organization : key === "project" ? azure!.project : rawValue;
       if (!value) continue;
       const encrypted = this.encrypt(value);
       await prisma.$executeRaw`

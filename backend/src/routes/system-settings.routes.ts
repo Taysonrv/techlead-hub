@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { requireRoles } from "../middlewares/roleMiddleware";
 import type { AuthenticatedRequest } from "../middlewares/authMiddleware";
-import { systemConfigurationService, type SystemConfigurationInput } from "../services/SystemConfigurationService";
+import { systemConfigurationService, type SystemConfigurationInput, type SystemConfigurationTestInput } from "../services/SystemConfigurationService";
 import { prisma } from "../database/prisma";
 
 export const systemSettingsRoutes = Router();
@@ -36,7 +36,7 @@ systemSettingsRoutes.get("/diagnostics", async (_request, response) => {
 
 systemSettingsRoutes.post("/test", async (request: AuthenticatedRequest, response) => {
   try {
-    return response.json(await systemConfigurationService.test(request.body as SystemConfigurationInput));
+    return response.json(await systemConfigurationService.test(request.body as SystemConfigurationTestInput));
   } catch (error) {
     return response.status(400).json({ message: error instanceof Error ? error.message : "Não foi possível validar a integração." });
   }

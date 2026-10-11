@@ -42,6 +42,7 @@ type Props = {
   startIcon?: ReactNode;
   fullWidth?: boolean;
   summary?: CorrectionExportSummary[];
+  label?: string;
 };
 
 const headers = [
@@ -115,7 +116,7 @@ export function exportCorrectionTasksToExcel(rows: CorrectionExportRow[], title:
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-export function ExportCorrectionTasksButton({ rows, title, subtitle, startIcon, fullWidth = false, summary }: Props) {
+export function ExportCorrectionTasksButton({ rows, title, subtitle, startIcon, fullWidth = false, summary, label }: Props) {
   const canExport=rows.length>0||!!summary?.length;
   return (
     <Box sx={{ width: fullWidth ? "100%" : "auto", display: "flex", justifyContent: "flex-end" }}>
@@ -130,7 +131,7 @@ export function ExportCorrectionTasksButton({ rows, title, subtitle, startIcon, 
             onClick={() => exportCorrectionTasksToExcel(rows, title, subtitle, summary)}
             sx={{ textTransform: "none", fontWeight: 800 }}
           >
-            {summary?.length?"Exportar report Excel":"Exportar Excel"}
+            {label ?? (summary?.length?"Exportar report Excel":"Exportar Excel")}
           </Button>
         </span>
       </Tooltip>

@@ -9,7 +9,6 @@ import {
 } from "@mui/material";
 import {
   AssessmentOutlined, InfoOutlined, OpenInNewOutlined, RefreshOutlined, RestartAltOutlined, ShareOutlined,
-  TrendingDownOutlined, TrendingUpOutlined,
 } from "@mui/icons-material";
 import {
   Bar, BarChart, CartesianGrid, Cell, LabelList, Pie, PieChart, ResponsiveContainer,
@@ -24,6 +23,7 @@ import { DetailFieldGrid, DetailPanelHeader, DetailSection } from "./DetailPanel
 import { detailDrawerPaperSx } from "../theme/layoutTokens";
 import { ExportCorrectionTasksButton } from "./ExportCorrectionTasksButton";
 import { correctionReportLink, parseCorrectionReportSelection } from "../utils/correctionReportSelection";
+import { useAuth } from "../context/AuthContext";
 import type { CorrectionMetric, CorrectionSlice } from "../utils/correctionReportSelection";
 
 function Stack(
@@ -113,6 +113,7 @@ type Report = {
     externalHistorySuspicious?:boolean;localFallbackUsed?:boolean;localStateHistoryEvents?:number;
     perItemHistoryRecoveryUsed?:boolean;recoveredHistoryItems?:number;recoveryCandidates?:number;missingClosingFields?:number;
     currentAssigneeError?:string|null;unknownUrgencyRows?:number;unknownPrioritizationRows?:number;
+    azureConnection?:{status:"ready"|"blocked"|"unverified";code?:string;httpStatus?:number|null;message?:string};
     diagnostics?:{
       scopedRecords?:number;localRecords:number;localPeriodCandidates:number;revisions:number;
       openingScopeIds:number;closingScopeIds:number;snapshotCandidates:number;
@@ -174,6 +175,7 @@ export function CorrectionMonthlyPanel() {
   const theme = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
+  const { user } = useAuth();
   const routeSelection = useMemo(()=>parseCorrectionReportSelection(location.search,currentMonth()),[location.search]);
 
   const [month,setMonth] = useState(routeSelection.month);
@@ -289,6 +291,8 @@ export function CorrectionMonthlyPanel() {
     report?.quality?.movementHistoryReliable ??
     report?.quality?.historicalMetricsReliable ??
     false;
+  const connectionBlocked=report?.quality?.azureConnection?.status==="blocked";
+  const movementValue=(total:number)=>!monthlyMovementVerified&&total===0?"—":total;
   const delivered = value("delivered");
   const canceled = value("canceled");
   const registered = value("registered");
@@ -330,17 +334,17 @@ export function CorrectionMonthlyPanel() {
       info:"Conta System.Id distintos criados dentro do período selecionado, independentemente do status no snapshot de fechamento.",
     },
     {
-      key:"delivered" as const,label:"Tasks entregues",value:report?delivered:"—",note:monthlyMovementVerified?"Concluídas no período":"Prévia parcial · movimentos comprovados",
+      key:"delivered" as const,label:"Tasks entregues",value:report?movementValue(delivered):"—",note:monthlyMovementVerified?"Concluídas no período":delivered?"Prévia parcial · movimentos comprovados":"Histórico pendente",
       accent:aliareColors.green,
       info:"Conta Tasks que entraram efetivamente em Concluído durante o período e permaneciam em Concluído no snapshot de fechamento.",
     },
     {
-      key:"canceled" as const,label:"Tasks canceladas",value:report?canceled:"—",note:monthlyMovementVerified?"Canceladas no período":"Prévia parcial · movimentos comprovados",
+      key:"canceled" as const,label:"Tasks canceladas",value:report?movementValue(canceled):"—",note:monthlyMovementVerified?"Canceladas no período":canceled?"Prévia parcial · movimentos comprovados":"Histórico pendente",
       accent:theme.palette.error.main,
       info:"Conta Tasks que entraram efetivamente em Cancelado durante o período e permaneciam em Cancelado no snapshot de fechamento.",
     },
     {
-      key:"registration" as const,label:"Tasks em Registro",value:report?value("registration"):"—",note:monthlyMovementVerified?"Fora do backlog":"Prévia parcial · fora do backlog",
+      key:"registration" as const,label:"Tasks em Registro",value:report?movementValue(value("registration")):"—",note:monthlyMovementVerified?"Fora do backlog":value("registration")?"Prévia parcial · fora do backlog":"Histórico pendente · fora do backlog",
       accent:aliareColors.warning,
       info:"Conta Tasks que entraram em Registro durante o período e permaneciam em Registro no fechamento. Registro aparece no pipeline, mas nunca integra backlog.",
     },
@@ -391,6 +395,7 @@ export function CorrectionMonthlyPanel() {
     {name:"Não priorizadas",total:periodRows.filter(row=>row.prioritized===false).length},
     {name:"Não informado",total:periodRows.filter(row=>row.prioritized===null).length},
   ].filter(item=>item.total);
+  const priorityColor=(name:string)=>name==="Priorizadas"?aliareColors.green:name==="Não priorizadas"?aliareColors.info:semanticChartColors.attention;
   const pipelineTotal=pipeline.reduce((sum,item)=>sum+item.total,0);
   const urgencyTotal=urgency.reduce((sum,item)=>sum+item.total,0);
   const priorityTotal=priority.reduce((sum,item)=>sum+item.total,0);
@@ -514,6 +519,8 @@ export function CorrectionMonthlyPanel() {
                 variant="outlined"
                 label={report.quality.refreshing
                   ?"Atualizando histórico"
+                  :connectionBlocked
+                    ?"Conexão Azure bloqueada"
                   :report.quality.localFallbackUsed
                   ?"Histórico local reconstruído"
                   :report.quality.historicalMetricsReliable&&!report.quality.historicalScopeError
@@ -587,97 +594,47 @@ export function CorrectionMonthlyPanel() {
       <b>A atualização histórica falhou.</b>{" "}{report.quality.refreshError}{" "}
       A última apuração disponível foi preservada. Verifique a falha e use Recarregar para consultar novamente o Azure.
     </Alert>}
-    {report?.quality&&(!report.quality.historicalMetricsReliable||!!report.quality.historicalScopeError)&&
-      <Alert severity="warning">
-        <b>{report.quality.refreshing?"Conferindo histórico no Azure.":"Apuração histórica parcial."}</b>{" "}
+    {report?.quality&&(!report.quality.historicalMetricsReliable||!!report.quality.historicalScopeError||connectionBlocked)&&
+      <Alert severity={connectionBlocked?"error":"warning"}
+        action={connectionBlocked&&user?.role==="ADMIN"?<Button color="inherit" size="small" onClick={()=>navigate(`/configuracoes?reportMonth=${month}`)}>Validar integração</Button>:undefined}>
+        <b>{report.quality.refreshing?"Conferindo histórico no Azure.":connectionBlocked?"Conexão Azure bloqueada.":"Prévia mensal · histórico incompleto."}</b>{" "}
         {report.quality.refreshing
-          ?"A última apuração disponível permanece na tela. Os números serão atualizados automaticamente quando a consulta terminar."
-          :"O histórico do Azure não foi recuperado por completo. Estados sem evidência histórica aparecem como indisponíveis. Backlog parcial não comprova o estoque total; use Recarregar para tentar novamente."}{" "}
-        {!!(report.quality.historyError||report.quality.snapshotError||report.quality.historicalScopeError)&&
-          <Box component="details" sx={{mt:1,"& summary":{cursor:"pointer",fontWeight:750}}}>
+          ?"A última apuração permanece disponível enquanto a consulta termina."
+          :connectionBlocked
+            ?report.quality.historicalMetricsReliable?"O fechamento salvo foi preservado. Valide a integração antes de atualizar.":"Os dados locais continuam disponíveis para conferência. Valide o acesso ao Azure e depois use Recarregar para concluir o mês."
+            :"Os números disponíveis ainda não confirmam o fechamento do mês. Um valor indisponível não comprova ausência de tarefas."}
+        <Box component="details" sx={{mt:1,"& summary":{cursor:"pointer",fontWeight:750}}}>
           <Box component="summary">Detalhes da consulta ao Azure</Box>
-          <Typography variant="body2" sx={{mt:.8,overflowWrap:"anywhere"}}>{[
-          report.quality.historyError && `Revisões: ${report.quality.historyError}`,
-          report.quality.snapshotError && `Snapshots: ${report.quality.snapshotError}`,
-          report.quality.historicalScopeError && `Escopo ASOF: ${report.quality.historicalScopeError}`,
-          ].filter(Boolean).join(" | ")}</Typography>
-          <Typography variant="body2" sx={{mt:.8}}>Se a resposta for inválida, HTML ou um redirecionamento, valide a conexão na tela Integrações. Os números desta prévia não confirmam o fechamento.</Typography>
-          </Box>
-        }
-        {report.quality.diagnostics && (
-          <Typography component="p" variant="caption" sx={{mt:0.8,opacity:0.9}}>
-            Carteira consultada: {report.quality.diagnostics.scopedRecords??report.quality.diagnostics.localRecords} tasks; com estado no fechamento: {periodUniverse}; movimentos/backlog do mês: {monthlyIndicatorRows.length}.{" "}
-            {report.quality.localPreview?"Prévia local: esses números não representam a cobertura histórica do Azure.":<>Histórico Azure: {report.quality.diagnostics.revisions} revisões;{" "}
-            {report.quality.diagnostics.openingScopeIds} IDs abertos na entrada, incluindo Registro;{" "}
-            {report.quality.diagnostics.closingScopeIds} IDs na carteira do fechamento;{" "}
-            {report.quality.diagnostics.snapshotCandidates} candidatos;{" "}
-            snapshots {report.quality.diagnostics.openingSnapshotItems}/{report.quality.diagnostics.closingSnapshotItems} (entrada/fechamento);{" "}
-            {report.quality.unknownClosingStates??0} sem estado histórico no fechamento.</>}
-          </Typography>
-        )}
+          {connectionBlocked?<Typography variant="body2" sx={{mt:.8,overflowWrap:"anywhere"}}>{report.quality.azureConnection?.message}</Typography>:
+            <Typography variant="body2" sx={{mt:.8,overflowWrap:"anywhere"}}>{[
+              report.quality.historyError&&`Revisões: ${report.quality.historyError}`,
+              report.quality.snapshotError&&`Snapshots: ${report.quality.snapshotError}`,
+              report.quality.historicalScopeError&&`Escopo ASOF: ${report.quality.historicalScopeError}`,
+            ].filter(Boolean).join(" | ")}</Typography>}
+          {report.quality.diagnostics&&<Typography component="p" variant="caption" sx={{mt:.8}}>
+            Carteira consultada: {report.quality.diagnostics.scopedRecords??report.quality.diagnostics.localRecords} Tasks; com estado no fechamento: {periodUniverse}; movimentos/backlog do mês: {monthlyIndicatorRows.length}.{" "}
+            {report.quality.localPreview?"Prévia local: estes números não comprovam cobertura Azure.":<>Histórico Azure: {report.quality.diagnostics.revisions} revisões; abertura: {report.quality.diagnostics.openingScopeIds} IDs; fechamento: {report.quality.diagnostics.closingScopeIds} IDs; snapshots {report.quality.diagnostics.openingSnapshotItems}/{report.quality.diagnostics.closingSnapshotItems}; {report.quality.unknownClosingStates??0} estados indisponíveis.</>}
+          </Typography>}
+          {report.quality.lastHistoryAttemptAt&&<Typography variant="caption" sx={{display:"block",mt:.8}}>
+            Última tentativa: {fmt(report.quality.lastHistoryAttemptAt)} (São Paulo).{" "}
+            {connectionBlocked?"As tentativas automáticas estão pausadas até corrigir a integração e recarregar.":report.quality.nextHistoryRetryAt&&`Próxima tentativa automática: ${fmt(report.quality.nextHistoryRetryAt)}.`}
+          </Typography>}
+          {!!(report.quality.unknownUrgencyRows||report.quality.unknownPrioritizationRows)&&<Typography variant="caption" sx={{display:"block",mt:.8}}>
+            Sem evidência histórica: {report.quality.unknownUrgencyRows??0} Tasks sem urgência e {report.quality.unknownPrioritizationRows??0} sem priorização. Valores atuais não substituem o fechamento.
+          </Typography>}
+        </Box>
       </Alert>
     }
-    {report?.quality?.lastHistoryAttemptAt&&<Typography variant="caption" color="text.secondary">
-      Última tentativa de atualização do histórico: {fmt(report.quality.lastHistoryAttemptAt)} (São Paulo).{" "}
-      {report.quality.nextHistoryRetryAt&&<>Nova tentativa automática às {fmt(report.quality.nextHistoryRetryAt)}; Recarregar permite tentar agora.</>}
-    </Typography>}
-    {!!report?.quality?.missingClosingFields&&<Alert severity="warning">
-      Há {report.quality.missingClosingFields} task(s) sem os campos históricos necessários para confirmar a carteira. Verifique o campo Cliente Principal e a permissão de leitura do Azure antes de entregar o report.
+    {!!report?.quality?.missingClosingFields&&!connectionBlocked&&<Alert severity="warning">
+      Há {report.quality.missingClosingFields} Tasks sem campos históricos para confirmar a carteira. Confira Cliente Principal e acesso ao projeto.
     </Alert>}
-    {!!(report?.quality?.unknownUrgencyRows||report?.quality?.unknownPrioritizationRows)&&<Alert severity="info">
-      Valores históricos não informados: {report?.quality?.unknownUrgencyRows??0} task(s) sem urgência e {report?.quality?.unknownPrioritizationRows??0} sem priorização.
-      Esses campos aparecem como “Não informado”; valores atuais não substituem o fechamento do mês.
+    {!!(report?.quality?.unknownUrgencyRows||report?.quality?.unknownPrioritizationRows)&&report?.quality?.historicalMetricsReliable&&!connectionBlocked&&<Alert severity="info">
+      Campos históricos não informados: {report.quality.unknownUrgencyRows??0} Tasks sem urgência e {report.quality.unknownPrioritizationRows??0} sem priorização.
     </Alert>}
-    {!!report?.quality?.currentAssigneeError&&<Alert severity="info">
-      Não foi possível consultar o responsável atual de algumas Tasks: {report.quality.currentAssigneeError} O responsável no fechamento permanece separado no detalhamento.
+    {!!report?.quality?.currentAssigneeError&&!connectionBlocked&&<Alert severity="info">
+      Não foi possível consultar o responsável atual de algumas Tasks: {report.quality.currentAssigneeError}
     </Alert>}
-    {report&&<ExportCorrectionTasksButton rows={base} title={`Report mensal de Correções ${month}`} subtitle={exportContext} summary={reportSummary}/>}
-    {report&&month==="2026-09"&&
-      <Card elevation={0} sx={{
-        ...panel,
-        borderColor:homologationPassed?"rgba(24,199,122,.28)":"rgba(237,151,47,.3)",
-        background:theme.palette.mode==="dark"
-          ?"linear-gradient(105deg,rgba(47,111,237,.08),rgba(24,199,122,.045),rgba(255,255,255,.012))"
-          :"linear-gradient(105deg,rgba(47,111,237,.05),rgba(24,199,122,.035),#FFFFFF)",
-      }}>
-        <CardContent sx={{py:1.2,"&:last-child":{pb:1.2}}}>
-          <Stack direction={{xs:"column",lg:"row"}} gap={1.25} justifyContent="space-between" alignItems={{lg:"center"}}>
-            <Box sx={{minWidth:0}}>
-              <Stack direction="row" gap={1} alignItems="center" flexWrap="wrap">
-                <Typography sx={{fontWeight:900}}>Conferência · setembro/2026</Typography>
-                <Chip size="small" label={homologationStatus} color={homologationPassed?"success":"warning"}/>
-              </Stack>
-              <Typography variant="caption" color="text.secondary">
-                {homologationScopeActive
-                  ?"Time SIMER e carteira SIMER, sem filtros adicionais. A referência da coordenação deve usar os mesmos criadores e clientes; histórico completo e totais coincidentes são necessários para homologar."
-                  :"Para confrontar a referência oficial, use Time SIMER e deixe Cliente, Urgência, Status e Priorizada sem seleção."}
-              </Typography>
-            </Box>
-            <Box sx={{display:"grid",gridTemplateColumns:{xs:"repeat(2,minmax(0,1fr))",sm:"repeat(5,minmax(108px,1fr))"},gap:.7}}>
-              {septemberHomologation.map(item=>{
-                const comparable=homologationScopeActive&&item.verified&&item.actual!==null;
-                const displayActual=item.key==="registration"?value("registration"):item.actual;
-                const matches=comparable&&item.actual===item.expected;
-                return <Box key={item.key} sx={{
-                  px:1,py:.7,border:"1px solid",borderColor:matches?"success.main":comparable?"warning.main":"divider",
-                  borderRadius:"8px",minWidth:0,bgcolor:"background.paper",
-                }}>
-                  <Typography variant="caption" color="text.secondary" sx={{display:"block",whiteSpace:"nowrap"}}>{item.label}</Typography>
-                  <Stack direction="row" gap={0.5} alignItems="baseline">
-                    <Typography sx={{fontWeight:900,fontVariantNumeric:"tabular-nums"}}>{displayActual??"—"}</Typography>
-                    <Typography variant="caption" color="text.secondary">/ ref. {item.expected}</Typography>
-                  </Stack>
-                  <Typography variant="caption" color={comparable&&!matches?"warning.main":"text.secondary"}>
-                    {!item.verified?"Histórico pendente":!homologationScopeActive?"Outro recorte":matches?"Confere":`Diferença: ${(item.actual??0)-item.expected}`}
-                  </Typography>
-                </Box>;
-              })}
-            </Box>
-          </Stack>
-        </CardContent>
-      </Card>
-    }
-
+    {report&&<ExportCorrectionTasksButton rows={base} title={`${homologationHistoryReady?"Report":"Prévia"} mensal de Correções ${month}`} subtitle={exportContext} summary={reportSummary} label={homologationHistoryReady?"Exportar report Excel":"Exportar prévia Excel"}/>}
     {!loading&&report&&report.rows.length===0&&
       <Alert severity="warning">Nenhuma Task do tipo Correção Clientes foi localizada no recorte carregado.</Alert>
     }
@@ -700,58 +657,21 @@ export function CorrectionMonthlyPanel() {
           )}
         </KpiGrid>
 
-        <Card elevation={0} sx={{
-          ...panel,
-          background:theme.palette.mode==="dark"
-            ?"linear-gradient(110deg,rgba(24,199,122,.08),rgba(255,255,255,.015))"
-            :"linear-gradient(110deg,rgba(24,199,122,.07),rgba(255,255,255,.98))",
-        }}>
-          <CardContent sx={{py:1.25,"&:last-child":{pb:1.25}}}>
-            <Stack spacing={1}>
-              <Stack direction={{xs:"column",lg:"row"}} justifyContent="space-between" alignItems={{lg:"center"}} gap={1.25}>
-              <Box sx={{display:"flex",alignItems:"center",gap:.7,flexWrap:"wrap",minWidth:0}}>
-                <Box>
-                  <Typography sx={{fontWeight:850}}>Leitura do período</Typography>
-                  <Typography variant="caption" color="text.secondary">Balanço operacional do recorte selecionado.</Typography>
-                </Box>
-                <InfoButton
-                  title="Leitura do período"
-                  description="Resumo derivado dos indicadores encontrados no recorte. Saídas = Entregues + Canceladas; saldo líquido = Registradas − Saídas; variação do backlog = Backlog atual − Backlog inicial. Os números só são oficiais quando o histórico Azure e os snapshots ASOF tiverem cobertura confirmada."
-                />
-                <MuiTooltip title={distributionConsistent?"Pipeline, Urgência e Priorização contam tasks distintas. Os cards se sobrepõem: uma task pode ser registrada e entregue no mesmo mês. A consistência dos gráficos não homologa o histórico.":`Divergência: universo ${periodUniverse}, pipeline ${pipelineTotal}, urgência ${urgencyTotal}, priorização ${priorityTotal}.`}>
-                  <Chip size="small" color={distributionConsistent?"success":"warning"} variant="outlined"
-                    label={distributionConsistent
-                      ? (backlogVerified&&monthlyMovementVerified
-                          ?"Distribuição consistente · histórico validado"
-                          :"Mesmo universo · histórico parcial")
-                      : "Revisar distribuição"}/>
-                </MuiTooltip>
-              </Box>
-              <Box sx={{display:"grid",gridTemplateColumns:{xs:"repeat(2,minmax(0,1fr))",md:"repeat(4,minmax(110px,1fr))"},gap:{xs:1,md:2.2}}}>
-                {[
-                  ["Saídas do mês",monthlyMovementVerified?outputs:"—"],
-                  ["Saldo líquido",monthlyMovementVerified?`${flowBalance>0?"+":""}${flowBalance}`:"—"],
-                  ["Variação backlog",backlogAvailable&&initialBacklogAvailable?`${delta>0?"+":""}${delta}`:"—"],
-                  ["Carteira no fechamento",periodUniverse],
-                ].map(([label,val],index)=>
-                  <Box key={String(label)} sx={{minWidth:0}}>
-                    <Typography variant="caption" color="text.secondary">{label}</Typography>
-                    <Stack direction="row" alignItems="center" gap={0.35}>
-                      {index===2&&backlogAvailable&&initialBacklogAvailable&&(delta<=0?<TrendingDownOutlined color="success" sx={{fontSize:18}}/>:<TrendingUpOutlined color="warning" sx={{fontSize:18}}/>)}
-                      <Typography sx={{fontWeight:900,fontSize:"1.15rem"}}>{val}</Typography>
-                    </Stack>
-                  </Box>
-                )}
-              </Box>
-              </Stack>
-              <Button size="small" sx={{alignSelf:"flex-start",maxWidth:"100%",whiteSpace:"normal",textAlign:"left"}}
-                onClick={()=>selectSlice({kind:"monthly"},"Movimentos e backlog do mês")}>
+        <Card elevation={0} sx={panel}>
+          <CardContent sx={{py:1.1,"&:last-child":{pb:1.1}}}>
+            <Stack direction={{xs:"column",sm:"row"}} gap={1} alignItems={{sm:"center"}} justifyContent="space-between">
+              <Typography variant="body2">Carteira no fechamento: <b>{periodUniverse} Tasks</b>{!backlogVerified&&" · prévia parcial"}.</Typography>
+              <Button size="small" sx={{whiteSpace:"normal",textAlign:"left"}} onClick={()=>selectSlice({kind:"monthly"},"Movimentos e backlog do mês")}>
                 Movimentos e backlog do mês: {monthlyIndicatorRows.length} Tasks distintas
               </Button>
-              <Typography variant="caption" color="text.secondary">
-                A carteira no fechamento inclui tarefas antigas. Os cards contam movimentos e estoques específicos; uma mesma Task pode participar de vários cards.
-              </Typography>
             </Stack>
+            <Typography variant="caption" color="text.secondary">
+              Os gráficos incluem Tasks antigas. Os cards contam movimentos e estoques específicos; a mesma Task pode participar de vários cards.
+            </Typography>
+            {!distributionConsistent&&<Typography variant="caption" color="warning.main" sx={{display:"block"}}>Revisar distribuição: carteira {periodUniverse}, pipeline {pipelineTotal}, urgência {urgencyTotal}, priorização {priorityTotal}.</Typography>}
+            {homologationHistoryReady&&<Typography variant="caption" color="text.secondary" sx={{display:"block"}}>
+              Saídas do mês: {outputs}. Saldo de movimentos: {flowBalance}. Variação do backlog: {delta>0?"+":""}{delta}.
+            </Typography>}
           </CardContent>
         </Card>
 
@@ -829,7 +749,7 @@ export function CorrectionMonthlyPanel() {
                     <Pie data={priority} dataKey="total" nameKey="name" innerRadius={58} outerRadius={82} paddingAngle={2}
                       stroke={theme.palette.background.paper} strokeWidth={2} isAnimationActive={false}
                       onClick={data=>{const name=(data as {name?:string}).name;if(name)selectSlice({kind:"prioritized",value:name==="Priorizadas"?true:name==="Não priorizadas"?false:null},`Priorização · ${name}`)}}>
-                      {priority.map((_,index)=><Cell key={index} fill={[aliareColors.green,aliareColors.info,semanticChartColors.attention][index%3]}/>)}
+                      {priority.map(item=><Cell key={item.name} fill={priorityColor(item.name)}/>)}
                     </Pie>
                     <ChartTooltip/>
                   </PieChart>
@@ -849,7 +769,7 @@ export function CorrectionMonthlyPanel() {
                     {kind:"prioritized",value:item.name==="Priorizadas"?true:item.name==="Não priorizadas"?false:null},
                     `Priorização · ${item.name}`,
                   )} sx={{justifyContent:"space-between",textTransform:"none",color:"text.primary",px:.8,borderRadius:1.5}}>
-                    <Typography variant="body2">{item.name}</Typography>
+                    <Box sx={{display:"flex",alignItems:"center",gap:.7}}><Box sx={{width:9,height:9,borderRadius:"50%",bgcolor:priorityColor(item.name)}}/><Typography variant="body2">{item.name}</Typography></Box>
                     <Chip size="small" label={item.total}/>
                   </Button>
                 )}
@@ -857,6 +777,53 @@ export function CorrectionMonthlyPanel() {
             </CardContent>
           </Card>
         </Box>
+
+    {report&&month==="2026-09"&&
+      <Card component="details" elevation={0} sx={{
+        ...panel,
+        borderColor:homologationPassed?"rgba(24,199,122,.28)":"rgba(237,151,47,.3)",
+        background:theme.palette.mode==="dark"
+          ?"linear-gradient(105deg,rgba(47,111,237,.08),rgba(24,199,122,.045),rgba(255,255,255,.012))"
+          :"linear-gradient(105deg,rgba(47,111,237,.05),rgba(24,199,122,.035),#FFFFFF)",
+      }}>
+        <Box component="summary" sx={{px:2,py:1.25,cursor:"pointer"}}>
+          <Typography component="span" sx={{fontWeight:850,mr:1}}>Conferência · setembro/2026</Typography>
+          <Chip size="small" label={homologationStatus} color={homologationPassed?"success":"warning"}/>
+        </Box>
+        <CardContent sx={{py:1.2,"&:last-child":{pb:1.2}}}>
+          <Stack direction={{xs:"column",lg:"row"}} gap={1.25} justifyContent="space-between" alignItems={{lg:"center"}}>
+            <Box sx={{minWidth:0}}>
+              <Typography variant="caption" color="text.secondary">
+                {homologationScopeActive
+                  ?"Time SIMER e carteira SIMER, sem filtros adicionais. A referência da coordenação deve usar os mesmos criadores e clientes; histórico completo e totais coincidentes são necessários para homologar."
+                  :"Para confrontar a referência oficial, use Time SIMER e deixe Cliente, Urgência, Status e Priorizada sem seleção."}
+              </Typography>
+            </Box>
+            <Box sx={{display:"grid",gridTemplateColumns:{xs:"repeat(2,minmax(0,1fr))",md:"repeat(5,minmax(108px,1fr))"},gap:.7}}>
+              {septemberHomologation.map(item=>{
+                const comparable=homologationScopeActive&&item.verified&&item.actual!==null;
+                const displayActual=item.key==="backlogInitial"?item.actual:item.key==="registered"?item.actual:movementValue(item.actual??0);
+                const matches=comparable&&item.actual===item.expected;
+                return <Box key={item.key} sx={{
+                  px:1,py:.7,border:"1px solid",borderColor:matches?"success.main":comparable?"warning.main":"divider",
+                  borderRadius:"8px",minWidth:0,bgcolor:"background.paper",
+                }}>
+                  <Typography variant="caption" color="text.secondary" sx={{display:"block",whiteSpace:"nowrap"}}>{item.label}</Typography>
+                  <Stack direction="row" gap={0.5} alignItems="baseline">
+                    <Typography sx={{fontWeight:900,fontVariantNumeric:"tabular-nums"}}>{displayActual??"—"}</Typography>
+                    <Typography variant="caption" color="text.secondary">/ ref. {item.expected}</Typography>
+                  </Stack>
+                  <Typography variant="caption" color={comparable&&!matches?"warning.main":"text.secondary"}>
+                    {!item.verified?"Histórico pendente":!homologationScopeActive?"Outro recorte":matches?"Confere":`Diferença: ${(item.actual??0)-item.expected}`}
+                  </Typography>
+                </Box>;
+              })}
+            </Box>
+          </Stack>
+        </CardContent>
+      </Card>
+    }
+
 
         <Card elevation={0} sx={panel}>
           <CardContent sx={{p:{xs:1.4,md:1.7},"&:last-child":{pb:{xs:1.4,md:1.7}}}}>

@@ -33,7 +33,7 @@ import {
 } from "react";
 import { PageHeader } from "../components/PageHeader";
 import { Import } from "./Import";
-import { api } from "../services/api";
+import { api, getApiErrorMessage } from "../services/api";
 import { getLocalNotificationPreferences, saveLocalNotificationPreferences, type LocalNotificationPreferences } from "../utils/notificationSound";
 
 type ConfigurationState = {
@@ -42,6 +42,7 @@ type ConfigurationState = {
   project: string;
   wiki: string;
   patConfigured: boolean;
+  azureCredentialSource?: "central" | "environment" | "missing";
   movideskConfigured: boolean;
   movideskUrl: string;
   runtime?: string;
@@ -55,6 +56,12 @@ type ConfigurationForm = {
   pat: string;
   movideskToken: string;
   movideskUrl: string;
+};
+
+type AzureHistoricalTest = {
+  month: string; ok: boolean; checkedAt: string; note: string;
+  checks: Array<{ key: string; label: string; status: "ok" | "empty" | "failed" | "skipped"; records?: number; message?: string }>;
+  fieldMapping: Record<string, string>;
 };
 
 type ActiveSession = { id: number; clientType: string; deviceName: string | null; appVersion: string | null; ipAddress: string | null; createdAt: string; lastActivityAt: string; user: { id: number; name: string; username: string } };
@@ -141,6 +148,13 @@ export function Settings() {
   const [saving, setSaving] =
     useState(false);
   const [testingAzure, setTestingAzure] = useState(false);
+  const [azureHistoricalTest, setAzureHistoricalTest] = useState<AzureHistoricalTest | null>(null);
+  const [azureHistoryMonth, setAzureHistoryMonth] = useState(() => {
+    const selected = new URLSearchParams(window.location.search).get("reportMonth");
+    if (selected && /^\d{4}-(0[1-9]|1[0-2])$/.test(selected)) return selected;
+    const parts = new Intl.DateTimeFormat("en", { year: "numeric", month: "2-digit", timeZone: "America/Sao_Paulo" }).formatToParts(new Date());
+    return `${parts.find(part => part.type === "year")?.value}-${parts.find(part => part.type === "month")?.value}`;
+  });
   const [testingMovidesk, setTestingMovidesk] = useState(false);
   const [error, setError] =
     useState<string | null>(null);
@@ -163,6 +177,8 @@ export function Settings() {
   const [causeBackfillBusy, setCauseBackfillBusy] = useState(false);
   const [recentEnrichments, setRecentEnrichments] = useState<RecentEnrichment[]>([]);
   const [classificationCoverage, setClassificationCoverage] = useState<ClassificationCoverage | null>(null);
+
+  useEffect(() => { setAzureHistoricalTest(null); }, [form.organization, form.project, form.pat, azureHistoryMonth]);
 
   useEffect(() => {
     void loadConfiguration();
@@ -285,15 +301,26 @@ export function Settings() {
     }
   }
 
-  async function testAzureConnection() {
+  async function testAzureConnection(withHistory = false) {
     try {
       setTestingAzure(true); setError(null); setSuccess(null);
-      const response = await api.post<{ azure?: { ok: boolean; organization: string; project: string } }>("/system-settings/test", {
-        organization: form.organization, project: form.project, wiki: form.wiki, pat: form.pat,
-      });
-      setSuccess(`Azure DevOps validado · ${response.data.azure?.organization ?? form.organization} / ${response.data.azure?.project ?? form.project}. Nenhuma credencial foi alterada.`);
+      const response = await api.post<{ azure?: { ok: boolean; organization: string; project: string; history?: AzureHistoricalTest } }>("/system-settings/test", {
+        integration: "azure", organization: form.organization, project: form.project, wiki: form.wiki, pat: form.pat,
+        ...(withHistory ? { reportMonth: azureHistoryMonth } : {}),
+      }, { timeout: 60_000 });
+      if (response.data.azure?.ok !== true) throw new Error("O Azure não confirmou uma conexão válida.");
+      if (withHistory) {
+        if (!response.data.azure.history) throw new Error("A API não retornou os testes de acesso histórico. Atualize o backend.");
+        setAzureHistoricalTest(response.data.azure.history);
+        if (!response.data.azure.history.ok) {
+          setError("A conexão atual responde, mas existem pendências nas APIs históricas do mês. Confira os testes abaixo.");
+          return;
+        }
+      }
+      setSuccess(`Azure DevOps validado · ${response.data.azure.organization} / ${response.data.azure.project}.${withHistory ? " Testes históricos concluídos; a homologação depende da apuração completa." : ""} Nenhuma credencial foi alterada.`);
     } catch (testError: any) {
-      setError(testError?.response?.data?.message ?? "Não foi possível validar o Azure DevOps.");
+      if (withHistory) setAzureHistoricalTest(null);
+      setError(testError?.response?.data?.message ?? (testError instanceof Error ? testError.message : "Não foi possível validar o Azure DevOps."));
     } finally { setTestingAzure(false); }
   }
 
@@ -458,17 +485,16 @@ export function Settings() {
         };
       }
 
+      setConfiguration(result);
+      setForm(current => ({ ...current, organization: result.organization, project: result.project, wiki: result.wiki, pat: "", movideskToken: "", movideskUrl: result.movideskUrl }));
+
       setSuccess(
         result.restartRequired
           ? "Configurações centralizadas com sucesso. Reinicie o serviço para que todos os processos apliquem as novas integrações."
           : "Configurações centralizadas com sucesso.",
       );
     } catch (saveError) {
-      setError(
-        saveError instanceof Error
-          ? saveError.message
-          : "Não foi possível salvar as configurações.",
-      );
+      setError(getApiErrorMessage(saveError, "Não foi possível salvar as configurações."));
     } finally {
       setSaving(false);
     }
@@ -655,7 +681,7 @@ export function Settings() {
                 }
                 color={
                   configuration?.patConfigured
-                    ? "success"
+                    ? "info"
                     : "default"
                 }
                 variant="outlined"
@@ -680,6 +706,7 @@ export function Settings() {
                 onChange={(event) =>
                   updateField("organization", event.target.value)
                 }
+                helperText="Nome ou URL da organização Azure DevOps."
               />
 
               <TextField
@@ -688,6 +715,7 @@ export function Settings() {
                 onChange={(event) =>
                   updateField("project", event.target.value)
                 }
+                helperText="Nome, GUID ou URL do projeto da carteira."
               />
 
               <TextField
@@ -711,7 +739,9 @@ export function Settings() {
                     ? "Deixe vazio para manter o PAT atual"
                     : "Informe o Personal Access Token"
                 }
-                helperText="O PAT atual não é exibido por segurança."
+                helperText={configuration?.azureCredentialSource === "central"
+                  ? "PAT salvo no Hub. Esta configuração prevalece sobre o .env do serviço."
+                  : configuration?.azureCredentialSource === "environment" ? "PAT carregado do ambiente do serviço. Preencha para salvar uma nova credencial no Hub." : "Informe um PAT com leitura de Work Items e acesso ao projeto."}
               />
             </Box>
             <Stack direction="row" spacing={1} sx={{ mt: 2, justifyContent: "flex-end" }}>
@@ -720,8 +750,30 @@ export function Settings() {
               </Button>
             </Stack>
             <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1 }}>
-              O teste não substitui a credencial salva. Ao salvar um novo PAT, o Hub valida primeiro e preserva o atual se houver falha.
+              Ao alterar PAT, organização ou projeto, o Hub valida a conexão antes de salvar. Uma resposta de login ou HTML não confirma acesso à API.
             </Typography>
+            <Divider sx={{ my: 2 }} />
+            <Stack direction={{ xs: "column", sm: "row" }} spacing={1.25} sx={{ alignItems: { sm: "center" } }}>
+              <TextField label="Mês do relatório" type="month" value={azureHistoryMonth} onChange={event => setAzureHistoryMonth(event.target.value)} slotProps={{ inputLabel: { shrink: true } }} sx={{ minWidth: 210 }} />
+              <Button variant="outlined" disabled={saving || testingAzure || !azureHistoryMonth || (!configuration?.patConfigured && !form.pat.trim())} onClick={() => void testAzureConnection(true)}>
+                {testingAzure ? "Testando..." : "Testar histórico do mês"}
+              </Button>
+            </Stack>
+            <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1 }}>
+              Verifica os mesmos campos, revisões e snapshots de abertura/fechamento usados pelo report. O teste usa uma amostra e não aprova os totais do mês.
+            </Typography>
+            {azureHistoricalTest && <Box sx={{ mt: 2 }}>
+              <Alert severity={azureHistoricalTest.ok ? "info" : "warning"} sx={{ mb: 1 }}>
+                Histórico de {azureHistoricalTest.month}: {azureHistoricalTest.ok ? "testes de acesso concluídos" : "há consultas pendentes"}. {azureHistoricalTest.note}
+              </Alert>
+              {azureHistoricalTest.checks.map(check => <Box key={check.key} sx={{ py: 1, display: "grid", gridTemplateColumns: { xs: "1fr", sm: "minmax(180px, 1fr) 2fr" }, gap: 1, borderBottom: "1px solid", borderColor: "divider" }}>
+                <Stack direction="row" spacing={1} sx={{ alignItems: "center", flexWrap: "wrap" }}>
+                  <Typography variant="body2" sx={{ fontWeight: 750 }}>{check.label}</Typography>
+                  <Chip size="small" color={check.status === "failed" ? "warning" : check.status === "ok" ? "success" : "default"} label={check.status === "ok" ? "Respondeu" : check.status === "empty" ? "Amostra vazia" : check.status === "failed" ? "Falhou" : "Não testado"} />
+                </Stack>
+                <Typography variant="caption" color="text.secondary" sx={{ overflowWrap: "anywhere" }}>{check.message ?? "Resposta JSON válida da API."}</Typography>
+              </Box>)}
+            </Box>}
           </CardContent>
         </Card>
 

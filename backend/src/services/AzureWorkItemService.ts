@@ -1,4 +1,5 @@
 import { scopedAzureWhere, scopedTicketWhere } from "../domain/OperationalScope";
+import { azureDevOpsConfiguration } from "./AzureDevOpsClient";
 import {
   Prisma,
 } from "@prisma/client";
@@ -3014,11 +3015,9 @@ export class AzureWorkItemService {
     id:
       number,
   ): string | null {
-    const organization =
-      process.env.AZURE_DEVOPS_ORGANIZATION?.trim();
-
-    const project =
-      process.env.AZURE_DEVOPS_PROJECT?.trim();
+    let organization: string, project: string;
+    try { ({ organization, project } = azureDevOpsConfiguration()); }
+    catch { return null; }
 
     if (
       !organization ||

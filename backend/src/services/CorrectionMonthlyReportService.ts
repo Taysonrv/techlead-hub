@@ -5,7 +5,11 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../database/prisma";
 import { AZURE_WORK_ITEM_FIELDS } from "./AzureWorkItemMapper";
 import { resolveSimerClient } from "../domain/OperationalScope";
-import { azureCollection, azureFailureMessage } from "./AzureDevOpsResponse";
+import { azureCollection, azureFailure, azureFailureMessage, type AzureFailure } from "./AzureDevOpsResponse";
+import { azureDevOpsConfiguration, createAzureDevOpsClient, AzureDevOpsConfigurationError } from "./AzureDevOpsClient";
+import { resolveCorrectionFields } from "./AzureCorrectionFields";
+import { saoPauloMonth } from "../domain/CorrectionMonthlyPeriod";
+export { saoPauloMonth } from "../domain/CorrectionMonthlyPeriod";
 
 type Identity = { displayName?: string; uniqueName?: string };
 type Revision = { id?: number; rev?: number; fields?: Record<string, unknown> };
@@ -163,29 +167,6 @@ function historicalUrgency(fields:Record<string,unknown>,referenceName:string) {
   const value=text(fields[referenceName]);
   return value&&/^\d+$/.test(value)?`P${value}`:value;
 }
-function normalized(value: string) {
-  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR");
-}
-export function saoPauloMonth(month: string, nowUtc: Date = new Date()) {
-  if (!/^\d{4}-\d{2}$/.test(month)) throw new Error("Período inválido. Use YYYY-MM.");
-  const parts = month.split("-");
-  const year = Number(parts[0]);
-  const m = Number(parts[1]);
-  if (!Number.isInteger(year) || !Number.isInteger(m) || m < 1 || m > 12) throw new Error("Período inválido.");
-  const start = new Date(`${month}-01T03:00:00.000Z`);
-  const nextYear = m === 12 ? year + 1 : year;
-  const nextMonth = m === 12 ? 1 : m + 1;
-  const endExclusive = new Date(`${nextYear}-${String(nextMonth).padStart(2, "0")}-01T03:00:00.000Z`);
-  // Meses encerrados usam 23:59:59.999 do último dia em São Paulo.
-  // No mês corrente, ASOF futuro é inválido no Azure DevOps: utilizamos
-  // uma fotografia de "agora" com pequena margem contra diferença de relógio.
-  const now = new Date(nowUtc.getTime() - 60_000);
-  if (now < start) throw new Error("Não é possível consultar um período que ainda não começou.");
-  const periodEnd = new Date(endExclusive.getTime() - 1);
-  const close = periodEnd < now ? periodEnd : now;
-  return { start, endExclusive, close };
-}
-
 type Row = {
   id:number; title:string; client:string|null; createdBy:string|null; createdAt:string|null; status:string;
   lastStateChangedAt:string|null; urgency:string|null; prioritized:boolean|null; assignedTo:string|null;
@@ -206,15 +187,13 @@ export class CorrectionMonthlyReportService {
   private static inFlight = new Map<string,Promise<unknown>>();
 
   private azureConfig() {
-    const organization=(process.env.AZURE_DEVOPS_ORGANIZATION??"").trim();
-    const project=(process.env.AZURE_DEVOPS_PROJECT??"").trim();
-    const pat=(process.env.AZURE_DEVOPS_PAT??"").trim();
-    if(!organization||!project||!pat) throw new Error("Integração Azure DevOps não configurada.");
-    return {organization,project,pat};
+    const configuration=azureDevOpsConfiguration();
+    if(!configuration.organization||!configuration.project||!configuration.pat)
+      throw new AzureDevOpsConfigurationError("Integração Azure DevOps não configurada. Informe organização, projeto e PAT na tela Integrações.");
+    return configuration;
   }
   private client() {
-    const {organization,project,pat}=this.azureConfig();
-    return axios.create({baseURL:`https://dev.azure.com/${encodeURIComponent(organization)}/${encodeURIComponent(project)}`,timeout:AZURE_REQUEST_TIMEOUT_MS,maxRedirects:0,headers:{Accept:"application/json",Authorization:`Basic ${Buffer.from(`:${pat}`).toString("base64")}`}});
+    return createAzureDevOpsClient(this.azureConfig(),AZURE_REQUEST_TIMEOUT_MS);
   }
   private async fieldDefinitions() {
     const {organization,project}=this.azureConfig();
@@ -226,24 +205,13 @@ export class CorrectionMonthlyReportService {
       const fields=azureCollection<FieldDefinition>(response,"value","campos");
       CorrectionMonthlyReportService.fieldCache.set(key,{expiresAt:Date.now()+FIELD_CACHE_TTL_MS,fields});
       return fields;
-    } catch { return []; }
+    } catch(error) {
+      if(azureFailure(error).requiresConfiguration) throw error;
+      return [];
+    }
   }
   private async resolveFields() {
-    const definitions=await this.fieldDefinitions();
-    const find=(terms:string[],fallback:string)=>{
-      const exact=definitions.find(field=>field.referenceName===fallback);
-      if(exact?.referenceName) return exact.referenceName;
-      const match=definitions.find(field=>{
-        const hay=normalized(`${field.name??""} ${field.referenceName??""}`);
-        return terms.some(term=>hay.includes(normalized(term)));
-      });
-      return match?.referenceName||fallback;
-    };
-    return {
-      client:find(["cliente principal","cliente"],AZURE_WORK_ITEM_FIELDS.client),
-      prioritized:find(["priorizada","priorizado"],AZURE_WORK_ITEM_FIELDS.prioritized),
-      urgency:find(["urgencia","criticidade","priority"],AZURE_WORK_ITEM_FIELDS.criticality),
-    };
+    return resolveCorrectionFields(await this.fieldDefinitions());
   }
   private async revisions(
     fields:{client:string;prioritized:string;urgency:string},
@@ -368,8 +336,8 @@ ASOF '${asOf.toISOString()}'`;
   }
 
   private workItemUrl(id:number):string|null {
-    const organization=(process.env.AZURE_DEVOPS_ORGANIZATION??"").trim();
-    const project=(process.env.AZURE_DEVOPS_PROJECT??"").trim();
+    let organization:string,project:string;
+    try { ({organization,project}=azureDevOpsConfiguration()); } catch { return null; }
     if(!organization||!project) return null;
     return `https://dev.azure.com/${encodeURIComponent(organization)}/${encodeURIComponent(project)}/_workitems/edit/${id}`;
   }
@@ -510,6 +478,9 @@ ASOF '${asOf.toISOString()}'`;
         nextHistoryRetryAt:!refreshing&&retryAt>Date.now()?new Date(retryAt).toISOString():undefined}};
     };
     const cached=cache.get(month);
+    const connectionBlocked=(cached?.data as {quality?:{azureConnection?:{status:string}}}|undefined)?.quality?.azureConnection?.status==="blocked";
+    // Bad credentials and malformed responses need configuration, not a ten-minute retry loop.
+    if(cached&&connectionBlocked&&!forceRefresh&&!pending.has(month)) return withStatus(cached.data);
     const previewError=CorrectionMonthlyReportService.previewErrors.get(month);
     if(!cached&&previewError&&previewError.expiresAt>Date.now()) throw previewError.error;
     const retryAt=CorrectionMonthlyReportService.retryAfter.get(month)??0;
@@ -544,7 +515,8 @@ ASOF '${asOf.toISOString()}'`;
         await this.saveClosing(month,updated);
         const completed={...updated,quality:{...updated.quality,lastHistoryAttemptAt:new Date(Date.now()).toISOString()}};
         cache.set(month,{expiresAt:Date.now()+REPORT_CACHE_TTL_MS,data:completed});
-        if(!updated.quality.historicalMetricsReliable) CorrectionMonthlyReportService.retryAfter.set(month,Date.now()+10*60_000);
+        if(updated.quality.azureConnection?.status==="blocked") CorrectionMonthlyReportService.retryAfter.delete(month);
+        else if(!updated.quality.historicalMetricsReliable) CorrectionMonthlyReportService.retryAfter.set(month,Date.now()+10*60_000);
         else CorrectionMonthlyReportService.retryAfter.delete(month);
         return completed;
       }).catch(error=>{
@@ -591,7 +563,7 @@ ASOF '${asOf.toISOString()}'`;
   private invalidateMonth(month:string) {
     CorrectionMonthlyReportService.reportCache.delete(month);
     CorrectionMonthlyReportService.previewErrors.delete(month);
-    CorrectionMonthlyReportService.fieldCache.delete(`${process.env.AZURE_DEVOPS_ORGANIZATION??""}/${process.env.AZURE_DEVOPS_PROJECT??""}`);
+    CorrectionMonthlyReportService.fieldCache.clear();
     for(const key of CorrectionMonthlyReportService.cache.keys())
       if(key.includes(`/corrections/${month}-01/`)) CorrectionMonthlyReportService.cache.delete(key);
   }
@@ -602,29 +574,34 @@ ASOF '${asOf.toISOString()}'`;
     const {start,endExclusive,close}=saoPauloMonth(month);
     const livePeriod=close.getTime()<endExclusive.getTime()-1;
     const savedClosingPromise=!livePeriod?this.loadClosing(month):Promise.resolve(null);
-    const scopePromise=localOnly?Promise.resolve({ids:null,complete:false,error:null}):Promise.allSettled([
-      this.workItemIdsAsOf(new Date(start.getTime()-1)),
-      // O pipeline é a carteira inteira no fechamento, inclusive Registro
-      // e terminais. A descoberta remota não depende da sincronização local.
-      this.workItemIdsAsOf(close,true),
-    ]).then(results=>({
-      ids:results.map(result=>result.status==="fulfilled"?result.value:[]) as [number[],number[]],
-      complete:results.every(result=>result.status==="fulfilled"),
-      error:results.flatMap((result,index)=>result.status==="rejected"?[`${index===0?"Abertura":"Fechamento"}: ${azureFailureMessage(result.reason)}`]:[]).join(" | ")||null,
-    }));
+    let scopePromise=Promise.resolve({ids:null as [number[],number[]]|null,complete:false,error:null as string|null,failures:[] as AzureFailure[]});
     const currentPromise=prisma.azureWorkItem.findMany({where:{workItemType:"Correção Clientes"},select:{id:true,title:true,client:true,criticality:true,prioritized:true,assignedToName:true,remoteUrl:true,createdByName:true,azureCreatedAt:true,state:true,stateChangedAt:true,azureClosedAt:true}});
     let fields:{client:string;prioritized:string;urgency:string}={client:AZURE_WORK_ITEM_FIELDS.client,prioritized:AZURE_WORK_ITEM_FIELDS.prioritized,urgency:AZURE_WORK_ITEM_FIELDS.criticality};
     let revisions:Revision[]=[];
     let historyAvailable=false;
     let historyError:string|null=null;
+    let connectionFailure:AzureFailure|null=null;
     try {
       if(!localOnly){
       fields=await this.resolveFields();
+      // A rejected credential at field discovery stops all historical requests.
+      // Once authenticated, scope and Reporting are independent and run together.
+      scopePromise=Promise.allSettled([
+        this.workItemIdsAsOf(new Date(start.getTime()-1)),
+        this.workItemIdsAsOf(close,true),
+      ]).then(results=>({
+        ids:results.map(result=>result.status==="fulfilled"?result.value:[]) as [number[],number[]],
+        complete:results.every(result=>result.status==="fulfilled"),
+        error:results.flatMap((result,index)=>result.status==="rejected"?[`${index===0?"Abertura":"Fechamento"}: ${azureFailureMessage(result.reason)}`]:[]).join(" | ")||null,
+        failures:results.flatMap(result=>result.status==="rejected"?[azureFailure(result.reason)]:[]),
+      }));
       revisions=await this.revisions(fields,start);
       historyAvailable=true;
       }
     } catch(error) {
       historyError=azureFailureMessage(error);
+      const failure=azureFailure(error);
+      if(failure.requiresConfiguration) connectionFailure=failure;
       console.warn(`[correction-monthly-report] Histórico do Azure indisponível; usando snapshot local. | ${historyError}`);
     }
     const [savedClosing,currentItems]=await Promise.all([savedClosingPromise,currentPromise]);
@@ -638,6 +615,7 @@ ASOF '${asOf.toISOString()}'`;
     let historicalScopeError:string|null=null;
     let historicalScopeAvailable=false;
     const scope=await scopePromise;
+    connectionFailure??=scope.failures.find(failure=>failure.requiresConfiguration)??null;
     if(scope.ids){
       [openingScopeIds,closingScopeIds]=scope.ids;
       historicalScopeAvailable=scope.complete;
@@ -653,7 +631,7 @@ ASOF '${asOf.toISOString()}'`;
     try {
       // Duas fotografias independentes: "sem registros" é válido quando o
       // escopo é vazio; "consulta falhou" não equivale a backlog zero.
-      if(!localOnly){
+      if(!localOnly&&!connectionFailure){
       const results=await Promise.allSettled([
         this.snapshots(candidateIds,new Date(start.getTime()-1),fields),
         this.snapshots(candidateIds,close,fields),
@@ -662,6 +640,8 @@ ASOF '${asOf.toISOString()}'`;
       if(results[1].status==="fulfilled") closingSnapshot=results[1].value;
       snapshotAvailable=results.every(result=>result.status==="fulfilled");
       const errors=results.flatMap((result,index)=>result.status==="rejected"?[`${index===0?"Abertura":"Fechamento"}: ${azureFailureMessage(result.reason)}`]:[]);
+      connectionFailure??=results.flatMap(result=>result.status==="rejected"?[azureFailure(result.reason)]:[])
+        .find(failure=>failure.requiresConfiguration)??null;
       if(errors.length) throw new Error(errors.join(" | "));
       }
     } catch(error) {
@@ -673,6 +653,7 @@ ASOF '${asOf.toISOString()}'`;
         .some(value=>!!value&&value>=start&&value<=close),
     ).length;
     const externalHistorySuspicious =
+      !connectionFailure &&
       localPeriodCandidates>0 &&
       revisions.length===0 &&
       openingScopeIds.length===0 &&
@@ -693,7 +674,7 @@ ASOF '${asOf.toISOString()}'`;
     // Inclui estoque antigo sem movimento no mês e itens encerrados depois
     // da abertura. A fotografia é o último estado ANTES do início do mês,
     // exatamente o fechamento do mês anterior (America/Sao_Paulo).
-    if(!localOnly&&(!snapshotAvailable||incompleteClosingEvidence||
+    if(!localOnly&&!connectionFailure&&(!snapshotAvailable||incompleteClosingEvidence||
       ((!historyAvailable||revisions.length===0)&&closingSnapshot.size===0&&current.length>0))){
       const ids=new Set(current.filter(item=>
         !!item.azureCreatedAt&&item.azureCreatedAt<=close&&
@@ -1063,7 +1044,7 @@ ASOF '${asOf.toISOString()}'`;
     const remoteIds=rows.filter(row=>!currentItemsById.has(row.id)).map(row=>row.id);
     let remoteAssignees=new Map<number,string|null>();
     let currentAssigneeError:string|null=null;
-    if(!localOnly&&remoteIds.length){
+    if(!localOnly&&!connectionFailure&&remoteIds.length){
       try { remoteAssignees=await this.currentAssignees(remoteIds); }
       catch(error){currentAssigneeError=azureFailureMessage(error);}
     }
@@ -1093,6 +1074,6 @@ ASOF '${asOf.toISOString()}'`;
     ].join(" | "));
     const count=(p:(r:Row)=>boolean)=>rows.filter(p).length;
     const by=(selector:(r:Row)=>string|null)=>Object.entries(rows.filter(row=>Boolean(row.stateAtClose)).reduce<Record<string,number>>((acc,row)=>{const key=selector(row)||"Não informado";acc[key]=(acc[key]??0)+1;return acc;},{})).map(([name,total])=>({name,total})).sort((a,b)=>b.total-a.total);
-    return {period:{month,timezone:"America/Sao_Paulo",start:start.toISOString(),close:close.toISOString()},cards:{registered:count(r=>r.registeredInPeriod),delivered:count(r=>r.deliveredInPeriod),canceled:count(r=>r.canceledInPeriod),inRegistration:count(r=>r.enteredRegistrationInPeriod),backlogInitial:count(r=>r.backlogInitial),backlogCurrent:count(r=>r.backlogCurrent)},pipeline:by(r=>r.status),urgency:by(r=>r.urgency),prioritization:[{name:"Priorizadas",total:count(r=>Boolean(r.stateAtClose)&&r.prioritized===true)},{name:"Não priorizadas",total:count(r=>Boolean(r.stateAtClose)&&r.prioritized===false)},{name:"Não informado",total:count(r=>Boolean(r.stateAtClose)&&r.prioritized===null)}],filters:{creators:[...new Set(rows.map(r=>r.createdBy).filter(Boolean))].sort(),teamCreators:[...new Set(rows.map(r=>r.createdBy).filter((value):value is string=>!!value&&isCorrectionTeamCreator(value)))].sort(),clients:[...new Set(rows.map(r=>r.client).filter((value):value is string=>!!value))].sort(),urgencies:[...new Set(rows.map(r=>r.urgency).filter(Boolean))].sort(),states:[...new Set(rows.map(r=>r.status).filter(Boolean))].sort()},rows,generatedAt:new Date().toISOString(),source:persistedClosingUsed?"Fechamento histórico salvo · Azure DevOps":perItemHistoryRecoveryUsed?"Azure DevOps · revisões por Task + prévia local":localFallbackUsed?"Base sincronizada do Azure DevOps · histórico local reconstruído":snapshotAvailable?(historyAvailable?"Azure DevOps · revisões + snapshots asOf":"Azure DevOps · snapshots asOf"):"Base sincronizada do Azure DevOps · snapshot local",quality:{persistedClosingUsed,currentAssigneeError,unknownUrgencyRows:rows.filter(row=>!!row.stateAtClose&&!row.urgency).length,unknownPrioritizationRows:rows.filter(row=>!!row.stateAtClose&&row.prioritized===null).length,localPreview:localOnly,backlogCurrentAvailable:backlogHistoricalReliable||livePeriod||rows.some(row=>row.backlogCurrent),unknownClosingStates:rows.filter(row=>!row.stateAtClose).length,backlogInitialAvailable:backlogHistoricalReliable||openingSnapshot.size>0||rows.some(row=>row.backlogInitial),perItemHistoryRecoveryUsed,recoveredHistoryItems,recoveryCandidates,missingClosingFields,historyAvailable,historyError,snapshotAvailable,snapshotError,historicalScopeError,externalHistorySuspicious,localFallbackUsed,localStateHistoryEvents,mode:localFallbackUsed?"local-history-fallback":backlogHistoricalReliable&&historyAvailable?"historical":snapshotAvailable?"asof-partial":"local-snapshot",movementHistoryReliable,historicalMetricsReliable:movementHistoryReliable&&backlogHistoricalReliable,backlogHistoricalReliable,diagnostics:{scopedRecords:scopedRows,localRecords:current.length,localPeriodCandidates,revisions:revisions.length,openingScopeIds:openingScopeIds.length,closingScopeIds:closingScopeIds.length,snapshotCandidates:candidateIds.length,openingSnapshotItems:openingSnapshot.size,closingSnapshotItems:closingSnapshot.size,outputRows:rows.length,monthlyIndicatorRows:rows.filter(row=>row.inMonthlyIndicators).length}},fieldMapping:fields};
+    return {period:{month,timezone:"America/Sao_Paulo",start:start.toISOString(),close:close.toISOString()},cards:{registered:count(r=>r.registeredInPeriod),delivered:count(r=>r.deliveredInPeriod),canceled:count(r=>r.canceledInPeriod),inRegistration:count(r=>r.enteredRegistrationInPeriod),backlogInitial:count(r=>r.backlogInitial),backlogCurrent:count(r=>r.backlogCurrent)},pipeline:by(r=>r.status),urgency:by(r=>r.urgency),prioritization:[{name:"Priorizadas",total:count(r=>Boolean(r.stateAtClose)&&r.prioritized===true)},{name:"Não priorizadas",total:count(r=>Boolean(r.stateAtClose)&&r.prioritized===false)},{name:"Não informado",total:count(r=>Boolean(r.stateAtClose)&&r.prioritized===null)}],filters:{creators:[...new Set(rows.map(r=>r.createdBy).filter(Boolean))].sort(),teamCreators:[...new Set(rows.map(r=>r.createdBy).filter((value):value is string=>!!value&&isCorrectionTeamCreator(value)))].sort(),clients:[...new Set(rows.map(r=>r.client).filter((value):value is string=>!!value))].sort(),urgencies:[...new Set(rows.map(r=>r.urgency).filter(Boolean))].sort(),states:[...new Set(rows.map(r=>r.status).filter(Boolean))].sort()},rows,generatedAt:new Date().toISOString(),source:persistedClosingUsed?"Fechamento histórico salvo · Azure DevOps":perItemHistoryRecoveryUsed?"Azure DevOps · revisões por Task + prévia local":localFallbackUsed?"Base sincronizada do Azure DevOps · histórico local reconstruído":snapshotAvailable?(historyAvailable?"Azure DevOps · revisões + snapshots asOf":"Azure DevOps · snapshots asOf"):"Base sincronizada do Azure DevOps · snapshot local",quality:{azureConnection:connectionFailure?{status:"blocked" as const,...connectionFailure}:{status:(historyAvailable||snapshotAvailable||historicalScopeAvailable?"ready":"unverified") as "ready"|"unverified"},persistedClosingUsed,currentAssigneeError,unknownUrgencyRows:rows.filter(row=>!!row.stateAtClose&&!row.urgency).length,unknownPrioritizationRows:rows.filter(row=>!!row.stateAtClose&&row.prioritized===null).length,localPreview:localOnly,backlogCurrentAvailable:backlogHistoricalReliable||livePeriod||rows.some(row=>row.backlogCurrent),unknownClosingStates:rows.filter(row=>!row.stateAtClose).length,backlogInitialAvailable:backlogHistoricalReliable||openingSnapshot.size>0||rows.some(row=>row.backlogInitial),perItemHistoryRecoveryUsed,recoveredHistoryItems,recoveryCandidates,missingClosingFields,historyAvailable,historyError,snapshotAvailable,snapshotError,historicalScopeError,externalHistorySuspicious,localFallbackUsed,localStateHistoryEvents,mode:localFallbackUsed?"local-history-fallback":backlogHistoricalReliable&&historyAvailable?"historical":snapshotAvailable?"asof-partial":"local-snapshot",movementHistoryReliable,historicalMetricsReliable:movementHistoryReliable&&backlogHistoricalReliable,backlogHistoricalReliable,diagnostics:{scopedRecords:scopedRows,localRecords:current.length,localPeriodCandidates,revisions:revisions.length,openingScopeIds:openingScopeIds.length,closingScopeIds:closingScopeIds.length,snapshotCandidates:candidateIds.length,openingSnapshotItems:openingSnapshot.size,closingSnapshotItems:closingSnapshot.size,outputRows:rows.length,monthlyIndicatorRows:rows.filter(row=>row.inMonthlyIndicators).length}},fieldMapping:fields};
   }
 }
