@@ -94,6 +94,7 @@ type MovideskBaselineStatus = {
   progress: { nextSkip: number; pages: number; processedRows: number; created: number; updated: number; ignored: number; errors: number; resumed: boolean } | null;
   database: { tickets: number; scopedTickets?: number; linkedTasks: number }; scope?: { startDate: string; clients: string[] };
   lastImport: { status: string; totalRows: number; insertedRows: number; updatedRows: number; skippedRows: number; errorRows: number; startedAt: string; finishedAt: string | null; message: string | null } | null;
+  lastIncremental?: { finishedAt: string; since?: string; totalRows?: number; created?: number; updated?: number; reconciliation?: boolean } | null;
   scheduler: { enabled: boolean; intervalMinutes: number; overlapMinutes: number; pageSize: number; phase: "WAITING_BASELINE" | "BASELINE_RUNNING" | "INCREMENTAL"; nextEstimatedAt: string | null };
   enrichmentScheduler?: { enabled: boolean; batchSize: number; idleIntervalMinutes: number; continuationSeconds: number; busyRetrySeconds: number; errorCooldownSeconds: number; apiState: "BUSY" | "AVAILABLE"; apiOwner: string | null };
   apiCompliance?: {
@@ -835,9 +836,13 @@ export function Import({ embedded = false }: { embedded?: boolean }) {
             <KpiGrid>
               <InfoCard label="Tickets no escopo 2026" value={String(movideskStatus.database.scopedTickets ?? 0)} />
               <InfoCard label="Tickets com Task no escopo" value={String(movideskStatus.database.linkedTasks)} />
-              <InfoCard label="Última execução" value={formatDateTime(movideskStatus.lastImport?.finishedAt ?? movideskStatus.lastImport?.startedAt)} />
+              <InfoCard label="Última incremental concluída" value={formatDateTime(movideskStatus.lastIncremental?.finishedAt)} />
               <InfoCard label="Próxima incremental" value={formatDateTime(movideskStatus.scheduler.nextEstimatedAt)} />
             </KpiGrid>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5 }}>
+              Atualização a cada {movideskStatus.scheduler.intervalMinutes} minutos, com reconciliação diária dos últimos sete dias.
+              {movideskStatus.lastIncremental && ` Último ciclo: ${movideskStatus.lastIncremental.totalRows ?? 0} tickets lidos, ${movideskStatus.lastIncremental.created ?? 0} novos e ${movideskStatus.lastIncremental.updated ?? 0} atualizados. Desde ${formatDateTime(movideskStatus.lastIncremental.since)}${movideskStatus.lastIncremental.reconciliation ? " · reconciliação de sete dias" : ""}.`}
+            </Typography>
             {movideskStatus.apiCompliance && <Box sx={{ mt: 2, p: 1.75, border: "1px solid", borderColor: "divider", borderRadius: 2.5, bgcolor: "background.default" }}>
               <Stack direction={{ xs: "column", md: "row" }} spacing={1} useFlexGap sx={{ alignItems: { md: "center" }, justifyContent: "space-between", flexWrap: "wrap" }}>
                 <Box>

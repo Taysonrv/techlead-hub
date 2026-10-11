@@ -7,10 +7,10 @@ import { MovideskJsonImportService } from "./MovideskJsonImportService";
 import { isSimerClient, SIMER_CLIENTS } from "../domain/OperationalScope";
 import { movideskRateLimiter } from "./MovideskRateLimiter";
 import { hasMovideskApiPriorityRequest } from "../jobs/MovideskSyncCoordinator";
+import { MOVIDESK_SAFETY_LOOKBACK_MINUTES, MOVIDESK_RECONCILIATION_DAYS, movideskSyncAnchor, movideskReconciliationDue, movideskSyncIntervalMinutes } from "../domain/MovideskSyncPolicy";
 
 const PAGE_SIZE = 50;
-const INCREMENTAL_OVERLAP_MINUTES = 10;
-const INCREMENTAL_SAFETY_LOOKBACK_MINUTES = 360;
+const INCREMENTAL_SAFETY_LOOKBACK_MINUTES = MOVIDESK_SAFETY_LOOKBACK_MINUTES;
 const INITIAL_INCREMENTAL_CATCHUP_HOURS = 24;
 const INCREMENTAL_COMPLETED_ACTION = "MOVIDESK_INCREMENTAL_COMPLETED_2026_V1";
 const ANALYTICAL_REFRESH_DAYS = 70;
@@ -92,6 +92,8 @@ type SyncSummary = {
   ignored: number;
   errors: number;
   since: string | null;
+  queriedPages?: number;
+  reconciliation?: boolean;
   analyticalMetadataRemaining?: number;
 };
 
@@ -760,9 +762,10 @@ export class MovideskService {
     } | null = null;
     let databaseAvailable = true;
     let databaseError: string | null = null;
+    let lastIncremental: { createdAt: Date; metadata: Prisma.JsonValue } | null = null;
     try {
       completed = await this.hasCompletedBaseline();
-      [tickets, scopedTickets, linkedTasks, lastImport] = await Promise.all([
+      [tickets, scopedTickets, linkedTasks, lastImport, lastIncremental] = await Promise.all([
         prisma.ticket.count({ where: scopedTicketWhere() }),
         prisma.ticket.count({ where: scopedTicketWhere({ createdDate: { gte: SYNC_SCOPE_START }, client: { in: [...SIMER_CLIENTS], mode: "insensitive" } }) }),
         prisma.ticket.count({ where: scopedTicketWhere({ taskNumber: { not: null }, createdDate: { gte: SYNC_SCOPE_START }, client: { in: [...SIMER_CLIENTS], mode: "insensitive" } }) }),
@@ -771,18 +774,19 @@ export class MovideskService {
           orderBy: { startedAt: "desc" },
           select: { id: true, status: true, totalRows: true, insertedRows: true, updatedRows: true, skippedRows: true, errorRows: true, startedAt: true, finishedAt: true, message: true },
         }),
+        prisma.auditLog.findFirst({ where: { action: INCREMENTAL_COMPLETED_ACTION }, orderBy: { createdAt: "desc" }, select: { createdAt: true, metadata: true } }),
       ]);
     } catch (error) {
       databaseAvailable = false;
       databaseError = error instanceof Error ? (error.message.split("\n")[0] ?? error.message).slice(0, 240) : "Banco de dados temporariamente indisponível.";
       console.warn(`[movidesk-status] Telemetria indisponível temporariamente: ${databaseError}`);
     }
-    const intervalMinutes = Number(process.env.MOVIDESK_SYNC_INTERVAL_MINUTES ?? 60);
     const schedulerEnabledRaw = process.env.MOVIDESK_SYNC_SCHEDULER_ENABLED?.trim().toLowerCase();
     const schedulerEnabled = Boolean(process.env.MOVIDESK_TOKEN?.trim()) && !["0","false","no","nao","não","off"].includes(schedulerEnabledRaw ?? "");
-    const safeInterval = Number.isSafeInteger(intervalMinutes) && intervalMinutes >= 15 && intervalMinutes <= 1440 ? intervalMinutes : 60;
-    const nextEstimatedAt = completed && lastImport?.finishedAt
-      ? new Date(lastImport.finishedAt.getTime() + safeInterval * 60_000).toISOString()
+    const safeInterval = movideskSyncIntervalMinutes();
+    const lastCompletedAt = lastIncremental?.createdAt && (!lastImport?.finishedAt || lastIncremental.createdAt > lastImport.finishedAt) ? lastIncremental.createdAt : lastImport?.finishedAt;
+    const nextEstimatedAt = completed && schedulerEnabled && lastCompletedAt
+      ? new Date(Math.max((movideskSyncAnchor(lastIncremental) ?? lastImport?.startedAt ?? lastCompletedAt).getTime() + safeInterval * 60_000, lastCompletedAt.getTime() + 30_000)).toISOString()
       : null;
     return {
       ...baselineState,
@@ -790,6 +794,7 @@ export class MovideskService {
       database: { available: databaseAvailable, error: databaseError, tickets, scopedTickets, linkedTasks },
       scope: { startDate: SYNC_SCOPE_START.toISOString(), clients: [...SIMER_CLIENTS] },
       lastImport,
+      lastIncremental: lastIncremental ? { finishedAt: lastIncremental.createdAt, ...((lastIncremental.metadata && typeof lastIncremental.metadata === "object" && !Array.isArray(lastIncremental.metadata)) ? lastIncremental.metadata : {}) } : null,
       apiCompliance: {
         sources: { recent: "/tickets", historical: "/tickets/past" },
         historicalBaselineEnabled: true,
@@ -799,7 +804,8 @@ export class MovideskService {
       scheduler: {
         enabled: schedulerEnabled,
         intervalMinutes: safeInterval,
-        overlapMinutes: INCREMENTAL_OVERLAP_MINUTES,
+        overlapMinutes: INCREMENTAL_SAFETY_LOOKBACK_MINUTES,
+        reconciliationDays: MOVIDESK_RECONCILIATION_DAYS,
         pageSize: PAGE_SIZE,
         phase: completed ? "INCREMENTAL" : baselineState.status === "RUNNING" ? "BASELINE_RUNNING" : "WAITING_BASELINE",
         nextEstimatedAt,
@@ -1370,7 +1376,7 @@ export class MovideskService {
     return { id, lastUpdate: normalizeMovideskDateTimeOffset(lastUpdate) };
   }
 
-  private async latestSuccessfulSyncDate() {
+  private async incrementalWindow(now: Date) {
     // Só habilitamos incremental depois que uma carga FULL terminou por inteiro.
     const baseline = await prisma.auditLog.findFirst({
       where: { action: BASELINE_COMPLETED_ACTION },
@@ -1383,18 +1389,23 @@ export class MovideskService {
     // Esse valor pode pertencer a outro ticket e fazer um ticket novo, ainda
     // ausente localmente, ficar definitivamente para trás da janela incremental.
     //
-    // O watermark passa a ser o término do último ciclo incremental bem-sucedido,
+    // O watermark é o início do último ciclo incremental bem-sucedido,
     // com uma janela de segurança de 6h para absorver atrasos de publicação,
     // diferenças de relógio e tickets que chegaram fora de ordem.
-    const lastIncremental = await prisma.auditLog.findFirst({
+    const [lastIncremental, lastReconciliation] = await Promise.all([prisma.auditLog.findFirst({
       where: { action: INCREMENTAL_COMPLETED_ACTION },
       orderBy: { createdAt: "desc" },
-      select: { createdAt: true },
-    });
+      select: { createdAt: true, metadata: true },
+    }), prisma.auditLog.findFirst({
+      where: { action: INCREMENTAL_COMPLETED_ACTION, metadata: { path: ["reconciliation"], equals: true } },
+      orderBy: { createdAt: "desc" },
+      select: { createdAt: true, metadata: true },
+    })]);
 
-    // Primeiro ciclo após o upgrade usa 24h; ciclos seguintes recuam 6h
-    // a partir do watermark persistido. O helper puro é coberto por teste.
-    return computeMovideskIncrementalSince(lastIncremental?.createdAt ?? null);
+    const reconciliation = movideskReconciliationDue(movideskSyncAnchor(lastReconciliation), now);
+    const incrementalSince = computeMovideskIncrementalSince(movideskSyncAnchor(lastIncremental), now);
+    const recoverySince = new Date(Math.max(SYNC_SCOPE_START.getTime(), now.getTime() - MOVIDESK_RECONCILIATION_DAYS * 24 * 60 * 60_000));
+    return { since: reconciliation && recoverySince < incrementalSince ? recoverySince : incrementalSince, reconciliation };
   }
 
   async syncTickets(
@@ -1402,7 +1413,9 @@ export class MovideskService {
     forceFull = false,
     refreshAnalyticalMetadata = true,
   ): Promise<SyncSummary> {
-    const since = forceFull ? null : await this.latestSuccessfulSyncDate();
+    const startedAt = new Date();
+    const window = forceFull ? null : await this.incrementalWindow(startedAt);
+    const since = window?.since ?? null;
     const mode: SyncSummary["mode"] = since ? "INCREMENTAL" : "FULL";
     const checkpoint = mode === "FULL" ? await this.loadBaselineCheckpoint() : null;
     const summary: SyncSummary = {
@@ -1414,6 +1427,8 @@ export class MovideskService {
       ignored: checkpoint?.ignored ?? 0,
       errors: checkpoint?.errors ?? 0,
       since: since?.toISOString() ?? null,
+      queriedPages: 0,
+      reconciliation: window?.reconciliation ?? false,
       analyticalMetadataRemaining: 0,
     };
     const initialSkip = checkpoint?.nextSkip ?? 0;
@@ -1435,6 +1450,7 @@ export class MovideskService {
     for (let skip = initialSkip; ; skip += PAGE_SIZE) {
       const useCursor = mode === "FULL" && (skip >= OFFSET_TO_CURSOR_THRESHOLD || Boolean(fullCursor));
       const rows = await this.getPage(skip, since, useCursor ? fullCursor : null);
+      summary.queriedPages = (summary.queriedPages ?? 0) + 1;
       if (!rows.length) break;
 
       const scopedRows = rows.filter((row) => isSimerClient(this.ticketClientName(row)));
@@ -1482,6 +1498,7 @@ export class MovideskService {
       // ultrapassou a janela de 90 dias documentada pelo Movidesk.
       for (let pastSkip = 0; ; pastSkip += PAGE_SIZE) {
         const rows = await this.getPastPage(pastSkip);
+        summary.queriedPages = (summary.queriedPages ?? 0) + 1;
         if (!rows.length) break;
         const scopedRows = rows.filter((row) => isSimerClient(this.ticketClientName(row)));
         const result = scopedRows.length
@@ -1518,6 +1535,9 @@ export class MovideskService {
           action: INCREMENTAL_COMPLETED_ACTION,
           entity: "Ticket",
           metadata: {
+            startedAt: startedAt.toISOString(),
+            reconciliation: summary.reconciliation ?? false,
+            queriedPages: summary.queriedPages ?? 0,
             since: summary.since,
             pages: summary.pages,
             totalRows: summary.totalRows,

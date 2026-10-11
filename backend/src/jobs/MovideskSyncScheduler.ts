@@ -1,9 +1,9 @@
 
 import { ensureDatabaseAvailable, reportDatabaseFailure } from "../database/prisma";
 import { MovideskService } from "../services/MovideskService";
+import { movideskSyncIntervalMinutes } from "../domain/MovideskSyncPolicy";
 import { clearMovideskApiPriority, releaseMovideskApi, requestMovideskApiPriority, tryAcquireMovideskApi } from "./MovideskSyncCoordinator";
 
-const DEFAULT_INTERVAL_MINUTES = 5;
 const DEFAULT_INITIAL_DELAY_SECONDS = 5;
 
 export function movideskNextCycleDelay(intervalMs: number, elapsedMs: number) {
@@ -23,8 +23,7 @@ export class MovideskSyncScheduler {
   }
 
   private intervalMinutes() {
-    const parsed = Number(process.env.MOVIDESK_SYNC_INTERVAL_MINUTES ?? DEFAULT_INTERVAL_MINUTES);
-    return Number.isSafeInteger(parsed) && parsed >= 2 && parsed <= 1440 ? parsed : DEFAULT_INTERVAL_MINUTES;
+    return movideskSyncIntervalMinutes();
   }
 
   start() {
@@ -93,6 +92,7 @@ export class MovideskSyncScheduler {
       console.log([
         "[movidesk-sync] Sincronização concluída.",
         `modo=${s.mode}`, `desde=${s.since??"baseline"}`,
+        `reconciliacao7d=${s.reconciliation ? "sim" : "não"}`, `consultas=${s.queriedPages}`,
         `paginas=${s.pages}`, `total=${s.totalRows}`,
         `inseridos=${s.created}`, `atualizados=${s.updated}`,
         `ignorados=${s.ignored}`, `erros=${s.errors}`,
