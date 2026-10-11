@@ -23,7 +23,7 @@ type Data={
 export function Intelligence(){
   const navigate=useNavigate(),theme=useTheme();
   const [days,setDays]=useState(90),[data,setData]=useState<Data|null>(null),[loading,setLoading]=useState(true),[error,setError]=useState("");
-  useEffect(()=>{const controller=new AbortController();setLoading(true);setError("");api.get<Data>("/intelligence/overview",{params:{days},signal:controller.signal}).then(r=>setData(r.data)).catch(e=>{if(!controller.signal.aborted)setError(getApiErrorMessage(e,"Não foi possível carregar a inteligência operacional."));}).finally(()=>{if(!controller.signal.aborted)setLoading(false)});return()=>controller.abort();},[days]);
+  useEffect(()=>{const controller=new AbortController();setLoading(true);setError("");api.get<Data>("/intelligence/overview",{params:{days},signal:controller.signal}).then(r=>{if(!controller.signal.aborted)setData(r.data)}).catch(e=>{if(!controller.signal.aborted)setError(getApiErrorMessage(e,"Não foi possível carregar a inteligência operacional."));}).finally(()=>{if(!controller.signal.aborted)setLoading(false)});return()=>controller.abort();},[days]);
   const panel={border:"1px solid",borderColor:"divider",borderRadius:3,background:theme.palette.mode==="dark"?"linear-gradient(145deg,rgba(12,31,55,.96),rgba(8,22,40,.98))":"linear-gradient(145deg,#fff,#f8fbff)",boxShadow:theme.palette.mode==="dark"?"0 18px 44px rgba(0,0,0,.18)":"0 14px 34px rgba(30,64,175,.06)"} as const;
   const openInvestigation=(q:string)=>navigate(`/investigacao?q=${encodeURIComponent(q)}`);
   return <Box sx={{pb:4}}>

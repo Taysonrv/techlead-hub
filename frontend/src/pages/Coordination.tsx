@@ -18,7 +18,7 @@ import {
   Stack,
   Typography,
 } from "@mui/material";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { KpiCard } from "../components/KpiCard";
 import { ExportTicketsButton } from "../components/ExportTicketsButton";
@@ -164,21 +164,27 @@ export function Coordination() {
     : analyticPeriod === "6m" ? "Últimos 6 meses"
     : analyticPeriod === "12m" ? "Últimos 12 meses" : "Desde 01/01/2026";
 
+  const summaryRequest = useRef<AbortController | null>(null);
   const load = useCallback(async () => {
+    summaryRequest.current?.abort();
+    const controller = new AbortController();
+    summaryRequest.current = controller;
     try {
       setLoading(true);
       setError("");
-      const response = await api.get<Data>("/coordination/summary", { params: { serviceDays: analyticParams.days, startDate: analyticParams.startDate, endDate: analyticParams.endDate } });
-      setData(response.data);
+      const response = await api.get<Data>("/coordination/summary", { signal: controller.signal, params: { serviceDays: analyticParams.days, startDate: analyticParams.startDate, endDate: analyticParams.endDate } });
+      if (!controller.signal.aborted) setData(response.data);
     } catch (requestError: unknown) {
+      if (controller.signal.aborted) return;
       setError(getApiErrorMessage(requestError, "Não foi possível carregar a central."));
     } finally {
-      setLoading(false);
+      if (!controller.signal.aborted) setLoading(false);
     }
   }, [analyticParams.days, analyticParams.endDate, analyticParams.startDate]);
 
   useEffect(() => {
     void load();
+    return () => summaryRequest.current?.abort();
   }, [load]);
 
   useEffect(() => {
