@@ -81,6 +81,7 @@ import {
   chartPalette,
   semanticChartColors,
 } from "../theme/chartPalette";
+import { subscribeTicketSnapshotRefresh } from "../services/ticketSnapshot";
 import { PageHeader } from "../components/PageHeader";
 import { CorrectionMonthlyPanel } from "../components/CorrectionMonthlyPanel";
 import { ExecutiveSection } from "../components/ExecutiveSection";
@@ -1209,6 +1210,7 @@ export function AzureWorkItems({
   ] = useState(false);
 
   const hasLoadedRef = useRef(false);
+  const mainRequestRef = useRef<AbortController | null>(null);
 
   const [
     detailLoading,
@@ -1436,11 +1438,12 @@ export function AzureWorkItems({
 
   const loadSummary =
     useCallback(
-      async () => {
+      async (signal: AbortSignal) => {
         const response =
           await api.get<SummaryResponse>(
             "/azure-work-items/summary",
             {
+              signal,
               params: {
                 type,
                 search: appliedSearch || undefined,
@@ -1459,9 +1462,7 @@ export function AzureWorkItems({
             },
           );
 
-        setSummary(
-          response.data,
-        );
+        return response.data;
       },
       [
         type, appliedSearch, state, criticality, assignedTo, client,
@@ -1472,17 +1473,19 @@ export function AzureWorkItems({
 
   const loadFilters =
     useCallback(
-      async () => {
+      async (signal: AbortSignal) => {
         const response =
           await api.get<FiltersResponse>(
             "/azure-work-items/filters",
             {
+              signal,
               params: {
                 type,
               },
             },
           );
 
+        if (signal.aborted) return;
         setFilters(
           response.data,
         );
@@ -1494,11 +1497,12 @@ export function AzureWorkItems({
 
   const loadList =
     useCallback(
-      async () => {
+      async (signal: AbortSignal) => {
         const response =
           await api.get<ListResponse>(
             "/azure-work-items",
             {
+              signal,
               params: {
                 type,
                 page,
@@ -1569,9 +1573,7 @@ export function AzureWorkItems({
             },
           );
 
-        setList(
-          response.data,
-        );
+        return response.data;
       },
       [
         appliedSearch,
@@ -1595,6 +1597,9 @@ export function AzureWorkItems({
   const loadAll =
     useCallback(
       async () => {
+        mainRequestRef.current?.abort();
+        const controller = new AbortController();
+        mainRequestRef.current = controller;
         const hasData = hasLoadedRef.current;
         try {
           if (hasData) setRefreshing(true);
@@ -1604,13 +1609,18 @@ export function AzureWorkItems({
             null,
           );
 
-          await Promise.all([
-            loadSummary(),
-            loadList(),
+          const [summaryData, listData] = await Promise.all([
+            loadSummary(controller.signal),
+            loadList(controller.signal),
           ]);
+          if (controller.signal.aborted) return;
+          setSummary(summaryData);
+          setList(listData);
+          hasLoadedRef.current = true;
         } catch (
           loadError
         ) {
+          if (controller.signal.aborted) return;
           console.error(
             "[AzureWorkItems]",
             loadError,
@@ -1620,9 +1630,11 @@ export function AzureWorkItems({
             "Não foi possível carregar os dados sincronizados do Azure DevOps.",
           );
         } finally {
-          hasLoadedRef.current = true;
-          setLoading(false);
-          setRefreshing(false);
+          if (!controller.signal.aborted) {
+            mainRequestRef.current = null;
+            setLoading(false);
+            setRefreshing(false);
+          }
         }
       },
       [
@@ -1635,10 +1647,18 @@ export function AzureWorkItems({
     // O painel mensal tem consulta e cache próprios: evitar três requisições
     // genéricas desnecessárias ao abrir Correções.
     if (!isCorrection) void loadAll();
+    const unsubscribe = subscribeTicketSnapshotRefresh(() => {
+      if (!isCorrection && !mainRequestRef.current) void loadAll();
+    });
+    return () => { unsubscribe(); mainRequestRef.current?.abort(); };
   }, [isCorrection, loadAll]);
 
   useEffect(() => {
-    if (!isCorrection) void loadFilters();
+    const controller = new AbortController();
+    if (!isCorrection) void loadFilters(controller.signal).catch(() => {
+      if (!controller.signal.aborted) setError("Não foi possível atualizar as opções dos filtros.");
+    });
+    return () => controller.abort();
   }, [isCorrection, loadFilters]);
 
   useEffect(() => {
@@ -3367,11 +3387,11 @@ export function AzureWorkItems({
                     },
                   }}
                 >
-                  <InputLabel>
+                  <InputLabel shrink>
                     Ordenar
                   </InputLabel>
 
-                  <Select
+                  <Select notched displayEmpty
                     value={
                       sortDirection
                     }
@@ -3457,7 +3477,7 @@ export function AzureWorkItems({
                   gridTemplateColumns: {
                     xs: "1fr",
                     sm: "repeat(2, minmax(0, 1fr))",
-                    lg: "repeat(5, minmax(0, 1fr))",
+                    lg: "repeat(3, minmax(0, 1fr))",
                   },
                   gap: 1.25,
                 }}
@@ -3466,11 +3486,11 @@ export function AzureWorkItems({
                   size="small"
                   fullWidth
                 >
-                  <InputLabel>
+                  <InputLabel shrink>
                     Estado
                   </InputLabel>
 
-                  <Select
+                  <Select notched displayEmpty renderValue={(value) => value === "true" ? "Sim" : value === "false" ? "Não" : value ? String(value) : "Todos"}
                     label="Estado"
                     value={
                       state
@@ -3514,11 +3534,11 @@ export function AzureWorkItems({
                   size="small"
                   fullWidth
                 >
-                  <InputLabel>
+                  <InputLabel shrink>
                     Criticidade
                   </InputLabel>
 
-                  <Select
+                  <Select notched displayEmpty renderValue={(value) => value === "true" ? "Sim" : value === "false" ? "Não" : value ? String(value) : "Todos"}
                     label="Criticidade"
                     value={
                       criticality
@@ -3651,7 +3671,7 @@ export function AzureWorkItems({
                     gridTemplateColumns: {
                       xs: "1fr",
                       sm: "repeat(2, minmax(0, 1fr))",
-                      lg: "repeat(4, minmax(0, 1fr))",
+                      lg: "repeat(3, minmax(0, 1fr))",
                     },
                     gap: 1.25,
                   }}
@@ -3726,11 +3746,11 @@ export function AzureWorkItems({
                     size="small"
                     fullWidth
                   >
-                    <InputLabel>
+                    <InputLabel shrink>
                       Priorização
                     </InputLabel>
 
-                    <Select
+                    <Select notched displayEmpty renderValue={(value) => value === "true" ? "Sim" : value === "false" ? "Não" : value ? String(value) : "Todos"}
                       label="Priorização"
                       value={
                         prioritized
@@ -3765,11 +3785,11 @@ export function AzureWorkItems({
                     size="small"
                     fullWidth
                   >
-                    <InputLabel>
+                    <InputLabel shrink>
                       Bloqueio
                     </InputLabel>
 
-                    <Select
+                    <Select notched displayEmpty renderValue={(value) => value === "true" ? "Sim" : value === "false" ? "Não" : value ? String(value) : "Todos"}
                       label="Bloqueio"
                       value={
                         blockedProcess
@@ -3804,11 +3824,11 @@ export function AzureWorkItems({
                     size="small"
                     fullWidth
                   >
-                    <InputLabel>
+                    <InputLabel shrink>
                       Responsável
                     </InputLabel>
 
-                    <Select
+                    <Select notched displayEmpty renderValue={(value) => value === "true" ? "Sim" : value === "false" ? "Não" : value ? String(value) : "Todos"}
                       label="Responsável"
                       value={
                         hasAssignedTo
@@ -3843,11 +3863,11 @@ export function AzureWorkItems({
                     size="small"
                     fullWidth
                   >
-                    <InputLabel>
+                    <InputLabel shrink>
                       Movidesk na Task
                     </InputLabel>
 
-                    <Select
+                    <Select notched displayEmpty renderValue={(value) => value === "true" ? "Sim" : value === "false" ? "Não" : value ? String(value) : "Todos"}
                       label="Movidesk na Task"
                       value={
                         hasMovideskTicket

@@ -49,6 +49,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 
@@ -70,6 +71,7 @@ import {
   aliareColors,
 } from "../theme/theme";
 import { InfoPopover, type InfoPopoverContent } from "../components/InfoPopover";
+import { subscribeTicketSnapshotRefresh } from "../services/ticketSnapshot";
 import { PageHeader } from "../components/PageHeader";
 import { ContentState } from "../components/ContentState";
 import { useTheme } from "@mui/material/styles";
@@ -439,6 +441,8 @@ export function Versions() {
   const [taskDetailLoading, setTaskDetailLoading] = useState(false);
   const [azureStatus, setAzureStatus] = useState<{ organization: string | null; project: string | null; wiki: string | null } | null>(null);
 
+  useEffect(() => () => { detailRequestRef.current?.abort(); }, []);
+
   const advancedFilterCount =
     [
       criticality,
@@ -463,11 +467,16 @@ export function Versions() {
       activeMetricFilter !== "all",
     );
 
-  const [referenceDataLoaded, setReferenceDataLoaded] = useState(false);
+  const referenceDataLoaded = useRef(false);
+  const mainRequestRef = useRef<AbortController | null>(null);
+  const detailRequestRef = useRef<AbortController | null>(null);
 
   const load =
     useCallback(
       async () => {
+        mainRequestRef.current?.abort();
+        const controller = new AbortController();
+        mainRequestRef.current = controller;
         try {
           setLoading(
             true,
@@ -519,38 +528,39 @@ export function Versions() {
 
           const summaryRequest = api.get<VersionsResponse>(
             "/azure-work-items/versions/summary",
-            { params },
+            { params, signal: controller.signal },
           );
 
-          if (!referenceDataLoaded) {
+          if (!referenceDataLoaded.current) {
             const [summaryResponse, filtersResponse, azureStatusResponse] = await Promise.all([
               summaryRequest,
               api.get<FiltersResponse>("/azure-work-items/filters"),
               api.get("/azure-devops/status"),
             ]);
+            if (controller.signal.aborted) return;
             setData(summaryResponse.data);
             setFilters(filtersResponse.data);
             setAzureStatus(azureStatusResponse.data);
-            setReferenceDataLoaded(true);
+            referenceDataLoaded.current = true;
           } else {
             const summaryResponse = await summaryRequest;
+            if (controller.signal.aborted) return;
             setData(summaryResponse.data);
           }
         } catch (
           currentError
         ) {
+          if (controller.signal.aborted) return;
           console.error(
             "Erro ao carregar versões:",
             currentError,
           );
 
           setError(
-            "Não foi possível carregar a visão de versões.",
+            "Não foi possível atualizar a visão de versões. Se houver dados exibidos, eles são da última consulta concluída.",
           );
         } finally {
-          setLoading(
-            false,
-          );
+          if (!controller.signal.aborted) { mainRequestRef.current = null; setLoading(false); }
         }
       },
       [
@@ -561,13 +571,14 @@ export function Versions() {
         criticality,
         prioritized,
         blockedProcess,
-        referenceDataLoaded,
       ],
     );
 
   useEffect(
     () => {
       void load();
+      const unsubscribe = subscribeTicketSnapshotRefresh(() => { if (!mainRequestRef.current) void load(); });
+      return () => { unsubscribe(); mainRequestRef.current?.abort(); };
     },
     [
       load,
@@ -609,10 +620,6 @@ export function Versions() {
             a,
             b,
           ) => {
-            if (appliedSearch) {
-              return toTimestamp(b.latestChangedAt) - toTimestamp(a.latestChangedAt);
-            }
-
             if (
               versionSort ===
               "version-desc"
@@ -627,16 +634,8 @@ export function Versions() {
               versionSort ===
               "version-asc"
             ) {
-              return a.label.localeCompare(
-                b.label,
-                "pt-BR",
-                {
-                  numeric:
-                    true,
-                  sensitivity:
-                    "base",
-                },
-              );
+              if (a.hasVersion !== b.hasVersion) return a.hasVersion ? -1 : 1;
+              return compareVersionsDesc(b, a);
             }
 
             if (
@@ -685,7 +684,6 @@ export function Versions() {
       },
       [
         data?.items,
-        appliedSearch,
         versionSort,
         versionChannel,
         activeMetricFilter,
@@ -1001,6 +999,9 @@ export function Versions() {
     requests:
       DetailRequest[],
   ) => {
+    detailRequestRef.current?.abort();
+    const controller = new AbortController();
+    detailRequestRef.current = controller;
     setSelectedVersion(
       context.version,
     );
@@ -1036,6 +1037,7 @@ export function Versions() {
               api.get<WorkItemListResponse>(
                 "/azure-work-items",
                 {
+                  signal: controller.signal,
                   params:
                     request.ignoreCurrentFilters
                       ? {
@@ -1053,6 +1055,7 @@ export function Versions() {
           ),
         );
 
+      if (controller.signal.aborted) return;
       const unique =
         new Map<
           number,
@@ -1094,6 +1097,7 @@ export function Versions() {
     } catch (
       currentError
     ) {
+      if (controller.signal.aborted) return;
       console.error(
         "Erro ao carregar detalhamento de versões:",
         currentError,
@@ -1103,9 +1107,7 @@ export function Versions() {
         "Não foi possível carregar as Tasks deste indicador.",
       );
     } finally {
-      setDetailLoading(
-        false,
-      );
+      if (!controller.signal.aborted) setDetailLoading(false);
     }
   }, [buildScopedParams]);
 
@@ -1450,7 +1452,7 @@ export function Versions() {
 
       {error && (
         <Alert
-          severity="error"
+          severity={data ? "warning" : "error"}
           sx={{
             mb:
               2,
@@ -1575,9 +1577,9 @@ export function Versions() {
                 },
               }}
             >
-              <InputLabel id="versions-select-1-label">
+              <InputLabel shrink id="versions-select-1-label">
                 Tipo
-              </InputLabel><Select labelId="versions-select-1-label" inputProps={{ id: "versions-select-1", "aria-labelledby": "versions-select-1-label" }}
+              </InputLabel><Select notched displayEmpty renderValue={(value) => value === "true" ? "Sim" : value === "false" ? "Não" : value ? String(value) : "Todos"} labelId="versions-select-1-label" inputProps={{ id: "versions-select-1", "aria-labelledby": "versions-select-1-label" }}
                 value={
                   type
                 }
@@ -1615,9 +1617,9 @@ export function Versions() {
                 },
               }}
             >
-              <InputLabel id="versions-select-2-label">
+              <InputLabel shrink id="versions-select-2-label">
                 Estado
-              </InputLabel><Select labelId="versions-select-2-label" inputProps={{ id: "versions-select-2", "aria-labelledby": "versions-select-2-label" }}
+              </InputLabel><Select notched displayEmpty renderValue={(value) => value === "true" ? "Sim" : value === "false" ? "Não" : value ? String(value) : "Todos"} labelId="versions-select-2-label" inputProps={{ id: "versions-select-2", "aria-labelledby": "versions-select-2-label" }}
                 value={
                   state
                 }
@@ -1820,9 +1822,9 @@ export function Versions() {
               <FormControl
                 size="small"
               >
-                <InputLabel id="versions-select-3-label">
+                <InputLabel shrink id="versions-select-3-label">
                   Criticidade
-                </InputLabel><Select labelId="versions-select-3-label" inputProps={{ id: "versions-select-3", "aria-labelledby": "versions-select-3-label" }}
+                </InputLabel><Select notched displayEmpty renderValue={(value) => value === "true" ? "Sim" : value === "false" ? "Não" : value ? String(value) : "Todos"} labelId="versions-select-3-label" inputProps={{ id: "versions-select-3", "aria-labelledby": "versions-select-3-label" }}
                   value={
                     criticality
                   }
@@ -1861,9 +1863,9 @@ export function Versions() {
               <FormControl
                 size="small"
               >
-                <InputLabel id="versions-select-4-label">
+                <InputLabel shrink id="versions-select-4-label">
                   Priorização
-                </InputLabel><Select labelId="versions-select-4-label" inputProps={{ id: "versions-select-4", "aria-labelledby": "versions-select-4-label" }}
+                </InputLabel><Select notched displayEmpty renderValue={(value) => value === "true" ? "Sim" : value === "false" ? "Não" : value ? String(value) : "Todos"} labelId="versions-select-4-label" inputProps={{ id: "versions-select-4", "aria-labelledby": "versions-select-4-label" }}
                   value={
                     prioritized
                   }
@@ -1892,9 +1894,9 @@ export function Versions() {
               <FormControl
                 size="small"
               >
-                <InputLabel id="versions-select-5-label">
+                <InputLabel shrink id="versions-select-5-label">
                   Bloqueio
-                </InputLabel><Select labelId="versions-select-5-label" inputProps={{ id: "versions-select-5", "aria-labelledby": "versions-select-5-label" }}
+                </InputLabel><Select notched displayEmpty renderValue={(value) => value === "true" ? "Sim" : value === "false" ? "Não" : value ? String(value) : "Todos"} labelId="versions-select-5-label" inputProps={{ id: "versions-select-5", "aria-labelledby": "versions-select-5-label" }}
                   value={
                     blockedProcess
                   }
@@ -1921,7 +1923,7 @@ export function Versions() {
               </FormControl>
 
               <FormControl size="small">
-                <InputLabel id="versions-select-6-label">Canal da versão</InputLabel><Select labelId="versions-select-6-label" inputProps={{ id: "versions-select-6", "aria-labelledby": "versions-select-6-label" }} value={versionChannel} label="Canal da versão" onChange={(event) => setVersionChannel(event.target.value as VersionChannel)}>
+                <InputLabel shrink id="versions-select-6-label">Canal da versão</InputLabel><Select notched displayEmpty labelId="versions-select-6-label" inputProps={{ id: "versions-select-6", "aria-labelledby": "versions-select-6-label" }} value={versionChannel} label="Canal da versão" onChange={(event) => setVersionChannel(event.target.value as VersionChannel)}>
                   <MenuItem value="">Todos os canais</MenuItem>
                   <MenuItem value="lts">LTS</MenuItem>
                   <MenuItem value="lte">LTE</MenuItem>
@@ -1932,7 +1934,7 @@ export function Versions() {
               </FormControl>
 
               <FormControl size="small">
-                <InputLabel id="versions-select-7-label">Ordenar versões</InputLabel><Select labelId="versions-select-7-label" inputProps={{ id: "versions-select-7", "aria-labelledby": "versions-select-7-label" }} value={versionSort} label="Ordenar versões" onChange={(event) => setVersionSort(event.target.value as VersionSort)}>
+                <InputLabel shrink id="versions-select-7-label">Ordenar versões</InputLabel><Select notched displayEmpty labelId="versions-select-7-label" inputProps={{ id: "versions-select-7", "aria-labelledby": "versions-select-7-label" }} value={versionSort} label="Ordenar versões" onChange={(event) => setVersionSort(event.target.value as VersionSort)}>
                   <MenuItem value="version-desc">Versão mais recente</MenuItem>
                   <MenuItem value="latest-desc">Movimentação mais recente</MenuItem>
                   <MenuItem value="total-desc">Maior volume</MenuItem>
@@ -1960,7 +1962,7 @@ export function Versions() {
             lg:
               "repeat(3, minmax(0, 1fr))",
             xl:
-              "repeat(5, minmax(0, 1fr))",
+              "repeat(3, minmax(0, 1fr))",
           },
           gap:
             1.25,
@@ -3808,7 +3810,7 @@ function DonutCard({
                 onClick={() => toggleItem(item.name)}
                 onDoubleClick={() => onSliceClick?.(item.name)}
                 onKeyDown={(event) => {
-                  if (event.key === "Enter" || event.key === " ") toggleItem(item.name);
+                  if (event.key === "Enter" || event.key === " ") { event.preventDefault(); toggleItem(item.name); }
                 }}
                 sx={{
                   display:
