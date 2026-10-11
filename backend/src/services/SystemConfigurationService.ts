@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import axios from "axios";
 import { prisma } from "../database/prisma";
+import { azureCollection, azureFailureMessage } from "./AzureDevOpsResponse";
 
 const SETTING_ENV = {
   organization: "AZURE_DEVOPS_ORGANIZATION",
@@ -83,22 +84,24 @@ class SystemConfigurationService {
       // WIQL is a POST-only endpoint in Azure DevOps. Use a minimal valid
       // query so the credential is tested against the same Work Items API
       // consumed by the synchronization service.
-      await axios.post(
+      const response=await axios.post(
         `https://dev.azure.com/${encodeURIComponent(organization)}/${encodeURIComponent(project)}/_apis/wit/wiql`,
         { query: "SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = @project ORDER BY [System.ChangedDate] DESC" },
         {
           headers: { Accept: "application/json", "Content-Type": "application/json", Authorization: `Basic ${auth}` },
           params: { "api-version": "7.1", "$top": "1" },
           timeout: 15_000,
+          maxRedirects: 0,
           validateStatus: (status) => status >= 200 && status < 300,
         },
       );
+      azureCollection(response,"workItems","teste de conexão");
     } catch (error) {
       if (axios.isAxiosError(error)) {
         const status = error.response?.status;
         if (status === 401) throw new Error("Azure DevOps rejeitou o novo PAT (HTTP 401). A credencial atual foi preservada.");
         if (status === 403) throw new Error("O novo PAT não possui permissão suficiente no Azure DevOps (HTTP 403). A credencial atual foi preservada.");
-        throw new Error(`Não foi possível validar o Azure DevOps${status ? ` (HTTP ${status})` : ""}. A configuração atual foi preservada.`);
+        throw new Error(`${azureFailureMessage(error)} A configuração atual foi preservada.`);
       }
       throw error;
     }

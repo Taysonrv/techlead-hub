@@ -14,6 +14,7 @@ export type CorrectionExportRow = {
   urgency: string | null;
   prioritized: boolean | null;
   assignedTo: string | null;
+  assignedAtClose?: string | null;
   terminalAt: string | null;
   remoteUrl: string | null;
   stateAtOpen?: string | null;
@@ -46,7 +47,7 @@ type Props = {
 const headers = [
   "Task Azure","Título","Cliente","Criado por","Data de criação","Status no fechamento",
   "Status na abertura","Última mudança de status","Urgência","Priorizada","Responsável atual",
-  "Conclusão/Cancelamento","Criada no período","Entregue no período","Cancelada no período",
+  "Responsável no fechamento","Conclusão/Cancelamento","Criada no período","Entregue no período","Cancelada no período",
   "Entrou em Registro no período","Backlog inicial","Backlog atual","Movimentos/backlog do mês","URL Azure",
 ];
 
@@ -77,7 +78,7 @@ export function exportCorrectionTasksToExcel(rows: CorrectionExportRow[], title:
   const values = rows.map((row) => [
     row.id,row.title,row.client,row.createdBy,excelDate(row.createdAt),row.status,row.stateAtOpen,
     excelDate(row.lastStateChangedAt),row.urgency,yesNo(row.prioritized),row.assignedTo,
-    excelDate(row.terminalAt),yesNo(row.registeredInPeriod),yesNo(row.deliveredInPeriod),
+    row.assignedAtClose,excelDate(row.terminalAt),yesNo(row.registeredInPeriod),yesNo(row.deliveredInPeriod),
     yesNo(row.canceledInPeriod),yesNo(row.enteredRegistrationInPeriod),yesNo(row.backlogInitial),
     yesNo(row.backlogCurrent),yesNo(row.inMonthlyIndicators??(row.registeredInPeriod||row.deliveredInPeriod||row.canceledInPeriod||row.enteredRegistrationInPeriod||row.backlogInitial||row.backlogCurrent)),row.remoteUrl,
   ]);

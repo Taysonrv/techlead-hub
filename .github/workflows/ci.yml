@@ -70,6 +70,7 @@ jobs:
         shell: pwsh
         run: |
           npm run lint --prefix frontend
+          npm run test --prefix frontend
           npm run build --prefix frontend
 
       - name: Validar desktop

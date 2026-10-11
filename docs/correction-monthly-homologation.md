@@ -12,7 +12,15 @@ A expiração do cache de dois minutos agenda uma consulta e preserva a última 
 
 Se a preparação inicial levar mais de quatro segundos depois de autenticar a requisição, a API responde HTTP 202 com o estado de geração, sem cards ou totais. A tela acompanha a mesma geração a cada três segundos e só exibe números quando recebe um relatório. Falhas na preparação local permanecem disponíveis à consulta de acompanhamento; Recarregar permite recuperar após corrigir a causa. Na recarga, os dados já exibidos permanecem visíveis inclusive se a nova requisição falhar.
 
-A primeira prévia não aguarda a gravação do fechamento. Essa gravação acontece no fluxo de background, antes da apuração remota, mantendo a ordem dos fechamentos. A leitura do fechamento salvo e das Tasks começa em paralelo; a prévia consulta apenas os campos necessários, sem transportar rawFields de todas as Correções. O terminal registra início da prévia e duração da apuração. Um timeout de 30 segundos no navegador indica que a chamada ao Hub não respondeu; isoladamente, ele não identifica falha do Azure. Se persistir, conferir logs do backend, versão executada, proxy do Vite e acesso ao PostgreSQL/autenticação antes do controller.
+A primeira prévia não aguarda a gravação do fechamento. Essa gravação acontece no fluxo de background, antes da apuração remota, mantendo a ordem dos fechamentos. A leitura do fechamento salvo e das Tasks começa em paralelo; as leituras locais consultam apenas os campos necessários, sem transportar rawFields de todas as Correções. O terminal registra início da prévia e duração da apuração. Um timeout de 30 segundos no navegador indica que a chamada ao Hub não respondeu; isoladamente, ele não identifica falha do Azure. Se persistir, conferir logs do backend, versão executada, proxy do Vite e acesso ao PostgreSQL/autenticação antes do controller.
+
+As consultas do report e o teste da configuração não seguem redirecionamentos. O teste exige uma coleção JSON de Work Items: HTTP 200 com HTML não comprova conexão. O diagnóstico informa o status e o tipo de resposta, sem expor corpo, URLs de redirecionamento ou credenciais. Resposta inválida pode representar uma página de login, proxy ou configuração inadequada; a causa exata exige validar a conexão na tela Integrações. A tela mantém o aviso de apuração parcial e organiza as falhas técnicas em Detalhes da consulta ao Azure.
+
+Cliente, urgência e priorização históricos vêm do fechamento. Campos ausentes nunca usam valores atuais; quando não houver evidência, urgência/priorização aparecem como Não informado. A mesma revisão histórica pode complementar campos omitidos pelo batch. A prévia local de mês encerrado também não substitui esses campos pelos valores atuais. Assim, mudanças posteriores não alteram cards filtrados ou distribuições de um mês fechado.
+
+Responsável atual e responsável no fechamento são informações separadas. O atual vem da última sincronização local; para Tasks remotas ainda não sincronizadas, uma consulta batch sem ASOF recupera a atribuição atual. A ausência de atribuição ou uma consulta malsucedida não reutiliza o nome antigo. Essa informação descritiva não filtra os criadores do suporte nem altera a apuração histórica. A lateral e o Excel incluem ambos os responsáveis.
+
+Compartilhar seleção preserva mês, filtros múltiplos, indicador/gráfico e busca textual no link. Compartilhar Task preserva também o ID selecionado. O destinatário abre o mesmo recorte sob as próprias permissões e a carteira obrigatória; o link consulta os dados disponíveis e não congela uma cópia do report. Tabela, lateral, compartilhamento e exportação da lateral usam a mesma busca textual.
 
 ## Leitura dos números
 
@@ -42,7 +50,7 @@ As referências devem corresponder aos mesmos criadores e à mesma carteira de c
 5. Conferir que o backlog final de setembro corresponde ao inicial de outubro sob os mesmos filtros.
 6. Usar Exportar report Excel. O arquivo traz os seis indicadores, referências, situação da apuração, período, filtros e listagem por ID. Se o histórico for parcial, o arquivo identifica PRÉVIA PARCIAL. Exportações da tabela e das laterais também levam a situação do histórico.
 
-Fechamentos anteriores ao formato v4 são reapurados. Um fechamento comprovado não é substituído por uma prévia com cobertura inferior. Testes automatizados exercitam dados simulados e não certificam os números da instalação.
+Fechamentos anteriores ao formato v5 são reapurados, pois podiam conter metadados atuais nos filtros históricos. Um fechamento v5 comprovado não é substituído por uma prévia com cobertura inferior. Testes automatizados exercitam dados simulados e não certificam os números da instalação.
 
 ## Fontes técnicas
 

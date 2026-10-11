@@ -15,7 +15,7 @@ import {
   Bar, BarChart, CartesianGrid, Cell, LabelList, Pie, PieChart, ResponsiveContainer,
   Tooltip as ChartTooltip, XAxis, YAxis,
 } from "recharts";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { api, getApiErrorMessage } from "../services/api";
 import { aliareColors } from "../theme/theme";
 import { chartPalette, semanticChartColors } from "../theme/chartPalette";
@@ -23,6 +23,8 @@ import { KpiCard } from "./KpiCard";
 import { DetailFieldGrid, DetailPanelHeader, DetailSection } from "./DetailPanel";
 import { detailDrawerPaperSx } from "../theme/layoutTokens";
 import { ExportCorrectionTasksButton } from "./ExportCorrectionTasksButton";
+import { correctionReportLink, parseCorrectionReportSelection } from "../utils/correctionReportSelection";
+import type { CorrectionMetric, CorrectionSlice } from "../utils/correctionReportSelection";
 
 function Stack(
   props: React.ComponentProps<typeof MuiStack> & {
@@ -90,6 +92,7 @@ function CardHeading({ title, subtitle, info }: { title: string; subtitle?: stri
 type Row = {
   id:number; title:string; client:string|null; createdBy:string|null; createdAt:string|null; status:string;
   lastStateChangedAt:string|null; urgency:string|null; prioritized:boolean|null; assignedTo:string|null;
+  assignedAtClose?:string|null; assignedToSource?:"local-sync"|"azure-current"|"unavailable";
   terminalAt:string|null; remoteUrl:string|null; stateAtOpen?:string|null; stateAtClose?:string|null;
   registeredInPeriod:boolean; deliveredInPeriod:boolean; canceledInPeriod:boolean;
   enteredRegistrationInPeriod:boolean; backlogInitial:boolean; backlogCurrent:boolean;
@@ -109,6 +112,7 @@ type Report = {
     historicalMetricsReliable:boolean;backlogHistoricalReliable?:boolean;backlogInitialAvailable?:boolean;backlogCurrentAvailable?:boolean;unknownClosingStates?:number;
     externalHistorySuspicious?:boolean;localFallbackUsed?:boolean;localStateHistoryEvents?:number;
     perItemHistoryRecoveryUsed?:boolean;recoveredHistoryItems?:number;recoveryCandidates?:number;missingClosingFields?:number;
+    currentAssigneeError?:string|null;unknownUrgencyRows?:number;unknownPrioritizationRows?:number;
     diagnostics?:{
       scopedRecords?:number;localRecords:number;localPeriodCandidates:number;revisions:number;
       openingScopeIds:number;closingScopeIds:number;snapshotCandidates:number;
@@ -119,13 +123,8 @@ type Report = {
 
 type GeneratingReport={status:"generating";month:string;retryAfterMs:number};
 
-type Drill = "registered"|"delivered"|"canceled"|"registration"|"backlogInitial"|"backlogCurrent"|null;
-type SliceDrill =
-  | {kind:"status";value:string}
-  | {kind:"urgency";value:string}
-  | {kind:"prioritized";value:boolean|null}
-  | {kind:"monthly"}
-  | null;
+type Drill = CorrectionMetric|null;
+type SliceDrill = CorrectionSlice|null;
 
 const TERMINAL = new Set(["Concluído","Cancelado"]);
 const PIPELINE_ORDER = [
@@ -165,29 +164,45 @@ const currentMonth = () => {
   return `${parts.find(part=>part.type==="year")?.value}-${parts.find(part=>part.type==="month")?.value}`;
 };
 
+const selectionLabel = (drill:Drill,slice:SliceDrill) => drill?metricLabel[drill]:
+  slice?.kind==="status"?`Status · ${slice.value}`:
+    slice?.kind==="urgency"?`Urgência · ${slice.value}`:
+      slice?.kind==="prioritized"?`Priorização · ${slice.value===true?"Sim":slice.value===false?"Não":"Não informado"}`:
+        slice?.kind==="monthly"?"Movimentos e backlog do mês":"Carteira no fechamento";
+
 export function CorrectionMonthlyPanel() {
   const theme = useTheme();
   const navigate = useNavigate();
+  const location = useLocation();
+  const routeSelection = useMemo(()=>parseCorrectionReportSelection(location.search,currentMonth()),[location.search]);
 
-  const [month,setMonth] = useState(currentMonth());
+  const [month,setMonth] = useState(routeSelection.month);
   const [report,setReport] = useState<Report|null>(null);
   const [loading,setLoading] = useState(false);
   const [error,setError] = useState("");
   const [preparing,setPreparing] = useState(false);
   const [reloadToken,setReloadToken] = useState(0);
 
-  const [creators,setCreators] = useState<string[]>([]);
-  const [clients,setClients] = useState<string[]>([]);
-  const [urgencies,setUrgencies] = useState<string[]>([]);
-  const [states,setStates] = useState<string[]>([]);
-  const [prioritized,setPrioritized] = useState<""|"true"|"false">("");
-  const [search,setSearch] = useState("");
-  const [drill,setDrill] = useState<Drill>(null);
-  const [sliceDrill,setSliceDrill] = useState<SliceDrill>(null);
+  const [creators,setCreators] = useState(routeSelection.creators);
+  const [clients,setClients] = useState(routeSelection.clients);
+  const [urgencies,setUrgencies] = useState(routeSelection.urgencies);
+  const [states,setStates] = useState(routeSelection.states);
+  const [prioritized,setPrioritized] = useState(routeSelection.prioritized);
+  const [search,setSearch] = useState(routeSelection.search);
+  const [drill,setDrill] = useState<Drill>(routeSelection.metric);
+  const [sliceDrill,setSliceDrill] = useState<SliceDrill>(routeSelection.slice);
 
-  const [drawerOpen,setDrawerOpen] = useState(false);
-  const [drawerTitle,setDrawerTitle] = useState("Detalhamento");
-  const [selectedTaskId,setSelectedTaskId] = useState<number|null>(null);
+  const [drawerOpen,setDrawerOpen] = useState(Boolean(routeSelection.metric||routeSelection.slice||routeSelection.taskId));
+  const [drawerTitle,setDrawerTitle] = useState(selectionLabel(routeSelection.metric,routeSelection.slice));
+  const [selectedTaskId,setSelectedTaskId] = useState(routeSelection.taskId);
+
+  useEffect(()=>{
+    setMonth(routeSelection.month);setCreators(routeSelection.creators);setClients(routeSelection.clients);
+    setUrgencies(routeSelection.urgencies);setStates(routeSelection.states);setPrioritized(routeSelection.prioritized);
+    setSearch(routeSelection.search);setDrill(routeSelection.metric);setSliceDrill(routeSelection.slice);
+    setDrawerTitle(selectionLabel(routeSelection.metric,routeSelection.slice));setSelectedTaskId(routeSelection.taskId);
+    setDrawerOpen(Boolean(routeSelection.metric||routeSelection.slice||routeSelection.taskId));
+  },[routeSelection]);
 
   useEffect(() => {
     let active = true;
@@ -396,9 +411,9 @@ export function CorrectionMonthlyPanel() {
     row.title.toLocaleLowerCase("pt-BR").includes(search.trim().toLocaleLowerCase("pt-BR"))
   ),[selectedRows,search]);
 
-  const drawerRows = useMemo(() => [...selectedRows].sort((a,b) =>
+  const drawerRows = useMemo(() => [...detailed].sort((a,b) =>
     (b.lastStateChangedAt??b.createdAt??"").localeCompare(a.lastStateChangedAt??a.createdAt??"")
-  ),[selectedRows]);
+  ),[detailed]);
 
   const selectedTask = useMemo(
     () => drawerRows.find(row=>row.id===selectedTaskId)??null,
@@ -406,19 +421,12 @@ export function CorrectionMonthlyPanel() {
   );
 
   useEffect(() => {
-    if(drawerOpen&&selectedTaskId===null&&drawerRows.length) setSelectedTaskId(drawerRows[0].id);
+    if(drawerOpen&&drawerRows.length&&!drawerRows.some(row=>row.id===selectedTaskId)) setSelectedTaskId(drawerRows[0].id);
   },[drawerOpen,drawerRows,selectedTaskId]);
 
-  const activeDrillLabel = drill
-    ? metricLabel[drill]
-    : sliceDrill?.kind==="status"
-      ? `Status · ${sliceDrill.value}`
-      : sliceDrill?.kind==="urgency"
-        ? `Urgência · ${sliceDrill.value}`
-        : sliceDrill?.kind==="prioritized"
-          ? `Priorização · ${sliceDrill.value===true?"Sim":sliceDrill.value===false?"Não":"Não informado"}`
-          : sliceDrill?.kind==="monthly"?"Movimentos e backlog do mês":"Carteira no fechamento";
+  const activeDrillLabel = selectionLabel(drill,sliceDrill);
   const exportContext=`Período ${month} · ${fmt(report?.period.start)} até ${fmt(report?.period.close)} (São Paulo) · ${backlogVerified&&monthlyMovementVerified?"Histórico validado":"PRÉVIA PARCIAL — histórico não homologado"}${month==="2026-09"?` · Conferência: ${homologationStatus}`:""} · Carteira SIMER · Criado por: ${creators.join(", ")||"Time SIMER"} · Clientes: ${clients.join(", ")||"Toda a carteira SIMER"} · Urgência: ${urgencies.join(", ")||"Todas"} · Status: ${states.join(", ")||"Todos"} · Priorizada: ${prioritized===""?"Todas":prioritized==="true"?"Sim":"Não"}`;
+  const detailExportContext=`${exportContext} · Busca ID/título: ${search.trim()||"Todas"}`;
 
   const openMetric = (key:Exclude<Drill,null>,label:string) => {
     setSliceDrill(null);
@@ -445,9 +453,9 @@ export function CorrectionMonthlyPanel() {
     window.dispatchEvent(new CustomEvent("techlead-hub:share-chat",{
       detail:{
         label:"Correções Clientes",
-        title:`${drawerTitle} · ${month}`,
-        status:`${selectedRows.length} task(s)`,
-        path:"/correcoes",
+        title:`${activeDrillLabel} · ${month}`,
+        status:`${drawerRows.length} task(s) · ${backlogVerified&&monthlyMovementVerified?"Histórico validado":"Prévia parcial"}`,
+        path:correctionReportLink({month,creators,clients,urgencies,states,prioritized,search,metric:drill,slice:sliceDrill,taskId:null}),
       },
     }));
   };
@@ -459,8 +467,8 @@ export function CorrectionMonthlyPanel() {
         recordId:row.id,
         title:row.title,
         client:row.client,
-        status:row.status,
-        path:`/correcoes?task=${row.id}`,
+        status:`${row.status} · ${month} · ${backlogVerified&&monthlyMovementVerified?"Histórico validado":"Prévia parcial"}`,
+        path:correctionReportLink({month,creators,clients,urgencies,states,prioritized,search,metric:drill,slice:sliceDrill,taskId:row.id}),
       },
     }));
   };
@@ -585,11 +593,17 @@ export function CorrectionMonthlyPanel() {
         {report.quality.refreshing
           ?"A última apuração disponível permanece na tela. Os números serão atualizados automaticamente quando a consulta terminar."
           :"O histórico do Azure não foi recuperado por completo. Estados sem evidência histórica aparecem como indisponíveis. Backlog parcial não comprova o estoque total; use Recarregar para tentar novamente."}{" "}
-        {[
+        {!!(report.quality.historyError||report.quality.snapshotError||report.quality.historicalScopeError)&&
+          <Box component="details" sx={{mt:1,"& summary":{cursor:"pointer",fontWeight:750}}}>
+          <Box component="summary">Detalhes da consulta ao Azure</Box>
+          <Typography variant="body2" sx={{mt:.8,overflowWrap:"anywhere"}}>{[
           report.quality.historyError && `Revisões: ${report.quality.historyError}`,
           report.quality.snapshotError && `Snapshots: ${report.quality.snapshotError}`,
           report.quality.historicalScopeError && `Escopo ASOF: ${report.quality.historicalScopeError}`,
-        ].filter(Boolean).join(" | ")}
+          ].filter(Boolean).join(" | ")}</Typography>
+          <Typography variant="body2" sx={{mt:.8}}>Se a resposta for inválida, HTML ou um redirecionamento, valide a conexão na tela Integrações. Os números desta prévia não confirmam o fechamento.</Typography>
+          </Box>
+        }
         {report.quality.diagnostics && (
           <Typography component="p" variant="caption" sx={{mt:0.8,opacity:0.9}}>
             Carteira consultada: {report.quality.diagnostics.scopedRecords??report.quality.diagnostics.localRecords} tasks; com estado no fechamento: {periodUniverse}; movimentos/backlog do mês: {monthlyIndicatorRows.length}.{" "}
@@ -609,6 +623,13 @@ export function CorrectionMonthlyPanel() {
     </Typography>}
     {!!report?.quality?.missingClosingFields&&<Alert severity="warning">
       Há {report.quality.missingClosingFields} task(s) sem os campos históricos necessários para confirmar a carteira. Verifique o campo Cliente Principal e a permissão de leitura do Azure antes de entregar o report.
+    </Alert>}
+    {!!(report?.quality?.unknownUrgencyRows||report?.quality?.unknownPrioritizationRows)&&<Alert severity="info">
+      Valores históricos não informados: {report?.quality?.unknownUrgencyRows??0} task(s) sem urgência e {report?.quality?.unknownPrioritizationRows??0} sem priorização.
+      Esses campos aparecem como “Não informado”; valores atuais não substituem o fechamento do mês.
+    </Alert>}
+    {!!report?.quality?.currentAssigneeError&&<Alert severity="info">
+      Não foi possível consultar o responsável atual de algumas Tasks: {report.quality.currentAssigneeError} O responsável no fechamento permanece separado no detalhamento.
     </Alert>}
     {report&&<ExportCorrectionTasksButton rows={base} title={`Report mensal de Correções ${month}`} subtitle={exportContext} summary={reportSummary}/>}
     {report&&month==="2026-09"&&
@@ -859,7 +880,7 @@ export function CorrectionMonthlyPanel() {
                 <ExportCorrectionTasksButton
                   rows={detailed}
                   title={`Correções Azure · ${activeDrillLabel}`}
-                  subtitle={exportContext}
+                  subtitle={detailExportContext}
                 />
               </Stack>
             </Stack>
@@ -909,7 +930,7 @@ export function CorrectionMonthlyPanel() {
                       <TableCell>{fmt(row.lastStateChangedAt)}</TableCell>
                       <TableCell>{row.urgency||"—"}</TableCell>
                       <TableCell>{row.prioritized===null?"—":row.prioritized?"Sim":"Não"}</TableCell>
-                      <TableCell>{row.assignedTo||"—"}</TableCell>
+                      <TableCell><MuiTooltip title={row.assignedToSource==="azure-current"?"Consultado no Azure atual":row.assignedToSource==="local-sync"?"Última sincronização local do Azure":row.assignedToSource==="unavailable"?"Responsável atual não recuperado":""}><span>{row.assignedTo||"—"}</span></MuiTooltip></TableCell>
                       <TableCell>{TERMINAL.has(row.status)?fmt(row.terminalAt):"—"}</TableCell>
                     </TableRow>
                   )}
@@ -935,7 +956,7 @@ export function CorrectionMonthlyPanel() {
             <ExportCorrectionTasksButton
               rows={drawerRows}
               title={`Correções Azure · ${drawerTitle}`}
-              subtitle={exportContext}
+              subtitle={detailExportContext}
               fullWidth
             />
             <Button fullWidth size="small" variant="outlined" startIcon={<ShareOutlined/>} onClick={shareSelection}>
@@ -959,6 +980,7 @@ export function CorrectionMonthlyPanel() {
                     ["Urgência",selectedTask.urgency||"Não informado"],
                     ["Criado por",selectedTask.createdBy||"Não informado"],
                     ["Responsável atual",selectedTask.assignedTo||"Não informado"],
+                    ["Responsável no fechamento",selectedTask.assignedAtClose||"Não informado"],
                     ["Data de criação",fmt(selectedTask.createdAt)],
                     ["Última mudança de status",fmt(selectedTask.lastStateChangedAt)],
                     ["Priorizada",selectedTask.prioritized===null?"Não informado":selectedTask.prioritized?"Sim":"Não"],

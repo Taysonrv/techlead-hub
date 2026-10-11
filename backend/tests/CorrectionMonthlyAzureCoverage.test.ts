@@ -32,6 +32,7 @@ function reportService(t:TestContext) {
   t.mock.method(service,"loadClosing",async()=>null);
   t.mock.method(service,"resolveFields",async()=>fields);
   t.mock.method(service,"workItemUrl",()=>null);
+  t.mock.method(service,"currentAssignees",async()=>new Map());
   return service;
 }
 
@@ -40,6 +41,87 @@ test("Reporting aceita uniqueName e nome com email sem incluir outro Renan",()=>
   assert.equal(identityName({displayName:"Alan Neto",uniqueName:"login"}),"Alan Neto");
   assert.equal(isCorrectionTeamCreator(identityName({uniqueName:"Renan Sousa <test@example.invalid>"})),true);
   assert.equal(isCorrectionTeamCreator("Renan Stein <test@example.invalid>"),false);
+});
+
+test("fechamentos anteriores à correção dos filtros históricos são reapurados",async(t)=>{
+  const original=prisma.systemSetting.findUnique;
+  let version=4;
+  prisma.systemSetting.findUnique=(async()=>({value:JSON.stringify({version,rows:[],reliable:true})})) as typeof original;
+  t.after(()=>{prisma.systemSetting.findUnique=original;});
+  const reader=new CorrectionMonthlyReportService() as unknown as {loadClosing(month:string):Promise<{reliable:boolean}|null>};
+  assert.equal(await reader.loadClosing("2026-09"),null);
+  version=5;
+  assert.equal((await reader.loadClosing("2026-09"))?.reliable,true);
+});
+
+test("valores atuais nunca preenchem filtros históricos ausentes e o responsável atual fica separado",async(t)=>{
+  localDb(t);
+  const service=reportService(t);
+  const before=snapshot(1,"Qualidade","2026-08-10T12:00:00Z","2026-08-10T12:00:00Z");
+  const final=snapshot(1,"Concluído","2026-08-10T12:00:00Z","2026-09-10T12:00:00Z");
+  delete final.fields.urgency;delete final.fields.prioritized;
+  final.fields["Microsoft.VSTS.Common.Priority"]=2;
+  final.fields["System.AssignedTo"]={displayName:"Responsável de setembro"};
+  let criticality="Alta",prioritized=true,assignedToName:string|null="Responsável de outubro";
+  prisma.azureWorkItem.findMany=(async()=>[{
+    id:1,client:"COAP",createdByName:"Tayson Araujo",azureCreatedAt:new Date("2026-08-10T12:00:00Z"),
+    state:"Concluído",stateChangedAt:new Date("2026-10-05T12:00:00Z"),criticality,prioritized,assignedToName,
+  }]) as typeof prisma.azureWorkItem.findMany;
+  t.mock.method(service,"workItemIdsAsOf",async()=>[1]);
+  t.mock.method(service,"snapshots",async(_ids:number[],at:Date)=>new Map([[1,at.getTime()<Date.parse("2026-09-01T03:00:00Z")?before:final]]));
+  t.mock.method(service,"revisions",async()=>[final]);
+  type Details=Result&{rows:Array<{urgency:string|null;prioritized:boolean|null;assignedTo:string|null;assignedAtClose:string|null;assignedToSource:string}>};
+  const first=await asBuilder(service).build("2026-09") as Details;
+  criticality="Baixa";prioritized=false;assignedToName=null;
+  const second=await asBuilder(service).build("2026-09") as Details;
+  assert.equal(first.rows[0].urgency,null);assert.equal(second.rows[0].urgency,null);
+  assert.equal(first.rows[0].prioritized,null);assert.equal(second.rows[0].prioritized,null);
+  assert.deepEqual(first.cards,second.cards);
+  assert.equal(first.rows[0].assignedTo,"Responsável de outubro");
+  assert.equal(second.rows[0].assignedTo,null,"a remoção do responsável atual não volta ao nome histórico");
+  assert.equal(second.rows[0].assignedAtClose,"Responsável de setembro");
+  assert.equal(second.rows[0].assignedToSource,"local-sync");
+});
+
+test("snapshot pode completar campos pela mesma revisão histórica sem usar metadados atuais",async(t)=>{
+  localDb(t);
+  const service=reportService(t);
+  const before=snapshot(1,"Qualidade","2026-08-10T12:00:00Z","2026-08-10T12:00:00Z");
+  const final=snapshot(1,"Concluído","2026-08-10T12:00:00Z","2026-09-10T12:00:00Z");
+  const batch={...final,fields:{...final.fields}};delete batch.fields.urgency;delete batch.fields.prioritized;
+  t.mock.method(service,"workItemIdsAsOf",async()=>[1]);
+  t.mock.method(service,"snapshots",async(_ids:number[],at:Date)=>new Map([[1,at.getTime()<Date.parse("2026-09-01T03:00:00Z")?before:batch]]));
+  t.mock.method(service,"revisions",async()=>[final]);
+  const report=await asBuilder(service).build("2026-09") as Result&{rows:Array<{urgency:string|null;prioritized:boolean|null}>};
+  assert.equal(report.rows[0].urgency,"Média");
+  assert.equal(report.rows[0].prioritized,false);
+});
+
+test("responsável de Task remota vem do Azure atual, inclusive quando não há atribuição",async(t)=>{
+  localDb(t);
+  const service=reportService(t);
+  const final=snapshot(1,"Concluído","2026-09-02T12:00:00Z","2026-09-10T12:00:00Z");
+  final.fields["System.AssignedTo"]={displayName:"Responsável de setembro"};
+  t.mock.method(service,"workItemIdsAsOf",async(_at:Date,all:boolean)=>all?[1]:[]);
+  t.mock.method(service,"snapshots",async(_ids:number[],at:Date)=>at.getTime()<Date.parse("2026-09-01T03:00:00Z")?new Map():new Map([[1,final]]));
+  t.mock.method(service,"revisions",async()=>[final]);
+  let owner:string|null="Responsável atual no Azure";
+  // Restore the real batch reader so its request is checked as well.
+  const reader=(CorrectionMonthlyReportService.prototype as any).currentAssignees;
+  t.mock.method(service,"currentAssignees",reader.bind(service));
+  t.mock.method(service,"client",()=>({post:async(_url:string,body:Record<string,unknown>)=>{
+    assert.equal(body.asOf,undefined);assert.deepEqual(body.ids,[1]);
+    assert.deepEqual(body.fields,["System.Id","System.AssignedTo"]);
+    return {data:{value:[{id:1,fields:owner?{"System.AssignedTo":{displayName:owner}}:{}}]}};
+  }}));
+  type Details=Result&{rows:Array<{assignedTo:string|null;assignedAtClose:string|null;assignedToSource:string}>};
+  const first=await asBuilder(service).build("2026-09") as Details;
+  owner=null;
+  const second=await asBuilder(service).build("2026-09") as Details;
+  assert.equal(first.rows[0].assignedTo,"Responsável atual no Azure");
+  assert.equal(first.rows[0].assignedToSource,"azure-current");
+  assert.equal(second.rows[0].assignedTo,null);
+  assert.equal(second.rows[0].assignedAtClose,"Responsável de setembro");
 });
 
 test("Reporting percorre continuação sem nextLink e não certifica página truncada",async(t)=>{

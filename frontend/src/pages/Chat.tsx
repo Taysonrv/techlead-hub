@@ -439,7 +439,7 @@ export function Chat() {
         return;
       }
       if (type.includes("corre") || type.includes("bug") || type.includes("task")) {
-        navigate(`/correcoes?task=${id}`);
+        navigate(card.path?.startsWith("/correcoes?reportMonth=")?card.path:`/correcoes?task=${id}`);
         return;
       }
     }
