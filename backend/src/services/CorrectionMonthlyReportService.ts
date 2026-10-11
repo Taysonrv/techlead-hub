@@ -108,8 +108,16 @@ const CORRECTION_TEAM_DISPLAY_NAMES = new Set([
 ]);
 export function isCorrectionTeamCreator(value: string | null | undefined): boolean {
   return !!value && CORRECTION_TEAM_DISPLAY_NAMES.has(
-    value.trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR"),
+    (identityName(value)??"").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR"),
   );
+}
+
+// Reporting pode retornar apenas uniqueName: "Nome <email>". Batch ASOF
+// normalmente retorna displayName; ambas as representações são identidades.
+export function identityName(value: unknown): string | null {
+  const name=typeof value==="string"?value:
+    value&&typeof value==="object"?(value as Identity).displayName||(value as Identity).uniqueName:null;
+  return typeof name==="string"?name.replace(/\s*<[^<>]*>\s*$/,"").trim()||null:null;
 }
 
 const TERMINAL = new Set(["Concluído", "Cancelado"]);
@@ -127,7 +135,7 @@ const REPORT_CACHE_TTL_MS = 2 * 60_000;
 
 function text(value: unknown): string | null {
   if (typeof value === "string") return value.trim() || null;
-  if (value && typeof value === "object") return text((value as Identity).displayName);
+  if (value && typeof value === "object") return identityName(value);
   if (typeof value === "number") return String(value);
   return null;
 }
@@ -171,6 +179,7 @@ type Row = {
   terminalAt:string|null; remoteUrl:string|null; stateAtOpen:string|null; stateAtClose:string|null;
   registeredInPeriod:boolean; deliveredInPeriod:boolean; canceledInPeriod:boolean; enteredRegistrationInPeriod:boolean;
   backlogInitial:boolean; backlogCurrent:boolean; inPeriodUniverse?:boolean;
+  inMonthlyIndicators?:boolean;
 };
 
 export class CorrectionMonthlyReportService {
@@ -242,43 +251,49 @@ export class CorrectionMonthlyReportService {
     const deadline=Date.now()+REVISION_STAGE_TIMEOUT_MS;
     let nextLink:string|null=null;
     let first=true;
+    let continuationToken:string|undefined;
+    const visited=new Set<string>();
     do {
       const remaining=deadline-Date.now();
       if(remaining<=0) throw new Error("Consulta de revisões do Azure excedeu o limite de tempo.");
       const response:AxiosResponse<ReportingResponse>=await client.get<ReportingResponse>(
         nextLink??"/_apis/wit/reporting/workitemrevisions",
-        first ? {
+        nextLink ? {
+          timeout:Math.max(1_000,Math.min(AZURE_REQUEST_TIMEOUT_MS,remaining)),
+        } : {
           params:{
             fields:requested.join(","),
             types:"Correção Clientes",
-            startDateTime:start.toISOString(),
+            ...(first?{startDateTime:start.toISOString()}:{continuationToken}),
             includeIdentityRef:true,
             includeLatestOnly:false,
             "$maxPageSize":2000,
             "api-version":"7.1",
           },
           timeout:Math.max(1_000,Math.min(AZURE_REQUEST_TIMEOUT_MS,remaining)),
-        } : {
-          timeout:Math.max(1_000,Math.min(AZURE_REQUEST_TIMEOUT_MS,remaining)),
         },
       );
       all.push(...(response.data.values??response.data.value??[]));
       nextLink=response.data.isLastBatch===true?null:(response.data.nextLink??null);
+      continuationToken=response.data.isLastBatch===true?undefined:response.data.continuationToken;
+      if(response.data.isLastBatch===false&&!nextLink&&!continuationToken)
+        throw new Error("Revisões incompletas: Azure não retornou continuação da consulta.");
+      const cursor=nextLink??continuationToken;
+      if(cursor&&visited.has(cursor)) throw new Error("Revisões incompletas: continuação repetida pelo Azure.");
+      if(cursor) visited.add(cursor);
       first=false;
-    } while(nextLink);
+    } while(nextLink||continuationToken);
 
     CorrectionMonthlyReportService.cache.set(cacheKey,{expiresAt:Date.now()+CACHE_TTL_MS,revisions:all});
     return all;
   }
 
-  private async workItemIdsAsOf(asOf:Date):Promise<number[]> {
+  private async workItemIdsAsOf(asOf:Date,includeTerminal=false):Promise<number[]> {
     const query = `SELECT [System.Id]
 FROM WorkItems
 WHERE [System.TeamProject] = @project
   AND [System.WorkItemType] = 'Correção Clientes'
-  AND [System.State] <> 'Registro'
-  AND [System.State] <> 'Concluído'
-  AND [System.State] <> 'Cancelado'
+${includeTerminal?"":"  AND [System.State] <> 'Concluído'\n  AND [System.State] <> 'Cancelado'"}
 ASOF '${asOf.toISOString()}'`;
     const response=await this.client().post<WiqlResponse>(
       "/_apis/wit/wiql",
@@ -380,8 +395,11 @@ ASOF '${asOf.toISOString()}'`;
       return response.data.value??[];
     };
 
-    for(let index=0;index<normalizedIds.length;index+=200){
+    let cursor=0;
+    const worker=async()=>{while(cursor<normalizedIds.length){
       if(Date.now()>=deadline) throw new Error("Consulta de snapshots do Azure excedeu o limite de tempo.");
+      const index=cursor;
+      cursor+=200;
       const batch=normalizedIds.slice(index,index+200);
       let values:SnapshotItem[];
       try {
@@ -398,7 +416,8 @@ ASOF '${asOf.toISOString()}'`;
         const id=Number(item.id??item.fields?.["System.Id"]);
         if(Number.isSafeInteger(id)) result.set(id,item);
       }
-    }
+    }};
+    await Promise.all(Array.from({length:Math.min(3,Math.ceil(normalizedIds.length/200))},worker));
 
     return result;
   }
@@ -414,7 +433,7 @@ ASOF '${asOf.toISOString()}'`;
       if(!saved) return null;
       const parsed=JSON.parse(saved.value);
       // Descarta prévias antigas que podiam usar o estado atual em meses passados.
-      return (parsed.version===3)&&Array.isArray(parsed.rows)?parsed:null;
+      return (parsed.version===4)&&Array.isArray(parsed.rows)?parsed:null;
     } catch { return null; }
   }
 
@@ -426,7 +445,8 @@ ASOF '${asOf.toISOString()}'`;
       const previous=await this.loadClosing(month);
       const reliable=data.quality.backlogHistoricalReliable;
       if(previous?.reliable&&!reliable) return;
-      const value=JSON.stringify({version:3,reliable,coverage:{movementHistoryReliable:data.quality.movementHistoryReliable??false,backlogInitialAvailable:data.quality.backlogInitialAvailable??reliable,backlogCurrentAvailable:data.quality.backlogCurrentAvailable??reliable},savedAt:new Date().toISOString(),rows:data.rows.filter(row=>row.inPeriodUniverse)});
+      if(previous?.reliable&&previous.coverage?.movementHistoryReliable===true&&!data.quality.movementHistoryReliable) return;
+      const value=JSON.stringify({version:4,reliable,coverage:{movementHistoryReliable:data.quality.movementHistoryReliable??false,backlogInitialAvailable:data.quality.backlogInitialAvailable??reliable,backlogCurrentAvailable:data.quality.backlogCurrentAvailable??reliable},savedAt:new Date().toISOString(),rows:data.rows.filter(row=>row.inPeriodUniverse)});
       await prisma.systemSetting.upsert({where:{key:this.snapshotKey(month)},create:{key:this.snapshotKey(month),value,encrypted:false},update:{value,encrypted:false}});
     } catch(error) {
       console.warn("[correction-monthly-report] Não foi possível persistir fechamento:",error instanceof Error?error.message:String(error));
@@ -436,6 +456,7 @@ ASOF '${asOf.toISOString()}'`;
   /** A tela recebe a prévia local; o Azure atualiza o mesmo mês em background. */
   async getPreview(month:string,forceRefresh=false) {
     saoPauloMonth(month);
+    if(forceRefresh&&!CorrectionMonthlyReportService.inFlight.has(month)) this.invalidateMonth(month);
     const cache=CorrectionMonthlyReportService.reportCache;
     const pending=CorrectionMonthlyReportService.inFlight;
     const withStatus=(data:unknown)=>{
@@ -475,7 +496,7 @@ ASOF '${asOf.toISOString()}'`;
   async get(month:string, forceRefresh=false) {
     // O botão Recarregar deve ignorar resultados parciais em cache quando
     // o Azure DevOps volta a ficar disponível.
-    if(forceRefresh) CorrectionMonthlyReportService.reportCache.delete(month);
+    if(forceRefresh) this.invalidateMonth(month);
     // Em desenvolvimento o React StrictMode pode montar o painel duas vezes.
     // Reutilizamos a mesma geração por mês para não duplicar as consultas
     // históricas pesadas no Azure DevOps.
@@ -499,15 +520,28 @@ ASOF '${asOf.toISOString()}'`;
     return generation;
   }
 
+  private invalidateMonth(month:string) {
+    CorrectionMonthlyReportService.reportCache.delete(month);
+    CorrectionMonthlyReportService.fieldCache.delete(`${process.env.AZURE_DEVOPS_ORGANIZATION??""}/${process.env.AZURE_DEVOPS_PROJECT??""}`);
+    for(const key of CorrectionMonthlyReportService.cache.keys())
+      if(key.includes(`/corrections/${month}-01/`)) CorrectionMonthlyReportService.cache.delete(key);
+  }
+
   private async build(month:string,localOnly=false) {
     const {start,endExclusive,close}=saoPauloMonth(month);
     const livePeriod=close.getTime()<endExclusive.getTime()-1;
     const savedClosing=!livePeriod?await this.loadClosing(month):null;
     const archivedRows=new Map((savedClosing?.rows??[]).map(row=>[row.id,row]));
-    const scopePromise=localOnly?Promise.resolve({ids:null,error:null}):Promise.all([
+    const scopePromise=localOnly?Promise.resolve({ids:null,complete:false,error:null}):Promise.allSettled([
       this.workItemIdsAsOf(new Date(start.getTime()-1)),
-      this.workItemIdsAsOf(close),
-    ]).then(ids=>({ids,error:null as string|null})).catch(error=>({ids:null,error:error instanceof Error?error.message:"Escopo histórico ASOF indisponível."}));
+      // O pipeline é a carteira inteira no fechamento, inclusive Registro
+      // e terminais. A descoberta remota não depende da sincronização local.
+      this.workItemIdsAsOf(close,true),
+    ]).then(results=>({
+      ids:results.map(result=>result.status==="fulfilled"?result.value:[]) as [number[],number[]],
+      complete:results.every(result=>result.status==="fulfilled"),
+      error:results.flatMap((result,index)=>result.status==="rejected"?[`${index===0?"Abertura":"Fechamento"}: ${result.reason instanceof Error?result.reason.message:"Escopo ASOF indisponível"}`]:[]).join(" | ")||null,
+    }));
     const currentPromise=prisma.azureWorkItem.findMany({where:{workItemType:"Correção Clientes"},select:{id:true,title:true,client:true,criticality:true,prioritized:true,assignedToName:true,remoteUrl:true,createdByName:true,azureCreatedAt:true,state:true,stateChangedAt:true,azureClosedAt:true,rawFields:true}});
     let fields:{client:string;prioritized:string;urgency:string}={client:AZURE_WORK_ITEM_FIELDS.client,prioritized:AZURE_WORK_ITEM_FIELDS.prioritized,urgency:AZURE_WORK_ITEM_FIELDS.criticality};
     let revisions:Revision[]=[];
@@ -534,10 +568,9 @@ ASOF '${asOf.toISOString()}'`;
     const scope=await scopePromise;
     if(scope.ids){
       [openingScopeIds,closingScopeIds]=scope.ids;
-      historicalScopeAvailable=true;
-    } else {
-      historicalScopeError=scope.error;
+      historicalScopeAvailable=scope.complete;
     }
+    historicalScopeError=scope.error;
     const candidateIds=selectReportCandidateIds(
       current, start, close, revisionIds, openingScopeIds, closingScopeIds,
     );
@@ -549,11 +582,15 @@ ASOF '${asOf.toISOString()}'`;
       // Duas fotografias independentes: "sem registros" é válido quando o
       // escopo é vazio; "consulta falhou" não equivale a backlog zero.
       if(!localOnly){
-      [openingSnapshot,closingSnapshot]=await Promise.all([
+      const results=await Promise.allSettled([
         this.snapshots(candidateIds,new Date(start.getTime()-1),fields),
         this.snapshots(candidateIds,close,fields),
       ]);
-      snapshotAvailable=true;
+      if(results[0].status==="fulfilled") openingSnapshot=results[0].value;
+      if(results[1].status==="fulfilled") closingSnapshot=results[1].value;
+      snapshotAvailable=results.every(result=>result.status==="fulfilled");
+      const errors=results.flatMap((result,index)=>result.status==="rejected"?[`${index===0?"Abertura":"Fechamento"}: ${result.reason instanceof Error?result.reason.message:"Snapshot indisponível"}`]:[]);
+      if(errors.length) throw new Error(errors.join(" | "));
       }
     } catch(error) {
       snapshotError=error instanceof Error ? error.message : "Snapshots históricos do Azure indisponíveis.";
@@ -572,38 +609,76 @@ ASOF '${asOf.toISOString()}'`;
     let perItemHistoryRecoveryUsed=false;
     let recoveredHistoryItems=0;
     let recoveryCandidates=0;
+    const recoveredRevisionIds=new Set<number>();
+    const incompleteClosingEvidence=[...closingSnapshot].some(([,snapshot])=>{
+      const f=snapshot.fields??{};
+      if(!isCorrectionTeamCreator(identityName(f["System.CreatedBy"]))) return false;
+      if(!text(f[fields.client])) return true;
+      return !!resolveSimerClient(text(f[fields.client]))&&!date(f["Microsoft.VSTS.Common.StateChangeDate"]);
+    });
     // Inclui estoque antigo sem movimento no mês e itens encerrados depois
     // da abertura. A fotografia é o último estado ANTES do início do mês,
     // exatamente o fechamento do mês anterior (America/Sao_Paulo).
-    if(!localOnly&&current.length>0&&revisions.length===0&&openingSnapshot.size===0){
-      const ids=current.filter(item=>
+    if(!localOnly&&(!snapshotAvailable||incompleteClosingEvidence||
+      ((!historyAvailable||revisions.length===0)&&closingSnapshot.size===0&&current.length>0))){
+      const ids=new Set(current.filter(item=>
         !!item.azureCreatedAt&&item.azureCreatedAt<=close&&
         !!resolveSimerClient(item.client)&&isCorrectionTeamCreator(item.createdByName)&&
         (!TERMINAL.has(item.state)||!item.stateChangedAt||item.stateChangedAt>=start),
-      ).sort((a,b)=>(a.azureCreatedAt?.getTime()??0)-(b.azureCreatedAt?.getTime()??0)).map(item=>item.id);
-      recoveryCandidates=ids.length;
-      if(ids.length){
-        const recovered=await this.recoverHistoricalSnapshots(ids,start,close);
+      ).sort((a,b)=>(a.azureCreatedAt?.getTime()??0)-(b.azureCreatedAt?.getTime()??0)).map(item=>item.id));
+      // Inclui Tasks encontradas no Azure que ainda não existem no banco local.
+      for(const [id,snapshot] of closingSnapshot){
+        const f=snapshot.fields??{};
+        if(isCorrectionTeamCreator(identityName(f["System.CreatedBy"]))&&
+          (!text(f[fields.client])||resolveSimerClient(text(f[fields.client])))) {
+          const changed=date(f["Microsoft.VSTS.Common.StateChangeDate"]);
+          if(!text(f[fields.client])||!TERMINAL.has(text(f["System.State"])??"")||!changed||changed>=start) ids.add(id);
+        }
+      }
+      recoveryCandidates=ids.size;
+      if(ids.size){
+        const recovered=await this.recoverHistoricalSnapshots([...ids],start,close);
         recoveredHistoryItems=recovered.completed.size;
         if(recoveredHistoryItems){
           perItemHistoryRecoveryUsed=true;
-          revisions=recovered.revisions;
-          for(const [id,item] of recovered.opening) openingSnapshot.set(id,item);
-          for(const [id,item] of recovered.closing) closingSnapshot.set(id,item);
+          revisions=[...revisions,...recovered.revisions];
+          for(const id of recovered.completed) recoveredRevisionIds.add(id);
+          // Revisões completas também recuperam os campos customizados que
+          // o batch pode ter omitido. Valores ASOF existentes têm precedência.
+          for(const [target,items] of [[openingSnapshot,recovered.opening],[closingSnapshot,recovered.closing]] as const)
+            for(const [id,item] of items){
+              const existing=target.get(id);
+              target.set(id,{...item,...existing,fields:{...item.fields,...existing?.fields}});
+            }
         }
-        console.info(`[correction-monthly-report] Recuperação por Task. | candidatos=${ids.length} | recuperados=${recoveredHistoryItems} | falhas=${recovered.failures} | fechamentoAnterior=${new Date(start.getTime()-1).toISOString()}`);
+        console.info(`[correction-monthly-report] Recuperação por Task. | candidatos=${ids.size} | recuperados=${recoveredHistoryItems} | falhas=${recovered.failures} | fechamentoAnterior=${new Date(start.getTime()-1).toISOString()}`);
       }
     }
 
+    const missingClosingFields=closingScopeIds.filter(id=>{
+      const f=closingSnapshot.get(id)?.fields??{};
+      const creator=identityName(f["System.CreatedBy"]);
+      return !creator||!text(f["System.State"])||!date(f["System.CreatedDate"])||
+        (isCorrectionTeamCreator(creator)&&!text(f[fields.client]));
+    }).length;
     let backlogHistoricalReliable=assessHistoricalBacklog(
       historicalScopeAvailable,
-      snapshotAvailable,
+      snapshotAvailable||perItemHistoryRecoveryUsed,
       openingScopeIds,
       closingScopeIds,
       new Set(openingSnapshot.keys()),
       new Set(closingSnapshot.keys()),
-    ) && !externalHistorySuspicious;
-    let movementHistoryReliable=historyAvailable && !externalHistorySuspicious;
+    ) && !externalHistorySuspicious && missingClosingFields===0 &&
+      openingScopeIds.every(id=>!!text(openingSnapshot.get(id)?.fields?.["System.State"]));
+    const closingMovementCoverage=[...closingSnapshot].filter(([,snapshot])=>{
+      const f=snapshot.fields??{};
+      return !!resolveSimerClient(text(f[fields.client]))&&isCorrectionTeamCreator(identityName(f["System.CreatedBy"]));
+    }).every(([id,snapshot])=>{
+      const stateChanged=date(snapshot.fields?.["Microsoft.VSTS.Common.StateChangeDate"]);
+      return (!!stateChanged&&stateChanged<=close)||recoveredRevisionIds.has(id);
+    });
+    let movementHistoryReliable=backlogHistoricalReliable&&
+      (closingMovementCoverage||(historyAvailable&&revisions.length>0));
     let localFallbackUsed=false;
     let localStateHistoryEvents=0;
 
@@ -634,6 +709,7 @@ ASOF '${asOf.toISOString()}'`;
       });
       const inPeriod=stateEvents.filter(event=>event.at>=start&&event.at<=close);
       const latestFields=Object.keys(closingFields).length?closingFields:(atClose?.revision.fields??{});
+      if(text(latestFields["System.WorkItemType"])&&text(latestFields["System.WorkItemType"])!=="Correção Clientes") continue;
       const currentItem=currentById.get(id);
       const lastState=[...stateEvents].reverse().find(event=>event.at<=close);
       const terminal=[...stateEvents].reverse().find(event=>event.at<=close&&TERMINAL.has(event.state));
@@ -653,12 +729,12 @@ ASOF '${asOf.toISOString()}'`;
       const {deliveredInPeriod,canceledInPeriod,enteredRegistrationInPeriod}=movement;
       const effectiveStateChangedAt=closeStateChangedAt??lastState?.at??null;
       const effectiveTerminalAt=TERMINAL.has(stateAtClose)?(closeStateChangedAt??terminal?.at??null):null;
-      rows.push({id,title:text(latestFields["System.Title"])??currentItem?.title??`Task ${id}`,client,createdBy:text(latestFields["System.CreatedBy"])??text(firstFields["System.CreatedBy"])??currentItem?.createdByName??null,createdAt:createdAt.toISOString(),status:stateAtClose,lastStateChangedAt:effectiveStateChangedAt?.toISOString()??null,urgency,prioritized,assignedTo:text(latestFields["System.AssignedTo"])??currentItem?.assignedToName??null,terminalAt:effectiveTerminalAt?.toISOString()??null,remoteUrl:currentItem?.remoteUrl??this.workItemUrl(id),stateAtOpen,stateAtClose,registeredInPeriod:movement.createdInPeriod,deliveredInPeriod,canceledInPeriod,enteredRegistrationInPeriod,backlogInitial:isBacklogState(stateAtOpen),backlogCurrent:isBacklogState(stateAtClose)});
+      rows.push({id,title:text(latestFields["System.Title"])??currentItem?.title??`Task ${id}`,client,createdBy:identityName(latestFields["System.CreatedBy"])??identityName(firstFields["System.CreatedBy"])??currentItem?.createdByName??null,createdAt:createdAt.toISOString(),status:stateAtClose,lastStateChangedAt:effectiveStateChangedAt?.toISOString()??null,urgency,prioritized,assignedTo:identityName(latestFields["System.AssignedTo"])??currentItem?.assignedToName??null,terminalAt:effectiveTerminalAt?.toISOString()??null,remoteUrl:currentItem?.remoteUrl??this.workItemUrl(id),stateAtOpen,stateAtClose,registeredInPeriod:movement.createdInPeriod,deliveredInPeriod,canceledInPeriod,enteredRegistrationInPeriod,backlogInitial:isBacklogState(stateAtOpen),backlogCurrent:isBacklogState(stateAtClose)});
     }
 
     // O endpoint de revisões retorna apenas itens que tiveram revisão no período.
     // Completamos o universo com os snapshots para preservar backlog sem movimentação.
-    if(snapshotAvailable){
+    if(snapshotAvailable||closingSnapshot.size){
       const existingIds=new Set(rows.map(row=>row.id));
       for(const id of candidateIds){
         if(existingIds.has(id)) continue;
@@ -666,6 +742,7 @@ ASOF '${asOf.toISOString()}'`;
         const openingFields=openingSnapshot.get(id)?.fields??{};
         const closingFields=closingSnapshot.get(id)?.fields??{};
         if(!Object.keys(closingFields).length) continue;
+        if(text(closingFields["System.WorkItemType"])&&text(closingFields["System.WorkItemType"])!=="Correção Clientes") continue;
 
         const client=text(closingFields[fields.client])??item?.client??null;
         const createdAt=date(closingFields["System.CreatedDate"])??item?.azureCreatedAt??null;
@@ -683,13 +760,13 @@ ASOF '${asOf.toISOString()}'`;
           id,
           title:text(closingFields["System.Title"])??item?.title??`Task ${id}`,
           client,
-          createdBy:text(closingFields["System.CreatedBy"])??item?.createdByName??null,
+          createdBy:identityName(closingFields["System.CreatedBy"])??item?.createdByName??null,
           createdAt:createdAt.toISOString(),
           status:stateAtClose,
           lastStateChangedAt:stateChangedAt?.toISOString()??null,
           urgency:text(closingFields[fields.urgency])??item?.criticality??text(raw[fields.urgency]),
           prioritized:bool(closingFields[fields.prioritized])??item?.prioritized??null,
-          assignedTo:text(closingFields["System.AssignedTo"])??item?.assignedToName??null,
+          assignedTo:identityName(closingFields["System.AssignedTo"])??item?.assignedToName??null,
           terminalAt:terminalAt?.toISOString()??null,
           remoteUrl:item?.remoteUrl??this.workItemUrl(id),
           stateAtOpen,
@@ -710,6 +787,7 @@ ASOF '${asOf.toISOString()}'`;
         const item=currentById.get(id);
         const openingFields=openingSnapshot.get(id)?.fields??{};
         const closingFields=closingSnapshot.get(id)?.fields??{};
+        if(text(closingFields["System.WorkItemType"])&&text(closingFields["System.WorkItemType"])!=="Correção Clientes") continue;
         const client=text(closingFields[fields.client])??item?.client??null;
 
         const createdAt=date(closingFields["System.CreatedDate"])??item?.azureCreatedAt??null;
@@ -736,13 +814,13 @@ ASOF '${asOf.toISOString()}'`;
           id,
           title:text(closingFields["System.Title"])??item?.title??`Task ${id}`,
           client,
-          createdBy:text(closingFields["System.CreatedBy"])??item?.createdByName??null,
+          createdBy:identityName(closingFields["System.CreatedBy"])??item?.createdByName??null,
           createdAt:createdAt.toISOString(),
           status:stateAtClose,
           lastStateChangedAt:fallbackStateChangedAt?.toISOString()??null,
           urgency:urgencyValue,
           prioritized,
-          assignedTo:text(closingFields["System.AssignedTo"])??item?.assignedToName??null,
+          assignedTo:identityName(closingFields["System.AssignedTo"])??item?.assignedToName??null,
           terminalAt:TERMINAL.has(stateAtClose)?fallbackStateChangedAt?.toISOString()??null:null,
           remoteUrl:item?.remoteUrl??this.workItemUrl(id),
           stateAtOpen,
@@ -873,7 +951,8 @@ ASOF '${asOf.toISOString()}'`;
     // Preserva a fotografia já gravada de um mês encerrado durante a prévia.
     // Atualizações no estado atual não reescrevem retroativamente esse fechamento.
     let persistedClosingUsed=false;
-    if(savedClosing?.reliable&&!backlogHistoricalReliable){
+    if(savedClosing?.reliable&&(!backlogHistoricalReliable||
+      (savedClosing.coverage?.movementHistoryReliable===true&&!movementHistoryReliable))){
       rows=savedClosing.rows;
       backlogHistoricalReliable=true;
       movementHistoryReliable=savedClosing.coverage?.movementHistoryReliable===true;
@@ -887,7 +966,7 @@ ASOF '${asOf.toISOString()}'`;
     // Normaliza os nomes abreviados do Azure usando a regra compartilhada.
     rows=rows.flatMap(row=>{
       const client=resolveSimerClient(row.client);
-      return client && isCorrectionTeamCreator(row.createdBy) ? [{...row,client}] : [];
+      return client && isCorrectionTeamCreator(row.createdBy) ? [{...row,client,createdBy:identityName(row.createdBy)}] : [];
     });
     for(const row of rows){
       row.inPeriodUniverse=
@@ -898,7 +977,10 @@ ASOF '${asOf.toISOString()}'`;
         row.backlogInitial||
         row.backlogCurrent||
         Boolean(row.stateAtClose);
+      row.inMonthlyIndicators=row.registeredInPeriod||row.deliveredInPeriod||row.canceledInPeriod||
+        row.enteredRegistrationInPeriod||row.backlogInitial||row.backlogCurrent;
     }
+    rows=[...new Map(rows.map(row=>[row.id,row])).values()];
     const scopedRows=rows.length;
     rows=rows.filter(row=>row.inPeriodUniverse);
     console.info([
@@ -914,6 +996,6 @@ ASOF '${asOf.toISOString()}'`;
     ].join(" | "));
     const count=(p:(r:Row)=>boolean)=>rows.filter(p).length;
     const by=(selector:(r:Row)=>string|null)=>Object.entries(rows.filter(row=>Boolean(row.stateAtClose)).reduce<Record<string,number>>((acc,row)=>{const key=selector(row)||"Não informado";acc[key]=(acc[key]??0)+1;return acc;},{})).map(([name,total])=>({name,total})).sort((a,b)=>b.total-a.total);
-    return {period:{month,timezone:"America/Sao_Paulo",start:start.toISOString(),close:close.toISOString()},cards:{registered:count(r=>r.registeredInPeriod),delivered:count(r=>r.deliveredInPeriod),canceled:count(r=>r.canceledInPeriod),inRegistration:count(r=>r.enteredRegistrationInPeriod),backlogInitial:count(r=>r.backlogInitial),backlogCurrent:count(r=>r.backlogCurrent)},pipeline:by(r=>r.status),urgency:by(r=>r.urgency),prioritization:[{name:"Priorizadas",total:count(r=>Boolean(r.stateAtClose)&&r.prioritized===true)},{name:"Não priorizadas",total:count(r=>Boolean(r.stateAtClose)&&r.prioritized===false)},{name:"Não informado",total:count(r=>Boolean(r.stateAtClose)&&r.prioritized===null)}],filters:{creators:[...new Set(rows.map(r=>r.createdBy).filter(Boolean))].sort(),teamCreators:[...new Set(rows.map(r=>r.createdBy).filter((value):value is string=>!!value&&isCorrectionTeamCreator(value)))].sort(),clients:[...new Set(rows.map(r=>r.client).filter((value):value is string=>!!value))].sort(),urgencies:[...new Set(rows.map(r=>r.urgency).filter(Boolean))].sort(),states:[...new Set(rows.map(r=>r.status).filter(Boolean))].sort()},rows,generatedAt:new Date().toISOString(),source:persistedClosingUsed?"Fechamento histórico salvo · Azure DevOps":perItemHistoryRecoveryUsed?"Azure DevOps · revisões por Task + prévia local":localFallbackUsed?"Base sincronizada do Azure DevOps · histórico local reconstruído":snapshotAvailable?(historyAvailable?"Azure DevOps · revisões + snapshots asOf":"Azure DevOps · snapshots asOf"):"Base sincronizada do Azure DevOps · snapshot local",quality:{persistedClosingUsed,localPreview:localOnly,backlogCurrentAvailable:backlogHistoricalReliable||livePeriod||rows.some(row=>row.backlogCurrent),unknownClosingStates:rows.filter(row=>!row.stateAtClose).length,backlogInitialAvailable:backlogHistoricalReliable||openingSnapshot.size>0||rows.some(row=>row.backlogInitial),perItemHistoryRecoveryUsed,recoveredHistoryItems,recoveryCandidates,historyAvailable,historyError,snapshotAvailable,snapshotError,historicalScopeError,externalHistorySuspicious,localFallbackUsed,localStateHistoryEvents,mode:localFallbackUsed?"local-history-fallback":backlogHistoricalReliable&&historyAvailable?"historical":snapshotAvailable?"asof-partial":"local-snapshot",movementHistoryReliable,historicalMetricsReliable:movementHistoryReliable&&backlogHistoricalReliable,backlogHistoricalReliable,diagnostics:{scopedRecords:scopedRows,localRecords:current.length,localPeriodCandidates,revisions:revisions.length,openingScopeIds:openingScopeIds.length,closingScopeIds:closingScopeIds.length,snapshotCandidates:candidateIds.length,openingSnapshotItems:openingSnapshot.size,closingSnapshotItems:closingSnapshot.size,outputRows:rows.length}},fieldMapping:fields};
+    return {period:{month,timezone:"America/Sao_Paulo",start:start.toISOString(),close:close.toISOString()},cards:{registered:count(r=>r.registeredInPeriod),delivered:count(r=>r.deliveredInPeriod),canceled:count(r=>r.canceledInPeriod),inRegistration:count(r=>r.enteredRegistrationInPeriod),backlogInitial:count(r=>r.backlogInitial),backlogCurrent:count(r=>r.backlogCurrent)},pipeline:by(r=>r.status),urgency:by(r=>r.urgency),prioritization:[{name:"Priorizadas",total:count(r=>Boolean(r.stateAtClose)&&r.prioritized===true)},{name:"Não priorizadas",total:count(r=>Boolean(r.stateAtClose)&&r.prioritized===false)},{name:"Não informado",total:count(r=>Boolean(r.stateAtClose)&&r.prioritized===null)}],filters:{creators:[...new Set(rows.map(r=>r.createdBy).filter(Boolean))].sort(),teamCreators:[...new Set(rows.map(r=>r.createdBy).filter((value):value is string=>!!value&&isCorrectionTeamCreator(value)))].sort(),clients:[...new Set(rows.map(r=>r.client).filter((value):value is string=>!!value))].sort(),urgencies:[...new Set(rows.map(r=>r.urgency).filter(Boolean))].sort(),states:[...new Set(rows.map(r=>r.status).filter(Boolean))].sort()},rows,generatedAt:new Date().toISOString(),source:persistedClosingUsed?"Fechamento histórico salvo · Azure DevOps":perItemHistoryRecoveryUsed?"Azure DevOps · revisões por Task + prévia local":localFallbackUsed?"Base sincronizada do Azure DevOps · histórico local reconstruído":snapshotAvailable?(historyAvailable?"Azure DevOps · revisões + snapshots asOf":"Azure DevOps · snapshots asOf"):"Base sincronizada do Azure DevOps · snapshot local",quality:{persistedClosingUsed,localPreview:localOnly,backlogCurrentAvailable:backlogHistoricalReliable||livePeriod||rows.some(row=>row.backlogCurrent),unknownClosingStates:rows.filter(row=>!row.stateAtClose).length,backlogInitialAvailable:backlogHistoricalReliable||openingSnapshot.size>0||rows.some(row=>row.backlogInitial),perItemHistoryRecoveryUsed,recoveredHistoryItems,recoveryCandidates,missingClosingFields,historyAvailable,historyError,snapshotAvailable,snapshotError,historicalScopeError,externalHistorySuspicious,localFallbackUsed,localStateHistoryEvents,mode:localFallbackUsed?"local-history-fallback":backlogHistoricalReliable&&historyAvailable?"historical":snapshotAvailable?"asof-partial":"local-snapshot",movementHistoryReliable,historicalMetricsReliable:movementHistoryReliable&&backlogHistoricalReliable,backlogHistoricalReliable,diagnostics:{scopedRecords:scopedRows,localRecords:current.length,localPeriodCandidates,revisions:revisions.length,openingScopeIds:openingScopeIds.length,closingScopeIds:closingScopeIds.length,snapshotCandidates:candidateIds.length,openingSnapshotItems:openingSnapshot.size,closingSnapshotItems:closingSnapshot.size,outputRows:rows.length,monthlyIndicatorRows:rows.filter(row=>row.inMonthlyIndicators).length}},fieldMapping:fields};
   }
 }

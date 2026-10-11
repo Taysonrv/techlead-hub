@@ -93,6 +93,7 @@ type Row = {
   registeredInPeriod:boolean; deliveredInPeriod:boolean; canceledInPeriod:boolean;
   enteredRegistrationInPeriod:boolean; backlogInitial:boolean; backlogCurrent:boolean;
   inPeriodUniverse?:boolean;
+  inMonthlyIndicators?:boolean;
 };
 
 type Report = {
@@ -105,7 +106,7 @@ type Report = {
     historicalScopeError?:string|null;mode:string;refreshing?:boolean;localPreview?:boolean;movementHistoryReliable?:boolean;
     historicalMetricsReliable:boolean;backlogHistoricalReliable?:boolean;backlogInitialAvailable?:boolean;backlogCurrentAvailable?:boolean;unknownClosingStates?:number;
     externalHistorySuspicious?:boolean;localFallbackUsed?:boolean;localStateHistoryEvents?:number;
-    perItemHistoryRecoveryUsed?:boolean;recoveredHistoryItems?:number;recoveryCandidates?:number;
+    perItemHistoryRecoveryUsed?:boolean;recoveredHistoryItems?:number;recoveryCandidates?:number;missingClosingFields?:number;
     diagnostics?:{
       scopedRecords?:number;localRecords:number;localPeriodCandidates:number;revisions:number;
       openingScopeIds:number;closingScopeIds:number;snapshotCandidates:number;
@@ -119,6 +120,7 @@ type SliceDrill =
   | {kind:"status";value:string}
   | {kind:"urgency";value:string}
   | {kind:"prioritized";value:boolean|null}
+  | {kind:"monthly"}
   | null;
 
 const TERMINAL = new Set(["Concluído","Cancelado"]);
@@ -151,12 +153,12 @@ const SEPTEMBER_2026_REFERENCE = {
 } as const;
 
 const fmt = (value:string|null|undefined) => value
-  ? new Intl.DateTimeFormat("pt-BR",{dateStyle:"short",timeStyle:"short"}).format(new Date(value))
+  ? new Intl.DateTimeFormat("pt-BR",{dateStyle:"short",timeStyle:"short",timeZone:"America/Sao_Paulo"}).format(new Date(value))
   : "—";
 
 const currentMonth = () => {
-  const date = new Date();
-  return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}`;
+  const parts=new Intl.DateTimeFormat("en",{year:"numeric",month:"2-digit",timeZone:"America/Sao_Paulo"}).formatToParts(new Date());
+  return `${parts.find(part=>part.type==="year")?.value}-${parts.find(part=>part.type==="month")?.value}`;
 };
 
 export function CorrectionMonthlyPanel() {
@@ -231,6 +233,10 @@ export function CorrectionMonthlyPanel() {
   const isPeriodRow = (row:Row) => row.inPeriodUniverse ??
     (row.registeredInPeriod || row.deliveredInPeriod || row.canceledInPeriod ||
       row.enteredRegistrationInPeriod || row.backlogInitial || row.backlogCurrent || Boolean(row.stateAtClose));
+  const isMonthlyIndicatorRow = (row:Row) => row.inMonthlyIndicators ??
+    (row.registeredInPeriod||row.deliveredInPeriod||row.canceledInPeriod||
+      row.enteredRegistrationInPeriod||row.backlogInitial||row.backlogCurrent);
+  const monthlyIndicatorRows=base.filter(isMonthlyIndicatorRow);
 
   const value = (key:Exclude<Drill,null>) => base.filter(row=>match(row,key)).length;
   const initial = value("backlogInitial");
@@ -254,8 +260,8 @@ export function CorrectionMonthlyPanel() {
   const teamCreators = report?.filters?.teamCreators ?? [];
   const teamScopeActive =
     teamCreators.length > 0 &&
-    creators.length === teamCreators.length &&
-    teamCreators.every((creator) => creators.includes(creator));
+    (creators.length===0||(creators.length === teamCreators.length &&
+    teamCreators.every((creator) => creators.includes(creator))));
   const homologationScopeActive =
     teamScopeActive &&
     clients.length===0 &&
@@ -265,12 +271,18 @@ export function CorrectionMonthlyPanel() {
   const septemberHomologation = month === "2026-09"
     ? [
         {key:"backlogInitial",label:"Backlog inicial",actual:backlogVerified?initial:null,expected:SEPTEMBER_2026_REFERENCE.backlogInitial,verified:backlogVerified},
-        {key:"registered",label:"Registradas",actual:registered,expected:SEPTEMBER_2026_REFERENCE.registered,verified:true},
+        {key:"registered",label:"Registradas",actual:registered,expected:SEPTEMBER_2026_REFERENCE.registered,verified:backlogVerified},
         {key:"delivered",label:"Entregues",actual:delivered,expected:SEPTEMBER_2026_REFERENCE.delivered,verified:monthlyMovementVerified},
         {key:"canceled",label:"Canceladas",actual:canceled,expected:SEPTEMBER_2026_REFERENCE.canceled,verified:monthlyMovementVerified},
         {key:"registration",label:"Em Registro",actual:value("registration"),expected:SEPTEMBER_2026_REFERENCE.registration,verified:monthlyMovementVerified},
       ]
     : [];
+  const homologationHistoryReady=backlogVerified&&monthlyMovementVerified;
+  const homologationPassed=homologationScopeActive&&homologationHistoryReady&&
+    septemberHomologation.every(item=>item.actual===item.expected);
+  const homologationStatus=!homologationScopeActive?"Filtros adicionais aplicados":
+    !homologationHistoryReady?"Pendente · histórico incompleto":
+      homologationPassed?"Homologado":"Divergente da referência";
 
   const cards = [
     {
@@ -304,6 +316,14 @@ export function CorrectionMonthlyPanel() {
       info:"Fotografia no fechamento do período: itens abertos, excluindo Registro, Concluído e Cancelado. Não exige movimentação no mês.",
     },
   ] as const;
+  const reportSummary=cards.map(card=>{
+    const reference=septemberHomologation.find(item=>item.key===card.key);
+    const verified=card.key==="backlogInitial"||card.key==="backlogCurrent"||card.key==="registered"?backlogVerified:monthlyMovementVerified;
+    return {indicator:card.label,value:card.value,reference:reference?.expected,
+      status:!verified?"Prévia parcial · histórico pendente":reference?
+        !homologationScopeActive?"Outro recorte":reference.actual===reference.expected?"Confere":"Divergente da referência":
+        "Histórico validado"};
+  });
 
   const periodRows = base.filter(row=>isPeriodRow(row)&&Boolean(row.stateAtClose));
   const periodUniverse = periodRows.length;
@@ -339,6 +359,7 @@ export function CorrectionMonthlyPanel() {
 
   const selectedRows = useMemo(() => base.filter(row => {
     if(drill) return match(row,drill);
+    if(sliceDrill?.kind==="monthly") return isMonthlyIndicatorRow(row);
     if(sliceDrill?.kind==="status") return isPeriodRow(row)&&Boolean(row.stateAtClose)&&row.status===sliceDrill.value;
     if(sliceDrill?.kind==="urgency") return isPeriodRow(row)&&Boolean(row.stateAtClose)&&(row.urgency||"Não informado")===sliceDrill.value;
     if(sliceDrill?.kind==="prioritized") return isPeriodRow(row)&&Boolean(row.stateAtClose)&&row.prioritized===sliceDrill.value;
@@ -372,7 +393,8 @@ export function CorrectionMonthlyPanel() {
         ? `Urgência · ${sliceDrill.value}`
         : sliceDrill?.kind==="prioritized"
           ? `Priorização · ${sliceDrill.value===true?"Sim":sliceDrill.value===false?"Não":"Não informado"}`
-          : "Universo do período";
+          : sliceDrill?.kind==="monthly"?"Movimentos e backlog do mês":"Carteira no fechamento";
+  const exportContext=`Período ${month} · ${fmt(report?.period.start)} até ${fmt(report?.period.close)} (São Paulo) · ${backlogVerified&&monthlyMovementVerified?"Histórico validado":"PRÉVIA PARCIAL — histórico não homologado"}${month==="2026-09"?` · Conferência: ${homologationStatus}`:""} · Carteira SIMER · Criado por: ${creators.join(", ")||"Time SIMER"} · Clientes: ${clients.join(", ")||"Toda a carteira SIMER"} · Urgência: ${urgencies.join(", ")||"Todas"} · Status: ${states.join(", ")||"Todos"} · Priorizada: ${prioritized===""?"Todas":prioritized==="true"?"Sim":"Não"}`;
 
   const openMetric = (key:Exclude<Drill,null>,label:string) => {
     setSliceDrill(null);
@@ -513,7 +535,7 @@ export function CorrectionMonthlyPanel() {
           </Stack>
         </Box>
         <Typography variant="caption" color="text.secondary" sx={{display:"block",mt:1.4}}>
-          {teamScopeActive?"Time SIMER selecionado":creators.length?"Criadores selecionados":"Todos os criadores do suporte SIMER"} · {periodUniverse} task(s) no período
+          {teamScopeActive?"Time SIMER":creators.length?"Criadores selecionados":"Todos os criadores do suporte SIMER"} · {periodUniverse} task(s) com estado no fechamento · {monthlyIndicatorRows.length} nos movimentos/backlog do mês
         </Typography>
       </CardContent>
     </Card>
@@ -539,20 +561,24 @@ export function CorrectionMonthlyPanel() {
         ].filter(Boolean).join(" | ")}
         {report.quality.diagnostics && (
           <Typography component="p" variant="caption" sx={{mt:0.8,opacity:0.9}}>
-            Base consultada: {report.quality.diagnostics.scopedRecords??report.quality.diagnostics.localRecords} tasks; recorte mensal: {periodUniverse} tasks distintas. Histórico Azure: {report.quality.diagnostics.revisions} revisões;{" "}
-            {report.quality.diagnostics.openingScopeIds} IDs abertos na entrada;{" "}
-            {report.quality.diagnostics.closingScopeIds} IDs abertos no fechamento;{" "}
+            Carteira consultada: {report.quality.diagnostics.scopedRecords??report.quality.diagnostics.localRecords} tasks; com estado no fechamento: {periodUniverse}; movimentos/backlog do mês: {monthlyIndicatorRows.length}. Histórico Azure: {report.quality.diagnostics.revisions} revisões;{" "}
+            {report.quality.diagnostics.openingScopeIds} IDs abertos na entrada, incluindo Registro;{" "}
+            {report.quality.diagnostics.closingScopeIds} IDs na carteira do fechamento;{" "}
             {report.quality.diagnostics.snapshotCandidates} candidatos;{" "}
             snapshots {report.quality.diagnostics.openingSnapshotItems}/{report.quality.diagnostics.closingSnapshotItems} (entrada/fechamento);{" "}
-            {report.quality.diagnostics.outputRows} tasks no universo mensal antes dos filtros; {report.quality.unknownClosingStates??0} sem estado histórico no fechamento.
+            {report.quality.unknownClosingStates??0} sem estado histórico no fechamento.
           </Typography>
         )}
       </Alert>
     }
+    {!!report?.quality?.missingClosingFields&&<Alert severity="warning">
+      Há {report.quality.missingClosingFields} task(s) sem os campos históricos necessários para confirmar a carteira. Verifique o campo Cliente Principal e a permissão de leitura do Azure antes de entregar o report.
+    </Alert>}
+    {!loading&&report&&<ExportCorrectionTasksButton rows={base} title={`Report mensal de Correções ${month}`} subtitle={exportContext} summary={reportSummary}/>}
     {!loading&&report&&month==="2026-09"&&
       <Card elevation={0} sx={{
         ...panel,
-        borderColor:homologationScopeActive?"rgba(24,199,122,.28)":"rgba(47,111,237,.22)",
+        borderColor:homologationPassed?"rgba(24,199,122,.28)":"rgba(237,151,47,.3)",
         background:theme.palette.mode==="dark"
           ?"linear-gradient(105deg,rgba(47,111,237,.08),rgba(24,199,122,.045),rgba(255,255,255,.012))"
           :"linear-gradient(105deg,rgba(47,111,237,.05),rgba(24,199,122,.035),#FFFFFF)",
@@ -560,10 +586,13 @@ export function CorrectionMonthlyPanel() {
         <CardContent sx={{py:1.2,"&:last-child":{pb:1.2}}}>
           <Stack direction={{xs:"column",lg:"row"}} gap={1.25} justifyContent="space-between" alignItems={{lg:"center"}}>
             <Box sx={{minWidth:0}}>
-              <Typography sx={{fontWeight:900}}>Homologação · setembro/2026</Typography>
+              <Stack direction="row" gap={1} alignItems="center" flexWrap="wrap">
+                <Typography sx={{fontWeight:900}}>Conferência · setembro/2026</Typography>
+                <Chip size="small" label={homologationStatus} color={homologationPassed?"success":"warning"}/>
+              </Stack>
               <Typography variant="caption" color="text.secondary">
                 {homologationScopeActive
-                  ?"Escopo homologado aplicado: Time SIMER, sem filtros adicionais. Comparação com a referência validada pela coordenação."
+                  ?"Time SIMER e carteira SIMER, sem filtros adicionais. A referência da coordenação deve usar os mesmos criadores e clientes; histórico completo e totais coincidentes são necessários para homologar."
                   :"Para confrontar a referência oficial, use Time SIMER e deixe Cliente, Urgência, Status e Priorizada sem seleção."}
               </Typography>
             </Box>
@@ -581,6 +610,9 @@ export function CorrectionMonthlyPanel() {
                     <Typography sx={{fontWeight:900,fontVariantNumeric:"tabular-nums"}}>{displayActual??"—"}</Typography>
                     <Typography variant="caption" color="text.secondary">/ ref. {item.expected}</Typography>
                   </Stack>
+                  <Typography variant="caption" color={comparable&&!matches?"warning.main":"text.secondary"}>
+                    {!item.verified?"Histórico pendente":!homologationScopeActive?"Outro recorte":matches?"Confere":`Diferença: ${(item.actual??0)-item.expected}`}
+                  </Typography>
                 </Box>;
               })}
             </Box>
@@ -618,8 +650,9 @@ export function CorrectionMonthlyPanel() {
             :"linear-gradient(110deg,rgba(24,199,122,.07),rgba(255,255,255,.98))",
         }}>
           <CardContent sx={{py:1.25,"&:last-child":{pb:1.25}}}>
-            <Stack direction={{xs:"column",lg:"row"}} justifyContent="space-between" alignItems={{lg:"center"}} gap={1.25}>
-              <Box sx={{display:"flex",alignItems:"center",gap:.7,flexWrap:"wrap"}}>
+            <Stack spacing={1}>
+              <Stack direction={{xs:"column",lg:"row"}} justifyContent="space-between" alignItems={{lg:"center"}} gap={1.25}>
+              <Box sx={{display:"flex",alignItems:"center",gap:.7,flexWrap:"wrap",minWidth:0}}>
                 <Box>
                   <Typography sx={{fontWeight:850}}>Leitura do período</Typography>
                   <Typography variant="caption" color="text.secondary">Balanço operacional do recorte selecionado.</Typography>
@@ -642,7 +675,7 @@ export function CorrectionMonthlyPanel() {
                   ["Saídas do mês",monthlyMovementVerified?outputs:"—"],
                   ["Saldo líquido",monthlyMovementVerified?`${flowBalance>0?"+":""}${flowBalance}`:"—"],
                   ["Variação backlog",backlogAvailable&&initialBacklogAvailable?`${delta>0?"+":""}${delta}`:"—"],
-                  ["Universo",periodUniverse],
+                  ["Carteira no fechamento",periodUniverse],
                 ].map(([label,val],index)=>
                   <Box key={String(label)} sx={{minWidth:0}}>
                     <Typography variant="caption" color="text.secondary">{label}</Typography>
@@ -653,6 +686,14 @@ export function CorrectionMonthlyPanel() {
                   </Box>
                 )}
               </Box>
+              </Stack>
+              <Button size="small" sx={{alignSelf:"flex-start",maxWidth:"100%",whiteSpace:"normal",textAlign:"left"}}
+                onClick={()=>selectSlice({kind:"monthly"},"Movimentos e backlog do mês")}>
+                Movimentos e backlog do mês: {monthlyIndicatorRows.length} Tasks distintas
+              </Button>
+              <Typography variant="caption" color="text.secondary">
+                A carteira no fechamento inclui tarefas antigas. Os cards contam movimentos e estoques específicos; uma mesma Task pode participar de vários cards.
+              </Typography>
             </Stack>
           </CardContent>
         </Card>
@@ -667,7 +708,7 @@ export function CorrectionMonthlyPanel() {
             <CardContent sx={{flex:1,display:"flex",flexDirection:"column",p:1.7,"&:last-child":{pb:1.7}}}>
               <CardHeading
                 title={backlogVerified?"Pipeline no fechamento":"Pipeline · prévia não homologada"}
-                subtitle={backlogVerified?`${periodUniverse} task(s) no snapshot final`:`${periodUniverse} task(s) com status recuperado no recorte parcial`}
+                subtitle={backlogVerified?`${periodUniverse} task(s) na carteira do fechamento · inclui tarefas antigas`:`${periodUniverse} task(s) na carteira parcial · inclui tarefas antigas`}
                 info="Distribui as Correções Clientes com estado comprovado no snapshot de fechamento, incluindo tasks sem movimentação no mês. Os cards de movimento usam universos diferentes e não devem ser somados para reproduzir o pipeline. Registro aparece no pipeline, mas é excluído de backlog."
               />
               <Box sx={{flex:1,minHeight:Math.max(230,pipeline.length*31),mt:1}}>
@@ -695,8 +736,8 @@ export function CorrectionMonthlyPanel() {
             <CardContent sx={{flex:1,display:"flex",flexDirection:"column",p:1.7,"&:last-child":{pb:1.7}}}>
               <CardHeading
                 title="Urgência"
-                subtitle="Tasks distintas do universo mensal"
-                info="Agrupa o mesmo universo do período pela urgência/criticidade registrada no Azure. Respeita todos os filtros globais. Clique em uma barra para abrir as Tasks correspondentes."
+                subtitle="Carteira no fechamento · inclui tarefas antigas"
+                info="Agrupa a carteira no fechamento pela urgência/criticidade do Azure. Respeita todos os filtros globais. Clique em uma barra para abrir as Tasks correspondentes."
               />
               <Box sx={{flex:1,minHeight:230,mt:1}}>
                 <ResponsiveContainer width="100%" height="100%">
@@ -722,8 +763,8 @@ export function CorrectionMonthlyPanel() {
             <CardContent sx={{flex:1,display:"flex",flexDirection:"column",p:1.7,"&:last-child":{pb:1.7}}}>
               <CardHeading
                 title="Priorização"
-                subtitle="Priorizadas x não priorizadas"
-                info="Agrupa o mesmo universo do período pelo campo Priorizada do Azure. Respeita os filtros globais. Clique em um segmento para abrir as Tasks correspondentes."
+                subtitle="Carteira no fechamento · priorizadas x não priorizadas"
+                info="Agrupa a carteira no fechamento pelo campo Priorizada do Azure. Respeita os filtros globais. Clique em um segmento para abrir as Tasks correspondentes."
               />
               <Box sx={{height:210,mt:.8,position:"relative"}}>
                 <ResponsiveContainer width="100%" height="100%">
@@ -782,7 +823,7 @@ export function CorrectionMonthlyPanel() {
                 <ExportCorrectionTasksButton
                   rows={detailed}
                   title={`Correções Azure · ${activeDrillLabel}`}
-                  subtitle={`Período ${month} · filtros e busca atuais`}
+                  subtitle={exportContext}
                 />
               </Stack>
             </Stack>
@@ -858,7 +899,7 @@ export function CorrectionMonthlyPanel() {
             <ExportCorrectionTasksButton
               rows={drawerRows}
               title={`Correções Azure · ${drawerTitle}`}
-              subtitle={`Período ${month} · recorte do painel mensal`}
+              subtitle={exportContext}
               fullWidth
             />
             <Button fullWidth size="small" variant="outlined" startIcon={<ShareOutlined/>} onClick={shareSelection}>
