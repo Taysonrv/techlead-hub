@@ -227,7 +227,9 @@ export function Performance() {
     Promise.all([
       api.get("/coordination/csat", { params:{ days:180 }, signal:controller.signal }),
       api.get("/coordination/sla-development", { params:{ days:180 }, signal:controller.signal }),
-    ]).then(([csat,sla]) => setExecutiveQuality({csat:csat.data,sla:sla.data}))
+    ]).then(([csat,sla]) => {
+      if (!controller.signal.aborted) setExecutiveQuality({csat:csat.data,sla:sla.data});
+    })
       .catch(()=>{ if(!controller.signal.aborted) setExecutiveQuality(null); });
     return ()=>controller.abort();
   }, []);
@@ -252,7 +254,7 @@ export function Performance() {
   const operationalSummary = useMemo(() => {
     const resolvedInPeriod = operationalCohorts.resolved;
     const closedInPeriod = operationalCohorts.closed;
-    const completedCohort = periodTickets.filter((ticket) => Boolean(ticket.resolvedDate || ticket.closedDate));
+    const completedCohort = periodTickets.filter((ticket) => ["Resolved", "Closed"].includes(ticket.baseStatus ?? "") && Boolean(ticket.resolvedDate || ticket.closedDate));
     const resolutionMinutes = completedCohort
       .map((ticket) => ticket.lifetimeMinutes)
       .filter((value): value is number => typeof value === "number" && Number.isFinite(value) && value >= 0);
@@ -628,16 +630,16 @@ export function Performance() {
         sx={{ mb: 1.5, borderRadius: 2 }}
       >
         <strong>SLA do suporte:</strong> usa os prazos e timestamps sincronizados do Movidesk. A 1ª resposta segue as entradas do período; a solução segue os tickets resolvidos no período. Atendimentos
-        sem prazo ou data de conclusão válidos não entram no denominador, independentemente da categoria.
+        sem prazo ou marco de resposta/solução válido não entram no denominador, independentemente da categoria.
         Os prazos calculados em horas úteis são exibidos separadamente como risco operacional.
       </Alert>
 
-      <Box sx={{ display:"grid", gridTemplateColumns:{xs:"1fr",sm:"repeat(2,minmax(0,1fr))",lg:"repeat(3,minmax(0,1fr))",xl:"repeat(5,minmax(0,1fr))"}, gap:1.25, mb:1.75 }}>
-        <PerformanceKpi title="Tickets abertos" value={operationalSummary.opened} description="Entradas do período atribuídas à operação SIMER" accent={aliareColors.info} info={{title:"Tickets abertos",summary:"Mesmo cohort do Resumo Executivo: tickets criados no período sob responsabilidade da operação SIMER.",calculation:"createdDate no período + isWithSimer = true.",source:"Movidesk",periodRule:"Segue integralmente o período global selecionado."}} />
-        <PerformanceKpi title="Tickets fechados" value={operationalSummary.closed} description="Fechamentos ocorridos no período" accent={aliareColors.green} info={{title:"Tickets fechados",summary:"Mesmo fluxo do Resumo Executivo: tickets SIMER cuja data de fechamento ocorreu no período.",calculation:"isWithSimer = true + closedDate no período.",source:"Movidesk",periodRule:"Segue integralmente o período global selecionado."}} />
-        <PerformanceKpi title="Backlog atual" value={operationalSummary.pending} description="Estoque atual de tickets ativos" accent={aliareColors.warning} info={{title:"Backlog atual",summary:"Mesmo estoque do Resumo Executivo: tickets atualmente ativos sob responsabilidade SIMER, independentemente da data de abertura.",calculation:"isWithSimer = true + status operacional ativo.",source:"Movidesk",periodRule:"Não é limitado pela data de abertura; representa o backlog atual."}} />
-        <PerformanceKpi title="Efetividade" value={`${operationalSummary.effectiveness}%`} description={`${operationalSummary.completedCohort} concluído(s) da coorte`} accent={rateColor(operationalSummary.effectiveness)} info={{title:"Efetividade",summary:"Percentual da coorte de entradas do período que já alcançou resolução ou fechamento.",calculation:"Tickets resolvidos/fechados ÷ tickets criados no período.",source:"Movidesk",periodRule:"Coorte de tickets criados no período; não confundir com SLA."}} />
-        <PerformanceKpi title="TMR" value={operationalSummary.avgResolutionMinutes===null?"—":formatServiceMinutes(operationalSummary.avgResolutionMinutes)} description="Tempo médio de resolução" accent={aliareColors.purple} info={{title:"TMR",summary:"Tempo médio de resolução dos tickets resolvidos da coorte selecionada.",calculation:"Média de lifetimeMinutes dos tickets resolvidos/fechados com medição disponível.",source:"Movidesk",periodRule:"Tickets criados no período com tempo de vida medido."}} />
+      <Box sx={{ display:"grid", gridTemplateColumns:{xs:"1fr",sm:"repeat(2,minmax(0,1fr))",lg:"repeat(3,minmax(0,1fr))",xl:"repeat(3,minmax(0,1fr))"}, gap:1.25, mb:1.75 }}>
+        <PerformanceKpi title="Tickets abertos" onClick={() => setDrilldown({ title: "Tickets abertos", tickets: periodTickets })} value={operationalSummary.opened} description="Entradas do período atribuídas à operação SIMER" accent={aliareColors.info} info={{title:"Tickets abertos",summary:"Mesmo cohort do Resumo Executivo: tickets criados no período sob responsabilidade da operação SIMER.",calculation:"createdDate no período + isWithSimer = true.",source:"Movidesk",periodRule:"Segue integralmente o período global selecionado."}} />
+        <PerformanceKpi title="Tickets fechados" onClick={() => setDrilldown({ title: "Tickets fechados", tickets: operationalCohorts.closed })} value={operationalSummary.closed} description="Fechamentos ocorridos no período" accent={aliareColors.green} info={{title:"Tickets fechados",summary:"Mesmo fluxo do Resumo Executivo: tickets SIMER cuja data de fechamento ocorreu no período.",calculation:"isWithSimer = true + closedDate no período.",source:"Movidesk",periodRule:"Segue integralmente o período global selecionado."}} />
+        <PerformanceKpi title="Backlog atual" onClick={() => setDrilldown({ title: "Backlog atual", tickets: currentBacklog })} value={operationalSummary.pending} description="Estoque atual de tickets ativos" accent={aliareColors.warning} info={{title:"Backlog atual",summary:"Mesmo estoque do Resumo Executivo: tickets atualmente ativos sob responsabilidade SIMER, independentemente da data de abertura.",calculation:"isWithSimer = true + status operacional ativo.",source:"Movidesk",periodRule:"Não é limitado pela data de abertura; representa o backlog atual."}} />
+        <PerformanceKpi title="Efetividade" onClick={() => setDrilldown({ title: "Efetividade", tickets: periodTickets.filter((ticket) => ["Resolved", "Closed"].includes(ticket.baseStatus ?? "") && Boolean(ticket.resolvedDate || ticket.closedDate)) })} value={`${operationalSummary.effectiveness}%`} description={`${operationalSummary.completedCohort} concluído(s) da coorte`} accent={rateColor(operationalSummary.effectiveness)} info={{title:"Efetividade",summary:"Percentual da coorte de entradas do período que já alcançou resolução ou fechamento.",calculation:"Tickets resolvidos/fechados ÷ tickets criados no período.",source:"Movidesk",periodRule:"Coorte de tickets criados no período; não confundir com SLA."}} />
+        <PerformanceKpi title="TMR" onClick={() => setDrilldown({ title: "TMR", tickets: periodTickets.filter((ticket) => ["Resolved", "Closed"].includes(ticket.baseStatus ?? "") && Boolean(ticket.resolvedDate || ticket.closedDate) && typeof ticket.lifetimeMinutes === "number" && Number.isFinite(ticket.lifetimeMinutes) && ticket.lifetimeMinutes >= 0) })} value={operationalSummary.avgResolutionMinutes===null?"—":formatServiceMinutes(operationalSummary.avgResolutionMinutes)} description="Tempo médio de resolução" accent={aliareColors.purple} info={{title:"TMR",summary:"Tempo médio de resolução dos tickets resolvidos da coorte selecionada.",calculation:"Média de lifetimeMinutes dos tickets resolvidos/fechados com medição disponível.",source:"Movidesk",periodRule:"Tickets criados no período com tempo de vida medido."}} />
       </Box>
 
       {executiveQuality && <Box sx={{ display:"grid", gridTemplateColumns:{xs:"1fr",sm:"repeat(2,minmax(0,1fr))",xl:"repeat(4,minmax(0,1fr))"}, gap:1.25, mb:1.75 }}>
@@ -1525,10 +1527,13 @@ function PerformanceKpi({
       onClick={onClick}
       onKeyDown={onClick ? (event) => {
         if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
           onClick();
         }
       } : undefined}
       sx={{
+        minWidth: 0,
+        height: "100%",
         position: "relative",
         overflow: "hidden",
         border: "1px solid",
@@ -1808,6 +1813,7 @@ function RiskBucket({
       onClick={onClick}
       onKeyDown={(event) => {
         if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
           onClick();
         }
       }}
