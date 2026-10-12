@@ -66,3 +66,10 @@ Fechamentos anteriores ao formato v6 são reapurados: além dos antigos filtros 
 - [Reporting Work Item Revisions](https://learn.microsoft.com/en-us/rest/api/azure/devops/wit/reporting-work-item-revisions/read-reporting-revisions-get?view=azure-devops-rest-7.1)
 - [Work Items Batch / ASOF](https://learn.microsoft.com/en-us/rest/api/azure/devops/wit/work-items/get-work-items-batch?view=azure-devops-rest-7.1)
 - [WIQL / precisão de horário](https://learn.microsoft.com/en-us/rest/api/azure/devops/wit/wiql/query-by-wiql?view=azure-devops-rest-7.1)
+
+
+## Visões e conferência de 12/10/2026
+
+A visão inicial Movimentos e backlog do mês usa a união dos seis indicadores por ID, preservando backlog herdado sem exigir evento no mês. A opção Carteira acumulada no fechamento mantém o pipeline previsto no escopo, incluindo terminais antigos. Gráficos, tabela, detalhamento, exportação e links identificam a visão. Os seis cards continuam com suas regras próprias. Gráficos exigem estado comprovado no fechamento; itens sem esse estado permanecem na listagem.
+
+O último Excel de setembro contém 370 IDs na carteira e 62 nos indicadores, com 44 registradas, 41 entregues, 8 canceladas, 1 em Registro, 14 no backlog inicial e 12 no final. A referência de 45 registradas ainda impede homologação integral. O CSV fornecido contém a Task 27002 (criada em 28/09, conclusão atual em 05/10), ausente do Excel; o Excel contém 26366 e 27079, ausentes do CSV. A união das listas de criação tem 45 IDs. Conferir histórico de tipo, Cliente Principal, criador e estado da 27002 no fechamento antes de concluir a causa ou alterar o backlog. O estado atual não comprova seu estado em setembro.

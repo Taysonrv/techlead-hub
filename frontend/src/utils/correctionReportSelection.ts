@@ -7,6 +7,7 @@ export type CorrectionSlice =
 
 export type CorrectionReportSelection = {
   month: string;
+  view: "monthly" | "portfolio";
   creators: string[];
   clients: string[];
   urgencies: string[];
@@ -38,12 +39,12 @@ export function parseCorrectionReportSelection(search: string, defaultMonth: str
   }
   const rawTask = params.get("reportTask") ?? "";
   const taskId = /^\d+$/.test(rawTask) && Number.isSafeInteger(Number(rawTask)) && Number(rawTask) > 0 ? Number(rawTask) : null;
-  return { month, creators: values("reportCreator"), clients: values("reportClient"), urgencies: values("reportUrgency"), states: values("reportState"),
+  return { month, view: params.get("reportView") === "portfolio" ? "portfolio" : "monthly", creators: values("reportCreator"), clients: values("reportClient"), urgencies: values("reportUrgency"), states: values("reportState"),
     prioritized: rawPriority === "true" || rawPriority === "false" ? rawPriority : "", search: (params.get("reportSearch") ?? "").slice(0, 500), metric, slice, taskId };
 }
 
 export function correctionReportLink(selection: CorrectionReportSelection): string {
-  const params = new URLSearchParams({ reportMonth: selection.month });
+  const params = new URLSearchParams({ reportMonth: selection.month, reportView: selection.view });
   for (const [key, values] of [["reportCreator", selection.creators], ["reportClient", selection.clients], ["reportUrgency", selection.urgencies], ["reportState", selection.states]] as const)
     for (const value of values) params.append(key, value);
   if (selection.prioritized) params.set("reportPrioritized", selection.prioritized);

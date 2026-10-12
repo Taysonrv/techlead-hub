@@ -178,6 +178,7 @@ export function CorrectionMonthlyPanel() {
   const { user } = useAuth();
   const routeSelection = useMemo(()=>parseCorrectionReportSelection(location.search,currentMonth()),[location.search]);
 
+  const [view,setView] = useState(routeSelection.view);
   const [month,setMonth] = useState(routeSelection.month);
   const [report,setReport] = useState<Report|null>(null);
   const [loading,setLoading] = useState(false);
@@ -199,7 +200,7 @@ export function CorrectionMonthlyPanel() {
   const [selectedTaskId,setSelectedTaskId] = useState(routeSelection.taskId);
 
   useEffect(()=>{
-    setMonth(routeSelection.month);setCreators(routeSelection.creators);setClients(routeSelection.clients);
+    setView(routeSelection.view);setMonth(routeSelection.month);setCreators(routeSelection.creators);setClients(routeSelection.clients);
     setUrgencies(routeSelection.urgencies);setStates(routeSelection.states);setPrioritized(routeSelection.prioritized);
     setSearch(routeSelection.search);setDrill(routeSelection.metric);setSliceDrill(routeSelection.slice);
     setDrawerTitle(selectionLabel(routeSelection.metric,routeSelection.slice));setSelectedTaskId(routeSelection.taskId);
@@ -368,7 +369,9 @@ export function CorrectionMonthlyPanel() {
         "Histórico validado"};
   });
 
-  const periodRows = base.filter(row=>isPeriodRow(row)&&Boolean(row.stateAtClose));
+  const viewLabel=view==="monthly"?"Movimentos e backlog do mês":"Carteira acumulada no fechamento";
+  const viewRows=view==="monthly"?monthlyIndicatorRows:base.filter(isPeriodRow);
+  const periodRows = viewRows.filter(row=>Boolean(row.stateAtClose));
   const periodUniverse = periodRows.length;
 
   const statusCounts = periodRows.reduce<Record<string,number>>((acc,row) => {
@@ -404,11 +407,12 @@ export function CorrectionMonthlyPanel() {
   const selectedRows = useMemo(() => base.filter(row => {
     if(drill) return match(row,drill);
     if(sliceDrill?.kind==="monthly") return isMonthlyIndicatorRow(row);
+    if(view==="monthly"&&!isMonthlyIndicatorRow(row)) return false;
     if(sliceDrill?.kind==="status") return isPeriodRow(row)&&Boolean(row.stateAtClose)&&row.status===sliceDrill.value;
     if(sliceDrill?.kind==="urgency") return isPeriodRow(row)&&Boolean(row.stateAtClose)&&(row.urgency||"Não informado")===sliceDrill.value;
     if(sliceDrill?.kind==="prioritized") return isPeriodRow(row)&&Boolean(row.stateAtClose)&&row.prioritized===sliceDrill.value;
     return isPeriodRow(row);
-  }),[base,drill,sliceDrill]);
+  }),[base,drill,sliceDrill,view]);
 
   const detailed = useMemo(() => selectedRows.filter(row =>
     !search.trim() ||
@@ -429,8 +433,8 @@ export function CorrectionMonthlyPanel() {
     if(drawerOpen&&drawerRows.length&&!drawerRows.some(row=>row.id===selectedTaskId)) setSelectedTaskId(drawerRows[0].id);
   },[drawerOpen,drawerRows,selectedTaskId]);
 
-  const activeDrillLabel = selectionLabel(drill,sliceDrill);
-  const exportContext=`Período ${month} · ${fmt(report?.period.start)} até ${fmt(report?.period.close)} (São Paulo) · ${backlogVerified&&monthlyMovementVerified?"Histórico validado":"PRÉVIA PARCIAL — histórico não homologado"}${month==="2026-09"?` · Conferência: ${homologationStatus}`:""} · Carteira SIMER · Criado por: ${creators.join(", ")||"Time SIMER"} · Clientes: ${clients.join(", ")||"Toda a carteira SIMER"} · Urgência: ${urgencies.join(", ")||"Todas"} · Status: ${states.join(", ")||"Todos"} · Priorizada: ${prioritized===""?"Todas":prioritized==="true"?"Sim":"Não"}`;
+  const activeDrillLabel = drill||sliceDrill?selectionLabel(drill,sliceDrill):viewLabel;
+  const exportContext=`Visão: ${viewLabel} · Período ${month} · ${fmt(report?.period.start)} até ${fmt(report?.period.close)} (São Paulo) · ${backlogVerified&&monthlyMovementVerified?"Histórico validado":"PRÉVIA PARCIAL — histórico não homologado"}${month==="2026-09"?` · Conferência: ${homologationStatus}`:""} · Carteira SIMER · Criado por: ${creators.join(", ")||"Time SIMER"} · Clientes: ${clients.join(", ")||"Toda a carteira SIMER"} · Urgência: ${urgencies.join(", ")||"Todas"} · Status: ${states.join(", ")||"Todos"} · Priorizada: ${prioritized===""?"Todas":prioritized==="true"?"Sim":"Não"}`;
   const detailExportContext=`${exportContext} · Busca ID/título: ${search.trim()||"Todas"}`;
 
   const openMetric = (key:Exclude<Drill,null>,label:string) => {
@@ -460,7 +464,7 @@ export function CorrectionMonthlyPanel() {
         label:"Correções Clientes",
         title:`${activeDrillLabel} · ${month}`,
         status:`${drawerRows.length} task(s) · ${backlogVerified&&monthlyMovementVerified?"Histórico validado":"Prévia parcial"}`,
-        path:correctionReportLink({month,creators,clients,urgencies,states,prioritized,search,metric:drill,slice:sliceDrill,taskId:null}),
+        path:correctionReportLink({month,view,creators,clients,urgencies,states,prioritized,search,metric:drill,slice:sliceDrill,taskId:null}),
       },
     }));
   };
@@ -473,7 +477,7 @@ export function CorrectionMonthlyPanel() {
         title:row.title,
         client:row.client,
         status:`${row.status} · ${month} · ${backlogVerified&&monthlyMovementVerified?"Histórico validado":"Prévia parcial"}`,
-        path:correctionReportLink({month,creators,clients,urgencies,states,prioritized,search,metric:drill,slice:sliceDrill,taskId:row.id}),
+        path:correctionReportLink({month,view,creators,clients,urgencies,states,prioritized,search,metric:drill,slice:sliceDrill,taskId:row.id}),
       },
     }));
   };
@@ -634,7 +638,7 @@ export function CorrectionMonthlyPanel() {
     {!!report?.quality?.currentAssigneeError&&!connectionBlocked&&<Alert severity="info">
       Não foi possível consultar o responsável atual de algumas Tasks: {report.quality.currentAssigneeError}
     </Alert>}
-    {report&&<ExportCorrectionTasksButton rows={base} title={`${homologationHistoryReady?"Report":"Prévia"} mensal de Correções ${month}`} subtitle={exportContext} summary={reportSummary} label={homologationHistoryReady?"Exportar report Excel":"Exportar prévia Excel"}/>}
+    {report&&<ExportCorrectionTasksButton rows={viewRows} title={`${homologationHistoryReady?"Report":"Prévia"} mensal de Correções ${month}`} subtitle={exportContext} summary={reportSummary} label={homologationHistoryReady?"Exportar report Excel":"Exportar prévia Excel"}/>}
     {!loading&&report&&report.rows.length===0&&
       <Alert severity="warning">Nenhuma Task do tipo Correção Clientes foi localizada no recorte carregado.</Alert>
     }
@@ -660,13 +664,22 @@ export function CorrectionMonthlyPanel() {
         <Card elevation={0} sx={panel}>
           <CardContent sx={{py:1.1,"&:last-child":{pb:1.1}}}>
             <Stack direction={{xs:"column",sm:"row"}} gap={1} alignItems={{sm:"center"}} justifyContent="space-between">
-              <Typography variant="body2">Carteira no fechamento: <b>{periodUniverse} Tasks</b>{!backlogVerified&&" · prévia parcial"}.</Typography>
+              <Typography variant="body2">{viewLabel}: <b>{viewRows.length} Tasks</b>{!backlogVerified&&" · prévia parcial"}.</Typography>
               <Button size="small" sx={{whiteSpace:"normal",textAlign:"left"}} onClick={()=>selectSlice({kind:"monthly"},"Movimentos e backlog do mês")}>
                 Movimentos e backlog do mês: {monthlyIndicatorRows.length} Tasks distintas
               </Button>
             </Stack>
-            <Typography variant="caption" color="text.secondary">
-              Os gráficos incluem Tasks antigas. Os cards contam movimentos e estoques específicos; a mesma Task pode participar de vários cards.
+            <FormControl size="small" sx={{mt:1,mb:1,width:"100%",maxWidth:440}}>
+              <InputLabel id="correction-view-label">Visão dos gráficos e da listagem</InputLabel>
+              <Select labelId="correction-view-label" label="Visão dos gráficos e da listagem" value={view}
+                onChange={event=>{setView(event.target.value as "monthly"|"portfolio");setDrill(null);setSliceDrill(null);setDrawerOpen(false);setSelectedTaskId(null);}}>
+                <MenuItem value="monthly">Movimentos e backlog do mês</MenuItem>
+                <MenuItem value="portfolio">Carteira acumulada no fechamento</MenuItem>
+              </Select>
+            </FormControl>
+            <Typography variant="caption" color="text.secondary" sx={{display:"block"}}>
+              {view==="monthly"?"Tasks dos indicadores mensais, incluindo backlog herdado. Cada ID aparece uma vez.":"Toda a carteira no fechamento, incluindo conclusões e cancelamentos de meses anteriores."}
+              {" Os seis cards mantêm suas regras mensais. Os gráficos usam o estado no fechamento; itens sem esse estado permanecem na listagem."}
             </Typography>
             {!distributionConsistent&&<Typography variant="caption" color="warning.main" sx={{display:"block"}}>Revisar distribuição: carteira {periodUniverse}, pipeline {pipelineTotal}, urgência {urgencyTotal}, priorização {priorityTotal}.</Typography>}
             {homologationHistoryReady&&<Typography variant="caption" color="text.secondary" sx={{display:"block"}}>
@@ -684,9 +697,9 @@ export function CorrectionMonthlyPanel() {
           <Card elevation={0} sx={chartPanel}>
             <CardContent sx={{flex:1,display:"flex",flexDirection:"column",p:1.7,"&:last-child":{pb:1.7}}}>
               <CardHeading
-                title={backlogVerified?"Pipeline no fechamento":"Pipeline · prévia não homologada"}
-                subtitle={backlogVerified?`${periodUniverse} task(s) na carteira do fechamento · inclui tarefas antigas`:`${periodUniverse} task(s) na carteira parcial · inclui tarefas antigas`}
-                info="Distribui as Correções Clientes com estado comprovado no snapshot de fechamento, incluindo tasks sem movimentação no mês. Os cards de movimento usam universos diferentes e não devem ser somados para reproduzir o pipeline. Registro aparece no pipeline, mas é excluído de backlog."
+                title={backlogVerified?(view==="monthly"?"Status das Tasks do mês":"Pipeline acumulado no fechamento"):"Pipeline · prévia não homologada"}
+                subtitle={`${viewLabel} · ${periodUniverse} Tasks com estado no fechamento`}
+                info="Distribui a visão selecionada pelo estado histórico no fechamento. A visão mensal reúne os indicadores, incluindo backlog sem movimento. A carteira acumulada inclui encerramentos anteriores. Registro não integra backlog."
               />
               <Box sx={{flex:1,minHeight:Math.max(230,pipeline.length*31),mt:1}}>
                 <ResponsiveContainer width="100%" height="100%">
@@ -713,8 +726,8 @@ export function CorrectionMonthlyPanel() {
             <CardContent sx={{flex:1,display:"flex",flexDirection:"column",p:1.7,"&:last-child":{pb:1.7}}}>
               <CardHeading
                 title="Urgência"
-                subtitle="Carteira no fechamento · inclui tarefas antigas"
-                info="Agrupa a carteira no fechamento pela urgência/criticidade do Azure. Respeita todos os filtros globais. Clique em uma barra para abrir as Tasks correspondentes."
+                subtitle={viewLabel}
+                info="Agrupa a visão selecionada pela urgência/criticidade do Azure. Respeita todos os filtros globais. Clique em uma barra para abrir as Tasks correspondentes."
               />
               <Box sx={{flex:1,minHeight:230,mt:1}}>
                 <ResponsiveContainer width="100%" height="100%">
@@ -740,8 +753,8 @@ export function CorrectionMonthlyPanel() {
             <CardContent sx={{flex:1,display:"flex",flexDirection:"column",p:1.7,"&:last-child":{pb:1.7}}}>
               <CardHeading
                 title="Priorização"
-                subtitle="Carteira no fechamento · priorizadas x não priorizadas"
-                info="Agrupa a carteira no fechamento pelo campo Priorizada do Azure. Respeita os filtros globais. Clique em um segmento para abrir as Tasks correspondentes."
+                subtitle={viewLabel}
+                info="Agrupa a visão selecionada pelo campo Priorizada do Azure. Respeita os filtros globais. Clique em um segmento para abrir as Tasks correspondentes."
               />
               <Box sx={{height:210,mt:.8,position:"relative"}}>
                 <ResponsiveContainer width="100%" height="100%">
