@@ -191,7 +191,6 @@ type DrilldownState = {
   destinationLabel?: string;
 } | null;
 
-type RecurrenceResponse = { items:Array<{service:string;cases:number;clients:number;score:number;priority:"high"|"medium"|"review";trendPct:number}>; summary:{total:number;high:number;rising:number;multiClient:number;anomalies:number}; anomalies?:Array<{service:string;reason:string;severity:"critical"|"warning";score:number;trendPct:number;recent30:number;tickets:number[]}> };
 
 type MetricInfoDefinition = {
   title: string;
@@ -241,7 +240,6 @@ export function Dashboard() {
   const [copyMessage, setCopyMessage] =
     useState("");
   const [flowHidden, setFlowHidden] = useState<Set<"opened" | "resolved" | "closed">>(() => new Set());
-  const [recurrence, setRecurrence] = useState<RecurrenceResponse | null>(null);
 
   const {
     period,
@@ -282,21 +280,11 @@ export function Dashboard() {
 
     void loadTickets(true);
     const unsubscribeRefresh = subscribeTicketSnapshotRefresh(() => { void loadTickets(); });
-    apiRecurrence();
     return () => {
       unsubscribeRefresh();
       controller.abort();
     };
   }, []);
-
-  async function apiRecurrence() {
-    try {
-      const response = await import("../services/api").then(({ api }) => api.get<RecurrenceResponse>("/known-problems/candidates"));
-      if (!loadRequestRef.current?.signal.aborted) setRecurrence(response.data);
-    } catch {
-      setRecurrence(null);
-    }
-  }
 
   /* =======================================================
      PERÍODO + CONJUNTOS EXECUTIVOS
@@ -1143,33 +1131,6 @@ export function Dashboard() {
         meta={<>{periodLabel(period)}{" • "}{filteredTickets.length} ticket(s) analisado(s)</>}
         action={<PeriodFilter />}
       />
-      {recurrence && recurrence.summary.total > 0 && (
-        <Card elevation={0} sx={{
-          mb: 2,
-          width: "100%",
-          border: "1px solid",
-          borderColor: "rgba(245,158,11,.28)",
-          borderRadius: 2,
-          background: isDark
-            ? "radial-gradient(circle at 0% 50%, rgba(245,158,11,.08), transparent 42%), linear-gradient(145deg, rgba(9,32,43,.98), rgba(7,25,38,.995))"
-            : "radial-gradient(circle at 0% 50%, rgba(245,158,11,.07), transparent 42%), linear-gradient(145deg, #FFFFFF, #FAFCFD)",
-        }}>
-          <CardContent sx={{ py:1.5, "&:last-child":{pb:1.5} }}>
-            <Stack direction={{xs:"column",md:"row"}} spacing={1.5} sx={{justifyContent:"space-between",alignItems:{md:"center"}}}>
-              <Box>
-                <Typography sx={{fontWeight:850}}>Inteligência de recorrência</Typography>
-                <Typography variant="body2" color="text.secondary">
-                  {recurrence.summary.total} padrão(ões) detectado(s) · {recurrence.summary.high} alta prioridade · {recurrence.summary.rising} em crescimento · {recurrence.summary.multiClient} multi-cliente · {recurrence.summary.anomalies} anomalia(s)
-                </Typography>
-              </Box>
-              <Stack direction="row" spacing={.7} useFlexGap sx={{flexWrap:"wrap",alignItems:"center"}}>
-                {recurrence.items.slice(0,3).map((item,index) => <Chip key={`${item.service}-${item.cases}-${item.score}-${item.trendPct}-${index}`} size="small" color={item.priority==="high"?"error":"warning"} variant="outlined" label={`${item.service}: ${item.cases} casos · ${item.score}/100`} onClick={()=>navigate(`/problemas-conhecidos?q=${encodeURIComponent(item.service)}`)}/>)}
-                <Button size="small" onClick={()=>navigate("/problemas-conhecidos")}>Ver análise</Button>
-              </Stack>
-            </Stack>
-          </CardContent>
-        </Card>
-      )}
       {metricAudit.length > 0 && (
         <Alert severity="warning" variant="outlined" sx={{ mb: 2 }}>
           Auditoria de métricas detectou {metricAudit.length} divergência(s): {metricAudit.map((item) => item.message).join(" · ")}
