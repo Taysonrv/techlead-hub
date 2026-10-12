@@ -56,8 +56,8 @@ test("fallback usa StateChangeDate e restringe todas as dimensões à carteira S
     ({ id, title: `Task ${id}`, client, createdByName: "Tayson Araujo", azureCreatedAt: createdAt, state, stateChangedAt });
   prisma.azureWorkItem.findMany = (async () => [
     item(1, "COAP", "Concluído", changedAt),
-    item(2, "COAGRO", "Cancelado", changedAt),
-    item(3, "BOM JESUS", "Registro", changedAt),
+    item(2, "COOPERATIVA AGROPECUARIA COMAG", "Cancelado", changedAt),
+    item(3, "COOPERATIVA BOM JESUS - LAPA-PR", "Registro", changedAt),
     item(4, "Cliente fora da carteira", "Concluído", changedAt),
     ...["Joel Kunrath", "Carina Silva", "Renan Stein", "Lucas Lima"].map((createdByName, index) =>
       ({ ...item(80 + index, "COAP", "Concluído", changedAt), createdByName })),

@@ -94,3 +94,16 @@ test("direct ticket investigation returns 404 outside the operational portfolio"
     prisma.ticket.findFirst = original;
   }
 });
+
+test("Azure client names from the September export preserve the strict portfolio", () => {
+  for (const [alias, canonical] of [
+    ["COOPERATIVA BOM JESUS - LAPA-PR", "BOM JESUS COOPERATIVA AGROINDUSTRIAL - LAPA-PR"],
+    ["COOPERATIVA AGROPECUARIA COMAG", "COOPERATIVA AGROPECUARIA COMAG - CURITIBA-PR"],
+  ]) {
+    assert.equal(resolveSimerClient(alias), canonical);
+    assert.equal(matches({ ...task, client: alias }, azureOperationalScope()), true);
+    assert.equal(matches({ ...task, client: alias, createdByName: "Renan Stein" }, azureOperationalScope()), false);
+    assert.equal(resolveSimerClient(`${alias} OUTRO CLIENTE`), null);
+    assert.equal(matches({ ...task, client: `${alias} OUTRO CLIENTE` }, azureOperationalScope()), false);
+  }
+});

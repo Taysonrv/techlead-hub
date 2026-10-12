@@ -59,7 +59,7 @@ As referências devem corresponder aos mesmos criadores e à mesma carteira de c
 6. Conferir que o backlog final de setembro corresponde ao inicial de outubro sob os mesmos filtros.
 7. Usar Exportar report Excel. O arquivo traz os seis indicadores, referências, situação da apuração, período, filtros e listagem por ID. Se o histórico for parcial, o arquivo identifica PRÉVIA PARCIAL. Exportações da tabela e das laterais também levam a situação do histórico.
 
-Fechamentos anteriores ao formato v5 são reapurados, pois podiam conter metadados atuais nos filtros históricos. Um fechamento v5 comprovado não é substituído por uma prévia com cobertura inferior. Testes automatizados exercitam dados simulados e não certificam os números da instalação.
+Fechamentos anteriores ao formato v6 são reapurados: além dos antigos filtros históricos com metadados atuais, podiam excluir as grafias Azure `COOPERATIVA BOM JESUS - LAPA-PR` e `COOPERATIVA AGROPECUARIA COMAG`. Essas grafias são aliases exatos dos clientes SIMER existentes, sem ampliar a carteira nem os criadores autorizados. Um fechamento v6 comprovado não é substituído por uma prévia com cobertura inferior. Testes automatizados exercitam dados simulados e não certificam os números da instalação.
 
 ## Fontes técnicas
 

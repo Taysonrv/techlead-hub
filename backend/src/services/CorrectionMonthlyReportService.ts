@@ -437,8 +437,8 @@ ASOF '${asOf.toISOString()}'`;
       const saved=await prisma.systemSetting.findUnique({where:{key:this.snapshotKey(month)}});
       if(!saved) return null;
       const parsed=JSON.parse(saved.value);
-      // Descarta prévias antigas que podiam usar o estado atual em meses passados.
-      return (parsed.version===5)&&Array.isArray(parsed.rows)?parsed:null;
+      // v6 reapura fechamentos anteriores ao reconhecimento dos nomes Azure de Bom Jesus e COMAG.
+      return (parsed.version===6)&&Array.isArray(parsed.rows)?parsed:null;
     } catch { return null; }
   }
 
@@ -451,7 +451,7 @@ ASOF '${asOf.toISOString()}'`;
       const reliable=data.quality.backlogHistoricalReliable;
       if(previous?.reliable&&!reliable) return;
       if(previous?.reliable&&previous.coverage?.movementHistoryReliable===true&&!data.quality.movementHistoryReliable) return;
-      const value=JSON.stringify({version:5,reliable,coverage:{movementHistoryReliable:data.quality.movementHistoryReliable??false,backlogInitialAvailable:data.quality.backlogInitialAvailable??reliable,backlogCurrentAvailable:data.quality.backlogCurrentAvailable??reliable},savedAt:new Date().toISOString(),rows:data.rows.filter(row=>row.inPeriodUniverse)});
+      const value=JSON.stringify({version:6,reliable,coverage:{movementHistoryReliable:data.quality.movementHistoryReliable??false,backlogInitialAvailable:data.quality.backlogInitialAvailable??reliable,backlogCurrentAvailable:data.quality.backlogCurrentAvailable??reliable},savedAt:new Date().toISOString(),rows:data.rows.filter(row=>row.inPeriodUniverse)});
       await prisma.systemSetting.upsert({where:{key:this.snapshotKey(month)},create:{key:this.snapshotKey(month),value,encrypted:false},update:{value,encrypted:false}});
     } catch(error) {
       console.warn("[correction-monthly-report] Não foi possível persistir fechamento:",error instanceof Error?error.message:String(error));

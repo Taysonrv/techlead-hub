@@ -25,7 +25,7 @@ const SIMER_CLIENT_ALIASES: ReadonlyArray<{
 }> = [
   {
     canonical: "BOM JESUS COOPERATIVA AGROINDUSTRIAL - LAPA-PR",
-    aliases: ["BOM JESUS"],
+    aliases: ["BOM JESUS", "COOPERATIVA BOM JESUS - LAPA-PR"],
   },
   {
     canonical: "CAMP - PRUDENTOPOLIS-PR",
@@ -45,7 +45,7 @@ const SIMER_CLIENT_ALIASES: ReadonlyArray<{
   },
   {
     canonical: "COOPERATIVA AGROPECUARIA COMAG - CURITIBA-PR",
-    aliases: ["COMAG"],
+    aliases: ["COMAG", "COOPERATIVA AGROPECUARIA COMAG"],
   },
   {
     canonical: "COPERAMA - ITURAMA-MG",

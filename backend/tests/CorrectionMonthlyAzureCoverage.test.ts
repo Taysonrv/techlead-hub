@@ -43,7 +43,7 @@ test("Reporting aceita uniqueName e nome com email sem incluir outro Renan",()=>
   assert.equal(isCorrectionTeamCreator("Renan Stein <test@example.invalid>"),false);
 });
 
-test("fechamentos anteriores à correção dos filtros históricos são reapurados",async(t)=>{
+test("fechamentos anteriores à correção da carteira e dos filtros históricos são reapurados",async(t)=>{
   const original=prisma.systemSetting.findUnique;
   let version=4;
   prisma.systemSetting.findUnique=(async()=>({value:JSON.stringify({version,rows:[],reliable:true})})) as typeof original;
@@ -51,6 +51,8 @@ test("fechamentos anteriores à correção dos filtros históricos são reapurad
   const reader=new CorrectionMonthlyReportService() as unknown as {loadClosing(month:string):Promise<{reliable:boolean}|null>};
   assert.equal(await reader.loadClosing("2026-09"),null);
   version=5;
+  assert.equal(await reader.loadClosing("2026-09"),null);
+  version=6;
   assert.equal((await reader.loadClosing("2026-09"))?.reliable,true);
 });
 
