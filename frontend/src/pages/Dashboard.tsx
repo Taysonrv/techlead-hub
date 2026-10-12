@@ -40,7 +40,7 @@ import { useColorMode } from "../context/ColorModeContext";
 
 import { useNavigate } from "react-router-dom";
 
-import { getTicketSnapshot, getTicketSnapshotState, subscribeTicketSnapshotRefresh } from "../services/ticketSnapshot";
+import { getTicketSnapshot, getTicketSnapshotState, invalidateTicketSnapshot, subscribeTicketSnapshotRefresh } from "../services/ticketSnapshot";
 import { PeriodFilter } from "../components/PeriodFilter";
 import { PageHeader } from "../components/PageHeader";
 import { ContentState } from "../components/ContentState";
@@ -237,6 +237,8 @@ export function Dashboard() {
   const [selectedTicket, setSelectedTicket] =
     useState<Ticket | null>(null);
 
+  const [lastLoadedAt,setLastLoadedAt] = useState(0);
+  const [refreshingData,setRefreshingData] = useState(false);
   const [copyMessage, setCopyMessage] =
     useState("");
   const [flowHidden, setFlowHidden] = useState<Set<"opened" | "resolved" | "closed">>(() => new Set());
@@ -260,12 +262,14 @@ export function Dashboard() {
     async function loadTickets(initial = false) {
       if (refreshing) return;
       refreshing = true;
+      setRefreshingData(true);
       try {
         if (initial) setLoading(true);
         setError(null);
         const snapshot = await getTicketSnapshot<Ticket>();
         if (!controller.signal.aborted) {
           setTickets(snapshot);
+          setLastLoadedAt(getTicketSnapshotState().cachedAt);
           setError(getTicketSnapshotState().lastErrorAt ? "A atualização falhou. Exibindo os últimos dados carregados; uma nova tentativa será feita automaticamente." : null);
         }
       } catch (err) {
@@ -274,7 +278,7 @@ export function Dashboard() {
         setError("Não foi possível carregar os dados do Dashboard. Verifique se o backend está rodando.");
       } finally {
         refreshing = false;
-        if (!controller.signal.aborted) setLoading(false);
+        if (!controller.signal.aborted) { setLoading(false);setRefreshingData(false); }
       }
     }
 
@@ -1128,8 +1132,8 @@ export function Dashboard() {
         eyebrow="Operação"
         title="Dashboard Executivo"
         description="Visão consolidada da operação de suporte"
-        meta={<>{periodLabel(period)}{" • "}{filteredTickets.length} ticket(s) analisado(s)</>}
-        action={<PeriodFilter />}
+        meta={<>{periodLabel(period)}{" • "}{filteredTickets.length} ticket(s) analisado(s){lastLoadedAt>0&&` · Leitura do Hub às ${new Date(lastLoadedAt).toLocaleTimeString("pt-BR")}`}</>}
+        action={<Stack direction={{xs:"column",sm:"row"}} sx={{gap:1,alignItems:{sm:"center"}}}><PeriodFilter /><Button variant="outlined" disabled={refreshingData} onClick={()=>invalidateTicketSnapshot()} sx={{whiteSpace:"nowrap"}}>{refreshingData?"Atualizando…":"Atualizar dados"}</Button></Stack>}
       />
       {metricAudit.length > 0 && (
         <Alert severity="warning" variant="outlined" sx={{ mb: 2 }}>

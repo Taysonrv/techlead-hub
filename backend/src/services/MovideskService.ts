@@ -124,8 +124,8 @@ let baselineState: BaselineState = {
   progress: null,
 };
 let baselinePromise: Promise<void> | null = null;
-let lastAnalyticalMetadataRefreshAt = 0;
-const analyticalMetadataCheckedIds = new Set<number>();
+
+
 
 export class MovideskService {
   private readonly url = process.env.MOVIDESK_URL?.trim() || "https://api.movidesk.com/public/v1";
@@ -182,14 +182,16 @@ export class MovideskService {
     }
   }
 
-  private async getWithRetry(url: string, config: Parameters<typeof axios.get>[1], context: string) {
+  private async getWithRetry(url: string, config: Parameters<typeof axios.get>[1], context: string, lowPriority = false) {
     let lastError: unknown = null;
     for (let attempt = 1; attempt <= REQUEST_RETRY_ATTEMPTS; attempt += 1) {
       try {
         await movideskRateLimiter.acquire();
+        if (lowPriority && hasMovideskApiPriorityRequest()) throw new Error("Metadados pausados para priorizar a sincronização de tickets.");
         return await axios.get(url, config);
       } catch (error) {
         lastError = error;
+        if (lowPriority && hasMovideskApiPriorityRequest()) throw error;
         const status = axios.isAxiosError(error) ? error.response?.status : undefined;
         const code = axios.isAxiosError(error) ? error.code : undefined;
         const retryable = code === "ECONNRESET" || code === "ETIMEDOUT" || code === "ECONNABORTED" || status === 429 || (typeof status === "number" && status >= 500);
@@ -932,14 +934,24 @@ export class MovideskService {
 
   private async refreshRecentClassifications(force = false) {
     const now = Date.now();
-    if (!force && lastAnalyticalMetadataRefreshAt && now - lastAnalyticalMetadataRefreshAt < ANALYTICAL_REFRESH_INTERVAL_MS) {
-      return { scanned: 0, updated: 0, causesUpdated: 0, reasonsUpdated: 0, businessAreasUpdated: 0, remaining: 0, skippedByCadence: true };
-    }
-
+    const checkpointKey=`movidesk-metadata-v2:${crypto.createHash("sha256").update(this.url+this.token()).digest("hex").slice(0,24)}`;
+    const saved=await prisma.systemSetting.findUnique({where:{key:checkpointKey}});
+    let checkpoint:{checked?:number[];completedAt?:number;startedAt?:number}={};
+    try { checkpoint=saved?JSON.parse(saved.value):{}; } catch { /* refaz checkpoint inválido */ }
+    if (!force && checkpoint.completedAt && now-checkpoint.completedAt<ANALYTICAL_REFRESH_INTERVAL_MS)
+      return { scanned:0,updated:0,causesUpdated:0,reasonsUpdated:0,businessAreasUpdated:0,remaining:0,skippedByCadence:true };
+    const resume=!force&&!checkpoint.completedAt&&checkpoint.startedAt&&now-checkpoint.startedAt<24*60*60_000;
+    const analyticalMetadataCheckedIds=new Set<number>(resume&&Array.isArray(checkpoint.checked)?checkpoint.checked:[]);
+    const startedAt=resume?checkpoint.startedAt!:now;
+    const saveProgress=async(completedAt=0)=>{
+      const value=JSON.stringify({startedAt,completedAt,checked:[...analyticalMetadataCheckedIds]});
+      await prisma.systemSetting.upsert({where:{key:checkpointKey},create:{key:checkpointKey,value,encrypted:false},update:{value}});
+    };
     const since = new Date(now - ANALYTICAL_REFRESH_DAYS * 24 * 60 * 60 * 1000);
     const candidates = await prisma.ticket.findMany({
       where: {
         AND: [
+          ticketOperationalScope(),
           { createdDate: { gte: since } },
           { client: { in: [...SIMER_CLIENTS], mode: "insensitive" } },
           { isDeleted: false },
@@ -978,7 +990,7 @@ export class MovideskService {
     // o cooldown. Durante a passagem atual cada ticket é consultado no máximo uma vez.
     if (!unchecked.length && candidates.length) {
       analyticalMetadataCheckedIds.clear();
-      lastAnalyticalMetadataRefreshAt = Date.now();
+      await saveProgress(Date.now());
       return { scanned: 0, updated: 0, causesUpdated: 0, reasonsUpdated: 0, businessAreasUpdated: 0, remaining: 0, skippedByCadence: false };
     }
 
@@ -991,16 +1003,17 @@ export class MovideskService {
     let reasonsUpdated = 0;
     let businessAreasUpdated = 0;
 
+    let processed=0;
     for (const ticket of batch) {
-      analyticalMetadataCheckedIds.add(ticket.movideskId);
+      if(hasMovideskApiPriorityRequest()) break;
       const response = await this.getWithRetry(`${this.url}/tickets`, {
         params: { token: this.token(), id: ticket.movideskId },
-        timeout: 120_000,
-      }, `metadados analíticos ticket=${ticket.movideskId}`);
+        timeout: 20_000,
+      }, `metadados analíticos ticket=${ticket.movideskId}`, true);
       const row = response.data && typeof response.data === "object" && !Array.isArray(response.data)
         ? response.data as Record<string, unknown>
         : null;
-      if (!row) continue;
+      if (!row) throw new Error("Resposta inválida ao consultar metadados do Movidesk.");
       scanned += 1;
 
       const category = typeof row.category === "string"
@@ -1017,10 +1030,13 @@ export class MovideskService {
 
       // Preserva também o payload que comprovou os metadados para que diagnósticos
       // futuros não indiquem falsamente divergência entre banco e rawData.
-      if (cause || reason || businessArea) data.rawData = row as Prisma.InputJsonValue;
-      if (!Object.keys(data).length) continue;
-
-      await prisma.ticket.update({ where: { movideskId: ticket.movideskId }, data });
+      if (Object.keys(data).length) {
+        data.rawData = row as Prisma.InputJsonValue;
+        await prisma.ticket.update({ where: { movideskId: ticket.movideskId }, data });
+      }
+      analyticalMetadataCheckedIds.add(ticket.movideskId);
+      await saveProgress();
+      processed+=1;
       // A reconciliação é manutenção de baixa prioridade. Pequenas pausas entre
       // escritas devolvem capacidade ao pool para autenticação e requisições interativas.
       await new Promise((resolve) => setTimeout(resolve, ANALYTICAL_DB_YIELD_MS));
@@ -1029,12 +1045,12 @@ export class MovideskService {
       if (data.businessArea) businessAreasUpdated += 1;
     }
 
-    const remaining = Math.max(0, unchecked.length - batch.length);
+    const remaining = Math.max(0, unchecked.length - processed);
     // Enquanto houver candidatos, não inicia o cooldown de 6h: o próximo ciclo
     // principal continua a fila. O cooldown só começa quando a passagem termina.
-    if (remaining === 0) lastAnalyticalMetadataRefreshAt = Date.now();
+    if (remaining === 0) await saveProgress(Date.now());
     const updated = causesUpdated + reasonsUpdated + businessAreasUpdated;
-    console.info(`[movidesk-metadata] Reconciliação concluída. | janela=${ANALYTICAL_REFRESH_DAYS}d | candidatos=${candidates.length} | processados=${batch.length} | lidos=${scanned} | causas=${causesUpdated} | motivos=${reasonsUpdated} | areas=${businessAreasUpdated} | atualizacoes=${updated} | restantes=${remaining}`);
+    console.info(`[movidesk-metadata] Reconciliação concluída. | janela=${ANALYTICAL_REFRESH_DAYS}d | candidatos=${candidates.length} | processados=${processed} | lidos=${scanned} | causas=${causesUpdated} | motivos=${reasonsUpdated} | areas=${businessAreasUpdated} | atualizacoes=${updated} | restantes=${remaining}`);
     return { scanned, updated, causesUpdated, reasonsUpdated, businessAreasUpdated, remaining, skippedByCadence: false };
   }
 

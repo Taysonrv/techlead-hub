@@ -18,7 +18,8 @@ function databaseErrorText(error: unknown) {
 export function isDatabaseConnectivityError(error: unknown) {
   const value = error as { code?: string } | null;
   const text = databaseErrorText(error);
-  return value?.code === "P1001" ||
+  return value?.code === "P1001" || value?.code === "P2024" ||
+    (value?.code === "P2028" && text.includes("unable to start a transaction")) ||
     text.includes("can't reach database server") ||
     text.includes("server has closed the connection") ||
     text.includes("connectionreset") ||
