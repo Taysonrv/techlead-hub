@@ -567,20 +567,11 @@ export function CorrectionMonthlyPanel() {
             </Select>
           </FormControl>
           <Stack direction="row" gap={1} flexWrap="wrap" alignItems="center" sx={{minHeight:40}}>
-            <MuiTooltip title="Selecionar os criadores do time SIMER, incluindo os nomes exibidos no Azure">
-              <span><Button
-                size="small"
-                variant={teamScopeActive?"contained":"outlined"}
-                disabled={!teamCreators.length}
-                onClick={()=>setCreators(teamCreators)}
-                sx={{minHeight:40,whiteSpace:"nowrap"}}
-              >Time SIMER</Button></span>
-            </MuiTooltip>
             <Button startIcon={<RestartAltOutlined/>} onClick={clear} sx={{minHeight:40}}>Limpar filtros</Button>
           </Stack>
         </Box>
         <Typography variant="caption" color="text.secondary" sx={{display:"block",mt:1.4}}>
-          {teamScopeActive?"Time SIMER":creators.length?"Criadores selecionados":"Todos os criadores do suporte SIMER"} · {report?`${periodUniverse} task(s) com estado no fechamento · ${monthlyIndicatorRows.length} nos movimentos/backlog do mês`:loading?"Preparando relatório…":"Relatório indisponível; totais não apurados"}
+          {report?`${periodUniverse} task(s) com estado no fechamento · ${monthlyIndicatorRows.length} nos movimentos/backlog do mês`:loading?"Preparando relatório…":"Relatório indisponível; totais não apurados"}
         </Typography>
       </CardContent>
     </Card>
@@ -790,53 +781,6 @@ export function CorrectionMonthlyPanel() {
             </CardContent>
           </Card>
         </Box>
-
-    {report&&month==="2026-09"&&
-      <Card component="details" elevation={0} sx={{
-        ...panel,
-        borderColor:homologationPassed?"rgba(24,199,122,.28)":"rgba(237,151,47,.3)",
-        background:theme.palette.mode==="dark"
-          ?"linear-gradient(105deg,rgba(47,111,237,.08),rgba(24,199,122,.045),rgba(255,255,255,.012))"
-          :"linear-gradient(105deg,rgba(47,111,237,.05),rgba(24,199,122,.035),#FFFFFF)",
-      }}>
-        <Box component="summary" sx={{px:2,py:1.25,cursor:"pointer"}}>
-          <Typography component="span" sx={{fontWeight:850,mr:1}}>Conferência · setembro/2026</Typography>
-          <Chip size="small" label={homologationStatus} color={homologationPassed?"success":"warning"}/>
-        </Box>
-        <CardContent sx={{py:1.2,"&:last-child":{pb:1.2}}}>
-          <Stack direction={{xs:"column",lg:"row"}} gap={1.25} justifyContent="space-between" alignItems={{lg:"center"}}>
-            <Box sx={{minWidth:0}}>
-              <Typography variant="caption" color="text.secondary">
-                {homologationScopeActive
-                  ?"Time SIMER e carteira SIMER, sem filtros adicionais. A referência da coordenação deve usar os mesmos criadores e clientes; histórico completo e totais coincidentes são necessários para homologar."
-                  :"Para confrontar a referência oficial, use Time SIMER e deixe Cliente, Urgência, Status e Priorizada sem seleção."}
-              </Typography>
-            </Box>
-            <Box sx={{display:"grid",gridTemplateColumns:{xs:"repeat(2,minmax(0,1fr))",md:"repeat(5,minmax(108px,1fr))"},gap:.7}}>
-              {septemberHomologation.map(item=>{
-                const comparable=homologationScopeActive&&item.verified&&item.actual!==null;
-                const displayActual=item.key==="backlogInitial"?item.actual:item.key==="registered"?item.actual:movementValue(item.actual??0);
-                const matches=comparable&&item.actual===item.expected;
-                return <Box key={item.key} sx={{
-                  px:1,py:.7,border:"1px solid",borderColor:matches?"success.main":comparable?"warning.main":"divider",
-                  borderRadius:"8px",minWidth:0,bgcolor:"background.paper",
-                }}>
-                  <Typography variant="caption" color="text.secondary" sx={{display:"block",whiteSpace:"nowrap"}}>{item.label}</Typography>
-                  <Stack direction="row" gap={0.5} alignItems="baseline">
-                    <Typography sx={{fontWeight:900,fontVariantNumeric:"tabular-nums"}}>{displayActual??"—"}</Typography>
-                    <Typography variant="caption" color="text.secondary">/ ref. {item.expected}</Typography>
-                  </Stack>
-                  <Typography variant="caption" color={comparable&&!matches?"warning.main":"text.secondary"}>
-                    {!item.verified?"Histórico pendente":!homologationScopeActive?"Outro recorte":matches?"Confere":`Diferença: ${(item.actual??0)-item.expected}`}
-                  </Typography>
-                </Box>;
-              })}
-            </Box>
-          </Stack>
-        </CardContent>
-      </Card>
-    }
-
 
         <Card elevation={0} sx={panel}>
           <CardContent sx={{p:{xs:1.4,md:1.7},"&:last-child":{pb:{xs:1.4,md:1.7}}}}>
