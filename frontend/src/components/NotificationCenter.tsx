@@ -238,7 +238,7 @@ export function NotificationCenter() {
     if (!userId) return;
     const heartbeat = () => {
       if (document.visibilityState !== "visible") return;
-      void api.post("/chat/presence", { status: "ONLINE" }).catch(() => undefined);
+      void api.post("/chat/presence", { status: "ONLINE", source: "global" }).catch(() => undefined);
     };
     heartbeat();
     const timer = window.setInterval(heartbeat, 30_000);
