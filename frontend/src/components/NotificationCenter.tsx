@@ -448,6 +448,8 @@ export function NotificationCenter() {
               ? OpenInNewOutlined
               : item.kind === "MEETING_REMINDER"
                 ? VideoCallOutlined
+              : item.kind === "USER_ONLINE"
+                ? PersonAddAltOutlined
               : item.kind === "CHAT_MENTION"
                 ? AlternateEmailOutlined
                 : (item.kind === "OPERATION_ALERT" || item.kind === "KNOWN_PROBLEM")
