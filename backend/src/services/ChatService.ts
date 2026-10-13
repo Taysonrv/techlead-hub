@@ -9,12 +9,33 @@ export class ChatService {
     const requested = String(input.status ?? "ONLINE").toUpperCase();
     const status = ["ONLINE", "AWAY", "BUSY"].includes(requested) ? requested : "ONLINE";
     const statusMessage = dataProtectionService.normalizeText(input.statusMessage, 160) || null;
-    await prisma.$executeRawUnsafe(
-      `INSERT INTO "ChatPresence" ("userId","status","statusMessage","lastSeenAt","updatedAt")
-       VALUES ($1,$2,$3,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)
-       ON CONFLICT ("userId") DO UPDATE SET "status"=EXCLUDED."status","statusMessage"=EXCLUDED."statusMessage","lastSeenAt"=CURRENT_TIMESTAMP,"updatedAt"=CURRENT_TIMESTAMP`,
-      userId, status, statusMessage,
-    );
+    const globalHeartbeat = input.source === "global";
+    // Uma transição real OFFLINE → ONLINE gera um evento por usuário.
+    // O lock transacional evita duplicação com múltiplas abas/servidores.
+    await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(716345, ${userId})::text AS lock_acquired`;
+      const previous = await tx.$queryRaw<Array<{ status: string; statusMessage: string | null; lastSeenAt: Date }>>`
+        SELECT "status", "statusMessage", "lastSeenAt" FROM "ChatPresence" WHERE "userId" = ${userId}
+      `;
+      const lastPresence = previous[0];
+      const wasOffline = !lastPresence ||
+        Date.now() - new Date(lastPresence.lastSeenAt).getTime() > 90_000;
+      const preserveManualStatus = globalHeartbeat && !!lastPresence && !wasOffline;
+      const nextStatus = preserveManualStatus ? lastPresence.status : status;
+      const nextMessage = preserveManualStatus ? lastPresence.statusMessage : statusMessage;
+      await tx.$executeRaw`
+        INSERT INTO "ChatPresence" ("userId","status","statusMessage","lastSeenAt","updatedAt")
+        VALUES (${userId},${nextStatus},${nextMessage},CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)
+        ON CONFLICT ("userId") DO UPDATE SET
+          "status"=EXCLUDED."status","statusMessage"=EXCLUDED."statusMessage",
+          "lastSeenAt"=CURRENT_TIMESTAMP,"updatedAt"=CURRENT_TIMESTAMP
+      `;
+      if (wasOffline && nextStatus === "ONLINE") {
+        await tx.$executeRaw`
+          INSERT INTO "ChatOnlineEvent" ("userId","occurredAt") VALUES (${userId},CURRENT_TIMESTAMP)
+        `;
+      }
+    });
     return { status, statusMessage };
   }
 

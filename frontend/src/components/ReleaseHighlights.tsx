@@ -65,7 +65,14 @@ export function ReleaseHighlights() {
     navigate("/sobre");
   }
 
-  const guideSteps = [
+  const isRc3 = version === "2.1.0-rc.3";
+  const guideSteps = isRc3 ? [
+    { icon: <AutoAwesomeOutlined />, title: "O que mudou nesta versão", description: "Confira os principais ajustes em dados, sincronização e colaboração." },
+    { icon: <DashboardOutlined />, title: "Dashboard e dados auditáveis", description: "Atualize a leitura e navegue pelos indicadores com a carteira SIMER consolidada." },
+    { icon: <SearchOutlined />, title: "Confira o histórico mensal", description: "Acompanhe movimentos, backlog e evidências Azure antes de validar os indicadores." },
+    { icon: <ChatOutlined />, title: "Veja quem entrou online", description: "O sino avisa novas entradas e leva diretamente ao Chat. A mesma presença vale em qualquer tela." },
+    { icon: <PersonOutlined />, title: "Implantação mais previsível", description: "O Docker tem modelo específico para banco externo, sem exigir credenciais dentro da imagem." },
+  ] : [
     {
       icon: <AutoAwesomeOutlined />,
       title: "O que mudou nesta versão",

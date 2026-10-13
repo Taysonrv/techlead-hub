@@ -7,7 +7,7 @@ import {
 
 export type AppNotification = {
   key: string;
-  kind: "SIMER_VERSION" | "AZURE_COMPLETED" | "AZURE_UPDATED" | "CHAT_MENTION" | "OPERATION_ALERT" | "KNOWN_PROBLEM" | "MEETING_REMINDER";
+  kind: "SIMER_VERSION" | "AZURE_COMPLETED" | "AZURE_UPDATED" | "CHAT_MENTION" | "USER_ONLINE" | "OPERATION_ALERT" | "KNOWN_PROBLEM" | "MEETING_REMINDER";
   title: string;
   message: string;
   occurredAt: Date;
@@ -396,6 +396,26 @@ export class NotificationService {
       return alerts;
     });
 
+    // Apenas entradas reais (não heartbeats); limitado às últimas 24h.
+    const onlineEvents = await prisma.$queryRaw<Array<{
+      id: bigint; userId: number; occurredAt: Date; name: string;
+    }>>`
+      SELECT e."id", e."userId", e."occurredAt", u."name"
+      FROM "ChatOnlineEvent" e JOIN "User" u ON u."id" = e."userId"
+      WHERE e."userId" <> ${userId}
+        AND e."occurredAt" >= CURRENT_TIMESTAMP - INTERVAL '24 hours'
+        AND u."active" = TRUE AND u."approvalStatus" = 'APPROVED'
+      ORDER BY e."occurredAt" DESC LIMIT 30
+    `;
+    const onlineNotifications: AppNotification[] = onlineEvents.map((event) => ({
+      key: `user-online:${event.id.toString()}`,
+      kind: "USER_ONLINE",
+      title: "Usuário entrou online",
+      message: `${event.name} está online no TechLead Hub.`,
+      occurredAt: event.occurredAt,
+      path: "/chat",
+    }));
+
     const preferences = await this.preferences(userId);
     const readRows = await prisma.$queryRaw<Array<{
       notificationKey: string;
@@ -406,9 +426,9 @@ export class NotificationService {
     `;
     const readKeys = new Set(readRows.map((row) => row.notificationKey));
 
-    const notifications = [...meetingNotifications, ...knownProblemNotifications, ...operationalAlerts, ...mentionNotifications, ...itemNotifications, ...versionNotifications]
+    const notifications = [...onlineNotifications, ...meetingNotifications, ...knownProblemNotifications, ...operationalAlerts, ...mentionNotifications, ...itemNotifications, ...versionNotifications]
       .filter((item) =>
-        item.kind === "CHAT_MENTION" || item.kind === "OPERATION_ALERT" || item.kind === "KNOWN_PROBLEM" || item.kind === "MEETING_REMINDER"
+        item.kind === "USER_ONLINE" || item.kind === "CHAT_MENTION" || item.kind === "OPERATION_ALERT" || item.kind === "KNOWN_PROBLEM" || item.kind === "MEETING_REMINDER"
           ? true
           : item.kind === "SIMER_VERSION"
           ? preferences.simerVersion

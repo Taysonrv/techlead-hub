@@ -12,6 +12,20 @@ export type ReleaseNote = {
 export const FALLBACK_APP_VERSION = import.meta.env.VITE_APP_VERSION || "development";
 
 export const releaseNotes: Record<string, ReleaseNote> = {
+  "2.1.0-rc.3": {
+    version: "2.1.0-rc.3",
+    title: "Confiabilidade dos dados, colaboração e implantação simplificada",
+    items: [
+      { title: "Dados confiáveis da operação", description: "Revisão do escopo SIMER em Movidesk e Azure, filtros e detalhamentos consistentes para evitar registros externos na carteira." },
+      { title: "Histórico mensal mais preciso", description: "Relatório de Correções consolida movimentos e backlog com evidências históricas Azure e sinaliza quando uma leitura ainda é parcial." },
+      { title: "Sincronização resiliente", description: "Reconciliação incremental Movidesk, retomada de metadados, tratamento de falhas de autenticação Azure e diagnósticos de cobertura." },
+      { title: "Dashboard atualizado", description: "Novo botão Atualizar dados, com indicador de carregamento e horário da última leitura do Hub, sem confundir consulta local com sincronização remota." },
+      { title: "Colegas online", description: "O sino de notificações avisa quando outro usuário entra online, sem alertas repetidos de heartbeat; clique para abrir o Chat." },
+      { title: "Chat e notificações", description: "Melhorias de estabilidade, leitura de notificações e consistência entre atualizações." },
+      { title: "Visual e navegação", description: "Cards, filtros e áreas operacionais revisados para notebooks e temas claro e escuro." },
+      { title: "Docker para banco externo", description: "Compose dedicado e validação de configuração antecipada facilitam a instalação com PostgreSQL gerenciado pela infraestrutura." },
+    ],
+  },
   "2.1.0-rc.2": {
     version: "2.1.0-rc.2",
     title: "Operação personalizada, performance e inteligência por analista",
