@@ -89,6 +89,7 @@ model User {
   auditLogs           AuditLog[]
   chatMemberships     ChatChannelMember[]
   chatMessages        ChatMessage[] @relation("ChatMessageAuthor")
+  chatOnlineEvents    ChatOnlineEvent[]
   calendarMeetingsCreated CalendarMeeting[] @relation("CalendarMeetingOrganizer")
   calendarMeetingParticipants CalendarMeetingParticipant[]
 
@@ -97,6 +98,15 @@ model User {
   @@index([active])
   @@index([approvalStatus])
   @@index([approvedById])
+}
+
+model ChatOnlineEvent {
+  id         BigInt   @id @default(autoincrement())
+  userId     Int
+  occurredAt DateTime @default(now()) @db.Timestamp(3)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([occurredAt(sort: Desc)])
 }
 
 model ChatChannel {
