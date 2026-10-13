@@ -123,9 +123,15 @@ async function start() {
   let databaseReady = false;
   try {
     await ensureApplicationSchema();
-    await systemConfigurationService.loadIntoEnvironment();
     databaseReady = true;
     process.env.APP_DATABASE_READY = "true";
+    try {
+      await systemConfigurationService.loadIntoEnvironment();
+    } catch (configurationError) {
+      // Credenciais criptografadas incompatíveis não significam falha de PostgreSQL.
+      // Nunca registre os valores nem a chave usados na descriptografia.
+      console.error("[server] Não foi possível carregar configurações seguras; banco permanece disponível. Verifique a chave de criptografia da instalação.", configurationError instanceof Error ? configurationError.name : "erro desconhecido");
+    }
   } catch (error) {
     process.env.APP_DATABASE_READY = "false";
     console.error("[server] Banco indisponível na inicialização; API subirá em modo degradado:", error);
