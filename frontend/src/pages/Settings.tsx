@@ -219,15 +219,18 @@ export function Settings() {
       setLoading(true);
       setError(null);
 
-      const [response, sessionResponse, diagnosticsResponse] = await Promise.all([
+      const [configResult, sessionsResult, diagnosticsResult] = await Promise.allSettled([
         api.get<ConfigurationState>("/system-settings"),
         api.get<{ sessions: ActiveSession[] }>("/sessions"),
         api.get<Diagnostics>("/system-settings/diagnostics"),
       ]);
-      const current = response.data;
-      setSessions(sessionResponse.data.sessions);
-      setDiagnostics(diagnosticsResponse.data);
-
+      if (sessionsResult.status === "fulfilled") setSessions(sessionsResult.value.data.sessions);
+      if (diagnosticsResult.status === "fulfilled") setDiagnostics(diagnosticsResult.value.data);
+      if (configResult.status === "rejected") {
+        setConfiguration(null);
+        throw new Error("Não foi possível verificar as configurações das integrações. Nenhuma credencial foi alterada. Confira o diagnóstico do backend.");
+      }
+      const current = configResult.value.data;
       setConfiguration(current);
       setForm((previous) => ({
         ...previous,
@@ -236,6 +239,9 @@ export function Settings() {
         wiki: current.wiki ?? "",
         movideskUrl: current.movideskUrl ?? "https://api.movidesk.com/public/v1",
       }));
+      if (sessionsResult.status === "rejected" || diagnosticsResult.status === "rejected") {
+        setError("As configurações foram carregadas, mas o diagnóstico de sessões ou plataforma está temporariamente indisponível.");
+      }
     } catch (loadError) {
       setError(
         loadError instanceof Error
@@ -610,7 +616,7 @@ export function Settings() {
                 label={
                   configuration?.databaseConfigured
                     ? "Configurado"
-                    : "Não configurado"
+                    : configuration === null ? "Não foi possível verificar" : "Não configurado"
                 }
                 color={
                   configuration?.databaseConfigured
@@ -677,7 +683,7 @@ export function Settings() {
                 label={
                   configuration?.patConfigured
                     ? "Credencial configurada"
-                    : "Não configurado"
+                    : configuration === null ? "Não foi possível verificar" : "Não configurado"
                 }
                 color={
                   configuration?.patConfigured
@@ -784,7 +790,7 @@ export function Settings() {
                 <Typography sx={{ fontWeight: 800 }}>Movidesk</Typography>
                 <Typography variant="body2" color="text.secondary">Fonte operacional de tickets. Sincronização automática incremental a cada 5 minutos por padrão (configurável no backend).</Typography>
               </Box>
-              <Chip icon={configuration?.movideskConfigured ? <CloudDoneOutlined /> : <CloudOffOutlined />} label={configuration?.movideskConfigured ? "Token configurado" : "Não configurado"} color={configuration?.movideskConfigured ? "success" : "default"} variant="outlined" />
+              <Chip icon={configuration?.movideskConfigured ? <CloudDoneOutlined /> : <CloudOffOutlined />} label={configuration?.movideskConfigured ? "Token configurado" : configuration === null ? "Não foi possível verificar" : "Não configurado"} color={configuration?.movideskConfigured ? "success" : "default"} variant="outlined" />
             </Stack>
             <Divider sx={{ my: 2 }} />
             <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" }, gap: 2 }}>
