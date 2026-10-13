@@ -13,7 +13,7 @@ export class ChatService {
     // Uma transição real OFFLINE → ONLINE gera um evento por usuário.
     // O lock transacional evita duplicação com múltiplas abas/servidores.
     await prisma.$transaction(async (tx) => {
-      await tx.$queryRaw`SELECT pg_advisory_xact_lock(716345, ${userId})::text AS lock_acquired`;
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(716345, ${userId}::integer)::text AS lock_acquired`;
       const previous = await tx.$queryRaw<Array<{ status: string; statusMessage: string | null; lastSeenAt: Date }>>`
         SELECT "status", "statusMessage", "lastSeenAt" FROM "ChatPresence" WHERE "userId" = ${userId}
       `;
