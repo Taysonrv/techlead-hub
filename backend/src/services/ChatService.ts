@@ -17,10 +17,12 @@ export class ChatService {
       const previous = await tx.$queryRaw<Array<{ status: string; statusMessage: string | null; lastSeenAt: Date }>>`
         SELECT "status", "statusMessage", "lastSeenAt" FROM "ChatPresence" WHERE "userId" = ${userId}
       `;
-      const wasOffline = previous.length === 0 ||
-        Date.now() - new Date(previous[0].lastSeenAt).getTime() > 90_000;
-      const nextStatus = globalHeartbeat && previous.length && !wasOffline ? previous[0].status : status;
-      const nextMessage = globalHeartbeat && previous.length && !wasOffline ? previous[0].statusMessage : statusMessage;
+      const lastPresence = previous[0];
+      const wasOffline = !lastPresence ||
+        Date.now() - new Date(lastPresence.lastSeenAt).getTime() > 90_000;
+      const preserveManualStatus = globalHeartbeat && !!lastPresence && !wasOffline;
+      const nextStatus = preserveManualStatus ? lastPresence.status : status;
+      const nextMessage = preserveManualStatus ? lastPresence.statusMessage : statusMessage;
       await tx.$executeRaw`
         INSERT INTO "ChatPresence" ("userId","status","statusMessage","lastSeenAt","updatedAt")
         VALUES (${userId},${nextStatus},${nextMessage},CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)
