@@ -73,6 +73,7 @@ const ROUTINE_PERMISSIONS = [
   ["evolutions","Evoluções"],["support","Apoios"],["versions","Versões"],["knowledge","Base de Conhecimento"],
   ["services","Serviços SIMER"],["technical-leadership","Central de Liderança"],["coordination","Central da Coordenação"],["imports","Dados e Sincronizações"],
 ] as const;
+type CredentialHealth = { status: "readable" | "incompatible" | "unavailable"; keySource: "dedicated" | "legacy-jwt" | "missing"; database: string; message?: string };
 type Diagnostics = { status: string; appVersion: string; runtime: string; nodeVersion: string; database: { status: string; latencyMs: number }; sessionPolicy: { exclusiveAcrossPlatforms: boolean; idleTimeoutMinutes: number }; checkedAt: string };
 type MovideskPreview = { readOnly: boolean; sampleSize: number; requested: number; validForImport: boolean; requiredFields: string[]; coverage: Record<string, number>; issues: Array<{ row: number; id: unknown; fields: string[] }>; examples: Array<{ id: unknown; subject: unknown; createdDate: unknown; lastUpdate: unknown; status: unknown; ownerTeam: unknown; serviceFirstLevel: unknown; serviceSecondLevel: unknown }> };
 type MovideskBaselineStatus = { status: "IDLE" | "RUNNING" | "SUCCESS" | "ERROR"; startedAt: string | null; finishedAt: string | null; completed: boolean; result: { mode: string; pages: number; totalRows: number; created: number; updated: number; ignored: number; errors: number } | null; error: string | null; database: { tickets: number; linkedTasks: number }; lastImport: { status: string; totalRows: number; insertedRows: number; updatedRows: number; skippedRows: number; errorRows: number; message: string | null } | null };
@@ -162,6 +163,8 @@ export function Settings() {
     useState<string | null>(null);
   const [sessions, setSessions] = useState<ActiveSession[]>([]);
   const [diagnostics, setDiagnostics] = useState<Diagnostics | null>(null);
+  const [credentialHealth, setCredentialHealth] = useState<CredentialHealth | null>(null);
+  const [credentialHealthBusy, setCredentialHealthBusy] = useState(false);
   const [startupEnabled, setStartupEnabled] = useState(false);
   const [startupSaving, setStartupSaving] = useState(false);
   const [permissionUsers,setPermissionUsers]=useState<PermissionUser[]>([]);
@@ -196,6 +199,24 @@ export function Settings() {
     const timer = window.setInterval(() => { void refreshMovideskBaseline(); }, 5000);
     return () => window.clearInterval(timer);
   }, [movideskBaseline?.status]);
+
+  async function diagnoseCredentials() {
+    setCredentialHealthBusy(true);
+    setCredentialHealth(null);
+    try {
+      const result = await api.get<CredentialHealth>("/system-settings/credentials-health");
+      setCredentialHealth(result.data);
+    } catch (err: any) {
+      const result = err?.response?.data as CredentialHealth | undefined;
+      setCredentialHealth(
+        result?.status === "incompatible" || result?.status === "unavailable"
+          ? result
+          : { status: "unavailable", keySource: "missing", database: "unknown", message: "Não foi possível completar o diagnóstico. Confira sua sessão de administrador e a disponibilidade do backend." }
+      );
+    } finally {
+      setCredentialHealthBusy(false);
+    }
+  }
 
   async function saveUserPermissions(userId:number, permissions:string[]) {
     try {
@@ -555,7 +576,19 @@ export function Settings() {
       <Stack spacing={2.5}>
         <Card elevation={0} sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2.5 }}>
           <CardContent sx={{ p: { xs: 2, md: 2.5 } }}>
-            <Typography sx={{ fontWeight: 800 }}>Diagnóstico da plataforma</Typography>
+            <Stack direction={{ xs: "column", sm: "row" }} sx={{ alignItems: { sm: "center" }, justifyContent: "space-between" }} spacing={1}>
+              <Typography sx={{ fontWeight: 800 }}>Diagnóstico da plataforma</Typography>
+              <Button size="small" variant="outlined" disabled={credentialHealthBusy} startIcon={credentialHealthBusy ? <CircularProgress size={15} /> : <StorageOutlined />} onClick={() => void diagnoseCredentials()}>
+                {credentialHealthBusy ? "Verificando..." : "Diagnosticar credenciais"}
+              </Button>
+            </Stack>
+            {credentialHealth && (
+              <Alert severity={credentialHealth.status === "readable" ? "success" : credentialHealth.status === "incompatible" ? "warning" : "error"} sx={{ mt: 1.5 }}>
+                <Typography sx={{ fontWeight: 700 }}>{credentialHealth.status === "readable" ? "Credenciais legíveis nesta instância" : credentialHealth.status === "incompatible" ? "Chave incompatível com os registros salvos" : "Diagnóstico indisponível"}</Typography>
+                <Typography variant="body2">Origem da chave: {credentialHealth.keySource === "dedicated" ? "SYSTEM_CONFIG_KEY dedicada" : credentialHealth.keySource === "legacy-jwt" ? "JWT_SECRET (legado)" : "não identificada"} · Banco: {credentialHealth.database}</Typography>
+                {credentialHealth.message && <Typography variant="body2">{credentialHealth.message}</Typography>}
+              </Alert>
+            )}
             <Typography variant="body2" color="text.secondary">Versões e disponibilidade do ambiente compartilhado entre Web e Desktop.</Typography>
             <Divider sx={{ my: 2 }} />
             <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr 1fr", md: "repeat(5, 1fr)" }, gap: 1.5 }}>
