@@ -576,7 +576,7 @@ export function Settings() {
       <Stack spacing={2.5}>
         <Card elevation={0} sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2.5 }}>
           <CardContent sx={{ p: { xs: 2, md: 2.5 } }}>
-            <Stack direction={{ xs: "column", sm: "row" }} alignItems={{ sm: "center" }} justifyContent="space-between" spacing={1}>
+            <Stack direction={{ xs: "column", sm: "row" }} sx={{ alignItems: { sm: "center" }, justifyContent: "space-between" }} spacing={1}>
               <Typography sx={{ fontWeight: 800 }}>Diagnóstico da plataforma</Typography>
               <Button size="small" variant="outlined" disabled={credentialHealthBusy} startIcon={credentialHealthBusy ? <CircularProgress size={15} /> : <StorageOutlined />} onClick={() => void diagnoseCredentials()}>
                 {credentialHealthBusy ? "Verificando..." : "Diagnosticar credenciais"}
