@@ -58,13 +58,20 @@ class SystemConfigurationService {
   async loadIntoEnvironment() {
     const rows = await prisma.$queryRawUnsafe<SettingRow[]>(`SELECT "key", "value" FROM "SystemSetting"`);
     const persistedKeys = new Set<string>();
+    const resolved: Array<{ envName: string; value: string }> = [];
     for (const row of rows) {
       const envName = SETTING_ENV[row.key as keyof typeof SETTING_ENV];
-      if (envName) {
-        process.env[envName] = this.decrypt(row.value);
-        persistedKeys.add(row.key);
+      if (!envName) continue;
+      try {
+        resolved.push({ envName, value: this.decrypt(row.value) });
+      } catch {
+        // Não expor valores criptografados, segredos ou detalhes de autenticação.
+        // Uma chave de instalação diferente não deve provocar carregamento parcial.
+        throw new Error(`Falha ao descriptografar a configuração '${row.key}'. Confira se SYSTEM_CONFIG_KEY/JWT_SECRET corresponde à chave utilizada quando a credencial foi salva. Nenhuma configuração foi alterada.`);
       }
+      persistedKeys.add(row.key);
     }
+    for (const entry of resolved) process.env[entry.envName] = entry.value;
     return persistedKeys;
   }
 
