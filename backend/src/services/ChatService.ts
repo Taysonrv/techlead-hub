@@ -9,12 +9,28 @@ export class ChatService {
     const requested = String(input.status ?? "ONLINE").toUpperCase();
     const status = ["ONLINE", "AWAY", "BUSY"].includes(requested) ? requested : "ONLINE";
     const statusMessage = dataProtectionService.normalizeText(input.statusMessage, 160) || null;
-    await prisma.$executeRawUnsafe(
-      `INSERT INTO "ChatPresence" ("userId","status","statusMessage","lastSeenAt","updatedAt")
-       VALUES ($1,$2,$3,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)
-       ON CONFLICT ("userId") DO UPDATE SET "status"=EXCLUDED."status","statusMessage"=EXCLUDED."statusMessage","lastSeenAt"=CURRENT_TIMESTAMP,"updatedAt"=CURRENT_TIMESTAMP`,
-      userId, status, statusMessage,
-    );
+    // Uma transição real OFFLINE → ONLINE gera um evento por usuário.
+    // O lock transacional evita duplicação com múltiplas abas/servidores.
+    await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(716345, ${userId})`;
+      const previous = await tx.$queryRaw<Array<{ status: string; lastSeenAt: Date }>>`
+        SELECT "status", "lastSeenAt" FROM "ChatPresence" WHERE "userId" = ${userId}
+      `;
+      const wasOffline = previous.length === 0 ||
+        Date.now() - new Date(previous[0].lastSeenAt).getTime() > 90_000;
+      await tx.$executeRaw`
+        INSERT INTO "ChatPresence" ("userId","status","statusMessage","lastSeenAt","updatedAt")
+        VALUES (${userId},${status},${statusMessage},CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)
+        ON CONFLICT ("userId") DO UPDATE SET
+          "status"=EXCLUDED."status","statusMessage"=EXCLUDED."statusMessage",
+          "lastSeenAt"=CURRENT_TIMESTAMP,"updatedAt"=CURRENT_TIMESTAMP
+      `;
+      if (wasOffline && status === "ONLINE") {
+        await tx.$executeRaw`
+          INSERT INTO "ChatOnlineEvent" ("userId","occurredAt") VALUES (${userId},CURRENT_TIMESTAMP)
+        `;
+      }
+    });
     return { status, statusMessage };
   }
 

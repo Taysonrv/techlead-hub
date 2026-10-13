@@ -1,5 +1,24 @@
 # Changelog
 
+## 2.1.0-rc.3 — 2026-10-13
+
+### Dados operacionais e Azure
+- Padronizada a carteira SIMER entre Movidesk, Azure, filtros, relatórios, busca e drill-downs, incluindo aliases exatos de clientes já homologados.
+- Apuração mensal de Correções reforça histórico de abertura/fechamento, backlog auditável e avisos para leituras parciais, sem preencher totais com referências.
+- Recuperação de metadados Movidesk e incremental revisadas, com diagnóstico mais explícito de falhas Azure e de conexão.
+
+### Dashboard, colaboração e notificações
+- Botão Atualizar dados com alinhamento, ícone e carregamento; última leitura do Hub distinguida da sincronização remota.
+- Notificação de entrada online de outros usuários autenticados, ligada ao Chat, com prevenção de alertas por heartbeat e armazenamento da leitura.
+- Ajustes em chat, notificações e responsividade dos indicadores em temas claro e escuro.
+
+### Implantação Web e Docker
+- Exemplo de Compose para PostgreSQL externo com validação das variáveis obrigatórias antes da inicialização, reinícios limitados e migrations desativadas por padrão.
+- Documentadas as duas modalidades de banco de dados e comandos seguros de validação e diagnóstico.
+
+> Release Candidate beta. Validar conexão com PostgreSQL, telas operacionais e integridade das apurações no ambiente antes de promover para estável.
+
+
 ## 2.1.0-rc.2 — 2026-10-06
 
 ### Operação personalizada e colaboração

@@ -23,6 +23,7 @@ import {
   AlternateEmailOutlined,
   WarningAmberOutlined,
   VideoCallOutlined,
+  PersonAddAltOutlined,
 } from "@mui/icons-material";
 
 import {
@@ -59,6 +60,7 @@ type NotificationKind =
   | "SIMER_VERSION"
   | "AZURE_COMPLETED"
   | "AZURE_UPDATED"
+  | "USER_ONLINE"
   | "CHAT_MENTION"
   | "OPERATION_ALERT"
   | "KNOWN_PROBLEM"
@@ -231,6 +233,22 @@ export function NotificationCenter() {
     }
   }, [userId]);
 
+  // Presença global: o usuário aparece online em qualquer tela autenticada.
+  useEffect(() => {
+    if (!userId) return;
+    const heartbeat = () => {
+      if (document.visibilityState !== "visible") return;
+      void api.post("/chat/presence", { status: "ONLINE" }).catch(() => undefined);
+    };
+    heartbeat();
+    const timer = window.setInterval(heartbeat, 30_000);
+    document.addEventListener("visibilitychange", heartbeat);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", heartbeat);
+    };
+  }, [userId]);
+
   useEffect(() => {
     void load();
     const timer = window.setInterval(() => { if(document.visibilityState!=="hidden") void load(); }, 60_000);
@@ -256,7 +274,7 @@ export function NotificationCenter() {
     return updates.onStateChange(addDesktopUpdate);
   }, [addDesktopUpdate]);
 
-  const enabledForKind = useCallback((kind: NotificationKind) => kind === "CHAT_MENTION" ? localPreferences.chat : (kind === "OPERATION_ALERT" || kind === "KNOWN_PROBLEM" || kind === "MEETING_REMINDER") ? localPreferences.operation : kind === "APP_VERSION" ? localPreferences.appVersion : kind === "SIMER_VERSION" ? localPreferences.simerVersion : kind === "AZURE_COMPLETED" ? localPreferences.azureCompleted : localPreferences.azureUpdated, [localPreferences]);
+  const enabledForKind = useCallback((kind: NotificationKind) => kind === "USER_ONLINE" ? localPreferences.chat : kind === "CHAT_MENTION" ? localPreferences.chat : (kind === "OPERATION_ALERT" || kind === "KNOWN_PROBLEM" || kind === "MEETING_REMINDER") ? localPreferences.operation : kind === "APP_VERSION" ? localPreferences.appVersion : kind === "SIMER_VERSION" ? localPreferences.simerVersion : kind === "AZURE_COMPLETED" ? localPreferences.azureCompleted : localPreferences.azureUpdated, [localPreferences]);
   const unread = useMemo(
     () => items.filter((item) => enabledForKind(item.kind) && !readKeys.includes(item.key)),
     [items, readKeys, enabledForKind],
