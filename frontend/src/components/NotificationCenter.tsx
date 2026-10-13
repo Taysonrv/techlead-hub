@@ -5,7 +5,6 @@ import {
   CircularProgress,
   Divider,
   FormControlLabel,
-  IconButton,
   Menu,
   MenuItem,
   Stack,
@@ -52,6 +51,8 @@ import {
   aliareColors,
 } from "../theme/theme";
 import { getLocalNotificationPreferences, saveLocalNotificationPreferences, playNotificationSound, type LocalNotificationPreferences } from "../utils/notificationSound";
+import { mergeNotificationItems } from "../utils/notificationItems";
+import { TopBarActionButton } from "./TopBarActionButton";
 
 type NotificationKind =
   | "APP_VERSION"
@@ -110,10 +111,15 @@ export function NotificationCenter() {
   const toast = toastQueue[0] ?? null;
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadError,setLoadError] = useState("");
+  const [saving,setSaving] = useState(false);
+  const identityRef=useRef(userId);
+  identityRef.current=userId;
   const [items, setItems] = useState<HubNotification[]>([]);
   const [readKeys, setReadKeys] = useState<string[]>([]);
   const [preferences, setPreferences] = useState(DEFAULT_PREFERENCES);
   const [showPreferences, setShowPreferences] = useState(false);
+  const [onlyUnread,setOnlyUnread] = useState(false);
   const [localPreferences, setLocalPreferences] = useState<LocalNotificationPreferences>(() => getLocalNotificationPreferences());
   const alertedKeys = useRef(new Set<string>());
   const notificationHydratedRef = useRef(false);
@@ -142,7 +148,7 @@ export function NotificationCenter() {
   const persistReadKeys = useCallback((keys: string[]) => {
     const limited = keys.slice(-500);
     setReadKeys(limited);
-    localStorage.setItem(storageKey, JSON.stringify(limited));
+    try { localStorage.setItem(storageKey, JSON.stringify(limited)); } catch { /* leitura persistida no servidor */ }
   }, [storageKey]);
 
   const addDesktopUpdate = useCallback((state: DesktopUpdateState) => {
@@ -178,13 +184,13 @@ export function NotificationCenter() {
     try {
       setLoading(true);
       const response = await api.get<NotificationResponse>("/notifications");
+      if(identityRef.current!==userId) return;
+      setLoadError("");
       setPreferences(response.data.preferences);
       setReadKeys(response.data.notifications.filter((item) => item.read).map((item) => item.key));
-      setItems((current) => {
-        const appItems = current.filter((item) => item.kind === "APP_VERSION");
-        return [...appItems, ...response.data.notifications];
-      });
+      setItems(current=>mergeNotificationItems(current,response.data.notifications));
     } catch (error) {
+      if(identityRef.current===userId) setLoadError("Não foi possível atualizar as notificações. Tente novamente.");
       console.warn("[notifications] Não foi possível carregar:", error);
     } finally {
       loadingRef.current = false;
@@ -197,6 +203,7 @@ export function NotificationCenter() {
     meetingLoadingRef.current = true;
     try {
       const response = await api.get<{ notifications: HubNotification[] }>("/notifications/meetings");
+      if(identityRef.current!==userId) return;
       meetingRetryAtRef.current = 0;
       const meetingItems = response.data.notifications ?? [];
       setItems((current) => {
@@ -226,13 +233,13 @@ export function NotificationCenter() {
 
   useEffect(() => {
     void load();
-    const timer = window.setInterval(() => void load(), 60_000);
+    const timer = window.setInterval(() => { if(document.visibilityState!=="hidden") void load(); }, 60_000);
     return () => window.clearInterval(timer);
   }, [load]);
 
   useEffect(() => {
     void loadMeetingReminders();
-    const timer = window.setInterval(() => void loadMeetingReminders(), 15_000);
+    const timer = window.setInterval(() => { if(document.visibilityState!=="hidden") void loadMeetingReminders(); }, 30_000);
     const refresh = () => { void loadMeetingReminders(); };
     window.addEventListener("techlead-hub:notifications-refresh", refresh);
     return () => {
@@ -266,6 +273,7 @@ export function NotificationCenter() {
       })
       .sort((left, right) => new Date(left.occurredAt).getTime() - new Date(right.occurredAt).getTime());
 
+    if (!items.length) return;
     if (!notificationHydratedRef.current) {
       const candidateKeys = new Set(candidates.map((item) => item.key));
       unread.forEach((item) => {
@@ -280,7 +288,7 @@ export function NotificationCenter() {
       const existing = new Set(current.map((item) => item.key));
       return [...current, ...candidates.filter((item) => !existing.has(item.key))].slice(0, 30);
     });
-  }, [unread]);
+  }, [unread,items.length]);
 
   const meetingPath = useCallback((meetingId: number) => {
     const params = new URLSearchParams(location.search);
@@ -304,12 +312,12 @@ export function NotificationCenter() {
   useEffect(() => {
     alertedKeys.current.clear();
     notificationHydratedRef.current = false;
-    setToastQueue([]);
+    setToastQueue([]);setItems([]);setAnchor(null);setLoadError("");
   }, [userId]);
 
   async function openMenu(event: MouseEvent<HTMLElement>) {
     setAnchor(event.currentTarget);
-    if (Notification.permission === "default") {
+    if ("Notification" in window && Notification.permission === "default") {
       await Notification.requestPermission().catch(() => "denied");
     }
     void load();
@@ -318,15 +326,21 @@ export function NotificationCenter() {
   function openNotification(item: HubNotification) {
     if (!readKeys.includes(item.key)) {
       persistReadKeys([...readKeys, item.key]);
-      void api.post("/notifications/read", { keys: [item.key] });
+      void api.post("/notifications/read", { keys: [item.key] }).catch(()=>{setLoadError("Não foi possível salvar a leitura da notificação.");void load();});
     }
     setAnchor(null);
     navigate(item.kind === "MEETING_REMINDER" && item.meetingId ? meetingPath(item.meetingId) : item.path);
   }
 
-  function markAllRead() {
-    persistReadKeys([...readKeys, ...items.map((item) => item.key)]);
-    void api.post("/notifications/read", { keys: items.map((item) => item.key) });
+  async function markAllRead() {
+    if(saving) return;
+    setSaving(true);
+    const keys=unread.map(item=>item.key);
+    try {
+      await api.post("/notifications/read", { keys });
+      if(identityRef.current===userId) { persistReadKeys([...new Set([...readKeys,...keys])]);setLoadError(""); }
+    } catch { setLoadError("Não foi possível marcar as notificações como lidas."); }
+    finally { setSaving(false); }
   }
 
   function changeLocalPreference(key: keyof LocalNotificationPreferences, checked: boolean) {
@@ -337,29 +351,23 @@ export function NotificationCenter() {
   function changePreference(key: keyof NotificationPreferences, checked: boolean) {
     const next = { ...preferences, [key]: checked };
     setPreferences(next);
-    void api.put("/notifications/preferences", next);
+    void api.put("/notifications/preferences", next).catch(()=>{setLoadError("Não foi possível salvar suas preferências.");void load();});
   }
 
   return (
     <>
-      <IconButton
+      <TopBarActionButton
+        title="Notificações"
         aria-label="Abrir notificações"
+        aria-haspopup="menu"
+        aria-expanded={Boolean(anchor)}
+        active={Boolean(anchor)}
         onClick={openMenu}
-        sx={{
-          width: 46,
-          height: 46,
-          border: "1px solid",
-          borderColor: "divider",
-          backgroundColor: "background.paper",
-          borderRadius: "50%",
-          boxShadow: "0 2px 10px rgba(0,0,0,0.06)",
-          "&:hover": { backgroundColor: "background.paper", borderColor: "rgba(24,199,122,.45)" },
-        }}
       >
         <Badge badgeContent={unread.length} color="error" max={99}>
           <NotificationsNoneOutlined />
         </Badge>
-      </IconButton>
+      </TopBarActionButton>
 
       <Menu
         anchorEl={anchor}
@@ -389,17 +397,22 @@ export function NotificationCenter() {
               {unread.length} não lida(s)
             </Typography>
           </Box>
-          <Button size="small" onClick={markAllRead} disabled={unread.length === 0}>
+          <Button size="small" onClick={markAllRead} disabled={saving || unread.length === 0}>
             Marcar lidas
           </Button>
         </Stack>
+        <Stack direction="row" sx={{px:2,pb:1,alignItems:"center",justifyContent:"space-between"}}>
+          <FormControlLabel control={<Switch size="small" checked={onlyUnread} onChange={(_,checked)=>setOnlyUnread(checked)}/>} label={<Typography variant="caption">Somente não lidas</Typography>}/>
+          <Button size="small" disabled={loading} onClick={()=>{void load();void loadMeetingReminders();}}>Atualizar</Button>
+        </Stack>
         <Divider />
 
+        {loadError && <Alert severity="warning" sx={{mx:1,my:1}} action={<Button size="small" onClick={()=>void load()}>Repetir</Button>}>{loadError}</Alert>}
         {loading && items.length === 0 && (
           <Box sx={{ py: 4, textAlign: "center" }}><CircularProgress size={24} /></Box>
         )}
 
-        {!loading && items.length === 0 && (
+        {!loading && !loadError && items.length === 0 && (
           <Box sx={{ p: 3, textAlign: "center" }}>
             <NotificationsNoneOutlined color="disabled" />
             <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
@@ -408,7 +421,8 @@ export function NotificationCenter() {
           </Box>
         )}
 
-        {items.map((item) => {
+        {!loading && onlyUnread && unread.length===0 && items.length>0 && <Typography variant="body2" color="text.secondary" sx={{p:2}}>Nenhuma notificação não lida.</Typography>}
+        {items.filter(item=>enabledForKind(item.kind)&&(!onlyUnread||!readKeys.includes(item.key))).map((item) => {
           const isUnread = !readKeys.includes(item.key);
           const Icon = item.kind === "APP_VERSION"
             ? Inventory2Outlined

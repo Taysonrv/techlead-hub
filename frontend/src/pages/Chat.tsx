@@ -17,7 +17,7 @@ export function Chat() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [channels, setChannels] = useState<Channel[]>(() => { try { return JSON.parse(sessionStorage.getItem("techlead-chat-channels") || "[]") as Channel[]; } catch { return []; } });
+  const [channels, setChannels] = useState<Channel[]>([]);
   const [participants, setParticipants] = useState<Person[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(() => { const value = Number(new URLSearchParams(window.location.search).get("channel")); return Number.isFinite(value) && value > 0 ? value : null; });
   const [messages, setMessages] = useState<Message[]>([]);
@@ -27,6 +27,9 @@ export function Chat() {
   const [channelsLoading, setChannelsLoading] = useState(true);
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
   const [sending, setSending] = useState(false);
+  const messageRequest = useRef<AbortController | null>(null);
+  const sendingRef = useRef(false);
+  const typingSentAt = useRef(0);
   const [error, setError] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [channelName, setChannelName] = useState("");
@@ -70,7 +73,8 @@ export function Chat() {
   const [incomingPopup, setIncomingPopup] = useState<{ channelId: number; channelName: string; authorName: string; preview: string } | null>(null);
   const previousChannelState = useRef<Map<number, { unread: number; lastMessageId: number | null }>>(new Map());
   const selectedIdRef = useRef<number | null>(null);
-  useEffect(() => { selectedIdRef.current = selectedId; }, [selectedId]);
+  selectedIdRef.current = selectedId;
+  useEffect(() => () => { if (typingTimer.current) window.clearTimeout(typingTimer.current); }, []);
 
   const selected = useMemo(() => channels.find((channel) => channel.id === selectedId) ?? null, [channels, selectedId]);
   const selectedPeer = useMemo(() => selected?.type === "DIRECT" ? selected.members?.map((member) => member.user).find((person) => person.id !== user?.id) : null, [selected, user?.id]);
@@ -194,7 +198,7 @@ export function Chat() {
       lastMessageId: channel.messages?.[channel.messages.length - 1]?.id ?? null,
     }]));
     setChannels(nextChannels);
-    try { sessionStorage.setItem("techlead-chat-channels", JSON.stringify(nextChannels)); } catch { /* cache opcional */ }
+
     setSelectedId((current) =>
       requestedTargetId ??
       current ??
@@ -209,19 +213,23 @@ export function Chat() {
   }, [searchParams, setSearchParams, user?.id]);
 
   const loadMessages = useCallback(async (channelId: number, quiet = false) => {
+    messageRequest.current?.abort();
+    const controller = new AbortController();
+    messageRequest.current = controller;
     try {
-      if (!quiet && messages.length === 0) setLoading(true);
-      const response = await api.get<{ messages: Message[] }>(`/chat/channels/${channelId}/messages`);
+      if (!quiet) setLoading(true);
+      const response = await api.get<{ messages: Message[] }>(`/chat/channels/${channelId}/messages`, { signal: controller.signal });
+      if (controller.signal.aborted || selectedIdRef.current !== channelId) return;
       setMessages(response.data.messages);
       setChannels((current) => current.map((channel) => channel.id === channelId ? { ...channel, unread: 0 } : channel));
       window.dispatchEvent(new Event("techlead-hub:chat-read"));
       setError("");
     } catch (requestError: any) {
-      if (!quiet) setError(requestError?.response?.data?.error || "Não foi possível carregar a conversa.");
+      if (!controller.signal.aborted && !quiet) setError(requestError?.response?.data?.error || "Não foi possível carregar a conversa.");
     } finally {
-      if (!quiet) setLoading(false);
+      if (!controller.signal.aborted) setLoading(false);
     }
-  }, [messages.length]);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -249,15 +257,17 @@ export function Chat() {
   }, [pendingShare]);
 
   useEffect(() => {
+    setMessages([]);setReplyTo(null);setContent("");setMessageSearch("");setShowJumpToLatest(false);
     if (!selectedId) { setLoading(false); return; }
     void loadMessages(selectedId);
+    return () => { messageRequest.current?.abort(); };
   }, [loadMessages, selectedId]);
   useEffect(() => {
     const container = messagesRef.current;
     if (!container) return;
     const nearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 140;
-    if (selectedId || nearBottom || !showJumpToLatest) {
-      container.scrollTo({ top: container.scrollHeight, behavior: selectedId ? "auto" : "smooth" });
+    if (nearBottom || !showJumpToLatest) {
+      container.scrollTo({ top: container.scrollHeight, behavior: "auto" });
       setShowJumpToLatest(false);
     }
   }, [messages, selectedId, showJumpToLatest]);
@@ -439,7 +449,7 @@ export function Chat() {
         return;
       }
       if (type.includes("corre") || type.includes("bug") || type.includes("task")) {
-        navigate(`/correcoes?task=${id}`);
+        navigate(card.path?.startsWith("/correcoes?reportMonth=")?card.path:`/correcoes?task=${id}`);
         return;
       }
     }
@@ -502,16 +512,21 @@ export function Chat() {
 
   async function send() {
     const text = content.trim();
-    if (!selectedId || !text || sending) return;
+    if (!selectedId || !text || sendingRef.current) return;
+    const channelId=selectedId;
+    sendingRef.current=true;
+    messageRequest.current?.abort();
     try {
       setSending(true);
       const response = await api.post<Message>(`/chat/channels/${selectedId}/messages`, { content: text, parentId: replyTo?.id ?? null });
-      setMessages((current) => [...current, response.data]);
+      if (selectedIdRef.current !== channelId) return;
+      setMessages((current) => current.some(item=>item.id===response.data.id)?current:[...current, response.data]);
+      setShowJumpToLatest(false);
       setContent("");
       setReplyTo(null);
       setError("");
     } catch (requestError: any) { setError(requestError?.response?.data?.error || "Não foi possível enviar a mensagem."); }
-    finally { setSending(false); }
+    finally { sendingRef.current=false;setSending(false); }
   }
 
   const togglePinnedMessage = useCallback(async (messageId: number) => {
@@ -751,7 +766,7 @@ export function Chat() {
           <Tooltip title="Figurinhas"><IconButton onClick={() => setStickersOpen(true)} disabled={!selectedId}><CelebrationOutlined /></IconButton></Tooltip>
           {selected?.type === "TEAM" && <Tooltip title="Ações rápidas da equipe"><IconButton color="primary" onClick={(event) => setQuickActionsAnchor(event.currentTarget)}><BoltOutlined /></IconButton></Tooltip>}
           <Tooltip title={soundEnabled ? "Desativar som" : "Ativar som"}><IconButton color={soundEnabled ? "primary" : "default"} onClick={() => { const next = !soundEnabled; setSoundEnabled(next); localStorage.setItem("techlead-chat-sound", next ? "on" : "off"); if ("Notification" in window && Notification.permission === "default") void Notification.requestPermission(); }}><NotificationsActiveOutlined /></IconButton></Tooltip>
-          <TextField size="small" fullWidth multiline maxRows={4} sx={{ "& .MuiOutlinedInput-root": { borderRadius: 3, bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(255,255,255,.035)" : "#f6f8fa", pr: .5 }, "& fieldset": { borderColor: "transparent" }, "& .Mui-focused fieldset": { borderColor: "primary.main" } }}  value={content} disabled={!selectedId || sending} placeholder="Escreva uma mensagem; use @usuario para mencionar..." slotProps={{ htmlInput: { maxLength: 4000 } }} onChange={(event) => { setContent(event.target.value); if (selectedId) void api.post(`/chat/channels/${selectedId}/typing`, { active: true }).catch(() => undefined); if (typingTimer.current) window.clearTimeout(typingTimer.current); typingTimer.current = window.setTimeout(() => { if (selectedId) void api.post(`/chat/channels/${selectedId}/typing`, { active: false }).catch(() => undefined); }, 1200); }} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void send(); } }} />
+          <TextField size="small" fullWidth multiline maxRows={4} sx={{ "& .MuiOutlinedInput-root": { borderRadius: 3, bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(255,255,255,.035)" : "#f6f8fa", pr: .5 }, "& fieldset": { borderColor: "transparent" }, "& .Mui-focused fieldset": { borderColor: "primary.main" } }}  value={content} disabled={!selectedId || sending} placeholder="Mensagem · Enter envia, Shift+Enter quebra linha" slotProps={{ htmlInput: { maxLength: 4000 } }} onChange={(event) => { setContent(event.target.value); if (selectedId && Date.now()-typingSentAt.current>2500) { typingSentAt.current=Date.now();void api.post(`/chat/channels/${selectedId}/typing`, { active: true }).catch(() => undefined); } if (typingTimer.current) window.clearTimeout(typingTimer.current); typingTimer.current = window.setTimeout(() => { if (selectedId) void api.post(`/chat/channels/${selectedId}/typing`, { active: false }).catch(() => undefined); }, 1200); }} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void send(); } }} />
           <Button variant="contained" endIcon={sending ? <CircularProgress size={16} color="inherit" /> : <SendRounded />} disabled={!selectedId || !content.trim() || sending} onClick={() => void send()} sx={{ minWidth: 42, width: 42, height: 38, px: 0, borderRadius: 2.5, boxShadow: "none", "&:hover": { boxShadow: "0 6px 16px rgba(24,199,122,.18)" }, "& .MuiButton-endIcon": { m: 0 } }}><Box component="span" sx={{ display: "none" }}>Enviar</Box></Button>
         </Stack>
       </Box>

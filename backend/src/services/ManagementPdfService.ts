@@ -1,3 +1,4 @@
+import { scopedTicketWhere, scopedAzureWhere } from "../domain/OperationalScope";
 import {
   Prisma,
 } from "@prisma/client";
@@ -137,19 +138,19 @@ export class ManagementPdfService {
         }),
         prisma.ticket.count({
           where:
-            ticketWhere,
+            scopedTicketWhere(ticketWhere),
         }),
         prisma.ticket.count({
-          where: {
+          where: scopedTicketWhere({
             ...ticketWhere,
             resolvedDate:
               null,
             closedDate:
               null,
-          },
+          }),
         }),
         prisma.ticket.count({
-          where: {
+          where: scopedTicketWhere({
             ...ticketWhere,
             resolvedDate: {
               not:
@@ -157,20 +158,20 @@ export class ManagementPdfService {
             },
             closedDate:
               null,
-          },
+          }),
         }),
         prisma.ticket.count({
-          where: {
+          where: scopedTicketWhere({
             ...ticketWhere,
             closedDate: {
               not:
                 null,
             },
-          },
+          }),
         }),
         prisma.ticket.findMany({
           where:
-            ticketWhere,
+            scopedTicketWhere(ticketWhere),
           select: {
             solutionSlaIndicator: true,
             dueDate: true,
@@ -182,13 +183,13 @@ export class ManagementPdfService {
           by: [
             "owner",
           ],
-          where: {
+          where: scopedTicketWhere({
             ...ticketWhere,
             owner: {
               not:
                 null,
             },
-          },
+          }),
           _count: {
             _all:
               true,
@@ -206,13 +207,13 @@ export class ManagementPdfService {
           by: [
             "client",
           ],
-          where: {
+          where: scopedTicketWhere({
             ...ticketWhere,
             client: {
               not:
                 null,
             },
-          },
+          }),
           _count: {
             _all:
               true,
@@ -230,13 +231,13 @@ export class ManagementPdfService {
           by: [
             "category",
           ],
-          where: {
+          where: scopedTicketWhere({
             ...ticketWhere,
             category: {
               not:
                 null,
             },
-          },
+          }),
           _count: {
             _all:
               true,
@@ -263,25 +264,25 @@ export class ManagementPdfService {
           "APOIO",
         ),
         prisma.azureWorkItem.count({
-          where: {
+          where: scopedAzureWhere({
             ...azureWhere,
             prioritized:
               true,
-          },
+          }),
         }),
         prisma.azureWorkItem.count({
-          where: {
+          where: scopedAzureWhere({
             ...azureWhere,
             blockedProcess:
               true,
-          },
+          }),
         }),
         prisma.azureWorkItem.groupBy({
           by: [
             "state",
           ],
           where:
-            azureWhere,
+            scopedAzureWhere(azureWhere),
           _count: {
             _all:
               true,
@@ -299,13 +300,13 @@ export class ManagementPdfService {
           by: [
             "deliveredVersion",
           ],
-          where: {
+          where: scopedAzureWhere({
             ...azureWhere,
             deliveredVersion: {
               not:
                 null,
             },
-          },
+          }),
           _count: {
             _all:
               true,
@@ -320,7 +321,7 @@ export class ManagementPdfService {
             15,
         }),
         prisma.ticket.findMany({
-          where: ticketWhere,
+          where: scopedTicketWhere(ticketWhere),
           select: { createdDate: true, resolvedDate: true, closedDate: true },
           orderBy: { createdDate: "asc" },
         }),
@@ -678,7 +679,7 @@ export class ManagementPdfService {
       string,
   ) {
     return prisma.azureWorkItem.count({
-      where: {
+      where: scopedAzureWhere({
         AND: [
           baseWhere,
           {
@@ -690,7 +691,7 @@ export class ManagementPdfService {
             },
           },
         ],
-      },
+      }),
     });
   }
 

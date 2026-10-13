@@ -1,4 +1,6 @@
+import { KpiGrid } from "./KpiGrid";
 import { useEffect, useMemo, useState } from "react";
+import { isAxiosError } from "axios";
 import {
   Alert, Autocomplete, Box, Button, Card, CardContent, Chip, CircularProgress, Divider, Drawer,
   FormControl, IconButton, InputLabel, MenuItem, Select, Stack as MuiStack, Table, TableBody,
@@ -7,13 +9,12 @@ import {
 } from "@mui/material";
 import {
   AssessmentOutlined, InfoOutlined, OpenInNewOutlined, RefreshOutlined, RestartAltOutlined, ShareOutlined,
-  TrendingDownOutlined, TrendingUpOutlined,
 } from "@mui/icons-material";
 import {
   Bar, BarChart, CartesianGrid, Cell, LabelList, Pie, PieChart, ResponsiveContainer,
   Tooltip as ChartTooltip, XAxis, YAxis,
 } from "recharts";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { api, getApiErrorMessage } from "../services/api";
 import { aliareColors } from "../theme/theme";
 import { chartPalette, semanticChartColors } from "../theme/chartPalette";
@@ -21,6 +22,9 @@ import { KpiCard } from "./KpiCard";
 import { DetailFieldGrid, DetailPanelHeader, DetailSection } from "./DetailPanel";
 import { detailDrawerPaperSx } from "../theme/layoutTokens";
 import { ExportCorrectionTasksButton } from "./ExportCorrectionTasksButton";
+import { correctionReportLink, parseCorrectionReportSelection } from "../utils/correctionReportSelection";
+import { useAuth } from "../context/AuthContext";
+import type { CorrectionMetric, CorrectionSlice } from "../utils/correctionReportSelection";
 
 function Stack(
   props: React.ComponentProps<typeof MuiStack> & {
@@ -88,10 +92,12 @@ function CardHeading({ title, subtitle, info }: { title: string; subtitle?: stri
 type Row = {
   id:number; title:string; client:string|null; createdBy:string|null; createdAt:string|null; status:string;
   lastStateChangedAt:string|null; urgency:string|null; prioritized:boolean|null; assignedTo:string|null;
+  assignedAtClose?:string|null; assignedToSource?:"local-sync"|"azure-current"|"unavailable";
   terminalAt:string|null; remoteUrl:string|null; stateAtOpen?:string|null; stateAtClose?:string|null;
   registeredInPeriod:boolean; deliveredInPeriod:boolean; canceledInPeriod:boolean;
   enteredRegistrationInPeriod:boolean; backlogInitial:boolean; backlogCurrent:boolean;
   inPeriodUniverse?:boolean;
+  inMonthlyIndicators?:boolean;
 };
 
 type Report = {
@@ -101,10 +107,13 @@ type Report = {
   filters?:{creators:string[];teamCreators?:string[];clients:string[];urgencies:string[];states:string[]};
   quality?:{
     historyAvailable:boolean;historyError:string|null;snapshotAvailable?:boolean;snapshotError?:string|null;
-    historicalScopeError?:string|null;mode:string;refreshing?:boolean;localPreview?:boolean;movementHistoryReliable?:boolean;
+    historicalScopeError?:string|null;refreshError?:string|null;mode:string;refreshing?:boolean;localPreview?:boolean;movementHistoryReliable?:boolean;
+    lastHistoryAttemptAt?:string;nextHistoryRetryAt?:string;
     historicalMetricsReliable:boolean;backlogHistoricalReliable?:boolean;backlogInitialAvailable?:boolean;backlogCurrentAvailable?:boolean;unknownClosingStates?:number;
     externalHistorySuspicious?:boolean;localFallbackUsed?:boolean;localStateHistoryEvents?:number;
-    perItemHistoryRecoveryUsed?:boolean;recoveredHistoryItems?:number;recoveryCandidates?:number;
+    perItemHistoryRecoveryUsed?:boolean;recoveredHistoryItems?:number;recoveryCandidates?:number;missingClosingFields?:number;
+    currentAssigneeError?:string|null;unknownUrgencyRows?:number;unknownPrioritizationRows?:number;
+    azureConnection?:{status:"ready"|"blocked"|"unverified";code?:string;httpStatus?:number|null;message?:string};
     diagnostics?:{
       scopedRecords?:number;localRecords:number;localPeriodCandidates:number;revisions:number;
       openingScopeIds:number;closingScopeIds:number;snapshotCandidates:number;
@@ -113,12 +122,10 @@ type Report = {
   };
 };
 
-type Drill = "registered"|"delivered"|"canceled"|"registration"|"backlogInitial"|"backlogCurrent"|null;
-type SliceDrill =
-  | {kind:"status";value:string}
-  | {kind:"urgency";value:string}
-  | {kind:"prioritized";value:boolean|null}
-  | null;
+type GeneratingReport={status:"generating";month:string;retryAfterMs:number};
+
+type Drill = CorrectionMetric|null;
+type SliceDrill = CorrectionSlice|null;
 
 const TERMINAL = new Set(["Concluído","Cancelado"]);
 const PIPELINE_ORDER = [
@@ -150,54 +157,92 @@ const SEPTEMBER_2026_REFERENCE = {
 } as const;
 
 const fmt = (value:string|null|undefined) => value
-  ? new Intl.DateTimeFormat("pt-BR",{dateStyle:"short",timeStyle:"short"}).format(new Date(value))
+  ? new Intl.DateTimeFormat("pt-BR",{dateStyle:"short",timeStyle:"short",timeZone:"America/Sao_Paulo"}).format(new Date(value))
   : "—";
 
 const currentMonth = () => {
-  const date = new Date();
-  return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}`;
+  const parts=new Intl.DateTimeFormat("en",{year:"numeric",month:"2-digit",timeZone:"America/Sao_Paulo"}).formatToParts(new Date());
+  return `${parts.find(part=>part.type==="year")?.value}-${parts.find(part=>part.type==="month")?.value}`;
 };
+
+const selectionLabel = (drill:Drill,slice:SliceDrill) => drill?metricLabel[drill]:
+  slice?.kind==="status"?`Status · ${slice.value}`:
+    slice?.kind==="urgency"?`Urgência · ${slice.value}`:
+      slice?.kind==="prioritized"?`Priorização · ${slice.value===true?"Sim":slice.value===false?"Não":"Não informado"}`:
+        slice?.kind==="monthly"?"Movimentos e backlog do mês":"Carteira no fechamento";
 
 export function CorrectionMonthlyPanel() {
   const theme = useTheme();
   const navigate = useNavigate();
+  const location = useLocation();
+  const { user } = useAuth();
+  const routeSelection = useMemo(()=>parseCorrectionReportSelection(location.search,currentMonth()),[location.search]);
 
-  const [month,setMonth] = useState(currentMonth());
+  const [view,setView] = useState(routeSelection.view);
+  const [month,setMonth] = useState(routeSelection.month);
   const [report,setReport] = useState<Report|null>(null);
   const [loading,setLoading] = useState(false);
   const [error,setError] = useState("");
+  const [preparing,setPreparing] = useState(false);
   const [reloadToken,setReloadToken] = useState(0);
 
-  const [creators,setCreators] = useState<string[]>([]);
-  const [clients,setClients] = useState<string[]>([]);
-  const [urgencies,setUrgencies] = useState<string[]>([]);
-  const [states,setStates] = useState<string[]>([]);
-  const [prioritized,setPrioritized] = useState<""|"true"|"false">("");
-  const [search,setSearch] = useState("");
-  const [drill,setDrill] = useState<Drill>(null);
-  const [sliceDrill,setSliceDrill] = useState<SliceDrill>(null);
+  const [creators,setCreators] = useState(routeSelection.creators);
+  const [clients,setClients] = useState(routeSelection.clients);
+  const [urgencies,setUrgencies] = useState(routeSelection.urgencies);
+  const [states,setStates] = useState(routeSelection.states);
+  const [prioritized,setPrioritized] = useState(routeSelection.prioritized);
+  const [search,setSearch] = useState(routeSelection.search);
+  const [drill,setDrill] = useState<Drill>(routeSelection.metric);
+  const [sliceDrill,setSliceDrill] = useState<SliceDrill>(routeSelection.slice);
 
-  const [drawerOpen,setDrawerOpen] = useState(false);
-  const [drawerTitle,setDrawerTitle] = useState("Detalhamento");
-  const [selectedTaskId,setSelectedTaskId] = useState<number|null>(null);
+  const [drawerOpen,setDrawerOpen] = useState(Boolean(routeSelection.metric||routeSelection.slice||routeSelection.taskId));
+  const [drawerTitle,setDrawerTitle] = useState(selectionLabel(routeSelection.metric,routeSelection.slice));
+  const [selectedTaskId,setSelectedTaskId] = useState(routeSelection.taskId);
+
+  useEffect(()=>{
+    setView(routeSelection.view);setMonth(routeSelection.month);setCreators(routeSelection.creators);setClients(routeSelection.clients);
+    setUrgencies(routeSelection.urgencies);setStates(routeSelection.states);setPrioritized(routeSelection.prioritized);
+    setSearch(routeSelection.search);setDrill(routeSelection.metric);setSliceDrill(routeSelection.slice);
+    setDrawerTitle(selectionLabel(routeSelection.metric,routeSelection.slice));setSelectedTaskId(routeSelection.taskId);
+    setDrawerOpen(Boolean(routeSelection.metric||routeSelection.slice||routeSelection.taskId));
+  },[routeSelection]);
 
   useEffect(() => {
     let active = true;
     setLoading(true);
+    setPreparing(false);
     setError("");
-    setReport(null);
+    setReport(current=>current?.period.month===month?current:null);
     let timer:ReturnType<typeof setTimeout>|undefined;
     const load=async(first:boolean)=>{
       try {
-        const {data}=await api.get<Report>("/azure-work-items/corrections/monthly-report",{
+        const {data,status}=await api.get<Report|GeneratingReport>("/azure-work-items/corrections/monthly-report",{
           params:{month,...(first&&reloadToken>0?{refresh:"1"}:{})},timeout:30000,
         });
         if(!active) return;
+        if(status===202&&data&&typeof data==="object"&&"status" in data&&data.status==="generating"){
+          setLoading(true);
+          setPreparing(true);
+          timer=setTimeout(()=>void load(false),3000);
+          return;
+        }
+        if(!data||typeof data!=="object"||!("rows" in data)||!Array.isArray(data.rows)||data.period?.month!==month)
+          throw new Error("A API não retornou um relatório válido para o período solicitado.");
+        setPreparing(false);
         setReport(data);
         setLoading(false);
         if(data.quality?.refreshing) timer=setTimeout(()=>void load(false),3000);
+        else if(data.quality?.nextHistoryRetryAt){
+          const retryAt=Date.parse(data.quality.nextHistoryRetryAt);
+          if(Number.isFinite(retryAt)) timer=setTimeout(()=>void load(false),Math.max(3000,retryAt-Date.now()));
+        }
       } catch(requestError) {
-        if(active){setError(getApiErrorMessage(requestError,"Não foi possível carregar o report mensal."));setLoading(false);}
+        if(active){
+          const message=getApiErrorMessage(requestError,"Não foi possível carregar o report mensal.");
+          const timedOut=isAxiosError(requestError)&&(requestError.code==="ECONNABORTED"||requestError.code==="ETIMEDOUT");
+          setError(timedOut?"A API não respondeu em 30 segundos. Verifique o terminal do backend e se ele foi reiniciado com a atualização do relatório.":message);
+          setLoading(false);setPreparing(false);
+        }
       }
     };
     void load(true);
@@ -229,7 +274,11 @@ export function CorrectionMonthlyPanel() {
 
   const isPeriodRow = (row:Row) => row.inPeriodUniverse ??
     (row.registeredInPeriod || row.deliveredInPeriod || row.canceledInPeriod ||
-      row.enteredRegistrationInPeriod || row.backlogInitial || row.backlogCurrent);
+      row.enteredRegistrationInPeriod || row.backlogInitial || row.backlogCurrent || Boolean(row.stateAtClose));
+  const isMonthlyIndicatorRow = (row:Row) => row.inMonthlyIndicators ??
+    (row.registeredInPeriod||row.deliveredInPeriod||row.canceledInPeriod||
+      row.enteredRegistrationInPeriod||row.backlogInitial||row.backlogCurrent);
+  const monthlyIndicatorRows=base.filter(isMonthlyIndicatorRow);
 
   const value = (key:Exclude<Drill,null>) => base.filter(row=>match(row,key)).length;
   const initial = value("backlogInitial");
@@ -243,6 +292,8 @@ export function CorrectionMonthlyPanel() {
     report?.quality?.movementHistoryReliable ??
     report?.quality?.historicalMetricsReliable ??
     false;
+  const connectionBlocked=report?.quality?.azureConnection?.status==="blocked";
+  const movementValue=(total:number)=>!monthlyMovementVerified&&total===0?"—":total;
   const delivered = value("delivered");
   const canceled = value("canceled");
   const registered = value("registered");
@@ -253,8 +304,8 @@ export function CorrectionMonthlyPanel() {
   const teamCreators = report?.filters?.teamCreators ?? [];
   const teamScopeActive =
     teamCreators.length > 0 &&
-    creators.length === teamCreators.length &&
-    teamCreators.every((creator) => creators.includes(creator));
+    (creators.length===0||(creators.length === teamCreators.length &&
+    teamCreators.every((creator) => creators.includes(creator))));
   const homologationScopeActive =
     teamScopeActive &&
     clients.length===0 &&
@@ -264,31 +315,37 @@ export function CorrectionMonthlyPanel() {
   const septemberHomologation = month === "2026-09"
     ? [
         {key:"backlogInitial",label:"Backlog inicial",actual:backlogVerified?initial:null,expected:SEPTEMBER_2026_REFERENCE.backlogInitial,verified:backlogVerified},
-        {key:"registered",label:"Registradas",actual:registered,expected:SEPTEMBER_2026_REFERENCE.registered,verified:true},
+        {key:"registered",label:"Registradas",actual:registered,expected:SEPTEMBER_2026_REFERENCE.registered,verified:backlogVerified},
         {key:"delivered",label:"Entregues",actual:delivered,expected:SEPTEMBER_2026_REFERENCE.delivered,verified:monthlyMovementVerified},
         {key:"canceled",label:"Canceladas",actual:canceled,expected:SEPTEMBER_2026_REFERENCE.canceled,verified:monthlyMovementVerified},
         {key:"registration",label:"Em Registro",actual:value("registration"),expected:SEPTEMBER_2026_REFERENCE.registration,verified:monthlyMovementVerified},
       ]
     : [];
+  const homologationHistoryReady=backlogVerified&&monthlyMovementVerified;
+  const homologationPassed=homologationScopeActive&&homologationHistoryReady&&
+    septemberHomologation.every(item=>item.actual===item.expected);
+  const homologationStatus=!homologationScopeActive?"Filtros adicionais aplicados":
+    !homologationHistoryReady?"Pendente · histórico incompleto":
+      homologationPassed?"Homologado":"Divergente da referência";
 
   const cards = [
     {
-      key:"registered" as const,label:"Tasks registradas",value:registered,note:monthlyMovementVerified?"Criadas no período":"Prévia parcial · validar histórico",
+      key:"registered" as const,label:"Tasks registradas",value:registered,note:"Criadas no período · qualquer estado no fechamento",
       accent:aliareColors.info,
       info:"Conta System.Id distintos criados dentro do período selecionado, independentemente do status no snapshot de fechamento.",
     },
     {
-      key:"delivered" as const,label:"Tasks entregues",value:report?delivered:"—",note:monthlyMovementVerified?"Concluídas no período":"Prévia parcial · movimentos comprovados",
+      key:"delivered" as const,label:"Tasks entregues",value:report?movementValue(delivered):"—",note:monthlyMovementVerified?"Concluídas no período":delivered?"Prévia parcial · movimentos comprovados":"Histórico pendente",
       accent:aliareColors.green,
       info:"Conta Tasks que entraram efetivamente em Concluído durante o período e permaneciam em Concluído no snapshot de fechamento.",
     },
     {
-      key:"canceled" as const,label:"Tasks canceladas",value:report?canceled:"—",note:monthlyMovementVerified?"Canceladas no período":"Prévia parcial · movimentos comprovados",
+      key:"canceled" as const,label:"Tasks canceladas",value:report?movementValue(canceled):"—",note:monthlyMovementVerified?"Canceladas no período":canceled?"Prévia parcial · movimentos comprovados":"Histórico pendente",
       accent:theme.palette.error.main,
       info:"Conta Tasks que entraram efetivamente em Cancelado durante o período e permaneciam em Cancelado no snapshot de fechamento.",
     },
     {
-      key:"registration" as const,label:"Tasks em Registro",value:report?value("registration"):"—",note:monthlyMovementVerified?"Fora do backlog":"Prévia parcial · fora do backlog",
+      key:"registration" as const,label:"Tasks em Registro",value:report?movementValue(value("registration")):"—",note:monthlyMovementVerified?"Fora do backlog":value("registration")?"Prévia parcial · fora do backlog":"Histórico pendente · fora do backlog",
       accent:aliareColors.warning,
       info:"Conta Tasks que entraram em Registro durante o período e permaneciam em Registro no fechamento. Registro aparece no pipeline, mas nunca integra backlog.",
     },
@@ -303,8 +360,18 @@ export function CorrectionMonthlyPanel() {
       info:"Fotografia no fechamento do período: itens abertos, excluindo Registro, Concluído e Cancelado. Não exige movimentação no mês.",
     },
   ] as const;
+  const reportSummary=cards.map(card=>{
+    const reference=septemberHomologation.find(item=>item.key===card.key);
+    const verified=card.key==="backlogInitial"||card.key==="backlogCurrent"||card.key==="registered"?backlogVerified:monthlyMovementVerified;
+    return {indicator:card.label,value:card.value,reference:reference?.expected,
+      status:!verified?"Prévia parcial · histórico pendente":reference?
+        !homologationScopeActive?"Outro recorte":reference.actual===reference.expected?"Confere":"Divergente da referência":
+        "Histórico validado"};
+  });
 
-  const periodRows = base.filter(isPeriodRow);
+  const viewLabel=view==="monthly"?"Movimentos e backlog do mês":"Carteira acumulada no fechamento";
+  const viewRows=view==="monthly"?monthlyIndicatorRows:base.filter(isPeriodRow);
+  const periodRows = viewRows.filter(row=>Boolean(row.stateAtClose));
   const periodUniverse = periodRows.length;
 
   const statusCounts = periodRows.reduce<Record<string,number>>((acc,row) => {
@@ -331,6 +398,7 @@ export function CorrectionMonthlyPanel() {
     {name:"Não priorizadas",total:periodRows.filter(row=>row.prioritized===false).length},
     {name:"Não informado",total:periodRows.filter(row=>row.prioritized===null).length},
   ].filter(item=>item.total);
+  const priorityColor=(name:string)=>name==="Priorizadas"?aliareColors.green:name==="Não priorizadas"?aliareColors.info:semanticChartColors.attention;
   const pipelineTotal=pipeline.reduce((sum,item)=>sum+item.total,0);
   const urgencyTotal=urgency.reduce((sum,item)=>sum+item.total,0);
   const priorityTotal=priority.reduce((sum,item)=>sum+item.total,0);
@@ -338,11 +406,13 @@ export function CorrectionMonthlyPanel() {
 
   const selectedRows = useMemo(() => base.filter(row => {
     if(drill) return match(row,drill);
-    if(sliceDrill?.kind==="status") return isPeriodRow(row)&&row.status===sliceDrill.value;
-    if(sliceDrill?.kind==="urgency") return isPeriodRow(row)&&(row.urgency||"Não informado")===sliceDrill.value;
-    if(sliceDrill?.kind==="prioritized") return isPeriodRow(row)&&row.prioritized===sliceDrill.value;
+    if(sliceDrill?.kind==="monthly") return isMonthlyIndicatorRow(row);
+    if(view==="monthly"&&!isMonthlyIndicatorRow(row)) return false;
+    if(sliceDrill?.kind==="status") return isPeriodRow(row)&&Boolean(row.stateAtClose)&&row.status===sliceDrill.value;
+    if(sliceDrill?.kind==="urgency") return isPeriodRow(row)&&Boolean(row.stateAtClose)&&(row.urgency||"Não informado")===sliceDrill.value;
+    if(sliceDrill?.kind==="prioritized") return isPeriodRow(row)&&Boolean(row.stateAtClose)&&row.prioritized===sliceDrill.value;
     return isPeriodRow(row);
-  }),[base,drill,sliceDrill]);
+  }),[base,drill,sliceDrill,view]);
 
   const detailed = useMemo(() => selectedRows.filter(row =>
     !search.trim() ||
@@ -350,9 +420,9 @@ export function CorrectionMonthlyPanel() {
     row.title.toLocaleLowerCase("pt-BR").includes(search.trim().toLocaleLowerCase("pt-BR"))
   ),[selectedRows,search]);
 
-  const drawerRows = useMemo(() => [...selectedRows].sort((a,b) =>
+  const drawerRows = useMemo(() => [...detailed].sort((a,b) =>
     (b.lastStateChangedAt??b.createdAt??"").localeCompare(a.lastStateChangedAt??a.createdAt??"")
-  ),[selectedRows]);
+  ),[detailed]);
 
   const selectedTask = useMemo(
     () => drawerRows.find(row=>row.id===selectedTaskId)??null,
@@ -360,18 +430,12 @@ export function CorrectionMonthlyPanel() {
   );
 
   useEffect(() => {
-    if(drawerOpen&&selectedTaskId===null&&drawerRows.length) setSelectedTaskId(drawerRows[0].id);
+    if(drawerOpen&&drawerRows.length&&!drawerRows.some(row=>row.id===selectedTaskId)) setSelectedTaskId(drawerRows[0].id);
   },[drawerOpen,drawerRows,selectedTaskId]);
 
-  const activeDrillLabel = drill
-    ? metricLabel[drill]
-    : sliceDrill?.kind==="status"
-      ? `Status · ${sliceDrill.value}`
-      : sliceDrill?.kind==="urgency"
-        ? `Urgência · ${sliceDrill.value}`
-        : sliceDrill?.kind==="prioritized"
-          ? `Priorização · ${sliceDrill.value===true?"Sim":sliceDrill.value===false?"Não":"Não informado"}`
-          : "Universo do período";
+  const activeDrillLabel = drill||sliceDrill?selectionLabel(drill,sliceDrill):viewLabel;
+  const exportContext=`Visão: ${viewLabel} · Período ${month} · ${fmt(report?.period.start)} até ${fmt(report?.period.close)} (São Paulo) · ${backlogVerified&&monthlyMovementVerified?"Histórico validado":"PRÉVIA PARCIAL — histórico não homologado"}${month==="2026-09"?` · Conferência: ${homologationStatus}`:""} · Carteira SIMER · Criado por: ${creators.join(", ")||"Time SIMER"} · Clientes: ${clients.join(", ")||"Toda a carteira SIMER"} · Urgência: ${urgencies.join(", ")||"Todas"} · Status: ${states.join(", ")||"Todos"} · Priorizada: ${prioritized===""?"Todas":prioritized==="true"?"Sim":"Não"}`;
+  const detailExportContext=`${exportContext} · Busca ID/título: ${search.trim()||"Todas"}`;
 
   const openMetric = (key:Exclude<Drill,null>,label:string) => {
     setSliceDrill(null);
@@ -398,9 +462,9 @@ export function CorrectionMonthlyPanel() {
     window.dispatchEvent(new CustomEvent("techlead-hub:share-chat",{
       detail:{
         label:"Correções Clientes",
-        title:`${drawerTitle} · ${month}`,
-        status:`${selectedRows.length} task(s)`,
-        path:"/correcoes",
+        title:`${activeDrillLabel} · ${month}`,
+        status:`${drawerRows.length} task(s) · ${backlogVerified&&monthlyMovementVerified?"Histórico validado":"Prévia parcial"}`,
+        path:correctionReportLink({month,view,creators,clients,urgencies,states,prioritized,search,metric:drill,slice:sliceDrill,taskId:null}),
       },
     }));
   };
@@ -412,8 +476,8 @@ export function CorrectionMonthlyPanel() {
         recordId:row.id,
         title:row.title,
         client:row.client,
-        status:row.status,
-        path:`/correcoes?task=${row.id}`,
+        status:`${row.status} · ${month} · ${backlogVerified&&monthlyMovementVerified?"Histórico validado":"Prévia parcial"}`,
+        path:correctionReportLink({month,view,creators,clients,urgencies,states,prioritized,search,metric:drill,slice:sliceDrill,taskId:row.id}),
       },
     }));
   };
@@ -429,7 +493,7 @@ export function CorrectionMonthlyPanel() {
   const chartPanel = {
     ...panel,
     height:"100%",
-    minHeight:390,
+    minHeight:310,
     display:"flex",
     boxShadow:theme.palette.mode==="dark"?"0 14px 34px rgba(0,0,0,.13)":"0 10px 28px rgba(15,23,42,.045)",
     "& .recharts-bar-rectangle, & .recharts-sector":{cursor:"pointer"},
@@ -457,7 +521,11 @@ export function CorrectionMonthlyPanel() {
                 size="small"
                 color={report.quality.historicalMetricsReliable&&!report.quality.historicalScopeError?"success":"warning"}
                 variant="outlined"
-                label={report.quality.localFallbackUsed
+                label={report.quality.refreshing
+                  ?"Atualizando histórico"
+                  :connectionBlocked
+                    ?"Conexão Azure bloqueada"
+                  :report.quality.localFallbackUsed
                   ?"Histórico local reconstruído"
                   :report.quality.historicalMetricsReliable&&!report.quality.historicalScopeError
                     ?"Histórico confiável"
@@ -499,20 +567,11 @@ export function CorrectionMonthlyPanel() {
             </Select>
           </FormControl>
           <Stack direction="row" gap={1} flexWrap="wrap" alignItems="center" sx={{minHeight:40}}>
-            <MuiTooltip title="Selecionar os criadores do time SIMER, incluindo os nomes exibidos no Azure">
-              <span><Button
-                size="small"
-                variant={teamScopeActive?"contained":"outlined"}
-                disabled={!teamCreators.length}
-                onClick={()=>setCreators(teamCreators)}
-                sx={{minHeight:40,whiteSpace:"nowrap"}}
-              >Time SIMER</Button></span>
-            </MuiTooltip>
             <Button startIcon={<RestartAltOutlined/>} onClick={clear} sx={{minHeight:40}}>Limpar filtros</Button>
           </Stack>
         </Box>
         <Typography variant="caption" color="text.secondary" sx={{display:"block",mt:1.4}}>
-          {teamScopeActive?"Time SIMER selecionado":creators.length?"Criadores selecionados":"Todos os criadores do suporte SIMER"} · {periodUniverse} task(s) no período
+          {report?`${periodUniverse} task(s) com estado no fechamento · ${monthlyIndicatorRows.length} nos movimentos/backlog do mês`:loading?"Preparando relatório…":"Relatório indisponível; totais não apurados"}
         </Typography>
       </CardContent>
     </Card>
@@ -522,85 +581,63 @@ export function CorrectionMonthlyPanel() {
         severity="error"
         action={<Button color="inherit" size="small" onClick={()=>setReloadToken(value=>value+1)}>Tentar novamente</Button>}
       >
-        {error}
+        {error}{report&&" A última apuração disponível foi preservada."}
       </Alert>
     }
-    {report?.quality&&(!report.quality.historicalMetricsReliable||!!report.quality.historicalScopeError)&&
-      <Alert severity="warning">
-        <b>{report.quality.refreshing?"Conferindo histórico no Azure.":"Apuração histórica parcial."}</b>{" "}
+    {loading&&report&&<Alert severity="info">Atualizando o relatório. A última apuração disponível permanece na tela.</Alert>}
+    {!!report?.quality?.refreshError&&<Alert severity="warning">
+      <b>A atualização histórica falhou.</b>{" "}{report.quality.refreshError}{" "}
+      A última apuração disponível foi preservada. Verifique a falha e use Recarregar para consultar novamente o Azure.
+    </Alert>}
+    {report?.quality&&(!report.quality.historicalMetricsReliable||!!report.quality.historicalScopeError||connectionBlocked)&&
+      <Alert severity={connectionBlocked?"error":"warning"}
+        action={connectionBlocked&&user?.role==="ADMIN"?<Button color="inherit" size="small" onClick={()=>navigate(`/configuracoes?reportMonth=${month}`)}>Validar integração</Button>:undefined}>
+        <b>{report.quality.refreshing?"Conferindo histórico no Azure.":connectionBlocked?"Conexão Azure bloqueada.":"Prévia mensal · histórico incompleto."}</b>{" "}
         {report.quality.refreshing
-          ?"A prévia local já está disponível. Os números serão atualizados automaticamente quando a consulta terminar."
-          :"O histórico do Azure não foi recuperado por completo. Estados sem evidência histórica aparecem como indisponíveis. Backlog parcial não comprova o estoque total; use Recarregar para tentar novamente."}{" "}
-        {[
-          report.quality.historyError && `Revisões: ${report.quality.historyError}`,
-          report.quality.snapshotError && `Snapshots: ${report.quality.snapshotError}`,
-          report.quality.historicalScopeError && `Escopo ASOF: ${report.quality.historicalScopeError}`,
-        ].filter(Boolean).join(" | ")}
-        {report.quality.diagnostics && (
-          <Typography component="p" variant="caption" sx={{mt:0.8,opacity:0.9}}>
-            Base consultada: {report.quality.diagnostics.scopedRecords??report.quality.diagnostics.localRecords} tasks; recorte mensal: {periodUniverse} tasks distintas. Histórico Azure: {report.quality.diagnostics.revisions} revisões;{" "}
-            {report.quality.diagnostics.openingScopeIds} IDs abertos na entrada;{" "}
-            {report.quality.diagnostics.closingScopeIds} IDs abertos no fechamento;{" "}
-            {report.quality.diagnostics.snapshotCandidates} candidatos;{" "}
-            snapshots {report.quality.diagnostics.openingSnapshotItems}/{report.quality.diagnostics.closingSnapshotItems} (entrada/fechamento);{" "}
-            {report.quality.diagnostics.outputRows} tasks no universo mensal antes dos filtros; {report.quality.unknownClosingStates??0} sem estado histórico no fechamento.
-          </Typography>
-        )}
+          ?"A última apuração permanece disponível enquanto a consulta termina."
+          :connectionBlocked
+            ?report.quality.historicalMetricsReliable?"O fechamento salvo foi preservado. Valide a integração antes de atualizar.":"Os dados locais continuam disponíveis para conferência. Valide o acesso ao Azure e depois use Recarregar para concluir o mês."
+            :"Os números disponíveis ainda não confirmam o fechamento do mês. Um valor indisponível não comprova ausência de tarefas."}
+        <Box component="details" sx={{mt:1,"& summary":{cursor:"pointer",fontWeight:750}}}>
+          <Box component="summary">Detalhes da consulta ao Azure</Box>
+          {connectionBlocked?<Typography variant="body2" sx={{mt:.8,overflowWrap:"anywhere"}}>{report.quality.azureConnection?.message}</Typography>:
+            <Typography variant="body2" sx={{mt:.8,overflowWrap:"anywhere"}}>{[
+              report.quality.historyError&&`Revisões: ${report.quality.historyError}`,
+              report.quality.snapshotError&&`Snapshots: ${report.quality.snapshotError}`,
+              report.quality.historicalScopeError&&`Escopo ASOF: ${report.quality.historicalScopeError}`,
+            ].filter(Boolean).join(" | ")}</Typography>}
+          {report.quality.diagnostics&&<Typography component="p" variant="caption" sx={{mt:.8}}>
+            Carteira consultada: {report.quality.diagnostics.scopedRecords??report.quality.diagnostics.localRecords} Tasks; com estado no fechamento: {periodUniverse}; movimentos/backlog do mês: {monthlyIndicatorRows.length}.{" "}
+            {report.quality.localPreview?"Prévia local: estes números não comprovam cobertura Azure.":<>Histórico Azure: {report.quality.diagnostics.revisions} revisões; abertura: {report.quality.diagnostics.openingScopeIds} IDs; fechamento: {report.quality.diagnostics.closingScopeIds} IDs; snapshots {report.quality.diagnostics.openingSnapshotItems}/{report.quality.diagnostics.closingSnapshotItems}; {report.quality.unknownClosingStates??0} estados indisponíveis.</>}
+          </Typography>}
+          {report.quality.lastHistoryAttemptAt&&<Typography variant="caption" sx={{display:"block",mt:.8}}>
+            Última tentativa: {fmt(report.quality.lastHistoryAttemptAt)} (São Paulo).{" "}
+            {connectionBlocked?"As tentativas automáticas estão pausadas até corrigir a integração e recarregar.":report.quality.nextHistoryRetryAt&&`Próxima tentativa automática: ${fmt(report.quality.nextHistoryRetryAt)}.`}
+          </Typography>}
+          {!!(report.quality.unknownUrgencyRows||report.quality.unknownPrioritizationRows)&&<Typography variant="caption" sx={{display:"block",mt:.8}}>
+            Sem evidência histórica: {report.quality.unknownUrgencyRows??0} Tasks sem urgência e {report.quality.unknownPrioritizationRows??0} sem priorização. Valores atuais não substituem o fechamento.
+          </Typography>}
+        </Box>
       </Alert>
     }
-    {!loading&&report&&month==="2026-09"&&
-      <Card elevation={0} sx={{
-        ...panel,
-        borderColor:homologationScopeActive?"rgba(24,199,122,.28)":"rgba(47,111,237,.22)",
-        background:theme.palette.mode==="dark"
-          ?"linear-gradient(105deg,rgba(47,111,237,.08),rgba(24,199,122,.045),rgba(255,255,255,.012))"
-          :"linear-gradient(105deg,rgba(47,111,237,.05),rgba(24,199,122,.035),#FFFFFF)",
-      }}>
-        <CardContent sx={{py:1.2,"&:last-child":{pb:1.2}}}>
-          <Stack direction={{xs:"column",lg:"row"}} gap={1.25} justifyContent="space-between" alignItems={{lg:"center"}}>
-            <Box sx={{minWidth:0}}>
-              <Typography sx={{fontWeight:900}}>Homologação · setembro/2026</Typography>
-              <Typography variant="caption" color="text.secondary">
-                {homologationScopeActive
-                  ?"Escopo homologado aplicado: Time SIMER, sem filtros adicionais. Comparação com a referência validada pela coordenação."
-                  :"Para confrontar a referência oficial, use Time SIMER e deixe Cliente, Urgência, Status e Priorizada sem seleção."}
-              </Typography>
-            </Box>
-            <Box sx={{display:"grid",gridTemplateColumns:{xs:"repeat(2,minmax(0,1fr))",sm:"repeat(5,minmax(108px,1fr))"},gap:.7}}>
-              {septemberHomologation.map(item=>{
-                const comparable=homologationScopeActive&&item.verified&&item.actual!==null;
-                const displayActual=item.key==="registration"?value("registration"):item.actual;
-                const matches=comparable&&item.actual===item.expected;
-                return <Box key={item.key} sx={{
-                  px:1,py:.7,border:"1px solid",borderColor:matches?"success.main":comparable?"warning.main":"divider",
-                  borderRadius:"8px",minWidth:0,bgcolor:"background.paper",
-                }}>
-                  <Typography variant="caption" color="text.secondary" sx={{display:"block",whiteSpace:"nowrap"}}>{item.label}</Typography>
-                  <Stack direction="row" gap={0.5} alignItems="baseline">
-                    <Typography sx={{fontWeight:900,fontVariantNumeric:"tabular-nums"}}>{displayActual??"—"}</Typography>
-                    <Typography variant="caption" color="text.secondary">/ ref. {item.expected}</Typography>
-                  </Stack>
-                </Box>;
-              })}
-            </Box>
-          </Stack>
-        </CardContent>
-      </Card>
-    }
-
+    {!!report?.quality?.missingClosingFields&&!connectionBlocked&&<Alert severity="warning">
+      Há {report.quality.missingClosingFields} Tasks sem campos históricos para confirmar a carteira. Confira Cliente Principal e acesso ao projeto.
+    </Alert>}
+    {!!(report?.quality?.unknownUrgencyRows||report?.quality?.unknownPrioritizationRows)&&report?.quality?.historicalMetricsReliable&&!connectionBlocked&&<Alert severity="info">
+      Campos históricos não informados: {report.quality.unknownUrgencyRows??0} Tasks sem urgência e {report.quality.unknownPrioritizationRows??0} sem priorização.
+    </Alert>}
+    {!!report?.quality?.currentAssigneeError&&!connectionBlocked&&<Alert severity="info">
+      Não foi possível consultar o responsável atual de algumas Tasks: {report.quality.currentAssigneeError}
+    </Alert>}
+    {report&&<ExportCorrectionTasksButton rows={viewRows} title={`${homologationHistoryReady?"Report":"Prévia"} mensal de Correções ${month}`} subtitle={exportContext} summary={reportSummary} label={homologationHistoryReady?"Exportar report Excel":"Exportar prévia Excel"}/>}
     {!loading&&report&&report.rows.length===0&&
       <Alert severity="warning">Nenhuma Task do tipo Correção Clientes foi localizada no recorte carregado.</Alert>
     }
 
-    {loading
-      ? <Box sx={{py:5,textAlign:"center"}}><CircularProgress size={28}/><Typography variant="body2" color="text.secondary" sx={{mt:1}}>Reconstruindo o fechamento mensal…</Typography></Box>
+    {loading&&!report
+      ? <Box sx={{py:5,textAlign:"center"}}><CircularProgress size={28}/><Typography variant="body2" color="text.secondary" sx={{mt:1}}>{preparing?"Preparando a apuração local. O relatório será atualizado automaticamente quando a consulta terminar.":"Carregando a apuração mensal…"}</Typography></Box>
       : report&&<>
-        <Box sx={{
-          display:"grid",
-          gridTemplateColumns:{xs:"1fr",sm:"repeat(2,minmax(0,1fr))",lg:"repeat(3,minmax(0,1fr))",xl:"repeat(6,minmax(0,1fr))"},
-          gap:1,
-          alignItems:"stretch",
-        }}>
+        <KpiGrid>
           {cards.map(card=>
             <KpiCard
               key={card.key}
@@ -610,72 +647,52 @@ export function CorrectionMonthlyPanel() {
               info={card.info}
               accent={card.accent}
               active={drill===card.key}
-              density="compact"
               onClick={()=>openMetric(card.key,card.label)}
             />
           )}
-        </Box>
+        </KpiGrid>
 
-        <Card elevation={0} sx={{
-          ...panel,
-          background:theme.palette.mode==="dark"
-            ?"linear-gradient(110deg,rgba(24,199,122,.08),rgba(255,255,255,.015))"
-            :"linear-gradient(110deg,rgba(24,199,122,.07),rgba(255,255,255,.98))",
-        }}>
-          <CardContent sx={{py:1.25,"&:last-child":{pb:1.25}}}>
-            <Stack direction={{xs:"column",lg:"row"}} justifyContent="space-between" alignItems={{lg:"center"}} gap={1.25}>
-              <Box sx={{display:"flex",alignItems:"center",gap:.7,flexWrap:"wrap"}}>
-                <Box>
-                  <Typography sx={{fontWeight:850}}>Leitura do período</Typography>
-                  <Typography variant="caption" color="text.secondary">Balanço operacional do recorte selecionado.</Typography>
-                </Box>
-                <InfoButton
-                  title="Leitura do período"
-                  description="Resumo derivado dos indicadores encontrados no recorte. Saídas = Entregues + Canceladas; saldo líquido = Registradas − Saídas; variação do backlog = Backlog atual − Backlog inicial. Os números só são oficiais quando o histórico Azure e os snapshots ASOF tiverem cobertura confirmada."
-                />
-                <MuiTooltip title={distributionConsistent?"Pipeline, Urgência e Priorização contam tasks distintas. Os cards se sobrepõem: uma task pode ser registrada e entregue no mesmo mês. A consistência dos gráficos não homologa o histórico.":`Divergência: universo ${periodUniverse}, pipeline ${pipelineTotal}, urgência ${urgencyTotal}, priorização ${priorityTotal}.`}>
-                  <Chip size="small" color={distributionConsistent?"success":"warning"} variant="outlined"
-                    label={distributionConsistent
-                      ? (backlogVerified&&monthlyMovementVerified
-                          ?"Distribuição consistente · histórico validado"
-                          :"Mesmo universo · histórico parcial")
-                      : "Revisar distribuição"}/>
-                </MuiTooltip>
-              </Box>
-              <Box sx={{display:"grid",gridTemplateColumns:{xs:"repeat(2,minmax(0,1fr))",md:"repeat(4,minmax(110px,1fr))"},gap:{xs:1,md:2.2}}}>
-                {[
-                  ["Saídas do mês",monthlyMovementVerified?outputs:"—"],
-                  ["Saldo líquido",monthlyMovementVerified?`${flowBalance>0?"+":""}${flowBalance}`:"—"],
-                  ["Variação backlog",backlogAvailable&&initialBacklogAvailable?`${delta>0?"+":""}${delta}`:"—"],
-                  ["Universo",periodUniverse],
-                ].map(([label,val],index)=>
-                  <Box key={String(label)} sx={{minWidth:0}}>
-                    <Typography variant="caption" color="text.secondary">{label}</Typography>
-                    <Stack direction="row" alignItems="center" gap={0.35}>
-                      {index===2&&backlogAvailable&&initialBacklogAvailable&&(delta<=0?<TrendingDownOutlined color="success" sx={{fontSize:18}}/>:<TrendingUpOutlined color="warning" sx={{fontSize:18}}/>)}
-                      <Typography sx={{fontWeight:900,fontSize:"1.15rem"}}>{val}</Typography>
-                    </Stack>
-                  </Box>
-                )}
-              </Box>
+        <Card elevation={0} sx={panel}>
+          <CardContent sx={{py:1.1,"&:last-child":{pb:1.1}}}>
+            <Stack direction={{xs:"column",sm:"row"}} gap={1} alignItems={{sm:"center"}} justifyContent="space-between">
+              <Typography variant="body2">{viewLabel}: <b>{viewRows.length} Tasks</b>{!backlogVerified&&" · prévia parcial"}.</Typography>
+              <Button size="small" sx={{whiteSpace:"normal",textAlign:"left"}} onClick={()=>selectSlice({kind:"monthly"},"Movimentos e backlog do mês")}>
+                Movimentos e backlog do mês: {monthlyIndicatorRows.length} Tasks distintas
+              </Button>
             </Stack>
+            <FormControl size="small" sx={{mt:1,mb:1,width:"100%",maxWidth:440}}>
+              <InputLabel id="correction-view-label">Visão dos gráficos e da listagem</InputLabel>
+              <Select labelId="correction-view-label" label="Visão dos gráficos e da listagem" value={view}
+                onChange={event=>{setView(event.target.value as "monthly"|"portfolio");setDrill(null);setSliceDrill(null);setDrawerOpen(false);setSelectedTaskId(null);}}>
+                <MenuItem value="monthly">Movimentos e backlog do mês</MenuItem>
+                <MenuItem value="portfolio">Carteira acumulada no fechamento</MenuItem>
+              </Select>
+            </FormControl>
+            <Typography variant="caption" color="text.secondary" sx={{display:"block"}}>
+              {view==="monthly"?"Tasks dos indicadores mensais, incluindo backlog herdado. Cada ID aparece uma vez.":"Toda a carteira no fechamento, incluindo conclusões e cancelamentos de meses anteriores."}
+              {" Os seis cards mantêm suas regras mensais. Os gráficos usam o estado no fechamento; itens sem esse estado permanecem na listagem."}
+            </Typography>
+            {!distributionConsistent&&<Typography variant="caption" color="warning.main" sx={{display:"block"}}>Revisar distribuição: carteira {periodUniverse}, pipeline {pipelineTotal}, urgência {urgencyTotal}, priorização {priorityTotal}.</Typography>}
+            {homologationHistoryReady&&<Typography variant="caption" color="text.secondary" sx={{display:"block"}}>
+              Saídas do mês: {outputs}. Saldo de movimentos: {flowBalance}. Variação do backlog: {delta>0?"+":""}{delta}.
+            </Typography>}
           </CardContent>
         </Card>
 
         <Box sx={{
           display:"grid",
-          gridTemplateColumns:{xs:"1fr",lg:"minmax(0,1.65fr) minmax(260px,.85fr) minmax(260px,.85fr)",xl:"minmax(0,1.85fr) minmax(300px,.95fr) minmax(300px,.95fr)"},
+          gridTemplateColumns:{xs:"minmax(0,1fr)",lg:"repeat(2,minmax(0,1fr))",xl:"repeat(3,minmax(0,1fr))"},
           gap:1.15,
           alignItems:"stretch",
         }}>
           <Card elevation={0} sx={chartPanel}>
             <CardContent sx={{flex:1,display:"flex",flexDirection:"column",p:1.7,"&:last-child":{pb:1.7}}}>
               <CardHeading
-                title={backlogVerified?"Pipeline no fechamento":"Pipeline · prévia não homologada"}
-                subtitle={backlogVerified?`${periodUniverse} task(s) no snapshot final`:`${periodUniverse} task(s) com status recuperado no recorte parcial`}
-                info="Distribui pelo status no snapshot de fechamento somente as Correções Clientes que participam do universo do período e filtros atuais. A soma das barras corresponde ao universo do período. Registro aparece no pipeline, mas é excluído de backlog."
+                title={backlogVerified?(view==="monthly"?"Status das Tasks do mês":"Pipeline acumulado no fechamento"):"Pipeline · prévia não homologada"}
+                subtitle={`${viewLabel} · ${periodUniverse} Tasks com estado no fechamento`}
+                info="Distribui a visão selecionada pelo estado histórico no fechamento. A visão mensal reúne os indicadores, incluindo backlog sem movimento. A carteira acumulada inclui encerramentos anteriores. Registro não integra backlog."
               />
-              <Box sx={{flex:1,minHeight:Math.max(340,pipeline.length*31),mt:1}}>
+              <Box sx={{flex:1,minHeight:Math.max(230,pipeline.length*31),mt:1}}>
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={pipeline} layout="vertical" margin={{left:14,right:46,top:6,bottom:6}}>
                     <CartesianGrid strokeDasharray="3 5" horizontal={false} stroke={theme.palette.divider} opacity={.55}/>
@@ -700,10 +717,10 @@ export function CorrectionMonthlyPanel() {
             <CardContent sx={{flex:1,display:"flex",flexDirection:"column",p:1.7,"&:last-child":{pb:1.7}}}>
               <CardHeading
                 title="Urgência"
-                subtitle="Tasks distintas do universo mensal"
-                info="Agrupa o mesmo universo do período pela urgência/criticidade registrada no Azure. Respeita todos os filtros globais. Clique em uma barra para abrir as Tasks correspondentes."
+                subtitle={viewLabel}
+                info="Agrupa a visão selecionada pela urgência/criticidade do Azure. Respeita todos os filtros globais. Clique em uma barra para abrir as Tasks correspondentes."
               />
-              <Box sx={{flex:1,minHeight:340,mt:1}}>
+              <Box sx={{flex:1,minHeight:230,mt:1}}>
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={urgency} layout="vertical" margin={{left:12,right:42,top:8,bottom:8}}>
                     <CartesianGrid strokeDasharray="3 5" horizontal={false} stroke={theme.palette.divider} opacity={.55}/>
@@ -727,16 +744,16 @@ export function CorrectionMonthlyPanel() {
             <CardContent sx={{flex:1,display:"flex",flexDirection:"column",p:1.7,"&:last-child":{pb:1.7}}}>
               <CardHeading
                 title="Priorização"
-                subtitle="Priorizadas x não priorizadas"
-                info="Agrupa o mesmo universo do período pelo campo Priorizada do Azure. Respeita os filtros globais. Clique em um segmento para abrir as Tasks correspondentes."
+                subtitle={viewLabel}
+                info="Agrupa a visão selecionada pelo campo Priorizada do Azure. Respeita os filtros globais. Clique em um segmento para abrir as Tasks correspondentes."
               />
-              <Box sx={{height:250,mt:.8,position:"relative"}}>
+              <Box sx={{height:210,mt:.8,position:"relative"}}>
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
-                    <Pie data={priority} dataKey="total" nameKey="name" innerRadius={68} outerRadius={100} paddingAngle={2}
+                    <Pie data={priority} dataKey="total" nameKey="name" innerRadius={58} outerRadius={82} paddingAngle={2}
                       stroke={theme.palette.background.paper} strokeWidth={2} isAnimationActive={false}
                       onClick={data=>{const name=(data as {name?:string}).name;if(name)selectSlice({kind:"prioritized",value:name==="Priorizadas"?true:name==="Não priorizadas"?false:null},`Priorização · ${name}`)}}>
-                      {priority.map((_,index)=><Cell key={index} fill={[aliareColors.green,aliareColors.info,semanticChartColors.attention][index%3]}/>)}
+                      {priority.map(item=><Cell key={item.name} fill={priorityColor(item.name)}/>)}
                     </Pie>
                     <ChartTooltip/>
                   </PieChart>
@@ -756,7 +773,7 @@ export function CorrectionMonthlyPanel() {
                     {kind:"prioritized",value:item.name==="Priorizadas"?true:item.name==="Não priorizadas"?false:null},
                     `Priorização · ${item.name}`,
                   )} sx={{justifyContent:"space-between",textTransform:"none",color:"text.primary",px:.8,borderRadius:1.5}}>
-                    <Typography variant="body2">{item.name}</Typography>
+                    <Box sx={{display:"flex",alignItems:"center",gap:.7}}><Box sx={{width:9,height:9,borderRadius:"50%",bgcolor:priorityColor(item.name)}}/><Typography variant="body2">{item.name}</Typography></Box>
                     <Chip size="small" label={item.total}/>
                   </Button>
                 )}
@@ -787,7 +804,7 @@ export function CorrectionMonthlyPanel() {
                 <ExportCorrectionTasksButton
                   rows={detailed}
                   title={`Correções Azure · ${activeDrillLabel}`}
-                  subtitle={`Período ${month} · filtros e busca atuais`}
+                  subtitle={detailExportContext}
                 />
               </Stack>
             </Stack>
@@ -837,7 +854,7 @@ export function CorrectionMonthlyPanel() {
                       <TableCell>{fmt(row.lastStateChangedAt)}</TableCell>
                       <TableCell>{row.urgency||"—"}</TableCell>
                       <TableCell>{row.prioritized===null?"—":row.prioritized?"Sim":"Não"}</TableCell>
-                      <TableCell>{row.assignedTo||"—"}</TableCell>
+                      <TableCell><MuiTooltip title={row.assignedToSource==="azure-current"?"Consultado no Azure atual":row.assignedToSource==="local-sync"?"Última sincronização local do Azure":row.assignedToSource==="unavailable"?"Responsável atual não recuperado":""}><span>{row.assignedTo||"—"}</span></MuiTooltip></TableCell>
                       <TableCell>{TERMINAL.has(row.status)?fmt(row.terminalAt):"—"}</TableCell>
                     </TableRow>
                   )}
@@ -863,7 +880,7 @@ export function CorrectionMonthlyPanel() {
             <ExportCorrectionTasksButton
               rows={drawerRows}
               title={`Correções Azure · ${drawerTitle}`}
-              subtitle={`Período ${month} · recorte do painel mensal`}
+              subtitle={detailExportContext}
               fullWidth
             />
             <Button fullWidth size="small" variant="outlined" startIcon={<ShareOutlined/>} onClick={shareSelection}>
@@ -887,6 +904,7 @@ export function CorrectionMonthlyPanel() {
                     ["Urgência",selectedTask.urgency||"Não informado"],
                     ["Criado por",selectedTask.createdBy||"Não informado"],
                     ["Responsável atual",selectedTask.assignedTo||"Não informado"],
+                    ["Responsável no fechamento",selectedTask.assignedAtClose||"Não informado"],
                     ["Data de criação",fmt(selectedTask.createdAt)],
                     ["Última mudança de status",fmt(selectedTask.lastStateChangedAt)],
                     ["Priorizada",selectedTask.prioritized===null?"Não informado":selectedTask.prioritized?"Sim":"Não"],

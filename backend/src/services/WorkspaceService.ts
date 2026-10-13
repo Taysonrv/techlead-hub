@@ -1,3 +1,4 @@
+import { scopedTicketWhere, scopedAzureWhere } from "../domain/OperationalScope";
 import {
   prisma,
 } from "../database/prisma";
@@ -52,7 +53,7 @@ export class WorkspaceService {
     const operationOwners = allowedOwners.length ? allowedOwners : [operationName];
 
     const tickets = await prisma.ticket.findMany({
-      where: { AND: [
+      where: scopedTicketWhere({ AND: [
         ticketOperationalScope(),
         { isDeleted: false },
         { owner: { in: operationOwners, mode: "insensitive" } },
@@ -61,7 +62,7 @@ export class WorkspaceService {
           { subject: { contains: params.search, mode: "insensitive" as const } },
           ...(Number.isSafeInteger(Number(params.search)) ? [{ movideskId: Number(params.search) }] : []),
         ] }] : []),
-      ] },
+      ] }),
       orderBy: { updatedAt: "desc" },
       take: 500,
       select: {
@@ -93,7 +94,7 @@ export class WorkspaceService {
     };
 
     const workItemCandidates = await prisma.azureWorkItem.findMany({
-        where: { AND: [
+        where: scopedAzureWhere({ AND: [
           identity,
           ...(params.client ? [{ OR: [
             { client: { equals: params.client, mode: "insensitive" as const } },
@@ -105,7 +106,7 @@ export class WorkspaceService {
             { title: { contains: params.search, mode: "insensitive" as const } },
             ...(Number.isSafeInteger(Number(params.search)) ? [{ id: Number(params.search) }] : []),
           ] }] : []),
-        ] },
+        ] }),
         orderBy: [{ azureChangedAt: "desc" }, { id: "desc" }],
         take: 5000,
         select: {
@@ -141,11 +142,11 @@ export class WorkspaceService {
     const blocked = workItems.filter((item) => item.blockedProcess && !isTerminal(item.state)).length;
 
     const versionItems = await prisma.azureWorkItem.findMany({
-      where: { AND: [
+      where: scopedAzureWhere({ AND: [
         azureOperationalScope(),
         { deliveredVersion: { not: null },
         workItemType: { in: ["Correção Clientes", "Evolução", "APOIO"], mode: "insensitive" } },
-      ] },
+      ] }),
       orderBy: [{ azureChangedAt: "desc" }, { id: "desc" }],
       take: 1000,
       select: { id: true, workItemType: true, title: true, state: true, deliveredVersion: true },
@@ -177,8 +178,8 @@ export class WorkspaceService {
       filters: {
         clients: [...new Set([...tickets.map((item) => item.client).filter((value): value is string => Boolean(value)), ...workItems.map((item) => item.client).filter((value): value is string => Boolean(value))])].sort(),
         types: ["Correção Clientes", "Evolução", "APOIO"],
-        analysts: [...SUPPORT_ANALYSTS, SUPPORT_COORDINATOR],
-        teams: Object.entries(SUPPORT_TEAMS).map(([name, members]) => ({ name, members: [...members] })),
+        analysts: [...SUPPORT_ANALYSTS],
+        teams: Object.entries(SUPPORT_TEAMS).map(([name, members]) => ({ name, members: members.filter(member => (SUPPORT_ANALYSTS as readonly string[]).includes(member)) })).filter(team => team.members.length),
       },
     };
   }
@@ -196,19 +197,19 @@ export class WorkspaceService {
     }) ?? user.name;
 
     const ticket = await prisma.ticket.findFirst({
-      where: {
+      where: scopedTicketWhere({
         id: ticketId,
         owner: { equals: operationName, mode: "insensitive" },
-      },
+      }),
     });
     if (!ticket) throw new Error("Atendimento não encontrado na operação deste usuário.");
 
     const relatedWorkItems = await prisma.azureWorkItem.findMany({
-      where: { OR: [
+      where: scopedAzureWhere({ OR: [
         ...(ticket.taskNumber ? [{ id: ticket.taskNumber }] : []),
         { movideskTicket: ticket.movideskId },
         { participantMovideskTickets: { contains: `,${ticket.movideskId},` } },
-      ] },
+      ] }),
       orderBy: [{ azureChangedAt: "desc" }, { id: "desc" }],
       select: {
         id: true, workItemType: true, title: true, state: true,

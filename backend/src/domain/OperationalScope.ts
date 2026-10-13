@@ -25,7 +25,7 @@ const SIMER_CLIENT_ALIASES: ReadonlyArray<{
 }> = [
   {
     canonical: "BOM JESUS COOPERATIVA AGROINDUSTRIAL - LAPA-PR",
-    aliases: ["BOM JESUS"],
+    aliases: ["BOM JESUS", "COOPERATIVA BOM JESUS - LAPA-PR"],
   },
   {
     canonical: "CAMP - PRUDENTOPOLIS-PR",
@@ -45,7 +45,7 @@ const SIMER_CLIENT_ALIASES: ReadonlyArray<{
   },
   {
     canonical: "COOPERATIVA AGROPECUARIA COMAG - CURITIBA-PR",
-    aliases: ["COMAG"],
+    aliases: ["COMAG", "COOPERATIVA AGROPECUARIA COMAG"],
   },
   {
     canonical: "COPERAMA - ITURAMA-MG",
@@ -78,12 +78,14 @@ export function resolveSimerClient(
   const aliasMatch = SIMER_CLIENT_ALIASES.find(({ aliases }) =>
     aliases.some((alias) => {
       const token = normalizeClientScopeValue(alias);
-      return normalized === token || normalized.includes(token);
+      return normalized === token;
     }),
   );
 
   return aliasMatch?.canonical ?? null;
 }
+
+export const SIMER_CLIENT_SCOPE_NAMES = [...new Set([...SIMER_CLIENTS, ...SIMER_CLIENT_ALIASES.flatMap(({ aliases }) => aliases)])];
 
 export const OPERATIONAL_SCOPE_START = new Date("2026-01-01T00:00:00.000Z");
 export const SUPPORT_COORDINATOR = "WELLINGTON ALVES GOLD" as const;
@@ -134,15 +136,17 @@ export function simerClientTicketScope(): Prisma.TicketWhereInput {
 /**
  * Escopo principal das telas Movidesk: somente atendimentos criados a partir
  * de 01/01/2026 e pertencentes aos clientes da carteira SIMER.
- * Responsável/equipe são dimensões analíticas e não critérios de pertencimento.
+ * Cliente, produto e responsável precisam pertencer à carteira operacional.
  */
 
 export const SIMER_EXCLUDED_PRODUCTS = ["AGB", "CLOVER", "SIAGRI WEB"] as const;
 
-export function simerSupportTicketScope(): Prisma.TicketWhereInput {
+export function simerSupportTicketScope(includeDeleted = false): Prisma.TicketWhereInput {
   return {
     AND: [
       simerClientTicketScope(),
+      { owner: { in: [...SUPPORT_ANALYSTS], mode: "insensitive" } },
+      ...(includeDeleted ? [] : [{ isDeleted: false }]),
       {
         NOT: {
           OR: SIMER_EXCLUDED_PRODUCTS.flatMap((product) => [
@@ -167,18 +171,13 @@ export function simerSupportTicketScope(): Prisma.TicketWhereInput {
   };
 }
 
-export function ticketOperationalScope(): Prisma.TicketWhereInput {
-  return simerSupportTicketScope();
+export function ticketOperationalScope(includeDeleted = false): Prisma.TicketWhereInput {
+  return simerSupportTicketScope(includeDeleted);
 }
 
-/**
- * Escopo da carteira da squad para indicadores de Coordenação.
- * Um ticket pertence ao recorte quando o cliente OU o analista responsável
- * pertence à squad. Mantido separado do ticketOperationalScope(), que é
- * intencionalmente mais estrito (cliente E analista).
- */
+/** A Coordenação usa a mesma carteira estrita das demais telas. */
 export function coordinationTicketScope(): Prisma.TicketWhereInput {
-  return simerClientTicketScope();
+  return ticketOperationalScope();
 }
 
 /**
@@ -186,60 +185,51 @@ export function coordinationTicketScope(): Prisma.TicketWhereInput {
  * ocorrência, e Assigned To normalmente é um desenvolvedor.
  * O campo confiável para delimitar a origem da demanda é Created By.
  */
-export function azureOperationalScope():
-  Prisma.AzureWorkItemWhereInput {
+export const AZURE_SUPPORT_CREATORS = [
+  ...SUPPORT_ANALYSTS,
+  ...SUPPORT_ANALYSTS.map((name) => name.normalize("NFD").replace(/[\u0300-\u036f]/g, "")),
+  "Alan Neto", "Renan Sousa", "Tayson Araujo",
+] as const;
+
+/** Identidade do criador, sem confundir pessoas com nomes parecidos. */
+export function resolveSupportCreator(value: string | null | undefined): string | null {
+  const normalized = normalizeClientScopeValue(value ?? "");
+  const fullName = SUPPORT_ANALYSTS.find(name => normalizeClientScopeValue(name) === normalized);
+  if (fullName) return fullName;
+  const aliases: Record<string, string> = {
+    "ALAN NETO": SUPPORT_ANALYSTS[0],
+    "RENAN SOUSA": SUPPORT_ANALYSTS[4],
+    "TAYSON ARAUJO": SUPPORT_ANALYSTS[5],
+  };
+  return aliases[normalized] ?? null;
+}
+
+export function supportCreatorNames(value: string): string[] {
+  const canonical = resolveSupportCreator(value);
+  return canonical ? [...new Set(AZURE_SUPPORT_CREATORS.filter(name => resolveSupportCreator(name) === canonical))] : [];
+}
+
+export function azureOperationalScope(): Prisma.AzureWorkItemWhereInput {
   return {
-    OR: [
-      {
-        createdByName: {
-          in: [
-            ...SUPPORT_ANALYSTS,
-          ],
-          mode:
-            "insensitive",
-        },
-      },
-      {
-        client: {
-          in: [
-            ...SIMER_CLIENTS,
-          ],
-          mode:
-            "insensitive",
-        },
-      },
-      {
-        movideskTicket: {
-          not:
-            null,
-        },
-      },
-      {
-        participantMovideskTickets: {
-          not: null,
-        },
-      },
+    AND: [
+      { client: { in: SIMER_CLIENT_SCOPE_NAMES, mode: "insensitive" } },
+      { createdByName: { in: [...AZURE_SUPPORT_CREATORS], mode: "insensitive" } },
+      { workItemType: { in: ["Correção Clientes", "Evolução", "APOIO"], mode: "insensitive" } },
     ],
   };
 }
 
-/**
- * Escopo estrito da Central da Coordenação.
- * Diferente do escopo geral do Azure, aqui um Work Item só participa
- * dos indicadores quando o Cliente Principal pertence à carteira da squad.
- */
 export function coordinationAzureScope(): Prisma.AzureWorkItemWhereInput {
-  return {
-    AND: [
-      azureOperationalScope(),
-      {
-        client: {
-          in: [...SIMER_CLIENTS],
-          mode: "insensitive",
-        },
-      },
-    ],
-  };
+  return azureOperationalScope();
+}
+
+/** Os filtros opcionais apenas restringem a carteira obrigatória. */
+export function scopedTicketWhere(where: Prisma.TicketWhereInput = {}, includeDeleted = false): Prisma.TicketWhereInput {
+  return { AND: [ticketOperationalScope(includeDeleted), where] };
+}
+
+export function scopedAzureWhere(where: Prisma.AzureWorkItemWhereInput = {}): Prisma.AzureWorkItemWhereInput {
+  return { AND: [azureOperationalScope(), where] };
 }
 
 export function isSupportAnalyst(
@@ -299,8 +289,8 @@ export function isSimerOperationalTeam(value: string | null | undefined) {
   );
 }
 
-export function isSimerOperationalResponsibility(owner: string | null | undefined, ownerTeam: string | null | undefined) {
-  return isSupportAnalyst(owner) || isSimerOperationalTeam(ownerTeam);
+export function isSimerOperationalResponsibility(owner: string | null | undefined, _ownerTeam: string | null | undefined) {
+  return isSupportAnalyst(owner);
 }
 
 export function isSimerClient(

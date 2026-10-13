@@ -1,3 +1,4 @@
+import { scopedTicketWhere, scopedAzureWhere } from "../domain/OperationalScope";
 import { isBug, isConcluded, mapPriority, SLA_PRIORITY } from "../domain/TicketClassificationRules";
 import { slaBusinessMinutes } from "../domain/SlaCalendarRules";
 import { prisma } from "../database/prisma";
@@ -46,7 +47,7 @@ export class CoordinationService {
     const [tickets, workItems] = await Promise.all([
       wantsTickets
         ? prisma.ticket.findMany({
-            where: {
+            where: scopedTicketWhere({
               AND: [
                 ticketScope,
                 ticketPriority,
@@ -62,7 +63,7 @@ export class CoordinationService {
                   ],
                 }] : []),
               ],
-            },
+            }),
             orderBy: [{ urgency: "desc" }, { lastUpdate: "asc" }],
             take: fetchLimit,
             select: {
@@ -76,14 +77,14 @@ export class CoordinationService {
         : Promise.resolve([]),
       wantsAzure
         ? prisma.azureWorkItem.findMany({
-            where: {
+            where: scopedAzureWhere({
               AND: [
                 azureScope,
                 azurePriority,
                 ...(analyst ? [{ createdByName: { equals: analyst, mode: "insensitive" as const } }] : []),
                 ...(serviceSince ? [{ azureCreatedAt: { gte: serviceSince } }] : []),
               ],
-            },
+            }),
             orderBy: [{ azureChangedAt: "asc" }],
             take: fetchLimit,
             select: {
@@ -112,7 +113,7 @@ export class CoordinationService {
     // O mesmo predicado usado no summary calcula o total do recorte. Assim o card e o drawer
     // permanecem consistentes mesmo quando a lista é paginada/limitada.
     const [ticketTotal, workItemTotal] = await Promise.all([
-      wantsTickets ? prisma.ticket.count({ where: { AND: [
+      wantsTickets ? prisma.ticket.count({ where: scopedTicketWhere({ AND: [
         ticketScope, ticketPriority,
         ...(analyst?[{owner:{equals:analyst,mode:"insensitive" as const}}]:[]),
         ...(serviceClient?[{client:{equals:serviceClient,mode:"insensitive" as const}}]:[]),
@@ -123,12 +124,12 @@ export class CoordinationService {
           {serviceSecondLevel:{contains:serviceModule,mode:"insensitive" as const}},
           {serviceThirdLevel:{contains:serviceModule,mode:"insensitive" as const}},
         ]}]:[]),
-      ] } }) : Promise.resolve(0),
-      wantsAzure ? prisma.azureWorkItem.count({ where: { AND: [
+      ] }) }) : Promise.resolve(0),
+      wantsAzure ? prisma.azureWorkItem.count({ where: scopedAzureWhere({ AND: [
         azureScope, azurePriority,
         ...(analyst?[{createdByName:{equals:analyst,mode:"insensitive" as const}}]:[]),
         ...(serviceSince?[{azureCreatedAt:{gte:serviceSince}}]:[]),
-      ] } }) : Promise.resolve(0),
+      ] }) }) : Promise.resolve(0),
     ]);
     // Para Serviço exato o filtro é pós-query; nesse caso o total conhecido é o conjunto filtrado carregado.
     const total = serviceName ? serviceFilteredTickets.length + workItemTotal : ticketTotal + workItemTotal;
@@ -154,16 +155,16 @@ export class CoordinationService {
     const ticketScope = ticketOperationalScope();
     const periodTicketScope = { AND: [ticketScope, { isDeleted: false }, { createdDate: { gte: since, lte: until } }] };
     const periodTickets = await prisma.ticket.findMany({
-      where: periodTicketScope,
+      where: scopedTicketWhere(periodTicketScope),
       select: { movideskId: true, taskNumber: true },
     });
     const ticketIds = periodTickets.map((ticket) => ticket.movideskId);
     const taskIds = periodTickets.map((ticket) => ticket.taskNumber).filter((id): id is number => id !== null);
     const [withService, withCause, withBusinessArea, azureItems, csat, services, latestCsat, latestCatalog] = await Promise.all([
-      prisma.ticket.count({ where: { AND: [periodTicketScope, { OR:[{service:{not:null}},{serviceFirstLevel:{not:null}},{serviceSecondLevel:{not:null}},{serviceThirdLevel:{not:null}}] }] } }),
-      prisma.ticket.count({ where: { AND: [periodTicketScope, { cause: { not:null } }] } }),
-      prisma.ticket.count({ where: { AND: [periodTicketScope, { businessArea: { not:null } }] } }),
-      taskIds.length ? prisma.azureWorkItem.count({ where: { id: { in: taskIds } } }) : Promise.resolve(0),
+      prisma.ticket.count({ where: scopedTicketWhere({ AND: [periodTicketScope, { OR:[{service:{not:null}},{serviceFirstLevel:{not:null}},{serviceSecondLevel:{not:null}},{serviceThirdLevel:{not:null}}] }] }) }),
+      prisma.ticket.count({ where: scopedTicketWhere({ AND: [periodTicketScope, { cause: { not:null } }] }) }),
+      prisma.ticket.count({ where: scopedTicketWhere({ AND: [periodTicketScope, { businessArea: { not:null } }] }) }),
+      taskIds.length ? prisma.azureWorkItem.count({ where: scopedAzureWhere({ id: { in: taskIds } }) }) : Promise.resolve(0),
       ticketIds.length ? prisma.movideskSurveyResponse.count({ where:{ ticketId:{in:ticketIds}, type:2, responseDate:{gte:since,lte:until} } }) : Promise.resolve(0),
       prisma.movideskServiceCatalog.count({ where:{isActive:true} }),
       ticketIds.length ? prisma.movideskSurveyResponse.aggregate({ where:{ticketId:{in:ticketIds},type:2,responseDate:{gte:since,lte:until}}, _max: { syncedAt: true, responseDate: true } }) : Promise.resolve({_max:{syncedAt:null,responseDate:null}}),
@@ -192,7 +193,7 @@ export class CoordinationService {
     });
     const ticketIds = [...new Set(responses.map((item) => item.ticketId).filter((id): id is number => id !== null))];
     const tickets = ticketIds.length ? await prisma.ticket.findMany({
-      where: { AND: [{ movideskId: { in: ticketIds }, isDeleted: false }, ticketOperationalScope()] },
+      where: scopedTicketWhere({ AND: [{ movideskId: { in: ticketIds }, isDeleted: false }, ticketOperationalScope()] }),
       select: { movideskId: true, subject: true, client: true, owner: true, service: true, serviceFirstLevel: true, serviceSecondLevel: true, serviceThirdLevel: true },
     }) : [];
     const byTicket = new Map(tickets.map((ticket) => [ticket.movideskId, ticket]));
@@ -251,7 +252,7 @@ export class CoordinationService {
     });
     const ids = [...new Set(responses.map((item) => item.ticketId).filter((id): id is number => id !== null))];
     const tickets = ids.length ? await prisma.ticket.findMany({
-      where: { AND: [{ movideskId: { in: ids }, isDeleted: false }, ticketOperationalScope()] },
+      where: scopedTicketWhere({ AND: [{ movideskId: { in: ids }, isDeleted: false }, ticketOperationalScope()] }),
       select: { movideskId:true, subject:true, client:true, owner:true, service:true, serviceFirstLevel:true, serviceSecondLevel:true, serviceThirdLevel:true, taskNumber:true },
     }) : [];
     const byTicket = new Map(tickets.map((ticket) => [ticket.movideskId, ticket]));
@@ -280,14 +281,14 @@ export class CoordinationService {
     const since = customStart ?? new Date(Date.now() - Math.min(Math.max(days, 1), 730) * 86400000);
     const until = customEnd ?? new Date();
     const tickets = await prisma.ticket.findMany({
-      where: { AND: [{ isDeleted: false, createdDate: { gte: since, lte: until } }, simerClientTicketScope()] },
+      where: scopedTicketWhere({ AND: [{ isDeleted: false, createdDate: { gte: since, lte: until } }, simerClientTicketScope()] }),
       select: { movideskId:true, subject:true, category:true, client:true, owner:true, urgency:true, createdDate:true, taskNumber:true, taskStatus:true, taskTitle:true, taskType:true }
     });
     const bugTickets=tickets.filter(t=>isBug(t.category,t.taskType));
     const ids=[...new Set(bugTickets.map(t=>t.taskNumber).filter((x):x is number=>Boolean(x)))];
     const movideskIds=bugTickets.map(t=>t.movideskId);
     const items=await prisma.azureWorkItem.findMany({
-      where:{OR:[...(ids.length?[{id:{in:ids}}]:[]),...(movideskIds.length?[{movideskTicket:{in:movideskIds}}]:[])]},
+      where:scopedAzureWhere({OR:[...(ids.length?[{id:{in:ids}}]:[]),...(movideskIds.length?[{movideskTicket:{in:movideskIds}}]:[])]}),
       select:{id:true,state:true,azureCreatedAt:true,stateChangedAt:true,azureChangedAt:true,azureClosedAt:true,title:true,movideskTicket:true,criticality:true}
     });
     const byId=new Map(items.map(x=>[x.id,x]));
@@ -361,14 +362,14 @@ export class CoordinationService {
     if (cached) return cached;
     const scope = simerClientTicketScope();
     const [allTickets, officialServices] = await Promise.all([prisma.ticket.findMany({
-      where: {
+      where: scopedTicketWhere({
         AND: [
           scope,
           { isDeleted: false, createdDate: { gte: previousSince } },
           ...(filters.client ? [{ client: { equals: filters.client, mode: "insensitive" as const } }] : []),
           ...(filters.analyst ? [{ owner: { equals: filters.analyst, mode: "insensitive" as const } }] : []),
         ],
-      },
+      }),
       select: {
         movideskId: true, subject: true, category: true, cause: true, client: true, owner: true,
         service: true, serviceFirstLevel: true, serviceSecondLevel: true, serviceThirdLevel: true,
@@ -500,7 +501,8 @@ export class CoordinationService {
     const appointments = await prisma.movideskTimeAppointment.findMany({
       where: {
         date: { gte: start, lte: now },
-        action: { ticket: { AND: [simerClientTicketScope(), { isDeleted: false }] } },
+        action: { ticket: ticketOperationalScope() },
+        createdByName: { in: [...SUPPORT_ANALYSTS], mode: "insensitive" },
       },
       select: { accountedTime: true, createdByName: true },
     });
@@ -547,35 +549,35 @@ export class CoordinationService {
       serviceTickets,
     ] = await Promise.all([
       prisma.ticket.count({
-        where: { AND: [ticketScope, coordinationTicketPriorityPredicate("backlog", now), ...periodTicketFilter] },
+        where: scopedTicketWhere({ AND: [ticketScope, coordinationTicketPriorityPredicate("backlog", now), ...periodTicketFilter] }),
       }),
       prisma.ticket.count({
-        where: { AND: [ticketScope, coordinationTicketPriorityPredicate("critical", now), ...periodTicketFilter] },
+        where: scopedTicketWhere({ AND: [ticketScope, coordinationTicketPriorityPredicate("critical", now), ...periodTicketFilter] }),
       }),
       prisma.ticket.count({
-        where: {
+        where: scopedTicketWhere({
           AND: [ticketScope, coordinationTicketPriorityPredicate("stale", now), ...periodTicketFilter],
-        },
+        }),
       }),
       prisma.ticket.count({
-        where: {
+        where: scopedTicketWhere({
           AND: [ticketScope, coordinationTicketPriorityPredicate("dueSoon", now), ...periodTicketFilter],
-        },
+        }),
       }),
       prisma.ticket.count({
-        where: {
+        where: scopedTicketWhere({
           AND: [ticketScope, coordinationTicketPriorityPredicate("overdue", now), ...periodTicketFilter],
-        },
+        }),
       }),
       prisma.azureWorkItem.count({
-        where: { AND: [azureScope, coordinationAzurePriorityPredicate("blocked"), ...periodAzureFilter] },
+        where: scopedAzureWhere({ AND: [azureScope, coordinationAzurePriorityPredicate("blocked"), ...periodAzureFilter] }),
       }),
       prisma.azureWorkItem.count({
-        where: { AND: [azureScope, coordinationAzurePriorityPredicate("unassigned"), ...periodAzureFilter] },
+        where: scopedAzureWhere({ AND: [azureScope, coordinationAzurePriorityPredicate("unassigned"), ...periodAzureFilter] }),
       }),
       prisma.ticket.groupBy({
         by: ["owner"],
-        where: {
+        where: scopedTicketWhere({
           AND: [
             ticketScope,
             {
@@ -586,12 +588,12 @@ export class CoordinationService {
               owner: { in: [...SUPPORT_ANALYSTS], mode: "insensitive" },
             },
           ],
-        },
+        }),
         _count: { id: true },
       }),
       prisma.azureWorkItem.groupBy({
         by: ["assignedToName"],
-        where: {
+        where: scopedAzureWhere({
           AND: [
             azureScope,
             {
@@ -602,17 +604,17 @@ export class CoordinationService {
               assignedToName: { in: [...SUPPORT_ANALYSTS], mode: "insensitive" },
             },
           ],
-        },
+        }),
         _count: { id: true },
       }),
       prisma.ticket.findMany({
         // Qualidade de Serviço pertence à carteira da squad: basta o ticket ser
         // de um cliente da squad OU estar com um analista da squad.
-        where: { AND: [
+        where: scopedTicketWhere({ AND: [
           ticketOperationalScope(),
           coordinationOpenTicketPredicate(),
           ...periodTicketFilter,
-        ] },
+        ] }),
         select: {
           id: true, subject: true, category: true, cause: true, service: true, client: true, owner: true,
           serviceFirstLevel: true, serviceSecondLevel: true, serviceThirdLevel: true,

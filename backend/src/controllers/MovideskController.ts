@@ -9,6 +9,7 @@ import { movideskEnrichmentSchedulerStatus } from "../jobs/MovideskEnrichmentSch
 export class MovideskController {
 
     async sync(req: AuthenticatedRequest, res: Response) {
+        if (!tryAcquireMovideskApi("MANUAL")) return res.status(409).json({ message: "Outra sincronização Movidesk está em andamento. Aguarde a conclusão e tente novamente." });
         try {
             const service = new MovideskService();
             const result = await service.syncTickets(req.auth?.userId ?? null);
@@ -17,7 +18,7 @@ export class MovideskController {
             return res.status(500).json({
                 message: error instanceof Error ? error.message : "Não foi possível sincronizar o Movidesk.",
             });
-        }
+        } finally { releaseMovideskApi("MANUAL"); }
 
     }
 
@@ -48,11 +49,12 @@ export class MovideskController {
     }
 
     async fullSync(req: AuthenticatedRequest, res: Response) {
+        if (!tryAcquireMovideskApi("MANUAL")) return res.status(409).json({ message: "Outra sincronização Movidesk está em andamento. Aguarde a conclusão e tente novamente." });
         try {
             return res.json(await new MovideskService().syncTickets(req.auth?.userId ?? null, true));
         } catch (error) {
             return res.status(500).json({ message: error instanceof Error ? error.message : "Não foi possível executar a carga completa do Movidesk." });
-        }
+        } finally { releaseMovideskApi("MANUAL"); }
     }
 
     async syncReferenceData(_req: AuthenticatedRequest, res: Response) {

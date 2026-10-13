@@ -1,3 +1,5 @@
+import { KpiGrid } from "../components/KpiGrid";
+import { KpiCard as ExecutiveKpiCard } from "../components/KpiCard";
 import {
   Accordion,
   AccordionDetails,
@@ -81,6 +83,7 @@ import {
   chartPalette,
   semanticChartColors,
 } from "../theme/chartPalette";
+import { subscribeTicketSnapshotRefresh } from "../services/ticketSnapshot";
 import { PageHeader } from "../components/PageHeader";
 import { CorrectionMonthlyPanel } from "../components/CorrectionMonthlyPanel";
 import { ExecutiveSection } from "../components/ExecutiveSection";
@@ -1209,6 +1212,7 @@ export function AzureWorkItems({
   ] = useState(false);
 
   const hasLoadedRef = useRef(false);
+  const mainRequestRef = useRef<AbortController | null>(null);
 
   const [
     detailLoading,
@@ -1436,11 +1440,12 @@ export function AzureWorkItems({
 
   const loadSummary =
     useCallback(
-      async () => {
+      async (signal: AbortSignal) => {
         const response =
           await api.get<SummaryResponse>(
             "/azure-work-items/summary",
             {
+              signal,
               params: {
                 type,
                 search: appliedSearch || undefined,
@@ -1459,9 +1464,7 @@ export function AzureWorkItems({
             },
           );
 
-        setSummary(
-          response.data,
-        );
+        return response.data;
       },
       [
         type, appliedSearch, state, criticality, assignedTo, client,
@@ -1472,17 +1475,19 @@ export function AzureWorkItems({
 
   const loadFilters =
     useCallback(
-      async () => {
+      async (signal: AbortSignal) => {
         const response =
           await api.get<FiltersResponse>(
             "/azure-work-items/filters",
             {
+              signal,
               params: {
                 type,
               },
             },
           );
 
+        if (signal.aborted) return;
         setFilters(
           response.data,
         );
@@ -1494,11 +1499,12 @@ export function AzureWorkItems({
 
   const loadList =
     useCallback(
-      async () => {
+      async (signal: AbortSignal) => {
         const response =
           await api.get<ListResponse>(
             "/azure-work-items",
             {
+              signal,
               params: {
                 type,
                 page,
@@ -1569,9 +1575,7 @@ export function AzureWorkItems({
             },
           );
 
-        setList(
-          response.data,
-        );
+        return response.data;
       },
       [
         appliedSearch,
@@ -1595,6 +1599,9 @@ export function AzureWorkItems({
   const loadAll =
     useCallback(
       async () => {
+        mainRequestRef.current?.abort();
+        const controller = new AbortController();
+        mainRequestRef.current = controller;
         const hasData = hasLoadedRef.current;
         try {
           if (hasData) setRefreshing(true);
@@ -1604,13 +1611,18 @@ export function AzureWorkItems({
             null,
           );
 
-          await Promise.all([
-            loadSummary(),
-            loadList(),
+          const [summaryData, listData] = await Promise.all([
+            loadSummary(controller.signal),
+            loadList(controller.signal),
           ]);
+          if (controller.signal.aborted) return;
+          setSummary(summaryData);
+          setList(listData);
+          hasLoadedRef.current = true;
         } catch (
           loadError
         ) {
+          if (controller.signal.aborted) return;
           console.error(
             "[AzureWorkItems]",
             loadError,
@@ -1620,9 +1632,11 @@ export function AzureWorkItems({
             "Não foi possível carregar os dados sincronizados do Azure DevOps.",
           );
         } finally {
-          hasLoadedRef.current = true;
-          setLoading(false);
-          setRefreshing(false);
+          if (!controller.signal.aborted) {
+            mainRequestRef.current = null;
+            setLoading(false);
+            setRefreshing(false);
+          }
         }
       },
       [
@@ -1635,10 +1649,18 @@ export function AzureWorkItems({
     // O painel mensal tem consulta e cache próprios: evitar três requisições
     // genéricas desnecessárias ao abrir Correções.
     if (!isCorrection) void loadAll();
+    const unsubscribe = subscribeTicketSnapshotRefresh(() => {
+      if (!isCorrection && !mainRequestRef.current) void loadAll();
+    });
+    return () => { unsubscribe(); mainRequestRef.current?.abort(); };
   }, [isCorrection, loadAll]);
 
   useEffect(() => {
-    if (!isCorrection) void loadFilters();
+    const controller = new AbortController();
+    if (!isCorrection) void loadFilters(controller.signal).catch(() => {
+      if (!controller.signal.aborted) setError("Não foi possível atualizar as opções dos filtros.");
+    });
+    return () => controller.abort();
   }, [isCorrection, loadFilters]);
 
   useEffect(() => {
@@ -2593,32 +2615,7 @@ export function AzureWorkItems({
             KPIs
         ================================================= */}
 
-        <Box
-          sx={{
-            order:
-              1,
-            display:
-              "grid",
-            gridTemplateColumns: {
-              xs:
-                "1fr",
-              sm:
-                "repeat(2, minmax(0, 1fr))",
-              lg:
-                "repeat(3, minmax(0, 1fr))",
-              xl:
-                "repeat(5, minmax(0, 1fr))",
-            },
-            gap: {
-              xs:
-                1.25,
-              md:
-                1.5,
-              xl:
-                1.5,
-            },
-          }}
-        >
+        <KpiGrid sx={{order: 1}}>
           {cards.map(
             (
               card,
@@ -2640,205 +2637,11 @@ export function AzureWorkItems({
                   : aliareColors.green;
 
               return (
-                <Card
-                  key={
-                    card.key
-                  }
-                  elevation={0}
-                  role="button"
-                  tabIndex={0}
-                  onClick={() =>
-                    handleCardClick(
-                      card.key,
-                    )
-                  }
-                  onKeyDown={(event) => {
-                    if (
-                      event.key ===
-                        "Enter" ||
-                      event.key ===
-                        " "
-                    ) {
-                      handleCardClick(
-                        card.key,
-                      );
-                    }
-                  }}
-                  sx={{
-                    position:
-                      "relative",
-                    overflow:
-                      "hidden",
-                    height:
-                      "100%",
-                    minHeight:
-                      112,
-                    border:
-                      "1px solid",
-                    borderColor:
-                      active
-                        ? accentColor
-                        : "divider",
-                    borderRadius:
-                      2.25,
-                    cursor:
-                      "pointer",
-                    backgroundColor:
-                      "background.paper",
-                    boxShadow:
-                      active
-                        ? `0 0 0 1px ${accentColor}`
-                        : "none",
-                    transition:
-                      "transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease",
-                    "&::before": {
-                      content:
-                        '""',
-                      position:
-                        "absolute",
-                      top:
-                        0,
-                      left:
-                        0,
-                      width:
-                        "100%",
-                      height:
-                        3,
-                      backgroundColor:
-                        accentColor,
-                    },
-                    "&:hover": {
-                      transform:
-                        "translateY(-2px)",
-                      borderColor:
-                        accentColor,
-                      boxShadow:
-                        "0 8px 24px rgba(16,24,40,0.08)",
-                    },
-                    "&:focus-visible": {
-                      outline:
-                        `2px solid ${accentColor}`,
-                      outlineOffset:
-                        "2px",
-                    },
-                  }}
-                >
-                  <CardContent
-                    sx={{
-                      p: {
-                        xs:
-                          1.25,
-                        md:
-                          1.4,
-                      },
-                      "&:last-child": {
-                        pb: {
-                          xs:
-                            1.25,
-                          md:
-                            1.4,
-                        },
-                      },
-                    }}
-                  >
-                    <Stack
-                      direction="row"
-                      spacing={1}
-                      sx={{
-                        alignItems:
-                          "flex-start",
-                        justifyContent:
-                          "space-between",
-                      }}
-                    >
-                      <Box
-                        sx={{
-                          minWidth:
-                            0,
-                        }}
-                      >
-                        <Typography
-                          variant="body2"
-                          sx={{
-                            fontWeight:
-                              750,
-                          }}
-                        >
-                          {card.label}
-                        </Typography>
-
-                        <Typography
-                          sx={{
-                            mt:
-                              0.55,
-                            fontSize: {
-                              xs:
-                                "1.5rem",
-                              md:
-                                "1.65rem",
-                              xl:
-                                "1.78rem",
-                            },
-                            fontWeight:
-                              800,
-                            lineHeight:
-                              1.1,
-                            fontVariantNumeric:
-                              "tabular-nums",
-                          }}
-                        >
-                          {formatNumber(
-                            card.value,
-                          )}
-                        </Typography>
-                      </Box>
-
-                      <Stack
-                        direction="row"
-                        spacing={0.25}
-                        sx={{
-                          alignItems:
-                            "center",
-                        }}
-                      >
-                        <Box
-                          sx={{
-                            display:
-                              "flex",
-                            color:
-                              accentColor,
-                          }}
-                        >
-                          {card.icon}
-                        </Box>
-
-                        <CardInfoButton
-                          info={
-                            card.info
-                          }
-                        />
-                      </Stack>
-                    </Stack>
-
-                    <Typography
-                      variant="caption"
-                      color="text.secondary"
-                      sx={{
-                        display:
-                          "block",
-                        mt:
-                          0.75,
-                      }}
-                    >
-                      {card.description}
-                    </Typography>
-
-                  </CardContent>
-                </Card>
+                <ExecutiveKpiCard key={card.key} title={card.label} value={formatNumber(card.value)} subtitle={card.description} accent={accentColor} active={active} icon={card.icon} infoContent={<CardInfoButton info={card.info} />} onClick={() => handleCardClick(card.key)} />
               );
             },
           )}
-        </Box>
+        </KpiGrid>
 
         {/* =================================================
             ANÁLISE EXECUTIVA
@@ -3367,11 +3170,11 @@ export function AzureWorkItems({
                     },
                   }}
                 >
-                  <InputLabel>
+                  <InputLabel shrink>
                     Ordenar
                   </InputLabel>
 
-                  <Select
+                  <Select notched displayEmpty
                     value={
                       sortDirection
                     }
@@ -3457,7 +3260,7 @@ export function AzureWorkItems({
                   gridTemplateColumns: {
                     xs: "1fr",
                     sm: "repeat(2, minmax(0, 1fr))",
-                    lg: "repeat(5, minmax(0, 1fr))",
+                    lg: "repeat(3, minmax(0, 1fr))",
                   },
                   gap: 1.25,
                 }}
@@ -3466,11 +3269,11 @@ export function AzureWorkItems({
                   size="small"
                   fullWidth
                 >
-                  <InputLabel>
+                  <InputLabel shrink>
                     Estado
                   </InputLabel>
 
-                  <Select
+                  <Select notched displayEmpty renderValue={(value) => value === "true" ? "Sim" : value === "false" ? "Não" : value ? String(value) : "Todos"}
                     label="Estado"
                     value={
                       state
@@ -3514,11 +3317,11 @@ export function AzureWorkItems({
                   size="small"
                   fullWidth
                 >
-                  <InputLabel>
+                  <InputLabel shrink>
                     Criticidade
                   </InputLabel>
 
-                  <Select
+                  <Select notched displayEmpty renderValue={(value) => value === "true" ? "Sim" : value === "false" ? "Não" : value ? String(value) : "Todos"}
                     label="Criticidade"
                     value={
                       criticality
@@ -3651,7 +3454,7 @@ export function AzureWorkItems({
                     gridTemplateColumns: {
                       xs: "1fr",
                       sm: "repeat(2, minmax(0, 1fr))",
-                      lg: "repeat(4, minmax(0, 1fr))",
+                      lg: "repeat(3, minmax(0, 1fr))",
                     },
                     gap: 1.25,
                   }}
@@ -3726,11 +3529,11 @@ export function AzureWorkItems({
                     size="small"
                     fullWidth
                   >
-                    <InputLabel>
+                    <InputLabel shrink>
                       Priorização
                     </InputLabel>
 
-                    <Select
+                    <Select notched displayEmpty renderValue={(value) => value === "true" ? "Sim" : value === "false" ? "Não" : value ? String(value) : "Todos"}
                       label="Priorização"
                       value={
                         prioritized
@@ -3765,11 +3568,11 @@ export function AzureWorkItems({
                     size="small"
                     fullWidth
                   >
-                    <InputLabel>
+                    <InputLabel shrink>
                       Bloqueio
                     </InputLabel>
 
-                    <Select
+                    <Select notched displayEmpty renderValue={(value) => value === "true" ? "Sim" : value === "false" ? "Não" : value ? String(value) : "Todos"}
                       label="Bloqueio"
                       value={
                         blockedProcess
@@ -3804,11 +3607,11 @@ export function AzureWorkItems({
                     size="small"
                     fullWidth
                   >
-                    <InputLabel>
+                    <InputLabel shrink>
                       Responsável
                     </InputLabel>
 
-                    <Select
+                    <Select notched displayEmpty renderValue={(value) => value === "true" ? "Sim" : value === "false" ? "Não" : value ? String(value) : "Todos"}
                       label="Responsável"
                       value={
                         hasAssignedTo
@@ -3843,11 +3646,11 @@ export function AzureWorkItems({
                     size="small"
                     fullWidth
                   >
-                    <InputLabel>
+                    <InputLabel shrink>
                       Movidesk na Task
                     </InputLabel>
 
-                    <Select
+                    <Select notched displayEmpty renderValue={(value) => value === "true" ? "Sim" : value === "false" ? "Não" : value ? String(value) : "Todos"}
                       label="Movidesk na Task"
                       value={
                         hasMovideskTicket

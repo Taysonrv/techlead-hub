@@ -1,8 +1,10 @@
+import { KpiGrid } from "../components/KpiGrid";
 import { Alert, Autocomplete, Box, Button, Card, CardContent, Chip, CircularProgress, Drawer, FormControl, InputLabel, MenuItem, Select, Stack, TextField, ToggleButton, ToggleButtonGroup, Tooltip, Typography } from "@mui/material";
 import { BookmarkAddOutlined, DeleteOutlined, DragIndicatorOutlined, FilterAltOutlined, InfoOutlined, OpenInNewOutlined, ScheduleOutlined, SearchOutlined, ViewColumnOutlined, ViewListOutlined, ShareOutlined } from "@mui/icons-material";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api, getApiErrorMessage } from "../services/api";
+import { subscribeTicketSnapshotRefresh } from "../services/ticketSnapshot";
 import { aliareColors } from "../theme/theme";
 import { PageHeader } from "../components/PageHeader";
 import { useFilters } from "../context/FiltersContext";
@@ -70,14 +72,22 @@ export function MyOperation() {
     try { return JSON.parse(localStorage.getItem("my-operation-saved-views") || "[]"); } catch { return []; }
   });
 
+  const requestRef = useRef<AbortController | null>(null);
   const load = useCallback(async () => {
+    requestRef.current?.abort();
+    const controller = new AbortController();
+    requestRef.current = controller;
     try {
       setLoading(true); setError("");
-      const response = await api.get<Data>("/workspace/my-operation", { params: { client: client || undefined, analyst: analyst || undefined, team: team || undefined, type: type || undefined, search: search || undefined } });
-      setData(response.data);
-    } catch { setError("Não foi possível carregar sua operação."); } finally { setLoading(false); }
+      const response = await api.get<Data>("/workspace/my-operation", { signal: controller.signal, params: { client: client || undefined, analyst: analyst || undefined, team: team || undefined, type: type || undefined, search: search || undefined } });
+      if (!controller.signal.aborted) setData(response.data);
+    } catch { if (!controller.signal.aborted) setError("Não foi possível atualizar sua operação. Os dados anteriores foram preservados."); } finally { if (!controller.signal.aborted) setLoading(false); if (requestRef.current === controller) requestRef.current = null; }
   }, [client, analyst, team, type, search]);
-  useEffect(() => { const timer = window.setTimeout(() => void load(), search ? 550 : 180); return () => window.clearTimeout(timer); }, [load, search]);
+  useEffect(() => { const timer = window.setTimeout(() => void load(), search ? 550 : 180); return () => { window.clearTimeout(timer); requestRef.current?.abort(); }; }, [load, search]);
+
+  useEffect(() => subscribeTicketSnapshotRefresh(() => {
+    if (!requestRef.current || requestRef.current.signal.aborted) void load();
+  }), [load]);
 
   const items = useMemo<Unified[]>(() => {
     if (!data) return [];
@@ -165,13 +175,13 @@ export function MyOperation() {
   return <Box sx={{ pb: 4, minHeight: 0 }}>
     <PageHeader eyebrow="Operação" title="Minha Operação" description="Seus atendimentos Movidesk e tarefas Azure em uma única experiência operacional." meta={`${items.length} registro(s) no recorte atual`} />
 
-    <Card variant="outlined" sx={{ mt: 2 }}><CardContent><Stack direction={{ xs: "column", md: "row" }} sx={{ justifyContent: "space-between", alignItems: { md: "center" }, mb: 1.5 }}><Box><Typography sx={{ fontWeight: 850 }}>Filtros da operação</Typography><Typography variant="caption" color="text.secondary">Combine o recorte e alterne entre Kanban e lista sem perder o contexto.</Typography></Box><Chip size="small" variant="outlined" label={`${items.length} registro(s)`} /></Stack><Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(2,minmax(0,1fr))", xl: "minmax(280px,1.6fr) repeat(5,minmax(150px,1fr))" }, gap: 1.2 }}>
+    <Card variant="outlined" sx={{ mt: 2 }}><CardContent><Stack direction={{ xs: "column", md: "row" }} sx={{ justifyContent: "space-between", alignItems: { md: "center" }, mb: 1.5 }}><Box><Typography sx={{ fontWeight: 850 }}>Filtros da operação</Typography><Typography variant="caption" color="text.secondary">Combine o recorte e alterne entre Kanban e lista sem perder o contexto.</Typography></Box><Chip size="small" variant="outlined" label={`${items.length} registro(s)`} /></Stack><Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(2,minmax(0,1fr))", xl: "repeat(3,minmax(0,1fr))" }, "& .MuiFormControl-root": { minWidth: "0 !important", width: "100%" }, "& .MuiSelect-select": { overflow: "hidden", textOverflow: "ellipsis" }, gap: 2 }}>
       <TextField size="small" label="Pesquisar ticket, tarefa ou assunto" value={search} onChange={(event) => setSearch(event.target.value)} slotProps={{ input: { startAdornment: <SearchOutlined sx={{ mr: 1, color: "text.disabled" }} /> } }} />
       <Autocomplete size="small" options={data?.filters.clients ?? []} value={client || null} onChange={(_, value) => setClient(value ?? "")} renderInput={(params) => <TextField {...params} label="Cliente" />} />
       <Autocomplete size="small" options={data?.filters.analysts ?? []} value={analyst || null} onChange={(_, value) => { setAnalyst(value ?? ""); if (value) setTeam(""); }} renderInput={(params) => <TextField {...params} label="Analista" />} />
-      <FormControl size="small"><InputLabel id="myoperation-select-1-label">Equipe</InputLabel><Select labelId="myoperation-select-1-label" inputProps={{ id: "myoperation-select-1", "aria-labelledby": "myoperation-select-1-label" }} label="Equipe" value={team} onChange={(event) => { setTeam(event.target.value); if (event.target.value) setAnalyst(""); }}><MenuItem value="">Minha operação</MenuItem>{data?.filters.teams.map((item) => <MenuItem key={item.name} value={item.name}>{item.name}</MenuItem>)}</Select></FormControl>
+      <FormControl size="small"><InputLabel shrink id="myoperation-select-1-label">Equipe</InputLabel><Select notched displayEmpty renderValue={(value) => value || "Minha operação"} labelId="myoperation-select-1-label" inputProps={{ id: "myoperation-select-1", "aria-labelledby": "myoperation-select-1-label" }} label="Equipe" value={team} onChange={(event) => { setTeam(event.target.value); if (event.target.value) setAnalyst(""); }}><MenuItem value="">Minha operação</MenuItem>{data?.filters.teams.map((item) => <MenuItem key={item.name} value={item.name}>{item.name}</MenuItem>)}</Select></FormControl>
       <FormControl size="small"><InputLabel id="myoperation-select-2-label">Conteúdo</InputLabel><Select labelId="myoperation-select-2-label" inputProps={{ id: "myoperation-select-2", "aria-labelledby": "myoperation-select-2-label" }} label="Conteúdo" value={sourceView} onChange={(event) => setSourceView(event.target.value as SourceView)}><MenuItem value="tickets">Atendimentos</MenuItem><MenuItem value="tasks">Tarefas</MenuItem><MenuItem value="both">Ambos</MenuItem></Select></FormControl>
-      <FormControl size="small"><InputLabel id="myoperation-select-3-label">Tipo de tarefa</InputLabel><Select labelId="myoperation-select-3-label" inputProps={{ id: "myoperation-select-3", "aria-labelledby": "myoperation-select-3-label" }} label="Tipo de tarefa" value={type} onChange={(event) => setType(event.target.value)} disabled={sourceView === "tickets"}><MenuItem value="">Todas</MenuItem>{data?.filters.types.map((value) => <MenuItem key={value} value={value}>{value}</MenuItem>)}</Select></FormControl>
+      <FormControl size="small"><InputLabel shrink id="myoperation-select-3-label">Tipo de tarefa</InputLabel><Select notched displayEmpty renderValue={(value) => value || "Todas"} labelId="myoperation-select-3-label" inputProps={{ id: "myoperation-select-3", "aria-labelledby": "myoperation-select-3-label" }} label="Tipo de tarefa" value={type} onChange={(event) => setType(event.target.value)} disabled={sourceView === "tickets"}><MenuItem value="">Todas</MenuItem>{data?.filters.types.map((value) => <MenuItem key={value} value={value}>{value}</MenuItem>)}</Select></FormControl>
       </Box><Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ mt: 1.25, alignItems: { sm: "center" }, justifyContent: "space-between" }}><Button size="small" onClick={() => { setClient(""); setAnalyst(""); setTeam(""); setType(""); setSearch(""); setMetric(""); setSort("priority"); }}>Limpar filtros</Button>
       <ToggleButtonGroup exclusive size="small" value={view} onChange={(_, value) => value && setView(value)}><ToggleButton value="kanban" aria-label="Kanban"><ViewColumnOutlined /></ToggleButton><ToggleButton value="list" aria-label="Lista"><ViewListOutlined /></ToggleButton></ToggleButtonGroup></Stack>
     <Stack direction={{ xs: "column", md: "row" }} spacing={1} useFlexGap sx={{ mt: 1.5, alignItems: { md: "center" }, flexWrap: "wrap" }}>
@@ -191,9 +201,9 @@ export function MyOperation() {
 
     {error && <Alert severity="error" onClose={() => setError("")} sx={{ mt: 2 }}>{error}</Alert>}
     {savingStatus && <Alert severity="info" sx={{ mt: 2 }}>Salvando a organização do atendimento…</Alert>}
-    <Box sx={{ mt: 2, display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2,minmax(0,1fr))", lg: "repeat(3,minmax(0,1fr))", xl: "repeat(5,minmax(0,1fr))" }, gap: 1.25 }}>
+    <KpiGrid sx={{mt: 2}}>
       {metrics.map(([key, label, info, valueKey]) => <KpiCard key={key} title={label} value={data?.summary[valueKey] ?? 0} subtitle="Clique para filtrar a operação" info={info} accent={metric === key ? aliareColors.green : aliareColors.greenDark} active={metric === key} onClick={() => setMetric(metric === key ? "" : key)} />)}
-    </Box>
+    </KpiGrid>
 
     {loading ? <Box sx={{ py: 10, textAlign: "center" }}><CircularProgress /></Box> : items.length === 0 ? <Card variant="outlined" sx={{mt:2,borderStyle:"dashed"}}><CardContent sx={{py:5,textAlign:"center"}}><FilterAltOutlined sx={{fontSize:34,color:"text.disabled"}}/><Typography sx={{fontWeight:850,mt:1}}>Nenhum registro neste recorte</Typography><Typography variant="body2" color="text.secondary" sx={{mt:.5}}>Revise os filtros, altere o conteúdo entre Atendimentos/Tarefas ou volte para a visão completa.</Typography><Button sx={{mt:1.5}} variant="outlined" onClick={()=>{setClient("");setAnalyst("");setTeam("");setType("");setSearch("");setMetric("");setSourceView("tickets");setSort("priority");}}>Limpar recorte</Button></CardContent></Card> : view === "kanban" ?
       <Box sx={{ mt: 2, display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))", md: "repeat(3, minmax(0, 1fr))", xl: "repeat(6, minmax(0, 1fr))" }, alignItems: "stretch", gap: 1, width: "100%", minWidth: 0, pb: 2 }}>

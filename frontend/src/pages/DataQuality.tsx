@@ -1,3 +1,4 @@
+import { KpiGrid } from "../components/KpiGrid";
 import {
   Alert, Autocomplete, Box, Button, Card, CardContent, Checkbox, Chip, CircularProgress,
   Drawer, FormControl, InputLabel, MenuItem, Select, Stack,
@@ -272,7 +273,7 @@ export function DataQuality() {
         }}
       >
         <TextField fullWidth size="small" label="Pesquisar" placeholder="ID, título, assunto ou vínculo..." value={search} onChange={(e) => setSearch(e.target.value)} slotProps={{ inputLabel: { shrink: true }, input: { startAdornment: <SearchOutlined sx={{ mr: 1, color: "text.disabled" }} /> } }} />
-        <FormControl fullWidth size="small"><InputLabel shrink id="dataquality-select-1-label">Tipo</InputLabel><Select labelId="dataquality-select-1-label" inputProps={{ id: "dataquality-select-1", "aria-labelledby": "dataquality-select-1-label" }} multiple displayEmpty label="Tipo" value={type} onChange={(e) => { const next = typeof e.target.value === "string" ? e.target.value.split(",") : e.target.value; const options = data?.filters.types ?? []; setType(next.includes("__all__") ? [...options] : next.filter((item) => item !== "__all__")); }} renderValue={(selected) => !selected.length ? "Todos os tipos" : selected.length === 1 ? selected[0] : `${selected.length} tipos`}><MenuItem value="__all__"><Checkbox size="small" checked={Boolean(data?.filters.types.length) && type.length === data?.filters.types.length} indeterminate={type.length > 0 && type.length < (data?.filters.types.length ?? 0)} />Todos os tipos</MenuItem>{data?.filters.types.map((value) => <MenuItem key={value} value={value}><Checkbox size="small" checked={type.includes(value)} />{value}</MenuItem>)}</Select></FormControl>
+        <FormControl fullWidth size="small"><InputLabel shrink id="dataquality-select-1-label">Tipo</InputLabel><Select notched labelId="dataquality-select-1-label" inputProps={{ id: "dataquality-select-1", "aria-labelledby": "dataquality-select-1-label" }} multiple displayEmpty label="Tipo" value={type} onChange={(e) => { const next = typeof e.target.value === "string" ? e.target.value.split(",") : e.target.value; const options = data?.filters.types ?? []; setType(next.includes("__all__") ? [...options] : next.filter((item) => item !== "__all__")); }} renderValue={(selected) => !selected.length ? "Todos os tipos" : selected.length === 1 ? selected[0] : `${selected.length} tipos`}><MenuItem value="__all__"><Checkbox size="small" checked={Boolean(data?.filters.types.length) && type.length === data?.filters.types.length} indeterminate={type.length > 0 && type.length < (data?.filters.types.length ?? 0)} />Todos os tipos</MenuItem>{data?.filters.types.map((value) => <MenuItem key={value} value={value}><Checkbox size="small" checked={type.includes(value)} />{value}</MenuItem>)}</Select></FormControl>
         <Autocomplete multiple fullWidth size="small" options={data?.filters.clients ?? []} value={client} onChange={(_, value) => setClient(value)} renderInput={(params) => <TextField {...params} label="Cliente" placeholder={!client.length ? "Todos os clientes" : undefined} slotProps={{ inputLabel: { shrink: true } }} />} limitTags={1} />
         <Autocomplete multiple fullWidth size="small" options={data?.filters.users ?? []} value={user} onChange={(_, value) => setUser(value)} renderInput={(params) => <TextField {...params} label="Analista" placeholder={!user.length ? "Todos os analistas" : undefined} slotProps={{ inputLabel: { shrink: true } }} />} limitTags={1} />
       </Box>
@@ -283,9 +284,9 @@ export function DataQuality() {
         <Box><Typography variant="h6" sx={{ fontWeight: 900 }}>Fila prioritária</Typography><Typography variant="body2" color="text.secondary">Sinais com ação operacional direta. Clique em um card para abrir as evidências.</Typography></Box>
         <Chip size="small" variant="outlined" label="Movidesk + Azure · SIMER" />
       </Stack>
-      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2,minmax(0,1fr))", lg: "repeat(3,minmax(0,1fr))", xl: "repeat(4,minmax(0,1fr))" }, gap: 1.25 }}>
+      <KpiGrid>
         {coordinationMetrics.map(([key, label, info, group]) => <KpiCard key={key} title={label} value={data?.summary[key] ?? 0} subtitle={group} info={info} accent={issue === key ? aliareColors.green : group === "Fluxo" ? "#ef4444" : group === "Versão" ? "#8b5cf6" : group === "Vínculo" ? "#f59e0b" : group === "Serviço" ? "#0891b2" : "#2676b9"} active={issue === key} onClick={() => setIssue(issue === key ? "" : key)} />)}
-      </Box>
+      </KpiGrid>
     </Box>
 
     <Card variant="outlined" sx={{ mt: 2 }}><CardContent>

@@ -1,3 +1,4 @@
+import { scopedTicketWhere } from "../domain/OperationalScope";
 import { prisma } from "../database/prisma";
 import { ticketOperationalScope } from "../domain/OperationalScope";
 
@@ -12,7 +13,7 @@ export class InvestigationIntelligenceService {
     const since=new Date(ticket.createdDate);since.setMonth(since.getMonth()-12);
     const until=new Date(ticket.createdDate);until.setMonth(until.getMonth()+1);
     const clientTickets=client?await prisma.ticket.findMany({
-      where:{AND:[ticketOperationalScope(),{isDeleted:false,client:{equals:client,mode:"insensitive"},createdDate:{gte:since,lte:until}}]},
+      where:scopedTicketWhere({AND:[ticketOperationalScope(),{isDeleted:false,client:{equals:client,mode:"insensitive"},createdDate:{gte:since,lte:until}}]}),
       select:{movideskId:true,subject:true,category:true,cause:true,status:true,urgency:true,service:true,serviceFirstLevel:true,serviceSecondLevel:true,serviceThirdLevel:true,createdDate:true,taskNumber:true,registeredVersion:true,deliveredVersion:true}
     }):[];
 

@@ -1,4 +1,7 @@
 import axios, { AxiosError, AxiosInstance } from "axios";
+import { createHash } from "node:crypto";
+import { azureDevOpsConfiguration, createAzureDevOpsClient, AzureDevOpsConfigurationError } from "./AzureDevOpsClient";
+import { azureCollection, azureFailureMessage, azureObject, AzureDevOpsResponseError } from "./AzureDevOpsResponse";
 
 import type {
   AzureDevOpsWorkItemResponse,
@@ -36,6 +39,8 @@ export type AzureDevOpsStatus = {
   wiki: string | null;
   workItemsAvailable: boolean;
   wikiAvailable: boolean;
+  workItemsError?: string | null;
+  wikiError?: string | null;
 };
 
 type AzureDevOpsErrorDetails = {
@@ -96,11 +101,22 @@ export class AzureDevOpsServiceError extends Error {
 ========================================================= */
 
 export class AzureDevOpsService {
-  private readonly organization: string;
-  private readonly project: string;
-  private readonly wiki: string;
-  private readonly pat: string;
-  private readonly client: AxiosInstance;
+  private activeClient: AxiosInstance | null = null;
+  private clientKey = "";
+  private get organization() { return azureDevOpsConfiguration().organization; }
+  private get project() { return azureDevOpsConfiguration().project; }
+  private get pat() { return azureDevOpsConfiguration().pat; }
+  private get wiki() { return process.env.AZURE_DEVOPS_WIKI?.trim() || ""; }
+  private get client() {
+    const configuration = azureDevOpsConfiguration();
+    const key = createHash("sha256").update(JSON.stringify([configuration, this.wiki])).digest("hex");
+    if (!this.activeClient || this.clientKey !== key) {
+      this.activeClient = createAzureDevOpsClient(configuration, AzureDevOpsService.REQUEST_TIMEOUT_MS);
+      this.clientKey = key;
+      this.resolvedWikiId = null;
+    }
+    return this.activeClient;
+  }
   private resolvedWikiId: string | null = null;
   private static readonly wikiPageCache = new Map<string, { expiresAt: number; pages: Array<Record<string, unknown>> }>();
   private static readonly wikiPageLoads = new Map<string, Promise<Array<Record<string, unknown>>>>();
@@ -109,60 +125,6 @@ export class AzureDevOpsService {
 
   private static readonly REQUEST_TIMEOUT_MS =
     30_000;
-
-  constructor() {
-    this.organization =
-      this.getOptionalEnv(
-        "AZURE_DEVOPS_ORGANIZATION",
-      );
-
-    this.project =
-      this.getOptionalEnv(
-        "AZURE_DEVOPS_PROJECT",
-      );
-
-    this.wiki =
-      this.getOptionalEnv(
-        "AZURE_DEVOPS_WIKI",
-      );
-
-    this.pat =
-      this.getOptionalEnv(
-        "AZURE_DEVOPS_PAT",
-      );
-
-    const baseURL =
-      this.isConfigured()
-        ? `https://dev.azure.com/${encodeURIComponent(
-            this.organization,
-          )}/${encodeURIComponent(
-            this.project,
-          )}`
-        : "https://dev.azure.com";
-
-    const basicToken =
-      Buffer
-        .from(
-          `:${this.pat}`,
-          "utf8",
-        )
-        .toString(
-          "base64",
-        );
-
-    this.client =
-      axios.create({
-        baseURL,
-        timeout:
-          AzureDevOpsService.REQUEST_TIMEOUT_MS,
-        headers: {
-          Accept:
-            "application/json",
-          Authorization:
-            `Basic ${basicToken}`,
-        },
-      });
-  }
 
   /* =======================================================
      STATUS / CONECTIVIDADE
@@ -198,29 +160,21 @@ export class AzureDevOpsService {
     let wikiAvailable =
       false;
 
+    let workItemsError: string | null = null;
+    let wikiError: string | null = null;
     try {
-      await this.client.get(
-        "/_apis/wit/workitems/26263",
-        {
-          params: {
-            "api-version":
-              "7.1",
-            fields:
-              "System.Id",
-          },
-        },
-      );
-
-      workItemsAvailable =
-        true;
-    } catch {
-      workItemsAvailable =
-        false;
+      const response = await this.client.post("/_apis/wit/wiql", {
+        query: "SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = @project",
+      }, { params: { "api-version": "7.1", "$top": 1 }, timeout: 15_000 });
+      azureCollection(response, "workItems", "teste de conexão");
+      workItemsAvailable = true;
+    } catch (error) {
+      workItemsError = azureFailureMessage(error);
     }
 
     try {
       const wikiId = await this.resolveWikiIdentifier();
-      await this.client.get(
+      const response = await this.client.get(
         `/_apis/wiki/wikis/${encodeURIComponent(wikiId)}`,
         {
           params: {
@@ -230,11 +184,10 @@ export class AzureDevOpsService {
         },
       );
 
-      wikiAvailable =
-        true;
-    } catch {
-      wikiAvailable =
-        false;
+      azureObject(response, "id", "teste da Wiki");
+      wikiAvailable = true;
+    } catch (error) {
+      wikiError = azureFailureMessage(error);
     }
 
     return {
@@ -248,6 +201,8 @@ export class AzureDevOpsService {
         this.wiki,
       workItemsAvailable,
       wikiAvailable,
+      workItemsError,
+      wikiError,
     };
   }
 
@@ -286,6 +241,7 @@ export class AzureDevOpsService {
           },
         );
 
+      azureObject(response, "id", "Work Item individual");
       return response.data;
     } catch (error) {
       throw this.mapAxiosError(
@@ -441,12 +397,7 @@ export class AzureDevOpsService {
             },
           );
 
-        result.push(
-          ...(
-            response.data
-              .value ?? []
-          ),
-        );
+        result.push(...azureCollection<AzureDevOpsWorkItemResponse>(response, "value", "lote de Work Items"));
       } catch (error) {
         throw this.mapAxiosError(
           error,
@@ -511,7 +462,7 @@ export class AzureDevOpsService {
     this.ensureAzureCoreConfigured();
     try {
       const response = await this.client.get("/_apis/wiki/wikis", { params: { "api-version": "7.1" } });
-      return (response.data?.value ?? []).map((wiki: Record<string, unknown>) => ({
+      return azureCollection<Record<string, unknown>>(response, "value", "Wikis").map((wiki: Record<string, unknown>) => ({
         id: wiki.id,
         name: wiki.name,
         type: wiki.type,
@@ -743,10 +694,7 @@ export class AzureDevOpsService {
         );
 
       const ids =
-        (
-          response.data
-            .workItems ?? []
-        )
+        azureCollection<AzureWiqlWorkItemReference>(response, "workItems", "descoberta WIQL")
           .map(
             (
               item,
@@ -814,23 +762,11 @@ export class AzureDevOpsService {
      CONFIGURAÇÃO
   ======================================================= */
 
-  private getOptionalEnv(
-    name: string,
-  ): string {
-    return (
-      process.env[
-        name
-      ]?.trim() ??
-      ""
-    );
-  }
-
   private isConfigured():
     boolean {
     return Boolean(
       this.organization &&
       this.project &&
-      this.wiki &&
       this.pat,
     );
   }
@@ -845,6 +781,7 @@ export class AzureDevOpsService {
   }
 
   private async resolveWikiIdentifier(): Promise<string> {
+    void this.client; // Invalidate resolved Wiki when saved credentials/configuration change.
     if (this.resolvedWikiId) return this.resolvedWikiId;
     this.ensureAzureCoreConfigured();
     const wikis = await this.listWikis() as Array<{ id?: unknown; name?: unknown; remoteUrl?: unknown }>;
@@ -911,14 +848,9 @@ export class AzureDevOpsService {
       )
     ) {
       return new AzureDevOpsServiceError(
-        fallbackMessage,
-        500,
-        {
-          status:
-            500,
-          message:
-            fallbackMessage,
-        },
+        error instanceof AzureDevOpsResponseError || error instanceof AzureDevOpsConfigurationError ? error.message : fallbackMessage,
+        502,
+        { status: 502, message: fallbackMessage },
       );
     }
 
@@ -931,10 +863,10 @@ export class AzureDevOpsService {
       axiosError.response
         ?.status;
 
-    const azureMessage =
-      axiosError.response
-        ?.data
-        ?.message;
+    const azureMessage = undefined;
+    if (status && status >= 300 && status < 400) {
+      return new AzureDevOpsServiceError(azureFailureMessage(error), 502, { status, message: azureFailureMessage(error) });
+    }
 
     if (
       axiosError.code ===

@@ -1,3 +1,5 @@
+import { KpiGrid } from "../components/KpiGrid";
+import { KpiCard as ExecutiveKpiCard } from "../components/KpiCard";
 import { useEffect,useState } from "react";
 import type { ReactNode } from "react";
 import { Alert,Box,Button,Card,CardContent,Chip,LinearProgress,MenuItem,Stack,TextField,Tooltip,Typography,useTheme } from "@mui/material";
@@ -23,20 +25,20 @@ type Data={
 export function Intelligence(){
   const navigate=useNavigate(),theme=useTheme();
   const [days,setDays]=useState(90),[data,setData]=useState<Data|null>(null),[loading,setLoading]=useState(true),[error,setError]=useState("");
-  useEffect(()=>{const controller=new AbortController();setLoading(true);setError("");api.get<Data>("/intelligence/overview",{params:{days},signal:controller.signal}).then(r=>setData(r.data)).catch(e=>{if(!controller.signal.aborted)setError(getApiErrorMessage(e,"Não foi possível carregar a inteligência operacional."));}).finally(()=>{if(!controller.signal.aborted)setLoading(false)});return()=>controller.abort();},[days]);
+  useEffect(()=>{const controller=new AbortController();setLoading(true);setError("");api.get<Data>("/intelligence/overview",{params:{days},signal:controller.signal}).then(r=>{if(!controller.signal.aborted)setData(r.data)}).catch(e=>{if(!controller.signal.aborted)setError(getApiErrorMessage(e,"Não foi possível carregar a inteligência operacional."));}).finally(()=>{if(!controller.signal.aborted)setLoading(false)});return()=>controller.abort();},[days]);
   const panel={border:"1px solid",borderColor:"divider",borderRadius:3,background:theme.palette.mode==="dark"?"linear-gradient(145deg,rgba(12,31,55,.96),rgba(8,22,40,.98))":"linear-gradient(145deg,#fff,#f8fbff)",boxShadow:theme.palette.mode==="dark"?"0 18px 44px rgba(0,0,0,.18)":"0 14px 34px rgba(30,64,175,.06)"} as const;
   const openInvestigation=(q:string)=>navigate(`/investigacao?q=${encodeURIComponent(q)}`);
   return <Box sx={{pb:4}}>
     <PageHeader eyebrow="Inteligência 2.1" title="Central de Inteligência" description="Correlação, recorrência e sinais operacionais para transformar dados do suporte em evidências acionáveis." meta={data?`${data.periodDays} dias · atualizado ${new Date(data.generatedAt).toLocaleString("pt-BR")}`:undefined}/>
     <Stack direction={{xs:"column",sm:"row"}} spacing={1.5} sx={{mb:2,alignItems:{sm:"center"}}}><Chip label={data?data.scope.name:"Carteira SIMER"} color="success" variant="outlined" sx={{fontWeight:800}}/><TextField select size="small" label="Período" value={days} onChange={e=>setDays(Number(e.target.value))} sx={{minWidth:190}}><MenuItem value={30}>30 dias</MenuItem><MenuItem value={90}>90 dias</MenuItem><MenuItem value={180}>6 meses</MenuItem><MenuItem value={365}>12 meses</MenuItem></TextField><Button startIcon={<SearchOutlined/>} onClick={()=>navigate("/investigacao")} variant="outlined">Investigar assunto</Button><Button startIcon={<PsychologyOutlined/>} onClick={()=>navigate("/problemas-conhecidos")} variant="outlined">Problemas conhecidos</Button></Stack>
     {loading&&<LinearProgress sx={{mb:2}}/>}{error&&<Alert severity="error" sx={{mb:2}}>{error}</Alert>}
-    {data&&<><Box sx={{display:"grid",gridTemplateColumns:{xs:"1fr",sm:"repeat(2,1fr)",xl:"repeat(5,1fr)"},gap:1.5,mb:2}}>
+    {data&&<><KpiGrid sx={{mb:2}}>
       <Metric title="Tickets analisados" value={data.summary.tickets} detail="Base do período" icon={<HubOutlined/>}/>
       <Metric title="Vínculo Azure" value={`${data.summary.linkCoverage}%`} detail={`${data.summary.azureItems} Work Items no período`} icon={<AutoGraphOutlined/>}/>
       <Metric title="Classificação" value={`${data.summary.classificationCoverage}%`} detail="Categoria ou causa informada" icon={<PsychologyOutlined/>}/>
       <Metric title="Anomalias" value={data.summary.anomalies} detail="Aumentos relevantes detectados" icon={<TrendingUpOutlined/>}/>
       <Metric title="Clusters" value={data.summary.clusters} detail="Padrões recorrentes" icon={<HubOutlined/>}/>
-    </Box>
+    </KpiGrid>
     {data.signals.length>0&&<Card elevation={0} sx={{...panel,mb:2,borderColor:"rgba(245,158,11,.28)"}}><CardContent><Typography sx={{fontWeight:850,fontSize:"1.05rem",mb:1.5}}>Radar de sinais</Typography><Stack spacing={1}>{data.signals.map((s,i)=><Button key={i} onClick={()=>s.query?openInvestigation(s.query):s.path?navigate(s.path):undefined} sx={{justifyContent:"flex-start",textAlign:"left",textTransform:"none",p:1.25,borderRadius:2,color:"text.primary","&:hover":{bgcolor:"action.hover"}}}><Box><Stack direction="row" spacing={1} sx={{alignItems:"center"}}><Chip size="small" label={s.severity==="high"?"Prioridade":"Atenção"} color={s.severity==="high"?"error":"warning"}/><Typography sx={{fontWeight:800}}>{s.title}</Typography></Stack><Typography variant="body2" color="text.secondary" sx={{mt:.5}}>{s.detail}</Typography></Box></Button>)}</Stack></CardContent></Card>}
     <Box sx={{display:"grid",gridTemplateColumns:{xs:"1fr",lg:"1.05fr .95fr"},gap:2,mb:2}}>
       <Card elevation={0} sx={panel}><CardContent><Typography sx={{fontWeight:850}}>Evolução da demanda</Typography><Typography variant="body2" color="text.secondary" sx={{mb:2}}>Volume mensal dentro do recorte selecionado.</Typography><Box sx={{height:290}}><ResponsiveContainer width="100%" height="100%"><LineChart data={data.trends.monthly}><CartesianGrid strokeDasharray="3 3" vertical={false}/><XAxis dataKey="month"/><YAxis allowDecimals={false}/><ChartTooltip/><Line type="monotone" dataKey="total" stroke={aliareColors.green} strokeWidth={3} dot={{r:3}}/></LineChart></ResponsiveContainer></Box></CardContent></Card>
@@ -49,7 +51,7 @@ export function Intelligence(){
     </CardContent></Card>
     <Card elevation={0} sx={{...panel,mb:2,overflow:"hidden"}}><CardContent>
       <Stack direction={{xs:"column",md:"row"}} sx={{justifyContent:"space-between",gap:2,mb:1.5}}><Box><Typography sx={{fontWeight:900,fontSize:"1.08rem"}}>Saúde operacional explicável</Typography><Typography variant="body2" color="text.secondary">Composição objetiva da confiabilidade e estabilidade do período. Passe pelos componentes para entender o cálculo.</Typography></Box><Tooltip title={data.health.formula}><Chip label={`${data.health.score}% · ${data.health.score>=85?"Estável":data.health.score>=70?"Atenção":"Crítico"}`} color={data.health.score>=85?"success":data.health.score>=70?"warning":"error"}/></Tooltip></Stack>
-      <Box sx={{display:"grid",gridTemplateColumns:{xs:"1fr",sm:"repeat(2,1fr)",xl:"repeat(5,1fr)"},gap:1}}>{data.health.components.map((item,index)=><Box key={`${item.key}-${index}`} sx={{p:1.1,border:"1px solid",borderColor:"divider",borderRadius:2,bgcolor:"action.hover"}}><Stack direction="row" sx={{justifyContent:"space-between",gap:1}}><Typography variant="caption" sx={{fontWeight:800}}>{item.label}</Typography><Typography variant="caption" color="text.secondary">{item.weight}%</Typography></Stack><Typography sx={{fontSize:"1.3rem",fontWeight:900,my:.4}}>{item.score}%</Typography><LinearProgress variant="determinate" value={Math.max(0, Math.min(100, item.score))} sx={{height:5,borderRadius:99}}/></Box>)}</Box>
+      <KpiGrid>{data.health.components.map((item,index)=><ExecutiveKpiCard key={`${item.key}-${index}`} title={item.label} value={`${item.score}%`} subtitle={`${item.weight}% de peso no índice`} info={data.health.formula} progress={item.score}/>)}</KpiGrid>
     </CardContent></Card>
     <Card elevation={0} sx={{...panel,mb:2,overflow:"hidden"}}><CardContent>
       <Stack direction={{xs:"column",md:"row"}} sx={{justifyContent:"space-between",gap:2,mb:2}}>
@@ -74,5 +76,5 @@ function DnaColumn({title,rows,onOpen}:{title:string;rows:Array<{name:string;tot
 }
 
 function Metric({title,value,detail,icon}:{title:string;value:string|number;detail:string;icon:ReactNode}){
-  return <Card elevation={0} sx={{border:"1px solid",borderColor:"divider",borderRadius:3,height:"100%",transition:"transform .16s ease, box-shadow .16s ease","&:hover":{transform:"translateY(-2px)",boxShadow:"0 12px 30px rgba(15,23,42,.08)"}}}><CardContent><Stack direction="row" sx={{alignItems:"center",justifyContent:"space-between",mb:1}}><Typography variant="body2" color="text.secondary" sx={{fontWeight:700}}>{title}</Typography><Box sx={{display:"flex",color:"primary.main"}}>{icon}</Box></Stack><Typography sx={{fontSize:"1.8rem",fontWeight:900,lineHeight:1.1}}>{value}</Typography><Typography variant="caption" color="text.secondary">{detail}</Typography></CardContent></Card>;
+  return <ExecutiveKpiCard title={title} value={value} subtitle={detail} icon={icon} />;
 }

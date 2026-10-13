@@ -1,3 +1,5 @@
+import { filterKnownProblemsToScope } from "../services/KnownProblemScopeService";
+import { scopedTicketWhere, scopedAzureWhere } from "../domain/OperationalScope";
 import type { Request, Response } from "express";
 import type { AuthenticatedRequest } from "../middlewares/authMiddleware";
 import { prisma } from "../database/prisma";
@@ -55,49 +57,49 @@ export class GlobalController {
     const navigation = navigationItems.filter((item) => normalizeSearch([item.title, item.subtitle, ...item.keywords].join(" ")).includes(normalizedQuery)).slice(0, 10);
     const [tickets, workItems, versions] = await Promise.all([
       prisma.ticket.findMany({
-        where: { AND: [ticketOperationalScope(), clientFilter, { OR: [
+        where: scopedTicketWhere({ AND: [ticketOperationalScope(), clientFilter, { OR: [
           { subject: { contains: query, mode: "insensitive" } },
           { client: { contains: query, mode: "insensitive" } },
           { category: { contains: query, mode: "insensitive" } },
           { service: { contains: query, mode: "insensitive" } },
           ...(Number.isSafeInteger(numeric) ? [{ movideskId: numeric }] : []),
-        ] }] },
+        ] }] }),
         select: { movideskId: true, subject: true, client: true, status: true },
         orderBy: { createdDate: "desc" }, take: 8,
       }),
       prisma.azureWorkItem.findMany({
-        where: { AND: [azureOperationalScope(), clientFilter, { OR: [
+        where: scopedAzureWhere({ AND: [azureOperationalScope(), clientFilter, { OR: [
           { title: { contains: query, mode: "insensitive" } },
           { client: { contains: query, mode: "insensitive" } },
           { module: { contains: query, mode: "insensitive" } },
           { process: { contains: query, mode: "insensitive" } },
           ...(Number.isSafeInteger(numeric) ? [{ id: numeric }] : []),
-        ] }] },
+        ] }] }),
         select: { id: true, title: true, workItemType: true, state: true, client: true },
         orderBy: { azureChangedAt: "desc" }, take: 8,
       }),
       prisma.azureWorkItem.findMany({
-        where: { AND: [azureOperationalScope(), { deliveredVersion: { contains: query, mode: "insensitive" } }] },
+        where: scopedAzureWhere({ AND: [azureOperationalScope(), { deliveredVersion: { contains: query, mode: "insensitive" } }] }),
         select: { deliveredVersion: true }, distinct: ["deliveredVersion"], take: 6,
       }),
     ]);
 
     const comparison = client ? await Promise.all([
-      prisma.ticket.count({ where: { AND: [{ client: { equals: client, mode: "insensitive" } }, { OR: [
+      prisma.ticket.count({ where: scopedTicketWhere({ AND: [{ client: { equals: client, mode: "insensitive" } }, { OR: [
         { subject: { contains: query, mode: "insensitive" } },
         { category: { contains: query, mode: "insensitive" } },
         { service: { contains: query, mode: "insensitive" } },
-      ] }] } }),
-      prisma.ticket.count({ where: { AND: [{ NOT: { client: { equals: client, mode: "insensitive" } } }, { OR: [
+      ] }] }) }),
+      prisma.ticket.count({ where: scopedTicketWhere({ AND: [{ NOT: { client: { equals: client, mode: "insensitive" } } }, { OR: [
         { subject: { contains: query, mode: "insensitive" } },
         { category: { contains: query, mode: "insensitive" } },
         { service: { contains: query, mode: "insensitive" } },
-      ] }] } }),
-      prisma.ticket.findMany({ where: { AND: [{ NOT: { client: { equals: client, mode: "insensitive" } } }, { OR: [
+      ] }] }) }),
+      prisma.ticket.findMany({ where: scopedTicketWhere({ AND: [{ NOT: { client: { equals: client, mode: "insensitive" } } }, { OR: [
         { subject: { contains: query, mode: "insensitive" } },
         { category: { contains: query, mode: "insensitive" } },
         { service: { contains: query, mode: "insensitive" } },
-      ] }] }, select: { client: true }, distinct: ["client"], take: 100 }),
+      ] }] }), select: { client: true }, distinct: ["client"], take: 100 }),
     ]) : null;
 
     return res.json({ comparison: comparison ? {
@@ -157,14 +159,14 @@ export class GlobalController {
       { tags: { contains: term, mode: "insensitive" as const } },
     ]);
 
-    const [ticketRows, workItemRows, knownRows] = await Promise.all([
+    const [ticketRows, workItemRows, rawKnownRows] = await Promise.all([
       prisma.ticket.findMany({
-        where: { AND: [ticketOperationalScope(), { isDeleted: false }, { OR: ticketOr }] },
+        where: scopedTicketWhere({ AND: [ticketOperationalScope(), { isDeleted: false }, { OR: ticketOr }] }),
         select: { movideskId:true,subject:true,client:true,status:true,category:true,cause:true,causeDetail:true,justification:true,service:true,serviceFirstLevel:true,serviceSecondLevel:true,serviceThirdLevel:true,taskNumber:true,taskType:true,deliveredVersion:true,registeredVersion:true,createdDate:true,lastUpdate:true },
         orderBy: { lastUpdate: "desc" }, take: 120,
       }),
       prisma.azureWorkItem.findMany({
-        where: { AND: [azureOperationalScope(), { OR: workItemOr }] },
+        where: scopedAzureWhere({ AND: [azureOperationalScope(), { OR: workItemOr }] }),
         select: { id:true,title:true,workItemType:true,state:true,client:true,module:true,process:true,reason:true,description:true,workaround:true,technicalSolution:true,tags:true,movideskTicket:true,deliveredVersion:true,registeredVersion:true,azureChangedAt:true,remoteUrl:true },
         orderBy: { azureChangedAt: "desc" }, take: 100,
       }),
@@ -183,6 +185,7 @@ export class GlobalController {
         ORDER BY "pinned" DESC, "updatedAt" DESC LIMIT 40
       `, terms.map((term) => `%${term}%`)),
     ]);
+    const knownRows = await filterKnownProblemsToScope(rawKnownRows);
 
     const tickets = ticketRows.map((item) => {
       const match=scoreText([item.subject,item.client,item.category,item.cause,item.causeDetail,item.justification,item.service,item.serviceFirstLevel,item.serviceSecondLevel,item.serviceThirdLevel]);
@@ -247,8 +250,8 @@ export class GlobalController {
     const numeric = Number(raw.replace(/^#/, ""));
     if (!raw || !Number.isSafeInteger(numeric)) return res.status(400).json({ message: "Informe o número do atendimento Movidesk." });
 
-    const ticket = await prisma.ticket.findUnique({
-      where: { movideskId: numeric },
+    const ticket = await prisma.ticket.findFirst({
+      where: scopedTicketWhere({ movideskId: numeric }),
       select: {
         movideskId: true, subject: true, status: true, baseStatus: true, category: true, cause: true, urgency: true,
         client: true, owner: true, service: true, serviceFirstLevel: true, serviceSecondLevel: true, serviceThirdLevel: true,
@@ -266,7 +269,7 @@ export class GlobalController {
       ...words.map((word) => ({ subject: { contains: word, mode: "insensitive" as const } })),
     ];
     const candidates = similarOr.length ? await prisma.ticket.findMany({
-      where: { AND: [ticketOperationalScope(), { movideskId: { not: ticket.movideskId } }, { isDeleted: false }, { OR: similarOr }] },
+      where: scopedTicketWhere({ AND: [ticketOperationalScope(), { movideskId: { not: ticket.movideskId } }, { isDeleted: false }, { OR: similarOr }] }),
       select: { movideskId: true, subject: true, client: true, category: true, cause: true, status: true, service: true, serviceThirdLevel: true, taskNumber: true, deliveredVersion: true, createdDate: true },
       orderBy: { createdDate: "desc" }, take: 80,
     }) : [];
@@ -289,7 +292,7 @@ export class GlobalController {
     }).filter((item)=>item.score>=15).sort((a,b)=>b.score-a.score||b.createdDate.getTime()-a.createdDate.getTime()).slice(0,12);
 
     const workItemIds=[ticket.taskNumber,...similar.map((x)=>x.taskNumber)].filter((v):v is number=>Number.isInteger(v));
-    const workItems=workItemIds.length?await prisma.azureWorkItem.findMany({where:{AND:[azureOperationalScope(),{id:{in:[...new Set(workItemIds)]}}]},select:{id:true,title:true,workItemType:true,state:true,client:true,module:true,process:true,registeredVersion:true,deliveredVersion:true,azureCreatedAt:true,activatedAt:true,stateChangedAt:true,azureChangedAt:true,azureClosedAt:true,remoteUrl:true}}):[];
+    const workItems=workItemIds.length?await prisma.azureWorkItem.findMany({where:scopedAzureWhere({AND:[azureOperationalScope(),{id:{in:[...new Set(workItemIds)]}}]}),select:{id:true,title:true,workItemType:true,state:true,client:true,module:true,process:true,registeredVersion:true,deliveredVersion:true,azureCreatedAt:true,activatedAt:true,stateChangedAt:true,azureChangedAt:true,azureClosedAt:true,remoteUrl:true}}):[];
     const timeline=[
       {date:ticket.createdDate,kind:"ticket-opened",title:`Atendimento #${ticket.movideskId} aberto`,source:"Movidesk",status:ticket.status,path:`/tickets?movidesk=${ticket.movideskId}`},
       ...(ticket.lastUpdate?[{date:ticket.lastUpdate,kind:"ticket-updated",title:"Última atualização do atendimento",source:"Movidesk",status:ticket.status,path:`/tickets?movidesk=${ticket.movideskId}`}]:[]),
@@ -380,11 +383,11 @@ export class GlobalController {
 
     const [tickets, workItems, meetings] = await Promise.all([
       prisma.ticket.findMany({
-        where: { AND: [ticketOperationalScope(), { OR: ["createdDate", "resolvedDate", "closedDate"].map((field) => ({ [field]: { gte: start, lt: end } })) }] },
+        where: scopedTicketWhere({ AND: [ticketOperationalScope(), { OR: ["createdDate", "resolvedDate", "closedDate"].map((field) => ({ [field]: { gte: start, lt: end } })) }] }),
         select: { movideskId: true, subject: true, createdDate: true, resolvedDate: true, closedDate: true }, take: 500,
       }),
       prisma.azureWorkItem.findMany({
-        where: { AND: [azureOperationalScope(), { OR: ["azureCreatedAt", "stateChangedAt", "azureClosedAt"].map((field) => ({ [field]: { gte: start, lt: end } })) }] },
+        where: scopedAzureWhere({ AND: [azureOperationalScope(), { OR: ["azureCreatedAt", "stateChangedAt", "azureClosedAt"].map((field) => ({ [field]: { gte: start, lt: end } })) }] }),
         select: { id: true, title: true, workItemType: true, azureCreatedAt: true, stateChangedAt: true, azureClosedAt: true, deliveredVersion: true }, take: 500,
       }),
       calendarMeetingService.listForRange(req.auth!.userId, req.auth!.role, start, end),

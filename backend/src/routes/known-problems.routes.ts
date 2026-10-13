@@ -1,3 +1,5 @@
+import { filterKnownProblemsToScope } from "../services/KnownProblemScopeService";
+import { scopedTicketWhere, scopedAzureWhere } from "../domain/OperationalScope";
 import { Router } from "express";
 import type { AuthenticatedRequest } from "../middlewares/authMiddleware";
 import { prisma } from "../database/prisma";
@@ -15,6 +17,11 @@ const knownProblemTicketScope = () => ticketOperationalScope();
 
 
 
+async function knownProblemInScope(id: number) {
+  const rows = await prisma.$queryRawUnsafe<any[]>(`SELECT "client","movideskTicket","azureWorkItem" FROM "KnownProblem" WHERE "id"=$1 AND "archived"=FALSE`, id);
+  return (await filterKnownProblemsToScope(rows)).length > 0;
+}
+
 async function list(req: AuthenticatedRequest) {
   const q = clean(req.query.q, 200).toLocaleLowerCase("pt-BR");
   const status = clean(req.query.status, 40);
@@ -28,7 +35,7 @@ async function list(req: AuthenticatedRequest) {
       CASE kp."severity" WHEN 'CRITICA' THEN 4 WHEN 'ALTA' THEN 3 WHEN 'MEDIA' THEN 2 ELSE 1 END DESC,
       kp."updatedAt" DESC
   `);
-  return rows.filter((row) => {
+  return (await filterKnownProblemsToScope(rows)).filter((row) => {
     if (status && row.status !== status) return false;
     if (!q) return true;
     return [row.title,row.symptom,row.solution,row.service,row.client,row.movideskTicket,row.azureWorkItem,row.tags]
@@ -42,9 +49,9 @@ knownProblemRoutes.get("/", async (req: AuthenticatedRequest,res) => {
     const userId=req.auth!.userId;
     const unread=await prisma.$queryRawUnsafe<any[]>(`
       SELECT COUNT(*)::int AS total FROM "KnownProblem" kp
-      WHERE kp."archived"=FALSE AND NOT EXISTS
+      WHERE kp."archived"=FALSE AND kp."id" = ANY($2::int[]) AND NOT EXISTS
       (SELECT 1 FROM "KnownProblemRead" r WHERE r."problemId"=kp."id" AND r."userId"=$1 AND r."readAt">=kp."updatedAt")
-    `,userId);
+    `,userId,items.map(item => item.id));
     res.json({items,unread:Number(unread[0]?.total??0),serverTime:new Date().toISOString()});
   } catch(error){console.error("[known-problems] list",error);res.status(500).json({error:"Não foi possível carregar os problemas conhecidos."});}
 });
@@ -54,7 +61,7 @@ knownProblemRoutes.get("/candidates", async (_req: AuthenticatedRequest,res) => 
   try {
     const since=new Date(); since.setDate(since.getDate()-180);
     const tickets=await prisma.ticket.findMany({
-      where:{AND:[knownProblemTicketScope(),{isDeleted:false,createdDate:{gte:since}}]},
+      where:scopedTicketWhere({AND:[knownProblemTicketScope(),{isDeleted:false,createdDate:{gte:since}}]}),
       select:{movideskId:true,subject:true,client:true,category:true,cause:true,causeDetail:true,reason:true,service:true,serviceFirstLevel:true,serviceSecondLevel:true,serviceThirdLevel:true,taskNumber:true,deliveredVersion:true,registeredVersion:true,createdDate:true},
       orderBy:{createdDate:"desc"},take:3000
     });
@@ -74,7 +81,7 @@ knownProblemRoutes.get("/candidates", async (_req: AuthenticatedRequest,res) => 
       g.cases++; if(t.client)g.clients.add(t.client); g.tickets.push(t.movideskId); if(t.subject)g.subjects.push(t.subject); if(t.taskNumber)g.tasks.add(t.taskNumber); g.dates.push(t.createdDate);
       subjectTokens.forEach(token=>g.tokens.set(token,(g.tokens.get(token)??0)+1)); groups.set(key,g);
     });
-    const existing=await prisma.$queryRawUnsafe<any[]>(`SELECT "service","version","movideskTicket","azureWorkItem" FROM "KnownProblem" WHERE "archived"=FALSE`);
+    const existing=await filterKnownProblemsToScope(await prisma.$queryRawUnsafe<any[]>(`SELECT "client","service","version","movideskTicket","azureWorkItem" FROM "KnownProblem" WHERE "archived"=FALSE`));
     const now=Date.now();
     const candidates=[...groups.values()].filter(g=>g.cases>=3).map(g=>{
       const covered=existing.some(k=>(k.service&&norm(k.service)===norm(g.service)&&(!k.version||k.version===g.version))||g.tickets.includes(Number(k.movideskTicket))||[...g.tasks].includes(Number(k.azureWorkItem)));
@@ -103,10 +110,10 @@ knownProblemRoutes.get("/technical-dna", async (req: AuthenticatedRequest,res) =
     if(serviceQuery.length<2) return res.status(400).json({error:"Informe um serviço para consolidar o DNA Técnico."});
     const since=new Date(); since.setDate(since.getDate()-180);
     const tickets=await prisma.ticket.findMany({
-      where:{AND:[knownProblemTicketScope(),{isDeleted:false,createdDate:{gte:since}},{OR:[
+      where:scopedTicketWhere({AND:[knownProblemTicketScope(),{isDeleted:false,createdDate:{gte:since}},{OR:[
         {service:{contains:serviceQuery,mode:"insensitive"}},{serviceFirstLevel:{contains:serviceQuery,mode:"insensitive"}},
         {serviceSecondLevel:{contains:serviceQuery,mode:"insensitive"}},{serviceThirdLevel:{contains:serviceQuery,mode:"insensitive"}}
-      ]}]},
+      ]}]}),
       select:{movideskId:true,subject:true,client:true,category:true,cause:true,causeDetail:true,reason:true,owner:true,service:true,serviceFirstLevel:true,serviceSecondLevel:true,serviceThirdLevel:true,taskNumber:true,taskType:true,registeredVersion:true,deliveredVersion:true,createdDate:true},
       orderBy:{createdDate:"desc"},take:1200
     });
@@ -119,8 +126,8 @@ knownProblemRoutes.get("/technical-dna", async (req: AuthenticatedRequest,res) =
     const categories=count(tickets.map(t=>t.category));
     const linked=tickets.filter(t=>t.taskNumber);
     const taskIds=[...new Set(linked.map(t=>t.taskNumber).filter((x):x is number=>Number.isInteger(x)))];
-    const workItems=taskIds.length?await prisma.azureWorkItem.findMany({where:{AND:[azureOperationalScope(),{id:{in:taskIds}}]},select:{id:true,title:true,workItemType:true,state:true,workaround:true,technicalSolution:true,deliveredVersion:true,registeredVersion:true,client:true},take:100}):[];
-    const known=await prisma.$queryRawUnsafe<any[]>(`SELECT "id","title","symptom","solution","workaround","technicalSolution","status","severity","version" FROM "KnownProblem" WHERE "archived"=FALSE AND LOWER(COALESCE("service",'')) LIKE $1 ORDER BY "updatedAt" DESC LIMIT 12`,`%${norm(serviceQuery)}%`);
+    const workItems=taskIds.length?await prisma.azureWorkItem.findMany({where:scopedAzureWhere({AND:[azureOperationalScope(),{id:{in:taskIds}}]}),select:{id:true,title:true,workItemType:true,state:true,workaround:true,technicalSolution:true,deliveredVersion:true,registeredVersion:true,client:true},take:100}):[];
+    const known=await filterKnownProblemsToScope(await prisma.$queryRawUnsafe<any[]>(`SELECT "client","movideskTicket","azureWorkItem","id","title","symptom","solution","workaround","technicalSolution","status","severity","version" FROM "KnownProblem" WHERE "archived"=FALSE AND LOWER(COALESCE("service",'')) LIKE $1 ORDER BY "updatedAt" DESC LIMIT 12`,`%${norm(serviceQuery)}%`));
     const solutions=workItems.filter(x=>x.workaround||x.technicalSolution).slice(0,8).map(x=>({id:x.id,title:x.title,type:x.workItemType,state:x.state,workaround:x.workaround,technicalSolution:x.technicalSolution,version:x.deliveredVersion||x.registeredVersion}));
     const recent30=tickets.filter(t=>Date.now()-t.createdDate.getTime()<=30*86400000).length;
     const previous30=tickets.filter(t=>{const age=Date.now()-t.createdDate.getTime();return age>30*86400000&&age<=60*86400000}).length;
@@ -166,11 +173,11 @@ knownProblemRoutes.get("/sources", async (req: AuthenticatedRequest,res) => {
     })]};
     const [tickets,workItems]=await Promise.all([
       prisma.ticket.findMany({
-        where:ticketWhere,orderBy:{lastUpdate:"desc"},take:16,
+        where:scopedTicketWhere(ticketWhere),orderBy:{lastUpdate:"desc"},take:16,
         select:{movideskId:true,subject:true,client:true,category:true,cause:true,serviceFirstLevel:true,serviceSecondLevel:true,serviceThirdLevel:true,taskNumber:true,taskType:true,registeredVersion:true,deliveredVersion:true,causeDetail:true,taskUrl:true}
       }),
       prisma.azureWorkItem.findMany({
-        where:workItemWhere,orderBy:{azureChangedAt:"desc"},take:16,
+        where:scopedAzureWhere(workItemWhere),orderBy:{azureChangedAt:"desc"},take:16,
         select:{id:true,workItemType:true,title:true,state:true,reason:true,client:true,criticality:true,module:true,process:true,movideskTicket:true,deliveredVersion:true,registeredVersion:true,workaround:true,technicalSolution:true,remoteUrl:true}
       })
     ]);
@@ -182,13 +189,19 @@ knownProblemRoutes.post("/", async (req: AuthenticatedRequest,res) => {
   try {
     const title=clean(req.body?.title,220), symptom=clean(req.body?.symptom), solution=clean(req.body?.solution,8000);
     if(!title||!symptom||!solution) return res.status(400).json({error:"Título, sintoma e solução são obrigatórios."});
-    const duplicate=await prisma.$queryRawUnsafe<any[]>(`
-      SELECT "id","title" FROM "KnownProblem" WHERE "archived"=FALSE AND (
+    const allowedPublication = await filterKnownProblemsToScope([{
+      client: optional(req.body?.client,300),
+      movideskTicket: optional(req.body?.movideskTicket,80),
+      azureWorkItem: optional(req.body?.azureWorkItem,120),
+    }]);
+    if (!allowedPublication.length) return res.status(400).json({error:"Cliente ou vínculo fora da carteira SIMER e dos analistas do suporte."});
+    const duplicate=await filterKnownProblemsToScope(await prisma.$queryRawUnsafe<any[]>(`
+      SELECT "client","movideskTicket","azureWorkItem","id","title" FROM "KnownProblem" WHERE "archived"=FALSE AND (
         ($1::text IS NOT NULL AND "movideskTicket"=$1) OR
         ($2::text IS NOT NULL AND "azureWorkItem"=$2) OR
         (LOWER(TRIM("title"))=LOWER(TRIM($3)) AND COALESCE(LOWER(TRIM("service")),'')=COALESCE(LOWER(TRIM($4)),''))
       ) LIMIT 1
-    `,optional(req.body?.movideskTicket,80),optional(req.body?.azureWorkItem,120),title,optional(req.body?.service,500));
+    `,optional(req.body?.movideskTicket,80),optional(req.body?.azureWorkItem,120),title,optional(req.body?.service,500)));
     if(duplicate.length) return res.status(409).json({error:`Já existe uma publicação semelhante (#${duplicate[0].id} · ${duplicate[0].title}). Atualize o cadastro existente em vez de duplicá-lo.`});
     const status=allowedStatus.has(req.body?.status)?req.body.status:"ATIVO";
     const severity=allowedSeverity.has(req.body?.severity)?req.body.severity:"MEDIA";
@@ -203,15 +216,22 @@ knownProblemRoutes.post("/", async (req: AuthenticatedRequest,res) => {
 knownProblemRoutes.put("/:id", async (req: AuthenticatedRequest,res) => {
   try {
     const id=Number(req.params.id); if(!Number.isInteger(id)) return res.status(400).json({error:"Registro inválido."});
+    if (!await knownProblemInScope(id)) return res.status(404).json({error:"Registro não encontrado na carteira."});
     const title=clean(req.body?.title,220), symptom=clean(req.body?.symptom), solution=clean(req.body?.solution,8000);
     if(!title||!symptom||!solution) return res.status(400).json({error:"Título, sintoma e solução são obrigatórios."});
-    const duplicate=await prisma.$queryRawUnsafe<any[]>(`
-      SELECT "id","title" FROM "KnownProblem" WHERE "archived"=FALSE AND "id"<>$1 AND (
+    const allowedPublication = await filterKnownProblemsToScope([{
+      client: optional(req.body?.client,300),
+      movideskTicket: optional(req.body?.movideskTicket,80),
+      azureWorkItem: optional(req.body?.azureWorkItem,120),
+    }]);
+    if (!allowedPublication.length) return res.status(400).json({error:"Cliente ou vínculo fora da carteira SIMER e dos analistas do suporte."});
+    const duplicate=await filterKnownProblemsToScope(await prisma.$queryRawUnsafe<any[]>(`
+      SELECT "client","movideskTicket","azureWorkItem","id","title" FROM "KnownProblem" WHERE "archived"=FALSE AND "id"<>$1 AND (
         ($2::text IS NOT NULL AND "movideskTicket"=$2) OR
         ($3::text IS NOT NULL AND "azureWorkItem"=$3) OR
         (LOWER(TRIM("title"))=LOWER(TRIM($4)) AND COALESCE(LOWER(TRIM("service")),'')=COALESCE(LOWER(TRIM($5)),''))
       ) LIMIT 1
-    `,id,optional(req.body?.movideskTicket,80),optional(req.body?.azureWorkItem,120),title,optional(req.body?.service,500));
+    `,id,optional(req.body?.movideskTicket,80),optional(req.body?.azureWorkItem,120),title,optional(req.body?.service,500)));
     if(duplicate.length) return res.status(409).json({error:`Já existe outra publicação semelhante (#${duplicate[0].id} · ${duplicate[0].title}).`});
     const status=allowedStatus.has(req.body?.status)?req.body.status:"ATIVO";
     const severity=allowedSeverity.has(req.body?.severity)?req.body.severity:"MEDIA";
@@ -225,7 +245,7 @@ knownProblemRoutes.put("/:id", async (req: AuthenticatedRequest,res) => {
 });
 
 knownProblemRoutes.post("/:id/read", async (req: AuthenticatedRequest,res) => {
-  try { const id=Number(req.params.id); await prisma.$executeRawUnsafe(`
+  try { const id=Number(req.params.id); if (!Number.isSafeInteger(id) || !await knownProblemInScope(id)) return res.status(404).json({error:"Registro não encontrado na carteira."}); await prisma.$executeRawUnsafe(`
     INSERT INTO "KnownProblemRead" ("problemId","userId","readAt") VALUES ($1,$2,CURRENT_TIMESTAMP)
     ON CONFLICT ("problemId","userId") DO UPDATE SET "readAt"=CURRENT_TIMESTAMP
   `,id,req.auth!.userId); res.json({ok:true}); }
@@ -233,6 +253,6 @@ knownProblemRoutes.post("/:id/read", async (req: AuthenticatedRequest,res) => {
 });
 
 knownProblemRoutes.delete("/:id", async (req: AuthenticatedRequest,res) => {
-  try { const id=Number(req.params.id); await prisma.$executeRawUnsafe(`UPDATE "KnownProblem" SET "archived"=TRUE,"updatedById"=$1,"updatedAt"=CURRENT_TIMESTAMP WHERE "id"=$2`,req.auth!.userId,id); res.status(204).send(); }
+  try { const id=Number(req.params.id); if (!Number.isSafeInteger(id) || !await knownProblemInScope(id)) return res.status(404).json({error:"Registro não encontrado na carteira."}); await prisma.$executeRawUnsafe(`UPDATE "KnownProblem" SET "archived"=TRUE,"updatedById"=$1,"updatedAt"=CURRENT_TIMESTAMP WHERE "id"=$2`,req.auth!.userId,id); res.status(204).send(); }
   catch(error){console.error("[known-problems] archive",error);res.status(500).json({error:"Não foi possível arquivar o registro."});}
 });

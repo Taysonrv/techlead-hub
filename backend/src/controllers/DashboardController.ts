@@ -1,3 +1,4 @@
+import { scopedTicketWhere, scopedAzureWhere } from "../domain/OperationalScope";
 import type {
   Request,
   Response,
@@ -9,7 +10,7 @@ import { prisma } from "../database/prisma";
 import { analyzeMovideskPayload } from "../services/MovideskPayloadAnalytics";
 
 import {
-  simerClientTicketScope,
+  ticketOperationalScope,
   isSimerOperationalResponsibility,
 } from "../domain/OperationalScope";
 
@@ -92,18 +93,18 @@ export class DashboardController {
         criticos,
       ] = await Promise.all([
         prisma.ticket.count({
-          where: snapshotWhere,
+          where: scopedTicketWhere(snapshotWhere),
         }),
 
         prisma.ticket.count({
-          where: {
+          where: scopedTicketWhere({
             ...snapshotWhere,
             ...createdDateWhere,
-          },
+          }),
         }),
 
         prisma.ticket.count({
-          where: {
+          where: scopedTicketWhere({
             ...snapshotWhere,
             baseStatus: {
               in: [
@@ -112,48 +113,49 @@ export class DashboardController {
                 "Stopped",
               ],
             },
-          },
+          }),
         }),
 
         prisma.ticket.count({
-          where: {
+          where: scopedTicketWhere({
             ...snapshotWhere,
             baseStatus: "New",
-          },
+          }),
         }),
 
         prisma.ticket.count({
-          where: {
+          where: scopedTicketWhere({
             ...snapshotWhere,
             baseStatus:
               "InAttendance",
-          },
+          }),
         }),
 
         prisma.ticket.count({
-          where: {
+          where: scopedTicketWhere({
             ...snapshotWhere,
             baseStatus:
               "Stopped",
-          },
+          }),
         }),
 
         prisma.ticket.count({
-          where: {
+          where: scopedTicketWhere({
             ...snapshotWhere,
             ...resolvedDateWhere,
-          },
+            baseStatus: { in: ["Resolved", "Closed"] },
+          }),
         }),
 
         prisma.ticket.count({
-          where: {
+          where: scopedTicketWhere({
             ...snapshotWhere,
             ...closedDateWhere,
-          },
+          }),
         }),
 
         prisma.ticket.count({
-          where: {
+          where: scopedTicketWhere({
             ...snapshotWhere,
             urgency: "Crítica",
 
@@ -164,7 +166,7 @@ export class DashboardController {
                 "Stopped",
               ],
             },
-          },
+          }),
         }),
       ]);
 
@@ -231,7 +233,7 @@ export class DashboardController {
               "category",
             ],
 
-            where: snapshotWhere,
+            where: scopedTicketWhere(snapshotWhere),
 
             _count: {
               id: true,
@@ -289,11 +291,11 @@ export class DashboardController {
         : {};
       const scope = await getLatestSnapshotWhere();
       const rows = await prisma.ticket.findMany({
-        where: {
+        where: scopedTicketWhere({
           ...scope,
           ...dateWhere,
           category: { in: ["Problema", "Dúvida", "Duvida"], mode: "insensitive" },
-        },
+        }),
         select: { id: true, category: true, cause: true, reason: true, rawData: true },
       });
       const norm = (value?: string | null) => (value ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLocaleLowerCase("pt-BR");
@@ -370,7 +372,7 @@ export class DashboardController {
       const tickets =
         await prisma.ticket.findMany(
           {
-            where: {
+            where: scopedTicketWhere({
               ...snapshotWhere,
               baseStatus: {
                 in: [
@@ -379,7 +381,7 @@ export class DashboardController {
                   "Stopped",
                 ],
               },
-            },
+            }),
 
             omit: {
               rawData: true,
@@ -728,7 +730,7 @@ export class DashboardController {
               "owner",
             ],
 
-            where: snapshotWhere,
+            where: scopedTicketWhere(snapshotWhere),
 
             _count: {
               id: true,
@@ -791,7 +793,7 @@ export class DashboardController {
               "client",
             ],
 
-            where: snapshotWhere,
+            where: scopedTicketWhere(snapshotWhere),
 
             _count: {
               id: true,
@@ -850,7 +852,7 @@ export class DashboardController {
       const tickets =
         await prisma.ticket.findMany(
           {
-            where: snapshotWhere,
+            where: scopedTicketWhere(snapshotWhere),
 
             select: {
               createdDate:
@@ -935,10 +937,10 @@ export class DashboardController {
     try {
       const snapshotWhere = await getLatestSnapshotWhere();
       const tickets = await prisma.ticket.findMany({
-        where: {
+        where: scopedTicketWhere({
           ...snapshotWhere,
           baseStatus: { in: ["New", "InAttendance", "Stopped"] },
-        },
+        }),
         select: {
           id: true, movideskId: true, protocol: true, subject: true,
           client: true, contact: true, owner: true, ownerTeam: true,
@@ -961,12 +963,12 @@ export class DashboardController {
 
       const directAzure = taskNumbers.length || movideskIds.length
         ? await prisma.azureWorkItem.findMany({
-            where: {
+            where: scopedAzureWhere({
               OR: [
                 ...(taskNumbers.length ? [{ id: { in: taskNumbers } }] : []),
                 ...(movideskIds.length ? [{ movideskTicket: { in: movideskIds } }] : []),
               ],
-            },
+            }),
             select: {
               id: true, workItemType: true, title: true, state: true,
               assignedToName: true, client: true, criticality: true,
@@ -1016,7 +1018,7 @@ export class DashboardController {
       const tickets =
         await prisma.ticket.findMany(
           {
-            where: snapshotWhere,
+            where: scopedTicketWhere(snapshotWhere),
 
             /* O payload completo é carregado somente no detalhe. */
             select: {
@@ -1089,12 +1091,12 @@ export class DashboardController {
       const azureWorkItems =
         taskNumbers.length > 0 || unlinkedMovideskIds.length > 0
           ? await prisma.azureWorkItem.findMany({
-              where: {
+              where: scopedAzureWhere({
                 OR: [
                   ...(taskNumbers.length ? [{ id: { in: taskNumbers } }] : []),
                   ...(unlinkedMovideskIds.length ? [{ movideskTicket: { in: unlinkedMovideskIds } }] : []),
                 ],
-              },
+              }),
               select: {
                 id:
                   true,
@@ -1372,10 +1374,10 @@ export class DashboardController {
       }
 
       const ticket = await prisma.ticket.findFirst({
-        where: {
+        where: scopedTicketWhere({
           ...(await getLatestSnapshotWhere()),
           id,
-        },
+        }),
         select: {
           movideskId: true,
           rawData: true,
@@ -1512,7 +1514,7 @@ async function getLatestSnapshotWhere(): Promise<SnapshotWhere> {
    * JSON complementares sem ocultar tickets de lotes anteriores.
    */
   return {
-    ...simerClientTicketScope(),
+    ...ticketOperationalScope(),
     isDeleted: false,
   };
 }

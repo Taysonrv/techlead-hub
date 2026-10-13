@@ -1,3 +1,5 @@
+import { scopedAzureWhere, scopedTicketWhere } from "../domain/OperationalScope";
+import { azureDevOpsConfiguration } from "./AzureDevOpsClient";
 import {
   Prisma,
 } from "@prisma/client";
@@ -6,7 +8,7 @@ import {
   prisma,
 } from "../database/prisma";
 import { isTerminalWorkItemState } from "../domain/OperationalLifecycleRules";
-import { azureOperationalScope } from "../domain/OperationalScope";
+import { azureOperationalScope, resolveSimerClient, resolveSupportCreator, supportCreatorNames } from "../domain/OperationalScope";
 import { HIGH_AZURE_CRITICALITIES, isHighAzureCriticality } from "../domain/AzureWorkItemRules";
 import { AZURE_PRODUCTIVITY_TYPES, classifyAzureProductivityOutcome, isAzureProductiveOutcome, isAzureProductivityConcluded, isAzureProductivityTerminalOutcome, type AzureProductivityOutcome } from "../domain/AzureProductivityRules";
 
@@ -126,11 +128,11 @@ export class AzureWorkItemService {
     ] =
       await prisma.$transaction([
         prisma.azureWorkItem.count({
-          where,
+          where: scopedAzureWhere(where),
         }),
 
         prisma.azureWorkItem.findMany({
-          where,
+          where: scopedAzureWhere(where),
           skip,
           take:
             pageSize,
@@ -172,10 +174,10 @@ export class AzureWorkItemService {
       number,
   ) {
     const workItem =
-      await prisma.azureWorkItem.findUnique({
-        where: {
+      await prisma.azureWorkItem.findFirst({
+        where: scopedAzureWhere({
           id,
-        },
+        }),
         select:
           this.detailSelect(),
       });
@@ -196,7 +198,7 @@ export class AzureWorkItemService {
      */
     const relatedTickets =
       await prisma.ticket.findMany({
-        where: {
+        where: scopedTicketWhere({
           OR: [
                 {
                   taskNumber:
@@ -214,7 +216,7 @@ export class AzureWorkItemService {
                 ),
                 ...this.participantTicketIds(workItem.participantMovideskTickets).map((movideskId) => ({ movideskId })),
               ],
-        },
+        }),
         orderBy: [
           {
             createdDate:
@@ -246,11 +248,11 @@ export class AzureWorkItemService {
 
     const parent =
       workItem.parentId
-        ? await prisma.azureWorkItem.findUnique({
-            where: {
+        ? await prisma.azureWorkItem.findFirst({
+            where: scopedAzureWhere({
               id:
                 workItem.parentId,
-            },
+            }),
             select:
               this.relationWorkItemSelect(),
           })
@@ -258,10 +260,10 @@ export class AzureWorkItemService {
 
     const children =
       await prisma.azureWorkItem.findMany({
-        where: {
+        where: scopedAzureWhere({
           parentId:
             workItem.id,
-        },
+        }),
         orderBy: [
           {
             azureChangedAt:
@@ -341,8 +343,8 @@ export class AzureWorkItemService {
             null
           : null,
 
-      participantClients: this.stringLines(workItem.participantClients),
-      participantMovideskTickets: this.participantTicketIds(workItem.participantMovideskTickets),
+      participantClients: [...new Set(this.stringLines(workItem.participantClients).map(resolveSimerClient).filter((value): value is NonNullable<typeof value> => value !== null))],
+      participantMovideskTickets: this.participantTicketIds(workItem.participantMovideskTickets).filter(id => tickets.some(ticket => ticket.movideskId === id)),
       relatedTicket:
         tickets[0] ??
         null,
@@ -417,21 +419,21 @@ export class AzureWorkItemService {
       await prisma.$transaction([
         prisma.azureWorkItem.count({
           where:
-            baseWhere,
+            scopedAzureWhere(baseWhere),
         }),
 
         prisma.azureWorkItem.count({
           where:
-            correctionWhere,
+            scopedAzureWhere(correctionWhere),
         }),
 
         prisma.azureWorkItem.count({
           where:
-            evolutionWhere,
+            scopedAzureWhere(evolutionWhere),
         }),
 
         prisma.azureWorkItem.count({
-          where: {
+          where: scopedAzureWhere({
             AND: [
               baseWhere,
               {
@@ -439,11 +441,11 @@ export class AzureWorkItemService {
                   true,
               },
             ],
-          },
+          }),
         }),
 
         prisma.azureWorkItem.count({
-          where: {
+          where: scopedAzureWhere({
             AND: [
               baseWhere,
               {
@@ -451,11 +453,11 @@ export class AzureWorkItemService {
                   true,
               },
             ],
-          },
+          }),
         }),
 
         prisma.azureWorkItem.count({
-          where: {
+          where: scopedAzureWhere({
             AND: [
               baseWhere,
               {
@@ -465,11 +467,11 @@ export class AzureWorkItemService {
                 },
               },
             ],
-          },
+          }),
         }),
 
         prisma.azureWorkItem.count({
-          where: {
+          where: scopedAzureWhere({
             AND: [
               baseWhere,
               { OR: [
@@ -477,11 +479,11 @@ export class AzureWorkItemService {
                 { participantMovideskTickets: { not: null } },
               ] },
             ],
-          },
+          }),
         }),
 
         prisma.azureWorkItem.count({
-          where: {
+          where: scopedAzureWhere({
             AND: [
               baseWhere,
               { AND: [
@@ -489,11 +491,11 @@ export class AzureWorkItemService {
                 { participantMovideskTickets: null },
               ] },
             ],
-          },
+          }),
         }),
 
         prisma.azureWorkItem.count({
-          where: {
+          where: scopedAzureWhere({
             AND: [
               baseWhere,
               {
@@ -504,11 +506,11 @@ export class AzureWorkItemService {
                 },
               },
             ],
-          },
+          }),
         }),
 
         prisma.azureWorkItem.count({
-          where: {
+          where: scopedAzureWhere({
             AND: [
               baseWhere,
               {
@@ -516,11 +518,11 @@ export class AzureWorkItemService {
                   null,
               },
             ],
-          },
+          }),
         }),
 
         prisma.azureWorkItem.count({
-          where: {
+          where: scopedAzureWhere({
             AND: [
               baseWhere,
               { AND: [
@@ -528,11 +530,11 @@ export class AzureWorkItemService {
                 { participantClients: null },
               ] },
             ],
-          },
+          }),
         }),
 
         prisma.azureWorkItem.count({
-          where: {
+          where: scopedAzureWhere({
             AND: [
               baseWhere,
               {
@@ -540,11 +542,11 @@ export class AzureWorkItemService {
                   null,
               },
             ],
-          },
+          }),
         }),
 
         prisma.azureWorkItem.count({
-          where: {
+          where: scopedAzureWhere({
             AND: [
               baseWhere,
               {
@@ -552,7 +554,7 @@ export class AzureWorkItemService {
                   null,
               },
             ],
-          },
+          }),
         }),
       ]);
 
@@ -562,7 +564,7 @@ export class AzureWorkItemService {
           "criticality",
         ],
         where:
-          baseWhere,
+          scopedAzureWhere(baseWhere),
         _count: {
           id:
             true,
@@ -581,7 +583,7 @@ export class AzureWorkItemService {
           "state",
         ],
         where:
-          baseWhere,
+          scopedAzureWhere(baseWhere),
         _count: {
           id:
             true,
@@ -669,7 +671,7 @@ export class AzureWorkItemService {
 
     const items =
       await prisma.azureWorkItem.findMany({
-        where,
+        where: scopedAzureWhere(where),
         select: {
           id:
             true,
@@ -1229,18 +1231,15 @@ export class AzureWorkItemService {
       );
 
     if (creator) {
-      and.push({
-        createdByName:
-          creator,
-      });
+      and.push({ createdByName: { in: supportCreatorNames(creator), mode: "insensitive" } });
     }
 
     const items =
       await prisma.azureWorkItem.findMany({
-        where: {
+        where: scopedAzureWhere({
           AND:
             and,
-        },
+        }),
         orderBy: [
           {
             azureCreatedAt:
@@ -1366,7 +1365,7 @@ export class AzureWorkItemService {
       const item of items
     ) {
       const creatorName =
-        item.createdByName?.trim();
+        resolveSupportCreator(item.createdByName);
 
       if (!creatorName) {
         continue;
@@ -1904,7 +1903,7 @@ export class AzureWorkItemService {
     ] =
       await Promise.all([
         prisma.azureWorkItem.findMany({
-          where,
+          where: scopedAzureWhere(where),
           distinct: [
             "workItemType",
           ],
@@ -1919,7 +1918,7 @@ export class AzureWorkItemService {
         }),
 
         prisma.azureWorkItem.findMany({
-          where,
+          where: scopedAzureWhere(where),
           distinct: [
             "state",
           ],
@@ -1934,7 +1933,7 @@ export class AzureWorkItemService {
         }),
 
         prisma.azureWorkItem.findMany({
-          where: {
+          where: scopedAzureWhere({
             AND: [
               where,
               {
@@ -1944,7 +1943,7 @@ export class AzureWorkItemService {
                 },
               },
             ],
-          },
+          }),
           distinct: [
             "assignedToName",
           ],
@@ -1959,13 +1958,13 @@ export class AzureWorkItemService {
         }),
 
         prisma.azureWorkItem.findMany({
-          where: { AND: [where, { participantClients: { not: null } }] },
+          where: scopedAzureWhere({ AND: [where, { participantClients: { not: null } }] }),
           distinct: ["participantClients"],
           select: { participantClients: true },
         }),
 
         prisma.azureWorkItem.findMany({
-          where: {
+          where: scopedAzureWhere({
             AND: [
               where,
               {
@@ -1975,7 +1974,7 @@ export class AzureWorkItemService {
                 },
               },
             ],
-          },
+          }),
           distinct: [
             "client",
           ],
@@ -1990,7 +1989,7 @@ export class AzureWorkItemService {
         }),
 
         prisma.azureWorkItem.findMany({
-          where: {
+          where: scopedAzureWhere({
             AND: [
               where,
               {
@@ -2000,7 +1999,7 @@ export class AzureWorkItemService {
                 },
               },
             ],
-          },
+          }),
           distinct: [
             "criticality",
           ],
@@ -2015,7 +2014,7 @@ export class AzureWorkItemService {
         }),
 
         prisma.azureWorkItem.findMany({
-          where: {
+          where: scopedAzureWhere({
             AND: [
               where,
               {
@@ -2025,7 +2024,7 @@ export class AzureWorkItemService {
                 },
               },
             ],
-          },
+          }),
           distinct: [
             "module",
           ],
@@ -2040,7 +2039,7 @@ export class AzureWorkItemService {
         }),
 
         prisma.azureWorkItem.findMany({
-          where: {
+          where: scopedAzureWhere({
             AND: [
               where,
               {
@@ -2050,7 +2049,7 @@ export class AzureWorkItemService {
                 },
               },
             ],
-          },
+          }),
           distinct: [
             "process",
           ],
@@ -2065,7 +2064,7 @@ export class AzureWorkItemService {
         }),
 
         prisma.azureWorkItem.findMany({
-          where: {
+          where: scopedAzureWhere({
             AND: [
               where,
               {
@@ -2075,7 +2074,7 @@ export class AzureWorkItemService {
                 },
               },
             ],
-          },
+          }),
           distinct: [
             "deliveredVersion",
           ],
@@ -2097,7 +2096,7 @@ export class AzureWorkItemService {
       clients: uniqueStrings([
         ...clients.map((item)=>item.client),
         ...participantClientRows.flatMap((item)=>this.stringLines(item.participantClients)),
-      ]),
+      ].map(resolveSimerClient)),
       criticalities: uniqueStrings(criticalities.map((item)=>item.criticality)),
       modules: uniqueStrings(modules.map((item)=>item.module)),
       processes: uniqueStrings(processes.map((item)=>item.process)),
@@ -2183,12 +2182,14 @@ export class AzureWorkItemService {
     }
 
     if (client) {
-      and.push({
+      const canonical = resolveSimerClient(client);
+      and.push(canonical ? {
         OR: [
-          { client },
-          { participantClients: { contains: client, mode: "insensitive" } },
+          { client: { equals: canonical, mode: "insensitive" } },
+          { client: { equals: client, mode: "insensitive" } },
+          { participantClients: { contains: canonical, mode: "insensitive" } },
         ],
-      });
+      } : { id: { in: [] } });
     }
 
     if (criticality) {
@@ -3014,11 +3015,9 @@ export class AzureWorkItemService {
     id:
       number,
   ): string | null {
-    const organization =
-      process.env.AZURE_DEVOPS_ORGANIZATION?.trim();
-
-    const project =
-      process.env.AZURE_DEVOPS_PROJECT?.trim();
+    let organization: string, project: string;
+    try { ({ organization, project } = azureDevOpsConfiguration()); }
+    catch { return null; }
 
     if (
       !organization ||

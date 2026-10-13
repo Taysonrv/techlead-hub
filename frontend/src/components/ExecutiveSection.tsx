@@ -36,6 +36,9 @@ export function ExecutiveSection({
     <Card
       elevation={0}
       sx={{
+        minWidth: 0,
+        width: "100%",
+        height: "100%",
         overflow: "hidden",
         isolation: "isolate",
         borderColor: "divider",

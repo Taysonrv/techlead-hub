@@ -1,3 +1,6 @@
+import { Prisma } from "@prisma/client";
+import { filterKnownProblemsToScope } from "./KnownProblemScopeService";
+import { scopedTicketWhere, scopedAzureWhere } from "../domain/OperationalScope";
 import {
   prisma,
 } from "../database/prisma";
@@ -150,7 +153,7 @@ export class NotificationService {
 
     const relatedTickets =
       await prisma.ticket.findMany({
-        where: {
+        where: scopedTicketWhere({
           AND: [
             {
               owner: {
@@ -161,7 +164,7 @@ export class NotificationService {
             { isDeleted: false },
             { baseStatus: { in: ["New", "InAttendance", "Stopped"] } },
           ],
-        },
+        }),
         select: {
           taskNumber: true,
           movideskId: true,
@@ -219,10 +222,10 @@ export class NotificationService {
       })),
     ];
 
-    const [workItems, versions, chatMentions, knownProblems, meetingNotifications] =
+    const [workItems, versions, chatMentions, rawKnownProblems, meetingNotifications] =
       await Promise.all([
         prisma.azureWorkItem.findMany({
-          where: {
+          where: scopedAzureWhere({
             AND: [
               { OR: identities },
               {
@@ -231,7 +234,7 @@ export class NotificationService {
                 },
               },
             ],
-          },
+          }),
           orderBy: {
             azureChangedAt: "desc",
           },
@@ -246,7 +249,7 @@ export class NotificationService {
           },
         }),
         prisma.azureWorkItem.findMany({
-          where: { deliveredVersion: { not: null } },
+          where: scopedAzureWhere({ deliveredVersion: { not: null } }),
           orderBy: { azureChangedAt: "desc" },
           select: {
             deliveredVersion: true,
@@ -280,8 +283,8 @@ export class NotificationService {
             author: { select: { name: true } },
           },
         }),
-        prisma.$queryRaw<Array<{ id: number; title: string; updatedAt: Date }>>`
-          SELECT "id", "title", "updatedAt"
+        prisma.$queryRaw<Array<{ id: number; title: string; updatedAt: Date; client: string | null; movideskTicket: string | null; azureWorkItem: string | null }>>`
+          SELECT "id", "title", "updatedAt", "client", "movideskTicket", "azureWorkItem"
           FROM "KnownProblem"
           WHERE "archived" = FALSE AND "updatedAt" >= ${since}
           ORDER BY "updatedAt" DESC
@@ -289,6 +292,8 @@ export class NotificationService {
         `,
         this.meetingNotificationsForUser(userId),
       ]);
+
+    const knownProblems = await filterKnownProblemsToScope(rawKnownProblems);
 
     const itemNotifications = workItems.map((item) => {
       const completed = TERMINAL_STATES.some(
@@ -429,14 +434,12 @@ export class NotificationService {
       .filter((key) => key.length > 0 && key.length <= 500))]
       .slice(0, 100);
 
-    await Promise.all(validKeys.map((key) =>
-      prisma.$executeRaw`
-        INSERT INTO "AppNotificationRead" ("userId", "notificationKey", "readAt")
-        VALUES (${userId}, ${key}, CURRENT_TIMESTAMP)
-        ON CONFLICT ("userId", "notificationKey")
-        DO UPDATE SET "readAt" = CURRENT_TIMESTAMP
-      `,
-    ));
+    if (validKeys.length) await prisma.$executeRaw(Prisma.sql`
+      INSERT INTO "AppNotificationRead" ("userId", "notificationKey", "readAt")
+      VALUES ${Prisma.join(validKeys.map(key=>Prisma.sql`(${userId}, ${key}, CURRENT_TIMESTAMP)`))}
+      ON CONFLICT ("userId", "notificationKey")
+      DO UPDATE SET "readAt" = CURRENT_TIMESTAMP
+    `);
 
     return validKeys.length;
   }

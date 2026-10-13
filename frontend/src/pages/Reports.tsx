@@ -234,9 +234,11 @@ export function Reports() {
   const [reportFilters, setReportFilters] = useState<Record<ReportScope, ReportFilters>>({ executive: {}, analysts: {}, sla: {}, clients: {}, development: {}, versions: {}, "operational-causes": {}, "operational-errors": {} });
 
   useEffect(() => {
-    void api.get<ReportFilterOptions>("/reports/filters")
-      .then((response) => setFilterOptions(response.data))
-      .catch(() => setFilterOptions(EMPTY_OPTIONS));
+    const controller = new AbortController();
+    void api.get<ReportFilterOptions>("/reports/filters", { signal: controller.signal })
+      .then((response) => { if (!controller.signal.aborted) setFilterOptions(response.data); })
+      .catch(() => { if (!controller.signal.aborted) setFilterOptions(EMPTY_OPTIONS); });
+    return () => controller.abort();
   }, []);
 
   const [
@@ -291,6 +293,7 @@ export function Reports() {
               to,
               ...reportFilters[report.scope],
             },
+            timeout: 120_000,
             responseType:
               "blob",
           }
@@ -692,7 +695,7 @@ function ReportCard({
             <Typography variant="body2" sx={{ fontWeight: 800 }}>Filtros deste relatório</Typography>
             {Object.values(filters).some(Boolean) && <Button size="small" onClick={onClearFilters}>Limpar</Button>}
           </Stack>
-          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2,minmax(0,1fr))" }, gap: 1 }}>
+          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2,minmax(0,1fr))" }, gap: 1.5, "& .MuiFormControl-root": { minWidth: 0 }, "& .MuiSelect-select": { overflow: "hidden", textOverflow: "ellipsis" } }}>
             {FILTERS_BY_REPORT[report.scope].map((key) => <ReportFilterField key={key} filterKey={key} value={filters[key] ?? ""} options={optionsFor(key, filterOptions)} onChange={(value) => onFilterChange(key, value)} />)}
           </Box>
           <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1 }}>O período geral e estes filtros serão aplicados ao Excel e ao PDF.</Typography>
@@ -786,7 +789,7 @@ function ReportCard({
 
 function ReportFilterField({ filterKey, value, options, onChange }: { filterKey: ReportFilterKey; value: string; options: string[]; onChange: (value: string) => void }) {
   const labels: Record<ReportFilterKey, string> = { client: "Cliente", analyst: "Analista", category: "Categoria", ticketStatus: "Status do atendimento", workItemType: "Tipo de tarefa", azureState: "Estado da tarefa", version: "Versão" };
-  return <TextField select label={labels[filterKey]} value={value} onChange={(event) => onChange(event.target.value)} fullWidth>
+  return <TextField select size="small" slotProps={{inputLabel:{shrink:true},select:{notched:true,displayEmpty:true,renderValue:(selected)=>selected?String(selected):"Todos"}}} label={labels[filterKey]} value={value} onChange={(event) => onChange(event.target.value)} fullWidth>
     <MenuItem value="">Todos</MenuItem>
     {options.map((option) => <MenuItem key={option} value={option}>{option}</MenuItem>)}
   </TextField>;

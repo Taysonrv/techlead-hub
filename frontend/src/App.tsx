@@ -26,6 +26,7 @@ import {
 } from "./components/Sidebar";
 import { GlobalTopBar } from "./components/GlobalTopBar";
 import { ReleaseHighlights } from "./components/ReleaseHighlights";
+import { isBackendUnavailable } from "./services/api";
 
 import {
   ProtectedRoute,
@@ -97,7 +98,7 @@ function AuthenticatedLayout({
     return () => window.clearTimeout(id);
   }, []);
   const [forbiddenMessage, setForbiddenMessage] = useState<string | null>(null);
-  const [backendUnavailable, setBackendUnavailable] = useState(false);
+  const [backendUnavailable, setBackendUnavailable] = useState(isBackendUnavailable);
   const location = useLocation();
   const isChat = location.pathname === "/chat";
   const fixedWorkspace = isChat;
@@ -147,6 +148,7 @@ function AuthenticatedLayout({
     window.addEventListener("techlead-hub:backend-unavailable", unavailable);
     window.addEventListener("techlead-hub:backend-available", available);
     window.addEventListener("techlead-hub:forbidden", forbidden);
+    setBackendUnavailable(isBackendUnavailable());
     return () => {
       window.removeEventListener("techlead-hub:backend-unavailable", unavailable);
       window.removeEventListener("techlead-hub:backend-available", available);
@@ -195,11 +197,11 @@ function AuthenticatedLayout({
               },
             }}
           >
-<Box sx={isChat ? { position: "relative", zIndex: (theme) => theme.zIndex.appBar, px: { xs: 1.5, sm: 2, md: 2.5, lg: 3, xl: 4 }, pt: { xs: 1.5, sm: 2, md: 2.5, lg: 3, xl: 3.5 }, height: { xs: 62, md: 70 }, boxSizing: "border-box", overflow: "visible", pointerEvents: "none", "& .MuiTextField-root, & input, & button, & [role='button']": { pointerEvents: "auto" } } : { px: { xs: 1.5, sm: 2, md: 2.5, lg: 3, xl: 4 } }}><GlobalTopBar /></Box>
+<Box sx={isChat ? { position: "relative", zIndex: (theme) => theme.zIndex.appBar, px: { xs: 1.5, sm: 2, md: 2.5, lg: 3, xl: 4 }, pt: { xs: 1.5, sm: 2, md: 2.5, lg: 3, xl: 3.5 }, height: { xs: 128, lg: 70 }, boxSizing: "border-box", overflow: "visible", pointerEvents: "none", "& .MuiTextField-root, & input, & button, & [role='button']": { pointerEvents: "auto" } } : { px: { xs: 1.5, sm: 2, md: 2.5, lg: 3, xl: 4 } }}><GlobalTopBar /></Box>
             {backendUnavailable && (
               <Alert severity="error" variant="outlined"
                 sx={isChat
-                  ? { position: "fixed", top: { xs: 66, md: 74 }, left: { xs: 12, sm: 16 }, right: { xs: 12, sm: 16 }, zIndex: (theme) => theme.zIndex.snackbar, borderRadius: 2, boxShadow: "0 14px 34px rgba(0,0,0,.18)" }
+                  ? { position: "fixed", top: { xs: 132, lg: 74 }, left: { xs: 12, sm: 16 }, right: { xs: 12, sm: 16 }, zIndex: (theme) => theme.zIndex.snackbar, borderRadius: 2, boxShadow: "0 14px 34px rgba(0,0,0,.18)" }
                   : { mx: { xs: 1.5, sm: 2, md: 2.5, lg: 3, xl: 4 }, mb: 1.25, borderRadius: 2 }
                 }>
                 <b>Backend indisponível.</b>{" "}Algumas informações podem não carregar até a comunicação com a API ser restabelecida.
@@ -214,7 +216,7 @@ function AuthenticatedLayout({
                 px: isChat ? 0 : { xs: 1.5, sm: 2, md: 2.5, lg: 3, xl: 4 },
                 pb: isChat ? 0 : { xs: 3, md: 4 },
                 minHeight: isChat ? 0 : "calc(100vh - 96px)",
-                height: isChat ? { xs: "calc(100dvh - 62px)", md: "calc(100dvh - 70px)" } : "auto",
+                height: isChat ? { xs: "calc(100dvh - 128px)", lg: "calc(100dvh - 70px)" } : "auto",
                 overflow: isChat ? "hidden" : "visible",
                 boxSizing: "border-box",
                 position: "relative",

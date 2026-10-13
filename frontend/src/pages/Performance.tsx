@@ -1,3 +1,5 @@
+import { KpiGrid } from "../components/KpiGrid";
+import { KpiCard as ExecutiveKpiCard } from "../components/KpiCard";
 import {
   Alert,
   Box,
@@ -46,7 +48,7 @@ import {
 
 import { useNavigate } from "react-router-dom";
 import { api } from "../services/api";
-import { getTicketSnapshot } from "../services/ticketSnapshot";
+import { getTicketSnapshot, getTicketSnapshotState, subscribeTicketSnapshotRefresh } from "../services/ticketSnapshot";
 import { useFilters } from "../context/FiltersContext";
 import { PeriodFilter } from "../components/PeriodFilter";
 import { PageHeader } from "../components/PageHeader";
@@ -192,23 +194,34 @@ export function Performance() {
     loadRequestRef.current?.abort();
     loadRequestRef.current = controller;
 
-    async function loadTickets() {
+    let refreshing = false;
+    async function loadTickets(initial = false) {
+      if (refreshing) return;
+      refreshing = true;
       try {
-        setLoading(true);
+        if (initial) setLoading(true);
         setError(null);
         const snapshot = await getTicketSnapshot<Ticket>();
-        if (!controller.signal.aborted) setTickets(snapshot);
+        if (!controller.signal.aborted) {
+          setTickets(snapshot);
+          setError(getTicketSnapshotState().lastErrorAt ? "A atualização falhou. Exibindo os últimos dados carregados; uma nova tentativa será feita automaticamente." : null);
+        }
       } catch (requestError) {
         if (controller.signal.aborted) return;
         console.error("Erro ao carregar desempenho:", requestError);
         setError("Não foi possível carregar os indicadores de desempenho.");
       } finally {
+        refreshing = false;
         if (!controller.signal.aborted) setLoading(false);
       }
     }
 
-    void loadTickets();
-    return () => controller.abort();
+    void loadTickets(true);
+    const unsubscribeRefresh = subscribeTicketSnapshotRefresh(() => { void loadTickets(); });
+    return () => {
+      unsubscribeRefresh();
+      controller.abort();
+    };
   }, []);
 
   useEffect(() => {
@@ -216,7 +229,9 @@ export function Performance() {
     Promise.all([
       api.get("/coordination/csat", { params:{ days:180 }, signal:controller.signal }),
       api.get("/coordination/sla-development", { params:{ days:180 }, signal:controller.signal }),
-    ]).then(([csat,sla]) => setExecutiveQuality({csat:csat.data,sla:sla.data}))
+    ]).then(([csat,sla]) => {
+      if (!controller.signal.aborted) setExecutiveQuality({csat:csat.data,sla:sla.data});
+    })
       .catch(()=>{ if(!controller.signal.aborted) setExecutiveQuality(null); });
     return ()=>controller.abort();
   }, []);
@@ -241,7 +256,7 @@ export function Performance() {
   const operationalSummary = useMemo(() => {
     const resolvedInPeriod = operationalCohorts.resolved;
     const closedInPeriod = operationalCohorts.closed;
-    const completedCohort = periodTickets.filter((ticket) => Boolean(ticket.resolvedDate || ticket.closedDate));
+    const completedCohort = periodTickets.filter((ticket) => ["Resolved", "Closed"].includes(ticket.baseStatus ?? "") && Boolean(ticket.resolvedDate || ticket.closedDate));
     const resolutionMinutes = completedCohort
       .map((ticket) => ticket.lifetimeMinutes)
       .filter((value): value is number => typeof value === "number" && Number.isFinite(value) && value >= 0);
@@ -591,12 +606,13 @@ export function Performance() {
     return <ContentState kind="loading" title="Carregando desempenho" minHeight={360} />;
   }
 
-  if (error) {
+  if (error && tickets.length === 0) {
     return <Alert severity="error">{error}</Alert>;
   }
 
   return (
     <>
+      {error && <Alert severity="warning" sx={{ mb: 2 }}>{error}</Alert>}
       <PageHeader
         eyebrow="Qualidade operacional"
         title="Desempenho do Atendimento"
@@ -616,37 +632,25 @@ export function Performance() {
         sx={{ mb: 1.5, borderRadius: 2 }}
       >
         <strong>SLA do suporte:</strong> usa os prazos e timestamps sincronizados do Movidesk. A 1ª resposta segue as entradas do período; a solução segue os tickets resolvidos no período. Atendimentos
-        sem medição e as categorias Adequação e Solicitação de Serviço não entram no denominador.
+        sem prazo ou marco de resposta/solução válido não entram no denominador, independentemente da categoria.
         Os prazos calculados em horas úteis são exibidos separadamente como risco operacional.
       </Alert>
 
-      <Box sx={{ display:"grid", gridTemplateColumns:{xs:"1fr",sm:"repeat(2,minmax(0,1fr))",lg:"repeat(3,minmax(0,1fr))",xl:"repeat(5,minmax(0,1fr))"}, gap:1.25, mb:1.75 }}>
-        <PerformanceKpi title="Tickets abertos" value={operationalSummary.opened} description="Entradas do período atribuídas à operação SIMER" accent={aliareColors.info} info={{title:"Tickets abertos",summary:"Mesmo cohort do Resumo Executivo: tickets criados no período sob responsabilidade da operação SIMER.",calculation:"createdDate no período + isWithSimer = true.",source:"Movidesk",periodRule:"Segue integralmente o período global selecionado."}} />
-        <PerformanceKpi title="Tickets fechados" value={operationalSummary.closed} description="Fechamentos ocorridos no período" accent={aliareColors.green} info={{title:"Tickets fechados",summary:"Mesmo fluxo do Resumo Executivo: tickets SIMER cuja data de fechamento ocorreu no período.",calculation:"isWithSimer = true + closedDate no período.",source:"Movidesk",periodRule:"Segue integralmente o período global selecionado."}} />
-        <PerformanceKpi title="Backlog atual" value={operationalSummary.pending} description="Estoque atual de tickets ativos" accent={aliareColors.warning} info={{title:"Backlog atual",summary:"Mesmo estoque do Resumo Executivo: tickets atualmente ativos sob responsabilidade SIMER, independentemente da data de abertura.",calculation:"isWithSimer = true + status operacional ativo.",source:"Movidesk",periodRule:"Não é limitado pela data de abertura; representa o backlog atual."}} />
-        <PerformanceKpi title="Efetividade" value={`${operationalSummary.effectiveness}%`} description={`${operationalSummary.completedCohort} concluído(s) da coorte`} accent={rateColor(operationalSummary.effectiveness)} info={{title:"Efetividade",summary:"Percentual da coorte de entradas do período que já alcançou resolução ou fechamento.",calculation:"Tickets resolvidos/fechados ÷ tickets criados no período.",source:"Movidesk",periodRule:"Coorte de tickets criados no período; não confundir com SLA."}} />
-        <PerformanceKpi title="TMR" value={operationalSummary.avgResolutionMinutes===null?"—":formatServiceMinutes(operationalSummary.avgResolutionMinutes)} description="Tempo médio de resolução" accent={aliareColors.purple} info={{title:"TMR",summary:"Tempo médio de resolução dos tickets resolvidos da coorte selecionada.",calculation:"Média de lifetimeMinutes dos tickets resolvidos/fechados com medição disponível.",source:"Movidesk",periodRule:"Tickets criados no período com tempo de vida medido."}} />
-      </Box>
-
-      {executiveQuality && <Box sx={{ display:"grid", gridTemplateColumns:{xs:"1fr",sm:"repeat(2,minmax(0,1fr))",xl:"repeat(4,minmax(0,1fr))"}, gap:1.25, mb:1.75 }}>
+      <KpiGrid sx={{mb:1.75}}>
+        <PerformanceKpi title="Tickets abertos" onClick={() => setDrilldown({ title: "Tickets abertos", tickets: periodTickets })} value={operationalSummary.opened} description="Entradas do período atribuídas à operação SIMER" accent={aliareColors.info} info={{title:"Tickets abertos",summary:"Mesmo cohort do Resumo Executivo: tickets criados no período sob responsabilidade da operação SIMER.",calculation:"createdDate no período + isWithSimer = true.",source:"Movidesk",periodRule:"Segue integralmente o período global selecionado."}} />
+        <PerformanceKpi title="Tickets fechados" onClick={() => setDrilldown({ title: "Tickets fechados", tickets: operationalCohorts.closed })} value={operationalSummary.closed} description="Fechamentos ocorridos no período" accent={aliareColors.green} info={{title:"Tickets fechados",summary:"Mesmo fluxo do Resumo Executivo: tickets SIMER cuja data de fechamento ocorreu no período.",calculation:"isWithSimer = true + closedDate no período.",source:"Movidesk",periodRule:"Segue integralmente o período global selecionado."}} />
+        <PerformanceKpi title="Backlog atual" onClick={() => setDrilldown({ title: "Backlog atual", tickets: currentBacklog })} value={operationalSummary.pending} description="Estoque atual de tickets ativos" accent={aliareColors.warning} info={{title:"Backlog atual",summary:"Mesmo estoque do Resumo Executivo: tickets atualmente ativos sob responsabilidade SIMER, independentemente da data de abertura.",calculation:"isWithSimer = true + status operacional ativo.",source:"Movidesk",periodRule:"Não é limitado pela data de abertura; representa o backlog atual."}} />
+        <PerformanceKpi title="Efetividade" onClick={() => setDrilldown({ title: "Efetividade", tickets: periodTickets.filter((ticket) => ["Resolved", "Closed"].includes(ticket.baseStatus ?? "") && Boolean(ticket.resolvedDate || ticket.closedDate)) })} value={`${operationalSummary.effectiveness}%`} description={`${operationalSummary.completedCohort} concluído(s) da coorte`} accent={rateColor(operationalSummary.effectiveness)} info={{title:"Efetividade",summary:"Percentual da coorte de entradas do período que já alcançou resolução ou fechamento.",calculation:"Tickets resolvidos/fechados ÷ tickets criados no período.",source:"Movidesk",periodRule:"Coorte de tickets criados no período; não confundir com SLA."}} />
+        <PerformanceKpi title="TMR" onClick={() => setDrilldown({ title: "TMR", tickets: periodTickets.filter((ticket) => ["Resolved", "Closed"].includes(ticket.baseStatus ?? "") && Boolean(ticket.resolvedDate || ticket.closedDate) && typeof ticket.lifetimeMinutes === "number" && Number.isFinite(ticket.lifetimeMinutes) && ticket.lifetimeMinutes >= 0) })} value={operationalSummary.avgResolutionMinutes===null?"—":formatServiceMinutes(operationalSummary.avgResolutionMinutes)} description="Tempo médio de resolução" accent={aliareColors.purple} info={{title:"TMR",summary:"Tempo médio de resolução dos tickets resolvidos da coorte selecionada.",calculation:"Média de lifetimeMinutes dos tickets resolvidos/fechados com medição disponível.",source:"Movidesk",periodRule:"Tickets criados no período com tempo de vida medido."}} />
+      {executiveQuality && <>
         <PerformanceKpi title="CSAT" value={executiveQuality.csat.summary.responses ? executiveQuality.csat.summary.average.toLocaleString("pt-BR",{maximumFractionDigits:2}) : "—"} description={`${executiveQuality.csat.summary.responses} resposta(s) · ${executiveQuality.csat.summary.positivePct}% notas 4–5`} accent={aliareColors.green} info={{ title:"CSAT", summary:"Média das avaliações de satisfação vinculadas aos tickets SIMER.", calculation:"Média das notas respondidas; o percentual positivo considera notas 4 e 5.", source:"Pesquisa de Satisfação Movidesk", reference:"MovideskSurveyResponse", periodRule:"Visão consolidada dos últimos 180 dias." }} onClick={()=>navigate("/coordenacao")} />
         <PerformanceKpi title="OLA Suporte" value={executiveQuality.sla.summary.bugsWithTask ? `${Math.round(executiveQuality.sla.summary.supportWithinOla/executiveQuality.sla.summary.bugsWithTask*1000)/10}%` : "—"} description="Ticket → abertura da Task" accent={aliareColors.info} info={{ title:"OLA Suporte", summary:"Cumprimento do prazo interno da etapa de suporte antes do encaminhamento ao desenvolvimento.", calculation:"Ticket aberto → abertura da Task, conforme meta da prioridade.", source:"Movidesk + Azure DevOps", reference:"Timestamps do Ticket e da Task", periodRule:"Visão consolidada dos últimos 180 dias." }} onClick={()=>navigate("/coordenacao")} />
         <PerformanceKpi title="OLA Desenvolvimento" value={executiveQuality.sla.summary.concluded ? `${Math.round(executiveQuality.sla.summary.factoryWithinOla/executiveQuality.sla.summary.concluded*1000)/10}%` : "—"} description="Task → conclusão no Azure" accent={aliareColors.green} info={{ title:"OLA Desenvolvimento", summary:"Cumprimento do prazo interno da etapa de desenvolvimento.", calculation:"Abertura da Task → estado Concluída, conforme meta da prioridade.", source:"Azure DevOps", reference:"Timestamps da Task", periodRule:"Visão consolidada dos últimos 180 dias." }} onClick={()=>navigate("/coordenacao")} />
         <PerformanceKpi title="SLA ponta a ponta" value={executiveQuality.sla.summary.concluded ? `${Math.round(executiveQuality.sla.summary.totalWithinSla/executiveQuality.sla.summary.concluded*1000)/10}%` : "—"} description="Suporte + Desenvolvimento" accent={aliareColors.warning} info={{ title:"SLA ponta a ponta", summary:"Cumprimento do prazo total do fluxo dos tickets vinculados ao desenvolvimento.", calculation:"Tempo de Suporte + tempo de Desenvolvimento, conforme meta da prioridade.", source:"Movidesk + Azure DevOps", reference:"Ticket → Task → Concluída", periodRule:"Visão consolidada dos últimos 180 dias." }} onClick={()=>navigate("/coordenacao")} />
-      </Box>}
+      </>}
+      </KpiGrid>
 
-      <Box
-        sx={{
-          display: "grid",
-          gridTemplateColumns: {
-            xs: "1fr",
-            sm: "repeat(2, minmax(0,1fr))",
-            xl: "repeat(4, minmax(0,1fr))",
-          },
-          gap: 1.25,
-          mb: 1.75,
-        }}
-      >
+      <KpiGrid sx={{mb: 1.75}}>
         <PerformanceKpi
           title="SLA suporte · 1ª resposta"
           value={formatSlaRate(timestampResponseSla.percentage)}
@@ -762,7 +766,7 @@ export function Performance() {
             })
           }
         />
-      </Box>
+      </KpiGrid>
 
       {(riskGroups.critical.length > 0 || riskGroups.overdue.length > 0) && (
         <Alert
@@ -1048,17 +1052,7 @@ export function Performance() {
             }}
           />
 
-          <Box
-            sx={{
-              display: "grid",
-              gridTemplateColumns: {
-                xs: "repeat(2, minmax(0,1fr))",
-                md: "repeat(5, minmax(0,1fr))",
-              },
-              gap: 1,
-              mt: 1.75,
-            }}
-          >
+          <KpiGrid sx={{ mt: 1.75 }}>
             <RiskBucket
               label="Normal"
               value={riskGroups.within.length}
@@ -1119,7 +1113,7 @@ export function Performance() {
                 })
               }
             />
-          </Box>
+          </KpiGrid>
         </CardContent>
       </Card>
 
@@ -1505,106 +1499,7 @@ function PerformanceKpi({
   info: CardInfo;
   onClick?: () => void;
 }) {
-  return (
-    <Card
-      elevation={0}
-      role={onClick ? "button" : undefined}
-      tabIndex={onClick ? 0 : undefined}
-      onClick={onClick}
-      onKeyDown={onClick ? (event) => {
-        if (event.key === "Enter" || event.key === " ") {
-          onClick();
-        }
-      } : undefined}
-      sx={{
-        position: "relative",
-        overflow: "hidden",
-        border: "1px solid",
-        borderColor: "divider",
-        borderRadius: 2.25,
-        cursor: onClick ? "pointer" : "default",
-        backgroundColor: "background.paper",
-        transition:
-          "transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease",
-        "&::before": {
-          content: '""',
-          position: "absolute",
-          top: 0,
-          left: 0,
-          width: "100%",
-          height: 3,
-          backgroundColor: accent,
-        },
-        "&:hover": onClick ? {
-          transform: "translateY(-2px)",
-          borderColor: accent,
-          boxShadow: "0 8px 24px rgba(16,24,40,0.08)",
-        } : {},
-        "&:focus-visible": {
-          outline: `2px solid ${accent}`,
-          outlineOffset: "2px",
-        },
-      }}
-    >
-      <CardContent
-        sx={{
-          p: { xs: 1.6, md: 1.8 },
-          "&:last-child": { pb: { xs: 1.6, md: 1.8 } },
-        }}
-      >
-        <Stack
-          direction="row"
-          sx={{
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 1,
-          }}
-        >
-          <Typography
-            variant="body2"
-            color="text.secondary"
-            sx={{ fontWeight: 650 }}
-          >
-            {title}
-          </Typography>
-
-          <CardInfoButton info={info} />
-        </Stack>
-
-        <Typography
-          sx={{
-            mt: 0.6,
-            fontSize: { xs: "1.75rem", md: "1.95rem", xl: "2.1rem" },
-            lineHeight: 1.05,
-            fontWeight: 800,
-            letterSpacing: "-0.025em",
-          }}
-        >
-          {value}
-        </Typography>
-
-        <Typography
-          variant="caption"
-          color="text.secondary"
-          sx={{ display: "block", mt: 0.75, minHeight: 18 }}
-        >
-          {description}
-        </Typography>
-
-        <Typography
-          variant="caption"
-          sx={{
-            display: "inline-block",
-            mt: 0.85,
-            fontWeight: 700,
-            color: aliareColors.greenDark,
-          }}
-        >
-          Ver atendimentos →
-        </Typography>
-      </CardContent>
-    </Card>
-  );
+  return <ExecutiveKpiCard title={title} value={value} subtitle={description} accent={accent} infoContent={<CardInfoButton info={info} />} onClick={onClick} />;
 }
 
 function DonutCard({
@@ -1789,39 +1684,7 @@ function RiskBucket({
   color: string;
   onClick: () => void;
 }) {
-  return (
-    <Box
-      role="button"
-      tabIndex={0}
-      onClick={onClick}
-      onKeyDown={(event) => {
-        if (event.key === "Enter" || event.key === " ") {
-          onClick();
-        }
-      }}
-      sx={{
-        p: 1.25,
-        border: "1px solid",
-        borderColor: "divider",
-        borderRadius: 1.5,
-        cursor: "pointer",
-        borderTop: `3px solid ${color}`,
-        transition: "transform 0.15s ease, box-shadow 0.15s ease",
-        "&:hover": {
-          transform: "translateY(-2px)",
-          boxShadow: "0 6px 18px rgba(16,24,40,0.06)",
-        },
-      }}
-    >
-      <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
-        {label}
-      </Typography>
-
-      <Typography sx={{ mt: 0.35, fontSize: "1.45rem", fontWeight: 800, lineHeight: 1 }}>
-        {value}
-      </Typography>
-    </Box>
-  );
+  return <ExecutiveKpiCard title={label} value={value} subtitle="Clique para ver os atendimentos" accent={color} onClick={onClick} />;
 }
 
 function RateChip({

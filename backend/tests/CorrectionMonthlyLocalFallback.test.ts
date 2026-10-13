@@ -56,8 +56,8 @@ test("fallback usa StateChangeDate e restringe todas as dimensões à carteira S
     ({ id, title: `Task ${id}`, client, createdByName: "Tayson Araujo", azureCreatedAt: createdAt, state, stateChangedAt });
   prisma.azureWorkItem.findMany = (async () => [
     item(1, "COAP", "Concluído", changedAt),
-    item(2, "COAGRO", "Cancelado", changedAt),
-    item(3, "BOM JESUS", "Registro", changedAt),
+    item(2, "COOPERATIVA AGROPECUARIA COMAG", "Cancelado", changedAt),
+    item(3, "COOPERATIVA BOM JESUS - LAPA-PR", "Registro", changedAt),
     item(4, "Cliente fora da carteira", "Concluído", changedAt),
     ...["Joel Kunrath", "Carina Silva", "Renan Stein", "Lucas Lima"].map((createdByName, index) =>
       ({ ...item(80 + index, "COAP", "Concluído", changedAt), createdByName })),
@@ -90,7 +90,7 @@ test("fallback usa StateChangeDate e restringe todas as dimensões à carteira S
   assert.equal(report.cards.backlogCurrent, 0);
   assert.equal(report.rows.some(row => row.id === 4 || row.id >= 80), false);
   assert.equal(report.filters.clients.includes("Cliente fora da carteira"), false);
-  assert.equal(report.pipeline.reduce((sum, entry) => sum + entry.total, 0), 3);
+  assert.equal(report.pipeline.reduce((sum, entry) => sum + entry.total, 0), 5);
   assert.equal(report.rows.find(row => row.id === 1)?.client, "COAP - SORRISO-MT");
   assert.equal(report.rows.find(row => row.id === 1)?.terminalAt, changedAt.toISOString());
   assert.equal(report.quality.movementHistoryReliable, false);
@@ -141,7 +141,9 @@ test("backlog inicial usa fechamento anterior mesmo com entrega posterior e esto
   assert.equal(report.cards.backlogCurrent,1);
   assert.equal(report.cards.delivered,1);
   assert.equal(report.rows.find(row=>row.id===1)?.stateAtOpen,"Desenvolvimento");
-  assert.equal(report.rows.some(row=>row.id===3),false);
+  // Registro appears in the closing pipeline, without entering backlog.
+  assert.equal(report.rows.some(row=>row.id===3),true);
+  assert.equal(report.rows.find(row=>row.id===3)?.backlogInitial,false);
   assert.equal(report.quality.backlogHistoricalReliable,false);
 });
 

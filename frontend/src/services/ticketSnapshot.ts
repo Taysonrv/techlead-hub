@@ -1,52 +1,39 @@
 import { api } from "./api";
+import { SnapshotCache } from "./snapshotCache";
 
-const SNAPSHOT_TTL_MS = 30_000;
-const SNAPSHOT_STALE_MS = 5 * 60_000;
+const cache = new SnapshotCache<unknown>(async () => {
+  const response = await api.get<unknown[]>("/dashboard/tickets", { timeout: 60_000 });
+  return response.data;
+});
 
-let cachedAt = 0;
-let cachedTickets: unknown[] | null = null;
-let inFlight: Promise<unknown[]> | null = null;
-let lastErrorAt = 0;
-
-/**
- * Snapshot operacional compartilhado pelas telas analíticas.
- * Evita que Dashboard, Clientes e Tickets repitam a mesma consulta pesada
- * durante navegação rápida. O TTL curto mantém os dados operacionais atuais.
- */
+/** Shared snapshot, refreshed after imports and isolated from previous sessions. */
 export async function getTicketSnapshot<T>(): Promise<T[]> {
-  const now = Date.now();
-  if (cachedTickets && now - cachedAt < SNAPSHOT_TTL_MS) {
-    return cachedTickets as T[];
-  }
-
-  if (!inFlight) {
-    inFlight = api.get<T[]>("/dashboard/tickets", { timeout: 60_000 })
-      .then((response) => {
-        cachedTickets = response.data;
-        cachedAt = Date.now();
-        lastErrorAt = 0;
-        return response.data as unknown[];
-      })
-      .catch((error) => {
-        lastErrorAt = Date.now();
-        if (cachedTickets && Date.now() - cachedAt < SNAPSHOT_STALE_MS) {
-          return cachedTickets;
-        }
-        throw error;
-      })
-      .finally(() => {
-        inFlight = null;
-      });
-  }
-
-  return inFlight as Promise<T[]>;
+  return cache.get() as Promise<T[]>;
 }
 
-export function getTicketSnapshotState() {
-  return { cachedAt, lastErrorAt, stale: Boolean(cachedTickets && Date.now() - cachedAt >= SNAPSHOT_TTL_MS) };
-}
+export function getTicketSnapshotState() { return cache.state(); }
 
 export function invalidateTicketSnapshot() {
-  cachedTickets = null;
-  cachedAt = 0;
+  cache.refresh();
+  window.dispatchEvent(new Event("techlead-hub:tickets-changed"));
+}
+
+window.addEventListener("techlead-hub:session-changed", () => cache.invalidate());
+
+export function subscribeTicketSnapshotRefresh(refresh: () => void) {
+  const visibleRefresh = () => {
+    if (document.visibilityState === "visible") refresh();
+  };
+  const timer = window.setInterval(visibleRefresh, 30_000);
+  window.addEventListener("focus", visibleRefresh);
+  window.addEventListener("techlead-hub:tickets-changed", visibleRefresh);
+  window.addEventListener("techlead-hub:backend-available", visibleRefresh);
+  document.addEventListener("visibilitychange", visibleRefresh);
+  return () => {
+    window.clearInterval(timer);
+    window.removeEventListener("focus", visibleRefresh);
+    window.removeEventListener("techlead-hub:tickets-changed", visibleRefresh);
+    window.removeEventListener("techlead-hub:backend-available", visibleRefresh);
+    document.removeEventListener("visibilitychange", visibleRefresh);
+  };
 }

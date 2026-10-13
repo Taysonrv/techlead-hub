@@ -1,3 +1,5 @@
+import { KpiGrid } from "../components/KpiGrid";
+import { KpiCard as ExecutiveKpiCard } from "../components/KpiCard";
 import {
   Alert,
   Box,
@@ -397,22 +399,7 @@ export function Users() {
 
       {/* CARDS */}
 
-      <Box
-        sx={{
-          display:
-            "grid",
-
-          gridTemplateColumns: {
-            xs: "1fr",
-            sm:
-              "repeat(2, minmax(0, 1fr))",
-            lg:
-              "repeat(4, minmax(0, 1fr))",
-          },
-
-          gap: 2,
-        }}
-      >
+      <KpiGrid>
         <SummaryCard
           label="Total"
           value={
@@ -452,7 +439,7 @@ export function Users() {
             <BlockOutlined />
           }
         />
-      </Box>
+      </KpiGrid>
 
       {/* TABLE */}
 
@@ -790,82 +777,7 @@ function SummaryCard({
   value: number;
   icon: React.ReactNode;
 }) {
-  return (
-    <Card
-      elevation={0}
-      sx={{
-        border:
-          "1px solid",
-
-        borderColor:
-          "divider",
-
-        borderRadius:
-          2,
-      }}
-    >
-      <CardContent>
-        <Stack
-          direction="row"
-          sx={{
-            alignItems:
-              "center",
-
-            justifyContent:
-              "space-between",
-          }}
-        >
-          <Box>
-            <Typography
-              variant="body2"
-              color="text.secondary"
-            >
-              {label}
-            </Typography>
-
-            <Typography
-              variant="h4"
-              sx={{
-                mt: 0.5,
-
-                fontWeight:
-                  800,
-              }}
-            >
-              {value}
-            </Typography>
-          </Box>
-
-          <Box
-            sx={{
-              width: 42,
-              height: 42,
-
-              borderRadius:
-                1.5,
-
-              display:
-                "flex",
-
-              alignItems:
-                "center",
-
-              justifyContent:
-                "center",
-
-              backgroundColor:
-                "rgba(24,199,122,0.08)",
-
-              color:
-                aliareColors.greenDark,
-            }}
-          >
-            {icon}
-          </Box>
-        </Stack>
-      </CardContent>
-    </Card>
-  );
+  return <ExecutiveKpiCard title={label} value={value} icon={icon} />;
 }
 
 /* =========================================================

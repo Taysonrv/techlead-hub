@@ -14,6 +14,7 @@ export type CorrectionExportRow = {
   urgency: string | null;
   prioritized: boolean | null;
   assignedTo: string | null;
+  assignedAtClose?: string | null;
   terminalAt: string | null;
   remoteUrl: string | null;
   stateAtOpen?: string | null;
@@ -24,6 +25,14 @@ export type CorrectionExportRow = {
   enteredRegistrationInPeriod: boolean;
   backlogInitial: boolean;
   backlogCurrent: boolean;
+  inMonthlyIndicators?: boolean;
+};
+
+export type CorrectionExportSummary = {
+  indicator: string;
+  value: string | number;
+  reference?: string | number;
+  status: string;
 };
 
 type Props = {
@@ -32,19 +41,21 @@ type Props = {
   subtitle?: string;
   startIcon?: ReactNode;
   fullWidth?: boolean;
+  summary?: CorrectionExportSummary[];
+  label?: string;
 };
 
 const headers = [
   "Task Azure","Título","Cliente","Criado por","Data de criação","Status no fechamento",
   "Status na abertura","Última mudança de status","Urgência","Priorizada","Responsável atual",
-  "Conclusão/Cancelamento","Criada no período","Entregue no período","Cancelada no período",
-  "Entrou em Registro no período","Backlog inicial","Backlog atual","URL Azure",
+  "Responsável no fechamento","Conclusão/Cancelamento","Criada no período","Entregue no período","Cancelada no período",
+  "Entrou em Registro no período","Backlog inicial","Backlog atual","Movimentos/backlog do mês","URL Azure",
 ];
 
 function excelDate(value?: string | null) {
   if (!value) return "";
   const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString("pt-BR");
+  return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString("pt-BR",{timeZone:"America/Sao_Paulo"});
 }
 
 function yesNo(value: boolean | null | undefined) {
@@ -64,19 +75,24 @@ function safeFileName(value: string) {
     .replace(/[^a-zA-Z0-9_-]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 80) || "correcoes_azure";
 }
 
-export function exportCorrectionTasksToExcel(rows: CorrectionExportRow[], title: string, subtitle?: string) {
+export function exportCorrectionTasksToExcel(rows: CorrectionExportRow[], title: string, subtitle?: string, summary?: CorrectionExportSummary[]) {
   const values = rows.map((row) => [
     row.id,row.title,row.client,row.createdBy,excelDate(row.createdAt),row.status,row.stateAtOpen,
     excelDate(row.lastStateChangedAt),row.urgency,yesNo(row.prioritized),row.assignedTo,
-    excelDate(row.terminalAt),yesNo(row.registeredInPeriod),yesNo(row.deliveredInPeriod),
+    row.assignedAtClose,excelDate(row.terminalAt),yesNo(row.registeredInPeriod),yesNo(row.deliveredInPeriod),
     yesNo(row.canceledInPeriod),yesNo(row.enteredRegistrationInPeriod),yesNo(row.backlogInitial),
-    yesNo(row.backlogCurrent),row.remoteUrl,
+    yesNo(row.backlogCurrent),yesNo(row.inMonthlyIndicators??(row.registeredInPeriod||row.deliveredInPeriod||row.canceledInPeriod||row.enteredRegistrationInPeriod||row.backlogInitial||row.backlogCurrent)),row.remoteUrl,
   ]);
 
   const tableRows = [
     `<Row><Cell ss:MergeAcross="${headers.length - 1}"><Data ss:Type="String">${xml(title)}</Data></Cell></Row>`,
     ...(subtitle ? [`<Row><Cell ss:MergeAcross="${headers.length - 1}"><Data ss:Type="String">${xml(subtitle)}</Data></Cell></Row>`] : []),
-    `<Row><Cell ss:MergeAcross="${headers.length - 1}"><Data ss:Type="String">Exportado em ${xml(new Date().toLocaleString("pt-BR"))} · ${rows.length} task(s)</Data></Cell></Row>`,
+    `<Row><Cell ss:MergeAcross="${headers.length - 1}"><Data ss:Type="String">Exportado em ${xml(new Date().toLocaleString("pt-BR",{timeZone:"America/Sao_Paulo"}))} · ${rows.length} task(s)</Data></Cell></Row>`,
+    ...(summary?.length?[
+      `<Row>${["Indicador","Apurado","Referência","Situação"].map(value=>`<Cell ss:StyleID="Header"><Data ss:Type="String">${xml(value)}</Data></Cell>`).join("")}</Row>`,
+      ...summary.map(item=>`<Row>${[item.indicator,item.value,item.reference??"",item.status].map(value=>`<Cell><Data ss:Type="String">${xml(value)}</Data></Cell>`).join("")}</Row>`),
+      "<Row/>",
+    ]:[]),
     `<Row>${headers.map((header) => `<Cell ss:StyleID="Header"><Data ss:Type="String">${xml(header)}</Data></Cell>`).join("")}</Row>`,
     ...values.map((row) => `<Row>${row.map((value) => `<Cell><Data ss:Type="String">${xml(value)}</Data></Cell>`).join("")}</Row>`),
   ].join("");
@@ -100,21 +116,22 @@ export function exportCorrectionTasksToExcel(rows: CorrectionExportRow[], title:
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-export function ExportCorrectionTasksButton({ rows, title, subtitle, startIcon, fullWidth = false }: Props) {
+export function ExportCorrectionTasksButton({ rows, title, subtitle, startIcon, fullWidth = false, summary, label }: Props) {
+  const canExport=rows.length>0||!!summary?.length;
   return (
     <Box sx={{ width: fullWidth ? "100%" : "auto", display: "flex", justifyContent: "flex-end" }}>
-      <Tooltip title={rows.length ? `Exportar ${rows.length} task(s) com detalhamento para Excel` : "Nenhuma task para exportar"}>
+      <Tooltip title={canExport ? `Exportar ${rows.length} task(s)${summary?.length?" e resumo dos indicadores":""} para Excel` : "Nenhuma task para exportar"}>
         <span style={{ width: fullWidth ? "100%" : undefined }}>
           <Button
             fullWidth={fullWidth}
             size="small"
             variant="outlined"
             startIcon={startIcon ?? <DownloadOutlined />}
-            disabled={!rows.length}
-            onClick={() => exportCorrectionTasksToExcel(rows, title, subtitle)}
+            disabled={!canExport}
+            onClick={() => exportCorrectionTasksToExcel(rows, title, subtitle, summary)}
             sx={{ textTransform: "none", fontWeight: 800 }}
           >
-            Exportar Excel
+            {label ?? (summary?.length?"Exportar report Excel":"Exportar Excel")}
           </Button>
         </span>
       </Tooltip>

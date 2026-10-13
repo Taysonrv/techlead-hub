@@ -1,3 +1,4 @@
+import { ManagementOverview } from "../components/ManagementOverview";
 import {
   Box,
   Card,
@@ -139,12 +140,14 @@ export function ManagementIntelligence() {
       {navigation}
 
       <PageHeader
-        eyebrow="Gestão 2.1"
+        eyebrow="Gestão da carteira"
         title="Central de Gestão & Inteligência"
         description="Uma única porta de entrada para decisão executiva, coordenação operacional e liderança técnica da carteira SIMER."
-        meta="Os módulos especializados preservam seu contexto e agora compartilham a mesma navegação."
+        meta="Entradas e resoluções seguem o período; backlog representa o estoque atual."
       />
 
+      <ManagementOverview />
+      <Typography variant="h6" sx={{ fontWeight: 850, mb: 1 }}>Da evidência à ação</Typography>
       <Stack
         direction={{ xs: "column", sm: "row" }}
         spacing={0.8}
@@ -153,7 +156,7 @@ export function ManagementIntelligence() {
       >
         <Chip label="Carteira SIMER" color="success" variant="outlined" />
         <Chip label="Inteligência + Coordenação + Liderança" variant="outlined" />
-        <Chip label="Navegação persistente entre módulos" variant="outlined" />
+        <Chip label="Recortes específicos dentro de cada módulo" variant="outlined" />
       </Stack>
 
       <Box
@@ -183,6 +186,8 @@ export function ManagementIntelligence() {
             }}
             sx={{
               minHeight: { xs: 180, md: 196 },
+              minWidth: 0,
+              "&:focus-visible": { outline: "2px solid", outlineColor: "primary.main", outlineOffset: 3 },
               borderColor: "divider",
               background: dark
                 ? "linear-gradient(145deg,rgba(12,34,52,.96),rgba(7,24,38,.985))"

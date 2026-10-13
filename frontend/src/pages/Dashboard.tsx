@@ -1,3 +1,4 @@
+import { KpiGrid } from "../components/KpiGrid";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
@@ -5,6 +6,7 @@ import {
   Alert,
   Box,
   Button,
+  CircularProgress,
   Card,
   CardContent,
   Chip,
@@ -19,6 +21,7 @@ import {
   Typography,
 } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
+import RefreshRoundedIcon from "@mui/icons-material/RefreshRounded";
 
 import {
   Bar,
@@ -39,7 +42,7 @@ import { useColorMode } from "../context/ColorModeContext";
 
 import { useNavigate } from "react-router-dom";
 
-import { getTicketSnapshot } from "../services/ticketSnapshot";
+import { getTicketSnapshot, getTicketSnapshotState, invalidateTicketSnapshot, subscribeTicketSnapshotRefresh } from "../services/ticketSnapshot";
 import { PeriodFilter } from "../components/PeriodFilter";
 import { PageHeader } from "../components/PageHeader";
 import { ContentState } from "../components/ContentState";
@@ -190,7 +193,6 @@ type DrilldownState = {
   destinationLabel?: string;
 } | null;
 
-type RecurrenceResponse = { items:Array<{service:string;cases:number;clients:number;score:number;priority:"high"|"medium"|"review";trendPct:number}>; summary:{total:number;high:number;rising:number;multiClient:number;anomalies:number}; anomalies?:Array<{service:string;reason:string;severity:"critical"|"warning";score:number;trendPct:number;recent30:number;tickets:number[]}> };
 
 type MetricInfoDefinition = {
   title: string;
@@ -237,10 +239,11 @@ export function Dashboard() {
   const [selectedTicket, setSelectedTicket] =
     useState<Ticket | null>(null);
 
+  const [lastLoadedAt,setLastLoadedAt] = useState(0);
+  const [refreshingData,setRefreshingData] = useState(false);
   const [copyMessage, setCopyMessage] =
     useState("");
   const [flowHidden, setFlowHidden] = useState<Set<"opened" | "resolved" | "closed">>(() => new Set());
-  const [recurrence, setRecurrence] = useState<RecurrenceResponse | null>(null);
 
   const {
     period,
@@ -257,34 +260,37 @@ export function Dashboard() {
     loadRequestRef.current?.abort();
     loadRequestRef.current = controller;
 
-    async function loadTickets() {
+    let refreshing = false;
+    async function loadTickets(initial = false) {
+      if (refreshing) return;
+      refreshing = true;
+      setRefreshingData(true);
       try {
-        setLoading(true);
+        if (initial) setLoading(true);
         setError(null);
         const snapshot = await getTicketSnapshot<Ticket>();
-        if (!controller.signal.aborted) setTickets(snapshot);
+        if (!controller.signal.aborted) {
+          setTickets(snapshot);
+          setLastLoadedAt(getTicketSnapshotState().cachedAt);
+          setError(getTicketSnapshotState().lastErrorAt ? "A atualização falhou. Exibindo os últimos dados carregados; uma nova tentativa será feita automaticamente." : null);
+        }
       } catch (err) {
         if (controller.signal.aborted) return;
         console.error("Erro ao carregar dashboard:", err);
         setError("Não foi possível carregar os dados do Dashboard. Verifique se o backend está rodando.");
       } finally {
-        if (!controller.signal.aborted) setLoading(false);
+        refreshing = false;
+        if (!controller.signal.aborted) { setLoading(false);setRefreshingData(false); }
       }
     }
 
-    void loadTickets();
-    apiRecurrence();
-    return () => controller.abort();
+    void loadTickets(true);
+    const unsubscribeRefresh = subscribeTicketSnapshotRefresh(() => { void loadTickets(); });
+    return () => {
+      unsubscribeRefresh();
+      controller.abort();
+    };
   }, []);
-
-  async function apiRecurrence() {
-    try {
-      const response = await import("../services/api").then(({ api }) => api.get<RecurrenceResponse>("/known-problems/candidates"));
-      if (!loadRequestRef.current?.signal.aborted) setRecurrence(response.data);
-    } catch {
-      setRecurrence(null);
-    }
-  }
 
   /* =======================================================
      PERÍODO + CONJUNTOS EXECUTIVOS
@@ -969,12 +975,12 @@ export function Dashboard() {
     {
       title: "Resolvidos",
       value: summary.resolvidosNoPeriodo,
-      description: "Abertos no período e resolvidos no mesmo recorte",
+      description: "Resolvidos no período, incluindo entradas de meses anteriores",
       severity: "success" as Severity,
       info: {
         title: "Resolvidos",
-        summary: "Tickets abertos no período selecionado que também foram resolvidos dentro desse mesmo recorte.",
-        calculation: "Cohort de createdDate no período, filtrado por resolvedDate dentro do período.",
+        summary: "Tickets com resolução no período e status resolvido ou fechado, independentemente da data de abertura.",
+        calculation: "resolvedDate no período + status resolvido/fechado + escopo SIMER.",
         source: "Movidesk",
         reference: "Ticket.resolvedDate",
         periodRule: "Usa a data de resolução, e não a data de abertura.",
@@ -985,7 +991,7 @@ export function Dashboard() {
     {
       title: "Fechados",
       value: summary.fechadosNoPeriodo,
-      description: "Abertos no período e fechados no mesmo recorte",
+      description: "Fechados no período, incluindo entradas de meses anteriores",
       severity: "success" as Severity,
       info: {
         title: "Fechados",
@@ -1087,7 +1093,7 @@ export function Dashboard() {
     return <ContentState kind="loading" title="Carregando visão executiva" minHeight={360} />;
   }
 
-  if (error) {
+  if (error && tickets.length === 0) {
     return (
       <Alert severity="error">
         {error}
@@ -1123,40 +1129,56 @@ export function Dashboard() {
           CABEÇALHO
       ================================================= */}
 
+      {error && <Alert severity="warning" sx={{ mb: 2 }}>{error}</Alert>}
       <PageHeader
         eyebrow="Operação"
         title="Dashboard Executivo"
         description="Visão consolidada da operação de suporte"
-        meta={<>{periodLabel(period)}{" • "}{filteredTickets.length} ticket(s) analisado(s)</>}
-        action={<PeriodFilter />}
+        meta={<>{periodLabel(period)}{" • "}{filteredTickets.length} ticket(s) analisado(s){lastLoadedAt>0&&` · Leitura do Hub às ${new Date(lastLoadedAt).toLocaleTimeString("pt-BR")}`}</>}
+        action={
+          <Stack
+            direction={{ xs: "column", sm: "row" }}
+            sx={{
+              gap: 1.25,
+              alignItems: { xs: "stretch", sm: "flex-end" },
+              flexWrap: "wrap",
+              "& > *": { minWidth: 0 },
+            }}
+          >
+            <PeriodFilter />
+            <Button
+              variant="contained"
+              disableElevation
+              disabled={refreshingData}
+              onClick={() => invalidateTicketSnapshot()}
+              startIcon={refreshingData
+                ? <CircularProgress size={16} thickness={5} color="inherit" />
+                : <RefreshRoundedIcon fontSize="small" />}
+              aria-label={refreshingData ? "Atualizando dados do dashboard" : "Atualizar dados do dashboard"}
+              sx={{
+                height: 40,
+                minHeight: 40,
+                minWidth: 154,
+                px: 2,
+                borderRadius: "8px",
+                fontWeight: 700,
+                fontSize: "0.82rem",
+                lineHeight: 1,
+                textTransform: "none",
+                whiteSpace: "nowrap",
+                flexShrink: 0,
+                bgcolor: "#078B5B",
+                color: "#FFFFFF",
+                "&:hover": { bgcolor: "#06744D" },
+                "&:focus-visible": { outline: "2px solid #22C55E", outlineOffset: 2 },
+                "&.Mui-disabled": { bgcolor: "rgba(7,139,91,.18)", color: "text.secondary" },
+              }}
+            >
+              {refreshingData ? "Atualizando..." : "Atualizar dados"}
+            </Button>
+          </Stack>
+        }
       />
-      {recurrence && recurrence.summary.total > 0 && (
-        <Card elevation={0} sx={{
-          mb: 2,
-          width: "100%",
-          border: "1px solid",
-          borderColor: "rgba(245,158,11,.28)",
-          borderRadius: 2,
-          background: isDark
-            ? "radial-gradient(circle at 0% 50%, rgba(245,158,11,.08), transparent 42%), linear-gradient(145deg, rgba(9,32,43,.98), rgba(7,25,38,.995))"
-            : "radial-gradient(circle at 0% 50%, rgba(245,158,11,.07), transparent 42%), linear-gradient(145deg, #FFFFFF, #FAFCFD)",
-        }}>
-          <CardContent sx={{ py:1.5, "&:last-child":{pb:1.5} }}>
-            <Stack direction={{xs:"column",md:"row"}} spacing={1.5} sx={{justifyContent:"space-between",alignItems:{md:"center"}}}>
-              <Box>
-                <Typography sx={{fontWeight:850}}>Inteligência de recorrência</Typography>
-                <Typography variant="body2" color="text.secondary">
-                  {recurrence.summary.total} padrão(ões) detectado(s) · {recurrence.summary.high} alta prioridade · {recurrence.summary.rising} em crescimento · {recurrence.summary.multiClient} multi-cliente · {recurrence.summary.anomalies} anomalia(s)
-                </Typography>
-              </Box>
-              <Stack direction="row" spacing={.7} useFlexGap sx={{flexWrap:"wrap",alignItems:"center"}}>
-                {recurrence.items.slice(0,3).map((item,index) => <Chip key={`${item.service}-${item.cases}-${item.score}-${item.trendPct}-${index}`} size="small" color={item.priority==="high"?"error":"warning"} variant="outlined" label={`${item.service}: ${item.cases} casos · ${item.score}/100`} onClick={()=>navigate(`/problemas-conhecidos?q=${encodeURIComponent(item.service)}`)}/>)}
-                <Button size="small" onClick={()=>navigate("/problemas-conhecidos")}>Ver análise</Button>
-              </Stack>
-            </Stack>
-          </CardContent>
-        </Card>
-      )}
       {metricAudit.length > 0 && (
         <Alert severity="warning" variant="outlined" sx={{ mb: 2 }}>
           Auditoria de métricas detectou {metricAudit.length} divergência(s): {metricAudit.map((item) => item.message).join(" · ")}
@@ -1167,27 +1189,7 @@ export function Dashboard() {
           KPIs
       ================================================= */}
 
-      <Box
-        sx={{
-          display: "grid",
-
-          gridTemplateColumns: {
-            xs: "1fr",
-            sm: "repeat(2, 1fr)",
-            lg: "repeat(3, minmax(0, 1fr))",
-          },
-
-          gap: {
-            xs: 1.25,
-            md: 1.5,
-            xl: 2,
-          },
-
-          mb: 2.5,
-          width: "100%",
-          alignItems: "stretch",
-        }}
-      >
+      <KpiGrid sx={{mb: 2.5}}>
         {cards.map(
           (card) => (
             <KpiCard
@@ -1213,7 +1215,7 @@ export function Dashboard() {
             />
           )
         )}
-      </Box>
+      </KpiGrid>
 
       {/* =================================================
           DESENVOLVIMENTO / AZURE DEVOPS
@@ -1311,18 +1313,7 @@ export function Dashboard() {
               Nenhum Work Item do Azure foi localizado nos atendimentos do snapshot atual.
             </Alert>
           ) : (
-            <Box
-              sx={{
-                display: "grid",
-                gridTemplateColumns: {
-                  xs: "1fr",
-                  sm: "repeat(2, minmax(0, 1fr))",
-                  lg: "repeat(3, minmax(0, 1fr))",
-                  xl: "repeat(3, minmax(0, 1fr))",
-                },
-                gap: 1.25,
-              }}
-            >
+            <KpiGrid>
               <DevelopmentMetric
                 title="Correções"
                 value={azureDevelopment.corrections.length}
@@ -1409,7 +1400,7 @@ export function Dashboard() {
                 }}
                 onClick={() => showTickets("Tasks de alta criticidade", tickets.filter((ticket) => { const value = normalize(ticket.azureWorkItem?.criticality); return value === "alta" || value === "critica"; }), "Tickets vinculados a Work Items de criticidade Alta ou Crítica")}
               />
-            </Box>
+            </KpiGrid>
           )}
         </CardContent>
       </Card>
@@ -2872,8 +2863,8 @@ function CardPeriodHeader({ title, subtitle, value, onChange }: { title: string;
       <Typography sx={{ fontWeight: 850, fontSize: "1.05rem", lineHeight: 1.25 }}>{title}</Typography>
       <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: .35 }}>{subtitle}</Typography>
     </Box>
-    {value && onChange && <FormControl size="small" sx={{ width: 126 }}>
-      <Select value={value} onChange={(event) => onChange(event.target.value as CardPeriod)} sx={{ height: 32, fontSize: ".75rem", fontWeight: 750, textAlign: "center" }}>
+    {value && onChange && <FormControl size="small" sx={{ width: { xs: "100%", sm: 152 }, maxWidth: "100%", minWidth: 0 }}>
+      <Select inputProps={{ "aria-label": `Período de ${title}` }} value={value} onChange={(event) => onChange(event.target.value as CardPeriod)} sx={{ height: 32, fontSize: ".75rem", fontWeight: 750, textAlign: "center" }}>
         <MenuItem value="7d">7 dias</MenuItem><MenuItem value="30d">30 dias</MenuItem><MenuItem value="60d">60 dias</MenuItem><MenuItem value="90d">90 dias</MenuItem><MenuItem value="month">Este mês</MenuItem><MenuItem value="semester">Semestre</MenuItem><MenuItem value="year">Este ano</MenuItem>
       </Select>
     </FormControl>}
