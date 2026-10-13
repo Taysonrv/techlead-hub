@@ -317,7 +317,9 @@ export function NotificationCenter() {
   useEffect(() => {
     if (!toast) return;
     playNotificationSound(toast.kind === "CHAT_MENTION" ? "chat" : "system");
-    if (preferences.desktopAlerts && "Notification" in window && Notification.permission === "granted") {
+    // Apenas o Electron envia alertas nativos: sessões Web mantêm sino e toast,
+    // mas não duplicam os avisos do Windows mesmo com o Desktop fechado.
+    if (window.techLeadHub && preferences.desktopAlerts && "Notification" in window && Notification.permission === "granted") {
       const alert = new Notification(toast.title, { body: toast.message });
       alert.onclick = () => {
         window.focus();
@@ -335,7 +337,7 @@ export function NotificationCenter() {
 
   async function openMenu(event: MouseEvent<HTMLElement>) {
     setAnchor(event.currentTarget);
-    if ("Notification" in window && Notification.permission === "default") {
+    if (window.techLeadHub && "Notification" in window && Notification.permission === "default") {
       await Notification.requestPermission().catch(() => "denied");
     }
     void load();
@@ -508,7 +510,7 @@ export function NotificationCenter() {
               ["simerVersion", "Versões do SIMER"],
               ["azureCompleted", "Tarefas concluídas"],
               ["azureUpdated", "Alterações em tarefas"],
-              ["desktopAlerts", "Avisos do Windows"],
+              ["desktopAlerts", "Avisos do Windows (somente Desktop)"],
             ] as Array<[keyof NotificationPreferences, string]>).map(([key, label]) => (
               <FormControlLabel
                 key={key}
