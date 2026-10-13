@@ -12,6 +12,16 @@ export type ReleaseNote = {
 export const FALLBACK_APP_VERSION = import.meta.env.VITE_APP_VERSION || "development";
 
 export const releaseNotes: Record<string, ReleaseNote> = {
+  "2.1.0-rc.4": {
+    version: "2.1.0-rc.4",
+    title: "Estabilidade do Desktop, Chat e Docker Web",
+    items: [
+      { title: "Docker e PostgreSQL", description: "Prisma Client gerado para Debian/OpenSSL 3, corrigindo a inicialização do backend na imagem Docker." },
+      { title: "Chat e presença online", description: "Correção da chamada de advisory lock PostgreSQL que provocava erros ao atualizar presença." },
+      { title: "Diagnóstico das integrações", description: "Falhas de leitura de credenciais são tratadas separadamente da disponibilidade do banco e não aparecem como configuração ausente." },
+      { title: "Configurações protegidas", description: "Leitura atômica dos segredos armazenados, com mensagens de diagnóstico sem exposição de senhas ou tokens." },
+    ],
+  },
   "2.1.0-rc.3": {
     version: "2.1.0-rc.3",
     title: "Confiabilidade dos dados, colaboração e implantação simplificada",

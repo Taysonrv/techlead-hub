@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.1.0-rc.4 — 2026-10-13
+
+### Correções críticas de estabilidade
+- Corrigida a incompatibilidade entre Prisma Client e Debian/OpenSSL 3 na imagem Docker Web, com geração explícita do engine de produção.
+- Corrigido o uso de `pg_advisory_xact_lock` no chat para os tipos esperados pelo PostgreSQL.
+- Falhas ao descriptografar configurações não são mais confundidas com indisponibilidade do banco na inicialização.
+- Carregamento de credenciais passa a ser atômico e apresenta diagnóstico sem expor segredos.
+- Tela de Configurações distingue falhas de consulta de integrações não configuradas e recupera as áreas independentes mesmo se algum diagnóstico auxiliar falhar.
+
+> Release Candidate beta. A correção não recupera automaticamente credenciais criptografadas com outra chave. Validar a configuração original do Desktop e o health check da imagem Docker em homologação antes de promover.
+
 ## 2.1.0-rc.3 — 2026-10-13
 
 ### Dados operacionais e Azure
