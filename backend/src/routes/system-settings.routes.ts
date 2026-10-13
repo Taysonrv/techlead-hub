@@ -16,6 +16,28 @@ systemSettingsRoutes.get("/", async (_request, response) => {
   }
 });
 
+// Diagnóstico administrativo, somente leitura. Nunca retorna credenciais ou valores secretos.
+systemSettingsRoutes.get("/credentials-health", async (_request, response) => {
+  const keySource = process.env.SYSTEM_CONFIG_KEY?.trim()
+    ? "dedicated"
+    : process.env.JWT_SECRET?.trim() ? "legacy-jwt" : "missing";
+  try {
+    await systemConfigurationService.status();
+    return response.json({ status: "readable", keySource, database: "ready" });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    const incompatible = message.startsWith("Falha ao descriptografar a configuração");
+    return response.status(incompatible ? 409 : 503).json({
+      status: incompatible ? "incompatible" : "unavailable",
+      keySource,
+      database: "unknown",
+      message: incompatible
+        ? "Credenciais persistidas incompatíveis com a chave atual. Não altere configurações antes de recuperar a chave original."
+        : "Não foi possível verificar as configurações.",
+    });
+  }
+});
+
 systemSettingsRoutes.get("/diagnostics", async (_request, response) => {
   const startedAt = Date.now();
   try {
