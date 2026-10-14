@@ -150,9 +150,21 @@ type CardInfoDefinition = {
   notes?: string;
 };
 
+type ClosureAudit = {
+  client: string; checkedTickets: number; enrichedTickets: number; coverageLimited: boolean;
+  totalCandidates: number; openCandidates: number; closedCandidates: number; disclaimer: string;
+  items: Array<{ ticketId: number; subject: string; status: string; stillOpen: boolean;
+    actionDate: string | null; actionAuthor: string | null; evidence: string; actionId: number }>;
+};
+
 export function Attention() {
   const navigate =
     useNavigate();
+
+  const [closureAudit, setClosureAudit] = useState<ClosureAudit | null>(null);
+  const [closureBusy, setClosureBusy] = useState(false);
+  const [closureError, setClosureError] = useState<string | null>(null);
+  const [showAllClosure, setShowAllClosure] = useState(false);
 
   const [tickets, setTickets] =
     useState<Ticket[]>([]);
@@ -190,6 +202,19 @@ export function Attention() {
     effectiveStartDate,
     effectiveEndDate,
   } = useFilters();
+
+  async function loadClosureAudit() {
+    setClosureBusy(true);
+    setClosureError(null);
+    try {
+      const { data } = await api.get<ClosureAudit>("/movidesk/closure-requests", { params: { client: "Bom Jesus" } });
+      setClosureAudit(data);
+    } catch {
+      setClosureError("Não foi possível consultar as interações. Verifique as permissões e a cobertura da sincronização Movidesk.");
+    } finally {
+      setClosureBusy(false);
+    }
+  }
 
   /* =====================================================
      CARREGAMENTO
@@ -834,6 +859,55 @@ export function Attention() {
         meta={<>{periodTickets.length} ticket(s) analisado(s) no período</>}
         action={<PeriodFilter />}
       />
+
+      <Card variant="outlined" sx={{ mb: 2, borderRadius: 2.5 }}>
+        <CardContent>
+          <Stack direction={{ xs: "column", md: "row" }} spacing={1.5} sx={{ alignItems: { md: "center" }, justifyContent: "space-between", mb: 1 }}>
+            <Box>
+              <Typography sx={{ fontWeight: 800 }}>Pedidos de baixa e cancelamento — Bom Jesus</Typography>
+              <Typography variant="body2" color="text.secondary">
+                Identifica candidatos no histórico sincronizado; requer conferência do autor e do contexto.
+              </Typography>
+            </Box>
+            <Button variant="outlined" disabled={closureBusy} onClick={() => void loadClosureAudit()}>
+              {closureBusy ? "Analisando..." : "Analisar solicitações"}
+            </Button>
+          </Stack>
+          {closureError && <Alert severity="warning" sx={{ mb: 1 }}>{closureError}</Alert>}
+          {closureAudit && (
+            <>
+              <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap", mb: 1.5 }}>
+                <Chip color="warning" label={`${closureAudit.openCandidates} candidatos ainda abertos`} />
+                <Chip variant="outlined" label={`${closureAudit.closedCandidates} já resolvidos/fechados`} />
+                <Chip variant="outlined" label={`${closureAudit.enrichedTickets} de ${closureAudit.checkedTickets} tickets com ações sincronizadas`} />
+              </Stack>
+              <Alert severity={closureAudit.enrichedTickets < closureAudit.checkedTickets || closureAudit.coverageLimited ? "warning" : "info"} sx={{ mb: 1.5 }}>
+                {closureAudit.disclaimer} {closureAudit.coverageLimited ? "A consulta atingiu o limite de 5.000 tickets." : ""}
+              </Alert>
+              <Button size="small" variant="text" onClick={() => setShowAllClosure((value) => !value)}>
+                {showAllClosure ? "Exibir apenas em aberto" : "Exibir também os já fechados"}
+              </Button>
+              <TableContainer sx={{ maxHeight: 420, overflowX: "auto" }}>
+                <Table size="small" stickyHeader>
+                  <TableHead><TableRow>
+                    <TableCell>Ticket</TableCell><TableCell>Situação</TableCell><TableCell>Autor/data</TableCell><TableCell>Evidência da interação</TableCell>
+                  </TableRow></TableHead>
+                  <TableBody>
+                    {closureAudit.items.filter((item) => showAllClosure || item.stillOpen).slice(0, 200).map((item) => (
+                      <TableRow key={item.ticketId} hover>
+                        <TableCell><Button size="small" onClick={() => navigate(`/tickets?movidesk=${item.ticketId}`)}>#{item.ticketId}</Button><Typography variant="caption" sx={{ display: "block", maxWidth: 240 }}>{item.subject}</Typography></TableCell>
+                        <TableCell><Chip size="small" color={item.stillOpen ? "warning" : "success"} label={item.status} /></TableCell>
+                        <TableCell>{item.actionAuthor || "Autor não identificado"}<Typography variant="caption" sx={{ display: "block" }}>{item.actionDate ? new Date(item.actionDate).toLocaleDateString("pt-BR") : "Sem data"}</Typography></TableCell>
+                        <TableCell sx={{ maxWidth: 420, whiteSpace: "normal", overflowWrap: "anywhere" }}>{item.evidence}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </>
+          )}
+        </CardContent>
+      </Card>
 
       {recurrence && recurrence.items.length > 0 && (
         <Card variant="outlined" sx={{ mb: 1.5, borderColor: "rgba(245,158,11,.28)", overflow: "hidden" }}>
