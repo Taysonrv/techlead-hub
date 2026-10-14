@@ -12,6 +12,16 @@ export type ReleaseNote = {
 export const FALLBACK_APP_VERSION = import.meta.env.VITE_APP_VERSION || "development";
 
 export const releaseNotes: Record<string, ReleaseNote> = {
+  "2.1.0-rc.5": {
+    version: "2.1.0-rc.5",
+    title: "Diagnóstico de credenciais e notificações sem duplicidade",
+    items: [
+      { title: "Diagnosticar credenciais", description: "Botão autenticado em Configurações para verificar a leitura segura das integrações, sem copiar tokens." },
+      { title: "Chave da instalação", description: "Diagnóstico somente leitura distingue credenciais legíveis, incompatíveis e indisponibilidade sem expor segredos." },
+      { title: "Notificações Windows", description: "Alertas nativos restritos ao aplicativo Desktop para evitar duplicidade com o navegador." },
+      { title: "Homologação Desktop e Web", description: "Verificação preparada para comparar os ambientes, sem regravar ou substituir credenciais existentes." },
+    ],
+  },
   "2.1.0-rc.4": {
     version: "2.1.0-rc.4",
     title: "Estabilidade do Desktop, Chat e Docker Web",
