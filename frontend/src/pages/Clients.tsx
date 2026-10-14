@@ -1967,7 +1967,7 @@ export function Clients() {
                 <CartesianGrid strokeDasharray="3 3" opacity={0.25} />
                 <XAxis dataKey="periodo" tick={{ fontSize: 11 }} />
                 <YAxis domain={[0, 100]} tickFormatter={(v: number) => `${v}%`} width={46} />
-                <Tooltip formatter={(value: number | string | undefined) => value == null ? "Sem medição" : `${Number(value).toFixed(1)}%`} />
+                <Tooltip formatter={(value) => { const scalar = Array.isArray(value) ? value[0] : value; return scalar == null || !Number.isFinite(Number(scalar)) ? "Sem medição" : `${Number(scalar).toFixed(1)}%`; }} />
                 <Legend />
                 <Line type="monotone" dataKey="resposta" name="SLA 1ª resposta" stroke={PIE_COLORS[0]} strokeWidth={2.5} connectNulls={false} />
                 <Line type="monotone" dataKey="solucao" name="SLA solução" stroke={PIE_COLORS[1]} strokeWidth={2.5} connectNulls={false} />
