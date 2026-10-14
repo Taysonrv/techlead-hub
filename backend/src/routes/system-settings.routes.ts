@@ -38,6 +38,20 @@ systemSettingsRoutes.get("/credentials-health", async (_request, response) => {
   }
 });
 
+// Apenas ADMIN. A chave é testada em memória; não há escrita nem retorno de segredo.
+systemSettingsRoutes.post("/recovery/validate", async (request, response) => {
+  const candidate = typeof request.body?.candidate === "string" ? request.body.candidate : "";
+  if (candidate.length < 32 || candidate.length > 4096) {
+    return response.status(400).json({ valid: false, message: "Informe uma chave válida (mínimo 32 caracteres)." });
+  }
+  try {
+    const valid = await systemConfigurationService.validateRecoveryKey(candidate);
+    return response.json({ valid });
+  } catch {
+    return response.status(503).json({ valid: false, message: "Não foi possível verificar os registros no banco." });
+  }
+});
+
 systemSettingsRoutes.get("/diagnostics", async (_request, response) => {
   const startedAt = Date.now();
   try {

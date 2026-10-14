@@ -793,6 +793,7 @@ function registerIpcHandlers() {
   ipcMain.removeHandler("configuration:get");
   ipcMain.removeHandler("configuration:import-env");
   ipcMain.removeHandler("configuration:save");
+  ipcMain.removeHandler("configuration:recover-key");
   ipcMain.removeHandler("startup:get");
   ipcMain.removeHandler("startup:set");
 
@@ -873,6 +874,36 @@ function registerIpcHandlers() {
 
   ipcMain.handle("configuration:import-env", async () => {
     return selectConfigurationFile();
+  });
+
+  ipcMain.handle("configuration:recover-key", async (event, input: unknown) => {
+    if (!mainWindow || event.sender !== mainWindow.webContents) {
+      throw new Error("A recuperação deve ser iniciada pela janela principal.");
+    }
+    const candidate = typeof input === "string" ? input.trim() : "";
+    if (candidate.length < 32 || candidate.length > 4096) {
+      throw new Error("Chave de recuperação inválida.");
+    }
+    const decision = await dialog.showMessageBox(mainWindow, {
+      type: "warning",
+      title: "Recuperação de credenciais",
+      message: "Confirmar recuperação da chave de integração?",
+      detail: "A chave foi validada contra os registros pelo administrador. Ela será armazenada com proteção do Windows e o TechLead Hub será reiniciado. A JWT_SECRET de autenticação não será alterada.",
+      buttons: ["Cancelar", "Confirmar recuperação"],
+      defaultId: 0,
+      cancelId: 0,
+      noLink: true,
+    });
+    if (decision.response !== 1) return { saved: false };
+    saveSecureValue("systemConfigKey", candidate);
+    // Sem retornar segredos ao renderer; reiniciar apenas após persistência.
+    setTimeout(() => {
+      isQuitting = true;
+      stopBackend();
+      app.relaunch();
+      app.exit(0);
+    }, 600);
+    return { saved: true };
   });
 
   ipcMain.handle("configuration:save", async (_event, input: unknown) => {
