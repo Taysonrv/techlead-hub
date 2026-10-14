@@ -165,6 +165,9 @@ export function Settings() {
   const [diagnostics, setDiagnostics] = useState<Diagnostics | null>(null);
   const [credentialHealth, setCredentialHealth] = useState<CredentialHealth | null>(null);
   const [credentialHealthBusy, setCredentialHealthBusy] = useState(false);
+  const [recoveryKey, setRecoveryKey] = useState("");
+  const [recoveringKey, setRecoveringKey] = useState(false);
+  const [recoveryMessage, setRecoveryMessage] = useState<string | null>(null);
   const [startupEnabled, setStartupEnabled] = useState(false);
   const [startupSaving, setStartupSaving] = useState(false);
   const [permissionUsers,setPermissionUsers]=useState<PermissionUser[]>([]);
@@ -199,6 +202,26 @@ export function Settings() {
     const timer = window.setInterval(() => { void refreshMovideskBaseline(); }, 5000);
     return () => window.clearInterval(timer);
   }, [movideskBaseline?.status]);
+
+  async function recoverDesktopKey() {
+    if (!window.techLeadHub?.configuration?.recoverKey || recoveryKey.length < 32) return;
+    setRecoveringKey(true);
+    setRecoveryMessage(null);
+    try {
+      const validation = await api.post<{ valid: boolean }>("/system-settings/recovery/validate", { candidate: recoveryKey });
+      if (!validation.data.valid) {
+        setRecoveryMessage("A chave informada não consegue ler todos os registros criptografados. Nenhuma alteração realizada.");
+        return;
+      }
+      const result = await window.techLeadHub.configuration.recoverKey(recoveryKey);
+      setRecoveryMessage(result.saved ? "Chave armazenada com segurança. O Desktop será reiniciado." : "Operação cancelada. Nenhuma chave alterada.");
+      if (result.saved) setRecoveryKey("");
+    } catch {
+      setRecoveryMessage("Falha na validação ou no armazenamento seguro. Nenhuma configuração foi substituída.");
+    } finally {
+      setRecoveringKey(false);
+    }
+  }
 
   async function diagnoseCredentials() {
     setCredentialHealthBusy(true);
@@ -582,6 +605,27 @@ export function Settings() {
                 {credentialHealthBusy ? "Verificando..." : "Diagnosticar credenciais"}
               </Button>
             </Stack>
+            {window.techLeadHub?.configuration?.recoverKey && credentialHealth?.status === "incompatible" && (
+              <Stack spacing={1.25} sx={{ mt: 2 }}>
+                <Typography sx={{ fontWeight: 750 }}>Recuperação administrativa de credenciais</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Informe a chave original que consegue ler as seis integrações. O valor será verificado no servidor e armazenado no Windows somente após confirmação. Não use uma chave nova aleatória nem cole segredos em logs.
+                </Typography>
+                <TextField
+                  size="small"
+                  type="password"
+                  fullWidth
+                  autoComplete="off"
+                  label="Chave original de criptografia"
+                  value={recoveryKey}
+                  onChange={(event) => setRecoveryKey(event.target.value)}
+                />
+                <Button variant="contained" disabled={recoveringKey || recoveryKey.length < 32} onClick={() => void recoverDesktopKey()}>
+                  {recoveringKey ? "Validando..." : "Validar e recuperar no Desktop"}
+                </Button>
+                {recoveryMessage && <Alert severity="info">{recoveryMessage}</Alert>}
+              </Stack>
+            )}
             {credentialHealth && (
               <Alert severity={credentialHealth.status === "readable" ? "success" : credentialHealth.status === "incompatible" ? "warning" : "error"} sx={{ mt: 1.5 }}>
                 <Typography sx={{ fontWeight: 700 }}>{credentialHealth.status === "readable" ? "Credenciais legíveis nesta instância" : credentialHealth.status === "incompatible" ? "Chave incompatível com os registros salvos" : "Diagnóstico indisponível"}</Typography>
