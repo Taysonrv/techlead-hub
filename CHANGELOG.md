@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.1.0-rc.6 — 2026-10-14
+
+### Recuperação administrativa de credenciais
+- Adicionada validação administrativa, somente leitura, da chave original contra os registros de integração criptografados.
+- Tela de Configurações oferece recuperação para instalações Desktop que apresentem chave incompatível.
+- Electron solicita confirmação, armazena a chave validada pelo Windows safeStorage e reinicia para reaplicar a configuração.
+- Mantidas as proteções de compatibilidade com JWT_SECRET legado e o inventário de registros operacionais não criptografados.
+
+> Versão beta de homologação da recuperação do Desktop. Não executa migração criptográfica dos registros do PostgreSQL; não utilizar a opção --apply da ferramenta de migração. A chave original deve ser preservada e informada somente na interface local protegida.
+
 ## 2.1.0-rc.5 — 2026-10-13
 
 ### Diagnóstico de credenciais (Desktop e Web)
