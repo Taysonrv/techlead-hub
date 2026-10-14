@@ -45,7 +45,7 @@ async function main() {
   const operational = rows.filter(row =>
     !knownKeys.includes(row.key) &&
     row.encrypted === false &&
-    (/^correction-monthly-close:[a-f0-9]+:\\d{4}-\\d{2}$/.test(row.key) ||
+    (/^correction-monthly-close:[a-f0-9]+:\d{4}-\d{2}$/.test(row.key) ||
      /^movidesk-metadata-v2:[a-f0-9]+$/.test(row.key))
   );
   const unknown = rows.filter(row => !knownKeys.includes(row.key) && !operational.includes(row));
