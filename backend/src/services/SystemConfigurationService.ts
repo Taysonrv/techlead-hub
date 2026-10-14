@@ -50,9 +50,26 @@ class SystemConfigurationService {
   private decrypt(value: string) {
     const [version, iv, tag, encrypted] = value.split(":");
     if (version !== "v1" || !iv || !tag || !encrypted) throw new Error("Configuração central inválida.");
-    const decipher = crypto.createDecipheriv("aes-256-gcm", this.encryptionKey(), Buffer.from(iv, "base64"));
-    decipher.setAuthTag(Buffer.from(tag, "base64"));
-    return Buffer.concat([decipher.update(Buffer.from(encrypted, "base64")), decipher.final()]).toString("utf8");
+    // Dados legados podem ter sido criptografados com JWT_SECRET antes da
+    // introdução de SYSTEM_CONFIG_KEY. Tentar as chaves sem alterar registros.
+    const secrets = [
+      process.env.SYSTEM_CONFIG_KEY?.trim(),
+      process.env.JWT_SECRET?.trim(),
+    ].filter((secret): secret is string => Boolean(secret && secret.length >= 32));
+    const tried = new Set<string>();
+    for (const secret of secrets) {
+      if (tried.has(secret)) continue;
+      tried.add(secret);
+      try {
+        const key = crypto.createHash("sha256").update(secret).digest();
+        const decipher = crypto.createDecipheriv("aes-256-gcm", key, Buffer.from(iv, "base64"));
+        decipher.setAuthTag(Buffer.from(tag, "base64"));
+        return Buffer.concat([decipher.update(Buffer.from(encrypted, "base64")), decipher.final()]).toString("utf8");
+      } catch {
+        // Só as chaves disponíveis são testadas; nunca registrar seus valores.
+      }
+    }
+    throw new Error("Configuração criptografada incompatível com as chaves disponíveis.");
   }
 
   async loadIntoEnvironment() {
