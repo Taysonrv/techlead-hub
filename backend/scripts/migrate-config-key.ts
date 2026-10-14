@@ -36,14 +36,28 @@ async function main() {
     throw Error("Aplicacao bloqueada: execute pg_dump e defina CONFIG_MIGRATION_BACKUP_CONFIRMED=YES somente apos verificar o backup.");
   }
 
-  const rows = await prisma.$queryRaw<Array<{ key: string; value: string }>>`
-    SELECT "key", "value" FROM "SystemSetting" ORDER BY "key"
+  const rows = await prisma.$queryRaw<Array<{ key: string; value: string; encrypted: boolean }>>`
+    SELECT "key", "value", "encrypted" FROM "SystemSetting" ORDER BY "key"
   `;
   const recognized = rows.filter(row => knownKeys.includes(row.key));
-  const unrecognizedCount = rows.length - recognized.length;
-  if (unrecognizedCount) {
-    console.warn(`Aviso: ${unrecognizedCount} registro(s) fora do escopo das seis integracoes conhecidas. Nenhum desses valores sera lido ou modificado.`);
-    if (apply) throw Error("Migracao real bloqueada: existem chaves fora do escopo. Revise os registros antes de autorizar aplicacao.");
+  // Metadados operacionais não são credenciais e não devem ser recriptografados.
+  // Qualquer novo tipo fora dessa lista interrompe a migração real.
+  const operational = rows.filter(row =>
+    !knownKeys.includes(row.key) &&
+    row.encrypted === false &&
+    (/^correction-monthly-close:[a-f0-9]+:\\d{4}-\\d{2}$/.test(row.key) ||
+     /^movidesk-metadata-v2:[a-f0-9]+$/.test(row.key))
+  );
+  const unknown = rows.filter(row => !knownKeys.includes(row.key) && !operational.includes(row));
+  if (operational.length) {
+    console.log(`Registros operacionais preservados: ${operational.length} (sem alteração).`);
+  }
+  if (unknown.length) {
+    console.warn(`Existem ${unknown.length} registro(s) inesperado(s) fora do escopo.`);
+    if (apply) throw Error("Migracao bloqueada: revise os registros inesperados antes de executar --apply.");
+  }
+  if (recognized.some(row => row.encrypted !== true)) {
+    throw Error("Uma configuração de integração não está marcada como criptografada. Migração interrompida.");
   }
   if (!recognized.length) throw Error("Nenhuma configuracao persistida encontrada; migracao cancelada.");
 
