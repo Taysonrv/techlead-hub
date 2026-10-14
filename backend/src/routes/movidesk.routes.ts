@@ -59,6 +59,7 @@ movideskRoutes.get("/closure-requests", requirePermission("attention"), async (r
       });
       if (!matches.length) return [];
       const action = matches[0];
+      if (!action) return [];
       const text = (action.description ?? "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
       const open = !["Closed", "Resolved", "Canceled", "Cancelled"].includes(ticket.baseStatus ?? "");
       return [{
