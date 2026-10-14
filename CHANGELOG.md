@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.1.0-rc.5 — 2026-10-13
+
+### Diagnóstico de credenciais (Desktop e Web)
+- Incluído diagnóstico administrativo, somente leitura, para identificar se a instância consegue descriptografar credenciais de integração já armazenadas.
+- Incluído o botão **Diagnosticar credenciais** na tela Configurações, utilizando a sessão autenticada do sistema, sem copiar tokens pelo navegador.
+- Os resultados distinguem credenciais legíveis, incompatibilidade da chave e indisponibilidade de verificação; a origem da chave é apresentada sem revelar segredos.
+- Limitadas as notificações nativas do Windows ao aplicativo Desktop, evitando alertas duplicados emitidos pelo navegador.
+
+> Release Candidate de diagnóstico. Esta versão não recupera automaticamente registros criptografados com outra chave. Validar no Desktop instalado e no Docker antes de migrar as credenciais.
+
 ## 2.1.0-rc.4 — 2026-10-13
 
 ### Correções críticas de estabilidade
