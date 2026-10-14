@@ -1601,7 +1601,7 @@ export function Clients() {
                 lg: "repeat(3, minmax(0, 1fr))",
                 xl: "repeat(3, minmax(0, 1fr))",
               },
-              gap: 2,
+              gap: 1.5,
               "& .MuiFormControl-root": { width: "100%", minWidth: 0 },
               "& .MuiInputLabel-root": { maxWidth: "calc(100% - 32px)" },
               "& .MuiSelect-select": { minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
@@ -1759,19 +1759,8 @@ export function Clients() {
         </CardContent>
       </Card>
 
-      <KpiGrid sx={{ mb: 2 }}>
-        <MetricCard title="Movidesk · abertos no período" value={movideskClientPeriodTickets.length}
-          description="Todos os tickets do cliente, antes do filtro SIMER"
-          info={{ title:"Movidesk · abertos no período", summary:"Universo total sincronizado do Movidesk para cliente e período.", calculation:"Data de abertura; não exige isWithSimer.", source:"Movidesk", reference:"Ticket.createdDate + Ticket.client", periodRule:"Respeita o mesmo período dos cards SIMER." }}
-          onClick={() => showTickets("Movidesk · abertos no período", movideskClientPeriodTickets, "Todos os tickets sincronizados do cliente")} />
-        <MetricCard title="Fora do escopo SIMER" value={outsideSimerPeriod.length}
-          description="Diferença para a carteira operacional SIMER"
-          info={{ title:"Fora do escopo SIMER", summary:"Tickets presentes no Movidesk sem isWithSimer verdadeiro.", calculation:"Total Movidesk menos tickets com isWithSimer=true.", source:"Movidesk + classificação interna do Hub", reference:"Ticket.isWithSimer", periodRule:"Mesma abertura e filtros de cliente." }}
-          onClick={() => showTickets("Fora do escopo SIMER", outsideSimerPeriod, "Verificar equipe, criado por e regra de classificação de escopo")} />
-      </KpiGrid>
-
       {/* Resumo operacional com as mesmas coortes do Dashboard */}
-      <KpiGrid sx={{ mb: 2 }}>
+      <KpiGrid sx={{ mb: 2, gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))", xl: "repeat(4, minmax(0, 1fr))" } }}>
         <MetricCard title="Abertos no período · SIMER" value={clientOperationalCohorts.entries.length} description="Abertura no intervalo"
           info={{ title: "Abertos no período · SIMER", summary: "Abertura no intervalo", calculation: "Contagem de tickets únicos com os mesmos critérios de data e escopo do Dashboard.", source: "Movidesk", reference: "Ticket.createdDate", periodRule: "Evento ocorrido dentro do período selecionado." }}
           onClick={() => showTickets("Abertos no período · SIMER", clientOperationalCohorts.entries, "Abertura no intervalo")} />
@@ -1785,6 +1774,21 @@ export function Clients() {
           info={{ title: "Fechados no período", summary: "Fechamento no intervalo", calculation: "Contagem de tickets únicos com os mesmos critérios de data e escopo do Dashboard.", source: "Movidesk", reference: "Ticket.closedDate", periodRule: "Evento ocorrido dentro do período selecionado." }}
           onClick={() => showTickets("Fechados no período", clientOperationalCohorts.closed, "Fechamento no intervalo")} />
       </KpiGrid>
+      <Box component="details" sx={{ mb: 2, border: "1px solid", borderColor: "divider", borderRadius: 2, px: 2, py: 1.25, "& summary": { cursor: "pointer", fontWeight: 700 } }}>
+        <Box component="summary">Conferência Movidesk × SIMER</Box>
+      <KpiGrid sx={{ mt: 1.5, mb: 0, gridTemplateColumns: { xs: "1fr", md: "repeat(2, minmax(0, 1fr))" } }}>
+        <MetricCard title="Movidesk · abertos no período" value={movideskClientPeriodTickets.length}
+          description="Todos os tickets do cliente, antes do filtro SIMER"
+          info={{ title:"Movidesk · abertos no período", summary:"Universo total sincronizado do Movidesk para cliente e período.", calculation:"Data de abertura; não exige isWithSimer.", source:"Movidesk", reference:"Ticket.createdDate + Ticket.client", periodRule:"Respeita o mesmo período dos cards SIMER." }}
+          onClick={() => showTickets("Movidesk · abertos no período", movideskClientPeriodTickets, "Todos os tickets sincronizados do cliente")} />
+        <MetricCard title="Fora do escopo SIMER" value={outsideSimerPeriod.length}
+          description="Diferença para a carteira operacional SIMER"
+          info={{ title:"Fora do escopo SIMER", summary:"Tickets presentes no Movidesk sem isWithSimer verdadeiro.", calculation:"Total Movidesk menos tickets com isWithSimer=true.", source:"Movidesk + classificação interna do Hub", reference:"Ticket.isWithSimer", periodRule:"Mesma abertura e filtros de cliente." }}
+          onClick={() => showTickets("Fora do escopo SIMER", outsideSimerPeriod, "Verificar equipe, criado por e regra de classificação de escopo")} />
+      </KpiGrid>
+
+      </Box>
+
       <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 2 }}>
         Coortes do Dashboard aplicadas ao cliente: entradas pela abertura, saídas pelas respectivas datas e backlog atual independentemente da abertura.
       </Typography>
@@ -1812,39 +1816,7 @@ export function Clients() {
         </CardContent>
       </Card>
 
-      {/* =================================================
-          KPIs DE CLIENTES
-      ================================================= */}
-
-      <KpiGrid sx={{mb: 2}}>
-        <MetricCard
-          title="Tickets no período"
-          value={
-            executiveTicketGroups
-              .all.length
-          }
-          description={`${summary.totalClients} cliente(s) com tickets`}
-          info={{
-            title: "Tickets no período",
-            summary: "Total de atendimentos que permanecem após aplicar período, cliente e categoria.",
-            calculation: "Contagem dos tickets do recorte atual.",
-            source: "Movidesk",
-            reference: "Ticket.createdDate + filtros da tela",
-            periodRule: "Respeita o período global e os filtros locais.",
-            notes: "Clique para abrir exatamente os tickets que formam o indicador.",
-          }}
-          onClick={() =>
-            showTickets(
-              "Tickets no período",
-
-              executiveTicketGroups
-                .all,
-
-              "Atendimentos que compõem este indicador"
-            )
-          }
-        />
-
+      <KpiGrid sx={{ mb: 2, gridTemplateColumns: { xs: "1fr", md: "repeat(2, minmax(0, 1fr))" } }}>
         <MetricCard
           title="Alta atenção"
           value={
@@ -1901,39 +1873,6 @@ export function Clients() {
           }
         />
 
-        <MetricCard
-          title="Críticos abertos"
-          value={
-            executiveTicketGroups
-              .critical.length
-          }
-          description="Atendimentos críticos ainda em aberto"
-          info={{
-            title: "Críticos abertos",
-            summary: "Tickets ainda ativos cuja urgência está classificada como Crítica.",
-            calculation: "Ticket aberto e urgência normalizada igual a Crítica.",
-            source: "Movidesk",
-            reference: "Ticket.urgency + Ticket.baseStatus",
-            periodRule: "Respeita o período e os filtros locais.",
-          }}
-          severity={
-            executiveTicketGroups
-              .critical.length >
-            0
-              ? "error"
-              : "default"
-          }
-          onClick={() =>
-            showTickets(
-              "Atendimentos críticos abertos",
-
-              executiveTicketGroups
-                .critical,
-
-              "A quantidade exibida no card corresponde exatamente aos atendimentos desta lista"
-            )
-          }
-        />
       </KpiGrid>
       <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap", mb: 2 }}>
         <Chip variant="outlined" color={clientRiskSummary.high ? "error" : "default"} label={`${clientRiskSummary.high} cliente(s) com risco agregado alto`} />
