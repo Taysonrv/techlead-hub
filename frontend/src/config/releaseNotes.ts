@@ -12,6 +12,16 @@ export type ReleaseNote = {
 export const FALLBACK_APP_VERSION = import.meta.env.VITE_APP_VERSION || "development";
 
 export const releaseNotes: Record<string, ReleaseNote> = {
+  "2.1.0-rc.6": {
+    version: "2.1.0-rc.6",
+    title: "Recuperação protegida das credenciais no Desktop",
+    items: [
+      { title: "Recuperação administrativa", description: "Validar uma chave original de integração sem regravar os registros criptografados do banco." },
+      { title: "Proteção Windows", description: "Chave validada armazenada pelo safeStorage do Electron após confirmação local e reinicialização controlada." },
+      { title: "Diagnóstico de incompatibilidade", description: "Configurações identifica quando a instalação Desktop não consegue ler as credenciais existentes." },
+      { title: "Migração preservada", description: "Nenhuma migração dos registros do PostgreSQL é executada automaticamente; a migração definitiva permanece separada." },
+    ],
+  },
   "2.1.0-rc.5": {
     version: "2.1.0-rc.5",
     title: "Diagnóstico de credenciais e notificações sem duplicidade",
