@@ -54,6 +54,7 @@ import { useNavigate } from "react-router-dom";
 
 import { getTicketSnapshot, getTicketSnapshotState, subscribeTicketSnapshotRefresh } from "../services/ticketSnapshot";
 import { calculateTimestampSla } from "../utils/timestampSla";
+import { buildOperationalCohorts } from "../utils/operationalMetrics";
 import { useFilters } from "../context/FiltersContext";
 import { PeriodFilter } from "../components/PeriodFilter";
 import { PageHeader } from "../components/PageHeader";
@@ -550,6 +551,22 @@ export function Clients() {
      MÉTRICAS POR CLIENTE
   ======================================================= */
 
+  // Reutiliza a regra de datas do Dashboard: entrada, resolução e backlog.
+  const clientOperationalTickets = useMemo(() => tickets.filter((ticket) =>
+    ticket.isWithSimer === true &&
+    (!selectedClient || ticket.client === selectedClient) &&
+    (!category || ticket.category === category) &&
+    (!status || ticket.status === status) &&
+    (!owner || ticket.owner === owner) &&
+    (!businessArea || ticket.businessArea === businessArea) &&
+    (!executiveArea || classifyExecutiveArea(ticket) === executiveArea)
+  ), [tickets, selectedClient, category, status, owner, businessArea, executiveArea]);
+
+  const clientOperationalCohorts = useMemo(() => buildOperationalCohorts(
+    clientOperationalTickets,
+    { start: startOfDay(effectiveStartDate), end: endOfDay(effectiveEndDate) },
+  ), [clientOperationalTickets, effectiveStartDate, effectiveEndDate]);
+
   const clients = useMemo(() => {
     const grouped =
       new Map<
@@ -800,78 +817,22 @@ export function Clients() {
    * exatamente os mesmos 3 atendimentos.
    */
 
-  const executiveTicketGroups =
-    useMemo(() => {
-      const highAttentionClients =
-        new Set(
-          clients
-            .filter(
-              (item) =>
-                item.attentionLevel ===
-                "alto"
-            )
-            .map(
-              (item) =>
-                item.client
-            )
-        );
+  const executiveTicketGroups = useMemo(() => {
+    const currentOpen = scopedTickets.filter(isOpen);
+    const highAttention = currentOpen.filter((ticket) => normalize(ticket.urgency) === "critica");
+    const attention = currentOpen.filter((ticket) =>
+      normalize(ticket.urgency) !== "critica" &&
+      (normalize(ticket.urgency) === "alta" || ticket.baseStatus === "Stopped")
+    );
+    return { all: scopedTickets, highAttention, attention, critical: highAttention };
+  }, [scopedTickets]);
 
-      const attentionClients =
-        new Set(
-          clients
-            .filter(
-              (item) =>
-                item.attentionLevel ===
-                "atencao"
-            )
-            .map(
-              (item) =>
-                item.client
-            )
-        );
-
-      const highAttention =
-        scopedTickets.filter(
-          (ticket) =>
-            highAttentionClients.has(
-              ticket.client ??
-                "Sem cliente"
-            )
-        );
-
-      const attention =
-        scopedTickets.filter(
-          (ticket) =>
-            attentionClients.has(
-              ticket.client ??
-                "Sem cliente"
-            )
-        );
-
-      const critical =
-        scopedTickets.filter(
-          (ticket) =>
-            isOpen(ticket) &&
-            normalize(
-              ticket.urgency
-            ) ===
-              "critica"
-        );
-
-      return {
-        all:
-          scopedTickets,
-
-        highAttention,
-
-        attention,
-
-        critical,
-      };
-    }, [
-      clients,
-      scopedTickets,
-    ]);
+  // Atenção agregada por cliente permanece disponível separadamente;
+  // ela não converte todos os tickets do cliente em tickets críticos.
+  const clientRiskSummary = useMemo(() => ({
+    high: clients.filter((item) => item.attentionLevel === "alto").length,
+    moderate: clients.filter((item) => item.attentionLevel === "atencao").length,
+  }), [clients]);
 
   /* =======================================================
      INDICADORES DA CARTEIRA
