@@ -954,6 +954,7 @@ type SecureConfig = {
   databaseUrl?: string;
 
   jwtSecret?: string;
+  systemConfigKey?: string;
 
   azureOrganization?: string;
   azureProject?: string;
@@ -976,6 +977,7 @@ type SecureConfig = {
 type SecureConfigKey =
   | "databaseUrl"
   | "jwtSecret"
+  | "systemConfigKey"
   | "azureOrganization"
   | "azureProject"
   | "azureWiki"
@@ -1291,6 +1293,10 @@ function readSecureConfig():
         "string"
           ? parsed.jwtSecret
           : undefined,
+      systemConfigKey:
+        typeof parsed.systemConfigKey === "string"
+          ? parsed.systemConfigKey
+          : undefined,
 
       azureOrganization:
         typeof parsed.azureOrganization === "string"
@@ -1503,6 +1509,24 @@ function migrateLegacyEnvValue(
   );
 
   return legacyValue;
+}
+
+function resolveSystemConfigKey() {
+  const provided = process.env.SYSTEM_CONFIG_KEY?.trim();
+  if (provided) return provided;
+
+  const secure = readSecureValue("systemConfigKey");
+  if (secure) return secure;
+
+  // Instalações antigas podem conter configuração legada. Nunca gerar
+  // chave aleatória sobre dados existentes em SystemSetting.
+  const migrated = migrateLegacyEnvValue("SYSTEM_CONFIG_KEY", "systemConfigKey");
+  if (migrated) return migrated;
+
+  if (!app.isPackaged) {
+    return readEnvValueFromFile(getDevelopmentEnvPath(), "SYSTEM_CONFIG_KEY") || "";
+  }
+  return "";
 }
 
 function resolveJwtSecret() {
@@ -2319,6 +2343,9 @@ function startBackend(
 
           JWT_SECRET:
             jwtSecret,
+
+          SYSTEM_CONFIG_KEY:
+            resolveSystemConfigKey(),
 
           AZURE_DEVOPS_ORGANIZATION:
             azure.organization,
