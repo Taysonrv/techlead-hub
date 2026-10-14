@@ -630,6 +630,51 @@ export function Clients() {
     return { types: overflow ? [...types, "Outros"] : types, rows };
   }, [clientOperationalTickets, effectiveEndDate]);
 
+  const monthlyPerformance = useMemo(() => {
+    const end = endOfDay(effectiveEndDate);
+    const months = Array.from({ length: 6 }, (_, index) => {
+      const date = new Date(end.getFullYear(), end.getMonth() - 5 + index, 1);
+      const next = new Date(date.getFullYear(), date.getMonth() + 1, 1);
+      return { periodo: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`, start: date, finish: next };
+    });
+    return months.map(({ periodo, start, finish }) => {
+      const created = clientOperationalTickets.filter((ticket) => {
+        const d = new Date(ticket.createdDate);
+        return Number.isFinite(d.getTime()) && d >= start && d < finish && d <= end;
+      });
+      const resolved = clientOperationalTickets.filter((ticket) => {
+        if (!ticket.resolvedDate || !["Resolved", "Closed"].includes(ticket.baseStatus ?? "")) return false;
+        const d = new Date(ticket.resolvedDate);
+        return Number.isFinite(d.getTime()) && d >= start && d < finish && d <= end;
+      });
+      const response = calculateTimestampSla(created, "response");
+      const solution = calculateTimestampSla(resolved, "solution");
+      const finishedFromEntries = created.filter((ticket) => ["Resolved", "Closed"].includes(ticket.baseStatus ?? "")).length;
+      return {
+        periodo,
+        resposta: response.percentage,
+        solucao: solution.percentage,
+        resolucao: created.length ? Math.round(finishedFromEntries / created.length * 1000) / 10 : null,
+        responseMeasured: response.measured,
+        solutionMeasured: solution.measured,
+        opened: created.length,
+        finishedFromEntries,
+      };
+    });
+  }, [clientOperationalTickets, effectiveEndDate]);
+
+  const performanceDeltas = useMemo(() => {
+    const current = monthlyPerformance[monthlyPerformance.length - 1];
+    const previous = monthlyPerformance[monthlyPerformance.length - 2];
+    const delta = (now: number | null, before: number | null) =>
+      now == null || before == null ? null : Math.round((now - before) * 10) / 10;
+    return [
+      { label: "SLA 1ª resposta", value: current?.resposta ?? null, difference: delta(current?.resposta ?? null, previous?.resposta ?? null), measured: current?.responseMeasured ?? 0 },
+      { label: "SLA solução", value: current?.solucao ?? null, difference: delta(current?.solucao ?? null, previous?.solucao ?? null), measured: current?.solutionMeasured ?? 0 },
+      { label: "Taxa de resolução", value: current?.resolucao ?? null, difference: delta(current?.resolucao ?? null, previous?.resolucao ?? null), measured: current?.opened ?? 0 },
+    ];
+  }, [monthlyPerformance]);
+
   const clients = useMemo(() => {
     const grouped =
       new Map<
@@ -1897,6 +1942,44 @@ export function Clients() {
         <Chip variant="outlined" color={clientRiskSummary.moderate ? "warning" : "default"} label={`${clientRiskSummary.moderate} cliente(s) em atenção`} />
         <Typography variant="caption" color="text.secondary" sx={{ alignSelf: "center" }}>Risco agregado por cliente não equivale à quantidade de tickets críticos.</Typography>
       </Stack>
+
+      <Card elevation={0} sx={{ mb: 2, border: "1px solid", borderColor: "divider", borderRadius: 2.5 }}>
+        <CardContent>
+          <Typography sx={{ fontWeight: 800 }}>Tendência mensal de desempenho</Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Últimos seis meses até a data final selecionada. Variações em pontos percentuais (p.p.) frente ao mês anterior; sem medição não equivale a zero.
+          </Typography>
+          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(3, minmax(0, 1fr))" }, gap: 1.5, mb: 2 }}>
+            {performanceDeltas.map((metric) => (
+              <Box key={metric.label} sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2, px: 2, py: 1.5, minWidth: 0 }}>
+                <Typography variant="caption" color="text.secondary">{metric.label}</Typography>
+                <Typography sx={{ fontWeight: 800, fontSize: "1.35rem" }}>{metric.value === null ? "Sem medição" : `${metric.value.toFixed(1)}%`}</Typography>
+                <Typography variant="caption" color={metric.difference == null ? "text.secondary" : metric.difference >= 0 ? "success.main" : "error.main"}>
+                  {metric.difference === null ? "Comparação indisponível" : `${metric.difference > 0 ? "+" : ""}${metric.difference.toFixed(1)} p.p. versus mês anterior`}
+                </Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>{metric.measured} ticket(s) no denominador</Typography>
+              </Box>
+            ))}
+          </Box>
+          <Box sx={{ height: 300, width: "100%" }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={monthlyPerformance} margin={{ top: 12, right: 18, left: 0, bottom: 8 }}>
+                <CartesianGrid strokeDasharray="3 3" opacity={0.25} />
+                <XAxis dataKey="periodo" tick={{ fontSize: 11 }} />
+                <YAxis domain={[0, 100]} tickFormatter={(v: number) => `${v}%`} width={46} />
+                <Tooltip formatter={(value: number | string | undefined) => value == null ? "Sem medição" : `${Number(value).toFixed(1)}%`} />
+                <Legend />
+                <Line type="monotone" dataKey="resposta" name="SLA 1ª resposta" stroke={PIE_COLORS[0]} strokeWidth={2.5} connectNulls={false} />
+                <Line type="monotone" dataKey="solucao" name="SLA solução" stroke={PIE_COLORS[1]} strokeWidth={2.5} connectNulls={false} />
+                <Line type="monotone" dataKey="resolucao" name="Taxa de resolução" stroke={PIE_COLORS[2]} strokeWidth={2.5} connectNulls={false} />
+              </LineChart>
+            </ResponsiveContainer>
+          </Box>
+          <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1.5 }}>
+            SLA de resposta: tickets abertos no mês com prazos medidos. SLA de solução: tickets resolvidos no mês com prazos medidos. Taxa de resolução: abertos naquele mês que estão resolvidos ou fechados na data atual.
+          </Typography>
+        </CardContent>
+      </Card>
 
       {/* =================================================
           RESUMO EXECUTIVO / CLIENTE
