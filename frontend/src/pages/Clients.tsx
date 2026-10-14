@@ -1705,6 +1705,25 @@ export function Clients() {
         </CardContent>
       </Card>
 
+      {/* Resumo operacional com as mesmas coortes do Dashboard */}
+      <KpiGrid sx={{ mb: 2 }}>
+        <MetricCard title="Abertos no período · SIMER" value={clientOperationalCohorts.entries.length} description="Abertura no intervalo"
+          info={{ title: "Abertos no período · SIMER", summary: "Abertura no intervalo", calculation: "Contagem de tickets únicos com os mesmos critérios de data e escopo do Dashboard.", source: "Movidesk", reference: "Ticket.createdDate", periodRule: "Evento ocorrido dentro do período selecionado." }}
+          onClick={() => showTickets("Abertos no período · SIMER", clientOperationalCohorts.entries, "Abertura no intervalo")} />
+        <MetricCard title="Backlog atual · SIMER" value={clientOperationalCohorts.backlog.length} description="Pendências inclusive de períodos anteriores"
+          info={{ title: "Backlog atual · SIMER", summary: "Pendências inclusive de períodos anteriores", calculation: "Contagem de tickets únicos com os mesmos critérios de data e escopo do Dashboard.", source: "Movidesk", reference: "Ticket.baseStatus", periodRule: "Fotografia atual, inclusive tickets abertos antes do período." }}
+          onClick={() => showTickets("Backlog atual · SIMER", clientOperationalCohorts.backlog, "Pendências inclusive de períodos anteriores")} />
+        <MetricCard title="Resolvidos no período" value={clientOperationalCohorts.resolved.length} description="Resolução no intervalo"
+          info={{ title: "Resolvidos no período", summary: "Resolução no intervalo", calculation: "Contagem de tickets únicos com os mesmos critérios de data e escopo do Dashboard.", source: "Movidesk", reference: "Ticket.resolvedDate", periodRule: "Evento ocorrido dentro do período selecionado." }}
+          onClick={() => showTickets("Resolvidos no período", clientOperationalCohorts.resolved, "Resolução no intervalo")} />
+        <MetricCard title="Fechados no período" value={clientOperationalCohorts.closed.length} description="Fechamento no intervalo"
+          info={{ title: "Fechados no período", summary: "Fechamento no intervalo", calculation: "Contagem de tickets únicos com os mesmos critérios de data e escopo do Dashboard.", source: "Movidesk", reference: "Ticket.closedDate", periodRule: "Evento ocorrido dentro do período selecionado." }}
+          onClick={() => showTickets("Fechados no período", clientOperationalCohorts.closed, "Fechamento no intervalo")} />
+      </KpiGrid>
+      <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 2 }}>
+        Coortes do Dashboard aplicadas ao cliente: entradas pela abertura, saídas pelas respectivas datas e backlog atual independentemente da abertura.
+      </Typography>
+
       {/* =================================================
           KPIs DE CLIENTES
       ================================================= */}
@@ -1744,11 +1763,11 @@ export function Clients() {
             executiveTicketGroups
               .highAttention.length
           }
-          description="Atendimentos de clientes em situação crítica"
+          description="Tickets abertos com urgência crítica"
           info={{
             title: "Alta atenção",
-            summary: "Atendimentos pertencentes a clientes classificados no nível mais alto de atenção.",
-            calculation: "Clientes com pelo menos 2 tickets críticos abertos ou 5 tickets abertos; o card conta os atendimentos desses clientes.",
+            summary: "Tickets abertos com urgência Crítica, independentemente da concentração de tickets no cliente.",
+            calculation: "Tickets abertos com urgência Crítica.",
             source: "Movidesk / regra local do TechLead Hub",
             reference: "Urgência, baseStatus e concentração por cliente",
             periodRule: "Respeita o recorte atual da tela.",
@@ -1772,11 +1791,11 @@ export function Clients() {
             executiveTicketGroups
               .attention.length
           }
-          description="Atendimentos que exigem acompanhamento"
+          description="Tickets abertos de urgência alta ou parados"
           info={{
             title: "Em atenção",
-            summary: "Atendimentos de clientes com sinais moderados de risco operacional.",
-            calculation: "Cliente com crítico, ticket parado ou ao menos 3 tickets abertos, sem atingir Alta atenção.",
+            summary: "Tickets abertos com urgência Alta ou status Parado, sem duplicar os críticos.",
+            calculation: "Tickets abertos com urgência Alta ou status Parado, excluindo os críticos.",
             source: "Movidesk / regra local do TechLead Hub",
             reference: "Urgência + baseStatus + concentração por cliente",
             periodRule: "Respeita o recorte atual da tela.",
@@ -1828,6 +1847,11 @@ export function Clients() {
           }
         />
       </KpiGrid>
+      <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap", mb: 2 }}>
+        <Chip variant="outlined" color={clientRiskSummary.high ? "error" : "default"} label={`${clientRiskSummary.high} cliente(s) com risco agregado alto`} />
+        <Chip variant="outlined" color={clientRiskSummary.moderate ? "warning" : "default"} label={`${clientRiskSummary.moderate} cliente(s) em atenção`} />
+        <Typography variant="caption" color="text.secondary" sx={{ alignSelf: "center" }}>Risco agregado por cliente não equivale à quantidade de tickets críticos.</Typography>
+      </Stack>
 
       {/* =================================================
           RESUMO EXECUTIVO / CLIENTE
