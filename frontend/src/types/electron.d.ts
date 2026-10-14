@@ -105,6 +105,7 @@ declare global {
           success: boolean;
           restartRequired: boolean;
         }>;
+        recoverKey: (candidate: string) => Promise<{ saved: boolean }>;
       };
 
       startup: {
