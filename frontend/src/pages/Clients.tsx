@@ -556,25 +556,6 @@ export function Clients() {
 
   // Reconciliação: universo bruto Movidesk x carteira operacional SIMER.
   // Não são métricas intercambiáveis; cada card mostra seu denominador.
-  const movideskClientPeriodTickets = useMemo(() => {
-    const start = startOfDay(effectiveStartDate);
-    const end = endOfDay(effectiveEndDate);
-    return tickets.filter((ticket) => {
-      const created = new Date(ticket.createdDate);
-      return Number.isFinite(created.getTime()) && created >= start && created <= end &&
-        (!selectedClient || ticket.client === selectedClient) &&
-        (!category || ticket.category === category) &&
-        (!status || ticket.status === status) &&
-        (!owner || ticket.owner === owner) &&
-        (!businessArea || ticket.businessArea === businessArea) &&
-        (!executiveArea || classifyExecutiveArea(ticket) === executiveArea);
-    });
-  }, [tickets, effectiveStartDate, effectiveEndDate, selectedClient, category, status, owner, businessArea, executiveArea]);
-
-  const outsideSimerPeriod = useMemo(() => movideskClientPeriodTickets.filter(
-    (ticket) => ticket.isWithSimer !== true
-  ), [movideskClientPeriodTickets]);
-
   // Reutiliza a regra de datas do Dashboard: entrada, resolução e backlog.
   const clientOperationalTickets = useMemo(() => tickets.filter((ticket) =>
     ticket.isWithSimer === true &&
@@ -619,6 +600,38 @@ export function Clients() {
       if (closed) { const row = buckets.get(closed); if (row) row.encerrados++; }
     }
     return [...buckets.values()];
+  }, [clientOperationalTickets, effectiveStartDate, effectiveEndDate]);
+
+  // Evolução mensal por tipo, usando a data de abertura de cada atendimento
+  // (independente do intervalo curto selecionado para o indicador diário).
+  const monthlyCategoryTrend = useMemo(() => {
+    const start = startOfDay(effectiveStartDate);
+    const end = endOfDay(effectiveEndDate);
+    const totals = new Map<string, number>();
+    const group = new Map<string, Map<string, number>>();
+    for (const ticket of clientOperationalTickets) {
+      const created = new Date(ticket.createdDate);
+      if (!Number.isFinite(created.getTime()) || created < start || created > end) continue;
+      const key = `${created.getFullYear()}-${String(created.getMonth() + 1).padStart(2, "0")}`;
+      const kind = ticket.category?.trim() || "Sem categoria";
+      if (!group.has(key)) group.set(key, new Map());
+      group.get(key)!.set(kind, (group.get(key)!.get(kind) ?? 0) + 1);
+      totals.set(kind, (totals.get(kind) ?? 0) + 1);
+    }
+    const types = [...totals.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5).map(([type]) => type);
+    const overflow = [...totals.keys()].some((type) => !types.includes(type));
+    const first = new Date(start.getFullYear(), start.getMonth(), 1);
+    const last = new Date(end.getFullYear(), end.getMonth(), 1);
+    const rows: Array<Record<string, string | number>> = [];
+    for (const date = new Date(first); date <= last; date.setMonth(date.getMonth() + 1)) {
+      const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+      const counts = group.get(key) ?? new Map<string, number>();
+      const record: Record<string, string | number> = { periodo: key };
+      for (const type of types) record[type] = counts.get(type) ?? 0;
+      if (overflow) record.Outros = [...counts.entries()].reduce((n, [type, count]) => n + (types.includes(type) ? 0 : count), 0);
+      rows.push(record);
+    }
+    return { types: overflow ? [...types, "Outros"] : types, rows };
   }, [clientOperationalTickets, effectiveStartDate, effectiveEndDate]);
 
   const clients = useMemo(() => {
@@ -1774,25 +1787,6 @@ export function Clients() {
           info={{ title: "Fechados no período", summary: "Fechamento no intervalo", calculation: "Contagem de tickets únicos com os mesmos critérios de data e escopo do Dashboard.", source: "Movidesk", reference: "Ticket.closedDate", periodRule: "Evento ocorrido dentro do período selecionado." }}
           onClick={() => showTickets("Fechados no período", clientOperationalCohorts.closed, "Fechamento no intervalo")} />
       </KpiGrid>
-      <Box component="details" sx={{ mb: 2, border: "1px solid", borderColor: "divider", borderRadius: 2, px: 2, py: 1.25, "& summary": { cursor: "pointer", fontWeight: 700 } }}>
-        <Box component="summary">Conferência Movidesk × SIMER</Box>
-      <KpiGrid sx={{ mt: 1.5, mb: 0, gridTemplateColumns: { xs: "1fr", md: "repeat(2, minmax(0, 1fr))" } }}>
-        <MetricCard title="Movidesk · abertos no período" value={movideskClientPeriodTickets.length}
-          description="Todos os tickets do cliente, antes do filtro SIMER"
-          info={{ title:"Movidesk · abertos no período", summary:"Universo total sincronizado do Movidesk para cliente e período.", calculation:"Data de abertura; não exige isWithSimer.", source:"Movidesk", reference:"Ticket.createdDate + Ticket.client", periodRule:"Respeita o mesmo período dos cards SIMER." }}
-          onClick={() => showTickets("Movidesk · abertos no período", movideskClientPeriodTickets, "Todos os tickets sincronizados do cliente")} />
-        <MetricCard title="Fora do escopo SIMER" value={outsideSimerPeriod.length}
-          description="Diferença para a carteira operacional SIMER"
-          info={{ title:"Fora do escopo SIMER", summary:"Tickets presentes no Movidesk sem isWithSimer verdadeiro.", calculation:"Total Movidesk menos tickets com isWithSimer=true.", source:"Movidesk + classificação interna do Hub", reference:"Ticket.isWithSimer", periodRule:"Mesma abertura e filtros de cliente." }}
-          onClick={() => showTickets("Fora do escopo SIMER", outsideSimerPeriod, "Verificar equipe, criado por e regra de classificação de escopo")} />
-      </KpiGrid>
-
-      </Box>
-
-      <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 2 }}>
-        Coortes do Dashboard aplicadas ao cliente: entradas pela abertura, saídas pelas respectivas datas e backlog atual independentemente da abertura.
-      </Typography>
-
       <Card elevation={0} sx={{ mb: 2, border: "1px solid", borderColor: "divider", borderRadius: 2.5 }}>
         <CardContent>
           <Typography sx={{ fontWeight: 800, mb: 0.5 }}>Evolução de abertos, resolvidos e encerrados</Typography>
@@ -1813,6 +1807,34 @@ export function Clients() {
               </LineChart>
             </ResponsiveContainer>
           </Box>
+        </CardContent>
+      </Card>
+
+      <Card elevation={0} sx={{ mb: 2, border: "1px solid", borderColor: "divider", borderRadius: 2.5 }}>
+        <CardContent>
+          <Typography sx={{ fontWeight: 800, mb: 0.5 }}>Evolução mensal por tipo de atendimento</Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Quantidade aberta em cada mês por categoria Movidesk. Exibe as cinco categorias mais frequentes e agrupa as demais em Outros.
+          </Typography>
+          {monthlyCategoryTrend.types.length === 0 ? (
+            <Typography color="text.secondary" sx={{ py: 4, textAlign: "center" }}>Sem atendimentos no período para comparar categorias.</Typography>
+          ) : (
+            <Box sx={{ width: "100%", height: 300 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={monthlyCategoryTrend.rows} margin={{ top: 10, right: 16, left: 0, bottom: 10 }}>
+                  <CartesianGrid strokeDasharray="3 3" opacity={0.25} />
+                  <XAxis dataKey="periodo" tick={{ fontSize: 11 }} />
+                  <YAxis allowDecimals={false} width={38} />
+                  <Tooltip />
+                  <Legend />
+                  {monthlyCategoryTrend.types.map((type, index) => (
+                    <Line key={type} type="monotone" dataKey={type} name={type}
+                      stroke={PIE_COLORS[index % PIE_COLORS.length]} strokeWidth={2.5} dot={{ r: 3 }} activeDot={{ r: 5 }} />
+                  ))}
+                </LineChart>
+              </ResponsiveContainer>
+            </Box>
+          )}
         </CardContent>
       </Card>
 
