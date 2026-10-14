@@ -50,16 +50,16 @@ movideskRoutes.get("/closure-requests", requirePermission("attention"), async (r
       orderBy: { movideskId: "desc" },
       take: 5000,
     });
-    const positive = /(?:pode(?:m|mos)?\\s+(?:baixar|cancelar|encerrar|fechar)|(?:solicito|solicitamos|peço|pedimos|favor|por favor)\\s+(?:(?:a|o)\\s+)?(?:baixa|cancelamento|encerramento)|(?:ticket|chamado|atendimento)\\s+(?:pode\\s+ser|seja|deve\\s+ser)\\s+(?:baixado|cancelado|encerrado|fechado)|(?:não\\s+(?:precisa|é\\s+necessário)\\s+mais\\s+(?:do|desse)\\s+(?:ticket|chamado|atendimento)))/i;
-    const negative = /(?:não\\s+(?:pode|podemos|consigo|conseguimos)\\s+(?:baixar|cancelar|encerrar)|(?:cancelar|baixar|encerrar)\\s+(?:a\\s+)?(?:nota|nf-e|nfe|pedido|contrato|título|romaneio|documento))/i;
+    const positive = /(?:pode(?:m|mos)?\s+(?:baixar|cancelar|encerrar|fechar)|(?:solicito|solicitamos|peço|pedimos|favor|por favor)\s+(?:(?:a|o)\s+)?(?:baixa|cancelamento|encerramento)|(?:ticket|chamado|atendimento)\s+(?:pode\s+ser|seja|deve\s+ser)\s+(?:baixado|cancelado|encerrado|fechado)|(?:não\s+(?:precisa|é\s+necessário)\s+mais\s+(?:do|desse)\s+(?:ticket|chamado|atendimento)))/i;
+    const negative = /(?:não\s+(?:pode|podemos|consigo|conseguimos)\s+(?:baixar|cancelar|encerrar)|(?:cancelar|baixar|encerrar)\s+(?:a\s+)?(?:nota|nf-e|nfe|pedido|contrato|título|romaneio|documento))/i;
     const results = tickets.flatMap((ticket) => {
       const matches = ticket.actions.filter((action) => {
-        const value = (action.description ?? "").replace(/<[^>]*>/g, " ").replace(/\\s+/g, " ").trim();
+        const value = (action.description ?? "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
         return positive.test(value) && !negative.test(value);
       });
       if (!matches.length) return [];
       const action = matches[0];
-      const text = (action.description ?? "").replace(/<[^>]*>/g, " ").replace(/\\s+/g, " ").trim();
+      const text = (action.description ?? "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
       const open = !["Closed", "Resolved", "Canceled", "Cancelled"].includes(ticket.baseStatus ?? "");
       return [{
         ticketId: ticket.movideskId, subject: ticket.subject, client: ticket.client,
