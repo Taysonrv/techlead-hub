@@ -40,6 +40,9 @@ import {
 import {
   Bar,
   BarChart,
+  Line,
+  LineChart,
+  Legend,
   CartesianGrid,
   Cell,
   Pie,
@@ -54,6 +57,7 @@ import { useNavigate } from "react-router-dom";
 
 import { getTicketSnapshot, getTicketSnapshotState, subscribeTicketSnapshotRefresh } from "../services/ticketSnapshot";
 import { calculateTimestampSla } from "../utils/timestampSla";
+import { buildOperationalCohorts } from "../utils/operationalMetrics";
 import { useFilters } from "../context/FiltersContext";
 import { PeriodFilter } from "../components/PeriodFilter";
 import { PageHeader } from "../components/PageHeader";
@@ -550,6 +554,127 @@ export function Clients() {
      MÉTRICAS POR CLIENTE
   ======================================================= */
 
+  // Reconciliação: universo bruto Movidesk x carteira operacional SIMER.
+  // Não são métricas intercambiáveis; cada card mostra seu denominador.
+  // Reutiliza a regra de datas do Dashboard: entrada, resolução e backlog.
+  const clientOperationalTickets = useMemo(() => tickets.filter((ticket) =>
+    ticket.isWithSimer === true &&
+    (!selectedClient || ticket.client === selectedClient) &&
+    (!category || ticket.category === category) &&
+    (!status || ticket.status === status) &&
+    (!owner || ticket.owner === owner) &&
+    (!businessArea || ticket.businessArea === businessArea) &&
+    (!executiveArea || classifyExecutiveArea(ticket) === executiveArea)
+  ), [tickets, selectedClient, category, status, owner, businessArea, executiveArea]);
+
+  const clientOperationalCohorts = useMemo(() => buildOperationalCohorts(
+    clientOperationalTickets,
+    { start: startOfDay(effectiveStartDate), end: endOfDay(effectiveEndDate) },
+  ), [clientOperationalTickets, effectiveStartDate, effectiveEndDate]);
+
+  const movementSeries = useMemo(() => {
+    const end = endOfDay(effectiveEndDate);
+    const firstMonth = new Date(end.getFullYear(), end.getMonth() - 5, 1);
+    const byMonth = new Map<string, { periodo: string; abertos: number; resolvidos: number; encerrados: number }>();
+    for (let month = new Date(firstMonth); month <= end; month.setMonth(month.getMonth() + 1)) {
+      const key = `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, "0")}`;
+      byMonth.set(key, { periodo: key, abertos: 0, resolvidos: 0, encerrados: 0 });
+    }
+    for (const ticket of clientOperationalTickets) {
+      for (const [dateValue, field] of [
+        [ticket.createdDate, "abertos"],
+        [ticket.resolvedDate, "resolvidos"],
+        [ticket.closedDate, "encerrados"],
+      ] as const) {
+        if (!dateValue) continue;
+        if (field === "resolvidos" && !["Resolved", "Closed"].includes(ticket.baseStatus ?? "")) continue;
+        const date = new Date(dateValue);
+        if (!Number.isFinite(date.getTime()) || date < firstMonth || date > end) continue;
+        const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+        const row = byMonth.get(key);
+        if (row) row[field] += 1;
+      }
+    }
+    return [...byMonth.values()];
+  }, [clientOperationalTickets, effectiveEndDate]);
+
+  // Evolução mensal por tipo, usando a data de abertura de cada atendimento
+  // (independente do intervalo curto selecionado para o indicador diário).
+  const monthlyCategoryTrend = useMemo(() => {
+    const end = endOfDay(effectiveEndDate);
+    const start = new Date(end.getFullYear(), end.getMonth() - 5, 1);
+    const totals = new Map<string, number>();
+    const group = new Map<string, Map<string, number>>();
+    for (const ticket of clientOperationalTickets) {
+      const created = new Date(ticket.createdDate);
+      if (!Number.isFinite(created.getTime()) || created < start || created > end) continue;
+      const key = `${created.getFullYear()}-${String(created.getMonth() + 1).padStart(2, "0")}`;
+      const kind = ticket.category?.trim() || "Sem categoria";
+      if (!group.has(key)) group.set(key, new Map());
+      group.get(key)!.set(kind, (group.get(key)!.get(kind) ?? 0) + 1);
+      totals.set(kind, (totals.get(kind) ?? 0) + 1);
+    }
+    const types = [...totals.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5).map(([type]) => type);
+    const overflow = [...totals.keys()].some((type) => !types.includes(type));
+    const first = new Date(start.getFullYear(), start.getMonth(), 1);
+    const last = new Date(end.getFullYear(), end.getMonth(), 1);
+    const rows: Array<Record<string, string | number>> = [];
+    for (const date = new Date(first); date <= last; date.setMonth(date.getMonth() + 1)) {
+      const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+      const counts = group.get(key) ?? new Map<string, number>();
+      const record: Record<string, string | number> = { periodo: key };
+      for (const type of types) record[type] = counts.get(type) ?? 0;
+      if (overflow) record.Outros = [...counts.entries()].reduce((n, [type, count]) => n + (types.includes(type) ? 0 : count), 0);
+      rows.push(record);
+    }
+    return { types: overflow ? [...types, "Outros"] : types, rows };
+  }, [clientOperationalTickets, effectiveEndDate]);
+
+  const monthlyPerformance = useMemo(() => {
+    const end = endOfDay(effectiveEndDate);
+    const months = Array.from({ length: 6 }, (_, index) => {
+      const date = new Date(end.getFullYear(), end.getMonth() - 5 + index, 1);
+      const next = new Date(date.getFullYear(), date.getMonth() + 1, 1);
+      return { periodo: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`, start: date, finish: next };
+    });
+    return months.map(({ periodo, start, finish }) => {
+      const created = clientOperationalTickets.filter((ticket) => {
+        const d = new Date(ticket.createdDate);
+        return Number.isFinite(d.getTime()) && d >= start && d < finish && d <= end;
+      });
+      const resolved = clientOperationalTickets.filter((ticket) => {
+        if (!ticket.resolvedDate || !["Resolved", "Closed"].includes(ticket.baseStatus ?? "")) return false;
+        const d = new Date(ticket.resolvedDate);
+        return Number.isFinite(d.getTime()) && d >= start && d < finish && d <= end;
+      });
+      const response = calculateTimestampSla(created, "response");
+      const solution = calculateTimestampSla(resolved, "solution");
+      const finishedFromEntries = created.filter((ticket) => ["Resolved", "Closed"].includes(ticket.baseStatus ?? "")).length;
+      return {
+        periodo,
+        resposta: response.percentage,
+        solucao: solution.percentage,
+        resolucao: created.length ? Math.round(finishedFromEntries / created.length * 1000) / 10 : null,
+        responseMeasured: response.measured,
+        solutionMeasured: solution.measured,
+        opened: created.length,
+        finishedFromEntries,
+      };
+    });
+  }, [clientOperationalTickets, effectiveEndDate]);
+
+  const performanceDeltas = useMemo(() => {
+    const current = monthlyPerformance[monthlyPerformance.length - 1];
+    const previous = monthlyPerformance[monthlyPerformance.length - 2];
+    const delta = (now: number | null, before: number | null) =>
+      now == null || before == null ? null : Math.round((now - before) * 10) / 10;
+    return [
+      { label: "SLA 1ª resposta", value: current?.resposta ?? null, difference: delta(current?.resposta ?? null, previous?.resposta ?? null), measured: current?.responseMeasured ?? 0 },
+      { label: "SLA solução", value: current?.solucao ?? null, difference: delta(current?.solucao ?? null, previous?.solucao ?? null), measured: current?.solutionMeasured ?? 0 },
+      { label: "Taxa de resolução", value: current?.resolucao ?? null, difference: delta(current?.resolucao ?? null, previous?.resolucao ?? null), measured: current?.opened ?? 0 },
+    ];
+  }, [monthlyPerformance]);
+
   const clients = useMemo(() => {
     const grouped =
       new Map<
@@ -800,78 +925,22 @@ export function Clients() {
    * exatamente os mesmos 3 atendimentos.
    */
 
-  const executiveTicketGroups =
-    useMemo(() => {
-      const highAttentionClients =
-        new Set(
-          clients
-            .filter(
-              (item) =>
-                item.attentionLevel ===
-                "alto"
-            )
-            .map(
-              (item) =>
-                item.client
-            )
-        );
+  const executiveTicketGroups = useMemo(() => {
+    const currentOpen = scopedTickets.filter(isOpen);
+    const highAttention = currentOpen.filter((ticket) => normalize(ticket.urgency) === "critica");
+    const attention = currentOpen.filter((ticket) =>
+      normalize(ticket.urgency) !== "critica" &&
+      (normalize(ticket.urgency) === "alta" || ticket.baseStatus === "Stopped")
+    );
+    return { all: scopedTickets, highAttention, attention, critical: highAttention };
+  }, [scopedTickets]);
 
-      const attentionClients =
-        new Set(
-          clients
-            .filter(
-              (item) =>
-                item.attentionLevel ===
-                "atencao"
-            )
-            .map(
-              (item) =>
-                item.client
-            )
-        );
-
-      const highAttention =
-        scopedTickets.filter(
-          (ticket) =>
-            highAttentionClients.has(
-              ticket.client ??
-                "Sem cliente"
-            )
-        );
-
-      const attention =
-        scopedTickets.filter(
-          (ticket) =>
-            attentionClients.has(
-              ticket.client ??
-                "Sem cliente"
-            )
-        );
-
-      const critical =
-        scopedTickets.filter(
-          (ticket) =>
-            isOpen(ticket) &&
-            normalize(
-              ticket.urgency
-            ) ===
-              "critica"
-        );
-
-      return {
-        all:
-          scopedTickets,
-
-        highAttention,
-
-        attention,
-
-        critical,
-      };
-    }, [
-      clients,
-      scopedTickets,
-    ]);
+  // Atenção agregada por cliente permanece disponível separadamente;
+  // ela não converte todos os tickets do cliente em tickets críticos.
+  const clientRiskSummary = useMemo(() => ({
+    high: clients.filter((item) => item.attentionLevel === "alto").length,
+    moderate: clients.filter((item) => item.attentionLevel === "atencao").length,
+  }), [clients]);
 
   /* =======================================================
      INDICADORES DA CARTEIRA
@@ -1586,7 +1655,7 @@ export function Clients() {
                 lg: "repeat(3, minmax(0, 1fr))",
                 xl: "repeat(3, minmax(0, 1fr))",
               },
-              gap: 2,
+              gap: 1.5,
               "& .MuiFormControl-root": { width: "100%", minWidth: 0 },
               "& .MuiInputLabel-root": { maxWidth: "calc(100% - 32px)" },
               "& .MuiSelect-select": { minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
@@ -1744,50 +1813,84 @@ export function Clients() {
         </CardContent>
       </Card>
 
-      {/* =================================================
-          KPIs DE CLIENTES
-      ================================================= */}
+      {/* Resumo operacional com as mesmas coortes do Dashboard */}
+      <KpiGrid sx={{ mb: 2, gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))", xl: "repeat(4, minmax(0, 1fr))" } }}>
+        <MetricCard title="Abertos no período · SIMER" value={clientOperationalCohorts.entries.length} description="Abertura no intervalo"
+          info={{ title: "Abertos no período · SIMER", summary: "Abertura no intervalo", calculation: "Contagem de tickets únicos com os mesmos critérios de data e escopo do Dashboard.", source: "Movidesk", reference: "Ticket.createdDate", periodRule: "Evento ocorrido dentro do período selecionado." }}
+          onClick={() => showTickets("Abertos no período · SIMER", clientOperationalCohorts.entries, "Abertura no intervalo")} />
+        <MetricCard title="Backlog atual · SIMER" value={clientOperationalCohorts.backlog.length} description="Pendências inclusive de períodos anteriores"
+          info={{ title: "Backlog atual · SIMER", summary: "Pendências inclusive de períodos anteriores", calculation: "Contagem de tickets únicos com os mesmos critérios de data e escopo do Dashboard.", source: "Movidesk", reference: "Ticket.baseStatus", periodRule: "Fotografia atual, inclusive tickets abertos antes do período." }}
+          onClick={() => showTickets("Backlog atual · SIMER", clientOperationalCohorts.backlog, "Pendências inclusive de períodos anteriores")} />
+        <MetricCard title="Resolvidos no período" value={clientOperationalCohorts.resolved.length} description="Resolução no intervalo"
+          info={{ title: "Resolvidos no período", summary: "Resolução no intervalo", calculation: "Contagem de tickets únicos com os mesmos critérios de data e escopo do Dashboard.", source: "Movidesk", reference: "Ticket.resolvedDate", periodRule: "Evento ocorrido dentro do período selecionado." }}
+          onClick={() => showTickets("Resolvidos no período", clientOperationalCohorts.resolved, "Resolução no intervalo")} />
+        <MetricCard title="Fechados no período" value={clientOperationalCohorts.closed.length} description="Fechamento no intervalo"
+          info={{ title: "Fechados no período", summary: "Fechamento no intervalo", calculation: "Contagem de tickets únicos com os mesmos critérios de data e escopo do Dashboard.", source: "Movidesk", reference: "Ticket.closedDate", periodRule: "Evento ocorrido dentro do período selecionado." }}
+          onClick={() => showTickets("Fechados no período", clientOperationalCohorts.closed, "Fechamento no intervalo")} />
+      </KpiGrid>
+      <Card elevation={0} sx={{ mb: 2, border: "1px solid", borderColor: "divider", borderRadius: 2.5 }}>
+        <CardContent>
+          <Typography sx={{ fontWeight: 800, mb: 0.5 }}>Evolução mensal de abertos, resolvidos e encerrados</Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Últimos seis meses até o período selecionado, pela data de cada evento. Os cards acima continuam seguindo o filtro de período.
+          </Typography>
+          <Box sx={{ width: "100%", height: 300 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={movementSeries} margin={{ top: 10, right: 18, left: 0, bottom: 10 }}>
+                <CartesianGrid strokeDasharray="3 3" opacity={0.25} />
+                <XAxis dataKey="periodo" minTickGap={22} tick={{ fontSize: 11 }} />
+                <YAxis allowDecimals={false} width={38} />
+                <Tooltip />
+                <Legend />
+                <Line type="monotone" dataKey="abertos" name="Abertos" stroke={semanticChartColors.normal} strokeWidth={2.5} dot={false} activeDot={{ r: 5 }} />
+                <Line type="monotone" dataKey="resolvidos" name="Resolvidos" stroke={semanticChartColors.positive} strokeWidth={2.5} dot={false} activeDot={{ r: 5 }} />
+                <Line type="monotone" dataKey="encerrados" name="Encerrados" stroke={semanticChartColors.attention} strokeWidth={2.5} dot={false} activeDot={{ r: 5 }} />
+              </LineChart>
+            </ResponsiveContainer>
+          </Box>
+        </CardContent>
+      </Card>
 
-      <KpiGrid sx={{mb: 2}}>
-        <MetricCard
-          title="Tickets no período"
-          value={
-            executiveTicketGroups
-              .all.length
-          }
-          description={`${summary.totalClients} cliente(s) com tickets`}
-          info={{
-            title: "Tickets no período",
-            summary: "Total de atendimentos que permanecem após aplicar período, cliente e categoria.",
-            calculation: "Contagem dos tickets do recorte atual.",
-            source: "Movidesk",
-            reference: "Ticket.createdDate + filtros da tela",
-            periodRule: "Respeita o período global e os filtros locais.",
-            notes: "Clique para abrir exatamente os tickets que formam o indicador.",
-          }}
-          onClick={() =>
-            showTickets(
-              "Tickets no período",
+      <Card elevation={0} sx={{ mb: 2, border: "1px solid", borderColor: "divider", borderRadius: 2.5 }}>
+        <CardContent>
+          <Typography sx={{ fontWeight: 800, mb: 0.5 }}>Evolução mensal por tipo de atendimento</Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Últimos seis meses até o período selecionado, pela data de abertura. Exibe as cinco categorias mais frequentes e agrupa as demais em Outros.
+          </Typography>
+          {monthlyCategoryTrend.types.length === 0 ? (
+            <Typography color="text.secondary" sx={{ py: 4, textAlign: "center" }}>Sem atendimentos no período para comparar categorias.</Typography>
+          ) : (
+            <Box sx={{ width: "100%", height: 300 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={monthlyCategoryTrend.rows} margin={{ top: 10, right: 16, left: 0, bottom: 10 }}>
+                  <CartesianGrid strokeDasharray="3 3" opacity={0.25} />
+                  <XAxis dataKey="periodo" tick={{ fontSize: 11 }} />
+                  <YAxis allowDecimals={false} width={38} />
+                  <Tooltip />
+                  <Legend />
+                  {monthlyCategoryTrend.types.map((type, index) => (
+                    <Line key={type} type="monotone" dataKey={type} name={type}
+                      stroke={PIE_COLORS[index % PIE_COLORS.length]} strokeWidth={2.5} dot={{ r: 3 }} activeDot={{ r: 5 }} />
+                  ))}
+                </LineChart>
+              </ResponsiveContainer>
+            </Box>
+          )}
+        </CardContent>
+      </Card>
 
-              executiveTicketGroups
-                .all,
-
-              "Atendimentos que compõem este indicador"
-            )
-          }
-        />
-
+      <KpiGrid sx={{ mb: 2, gridTemplateColumns: { xs: "1fr", md: "repeat(2, minmax(0, 1fr))" } }}>
         <MetricCard
           title="Alta atenção"
           value={
             executiveTicketGroups
               .highAttention.length
           }
-          description="Atendimentos de clientes em situação crítica"
+          description="Tickets abertos com urgência crítica"
           info={{
             title: "Alta atenção",
-            summary: "Atendimentos pertencentes a clientes classificados no nível mais alto de atenção.",
-            calculation: "Clientes com pelo menos 2 tickets críticos abertos ou 5 tickets abertos; o card conta os atendimentos desses clientes.",
+            summary: "Tickets abertos com urgência Crítica, independentemente da concentração de tickets no cliente.",
+            calculation: "Tickets abertos com urgência Crítica.",
             source: "Movidesk / regra local do TechLead Hub",
             reference: "Urgência, baseStatus e concentração por cliente",
             periodRule: "Respeita o recorte atual da tela.",
@@ -1811,11 +1914,11 @@ export function Clients() {
             executiveTicketGroups
               .attention.length
           }
-          description="Atendimentos que exigem acompanhamento"
+          description="Tickets abertos de urgência alta ou parados"
           info={{
             title: "Em atenção",
-            summary: "Atendimentos de clientes com sinais moderados de risco operacional.",
-            calculation: "Cliente com crítico, ticket parado ou ao menos 3 tickets abertos, sem atingir Alta atenção.",
+            summary: "Tickets abertos com urgência Alta ou status Parado, sem duplicar os críticos.",
+            calculation: "Tickets abertos com urgência Alta ou status Parado, excluindo os críticos.",
             source: "Movidesk / regra local do TechLead Hub",
             reference: "Urgência + baseStatus + concentração por cliente",
             periodRule: "Respeita o recorte atual da tela.",
@@ -1833,40 +1936,50 @@ export function Clients() {
           }
         />
 
-        <MetricCard
-          title="Críticos abertos"
-          value={
-            executiveTicketGroups
-              .critical.length
-          }
-          description="Atendimentos críticos ainda em aberto"
-          info={{
-            title: "Críticos abertos",
-            summary: "Tickets ainda ativos cuja urgência está classificada como Crítica.",
-            calculation: "Ticket aberto e urgência normalizada igual a Crítica.",
-            source: "Movidesk",
-            reference: "Ticket.urgency + Ticket.baseStatus",
-            periodRule: "Respeita o período e os filtros locais.",
-          }}
-          severity={
-            executiveTicketGroups
-              .critical.length >
-            0
-              ? "error"
-              : "default"
-          }
-          onClick={() =>
-            showTickets(
-              "Atendimentos críticos abertos",
-
-              executiveTicketGroups
-                .critical,
-
-              "A quantidade exibida no card corresponde exatamente aos atendimentos desta lista"
-            )
-          }
-        />
       </KpiGrid>
+      <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap", mb: 2 }}>
+        <Chip variant="outlined" color={clientRiskSummary.high ? "error" : "default"} label={`${clientRiskSummary.high} cliente(s) com risco agregado alto`} />
+        <Chip variant="outlined" color={clientRiskSummary.moderate ? "warning" : "default"} label={`${clientRiskSummary.moderate} cliente(s) em atenção`} />
+        <Typography variant="caption" color="text.secondary" sx={{ alignSelf: "center" }}>Risco agregado por cliente não equivale à quantidade de tickets críticos.</Typography>
+      </Stack>
+
+      <Card elevation={0} sx={{ mb: 2, border: "1px solid", borderColor: "divider", borderRadius: 2.5 }}>
+        <CardContent>
+          <Typography sx={{ fontWeight: 800 }}>Tendência mensal de desempenho</Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Últimos seis meses até a data final selecionada. Variações em pontos percentuais (p.p.) frente ao mês anterior; sem medição não equivale a zero.
+          </Typography>
+          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(3, minmax(0, 1fr))" }, gap: 1.5, mb: 2 }}>
+            {performanceDeltas.map((metric) => (
+              <Box key={metric.label} sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2, px: 2, py: 1.5, minWidth: 0 }}>
+                <Typography variant="caption" color="text.secondary">{metric.label}</Typography>
+                <Typography sx={{ fontWeight: 800, fontSize: "1.35rem" }}>{metric.value === null ? "Sem medição" : `${metric.value.toFixed(1)}%`}</Typography>
+                <Typography variant="caption" color={metric.difference == null ? "text.secondary" : metric.difference >= 0 ? "success.main" : "error.main"}>
+                  {metric.difference === null ? "Comparação indisponível" : `${metric.difference > 0 ? "+" : ""}${metric.difference.toFixed(1)} p.p. versus mês anterior`}
+                </Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>{metric.measured} ticket(s) no denominador</Typography>
+              </Box>
+            ))}
+          </Box>
+          <Box sx={{ height: 300, width: "100%" }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={monthlyPerformance} margin={{ top: 12, right: 18, left: 0, bottom: 8 }}>
+                <CartesianGrid strokeDasharray="3 3" opacity={0.25} />
+                <XAxis dataKey="periodo" tick={{ fontSize: 11 }} />
+                <YAxis domain={[0, 100]} tickFormatter={(v: number) => `${v}%`} width={46} />
+                <Tooltip formatter={(value) => { const scalar = Array.isArray(value) ? value[0] : value; return scalar == null || !Number.isFinite(Number(scalar)) ? "Sem medição" : `${Number(scalar).toFixed(1)}%`; }} />
+                <Legend />
+                <Line type="monotone" dataKey="resposta" name="SLA 1ª resposta" stroke={PIE_COLORS[0]} strokeWidth={2.5} connectNulls={false} />
+                <Line type="monotone" dataKey="solucao" name="SLA solução" stroke={PIE_COLORS[1]} strokeWidth={2.5} connectNulls={false} />
+                <Line type="monotone" dataKey="resolucao" name="Taxa de resolução" stroke={PIE_COLORS[2]} strokeWidth={2.5} connectNulls={false} />
+              </LineChart>
+            </ResponsiveContainer>
+          </Box>
+          <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1.5 }}>
+            SLA de resposta: tickets abertos no mês com prazos medidos. SLA de solução: tickets resolvidos no mês com prazos medidos. Taxa de resolução: abertos naquele mês que estão resolvidos ou fechados na data atual.
+          </Typography>
+        </CardContent>
+      </Card>
 
       {/* =================================================
           RESUMO EXECUTIVO / CLIENTE
