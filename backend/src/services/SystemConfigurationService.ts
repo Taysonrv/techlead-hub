@@ -72,6 +72,30 @@ class SystemConfigurationService {
     throw new Error("Configuração criptografada incompatível com as chaves disponíveis.");
   }
 
+  // Compara uma chave candidata com os registros de integração existentes.
+  // Somente leitura; não altera a chave do processo nem retorna valores.
+  async validateRecoveryKey(candidate: string) {
+    if (candidate.length < 32 || candidate.length > 4096) return false;
+    const rows = await prisma.$queryRaw<SettingRow[]>`
+      SELECT "key", "value" FROM "SystemSetting"
+    `;
+    const known = rows.filter(row => Object.prototype.hasOwnProperty.call(SETTING_ENV, row.key));
+    if (!known.length) return false;
+    const key = crypto.createHash("sha256").update(candidate).digest();
+    for (const row of known) {
+      try {
+        const [version, iv, tag, payload] = row.value.split(":");
+        if (version !== "v1" || !iv || !tag || !payload) return false;
+        const decipher = crypto.createDecipheriv("aes-256-gcm", key, Buffer.from(iv, "base64"));
+        decipher.setAuthTag(Buffer.from(tag, "base64"));
+        Buffer.concat([decipher.update(Buffer.from(payload, "base64")), decipher.final()]);
+      } catch {
+        return false;
+      }
+    }
+    return true;
+  }
+
   async loadIntoEnvironment() {
     const rows = await prisma.$queryRawUnsafe<SettingRow[]>(`SELECT "key", "value" FROM "SystemSetting"`);
     const persistedKeys = new Set<string>();
