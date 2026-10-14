@@ -573,40 +573,36 @@ export function Clients() {
   ), [clientOperationalTickets, effectiveStartDate, effectiveEndDate]);
 
   const movementSeries = useMemo(() => {
-    const start = startOfDay(effectiveStartDate);
     const end = endOfDay(effectiveEndDate);
-    const days = Math.round((end.getTime() - start.getTime()) / 86400000) + 1;
-    const monthly = days > 95;
-    const buckets = new Map<string, { periodo: string; abertos: number; resolvidos: number; encerrados: number }>();
-    const index = (value: string | null | undefined) => {
-      if (!value) return null;
-      const d = new Date(value);
-      if (!Number.isFinite(d.getTime()) || d < start || d > end) return null;
-      const year = d.getFullYear();
-      const month = String(d.getMonth() + 1).padStart(2, "0");
-      const day = String(d.getDate()).padStart(2, "0");
-      return monthly ? `${year}-${month}` : `${year}-${month}-${day}`;
-    };
-    for (let t = new Date(start); t <= end; monthly ? t.setMonth(t.getMonth() + 1) : t.setDate(t.getDate() + 1)) {
-      const key = monthly ? `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}` : `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`;
-      buckets.set(key, { periodo: key, abertos: 0, resolvidos: 0, encerrados: 0 });
+    const firstMonth = new Date(end.getFullYear(), end.getMonth() - 5, 1);
+    const byMonth = new Map<string, { periodo: string; abertos: number; resolvidos: number; encerrados: number }>();
+    for (let month = new Date(firstMonth); month <= end; month.setMonth(month.getMonth() + 1)) {
+      const key = `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, "0")}`;
+      byMonth.set(key, { periodo: key, abertos: 0, resolvidos: 0, encerrados: 0 });
     }
     for (const ticket of clientOperationalTickets) {
-      const opened = index(ticket.createdDate);
-      const resolved = index(ticket.resolvedDate);
-      const closed = index(ticket.closedDate);
-      if (opened) { const row = buckets.get(opened); if (row) row.abertos++; }
-      if (resolved && ["Resolved", "Closed"].includes(ticket.baseStatus ?? "")) { const row = buckets.get(resolved); if (row) row.resolvidos++; }
-      if (closed) { const row = buckets.get(closed); if (row) row.encerrados++; }
+      for (const [dateValue, field] of [
+        [ticket.createdDate, "abertos"],
+        [ticket.resolvedDate, "resolvidos"],
+        [ticket.closedDate, "encerrados"],
+      ] as const) {
+        if (!dateValue) continue;
+        if (field === "resolvidos" && !["Resolved", "Closed"].includes(ticket.baseStatus ?? "")) continue;
+        const date = new Date(dateValue);
+        if (!Number.isFinite(date.getTime()) || date < firstMonth || date > end) continue;
+        const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+        const row = byMonth.get(key);
+        if (row) row[field] += 1;
+      }
     }
-    return [...buckets.values()];
-  }, [clientOperationalTickets, effectiveStartDate, effectiveEndDate]);
+    return [...byMonth.values()];
+  }, [clientOperationalTickets, effectiveEndDate]);
 
   // Evolução mensal por tipo, usando a data de abertura de cada atendimento
   // (independente do intervalo curto selecionado para o indicador diário).
   const monthlyCategoryTrend = useMemo(() => {
-    const start = startOfDay(effectiveStartDate);
     const end = endOfDay(effectiveEndDate);
+    const start = new Date(end.getFullYear(), end.getMonth() - 5, 1);
     const totals = new Map<string, number>();
     const group = new Map<string, Map<string, number>>();
     for (const ticket of clientOperationalTickets) {
@@ -632,7 +628,7 @@ export function Clients() {
       rows.push(record);
     }
     return { types: overflow ? [...types, "Outros"] : types, rows };
-  }, [clientOperationalTickets, effectiveStartDate, effectiveEndDate]);
+  }, [clientOperationalTickets, effectiveEndDate]);
 
   const clients = useMemo(() => {
     const grouped =
@@ -1789,9 +1785,9 @@ export function Clients() {
       </KpiGrid>
       <Card elevation={0} sx={{ mb: 2, border: "1px solid", borderColor: "divider", borderRadius: 2.5 }}>
         <CardContent>
-          <Typography sx={{ fontWeight: 800, mb: 0.5 }}>Evolução de abertos, resolvidos e encerrados</Typography>
+          <Typography sx={{ fontWeight: 800, mb: 0.5 }}>Evolução mensal de abertos, resolvidos e encerrados</Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Linha temporal do cliente · abertos por abertura, resolvidos por resolução e encerrados por fechamento. Escopo operacional SIMER.
+            Últimos seis meses até o período selecionado, pela data de cada evento. Os cards acima continuam seguindo o filtro de período.
           </Typography>
           <Box sx={{ width: "100%", height: 300 }}>
             <ResponsiveContainer width="100%" height="100%">
@@ -1814,7 +1810,7 @@ export function Clients() {
         <CardContent>
           <Typography sx={{ fontWeight: 800, mb: 0.5 }}>Evolução mensal por tipo de atendimento</Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Quantidade aberta em cada mês por categoria Movidesk. Exibe as cinco categorias mais frequentes e agrupa as demais em Outros.
+            Últimos seis meses até o período selecionado, pela data de abertura. Exibe as cinco categorias mais frequentes e agrupa as demais em Outros.
           </Typography>
           {monthlyCategoryTrend.types.length === 0 ? (
             <Typography color="text.secondary" sx={{ py: 4, textAlign: "center" }}>Sem atendimentos no período para comparar categorias.</Typography>
