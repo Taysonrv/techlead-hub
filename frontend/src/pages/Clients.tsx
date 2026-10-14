@@ -40,6 +40,9 @@ import {
 import {
   Bar,
   BarChart,
+  Line,
+  LineChart,
+  Legend,
   CartesianGrid,
   Cell,
   Pie,
@@ -551,6 +554,27 @@ export function Clients() {
      MÉTRICAS POR CLIENTE
   ======================================================= */
 
+  // Reconciliação: universo bruto Movidesk x carteira operacional SIMER.
+  // Não são métricas intercambiáveis; cada card mostra seu denominador.
+  const movideskClientPeriodTickets = useMemo(() => {
+    const start = startOfDay(effectiveStartDate);
+    const end = endOfDay(effectiveEndDate);
+    return tickets.filter((ticket) => {
+      const created = new Date(ticket.createdDate);
+      return Number.isFinite(created.getTime()) && created >= start && created <= end &&
+        (!selectedClient || ticket.client === selectedClient) &&
+        (!category || ticket.category === category) &&
+        (!status || ticket.status === status) &&
+        (!owner || ticket.owner === owner) &&
+        (!businessArea || ticket.businessArea === businessArea) &&
+        (!executiveArea || classifyExecutiveArea(ticket) === executiveArea);
+    });
+  }, [tickets, effectiveStartDate, effectiveEndDate, selectedClient, category, status, owner, businessArea, executiveArea]);
+
+  const outsideSimerPeriod = useMemo(() => movideskClientPeriodTickets.filter(
+    (ticket) => ticket.isWithSimer !== true
+  ), [movideskClientPeriodTickets]);
+
   // Reutiliza a regra de datas do Dashboard: entrada, resolução e backlog.
   const clientOperationalTickets = useMemo(() => tickets.filter((ticket) =>
     ticket.isWithSimer === true &&
@@ -566,6 +590,36 @@ export function Clients() {
     clientOperationalTickets,
     { start: startOfDay(effectiveStartDate), end: endOfDay(effectiveEndDate) },
   ), [clientOperationalTickets, effectiveStartDate, effectiveEndDate]);
+
+  const movementSeries = useMemo(() => {
+    const start = startOfDay(effectiveStartDate);
+    const end = endOfDay(effectiveEndDate);
+    const days = Math.round((end.getTime() - start.getTime()) / 86400000) + 1;
+    const monthly = days > 95;
+    const buckets = new Map<string, { periodo: string; abertos: number; resolvidos: number; encerrados: number }>();
+    const index = (value: string | null | undefined) => {
+      if (!value) return null;
+      const d = new Date(value);
+      if (!Number.isFinite(d.getTime()) || d < start || d > end) return null;
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      return monthly ? `${year}-${month}` : `${year}-${month}-${day}`;
+    };
+    for (let t = new Date(start); t <= end; monthly ? t.setMonth(t.getMonth() + 1) : t.setDate(t.getDate() + 1)) {
+      const key = monthly ? `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}` : `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`;
+      buckets.set(key, { periodo: key, abertos: 0, resolvidos: 0, encerrados: 0 });
+    }
+    for (const ticket of clientOperationalTickets) {
+      const opened = index(ticket.createdDate);
+      const resolved = index(ticket.resolvedDate);
+      const closed = index(ticket.closedDate);
+      if (opened) { const row = buckets.get(opened); if (row) row.abertos++; }
+      if (resolved && ["Resolved", "Closed"].includes(ticket.baseStatus ?? "")) { const row = buckets.get(resolved); if (row) row.resolvidos++; }
+      if (closed) { const row = buckets.get(closed); if (row) row.encerrados++; }
+    }
+    return [...buckets.values()];
+  }, [clientOperationalTickets, effectiveStartDate, effectiveEndDate]);
 
   const clients = useMemo(() => {
     const grouped =
@@ -1705,6 +1759,17 @@ export function Clients() {
         </CardContent>
       </Card>
 
+      <KpiGrid sx={{ mb: 2 }}>
+        <MetricCard title="Movidesk · abertos no período" value={movideskClientPeriodTickets.length}
+          description="Todos os tickets do cliente, antes do filtro SIMER"
+          info={{ title:"Movidesk · abertos no período", summary:"Universo total sincronizado do Movidesk para cliente e período.", calculation:"Data de abertura; não exige isWithSimer.", source:"Movidesk", reference:"Ticket.createdDate + Ticket.client", periodRule:"Respeita o mesmo período dos cards SIMER." }}
+          onClick={() => showTickets("Movidesk · abertos no período", movideskClientPeriodTickets, "Todos os tickets sincronizados do cliente")} />
+        <MetricCard title="Fora do escopo SIMER" value={outsideSimerPeriod.length}
+          description="Diferença para a carteira operacional SIMER"
+          info={{ title:"Fora do escopo SIMER", summary:"Tickets presentes no Movidesk sem isWithSimer verdadeiro.", calculation:"Total Movidesk menos tickets com isWithSimer=true.", source:"Movidesk + classificação interna do Hub", reference:"Ticket.isWithSimer", periodRule:"Mesma abertura e filtros de cliente." }}
+          onClick={() => showTickets("Fora do escopo SIMER", outsideSimerPeriod, "Verificar equipe, criado por e regra de classificação de escopo")} />
+      </KpiGrid>
+
       {/* Resumo operacional com as mesmas coortes do Dashboard */}
       <KpiGrid sx={{ mb: 2 }}>
         <MetricCard title="Abertos no período · SIMER" value={clientOperationalCohorts.entries.length} description="Abertura no intervalo"
@@ -1723,6 +1788,29 @@ export function Clients() {
       <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 2 }}>
         Coortes do Dashboard aplicadas ao cliente: entradas pela abertura, saídas pelas respectivas datas e backlog atual independentemente da abertura.
       </Typography>
+
+      <Card elevation={0} sx={{ mb: 2, border: "1px solid", borderColor: "divider", borderRadius: 2.5 }}>
+        <CardContent>
+          <Typography sx={{ fontWeight: 800, mb: 0.5 }}>Evolução de abertos, resolvidos e encerrados</Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Linha temporal do cliente · abertos por abertura, resolvidos por resolução e encerrados por fechamento. Escopo operacional SIMER.
+          </Typography>
+          <Box sx={{ width: "100%", height: 300 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={movementSeries} margin={{ top: 10, right: 18, left: 0, bottom: 10 }}>
+                <CartesianGrid strokeDasharray="3 3" opacity={0.25} />
+                <XAxis dataKey="periodo" minTickGap={22} tick={{ fontSize: 11 }} />
+                <YAxis allowDecimals={false} width={38} />
+                <Tooltip />
+                <Legend />
+                <Line type="monotone" dataKey="abertos" name="Abertos" stroke={semanticChartColors.normal} strokeWidth={2.5} dot={false} activeDot={{ r: 5 }} />
+                <Line type="monotone" dataKey="resolvidos" name="Resolvidos" stroke={semanticChartColors.positive} strokeWidth={2.5} dot={false} activeDot={{ r: 5 }} />
+                <Line type="monotone" dataKey="encerrados" name="Encerrados" stroke={semanticChartColors.attention} strokeWidth={2.5} dot={false} activeDot={{ r: 5 }} />
+              </LineChart>
+            </ResponsiveContainer>
+          </Box>
+        </CardContent>
+      </Card>
 
       {/* =================================================
           KPIs DE CLIENTES
