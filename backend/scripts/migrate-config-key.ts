@@ -40,7 +40,11 @@ async function main() {
     SELECT "key", "value" FROM "SystemSetting" ORDER BY "key"
   `;
   const recognized = rows.filter(row => knownKeys.includes(row.key));
-  if (rows.length !== recognized.length) throw Error("Existem chaves desconhecidas na tabela SystemSetting. Revise o esquema antes de migrar.");
+  const unrecognizedCount = rows.length - recognized.length;
+  if (unrecognizedCount) {
+    console.warn(`Aviso: ${unrecognizedCount} registro(s) fora do escopo das seis integracoes conhecidas. Nenhum desses valores sera lido ou modificado.`);
+    if (apply) throw Error("Migracao real bloqueada: existem chaves fora do escopo. Revise os registros antes de autorizar aplicacao.");
+  }
   if (!recognized.length) throw Error("Nenhuma configuracao persistida encontrada; migracao cancelada.");
 
   const entries: Array<{ name: string; original: string; updated: string }> = [];
