@@ -1,6 +1,8 @@
 import {
   app,
   BrowserWindow,
+  Menu,
+  Tray,
   dialog,
   ipcMain,
   safeStorage,
@@ -195,6 +197,9 @@ let backendProcess:
 
 let isQuitting =
   false;
+
+let tray: Tray | null = null;
+
 
 let startedBackendHere =
   false;
@@ -2784,6 +2789,34 @@ function getWindowMetrics() {
   };
 }
 
+async function ensureTray() {
+  if (tray || process.platform !== "win32") return;
+  try {
+    const icon = await app.getFileIcon(process.execPath, { size: "small" });
+    tray = new Tray(icon);
+    tray.setToolTip(APP_NAME);
+    const show = () => {
+      if (!mainWindow || mainWindow.isDestroyed()) return;
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.show();
+      mainWindow.focus();
+    };
+    tray.on("double-click", show);
+    tray.on("click", show);
+    tray.setContextMenu(Menu.buildFromTemplate([
+      { label: "Abrir TechLead Hub", click: show },
+      { type: "separator" },
+      { label: "Sair completamente", click: () => {
+        isQuitting = true;
+        app.quit();
+      } },
+    ]));
+  } catch (error) {
+    // Se não houver bandeja disponível, preservar o encerramento normal.
+    console.warn("[desktop] Não foi possível iniciar ícone de bandeja.");
+  }
+}
+
 function createWindow() {
   const metrics =
     getWindowMetrics();
@@ -2839,6 +2872,13 @@ function createWindow() {
    * Mantém o layout mais confortável em notebooks menores,
    * equivalente ao zoom de 90% que já vinha funcionando bem.
    */
+  mainWindow.on("close", (event) => {
+    if (process.platform === "win32" && tray && !isQuitting) {
+      event.preventDefault();
+      mainWindow?.hide();
+    }
+  });
+
   mainWindow.webContents.setZoomFactor(
     metrics.zoomFactor
   );
@@ -3245,6 +3285,7 @@ if (
 
         configureAutoUpdater();
 
+        await ensureTray();
         await bootstrap();
       }
     )
