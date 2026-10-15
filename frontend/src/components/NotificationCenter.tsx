@@ -354,7 +354,7 @@ export function NotificationCenter() {
       void api.post("/notifications/read", { keys: [item.key] }).catch(()=>{setLoadError("Não foi possível salvar a leitura da notificação.");void load();});
     }
     setAnchor(null);
-    navigate(item.kind === "MEETING_REMINDER" && item.meetingId ? meetingPath(item.meetingId) : item.path);
+    navigate(item.kind === "MEETING_REMINDER" && item.meetingId ? `${window.location.pathname}?meeting=${encodeURIComponent(String(item.meetingId))}` : item.path);
   }
 
   async function markAllRead() {
