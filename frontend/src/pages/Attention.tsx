@@ -922,7 +922,7 @@ export function Attention() {
                 ].map((metric) => (
                   <Box key={metric.label} sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2.25, px: 1.75, py: 1.4, bgcolor: "background.paper", minWidth: 0 }}>
                     <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 750, display: "block" }}>{metric.label}</Typography>
-                    <Typography sx={{ fontSize: "1.65rem", fontWeight: 850, lineHeight: 1.4, color: metric.tone }} fontVariant="tabular-nums">{metric.value}</Typography>
+                    <Typography sx={{ fontSize: "1.65rem", fontWeight: 850, lineHeight: 1.4, color: metric.tone, fontVariantNumeric: "tabular-nums" }}>{metric.value}</Typography>
                     <Typography variant="caption" color="text.secondary">{metric.detail}</Typography>
                   </Box>
                 ))}
