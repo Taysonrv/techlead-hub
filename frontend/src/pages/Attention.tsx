@@ -213,14 +213,15 @@ export function Attention() {
     if (!closureAudit) return;
     const columns = ["Ticket", "Assunto", "Situação", "Ainda aberto", "Autor", "Data da interação", "Evidência"];
     const escapeCsv = (value: unknown) => {
-      const safe = String(value ?? "").replace(/^[\\s]*[=+@-]/, "'  async function loadClosureAudit() {");
+      const raw = String(value ?? "");
+      const safe = /^[\t\r\n ]*[=+@-]/.test(raw) ? "'" + raw : raw;
       return '"' + safe.replace(/"/g, '""') + '"';
     };
     const records = displayedClosureItems.map((item) => [
       item.ticketId, item.subject, item.status, item.stillOpen ? "Sim" : "Não",
       item.actionAuthor ?? "", item.actionDate ? new Date(item.actionDate).toLocaleString("pt-BR") : "", item.evidence,
     ].map(escapeCsv).join(";"));
-    const csv = "\\uFEFF" + [columns.map(escapeCsv).join(";"), ...records].join("\\r\\n");
+    const csv = "\uFEFF" + [columns.map(escapeCsv).join(";"), ...records].join("\r\n");
     const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
     const link = document.createElement("a");
     link.href = url;
