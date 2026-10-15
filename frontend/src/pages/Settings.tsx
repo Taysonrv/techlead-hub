@@ -641,6 +641,8 @@ export function Settings() {
           </CardContent>
         </Card>
 
+        <Box component="details" sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2.5, overflow: "hidden", "& summary": { cursor: "pointer", px: 2.5, py: 1.5, fontWeight: 750, bgcolor: "background.paper" } }}>
+          <Box component="summary">Sessões e dispositivos · ${sessions.length} ativa(s) · Administração avançada</Box>
         <Card elevation={0} sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2.5 }}>
           <CardContent sx={{ p: { xs: 2, md: 2.5 } }}>
             <Stack direction={{ xs: "column", sm: "row" }} sx={{ justifyContent: "space-between", gap: 1 }}><Box><Typography sx={{ fontWeight: 800 }}>Sessões ativas</Typography><Typography variant="body2" color="text.secondary">Um usuário não pode utilizar Web e Desktop simultaneamente. Sessões inativas expiram conforme a política do servidor.</Typography></Box><Stack direction="row" spacing={1} useFlexGap sx={{flexWrap:"wrap"}}><Chip label={`${sessions.length} ativa(s)`} color="success" variant="outlined" />{diagnostics?.sessionPolicy?.idleTimeoutMinutes ? <Chip label={`Expiração · ${diagnostics.sessionPolicy.idleTimeoutMinutes} min`} variant="outlined" /> : null}</Stack></Stack>
@@ -648,6 +650,9 @@ export function Settings() {
             <Stack spacing={1}>{sessions.map((session) => <Box key={session.id} sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 2, p: 1.25, border: "1px solid", borderColor: "divider", borderRadius: 1.5 }}><Box sx={{ minWidth: 0 }}><Stack direction="row" spacing={1} sx={{ alignItems: "center", flexWrap: "wrap" }}><Typography sx={{ fontWeight: 800 }}>{session.user.name}</Typography><Chip size="small" label={session.clientType === "DESKTOP" ? "Desktop" : "Web"} /><Chip size="small" variant="outlined" label={session.appVersion || "Versão não informada"} /></Stack><Typography variant="caption" color="text.secondary">{session.deviceName || session.user.username} · atividade {new Date(session.lastActivityAt).toLocaleString("pt-BR")}</Typography></Box><Button size="small" color="error" onClick={() => void revokeSession(session.id)}>Encerrar</Button></Box>)}{!sessions.length && <Typography variant="body2" color="text.secondary">Nenhuma sessão ativa.</Typography>}</Stack>
           </CardContent>
         </Card>
+
+
+        </Box>
 
         {window.techLeadHub?.platform === "win32" && window.techLeadHub.startup && <Card elevation={0} sx={{ border: "1px solid", borderColor: startupEnabled ? "rgba(24,199,122,.28)" : "divider", borderRadius: 2.5, background: startupEnabled ? "linear-gradient(120deg,rgba(24,199,122,.055),transparent)" : undefined }}>
           <CardContent sx={{ p: { xs: 2, md: 2.5 } }}>
