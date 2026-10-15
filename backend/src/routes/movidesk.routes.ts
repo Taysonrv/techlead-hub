@@ -2,6 +2,7 @@ import { Router } from "express";
 import { MovideskController } from "../controllers/MovideskController";
 import { requirePermission } from "../middlewares/roleMiddleware";
 import { prisma } from "../database/prisma";
+import { SIMER_CLIENTS, SIMER_CLIENT_SCOPE_NAMES, resolveSimerClient } from "../domain/OperationalScope";
 
 export const movideskRoutes = Router();
 const controller = new MovideskController();
@@ -30,27 +31,24 @@ movideskRoutes.get("/preview", requirePermission("imports"), controller.preview.
  * Auditoria somente leitura das solicitações de encerramento feitas nas ações
  * Movidesk. Os resultados são candidatos e exigem conferência do autor/contexto.
  */
-movideskRoutes.get("/closure-requests/clients", requirePermission("attention"), async (_request, response) => {
-  try {
-    const values = await prisma.ticket.findMany({
-      where: { isDeleted: false, client: { not: null } },
-      distinct: ["client"], select: { client: true }, orderBy: { client: "asc" },
-    });
-    return response.json({ clients: values.map(row => row.client).filter((name): name is string => Boolean(name?.trim())) });
-  } catch {
-    return response.status(503).json({ message: "Não foi possível consultar a carteira de clientes." });
-  }
+movideskRoutes.get("/closure-requests/clients", requirePermission("attention"), (_request, response) => {
+  // Fonte única de verdade utilizada pela operação SIMER; não listar contatos.
+  return response.json({ clients: [...SIMER_CLIENTS] });
 });
 
 movideskRoutes.get("/closure-requests", requirePermission("attention"), async (request, response) => {
   const client = typeof request.query.client === "string" ? request.query.client.trim() : "Bom Jesus";
   const allClients = client === "__all__";
-  if (!allClients && (client.length < 2 || client.length > 80)) {
+  const canonical = allClients ? null : resolveSimerClient(client);
+  const allowedNames = allClients
+    ? SIMER_CLIENT_SCOPE_NAMES
+    : SIMER_CLIENT_SCOPE_NAMES.filter((name) => resolveSimerClient(name) === canonical);
+  if (!allClients && (!canonical || client.length > 120)) {
     return response.status(400).json({ message: "Informe um cliente válido." });
   }
   try {
     const tickets = await prisma.ticket.findMany({
-      where: { ...(allClients ? {} : { client: { equals: client, mode: "insensitive" as const } }), isDeleted: false },
+      where: { client: { in: allowedNames, mode: "insensitive" }, isDeleted: false },
       select: {
         id: true, movideskId: true, subject: true, client: true, contact: true,
         status: true, baseStatus: true, closedDate: true, canceledDate: true, owner: true, ownerTeam: true,
@@ -106,7 +104,7 @@ movideskRoutes.get("/closure-requests", requirePermission("attention"), async (r
     });
     const candidates = results.filter(row => row.hasClosureRequest);
     return response.json({
-      client: allClients ? "Toda a carteira" : client, checkedTickets: tickets.length, enrichedTickets: tickets.filter(t => t.actions.length > 0).length,
+      client: allClients ? "Toda a carteira SIMER" : canonical, checkedTickets: tickets.length, enrichedTickets: tickets.filter(t => t.actions.length > 0).length,
       coverageLimited: tickets.length === 5000,
       totalCandidates: candidates.length,
       openCandidates: candidates.filter(row => row.stillOpen).length,
