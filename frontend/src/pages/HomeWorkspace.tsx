@@ -4,6 +4,8 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { getTicketSnapshot, subscribeTicketSnapshotRefresh } from "../services/ticketSnapshot";
 import { PageHeader } from "../components/PageHeader";
+import { KpiCard } from "../components/KpiCard";
+import { aliareColors } from "../theme/theme";
 
 type Ticket = {
   movideskId: number; subject: string; owner: string | null; status: string;
@@ -44,10 +46,10 @@ export function HomeWorkspace() {
   const isManagement = user?.role === "ADMIN" || user?.role === "COORDENADOR";
   const priority = isManagement ? [...new Map([...critical,...dueSoon].map((item) => [item.movideskId,item])).values()] : mine;
   const metrics = [
-    { name: isManagement ? "Backlog atual" : "Minha carteira aberta", value: isManagement ? open.length : mine.length, route: "/operacao/tickets" },
-    { name: "Críticos", value: critical.length, route: "/pendencias-riscos" },
-    { name: "Prazo vencido ou próximo", value: dueSoon.length, route: "/pendencias-riscos" },
-    { name: "Parados", value: stopped.length, route: "/operacao/tickets" },
+    { name: isManagement ? "Backlog atual" : "Minha carteira aberta", value: isManagement ? open.length : mine.length, route: isManagement ? "/operacao/tickets" : "/operacao/minha-operacao", accent: aliareColors.warning, subtitle: isManagement ? "Tickets ativos na carteira SIMER" : "Atendimentos sob minha responsabilidade" },
+    { name: "Críticos", value: critical.length, route: "/pendencias-riscos", accent: aliareColors.red, subtitle: "Urgência crítica ainda em aberto" },
+    { name: "Prazo vencido ou próximo", value: dueSoon.length, route: "/pendencias-riscos", accent: aliareColors.warning, subtitle: "Vencidos ou a vencer em até 24 horas" },
+    { name: "Parados", value: stopped.length, route: "/operacao/tickets", accent: aliareColors.info, subtitle: "Atendimentos em situação de parada" },
   ];
 
   return <Box sx={{ minWidth: 0, pb: 3 }}>
@@ -57,13 +59,17 @@ export function HomeWorkspace() {
     {error && <Alert severity="warning" sx={{ mb: 2 }}>{error}</Alert>}
     {loading ? <Box sx={{ display: "flex", justifyContent: "center", py: 7 }}><CircularProgress /></Box> : <>
       <Box sx={{ display: "grid", gridTemplateColumns: { xs: "repeat(2,minmax(0,1fr))", lg: "repeat(4,minmax(0,1fr))" }, gap: 1.5, mb: 2 }}>
-        {metrics.map((metric) => <Card key={metric.name} variant="outlined" sx={{ cursor: "pointer", borderRadius: 2.5, "&:hover": { borderColor: "primary.main", boxShadow: 2 } }}
-          onClick={() => navigate(metric.route)}>
-          <CardContent>
-            <Typography variant="caption" color="text.secondary">{metric.name}</Typography>
-            <Typography sx={{ fontWeight: 850, fontSize: "1.8rem", fontVariantNumeric: "tabular-nums" }}>{metric.value}</Typography>
-          </CardContent>
-        </Card>)}
+        {metrics.map((metric) => (
+          <KpiCard
+            key={metric.name}
+            title={metric.name}
+            value={metric.value}
+            subtitle={metric.subtitle}
+            accent={metric.accent}
+            info={metric.subtitle}
+            onClick={() => navigate(metric.route)}
+          />
+        ))}
       </Box>
       <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "minmax(0,1.7fr) minmax(300px,.8fr)" }, gap: 2 }}>
         <Card variant="outlined" sx={{ borderRadius: 2.5 }}>
