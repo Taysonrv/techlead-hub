@@ -811,7 +811,7 @@ export function CorrectionMonthlyPanel() {
 
             <TableContainer sx={{mt:1.2,maxHeight:560,border:"1px solid",borderColor:"divider",borderRadius:"10px",overflow:"auto"}}>
               <Table stickyHeader size="small">
-                <TableHead sx={{"& .MuiTableCell-head":{bgcolor:theme.palette.mode==="dark"?"#111827":"#172033",color:"#fff",fontWeight:850,borderBottom:"none",whiteSpace:"nowrap"}}}>
+                <TableHead sx={{"& .MuiTableCell-head":{bgcolor:"background.paper",color:"text.primary",fontWeight:800,borderBottom:"1px solid",borderColor:"divider",whiteSpace:"nowrap",opacity:1}}}>
                   <TableRow>
                     {["ID","Título","Cliente","Criado por","Criação","Status","Última mudança","Urgência","Priorizada","Responsável","Conclusão/Cancelamento"].map(header=><TableCell key={header}>{header}</TableCell>)}
                   </TableRow>
