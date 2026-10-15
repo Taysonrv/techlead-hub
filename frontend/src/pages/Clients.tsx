@@ -1652,7 +1652,7 @@ export function Clients() {
               gridTemplateColumns: {
                 xs: "minmax(0, 1fr)",
                 md: "repeat(2, minmax(0, 1fr))",
-                lg: "repeat(3, minmax(0, 1fr))",
+                lg: "repeat(2, minmax(0, 1fr))",
                 xl: "repeat(3, minmax(0, 1fr))",
               },
               gap: 1.5,
@@ -2197,8 +2197,8 @@ export function Clients() {
           mb: 2,
         }}
       >
-        {/* DISTRIBUIÇÃO POR CLIENTE */}
-
+        {/* Cliente usa a linha completa para acomodar nomes longos da carteira SIMER. */}
+        <Box sx={{ gridColumn: { xs: "auto", lg: "1 / -1" }, minWidth: 0 }}>
         <ChartCard
           title="Distribuição por Cliente"
           subtitle="Participação dos clientes no volume de chamados"
@@ -2351,6 +2351,7 @@ export function Clients() {
             <EmptyChart />
           )}
         </ChartCard>
+        </Box>
 
         <ChartCard
           title="Atendimentos por Categoria"
@@ -2565,7 +2566,7 @@ export function Clients() {
         </ChartCard>
       </Box>
 
-      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "1.35fr .65fr" }, gap: 2, mb: 2 }}>
+      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "minmax(0,1fr)", xl: "minmax(0,1.35fr) minmax(340px,.65fr)" }, gap: 2, mb: 2 }}>
         <ChartCard title="Volume por Responsável" subtitle="Distribuição da demanda entre os analistas no recorte · clique para investigar">
           {ownerChartData.length ? (
             <Box sx={{ mt: 1 }}>
@@ -2574,7 +2575,7 @@ export function Clients() {
                 <Chip size="small" variant="outlined" label={`${ownerChartData.reduce((sum, item) => sum + Number(item.value || 0), 0)} tickets distribuídos`} />
                 <Chip size="small" variant="outlined" label={`Maior carteira: ${ownerChartData[0]?.name ?? "—"} · ${ownerChartData[0]?.value ?? 0}`} />
               </Stack>
-              <Box sx={{ height: Math.max(220, Math.min(350, ownerChartData.length * 38 + 46)) }}>
+              <Box sx={{ height: Math.max(330, Math.min(540, ownerChartData.length * 54 + 70)), minWidth: 0 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={ownerChartData} layout="vertical" barCategoryGap="28%" margin={{ top: 6, right: 54, bottom: 4, left: 8 }}>
                     <CartesianGrid strokeDasharray="4 6" horizontal={false} stroke={theme.palette.divider} opacity={0.4} />
@@ -2596,14 +2597,14 @@ export function Clients() {
         </ChartCard>
 
         <ChartCard title="Insights do Período" subtitle="Leituras automáticas para apoiar a apresentação executiva">
-          <Stack spacing={1.25} sx={{ mt: 2 }}>
+          <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(2,minmax(0,1fr))", xl: "1fr" }, gap: 1.25 }}>
             {executiveInsights.map((insight, index) => (
               <Box key={insight} sx={{ display: "flex", gap: 1.2, p: 1.2, borderRadius: 1.5, bgcolor: index === 2 && portfolioSummary.critical ? "rgba(211,47,47,.06)" : "rgba(0,122,96,.055)" }}>
                 <Box sx={{ width: 24, height: 24, flexShrink: 0, borderRadius: "50%", display: "grid", placeItems: "center", bgcolor: index === 2 && portfolioSummary.critical ? "error.main" : aliareColors.green, color: "white", fontSize: 12, fontWeight: 900 }}>{index + 1}</Box>
                 <Typography variant="body2" sx={{ lineHeight: 1.5 }}>{insight}</Typography>
               </Box>
             ))}
-          </Stack>
+          </Box>
         </ChartCard>
       </Box>
 
