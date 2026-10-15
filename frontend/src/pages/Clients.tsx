@@ -630,6 +630,16 @@ export function Clients() {
     return { types: overflow ? [...types, "Outros"] : types, rows };
   }, [clientOperationalTickets, effectiveEndDate]);
 
+  const [hiddenMovementLines, setHiddenMovementLines] = useState<Set<string>>(() => new Set());
+  const [hiddenCategoryLines, setHiddenCategoryLines] = useState<Set<string>>(() => new Set());
+  const toggleLine = (key: string, count: number, setter: React.Dispatch<React.SetStateAction<Set<string>>>) => {
+    setter((previous) => {
+      const next = new Set(previous);
+      if (next.has(key)) next.delete(key);
+      else if (next.size < count - 1) next.add(key);
+      return next;
+    });
+  };
   const [hiddenPerformanceLines, setHiddenPerformanceLines] = useState<Set<string>>(() => new Set());
   const togglePerformanceLine = (key: string) => {
     setHiddenPerformanceLines((previous) => {
@@ -1851,10 +1861,10 @@ export function Clients() {
                 <XAxis dataKey="periodo" minTickGap={22} tick={{ fontSize: 11 }} />
                 <YAxis allowDecimals={false} width={38} />
                 <Tooltip />
-                <Legend />
-                <Line type="monotone" dataKey="abertos" name="Abertos" stroke={semanticChartColors.normal} strokeWidth={2.5} dot={false} activeDot={{ r: 5 }} />
-                <Line type="monotone" dataKey="resolvidos" name="Resolvidos" stroke={semanticChartColors.positive} strokeWidth={2.5} dot={false} activeDot={{ r: 5 }} />
-                <Line type="monotone" dataKey="encerrados" name="Encerrados" stroke={semanticChartColors.attention} strokeWidth={2.5} dot={false} activeDot={{ r: 5 }} />
+                <Legend onClick={(entry) => toggleLine(String(entry.dataKey ?? ""), 3, setHiddenMovementLines)} formatter={(value, entry) => <span style={{ cursor: "pointer", opacity: hiddenMovementLines.has(String(entry.dataKey ?? "")) ? 0.38 : 1, textDecoration: hiddenMovementLines.has(String(entry.dataKey ?? "")) ? "line-through" : "none" }}>{value}</span>} />
+                <Line type="monotone" dataKey="abertos" hide={hiddenMovementLines.has("abertos")} name="Abertos" stroke={semanticChartColors.normal} strokeWidth={2.5} dot={false} activeDot={{ r: 5 }} />
+                <Line type="monotone" dataKey="resolvidos" hide={hiddenMovementLines.has("resolvidos")} name="Resolvidos" stroke={semanticChartColors.positive} strokeWidth={2.5} dot={false} activeDot={{ r: 5 }} />
+                <Line type="monotone" dataKey="encerrados" hide={hiddenMovementLines.has("encerrados")} name="Encerrados" stroke={semanticChartColors.attention} strokeWidth={2.5} dot={false} activeDot={{ r: 5 }} />
               </LineChart>
             </ResponsiveContainer>
           </Box>
@@ -1877,9 +1887,9 @@ export function Clients() {
                   <XAxis dataKey="periodo" tick={{ fontSize: 11 }} />
                   <YAxis allowDecimals={false} width={38} />
                   <Tooltip />
-                  <Legend />
+                  <Legend onClick={(entry) => toggleLine(String(entry.dataKey ?? ""), monthlyCategoryTrend.types.length, setHiddenCategoryLines)} formatter={(value, entry) => <span style={{ cursor: "pointer", opacity: hiddenCategoryLines.has(String(entry.dataKey ?? "")) ? 0.38 : 1, textDecoration: hiddenCategoryLines.has(String(entry.dataKey ?? "")) ? "line-through" : "none" }}>{value}</span>} />
                   {monthlyCategoryTrend.types.map((type, index) => (
-                    <Line key={type} type="monotone" dataKey={type} name={type}
+                    <Line key={type} type="monotone" dataKey={type} hide={hiddenCategoryLines.has(type)} name={type}
                       stroke={PIE_COLORS[index % PIE_COLORS.length]} strokeWidth={2.5} dot={{ r: 3 }} activeDot={{ r: 5 }} />
                   ))}
                 </LineChart>
