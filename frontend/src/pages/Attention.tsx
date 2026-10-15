@@ -239,7 +239,7 @@ export function Attention() {
     else { setClosureArea("Todos"); setClosureAuthorization("identified"); setShowAllClosure(false); }
   }
 
-  function exportClosureList() {
+  function exportClosureList(rowsOverride?: ClosureAudit["items"]) {
     if (!closureAudit) return;
     const columns = ["Ticket", "Assunto", "Equipe", "Responsável", "Situação", "Ainda aberto", "Indício de autorização", "Autor", "Data da interação", "Evidência"];
     const escapeCsv = (value: unknown) => {
@@ -247,7 +247,7 @@ export function Attention() {
       const safe = /^[\t\r\n ]*[=+@-]/.test(raw) ? "'" + raw : raw;
       return '"' + safe.replace(/"/g, '""') + '"';
     };
-    const records = displayedClosureItems.map((item) => [
+    const records = (rowsOverride ?? displayedClosureItems).map((item) => [
       item.ticketId, item.subject, item.ownerTeam ?? item.area, item.owner ?? "", item.status, item.stillOpen ? "Sim" : "Não", item.hasClosureRequest ? "Sim - verificar autoria" : "Não identificado",
       item.actionAuthor ?? "", item.actionDate ? new Date(item.actionDate).toLocaleString("pt-BR") : "", item.evidence,
     ].map(escapeCsv).join(";"));
@@ -1826,7 +1826,7 @@ export function Attention() {
             </Box>
             <Button onClick={() => setClosureMetric(null)}>Fechar</Button>
           </Stack>
-          <Button variant="outlined" size="small" sx={{ mb: 2 }} onClick={exportClosureList}>Exportar lista filtrada</Button>
+          <Button variant="outlined" size="small" sx={{ mb: 2 }} onClick={() => exportClosureList(closureMetricItems)}>Exportar lista filtrada</Button>
           <Stack spacing={1}>
             {closureMetricItems.slice(0, 200).map((item) => (
               <Box key={item.ticketId} sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2, p: 1.5 }}>
