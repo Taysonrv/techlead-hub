@@ -90,18 +90,43 @@ export function HomeWorkspace() {
                 </Box>)}</Stack>}
           </CardContent>
         </Card>
-        <Card variant="outlined" sx={{ borderRadius: 2.5 }}>
-          <CardContent>
-            <Typography sx={{ fontWeight: 800, mb: 1.5 }}>Acesso rápido</Typography>
-            <Stack spacing={1}>
-              <Button variant="outlined" sx={{ justifyContent: "flex-start" }} onClick={() => navigate("/operacao/minha-operacao")}>Minha Operação</Button>
-              <Button variant="outlined" sx={{ justifyContent: "flex-start" }} onClick={() => navigate("/visao-operacional/desempenho")}>Desempenho & SLA</Button>
-              <Button variant="outlined" sx={{ justifyContent: "flex-start" }} onClick={() => navigate("/chat")}>Chat</Button>
-              <Button variant="outlined" sx={{ justifyContent: "flex-start" }} onClick={() => navigate("/visao-operacional")}>Dashboard Executivo</Button>
-            </Stack>
-            <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 2 }}>Dados do snapshot Movidesk. As regras detalhadas permanecem nas telas analíticas.</Typography>
-          </CardContent>
-        </Card>
+        <Stack spacing={2} sx={{ minWidth: 0 }}>
+          <Card variant="outlined" sx={{ borderRadius: 2.5 }}>
+            <CardContent sx={{ "&:last-child": { pb: 2 } }}>
+              <Typography sx={{ fontWeight: 800 }}>Pulso da operação</Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                Situação atual dos atendimentos SIMER
+              </Typography>
+              <Stack spacing={1.25}>
+                {[
+                  { title: "Em atenção imediata", value: new Set([...critical, ...dueSoon].map((ticket) => ticket.movideskId)).size, color: "error.main" },
+                  { title: "Em andamento", value: open.filter((ticket) => ["inprogress", "in progress"].includes(clean(ticket.baseStatus).replace(/\s+/g, "")) || clean(ticket.status).includes("andamento")).length, color: "info.main" },
+                  { title: "Aguardando / parados", value: stopped.length, color: "warning.main" },
+                ].map((item) => (
+                  <Stack key={item.title} direction="row" sx={{ alignItems: "center", justifyContent: "space-between", gap: 1, pb: .75, borderBottom: "1px solid", borderColor: "divider" }}>
+                    <Typography variant="body2" color="text.secondary">{item.title}</Typography>
+                    <Typography sx={{ fontWeight: 850, fontVariantNumeric: "tabular-nums", color: item.color }}>{item.value}</Typography>
+                  </Stack>
+                ))}
+              </Stack>
+              <Button size="small" sx={{ mt: 1.5 }} onClick={() => navigate("/pendencias-riscos")}>Analisar pendências e riscos</Button>
+            </CardContent>
+          </Card>
+          <Card variant="outlined" sx={{ borderRadius: 2.5 }}>
+            <CardContent sx={{ "&:last-child": { pb: 2 } }}>
+              <Typography sx={{ fontWeight: 800, mb: 1.5 }}>Acesso rápido</Typography>
+              <Box sx={{ display: "grid", gridTemplateColumns: { xs: "repeat(2,minmax(0,1fr))", sm: "repeat(2,minmax(0,1fr))", lg: "1fr" }, gap: 1 }}>
+                <Button variant="outlined" size="small" sx={{ justifyContent: "flex-start", minWidth: 0 }} onClick={() => navigate("/operacao/minha-operacao")}>Minha Operação</Button>
+                <Button variant="outlined" size="small" sx={{ justifyContent: "flex-start", minWidth: 0 }} onClick={() => navigate("/visao-operacional/desempenho")}>Desempenho & SLA</Button>
+                <Button variant="outlined" size="small" sx={{ justifyContent: "flex-start", minWidth: 0 }} onClick={() => navigate("/chat")}>Chat interno</Button>
+                <Button variant="outlined" size="small" sx={{ justifyContent: "flex-start", minWidth: 0 }} onClick={() => navigate("/visao-operacional")}>Dashboard Executivo</Button>
+              </Box>
+              <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1.5 }}>
+                Visão operacional: detalhes, metodologias e exportações permanecem nas telas especializadas.
+              </Typography>
+            </CardContent>
+          </Card>
+        </Stack>
       </Box>
     </>}
   </Box>;
