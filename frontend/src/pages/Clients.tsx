@@ -630,6 +630,16 @@ export function Clients() {
     return { types: overflow ? [...types, "Outros"] : types, rows };
   }, [clientOperationalTickets, effectiveEndDate]);
 
+  const [hiddenPerformanceLines, setHiddenPerformanceLines] = useState<Set<string>>(() => new Set());
+  const togglePerformanceLine = (key: string) => {
+    setHiddenPerformanceLines((previous) => {
+      const next = new Set(previous);
+      if (next.has(key)) next.delete(key);
+      else if (next.size < 2) next.add(key); // preserve at least one visible series
+      return next;
+    });
+  };
+
   const monthlyPerformance = useMemo(() => {
     const end = endOfDay(effectiveEndDate);
     const months = Array.from({ length: 6 }, (_, index) => {
@@ -1968,10 +1978,17 @@ export function Clients() {
                 <XAxis dataKey="periodo" tick={{ fontSize: 11 }} />
                 <YAxis domain={[0, 100]} tickFormatter={(v: number) => `${v}%`} width={46} />
                 <Tooltip formatter={(value) => { const scalar = Array.isArray(value) ? value[0] : value; return scalar == null || !Number.isFinite(Number(scalar)) ? "Sem medição" : `${Number(scalar).toFixed(1)}%`; }} />
-                <Legend />
-                <Line type="monotone" dataKey="resposta" name="SLA 1ª resposta" stroke={PIE_COLORS[0]} strokeWidth={2.5} connectNulls={false} />
-                <Line type="monotone" dataKey="solucao" name="SLA solução" stroke={PIE_COLORS[1]} strokeWidth={2.5} connectNulls={false} />
-                <Line type="monotone" dataKey="resolucao" name="Taxa de resolução" stroke={PIE_COLORS[2]} strokeWidth={2.5} connectNulls={false} />
+                <Legend
+                  onClick={(entry) => togglePerformanceLine(String(entry.dataKey ?? ""))}
+                  formatter={(value, entry) => (
+                    <span style={{ cursor: "pointer", opacity: hiddenPerformanceLines.has(String(entry.dataKey ?? "")) ? 0.4 : 1, textDecoration: hiddenPerformanceLines.has(String(entry.dataKey ?? "")) ? "line-through" : "none" }}>
+                      {value}
+                    </span>
+                  )}
+                />
+                <Line type="monotone" dataKey="resposta" name="SLA 1ª resposta" stroke={PIE_COLORS[0]} strokeWidth={2.5} connectNulls={false} hide={hiddenPerformanceLines.has("resposta")} />
+                <Line type="monotone" dataKey="solucao" name="SLA solução" stroke={PIE_COLORS[1]} strokeWidth={2.5} connectNulls={false} hide={hiddenPerformanceLines.has("solucao")} />
+                <Line type="monotone" dataKey="resolucao" name="Taxa de resolução" stroke={PIE_COLORS[2]} strokeWidth={2.5} connectNulls={false} hide={hiddenPerformanceLines.has("resolucao")} />
               </LineChart>
             </ResponsiveContainer>
           </Box>
