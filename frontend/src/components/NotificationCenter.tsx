@@ -308,6 +308,17 @@ export function NotificationCenter() {
       ? fresh.filter(isUrgent).slice(0, 2)
       : [];
 
+    if (document.visibilityState === "hidden" && window.techLeadHub &&
+        preferences.desktopAlerts && "Notification" in window && Notification.permission === "granted") {
+      fresh.filter(isUrgent).slice(0, 2).forEach((item) => {
+        const native = new Notification(item.title, { body: item.message });
+        native.onclick = () => {
+          window.focus();
+          navigate(item.path);
+          native.close();
+        };
+      });
+    }
     unseen.forEach((item) => alertedKeys.current.add(item.key));
     notificationHydratedRef.current = true;
     try { sessionStorage.setItem(sessionKey, JSON.stringify([...alertedKeys.current].slice(-500))); } catch { /* opcional */ }
@@ -315,7 +326,7 @@ export function NotificationCenter() {
       const keys = new Set(current.map((item) => item.key));
       return [...current, ...toShow.filter((item) => !keys.has(item.key))].slice(0, 2);
     });
-  }, [unread, items.length, userId]);
+  }, [unread, items.length, userId, preferences.desktopAlerts, navigate]);
 
   const meetingPath = useCallback((meetingId: number) => {
     const params = new URLSearchParams(location.search);
@@ -328,18 +339,8 @@ export function NotificationCenter() {
     if (document.visibilityState === "visible") {
       playNotificationSound(toast.kind === "CHAT_MENTION" ? "chat" : "system");
     }
-    // Evita toast + notificação nativa simultaneamente. Na bandeja, alertas
-    // do Windows são reservados a eventos urgentes; Web nunca gera nativos.
-    if (window.techLeadHub && document.visibilityState === "hidden" &&
-        preferences.desktopAlerts && "Notification" in window && Notification.permission === "granted") {
-      const alert = new Notification(toast.title, { body: toast.message });
-      alert.onclick = () => {
-        window.focus();
-        navigate(toast.kind === "MEETING_REMINDER" && toast.meetingId ? meetingPath(toast.meetingId) : toast.path);
-        alert.close();
-      };
-    }
-  }, [toast, navigate, preferences.desktopAlerts, meetingPath]);
+
+  }, [toast]);
 
   useEffect(() => {
     alertedKeys.current.clear();
