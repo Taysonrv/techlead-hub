@@ -154,7 +154,7 @@ type ClosureAudit = {
   client: string; checkedTickets: number; enrichedTickets: number; coverageLimited: boolean;
   openWithProduct: number; openWithSupport: number; authorizedOpenWithProduct: number; authorizedOpenWithSupport: number;
   totalCandidates: number; openCandidates: number; closedCandidates: number; disclaimer: string;
-  items: Array<{ ticketId: number; subject: string; status: string; stillOpen: boolean;
+  items: Array<{ ticketId: number; subject: string; client?: string | null; status: string; stillOpen: boolean;
     area: "Produto" | "Suporte" | "Outros"; owner: string | null; ownerTeam: string | null; hasClosureRequest: boolean; hasActions?: boolean;
     actionDate: string | null; actionAuthor: string | null; evidence: string; actionId: number }>;
 };
@@ -165,6 +165,8 @@ export function Attention() {
 
   const [closureAudit, setClosureAudit] = useState<ClosureAudit | null>(null);
   const [closureBusy, setClosureBusy] = useState(false);
+  const [closureClient, setClosureClient] = useState("Bom Jesus");
+  const [closureClients, setClosureClients] = useState<string[]>([]);
   const [selectedClosure, setSelectedClosure] = useState<ClosureAudit["items"][number] | null>(null);
   const [closureMetric, setClosureMetric] = useState<string | null>(null);
   const [closureError, setClosureError] = useState<string | null>(null);
@@ -262,12 +264,22 @@ export function Attention() {
     URL.revokeObjectURL(url);
   }
 
+  useEffect(() => {
+    let active = true;
+    void api.get<{ clients: string[] }>("/movidesk/closure-requests/clients")
+      .then(({ data }) => { if (active) setClosureClients(data.clients); })
+      .catch(() => undefined);
+    return () => { active = false; };
+  }, []);
+
   async function loadClosureAudit() {
     setClosureBusy(true);
     setClosureError(null);
     try {
-      const { data } = await api.get<ClosureAudit>("/movidesk/closure-requests", { params: { client: "Bom Jesus" } });
+      const { data } = await api.get<ClosureAudit>("/movidesk/closure-requests", { params: { client: closureClient } });
       setClosureAudit(data);
+      setClosureMetric(null);
+      setSelectedClosure(null);
     } catch {
       setClosureError("Não foi possível consultar as interações. Verifique as permissões e a cobertura da sincronização Movidesk.");
     } finally {
@@ -923,13 +935,24 @@ export function Attention() {
         <CardContent sx={{ p: { xs: 2, md: 2.5 }, "&:last-child": { pb: 2.5 } }}>
           <Stack direction={{ xs: "column", md: "row" }} spacing={1.5} sx={{ alignItems: { md: "center" }, justifyContent: "space-between", mb: 2 }}>
             <Box>
-              <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 750, letterSpacing: 1 }}>INTELIGÊNCIA OPERACIONAL · BOM JESUS</Typography>
+              <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 750, letterSpacing: 1 }}>INTELIGÊNCIA OPERACIONAL · CARTEIRA DE CLIENTES</Typography>
               <Typography variant="h6" sx={{ fontWeight: 850, letterSpacing: "-.02em" }}>Solicitações de baixa e cancelamento</Typography>
               <Typography variant="body2" color="text.secondary">Identifique pedidos de encerramento e acompanhe pendências por equipe responsável.</Typography>
             </Box>
             <Button variant="contained" disabled={closureBusy} onClick={() => void loadClosureAudit()} sx={{ flexShrink: 0, minHeight: 40 }}>
               {closureBusy ? "Analisando..." : "Atualizar análise"}
             </Button>
+          </Stack>
+          <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ alignItems: { sm: "center" }, mb: 2 }}>
+            <FormControl size="small" sx={{ minWidth: { xs: "100%", sm: 300 }, maxWidth: 460 }}>
+              <InputLabel>Cliente da carteira</InputLabel>
+              <Select value={closureClient} label="Cliente da carteira" onChange={(event) => { setClosureClient(event.target.value); setClosureAudit(null); setClosureMetric(null); setSelectedClosure(null); }}>
+                <MenuItem value="__all__">Toda a carteira</MenuItem>
+                {!closureClients.includes("Bom Jesus") && <MenuItem value="Bom Jesus">Bom Jesus</MenuItem>}
+                {closureClients.map((name) => <MenuItem key={name} value={name}>{name}</MenuItem>)}
+              </Select>
+            </FormControl>
+            <Typography variant="caption" color="text.secondary">Selecione o cliente e clique em Atualizar análise. Registros sem histórico permanecem sem indício.</Typography>
           </Stack>
           {closureError && <Alert severity="warning" sx={{ mb: 1.5 }}>{closureError}</Alert>}
           {closureAudit && (
@@ -1820,7 +1843,7 @@ export function Attention() {
         <Box sx={{ width: { xs: "100vw", sm: 560 }, maxWidth: "100vw", p: 2.5, bgcolor: "background.paper", minHeight: "100%", color: "text.primary" }}>
           <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "center", mb: 1.5 }}>
             <Box>
-              <Typography variant="overline" color="text.secondary">BOM JESUS · DETALHAMENTO</Typography>
+              <Typography variant="overline" color="text.secondary">ATENDIMENTOS · DETALHAMENTO</Typography>
               <Typography variant="h6" sx={{ fontWeight: 850 }}>{({ openCandidates: "Abertos com indício", closedCandidates: "Já concluídos", enrichedTickets: "Histórico disponível", product: "Produto · abertos", support: "Suporte · abertos" } as Record<string, string>)[closureMetric ?? ""]}</Typography>
               <Typography variant="body2" color="text.secondary">{closureMetricItems.length} atendimento(s) no recorte</Typography>
             </Box>
@@ -1855,7 +1878,7 @@ export function Attention() {
             <Stack spacing={2.25}>
               <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "flex-start", borderBottom: "1px solid", borderColor: "divider", pb: 1.5 }}>
                 <Box>
-                  <Typography variant="overline" color="text.secondary">Solicitação de encerramento · Bom Jesus</Typography>
+                  <Typography variant="overline" color="text.secondary">Solicitação de encerramento · Cliente</Typography>
                   <Typography variant="h6" sx={{ fontWeight: 850, letterSpacing: "-.02em" }}>Ticket #{selectedClosure.ticketId}</Typography>
                 </Box>
                 <Button size="small" onClick={() => setSelectedClosure(null)}>Fechar</Button>
@@ -1876,7 +1899,7 @@ export function Attention() {
                 <Button variant="contained" onClick={() => navigate(`/operacao/tickets?movidesk=${selectedClosure.ticketId}`)}>Abrir detalhe completo</Button>
                 <Button variant="outlined" onClick={() => navigate(`/investigacao?q=${selectedClosure.ticketId}`)}>Investigar ticket</Button>
                 <Button variant="outlined" onClick={() => void navigator.clipboard.writeText(`#${selectedClosure.ticketId} - ${selectedClosure.subject}\\n${selectedClosure.evidence}`)}>Copiar resumo</Button>
-                <Button variant="outlined" onClick={() => window.dispatchEvent(new CustomEvent("techlead-hub:share-chat", { detail: { label: "Ticket", recordId: selectedClosure.ticketId, title: selectedClosure.subject, client: "Bom Jesus", status: selectedClosure.status, path: `/operacao/tickets?movidesk=${selectedClosure.ticketId}` } }))}>Compartilhar no chat</Button>
+                <Button variant="outlined" onClick={() => window.dispatchEvent(new CustomEvent("techlead-hub:share-chat", { detail: { label: "Ticket", recordId: selectedClosure.ticketId, title: selectedClosure.subject, client: selectedClosure.client ?? closureClient, status: selectedClosure.status, path: `/operacao/tickets?movidesk=${selectedClosure.ticketId}` } }))}>Compartilhar no chat</Button>
               </Stack>
               <Typography variant="caption" color="text.secondary">Para histórico completo, tarefas vinculadas, prazos e demais ações, utilize “Abrir detalhe completo”.</Typography>
             </Stack>
