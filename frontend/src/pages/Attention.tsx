@@ -165,7 +165,7 @@ export function Attention() {
 
   const [closureAudit, setClosureAudit] = useState<ClosureAudit | null>(null);
   const [closureBusy, setClosureBusy] = useState(false);
-  const [closureClient, setClosureClient] = useState("Bom Jesus");
+  const [closureClient, setClosureClient] = useState("BOM JESUS COOPERATIVA AGROINDUSTRIAL - LAPA-PR");
   const [closureClients, setClosureClients] = useState<string[]>([]);
   const [selectedClosure, setSelectedClosure] = useState<ClosureAudit["items"][number] | null>(null);
   const [closureMetric, setClosureMetric] = useState<string | null>(null);
@@ -947,12 +947,11 @@ export function Attention() {
             <FormControl size="small" sx={{ minWidth: { xs: "100%", sm: 300 }, maxWidth: 460 }}>
               <InputLabel>Cliente da carteira</InputLabel>
               <Select value={closureClient} label="Cliente da carteira" onChange={(event) => { setClosureClient(event.target.value); setClosureAudit(null); setClosureMetric(null); setSelectedClosure(null); }}>
-                <MenuItem value="__all__">Toda a carteira</MenuItem>
-                {!closureClients.includes("Bom Jesus") && <MenuItem value="Bom Jesus">Bom Jesus</MenuItem>}
+                <MenuItem value="__all__">Toda a carteira SIMER</MenuItem>
                 {closureClients.map((name) => <MenuItem key={name} value={name}>{name}</MenuItem>)}
               </Select>
             </FormControl>
-            <Typography variant="caption" color="text.secondary">Selecione o cliente e clique em Atualizar análise. Registros sem histórico permanecem sem indício.</Typography>
+            <Typography variant="caption" color="text.secondary">Carteira oficial SIMER. Selecione o cliente e clique em Atualizar análise.</Typography>
           </Stack>
           {closureError && <Alert severity="warning" sx={{ mb: 1.5 }}>{closureError}</Alert>}
           {closureAudit && (
