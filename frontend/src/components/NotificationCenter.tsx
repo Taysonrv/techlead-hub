@@ -280,33 +280,42 @@ export function NotificationCenter() {
     [items, readKeys, enabledForKind],
   );
 
+  // Pop-ups são avisos transitórios, não uma caixa de entrada paralela.
+  // Histórico completo permanece no sino. Chaves já exibidas nesta sessão
+  // sobrevivem a remounts/navegação, sem incluir conteúdos confidenciais.
   useEffect(() => {
-    const now = Date.now();
-    const candidates = unread
-      .filter((item) => !alertedKeys.current.has(item.key))
-      .filter((item) => {
-        if (notificationHydratedRef.current) return true;
-        const age = now - new Date(item.occurredAt).getTime();
-        return item.kind === "MEETING_REMINDER" || (age >= 0 && age < 10 * 60_000);
-      })
-      .sort((left, right) => new Date(left.occurredAt).getTime() - new Date(right.occurredAt).getTime());
-
-    if (!items.length) return;
+    if (!userId || !items.length) return;
+    const sessionKey = `techlead-hub:notifications:shown:${userId}`;
     if (!notificationHydratedRef.current) {
-      const candidateKeys = new Set(candidates.map((item) => item.key));
-      unread.forEach((item) => {
-        if (!candidateKeys.has(item.key)) alertedKeys.current.add(item.key);
-      });
-      notificationHydratedRef.current = true;
+      try {
+        const stored = JSON.parse(sessionStorage.getItem(sessionKey) ?? "[]");
+        if (Array.isArray(stored)) stored.filter((key): key is string => typeof key === "string").forEach((key) => alertedKeys.current.add(key));
+      } catch { /* armazenamento de sessão opcional */ }
     }
 
-    if (!candidates.length) return;
-    candidates.forEach((item) => alertedKeys.current.add(item.key));
-    setToastQueue((current) => {
-      const existing = new Set(current.map((item) => item.key));
-      return [...current, ...candidates.filter((item) => !existing.has(item.key))].slice(0, 30);
+    const now = Date.now();
+    const unseen = unread
+      .filter((item) => !alertedKeys.current.has(item.key))
+      .sort((left, right) => new Date(right.occurredAt).getTime() - new Date(left.occurredAt).getTime());
+    const fresh = unseen.filter((item) => {
+      const age = now - new Date(item.occurredAt).getTime();
+      return Number.isFinite(age) && age >= 0 && age < 5 * 60_000;
     });
-  }, [unread,items.length]);
+    const isUrgent = (item: HubNotification) =>
+      item.kind === "CHAT_MENTION" || item.kind === "MEETING_REMINDER" ||
+      item.kind === "OPERATION_ALERT";
+    const toShow = document.visibilityState === "visible"
+      ? fresh.filter(isUrgent).slice(0, 2)
+      : [];
+
+    unseen.forEach((item) => alertedKeys.current.add(item.key));
+    notificationHydratedRef.current = true;
+    try { sessionStorage.setItem(sessionKey, JSON.stringify([...alertedKeys.current].slice(-500))); } catch { /* opcional */ }
+    if (toShow.length) setToastQueue((current) => {
+      const keys = new Set(current.map((item) => item.key));
+      return [...current, ...toShow.filter((item) => !keys.has(item.key))].slice(0, 2);
+    });
+  }, [unread, items.length, userId]);
 
   const meetingPath = useCallback((meetingId: number) => {
     const params = new URLSearchParams(location.search);
@@ -316,10 +325,13 @@ export function NotificationCenter() {
 
   useEffect(() => {
     if (!toast) return;
-    playNotificationSound(toast.kind === "CHAT_MENTION" ? "chat" : "system");
-    // Apenas o Electron envia alertas nativos: sessões Web mantêm sino e toast,
-    // mas não duplicam os avisos do Windows mesmo com o Desktop fechado.
-    if (window.techLeadHub && preferences.desktopAlerts && "Notification" in window && Notification.permission === "granted") {
+    if (document.visibilityState === "visible") {
+      playNotificationSound(toast.kind === "CHAT_MENTION" ? "chat" : "system");
+    }
+    // Evita toast + notificação nativa simultaneamente. Na bandeja, alertas
+    // do Windows são reservados a eventos urgentes; Web nunca gera nativos.
+    if (window.techLeadHub && document.visibilityState === "hidden" &&
+        preferences.desktopAlerts && "Notification" in window && Notification.permission === "granted") {
       const alert = new Notification(toast.title, { body: toast.message });
       alert.onclick = () => {
         window.focus();
@@ -531,7 +543,7 @@ export function NotificationCenter() {
       <Snackbar
         key={toast?.key ?? "notification-toast"}
         open={Boolean(toast)}
-        autoHideDuration={8000}
+        autoHideDuration={5000}
         onClose={(_, reason) => { if (reason !== "clickaway") setToastQueue((current) => current.slice(1)); }}
         anchorOrigin={{vertical:"bottom",horizontal:"right"}}
       >
@@ -545,11 +557,11 @@ export function NotificationCenter() {
             setToastQueue((current) => current.slice(1));
             openNotification(item);
           }}
-          sx={{cursor:"pointer",minWidth:{sm:360},maxWidth:{sm:480},boxShadow:"0 16px 42px rgba(0,0,0,.28)"}}
+          sx={{cursor:"pointer",width:{xs:"calc(100vw - 32px)",sm:350},maxWidth:400,boxShadow:"0 10px 28px rgba(0,0,0,.20)","& .MuiAlert-message":{overflow:"hidden"}}}
         >
           <Typography sx={{fontWeight:850,fontSize:".82rem"}}>{toast?.title}</Typography>
           <Typography sx={{fontSize:".76rem",opacity:.92}}>{toast?.message}</Typography>
-          {toastQueue.length > 1 && <Typography variant="caption" sx={{display:"block",mt:.45,opacity:.78}}>{toastQueue.length-1} notificação(ões) aguardando</Typography>}
+          
         </Alert>
       </Snackbar>
     </>
