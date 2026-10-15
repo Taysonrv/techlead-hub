@@ -973,7 +973,7 @@ export function Attention() {
                       {showAllClosure ? "Somente abertos" : "Incluir fechados"}
                     </Button>
                   </Stack>
-                  <Button size="small" variant="outlined" disabled={!displayedClosureItems.length} onClick={exportClosureList} sx={{ flexShrink: 0 }}>Exportar CSV</Button>
+                  <Button size="small" variant="outlined" disabled={!displayedClosureItems.length} onClick={() => exportClosureList()} sx={{ flexShrink: 0 }}>Exportar CSV</Button>
                 </Stack>
               </Box>
               <Alert severity={closureAudit.enrichedTickets < closureAudit.checkedTickets || closureAudit.coverageLimited ? "warning" : "info"}
