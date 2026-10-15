@@ -69,7 +69,7 @@ movideskRoutes.get("/closure-requests", requirePermission("attention"), async (r
         ticketId: ticket.movideskId, subject: ticket.subject, client: ticket.client,
         contact: ticket.contact, status: ticket.status, baseStatus: ticket.baseStatus,
         owner: ticket.owner, ownerTeam: ticket.ownerTeam, area,
-        stillOpen, hasClosureRequest: Boolean(action), evidence: evidence.slice(0, 320),
+        stillOpen, hasClosureRequest: Boolean(action), hasActions: ticket.actions.length > 0, evidence: evidence.slice(0, 320),
         actionDate: action?.createdDate ?? null, actionAuthor: action?.createdByName ?? null,
         actionId: action?.movideskActionId ?? null, matchingActions: matches.length,
         needsAuthorVerification: Boolean(action),
