@@ -40,7 +40,7 @@ movideskRoutes.get("/closure-requests", requirePermission("attention"), async (r
       where: { client: { contains: client, mode: "insensitive" }, isDeleted: false },
       select: {
         id: true, movideskId: true, subject: true, client: true, contact: true,
-        status: true, baseStatus: true, closedDate: true, canceledDate: true,
+        status: true, baseStatus: true, closedDate: true, canceledDate: true, owner: true, ownerTeam: true,
         actions: {
           where: { isDeleted: false },
           select: { movideskActionId: true, description: true, createdDate: true, createdByName: true },
@@ -52,32 +52,41 @@ movideskRoutes.get("/closure-requests", requirePermission("attention"), async (r
     });
     const positive = /(?:pode(?:m|mos)?\s+(?:baixar|cancelar|encerrar|fechar)|(?:solicito|solicitamos|peço|pedimos|favor|por favor)\s+(?:(?:a|o)\s+)?(?:baixa|cancelamento|encerramento)|(?:ticket|chamado|atendimento)\s+(?:pode\s+ser|seja|deve\s+ser)\s+(?:baixado|cancelado|encerrado|fechado)|(?:não\s+(?:precisa|é\s+necessário)\s+mais\s+(?:do|desse)\s+(?:ticket|chamado|atendimento)))/i;
     const negative = /(?:não\s+(?:pode|podemos|consigo|conseguimos)\s+(?:baixar|cancelar|encerrar)|(?:cancelar|baixar|encerrar)\s+(?:a\s+)?(?:nota|nf-e|nfe|pedido|contrato|título|romaneio|documento))/i;
-    const results = tickets.flatMap((ticket) => {
+    const results = tickets.map((ticket) => {
       const matches = ticket.actions.filter((action) => {
         const value = (action.description ?? "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
         return positive.test(value) && !negative.test(value);
       });
-      if (!matches.length) return [];
       const action = matches[0];
-      if (!action) return [];
-      const text = (action.description ?? "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
-      const open = !["Closed", "Resolved", "Canceled", "Cancelled"].includes(ticket.baseStatus ?? "");
-      return [{
+      const evidence = (action?.description ?? "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+      const stillOpen = !["Closed", "Resolved", "Canceled", "Cancelled"].includes(ticket.baseStatus ?? "");
+      // A classificação utiliza a equipe atual do Movidesk e não o texto da ação.
+      // Equipes não reconhecidas permanecem em "Outros", sem inferência automática.
+      const teamText = (ticket.ownerTeam ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+      const area = /produto|product/.test(teamText) ? "Produto"
+        : /suporte|sustentacao|support/.test(teamText) ? "Suporte" : "Outros";
+      return {
         ticketId: ticket.movideskId, subject: ticket.subject, client: ticket.client,
         contact: ticket.contact, status: ticket.status, baseStatus: ticket.baseStatus,
-        stillOpen: open, evidence: text.slice(0, 320),
-        actionDate: action.createdDate, actionAuthor: action.createdByName,
-        actionId: action.movideskActionId, matchingActions: matches.length,
-        needsAuthorVerification: true,
-      }];
+        owner: ticket.owner, ownerTeam: ticket.ownerTeam, area,
+        stillOpen, hasClosureRequest: Boolean(action), evidence: evidence.slice(0, 320),
+        actionDate: action?.createdDate ?? null, actionAuthor: action?.createdByName ?? null,
+        actionId: action?.movideskActionId ?? null, matchingActions: matches.length,
+        needsAuthorVerification: Boolean(action),
+      };
     });
+    const candidates = results.filter(row => row.hasClosureRequest);
     return response.json({
       client, checkedTickets: tickets.length, enrichedTickets: tickets.filter(t => t.actions.length > 0).length,
       coverageLimited: tickets.length === 5000,
-      totalCandidates: results.length,
-      openCandidates: results.filter(row => row.stillOpen).length,
-      closedCandidates: results.filter(row => !row.stillOpen).length,
-      disclaimer: "Correspondências textuais preliminares. Verifique autoria, contexto e cobertura de ações antes de concluir que o cliente pediu encerramento.",
+      totalCandidates: candidates.length,
+      openCandidates: candidates.filter(row => row.stillOpen).length,
+      closedCandidates: candidates.filter(row => !row.stillOpen).length,
+      openWithProduct: results.filter(row => row.stillOpen && row.area === "Produto").length,
+      openWithSupport: results.filter(row => row.stillOpen && row.area === "Suporte").length,
+      authorizedOpenWithProduct: candidates.filter(row => row.stillOpen && row.area === "Produto").length,
+      authorizedOpenWithSupport: candidates.filter(row => row.stillOpen && row.area === "Suporte").length,
+      disclaimer: "Abrange todos os tickets sincronizados do cliente até o limite informado. Solicitações identificadas são candidatas textuais; verifique autoria, contexto e cobertura antes de concluir autorização. Equipes não classificadas aparecem em Outros.",
       items: results,
     });
   } catch {
