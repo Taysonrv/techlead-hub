@@ -12,6 +12,17 @@ export type ReleaseNote = {
 export const FALLBACK_APP_VERSION = import.meta.env.VITE_APP_VERSION || "development";
 
 export const releaseNotes: Record<string, ReleaseNote> = {
+  "2.1.0-rc.7": {
+    version: "2.1.0-rc.7",
+    title: "Inteligência operacional e estabilidade Web/Desktop",
+    items: [
+      { title: "Visão de clientes", description: "Indicadores e tendências mensais com coortes alinhadas aos relatórios operacionais." },
+      { title: "Encerramentos da carteira", description: "Auditoria de pedidos de baixa e conclusão por cliente SIMER, equipe e evidências com exportação." },
+      { title: "Chat e notificações", description: "Reconexão mais resiliente e avisos uniformes, com histórico no sino." },
+      { title: "Desktop e integrações", description: "Recuperação controlada do backend local e disponibilidade do PostgreSQL independente de chave de integração incompatível." },
+      { title: "Configurações e relatórios", description: "Diagnósticos avançados organizados e legibilidade das Tasks de Correções no modo claro." },
+    ],
+  },
   "2.1.0-rc.6": {
     version: "2.1.0-rc.6",
     title: "Recuperação protegida das credenciais no Desktop",
