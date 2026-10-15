@@ -2190,7 +2190,7 @@ export function Clients() {
 
           gridTemplateColumns: {
             xs: "1fr",
-            lg: "repeat(3, minmax(0, 1fr))",
+            md: "repeat(2, minmax(0, 1fr))",
           },
 
           gap: 2,
@@ -2198,7 +2198,7 @@ export function Clients() {
         }}
       >
         {/* Cliente usa a linha completa para acomodar nomes longos da carteira SIMER. */}
-        <Box sx={{ gridColumn: { xs: "auto", lg: "1 / -1" }, minWidth: 0 }}>
+        <Box sx={{ gridColumn: { xs: "auto", md: "1 / -1" }, minWidth: 0 }}>
         <ChartCard
           title="Distribuição por Cliente"
           subtitle="Participação dos clientes no volume de chamados"
