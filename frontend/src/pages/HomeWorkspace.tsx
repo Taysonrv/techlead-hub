@@ -45,6 +45,13 @@ export function HomeWorkspace() {
   }), [open]);
   const isManagement = user?.role === "ADMIN" || user?.role === "COORDENADOR";
   const priority = isManagement ? [...new Map([...critical,...dueSoon].map((item) => [item.movideskId,item])).values()] : mine;
+  const orderedPriority = [...priority].sort((left, right) => {
+    const urgencyDelta = Number(clean(right.urgency).includes("critic")) - Number(clean(left.urgency).includes("critic"));
+    if (urgencyDelta !== 0) return urgencyDelta;
+    const leftDue = left.dueDate ? Date.parse(left.dueDate) : Number.POSITIVE_INFINITY;
+    const rightDue = right.dueDate ? Date.parse(right.dueDate) : Number.POSITIVE_INFINITY;
+    return (Number.isFinite(leftDue) ? leftDue : Number.POSITIVE_INFINITY) - (Number.isFinite(rightDue) ? rightDue : Number.POSITIVE_INFINITY);
+  });
   const metrics = [
     { name: isManagement ? "Backlog atual" : "Minha carteira aberta", value: isManagement ? open.length : mine.length, route: isManagement ? "/operacao/tickets" : "/operacao/minha-operacao", accent: aliareColors.warning, subtitle: isManagement ? "Tickets ativos na carteira SIMER" : "Atendimentos sob minha responsabilidade" },
     { name: "Críticos", value: critical.length, route: "/pendencias-riscos", accent: aliareColors.error, subtitle: "Urgência crítica ainda em aberto" },
@@ -77,7 +84,7 @@ export function HomeWorkspace() {
             <Typography sx={{ fontWeight: 800 }}>O que precisa da sua atenção</Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>{isManagement ? "Atendimentos críticos ou com prazo próximo" : "Seus atendimentos em aberto"}</Typography>
             {priority.length === 0 ? <Alert severity="success">Nenhuma prioridade identificada no snapshot atual.</Alert> :
-              <Stack spacing={1}>{priority.slice(0,8).map((ticket) =>
+              <Stack spacing={1}>{orderedPriority.slice(0,8).map((ticket) =>
                 <Box key={ticket.movideskId} role="button" tabIndex={0}
                   onClick={() => navigate("/operacao/tickets?movidesk=" + ticket.movideskId)}
                   onKeyDown={(event) => { if (event.key === "Enter") navigate("/operacao/tickets?movidesk=" + ticket.movideskId); }}
