@@ -47,7 +47,7 @@ export function HomeWorkspace() {
   const priority = isManagement ? [...new Map([...critical,...dueSoon].map((item) => [item.movideskId,item])).values()] : mine;
   const metrics = [
     { name: isManagement ? "Backlog atual" : "Minha carteira aberta", value: isManagement ? open.length : mine.length, route: isManagement ? "/operacao/tickets" : "/operacao/minha-operacao", accent: aliareColors.warning, subtitle: isManagement ? "Tickets ativos na carteira SIMER" : "Atendimentos sob minha responsabilidade" },
-    { name: "Críticos", value: critical.length, route: "/pendencias-riscos", accent: aliareColors.red, subtitle: "Urgência crítica ainda em aberto" },
+    { name: "Críticos", value: critical.length, route: "/pendencias-riscos", accent: aliareColors.error, subtitle: "Urgência crítica ainda em aberto" },
     { name: "Prazo vencido ou próximo", value: dueSoon.length, route: "/pendencias-riscos", accent: aliareColors.warning, subtitle: "Vencidos ou a vencer em até 24 horas" },
     { name: "Parados", value: stopped.length, route: "/operacao/tickets", accent: aliareColors.info, subtitle: "Atendimentos em situação de parada" },
   ];
