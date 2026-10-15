@@ -913,9 +913,13 @@ export function Attention() {
               <Alert severity={closureAudit.enrichedTickets < closureAudit.checkedTickets || closureAudit.coverageLimited ? "warning" : "info"} sx={{ mb: 1.5 }}>
                 {closureAudit.disclaimer} {closureAudit.coverageLimited ? "A consulta atingiu o limite de 5.000 tickets." : ""}
               </Alert>
-              <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap", alignItems: "center", mb: 1 }}>\n              <Button size="small" variant="text" onClick={() => setShowAllClosure((value) => !value)}>
+              <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap", alignItems: "center", mb: 1 }}>
+                <Button size="small" variant="text" onClick={() => setShowAllClosure((value) => !value)}>
                 {showAllClosure ? "Exibir apenas em aberto" : "Exibir também os já fechados"}
               </Button>
+                <Button size="small" variant="outlined" disabled={!displayedClosureItems.length} onClick={exportClosureList}>Exportar lista (Excel/CSV)</Button>
+                <Typography variant="caption" color="text.secondary">{displayedClosureItems.length} resultado(s) exibido(s)</Typography>
+              </Stack>
               <TableContainer sx={{ maxHeight: 420, overflowX: "auto", bgcolor: "background.paper", border: "1px solid", borderColor: "divider", borderRadius: 2, "& .MuiTableCell-head": { color: "text.primary", bgcolor: "action.hover", fontWeight: 800 }, "& .MuiTableCell-body": { color: "text.primary" }, "& .MuiTableRow-root:nth-of-type(even)": { bgcolor: "action.hover" } }}>
                 <Table size="small" stickyHeader>
                   <TableHead><TableRow>
