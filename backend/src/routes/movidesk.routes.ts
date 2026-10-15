@@ -67,19 +67,19 @@ movideskRoutes.get("/closure-requests", requirePermission("attention"), async (r
     // hipóteses auditáveis, nunca autorizações confirmadas automaticamente.
     const normalizeText = (value: string) => value
       .replace(/<[^>]*>/g, " ").replace(/&nbsp;/gi, " ")
-      .normalize("NFD").replace(/[\\u0300-\\u036f]/g, "")
-      .replace(/\\s+/g, " ").trim().toLowerCase();
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      .replace(/\s+/g, " ").trim().toLowerCase();
     const positive = [
-      /\\b(?:pode|podem|podemos|poderiam|poderia|favor|solicito|solicitamos|peco|pedimos)\\b.{0,50}\\b(?:baixar|baixa|cancelar|cancelamento|encerrar|encerramento|fechar|fechamento|concluir|conclusao|finalizar|finalizacao)\\b/,
-      /\\b(?:ticket|tkt|chamado|atendimento|solicitacao)\\b.{0,60}\\b(?:pode ser|pode ficar|seja|esta|estaria|foi)\\s+(?:baixado|cancelado|encerrado|fechado|concluido|finalizado)\\b/,
-      /\\b(?:assunto|problema|caso|situacao)\\s+(?:ja\\s+)?(?:foi|esta|ficou)\\s+(?:resolvido|solucionado|normalizado)\\b/,
-      /\\b(?:nao precisamos mais|nao e mais necessario|nao ha mais necessidade|nao sera mais necessario|pode desconsiderar|desconsiderem)\\b.{0,65}\\b(?:ticket|chamado|atendimento|solicitacao|pedido de suporte)\\b/,
-      /\\b(?:podem dar baixa|pode dar baixa|autorizo o encerramento|autorizamos o encerramento|sem necessidade de continuidade|podem finalizar|pode concluir)\\b/,
+      /\b(?:pode|podem|podemos|poderiam|poderia|favor|solicito|solicitamos|peco|pedimos)\b.{0,50}\b(?:baixar|baixa|cancelar|cancelamento|encerrar|encerramento|fechar|fechamento|concluir|conclusao|finalizar|finalizacao)\b/,
+      /\b(?:ticket|tkt|chamado|atendimento|solicitacao)\b.{0,60}\b(?:pode ser|pode ficar|seja|esta|estaria|foi)\s+(?:baixado|cancelado|encerrado|fechado|concluido|finalizado)\b/,
+      /\b(?:assunto|problema|caso|situacao)\s+(?:ja\s+)?(?:foi|esta|ficou)\s+(?:resolvido|solucionado|normalizado)\b/,
+      /\b(?:nao precisamos mais|nao e mais necessario|nao ha mais necessidade|nao sera mais necessario|pode desconsiderar|desconsiderem)\b.{0,65}\b(?:ticket|chamado|atendimento|solicitacao|pedido de suporte)\b/,
+      /\b(?:podem dar baixa|pode dar baixa|autorizo o encerramento|autorizamos o encerramento|sem necessidade de continuidade|podem finalizar|pode concluir)\b/,
     ];
     const negative = [
-      /\\b(?:nao|nunca|sem)\\s+(?:pode|podemos|consigo|conseguimos|autoriza|autorizamos|solicito)\\s+(?:baixar|cancelar|encerrar|fechar|concluir|finalizar)\\b/,
-      /\\b(?:cancelar|baixar|encerrar|fechar|concluir)\\s+(?:a|o|uma|um)\\s+(?:nota|nf-e|nfe|pedido|contrato|titulo|romaneio|documento|op|receita|boleto|parcela)\\b/,
-      /\\b(?:erro|falha|problema|duvida|como|nao consegue|nao consigo)\\b.{0,35}\\b(?:baixar|cancelar|encerrar)\\b/,
+      /\b(?:nao|nunca|sem)\s+(?:pode|podemos|consigo|conseguimos|autoriza|autorizamos|solicito)\s+(?:baixar|cancelar|encerrar|fechar|concluir|finalizar)\b/,
+      /\b(?:cancelar|baixar|encerrar|fechar|concluir)\s+(?:a|o|uma|um)\s+(?:nota|nf-e|nfe|pedido|contrato|titulo|romaneio|documento|op|receita|boleto|parcela)\b/,
+      /\b(?:erro|falha|problema|duvida|como|nao consegue|nao consigo)\b.{0,35}\b(?:baixar|cancelar|encerrar)\b/,
     ];
     const results = tickets.map((ticket) => {
       const matches = ticket.actions.filter((action) => {
