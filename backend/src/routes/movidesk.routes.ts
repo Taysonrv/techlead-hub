@@ -67,25 +67,44 @@ movideskRoutes.get("/closure-requests", requirePermission("attention"), async (r
       .replace(/<[^>]*>/g, " ").replace(/&nbsp;/gi, " ")
       .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
       .replace(/\s+/g, " ").trim().toLowerCase();
-    const positive = [
-      /\b(?:pode|podem|podemos|poderiam|poderia|favor|solicito|solicitamos|peco|pedimos)\b.{0,50}\b(?:baixar|baixa|cancelar|cancelamento|encerrar|encerramento|fechar|fechamento|concluir|conclusao|finalizar|finalizacao)\b/,
-      /\b(?:ticket|tkt|chamado|atendimento|solicitacao)\b.{0,60}\b(?:pode ser|pode ficar|seja|esta|estaria|foi)\s+(?:baixado|cancelado|encerrado|fechado|concluido|finalizado)\b/,
-      /\b(?:assunto|problema|caso|situacao)\s+(?:ja\s+)?(?:foi|esta|ficou)\s+(?:resolvido|solucionado|normalizado)\b/,
-      /\b(?:nao precisamos mais|nao e mais necessario|nao ha mais necessidade|nao sera mais necessario|pode desconsiderar|desconsiderem)\b.{0,65}\b(?:ticket|chamado|atendimento|solicitacao|pedido de suporte)\b/,
-      /\b(?:podem dar baixa|pode dar baixa|autorizo o encerramento|autorizamos o encerramento|sem necessidade de continuidade|podem finalizar|pode concluir)\b/,
+    // Somente pedidos explícitos sobre ESTE atendimento; explicações sobre
+    // concluir processos, finalizar chamados antigos ou cancelar documentos
+    // não caracterizam autorização de baixa do ticket atual.
+    const explicit = [
+      /\b(?:pode|podem|podemos|poderia|poderiam|autorizo|autorizamos|solicito|solicitamos|peco|pedimos)\b.{0,32}\b(?:encerrar|encerramento|fechar|fechamento|baixar|baixa|cancelar|cancelamento|concluir|finalizar)\b.{0,35}\b(?:este|esse|o|do|deste|desse)?\s*(?:ticket|tkt|chamado|atendimento|solicitacao)\b/,
+      /\b(?:este|esse|o|deste|desse)\s+(?:ticket|tkt|chamado|atendimento|solicitacao)\b.{0,35}\b(?:pode|podem|deve|favor|solicito)\b.{0,22}\b(?:ser\s+)?(?:encerrado|fechado|baixado|cancelado|concluido|finalizado|encerrar|fechar|baixar|cancelar|concluir|finalizar)\b/,
+      /\b(?:solicito|solicitamos|peco|pedimos)\s+(?:o|a)?\s*(?:encerramento|fechamento|baixa|cancelamento|conclusao|finalizacao)\s+(?:do|deste|desse)\s+(?:ticket|tkt|chamado|atendimento)\b/,
+      /\b(?:podem|pode)\s+(?:dar\s+)?(?:baixa|encerrar|fechar|cancelar|concluir|finalizar)\s+(?:o|este|esse)?\s*(?:ticket|tkt|chamado|atendimento)\b/,
+      /\b(?:nao precisamos mais|nao e mais necessario|nao ha mais necessidade|podem desconsiderar)\b.{0,35}\b(?:este|esse|o)\s+(?:ticket|tkt|chamado|atendimento)\b/,
+      /\b(?:pode|podem)\s+(?:dar\s+)?(?:baixa|encerrar|fechar|cancelar|concluir|finalizar)\s+(?:por ai|por aqui|mesmo|entao)\b/,
+      /\b(?:solicito|solicitamos)\s+(?:o|a)?\s*(?:encerramento|fechamento|baixa)\s+(?:do|da)\s+(?:ticket|chamado|atendimento)\b/,
     ];
     const negative = [
-      /\b(?:nao|nunca|sem)\s+(?:pode|podemos|consigo|conseguimos|autoriza|autorizamos|solicito)\s+(?:baixar|cancelar|encerrar|fechar|concluir|finalizar)\b/,
-      /\b(?:cancelar|baixar|encerrar|fechar|concluir)\s+(?:a|o|uma|um)\s+(?:nota|nf-e|nfe|pedido|contrato|titulo|romaneio|documento|op|receita|boleto|parcela)\b/,
-      /\b(?:erro|falha|problema|duvida|como|nao consegue|nao consigo)\b.{0,35}\b(?:baixar|cancelar|encerrar)\b/,
+      /\b(?:nao|nunca|sem)\s+(?:pode|podemos|consigo|conseguimos|autoriza|autorizamos)\s+(?:baixar|cancelar|encerrar|fechar|concluir|finalizar)\b/,
+      /\b(?:cancelar|baixar|encerrar|fechar|concluir)\s+(?:a|o|uma|um)\s+(?:nota|nf-e|nfe|pedido|contrato|titulo|romaneio|documento|op|receita|boleto|parcela|lancamento)\b/,
+      /\b(?:ticket|chamado|atendimento)\s*(?:n[ºo.]?\s*)?\d{4,}\b.{0,90}\b(?:foi|esta|ficou|ja foi)\s+(?:encerrado|finalizado|fechado)\b/,
+      /\b(?:ticket|chamado|atendimento)\b.{0,35}\b(?:foi|ja havia sido|ja foi)\s+(?:encerrado|finalizado|fechado)\b.{0,90}\b(?:problema persiste|continua ocorrendo|persiste|voltou a ocorrer)\b/,
     ];
+    const evidenceFor = (description: string) => {
+      const original = description.replace(/<[^>]*>/g, " ").replace(/&nbsp;/gi, " ").replace(/\s+/g, " ").trim();
+      const normalized = normalizeText(original);
+      if (negative.some(pattern => pattern.test(normalized))) return null;
+      const match = explicit.map(pattern => pattern.exec(normalized)).find(Boolean);
+      if (!match || match.index === undefined) return null;
+      // Preservar trecho relevante mesmo em interações extensas. Em textos
+      // com acentos, o índice normalizado pode deslocar alguns caracteres;
+      // o texto de evidência é apenas indicativo e não substitui o original.
+      const from = Math.max(0, match.index - 65);
+      const to = Math.min(original.length, match.index + match[0].length + 90);
+      return (from ? "…" : "") + original.slice(from, to) + (to < original.length ? "…" : "");
+    };
     const results = tickets.map((ticket) => {
-      const matches = ticket.actions.filter((action) => {
-        const value = (action.description ?? "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
-        return positive.some((pattern) => pattern.test(value)) && !negative.some((pattern) => pattern.test(value));
-      });
-      const action = matches[0];
-      const evidence = (action?.description ?? "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+      const matches = ticket.actions.map((action) => ({
+        action, evidence: evidenceFor(action.description ?? ""),
+      })).filter((record) => record.evidence !== null);
+      const chosen = matches[0];
+      const action = chosen?.action;
+      const evidence = chosen?.evidence ?? "";
       const stillOpen = !["Closed", "Resolved", "Canceled", "Cancelled"].includes(ticket.baseStatus ?? "");
       // A classificação utiliza a equipe atual do Movidesk e não o texto da ação.
       // Equipes não reconhecidas permanecem em "Outros", sem inferência automática.
