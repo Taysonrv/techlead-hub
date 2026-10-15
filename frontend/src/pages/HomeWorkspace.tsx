@@ -65,7 +65,7 @@ export function HomeWorkspace() {
       const task = ticket.azureWorkItem;
       const changed = task?.azureChangedAt ? Date.parse(task.azureChangedAt) : NaN;
       if (task && Number.isFinite(changed) && changed >= boundary) {
-        records.push({ id: "task-" + task.id, timestamp: changed, kind: "Azure", title: "Task #" + task.id + " · " + task.state, detail: task.title, path: "/desenvolvimento/azure-work-items" });
+        records.push({ id: "task-" + task.id, timestamp: changed, kind: "Azure", title: "Task #" + task.id + " · " + task.state, detail: task.title, path: "/operacao/tickets?movidesk=" + ticket.movideskId });
       }
     }
     return [...new Map(records.sort((a, b) => b.timestamp - a.timestamp).map((item) => [item.id, item])).values()].slice(0, 6);
