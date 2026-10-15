@@ -155,7 +155,7 @@ type ClosureAudit = {
   openWithProduct: number; openWithSupport: number; authorizedOpenWithProduct: number; authorizedOpenWithSupport: number;
   totalCandidates: number; openCandidates: number; closedCandidates: number; disclaimer: string;
   items: Array<{ ticketId: number; subject: string; status: string; stillOpen: boolean;
-    area: "Produto" | "Suporte" | "Outros"; owner: string | null; ownerTeam: string | null; hasClosureRequest: boolean;
+    area: "Produto" | "Suporte" | "Outros"; owner: string | null; ownerTeam: string | null; hasClosureRequest: boolean; hasActions?: boolean;
     actionDate: string | null; actionAuthor: string | null; evidence: string; actionId: number }>;
 };
 
@@ -223,7 +223,7 @@ export function Attention() {
     return closureAudit.items.filter((item) => {
       if (closureMetric === "openCandidates") return item.stillOpen && item.hasClosureRequest;
       if (closureMetric === "closedCandidates") return !item.stillOpen && item.hasClosureRequest;
-      if (closureMetric === "enrichedTickets") return Boolean(item.actionId);
+      if (closureMetric === "enrichedTickets") return item.hasActions === true;
       if (closureMetric === "product") return item.stillOpen && item.area === "Produto";
       if (closureMetric === "support") return item.stillOpen && item.area === "Suporte";
       return false;
