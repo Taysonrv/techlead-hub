@@ -166,6 +166,7 @@ export function Attention() {
   const [closureAudit, setClosureAudit] = useState<ClosureAudit | null>(null);
   const [closureBusy, setClosureBusy] = useState(false);
   const [selectedClosure, setSelectedClosure] = useState<ClosureAudit["items"][number] | null>(null);
+  const [closureMetric, setClosureMetric] = useState<string | null>(null);
   const [closureError, setClosureError] = useState<string | null>(null);
   const [showAllClosure, setShowAllClosure] = useState(false);
   const [closureArea, setClosureArea] = useState<"Todos" | "Produto" | "Suporte" | "Outros">("Todos");
@@ -216,6 +217,27 @@ export function Attention() {
     ),
     [closureAudit, showAllClosure, closureArea, closureAuthorization],
   );
+
+  const closureMetricItems = useMemo(() => {
+    if (!closureAudit || !closureMetric) return [];
+    return closureAudit.items.filter((item) => {
+      if (closureMetric === "openCandidates") return item.stillOpen && item.hasClosureRequest;
+      if (closureMetric === "closedCandidates") return !item.stillOpen && item.hasClosureRequest;
+      if (closureMetric === "enrichedTickets") return Boolean(item.actionId);
+      if (closureMetric === "product") return item.stillOpen && item.area === "Produto";
+      if (closureMetric === "support") return item.stillOpen && item.area === "Suporte";
+      return false;
+    });
+  }, [closureAudit, closureMetric]);
+
+  function openClosureMetric(key: string) {
+    setClosureMetric(key);
+    if (key === "product") { setClosureArea("Produto"); setClosureAuthorization("all"); setShowAllClosure(false); }
+    else if (key === "support") { setClosureArea("Suporte"); setClosureAuthorization("all"); setShowAllClosure(false); }
+    else if (key === "closedCandidates") { setClosureArea("Todos"); setClosureAuthorization("identified"); setShowAllClosure(true); }
+    else if (key === "enrichedTickets") { setClosureArea("Todos"); setClosureAuthorization("all"); setShowAllClosure(true); }
+    else { setClosureArea("Todos"); setClosureAuthorization("identified"); setShowAllClosure(false); }
+  }
 
   function exportClosureList() {
     if (!closureAudit) return;
@@ -914,13 +936,13 @@ export function Attention() {
             <>
               <Box sx={{ display: "grid", gridTemplateColumns: { xs: "repeat(2, minmax(0, 1fr))", lg: "repeat(5, minmax(0, 1fr))" }, gap: 1.25, mb: 2 }}>
                 {[
-                  { label: "Abertos com indício", value: closureAudit.openCandidates, detail: "Pendentes de validação", tone: "warning.main" },
-                  { label: "Já concluídos", value: closureAudit.closedCandidates, detail: "Resolvidos ou fechados", tone: "success.main" },
-                  { label: "Histórico disponível", value: closureAudit.enrichedTickets, detail: `De ${closureAudit.checkedTickets} tickets`, tone: "info.main" },
-                  { label: "Produto · abertos", value: closureAudit.openWithProduct, detail: `${closureAudit.authorizedOpenWithProduct} com indício`, tone: "primary.main" },
-                  { label: "Suporte · abertos", value: closureAudit.openWithSupport, detail: `${closureAudit.authorizedOpenWithSupport} com indício`, tone: "primary.main" },
+                  { key: "openCandidates", label: "Abertos com indício", value: closureAudit.openCandidates, detail: "Pendentes de validação", tone: "warning.main" },
+                  { key: "closedCandidates", label: "Já concluídos", value: closureAudit.closedCandidates, detail: "Resolvidos ou fechados", tone: "success.main" },
+                  { key: "enrichedTickets", label: "Histórico disponível", value: closureAudit.enrichedTickets, detail: `De ${closureAudit.checkedTickets} tickets`, tone: "info.main" },
+                  { key: "product", label: "Produto · abertos", value: closureAudit.openWithProduct, detail: `${closureAudit.authorizedOpenWithProduct} com indício`, tone: "primary.main" },
+                  { key: "support", label: "Suporte · abertos", value: closureAudit.openWithSupport, detail: `${closureAudit.authorizedOpenWithSupport} com indício`, tone: "primary.main" },
                 ].map((metric) => (
-                  <Box key={metric.label} sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2.25, px: 1.75, py: 1.4, bgcolor: "background.paper", minWidth: 0 }}>
+                  <Box key={metric.key} role="button" tabIndex={0} onClick={() => openClosureMetric(metric.key)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); openClosureMetric(metric.key); } }} sx={{ border: "1px solid", borderColor: closureMetric === metric.key ? "primary.main" : "divider", borderRadius: 2.25, px: 1.75, py: 1.4, bgcolor: "background.paper", minWidth: 0, cursor: "pointer", transition: "border-color .15s, box-shadow .15s", boxShadow: closureMetric === metric.key ? 2 : 0, "&:hover": { borderColor: "primary.main", boxShadow: 2 }, "&:focus-visible": { outline: "2px solid", outlineColor: "primary.main", outlineOffset: 2 } }}>
                     <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 750, display: "block" }}>{metric.label}</Typography>
                     <Typography sx={{ fontSize: "1.65rem", fontWeight: 850, lineHeight: 1.4, color: metric.tone, fontVariantNumeric: "tabular-nums" }}>{metric.value}</Typography>
                     <Typography variant="caption" color="text.secondary">{metric.detail}</Typography>
@@ -965,7 +987,7 @@ export function Attention() {
                 <Typography variant="caption" color="text.secondary">{displayedClosureItems.length} resultado(s) · até 200 visíveis na tabela · exportação completa do filtro</Typography>
               </Stack>
               <TableContainer sx={{ maxHeight: 500, overflowX: "auto", border: "1px solid", borderColor: "divider", borderRadius: 2.25, bgcolor: "background.paper",
-                "& .MuiTableCell-head": { bgcolor: "background.default", color: "text.secondary", fontWeight: 800, fontSize: ".73rem", letterSpacing: ".025em", whiteSpace: "nowrap", borderColor: "divider" },
+                "& .MuiTableCell-head": { backgroundColor: "background.paper", color: "text.primary", opacity: 1, fontWeight: 800, fontSize: ".73rem", letterSpacing: ".025em", whiteSpace: "nowrap", borderColor: "divider" },
                 "& .MuiTableCell-body": { color: "text.primary", borderColor: "divider", py: 1.35 },
                 "& .MuiTableRow-root:hover": { bgcolor: "action.hover" } }}>
                 <Table size="small" stickyHeader sx={{ minWidth: 940 }}>
@@ -1793,6 +1815,38 @@ export function Attention() {
           showLastButton
         />
       </Card>
+
+      <Drawer anchor="right" open={Boolean(closureMetric)} onClose={() => setClosureMetric(null)} slotProps={{ paper: { sx: detailDrawerPaperSx } }}>
+        <Box sx={{ width: { xs: "100vw", sm: 560 }, maxWidth: "100vw", p: 2.5, bgcolor: "background.paper", minHeight: "100%", color: "text.primary" }}>
+          <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "center", mb: 1.5 }}>
+            <Box>
+              <Typography variant="overline" color="text.secondary">BOM JESUS · DETALHAMENTO</Typography>
+              <Typography variant="h6" sx={{ fontWeight: 850 }}>{({ openCandidates: "Abertos com indício", closedCandidates: "Já concluídos", enrichedTickets: "Histórico disponível", product: "Produto · abertos", support: "Suporte · abertos" } as Record<string, string>)[closureMetric ?? ""]}</Typography>
+              <Typography variant="body2" color="text.secondary">{closureMetricItems.length} atendimento(s) no recorte</Typography>
+            </Box>
+            <Button onClick={() => setClosureMetric(null)}>Fechar</Button>
+          </Stack>
+          <Button variant="outlined" size="small" sx={{ mb: 2 }} onClick={exportClosureList}>Exportar lista filtrada</Button>
+          <Stack spacing={1}>
+            {closureMetricItems.slice(0, 200).map((item) => (
+              <Box key={item.ticketId} sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2, p: 1.5 }}>
+                <Stack direction="row" sx={{ justifyContent: "space-between", gap: 1 }}>
+                  <Typography sx={{ color: "primary.main", fontWeight: 800 }}>#{item.ticketId}</Typography>
+                  <Chip size="small" variant="outlined" color={item.stillOpen ? "warning" : "success"} label={item.status} />
+                </Stack>
+                <Typography variant="body2" sx={{ fontWeight: 650, my: .5 }}>{item.subject}</Typography>
+                <Typography variant="caption" color="text.secondary">{item.ownerTeam || item.area} · {item.owner || "Sem responsável"}</Typography>
+                <Stack direction="row" spacing={1} useFlexGap sx={{ mt: 1, flexWrap: "wrap" }}>
+                  <Button size="small" onClick={() => { setClosureMetric(null); setSelectedClosure(item); }}>Ver evidência</Button>
+                  <Button size="small" onClick={() => navigate(`/operacao/tickets?movidesk=${item.ticketId}`)}>Detalhe completo</Button>
+                  <Button size="small" onClick={() => navigate(`/investigacao?q=${item.ticketId}`)}>Investigar</Button>
+                  <Button size="small" onClick={() => void navigator.clipboard.writeText(`#${item.ticketId} - ${item.subject}`)}>Copiar</Button>
+                </Stack>
+              </Box>
+            ))}
+          </Stack>
+        </Box>
+      </Drawer>
 
       <Drawer anchor="right" open={Boolean(selectedClosure)} onClose={() => setSelectedClosure(null)}
         slotProps={{ paper: { sx: detailDrawerPaperSx } }}>
