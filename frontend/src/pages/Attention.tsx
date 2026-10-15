@@ -1798,21 +1798,21 @@ export function Attention() {
         slotProps={{ paper: { sx: detailDrawerPaperSx } }}>
         <Box sx={{ width: { xs: "100vw", sm: 540 }, maxWidth: "100vw", p: 2.5, color: "text.primary", bgcolor: "background.paper", minHeight: "100%" }}>
           {selectedClosure && (
-            <Stack spacing={2}>
-              <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "flex-start" }}>
+            <Stack spacing={2.25}>
+              <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "flex-start", borderBottom: "1px solid", borderColor: "divider", pb: 1.5 }}>
                 <Box>
                   <Typography variant="overline" color="text.secondary">Solicitação de encerramento · Bom Jesus</Typography>
-                  <Typography variant="h6" sx={{ fontWeight: 850 }}>Ticket #{selectedClosure.ticketId}</Typography>
+                  <Typography variant="h6" sx={{ fontWeight: 850, letterSpacing: "-.02em" }}>Ticket #{selectedClosure.ticketId}</Typography>
                 </Box>
                 <Button size="small" onClick={() => setSelectedClosure(null)}>Fechar</Button>
               </Stack>
-              <Typography sx={{ fontWeight: 700 }}>{selectedClosure.subject}</Typography>
+              <Typography sx={{ fontWeight: 750, fontSize: "1.05rem", lineHeight: 1.4 }}>{selectedClosure.subject}</Typography>
               <Typography variant="body2" color="text.secondary">Equipe atual: {selectedClosure.ownerTeam || selectedClosure.area} · Responsável: {selectedClosure.owner || "Não informado"}</Typography>
               <Chip sx={{ alignSelf: "flex-start" }} size="small" variant="outlined" label={selectedClosure.hasClosureRequest ? "Indício de autorização identificado" : "Sem autorização identificada"} />
               <Chip sx={{ alignSelf: "flex-start" }} size="small" label={selectedClosure.status} color={selectedClosure.stillOpen ? "warning" : "success"} />
               <Alert severity="info">A identificação de autorização é preliminar e depende da cobertura do histórico. Confirme a autoria, a intenção e a situação atual antes de encaminhar para encerramento.</Alert>
               <Box sx={{ bgcolor: "action.hover", border: "1px solid", borderColor: "divider", borderRadius: 2, p: 2 }}>
-                <Typography variant="subtitle2">Interação identificada</Typography>
+                <Typography variant="subtitle2" sx={{ fontWeight: 800, mb: .5 }}>Evidência da interação</Typography>
                 <Typography variant="caption" color="text.secondary">
                   {selectedClosure.actionAuthor || "Autor não identificado"} · {selectedClosure.actionDate ? new Date(selectedClosure.actionDate).toLocaleString("pt-BR") : "Sem data"}
                 </Typography>
