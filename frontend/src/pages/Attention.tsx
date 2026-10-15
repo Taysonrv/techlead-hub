@@ -1738,7 +1738,7 @@ export function Attention() {
         <Box sx={{ width: { xs: "100vw", sm: 540 }, maxWidth: "100vw", p: 2.5, color: "text.primary", bgcolor: "background.paper", minHeight: "100%" }}>
           {selectedClosure && (
             <Stack spacing={2}>
-              <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
+              <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "flex-start" }}>
                 <Box>
                   <Typography variant="overline" color="text.secondary">Solicitação de encerramento · Bom Jesus</Typography>
                   <Typography variant="h6" sx={{ fontWeight: 850 }}>Ticket #{selectedClosure.ticketId}</Typography>
@@ -1755,7 +1755,7 @@ export function Attention() {
                 </Typography>
                 <Typography sx={{ mt: 1, whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{selectedClosure.evidence}</Typography>
               </Box>
-              <Stack direction={{ xs: "column", sm: "row" }} spacing={1} useFlexGap flexWrap="wrap">
+              <Stack direction={{ xs: "column", sm: "row" }} spacing={1} useFlexGap sx={{ flexWrap: "wrap" }}>
                 <Button variant="contained" onClick={() => navigate(`/operacao/tickets?movidesk=${selectedClosure.ticketId}`)}>Abrir detalhe completo</Button>
                 <Button variant="outlined" onClick={() => navigate(`/investigacao?q=${selectedClosure.ticketId}`)}>Investigar ticket</Button>
                 <Button variant="outlined" onClick={() => void navigator.clipboard.writeText(`#${selectedClosure.ticketId} - ${selectedClosure.subject}\\n${selectedClosure.evidence}`)}>Copiar resumo</Button>
