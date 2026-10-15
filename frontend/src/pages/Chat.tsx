@@ -334,6 +334,11 @@ export function Chat() {
               lastRealtimeMessageId.current = latestId;
             }
           }
+          // Um stream finalizado normalmente também exige intervalo antes de reconectar.
+          if (!stopped && !controller.signal.aborted) {
+            await new Promise((resolve) => window.setTimeout(resolve, retryMs));
+            retryMs = Math.min(retryMs * 2, 30_000);
+          }
         } catch {
           if (!stopped && !controller.signal.aborted) {
             await new Promise((resolve) => window.setTimeout(resolve, retryMs));
