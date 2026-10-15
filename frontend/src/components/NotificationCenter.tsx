@@ -550,10 +550,10 @@ export function NotificationCenter() {
             setToastQueue((current) => current.slice(1));
             openNotification(item);
           }}
-          sx={{cursor:"pointer",width:{xs:"calc(100vw - 32px)",sm:350},maxWidth:400,boxShadow:"0 10px 28px rgba(0,0,0,.20)","& .MuiAlert-message":{overflow:"hidden"}}}
+          sx={{ cursor:"pointer",width:{xs:"calc(100vw - 32px)",sm:360},maxWidth:360,minHeight:100,maxHeight:100,boxSizing:"border-box",alignItems:"flex-start",boxShadow:"0 10px 28px rgba(0,0,0,.20)","& .MuiAlert-icon":{mt:.5},"& .MuiAlert-message":{minWidth:0,overflow:"hidden",flex:1,py:.2},"& .MuiAlert-action":{pt:0} }}
         >
-          <Typography sx={{fontWeight:850,fontSize:".82rem"}}>{toast?.title}</Typography>
-          <Typography sx={{fontSize:".76rem",opacity:.92}}>{toast?.message}</Typography>
+          <Typography sx={{fontWeight:850,fontSize:".82rem",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={toast?.title}>{toast?.title}</Typography>
+          <Typography sx={{fontSize:".76rem",opacity:.92,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden",overflowWrap:"anywhere"}} title={toast?.message}>{toast?.message}</Typography>
           
         </Alert>
       </Snackbar>
