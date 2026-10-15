@@ -890,6 +890,8 @@ export function Import({ embedded = false }: { embedded?: boolean }) {
         </CardContent>
       </Card>
 
+      <Box component="details" sx={{ mb: 3, border: "1px solid", borderColor: "divider", borderRadius: 2.5, "& summary": { cursor: "pointer", p: 2, fontWeight: 750, bgcolor: "background.paper" } }}>
+        <Box component="summary">Diagnósticos avançados · classificações e metadados Movidesk</Box>
       {movideskStatus?.completed && (
         <Card elevation={0} sx={{ mb: 3, border: "1px solid", borderColor: "divider", borderRadius: 3, bgcolor: "background.paper" }}>
           <CardContent sx={{ p: { xs: 2, md: 2.5 }, "&:last-child": { pb: { xs: 2, md: 2.5 } } }}>
@@ -971,6 +973,9 @@ export function Import({ embedded = false }: { embedded?: boolean }) {
           </CardContent>
         </Card>
       )}
+
+
+      </Box>
 
       {/* =====================================================
           MOVIDESK
