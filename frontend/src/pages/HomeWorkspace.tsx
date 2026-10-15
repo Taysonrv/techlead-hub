@@ -10,7 +10,8 @@ import { aliareColors } from "../theme/theme";
 type Ticket = {
   movideskId: number; subject: string; owner: string | null; status: string;
   baseStatus: string | null; urgency: string | null; dueDate: string | null;
-  isWithSimer?: boolean; client: string | null;
+  isWithSimer?: boolean; client: string | null; createdDate?: string | null;
+  azureWorkItem?: { id: number; title: string; state: string; azureChangedAt: string | null } | null;
 };
 const clean = (value: string | null | undefined) => (value ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
 
@@ -52,6 +53,23 @@ export function HomeWorkspace() {
     const rightDue = right.dueDate ? Date.parse(right.dueDate) : Number.POSITIVE_INFINITY;
     return (Number.isFinite(leftDue) ? leftDue : Number.POSITIVE_INFINITY) - (Number.isFinite(rightDue) ? rightDue : Number.POSITIVE_INFINITY);
   });
+  const recentUpdates = useMemo(() => {
+    const boundary = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    const records: Array<{ id: string; timestamp: number; kind: "Movidesk" | "Azure"; title: string; detail: string; path: string }> = [];
+    for (const ticket of tickets) {
+      if (ticket.isWithSimer === false) continue;
+      const opened = ticket.createdDate ? Date.parse(ticket.createdDate) : NaN;
+      if (Number.isFinite(opened) && opened >= boundary) {
+        records.push({ id: "ticket-" + ticket.movideskId, timestamp: opened, kind: "Movidesk", title: "Novo atendimento #" + ticket.movideskId, detail: ticket.subject, path: "/operacao/tickets?movidesk=" + ticket.movideskId });
+      }
+      const task = ticket.azureWorkItem;
+      const changed = task?.azureChangedAt ? Date.parse(task.azureChangedAt) : NaN;
+      if (task && Number.isFinite(changed) && changed >= boundary) {
+        records.push({ id: "task-" + task.id, timestamp: changed, kind: "Azure", title: "Task #" + task.id + " · " + task.state, detail: task.title, path: "/desenvolvimento/azure-work-items" });
+      }
+    }
+    return [...new Map(records.sort((a, b) => b.timestamp - a.timestamp).map((item) => [item.id, item])).values()].slice(0, 6);
+  }, [tickets]);
   const metrics = [
     { name: isManagement ? "Backlog atual" : "Minha carteira aberta", value: isManagement ? open.length : mine.length, route: isManagement ? "/operacao/tickets" : "/operacao/minha-operacao", accent: aliareColors.warning, subtitle: isManagement ? "Tickets ativos na carteira SIMER" : "Atendimentos sob minha responsabilidade" },
     { name: "Críticos", value: critical.length, route: "/pendencias-riscos", accent: aliareColors.error, subtitle: "Urgência crítica ainda em aberto" },
@@ -117,6 +135,36 @@ export function HomeWorkspace() {
                 ))}
               </Stack>
               <Button size="small" sx={{ mt: 1.5 }} onClick={() => navigate("/pendencias-riscos")}>Analisar pendências e riscos</Button>
+            </CardContent>
+          </Card>
+          <Card variant="outlined" sx={{ borderRadius: 2.5 }}>
+            <CardContent sx={{ "&:last-child": { pb: 2 } }}>
+              <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between", mb: 1 }}>
+                <Box>
+                  <Typography sx={{ fontWeight: 800 }}>Atualizações recentes</Typography>
+                  <Typography variant="caption" color="text.secondary">Movidesk e Tasks Azure · últimos 7 dias</Typography>
+                </Box>
+                <Typography variant="caption" color="text.secondary">{recentUpdates.length} exibida(s)</Typography>
+              </Stack>
+              {recentUpdates.length === 0 ? (
+                <Typography variant="body2" color="text.secondary">Nenhuma atualização recente disponível nos dados sincronizados.</Typography>
+              ) : (
+                <Stack spacing={.75}>
+                  {recentUpdates.map((item) => (
+                    <Box key={item.id} role="button" tabIndex={0}
+                      onClick={() => navigate(item.path)}
+                      onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); navigate(item.path); } }}
+                      sx={{ cursor: "pointer", border: "1px solid", borderColor: "divider", borderRadius: 1.5, p: 1, "&:hover": { bgcolor: "action.hover", borderColor: "primary.main" } }}>
+                      <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between", gap: 1 }}>
+                        <Typography variant="caption" sx={{ fontWeight: 800, color: item.kind === "Azure" ? "info.main" : "success.main" }}>{item.title}</Typography>
+                        <Typography variant="caption" color="text.secondary">{new Date(item.timestamp).toLocaleDateString("pt-BR")}</Typography>
+                      </Stack>
+                      <Typography variant="caption" color="text.secondary" sx={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={item.detail}>{item.detail}</Typography>
+                    </Box>
+                  ))}
+                </Stack>
+              )}
+              <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1 }}>Eventos recentes detectados no snapshot; não representam notificações lidas ou não lidas.</Typography>
             </CardContent>
           </Card>
           <Card variant="outlined" sx={{ borderRadius: 2.5 }}>
