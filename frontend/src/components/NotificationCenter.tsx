@@ -36,7 +36,6 @@ import {
 } from "react";
 
 import {
-  useLocation,
   useNavigate,
 } from "react-router-dom";
 
@@ -106,7 +105,6 @@ type DesktopUpdateState = {
 
 export function NotificationCenter() {
   const navigate = useNavigate();
-  const location = useLocation();
   const { user } = useAuth();
   const userId = user?.id ?? null;
   const [toastQueue, setToastQueue] = useState<HubNotification[]>([]);
@@ -327,12 +325,6 @@ export function NotificationCenter() {
       return [...current, ...toShow.filter((item) => !keys.has(item.key))].slice(0, 2);
     });
   }, [unread, items.length, userId, preferences.desktopAlerts, navigate]);
-
-  const meetingPath = useCallback((meetingId: number) => {
-    const params = new URLSearchParams(location.search);
-    params.set("meeting", String(meetingId));
-    return `${location.pathname}?${params.toString()}`;
-  }, [location.pathname, location.search]);
 
   useEffect(() => {
     if (!toast) return;
