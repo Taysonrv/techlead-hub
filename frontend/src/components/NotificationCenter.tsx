@@ -249,13 +249,13 @@ export function NotificationCenter() {
 
   useEffect(() => {
     void load();
-    const timer = window.setInterval(() => { if(document.visibilityState!=="hidden") void load(); }, 60_000);
+    const timer = window.setInterval(() => { if(window.techLeadHub || document.visibilityState!=="hidden") void load(); }, 60_000);
     return () => window.clearInterval(timer);
   }, [load]);
 
   useEffect(() => {
     void loadMeetingReminders();
-    const timer = window.setInterval(() => { if(document.visibilityState!=="hidden") void loadMeetingReminders(); }, 30_000);
+    const timer = window.setInterval(() => { if(window.techLeadHub || document.visibilityState!=="hidden") void loadMeetingReminders(); }, 30_000);
     const refresh = () => { void loadMeetingReminders(); };
     window.addEventListener("techlead-hub:notifications-refresh", refresh);
     return () => {
