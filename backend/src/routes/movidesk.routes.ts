@@ -84,7 +84,7 @@ movideskRoutes.get("/closure-requests", requirePermission("attention"), async (r
     const results = tickets.map((ticket) => {
       const matches = ticket.actions.filter((action) => {
         const value = (action.description ?? "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
-        return positive.test(value) && !negative.test(value);
+        return positive.some((pattern) => pattern.test(value)) && !negative.some((pattern) => pattern.test(value));
       });
       const action = matches[0];
       const evidence = (action?.description ?? "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
