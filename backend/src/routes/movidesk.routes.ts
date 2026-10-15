@@ -30,14 +30,27 @@ movideskRoutes.get("/preview", requirePermission("imports"), controller.preview.
  * Auditoria somente leitura das solicitações de encerramento feitas nas ações
  * Movidesk. Os resultados são candidatos e exigem conferência do autor/contexto.
  */
+movideskRoutes.get("/closure-requests/clients", requirePermission("attention"), async (_request, response) => {
+  try {
+    const values = await prisma.ticket.findMany({
+      where: { isDeleted: false, client: { not: null } },
+      distinct: ["client"], select: { client: true }, orderBy: { client: "asc" },
+    });
+    return response.json({ clients: values.map(row => row.client).filter((name): name is string => Boolean(name?.trim())) });
+  } catch {
+    return response.status(503).json({ message: "Não foi possível consultar a carteira de clientes." });
+  }
+});
+
 movideskRoutes.get("/closure-requests", requirePermission("attention"), async (request, response) => {
   const client = typeof request.query.client === "string" ? request.query.client.trim() : "Bom Jesus";
-  if (client.length < 3 || client.length > 80) {
+  const allClients = client === "__all__";
+  if (!allClients && (client.length < 2 || client.length > 80)) {
     return response.status(400).json({ message: "Informe um cliente válido." });
   }
   try {
     const tickets = await prisma.ticket.findMany({
-      where: { client: { contains: client, mode: "insensitive" }, isDeleted: false },
+      where: { ...(allClients ? {} : { client: { equals: client, mode: "insensitive" as const } }), isDeleted: false },
       select: {
         id: true, movideskId: true, subject: true, client: true, contact: true,
         status: true, baseStatus: true, closedDate: true, canceledDate: true, owner: true, ownerTeam: true,
@@ -50,8 +63,24 @@ movideskRoutes.get("/closure-requests", requirePermission("attention"), async (r
       orderBy: { movideskId: "desc" },
       take: 5000,
     });
-    const positive = /(?:pode(?:m|mos)?\s+(?:baixar|cancelar|encerrar|fechar)|(?:solicito|solicitamos|peço|pedimos|favor|por favor)\s+(?:(?:a|o)\s+)?(?:baixa|cancelamento|encerramento)|(?:ticket|chamado|atendimento)\s+(?:pode\s+ser|seja|deve\s+ser)\s+(?:baixado|cancelado|encerrado|fechado)|(?:não\s+(?:precisa|é\s+necessário)\s+mais\s+(?:do|desse)\s+(?:ticket|chamado|atendimento)))/i;
-    const negative = /(?:não\s+(?:pode|podemos|consigo|conseguimos)\s+(?:baixar|cancelar|encerrar)|(?:cancelar|baixar|encerrar)\s+(?:a\s+)?(?:nota|nf-e|nfe|pedido|contrato|título|romaneio|documento))/i;
+    // Pedidos explícitos de encerramento do atendimento; ocorrências são
+    // hipóteses auditáveis, nunca autorizações confirmadas automaticamente.
+    const normalizeText = (value: string) => value
+      .replace(/<[^>]*>/g, " ").replace(/&nbsp;/gi, " ")
+      .normalize("NFD").replace(/[\\u0300-\\u036f]/g, "")
+      .replace(/\\s+/g, " ").trim().toLowerCase();
+    const positive = [
+      /\\b(?:pode|podem|podemos|poderiam|poderia|favor|solicito|solicitamos|peco|pedimos)\\b.{0,50}\\b(?:baixar|baixa|cancelar|cancelamento|encerrar|encerramento|fechar|fechamento|concluir|conclusao|finalizar|finalizacao)\\b/,
+      /\\b(?:ticket|tkt|chamado|atendimento|solicitacao)\\b.{0,60}\\b(?:pode ser|pode ficar|seja|esta|estaria|foi)\\s+(?:baixado|cancelado|encerrado|fechado|concluido|finalizado)\\b/,
+      /\\b(?:assunto|problema|caso|situacao)\\s+(?:ja\\s+)?(?:foi|esta|ficou)\\s+(?:resolvido|solucionado|normalizado)\\b/,
+      /\\b(?:nao precisamos mais|nao e mais necessario|nao ha mais necessidade|nao sera mais necessario|pode desconsiderar|desconsiderem)\\b.{0,65}\\b(?:ticket|chamado|atendimento|solicitacao|pedido de suporte)\\b/,
+      /\\b(?:podem dar baixa|pode dar baixa|autorizo o encerramento|autorizamos o encerramento|sem necessidade de continuidade|podem finalizar|pode concluir)\\b/,
+    ];
+    const negative = [
+      /\\b(?:nao|nunca|sem)\\s+(?:pode|podemos|consigo|conseguimos|autoriza|autorizamos|solicito)\\s+(?:baixar|cancelar|encerrar|fechar|concluir|finalizar)\\b/,
+      /\\b(?:cancelar|baixar|encerrar|fechar|concluir)\\s+(?:a|o|uma|um)\\s+(?:nota|nf-e|nfe|pedido|contrato|titulo|romaneio|documento|op|receita|boleto|parcela)\\b/,
+      /\\b(?:erro|falha|problema|duvida|como|nao consegue|nao consigo)\\b.{0,35}\\b(?:baixar|cancelar|encerrar)\\b/,
+    ];
     const results = tickets.map((ticket) => {
       const matches = ticket.actions.filter((action) => {
         const value = (action.description ?? "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
@@ -77,7 +106,7 @@ movideskRoutes.get("/closure-requests", requirePermission("attention"), async (r
     });
     const candidates = results.filter(row => row.hasClosureRequest);
     return response.json({
-      client, checkedTickets: tickets.length, enrichedTickets: tickets.filter(t => t.actions.length > 0).length,
+      client: allClients ? "Toda a carteira" : client, checkedTickets: tickets.length, enrichedTickets: tickets.filter(t => t.actions.length > 0).length,
       coverageLimited: tickets.length === 5000,
       totalCandidates: candidates.length,
       openCandidates: candidates.filter(row => row.stillOpen).length,
