@@ -1,4 +1,5 @@
 import { KpiGrid } from "../components/KpiGrid";
+import { SlaInvestigationPanel } from "../components/SlaInvestigationPanel";
 import { KpiCard as ExecutiveKpiCard } from "../components/KpiCard";
 import {
   Alert,
@@ -620,6 +621,7 @@ export function Performance() {
         meta="SLA calculado pelos marcos temporais disponíveis, separado do risco operacional"
         action={<PeriodFilter />}
       />
+      <SlaInvestigationPanel />
       {metricAudit.length > 0 && (
         <Alert severity="warning" variant="outlined" sx={{ mb: 2 }}>
           Auditoria de consistência detectou {metricAudit.length} divergência(s): {metricAudit.map((item) => item.message).join(" · ")}
