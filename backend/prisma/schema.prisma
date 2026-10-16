@@ -86,6 +86,7 @@ model User {
   passwordResetTokens PasswordResetToken[]
   importRuns          ImportRun[]
   azureSyncRuns       AzureSyncRun[]
+  azureFollows        AzureWorkItemFollow[]
   systemSettings      SystemSetting[] @relation("SystemSettingUpdatedBy")
   auditLogs           AuditLog[]
   chatMemberships     ChatChannelMember[]
@@ -715,6 +716,7 @@ model AzureSyncRun {
 // =========================================================
 
 model AzureWorkItem {
+  followers AzureWorkItemFollow[]
   // System.Id do Azure DevOps.
   //
   // O próprio ID do Azure é utilizado como chave primária.
@@ -886,4 +888,15 @@ model DataQualitySnapshot {
 
   @@unique([scopeKey, snapshotDate])
   @@index([snapshotDate])
+}
+
+model AzureWorkItemFollow {
+  userId Int
+  workItemId Int
+  source String @default("HUB")
+  followedAt DateTime @default(now())
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workItem AzureWorkItem @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  @@id([userId, workItemId])
+  @@index([workItemId])
 }
