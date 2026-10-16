@@ -29,7 +29,7 @@ export function SlaInvestigationPanel() {
  const metric=data.metrics[key];return <Box key={key} sx={{p:1.5,border:"1px solid",borderColor:"divider",borderRadius:2,minWidth:146,flex:"1 1 140px"}}>
  <Typography variant="caption">{({response:"1ª resposta",support:"OLA Suporte",factory:"OLA Fábrica",total:"SLA total"})[key]}</Typography>
  <Typography variant="h6">{metric.percent===null?"—":`${metric.percent}%`}</Typography>
- <Typography variant="caption" color="text.secondary">{duration(metric.minutes)} / {duration(metric.targetMinutes)}</Typography></Box>;})}</Stack>
+ <Typography variant="caption" color="text.secondary">{duration(metric.minutes)} / {duration(metric.targetMinutes)}</Typography></Box>;})}</Box>
  <Typography variant="body2">{data.summary}</Typography>
  {data.task&&<Chip variant="outlined" label={`Azure #${data.task.id} · ${data.task.state}`} sx={{alignSelf:"flex-start"}}/>}
  <Divider/><Typography sx={{fontWeight:800}}>Linha do tempo · evidências</Typography>
