@@ -57,7 +57,6 @@ const Chat = lazy(() => import("./pages/Chat").then((module) => ({ default: modu
 const Investigation = lazy(() => import("./pages/Investigation").then((module) => ({ default: module.Investigation })));
 const KnownProblems = lazy(() => import("./pages/KnownProblems").then((module) => ({ default: module.KnownProblems })));
 const ManagementIntelligence = lazy(() => import("./pages/ManagementIntelligence").then((module) => ({ default: module.ManagementIntelligence })));
-const HomeWorkspace = lazy(() => import("./pages/HomeWorkspace").then((module) => ({ default: module.HomeWorkspace })));
 const AnalysisAssistant = lazy(() => import("./pages/AnalysisAssistant").then((module) => ({ default: module.AnalysisAssistant })));
 const OperationalOverview = lazy(() => import("./pages/OperationalOverview").then((module) => ({ default: module.OperationalOverview })));
 const OperationsHub = lazy(() => import("./pages/OperationsHub").then((module) => ({ default: module.OperationsHub })));
