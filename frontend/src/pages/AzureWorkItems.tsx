@@ -1,4 +1,5 @@
 import { KpiGrid } from "../components/KpiGrid";
+import { AzureFollowButton } from "../components/AzureFollowButton";
 import { KpiCard as ExecutiveKpiCard } from "../components/KpiCard";
 import {
   Accordion,
@@ -4201,6 +4202,8 @@ export function AzureWorkItems({
                 <CloseOutlined />
               </IconButton>
             </Stack>
+
+            {selectedWorkItem && <AzureFollowButton key={selectedWorkItem.id} workItemId={selectedWorkItem.id} />}
 
             {selectedWorkItem && (
               <Stack
