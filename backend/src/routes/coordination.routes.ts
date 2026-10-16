@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { requirePermission } from "../middlewares/roleMiddleware";
 import { coordinationService } from "../services/CoordinationService";
+import { SlaInvestigationService } from "../services/SlaInvestigationService";
 import type { AuthenticatedRequest } from "../middlewares/authMiddleware";
 
 const coordinationRoutes = Router();
@@ -89,6 +90,15 @@ coordinationRoutes.get("/csat/details", async (req: AuthenticatedRequest, res) =
     console.error("[coordination] Falha ao carregar detalhes CSAT:", error);
     res.status(500).json({ error: "Não foi possível carregar os detalhes de CSAT." });
   }
+});
+
+coordinationRoutes.get("/sla-investigation/:ticketId", async (req:AuthenticatedRequest,res)=>{
+ try {
+  const tier=req.query.tier==="VIP"?"VIP":"PADRAO";
+  const result=await new SlaInvestigationService().byTicket(Number(req.params.ticketId),tier);
+  if(result.status!==200) return res.status(result.status).json({message:result.message});
+  return res.json(result);
+ }catch(error){console.error("[sla-investigation] Erro de análise:",error);return res.status(500).json({message:"Não foi possível investigar o SLA deste atendimento."});}
 });
 
 coordinationRoutes.get("/sla-development", async (req: AuthenticatedRequest, res) => {
