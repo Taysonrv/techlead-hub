@@ -3,10 +3,11 @@ import { Alert, Box, Button, Card, CardContent, CircularProgress, Divider, Stack
 import { ContentCopyOutlined, OpenInNewOutlined, SearchOutlined } from "@mui/icons-material";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { getTicketSnapshot } from "../services/ticketSnapshot";
+import { api } from "../services/api";
 import { PageHeader } from "../components/PageHeader";
 
 type Ticket = {
-  movideskId: number; subject: string; client: string | null; status: string;
+  id?: number; movideskId: number; subject: string; client: string | null; status: string;
   service?: string | null; category?: string | null; createdDate?: string | null;
   deliveredVersion?: string | null; justification?: string | null;
 };
@@ -42,6 +43,14 @@ export function AnalysisAssistant() {
       const found = data.find((item) => item.movideskId === id);
       if (!found) { setTicket(null); setLoadError("Ticket não encontrado no snapshot sincronizado. Atualize os dados ou informe as evidências manualmente."); return; }
       setTicket(found);
+      let timelineNotes = "";
+      if (found.id) {
+        try {
+          const response = await api.get<{ timeline?: Array<{ date: string; title: string; description: string | null; author: string | null }> }>("/dashboard/tickets/" + found.id + "/analytics");
+          timelineNotes = (response.data.timeline ?? []).filter((event) => Boolean(event.description?.trim())).slice(-6)
+            .map((event) => "[" + event.date + " · " + (event.author ?? "Autor não informado") + " · " + event.title + "] " + (event.description ?? "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").slice(0, 400)).join("\n");
+        } catch { timelineNotes = "Histórico não disponível para carregamento automático. Consulte o Movidesk."; }
+      }
       // O preenchimento assistido é sempre conservador; não afirmar testes a partir do título.
       setFields({
         problem: "Relato registrado no atendimento: " + found.subject + ".\nDescrever impacto e comportamento com base nas evidências da interação.",
@@ -52,7 +61,7 @@ export function AnalysisAssistant() {
           found.service ? "Serviço: " + found.service : null,
           "Ambiente (produção/homologação), versão utilizada no teste e documentos: confirmar.",
         ].filter(Boolean).join("\n"),
-        reproduce: "", video: "", evidence: "", links: "",
+        reproduce: "", video: "", evidence: timelineNotes, links: "",
       });
       setCopied(false);
     } catch {
