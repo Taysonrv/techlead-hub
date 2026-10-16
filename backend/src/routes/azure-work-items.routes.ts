@@ -31,7 +31,12 @@ azureWorkItemRoutes.get("/following", azureReadAccess, async (request: Authentic
     SELECT "workItemId", "followedAt" FROM "AzureWorkItemFollow"
     WHERE "userId" = ${userId} ORDER BY "followedAt" DESC
   `;
-  return response.json({ items: rows });
+  const records = rows.length ? await prisma.azureWorkItem.findMany({
+    where: scopedAzureWhere({ id: { in: rows.map(row => row.workItemId) } }),
+    select: { id: true, title: true, state: true, workItemType: true, azureChangedAt: true },
+  }) : [];
+  const info = new Map(records.map(item => [item.id, item]));
+  return response.json({ items: rows.map(row => ({ ...row, workItem: info.get(row.workItemId) ?? null })) });
 });
 
 azureWorkItemRoutes.put("/:id/follow", azureReadAccess, async (request: AuthenticatedRequest, response) => {
