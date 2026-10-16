@@ -1,11 +1,13 @@
 import { Router } from "express";
 import { requirePermission } from "../middlewares/roleMiddleware";
+import { requireAnyPermission } from "../middlewares/routinePermissionMiddleware";
 import { coordinationService } from "../services/CoordinationService";
 import { SlaInvestigationService } from "../services/SlaInvestigationService";
 import type { AuthenticatedRequest } from "../middlewares/authMiddleware";
 
 const coordinationRoutes = Router();
 coordinationRoutes.use((req, res, next) => {
+  if (req.path.startsWith("/sla-investigation/")) return requireAnyPermission("performance", "coordination")(req as AuthenticatedRequest,res,next);
   const permission = req.path.startsWith("/services") ? "services" : "coordination";
   return requirePermission(permission)(req as AuthenticatedRequest, res, next);
 });
