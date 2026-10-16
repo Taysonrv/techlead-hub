@@ -7,7 +7,6 @@ import {
   Alert,
   Box,
   Button,
-  CircularProgress,
   Card,
   CardContent,
   Chip,
@@ -22,7 +21,6 @@ import {
   Typography,
 } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
-import RefreshRoundedIcon from "@mui/icons-material/RefreshRounded";
 
 import {
   Bar,
@@ -241,7 +239,6 @@ export function Dashboard() {
     useState<Ticket | null>(null);
 
   const [lastLoadedAt,setLastLoadedAt] = useState(0);
-  const [refreshingData,setRefreshingData] = useState(false);
   const [copyMessage, setCopyMessage] =
     useState("");
   const [flowHidden, setFlowHidden] = useState<Set<"opened" | "resolved" | "closed">>(() => new Set());
@@ -265,7 +262,6 @@ export function Dashboard() {
     async function loadTickets(initial = false) {
       if (refreshing) return;
       refreshing = true;
-      setRefreshingData(true);
       try {
         if (initial) setLoading(true);
         setError(null);
@@ -281,7 +277,7 @@ export function Dashboard() {
         setError("Não foi possível carregar os dados do Dashboard. Verifique se o backend está rodando.");
       } finally {
         refreshing = false;
-        if (!controller.signal.aborted) { setLoading(false);setRefreshingData(false); }
+        if (!controller.signal.aborted) setLoading(false);
       }
     }
 
