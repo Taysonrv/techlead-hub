@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { Alert, Box, Button, Card, CardContent, CircularProgress, Stack, Typography } from "@mui/material";
+import { Alert, Box, Button, Card, CardContent, CircularProgress, Chip, Drawer, IconButton, Stack, Typography } from "@mui/material";
+import { CloseRounded, OpenInNewRounded } from "@mui/icons-material";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { getTicketSnapshot, subscribeTicketSnapshotRefresh } from "../services/ticketSnapshot";
@@ -21,6 +22,7 @@ export function HomeWorkspace({ embedded = false }: { embedded?: boolean }) {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [pulseSelection, setPulseSelection] = useState<"immediate" | "progress" | "stopped" | null>(null);
   useEffect(() => {
     let active = true;
     const refresh = () => {
@@ -70,6 +72,16 @@ export function HomeWorkspace({ embedded = false }: { embedded?: boolean }) {
     }
     return [...new Map(records.sort((a, b) => b.timestamp - a.timestamp).map((item) => [item.id, item])).values()].slice(0, 6);
   }, [tickets]);
+  const pulseGroups = useMemo(() => {
+    const immediate = [...new Map([...critical, ...dueSoon].map(item => [item.movideskId, item])).values()];
+    const progress = open.filter(item => clean(item.baseStatus).replace(/\s+/g, "") === "inprogress" || clean(item.status).includes("andamento"));
+    return [
+      { key: "immediate" as const, title: "Em atenção imediata", items: immediate, tone: "error.main", description: "Críticos ou com prazo vencido / próximo" },
+      { key: "progress" as const, title: "Em andamento", items: progress, tone: "info.main", description: "Atendimentos em andamento" },
+      { key: "stopped" as const, title: "Aguardando / parados", items: stopped, tone: "warning.main", description: "Tickets com status operacional de parada" },
+    ];
+  }, [critical, dueSoon, open, stopped]);
+  const activePulse = pulseGroups.find(group => group.key === pulseSelection);
   const metrics = [
     { name: isManagement ? "Backlog atual" : "Minha carteira aberta", value: isManagement ? open.length : mine.length, route: isManagement ? "/operacao/tickets" : "/operacao/minha-operacao", accent: aliareColors.warning, subtitle: isManagement ? "Tickets ativos na carteira SIMER" : "Atendimentos sob minha responsabilidade" },
     { name: "Críticos", value: critical.length, route: "/pendencias-riscos", accent: aliareColors.error, subtitle: "Urgência crítica ainda em aberto" },
@@ -99,9 +111,9 @@ export function HomeWorkspace({ embedded = false }: { embedded?: boolean }) {
       </Box>
       </>}
       <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "minmax(0,1.7fr) minmax(300px,.8fr)" }, gap: 2, alignItems: "start" }}>
-        <Card variant="outlined" sx={{ borderRadius: 2.5 }}>
-          <CardContent>
-            <Typography sx={{ fontWeight: 800 }}>O que precisa da sua atenção</Typography>
+        <Card variant="outlined" sx={{ borderRadius: 2.5, bgcolor: "background.paper", minWidth: 0 }}>
+          <CardContent sx={{ p: { xs: 1.75, md: 2.25 }, "&:last-child": { pb: 2.25 } }}>
+            <Typography sx={{ fontWeight: 850, letterSpacing: "-.015em" }}>O que precisa da sua atenção</Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>{isManagement ? "Atendimentos críticos ou com prazo próximo" : "Seus atendimentos em aberto"}</Typography>
             {priority.length === 0 ? <Alert severity="success">Nenhuma prioridade identificada no snapshot atual.</Alert> :
               <Stack spacing={1}>{orderedPriority.slice(0,8).map((ticket) =>
@@ -124,16 +136,20 @@ export function HomeWorkspace({ embedded = false }: { embedded?: boolean }) {
               <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
                 Situação atual dos atendimentos SIMER
               </Typography>
-              <Stack spacing={1.25}>
-                {[
-                  { title: "Em atenção imediata", value: new Set([...critical, ...dueSoon].map((ticket) => ticket.movideskId)).size, color: "error.main" },
-                  { title: "Em andamento", value: open.filter((ticket) => ["inprogress", "in progress"].includes(clean(ticket.baseStatus).replace(/\s+/g, "")) || clean(ticket.status).includes("andamento")).length, color: "info.main" },
-                  { title: "Aguardando / parados", value: stopped.length, color: "warning.main" },
-                ].map((item) => (
-                  <Stack key={item.title} direction="row" sx={{ alignItems: "center", justifyContent: "space-between", gap: 1, pb: .75, borderBottom: "1px solid", borderColor: "divider" }}>
-                    <Typography variant="body2" color="text.secondary">{item.title}</Typography>
-                    <Typography sx={{ fontWeight: 850, fontVariantNumeric: "tabular-nums", color: item.color }}>{item.value}</Typography>
-                  </Stack>
+              <Stack spacing={.75}>
+                {pulseGroups.map((group) => (
+                  <Box key={group.key} component="button" type="button" onClick={() => setPulseSelection(group.key)}
+                    sx={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", textAlign: "left", gap: 1.5,
+                      backgroundColor: "transparent", border: "1px solid", borderColor: "divider", borderRadius: 1.5, px: 1.25, py: 1.1,
+                      cursor: "pointer", color: "text.primary", transition: "background-color .15s,border-color .15s",
+                      "&:hover": { bgcolor: "action.hover", borderColor: "primary.main" },
+                      "&:focus-visible": { outline: "2px solid", outlineColor: "primary.main", outlineOffset: 2 } }}>
+                    <Typography variant="body2" sx={{ fontWeight: 650 }}>{group.title}</Typography>
+                    <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
+                      <Typography sx={{ fontWeight: 850, fontVariantNumeric: "tabular-nums", color: group.tone }}>{group.items.length}</Typography>
+                      <OpenInNewRounded sx={{ fontSize: 15, color: "text.secondary" }} />
+                    </Stack>
+                  </Box>
                 ))}
               </Stack>
               <Button size="small" sx={{ mt: 1.5 }} onClick={() => navigate("/pendencias-riscos")}>Analisar pendências e riscos</Button>
@@ -188,5 +204,36 @@ export function HomeWorkspace({ embedded = false }: { embedded?: boolean }) {
         </Stack>
       </Box>
     </>}
+    <Drawer anchor="right" open={Boolean(pulseSelection)} onClose={() => setPulseSelection(null)}
+      slotProps={{ paper: { sx: { width: { xs: "100%", sm: 540 }, maxWidth: "100vw", bgcolor: "background.paper", backgroundImage: "none" } } }}>
+      <Box sx={{ p: { xs: 2, sm: 2.5 }, minWidth: 0 }}>
+        <Stack direction="row" sx={{ alignItems: "flex-start", justifyContent: "space-between", gap: 2, mb: 2 }}>
+          <Box>
+            <Typography variant="overline" color="text.secondary">PULSO DA OPERAÇÃO · SIMER</Typography>
+            <Typography variant="h6" sx={{ fontWeight: 850 }}>{activePulse?.title ?? "Atendimentos"}</Typography>
+            <Typography variant="body2" color="text.secondary">{activePulse?.description}</Typography>
+          </Box>
+          <IconButton onClick={() => setPulseSelection(null)} aria-label="Fechar painel"><CloseRounded /></IconButton>
+        </Stack>
+        <Chip size="small" label={`${activePulse?.items.length ?? 0} atendimento(s)`} sx={{ mb: 2 }} />
+        <Stack spacing={1}>
+          {activePulse?.items.length === 0 && <Alert severity="info">Nenhum atendimento identificado neste recorte.</Alert>}
+          {activePulse?.items.map(item => (
+            <Box key={item.movideskId} sx={{ border: "1px solid", borderColor: "divider", p: 1.5, borderRadius: 2 }}>
+              <Stack direction="row" spacing={1} sx={{ alignItems: "center", mb: .5 }}>
+                <Typography sx={{ fontWeight: 850, color: "primary.main" }}>#{item.movideskId}</Typography>
+                <Chip size="small" variant="outlined" label={item.status} sx={{ ml: "auto", maxWidth: 165 }} />
+              </Stack>
+              <Typography variant="body2" sx={{ fontWeight: 600, mb: .75 }}>{item.subject}</Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>{item.client || "Cliente não informado"} · {item.owner || "Sem responsável"}</Typography>
+              <Stack direction="row" spacing={1}>
+                <Button size="small" variant="outlined" onClick={() => { setPulseSelection(null); navigate("/operacao/tickets?movidesk=" + item.movideskId); }}>Abrir atendimento</Button>
+                <Button size="small" onClick={() => { setPulseSelection(null); navigate("/analise-atendimento?ticket=" + item.movideskId); }}>Analisar</Button>
+              </Stack>
+            </Box>
+          ))}
+        </Stack>
+      </Box>
+    </Drawer>
   </Box>;
 }
