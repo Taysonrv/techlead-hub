@@ -1,4 +1,5 @@
 import { KpiGrid } from "../components/KpiGrid";
+import { HomeWorkspace } from "./HomeWorkspace";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
@@ -1184,6 +1185,40 @@ export function Dashboard() {
           Auditoria de métricas detectou {metricAudit.length} divergência(s): {metricAudit.map((item) => item.message).join(" · ")}
         </Alert>
       )}
+
+      {/* ATALHOS PARA A OPERAÇÃO / ANÁLISE ASSISTIDA */}
+      <Card variant="outlined" sx={{ borderRadius: 2.5, mb: 2.25, bgcolor: "background.paper" }}>
+        <CardContent sx={{ p: { xs: 1.75, md: 2.25 }, "&:last-child": { pb: 2.25 } }}>
+          <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ justifyContent: "space-between", alignItems: { sm: "center" }, mb: 1.5 }}>
+            <Box>
+              <Typography sx={{ fontWeight: 850 }}>Acesso rápido às rotinas</Typography>
+              <Typography variant="body2" color="text.secondary">Inicie uma análise técnica ou vá diretamente ao seu trabalho, às consultas e aos relatórios.</Typography>
+            </Box>
+            <Button variant="contained" onClick={() => navigate("/analise-atendimento")}>Analisar atendimento</Button>
+          </Stack>
+          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "repeat(2,minmax(0,1fr))", sm: "repeat(3,minmax(0,1fr))", lg: "repeat(5,minmax(0,1fr))" }, gap: 1 }}>
+            {[
+              ["Tickets", "/operacao/tickets"], ["Minha Operação", "/operacao/minha-operacao"],
+              ["Pendências & Riscos", "/pendencias-riscos"], ["Qualidade de Dados", "/pendencias-riscos/qualidade"],
+              ["Clientes", "/clientes"], ["Analistas", "/analistas"], ["Desempenho & SLA", "/visao-operacional/desempenho"],
+              ["Relatórios", "/relatorios"], ["Investigação SIMER", "/investigacao"], ["Problemas Conhecidos", "/problemas-conhecidos"],
+              ["Tasks de Correções", "/correcoes"], ["Evoluções", "/evolucoes"], ["Apoios", "/apoios"],
+              ["Versões", "/versoes"], ["Serviços SIMER", "/servicos"], ["Coordenação", "/gestao-inteligencia/coordenacao"],
+              ["Liderança Técnica", "/gestao-inteligencia/lideranca"], ["Chat", "/chat"],
+              ["Conhecimento", "/conhecimento"], ["Configurações", "/configuracoes"],
+            ].map(([label, path]) => (
+              <Button key={path} variant="outlined" size="small" onClick={() => navigate(path)}
+                sx={{ justifyContent: "flex-start", minWidth: 0, textAlign: "left", minHeight: 38, fontSize: ".75rem", lineHeight: 1.25, color: "text.primary", borderColor: "divider", "&:hover": { borderColor: "primary.main", bgcolor: "action.hover" } }}>
+                {label}
+              </Button>
+            ))}
+          </Box>
+        </CardContent>
+      </Card>
+      <Box sx={{ mb: 2.25 }}>
+        <Typography sx={{ fontWeight: 850, mb: 1 }}>Sua operação agora</Typography>
+        <HomeWorkspace embedded />
+      </Box>
 
       {/* =================================================
           KPIs
