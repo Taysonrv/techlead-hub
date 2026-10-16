@@ -25,14 +25,14 @@ export function SlaInvestigationPanel() {
  {data&&<Stack spacing={2} sx={{mt:2}}>
  <Alert severity="info">Resultado preliminar: feriados e pausas ainda requerem evidência validada; não substitui o SLA oficial do Movidesk.</Alert>
  <Typography sx={{fontWeight:800}}>#{data.ticket.id} · {data.ticket.subject}</Typography>
- <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">{(["response","support","factory","total"] as const).map((key)=>{
+ <Box sx={{display:"flex",flexDirection:"row",gap:1,flexWrap:"wrap"}}>{(["response","support","factory","total"] as const).map((key)=>{
  const metric=data.metrics[key];return <Box key={key} sx={{p:1.5,border:"1px solid",borderColor:"divider",borderRadius:2,minWidth:146,flex:"1 1 140px"}}>
  <Typography variant="caption">{({response:"1ª resposta",support:"OLA Suporte",factory:"OLA Fábrica",total:"SLA total"})[key]}</Typography>
  <Typography variant="h6">{metric.percent===null?"—":`${metric.percent}%`}</Typography>
  <Typography variant="caption" color="text.secondary">{duration(metric.minutes)} / {duration(metric.targetMinutes)}</Typography></Box>;})}</Stack>
  <Typography variant="body2">{data.summary}</Typography>
  {data.task&&<Chip variant="outlined" label={`Azure #${data.task.id} · ${data.task.state}`} sx={{alignSelf:"flex-start"}}/>}
- <Divider/><Typography fontWeight={800}>Linha do tempo · evidências</Typography>
+ <Divider/><Typography sx={{fontWeight:800}}>Linha do tempo · evidências</Typography>
  <Box sx={{maxHeight:420,overflow:"auto"}}>{data.timeline.map((event,i)=><Box key={i} sx={{py:1.5,pl:2,borderLeft:"2px solid",borderColor:"divider"}}>
  <Typography variant="caption" color="text.secondary">{new Date(event.at).toLocaleString("pt-BR")}</Typography>
  <Typography variant="body2" sx={{fontWeight:700}}>{event.title}</Typography><Typography variant="body2">{event.detail}</Typography>
