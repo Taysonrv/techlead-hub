@@ -182,7 +182,11 @@ export class NotificationService {
       .map((ticket) => ticket.movideskId)
       .filter((value): value is number => value !== null);
 
+    const followed = await prisma.azureWorkItemFollow.findMany({ where: { userId }, select: { workItemId: true, followedAt: true } });
+    const followingById = new Map(followed.map(f => [f.workItemId, f.followedAt]));
+
     const identities = [
+      ...(followed.length ? [{ id: { in: followed.map(f => f.workItemId) } }] : []),
       {
         createdByName: {
           equals: user.name,
@@ -295,7 +299,10 @@ export class NotificationService {
 
     const knownProblems = await filterKnownProblemsToScope(rawKnownProblems);
 
-    const itemNotifications = workItems.map((item) => {
+    const itemNotifications = workItems.filter(item => {
+      const followedAt = followingById.get(item.id);
+      return !followedAt || (item.azureChangedAt ?? item.updatedAt) > followedAt;
+    }).map((item) => {
       const completed = TERMINAL_STATES.some(
         (state) => state.toLocaleLowerCase("pt-BR") ===
           item.state.trim().toLocaleLowerCase("pt-BR"),
