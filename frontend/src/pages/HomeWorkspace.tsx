@@ -146,13 +146,13 @@ export function HomeWorkspace({ embedded = false }: { embedded?: boolean }) {
                   <Typography sx={{ fontWeight: 800 }}>Atualizações recentes</Typography>
                   <Typography variant="caption" color="text.secondary">Movidesk e Tasks Azure · últimos 7 dias</Typography>
                 </Box>
-                <Typography variant="caption" color="text.secondary">{Math.min(recentUpdates.length, embedded ? 3 : 6)} exibida(s)</Typography>
+                <Typography variant="caption" color="text.secondary">{Math.min(recentUpdates.length, embedded ? 2 : 6)} exibida(s)</Typography>
               </Stack>
               {recentUpdates.length === 0 ? (
                 <Typography variant="body2" color="text.secondary">Nenhuma atualização recente disponível nos dados sincronizados.</Typography>
               ) : (
                 <Stack spacing={.75}>
-                  {recentUpdates.slice(0, embedded ? 3 : 6).map((item) => (
+                  {recentUpdates.slice(0, embedded ? 2 : 6).map((item) => (
                     <Box key={item.id} role="button" tabIndex={0}
                       onClick={() => navigate(item.path)}
                       onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); navigate(item.path); } }}
@@ -166,7 +166,7 @@ export function HomeWorkspace({ embedded = false }: { embedded?: boolean }) {
                   ))}
                 </Stack>
               )}
-              <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1 }}>Eventos recentes detectados no snapshot; não representam notificações lidas ou não lidas.</Typography>
+              {!embedded && <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1 }}>Eventos recentes detectados no snapshot; não representam notificações lidas ou não lidas.</Typography>}
             </CardContent>
           </Card>
           {!embedded && (
