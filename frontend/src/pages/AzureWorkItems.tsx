@@ -1268,6 +1268,33 @@ export function AzureWorkItems({
       null,
     );
 
+  const [followedTasks, setFollowedTasks] = useState<Set<number>>(() => new Set());
+  const [followBusy, setFollowBusy] = useState(false);
+  useEffect(() => {
+    let active = true;
+    void api.get<{ items: Array<{ workItemId: number }> }>("/azure-work-items/following")
+      .then(({ data }) => { if (active) setFollowedTasks(new Set(data.items.map(item => item.workItemId))); })
+      .catch(() => undefined);
+    return () => { active = false; };
+  }, []);
+  const toggleFollow = async (id: number) => {
+    if (followBusy) return;
+    const wasFollowing = followedTasks.has(id);
+    setFollowBusy(true);
+    try {
+      if (wasFollowing) await api.delete("/azure-work-items/" + id + "/follow");
+      else await api.put("/azure-work-items/" + id + "/follow");
+      setFollowedTasks(previous => {
+        const next = new Set(previous);
+        if (wasFollowing) next.delete(id);
+        else next.add(id);
+        return next;
+      });
+    } catch {
+      setDetailError("Não foi possível atualizar o acompanhamento da Task.");
+    } finally { setFollowBusy(false); }
+  };
+
   const [
     drawerOpen,
     setDrawerOpen,
@@ -4202,6 +4229,12 @@ export function AzureWorkItems({
               </IconButton>
             </Stack>
 
+            {selectedWorkItem && (
+              <Button size="small" sx={{ mt: 1, mb: .5 }} variant={followedTasks.has(selectedWorkItem.id) ? "contained" : "outlined"}
+                disabled={followBusy} onClick={() => void toggleFollow(selectedWorkItem.id)}>
+                {followedTasks.has(selectedWorkItem.id) ? "Seguindo · deixar de seguir" : "Seguir Task e receber avisos"}
+              </Button>
+            )}
             {selectedWorkItem && (
               <Stack
                 direction="row"
