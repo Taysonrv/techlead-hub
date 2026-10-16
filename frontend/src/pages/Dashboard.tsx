@@ -287,8 +287,20 @@ export function Dashboard() {
 
     void loadTickets(true);
     const unsubscribeRefresh = subscribeTicketSnapshotRefresh(() => { void loadTickets(); });
+    // Atualização a cada 60s, usando o cache compartilhado e impedindo overlap.
+    // Não efetuar chamadas enquanto a aba estiver oculta; a próxima leitura
+    // será realizada assim que a página voltar a ficar visível.
+    const refreshOnce = () => {
+      if (document.visibilityState !== "visible" || refreshing) return;
+      invalidateTicketSnapshot();
+    };
+    const intervalId = window.setInterval(refreshOnce, 60_000);
+    const onVisibilityChange = () => { if (document.visibilityState === "visible") refreshOnce(); };
+    document.addEventListener("visibilitychange", onVisibilityChange);
     return () => {
       unsubscribeRefresh();
+      window.clearInterval(intervalId);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
       controller.abort();
     };
   }, []);
@@ -1136,49 +1148,7 @@ export function Dashboard() {
         title="Dashboard Executivo"
         description="Visão consolidada da operação de suporte"
         meta={<>{periodLabel(period)}{" • "}{filteredTickets.length} ticket(s) analisado(s){lastLoadedAt>0&&` · Leitura do Hub às ${new Date(lastLoadedAt).toLocaleTimeString("pt-BR")}`}</>}
-        action={
-          <Stack
-            direction={{ xs: "column", sm: "row" }}
-            sx={{
-              gap: 1.25,
-              alignItems: { xs: "stretch", sm: "flex-end" },
-              flexWrap: "wrap",
-              "& > *": { minWidth: 0 },
-            }}
-          >
-            <PeriodFilter />
-            <Button
-              variant="contained"
-              disableElevation
-              disabled={refreshingData}
-              onClick={() => invalidateTicketSnapshot()}
-              startIcon={refreshingData
-                ? <CircularProgress size={16} thickness={5} color="inherit" />
-                : <RefreshRoundedIcon fontSize="small" />}
-              aria-label={refreshingData ? "Atualizando dados do dashboard" : "Atualizar dados do dashboard"}
-              sx={{
-                height: 40,
-                minHeight: 40,
-                minWidth: 154,
-                px: 2,
-                borderRadius: "8px",
-                fontWeight: 700,
-                fontSize: "0.82rem",
-                lineHeight: 1,
-                textTransform: "none",
-                whiteSpace: "nowrap",
-                flexShrink: 0,
-                bgcolor: "#078B5B",
-                color: "#FFFFFF",
-                "&:hover": { bgcolor: "#06744D" },
-                "&:focus-visible": { outline: "2px solid #22C55E", outlineOffset: 2 },
-                "&.Mui-disabled": { bgcolor: "rgba(7,139,91,.18)", color: "text.secondary" },
-              }}
-            >
-              {refreshingData ? "Atualizando..." : "Atualizar dados"}
-            </Button>
-          </Stack>
-        }
+        action={<PeriodFilter />}
       />
       {metricAudit.length > 0 && (
         <Alert severity="warning" variant="outlined" sx={{ mb: 2 }}>
