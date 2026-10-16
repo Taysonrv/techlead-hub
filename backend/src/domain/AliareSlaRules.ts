@@ -34,7 +34,7 @@ export function aliareBusinessMinutes(start:Date,end:Date,kind:SlaKind,holidays:
  let minutes=0;
  for(let t=Math.ceil(start.getTime()/60000)*60000;t+60000<=end.getTime();t+=60000){
   const p=Object.fromEntries(fmt.formatToParts(new Date(t)).map(item=>[item.type,item.value]));
-  const wd=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].indexOf(p.weekday);
+  const wd=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].indexOf(p.weekday ?? "");
   const m=Number(p.hour)*60+Number(p.minute);
   if(holidays.has(`${p.year}-${p.month}-${p.day}`)) continue;
   if(wd>=1&&wd<=5&&m>=480&&m<(kind==="BUG"?1080:1110)) minutes++;
