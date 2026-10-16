@@ -89,7 +89,7 @@ export function AnalysisAssistant() {
       <CardContent>
         <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5} sx={{ alignItems: { sm: "center" } }}>
           <TextField label="Número do ticket Movidesk" value={ticketId} onChange={(event) => setTicketId(event.target.value)} size="small"
-            placeholder="Ex.: 816055" sx={{ flex: 1 }} inputProps={{ inputMode: "numeric" }} />
+            placeholder="Ex.: 816055" sx={{ flex: 1 }} slotProps={{ htmlInput: { inputMode: "numeric" } }} />
           <Button variant="contained" disabled={loading} startIcon={loading ? <CircularProgress size={16}/> : <SearchOutlined/>} onClick={() => void loadTicket()}>Carregar dados</Button>
           {ticket && <Button variant="outlined" startIcon={<OpenInNewOutlined />} onClick={() => navigate("/operacao/tickets?movidesk=" + ticket.movideskId)}>Abrir ticket</Button>}
         </Stack>
