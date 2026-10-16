@@ -322,7 +322,7 @@ export class NotificationService {
 
     const knownProblems = await filterKnownProblemsToScope(rawKnownProblems);
 
-    const itemNotifications = workItems.map((item) => {
+    const itemNotifications = workItems.filter(item => !followStart.has(item.id)).map((item) => {
       const completed = TERMINAL_STATES.some(
         (state) => state.toLocaleLowerCase("pt-BR") ===
           item.state.trim().toLocaleLowerCase("pt-BR"),
