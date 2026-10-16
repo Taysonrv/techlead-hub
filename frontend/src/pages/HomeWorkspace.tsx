@@ -98,7 +98,7 @@ export function HomeWorkspace({ embedded = false }: { embedded?: boolean }) {
         ))}
       </Box>
       </>}
-      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "minmax(0,1.7fr) minmax(300px,.8fr)" }, gap: 2 }}>
+      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "minmax(0,1.7fr) minmax(300px,.8fr)" }, gap: 2, alignItems: "start" }}>
         <Card variant="outlined" sx={{ borderRadius: 2.5 }}>
           <CardContent>
             <Typography sx={{ fontWeight: 800 }}>O que precisa da sua atenção</Typography>
