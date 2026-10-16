@@ -11,6 +11,12 @@ type Ticket = {
   service?: string | null; category?: string | null; createdDate?: string | null;
   deliveredVersion?: string | null; justification?: string | null;
 };
+type RelatedResearch = {
+  similar: Array<{ movideskId: number; subject: string; client?: string; score: number; reasons: string[] }>;
+  workItems: Array<{ id: number; title: string; workItemType: string; state: string }>;
+  ruleItems?: Array<{ id?: number; name?: string; nodeText?: string; path?: string }>;
+  summary?: { similarCases: number; relatedWorkItems: number; rules?: number };
+};
 type Fields = { problem: string; correct: string; environment: string; reproduce: string; video: string; evidence: string; links: string };
 const blank: Fields = { problem: "", correct: "", environment: "", reproduce: "", video: "", evidence: "", links: "" };
 const questions: Array<{ key: keyof Fields; title: string; hint: string }> = [
@@ -33,16 +39,25 @@ export function AnalysisAssistant() {
   const [loadError, setLoadError] = useState("");
   const [fields, setFields] = useState<Fields>(blank);
   const [copied, setCopied] = useState(false);
+  const [research, setResearch] = useState<RelatedResearch | null>(null);
+  const [researchError, setResearchError] = useState("");
+  const [researchLoading, setResearchLoading] = useState(false);
+  const [selectedRefs, setSelectedRefs] = useState<string[]>([]);
 
   const loadTicket = async () => {
     const id = Number(ticketId.trim().replace(/^#/, ""));
     if (!Number.isSafeInteger(id) || id <= 0) { setLoadError("Informe um número válido de ticket Movidesk."); return; }
-    setLoading(true); setLoadError("");
+    setLoading(true); setLoadError(""); setResearch(null); setSelectedRefs([]); setResearchError("");
     try {
       const data = await getTicketSnapshot<Ticket>();
       const found = data.find((item) => item.movideskId === id);
       if (!found) { setTicket(null); setLoadError("Ticket não encontrado no snapshot sincronizado. Atualize os dados ou informe as evidências manualmente."); return; }
       setTicket(found);
+      setResearchLoading(true);
+      void api.get<RelatedResearch>("/global/investigate", { params: { q: String(id) } })
+        .then(({ data: references }) => { setResearch(references); })
+        .catch(() => setResearchError("Não foi possível consultar as correlações nesta instância."))
+        .finally(() => setResearchLoading(false));
       let timelineNotes = "";
       if (found.id) {
         try {
@@ -69,11 +84,21 @@ export function AnalysisAssistant() {
     } finally { setLoading(false); }
   };
   useEffect(() => { if (params.get("ticket")) void loadTicket(); /* Executar somente no acesso inicial */ }, []);
+  const references = useMemo(() => {
+    if (!research) return [] as Array<{ key: string; kind: string; title: string; description: string; url: string }>;
+    return [
+      ...research.similar.slice(0, 10).map(item => ({ key: "ticket-" + item.movideskId, kind: "Atendimento semelhante", title: "#" + item.movideskId + " · " + item.subject, description: "Similaridade " + Math.round(item.score) + " · " + item.reasons.join(", "), url: "/operacao/tickets?movidesk=" + item.movideskId })),
+      ...research.workItems.slice(0, 10).map(item => ({ key: "task-" + item.id, kind: "Task relacionada", title: "#" + item.id + " · " + item.title, description: item.workItemType + " · " + item.state, url: item.workItemType === "Evolução" ? "/evolucoes?task=" + item.id : "/correcoes?task=" + item.id })),
+      ...(research.ruleItems ?? []).slice(0, 10).map((item, index) => ({ key: "rule-" + index, kind: "Regra de negócio", title: item.name || item.nodeText || "Regra relacionada", description: "Referência do mapa SIMER · verificar aderência ao caso", url: "/investigacao?q=" + encodeURIComponent(ticketId) })),
+    ];
+  }, [research, ticketId]);
+  const includeReference = (key: string) => setSelectedRefs(previous => previous.includes(key) ? previous.filter(value => value !== key) : [...previous, key]);
+  const chosenReferences = references.filter(reference => selectedRefs.includes(reference.key));
   const result = useMemo(() => {
     const heading = ticket ? "Análise técnica — Ticket #" + ticket.movideskId + " · " + ticket.subject : "Análise técnica do atendimento";
     const sections = questions.map(({ key, title }) => "**" + title + "**\n" + normalize(fields[key]));
-    return [heading, ticket ? "Cliente: " + (ticket.client ?? "Não informado") + "\nSituação: " + ticket.status : "", ...sections].filter(Boolean).join("\n\n");
-  }, [fields, ticket]);
+    return [heading, ticket ? "Cliente: " + (ticket.client ?? "Não informado") + "\nSituação: " + ticket.status : "", ...sections, ...(chosenReferences.length ? ["**Referências relacionadas (correlação sugerida; confirmar pertinência)**\n" + chosenReferences.map(item => item.kind + ": " + item.title + " — " + item.description + "\n" + item.url).join("\n")] : [])].filter(Boolean).join("\n\n");
+  }, [fields, ticket, chosenReferences]);
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(result);
@@ -95,6 +120,40 @@ export function AnalysisAssistant() {
         </Stack>
         {loadError && <Alert severity="warning" sx={{ mt: 1.5 }}>{loadError}</Alert>}
         <Alert severity="info" sx={{ mt: 1.5 }}>Os dados básicos vêm do snapshot sincronizado. Prints, interações, regras, logs e testes precisam ser conferidos e registrados pelo analista. Campos ausentes serão marcados como pendentes.</Alert>
+      </CardContent>
+    </Card>
+    <Card variant="outlined" sx={{ borderRadius: 2.5, mb: 2 }}>
+      <CardContent>
+        <Stack direction="row" spacing={1} sx={{ alignItems: "center", justifyContent: "space-between", mb: 1.5 }}>
+          <Box>
+            <Typography sx={{ fontWeight: 850 }}>Correlação técnica e histórico</Typography>
+            <Typography variant="body2" color="text.secondary">Atendimentos semelhantes, Tasks tratadas e regras de negócio do mapa SIMER.</Typography>
+          </Box>
+          {ticket && <Button size="small" variant="outlined" onClick={() => navigate("/investigacao?q=" + ticket.movideskId)}>Investigação completa</Button>}
+        </Stack>
+        {researchLoading && <CircularProgress size={22}/>}
+        {researchError && <Alert severity="warning" sx={{ mb: 1 }}>{researchError}</Alert>}
+        {!research && !researchLoading && !researchError && <Typography variant="body2" color="text.secondary">Carregue um atendimento para pesquisar referências.</Typography>}
+        {research && <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "repeat(3,minmax(0,1fr))" }, gap: 1.25 }}>
+          {(["Atendimento semelhante", "Task relacionada", "Regra de negócio"] as const).map(kind => (
+            <Box key={kind} sx={{ border: "1px solid", borderColor: "divider", p: 1.5, borderRadius: 2, minWidth: 0 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 800, mb: 1 }}>{kind}</Typography>
+              {references.filter(item => item.kind === kind).length === 0
+                ? <Typography variant="caption" color="text.secondary">Nenhuma referência encontrada.</Typography>
+                : <Stack spacing={1}>{references.filter(item => item.kind === kind).map(item => (
+                  <Box key={item.key} sx={{ borderBottom: "1px solid", borderColor: "divider", pb: 1 }}>
+                    <Typography variant="body2" sx={{ fontWeight: 700 }}>{item.title}</Typography>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: .5 }}>{item.description}</Typography>
+                    <Stack direction="row" spacing={1}>
+                      <Button size="small" onClick={() => navigate(item.url)}>Consultar</Button>
+                      <Button size="small" variant={selectedRefs.includes(item.key) ? "contained" : "outlined"} onClick={() => includeReference(item.key)}>{selectedRefs.includes(item.key) ? "Incluída" : "Incluir no texto"}</Button>
+                    </Stack>
+                  </Box>
+                ))}</Stack>}
+            </Box>
+          ))}
+        </Box>}
+        <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1.5 }}>A correspondência é sugestiva: similaridade não comprova causa raiz nem regra aplicável. Somente referências selecionadas são incluídas no texto final.</Typography>
       </CardContent>
     </Card>
     <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", xl: "minmax(0,1fr) minmax(0,1fr)" }, gap: 2 }}>
