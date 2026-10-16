@@ -41,7 +41,7 @@ import { useColorMode } from "../context/ColorModeContext";
 
 import { useNavigate } from "react-router-dom";
 
-import { getTicketSnapshot, getTicketSnapshotState, invalidateTicketSnapshot, subscribeTicketSnapshotRefresh } from "../services/ticketSnapshot";
+import { getTicketSnapshot, getTicketSnapshotState, subscribeTicketSnapshotRefresh } from "../services/ticketSnapshot";
 import { PeriodFilter } from "../components/PeriodFilter";
 import { PageHeader } from "../components/PageHeader";
 import { ContentState } from "../components/ContentState";
@@ -283,12 +283,12 @@ export function Dashboard() {
 
     void loadTickets(true);
     const unsubscribeRefresh = subscribeTicketSnapshotRefresh(() => { void loadTickets(); });
-    // Atualização a cada 60s, usando o cache compartilhado e impedindo overlap.
+    // Atualização a cada 60s, reutilizando o cache e impedindo overlap.
     // Não efetuar chamadas enquanto a aba estiver oculta; a próxima leitura
     // será realizada assim que a página voltar a ficar visível.
     const refreshOnce = () => {
       if (document.visibilityState !== "visible" || refreshing) return;
-      invalidateTicketSnapshot();
+      void loadTickets();
     };
     const intervalId = window.setInterval(refreshOnce, 60_000);
     const onVisibilityChange = () => { if (document.visibilityState === "visible") refreshOnce(); };
