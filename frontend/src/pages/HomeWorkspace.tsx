@@ -15,7 +15,7 @@ type Ticket = {
 };
 const clean = (value: string | null | undefined) => (value ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
 
-export function HomeWorkspace() {
+export function HomeWorkspace({ embedded = false }: { embedded?: boolean }) {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [tickets, setTickets] = useState<Ticket[]>([]);
@@ -78,11 +78,12 @@ export function HomeWorkspace() {
   ];
 
   return <Box sx={{ minWidth: 0, pb: 3 }}>
-    <PageHeader eyebrow="INÍCIO · OPERAÇÃO" title="Central de Trabalho"
+    {!embedded && <PageHeader eyebrow="INÍCIO · OPERAÇÃO" title="Central de Trabalho"
       description="Prioridades atuais, sua carteira e acesso direto às rotinas."
-      action={<Button variant="outlined" onClick={() => navigate("/visao-operacional")}>Abrir Dashboard Executivo</Button>} />
+      action={<Button variant="outlined" onClick={() => navigate("/visao-operacional")}>Abrir Dashboard Executivo</Button>} />}
     {error && <Alert severity="warning" sx={{ mb: 2 }}>{error}</Alert>}
     {loading ? <Box sx={{ display: "flex", justifyContent: "center", py: 7 }}><CircularProgress /></Box> : <>
+      {!embedded && <>
       <Box sx={{ display: "grid", gridTemplateColumns: { xs: "repeat(2,minmax(0,1fr))", lg: "repeat(4,minmax(0,1fr))" }, gap: 1.5, mb: 2 }}>
         {metrics.map((metric) => (
           <KpiCard
@@ -96,6 +97,7 @@ export function HomeWorkspace() {
           />
         ))}
       </Box>
+      </>}
       <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "minmax(0,1.7fr) minmax(300px,.8fr)" }, gap: 2 }}>
         <Card variant="outlined" sx={{ borderRadius: 2.5 }}>
           <CardContent>
