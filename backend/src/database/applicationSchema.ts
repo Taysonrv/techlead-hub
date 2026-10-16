@@ -304,6 +304,19 @@ export async function ensureApplicationSchema() {
     )
   `);
   await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "DataQualitySnapshot_snapshotDate_idx" ON "DataQualitySnapshot" ("snapshotDate")`);
+  // Desktop distribuído não executa Prisma CLI: instalar tabela de seguimento
+  // de Tasks também durante a inicialização, sem alterar acompanhamentos existentes.
+  await prisma.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS "AzureWorkItemFollow" (
+      "userId" INTEGER NOT NULL REFERENCES "User"("id") ON DELETE CASCADE,
+      "workItemId" INTEGER NOT NULL REFERENCES "AzureWorkItem"("id") ON DELETE CASCADE,
+      "followedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "lastSeenRevision" INTEGER,
+      CONSTRAINT "AzureWorkItemFollow_pkey" PRIMARY KEY ("userId","workItemId")
+    )
+  `);
+  await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "AzureWorkItemFollow_workItemId_idx" ON "AzureWorkItemFollow" ("workItemId")`);
+
   await prisma.$executeRawUnsafe(`
     CREATE TABLE IF NOT EXISTS "KnownProblemRead" (
       "problemId" INTEGER NOT NULL REFERENCES "KnownProblem"("id") ON DELETE CASCADE,
