@@ -832,6 +832,14 @@ export function Coordination() {
           {integrationHealth&&Object.entries(integrationHealth.sources).map(([name,source])=><Box key={name} sx={{borderTop:"1px solid",borderColor:"divider",pt:1}}><Typography variant="body2" sx={{fontWeight:750}}>{name}</Typography><Typography variant="caption" color="text.secondary">{source}</Typography></Box>)}
         </Stack>
       </Drawer>
+      <Drawer anchor="right" open={Boolean(slaComponentDetail)} onClose={()=>setSlaComponentDetail(null)} slotProps={{paper:{sx:detailDrawerPaperSx}}}>
+        <DetailPanelHeader eyebrow="Saúde SLA × OLA" title={slaComponentDetail?.label ?? "Componente"} onClose={()=>setSlaComponentDetail(null)}/>
+        <Stack spacing={1.5} sx={{p:2}}>
+          {slaComponentDetail&&<Card variant="outlined" sx={{borderRadius:2.5}}><CardContent><Typography variant="overline" color="text.secondary">Pontuação do componente selecionado</Typography><Typography sx={{fontWeight:900,fontSize:"2rem",color:"primary.main"}}>{slaComponentDetail.score}%</Typography><LinearProgress variant="determinate" value={Math.max(0,Math.min(100,slaComponentDetail.score))} sx={{height:8,borderRadius:5,mt:1}}/><Typography variant="body2" sx={{mt:1}}>{slaComponentDetail.detail}</Typography><Typography variant="body2" sx={{mt:1}}>Peso no índice: {slaComponentDetail.weight}% · contribuição ponderada: {(slaComponentDetail.score*slaComponentDetail.weight/100).toLocaleString("pt-BR",{maximumFractionDigits:2})} pontos.</Typography></CardContent></Card>}
+          <Typography variant="body2" color="text.secondary">Este painel detalha somente o componente selecionado. Para consultar as regras gerais de cálculo, abra a metodologia.</Typography>
+          <Button variant="outlined" onClick={()=>{setSlaComponentDetail(null);setSlaInfoDrawerOpen(true)}}>Ver metodologia completa</Button>
+        </Stack>
+      </Drawer>
       <Drawer anchor="right" open={slaInfoDrawerOpen} onClose={()=>setSlaInfoDrawerOpen(false)} slotProps={{paper:{sx:detailDrawerPaperSx}}}>
         <DetailPanelHeader eyebrow="Metodologia" title="SLA × OLA · Suporte x Desenvolvimento" onClose={()=>setSlaInfoDrawerOpen(false)}/>
         <Stack spacing={1.5} sx={{p:2}}>
