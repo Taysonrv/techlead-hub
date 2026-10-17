@@ -1,5 +1,19 @@
 # Changelog
 
+## 2.1.0-rc.8 — 2026-10-17
+
+### Central da Coordenação e rastreabilidade
+- Cards de Tickets, vínculos de Tasks, Work Items e Serviços passam a abrir detalhamentos consultados no backend, com registros operacionais em vez de dados agregados repetidos.
+- Novo endpoint de detalhamento respeita o escopo operacional e o período selecionado, com limites de consulta para preservar o desempenho.
+- Listagens apresentam informações contextuais e caminhos para acessar os registros relacionados.
+
+### Acompanhamento Azure e análise operacional
+- Incluído MVP para acompanhar Work Items Azure por usuário e receber notificações de alterações sincronizadas, respeitando a carteira SIMER.
+- Adicionada investigação de SLA com componentes explicáveis e detalhamento contextual.
+- Polimento da auditoria de encerramentos, filtros, indicadores, tabela e drawer.
+
+> Pré-release beta. Validar builds, testes automatizados, fluxos Web/Desktop e integração com PostgreSQL em homologação antes de publicar. A migration de acompanhamento de Tasks deve ser revisada e aplicada somente conforme o processo aprovado do ambiente; não executar migrações diretamente na base de produção como parte da preparação da release.
+
 ## 2.1.0-rc.7 — 2026-10-15
 
 ### Operação e qualidade
