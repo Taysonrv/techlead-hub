@@ -1,4 +1,5 @@
 import { KpiGrid } from "../components/KpiGrid";
+import { AzureFollowButton } from "../components/AzureFollowButton";
 import { KpiCard as ExecutiveKpiCard } from "../components/KpiCard";
 import {
   Accordion,
@@ -4255,6 +4256,8 @@ export function AzureWorkItems({
                 <CloseOutlined />
               </IconButton>
             </Stack>
+
+            {selectedWorkItem && <AzureFollowButton key={selectedWorkItem.id} workItemId={selectedWorkItem.id} />}
 
             {selectedWorkItem && (
               <Button size="small" sx={{ mt: 1, mb: .5 }} variant={followedTasks.has(selectedWorkItem.id) ? "contained" : "outlined"}
