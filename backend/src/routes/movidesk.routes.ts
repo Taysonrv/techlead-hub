@@ -2,6 +2,7 @@ import { Router } from "express";
 import { MovideskController } from "../controllers/MovideskController";
 import { requirePermission } from "../middlewares/roleMiddleware";
 import { prisma } from "../database/prisma";
+import { SIMER_CLIENTS, SIMER_CLIENT_SCOPE_NAMES, resolveSimerClient } from "../domain/OperationalScope";
 
 export const movideskRoutes = Router();
 const controller = new MovideskController();
@@ -30,14 +31,24 @@ movideskRoutes.get("/preview", requirePermission("imports"), controller.preview.
  * Auditoria somente leitura das solicitações de encerramento feitas nas ações
  * Movidesk. Os resultados são candidatos e exigem conferência do autor/contexto.
  */
+movideskRoutes.get("/closure-requests/clients", requirePermission("attention"), (_request, response) => {
+  // Fonte única de verdade utilizada pela operação SIMER; não listar contatos.
+  return response.json({ clients: [...SIMER_CLIENTS] });
+});
+
 movideskRoutes.get("/closure-requests", requirePermission("attention"), async (request, response) => {
   const client = typeof request.query.client === "string" ? request.query.client.trim() : "Bom Jesus";
-  if (client.length < 3 || client.length > 80) {
+  const allClients = client === "__all__";
+  const canonical = allClients ? null : resolveSimerClient(client);
+  const allowedNames = allClients
+    ? SIMER_CLIENT_SCOPE_NAMES
+    : SIMER_CLIENT_SCOPE_NAMES.filter((name) => resolveSimerClient(name) === canonical);
+  if (!allClients && (!canonical || client.length > 120)) {
     return response.status(400).json({ message: "Informe um cliente válido." });
   }
   try {
     const tickets = await prisma.ticket.findMany({
-      where: { client: { contains: client, mode: "insensitive" }, isDeleted: false },
+      where: { client: { in: allowedNames, mode: "insensitive" }, isDeleted: false },
       select: {
         id: true, movideskId: true, subject: true, client: true, contact: true,
         status: true, baseStatus: true, closedDate: true, canceledDate: true, owner: true, ownerTeam: true,
@@ -50,15 +61,50 @@ movideskRoutes.get("/closure-requests", requirePermission("attention"), async (r
       orderBy: { movideskId: "desc" },
       take: 5000,
     });
-    const positive = /(?:pode(?:m|mos)?\s+(?:baixar|cancelar|encerrar|fechar)|(?:solicito|solicitamos|peço|pedimos|favor|por favor)\s+(?:(?:a|o)\s+)?(?:baixa|cancelamento|encerramento)|(?:ticket|chamado|atendimento)\s+(?:pode\s+ser|seja|deve\s+ser)\s+(?:baixado|cancelado|encerrado|fechado)|(?:não\s+(?:precisa|é\s+necessário)\s+mais\s+(?:do|desse)\s+(?:ticket|chamado|atendimento)))/i;
-    const negative = /(?:não\s+(?:pode|podemos|consigo|conseguimos)\s+(?:baixar|cancelar|encerrar)|(?:cancelar|baixar|encerrar)\s+(?:a\s+)?(?:nota|nf-e|nfe|pedido|contrato|título|romaneio|documento))/i;
+    // Pedidos explícitos de encerramento do atendimento; ocorrências são
+    // hipóteses auditáveis, nunca autorizações confirmadas automaticamente.
+    const normalizeText = (value: string) => value
+      .replace(/<[^>]*>/g, " ").replace(/&nbsp;/gi, " ")
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      .replace(/\s+/g, " ").trim().toLowerCase();
+    // Somente pedidos explícitos sobre ESTE atendimento; explicações sobre
+    // concluir processos, finalizar chamados antigos ou cancelar documentos
+    // não caracterizam autorização de baixa do ticket atual.
+    const explicit = [
+      /\b(?:pode|podem|podemos|poderia|poderiam|autorizo|autorizamos|solicito|solicitamos|peco|pedimos)\b.{0,32}\b(?:encerrar|encerramento|fechar|fechamento|baixar|baixa|cancelar|cancelamento|concluir|finalizar)\b.{0,35}\b(?:este|esse|o|do|deste|desse)?\s*(?:ticket|tkt|chamado|atendimento|solicitacao)\b/,
+      /\b(?:este|esse|o|deste|desse)\s+(?:ticket|tkt|chamado|atendimento|solicitacao)\b.{0,35}\b(?:pode|podem|deve|favor|solicito)\b.{0,22}\b(?:ser\s+)?(?:encerrado|fechado|baixado|cancelado|concluido|finalizado|encerrar|fechar|baixar|cancelar|concluir|finalizar)\b/,
+      /\b(?:solicito|solicitamos|peco|pedimos)\s+(?:o|a)?\s*(?:encerramento|fechamento|baixa|cancelamento|conclusao|finalizacao)\s+(?:do|deste|desse)\s+(?:ticket|tkt|chamado|atendimento)\b/,
+      /\b(?:podem|pode)\s+(?:dar\s+)?(?:baixa|encerrar|fechar|cancelar|concluir|finalizar)\s+(?:o|este|esse)?\s*(?:ticket|tkt|chamado|atendimento)\b/,
+      /\b(?:nao precisamos mais|nao e mais necessario|nao ha mais necessidade|podem desconsiderar)\b.{0,35}\b(?:este|esse|o)\s+(?:ticket|tkt|chamado|atendimento)\b/,
+      /\b(?:pode|podem)\s+(?:dar\s+)?(?:baixa|encerrar|fechar|cancelar|concluir|finalizar)\s+(?:por ai|por aqui|mesmo|entao)\b/,
+      /\b(?:solicito|solicitamos)\s+(?:o|a)?\s*(?:encerramento|fechamento|baixa)\s+(?:do|da)\s+(?:ticket|chamado|atendimento)\b/,
+    ];
+    const negative = [
+      /\b(?:nao|nunca|sem)\s+(?:pode|podemos|consigo|conseguimos|autoriza|autorizamos)\s+(?:baixar|cancelar|encerrar|fechar|concluir|finalizar)\b/,
+      /\b(?:cancelar|baixar|encerrar|fechar|concluir)\s+(?:a|o|uma|um)\s+(?:nota|nf-e|nfe|pedido|contrato|titulo|romaneio|documento|op|receita|boleto|parcela|lancamento)\b/,
+      /\b(?:ticket|chamado|atendimento)\s*(?:n[ºo.]?\s*)?\d{4,}\b.{0,90}\b(?:foi|esta|ficou|ja foi)\s+(?:encerrado|finalizado|fechado)\b/,
+      /\b(?:ticket|chamado|atendimento)\b.{0,35}\b(?:foi|ja havia sido|ja foi)\s+(?:encerrado|finalizado|fechado)\b.{0,90}\b(?:problema persiste|continua ocorrendo|persiste|voltou a ocorrer)\b/,
+    ];
+    const evidenceFor = (description: string) => {
+      const original = description.replace(/<[^>]*>/g, " ").replace(/&nbsp;/gi, " ").replace(/\s+/g, " ").trim();
+      const normalized = normalizeText(original);
+      if (negative.some(pattern => pattern.test(normalized))) return null;
+      const match = explicit.map(pattern => pattern.exec(normalized)).find(Boolean);
+      if (!match || match.index === undefined) return null;
+      // Preservar trecho relevante mesmo em interações extensas. Em textos
+      // com acentos, o índice normalizado pode deslocar alguns caracteres;
+      // o texto de evidência é apenas indicativo e não substitui o original.
+      const from = Math.max(0, match.index - 65);
+      const to = Math.min(original.length, match.index + match[0].length + 90);
+      return (from ? "…" : "") + original.slice(from, to) + (to < original.length ? "…" : "");
+    };
     const results = tickets.map((ticket) => {
-      const matches = ticket.actions.filter((action) => {
-        const value = (action.description ?? "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
-        return positive.test(value) && !negative.test(value);
-      });
-      const action = matches[0];
-      const evidence = (action?.description ?? "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+      const matches = ticket.actions.map((action) => ({
+        action, evidence: evidenceFor(action.description ?? ""),
+      })).filter((record) => record.evidence !== null);
+      const chosen = matches[0];
+      const action = chosen?.action;
+      const evidence = chosen?.evidence ?? "";
       const stillOpen = !["Closed", "Resolved", "Canceled", "Cancelled"].includes(ticket.baseStatus ?? "");
       // A classificação utiliza a equipe atual do Movidesk e não o texto da ação.
       // Equipes não reconhecidas permanecem em "Outros", sem inferência automática.
@@ -77,7 +123,7 @@ movideskRoutes.get("/closure-requests", requirePermission("attention"), async (r
     });
     const candidates = results.filter(row => row.hasClosureRequest);
     return response.json({
-      client, checkedTickets: tickets.length, enrichedTickets: tickets.filter(t => t.actions.length > 0).length,
+      client: allClients ? "Toda a carteira SIMER" : canonical, checkedTickets: tickets.length, enrichedTickets: tickets.filter(t => t.actions.length > 0).length,
       coverageLimited: tickets.length === 5000,
       totalCandidates: candidates.length,
       openCandidates: candidates.filter(row => row.stillOpen).length,
