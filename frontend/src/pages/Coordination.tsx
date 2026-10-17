@@ -155,6 +155,8 @@ export function Coordination() {
   const [csatDetailTitle, setCsatDetailTitle] = useState("");
   const [csatDetailLoading, setCsatDetailLoading] = useState(false);
   const [integrationDrawerOpen, setIntegrationDrawerOpen] = useState(false);
+  const [integrationDetailKey, setIntegrationDetailKey] = useState<"tickets" | "links" | "azure" | "services">("tickets");
+  const [slaComponentDetail, setSlaComponentDetail] = useState<{label:string;detail:string;weight:number;score:number}|null>(null);
   const [slaInfoDrawerOpen, setSlaInfoDrawerOpen] = useState(false);
 
   const analyticParams = useMemo(() => {
@@ -348,11 +350,11 @@ export function Coordination() {
               <Chip size="small" variant="outlined" label={`${integrationHealth.businessAreaCoveragePct}% com área de negócio`} />
               </Stack>
               <KpiGrid>
-                <KpiCard title="Tickets" value={integrationHealth.tickets} subtitle="Movidesk · ver cobertura" info="Tickets dos clientes da carteira SIMER." accent={aliareColors.info} onClick={()=>setIntegrationDrawerOpen(true)}/>
-                <KpiCard title="Vínculos Task" value={integrationHealth.linkedTasks} subtitle="Movidesk → Azure · ver detalhes" info="Tickets com número de Task relacionado." accent={aliareColors.green} onClick={()=>setIntegrationDrawerOpen(true)}/>
-                <KpiCard title="Work Items" value={integrationHealth.azureItems} subtitle="Azure DevOps · ver detalhes" info="Itens Azure no escopo da coordenação." accent={aliareColors.info} onClick={()=>setIntegrationDrawerOpen(true)}/>
+                <KpiCard title="Tickets" value={integrationHealth.tickets} subtitle="Movidesk · ver cobertura" info="Tickets dos clientes da carteira SIMER." accent={aliareColors.info} onClick={()=>{setIntegrationDetailKey("tickets");setIntegrationDrawerOpen(true)}}/>
+                <KpiCard title="Vínculos Task" value={integrationHealth.linkedTasks} subtitle="Movidesk → Azure · ver detalhes" info="Tickets com número de Task relacionado." accent={aliareColors.green} onClick={()=>{setIntegrationDetailKey("links");setIntegrationDrawerOpen(true)}}/>
+                <KpiCard title="Work Items" value={integrationHealth.azureItems} subtitle="Azure DevOps · ver detalhes" info="Itens Azure no escopo da coordenação." accent={aliareColors.info} onClick={()=>{setIntegrationDetailKey("azure");setIntegrationDrawerOpen(true)}}/>
                 <KpiCard title="CSAT" value={integrationHealth.csatResponses} subtitle="CSAT 1–5 · ver detalhes" info="Respostas Movidesk do tipo Carinhas/Smiley (escala 1–5) persistidas para a carteira." accent={aliareColors.warning} onClick={()=>{setIntegrationDrawerOpen(false);void openCsatDetails("CSAT · Todas as avaliações",{});}}/>
-                <KpiCard title="Serviços" value={integrationHealth.catalogServices} subtitle="Recorte enriquecido · ver detalhes" info="Metadados Movidesk sincronizados para os Serviços observados na carteira; não representa o catálogo global." accent={aliareColors.green} onClick={()=>setIntegrationDrawerOpen(true)}/>
+                <KpiCard title="Serviços" value={integrationHealth.catalogServices} subtitle="Recorte enriquecido · ver detalhes" info="Metadados Movidesk sincronizados para os Serviços observados na carteira; não representa o catálogo global." accent={aliareColors.green} onClick={()=>{setIntegrationDetailKey("services");setIntegrationDrawerOpen(true)}}/>
               </KpiGrid>
             </CardContent>
           </Card>}
@@ -377,7 +379,7 @@ export function Coordination() {
                       <Box><Typography sx={{fontWeight:900}}>Saúde SLA × OLA</Typography><Typography variant="body2" color="text.secondary">Índice transparente para leitura executiva; cada componente permanece disponível separadamente.</Typography></Box>
                       <Stack direction="row" spacing={1} sx={{alignItems:"center"}}><Chip color={slaDevelopment.health.status==="stable"?"success":slaDevelopment.health.status==="attention"?"warning":"error"} label={`${slaDevelopment.health.score}% · ${slaDevelopment.health.status==="stable"?"Estável":slaDevelopment.health.status==="attention"?"Atenção":"Crítico"}`}/><Tooltip title={slaDevelopment.health.formula}><InfoOutlined sx={{fontSize:18,color:"text.secondary"}}/></Tooltip></Stack>
                     </Stack>
-                    <KpiGrid>{slaDevelopment.health.components.map(component=><KpiCard key={component.key} title={component.label} value={`${component.score}%`} subtitle={`${component.detail} · ver composição`} info={`${component.weight}% de peso no índice. ${slaDevelopment.health?.formula ?? ""}`} progress={component.score} onClick={()=>setSlaInfoDrawerOpen(true)}/>)}</KpiGrid>
+                    <KpiGrid>{slaDevelopment.health.components.map(component=><KpiCard key={component.key} title={component.label} value={`${component.score}%`} subtitle={`${component.detail} · ver composição`} info={`${component.weight}% de peso no índice. ${slaDevelopment.health?.formula ?? ""}`} progress={component.score} onClick={()=>setSlaComponentDetail({label:component.label,detail:component.detail,weight:component.weight,score:component.score})}/>)}</KpiGrid>
                     {slaDevelopment.health.alerts.length>0&&<Stack spacing={.7} sx={{mt:1}}>{slaDevelopment.health.alerts.map((alert,i)=><Alert key={i} severity={alert.severity} variant="outlined"><Typography sx={{fontWeight:800}}>{alert.title}</Typography><Typography variant="body2">{alert.detail}</Typography></Alert>)}</Stack>}
                   </Box>}
                   <Alert severity={slaDevelopment.dataQuality.missingAzure || slaDevelopment.dataQuality.missingTaskCreatedAt || slaDevelopment.dataQuality.missingPriority || slaDevelopment.dataQuality.invalidTimeline ? "warning" : "success"} variant="outlined">
@@ -815,9 +817,9 @@ export function Coordination() {
         </CardContent>
       </Card>
       <Drawer anchor="right" open={integrationDrawerOpen} onClose={()=>setIntegrationDrawerOpen(false)} slotProps={{paper:{sx:detailDrawerPaperSx}}}>
-        <DetailPanelHeader eyebrow="Observabilidade" title="Saúde das integrações" identifier={integrationHealth ? `${Object.keys(integrationHealth.sources).length} fonte(s)` : undefined} onClose={()=>setIntegrationDrawerOpen(false)}/>
+        <DetailPanelHeader eyebrow="Observabilidade" title={({tickets:"Tickets Movidesk",links:"Vínculos Movidesk → Azure",azure:"Work Items Azure DevOps",services:"Catálogo de serviços"} as const)[integrationDetailKey]} identifier={integrationHealth ? `${Object.keys(integrationHealth.sources).length} fonte(s)` : undefined} onClose={()=>setIntegrationDrawerOpen(false)}/>
         <Stack spacing={1.25} sx={{p:2}}>
-          <Typography variant="body2" color="text.secondary">Cobertura das fontes usadas pela Central. Cobertura baixa pode afetar a completude das análises, sem necessariamente indicar indisponibilidade da origem.</Typography>
+          <Typography variant="body2" color="text.secondary">{({tickets:"Tickets Movidesk no escopo operacional.",links:"Vínculos entre tickets Movidesk e Tasks do Azure DevOps.",azure:"Work Items encontrados no recorte operacional.",services:"Metadados de serviços usados para classificar os atendimentos."} as const)[integrationDetailKey]}</Typography>
           {integrationHealth&&[
             ["Movidesk · tickets",integrationHealth.tickets,"Tickets no escopo"],
             ["Movidesk → Azure",integrationHealth.linkedTasks,`${integrationHealth.taskLinkCoveragePct}% com Task vinculada`],
