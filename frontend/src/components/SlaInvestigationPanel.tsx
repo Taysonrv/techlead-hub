@@ -95,7 +95,7 @@ export function SlaInvestigationPanel() {
         <Box sx={{position:"relative",pl:2,borderLeft:"2px solid",borderColor:"primary.main",minWidth:0}}>
          <Typography variant="body2" sx={{fontWeight:750}}>{event.title}</Typography>
          <Typography variant="body2" sx={{mt:0.4,overflowWrap:"anywhere"}}>{event.detail}</Typography>
-         <Typography variant="caption" color="text.secondary" sx={{display:"block"}} sx={{mt:0.75}}>Evidência: {event.evidence}</Typography>
+         <Typography variant="caption" color="text.secondary" sx={{display:"block",mt:0.75}}>Evidência: {event.evidence}</Typography>
         </Box>
        </Box>)}
       </Stack>}
