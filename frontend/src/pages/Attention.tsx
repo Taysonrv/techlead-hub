@@ -154,8 +154,8 @@ type ClosureAudit = {
   client: string; checkedTickets: number; enrichedTickets: number; coverageLimited: boolean;
   openWithProduct: number; openWithSupport: number; authorizedOpenWithProduct: number; authorizedOpenWithSupport: number;
   totalCandidates: number; openCandidates: number; closedCandidates: number; disclaimer: string;
-  items: Array<{ ticketId: number; subject: string; status: string; stillOpen: boolean;
-    area: "Produto" | "Suporte" | "Outros"; owner: string | null; ownerTeam: string | null; hasClosureRequest: boolean;
+  items: Array<{ ticketId: number; subject: string; client?: string | null; status: string; stillOpen: boolean;
+    area: "Produto" | "Suporte" | "Outros"; owner: string | null; ownerTeam: string | null; hasClosureRequest: boolean; hasActions?: boolean;
     actionDate: string | null; actionAuthor: string | null; evidence: string; actionId: number }>;
 };
 
@@ -165,7 +165,10 @@ export function Attention() {
 
   const [closureAudit, setClosureAudit] = useState<ClosureAudit | null>(null);
   const [closureBusy, setClosureBusy] = useState(false);
+  const [closureClient, setClosureClient] = useState("BOM JESUS COOPERATIVA AGROINDUSTRIAL - LAPA-PR");
+  const [closureClients, setClosureClients] = useState<string[]>([]);
   const [selectedClosure, setSelectedClosure] = useState<ClosureAudit["items"][number] | null>(null);
+  const [closureMetric, setClosureMetric] = useState<string | null>(null);
   const [closureError, setClosureError] = useState<string | null>(null);
   const [showAllClosure, setShowAllClosure] = useState(false);
   const [closureArea, setClosureArea] = useState<"Todos" | "Produto" | "Suporte" | "Outros">("Todos");
@@ -217,7 +220,28 @@ export function Attention() {
     [closureAudit, showAllClosure, closureArea, closureAuthorization],
   );
 
-  function exportClosureList() {
+  const closureMetricItems = useMemo(() => {
+    if (!closureAudit || !closureMetric) return [];
+    return closureAudit.items.filter((item) => {
+      if (closureMetric === "openCandidates") return item.stillOpen && item.hasClosureRequest;
+      if (closureMetric === "closedCandidates") return !item.stillOpen && item.hasClosureRequest;
+      if (closureMetric === "enrichedTickets") return item.hasActions === true;
+      if (closureMetric === "product") return item.stillOpen && item.area === "Produto";
+      if (closureMetric === "support") return item.stillOpen && item.area === "Suporte";
+      return false;
+    });
+  }, [closureAudit, closureMetric]);
+
+  function openClosureMetric(key: string) {
+    setClosureMetric(key);
+    if (key === "product") { setClosureArea("Produto"); setClosureAuthorization("all"); setShowAllClosure(false); }
+    else if (key === "support") { setClosureArea("Suporte"); setClosureAuthorization("all"); setShowAllClosure(false); }
+    else if (key === "closedCandidates") { setClosureArea("Todos"); setClosureAuthorization("identified"); setShowAllClosure(true); }
+    else if (key === "enrichedTickets") { setClosureArea("Todos"); setClosureAuthorization("all"); setShowAllClosure(true); }
+    else { setClosureArea("Todos"); setClosureAuthorization("identified"); setShowAllClosure(false); }
+  }
+
+  function exportClosureList(rowsOverride?: ClosureAudit["items"]) {
     if (!closureAudit) return;
     const columns = ["Ticket", "Assunto", "Equipe", "Responsável", "Situação", "Ainda aberto", "Indício de autorização", "Autor", "Data da interação", "Evidência"];
     const escapeCsv = (value: unknown) => {
@@ -225,7 +249,7 @@ export function Attention() {
       const safe = /^[\t\r\n ]*[=+@-]/.test(raw) ? "'" + raw : raw;
       return '"' + safe.replace(/"/g, '""') + '"';
     };
-    const records = displayedClosureItems.map((item) => [
+    const records = (rowsOverride ?? displayedClosureItems).map((item) => [
       item.ticketId, item.subject, item.ownerTeam ?? item.area, item.owner ?? "", item.status, item.stillOpen ? "Sim" : "Não", item.hasClosureRequest ? "Sim - verificar autoria" : "Não identificado",
       item.actionAuthor ?? "", item.actionDate ? new Date(item.actionDate).toLocaleString("pt-BR") : "", item.evidence,
     ].map(escapeCsv).join(";"));
@@ -240,12 +264,22 @@ export function Attention() {
     URL.revokeObjectURL(url);
   }
 
+  useEffect(() => {
+    let active = true;
+    void api.get<{ clients: string[] }>("/movidesk/closure-requests/clients")
+      .then(({ data }) => { if (active) setClosureClients(data.clients); })
+      .catch(() => undefined);
+    return () => { active = false; };
+  }, []);
+
   async function loadClosureAudit() {
     setClosureBusy(true);
     setClosureError(null);
     try {
-      const { data } = await api.get<ClosureAudit>("/movidesk/closure-requests", { params: { client: "Bom Jesus" } });
+      const { data } = await api.get<ClosureAudit>("/movidesk/closure-requests", { params: { client: closureClient } });
       setClosureAudit(data);
+      setClosureMetric(null);
+      setSelectedClosure(null);
     } catch {
       setClosureError("Não foi possível consultar as interações. Verifique as permissões e a cobertura da sincronização Movidesk.");
     } finally {
@@ -897,74 +931,112 @@ export function Attention() {
         action={<PeriodFilter />}
       />
 
-      <Card variant="outlined" sx={{ mb: 2, borderRadius: 2.5 }}>
-        <CardContent>
-          <Stack direction={{ xs: "column", md: "row" }} spacing={1.5} sx={{ alignItems: { md: "center" }, justifyContent: "space-between", mb: 1 }}>
+      <Card variant="outlined" sx={{ mb: 2, borderRadius: 3, bgcolor: "background.paper", overflow: "hidden" }}>
+        <CardContent sx={{ p: { xs: 2, md: 2.5 }, "&:last-child": { pb: 2.5 } }}>
+          <Stack direction={{ xs: "column", md: "row" }} spacing={1.5} sx={{ alignItems: { md: "center" }, justifyContent: "space-between", mb: 2 }}>
             <Box>
-              <Typography sx={{ fontWeight: 800 }}>Pedidos de baixa e cancelamento — Bom Jesus</Typography>
-              <Typography variant="body2" color="text.secondary">
-                Identifica candidatos no histórico sincronizado; requer conferência do autor e do contexto.
-              </Typography>
+              <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 750, letterSpacing: 1 }}>INTELIGÊNCIA OPERACIONAL · CARTEIRA DE CLIENTES</Typography>
+              <Typography variant="h6" sx={{ fontWeight: 850, letterSpacing: "-.02em" }}>Solicitações de baixa e cancelamento</Typography>
+              <Typography variant="body2" color="text.secondary">Identifique pedidos de encerramento e acompanhe pendências por equipe responsável.</Typography>
             </Box>
-            <Button variant="outlined" disabled={closureBusy} onClick={() => void loadClosureAudit()}>
-              {closureBusy ? "Analisando..." : "Analisar solicitações"}
+            <Button variant="contained" disabled={closureBusy} onClick={() => void loadClosureAudit()} sx={{ flexShrink: 0, minHeight: 40 }}>
+              {closureBusy ? "Analisando..." : "Atualizar análise"}
             </Button>
           </Stack>
-          {closureError && <Alert severity="warning" sx={{ mb: 1 }}>{closureError}</Alert>}
+          <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ alignItems: { sm: "center" }, mb: 2 }}>
+            <FormControl size="small" sx={{ minWidth: { xs: "100%", sm: 300 }, maxWidth: 460 }}>
+              <InputLabel>Cliente da carteira</InputLabel>
+              <Select value={closureClient} label="Cliente da carteira" onChange={(event) => { setClosureClient(event.target.value); setClosureAudit(null); setClosureMetric(null); setSelectedClosure(null); }}>
+                <MenuItem value="__all__">Toda a carteira SIMER</MenuItem>
+                {closureClients.map((name) => <MenuItem key={name} value={name}>{name}</MenuItem>)}
+              </Select>
+            </FormControl>
+            <Typography variant="caption" color="text.secondary">Carteira oficial SIMER. Selecione o cliente e clique em Atualizar análise.</Typography>
+          </Stack>
+          {closureError && <Alert severity="warning" sx={{ mb: 1.5 }}>{closureError}</Alert>}
           {closureAudit && (
             <>
-              <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap", mb: 1.5 }}>
-                <Chip color="warning" label={`${closureAudit.openCandidates} candidatos ainda abertos`} />
-                <Chip variant="outlined" label={`${closureAudit.closedCandidates} já resolvidos/fechados`} />
-                <Chip variant="outlined" label={`${closureAudit.enrichedTickets} de ${closureAudit.checkedTickets} tickets com ações sincronizadas`} />
-              </Stack>
-              <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap", mb: 1 }}>
-                <Chip variant="outlined" label={`Produto: ${closureAudit.openWithProduct} abertos · ${closureAudit.authorizedOpenWithProduct} com indício`} />
-                <Chip variant="outlined" label={`Suporte: ${closureAudit.openWithSupport} abertos · ${closureAudit.authorizedOpenWithSupport} com indício`} />
-              </Stack>
-              <Stack direction={{ xs: "column", md: "row" }} spacing={1.5} sx={{ mb: 1.5 }}>
-                <FormControl size="small" sx={{ minWidth: 190 }}>
-                  <InputLabel>Equipe atual</InputLabel>
-                  <Select value={closureArea} label="Equipe atual" onChange={(event) => setClosureArea(event.target.value as typeof closureArea)}>
-                    <MenuItem value="Todos">Todas as equipes</MenuItem>
-                    <MenuItem value="Produto">Produto</MenuItem>
-                    <MenuItem value="Suporte">Suporte</MenuItem>
-                    <MenuItem value="Outros">Outras equipes</MenuItem>
-                  </Select>
-                </FormControl>
-                <FormControl size="small" sx={{ minWidth: 230 }}>
-                  <InputLabel>Solicitação de encerramento</InputLabel>
-                  <Select value={closureAuthorization} label="Solicitação de encerramento" onChange={(event) => setClosureAuthorization(event.target.value as typeof closureAuthorization)}>
-                    <MenuItem value="identified">Com indício de autorização</MenuItem>
-                    <MenuItem value="missing">Sem solicitação identificada</MenuItem>
-                    <MenuItem value="all">Todos os atendimentos</MenuItem>
-                  </Select>
-                </FormControl>
-              </Stack>
-              <Alert severity={closureAudit.enrichedTickets < closureAudit.checkedTickets || closureAudit.coverageLimited ? "warning" : "info"} sx={{ mb: 1.5 }}>
-                {closureAudit.disclaimer} {closureAudit.coverageLimited ? "A consulta atingiu o limite de 5.000 tickets." : ""}
+              <Box sx={{ display: "grid", gridTemplateColumns: { xs: "repeat(2, minmax(0, 1fr))", lg: "repeat(5, minmax(0, 1fr))" }, gap: 1.25, mb: 2 }}>
+                {[
+                  { key: "openCandidates", label: "Abertos com indício", value: closureAudit.openCandidates, detail: "Pendentes de validação", tone: "warning.main" },
+                  { key: "closedCandidates", label: "Já concluídos", value: closureAudit.closedCandidates, detail: "Resolvidos ou fechados", tone: "success.main" },
+                  { key: "enrichedTickets", label: "Histórico disponível", value: closureAudit.enrichedTickets, detail: `De ${closureAudit.checkedTickets} tickets`, tone: "info.main" },
+                  { key: "product", label: "Produto · abertos", value: closureAudit.openWithProduct, detail: `${closureAudit.authorizedOpenWithProduct} com indício`, tone: "primary.main" },
+                  { key: "support", label: "Suporte · abertos", value: closureAudit.openWithSupport, detail: `${closureAudit.authorizedOpenWithSupport} com indício`, tone: "primary.main" },
+                ].map((metric) => (
+                  <Box key={metric.key} role="button" tabIndex={0} onClick={() => openClosureMetric(metric.key)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); openClosureMetric(metric.key); } }} sx={{ border: "1px solid", borderColor: closureMetric === metric.key ? "primary.main" : "divider", borderRadius: 2.25, px: 1.75, py: 1.4, bgcolor: "background.paper", minWidth: 0, cursor: "pointer", transition: "border-color .15s, box-shadow .15s", boxShadow: closureMetric === metric.key ? 2 : 0, "&:hover": { borderColor: "primary.main", boxShadow: 2 }, "&:focus-visible": { outline: "2px solid", outlineColor: "primary.main", outlineOffset: 2 } }}>
+                    <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 750, display: "block" }}>{metric.label}</Typography>
+                    <Typography sx={{ fontSize: "1.65rem", fontWeight: 850, lineHeight: 1.4, color: metric.tone, fontVariantNumeric: "tabular-nums" }}>{metric.value}</Typography>
+                    <Typography variant="caption" color="text.secondary">{metric.detail}</Typography>
+                  </Box>
+                ))}
+              </Box>
+              <Box sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2.5, p: 1.5, mb: 1.5, bgcolor: "background.default" }}>
+                <Stack direction={{ xs: "column", lg: "row" }} spacing={1.25} sx={{ alignItems: { lg: "center" }, justifyContent: "space-between" }}>
+                  <Stack direction={{ xs: "column", sm: "row" }} spacing={1.25} sx={{ flexWrap: "wrap" }}>
+                    <FormControl size="small" sx={{ minWidth: { xs: "100%", sm: 190 } }}>
+                      <InputLabel>Equipe atual</InputLabel>
+                      <Select value={closureArea} label="Equipe atual" onChange={(event) => setClosureArea(event.target.value as typeof closureArea)}>
+                        <MenuItem value="Todos">Todas as equipes</MenuItem>
+                        <MenuItem value="Produto">Produto</MenuItem>
+                        <MenuItem value="Suporte">Suporte</MenuItem>
+                        <MenuItem value="Outros">Outras equipes</MenuItem>
+                      </Select>
+                    </FormControl>
+                    <FormControl size="small" sx={{ minWidth: { xs: "100%", sm: 230 } }}>
+                      <InputLabel>Pedido de encerramento</InputLabel>
+                      <Select value={closureAuthorization} label="Pedido de encerramento" onChange={(event) => setClosureAuthorization(event.target.value as typeof closureAuthorization)}>
+                        <MenuItem value="identified">Com indício</MenuItem>
+                        <MenuItem value="missing">Sem indício identificado</MenuItem>
+                        <MenuItem value="all">Todos</MenuItem>
+                      </Select>
+                    </FormControl>
+                    <Button size="small" variant="text" onClick={() => setShowAllClosure((v) => !v)}>
+                      {showAllClosure ? "Somente abertos" : "Incluir fechados"}
+                    </Button>
+                  </Stack>
+                  <Button size="small" variant="outlined" disabled={!displayedClosureItems.length} onClick={() => exportClosureList()} sx={{ flexShrink: 0 }}>Exportar CSV</Button>
+                </Stack>
+              </Box>
+              <Alert severity={closureAudit.enrichedTickets < closureAudit.checkedTickets || closureAudit.coverageLimited ? "warning" : "info"}
+                sx={{ mb: 1.5, py: .25, border: "1px solid", borderColor: "divider", "& .MuiAlert-message": { color: "text.secondary", fontSize: ".8rem" } }}>
+                <Typography component="span" variant="body2" sx={{ fontWeight: 750 }}>Leitura analítica do histórico. </Typography>
+                Correspondências textuais exigem validação da autoria e do contexto. {closureAudit.coverageLimited ? "Limite de consulta atingido. " : ""}
+                Cobertura: {closureAudit.enrichedTickets} de {closureAudit.checkedTickets} tickets.
               </Alert>
-              <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap", alignItems: "center", mb: 1 }}>
-                <Button size="small" variant="text" onClick={() => setShowAllClosure((value) => !value)}>
-                {showAllClosure ? "Exibir apenas em aberto" : "Exibir também os já fechados"}
-              </Button>
-                <Button size="small" variant="outlined" disabled={!displayedClosureItems.length} onClick={exportClosureList}>Exportar lista (Excel/CSV)</Button>
-                <Typography variant="caption" color="text.secondary">{displayedClosureItems.length} resultado(s) exibido(s)</Typography>
+              <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between", mb: 1 }}>
+                <Typography sx={{ fontWeight: 750, fontSize: ".9rem" }}>Atendimentos identificados</Typography>
+                <Typography variant="caption" color="text.secondary">{displayedClosureItems.length} resultado(s) · até 200 visíveis na tabela · exportação completa do filtro</Typography>
               </Stack>
-              <TableContainer sx={{ maxHeight: 420, overflowX: "auto", bgcolor: "background.paper", border: "1px solid", borderColor: "divider", borderRadius: 2, "& .MuiTableCell-head": { color: "text.primary", bgcolor: "action.hover", fontWeight: 800 }, "& .MuiTableCell-body": { color: "text.primary" }, "& .MuiTableRow-root:nth-of-type(even)": { bgcolor: "action.hover" } }}>
-                <Table size="small" stickyHeader>
+              <TableContainer sx={{ maxHeight: 500, overflowX: "auto", border: "1px solid", borderColor: "divider", borderRadius: 2.25, bgcolor: "background.paper",
+                "& .MuiTableCell-head": { backgroundColor: "background.paper", color: "text.primary", opacity: 1, fontWeight: 800, fontSize: ".73rem", letterSpacing: ".025em", whiteSpace: "nowrap", borderColor: "divider" },
+                "& .MuiTableCell-body": { color: "text.primary", borderColor: "divider", py: 1.35 },
+                "& .MuiTableRow-root:hover": { bgcolor: "action.hover" } }}>
+                <Table size="small" stickyHeader sx={{ minWidth: 940 }}>
                   <TableHead><TableRow>
-                    <TableCell>Ticket</TableCell><TableCell>Equipe atual</TableCell><TableCell>Autorização</TableCell><TableCell>Situação</TableCell><TableCell>Autor/data</TableCell><TableCell>Evidência da interação</TableCell>
+                    <TableCell sx={{ width: 210 }}>TICKET</TableCell><TableCell sx={{ width: 200 }}>EQUIPE / RESPONSÁVEL</TableCell><TableCell>INDÍCIO</TableCell>
+                    <TableCell>SITUAÇÃO</TableCell><TableCell sx={{ width: 180 }}>AUTOR / DATA</TableCell><TableCell>EVIDÊNCIA</TableCell>
                   </TableRow></TableHead>
                   <TableBody>
                     {displayedClosureItems.slice(0, 200).map((item) => (
                       <TableRow key={item.ticketId} hover sx={{ cursor: "pointer" }} onClick={() => setSelectedClosure(item)}>
-                        <TableCell><Button size="small" onClick={(event) => { event.stopPropagation(); setSelectedClosure(item); }}>#{item.ticketId}</Button><Typography variant="caption" sx={{ display: "block", maxWidth: 240 }}>{item.subject}</Typography></TableCell>
-                        <TableCell>{item.ownerTeam || item.area}<Typography variant="caption" sx={{ display: "block" }} color="text.secondary">{item.owner ?? "Sem responsável"}</Typography></TableCell>
-                        <TableCell><Chip size="small" variant="outlined" color={item.hasClosureRequest ? "warning" : "default"} label={item.hasClosureRequest ? "Indício encontrado" : "Não identificado"} /></TableCell>
-                        <TableCell><Chip size="small" color={item.stillOpen ? "warning" : "success"} label={item.status} /></TableCell>
-                        <TableCell>{item.actionAuthor || "Autor não identificado"}<Typography variant="caption" sx={{ display: "block" }}>{item.actionDate ? new Date(item.actionDate).toLocaleDateString("pt-BR") : "Sem data"}</Typography></TableCell>
-                        <TableCell sx={{ maxWidth: 420, whiteSpace: "normal", overflowWrap: "anywhere" }}>{item.evidence}</TableCell>
+                        <TableCell>
+                          <Typography sx={{ color: "primary.main", fontWeight: 850, fontSize: ".88rem" }}>#{item.ticketId}</Typography>
+                          <Typography variant="caption" color="text.secondary" sx={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", lineHeight: 1.5 }} title={item.subject}>{item.subject}</Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="body2" sx={{ fontWeight: 650, lineHeight: 1.35 }}>{item.ownerTeam || item.area}</Typography>
+                          <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>{item.owner || "Sem responsável"}</Typography>
+                        </TableCell>
+                        <TableCell><Chip size="small" variant="outlined" color={item.hasClosureRequest ? "warning" : "default"} label={item.hasClosureRequest ? "Com indício" : "Sem indício"} sx={{ fontWeight: 650 }} /></TableCell>
+                        <TableCell><Chip size="small" variant="outlined" color={item.stillOpen ? "warning" : "success"} label={item.status} sx={{ fontWeight: 650 }} /></TableCell>
+                        <TableCell>
+                          <Typography variant="caption" sx={{ fontWeight: 650, display: "block" }}>{item.actionAuthor || "Não identificado"}</Typography>
+                          <Typography variant="caption" color="text.secondary">{item.actionDate ? new Date(item.actionDate).toLocaleDateString("pt-BR") : "—"}</Typography>
+                        </TableCell>
+                        <TableCell sx={{ maxWidth: 280 }}>
+                          <Typography variant="caption" title={item.evidence} sx={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", lineHeight: 1.55 }} color="text.secondary">{item.evidence || "Sem evidência identificada"}</Typography>
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -1766,25 +1838,57 @@ export function Attention() {
         />
       </Card>
 
+      <Drawer anchor="right" open={Boolean(closureMetric)} onClose={() => setClosureMetric(null)} slotProps={{ paper: { sx: detailDrawerPaperSx } }}>
+        <Box sx={{ width: { xs: "100vw", sm: 560 }, maxWidth: "100vw", p: 2.5, bgcolor: "background.paper", minHeight: "100%", color: "text.primary" }}>
+          <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "center", mb: 1.5 }}>
+            <Box>
+              <Typography variant="overline" color="text.secondary">ATENDIMENTOS · DETALHAMENTO</Typography>
+              <Typography variant="h6" sx={{ fontWeight: 850 }}>{({ openCandidates: "Abertos com indício", closedCandidates: "Já concluídos", enrichedTickets: "Histórico disponível", product: "Produto · abertos", support: "Suporte · abertos" } as Record<string, string>)[closureMetric ?? ""]}</Typography>
+              <Typography variant="body2" color="text.secondary">{closureMetricItems.length} atendimento(s) no recorte</Typography>
+            </Box>
+            <Button onClick={() => setClosureMetric(null)}>Fechar</Button>
+          </Stack>
+          <Button variant="outlined" size="small" sx={{ mb: 2 }} onClick={() => exportClosureList(closureMetricItems)}>Exportar lista filtrada</Button>
+          <Stack spacing={1}>
+            {closureMetricItems.slice(0, 200).map((item) => (
+              <Box key={item.ticketId} sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2, p: 1.5 }}>
+                <Stack direction="row" sx={{ justifyContent: "space-between", gap: 1 }}>
+                  <Typography sx={{ color: "primary.main", fontWeight: 800 }}>#{item.ticketId}</Typography>
+                  <Chip size="small" variant="outlined" color={item.stillOpen ? "warning" : "success"} label={item.status} />
+                </Stack>
+                <Typography variant="body2" sx={{ fontWeight: 650, my: .5 }}>{item.subject}</Typography>
+                <Typography variant="caption" color="text.secondary">{item.ownerTeam || item.area} · {item.owner || "Sem responsável"}</Typography>
+                <Stack direction="row" spacing={1} useFlexGap sx={{ mt: 1, flexWrap: "wrap" }}>
+                  <Button size="small" onClick={() => { setClosureMetric(null); setSelectedClosure(item); }}>Ver evidência</Button>
+                  <Button size="small" onClick={() => navigate(`/operacao/tickets?movidesk=${item.ticketId}`)}>Detalhe completo</Button>
+                  <Button size="small" onClick={() => navigate(`/investigacao?q=${item.ticketId}`)}>Investigar</Button>
+                  <Button size="small" onClick={() => void navigator.clipboard.writeText(`#${item.ticketId} - ${item.subject}`)}>Copiar</Button>
+                </Stack>
+              </Box>
+            ))}
+          </Stack>
+        </Box>
+      </Drawer>
+
       <Drawer anchor="right" open={Boolean(selectedClosure)} onClose={() => setSelectedClosure(null)}
         slotProps={{ paper: { sx: detailDrawerPaperSx } }}>
         <Box sx={{ width: { xs: "100vw", sm: 540 }, maxWidth: "100vw", p: 2.5, color: "text.primary", bgcolor: "background.paper", minHeight: "100%" }}>
           {selectedClosure && (
-            <Stack spacing={2}>
-              <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "flex-start" }}>
+            <Stack spacing={2.25}>
+              <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "flex-start", borderBottom: "1px solid", borderColor: "divider", pb: 1.5 }}>
                 <Box>
-                  <Typography variant="overline" color="text.secondary">Solicitação de encerramento · Bom Jesus</Typography>
-                  <Typography variant="h6" sx={{ fontWeight: 850 }}>Ticket #{selectedClosure.ticketId}</Typography>
+                  <Typography variant="overline" color="text.secondary">Solicitação de encerramento · Cliente</Typography>
+                  <Typography variant="h6" sx={{ fontWeight: 850, letterSpacing: "-.02em" }}>Ticket #{selectedClosure.ticketId}</Typography>
                 </Box>
                 <Button size="small" onClick={() => setSelectedClosure(null)}>Fechar</Button>
               </Stack>
-              <Typography sx={{ fontWeight: 700 }}>{selectedClosure.subject}</Typography>
+              <Typography sx={{ fontWeight: 750, fontSize: "1.05rem", lineHeight: 1.4 }}>{selectedClosure.subject}</Typography>
               <Typography variant="body2" color="text.secondary">Equipe atual: {selectedClosure.ownerTeam || selectedClosure.area} · Responsável: {selectedClosure.owner || "Não informado"}</Typography>
               <Chip sx={{ alignSelf: "flex-start" }} size="small" variant="outlined" label={selectedClosure.hasClosureRequest ? "Indício de autorização identificado" : "Sem autorização identificada"} />
               <Chip sx={{ alignSelf: "flex-start" }} size="small" label={selectedClosure.status} color={selectedClosure.stillOpen ? "warning" : "success"} />
               <Alert severity="info">A identificação de autorização é preliminar e depende da cobertura do histórico. Confirme a autoria, a intenção e a situação atual antes de encaminhar para encerramento.</Alert>
               <Box sx={{ bgcolor: "action.hover", border: "1px solid", borderColor: "divider", borderRadius: 2, p: 2 }}>
-                <Typography variant="subtitle2">Interação identificada</Typography>
+                <Typography variant="subtitle2" sx={{ fontWeight: 800, mb: .5 }}>Evidência da interação</Typography>
                 <Typography variant="caption" color="text.secondary">
                   {selectedClosure.actionAuthor || "Autor não identificado"} · {selectedClosure.actionDate ? new Date(selectedClosure.actionDate).toLocaleString("pt-BR") : "Sem data"}
                 </Typography>
@@ -1794,7 +1898,7 @@ export function Attention() {
                 <Button variant="contained" onClick={() => navigate(`/operacao/tickets?movidesk=${selectedClosure.ticketId}`)}>Abrir detalhe completo</Button>
                 <Button variant="outlined" onClick={() => navigate(`/investigacao?q=${selectedClosure.ticketId}`)}>Investigar ticket</Button>
                 <Button variant="outlined" onClick={() => void navigator.clipboard.writeText(`#${selectedClosure.ticketId} - ${selectedClosure.subject}\\n${selectedClosure.evidence}`)}>Copiar resumo</Button>
-                <Button variant="outlined" onClick={() => window.dispatchEvent(new CustomEvent("techlead-hub:share-chat", { detail: { label: "Ticket", recordId: selectedClosure.ticketId, title: selectedClosure.subject, client: "Bom Jesus", status: selectedClosure.status, path: `/operacao/tickets?movidesk=${selectedClosure.ticketId}` } }))}>Compartilhar no chat</Button>
+                <Button variant="outlined" onClick={() => window.dispatchEvent(new CustomEvent("techlead-hub:share-chat", { detail: { label: "Ticket", recordId: selectedClosure.ticketId, title: selectedClosure.subject, client: selectedClosure.client ?? closureClient, status: selectedClosure.status, path: `/operacao/tickets?movidesk=${selectedClosure.ticketId}` } }))}>Compartilhar no chat</Button>
               </Stack>
               <Typography variant="caption" color="text.secondary">Para histórico completo, tarefas vinculadas, prazos e demais ações, utilize “Abrir detalhe completo”.</Typography>
             </Stack>
