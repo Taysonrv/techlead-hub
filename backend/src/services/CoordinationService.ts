@@ -142,6 +142,49 @@ export class CoordinationService {
     };
   }
 
+  async integrationDetails(kind: "tickets" | "links" | "azure" | "services", days = 30, startDate?: string, endDate?: string) {
+    const now = new Date();
+    const parsedStart = startDate ? new Date(`${startDate}T00:00:00.000`) : null;
+    const parsedEnd = endDate ? new Date(`${endDate}T23:59:59.999`) : null;
+    const safeDays = Math.min(Math.max(days || 30, 1), 730);
+    const since = parsedStart && !Number.isNaN(parsedStart.getTime()) ? parsedStart : new Date(now.getTime() - (safeDays - 1) * 86400000);
+    const until = parsedEnd && !Number.isNaN(parsedEnd.getTime()) ? parsedEnd : now;
+    const where = scopedTicketWhere({ AND: [ticketOperationalScope(), { isDeleted: false }, { createdDate: { gte: since, lte: until } }] });
+    if (kind === "services") {
+      const [services, tickets] = await Promise.all([
+        prisma.movideskServiceCatalog.findMany({ where: { isActive: true }, orderBy: { name: "asc" }, take: 300, select: { id: true, name: true, parentServiceId: true, defaultCategory: true, defaultUrgency: true, syncedAt: true } }),
+        prisma.ticket.findMany({ where, select: { movideskId: true, subject: true, client: true, owner: true, service: true, serviceFirstLevel: true, serviceSecondLevel: true, serviceThirdLevel: true } }),
+      ]);
+      const serviceCounts = new Map<string, number>();
+      for (const ticket of tickets) {
+        for (const name of [ticket.service, ticket.serviceFirstLevel, ticket.serviceSecondLevel, ticket.serviceThirdLevel]) {
+          if (name?.trim()) serviceCounts.set(name.trim().toLocaleLowerCase("pt-BR"), (serviceCounts.get(name.trim().toLocaleLowerCase("pt-BR")) ?? 0) + 1);
+        }
+      }
+      return { kind, total: services.length, loaded: services.length, truncated: false, services: services.map(s => ({ ...s, ticketCount: serviceCounts.get(s.name.trim().toLocaleLowerCase("pt-BR")) ?? 0 })), tickets: [], workItems: [] };
+    }
+    const tickets = await prisma.ticket.findMany({
+      where,
+      orderBy: [{ createdDate: "desc" }],
+      take: 1000,
+      select: { movideskId: true, protocol: true, subject: true, status: true, urgency: true, client: true, owner: true, createdDate: true, lastUpdate: true, taskNumber: true, taskStatus: true, taskTitle: true, service: true, serviceFirstLevel: true, serviceSecondLevel: true, serviceThirdLevel: true, category: true, cause: true },
+    });
+    const linkedTickets = tickets.filter(t => t.taskNumber !== null);
+    const taskIds = [...new Set(linkedTickets.map(t => t.taskNumber).filter((id): id is number => id !== null))];
+    const workItems = (kind === "azure" || kind === "links") && taskIds.length ? await prisma.azureWorkItem.findMany({
+      where: scopedAzureWhere({ id: { in: taskIds } }),
+      orderBy: [{ azureChangedAt: "desc" }],
+      take: 1000,
+      select: { id: true, workItemType: true, title: true, state: true, client: true, assignedToName: true, movideskTicket: true, azureChangedAt: true, remoteUrl: true },
+    }) : [];
+    if (kind === "links") {
+      const azureById = new Map(workItems.map(w => [w.id, w]));
+      return { kind, total: linkedTickets.length, loaded: linkedTickets.length, truncated: false, tickets: linkedTickets.map(t => ({ ...t, workItem: t.taskNumber ? azureById.get(t.taskNumber) ?? null : null })), workItems, services: [] };
+    }
+    if (kind === "azure") return { kind, total: workItems.length, loaded: workItems.length, truncated: false, tickets: [], workItems, services: [] };
+    return { kind, total: tickets.length, loaded: tickets.length, truncated: false, tickets, workItems: [], services: [] };
+  }
+
   async integrationHealth(days = 30, startDate?: string, endDate?: string) {
     const safeDays = Math.min(Math.max(days || 730, 1), 730);
     const now = new Date();

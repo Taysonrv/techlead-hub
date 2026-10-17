@@ -298,6 +298,7 @@ export function Chat() {
     let stopped = false;
     const controller = new AbortController();
     const connect = async () => {
+      let retryMs = 1800;
       while (!stopped) {
         try {
           const token = getAccessToken();
@@ -310,6 +311,7 @@ export function Chat() {
             continue;
           }
           if (!response.ok || !response.body) throw new Error("stream indisponível");
+          retryMs = 1800;
           const reader = response.body.getReader();
           const decoder = new TextDecoder();
           let buffer = "";
@@ -332,8 +334,16 @@ export function Chat() {
               lastRealtimeMessageId.current = latestId;
             }
           }
+          // Um stream finalizado normalmente também exige intervalo antes de reconectar.
+          if (!stopped && !controller.signal.aborted) {
+            await new Promise((resolve) => window.setTimeout(resolve, retryMs));
+            retryMs = Math.min(retryMs * 2, 30_000);
+          }
         } catch {
-          if (!stopped) await new Promise((resolve) => window.setTimeout(resolve, 1800));
+          if (!stopped && !controller.signal.aborted) {
+            await new Promise((resolve) => window.setTimeout(resolve, retryMs));
+            retryMs = Math.min(retryMs * 2, 30_000);
+          }
         }
       }
     };

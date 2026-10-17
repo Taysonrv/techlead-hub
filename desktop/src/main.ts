@@ -204,6 +204,10 @@ let tray: Tray | null = null;
 let startedBackendHere =
   false;
 
+let backendRestartTimer: NodeJS.Timeout | null = null;
+let backendRestartAttempts = 0;
+let backendStopRequested = false;
+
 let updaterConfigured =
   false;
 
@@ -2360,6 +2364,7 @@ function startBackend(
 
   startedBackendHere =
     true;
+  backendStopRequested = false;
 
   backendProcess =
     spawn(
@@ -2489,25 +2494,28 @@ function startBackend(
 
   backendProcess.on(
     "exit",
-    (
-      code,
-      signal
-    ) => {
-      console.log(
-        `[desktop] Backend finalizado. Code=${code}, Signal=${signal}`
-      );
-
-      backendProcess =
-        null;
-
-      if (
-        !isQuitting &&
-        code !== 0
-      ) {
-        console.error(
-          "[desktop] Backend foi encerrado inesperadamente."
-        );
+    (code, signal) => {
+      console.log(`[desktop] Backend finalizado. Code=${code}, Signal=${signal}`);
+      backendProcess = null;
+      if (isQuitting || backendStopRequested || !startedBackendHere) return;
+      console.warn("[desktop] Backend encerrou inesperadamente; recuperação automática limitada ativada.");
+      if (backendRestartTimer || backendRestartAttempts >= 5) {
+        if (backendRestartAttempts >= 5) console.error("[desktop] Limite de cinco reinicializações automáticas atingido. Reinicie o Desktop para nova tentativa.");
+        return;
       }
+      const delay = Math.min(30_000, 2000 * Math.pow(2, backendRestartAttempts++));
+      backendRestartTimer = setTimeout(() => {
+        backendRestartTimer = null;
+        if (isQuitting || backendStopRequested || backendProcess) return;
+        void checkBackendHealth().then((online) => {
+          if (online || isQuitting || backendStopRequested || backendProcess) return;
+          try {
+            startBackend(databaseUrl, jwtSecret, azure, email, microsoft);
+          } catch (error) {
+            console.error("[desktop] Falha na reinicialização automática do backend:", error instanceof Error ? error.name : "erro desconhecido");
+          }
+        }).catch(() => undefined);
+      }, delay);
     }
   );
 }
@@ -2517,6 +2525,9 @@ function startBackend(
 ========================================================= */
 
 function stopBackend() {
+  backendStopRequested = true;
+  if (backendRestartTimer) clearTimeout(backendRestartTimer);
+  backendRestartTimer = null;
   if (
     !backendProcess ||
     !startedBackendHere

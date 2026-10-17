@@ -630,6 +630,26 @@ export function Clients() {
     return { types: overflow ? [...types, "Outros"] : types, rows };
   }, [clientOperationalTickets, effectiveEndDate]);
 
+  const [hiddenMovementLines, setHiddenMovementLines] = useState<Set<string>>(() => new Set());
+  const [hiddenCategoryLines, setHiddenCategoryLines] = useState<Set<string>>(() => new Set());
+  const toggleLine = (key: string, count: number, setter: React.Dispatch<React.SetStateAction<Set<string>>>) => {
+    setter((previous) => {
+      const next = new Set(previous);
+      if (next.has(key)) next.delete(key);
+      else if (next.size < count - 1) next.add(key);
+      return next;
+    });
+  };
+  const [hiddenPerformanceLines, setHiddenPerformanceLines] = useState<Set<string>>(() => new Set());
+  const togglePerformanceLine = (key: string) => {
+    setHiddenPerformanceLines((previous) => {
+      const next = new Set(previous);
+      if (next.has(key)) next.delete(key);
+      else if (next.size < 2) next.add(key); // preserve at least one visible series
+      return next;
+    });
+  };
+
   const monthlyPerformance = useMemo(() => {
     const end = endOfDay(effectiveEndDate);
     const months = Array.from({ length: 6 }, (_, index) => {
@@ -1652,7 +1672,7 @@ export function Clients() {
               gridTemplateColumns: {
                 xs: "minmax(0, 1fr)",
                 md: "repeat(2, minmax(0, 1fr))",
-                lg: "repeat(3, minmax(0, 1fr))",
+                lg: "repeat(2, minmax(0, 1fr))",
                 xl: "repeat(3, minmax(0, 1fr))",
               },
               gap: 1.5,
@@ -1841,10 +1861,10 @@ export function Clients() {
                 <XAxis dataKey="periodo" minTickGap={22} tick={{ fontSize: 11 }} />
                 <YAxis allowDecimals={false} width={38} />
                 <Tooltip />
-                <Legend />
-                <Line type="monotone" dataKey="abertos" name="Abertos" stroke={semanticChartColors.normal} strokeWidth={2.5} dot={false} activeDot={{ r: 5 }} />
-                <Line type="monotone" dataKey="resolvidos" name="Resolvidos" stroke={semanticChartColors.positive} strokeWidth={2.5} dot={false} activeDot={{ r: 5 }} />
-                <Line type="monotone" dataKey="encerrados" name="Encerrados" stroke={semanticChartColors.attention} strokeWidth={2.5} dot={false} activeDot={{ r: 5 }} />
+                <Legend onClick={(entry) => toggleLine(String(entry.dataKey ?? ""), 3, setHiddenMovementLines)} formatter={(value, entry) => <span style={{ cursor: "pointer", opacity: hiddenMovementLines.has(String(entry.dataKey ?? "")) ? 0.38 : 1, textDecoration: hiddenMovementLines.has(String(entry.dataKey ?? "")) ? "line-through" : "none" }}>{value}</span>} />
+                <Line type="monotone" dataKey="abertos" hide={hiddenMovementLines.has("abertos")} name="Abertos" stroke={semanticChartColors.normal} strokeWidth={2.5} dot={false} activeDot={{ r: 5 }} />
+                <Line type="monotone" dataKey="resolvidos" hide={hiddenMovementLines.has("resolvidos")} name="Resolvidos" stroke={semanticChartColors.positive} strokeWidth={2.5} dot={false} activeDot={{ r: 5 }} />
+                <Line type="monotone" dataKey="encerrados" hide={hiddenMovementLines.has("encerrados")} name="Encerrados" stroke={semanticChartColors.attention} strokeWidth={2.5} dot={false} activeDot={{ r: 5 }} />
               </LineChart>
             </ResponsiveContainer>
           </Box>
@@ -1867,9 +1887,9 @@ export function Clients() {
                   <XAxis dataKey="periodo" tick={{ fontSize: 11 }} />
                   <YAxis allowDecimals={false} width={38} />
                   <Tooltip />
-                  <Legend />
+                  <Legend onClick={(entry) => toggleLine(String(entry.dataKey ?? ""), monthlyCategoryTrend.types.length, setHiddenCategoryLines)} formatter={(value, entry) => <span style={{ cursor: "pointer", opacity: hiddenCategoryLines.has(String(entry.dataKey ?? "")) ? 0.38 : 1, textDecoration: hiddenCategoryLines.has(String(entry.dataKey ?? "")) ? "line-through" : "none" }}>{value}</span>} />
                   {monthlyCategoryTrend.types.map((type, index) => (
-                    <Line key={type} type="monotone" dataKey={type} name={type}
+                    <Line key={type} type="monotone" dataKey={type} hide={hiddenCategoryLines.has(type)} name={type}
                       stroke={PIE_COLORS[index % PIE_COLORS.length]} strokeWidth={2.5} dot={{ r: 3 }} activeDot={{ r: 5 }} />
                   ))}
                 </LineChart>
@@ -1968,10 +1988,17 @@ export function Clients() {
                 <XAxis dataKey="periodo" tick={{ fontSize: 11 }} />
                 <YAxis domain={[0, 100]} tickFormatter={(v: number) => `${v}%`} width={46} />
                 <Tooltip formatter={(value) => { const scalar = Array.isArray(value) ? value[0] : value; return scalar == null || !Number.isFinite(Number(scalar)) ? "Sem medição" : `${Number(scalar).toFixed(1)}%`; }} />
-                <Legend />
-                <Line type="monotone" dataKey="resposta" name="SLA 1ª resposta" stroke={PIE_COLORS[0]} strokeWidth={2.5} connectNulls={false} />
-                <Line type="monotone" dataKey="solucao" name="SLA solução" stroke={PIE_COLORS[1]} strokeWidth={2.5} connectNulls={false} />
-                <Line type="monotone" dataKey="resolucao" name="Taxa de resolução" stroke={PIE_COLORS[2]} strokeWidth={2.5} connectNulls={false} />
+                <Legend
+                  onClick={(entry) => togglePerformanceLine(String(entry.dataKey ?? ""))}
+                  formatter={(value, entry) => (
+                    <span style={{ cursor: "pointer", opacity: hiddenPerformanceLines.has(String(entry.dataKey ?? "")) ? 0.4 : 1, textDecoration: hiddenPerformanceLines.has(String(entry.dataKey ?? "")) ? "line-through" : "none" }}>
+                      {value}
+                    </span>
+                  )}
+                />
+                <Line type="monotone" dataKey="resposta" name="SLA 1ª resposta" stroke={PIE_COLORS[0]} strokeWidth={2.5} connectNulls={false} hide={hiddenPerformanceLines.has("resposta")} />
+                <Line type="monotone" dataKey="solucao" name="SLA solução" stroke={PIE_COLORS[1]} strokeWidth={2.5} connectNulls={false} hide={hiddenPerformanceLines.has("solucao")} />
+                <Line type="monotone" dataKey="resolucao" name="Taxa de resolução" stroke={PIE_COLORS[2]} strokeWidth={2.5} connectNulls={false} hide={hiddenPerformanceLines.has("resolucao")} />
               </LineChart>
             </ResponsiveContainer>
           </Box>
@@ -2190,15 +2217,15 @@ export function Clients() {
 
           gridTemplateColumns: {
             xs: "1fr",
-            lg: "repeat(3, minmax(0, 1fr))",
+            md: "repeat(2, minmax(0, 1fr))",
           },
 
           gap: 2,
           mb: 2,
         }}
       >
-        {/* DISTRIBUIÇÃO POR CLIENTE */}
-
+        {/* Cliente usa a linha completa para acomodar nomes longos da carteira SIMER. */}
+        <Box sx={{ gridColumn: { xs: "auto", md: "1 / -1" }, minWidth: 0 }}>
         <ChartCard
           title="Distribuição por Cliente"
           subtitle="Participação dos clientes no volume de chamados"
@@ -2351,6 +2378,7 @@ export function Clients() {
             <EmptyChart />
           )}
         </ChartCard>
+        </Box>
 
         <ChartCard
           title="Atendimentos por Categoria"
@@ -2565,7 +2593,7 @@ export function Clients() {
         </ChartCard>
       </Box>
 
-      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "1.35fr .65fr" }, gap: 2, mb: 2 }}>
+      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "minmax(0,1fr)", xl: "minmax(0,1.35fr) minmax(340px,.65fr)" }, gap: 2, mb: 2 }}>
         <ChartCard title="Volume por Responsável" subtitle="Distribuição da demanda entre os analistas no recorte · clique para investigar">
           {ownerChartData.length ? (
             <Box sx={{ mt: 1 }}>
@@ -2574,7 +2602,7 @@ export function Clients() {
                 <Chip size="small" variant="outlined" label={`${ownerChartData.reduce((sum, item) => sum + Number(item.value || 0), 0)} tickets distribuídos`} />
                 <Chip size="small" variant="outlined" label={`Maior carteira: ${ownerChartData[0]?.name ?? "—"} · ${ownerChartData[0]?.value ?? 0}`} />
               </Stack>
-              <Box sx={{ height: Math.max(220, Math.min(350, ownerChartData.length * 38 + 46)) }}>
+              <Box sx={{ height: Math.max(330, Math.min(540, ownerChartData.length * 54 + 70)), minWidth: 0 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={ownerChartData} layout="vertical" barCategoryGap="28%" margin={{ top: 6, right: 54, bottom: 4, left: 8 }}>
                     <CartesianGrid strokeDasharray="4 6" horizontal={false} stroke={theme.palette.divider} opacity={0.4} />
@@ -2596,14 +2624,14 @@ export function Clients() {
         </ChartCard>
 
         <ChartCard title="Insights do Período" subtitle="Leituras automáticas para apoiar a apresentação executiva">
-          <Stack spacing={1.25} sx={{ mt: 2 }}>
+          <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(2,minmax(0,1fr))", xl: "1fr" }, gap: 1.25 }}>
             {executiveInsights.map((insight, index) => (
               <Box key={insight} sx={{ display: "flex", gap: 1.2, p: 1.2, borderRadius: 1.5, bgcolor: index === 2 && portfolioSummary.critical ? "rgba(211,47,47,.06)" : "rgba(0,122,96,.055)" }}>
                 <Box sx={{ width: 24, height: 24, flexShrink: 0, borderRadius: "50%", display: "grid", placeItems: "center", bgcolor: index === 2 && portfolioSummary.critical ? "error.main" : aliareColors.green, color: "white", fontSize: 12, fontWeight: 900 }}>{index + 1}</Box>
                 <Typography variant="body2" sx={{ lineHeight: 1.5 }}>{insight}</Typography>
               </Box>
             ))}
-          </Stack>
+          </Box>
         </ChartCard>
       </Box>
 

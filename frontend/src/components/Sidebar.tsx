@@ -522,6 +522,7 @@ export function Sidebar() {
 
   const analysisMenu = useMemo<MenuItemData[]>(
     () => [
+      ...(canAccess("dashboard") ? [{ label: "Dashboard Executivo", path: "/visao-operacional", icon: <HomeOutlined fontSize="small" /> }] : []),
       ...(canAccess("performance") ? [{ label: "Desempenho & SLA", path: "/visao-operacional/desempenho", icon: <SpeedOutlined fontSize="small" /> }] : []),
       ...(canAccess("reports") ? [{ label: "Relatórios", path: "/relatorios", icon: <AssessmentOutlined fontSize="small" /> }] : []),
       ...(canAccess("services")
@@ -889,10 +890,10 @@ export function Sidebar() {
         </Box>
 
         {canAccess("dashboard") && <Box sx={{ px: 1, mb: .5 }}>
-          <ListItemButton component={NavLink} to="/visao-operacional" end title="Visão Operacional" sx={{ minHeight: 40, px: 1.15, borderRadius: 1.5, color: "rgba(255,255,255,.72)", "&:hover": { bgcolor: "rgba(24,199,122,.08)", color: "#fff" }, "&.active": { bgcolor: "rgba(24,199,122,.13)", color: "#fff" }, "&.active .MuiListItemIcon-root": { color: aliareColors.green } }}>
+          <ListItemButton component={NavLink} to="/inicio" end title="Central de Trabalho" sx={{ minHeight: 40, px: 1.15, borderRadius: 1.5, color: "rgba(255,255,255,.72)", "&:hover": { bgcolor: "rgba(24,199,122,.08)", color: "#fff" }, "&.active": { bgcolor: "rgba(24,199,122,.13)", color: "#fff" }, "&.active .MuiListItemIcon-root": { color: aliareColors.green } }}>
             <ListItemIcon sx={{ minWidth: 34, color: "rgba(255,255,255,.44)", "& .MuiSvgIcon-root": { fontSize: 19 } }}><HomeOutlined fontSize="small" /></ListItemIcon>
             <ListItemText primary="Início" slotProps={{ primary: { sx: { fontSize: ".8rem", fontWeight: 600, lineHeight: 1.35 } } }} />
-            {!window.techLeadHub?.desktop && <RoutineNewTabButton path="/visao-operacional" label="Visão Operacional" />}
+            {!window.techLeadHub?.desktop && <RoutineNewTabButton path="/inicio" label="Central de Trabalho" />}
           </ListItemButton>
         </Box>}
 
