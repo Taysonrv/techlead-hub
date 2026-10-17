@@ -33,9 +33,16 @@ function normalizeMovideskToken(raw: string) {
 
 class SystemConfigurationService {
   private encryptionKey() {
-    const secret = process.env.SYSTEM_CONFIG_KEY?.trim() || process.env.JWT_SECRET?.trim();
+    // Configurações compartilhadas entre instâncias não podem depender do
+    // JWT_SECRET local, pois esse segredo pode variar por instalação/usuário.
+    // JWT_SECRET continua sendo aceito apenas no fluxo de leitura legado.
+    const secret = process.env.SYSTEM_CONFIG_KEY?.trim();
     if (!secret || secret.length < 32) {
-      throw new Error("SYSTEM_CONFIG_KEY ou JWT_SECRET seguro é obrigatório para proteger configurações centrais.");
+      throw new Error(
+        "SYSTEM_CONFIG_KEY compartilhada é obrigatória para salvar configurações centrais. " +
+        "Configure o mesmo segredo persistente em todas as instâncias que acessam este banco. " +
+        "JWT_SECRET não pode ser usada para novas gravações."
+      );
     }
     return crypto.createHash("sha256").update(secret).digest();
   }
