@@ -293,9 +293,36 @@ export class NotificationService {
         this.meetingNotificationsForUser(userId),
       ]);
 
+    const followedRows = await prisma.$queryRaw<Array<{ workItemId: number; followedAt: Date; lastSeenRevision: number | null }>>`
+      SELECT "workItemId", "followedAt", "lastSeenRevision" FROM "AzureWorkItemFollow"
+      WHERE "userId" = ${userId}
+    `;
+    const followed = followedRows.length ? await prisma.azureWorkItem.findMany({
+      where: scopedAzureWhere({ id: { in: followedRows.map(row => row.workItemId) }, azureChangedAt: { gte: since } }),
+      select: { id: true, workItemType: true, title: true, state: true, revision: true, azureChangedAt: true },
+      take: 200,
+    }) : [];
+    const followStart = new Map(followedRows.map(row => [row.workItemId, row]));
+    const followedNotifications = followed.flatMap(item => {
+      const preference = followStart.get(item.id);
+      const changed = item.azureChangedAt;
+      if (!preference || !changed || changed <= preference.followedAt ||
+          (item.revision ?? 0) <= (preference.lastSeenRevision ?? 0)) return [];
+      const terminal = TERMINAL_STATES.some(state => state.toLowerCase() === item.state.trim().toLowerCase());
+      return [{
+        key: `azure-follow:${item.id}:rev:${item.revision ?? changed.toISOString()}`,
+        kind: terminal ? "AZURE_COMPLETED" as const : "AZURE_UPDATED" as const,
+        title: terminal ? "Task seguida concluída" : "Task seguida atualizada",
+        message: `#${item.id} · ${item.title} · ${item.state}`,
+        occurredAt: changed,
+        path: `${this.routeForType(item.workItemType)}?task=${item.id}`,
+        workItemId: item.id,
+      }];
+    });
+
     const knownProblems = await filterKnownProblemsToScope(rawKnownProblems);
 
-    const itemNotifications = workItems.map((item) => {
+    const itemNotifications = workItems.filter(item => !followStart.has(item.id)).map((item) => {
       const completed = TERMINAL_STATES.some(
         (state) => state.toLocaleLowerCase("pt-BR") ===
           item.state.trim().toLocaleLowerCase("pt-BR"),
@@ -426,7 +453,7 @@ export class NotificationService {
     `;
     const readKeys = new Set(readRows.map((row) => row.notificationKey));
 
-    const notifications = [...onlineNotifications, ...meetingNotifications, ...knownProblemNotifications, ...operationalAlerts, ...mentionNotifications, ...itemNotifications, ...versionNotifications]
+    const notifications = [...onlineNotifications, ...meetingNotifications, ...knownProblemNotifications, ...operationalAlerts, ...mentionNotifications, ...itemNotifications, ...followedNotifications, ...versionNotifications]
       .filter((item) =>
         item.kind === "USER_ONLINE" || item.kind === "CHAT_MENTION" || item.kind === "OPERATION_ALERT" || item.kind === "KNOWN_PROBLEM" || item.kind === "MEETING_REMINDER"
           ? true

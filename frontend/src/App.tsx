@@ -57,6 +57,7 @@ const Chat = lazy(() => import("./pages/Chat").then((module) => ({ default: modu
 const Investigation = lazy(() => import("./pages/Investigation").then((module) => ({ default: module.Investigation })));
 const KnownProblems = lazy(() => import("./pages/KnownProblems").then((module) => ({ default: module.KnownProblems })));
 const ManagementIntelligence = lazy(() => import("./pages/ManagementIntelligence").then((module) => ({ default: module.ManagementIntelligence })));
+const AnalysisAssistant = lazy(() => import("./pages/AnalysisAssistant").then((module) => ({ default: module.AnalysisAssistant })));
 const OperationalOverview = lazy(() => import("./pages/OperationalOverview").then((module) => ({ default: module.OperationalOverview })));
 const OperationsHub = lazy(() => import("./pages/OperationsHub").then((module) => ({ default: module.OperationsHub })));
 const RiskPendingHub = lazy(() => import("./pages/RiskPendingHub").then((module) => ({ default: module.RiskPendingHub })));
@@ -481,6 +482,8 @@ function App() {
             }
           />
 
+          <Route path="/inicio" element={<Navigate to="/visao-operacional" replace />} />
+          <Route path="/analise-atendimento" element={<RoutineAccess permission="tickets"><AuthenticatedLayout><AnalysisAssistant /></AuthenticatedLayout></RoutineAccess>} />
           <Route path="/visao-operacional" element={<RoutineAccess permission="dashboard"><AuthenticatedLayout><OperationalOverview /></AuthenticatedLayout></RoutineAccess>} />
           <Route path="/visao-operacional/desempenho" element={<RoutineAccess permission="performance"><AuthenticatedLayout><OperationalOverview /></AuthenticatedLayout></RoutineAccess>} />
           <Route path="/operacao/tickets" element={<RoutineAccess permission="tickets"><AuthenticatedLayout><OperationsHub /></AuthenticatedLayout></RoutineAccess>} />

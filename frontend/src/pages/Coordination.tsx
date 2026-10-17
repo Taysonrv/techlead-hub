@@ -11,9 +11,14 @@ import {
   Chip,
   CircularProgress,
   Drawer,
+  Divider,
   Button,
   LinearProgress,
   TextField,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
   useTheme,
   Tooltip,
   Stack,
@@ -73,6 +78,12 @@ type CsatOverview = {
 };
 
 type IntegrationHealth = { tickets: number; linkedTasks: number; azureItems: number; csatResponses: number; catalogServices: number; taskLinkCoveragePct: number; serviceCoveragePct: number; causeCoveragePct: number; businessAreaCoveragePct: number; latestCsatSyncAt: string | null; latestCsatResponseAt: string | null; latestCatalogSyncAt: string | null; sources: Record<string,string> };
+type IntegrationDetailRecord = {
+  total: number; loaded: number; truncated: boolean;
+  tickets: Array<{movideskId:number; protocol:string|null; subject:string; status:string; urgency:string|null; client:string|null; owner:string|null; createdDate:string; lastUpdate:string|null; taskNumber:number|null; taskStatus:string|null; taskTitle:string|null; service:string|null; serviceFirstLevel:string|null; serviceSecondLevel:string|null; serviceThirdLevel:string|null; category:string|null; cause:string|null; workItem?:{id:number;title:string;state:string;remoteUrl:string|null}|null}>;
+  workItems: Array<{id:number;workItemType:string;title:string;state:string;client:string|null;assignedToName:string|null;movideskTicket:number|null;azureChangedAt:string|null;remoteUrl:string|null}>;
+  services: Array<{id:number;name:string;parentServiceId:number|null;defaultCategory:string|null;defaultUrgency:string|null;syncedAt:string;ticketCount:number}>;
+};
 
 type SlaBreakdown = { total:number; concluded:number; openDevelopment:number; avgSupportMinutes:number; avgFactoryMinutes:number; avgTotalMinutes:number; supportWithinOla:number; factoryWithinOla:number; totalWithinSla:number };
 
@@ -134,7 +145,9 @@ export function Coordination() {
   const [detailError, setDetailError] = useState("");
   const [details, setDetails] = useState<DetailData | null>(null);
   const [serviceDays, setServiceDays] = useState(30);
-  const [analyticPeriod, setAnalyticPeriod] = useState<"thisMonth" | "lastMonth" | "3m" | "6m" | "12m" | "all">("thisMonth");
+  const [analyticPeriod, setAnalyticPeriod] = useState<"7d" | "30d" | "60d" | "90d" | "thisMonth" | "lastMonth" | "semester" | "year" | "custom">("30d");
+  const [customStartDate, setCustomStartDate] = useState("");
+  const [customEndDate, setCustomEndDate] = useState("");
   const [slaDays, setSlaDays] = useState(30);
   const [slaPeriod, setSlaPeriod] = useState<"thisMonth" | "lastMonth" | "30d" | "custom">("30d");
   const [slaCustomStart, setSlaCustomStart] = useState("");
@@ -144,26 +157,31 @@ export function Coordination() {
   const [csat, setCsat] = useState<CsatOverview | null>(null);
   const [csatLoading, setCsatLoading] = useState(false);
   const [integrationHealth, setIntegrationHealth] = useState<IntegrationHealth | null>(null);
+  const [integrationRecords, setIntegrationRecords] = useState<IntegrationDetailRecord | null>(null);
+  const [integrationRecordsLoading, setIntegrationRecordsLoading] = useState(false);
+  const [integrationRecordsError, setIntegrationRecordsError] = useState("");
   const [slaDetail, setSlaDetail] = useState<{ title:string; rows:SlaRow[] } | null>(null);
   const [csatDetail, setCsatDetail] = useState<CsatDetail | null>(null);
   const [csatDetailTitle, setCsatDetailTitle] = useState("");
   const [csatDetailLoading, setCsatDetailLoading] = useState(false);
+  const [integrationDrawerOpen, setIntegrationDrawerOpen] = useState(false);
+  const [integrationDetailKey, setIntegrationDetailKey] = useState<"tickets" | "links" | "azure" | "services">("tickets");
+  const [slaComponentDetail, setSlaComponentDetail] = useState<{label:string;detail:string;weight:number;score:number}|null>(null);
+  const [slaInfoDrawerOpen, setSlaInfoDrawerOpen] = useState(false);
 
   const analyticParams = useMemo(() => {
     const now = new Date();
     const iso = (date: Date) => [date.getFullYear(), String(date.getMonth() + 1).padStart(2, "0"), String(date.getDate()).padStart(2, "0")].join("-");
+    if (analyticPeriod === "custom" && customStartDate && customEndDate && customStartDate <= customEndDate) return { startDate: customStartDate, endDate: customEndDate, days: serviceDays };
     if (analyticPeriod === "thisMonth") return { startDate: iso(new Date(now.getFullYear(), now.getMonth(), 1)), endDate: iso(now), days: serviceDays };
     if (analyticPeriod === "lastMonth") return { startDate: iso(new Date(now.getFullYear(), now.getMonth() - 1, 1)), endDate: iso(new Date(now.getFullYear(), now.getMonth(), 0)), days: serviceDays };
-    if (analyticPeriod === "all") return { startDate: "2026-01-01", endDate: iso(now), days: 0 };
-    const months = analyticPeriod === "3m" ? 3 : analyticPeriod === "6m" ? 6 : 12;
-    return { startDate: iso(new Date(now.getFullYear(), now.getMonth() - months + 1, 1)), endDate: iso(now), days: serviceDays };
-  }, [analyticPeriod, serviceDays]);
+    if (analyticPeriod === "semester") return { startDate: iso(new Date(now.getFullYear(), now.getMonth() < 6 ? 0 : 6, 1)), endDate: iso(now), days: serviceDays };
+    if (analyticPeriod === "year") return { startDate: iso(new Date(now.getFullYear(), 0, 1)), endDate: iso(now), days: serviceDays };
+    const days = analyticPeriod === "7d" ? 7 : analyticPeriod === "30d" ? 30 : analyticPeriod === "60d" ? 60 : 90;
+    return { startDate: iso(new Date(now.getFullYear(), now.getMonth(), now.getDate() - (days - 1))), endDate: iso(now), days: serviceDays };
+  }, [analyticPeriod, customStartDate, customEndDate, serviceDays]);
 
-  const analyticPeriodLabel = analyticPeriod === "thisMonth" ? "Este mês"
-    : analyticPeriod === "lastMonth" ? "Mês passado"
-    : analyticPeriod === "3m" ? "Últimos 3 meses"
-    : analyticPeriod === "6m" ? "Últimos 6 meses"
-    : analyticPeriod === "12m" ? "Últimos 12 meses" : "Desde 01/01/2026";
+  const analyticPeriodLabel = ({ "7d":"Últimos 7 dias", "30d":"Últimos 30 dias", "60d":"Últimos 60 dias", "90d":"Últimos 90 dias", thisMonth:"Este mês", lastMonth:"Mês passado", semester:"Este semestre", year:"Este ano", custom:"Personalizado" } as const)[analyticPeriod];
 
   const summaryRequest = useRef<AbortController | null>(null);
   const load = useCallback(async () => {
@@ -206,6 +224,20 @@ export function Coordination() {
       .catch(() => { if (!controller.signal.aborted) setIntegrationHealth(null); });
     return () => controller.abort();
   }, [analyticParams.days, analyticParams.endDate, analyticParams.startDate]);
+
+  useEffect(() => {
+    if (!integrationDrawerOpen) return;
+    const controller = new AbortController();
+    setIntegrationRecordsLoading(true);
+    setIntegrationRecordsError("");
+    api.get<IntegrationDetailRecord>("/coordination/integration-details", {
+      params: { kind: integrationDetailKey, days: analyticParams.days, startDate: analyticParams.startDate, endDate: analyticParams.endDate },
+      signal: controller.signal,
+    }).then(response => setIntegrationRecords(response.data))
+      .catch(requestError => { if (!controller.signal.aborted) { setIntegrationRecords(null); setIntegrationRecordsError(getApiErrorMessage(requestError, "Não foi possível carregar os registros.")); } })
+      .finally(() => { if (!controller.signal.aborted) setIntegrationRecordsLoading(false); });
+    return () => controller.abort();
+  }, [integrationDrawerOpen, integrationDetailKey, analyticParams.days, analyticParams.endDate, analyticParams.startDate]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -307,15 +339,13 @@ export function Coordination() {
               <Typography variant="body2" color="text.secondary">Leitura rápida para decidir onde atuar primeiro, com acesso direto aos recortes operacionais.</Typography>
             </Box>
             <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap", alignItems: "center" }}>
-              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 800, mr: .25 }}>Período analítico</Typography>
-              {([
-                { v:"thisMonth", l:"Este mês", days:30 },
-                { v:"lastMonth", l:"Mês passado", days:30 },
-                { v:"3m", l:"3 meses", days:90 },
-                { v:"6m", l:"6 meses", days:180 },
-                { v:"12m", l:"12 meses", days:365 },
-                { v:"all", l:"Todo 2026", days:0 },
-              ] as const).map((period)=><Chip key={period.v} clickable size="small" label={period.l} color={analyticPeriod===period.v?"primary":"default"} variant={analyticPeriod===period.v?"filled":"outlined"} onClick={()=>{setAnalyticPeriod(period.v);setServiceDays(period.days);setSlaPeriod("30d");setSlaDays(period.days || 730)}} />)}
+              <FormControl size="small" sx={{minWidth:{xs:"100%",sm:210}}}>
+                <InputLabel id="coordination-period-label">Período</InputLabel>
+                <Select labelId="coordination-period-label" label="Período" value={analyticPeriod} onChange={(event)=>{const value=event.target.value as typeof analyticPeriod;setAnalyticPeriod(value);const days=({"7d":7,"30d":30,"60d":60,"90d":90,thisMonth:30,lastMonth:30,semester:180,year:365,custom:serviceDays} as const)[value];setServiceDays(days);setSlaPeriod("30d");setSlaDays(days);}}>
+                  <MenuItem value="7d">Últimos 7 dias</MenuItem><MenuItem value="30d">Últimos 30 dias</MenuItem><MenuItem value="60d">Últimos 60 dias</MenuItem><MenuItem value="90d">Últimos 90 dias</MenuItem><MenuItem value="thisMonth">Este mês</MenuItem><MenuItem value="lastMonth">Mês passado</MenuItem><MenuItem value="semester">Este semestre</MenuItem><MenuItem value="year">Este ano</MenuItem><MenuItem value="custom">Personalizado</MenuItem>
+                </Select>
+              </FormControl>
+              {analyticPeriod==="custom"&&<><TextField size="small" type="date" label="Data inicial" slotProps={{inputLabel:{shrink:true}}} value={customStartDate} onChange={e=>setCustomStartDate(e.target.value)}/><TextField size="small" type="date" label="Data final" slotProps={{inputLabel:{shrink:true}}} value={customEndDate} onChange={e=>setCustomEndDate(e.target.value)}/></>}
               <Button size="small" variant="outlined" onClick={() => navigate("/atencao")}>Riscos</Button>
               <Button size="small" variant="outlined" onClick={() => navigate("/qualidade-dados")}>Pendências</Button>
               <Button size="small" variant="outlined" onClick={() => navigate("/desempenho")}>Desempenho</Button>
@@ -337,18 +367,18 @@ export function Coordination() {
           {integrationHealth && <Card variant="outlined" sx={{ mb: 2 }}>
             <CardContent>
               <Stack direction={{ xs:"column", md:"row" }} spacing={1} sx={{ justifyContent:"space-between", mb:1.25 }}>
-                <Box><Typography sx={{ fontWeight:900 }}>Saúde das integrações</Typography><Typography variant="body2" color="text.secondary">Cobertura das fontes que alimentam os indicadores executivos.</Typography></Box>
+                <Box role="button" tabIndex={0} onClick={()=>setIntegrationDrawerOpen(true)} onKeyDown={event=>{if(event.key==="Enter"||event.key===" "){event.preventDefault();setIntegrationDrawerOpen(true)}}} sx={{cursor:"pointer","&:hover .integration-title":{color:"primary.main"},"&:focus-visible":{outline:"2px solid",outlineColor:"primary.main"}}}><Typography className="integration-title" sx={{fontWeight:900}}>Saúde das integrações <Typography component="span" color="primary.main" sx={{fontSize:13,fontWeight:800}}>· Ver detalhes ↗</Typography></Typography><Typography variant="body2" color="text.secondary">Cobertura das fontes que alimentam os indicadores executivos.</Typography></Box>
                 <Chip size="small" variant="outlined" label={`${integrationHealth.taskLinkCoveragePct}% com Task vinculada`} />
               <Chip size="small" variant="outlined" label={`${integrationHealth.serviceCoveragePct}% com serviço`} />
               <Chip size="small" variant="outlined" label={`${integrationHealth.causeCoveragePct}% com causa`} />
               <Chip size="small" variant="outlined" label={`${integrationHealth.businessAreaCoveragePct}% com área de negócio`} />
               </Stack>
               <KpiGrid>
-                <KpiCard title="Tickets" value={integrationHealth.tickets} subtitle="Movidesk" info="Tickets dos clientes da carteira SIMER." accent={aliareColors.info}/>
-                <KpiCard title="Vínculos Task" value={integrationHealth.linkedTasks} subtitle="Movidesk → Azure" info="Tickets com número de Task relacionado." accent={aliareColors.green}/>
-                <KpiCard title="Work Items" value={integrationHealth.azureItems} subtitle="Azure DevOps" info="Itens Azure no escopo da coordenação." accent={aliareColors.info}/>
-                <KpiCard title="CSAT" value={integrationHealth.csatResponses} subtitle="CSAT 1–5" info="Respostas Movidesk do tipo Carinhas/Smiley (escala 1–5) persistidas para a carteira." accent={aliareColors.warning}/>
-                <KpiCard title="Serviços" value={integrationHealth.catalogServices} subtitle="Recorte enriquecido" info="Metadados Movidesk sincronizados para os Serviços observados na carteira; não representa o catálogo global." accent={aliareColors.green}/>
+                <KpiCard title="Tickets" value={integrationHealth.tickets} subtitle="Movidesk · ver cobertura" info="Tickets dos clientes da carteira SIMER." accent={aliareColors.info} onClick={()=>{setIntegrationDetailKey("tickets");setIntegrationDrawerOpen(true)}}/>
+                <KpiCard title="Vínculos Task" value={integrationHealth.linkedTasks} subtitle="Movidesk → Azure · ver detalhes" info="Tickets com número de Task relacionado." accent={aliareColors.green} onClick={()=>{setIntegrationDetailKey("links");setIntegrationDrawerOpen(true)}}/>
+                <KpiCard title="Work Items" value={integrationHealth.azureItems} subtitle="Azure DevOps · ver detalhes" info="Itens Azure no escopo da coordenação." accent={aliareColors.info} onClick={()=>{setIntegrationDetailKey("azure");setIntegrationDrawerOpen(true)}}/>
+                <KpiCard title="CSAT" value={integrationHealth.csatResponses} subtitle="CSAT 1–5 · ver detalhes" info="Respostas Movidesk do tipo Carinhas/Smiley (escala 1–5) persistidas para a carteira." accent={aliareColors.warning} onClick={()=>{setIntegrationDrawerOpen(false);void openCsatDetails("CSAT · Todas as avaliações",{});}}/>
+                <KpiCard title="Serviços" value={integrationHealth.catalogServices} subtitle="Recorte enriquecido · ver detalhes" info="Metadados Movidesk sincronizados para os Serviços observados na carteira; não representa o catálogo global." accent={aliareColors.green} onClick={()=>{setIntegrationDetailKey("services");setIntegrationDrawerOpen(true)}}/>
               </KpiGrid>
             </CardContent>
           </Card>}
@@ -356,7 +386,7 @@ export function Coordination() {
             <CardContent>
               <Stack direction={{ xs: "column", lg: "row" }} spacing={1.5} sx={{ alignItems: { lg: "center" }, justifyContent: "space-between", mb: 1.5 }}>
                 <Box>
-                  <Typography sx={{ fontWeight: 900 }}>SLA × OLA · Suporte x Desenvolvimento</Typography>
+                  <Typography role="button" tabIndex={0} onClick={()=>setSlaInfoDrawerOpen(true)} onKeyDown={event=>{if(event.key==="Enter"||event.key===" "){event.preventDefault();setSlaInfoDrawerOpen(true)}}} sx={{fontWeight:900,cursor:"pointer","&:hover":{color:"primary.main"},"&:focus-visible":{outline:"2px solid",outlineColor:"primary.main"}}}>SLA × OLA · Suporte x Desenvolvimento <Typography component="span" color="primary.main" sx={{fontSize:13,fontWeight:800}}>· Explicação ↗</Typography></Typography>
                   <Typography variant="body2" color="text.secondary" sx={{ mt: .35 }}>
                     Ticket Movidesk → abertura da Task → conclusão no Azure, calculado em horas úteis.
                   </Typography>
@@ -373,18 +403,18 @@ export function Coordination() {
                       <Box><Typography sx={{fontWeight:900}}>Saúde SLA × OLA</Typography><Typography variant="body2" color="text.secondary">Índice transparente para leitura executiva; cada componente permanece disponível separadamente.</Typography></Box>
                       <Stack direction="row" spacing={1} sx={{alignItems:"center"}}><Chip color={slaDevelopment.health.status==="stable"?"success":slaDevelopment.health.status==="attention"?"warning":"error"} label={`${slaDevelopment.health.score}% · ${slaDevelopment.health.status==="stable"?"Estável":slaDevelopment.health.status==="attention"?"Atenção":"Crítico"}`}/><Tooltip title={slaDevelopment.health.formula}><InfoOutlined sx={{fontSize:18,color:"text.secondary"}}/></Tooltip></Stack>
                     </Stack>
-                    <KpiGrid>{slaDevelopment.health.components.map(component=><KpiCard key={component.key} title={component.label} value={`${component.score}%`} subtitle={component.detail} info={`${component.weight}% de peso no índice. ${slaDevelopment.health?.formula ?? ""}`} progress={component.score}/>)}</KpiGrid>
+                    <KpiGrid>{slaDevelopment.health.components.map(component=><KpiCard key={component.key} title={component.label} value={`${component.score}%`} subtitle={`${component.detail} · ver composição`} info={`${component.weight}% de peso no índice. ${slaDevelopment.health?.formula ?? ""}`} progress={component.score} onClick={()=>setSlaComponentDetail({label:component.label,detail:component.detail,weight:component.weight,score:component.score})}/>)}</KpiGrid>
                     {slaDevelopment.health.alerts.length>0&&<Stack spacing={.7} sx={{mt:1}}>{slaDevelopment.health.alerts.map((alert,i)=><Alert key={i} severity={alert.severity} variant="outlined"><Typography sx={{fontWeight:800}}>{alert.title}</Typography><Typography variant="body2">{alert.detail}</Typography></Alert>)}</Stack>}
                   </Box>}
                   <Alert severity={slaDevelopment.dataQuality.missingAzure || slaDevelopment.dataQuality.missingTaskCreatedAt || slaDevelopment.dataQuality.missingPriority || slaDevelopment.dataQuality.invalidTimeline ? "warning" : "success"} variant="outlined">
                     Cobertura: {slaDevelopment.dataQuality.linked}/{slaDevelopment.dataQuality.bugsInPeriod} correções vinculadas. Sem Azure: {slaDevelopment.dataQuality.missingAzure} · sem abertura da Task: {slaDevelopment.dataQuality.missingTaskCreatedAt} · sem prioridade: {slaDevelopment.dataQuality.missingPriority} · linha temporal inválida: {slaDevelopment.dataQuality.invalidTimeline ?? 0}.
                   </Alert>
                   <KpiGrid>
-                    <KpiCard title="OLA Suporte" value={`${rate(slaDevelopment.summary.supportWithinOla, slaDevelopment.summary.bugsWithTask)}%`} subtitle={`${formatHours(slaDevelopment.summary.avgSupportMinutes)} em média`} info="Da abertura do ticket Movidesk até a abertura da Task no Azure. Considera todas as correções com Task válida." accent={aliareColors.info} />
-                    <KpiCard title="OLA Desenvolvimento" value={`${rate(slaDevelopment.summary.factoryWithinOla, slaDevelopment.summary.bugsWithTask)}%`} subtitle={`${formatHours(slaDevelopment.summary.avgFactoryMinutes)} consumidas em média`} info="Da abertura da Task até a conclusão; para itens ainda abertos, mede o consumo acumulado até o fim do recorte." accent={aliareColors.green} />
-                    <KpiCard title="SLA concluídos" value={slaDevelopment.summary.concluded ? `${rate(slaDevelopment.summary.totalWithinSla, slaDevelopment.summary.concluded)}%` : "—"} subtitle={`${slaDevelopment.summary.concluded} concluída(s) · ${formatHours(slaDevelopment.summary.avgTotalMinutes)} média`} info="SLA final calculado somente para correções cuja Task já foi concluída." accent={aliareColors.warning} />
-                    <KpiCard title="Em desenvolvimento" value={slaDevelopment.summary.openDevelopment} subtitle={`${slaDevelopment.summary.openFactoryOverOla ?? 0} acima do OLA Dev`} info="Correções com Task aberta. O consumo continua sendo calculado para identificar risco antes da conclusão." accent={aliareColors.purple} />
-                    <KpiCard title="Fora da meta" value={slaDevelopment.outliers.total} subtitle={`${slaDevelopment.outliers.support} suporte · ${slaDevelopment.outliers.factory} desenvolvimento`} info="Itens que já ultrapassaram pelo menos uma meta operacional, incluindo Tasks ainda abertas." accent={aliareColors.error} />
+                    <KpiCard title="OLA Suporte" value={`${rate(slaDevelopment.summary.supportWithinOla, slaDevelopment.summary.bugsWithTask)}%`} subtitle={`${formatHours(slaDevelopment.summary.avgSupportMinutes)} em média · clique para listar`} info="Da abertura do ticket Movidesk até a abertura da Task no Azure. Considera todas as correções com Task válida." accent={aliareColors.info} onClick={()=>openSlaRows("OLA Suporte · itens fora da meta",slaDevelopment.rows.filter(row=>row.supportPct>100).map(row=>row.movideskId))} />
+                    <KpiCard title="OLA Desenvolvimento" value={`${rate(slaDevelopment.summary.factoryWithinOla, slaDevelopment.summary.bugsWithTask)}%`} subtitle={`${formatHours(slaDevelopment.summary.avgFactoryMinutes)} consumidas em média · clique para listar`} info="Da abertura da Task até a conclusão; para itens ainda abertos, mede o consumo acumulado até o fim do recorte." accent={aliareColors.green} onClick={()=>openSlaRows("OLA Desenvolvimento · itens fora da meta",slaDevelopment.rows.filter(row=>row.factoryPct!==null && row.factoryPct!==undefined && row.factoryPct>100).map(row=>row.movideskId))} />
+                    <KpiCard title="SLA concluídos" value={slaDevelopment.summary.concluded ? `${rate(slaDevelopment.summary.totalWithinSla, slaDevelopment.summary.concluded)}%` : "—"} subtitle={`${slaDevelopment.summary.concluded} concluída(s) · ${formatHours(slaDevelopment.summary.avgTotalMinutes)} média · clique para listar`} info="SLA final calculado somente para correções cuja Task já foi concluída." accent={aliareColors.warning} onClick={()=>openSlaRows("SLA · Tasks concluídas",slaDevelopment.rows.filter(row=>row.taskState?.toLocaleLowerCase("pt-BR").includes("conclu") || row.totalMinutes!==null).map(row=>row.movideskId))} />
+                    <KpiCard title="Em desenvolvimento" value={slaDevelopment.summary.openDevelopment} subtitle={`${slaDevelopment.summary.openFactoryOverOla ?? 0} acima do OLA Dev · clique para listar os ${slaDevelopment.summary.openDevelopment} abertos`} info="Correções com Task ainda aberta. O clique lista todos os itens em desenvolvimento; o número acima do OLA é um subconjunto." accent={aliareColors.purple} onClick={()=>openSlaRows("Em desenvolvimento · Tasks abertas",slaDevelopment.rows.filter(row=>!/(conclu|closed|done|resolved)/i.test(row.taskState ?? "")).map(row=>row.movideskId))} />
+                    <KpiCard title="Fora da meta" value={slaDevelopment.outliers.total} subtitle={`${slaDevelopment.outliers.support} suporte · ${slaDevelopment.outliers.factory} desenvolvimento · clique para listar`} info="Itens que já ultrapassaram pelo menos uma meta operacional, incluindo Tasks ainda abertas." accent={aliareColors.error} onClick={()=>openSlaRows("Fora da meta · SLA × OLA",slaDevelopment.outliers.top.map(row=>row.movideskId))} />
                   </KpiGrid>
                   <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", xl: "1fr 1.4fr" }, gap: 1.25 }}>
                     <Box sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2.5, p: 1.5 }}>
@@ -457,7 +487,7 @@ export function Coordination() {
                   {csat.summary.responses > 0 && <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", xl: "minmax(0, 1fr) minmax(0, 1fr)" }, gap: 1.5, alignItems: "stretch" }}>
                     <Box sx={{ ...analyticsPanelSx, p: 1.75, minWidth: 0, display: "flex", flexDirection: "column" }}>
                       <Stack direction="row" sx={{alignItems:"flex-start",justifyContent:"space-between",gap:1,mb:.25}}>
-                        <Box><Typography sx={{ fontWeight: 850 }}>Distribuição das notas</Typography><Typography variant="caption" color="text.secondary">Escala CSAT 1–5 · respostas vinculadas à carteira SIMER</Typography></Box>
+                        <Box><Typography sx={{fontWeight:900,fontSize:"1rem"}}>Distribuição das notas</Typography><Typography variant="caption" color="text.secondary">Escala CSAT 1–5 · respostas vinculadas à carteira SIMER</Typography><Stack direction="row" spacing={.6} sx={{mt:.8,flexWrap:"wrap"}}><Chip size="small" color="primary" variant="outlined" label={`${csat.summary.responses} respostas`}/><Chip size="small" variant="outlined" label={`Média ${csat.summary.average.toLocaleString("pt-BR",{maximumFractionDigits:2})}`}/></Stack></Box>
                         <Tooltip title="Quantidade de respostas da Pesquisa de Satisfação Movidesk em cada nota da escala 1–5."><InfoOutlined sx={{fontSize:17,color:"text.secondary",mt:.25}}/></Tooltip>
                       </Stack>
                       <Box sx={{ flex: 1, minHeight: 260, mt: 1 }}>
@@ -471,11 +501,11 @@ export function Coordination() {
                     </Box>
                     <Box sx={{ ...analyticsPanelSx, p: 1.75, minWidth: 0, display: "flex", flexDirection: "column" }}>
                       <Stack direction="row" sx={{alignItems:"flex-start",justifyContent:"space-between",gap:1,mb:1}}>
-                        <Box><Typography sx={{ fontWeight: 850 }}>CSAT por analista</Typography><Typography variant="caption" color="text.secondary">Equipe oficial de Suporte e Sustentação · clique para detalhar</Typography></Box>
+                        <Box><Typography sx={{fontWeight:900,fontSize:"1rem"}}>CSAT por analista</Typography><Typography variant="caption" color="text.secondary">Equipe oficial de Suporte e Sustentação · clique para detalhar</Typography><Stack direction="row" spacing={.6} sx={{mt:.8,flexWrap:"wrap"}}><Chip size="small" color="primary" variant="outlined" label={`${csat.byAnalyst.filter(item=>data?.scope.analysts.some(analyst=>analyst.localeCompare(item.name,"pt-BR",{sensitivity:"base"})===0)).length} analistas`}/><Chip size="small" variant="outlined" label="Média · respostas · positivas"/></Stack></Box>
                         <Tooltip title="Média e quantidade de avaliações por analista da operação SIMER. Pessoas fora da equipe oficial não compõem este ranking."><InfoOutlined sx={{fontSize:17,color:"text.secondary",mt:.25}}/></Tooltip>
                       </Stack>
                       <Stack spacing={.35} sx={{ flex: 1 }}>
-                        {csat.byAnalyst.filter((item) => data?.scope.analysts.some((analyst) => analyst.localeCompare(item.name, "pt-BR", { sensitivity: "base" }) === 0)).slice(0,8).map((item,index) => <Stack key={`${item.name}-${index}`} direction="row" spacing={1} role="button" tabIndex={0} onClick={()=>void openCsatDetails(`CSAT · ${item.name}`,{analyst:item.name})} onKeyDown={(event)=>{if(event.key==="Enter"||event.key===" ")void openCsatDetails(`CSAT · ${item.name}`,{analyst:item.name})}} sx={{ alignItems:"center", cursor:"pointer", borderRadius:1.5, px:1, py:.75, mx:-1, transition:"background-color .15s ease", "&:hover":{bgcolor:"action.hover"} }}>
+                        {csat.byAnalyst.filter((item) => data?.scope.analysts.some((analyst) => analyst.localeCompare(item.name, "pt-BR", { sensitivity: "base" }) === 0)).slice(0,8).map((item,index) => <Stack key={`${item.name}-${index}`} direction="row" spacing={1} role="button" tabIndex={0} onClick={()=>void openCsatDetails(`CSAT · ${item.name}`,{analyst:item.name})} onKeyDown={(event)=>{if(event.key==="Enter"||event.key===" ")void openCsatDetails(`CSAT · ${item.name}`,{analyst:item.name})}} sx={{alignItems:"center",cursor:"pointer",borderRadius:2,px:1,py:1,mx:-1,border:"1px solid",borderColor:"divider",backgroundColor:"background.paper",transition:"transform .15s ease, border-color .15s ease, background-color .15s ease","&:hover":{bgcolor:"action.hover",borderColor:"primary.main",transform:"translateX(2px)"},"&:focus-visible":{outline:"2px solid",outlineColor:"primary.main"}}}>
                           <Typography variant="body2" sx={{ flex:1, minWidth:0, fontWeight:650, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{item.name}</Typography>
                           <Typography variant="caption" color="text.secondary" sx={{whiteSpace:"nowrap"}}>{item.responses} resp.</Typography>
                           <Chip size="small" variant="outlined" label={`${item.average.toLocaleString("pt-BR",{maximumFractionDigits:2})} · ${item.positivePct}%`} sx={{minWidth:92,fontWeight:750}} />
@@ -489,10 +519,21 @@ export function Coordination() {
             </CardContent>
           </Card>
 
-          {loading || !data ? (
-            <Box sx={{ minHeight: 320, display: "grid", placeItems: "center" }}>
-              <CircularProgress />
-            </Box>
+          {loading && !data ? (
+            <Card variant="outlined" sx={{minHeight:240,display:"grid",placeItems:"center",borderRadius:3}}>
+              <Stack spacing={1.5} sx={{alignItems:"center",p:3,textAlign:"center"}}>
+                <CircularProgress size={30} aria-label="Carregando dados da Central da Coordenação"/>
+                <Typography sx={{fontWeight:750}}>Carregando indicadores operacionais</Typography>
+                <Typography variant="body2" color="text.secondary">Estamos consolidando atendimentos, tarefas e métricas do período selecionado.</Typography>
+              </Stack>
+            </Card>
+          ) : error && !data ? (
+            <Alert severity="error" sx={{borderRadius:3}} action={<Button color="inherit" size="small" onClick={() => void load()}>Tentar novamente</Button>}>
+              <Typography sx={{fontWeight:800,mb:.35}}>Não foi possível carregar a Central</Typography>
+              {error}
+            </Alert>
+          ) : !data ? (
+            <Alert severity="info" sx={{borderRadius:3}} action={<Button color="inherit" size="small" onClick={() => void load()}>Recarregar</Button>}>Nenhum dado disponível para apresentar neste momento.</Alert>
           ) : (
             <Stack spacing={2}>
               <Card variant="outlined" sx={{ overflow: "hidden", borderColor: data.intelligence.health === "critical" ? "error.light" : data.intelligence.health === "attention" ? "warning.light" : "success.light" }}>
@@ -559,13 +600,19 @@ export function Coordination() {
                 </CardContent>
               </Card>
 
+              <Box sx={{mb:1.25}}>
+                <Stack direction={{xs:"column",sm:"row"}} spacing={0.75} sx={{alignItems:{sm:"center"},justifyContent:"space-between"}}>
+                  <Typography variant="subtitle1" sx={{fontWeight:900}}>Indicadores principais</Typography>
+                  <Typography variant="caption" color="text.secondary">Selecione um card para abrir os registros relacionados</Typography>
+                </Stack>
+              </Box>
               <KpiGrid>
                 {cards.map(([kind, label, value, info]) => (
                   <KpiCard
                     key={label}
                     title={label}
                     value={value}
-                    subtitle={serviceDays ? `Recorte · últimos ${serviceDays} dias` : "Recorte · histórico disponível"}
+                    subtitle={`${serviceDays ? `Recorte · últimos ${serviceDays} dias` : "Recorte · histórico disponível"} · Clique para detalhar`}
                     info={info}
                     onClick={() => void openDetails(kind, label)}
                     accent={
@@ -602,7 +649,7 @@ export function Coordination() {
                     </Stack>
                   </Stack>
                   <KpiGrid sx={{mb: 2}}>
-                    <KpiCard title="Com serviço específico" value={data.serviceAnalytics.specificServices} subtitle="Atendimentos abertos" info="Tickets da equipe com Serviço de 2º nível informado no Movidesk. O 1º nível é apenas agrupador e o 3º nível permanece disponível no detalhamento." accent={aliareColors.green} />
+                    <KpiCard title="Com serviço específico" value={data.serviceAnalytics.specificServices} subtitle="Atendimentos abertos · clique para ver serviços" info="Tickets da equipe com Serviço de 2º nível informado no Movidesk. O 1º nível é apenas agrupador e o 3º nível permanece disponível no detalhamento." onClick={() => void openDetails("service", "Atendimentos com serviço específico")} accent={aliareColors.green} />
                     <KpiCard title="Sem serviço" value={data.serviceAnalytics.withoutService} subtitle="Requer classificação" info="Atendimentos da equipe sem Serviço de 2º nível informado." onClick={() => navigate("/qualidade-dados?issue=withoutService")} accent={aliareColors.error} />
                     <KpiCard title="SIMER genérico" value={data.serviceAnalytics.genericService} subtitle="Requer revisão" info="Tickets cujo Serviço de 2º nível ainda é genérico (por exemplo SIMER), exigindo refinamento da classificação." onClick={() => navigate("/qualidade-dados?issue=genericSimerService")} accent={aliareColors.warning} />
                     <KpiCard title="Possível incorreto" value={data.serviceAnalytics.suspectedMismatch} subtitle="Sugestão assistiva" info="No escopo da equipe, o Serviço informado diverge de uma sugestão assistiva com evidência suficiente. Exige validação humana." onClick={() => navigate("/qualidade-dados?issue=suspectedServiceMismatch")} accent={aliareColors.info} />
@@ -793,6 +840,54 @@ export function Coordination() {
           )}
         </CardContent>
       </Card>
+      <Drawer anchor="right" open={integrationDrawerOpen} onClose={()=>setIntegrationDrawerOpen(false)} slotProps={{paper:{sx:detailDrawerPaperSx}}}>
+        <DetailPanelHeader eyebrow="Observabilidade" title={({tickets:"Tickets Movidesk",links:"Vínculos Movidesk → Azure",azure:"Work Items Azure DevOps",services:"Catálogo de serviços"} as const)[integrationDetailKey]} identifier={integrationHealth ? `${Object.keys(integrationHealth.sources).length} fonte(s)` : undefined} onClose={()=>setIntegrationDrawerOpen(false)}/>
+        <Stack spacing={1.25} sx={{p:2}}>
+          <Typography variant="body2" color="text.secondary">{({tickets:"Tickets Movidesk no escopo operacional.",links:"Vínculos entre tickets Movidesk e Tasks do Azure DevOps.",azure:"Work Items encontrados no recorte operacional.",services:"Metadados de serviços usados para classificar os atendimentos."} as const)[integrationDetailKey]}</Typography>
+          {integrationHealth&&(() => {
+            const selected = {
+              tickets: [{title:"Tickets Movidesk",value:integrationHealth.tickets,description:"Tickets no escopo operacional."}],
+              links: [{title:"Vínculos Movidesk → Azure",value:integrationHealth.linkedTasks,description:`${integrationHealth.taskLinkCoveragePct}% dos tickets com Task vinculada.`}],
+              azure: [{title:"Work Items Azure DevOps",value:integrationHealth.azureItems,description:"Work Items encontrados no recorte operacional."}],
+              services: [{title:"Serviços no catálogo",value:integrationHealth.catalogServices,description:"Serviços observados no recorte."}],
+            }[integrationDetailKey];
+            return selected.map(item=><Card key={item.title} variant="outlined" sx={{borderRadius:2.5}}><CardContent sx={{p:1.5,"&:last-child":{pb:1.5}}}><Stack direction="row" spacing={1.25} sx={{alignItems:"center"}}><Box sx={{flex:1,minWidth:0}}><Typography sx={{fontWeight:800}}>{item.title}</Typography><Typography variant="caption" color="text.secondary">{item.description}</Typography></Box><Typography sx={{fontWeight:900,fontSize:"1.15rem"}}>{item.value}</Typography></Stack></CardContent></Card>);
+          })()}
+          {integrationHealth&&integrationDetailKey==="links"&&<DetailSection title="Cobertura de vínculos"><Stack direction="row" sx={{justifyContent:"space-between",mb:.4}}><Typography variant="body2">Tickets com Task vinculada</Typography><Typography variant="body2" sx={{fontWeight:800}}>{integrationHealth.taskLinkCoveragePct}%</Typography></Stack><LinearProgress variant="determinate" value={Math.max(0,Math.min(100,integrationHealth.taskLinkCoveragePct||0))} sx={{height:7,borderRadius:4}}/></DetailSection>}
+          {integrationHealth&&integrationDetailKey==="services"&&<DetailSection title="Qualidade da classificação">{[["Serviço",integrationHealth.serviceCoveragePct],["Causa",integrationHealth.causeCoveragePct],["Área de negócio",integrationHealth.businessAreaCoveragePct]].map(([label,value])=><Box key={String(label)} sx={{mb:1}}><Stack direction="row" sx={{justifyContent:"space-between",mb:.4}}><Typography variant="body2">{label}</Typography><Typography variant="body2" sx={{fontWeight:800}}>{value}%</Typography></Stack><LinearProgress variant="determinate" value={Math.max(0,Math.min(100,Number(value)||0))} sx={{height:7,borderRadius:4}}/></Box>)}</DetailSection>}
+          {integrationHealth&&<DetailSection title="Origem do indicador"><Typography variant="body2" color="text.secondary">{integrationHealth.sources[integrationDetailKey] ?? (integrationDetailKey==="tickets" ? "Tickets Movidesk no escopo operacional." : integrationDetailKey==="links" ? "Vínculos entre tickets Movidesk e Tasks Azure." : integrationDetailKey==="azure" ? "Work Items do Azure DevOps." : "Catálogo de serviços e classificação dos atendimentos.")}</Typography></DetailSection>}
+          <Divider />
+          <DetailSection title={integrationDetailKey==="tickets" ? "Atendimentos do período" : integrationDetailKey==="links" ? "Atendimentos e Tasks vinculadas" : integrationDetailKey==="azure" ? "Work Items vinculados ao período" : "Serviços ativos do catálogo"}>
+            {integrationRecordsLoading ? <Box sx={{py:4,display:"grid",placeItems:"center"}}><CircularProgress size={26}/></Box>
+            : integrationRecordsError ? <Alert severity="error">{integrationRecordsError}</Alert>
+            : integrationRecords ? <>
+              <Typography variant="caption" color="text.secondary" sx={{display:"block",mb:1}}>{integrationRecords.total} registro(s) encontrado(s) · {integrationRecords.loaded} exibido(s)</Typography>
+              {integrationDetailKey!=="services" && integrationDetailKey!=="azure" && integrationRecords.tickets.map(ticket=><Button key={ticket.movideskId} fullWidth variant="outlined" onClick={()=>navigate(`/tickets?movidesk=${ticket.movideskId}`)} sx={{justifyContent:"flex-start",textAlign:"left",textTransform:"none",mb:.75,p:1.2}}><Box sx={{minWidth:0,width:"100%"}}><Typography sx={{fontWeight:800}}>#{ticket.movideskId} · {ticket.subject}</Typography><Typography variant="caption" color="text.secondary">{[ticket.status,ticket.client,ticket.owner].filter(Boolean).join(" · ")}</Typography>{integrationDetailKey==="links"&&<Typography variant="caption" sx={{display:"block",mt:.3,color:"primary.main"}}>{ticket.taskNumber ? `Task #${ticket.taskNumber} · ${ticket.workItem?.title ?? ticket.taskTitle ?? "Work Item não localizado no Azure"} · ${ticket.workItem?.state ?? ticket.taskStatus ?? "Estado não informado"}` : "Sem Task vinculada"}</Typography>}</Box></Button>)}
+              {(integrationDetailKey==="azure" || integrationDetailKey==="links") && integrationRecords.workItems.map(item=><Button key={item.id} fullWidth variant="outlined" onClick={()=>item.remoteUrl ? window.open(item.remoteUrl,"_blank","noopener,noreferrer") : undefined} sx={{justifyContent:"flex-start",textAlign:"left",textTransform:"none",mb:.75,p:1.2}}><Box sx={{minWidth:0,width:"100%"}}><Typography sx={{fontWeight:800}}>#{item.id} · {item.title}</Typography><Typography variant="caption" color="text.secondary">{[item.workItemType,item.state,item.client,item.assignedToName].filter(Boolean).join(" · ")}</Typography></Box></Button>)}
+              {integrationDetailKey==="services" && integrationRecords.services.map(service=><Box key={service.id} sx={{border:"1px solid",borderColor:"divider",borderRadius:2,p:1.2,mb:.75}}><Typography sx={{fontWeight:800}}>{service.name}</Typography><Typography variant="caption" color="text.secondary">{[`ID ${service.id}`,service.defaultCategory,service.defaultUrgency,`${service.ticketCount} ocorrência(s) em campos de serviço no período`].filter(Boolean).join(" · ")}</Typography></Box>)}
+              {integrationRecords.total===0 && <Typography variant="body2" color="text.secondary">Nenhum registro encontrado para o período e escopo selecionados.</Typography>}
+              {integrationRecords.truncated && <Alert severity="info">A lista foi limitada para preservar o desempenho.</Alert>}
+            </> : <Typography variant="body2" color="text.secondary">Abra o card para carregar os registros.</Typography>}
+          </DetailSection>
+        </Stack>
+      </Drawer>
+      <Drawer anchor="right" open={Boolean(slaComponentDetail)} onClose={()=>setSlaComponentDetail(null)} slotProps={{paper:{sx:detailDrawerPaperSx}}}>
+        <DetailPanelHeader eyebrow="Saúde SLA × OLA" title={slaComponentDetail?.label ?? "Componente"} onClose={()=>setSlaComponentDetail(null)}/>
+        <Stack spacing={1.5} sx={{p:2}}>
+          {slaComponentDetail&&<Card variant="outlined" sx={{borderRadius:2.5}}><CardContent><Typography variant="overline" color="text.secondary">Pontuação do componente selecionado</Typography><Typography sx={{fontWeight:900,fontSize:"2rem",color:"primary.main"}}>{slaComponentDetail.score}%</Typography><LinearProgress variant="determinate" value={Math.max(0,Math.min(100,slaComponentDetail.score))} sx={{height:8,borderRadius:5,mt:1}}/><Typography variant="body2" sx={{mt:1}}>{slaComponentDetail.detail}</Typography><Typography variant="body2" sx={{mt:1}}>Peso no índice: {slaComponentDetail.weight}% · contribuição ponderada: {(slaComponentDetail.score*slaComponentDetail.weight/100).toLocaleString("pt-BR",{maximumFractionDigits:2})} pontos.</Typography></CardContent></Card>}
+          <Typography variant="body2" color="text.secondary">Este painel detalha somente o componente selecionado. Para consultar as regras gerais de cálculo, abra a metodologia.</Typography>
+          <Button variant="outlined" onClick={()=>{setSlaComponentDetail(null);setSlaInfoDrawerOpen(true)}}>Ver metodologia completa</Button>
+        </Stack>
+      </Drawer>
+      <Drawer anchor="right" open={slaInfoDrawerOpen} onClose={()=>setSlaInfoDrawerOpen(false)} slotProps={{paper:{sx:detailDrawerPaperSx}}}>
+        <DetailPanelHeader eyebrow="Metodologia" title="SLA × OLA · Suporte x Desenvolvimento" onClose={()=>setSlaInfoDrawerOpen(false)}/>
+        <Stack spacing={1.5} sx={{p:2}}>
+          <Alert severity="info" variant="outlined">Análise preliminar, dependente da qualidade dos vínculos e timestamps disponíveis.</Alert>
+          <DetailSection title="Etapas da linha do tempo"><DetailFieldGrid fields={[["OLA Suporte","Abertura do ticket Movidesk → abertura da Task no Azure"],["OLA Desenvolvimento","Abertura da Task → conclusão no Azure"],["SLA final","Tempo total; calculado apenas para Tasks concluídas"],["Tasks abertas","Consumo acumulado até o fim do recorte para identificar risco"]]}/></DetailSection>
+          {slaDevelopment&&<DetailSection title="Qualidade dos dados"><DetailFieldGrid fields={[["Correções no período",slaDevelopment.dataQuality.bugsInPeriod],["Vinculadas",slaDevelopment.dataQuality.linked],["Sem Azure",slaDevelopment.dataQuality.missingAzure],["Sem abertura da Task",slaDevelopment.dataQuality.missingTaskCreatedAt],["Sem prioridade",slaDevelopment.dataQuality.missingPriority],["Linha temporal inválida",slaDevelopment.dataQuality.invalidTimeline??0],["Calendário",slaDevelopment.rule.schedule],["Estado de conclusão",slaDevelopment.rule.taskEndState]]}/></DetailSection>}
+          <Typography variant="body2" color="text.secondary">Feriados, pausas e exceções precisam ser validados antes de tratar os resultados como SLA oficial.</Typography>
+        </Stack>
+      </Drawer>
       <Drawer anchor="right" open={Boolean(slaDetail)} onClose={()=>setSlaDetail(null)} slotProps={{ paper:{ sx:detailDrawerPaperSx } }}>
         <DetailPanelHeader eyebrow="SLA × OLA" title={slaDetail?.title ?? "Detalhes"} identifier={slaDetail ? `${slaDetail.rows.length} item(ns)` : undefined} onClose={()=>setSlaDetail(null)} />
         <Stack spacing={1.2} sx={{ p:2 }}>{slaDetail?.rows.map((row)=><Button key={row.movideskId} variant="outlined" onClick={()=>navigate(`/tickets?movidesk=${row.movideskId}`)} sx={{ textTransform:"none", textAlign:"left", justifyContent:"flex-start", p:1.25 }}><Box><Typography sx={{fontWeight:800}}>#{row.movideskId} · {row.subject}</Typography><Typography variant="caption" color="text.secondary">{[row.client,row.owner,row.urgency,`Task #${row.taskNumber}`].filter(Boolean).join(" · ")}</Typography><Typography variant="caption" sx={{display:"block",mt:.35}}>Suporte {formatHours(row.supportMinutes)} · Desenvolvimento {formatHours(row.factoryMinutes ?? 0)} · Total {formatHours(row.totalMinutes ?? 0)}</Typography></Box></Button>)}</Stack>

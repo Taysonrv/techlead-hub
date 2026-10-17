@@ -1,10 +1,13 @@
 import { Router } from "express";
 import { requirePermission } from "../middlewares/roleMiddleware";
+import { requireAnyPermission } from "../middlewares/routinePermissionMiddleware";
 import { coordinationService } from "../services/CoordinationService";
+import { SlaInvestigationService } from "../services/SlaInvestigationService";
 import type { AuthenticatedRequest } from "../middlewares/authMiddleware";
 
 const coordinationRoutes = Router();
 coordinationRoutes.use((req, res, next) => {
+  if (req.path.startsWith("/sla-investigation/")) return requireAnyPermission("performance", "coordination")(req as AuthenticatedRequest,res,next);
   const permission = req.path.startsWith("/services") ? "services" : "coordination";
   return requirePermission(permission)(req as AuthenticatedRequest, res, next);
 });
@@ -50,6 +53,20 @@ coordinationRoutes.get("/services", async (req: AuthenticatedRequest, res) => {
   }
 });
 
+coordinationRoutes.get("/integration-details", async (req: AuthenticatedRequest, res) => {
+  try {
+    const rawKind = String(req.query.kind ?? "tickets");
+    if (!["tickets", "links", "azure", "services"].includes(rawKind)) return res.status(400).json({ error: "Tipo de detalhe inválido." });
+    const days = Number(req.query.days ?? 30);
+    const startDate = typeof req.query.startDate === "string" ? req.query.startDate : undefined;
+    const endDate = typeof req.query.endDate === "string" ? req.query.endDate : undefined;
+    res.json(await coordinationService.integrationDetails(rawKind as "tickets" | "links" | "azure" | "services", Number.isFinite(days) ? days : 30, startDate, endDate));
+  } catch (error) {
+    console.error("[coordination] Falha ao carregar registros das integrações:", error);
+    res.status(500).json({ error: "Não foi possível carregar os registros desta integração." });
+  }
+});
+
 coordinationRoutes.get("/integration-health", async (req: AuthenticatedRequest, res) => {
   try {
     const days = Number(req.query.days ?? 30);
@@ -89,6 +106,15 @@ coordinationRoutes.get("/csat/details", async (req: AuthenticatedRequest, res) =
     console.error("[coordination] Falha ao carregar detalhes CSAT:", error);
     res.status(500).json({ error: "Não foi possível carregar os detalhes de CSAT." });
   }
+});
+
+coordinationRoutes.get("/sla-investigation/:ticketId", async (req:AuthenticatedRequest,res)=>{
+ try {
+  const tier=req.query.tier==="VIP"?"VIP":"PADRAO";
+  const result=await new SlaInvestigationService().byTicket(Number(req.params.ticketId),tier);
+  if(result.status!==200) return res.status(result.status).json({message:result.message});
+  return res.json(result);
+ }catch(error){console.error("[sla-investigation] Erro de análise:",error);return res.status(500).json({message:"Não foi possível investigar o SLA deste atendimento."});}
 });
 
 coordinationRoutes.get("/sla-development", async (req: AuthenticatedRequest, res) => {
