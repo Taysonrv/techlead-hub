@@ -53,6 +53,20 @@ coordinationRoutes.get("/services", async (req: AuthenticatedRequest, res) => {
   }
 });
 
+coordinationRoutes.get("/integration-details", async (req: AuthenticatedRequest, res) => {
+  try {
+    const rawKind = String(req.query.kind ?? "tickets");
+    if (!["tickets", "links", "azure", "services"].includes(rawKind)) return res.status(400).json({ error: "Tipo de detalhe inválido." });
+    const days = Number(req.query.days ?? 30);
+    const startDate = typeof req.query.startDate === "string" ? req.query.startDate : undefined;
+    const endDate = typeof req.query.endDate === "string" ? req.query.endDate : undefined;
+    res.json(await coordinationService.integrationDetails(rawKind as "tickets" | "links" | "azure" | "services", Number.isFinite(days) ? days : 30, startDate, endDate));
+  } catch (error) {
+    console.error("[coordination] Falha ao carregar registros das integrações:", error);
+    res.status(500).json({ error: "Não foi possível carregar os registros desta integração." });
+  }
+});
+
 coordinationRoutes.get("/integration-health", async (req: AuthenticatedRequest, res) => {
   try {
     const days = Number(req.query.days ?? 30);
