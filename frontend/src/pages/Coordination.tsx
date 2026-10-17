@@ -814,6 +814,31 @@ export function Coordination() {
           )}
         </CardContent>
       </Card>
+      <Drawer anchor="right" open={integrationDrawerOpen} onClose={()=>setIntegrationDrawerOpen(false)} slotProps={{paper:{sx:detailDrawerPaperSx}}}>
+        <DetailPanelHeader eyebrow="Observabilidade" title="Saúde das integrações" identifier={integrationHealth ? `${Object.keys(integrationHealth.sources).length} fonte(s)` : undefined} onClose={()=>setIntegrationDrawerOpen(false)}/>
+        <Stack spacing={1.25} sx={{p:2}}>
+          <Typography variant="body2" color="text.secondary">Cobertura das fontes usadas pela Central. Cobertura baixa pode afetar a completude das análises, sem necessariamente indicar indisponibilidade da origem.</Typography>
+          {integrationHealth&&[
+            ["Movidesk · tickets",integrationHealth.tickets,"Tickets no escopo"],
+            ["Movidesk → Azure",integrationHealth.linkedTasks,`${integrationHealth.taskLinkCoveragePct}% com Task vinculada`],
+            ["Azure DevOps",integrationHealth.azureItems,"Work Items encontrados"],
+            ["Pesquisa CSAT",integrationHealth.csatResponses,"Respostas sincronizadas"],
+            ["Catálogo de serviços",integrationHealth.catalogServices,"Serviços observados no recorte"],
+          ].map(([title,value,description])=><Card key={String(title)} variant="outlined" sx={{borderRadius:2.5}}><CardContent sx={{p:1.5,"&:last-child":{pb:1.5}}}><Stack direction="row" spacing={1.25} sx={{alignItems:"center"}}><Box sx={{flex:1,minWidth:0}}><Typography sx={{fontWeight:800}}>{title}</Typography><Typography variant="caption" color="text.secondary">{description}</Typography></Box><Typography sx={{fontWeight:900,fontSize:"1.15rem"}}>{value}</Typography></Stack></CardContent></Card>)}
+          <Typography sx={{fontWeight:850,mt:1}}>Cobertura de qualidade</Typography>
+          {[["Task vinculada",integrationHealth?.taskLinkCoveragePct],["Serviço",integrationHealth?.serviceCoveragePct],["Causa",integrationHealth?.causeCoveragePct],["Área de negócio",integrationHealth?.businessAreaCoveragePct]].map(([label,value])=><Box key={String(label)}><Stack direction="row" sx={{justifyContent:"space-between",mb:.4}}><Typography variant="body2">{label}</Typography><Typography variant="body2" sx={{fontWeight:800}}>{value}%</Typography></Stack><LinearProgress variant="determinate" value={Math.max(0,Math.min(100,Number(value)||0))} sx={{height:7,borderRadius:4}}/></Box>)}
+          {integrationHealth&&Object.entries(integrationHealth.sources).map(([name,source])=><Box key={name} sx={{borderTop:"1px solid",borderColor:"divider",pt:1}}><Typography variant="body2" sx={{fontWeight:750}}>{name}</Typography><Typography variant="caption" color="text.secondary">{source}</Typography></Box>)}
+        </Stack>
+      </Drawer>
+      <Drawer anchor="right" open={slaInfoDrawerOpen} onClose={()=>setSlaInfoDrawerOpen(false)} slotProps={{paper:{sx:detailDrawerPaperSx}}}>
+        <DetailPanelHeader eyebrow="Metodologia" title="SLA × OLA · Suporte x Desenvolvimento" onClose={()=>setSlaInfoDrawerOpen(false)}/>
+        <Stack spacing={1.5} sx={{p:2}}>
+          <Alert severity="info" variant="outlined">Análise preliminar, dependente da qualidade dos vínculos e timestamps disponíveis.</Alert>
+          <DetailSection title="Etapas da linha do tempo"><DetailFieldGrid fields={[["OLA Suporte","Abertura do ticket Movidesk → abertura da Task no Azure"],["OLA Desenvolvimento","Abertura da Task → conclusão no Azure"],["SLA final","Tempo total; calculado apenas para Tasks concluídas"],["Tasks abertas","Consumo acumulado até o fim do recorte para identificar risco"]]}/></DetailSection>
+          {slaDevelopment&&<DetailSection title="Qualidade dos dados"><DetailFieldGrid fields={[["Correções no período",slaDevelopment.dataQuality.bugsInPeriod],["Vinculadas",slaDevelopment.dataQuality.linked],["Sem Azure",slaDevelopment.dataQuality.missingAzure],["Sem abertura da Task",slaDevelopment.dataQuality.missingTaskCreatedAt],["Sem prioridade",slaDevelopment.dataQuality.missingPriority],["Linha temporal inválida",slaDevelopment.dataQuality.invalidTimeline??0],["Calendário",slaDevelopment.rule.schedule],["Estado de conclusão",slaDevelopment.rule.taskEndState]]}/></DetailSection>}
+          <Typography variant="body2" color="text.secondary">Feriados, pausas e exceções precisam ser validados antes de tratar os resultados como SLA oficial.</Typography>
+        </Stack>
+      </Drawer>
       <Drawer anchor="right" open={Boolean(slaDetail)} onClose={()=>setSlaDetail(null)} slotProps={{ paper:{ sx:detailDrawerPaperSx } }}>
         <DetailPanelHeader eyebrow="SLA × OLA" title={slaDetail?.title ?? "Detalhes"} identifier={slaDetail ? `${slaDetail.rows.length} item(ns)` : undefined} onClose={()=>setSlaDetail(null)} />
         <Stack spacing={1.2} sx={{ p:2 }}>{slaDetail?.rows.map((row)=><Button key={row.movideskId} variant="outlined" onClick={()=>navigate(`/tickets?movidesk=${row.movideskId}`)} sx={{ textTransform:"none", textAlign:"left", justifyContent:"flex-start", p:1.25 }}><Box><Typography sx={{fontWeight:800}}>#{row.movideskId} · {row.subject}</Typography><Typography variant="caption" color="text.secondary">{[row.client,row.owner,row.urgency,`Task #${row.taskNumber}`].filter(Boolean).join(" · ")}</Typography><Typography variant="caption" sx={{display:"block",mt:.35}}>Suporte {formatHours(row.supportMinutes)} · Desenvolvimento {formatHours(row.factoryMinutes ?? 0)} · Total {formatHours(row.totalMinutes ?? 0)}</Typography></Box></Button>)}</Stack>
