@@ -154,6 +154,8 @@ export function Coordination() {
   const [csatDetail, setCsatDetail] = useState<CsatDetail | null>(null);
   const [csatDetailTitle, setCsatDetailTitle] = useState("");
   const [csatDetailLoading, setCsatDetailLoading] = useState(false);
+  const [integrationDrawerOpen, setIntegrationDrawerOpen] = useState(false);
+  const [slaInfoDrawerOpen, setSlaInfoDrawerOpen] = useState(false);
 
   const analyticParams = useMemo(() => {
     const now = new Date();
@@ -339,7 +341,7 @@ export function Coordination() {
           {integrationHealth && <Card variant="outlined" sx={{ mb: 2 }}>
             <CardContent>
               <Stack direction={{ xs:"column", md:"row" }} spacing={1} sx={{ justifyContent:"space-between", mb:1.25 }}>
-                <Box><Typography sx={{ fontWeight:900 }}>Saúde das integrações</Typography><Typography variant="body2" color="text.secondary">Cobertura das fontes que alimentam os indicadores executivos.</Typography></Box>
+                <Box role="button" tabIndex={0} onClick={()=>setIntegrationDrawerOpen(true)} onKeyDown={event=>{if(event.key==="Enter"||event.key===" "){event.preventDefault();setIntegrationDrawerOpen(true)}}} sx={{cursor:"pointer","&:hover .integration-title":{color:"primary.main"},"&:focus-visible":{outline:"2px solid",outlineColor:"primary.main"}}}><Typography className="integration-title" sx={{fontWeight:900}}>Saúde das integrações <Typography component="span" color="primary.main" sx={{fontSize:13,fontWeight:800}}>· Ver detalhes ↗</Typography></Typography><Typography variant="body2" color="text.secondary">Cobertura das fontes que alimentam os indicadores executivos.</Typography></Box>
                 <Chip size="small" variant="outlined" label={`${integrationHealth.taskLinkCoveragePct}% com Task vinculada`} />
               <Chip size="small" variant="outlined" label={`${integrationHealth.serviceCoveragePct}% com serviço`} />
               <Chip size="small" variant="outlined" label={`${integrationHealth.causeCoveragePct}% com causa`} />
@@ -358,7 +360,7 @@ export function Coordination() {
             <CardContent>
               <Stack direction={{ xs: "column", lg: "row" }} spacing={1.5} sx={{ alignItems: { lg: "center" }, justifyContent: "space-between", mb: 1.5 }}>
                 <Box>
-                  <Typography sx={{ fontWeight: 900 }}>SLA × OLA · Suporte x Desenvolvimento</Typography>
+                  <Typography role="button" tabIndex={0} onClick={()=>setSlaInfoDrawerOpen(true)} onKeyDown={event=>{if(event.key==="Enter"||event.key===" "){event.preventDefault();setSlaInfoDrawerOpen(true)}}} sx={{fontWeight:900,cursor:"pointer","&:hover":{color:"primary.main"},"&:focus-visible":{outline:"2px solid",outlineColor:"primary.main"}}}>SLA × OLA · Suporte x Desenvolvimento <Typography component="span" color="primary.main" sx={{fontSize:13,fontWeight:800}}>· Explicação ↗</Typography></Typography>
                   <Typography variant="body2" color="text.secondary" sx={{ mt: .35 }}>
                     Ticket Movidesk → abertura da Task → conclusão no Azure, calculado em horas úteis.
                   </Typography>
@@ -385,7 +387,7 @@ export function Coordination() {
                     <KpiCard title="OLA Suporte" value={`${rate(slaDevelopment.summary.supportWithinOla, slaDevelopment.summary.bugsWithTask)}%`} subtitle={`${formatHours(slaDevelopment.summary.avgSupportMinutes)} em média`} info="Da abertura do ticket Movidesk até a abertura da Task no Azure. Considera todas as correções com Task válida." accent={aliareColors.info} />
                     <KpiCard title="OLA Desenvolvimento" value={`${rate(slaDevelopment.summary.factoryWithinOla, slaDevelopment.summary.bugsWithTask)}%`} subtitle={`${formatHours(slaDevelopment.summary.avgFactoryMinutes)} consumidas em média`} info="Da abertura da Task até a conclusão; para itens ainda abertos, mede o consumo acumulado até o fim do recorte." accent={aliareColors.green} />
                     <KpiCard title="SLA concluídos" value={slaDevelopment.summary.concluded ? `${rate(slaDevelopment.summary.totalWithinSla, slaDevelopment.summary.concluded)}%` : "—"} subtitle={`${slaDevelopment.summary.concluded} concluída(s) · ${formatHours(slaDevelopment.summary.avgTotalMinutes)} média`} info="SLA final calculado somente para correções cuja Task já foi concluída." accent={aliareColors.warning} />
-                    <KpiCard title="Em desenvolvimento" value={slaDevelopment.summary.openDevelopment} subtitle={`${slaDevelopment.summary.openFactoryOverOla ?? 0} acima do OLA Dev`} info="Correções com Task aberta. O consumo continua sendo calculado para identificar risco antes da conclusão." accent={aliareColors.purple} />
+                    <KpiCard title="Em desenvolvimento" value={slaDevelopment.summary.openDevelopment} subtitle={`${slaDevelopment.summary.openFactoryOverOla ?? 0} acima do OLA Dev · clique para listar`} info="Correções com Task aberta. O consumo continua sendo calculado para identificar risco antes da conclusão." accent={aliareColors.purple} onClick={()=>openSlaRows("Fábrica acima do OLA",slaDevelopment.rows.filter(row=>row.factoryPct!==null && row.factoryPct!==undefined && row.factoryPct>100 && row.taskState?.toLocaleLowerCase("pt-BR")!=="concluída").map(row=>row.movideskId))} />
                     <KpiCard title="Fora da meta" value={slaDevelopment.outliers.total} subtitle={`${slaDevelopment.outliers.support} suporte · ${slaDevelopment.outliers.factory} desenvolvimento`} info="Itens que já ultrapassaram pelo menos uma meta operacional, incluindo Tasks ainda abertas." accent={aliareColors.error} />
                   </KpiGrid>
                   <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", xl: "1fr 1.4fr" }, gap: 1.25 }}>
