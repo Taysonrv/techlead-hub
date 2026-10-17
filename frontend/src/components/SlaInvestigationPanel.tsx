@@ -6,7 +6,7 @@ import InsightsRoundedIcon from "@mui/icons-material/InsightsRounded";
 import { api } from "../services/api";
 
 type Metric = { minutes:number|null; targetMinutes:number|null; percent:number|null; overdue:boolean|null };
-type Investigation = { ticket:{id:number;subject:string;client:string|null;urgency:string|null}; task:null|{id:number;title:string;state:string;version:string|null}; metrics:Record<"response"|"support"|"factory"|"total",Metric>; timeline:Array<{at:string;title:string;detail:string;evidence:string}>; issues:string[]; summary:string };
+type Investigation = { profile?:{tier:"PADRAO"|"VIP";kind:"BUG"|"OUTROS";priority:string|null;calendar:string;reference:string}; ticket:{id:number;subject:string;client:string|null;urgency:string|null;category?:string|null;status?:string;owner?:string|null;createdAt?:string}; task:null|{id:number;title:string;state:string;version:string|null;criticality?:string|null;createdAt?:string|null;concludedAt?:string|null}; metrics:Record<"response"|"support"|"factory"|"total",Metric>; timeline:Array<{at:string;title:string;detail:string;evidence:string}>; issues:string[]; summary:string };
 
 const metricLabels = { response:"1ª resposta", support:"OLA · Suporte", factory:"OLA · Fábrica", total:"SLA · Total" };
 const duration = (m:number|null) => m===null ? "Sem dados" : m < 60 ? `${m} min` : `${(m/60).toLocaleString("pt-BR",{maximumFractionDigits:1})} h`;
@@ -57,9 +57,16 @@ export function SlaInvestigationPanel() {
         <Typography variant="overline" color="text.secondary">Atendimento #{data.ticket.id}</Typography>
         <Typography variant="subtitle1" sx={{fontWeight:800,lineHeight:1.35,overflowWrap:"anywhere"}}>{data.ticket.subject}</Typography>
         <Typography variant="body2" color="text.secondary">{data.ticket.client||"Cliente não informado"}{data.ticket.urgency? ` · Urgência: ${data.ticket.urgency}`:""}</Typography>
+        <Stack direction="row" spacing={0.75} sx={{mt:1,flexWrap:"wrap",rowGap:0.75}}>
+         {data.ticket.status&&<Chip size="small" variant="outlined" label={data.ticket.status}/>}
+         {data.ticket.category&&<Chip size="small" variant="outlined" label={data.ticket.category}/>}
+         {data.profile?.priority&&<Chip size="small" color="info" variant="outlined" label={`Prioridade ${data.profile.priority}`}/>}
+         {data.profile&&<Chip size="small" variant="outlined" label={data.profile.tier==="VIP"?"Perfil VIP":"Perfil Padrão"}/>}
+        </Stack>
        </Box>
        {data.task&&<Chip color="primary" variant="outlined" label={`Azure #${data.task.id} · ${data.task.state}`} sx={{maxWidth:"100%"}}/>}
       </Stack>
+      {data.profile&&<Typography variant="caption" color="text.secondary" sx={{display:"block",mt:1.25}}>Calendário aplicado: {data.profile.calendar}. Referência: {data.profile.reference}.</Typography>}
      </Box>
      <Box sx={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(min(100%,210px),1fr))",gap:1.25}}>
       {(["response","support","factory","total"] as const).map(key=>{
@@ -89,7 +96,7 @@ export function SlaInvestigationPanel() {
       </Box>
      </Stack>
      {data.timeline.length===0?<Alert severity="warning">Nenhum evento foi localizado para compor a linha do tempo deste atendimento.</Alert>:
-      <Stack spacing={0} sx={{maxHeight:480,overflowY:"auto",pr:0.5}}>
+      <Stack spacing={0} sx={{maxHeight:600,overflowY:"auto",pr:0.5}}>
        {data.timeline.map((event,i)=><Box key={`${event.at}-${i}`} sx={{display:"grid",gridTemplateColumns:{xs:"1fr",sm:"150px 1fr"},gap:1.5,py:1.5,borderBottom:i===data.timeline.length-1?0:"1px solid",borderColor:"divider"}}>
         <Typography variant="caption" color="text.secondary" sx={{pt:0.25}}>{new Date(event.at).toLocaleString("pt-BR")}</Typography>
         <Box sx={{position:"relative",pl:2,borderLeft:"2px solid",borderColor:"primary.main",minWidth:0}}>
