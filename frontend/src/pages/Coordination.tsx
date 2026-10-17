@@ -14,6 +14,10 @@ import {
   Button,
   LinearProgress,
   TextField,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
   useTheme,
   Tooltip,
   Stack,
@@ -134,7 +138,9 @@ export function Coordination() {
   const [detailError, setDetailError] = useState("");
   const [details, setDetails] = useState<DetailData | null>(null);
   const [serviceDays, setServiceDays] = useState(30);
-  const [analyticPeriod, setAnalyticPeriod] = useState<"thisMonth" | "lastMonth" | "3m" | "6m" | "12m" | "all">("thisMonth");
+  const [analyticPeriod, setAnalyticPeriod] = useState<"7d" | "30d" | "60d" | "90d" | "thisMonth" | "lastMonth" | "semester" | "year" | "custom">("30d");
+  const [customStartDate, setCustomStartDate] = useState("");
+  const [customEndDate, setCustomEndDate] = useState("");
   const [slaDays, setSlaDays] = useState(30);
   const [slaPeriod, setSlaPeriod] = useState<"thisMonth" | "lastMonth" | "30d" | "custom">("30d");
   const [slaCustomStart, setSlaCustomStart] = useState("");
@@ -152,18 +158,16 @@ export function Coordination() {
   const analyticParams = useMemo(() => {
     const now = new Date();
     const iso = (date: Date) => [date.getFullYear(), String(date.getMonth() + 1).padStart(2, "0"), String(date.getDate()).padStart(2, "0")].join("-");
+    if (analyticPeriod === "custom" && customStartDate && customEndDate && customStartDate <= customEndDate) return { startDate: customStartDate, endDate: customEndDate, days: serviceDays };
     if (analyticPeriod === "thisMonth") return { startDate: iso(new Date(now.getFullYear(), now.getMonth(), 1)), endDate: iso(now), days: serviceDays };
     if (analyticPeriod === "lastMonth") return { startDate: iso(new Date(now.getFullYear(), now.getMonth() - 1, 1)), endDate: iso(new Date(now.getFullYear(), now.getMonth(), 0)), days: serviceDays };
-    if (analyticPeriod === "all") return { startDate: "2026-01-01", endDate: iso(now), days: 0 };
-    const months = analyticPeriod === "3m" ? 3 : analyticPeriod === "6m" ? 6 : 12;
-    return { startDate: iso(new Date(now.getFullYear(), now.getMonth() - months + 1, 1)), endDate: iso(now), days: serviceDays };
-  }, [analyticPeriod, serviceDays]);
+    if (analyticPeriod === "semester") return { startDate: iso(new Date(now.getFullYear(), now.getMonth() < 6 ? 0 : 6, 1)), endDate: iso(now), days: serviceDays };
+    if (analyticPeriod === "year") return { startDate: iso(new Date(now.getFullYear(), 0, 1)), endDate: iso(now), days: serviceDays };
+    const days = analyticPeriod === "7d" ? 7 : analyticPeriod === "30d" ? 30 : analyticPeriod === "60d" ? 60 : 90;
+    return { startDate: iso(new Date(now.getFullYear(), now.getMonth(), now.getDate() - (days - 1))), endDate: iso(now), days: serviceDays };
+  }, [analyticPeriod, customStartDate, customEndDate, serviceDays]);
 
-  const analyticPeriodLabel = analyticPeriod === "thisMonth" ? "Este mês"
-    : analyticPeriod === "lastMonth" ? "Mês passado"
-    : analyticPeriod === "3m" ? "Últimos 3 meses"
-    : analyticPeriod === "6m" ? "Últimos 6 meses"
-    : analyticPeriod === "12m" ? "Últimos 12 meses" : "Desde 01/01/2026";
+  const analyticPeriodLabel = ({ "7d":"Últimos 7 dias", "30d":"Últimos 30 dias", "60d":"Últimos 60 dias", "90d":"Últimos 90 dias", thisMonth:"Este mês", lastMonth:"Mês passado", semester:"Este semestre", year:"Este ano", custom:"Personalizado" } as const)[analyticPeriod];
 
   const summaryRequest = useRef<AbortController | null>(null);
   const load = useCallback(async () => {
@@ -307,15 +311,13 @@ export function Coordination() {
               <Typography variant="body2" color="text.secondary">Leitura rápida para decidir onde atuar primeiro, com acesso direto aos recortes operacionais.</Typography>
             </Box>
             <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap", alignItems: "center" }}>
-              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 800, mr: .25 }}>Período analítico</Typography>
-              {([
-                { v:"thisMonth", l:"Este mês", days:30 },
-                { v:"lastMonth", l:"Mês passado", days:30 },
-                { v:"3m", l:"3 meses", days:90 },
-                { v:"6m", l:"6 meses", days:180 },
-                { v:"12m", l:"12 meses", days:365 },
-                { v:"all", l:"Todo 2026", days:0 },
-              ] as const).map((period)=><Chip key={period.v} clickable size="small" label={period.l} color={analyticPeriod===period.v?"primary":"default"} variant={analyticPeriod===period.v?"filled":"outlined"} onClick={()=>{setAnalyticPeriod(period.v);setServiceDays(period.days);setSlaPeriod("30d");setSlaDays(period.days || 730)}} />)}
+              <FormControl size="small" sx={{minWidth:{xs:"100%",sm:210}}}>
+                <InputLabel id="coordination-period-label">Período</InputLabel>
+                <Select labelId="coordination-period-label" label="Período" value={analyticPeriod} onChange={(event)=>{const value=event.target.value as typeof analyticPeriod;setAnalyticPeriod(value);const days=({"7d":7,"30d":30,"60d":60,"90d":90,thisMonth:30,lastMonth:30,semester:180,year:365,custom:serviceDays} as const)[value];setServiceDays(days);setSlaPeriod("30d");setSlaDays(days);}}>
+                  <MenuItem value="7d">Últimos 7 dias</MenuItem><MenuItem value="30d">Últimos 30 dias</MenuItem><MenuItem value="60d">Últimos 60 dias</MenuItem><MenuItem value="90d">Últimos 90 dias</MenuItem><MenuItem value="thisMonth">Este mês</MenuItem><MenuItem value="lastMonth">Mês passado</MenuItem><MenuItem value="semester">Este semestre</MenuItem><MenuItem value="year">Este ano</MenuItem><MenuItem value="custom">Personalizado</MenuItem>
+                </Select>
+              </FormControl>
+              {analyticPeriod==="custom"&&<><TextField size="small" type="date" label="Data inicial" InputLabelProps={{shrink:true}} value={customStartDate} onChange={e=>setCustomStartDate(e.target.value)}/><TextField size="small" type="date" label="Data final" InputLabelProps={{shrink:true}} value={customEndDate} onChange={e=>setCustomEndDate(e.target.value)}/></>}
               <Button size="small" variant="outlined" onClick={() => navigate("/atencao")}>Riscos</Button>
               <Button size="small" variant="outlined" onClick={() => navigate("/qualidade-dados")}>Pendências</Button>
               <Button size="small" variant="outlined" onClick={() => navigate("/desempenho")}>Desempenho</Button>
