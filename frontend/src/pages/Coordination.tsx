@@ -570,6 +570,12 @@ export function Coordination() {
                 </CardContent>
               </Card>
 
+              <Box sx={{mb:1.25}}>
+                <Stack direction={{xs:"column",sm:"row"}} spacing={0.75} sx={{alignItems:{sm:"center"},justifyContent:"space-between"}}>
+                  <Typography variant="subtitle1" sx={{fontWeight:900}}>Indicadores principais</Typography>
+                  <Typography variant="caption" color="text.secondary">Selecione um card para abrir os registros relacionados</Typography>
+                </Stack>
+              </Box>
               <KpiGrid>
                 {cards.map(([kind, label, value, info]) => (
                   <KpiCard
