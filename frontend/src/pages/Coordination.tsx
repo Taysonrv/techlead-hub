@@ -565,7 +565,7 @@ export function Coordination() {
                     key={label}
                     title={label}
                     value={value}
-                    subtitle={serviceDays ? `Recorte · últimos ${serviceDays} dias` : "Recorte · histórico disponível"}
+                    subtitle={`${serviceDays ? `Recorte · últimos ${serviceDays} dias` : "Recorte · histórico disponível"} · Clique para detalhar`}
                     info={info}
                     onClick={() => void openDetails(kind, label)}
                     accent={
@@ -602,7 +602,7 @@ export function Coordination() {
                     </Stack>
                   </Stack>
                   <KpiGrid sx={{mb: 2}}>
-                    <KpiCard title="Com serviço específico" value={data.serviceAnalytics.specificServices} subtitle="Atendimentos abertos" info="Tickets da equipe com Serviço de 2º nível informado no Movidesk. O 1º nível é apenas agrupador e o 3º nível permanece disponível no detalhamento." accent={aliareColors.green} />
+                    <KpiCard title="Com serviço específico" value={data.serviceAnalytics.specificServices} subtitle="Atendimentos abertos · clique para ver serviços" info="Tickets da equipe com Serviço de 2º nível informado no Movidesk. O 1º nível é apenas agrupador e o 3º nível permanece disponível no detalhamento." onClick={() => void openDetails("service", "Atendimentos com serviço específico")} accent={aliareColors.green} />
                     <KpiCard title="Sem serviço" value={data.serviceAnalytics.withoutService} subtitle="Requer classificação" info="Atendimentos da equipe sem Serviço de 2º nível informado." onClick={() => navigate("/qualidade-dados?issue=withoutService")} accent={aliareColors.error} />
                     <KpiCard title="SIMER genérico" value={data.serviceAnalytics.genericService} subtitle="Requer revisão" info="Tickets cujo Serviço de 2º nível ainda é genérico (por exemplo SIMER), exigindo refinamento da classificação." onClick={() => navigate("/qualidade-dados?issue=genericSimerService")} accent={aliareColors.warning} />
                     <KpiCard title="Possível incorreto" value={data.serviceAnalytics.suspectedMismatch} subtitle="Sugestão assistiva" info="No escopo da equipe, o Serviço informado diverge de uma sugestão assistiva com evidência suficiente. Exige validação humana." onClick={() => navigate("/qualidade-dados?issue=suspectedServiceMismatch")} accent={aliareColors.info} />
