@@ -861,7 +861,7 @@ export function Login() {
                 "-0.04em",
             }}
           >
-            Hub Suporte Simer
+            TechLead Hub · SIMER
           </Typography>
 
           <Typography
@@ -1024,7 +1024,7 @@ export function Login() {
                   "-.025em",
               }}
             >
-              Hub Suporte Simer
+              TechLead Hub · SIMER
             </Typography>
 
             <Typography
@@ -1376,8 +1376,7 @@ function LoginForm({
             1.65,
         }}
       >
-        Entre com suas credenciais para acessar
-        o Hub Suporte Simer.
+        Acesse sua Central de Trabalho com credenciais autorizadas.
       </Typography>
 
       {error && (
@@ -1563,7 +1562,7 @@ function LoginForm({
           },
         }}
       >
-        Criar conta
+        Solicitar acesso
       </Button>
 
       <Typography
@@ -2249,7 +2248,7 @@ function RegisterSuccess({
         >
           Sua solicitação foi registrada com sucesso.
           Aguarde a aprovação de um administrador para
-          acessar o Hub Suporte Simer.
+          acessar o TechLead Hub · SIMER.
         </Typography>
       </Box>
 
@@ -2437,7 +2436,7 @@ function getErrorMessage(
     }
 
     if (!error.response) {
-      return "Não foi possível conectar ao servidor do Hub Suporte Simer.";
+      return "Não foi possível conectar ao servidor do TechLead Hub · SIMER.";
     }
   }
 

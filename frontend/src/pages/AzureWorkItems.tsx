@@ -1269,6 +1269,38 @@ export function AzureWorkItems({
       null,
     );
 
+  type FollowEntry = { workItemId: number; workItem: { id: number; title: string; state: string; workItemType: string } | null };
+  const [followedTasks, setFollowedTasks] = useState<Set<number>>(() => new Set());
+  const [followedDetails, setFollowedDetails] = useState<FollowEntry[]>([]);
+  const [showFollowed, setShowFollowed] = useState(false);
+  const [followBusy, setFollowBusy] = useState(false);
+  useEffect(() => {
+    let active = true;
+    void api.get<{ items: FollowEntry[] }>("/azure-work-items/following")
+      .then(({ data }) => { if (active) { setFollowedTasks(new Set(data.items.map(item => item.workItemId))); setFollowedDetails(data.items); } })
+      .catch(() => undefined);
+    return () => { active = false; };
+  }, []);
+  const toggleFollow = async (id: number) => {
+    if (followBusy) return;
+    const wasFollowing = followedTasks.has(id);
+    setFollowBusy(true);
+    try {
+      if (wasFollowing) await api.delete("/azure-work-items/" + id + "/follow");
+      else await api.put("/azure-work-items/" + id + "/follow");
+      setFollowedTasks(previous => {
+        const next = new Set(previous);
+        if (wasFollowing) next.delete(id);
+        else next.add(id);
+        return next;
+      });
+      const updated = await api.get<{ items: FollowEntry[] }>("/azure-work-items/following");
+      setFollowedDetails(updated.data.items);
+    } catch {
+      setDetailError("Não foi possível atualizar o acompanhamento da Task.");
+    } finally { setFollowBusy(false); }
+  };
+
   const [
     drawerOpen,
     setDrawerOpen,
@@ -4098,6 +4130,28 @@ export function AzureWorkItems({
         </>}
       </Stack>
 
+      <Box sx={{ mt: 1.5, mb: 2 }}>
+        <Button size="small" variant="outlined" onClick={() => setShowFollowed(previous => !previous)}>
+          {showFollowed ? "Ocultar Tasks seguidas" : `Minhas Tasks seguidas no Hub (${followedTasks.size})`}
+        </Button>
+        {showFollowed && <Card variant="outlined" sx={{ mt: 1.5, borderRadius: 2, p: 2 }}>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+            Acompanhamentos configurados no Hub. Seguidos diretamente no Azure exigem integração da sua identidade Azure.
+          </Typography>
+          {followedDetails.length === 0
+            ? <Typography variant="body2">Você ainda não segue nenhuma Task pelo Hub.</Typography>
+            : <Stack spacing={1}>{followedDetails.map(item => (
+              <Box key={item.workItemId} sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1, borderBottom: "1px solid", borderColor: "divider", pb: 1 }}>
+                <Box sx={{ minWidth: 0 }}>
+                  <Typography variant="body2" sx={{ fontWeight: 750 }}>#{item.workItemId} · {item.workItem?.title ?? "Task indisponível"}</Typography>
+                  <Typography variant="caption" color="text.secondary">{item.workItem?.state ?? "Sem status"} · {item.workItem?.workItemType ?? "Task"}</Typography>
+                </Box>
+                <Button size="small" onClick={() => { setShowFollowed(false); setSearchParams({ task: String(item.workItemId) }); }}>Abrir</Button>
+              </Box>
+            ))}</Stack>}
+        </Card>}
+      </Box>
+
       {/* ===================================================
           DRAWER DE DETALHE
       =================================================== */}
@@ -4205,6 +4259,12 @@ export function AzureWorkItems({
 
             {selectedWorkItem && <AzureFollowButton key={selectedWorkItem.id} workItemId={selectedWorkItem.id} />}
 
+            {selectedWorkItem && (
+              <Button size="small" sx={{ mt: 1, mb: .5 }} variant={followedTasks.has(selectedWorkItem.id) ? "contained" : "outlined"}
+                disabled={followBusy} onClick={() => void toggleFollow(selectedWorkItem.id)}>
+                {followedTasks.has(selectedWorkItem.id) ? "Seguindo · deixar de seguir" : "Seguir Task e receber avisos"}
+              </Button>
+            )}
             {selectedWorkItem && (
               <Stack
                 direction="row"

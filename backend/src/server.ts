@@ -83,10 +83,16 @@ function scheduleDatabaseRecovery() {
     databaseRecoveryTimer = undefined;
     try {
       await prisma.$queryRaw`SELECT 1`;
-      await systemConfigurationService.loadIntoEnvironment();
       process.env.APP_DATABASE_READY = "true";
       databaseRecoveryAttempts = 0;
-      console.log("[server] PostgreSQL recuperado; schedulers serão retomados.");
+      try {
+        await systemConfigurationService.loadIntoEnvironment();
+      } catch (configurationError) {
+        // O PostgreSQL está pronto: falha de descriptografia exige intervenção
+        // administrativa, mas não deve simular uma indisponibilidade do banco.
+        console.warn("[server] Banco recuperado; credenciais de integração incompatíveis. Confira SYSTEM_CONFIG_KEY/JWT_SECRET.", configurationError instanceof Error ? configurationError.name : "erro desconhecido");
+      }
+      console.log("[server] PostgreSQL recuperado; schedulers serão retomados quando configurados.");
       startSchedulers();
     } catch {
       process.env.APP_DATABASE_READY = "false";

@@ -1,5 +1,34 @@
 # Changelog
 
+## 2.1.0-rc.8 — 2026-10-17
+
+### Central da Coordenação e rastreabilidade
+- Cards de Tickets, vínculos de Tasks, Work Items e Serviços passam a abrir detalhamentos consultados no backend, com registros operacionais em vez de dados agregados repetidos.
+- Novo endpoint de detalhamento respeita o escopo operacional e o período selecionado, com limites de consulta para preservar o desempenho.
+- Listagens apresentam informações contextuais e caminhos para acessar os registros relacionados.
+
+### Acompanhamento Azure e análise operacional
+- Incluído MVP para acompanhar Work Items Azure por usuário e receber notificações de alterações sincronizadas, respeitando a carteira SIMER.
+- Adicionada investigação de SLA com componentes explicáveis e detalhamento contextual.
+- Polimento da auditoria de encerramentos, filtros, indicadores, tabela e drawer.
+
+> Pré-release beta. Validar builds, testes automatizados, fluxos Web/Desktop e integração com PostgreSQL em homologação antes de publicar. A migration de acompanhamento de Tasks deve ser revisada e aplicada somente conforme o processo aprovado do ambiente; não executar migrações diretamente na base de produção como parte da preparação da release.
+
+## 2.1.0-rc.7 — 2026-10-15
+
+### Operação e qualidade
+- Tela Clientes: critérios operacionais alinhados ao Dashboard, séries mensais por tipo, SLA de primeira resposta e solução e taxa de resolução.
+- Auditoria de encerramentos: identificação com evidências, filtros Produto/Suporte e carteira oficial SIMER, drawer e exportação; prevenção de falsos positivos.
+- Painel de Tasks de Correções: cabeçalho da tabela harmonizado com os modos claro e escuro.
+- Chat: reconexão SSE com intervalos progressivos para indisponibilidade de conexão e encerramento do stream.
+- Notificações: toasts informativos, de sucesso e alerta com dimensões consistentes e conteúdo limitado sem sobreposição.
+- Desktop: até cinco tentativas escalonadas de recuperação do backend local após encerramento inesperado, preservando a bandeja.
+- Backend: recuperação de PostgreSQL independente da descriptografia de credenciais da integração.
+- Configurações e Dados/Sincronizações: diagnósticos avançados e gerenciamento de sessões agrupados sem excluir recursos necessários.
+- Infraestrutura Web: recomendações TLS/HTTPS com proxy reverso e SSE sem buffering, além de checklist de homologação.
+
+> Beta para testes finais: a configuração do certificado TLS no FQDN corporativo, a reconexão real e os fluxos de integração precisam de validação no ambiente da infraestrutura. Não executar migração criptográfica de registros durante a publicação.
+
 ## 2.1.0-rc.6 — 2026-10-14
 
 ### Recuperação administrativa de credenciais

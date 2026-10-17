@@ -1,4 +1,5 @@
 import { KpiGrid } from "../components/KpiGrid";
+import { HomeWorkspace } from "./HomeWorkspace";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
@@ -6,7 +7,6 @@ import {
   Alert,
   Box,
   Button,
-  CircularProgress,
   Card,
   CardContent,
   Chip,
@@ -21,7 +21,6 @@ import {
   Typography,
 } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
-import RefreshRoundedIcon from "@mui/icons-material/RefreshRounded";
 
 import {
   Bar,
@@ -42,7 +41,7 @@ import { useColorMode } from "../context/ColorModeContext";
 
 import { useNavigate } from "react-router-dom";
 
-import { getTicketSnapshot, getTicketSnapshotState, invalidateTicketSnapshot, subscribeTicketSnapshotRefresh } from "../services/ticketSnapshot";
+import { getTicketSnapshot, getTicketSnapshotState, subscribeTicketSnapshotRefresh } from "../services/ticketSnapshot";
 import { PeriodFilter } from "../components/PeriodFilter";
 import { PageHeader } from "../components/PageHeader";
 import { ContentState } from "../components/ContentState";
@@ -240,7 +239,6 @@ export function Dashboard() {
     useState<Ticket | null>(null);
 
   const [lastLoadedAt,setLastLoadedAt] = useState(0);
-  const [refreshingData,setRefreshingData] = useState(false);
   const [copyMessage, setCopyMessage] =
     useState("");
   const [flowHidden, setFlowHidden] = useState<Set<"opened" | "resolved" | "closed">>(() => new Set());
@@ -264,7 +262,6 @@ export function Dashboard() {
     async function loadTickets(initial = false) {
       if (refreshing) return;
       refreshing = true;
-      setRefreshingData(true);
       try {
         if (initial) setLoading(true);
         setError(null);
@@ -280,14 +277,26 @@ export function Dashboard() {
         setError("Não foi possível carregar os dados do Dashboard. Verifique se o backend está rodando.");
       } finally {
         refreshing = false;
-        if (!controller.signal.aborted) { setLoading(false);setRefreshingData(false); }
+        if (!controller.signal.aborted) setLoading(false);
       }
     }
 
     void loadTickets(true);
     const unsubscribeRefresh = subscribeTicketSnapshotRefresh(() => { void loadTickets(); });
+    // Atualização a cada 60s, reutilizando o cache e impedindo overlap.
+    // Não efetuar chamadas enquanto a aba estiver oculta; a próxima leitura
+    // será realizada assim que a página voltar a ficar visível.
+    const refreshOnce = () => {
+      if (document.visibilityState !== "visible" || refreshing) return;
+      void loadTickets();
+    };
+    const intervalId = window.setInterval(refreshOnce, 60_000);
+    const onVisibilityChange = () => { if (document.visibilityState === "visible") refreshOnce(); };
+    document.addEventListener("visibilitychange", onVisibilityChange);
     return () => {
       unsubscribeRefresh();
+      window.clearInterval(intervalId);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
       controller.abort();
     };
   }, []);
@@ -1135,55 +1144,47 @@ export function Dashboard() {
         title="Dashboard Executivo"
         description="Visão consolidada da operação de suporte"
         meta={<>{periodLabel(period)}{" • "}{filteredTickets.length} ticket(s) analisado(s){lastLoadedAt>0&&` · Leitura do Hub às ${new Date(lastLoadedAt).toLocaleTimeString("pt-BR")}`}</>}
-        action={
-          <Stack
-            direction={{ xs: "column", sm: "row" }}
-            sx={{
-              gap: 1.25,
-              alignItems: { xs: "stretch", sm: "flex-end" },
-              flexWrap: "wrap",
-              "& > *": { minWidth: 0 },
-            }}
-          >
-            <PeriodFilter />
-            <Button
-              variant="contained"
-              disableElevation
-              disabled={refreshingData}
-              onClick={() => invalidateTicketSnapshot()}
-              startIcon={refreshingData
-                ? <CircularProgress size={16} thickness={5} color="inherit" />
-                : <RefreshRoundedIcon fontSize="small" />}
-              aria-label={refreshingData ? "Atualizando dados do dashboard" : "Atualizar dados do dashboard"}
-              sx={{
-                height: 40,
-                minHeight: 40,
-                minWidth: 154,
-                px: 2,
-                borderRadius: "8px",
-                fontWeight: 700,
-                fontSize: "0.82rem",
-                lineHeight: 1,
-                textTransform: "none",
-                whiteSpace: "nowrap",
-                flexShrink: 0,
-                bgcolor: "#078B5B",
-                color: "#FFFFFF",
-                "&:hover": { bgcolor: "#06744D" },
-                "&:focus-visible": { outline: "2px solid #22C55E", outlineOffset: 2 },
-                "&.Mui-disabled": { bgcolor: "rgba(7,139,91,.18)", color: "text.secondary" },
-              }}
-            >
-              {refreshingData ? "Atualizando..." : "Atualizar dados"}
-            </Button>
-          </Stack>
-        }
+        action={<PeriodFilter />}
       />
       {metricAudit.length > 0 && (
         <Alert severity="warning" variant="outlined" sx={{ mb: 2 }}>
           Auditoria de métricas detectou {metricAudit.length} divergência(s): {metricAudit.map((item) => item.message).join(" · ")}
         </Alert>
       )}
+
+      {/* ATALHOS PARA A OPERAÇÃO / ANÁLISE ASSISTIDA */}
+      <Card variant="outlined" sx={{ borderRadius: 2.5, mb: 2.25, bgcolor: "background.paper" }}>
+        <CardContent sx={{ p: { xs: 1.75, md: 2.25 }, "&:last-child": { pb: 2.25 } }}>
+          <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ justifyContent: "space-between", alignItems: { sm: "center" }, mb: 1.5 }}>
+            <Box>
+              <Typography sx={{ fontWeight: 850 }}>Acesso rápido às rotinas</Typography>
+              <Typography variant="body2" color="text.secondary">Inicie uma análise técnica ou vá diretamente ao seu trabalho, às consultas e aos relatórios.</Typography>
+            </Box>
+            <Button variant="contained" onClick={() => navigate("/analise-atendimento")}>Analisar atendimento</Button>
+          </Stack>
+          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "repeat(2,minmax(0,1fr))", sm: "repeat(3,minmax(0,1fr))", lg: "repeat(5,minmax(0,1fr))" }, gap: 1 }}>
+            {[
+              ["Tickets", "/operacao/tickets"], ["Minha Operação", "/operacao/minha-operacao"],
+              ["Pendências & Riscos", "/pendencias-riscos"], ["Qualidade de Dados", "/pendencias-riscos/qualidade"],
+              ["Clientes", "/clientes"], ["Analistas", "/analistas"], ["Desempenho & SLA", "/visao-operacional/desempenho"],
+              ["Relatórios", "/relatorios"], ["Investigação SIMER", "/investigacao"], ["Problemas Conhecidos", "/problemas-conhecidos"],
+              ["Tasks de Correções", "/correcoes"], ["Evoluções", "/evolucoes"], ["Apoios", "/apoios"],
+              ["Versões", "/versoes"], ["Serviços SIMER", "/servicos"], ["Coordenação", "/gestao-inteligencia/coordenacao"],
+              ["Liderança Técnica", "/gestao-inteligencia/lideranca"], ["Chat", "/chat"],
+              ["Conhecimento", "/conhecimento"], ["Configurações", "/configuracoes"],
+            ].map(([label, path]) => (
+              <Button key={path} variant="outlined" size="small" onClick={() => navigate(path)}
+                sx={{ justifyContent: "flex-start", minWidth: 0, textAlign: "left", minHeight: 38, fontSize: ".75rem", lineHeight: 1.25, color: "text.primary", borderColor: "divider", "&:hover": { borderColor: "primary.main", bgcolor: "action.hover" } }}>
+                {label}
+              </Button>
+            ))}
+          </Box>
+        </CardContent>
+      </Card>
+      <Box sx={{ mb: 2.25 }}>
+        <Typography sx={{ fontWeight: 850, mb: 1 }}>Sua operação agora</Typography>
+        <HomeWorkspace embedded />
+      </Box>
 
       {/* =================================================
           KPIs

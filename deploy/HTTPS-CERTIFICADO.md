@@ -61,6 +61,18 @@ server {
     ssl_certificate_key /etc/ssl/techlead/privkey.pem;
     ssl_protocols TLSv1.2 TLSv1.3;
 
+    # SSE do chat: desabilite buffering para que eventos cheguem imediatamente.
+    location /api/chat/events {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_read_timeout 3600s;
+    }
+
     location / {
         proxy_pass http://127.0.0.1:8080;
         proxy_http_version 1.1;
@@ -85,9 +97,18 @@ interno alcançável **somente a partir do proxy**. Restringir acesso ao upstrea
 4. Login, logout e renovação da sessão funcionam sem laços de autenticação.
 5. Dashboard, filtros, API, chat e notificações funcionam via FQDN público.
 6. Reiniciar ou substituir a imagem conserva os segredos e os dados do banco.
-7. Não há endpoint HTTP direto do container acessível pela rede pública.
-8. Capturar evidências de vigência do certificado e de agendamento da renovação.
+7. Chat em tempo real: mensagens, presença e indicadores recebidos sem atraso pelo proxy (SSE sem buffering).
+8. Não há endpoint HTTP direto do container acessível pela rede pública.
+9. Capturar evidências de vigência do certificado e de agendamento da renovação.
 
 O GitHub Actions publica a imagem, mas **não** instala certificado digital
 no servidor corporativo. Certificados e seus arquivos privados nunca devem
 ser enviados ao GitHub nem commitados no repositório.
+
+## Diagnóstico de certificados e renovação
+
+O repositório **não contém** certificado ou chave privada: a validação final só pode ser realizada no FQDN provisionado pela infraestrutura. O certificado HTTPS do navegador e o certificado/TLS da conexão PostgreSQL são assuntos separados.
+
+Solicite à infraestrutura evidência de: FQDN/SAN válido, certificado vigente, cadeia completa, renovação automatizada, redirecionamento de HTTP, acesso restrito à porta interna e `https://<fqdn>/health/ready` 200. Nunca envie arquivos `.pfx`, `.key` ou senhas ao repositório.
+
+**Atenção:** para o Compose com banco externo (`deploy/docker-compose.example.yml`), as variáveis são `TECHLEAD_HUB_IMAGE` e `TECHLEAD_HUB_PORT`. O `docker-compose.yml` da raiz contém PostgreSQL local e utiliza outros nomes de variáveis; não misture os dois modelos de implantação.

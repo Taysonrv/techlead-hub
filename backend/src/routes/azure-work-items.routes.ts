@@ -1,13 +1,15 @@
 import {
   Router,
 } from "express";
-import type { AuthenticatedRequest } from "../middlewares/authMiddleware";
 import { AzureFollowService } from "../services/AzureFollowService";
+import type { AuthenticatedRequest } from "../middlewares/authMiddleware";
 
 import {
   AzureWorkItemController,
 } from "../controllers/AzureWorkItemController";
 import { requireAnyPermission } from "../middlewares/routinePermissionMiddleware";
+import { prisma } from "../database/prisma";
+import { scopedAzureWhere } from "../domain/OperationalScope";
 import { CorrectionMonthlyReportController } from "../controllers/CorrectionMonthlyReportController";
 
 const azureWorkItemRoutes =
