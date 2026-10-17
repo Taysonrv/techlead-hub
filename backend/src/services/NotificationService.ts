@@ -182,11 +182,14 @@ export class NotificationService {
       .map((ticket) => ticket.movideskId)
       .filter((value): value is number => value !== null);
 
-    const followed = await prisma.azureWorkItemFollow.findMany({ where: { userId }, select: { workItemId: true, followedAt: true } });
-    const followingById = new Map(followed.map(f => [f.workItemId, f.followedAt]));
+    const followedRows = await prisma.$queryRaw<Array<{ workItemId: number; followedAt: Date; lastSeenRevision: number | null }>>`
+      SELECT "workItemId", "followedAt", "lastSeenRevision" FROM "AzureWorkItemFollow"
+      WHERE "userId" = ${userId}
+    `;
+    const followingById = new Map(followedRows.map(row => [row.workItemId, row.followedAt]));
 
     const identities = [
-      ...(followed.length ? [{ id: { in: followed.map(f => f.workItemId) } }] : []),
+      ...(followedRows.length ? [{ id: { in: followedRows.map(row => row.workItemId) } }] : []),
       {
         createdByName: {
           equals: user.name,
@@ -297,17 +300,13 @@ export class NotificationService {
         this.meetingNotificationsForUser(userId),
       ]);
 
-    const followedRows = await prisma.$queryRaw<Array<{ workItemId: number; followedAt: Date; lastSeenRevision: number | null }>>`
-      SELECT "workItemId", "followedAt", "lastSeenRevision" FROM "AzureWorkItemFollow"
-      WHERE "userId" = ${userId}
-    `;
-    const followed = followedRows.length ? await prisma.azureWorkItem.findMany({
+    const followedItems = followedRows.length ? await prisma.azureWorkItem.findMany({
       where: scopedAzureWhere({ id: { in: followedRows.map(row => row.workItemId) }, azureChangedAt: { gte: since } }),
       select: { id: true, workItemType: true, title: true, state: true, revision: true, azureChangedAt: true },
       take: 200,
     }) : [];
     const followStart = new Map(followedRows.map(row => [row.workItemId, row]));
-    const followedNotifications = followed.flatMap(item => {
+    const followedNotifications = followedItems.flatMap(item => {
       const preference = followStart.get(item.id);
       const changed = item.azureChangedAt;
       if (!preference || !changed || changed <= preference.followedAt ||
@@ -326,10 +325,7 @@ export class NotificationService {
 
     const knownProblems = await filterKnownProblemsToScope(rawKnownProblems);
 
-    const itemNotifications = workItems.filter(item => {
-      const followedAt = followingById.get(item.id);
-      return !followedAt || (item.azureChangedAt ?? item.updatedAt) > followedAt;
-    }).map((item) => {
+    const itemNotifications = workItems.filter(item => !followStart.has(item.id)).map((item) => {
       const completed = TERMINAL_STATES.some(
         (state) => state.toLocaleLowerCase("pt-BR") ===
           item.state.trim().toLocaleLowerCase("pt-BR"),
