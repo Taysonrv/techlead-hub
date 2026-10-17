@@ -66,6 +66,7 @@ export function KpiCard({
       role={onClick ? "button" : undefined}
       tabIndex={onClick ? 0 : undefined}
       aria-pressed={onClick ? active : undefined}
+      aria-label={onClick ? `${title}. ${subtitle ?? ""} Clique para abrir o detalhamento.` : undefined}
       onClick={onClick}
       onKeyDown={activate}
       sx={{
@@ -75,8 +76,10 @@ export function KpiCard({
         minWidth: 0,
         height: density === "compact" ? { xs: 98, md: 104 } : kpiLayout.height,
         minHeight: density === "compact" ? { xs: 98, md: 104 } : kpiLayout.height,
+        border: "1px solid",
         borderColor: active ? accent : "divider",
         cursor: onClick ? "pointer" : "default",
+        opacity: 1,
         background: dark
           ? `radial-gradient(circle at 0% 50%, ${alpha(accent, 0.17)} 0%, ${alpha(accent, 0.075)} 24%, transparent 58%), linear-gradient(145deg, rgba(11,34,48,.98), rgba(7,25,38,.995))`
           : `radial-gradient(circle at 0% 50%, ${alpha(accent, 0.10)} 0%, ${alpha(accent, 0.04)} 28%, transparent 60%), linear-gradient(145deg, #FFFFFF, #FAFCFD)`,
