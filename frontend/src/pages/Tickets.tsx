@@ -1389,7 +1389,7 @@ export function Tickets() {
           >
             <TextField
               size="small"
-              placeholder="Pesquisar ticket, assunto, cliente, analista, task ou versão..."
+              placeholder="Buscar por número, nome, assunto ou contexto do atendimento..."
               value={
                 search
               }
