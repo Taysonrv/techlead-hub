@@ -2,15 +2,21 @@
 
 **Estado: ferramenta preparatória. Não execute `--apply` até o Desktop e o Docker
 receberem persistentemente a mesma `SYSTEM_CONFIG_KEY`.** A aplicação da
-migração sem esse provisionamento fará o Desktop atual perder o acesso às
+migração sem esse provisionamento fará instâncias perderem o acesso às
 configurações, ainda que o banco permaneça íntegro.
+
+A chave é compartilhada por ambiente/banco, não por usuário. `JWT_SECRET` serve
+para assinar tokens e não deve ser usada em novas gravações de `SystemSetting`.
+Todas as instâncias que compartilham o banco precisam receber o mesmo valor de
+`SYSTEM_CONFIG_KEY` por configuração segura de implantação. Não gere uma chave
+nova automaticamente por estação nem grave a chave em `SystemSetting`.
 
 ## Premissas
 
 - Janela de manutenção, com todos os processos e schedulers do TechLead Hub parados.
 - `DATABASE_URL` apontando para o banco correto.
 - `JWT_SECRET` **original**, que no VS Code retornou `readable`.
-- `SYSTEM_CONFIG_KEY` de destino, distinta, estável e protegida por cofre de segredos.
+- `SYSTEM_CONFIG_KEY` de destino, distinta de `JWT_SECRET`, estável e protegida por cofre de segredos; provisionada em todas as instâncias.
 - Backup verificado de `SystemSetting` e backup/restauração do PostgreSQL disponível.
 - Credencial de banco com permissões mínimas necessárias, nunca encaminhada em logs.
 
