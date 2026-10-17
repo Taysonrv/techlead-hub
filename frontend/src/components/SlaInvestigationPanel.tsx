@@ -20,7 +20,7 @@ export function SlaInvestigationPanel() {
 
  async function submit(event:FormEvent) {
   event.preventDefault();
-  if(!/^\\d+$/.test(number.trim())) return;
+  if(!/^\d+$/.test(number.trim())) return;
   setLoading(true); setError(""); setData(null);
   try {
    const result=await api.get<Investigation>(`/coordination/sla-investigation/${number.trim()}`,{params:{tier}});
@@ -45,7 +45,7 @@ export function SlaInvestigationPanel() {
     <Box component="form" onSubmit={submit} sx={{display:"grid",gridTemplateColumns:{xs:"1fr",sm:"minmax(220px,1fr) 150px auto"},gap:1.25,alignItems:"start"}}>
      <TextField fullWidth label="Número do atendimento" placeholder="Ex.: 814643" size="small" value={number} onChange={e=>setNumber(e.target.value)} slotProps={{htmlInput:{inputMode:"numeric"}}} helperText="Informe o número do ticket no Movidesk."/>
      <TextField fullWidth label="Perfil de SLA" size="small" select value={tier} onChange={e=>setTier(e.target.value)}><MenuItem value="PADRAO">Padrão</MenuItem><MenuItem value="VIP">VIP</MenuItem></TextField>
-     <Button type="submit" variant="contained" startIcon={<SearchRoundedIcon/>} disabled={loading||!/^\\d+$/.test(number.trim())} sx={{height:40,px:2.5,whiteSpace:"nowrap"}}>{loading?"Analisando…":"Investigar"}</Button>
+     <Button type="submit" variant="contained" startIcon={<SearchRoundedIcon/>} disabled={loading||!/^\d+$/.test(number.trim())} sx={{height:40,px:2.5,whiteSpace:"nowrap"}}>{loading?"Analisando…":"Investigar"}</Button>
     </Box>
     {loading&&<LinearProgress sx={{borderRadius:2}}/>}
     {error&&<Alert severity="error" onClose={()=>setError("")}>{error}</Alert>}
