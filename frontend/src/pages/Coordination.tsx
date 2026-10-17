@@ -77,6 +77,12 @@ type CsatOverview = {
 };
 
 type IntegrationHealth = { tickets: number; linkedTasks: number; azureItems: number; csatResponses: number; catalogServices: number; taskLinkCoveragePct: number; serviceCoveragePct: number; causeCoveragePct: number; businessAreaCoveragePct: number; latestCsatSyncAt: string | null; latestCsatResponseAt: string | null; latestCatalogSyncAt: string | null; sources: Record<string,string> };
+type IntegrationDetailRecord = {
+  total: number; loaded: number; truncated: boolean;
+  tickets: Array<{movideskId:number; protocol:string|null; subject:string; status:string; urgency:string|null; client:string|null; owner:string|null; createdDate:string; lastUpdate:string|null; taskNumber:number|null; taskStatus:string|null; taskTitle:string|null; service:string|null; serviceFirstLevel:string|null; serviceSecondLevel:string|null; serviceThirdLevel:string|null; category:string|null; cause:string|null; workItem?:{id:number;title:string;state:string;remoteUrl:string|null}|null}>;
+  workItems: Array<{id:number;workItemType:string;title:string;state:string;client:string|null;assignedToName:string|null;movideskTicket:number|null;azureChangedAt:string|null;remoteUrl:string|null}>;
+  services: Array<{id:number;name:string;parentServiceId:number|null;defaultCategory:string|null;defaultUrgency:string|null;syncedAt:string;ticketCount:number}>;
+};
 
 type SlaBreakdown = { total:number; concluded:number; openDevelopment:number; avgSupportMinutes:number; avgFactoryMinutes:number; avgTotalMinutes:number; supportWithinOla:number; factoryWithinOla:number; totalWithinSla:number };
 
@@ -150,6 +156,9 @@ export function Coordination() {
   const [csat, setCsat] = useState<CsatOverview | null>(null);
   const [csatLoading, setCsatLoading] = useState(false);
   const [integrationHealth, setIntegrationHealth] = useState<IntegrationHealth | null>(null);
+  const [integrationRecords, setIntegrationRecords] = useState<IntegrationDetailRecord | null>(null);
+  const [integrationRecordsLoading, setIntegrationRecordsLoading] = useState(false);
+  const [integrationRecordsError, setIntegrationRecordsError] = useState("");
   const [slaDetail, setSlaDetail] = useState<{ title:string; rows:SlaRow[] } | null>(null);
   const [csatDetail, setCsatDetail] = useState<CsatDetail | null>(null);
   const [csatDetailTitle, setCsatDetailTitle] = useState("");
@@ -214,6 +223,20 @@ export function Coordination() {
       .catch(() => { if (!controller.signal.aborted) setIntegrationHealth(null); });
     return () => controller.abort();
   }, [analyticParams.days, analyticParams.endDate, analyticParams.startDate]);
+
+  useEffect(() => {
+    if (!integrationDrawerOpen) return;
+    const controller = new AbortController();
+    setIntegrationRecordsLoading(true);
+    setIntegrationRecordsError("");
+    api.get<IntegrationDetailRecord>("/coordination/integration-details", {
+      params: { kind: integrationDetailKey, days: analyticParams.days, startDate: analyticParams.startDate, endDate: analyticParams.endDate },
+      signal: controller.signal,
+    }).then(response => setIntegrationRecords(response.data))
+      .catch(requestError => { if (!controller.signal.aborted) { setIntegrationRecords(null); setIntegrationRecordsError(getApiErrorMessage(requestError, "Não foi possível carregar os registros.")); } })
+      .finally(() => { if (!controller.signal.aborted) setIntegrationRecordsLoading(false); });
+    return () => controller.abort();
+  }, [integrationDrawerOpen, integrationDetailKey, analyticParams.days, analyticParams.endDate, analyticParams.startDate]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -832,6 +855,19 @@ export function Coordination() {
           {integrationHealth&&integrationDetailKey==="links"&&<DetailSection title="Cobertura de vínculos"><Stack direction="row" sx={{justifyContent:"space-between",mb:.4}}><Typography variant="body2">Tickets com Task vinculada</Typography><Typography variant="body2" sx={{fontWeight:800}}>{integrationHealth.taskLinkCoveragePct}%</Typography></Stack><LinearProgress variant="determinate" value={Math.max(0,Math.min(100,integrationHealth.taskLinkCoveragePct||0))} sx={{height:7,borderRadius:4}}/></DetailSection>}
           {integrationHealth&&integrationDetailKey==="services"&&<DetailSection title="Qualidade da classificação">{[["Serviço",integrationHealth.serviceCoveragePct],["Causa",integrationHealth.causeCoveragePct],["Área de negócio",integrationHealth.businessAreaCoveragePct]].map(([label,value])=><Box key={String(label)} sx={{mb:1}}><Stack direction="row" sx={{justifyContent:"space-between",mb:.4}}><Typography variant="body2">{label}</Typography><Typography variant="body2" sx={{fontWeight:800}}>{value}%</Typography></Stack><LinearProgress variant="determinate" value={Math.max(0,Math.min(100,Number(value)||0))} sx={{height:7,borderRadius:4}}/></Box>)}</DetailSection>}
           {integrationHealth&&<DetailSection title="Origem do indicador"><Typography variant="body2" color="text.secondary">{integrationHealth.sources[integrationDetailKey] ?? (integrationDetailKey==="tickets" ? "Tickets Movidesk no escopo operacional." : integrationDetailKey==="links" ? "Vínculos entre tickets Movidesk e Tasks Azure." : integrationDetailKey==="azure" ? "Work Items do Azure DevOps." : "Catálogo de serviços e classificação dos atendimentos.")}</Typography></DetailSection>}
+          <Divider />
+          <DetailSection title={integrationDetailKey==="tickets" ? "Atendimentos do período" : integrationDetailKey==="links" ? "Atendimentos e Tasks vinculadas" : integrationDetailKey==="azure" ? "Work Items vinculados ao período" : "Serviços ativos do catálogo"}>
+            {integrationRecordsLoading ? <Box sx={{py:4,display:"grid",placeItems:"center"}}><CircularProgress size={26}/></Box>
+            : integrationRecordsError ? <Alert severity="error">{integrationRecordsError}</Alert>
+            : integrationRecords ? <>
+              <Typography variant="caption" color="text.secondary" sx={{display:"block",mb:1}}>{integrationRecords.total} registro(s) encontrado(s) · {integrationRecords.loaded} exibido(s)</Typography>
+              {integrationDetailKey!=="services" && integrationDetailKey!=="azure" && integrationRecords.tickets.map(ticket=><Button key={ticket.movideskId} fullWidth variant="outlined" onClick={()=>navigate(`/tickets?movidesk=${ticket.movideskId}`)} sx={{justifyContent:"flex-start",textAlign:"left",textTransform:"none",mb:.75,p:1.2}}><Box sx={{minWidth:0,width:"100%"}}><Typography sx={{fontWeight:800}}>#{ticket.movideskId} · {ticket.subject}</Typography><Typography variant="caption" color="text.secondary">{[ticket.status,ticket.client,ticket.owner].filter(Boolean).join(" · ")}</Typography>{integrationDetailKey==="links"&&<Typography variant="caption" sx={{display:"block",mt:.3,color:"primary.main"}}>{ticket.taskNumber ? `Task #${ticket.taskNumber} · ${ticket.workItem?.title ?? ticket.taskTitle ?? "Work Item não localizado no Azure"} · ${ticket.workItem?.state ?? ticket.taskStatus ?? "Estado não informado"}` : "Sem Task vinculada"}</Typography>}</Box></Button>)}
+              {(integrationDetailKey==="azure" || integrationDetailKey==="links") && integrationRecords.workItems.map(item=><Button key={item.id} fullWidth variant="outlined" onClick={()=>item.remoteUrl ? window.open(item.remoteUrl,"_blank","noopener,noreferrer") : undefined} sx={{justifyContent:"flex-start",textAlign:"left",textTransform:"none",mb:.75,p:1.2}}><Box sx={{minWidth:0,width:"100%"}}><Typography sx={{fontWeight:800}}>#{item.id} · {item.title}</Typography><Typography variant="caption" color="text.secondary">{[item.workItemType,item.state,item.client,item.assignedToName].filter(Boolean).join(" · ")}</Typography></Box></Button>)}
+              {integrationDetailKey==="services" && integrationRecords.services.map(service=><Box key={service.id} sx={{border:"1px solid",borderColor:"divider",borderRadius:2,p:1.2,mb:.75}}><Typography sx={{fontWeight:800}}>{service.name}</Typography><Typography variant="caption" color="text.secondary">{[`ID ${service.id}`,service.defaultCategory,service.defaultUrgency,`${service.ticketCount} ocorrência(s) em campos de serviço no período`].filter(Boolean).join(" · ")}</Typography></Box>)}
+              {integrationRecords.total===0 && <Typography variant="body2" color="text.secondary">Nenhum registro encontrado para o período e escopo selecionados.</Typography>}
+              {integrationRecords.truncated && <Alert severity="info">A lista foi limitada para preservar o desempenho.</Alert>}
+            </> : <Typography variant="body2" color="text.secondary">Abra o card para carregar os registros.</Typography>}
+          </DetailSection>
         </Stack>
       </Drawer>
       <Drawer anchor="right" open={Boolean(slaComponentDetail)} onClose={()=>setSlaComponentDetail(null)} slotProps={{paper:{sx:detailDrawerPaperSx}}}>
