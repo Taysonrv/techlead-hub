@@ -2,6 +2,7 @@ import {
   Router,
 } from "express";
 import { AzureFollowService } from "../services/AzureFollowService";
+import type { AuthenticatedRequest } from "../middlewares/authMiddleware";
 
 import {
   AzureWorkItemController,
