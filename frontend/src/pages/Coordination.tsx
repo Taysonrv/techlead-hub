@@ -489,10 +489,21 @@ export function Coordination() {
             </CardContent>
           </Card>
 
-          {loading || !data ? (
-            <Box sx={{ minHeight: 320, display: "grid", placeItems: "center" }}>
-              <CircularProgress />
-            </Box>
+          {loading && !data ? (
+            <Card variant="outlined" sx={{minHeight:240,display:"grid",placeItems:"center",borderRadius:3}}>
+              <Stack spacing={1.5} sx={{alignItems:"center",p:3,textAlign:"center"}}>
+                <CircularProgress size={30} aria-label="Carregando dados da Central da Coordenação"/>
+                <Typography sx={{fontWeight:750}}>Carregando indicadores operacionais</Typography>
+                <Typography variant="body2" color="text.secondary">Estamos consolidando atendimentos, tarefas e métricas do período selecionado.</Typography>
+              </Stack>
+            </Card>
+          ) : error && !data ? (
+            <Alert severity="error" sx={{borderRadius:3}} action={<Button color="inherit" size="small" onClick={() => void load()}>Tentar novamente</Button>}>
+              <Typography sx={{fontWeight:800,mb:.35}}>Não foi possível carregar a Central</Typography>
+              {error}
+            </Alert>
+          ) : !data ? (
+            <Alert severity="info" sx={{borderRadius:3}} action={<Button color="inherit" size="small" onClick={() => void load()}>Recarregar</Button>}>Nenhum dado disponível para apresentar neste momento.</Alert>
           ) : (
             <Stack spacing={2}>
               <Card variant="outlined" sx={{ overflow: "hidden", borderColor: data.intelligence.health === "critical" ? "error.light" : data.intelligence.health === "attention" ? "warning.light" : "success.light" }}>
