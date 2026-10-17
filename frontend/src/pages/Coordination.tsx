@@ -317,7 +317,7 @@ export function Coordination() {
                   <MenuItem value="7d">Últimos 7 dias</MenuItem><MenuItem value="30d">Últimos 30 dias</MenuItem><MenuItem value="60d">Últimos 60 dias</MenuItem><MenuItem value="90d">Últimos 90 dias</MenuItem><MenuItem value="thisMonth">Este mês</MenuItem><MenuItem value="lastMonth">Mês passado</MenuItem><MenuItem value="semester">Este semestre</MenuItem><MenuItem value="year">Este ano</MenuItem><MenuItem value="custom">Personalizado</MenuItem>
                 </Select>
               </FormControl>
-              {analyticPeriod==="custom"&&<><TextField size="small" type="date" label="Data inicial" InputLabelProps={{shrink:true}} value={customStartDate} onChange={e=>setCustomStartDate(e.target.value)}/><TextField size="small" type="date" label="Data final" InputLabelProps={{shrink:true}} value={customEndDate} onChange={e=>setCustomEndDate(e.target.value)}/></>}
+              {analyticPeriod==="custom"&&<><TextField size="small" type="date" label="Data inicial" slotProps={{inputLabel:{shrink:true}}} value={customStartDate} onChange={e=>setCustomStartDate(e.target.value)}/><TextField size="small" type="date" label="Data final" slotProps={{inputLabel:{shrink:true}}} value={customEndDate} onChange={e=>setCustomEndDate(e.target.value)}/></>}
               <Button size="small" variant="outlined" onClick={() => navigate("/atencao")}>Riscos</Button>
               <Button size="small" variant="outlined" onClick={() => navigate("/qualidade-dados")}>Pendências</Button>
               <Button size="small" variant="outlined" onClick={() => navigate("/desempenho")}>Desempenho</Button>
