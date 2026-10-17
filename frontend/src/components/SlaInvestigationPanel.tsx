@@ -52,7 +52,7 @@ export function SlaInvestigationPanel() {
     {data&&<>
      <Alert severity="info" sx={{borderRadius:2}}>Análise preliminar: feriados e pausas ainda dependem de evidência validada. Este relatório não substitui o SLA oficial do Movidesk.</Alert>
      <Box sx={{p:{xs:1.5,md:2},borderRadius:2,bgcolor:"action.hover"}}>
-      <Stack direction={{xs:"column",sm:"row"}} spacing={1} sx={{justifyContent:"space-between"}} sx={{alignItems:{xs:"flex-start",sm:"center"}}}>
+      <Stack direction={{xs:"column",sm:"row"}} spacing={1} sx={{justifyContent:"space-between",alignItems:{xs:"flex-start",sm:"center"}}}>
        <Box sx={{minWidth:0}}>
         <Typography variant="overline" color="text.secondary">Atendimento #{data.ticket.id}</Typography>
         <Typography variant="subtitle1" sx={{fontWeight:800,lineHeight:1.35,overflowWrap:"anywhere"}}>{data.ticket.subject}</Typography>
