@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { Alert, Box, Button, Card, CardContent, Chip, Divider, LinearProgress, Stack, TextField, Typography } from "@mui/material";
+import { Alert, Box, Button, Card, CardContent, Chip, Divider, LinearProgress, Stack, TextField, Typography, MenuItem } from "@mui/material";
 import SearchRoundedIcon from "@mui/icons-material/SearchRounded";
 import TimelineRoundedIcon from "@mui/icons-material/TimelineRounded";
 import InsightsRoundedIcon from "@mui/icons-material/InsightsRounded";
@@ -34,7 +34,7 @@ export function SlaInvestigationPanel() {
   <Box sx={{height:4,background:"linear-gradient(90deg, #16a765 0%, #4f8df7 100%)"}} />
   <CardContent sx={{p:{xs:2,md:3}}}>
    <Stack spacing={2.5}>
-    <Stack direction="row" spacing={1.5} alignItems="center">
+    <Stack direction="row" spacing={1.5} sx={{alignItems:"center"}}>
      <Box sx={{display:"grid",placeItems:"center",width:44,height:44,borderRadius:2,bgcolor:"action.hover",color:"primary.main",flexShrink:0}}><InsightsRoundedIcon /></Box>
      <Box sx={{minWidth:0,flex:1}}>
       <Typography variant="h6" sx={{fontWeight:800,lineHeight:1.25}}>Investigação de SLA e OLA</Typography>
@@ -43,8 +43,8 @@ export function SlaInvestigationPanel() {
      <Chip size="small" variant="outlined" label="Aliare 2026 v1.0" sx={{display:{xs:"none",sm:"inline-flex"}}}/>
     </Stack>
     <Box component="form" onSubmit={submit} sx={{display:"grid",gridTemplateColumns:{xs:"1fr",sm:"minmax(220px,1fr) 150px auto"},gap:1.25,alignItems:"start"}}>
-     <TextField fullWidth label="Número do atendimento" placeholder="Ex.: 814643" size="small" value={number} onChange={e=>setNumber(e.target.value)} inputProps={{inputMode:"numeric"}} helperText="Informe o número do ticket no Movidesk."/>
-     <TextField fullWidth label="Perfil de SLA" size="small" select SelectProps={{native:true}} value={tier} onChange={e=>setTier(e.target.value)}><option value="PADRAO">Padrão</option><option value="VIP">VIP</option></TextField>
+     <TextField fullWidth label="Número do atendimento" placeholder="Ex.: 814643" size="small" value={number} onChange={e=>setNumber(e.target.value)} slotProps={{htmlInput:{inputMode:"numeric"}}} helperText="Informe o número do ticket no Movidesk."/>
+     <TextField fullWidth label="Perfil de SLA" size="small" select value={tier} onChange={e=>setTier(e.target.value)}><MenuItem value="PADRAO">Padrão</MenuItem><MenuItem value="VIP">VIP</MenuItem></TextField>
      <Button type="submit" variant="contained" startIcon={<SearchRoundedIcon/>} disabled={loading||!/^\\d+$/.test(number.trim())} sx={{height:40,px:2.5,whiteSpace:"nowrap"}}>{loading?"Analisando…":"Investigar"}</Button>
     </Box>
     {loading&&<LinearProgress sx={{borderRadius:2}}/>}
@@ -52,7 +52,7 @@ export function SlaInvestigationPanel() {
     {data&&<>
      <Alert severity="info" sx={{borderRadius:2}}>Análise preliminar: feriados e pausas ainda dependem de evidência validada. Este relatório não substitui o SLA oficial do Movidesk.</Alert>
      <Box sx={{p:{xs:1.5,md:2},borderRadius:2,bgcolor:"action.hover"}}>
-      <Stack direction={{xs:"column",sm:"row"}} spacing={1} justifyContent="space-between" alignItems={{xs:"flex-start",sm:"center"}}>
+      <Stack direction={{xs:"column",sm:"row"}} spacing={1} sx={{justifyContent:"space-between"}} sx={{alignItems:{xs:"flex-start",sm:"center"}}}>
        <Box sx={{minWidth:0}}>
         <Typography variant="overline" color="text.secondary">Atendimento #{data.ticket.id}</Typography>
         <Typography variant="subtitle1" sx={{fontWeight:800,lineHeight:1.35,overflowWrap:"anywhere"}}>{data.ticket.subject}</Typography>
@@ -70,8 +70,8 @@ export function SlaInvestigationPanel() {
        return <Box key={key} sx={{p:1.75,border:"1px solid",borderColor:"divider",borderRadius:2.5,minWidth:0}}>
         <Typography variant="body2" color="text.secondary" sx={{fontWeight:650}}>{metricLabels[key]}</Typography>
         <Typography variant="h5" sx={{fontWeight:800,my:0.75,color}}>{valid?`${metric.percent}%`:"—"}</Typography>
-        <Typography variant="caption" color="text.secondary" display="block">{duration(metric.minutes)} consumidos</Typography>
-        <Typography variant="caption" color="text.secondary" display="block">Meta: {duration(metric.targetMinutes)}</Typography>
+        <Typography variant="caption" color="text.secondary" sx={{display:"block"}}>{duration(metric.minutes)} consumidos</Typography>
+        <Typography variant="caption" color="text.secondary" sx={{display:"block"}}>Meta: {duration(metric.targetMinutes)}</Typography>
         <LinearProgress variant="determinate" value={percent} color={metric.overdue===true?"error":metric.overdue===false?"success":"primary"} sx={{mt:1.25,height:5,borderRadius:5,bgcolor:"action.hover"}}/>
        </Box>;
       })}
@@ -81,7 +81,7 @@ export function SlaInvestigationPanel() {
       <Typography variant="body2" color="text.secondary">{data.summary}</Typography>
      </Box>
      <Divider/>
-     <Stack direction="row" spacing={1} alignItems="center">
+     <Stack direction="row" spacing={1} sx={{alignItems:"center"}}>
       <TimelineRoundedIcon color="primary"/>
       <Box>
        <Typography variant="subtitle1" sx={{fontWeight:800}}>Linha do tempo e evidências</Typography>
@@ -95,7 +95,7 @@ export function SlaInvestigationPanel() {
         <Box sx={{position:"relative",pl:2,borderLeft:"2px solid",borderColor:"primary.main",minWidth:0}}>
          <Typography variant="body2" sx={{fontWeight:750}}>{event.title}</Typography>
          <Typography variant="body2" sx={{mt:0.4,overflowWrap:"anywhere"}}>{event.detail}</Typography>
-         <Typography variant="caption" color="text.secondary" display="block" sx={{mt:0.75}}>Evidência: {event.evidence}</Typography>
+         <Typography variant="caption" color="text.secondary" sx={{display:"block"}} sx={{mt:0.75}}>Evidência: {event.evidence}</Typography>
         </Box>
        </Box>)}
       </Stack>}
