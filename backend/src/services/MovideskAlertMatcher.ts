@@ -29,3 +29,9 @@ export function shouldAlertForMovideskSubject(
     return normalizedTerm.length > 0 && normalizedSubject.includes(normalizedTerm);
   });
 }
+
+export function areMovideskTeamsAlertsEnabled(
+  value = process.env.TEAMS_ALERTS_ENABLED,
+): boolean {
+  return value?.trim().toLowerCase() === "true";
+}
