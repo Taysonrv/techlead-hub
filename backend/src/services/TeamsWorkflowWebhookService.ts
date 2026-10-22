@@ -75,6 +75,8 @@ export class TeamsWorkflowWebhookService {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(card),
+        // A URL de Workflow é um segredo; não permitir que redirects encaminhem o POST/card a outro host.
+        redirect: "error",
         signal: controller.signal,
       });
       const result = { status: response.status, durationMs: Date.now() - startedAt };
