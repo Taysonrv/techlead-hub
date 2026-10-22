@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import { Prisma } from "@prisma/client";
 
 import { prisma } from "../database/prisma";
+import { shouldAlertForMovideskSubject } from "./MovideskAlertMatcher";
 
 type JsonObject = Record<string, unknown>;
 
@@ -117,33 +118,52 @@ export class MovideskJsonImportService {
         if (ticket.category) categories.add(ticket.category);
         if (ticket.service) services.add(ticket.service);
 
-        const existing = await prisma.ticket.findUnique({
-          where: { movideskId: ticket.movideskId },
-          select: { id: true, cause: true, reason: true, businessArea: true },
-        });
+        const existing = await prisma.$transaction(async (tx) => {
+          const previous = await tx.ticket.findUnique({
+            where: { movideskId: ticket.movideskId },
+            select: { id: true, cause: true, reason: true, businessArea: true },
+          });
 
-        await prisma.ticket.upsert({
-          where: { movideskId: ticket.movideskId },
-          create: {
-            ...ticket,
-            importSource: source,
-            importBatch: batchId,
-            importedAt: new Date(),
-            importRunId: importRun.id,
-          },
-          update: {
-            ...ticket,
-            // A API pode deixar de devolver customFieldValues históricos. Não
-            // apagamos uma classificação oficial já persistida só porque o
-            // campo deixou de vir no payload atual.
-            cause: this.isCategory(ticket.category, "problema") ? (ticket.cause ?? existing?.cause ?? null) : null,
-            reason: this.isCategory(ticket.category, "duvida") ? (ticket.reason ?? existing?.reason ?? null) : null,
-            businessArea: ticket.businessArea ?? existing?.businessArea ?? null,
-            importSource: source,
-            importBatch: batchId,
-            importedAt: new Date(),
-            importRunId: importRun.id,
-          },
+          await tx.ticket.upsert({
+            where: { movideskId: ticket.movideskId },
+            create: {
+              ...ticket,
+              importSource: source,
+              importBatch: batchId,
+              importedAt: new Date(),
+              importRunId: importRun.id,
+            },
+            update: {
+              ...ticket,
+              // A API pode deixar de devolver customFieldValues históricos. Não
+              // apagamos uma classificação oficial já persistida só porque o
+              // campo deixou de vir no payload atual.
+              cause: this.isCategory(ticket.category, "problema") ? (ticket.cause ?? previous?.cause ?? null) : null,
+              reason: this.isCategory(ticket.category, "duvida") ? (ticket.reason ?? previous?.reason ?? null) : null,
+              businessArea: ticket.businessArea ?? previous?.businessArea ?? null,
+              importSource: source,
+              importBatch: batchId,
+              importedAt: new Date(),
+              importRunId: importRun.id,
+            },
+          });
+
+          // Só a primeira inserção do ticket gera evento. A chave única protege
+          // contra concorrência/reprocessamento e a fila é gravada atomicamente.
+          if (!previous && shouldAlertForMovideskSubject(ticket.subject)) {
+            await tx.teamsAlertOutbox.createMany({
+              data: [{
+                movideskId: ticket.movideskId,
+                eventType: "NEW_TICKET",
+                subject: ticket.subject,
+                client: ticket.client ?? null,
+                createdDate: ticket.createdDate,
+                urgency: ticket.urgency ?? null,
+              }],
+              skipDuplicates: true,
+            });
+          }
+          return previous;
         });
 
         if (existing) updated += 1;
