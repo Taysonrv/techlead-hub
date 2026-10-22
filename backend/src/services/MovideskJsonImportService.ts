@@ -2,7 +2,10 @@ import crypto from "node:crypto";
 import { Prisma } from "@prisma/client";
 
 import { prisma } from "../database/prisma";
-import { shouldAlertForMovideskSubject } from "./MovideskAlertMatcher";
+import {
+  areMovideskTeamsAlertsEnabled,
+  shouldAlertForMovideskSubject,
+} from "./MovideskAlertMatcher";
 
 type JsonObject = Record<string, unknown>;
 
@@ -150,7 +153,11 @@ export class MovideskJsonImportService {
 
           // Só a primeira inserção do ticket gera evento. A chave única protege
           // contra concorrência/reprocessamento e a fila é gravada atomicamente.
-          if (!previous && shouldAlertForMovideskSubject(ticket.subject)) {
+          if (
+            areMovideskTeamsAlertsEnabled() &&
+            !previous &&
+            shouldAlertForMovideskSubject(ticket.subject)
+          ) {
             await tx.teamsAlertOutbox.createMany({
               data: [{
                 movideskId: ticket.movideskId,
