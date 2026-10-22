@@ -79,6 +79,33 @@ export class MovideskTeamsAlertScheduler {
     });
     if (!candidate) return;
 
+    // Um processo pode cair depois de incrementar attempts na última tentativa,
+    // antes de persistir SENT/PENDING/DEAD. Não reenvie um item recuperado que
+    // já consumiu o limite: finalize-o sem reivindicar nem chamar o webhook.
+    if (candidate.attempts >= MAX_ATTEMPTS) {
+      await this.db.teamsAlertOutbox.updateMany({
+        where: {
+          id: candidate.id,
+          OR: [
+            { status: "PENDING", nextAttemptAt: { lte: now } },
+            {
+              status: "PROCESSING",
+              OR: [
+                { lockedUntil: null },
+                { lockedUntil: { lt: now } },
+              ],
+            },
+          ],
+        },
+        data: {
+          status: "DEAD",
+          lockedUntil: null,
+          lastError: `Limite de ${MAX_ATTEMPTS} tentativas atingido; item encerrado durante recuperação.`,
+        },
+      });
+      return;
+    }
+
     const leaseUntil = new Date(Date.now() + LEASE_MS);
     const claimed = await this.db.teamsAlertOutbox.updateMany({
       where: {
