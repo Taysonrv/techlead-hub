@@ -32,17 +32,18 @@ O ticket 815483 apareceu em diagnóstico anterior como caso suspeito, mas não h
 6. Como não há transação distribuída entre banco e Teams, usar entrega at-least-once. Se o Teams aceitar o cartão e a confirmação local falhar, uma duplicidade remota ainda é possível; não prometer exactly-once.
 
 ## Microsoft Teams Workflows
-O destino configurado pelo usuário é um **chat em grupo** por meio do modelo de webhook dos Workflows. O trigger aceita apenas HTTP POST e espera um payload de cartão adaptável (Adaptive Card) ou cartão de mensagem, com limite de 256 KB.
+O destino é um **chat em grupo**, por meio do modelo de webhook dos Workflows. A documentação oficial da Microsoft confirma que o endpoint criado pelo modelo recebe HTTP POST e aceita Adaptive Card ou Message Card. A orientação de teste é enviar o JSON do cartão no corpo da requisição e visualizar o cartão publicado no Teams. Consulte: https://support.microsoft.com/en-us/workflows/send-messages-in-teams-using-incoming-webhooks
 
-- Enviar `Content-Type: application/json`.
-- Usar um Adaptive Card compacto, sem dados desnecessários, com os oito campos requeridos.
+- Enviar `POST` com `Content-Type: application/json`.
+- Enviar o objeto JSON do Adaptive Card diretamente no corpo da requisição, conforme a orientação da documentação Microsoft; não adicionar um envelope arbitrário `{ "card": ... }`.
+- A autenticação permitida depende do modelo de Workflow selecionado. Respeitar a configuração gerada pelo Teams.
+- Usar um Adaptive Card compacto, com os oito campos necessários e abaixo do limite de 256 KB.
 - Guardar a URL do webhook em variável de ambiente/secret store; nunca versionar, exibir na interface ou gravar a URL em logs.
 - Manter a integração desligada por padrão até a URL ser configurada no ambiente protegido e validada em homologação.
 - Validar respostas HTTP e timeout. Sanitizar logs para registrar status, duração e ID do evento, nunca o webhook ou segredos.
-- O formato final do JSON deve corresponder ao trigger/modelo escolhido no Workflow; confirmar se ele espera um objeto Adaptive Card direto ou um envelope específico antes do teste integrado.
 
 ### Payload de referência (Adaptive Card)
-O envelope exato deve ser ajustado ao trigger selecionado no Workflow. Este é o objeto de cartão a ser transportado dentro do envelope aceito por ele:
+Este JSON de cartão ilustrativo é o corpo do POST. Substituir os valores de exemplo pelos campos do atendimento real e gerar o link a partir de uma URL-base validada.
 
 ```json
 {
@@ -50,24 +51,40 @@ O envelope exato deve ser ajustado ao trigger selecionado no Workflow. Este é o
   "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
   "version": "1.4",
   "body": [
-    { "type": "TextBlock", "text": "Novo atendimento Movidesk", "weight": "Bolder", "size": "Medium", "wrap": true },
-    { "type": "FactSet", "facts": [
-      { "title": "Número", "value": "123456" },
-      { "title": "Assunto", "value": "AGRIQ — exemplo" },
-      { "title": "Cliente", "value": "Cliente exemplo" },
-      { "title": "Abertura", "value": "22/10/2026 10:30" },
-      { "title": "Prioridade", "value": "Alta" },
-      { "title": "Status", "value": "Novo" },
-      { "title": "Responsável", "value": "Equipe responsável" }
-    ] },
-    { "type": "ActionSet", "actions": [
-      { "type": "Action.OpenUrl", "title": "Abrir atendimento", "url": "https://example.invalid/tickets/123456" }
-    ] }
+    {
+      "type": "TextBlock",
+      "text": "Novo atendimento Movidesk",
+      "weight": "Bolder",
+      "size": "Medium",
+      "wrap": true
+    },
+    {
+      "type": "FactSet",
+      "facts": [
+        { "title": "Número", "value": "123456" },
+        { "title": "Assunto", "value": "AGRIQ — exemplo" },
+        { "title": "Cliente", "value": "Cliente exemplo" },
+        { "title": "Abertura", "value": "22/10/2026 10:30" },
+        { "title": "Prioridade", "value": "Alta" },
+        { "title": "Status", "value": "Novo" },
+        { "title": "Responsável", "value": "Equipe responsável" }
+      ]
+    },
+    {
+      "type": "ActionSet",
+      "actions": [
+        {
+          "type": "Action.OpenUrl",
+          "title": "Abrir atendimento",
+          "url": "https://example.invalid/tickets/123456"
+        }
+      ]
+    }
   ]
 }
 ```
 
-O cartão acima é ilustrativo: valores e URL devem vir do registro real, e a URL-base deve ser configurada/validada. Não usar o domínio de exemplo em produção.
+O cartão acima é ilustrativo. Não usar o domínio `example.invalid` em produção. Validar a URL final e o comportamento do Workflow em chat de homologação antes da ativação.
 
 ## Configuração proposta
 - `TEAMS_ALERTS_ENABLED=false` por padrão.
@@ -82,7 +99,7 @@ O cartão acima é ilustrativo: valores e URL devem vir do registro real, e a UR
 - Atomicidade: falha ao persistir evento não deve deixar ticket novo sem sinalização silenciosa.
 - Worker: sucesso, timeout, HTTP 429/Retry-After, HTTP 5xx, reinício com pendências e duas instâncias concorrentes.
 - Segurança: logs sem URL/segredos, conteúdo escapado, URL de destino validada e payload abaixo de 256 KB.
-- Contrato: validar o envelope esperado pelo trigger real do Workflow e publicar em chat de homologação.
+- Contrato: POST com o Adaptive Card diretamente no body, usando o modelo e autenticação configurados no Workflow; publicar em chat de homologação.
 - Regressão: escopo SIMER e baseline manual permanecem inalterados; testes atuais passam.
 
 ## Critérios de aceite
