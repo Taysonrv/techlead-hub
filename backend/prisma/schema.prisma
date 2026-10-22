@@ -895,6 +895,7 @@ model AzureWorkItemFollow {
   workItemId Int
   source String @default("HUB")
   followedAt DateTime @default(now())
+  lastSeenRevision Int?
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   workItem AzureWorkItem @relation(fields: [workItemId], references: [id], onDelete: Cascade)
   @@id([userId, workItemId])
