@@ -133,6 +133,11 @@ test("limita Retry-After a 24 horas e ignora cabeçalho inválido", async (t) =>
     },
   );
 
+});
+
+test("ignora um cabeçalho Retry-After inválido", async (t) => {
+  restoreEnv(t);
+  configureEnabled();
   t.mock.method(globalThis, "fetch", async () =>
     new Response(null, {
       status: 502,
