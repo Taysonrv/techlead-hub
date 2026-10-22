@@ -111,10 +111,10 @@ O cartão acima é ilustrativo. Não usar o domínio `example.invalid` em produ�
 
 ## Implementação inicial da fila persistente
 
-- O importador grava o ticket e o evento de alerta na mesma transação. Só a primeira inserção de um ID Movidesk cria o evento; atualizações posteriores não geram novo alerta.
+- Com `TEAMS_ALERTS_ENABLED=true`, o importador grava o ticket e o evento de alerta na mesma transação. Só a primeira inserção de um ID Movidesk cria o evento; atualizações posteriores não geram novo alerta. Com a flag ausente ou diferente de `true`, o importador não acessa a tabela de outbox, permitindo manter o recurso desativado antes da migração.
 - A tabela `TeamsAlertOutbox` usa chave única por `movideskId + eventType`, estados `PENDING`, `PROCESSING`, `SENT` e `DEAD`, bloqueio temporário para concorrência e retentativas com backoff exponencial e jitter.
 - O worker processa um evento por ciclo, separado do scheduler de sincronização. A falha no Teams não interrompe a importação do Movidesk.
 - A configuração está desligada por padrão (`TEAMS_ALERTS_ENABLED=false`). O modelo de variáveis de ambiente está em `backend/.env.teams.example`; copie somente as variáveis necessárias para o `.env` local ignorado pelo Git.
 - Não ativar até confirmar a URL-base real do ticket no Movidesk e testar o formato do Adaptive Card com um chat de homologação.
-- A migration `20261022120000_movidesk_teams_alert_outbox` é parte da branch e ainda não deve ser aplicada a uma base de produção. Validar primeiro em banco local/homologação e manter plano de rollback.
+- A migration `20261022120000_movidesk_teams_alert_outbox` é parte da branch e ainda não deve ser aplicada a uma base de produção. Validar primeiro em banco local/homologação e manter plano de rollback. Aplicar a migração em ambiente autorizado antes de configurar `TEAMS_ALERTS_ENABLED=true`; com a flag ativada e a tabela ausente, a transação de importação de um ticket correspondente será revertida para preservar a atomicidade.
 - Antes de publicar, rodar `npm run prisma:generate`, `npm test` e `npm run build` na pasta `backend`; testar Desktop e Web com o mesmo backend/configuração, sem incluir o segredo no pacote do frontend.
