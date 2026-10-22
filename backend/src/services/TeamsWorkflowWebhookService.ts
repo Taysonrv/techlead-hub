@@ -2,17 +2,45 @@ import { buildMovideskAdaptiveCard, type MovideskAlertTicket } from "./MovideskT
 
 const DEFAULT_TIMEOUT_MS = 8_000;
 const MAX_TIMEOUT_MS = 30_000;
+const MAX_RETRY_AFTER_MS = 24 * 60 * 60_000;
 
 export type TeamsWebhookResult = {
   status: number;
   durationMs: number;
 };
 
+export class TeamsWebhookHttpError extends Error {
+  constructor(
+    public readonly status: number,
+    public readonly retryAfterMs: number | null,
+  ) {
+    super(`Teams Workflow respondeu HTTP ${status}.`);
+    this.name = "TeamsWebhookHttpError";
+  }
+}
+
 function configuredTimeout(): number {
   const value = Number(process.env.TEAMS_WEBHOOK_TIMEOUT_MS ?? DEFAULT_TIMEOUT_MS);
   return Number.isSafeInteger(value) && value >= 1_000 && value <= MAX_TIMEOUT_MS
     ? value
     : DEFAULT_TIMEOUT_MS;
+}
+
+function parseRetryAfter(value: string | null): number | null {
+  if (!value) return null;
+
+  const seconds = Number(value);
+  if (Number.isFinite(seconds) && seconds >= 0) {
+    return Math.min(seconds * 1_000, MAX_RETRY_AFTER_MS);
+  }
+
+  const retryDate = Date.parse(value);
+  if (!Number.isFinite(retryDate)) return null;
+
+  return Math.min(
+    Math.max(0, retryDate - Date.now()),
+    MAX_RETRY_AFTER_MS,
+  );
 }
 
 export class TeamsWorkflowWebhookService {
@@ -52,14 +80,14 @@ export class TeamsWorkflowWebhookService {
       const result = { status: response.status, durationMs: Date.now() - startedAt };
       if (!response.ok) {
         // Nunca propagar body/URL do Workflow: respostas podem conter detalhes sensíveis.
-        const retryAfter = response.headers.get("retry-after");
-        throw new Error(
-          `Teams Workflow respondeu HTTP ${response.status}.${retryAfter ? ` Retry-After=${retryAfter}.` : ""}`,
+        throw new TeamsWebhookHttpError(
+          response.status,
+          parseRetryAfter(response.headers.get("retry-after")),
         );
       }
       return result;
     } catch (error) {
-      if (error instanceof Error && error.message.startsWith("Teams Workflow respondeu HTTP ")) {
+      if (error instanceof TeamsWebhookHttpError) {
         throw error;
       }
       if (controller.signal.aborted) {
