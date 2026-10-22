@@ -17,7 +17,14 @@ export class MovideskTeamsAlertScheduler {
   private timer: NodeJS.Timeout | undefined;
   private running = false;
   private stopped = false;
-  private readonly webhook = new TeamsWorkflowWebhookService();
+  private readonly webhook: TeamsWorkflowWebhookService;
+
+  constructor(
+    private readonly db: typeof prisma = prisma,
+    webhook?: TeamsWorkflowWebhookService,
+  ) {
+    this.webhook = webhook ?? new TeamsWorkflowWebhookService();
+  }
 
   start() {
     if (this.timer || this.stopped) return;
@@ -55,7 +62,7 @@ export class MovideskTeamsAlertScheduler {
 
   private async processOne() {
     const now = new Date();
-    const candidate = await prisma.teamsAlertOutbox.findFirst({
+    const candidate = await this.db.teamsAlertOutbox.findFirst({
       where: {
         OR: [
           { status: "PENDING", nextAttemptAt: { lte: now } },
@@ -73,7 +80,7 @@ export class MovideskTeamsAlertScheduler {
     if (!candidate) return;
 
     const leaseUntil = new Date(Date.now() + LEASE_MS);
-    const claimed = await prisma.teamsAlertOutbox.updateMany({
+    const claimed = await this.db.teamsAlertOutbox.updateMany({
       where: {
         id: candidate.id,
         OR: [
@@ -92,13 +99,13 @@ export class MovideskTeamsAlertScheduler {
     if (claimed.count !== 1) return;
 
     try {
-      const ticket = await prisma.ticket.findUnique({
+      const ticket = await this.db.ticket.findUnique({
         where: { movideskId: candidate.movideskId },
         select: { movideskId: true, subject: true, client: true, createdDate: true, urgency: true, status: true, owner: true },
       });
       if (!ticket) throw new Error("Ticket não encontrado no banco para montar o alerta.");
       const result = await this.webhook.sendNewTicket(ticket);
-      await prisma.teamsAlertOutbox.update({
+      await this.db.teamsAlertOutbox.update({
         where: { id: candidate.id },
         data: { status: "SENT", sentAt: new Date(), lockedUntil: null, lastHttpStatus: result.status, lastError: null },
       });
@@ -120,7 +127,7 @@ export class MovideskTeamsAlertScheduler {
           ? error.status
           : null;
 
-      await prisma.teamsAlertOutbox.update({
+      await this.db.teamsAlertOutbox.update({
         where: { id: candidate.id },
         data: {
           status: terminal ? "DEAD" : "PENDING",
