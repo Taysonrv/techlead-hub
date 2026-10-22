@@ -918,7 +918,7 @@ model TeamsAlertOutbox {
   client         String?
   createdDate    DateTime
   urgency        String?
-  status         String          @default("PENDING")
+  status         TeamsAlertStatus @default(PENDING)
   attempts       Int             @default(0)
   nextAttemptAt  DateTime        @default(now())
   lockedUntil    DateTime?
