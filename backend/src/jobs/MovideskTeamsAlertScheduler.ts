@@ -1,5 +1,8 @@
 import { prisma } from "../database/prisma";
-import { TeamsWorkflowWebhookService } from "../services/TeamsWorkflowWebhookService";
+import {
+  TeamsWebhookHttpError,
+  TeamsWorkflowWebhookService,
+} from "../services/TeamsWorkflowWebhookService";
 
 const POLL_MS = 15_000;
 const LEASE_MS = 45_000;
@@ -56,7 +59,13 @@ export class MovideskTeamsAlertScheduler {
       where: {
         OR: [
           { status: "PENDING", nextAttemptAt: { lte: now } },
-          { status: "PROCESSING", lockedUntil: { lt: now } },
+          {
+            status: "PROCESSING",
+            OR: [
+              { lockedUntil: null },
+              { lockedUntil: { lt: now } },
+            ],
+          },
         ],
       },
       orderBy: [{ nextAttemptAt: "asc" }, { createdAt: "asc" }],
@@ -69,7 +78,13 @@ export class MovideskTeamsAlertScheduler {
         id: candidate.id,
         OR: [
           { status: "PENDING", nextAttemptAt: { lte: now } },
-          { status: "PROCESSING", lockedUntil: { lt: now } },
+          {
+            status: "PROCESSING",
+            OR: [
+              { lockedUntil: null },
+              { lockedUntil: { lt: now } },
+            ],
+          },
         ],
       },
       data: { status: "PROCESSING", lockedUntil: leaseUntil, attempts: { increment: 1 } },
@@ -90,14 +105,28 @@ export class MovideskTeamsAlertScheduler {
       console.log(`[teams-alerts] Alerta enviado | ticket=${candidate.movideskId} | http=${result.status} | duração=${result.durationMs}ms`);
     } catch (error) {
       const attempts = candidate.attempts + 1;
-      const message = error instanceof Error ? error.message : "Falha desconhecida no envio.";
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Falha desconhecida no envio.";
       const terminal = attempts >= MAX_ATTEMPTS;
+      const retryAfterMs =
+        error instanceof TeamsWebhookHttpError
+          ? error.retryAfterMs
+          : null;
+      const delayMs = retryAfterMs ?? retryDelay(attempts);
+      const httpStatus =
+        error instanceof TeamsWebhookHttpError
+          ? error.status
+          : null;
+
       await prisma.teamsAlertOutbox.update({
         where: { id: candidate.id },
         data: {
           status: terminal ? "DEAD" : "PENDING",
           lockedUntil: null,
-          nextAttemptAt: new Date(Date.now() + retryDelay(attempts)),
+          nextAttemptAt: new Date(Date.now() + delayMs),
+          lastHttpStatus: httpStatus,
           lastError: message.slice(0, 500),
         },
       });
