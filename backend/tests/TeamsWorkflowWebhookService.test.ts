@@ -53,8 +53,10 @@ test("envia Adaptive Card e retorna status e duração quando o Workflow aceita"
   restoreEnv(t);
   configureEnabled();
   let requestBody: any;
+  let redirectMode: RequestRedirect | undefined;
   const fetchMock = t.mock.method(globalThis, "fetch", async (_input: any, init?: RequestInit) => {
     requestBody = JSON.parse(String(init?.body));
+    redirectMode = init?.redirect;
     return new Response(null, { status: 202 });
   });
 
@@ -63,6 +65,7 @@ test("envia Adaptive Card e retorna status e duração quando o Workflow aceita"
   assert.equal(result.status, 202);
   assert.ok(result.durationMs >= 0);
   assert.equal(fetchMock.mock.callCount(), 1);
+  assert.equal(redirectMode, "error");
   assert.equal(requestBody.type, "AdaptiveCard");
   assert.equal(requestBody.version, "1.4");
   assert.ok(JSON.stringify(requestBody).includes("https://movidesk.example.invalid/ticket/12345"));
