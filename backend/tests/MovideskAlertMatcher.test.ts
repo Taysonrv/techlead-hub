@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  areMovideskTeamsAlertsEnabled,
   normalizeMovideskAlertText,
   parseMovideskAlertTerms,
   shouldAlertForMovideskSubject,
@@ -29,4 +30,13 @@ test("deduplicates normalized terms", () => {
     "agriq",
     "receituario",
   ]);
+});
+
+
+test("keeps Teams alerts disabled unless the flag is explicitly true", () => {
+  assert.equal(areMovideskTeamsAlertsEnabled(undefined), false);
+  assert.equal(areMovideskTeamsAlertsEnabled(""), false);
+  assert.equal(areMovideskTeamsAlertsEnabled("false"), false);
+  assert.equal(areMovideskTeamsAlertsEnabled("TRUE"), true);
+  assert.equal(areMovideskTeamsAlertsEnabled(" true "), true);
 });
