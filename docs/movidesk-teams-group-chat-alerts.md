@@ -107,3 +107,14 @@ O cartão acima é ilustrativo. Não usar o domínio `example.invalid` em produ�
 - Falhas de envio permanecem persistidas e são retentadas sem bloquear a sincronização principal.
 - Métricas de idade da fila, tentativas, entregues, falhas e HTTP 429.
 - Nenhuma migração ou ativação em produção sem revisão, backup/plano de rollback e autorização explícita.
+
+
+## Implementação inicial da fila persistente
+
+- O importador grava o ticket e o evento de alerta na mesma transação. Só a primeira inserção de um ID Movidesk cria o evento; atualizações posteriores não geram novo alerta.
+- A tabela `TeamsAlertOutbox` usa chave única por `movideskId + eventType`, estados `PENDING`, `PROCESSING`, `SENT` e `DEAD`, bloqueio temporário para concorrência e retentativas com backoff exponencial e jitter.
+- O worker processa um evento por ciclo, separado do scheduler de sincronização. A falha no Teams não interrompe a importação do Movidesk.
+- A configuração está desligada por padrão (`TEAMS_ALERTS_ENABLED=false`). O modelo de variáveis de ambiente está em `backend/.env.teams.example`; copie somente as variáveis necessárias para o `.env` local ignorado pelo Git.
+- Não ativar até confirmar a URL-base real do ticket no Movidesk e testar o formato do Adaptive Card com um chat de homologação.
+- A migration `20261022120000_movidesk_teams_alert_outbox` é parte da branch e ainda não deve ser aplicada a uma base de produção. Validar primeiro em banco local/homologação e manter plano de rollback.
+- Antes de publicar, rodar `npm run prisma:generate`, `npm test` e `npm run build` na pasta `backend`; testar Desktop e Web com o mesmo backend/configuração, sem incluir o segredo no pacote do frontend.
