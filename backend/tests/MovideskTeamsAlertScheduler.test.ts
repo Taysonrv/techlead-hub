@@ -119,6 +119,25 @@ test("worker marca DEAD ao atingir oito tentativas e conserva status HTTP", asyn
   assert.equal(data.lockedUntil, null);
 });
 
+test("worker encerra item recuperado que já atingiu oito tentativas sem reenviar", async () => {
+  let sends = 0;
+  const { scheduler, calls } = harness({
+    item: { ...candidate, status: "PROCESSING", attempts: 8, lockedUntil: null },
+    send: async () => {
+      sends += 1;
+      return { status: 202, durationMs: 1 };
+    },
+  });
+
+  await runOne(scheduler);
+
+  assert.equal(calls.claim.data.status, "DEAD");
+  assert.equal(calls.claim.data.lockedUntil, null);
+  assert.match(calls.claim.data.lastError, /8 tentativas/);
+  assert.equal(calls.ticketLookups, 0);
+  assert.equal(sends, 0);
+});
+
 test("worker não envia quando outro processo já reivindicou o item", async () => {
   let sends = 0;
   const { scheduler, calls } = harness({
