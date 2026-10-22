@@ -8,6 +8,7 @@ import {
 import { MovideskSyncScheduler } from "./jobs/MovideskSyncScheduler";
 import { MovideskReferenceSyncScheduler } from "./jobs/MovideskReferenceSyncScheduler";
 import { MovideskEnrichmentScheduler } from "./jobs/MovideskEnrichmentScheduler";
+import { MovideskTeamsAlertScheduler } from "./jobs/MovideskTeamsAlertScheduler";
 
 import {
   ensureApplicationSchema,
@@ -57,6 +58,7 @@ let azureSyncScheduler: AzureDevOpsSyncScheduler | undefined;
 let movideskSyncScheduler: MovideskSyncScheduler | undefined;
 let movideskReferenceSyncScheduler: MovideskReferenceSyncScheduler | undefined;
 let movideskEnrichmentScheduler: MovideskEnrichmentScheduler | undefined;
+let movideskTeamsAlertScheduler: MovideskTeamsAlertScheduler | undefined;
 
 let server: Server | undefined;
 let databaseRecoveryTimer: NodeJS.Timeout | undefined;
@@ -69,10 +71,12 @@ function startSchedulers() {
   movideskSyncScheduler = new MovideskSyncScheduler();
   movideskReferenceSyncScheduler = new MovideskReferenceSyncScheduler();
   movideskEnrichmentScheduler = new MovideskEnrichmentScheduler();
+  movideskTeamsAlertScheduler = new MovideskTeamsAlertScheduler();
   azureSyncScheduler.start();
   movideskSyncScheduler.start();
   movideskReferenceSyncScheduler.start();
   movideskEnrichmentScheduler.start();
+  movideskTeamsAlertScheduler.start();
   schedulersStarted = true;
 }
 
@@ -113,10 +117,11 @@ function assertPrismaClientUpToDate() {
   // causaria erros findMany repetidos em calendário e notificações.
   if (
     typeof prisma.calendarMeeting?.findMany !== "function" ||
-    typeof prisma.calendarMeetingParticipant?.findMany !== "function"
+    typeof prisma.calendarMeetingParticipant?.findMany !== "function" ||
+    typeof prisma.teamsAlertOutbox?.findMany !== "function"
   ) {
     throw new Error(
-      "[prisma] Prisma Client desatualizado para as reuniões. " +
+      "[prisma] Prisma Client desatualizado para reuniões ou alertas Teams. " +
       "Execute 'npm run prisma:generate' na pasta backend, " +
       "confira as migrações com 'npm run prisma:migrate:deploy' " +
       "e reinicie o servidor.",
@@ -208,6 +213,7 @@ async function shutdown(
   movideskSyncScheduler?.stop();
   movideskReferenceSyncScheduler?.stop();
   movideskEnrichmentScheduler?.stop();
+  movideskTeamsAlertScheduler?.stop();
 
   try {
     if (server) {
