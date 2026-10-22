@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import test, { type TestContext } from "node:test";
 import {
   TeamsWebhookHttpError,
   TeamsWorkflowWebhookService,
@@ -21,7 +21,7 @@ function configureEnabled() {
   process.env.TEAMS_TICKET_BASE_URL = "https://movidesk.example.invalid/ticket";
 }
 
-function restoreEnv(t: test.TestContext) {
+function restoreEnv(t: TestContext) {
   const keys = [
     "TEAMS_ALERTS_ENABLED",
     "TEAMS_WORKFLOW_WEBHOOK_URL",
