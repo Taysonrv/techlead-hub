@@ -27,6 +27,7 @@ export function PageHeader({
         justifyContent: "space-between",
         alignItems: { xs: "stretch", lg: "center" },
         gap: { xs: 1.4, lg: 2 },
+        minWidth: 0,
         mb: { xs: 1.5, md: 2 },
         position: "relative",
         overflow: "hidden",
@@ -107,6 +108,7 @@ export function PageHeader({
               xl: "1.9rem",
             },
             lineHeight: 1.12,
+            overflowWrap: "anywhere",
           }}
         >
           {title}
@@ -118,6 +120,7 @@ export function PageHeader({
           sx={{
             mt: 0.3,
             maxWidth: 880,
+            overflowWrap: "anywhere",
             lineHeight: 1.48,
           }}
         >
@@ -146,7 +149,7 @@ export function PageHeader({
             flexShrink: 0,
             alignSelf: { xs: "stretch", lg: "center" },
             minWidth: 0,
-            maxWidth: { lg: "48%" },
+            maxWidth: { xs: "100%", lg: "48%" },
             p: 0,
             borderRadius: 0,
             border: 0,
