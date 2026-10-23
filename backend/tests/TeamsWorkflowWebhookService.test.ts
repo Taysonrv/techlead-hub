@@ -18,7 +18,7 @@ const ticket = {
 function configureEnabled() {
   process.env.TEAMS_ALERTS_ENABLED = "true";
   process.env.TEAMS_WORKFLOW_WEBHOOK_URL = "https://example.invalid/workflow";
-  process.env.TEAMS_TICKET_BASE_URL = "https://movidesk.example.invalid/ticket";
+  process.env.TEAMS_TICKET_BASE_URL = "https://movidesk.example.invalid";
 }
 
 function restoreEnv(t: TestContext) {
@@ -68,7 +68,7 @@ test("envia Adaptive Card e retorna status e duração quando o Workflow aceita"
   assert.equal(redirectMode, "error");
   assert.equal(requestBody.type, "AdaptiveCard");
   assert.equal(requestBody.version, "1.4");
-  assert.ok(JSON.stringify(requestBody).includes("https://movidesk.example.invalid/ticket/12345"));
+  assert.ok(JSON.stringify(requestBody).includes("https://movidesk.example.invalid/Ticket/Edit/12345"));
 });
 
 test("converte HTTP 429 e Retry-After em erro tipado sem expor corpo ou URL", async (t) => {
