@@ -46,8 +46,8 @@ function ticketUrl(baseUrl: string, movideskId: number): string {
   if (!Number.isSafeInteger(movideskId) || movideskId <= 0) {
     throw new Error("Identificador Movidesk inválido.");
   }
-  const root = base.toString().replace(/\/+$/, "");
-  return `${root}/${movideskId}`;
+  const root = base.toString().replace(/\\/+$/, "");
+  return `${root}/Ticket/Edit/${movideskId}`;
 }
 
 export function buildMovideskAdaptiveCard(
@@ -80,7 +80,7 @@ export function buildMovideskAdaptiveCard(
         type: "FactSet",
         facts: facts.map((fact) => ({
           title: fact.title,
-          value: fact.value.replace(/[\u0000-\u001f]/g, " "),
+          value: fact.value.replace(/[\\u0000-\\u001f]/g, " "),
         })),
       },
       {
