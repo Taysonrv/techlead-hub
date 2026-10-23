@@ -40,7 +40,7 @@ export function ContentState({
           py: 2.5,
           border: "1px solid",
           borderColor: "divider",
-          borderRadius: "12px",
+          borderRadius: "18px",
           bgcolor: "background.paper",
         }}
       >
@@ -86,11 +86,11 @@ export function ContentState({
           : "linear-gradient(145deg,rgba(248,250,252,.96),rgba(255,255,255,.96))",
       }}
     >
-      <Stack spacing={0.9} sx={{ alignItems: "center", textAlign: "center", maxWidth: 440, minWidth: 0, overflowWrap: "anywhere" }}>
+      <Stack spacing={0.9} sx={{ alignItems: "center", textAlign: "center", maxWidth: 480, minWidth: 0, overflowWrap: "anywhere" }}>
         <Box
           sx={{
-            width: 42,
-            height: 42,
+            width: 52,
+            height: 52,
             borderRadius: "12px",
             display: "grid",
             placeItems: "center",
