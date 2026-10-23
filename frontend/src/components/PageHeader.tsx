@@ -31,12 +31,12 @@ export function PageHeader({
         mb: { xs: 1.5, md: 2 },
         position: "relative",
         overflow: "hidden",
-        p: { xs: 1.45, sm: 1.65, md: 1.8 },
-        minHeight: { md: 102 },
+        p: { xs: 2, sm: 2.4, md: 3 },
+        minHeight: { md: 154 },
         width: "100%",
         maxWidth: "100%",
         boxSizing: "border-box",
-        borderRadius: "14px",
+        borderRadius: "20px",
         isolation: "isolate",
         border: "1px solid",
         borderColor: dark
@@ -50,7 +50,7 @@ export function PageHeader({
           content: '""',
           position: "absolute",
           inset: "0 auto 0 0",
-          width: 3,
+          width: 5,
           background:
             "linear-gradient(180deg, #18C77A 0%, #22D3EE 62%, transparent 100%)",
           opacity: dark ? 0.95 : 0.78,
@@ -102,10 +102,10 @@ export function PageHeader({
             fontWeight: 820,
             letterSpacing: "-.028em",
             fontSize: {
-              xs: "1.42rem",
-              sm: "1.6rem",
-              md: "1.78rem",
-              xl: "1.9rem",
+              xs: "1.75rem",
+              sm: "2rem",
+              md: "2.3rem",
+              xl: "2.5rem",
             },
             lineHeight: 1.12,
             overflowWrap: "anywhere",
@@ -118,7 +118,7 @@ export function PageHeader({
           variant="body2"
           color="text.secondary"
           sx={{
-            mt: 0.3,
+            mt: 0.75,
             maxWidth: 880,
             overflowWrap: "anywhere",
             lineHeight: 1.48,
