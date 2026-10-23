@@ -19,10 +19,10 @@ export const detailDrawerPaperSx = {
 
 // Mesmas medidas dos indicadores do Resumo Executivo (Dashboard).
 export const kpiLayout = {
-  height: { xs: 112, md: 118 },
-  padding: { xs: 1.25, md: 1.4 },
-  titleSize: ".8rem",
-  valueSize: { xs: "1.45rem", md: "1.62rem", xl: "1.72rem" },
+  height: { xs: 132, md: 148 },
+  padding: { xs: 1.6, md: 2 },
+  titleSize: ".84rem",
+  valueSize: { xs: "1.9rem", md: "2.15rem", xl: "2.35rem" },
   columns: { xs: "minmax(0, 1fr)", sm: "repeat(2, minmax(0, 1fr))", lg: "repeat(3, minmax(0, 1fr))" },
-  gap: { xs: 1.25, md: 1.5, xl: 2 },
+  gap: { xs: 1.5, md: 2, xl: 2.5 },
 } as const;
