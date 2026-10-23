@@ -895,8 +895,41 @@ model AzureWorkItemFollow {
   workItemId Int
   source String @default("HUB")
   followedAt DateTime @default(now())
+  lastSeenRevision Int?
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   workItem AzureWorkItem @relation(fields: [workItemId], references: [id], onDelete: Cascade)
   @@id([userId, workItemId])
   @@index([workItemId])
+}
+
+
+// Fila persistente de alertas externos; independente do runtime Web/Desktop.
+enum TeamsAlertStatus {
+  PENDING
+  PROCESSING
+  SENT
+  DEAD
+}
+
+model TeamsAlertOutbox {
+  id             String          @id @default(cuid())
+  movideskId     Int
+  eventType      String          @default("NEW_TICKET") @db.VarChar(40)
+  subject        String
+  client         String?
+  createdDate    DateTime
+  urgency        String?
+  status         TeamsAlertStatus @default(PENDING)
+  attempts       Int             @default(0)
+  nextAttemptAt  DateTime        @default(now())
+  lockedUntil    DateTime?
+  sentAt         DateTime?
+  lastHttpStatus Int?
+  lastError      String?         @db.VarChar(500)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  @@unique([movideskId, eventType])
+  @@index([status, nextAttemptAt])
+  @@index([lockedUntil])
 }
