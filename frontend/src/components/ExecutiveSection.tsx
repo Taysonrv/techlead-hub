@@ -43,6 +43,8 @@ export function ExecutiveSection({
         overflow: "hidden",
         isolation: "isolate",
         borderColor: "divider",
+        borderRadius: "18px",
+        boxShadow: dark ? "0 16px 38px rgba(0,0,0,.17)" : "0 12px 34px rgba(15,23,42,.07)",
         background: dark
           ? "linear-gradient(145deg, rgba(11,34,50,.97), rgba(7,24,38,.99))"
           : "linear-gradient(180deg,#FFFFFF,#FBFCFD)",
@@ -50,7 +52,7 @@ export function ExecutiveSection({
           content: '""',
           position: "absolute",
           inset: "0 0 auto",
-          height: 2,
+          height: 4,
           background:
             "linear-gradient(90deg, " +
             accent +
@@ -63,9 +65,9 @@ export function ExecutiveSection({
       {title || subtitle || action ? (
         <Box
           sx={{
-            px: { xs: 1.55, md: 1.85 },
-            pt: { xs: 1.35, md: 1.5 },
-            pb: 1.05,
+            px: { xs: 1.8, md: 2.5 },
+            pt: { xs: 1.7, md: 2 },
+            pb: 1.4,
             borderBottom: "1px solid",
             borderColor: "divider",
             background: dark
@@ -88,8 +90,8 @@ export function ExecutiveSection({
                   sx={{
                     display: "grid",
                     placeItems: "center",
-                    width: 34,
-                    height: 34,
+                    width: 40,
+                    height: 40,
                     flexShrink: 0,
                     borderRadius: 2,
                     color: accent,
@@ -107,7 +109,7 @@ export function ExecutiveSection({
                   <Typography
                     sx={{
                       fontWeight: 800,
-                      fontSize: ".98rem",
+                      fontSize: "1.13rem",
                       letterSpacing: "-.01em",
                     }}
                   >
@@ -135,7 +137,7 @@ export function ExecutiveSection({
         sx={{
           p: compact
             ? { xs: 1.2, md: 1.35 }
-            : { xs: 1.5, md: 1.7 },
+            : { xs: 1.8, md: 2.3 },
           "&:last-child": {
             pb: compact
               ? { xs: 1.2, md: 1.35 }
