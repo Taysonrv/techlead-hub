@@ -1,0 +1,50 @@
+/* TechLead Hub — tokens semânticos de apresentação (tema MUI é a fonte dos valores). */
+:root,
+:root[data-color-mode="light"] {
+  --hub-bg: #f5f7fb;
+  --hub-surface: #ffffff;
+  --hub-surface-raised: #f9fbff;
+  --hub-border: #dce4ec;
+  --hub-text: #142333;
+  --hub-text-secondary: #526476;
+  --hub-text-muted: #66788b;
+  --hub-accent: #0891b2;
+  --hub-accent-blue: #2563eb;
+  --hub-success: #16865f;
+  --hub-warning: #a9670b;
+  --hub-error: #c83232;
+  --hub-info: #2563eb;
+  --hub-space-1: 4px;
+  --hub-space-2: 8px;
+  --hub-space-3: 12px;
+  --hub-space-4: 16px;
+  --hub-space-6: 24px;
+  --hub-space-8: 32px;
+  --hub-radius-sm: 8px;
+  --hub-radius-md: 12px;
+  --hub-radius-lg: 16px;
+  --hub-shadow-card: 0 14px 34px rgb(15 23 42 / 8%);
+  --hub-glass-blur: 16px;
+  --hub-font: Inter, "Segoe UI", Roboto, Arial, sans-serif;
+  --hub-motion-fast: 180ms;
+  --hub-motion-normal: 240ms;
+}
+:root[data-color-mode="dark"] {
+  --hub-bg: #071421;
+  --hub-surface: #0d2232;
+  --hub-surface-raised: #142c40;
+  --hub-border: #29465a;
+  --hub-text: #edf6fb;
+  --hub-text-secondary: #b1c5d2;
+  --hub-text-muted: #94acbc;
+  --hub-accent: #3ac5e0;
+  --hub-accent-blue: #60a5fa;
+  --hub-success: #43d39a;
+  --hub-warning: #fbbf65;
+  --hub-error: #fb7777;
+  --hub-info: #79b4ff;
+  --hub-shadow-card: 0 16px 40px rgb(0 0 0 / 24%);
+}
+@media (prefers-reduced-motion: reduce) {
+  :root { --hub-motion-fast: 0ms; --hub-motion-normal: 0ms; }
+}
