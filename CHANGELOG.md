@@ -1,5 +1,14 @@
 # Changelog
 
+## Em preparação — modernização visual executiva (branch de homologação)
+
+### Fundação de apresentação
+- Diagnóstico do frontend React/MUI/Vite e plano de migração por fases, preservando contratos de API, rotas, Prisma e backend.
+- Tokens CSS semânticos de tema claro e escuro: superfícies, texto, bordas, destaques, estados, espaçamento, raios, sombras, tipografia e movimento reduzido.
+- Melhorias incrementais prévias nos indicadores, seções, cabeçalhos, filtros, tabelas e estados de conteúdo.
+
+> Ainda não publicado. Build, lint, validação Web/Electron e migração das telas restantes pendentes de homologação. Nenhuma alteração de backend ou banco de dados nesta etapa.
+
 ## 2.1.0-rc.8 — 2026-10-17
 
 ### Central da Coordenação e rastreabilidade
