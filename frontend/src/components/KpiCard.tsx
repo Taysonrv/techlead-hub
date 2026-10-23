@@ -78,24 +78,23 @@ export function KpiCard({
         "@media (prefers-reduced-motion: reduce)": { transition: "none", "&:hover": { transform: "none" } },
         minHeight: density === "compact" ? { xs: 98, md: 104 } : kpiLayout.height,
         border: "1px solid",
-        borderColor: active ? accent : "divider",
+        borderColor: active ? accent : dark ? "rgba(117,171,190,.22)" : "rgba(15,23,42,.085)",
+        borderRadius: "18px",
         cursor: onClick ? "pointer" : "default",
         opacity: 1,
         background: dark
           ? `radial-gradient(circle at 0% 50%, ${alpha(accent, 0.17)} 0%, ${alpha(accent, 0.075)} 24%, transparent 58%), linear-gradient(145deg, rgba(11,34,48,.98), rgba(7,25,38,.995))`
           : `radial-gradient(circle at 0% 50%, ${alpha(accent, 0.10)} 0%, ${alpha(accent, 0.04)} 28%, transparent 60%), linear-gradient(145deg, #FFFFFF, #FAFCFD)`,
         boxShadow: active
-          ? dark
-            ? "0 15px 34px rgba(0,0,0,.18)"
-            : "0 10px 26px rgba(15,23,42,.07)"
-          : "none",
+          ? dark ? "0 20px 42px rgba(0,0,0,.25)" : "0 16px 36px rgba(15,23,42,.11)"
+          : dark ? "0 12px 30px rgba(0,0,0,.13)" : "0 10px 28px rgba(15,23,42,.065)",
         transition:
           "transform .15s ease, box-shadow .15s ease, border-color .15s ease",
         "&::before": {
           content: '""',
           position: "absolute",
           inset: "0 auto 0 0",
-          width: 3,
+          width: 5,
           bgcolor: accent,
           opacity: active ? 1 : 0.82,
         },
@@ -149,9 +148,11 @@ export function KpiCard({
             sx={{
               fontWeight: 750,
               fontSize: kpiLayout.titleSize,
-              whiteSpace: "nowrap",
+              whiteSpace: "normal",
               overflow: "hidden",
-              textOverflow: "ellipsis",
+              display: "-webkit-box",
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: "vertical",
               letterSpacing: "-.004em",
               lineHeight: 1.3,
               minWidth: 0,
