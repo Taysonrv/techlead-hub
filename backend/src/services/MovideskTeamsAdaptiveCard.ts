@@ -80,7 +80,7 @@ export function buildMovideskAdaptiveCard(
         type: "FactSet",
         facts: facts.map((fact) => ({
           title: fact.title,
-          value: fact.value.replace(/[\\u0000-\\u001f]/g, " "),
+          value: fact.value.replace(/[\u0000-\u001f]/g, " "),
         })),
       },
       {
