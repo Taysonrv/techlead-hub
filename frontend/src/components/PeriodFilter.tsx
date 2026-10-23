@@ -47,7 +47,8 @@ export function PeriodFilter() {
     >
       <Box
         sx={{
-          minWidth: { xs: "100%", sm: 168 },
+          minWidth: { xs: 0, sm: 168 },
+          maxWidth: "100%",
           flex: { xs: "1 1 100%", sm: "0 1 184px" },
         }}
       >
@@ -110,10 +111,11 @@ export function PeriodFilter() {
             },
             gap: 0.8,
             flex: "1 1 310px",
+            maxWidth: "100%",
             minWidth: 0,
           }}
         >
-          <Box>
+          <Box sx={{ minWidth: 0 }}>
             <Typography
               component="label"
               htmlFor={startDateId}
