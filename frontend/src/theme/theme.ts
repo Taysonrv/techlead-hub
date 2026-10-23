@@ -95,7 +95,7 @@ export function createAppTheme(mode: PaletteMode = "light") {
       text: { primary: text, secondary: textSecondary },
       divider: border,
     },
-    shape: { borderRadius: 6 },
+    shape: { borderRadius: 10 },
     typography: {
       fontFamily: ["Inter", "Segoe UI", "Roboto", "Arial", "sans-serif"].join(","),
       h1: { fontWeight: 800 }, h2: { fontWeight: 800 },
@@ -140,7 +140,7 @@ export function createAppTheme(mode: PaletteMode = "light") {
             position: "relative",
             border: `1px solid ${border}`,
             boxShadow: dark ? "0 16px 42px rgba(0,0,0,.18), inset 0 1px rgba(255,255,255,.025)" : "0 8px 24px rgba(15,23,42,.055)",
-            borderRadius: 12,
+            borderRadius: 16,
             overflow: "hidden",
             backdropFilter: dark ? "blur(16px)" : undefined,
             background: dark ? "linear-gradient(145deg, rgba(10,35,45,.94), rgba(7,27,39,.97))" : "linear-gradient(180deg,#FFFFFF,#FBFCFD)",
@@ -222,8 +222,8 @@ export function createAppTheme(mode: PaletteMode = "light") {
         defaultProps: { disableElevation: true, size: "small" },
         styleOverrides: {
           root: {
-            borderRadius: 7,
-            minHeight: 36,
+            borderRadius: 10,
+            minHeight: 38,
             fontSize: ".88rem",
             textTransform: "none",
             fontWeight: 700,
@@ -334,7 +334,7 @@ export function createAppTheme(mode: PaletteMode = "light") {
             position: "sticky",
             top: 0,
             zIndex: 1,
-            "& .MuiTableCell-head": { color: "#FFFFFF", fontWeight: 750, fontSize: ".74rem", letterSpacing: ".03em", textTransform: "uppercase", borderBottomColor: dark ? "rgba(116,166,216,.18)" : aliareColors.graphite, position: "sticky", top: 0, zIndex: 2 },
+            "& .MuiTableCell-head": { color: "#FFFFFF", fontWeight: 750, fontSize: ".76rem", letterSpacing: ".045em", textTransform: "uppercase", borderBottomColor: dark ? "rgba(116,166,216,.18)" : aliareColors.graphite, position: "sticky", top: 0, zIndex: 2 },
           },
         },
       },
@@ -345,7 +345,7 @@ export function createAppTheme(mode: PaletteMode = "light") {
             "&::-webkit-scrollbar": { height: 9, width: 9 },
             "&::-webkit-scrollbar-track": { background: dark ? "#091827" : "#EEF1F3" },
             "&::-webkit-scrollbar-thumb": { background: dark ? "#31516E" : "#C7CDD3", borderRadius: 99 },
-            borderRadius: 10,
+            borderRadius: 14,
             border: `1px solid ${border}`,
             overflowX: "auto",
             overscrollBehaviorX: "contain",
@@ -357,8 +357,8 @@ export function createAppTheme(mode: PaletteMode = "light") {
         styleOverrides: {
           root: {
             borderBottomColor: border,
-            padding: "9px 12px",
-            fontSize: ".84rem",
+            padding: "12px 16px",
+            fontSize: ".85rem",
             lineHeight: 1.4,
             ...(dark && { color: "#DCE9F7" }),
           },
