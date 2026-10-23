@@ -14,14 +14,14 @@ const ticket = {
 };
 
 test("builds a direct Adaptive Card body with requested ticket fields", () => {
-  const card = buildMovideskAdaptiveCard(ticket, "https://techhub.example.com/tickets");
+  const card = buildMovideskAdaptiveCard(ticket, "https://techhub.example.com");
   assert.equal(card.type, "AdaptiveCard");
   assert.equal(card.version, "1.4");
   const serialized = JSON.stringify(card);
   for (const expected of ["123456", ticket.subject, ticket.client!, "Alta", "Novo", ticket.owner!]) {
     assert.ok(serialized.includes(expected));
   }
-  assert.ok(serialized.includes("https://techhub.example.com/tickets/123456"));
+  assert.ok(serialized.includes("https://techhub.example.com/Ticket/Edit/123456"));
 });
 
 test("rejects non-HTTPS or malformed ticket base URLs", () => {
