@@ -75,6 +75,7 @@ export function KpiCard({
         width: "100%",
         minWidth: 0,
         height: density === "compact" ? { xs: 98, md: 104 } : kpiLayout.height,
+        "@media (prefers-reduced-motion: reduce)": { transition: "none", "&:hover": { transform: "none" } },
         minHeight: density === "compact" ? { xs: 98, md: 104 } : kpiLayout.height,
         border: "1px solid",
         borderColor: active ? accent : "divider",
@@ -227,6 +228,7 @@ export function KpiCard({
               : kpiLayout.valueSize,
             lineHeight: 1,
             fontVariantNumeric: "tabular-nums",
+            fontFeatureSettings: "\"tnum\"",
           }}
         >
           {value}
