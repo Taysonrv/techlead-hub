@@ -9,6 +9,7 @@ export function KpiGrid({ sx, ...props }: BoxProps) {
     {
       display: "grid",
       width: "100%",
+      maxWidth: "100%",
       minWidth: 0,
       gridTemplateColumns: kpiLayout.columns,
       gap: kpiLayout.gap,
