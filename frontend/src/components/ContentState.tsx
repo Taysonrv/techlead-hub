@@ -30,11 +30,13 @@ export function ContentState({
       <Box
         role="status"
         aria-label={title ?? defaults[0]}
+        aria-busy="true"
         sx={{
           minHeight,
           display: "grid",
           alignContent: "center",
           px: { xs: 1.5, md: 2 },
+          minWidth: 0,
           py: 2.5,
           border: "1px solid",
           borderColor: "divider",
@@ -46,8 +48,8 @@ export function ContentState({
           <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
             <Skeleton variant="rounded" width={28} height={28} sx={{ borderRadius: "8px" }} />
             <Box sx={{ flex: 1 }}>
-              <Skeleton variant="rounded" height={16} width="32%" />
-              <Skeleton variant="rounded" height={10} width="48%" sx={{ mt: 0.7 }} />
+              <Skeleton variant="rounded" height={16} width="min(32%, 190px)" />
+              <Skeleton variant="rounded" height={10} width="min(48%, 290px)" sx={{ mt: 0.7 }} />
             </Box>
           </Stack>
           <Skeleton
@@ -71,6 +73,7 @@ export function ContentState({
         placeItems: "center",
         px: 2,
         py: 2.5,
+        minWidth: 0,
         border: "1px dashed",
         borderColor: error
           ? dark
@@ -83,7 +86,7 @@ export function ContentState({
           : "linear-gradient(145deg,rgba(248,250,252,.96),rgba(255,255,255,.96))",
       }}
     >
-      <Stack spacing={0.9} sx={{ alignItems: "center", textAlign: "center", maxWidth: 440 }}>
+      <Stack spacing={0.9} sx={{ alignItems: "center", textAlign: "center", maxWidth: 440, minWidth: 0, overflowWrap: "anywhere" }}>
         <Box
           sx={{
             width: 42,
