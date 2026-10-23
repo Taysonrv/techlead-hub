@@ -39,6 +39,7 @@ export function ExecutiveSection({
         minWidth: 0,
         width: "100%",
         height: "100%",
+        maxWidth: "100%",
         overflow: "hidden",
         isolation: "isolate",
         borderColor: "divider",
@@ -78,6 +79,7 @@ export function ExecutiveSection({
             sx={{
               alignItems: { xs: "stretch", sm: "center" },
               justifyContent: "space-between",
+              minWidth: 0,
             }}
           >
             <Stack direction="row" spacing={1} sx={{ alignItems: "center", minWidth: 0 }}>
@@ -116,7 +118,7 @@ export function ExecutiveSection({
                   <Typography
                     variant="caption"
                     color="text.secondary"
-                    sx={{ lineHeight: 1.4 }}
+                    sx={{ lineHeight: 1.4, overflowWrap: "anywhere" }}
                   >
                     {subtitle}
                   </Typography>
@@ -124,7 +126,7 @@ export function ExecutiveSection({
               </Box>
             </Stack>
 
-            {action ? <Box sx={{ flexShrink: 0 }}>{action}</Box> : null}
+            {action ? <Box sx={{ minWidth: 0, maxWidth: "100%", flexShrink: { xs: 1, sm: 0 }, "& > *": { maxWidth: "100%" } }}>{action}</Box> : null}
           </Stack>
         </Box>
       ) : null}
