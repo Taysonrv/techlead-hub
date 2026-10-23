@@ -46,7 +46,7 @@ function ticketUrl(baseUrl: string, movideskId: number): string {
   if (!Number.isSafeInteger(movideskId) || movideskId <= 0) {
     throw new Error("Identificador Movidesk inválido.");
   }
-  const root = base.toString().replace(/\\/+$/, "");
+  const root = base.toString().replace(/\/+$/, "");
   return `${root}/Ticket/Edit/${movideskId}`;
 }
 
