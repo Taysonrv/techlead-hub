@@ -491,6 +491,26 @@ svg {
 }
 
 
+/* Navegação lateral: foco visível, feedback consistente e animação reduzida. */
+.techlead-sidebar .MuiDrawer-paper nav .MuiListItemButton-root {
+  transition: background-color 140ms ease, color 140ms ease;
+}
+.techlead-sidebar .MuiDrawer-paper nav .MuiListItemButton-root:focus-visible,
+.techlead-sidebar .MuiDrawer-paper button:focus-visible {
+  outline: 2px solid #52d7b0;
+  outline-offset: -2px;
+}
+.techlead-sidebar--collapsed .MuiDrawer-paper nav .MuiListItemButton-root:hover {
+  background: rgba(24,199,122,.12);
+}
+@media (prefers-reduced-motion: reduce) {
+  .techlead-sidebar,
+  .techlead-sidebar .MuiDrawer-paper,
+  .techlead-sidebar .MuiDrawer-paper * {
+    transition-duration: 0.01ms !important;
+  }
+}
+
 /* Dashboard executivo — referência visual: cards luminosos e gráficos em camadas.
    Estilização limitada ao Dashboard; números e séries vêm das consultas existentes. */
 .techlead-executive-dashboard {
