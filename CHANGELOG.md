@@ -16,6 +16,8 @@
 - Minha Operação e Pendências: carregamento padronizado com `AsyncState`/`ContentState`; Pendências recebe estado vazio contextual e erro de carregamento, mantendo filtros, Kanban e listas.
 - Analistas, Serviços e Versões: adoção de `AsyncState` nos carregamentos/erros iniciais, preservando gráficos, filtros e ações.
 - Configurações e Usuários: estados de carregamento migrados para `ContentState`; demais módulos ainda exigem auditoria individual e homologação desktop.
+- Liderança Técnica e Central da Coordenação: estados iniciais de carregamento/erro padronizados; Coordenação mantém ação de tentar novamente e estado vazio contextual.
+- Base de Conhecimento: status de conexão com Wiki Azure padronizado via `StatusPill` e estado vazio via `ContentState`.
 - Correção de propriedades duplicadas do tema MUI (TS1117) e documentação do carregamento inicial no Assistente de Análise; CI da correção aprovado.
 - Tema MUI centraliza estilos de tabelas (cabeçalhos fixos, números tabulares, hover, scroll contido) e chips por meio dos tokens semânticos.
 
