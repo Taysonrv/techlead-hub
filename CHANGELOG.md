@@ -8,6 +8,9 @@
 - Melhorias incrementais prévias nos indicadores, seções, cabeçalhos, filtros, tabelas e estados de conteúdo.
 - Dashboard: indicadores essenciais passam a aparecer imediatamente após o cabeçalho, antes dos atalhos e do workspace; título de seção e contagem de indicadores adicionados sem alterar métricas ou filtros.
 - Estados de conteúdo: wrapper genérico AsyncState e suporte opcional a retry, ação vazia e detalhe técnico; adoção pelas telas segue em andamento.
+- Reorganização da análise secundária do Dashboard com títulos executivos e espaçamento consistente; gráfico de evolução permanece em destaque.
+- Sidebar com superfície azul-marinho em gradiente; busca global da topbar com superfície elevada e maior área de interação.
+- Componente `StatusPill` tipado criado para adoção progressiva em telas operacionais (sem alteração de status de negócio).
 
 > Ainda não publicado. Build, lint, validação Web/Electron e migração das telas restantes pendentes de homologação. Nenhuma alteração de backend ou banco de dados nesta etapa.
 
