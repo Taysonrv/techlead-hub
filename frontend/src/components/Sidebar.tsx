@@ -763,9 +763,9 @@ export function Sidebar() {
         <Box
           className="techlead-sidebar-identity"
           sx={{
-            pr: 6,
             px:
               1.75,
+            paddingRight: 6,
 
             pt:
               1.75,
