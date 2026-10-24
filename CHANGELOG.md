@@ -28,6 +28,7 @@
 - Cabeçalhos de páginas: título fluido em janelas estreitas, espaçamento adaptativo e sombras padronizadas.
 - Seções executivas: superfícies, sombras e cantos conectados aos tokens visuais compartilhados.
 - Shell Web/Electron: limites de largura para o conteúdo principal em janelas redimensionadas; busca global e avisos de atualização limitados ao espaço disponível.
+- Sidebar: modo compacto de 76 px com navegação por ícones, alternância expandir/recolher, preferência local persistente e atalho de perfil no rodapé.
 - Correção de propriedades duplicadas do tema MUI (TS1117) e documentação do carregamento inicial no Assistente de Análise; CI da correção aprovado.
 - Tema MUI centraliza estilos de tabelas (cabeçalhos fixos, números tabulares, hover, scroll contido) e chips por meio dos tokens semânticos.
 
