@@ -25,16 +25,16 @@ export function PublicClientEnrichment() {
   return (
     <Card variant="outlined" sx={{ mb: 2, borderRadius: 2.5 }}>
       <CardContent>
-        <Stack direction="row" alignItems="center" justifyContent="space-between" gap={1}>
-          <Box><Typography fontWeight={800}>Consulta cadastral pública</Typography>
+        <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between", gap: 1 }}>
+          <Box><Typography sx={{ fontWeight: 800 }}>Consulta cadastral pública</Typography>
             <Typography variant="caption" color="text.secondary">Dados complementares da BrasilAPI e ViaCEP; não alteram o cadastro do Movidesk.</Typography></Box>
           <Button size="small" variant="outlined" onClick={() => setExpanded(!expanded)} aria-expanded={expanded}>{expanded ? "Recolher" : "Consultar"}</Button>
         </Stack>
         <Collapse in={expanded}>
-          <Stack direction={{ xs: "column", sm: "row" }} gap={1} sx={{ mt: 2 }}>
+          <Stack direction={{ xs: "column", sm: "row" }} sx={{ gap: 1, mt: 2 }}>
             <Button variant={kind === "cnpj" ? "contained" : "outlined"} onClick={() => { setKind("cnpj"); setValue(""); setResult(null); setError(""); }}>CNPJ</Button>
             <Button variant={kind === "cep" ? "contained" : "outlined"} onClick={() => { setKind("cep"); setValue(""); setResult(null); setError(""); }}>CEP</Button>
-            <TextField size="small" label={kind === "cnpj" ? "CNPJ" : "CEP"} value={value} onChange={event => setValue(event.target.value)} inputProps={{ inputMode: "numeric", maxLength: 20 }} sx={{ flex: 1 }} />
+            <TextField size="small" label={kind === "cnpj" ? "CNPJ" : "CEP"} value={value} onChange={event => setValue(event.target.value)} slotProps={{ htmlInput: { inputMode: "numeric", maxLength: 20 } }} sx={{ flex: 1 }} />
             <Button variant="contained" disabled={loading} onClick={() => void consult()}>{loading ? "Consultando..." : "Pesquisar"}</Button>
           </Stack>
           {error && <Alert severity="warning" sx={{ mt: 2 }}>{error}</Alert>}
@@ -65,15 +65,15 @@ export function GitHubReleasePanel() {
     finally { setLoading(false); }
   }
   return <Card variant="outlined" sx={{ mb: 2, borderRadius: 2.5 }}><CardContent>
-    <Stack direction="row" alignItems="center" justifyContent="space-between" gap={1}>
-      <Box><Typography fontWeight={800}>Publicações do TechLead Hub</Typography>
+    <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between", gap: 1 }}>
+      <Box><Typography sx={{ fontWeight: 800 }}>Publicações do TechLead Hub</Typography>
         <Typography variant="caption" color="text.secondary">Releases oficiais disponíveis no GitHub. Não altera o atualizador instalado.</Typography></Box>
       <Button variant="outlined" size="small" disabled={loading} onClick={() => void consult()}>{loading ? "Consultando..." : "Consultar releases"}</Button>
     </Stack>
     {error && <Alert severity="warning" sx={{ mt: 2 }}>{error}</Alert>}
     {releases && <Stack spacing={1} sx={{ mt: 2 }}>
       {releases.length === 0 && <Typography variant="body2">Nenhuma publicação pública encontrada.</Typography>}
-      {releases.map(release => <Stack key={release.tag} direction="row" gap={1} alignItems="center" flexWrap="wrap">
+      {releases.map(release => <Stack key={release.tag} direction="row" sx={{ gap: 1, alignItems: "center", flexWrap: "wrap" }}>
         <Chip label={release.tag} size="small" color={release.prerelease ? "warning" : "success"} variant="outlined"/>
         <Typography variant="body2">{release.name || release.tag}</Typography>
         <Typography variant="caption" color="text.secondary">{release.publishedAt ? new Date(release.publishedAt).toLocaleDateString("pt-BR") : ""}</Typography>
