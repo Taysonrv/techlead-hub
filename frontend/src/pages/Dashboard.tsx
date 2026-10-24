@@ -1191,6 +1191,70 @@ export function Dashboard() {
         )}
       </KpiGrid>
 
+      {/* EVOLUÇÃO DE TICKETS — DESTAQUE EXECUTIVO */}
+      {filteredTickets.length > 0 && (
+        <Box sx={{ mb: 2.5 }}>
+          <Typography variant="overline" sx={{ fontWeight: 850, color: "primary.main", letterSpacing: ".1em" }}>Tendência operacional</Typography>
+          <Typography variant="h6" sx={{ fontWeight: 850, mb: 1, letterSpacing: "-.025em" }}>Evolução dos tickets</Typography>
+          <Box sx={{ my: 2 }}>
+            <CardBase>
+              <Stack direction={{ xs: "column", sm: "row" }} sx={{ justifyContent: "space-between", alignItems: "center", gap: 1 }}>
+                <Box sx={{ textAlign: "left" }}>
+                  <Typography sx={{ fontWeight: 850, fontSize: "1.05rem" }}>
+                    Abertos × Resolvidos × Fechados
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Fluxo diário da Operação SIMER • entrada, resolução e fechamento no período
+                  </Typography>
+                </Box>
+              </Stack>
+              <Box sx={{ height: { xs: 280, md: 350 }, mt: 1.25 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={dailyFlow} margin={{ top: 8, right: 12, left: 4, bottom: 4 }}>
+                    <defs>
+                      <linearGradient id="openedFlow" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor={semanticChartColors.normal} stopOpacity={0.24} />
+                        <stop offset="95%" stopColor={semanticChartColors.normal} stopOpacity={0.01} />
+                      </linearGradient>
+                      <linearGradient id="resolvedFlow" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor={semanticChartColors.positive} stopOpacity={0.20} />
+                        <stop offset="95%" stopColor={semanticChartColors.positive} stopOpacity={0.01} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={chartGrid} />
+                    <XAxis dataKey="date" tick={{ fontSize: 10 }} minTickGap={24} interval="preserveStartEnd" tickMargin={8} />
+                    <YAxis allowDecimals={false} tick={{ fontSize: 10 }} width={42} />
+                    <Tooltip contentStyle={chartTooltipStyle} />
+                    {!flowHidden.has("opened") && (
+                      <Area type="monotone" dataKey="opened" name="Abertos" stroke={semanticChartColors.normal} strokeWidth={2.4} fill="url(#openedFlow)" activeDot={{ r: 6, cursor: "pointer", onClick: (_event, payload: any) => { const day = payload?.payload?.sortDate; if (day) showTickets(`Abertos em ${formatShortDate(day)}`, openedInPeriod.filter((ticket) => formatIsoDate(new Date(ticket.createdDate)) === day), "Tickets abertos no dia selecionado"); } }} />
+                    )}
+                    {!flowHidden.has("resolved") && (
+                      <Area type="monotone" dataKey="resolved" name="Resolvidos" stroke={semanticChartColors.positive} strokeWidth={2.4} fill="url(#resolvedFlow)" activeDot={{ r: 6, cursor: "pointer", onClick: (_event, payload: any) => { const day = payload?.payload?.sortDate; if (day) showTickets(`Resolvidos em ${formatShortDate(day)}`, resolvedInPeriod.filter((ticket) => Boolean(ticket.resolvedDate) && formatIsoDate(new Date(ticket.resolvedDate!)) === day), "Tickets resolvidos no dia selecionado"); } }} />
+                    )}
+                    {!flowHidden.has("closed") && (
+                      <Area type="monotone" dataKey="closed" name="Fechados" stroke={semanticChartColors.neutral} strokeWidth={2.2} fillOpacity={0} activeDot={{ r: 6, cursor: "pointer", onClick: (_event, payload: any) => { const day = payload?.payload?.sortDate; if (day) showTickets(`Fechados em ${formatShortDate(day)}`, closedInPeriod.filter((ticket) => Boolean(ticket.closedDate) && formatIsoDate(new Date(ticket.closedDate!)) === day), "Tickets fechados no dia selecionado"); } }} />
+                    )}
+                  </AreaChart>
+                </ResponsiveContainer>
+              </Box>
+              <Stack direction="row" spacing={1} useFlexGap sx={{ mt: .5, justifyContent: "center", alignItems: "center", flexWrap: "wrap" }}>
+                {([
+                  ["opened","Abertos",semanticChartColors.normal],
+                  ["resolved","Resolvidos",semanticChartColors.positive],
+                  ["closed","Fechados",semanticChartColors.neutral],
+                ] as const).map(([key,label,color]) => {
+                  const active = !flowHidden.has(key);
+                  return <Chip key={key} size="small" clickable variant={active ? "filled" : "outlined"} label={`● ${label}`}
+                    onClick={() => setFlowHidden((current) => { const next = new Set(current); if (next.has(key)) next.delete(key); else if (current.size < 2) next.add(key); return next; })}
+                    sx={{ color: active ? color : "text.disabled", fontWeight: 800, opacity: active ? 1 : .55 }} />;
+                })}
+              </Stack>
+            </CardBase>
+          </Box>
+
+        </Box>
+      )}
+
       {/* ATALHOS PARA A OPERAÇÃO / ANÁLISE ASSISTIDA */}
       <Card variant="outlined" sx={{ borderRadius: 2.5, mb: 2.25, bgcolor: "background.paper" }}>
         <CardContent sx={{ p: { xs: 1.75, md: 2.25 }, "&:last-child": { pb: 2.25 } }}>
@@ -1472,62 +1536,6 @@ export function Dashboard() {
           {/* =============================================
               EVOLUÇÃO MENSAL POR CATEGORIA
           ============================================== */}
-
-          <Box sx={{ my: 2 }}>
-            <CardBase>
-              <Stack direction={{ xs: "column", sm: "row" }} sx={{ justifyContent: "center", alignItems: "center", gap: 1 }}>
-                <Box sx={{ textAlign: "center" }}>
-                  <Typography sx={{ fontWeight: 850, fontSize: "1.05rem" }}>
-                    Abertos × Resolvidos × Fechados
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    Fluxo diário da Operação SIMER • entrada, resolução e fechamento no período
-                  </Typography>
-                </Box>
-              </Stack>
-              <Box sx={{ height: { xs: 225, md: 250 }, mt: 1.25 }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={dailyFlow} margin={{ top: 8, right: 12, left: 4, bottom: 4 }}>
-                    <defs>
-                      <linearGradient id="openedFlow" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor={semanticChartColors.normal} stopOpacity={0.24} />
-                        <stop offset="95%" stopColor={semanticChartColors.normal} stopOpacity={0.01} />
-                      </linearGradient>
-                      <linearGradient id="resolvedFlow" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor={semanticChartColors.positive} stopOpacity={0.20} />
-                        <stop offset="95%" stopColor={semanticChartColors.positive} stopOpacity={0.01} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={chartGrid} />
-                    <XAxis dataKey="date" tick={{ fontSize: 10 }} minTickGap={24} interval="preserveStartEnd" tickMargin={8} />
-                    <YAxis allowDecimals={false} tick={{ fontSize: 10 }} width={42} />
-                    <Tooltip contentStyle={chartTooltipStyle} />
-                    {!flowHidden.has("opened") && (
-                      <Area type="monotone" dataKey="opened" name="Abertos" stroke={semanticChartColors.normal} strokeWidth={2.4} fill="url(#openedFlow)" activeDot={{ r: 6, cursor: "pointer", onClick: (_event, payload: any) => { const day = payload?.payload?.sortDate; if (day) showTickets(`Abertos em ${formatShortDate(day)}`, openedInPeriod.filter((ticket) => formatIsoDate(new Date(ticket.createdDate)) === day), "Tickets abertos no dia selecionado"); } }} />
-                    )}
-                    {!flowHidden.has("resolved") && (
-                      <Area type="monotone" dataKey="resolved" name="Resolvidos" stroke={semanticChartColors.positive} strokeWidth={2.4} fill="url(#resolvedFlow)" activeDot={{ r: 6, cursor: "pointer", onClick: (_event, payload: any) => { const day = payload?.payload?.sortDate; if (day) showTickets(`Resolvidos em ${formatShortDate(day)}`, resolvedInPeriod.filter((ticket) => Boolean(ticket.resolvedDate) && formatIsoDate(new Date(ticket.resolvedDate!)) === day), "Tickets resolvidos no dia selecionado"); } }} />
-                    )}
-                    {!flowHidden.has("closed") && (
-                      <Area type="monotone" dataKey="closed" name="Fechados" stroke={semanticChartColors.neutral} strokeWidth={2.2} fillOpacity={0} activeDot={{ r: 6, cursor: "pointer", onClick: (_event, payload: any) => { const day = payload?.payload?.sortDate; if (day) showTickets(`Fechados em ${formatShortDate(day)}`, closedInPeriod.filter((ticket) => Boolean(ticket.closedDate) && formatIsoDate(new Date(ticket.closedDate!)) === day), "Tickets fechados no dia selecionado"); } }} />
-                    )}
-                  </AreaChart>
-                </ResponsiveContainer>
-              </Box>
-              <Stack direction="row" spacing={1} useFlexGap sx={{ mt: .5, justifyContent: "center", alignItems: "center", flexWrap: "wrap" }}>
-                {([
-                  ["opened","Abertos",semanticChartColors.normal],
-                  ["resolved","Resolvidos",semanticChartColors.positive],
-                  ["closed","Fechados",semanticChartColors.neutral],
-                ] as const).map(([key,label,color]) => {
-                  const active = !flowHidden.has(key);
-                  return <Chip key={key} size="small" clickable variant={active ? "filled" : "outlined"} label={`● ${label}`}
-                    onClick={() => setFlowHidden((current) => { const next = new Set(current); if (next.has(key)) next.delete(key); else if (current.size < 2) next.add(key); return next; })}
-                    sx={{ color: active ? color : "text.disabled", fontWeight: 800, opacity: active ? 1 : .55 }} />;
-                })}
-              </Stack>
-            </CardBase>
-          </Box>
 
           <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", xl: "1fr 1fr" }, gap: 2, mb: 2 }}>
             <CardBase>
