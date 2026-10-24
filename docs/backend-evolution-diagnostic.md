@@ -51,3 +51,10 @@ A raiz `backend/src/routes/index.ts` monta `/api/auth` como área pública com p
 - CI da branch executa `npm run prisma:generate`, valida Prisma, build e testes backend, lint/testes/build frontend, testes/build desktop e build Docker. O sucesso do CI não equivale a homologação visual/interativa Electron.
 - **Não executado localmente neste diagnóstico:** benchmark p50/p95, teste contra banco real, auditoria exaustiva de rotas, instalação do Electron e rollback de migrações.
 - **Sem migrations, novas dependências, alterações de API ou variáveis de ambiente nesta etapa.**
+
+## Fase 1 — primeira entrega incremental
+
+- `backend/src/app.ts`: requisições JSON/urlencoded acima do limite configurado passam a retornar HTTP 413 com o formato legado `{ error: string }`; logs de erros globais não registram mais o objeto de erro integral.
+- `backend/src/routes/import.routes.ts`: o limite de upload Movidesk permanece 50 MB, mas excedê-lo retorna HTTP 413; demais erros de multipart retornam HTTP 400, sem detalhes internos. A autenticação e a permissão `imports` permanecem.
+- Sem dependências, migrations, alteração de payloads de sucesso ou mudança dos limites efetivos.
+- **Ainda pendente:** testes de integração das respostas 413/400, revisão de MIME/assinatura dos arquivos, limites por rota, CORS e validação de permissões. Confirmar CI antes de avançar.
