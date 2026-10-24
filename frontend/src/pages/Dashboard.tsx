@@ -539,6 +539,21 @@ export function Dashboard() {
     return [...months.values()];
   }, [dailyFlow]);
 
+  const monthlyVariation = useMemo(() => {
+    if (monthlyFlow.length < 2) return null;
+    const current = monthlyFlow[monthlyFlow.length - 1];
+    const previous = monthlyFlow[monthlyFlow.length - 2];
+    const variation = (value: number, baseline: number): number | null =>
+      baseline === 0 ? null : ((value - baseline) / baseline) * 100;
+    return {
+      current,
+      previous,
+      opened: variation(current.opened, previous.opened),
+      resolved: variation(current.resolved, previous.resolved),
+      closed: variation(current.closed, previous.closed),
+    };
+  }, [monthlyFlow]);
+
   const canonicalCategory = (value?: string | null) => {
     const normalized = normalize(value ?? "");
     if (normalized === "adequacao") return "Adequação";
@@ -1231,6 +1246,38 @@ export function Dashboard() {
               </Box>
               <Chip size="small" variant="outlined" label={`${monthlyFlow.length} mês(es)`} />
             </Stack>
+            {monthlyVariation && (
+              <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(3, minmax(0, 1fr))" }, gap: 1.5, mb: 2 }}>
+                {([
+                  ["Abertos", "opened", semanticChartColors.normal],
+                  ["Resolvidos", "resolved", semanticChartColors.positive],
+                  ["Fechados", "closed", semanticChartColors.neutral],
+                ] as const).map(([label, key, color]) => {
+                  const percent = monthlyVariation[key];
+                  const current = monthlyVariation.current[key];
+                  const previous = monthlyVariation.previous[key];
+                  const direction = current > previous ? "Alta" : current < previous ? "Queda" : "Estável";
+                  return (
+                    <Box key={key} sx={{ p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: 2, minWidth: 0 }}>
+                      <Stack direction="row" spacing={1} sx={{ alignItems: "center", justifyContent: "space-between", flexWrap: "wrap" }}>
+                        <Typography variant="body2" sx={{ fontWeight: 750, color }}>{label}</Typography>
+                        <Chip size="small" variant="outlined" color={percent === null ? "default" : percent > 0 ? "info" : percent < 0 ? "warning" : "default"}
+                          label={percent === null ? "Sem base" : `${percent > 0 ? "+" : ""}${percent.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`} />
+                      </Stack>
+                      <Typography sx={{ fontWeight: 850, fontSize: "1.4rem", mt: 0.75 }}>{current.toLocaleString("pt-BR")}</Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {direction} · anterior: {previous.toLocaleString("pt-BR")}
+                      </Typography>
+                    </Box>
+                  );
+                })}
+                <Typography variant="caption" color="text.secondary" sx={{ gridColumn: "1 / -1" }}>
+                  Comparação entre {monthlyVariation.previous.month} e {monthlyVariation.current.month}.
+                  {monthlyVariation.current.month} pode ser um mês parcial, conforme o filtro selecionado.
+                  Quando o mês anterior tem zero ocorrências, a variação percentual não é calculável.
+                </Typography>
+              </Box>
+            )}
             <Box role="img" aria-label="Gráfico de barras da evolução mensal dos tickets abertos, resolvidos e fechados" sx={{ height: { xs: 280, sm: 320 }, minWidth: 0 }}>
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={monthlyFlow} margin={{ top: 10, right: 10, bottom: 8, left: -12 }} barCategoryGap="24%">
