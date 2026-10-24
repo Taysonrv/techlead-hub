@@ -288,6 +288,8 @@ export function Import({ embedded = false }: { embedded?: boolean }) {
     );
 
   const [syncHealth, setSyncHealth] = useState<SyncCenterSummary | null>(null);
+  const azureStatusRequest = useRef(false);
+  const referenceStatusRequest = useRef(false);
   const [historyExpanded, setHistoryExpanded] = useState(false);
   const [classificationCoverage, setClassificationCoverage] = useState<ClassificationCoverage | null>(null);
   const [metadataTickets, setMetadataTickets] = useState("815474, 777071");
@@ -322,6 +324,8 @@ export function Import({ embedded = false }: { embedded?: boolean }) {
         showLoading =
           false,
       ) => {
+        if (azureStatusRequest.current || document.visibilityState === "hidden") return;
+        azureStatusRequest.current = true;
         try {
           if (
             showLoading
@@ -365,9 +369,8 @@ export function Import({ embedded = false }: { embedded?: boolean }) {
             ),
           );
         } finally {
-          setAzureLoading(
-            false,
-          );
+          azureStatusRequest.current = false;
+          setAzureLoading(false);
         }
       },
       [],
@@ -382,22 +385,21 @@ export function Import({ embedded = false }: { embedded?: boolean }) {
       const timer =
         window.setInterval(
           () => {
-            void loadAzureStatus(
-              false,
-            );
+            if (document.visibilityState === "visible") void loadAzureStatus(false);
           },
           AZURE_STATUS_REFRESH_MS,
         );
 
+      const onVisibility = () => {
+        if (document.visibilityState === "visible") void loadAzureStatus(false);
+      };
+      document.addEventListener("visibilitychange", onVisibility);
       return () => {
-        window.clearInterval(
-          timer,
-        );
+        window.clearInterval(timer);
+        document.removeEventListener("visibilitychange", onVisibility);
       };
     },
-    [
-      loadAzureStatus,
-    ],
+    [loadAzureStatus],
   );
 
   const loadClassificationCoverage = useCallback(async () => {
@@ -735,18 +737,30 @@ export function Import({ embedded = false }: { embedded?: boolean }) {
   }, [loadMovideskStatus]);
 
   async function loadReferenceSyncStatus() {
+    if (referenceStatusRequest.current || document.visibilityState === "hidden") return;
+    referenceStatusRequest.current = true;
     try {
       const response = await api.get<{ status:string; phase:string; result:Record<string,unknown>|null; error:string|null; scheduler?:{ enabled:boolean; hour:number; minute:number; nextEstimatedAt:string|null } }>("/movidesk/reference-sync/status", { timeout: 30_000 });
       setReferenceNextAt(response.data.scheduler?.nextEstimatedAt ?? null);
       setReferenceSchedule(response.data.scheduler ? { hour: response.data.scheduler.hour, minute: response.data.scheduler.minute } : null);
       if (response.data.status === "FAILED" && response.data.error) setError(response.data.error);
     } catch { /* status é complementar; não derruba a tela */ }
+    finally { referenceStatusRequest.current = false; }
   }
 
   useEffect(() => {
     void loadReferenceSyncStatus();
-    const timer = window.setInterval(() => { void loadReferenceSyncStatus(); }, 5_000);
-    return () => window.clearInterval(timer);
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible") void loadReferenceSyncStatus();
+    }, 15_000);
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") void loadReferenceSyncStatus();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
   }, []);
 
   async function startMovideskFull() {
