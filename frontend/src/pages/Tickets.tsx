@@ -1148,14 +1148,8 @@ export function Tickets() {
     return <ContentState kind="loading" title="Carregando tickets" minHeight={360} />;
   }
 
-  if (
-    error && tickets.length === 0
-  ) {
-    return (
-      <Alert severity="error">
-        {error}
-      </Alert>
-    );
+  if (error && tickets.length === 0) {
+    return <ContentState kind="error" title="Não foi possível carregar" description="Não foi possível consultar os dados. Tente novamente em instantes." errorDetail={error} />;
   }
 
   /* =======================================================
