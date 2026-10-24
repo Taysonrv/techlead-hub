@@ -32,6 +32,7 @@
 - Dashboard executivo: aproximação visual da referência enviada, com cards em gradientes azul/turquesa, realce de gráficos, profundidade sutil nos temas claro/escuro e ajustes mobile; preservados KPIs e séries reais.
 - Sidebar compacta: removido perfil duplicado (permanece apenas o superior), eliminadas setas dos grupos recolhidos e aprimorados separadores, seleção e badges dos ícones.
 - Dashboard executivo: grade de KPIs responsiva com quatro colunas em desktop amplo e painéis analíticos em duas colunas a partir de telas grandes; sem alteração dos indicadores ou drilldowns.
+- Clientes: aplicado o padrão visual executivo do Dashboard aos KPIs operacionais, cards, gráficos e tabela responsiva; mantidos filtros, drilldowns, dados reais e layout de impressão/PDF.
 - Correção de propriedades duplicadas do tema MUI (TS1117) e documentação do carregamento inicial no Assistente de Análise; CI da correção aprovado.
 - Tema MUI centraliza estilos de tabelas (cabeçalhos fixos, números tabulares, hover, scroll contido) e chips por meio dos tokens semânticos.
 
