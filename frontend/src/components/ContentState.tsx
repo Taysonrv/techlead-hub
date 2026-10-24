@@ -1,4 +1,4 @@
-import { Box, Button, Skeleton, Stack, Typography, useTheme } from "@mui/material";
+import { Box, Button, Skeleton, Stack, Typography } from "@mui/material";
 import InboxOutlined from "@mui/icons-material/InboxOutlined";
 import ErrorOutlineOutlined from "@mui/icons-material/ErrorOutlineOutlined";
 
@@ -23,9 +23,6 @@ export function ContentState({
   emptyActionLabel = "Limpar filtros",
   errorDetail,
 }: ContentStateProps) {
-  const theme = useTheme();
-  const dark = theme.palette.mode === "dark";
-
   const defaults =
     kind === "loading"
       ? ["Carregando dados", "Aguarde enquanto consolidamos as informações."]
@@ -54,7 +51,7 @@ export function ContentState({
       >
         <Stack spacing={1.1}>
           <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
-            <Skeleton variant="rounded" width={28} height={28} sx={{ borderRadius: "8px" }} />
+            <Skeleton variant="rounded" width={28} height={28} sx={{ borderRadius: "var(--hub-radius-sm)" }} />
             <Box sx={{ flex: 1 }}>
               <Skeleton variant="rounded" height={16} width="min(32%, 190px)" />
               <Skeleton variant="rounded" height={10} width="min(48%, 290px)" sx={{ mt: 0.7 }} />
@@ -63,7 +60,7 @@ export function ContentState({
           <Skeleton
             variant="rounded"
             height={Math.max(74, minHeight - 92)}
-            sx={{ borderRadius: "10px" }}
+            sx={{ borderRadius: "var(--hub-radius-md)" }}
           />
         </Stack>
       </Box>
@@ -83,15 +80,9 @@ export function ContentState({
         py: 2.5,
         minWidth: 0,
         border: "1px dashed",
-        borderColor: error
-          ? dark
-            ? "rgba(239,83,80,.42)"
-            : "rgba(229,57,53,.28)"
-          : "divider",
+        borderColor: error ? "var(--hub-error)" : "var(--hub-border)",
         borderRadius: "var(--hub-radius-lg)",
-        background: dark
-          ? "linear-gradient(145deg,rgba(9,30,44,.62),rgba(8,24,37,.52))"
-          : "linear-gradient(145deg,rgba(248,250,252,.96),rgba(255,255,255,.96))",
+        background: "var(--hub-surface-raised)",
       }}
     >
       <Stack spacing={0.9} sx={{ alignItems: "center", textAlign: "center", maxWidth: 480, minWidth: 0, overflowWrap: "anywhere" }}>
@@ -99,17 +90,13 @@ export function ContentState({
           sx={{
             width: 52,
             height: 52,
-            borderRadius: "12px",
+            borderRadius: "var(--hub-radius-md)",
             display: "grid",
             placeItems: "center",
             color: error ? "error.main" : "text.secondary",
             border: "1px solid",
             borderColor: error ? "error.main" : "divider",
-            bgcolor: error
-              ? dark
-                ? "rgba(229,57,53,.08)"
-                : "rgba(229,57,53,.045)"
-              : "action.hover",
+            bgcolor: "var(--hub-surface)",
           }}
         >
           {error ? <ErrorOutlineOutlined /> : <InboxOutlined />}
