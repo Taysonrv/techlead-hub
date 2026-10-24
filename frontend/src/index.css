@@ -459,12 +459,23 @@ svg {
 }
 .techlead-sidebar--collapsed .MuiDrawer-paper .MuiListItemText-root,
 .techlead-sidebar--collapsed .MuiDrawer-paper .MuiListItemButton-root > .MuiIconButton-root,
-.techlead-sidebar--collapsed .MuiDrawer-paper .MuiListItemButton-root > .MuiBox-root,
 .techlead-sidebar--collapsed .techlead-sidebar-meta {
   display: none;
 }
 .techlead-sidebar--collapsed .MuiDrawer-paper nav {
   padding-inline: 8px;
+}
+.techlead-sidebar--collapsed .MuiDrawer-paper nav + nav {
+  border-top: 1px solid rgba(255,255,255,.075);
+  padding-top: 7px;
+  margin-top: 7px;
+}
+.techlead-sidebar--collapsed .MuiDrawer-paper nav .MuiListItemButton-root {
+  min-height: 44px;
+  border-radius: 11px;
+}
+.techlead-sidebar--collapsed .MuiDrawer-paper nav .MuiListItemButton-root.active {
+  background: rgba(24,199,122,.15);
 }
 .techlead-sidebar--collapsed .MuiDrawer-paper nav .MuiListItemButton-root,
 .techlead-sidebar--collapsed .MuiDrawer-paper .MuiListItemButton-root {
