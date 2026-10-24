@@ -50,6 +50,7 @@ import {
   aliareColors,
 } from "../theme/theme";
 import { PageHeader } from "../components/PageHeader";
+import { ContentState } from "../components/ContentState";
 
 import type {
   UserApprovalStatus,
@@ -466,29 +467,7 @@ export function Users() {
           }}
         >
           {loading ? (
-            <Box
-              sx={{
-                minHeight:
-                  320,
-
-                display:
-                  "flex",
-
-                alignItems:
-                  "center",
-
-                justifyContent:
-                  "center",
-              }}
-            >
-              <CircularProgress
-                size={32}
-                sx={{
-                  color:
-                    aliareColors.green,
-                }}
-              />
-            </Box>
+            <ContentState kind="loading" title="Carregando usuários" minHeight={320} />
           ) : (
             <>
               <TableContainer>
