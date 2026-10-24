@@ -1152,6 +1152,45 @@ export function Dashboard() {
         </Alert>
       )}
 
+      {/* =================================================
+          KPIs
+      ================================================= */}
+
+      <Box sx={{ mb: 1.5, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1, flexWrap: "wrap" }}>
+        <Box>
+          <Typography variant="overline" sx={{ color: "primary.main", fontWeight: 850, letterSpacing: ".1em" }}>Visão em tempo real</Typography>
+          <Typography variant="h6" sx={{ fontWeight: 850, letterSpacing: "-.025em" }}>Indicadores essenciais</Typography>
+        </Box>
+        <Chip label={`${cards.length} indicadores`} variant="outlined" size="small" />
+      </Box>
+      <KpiGrid sx={{mb: 2.5}}>
+        {cards.map(
+          (card) => (
+            <KpiCard
+              key={card.title}
+              title={
+                card.title
+              }
+              value={
+                card.value
+              }
+              description={
+                card.description
+              }
+              severity={
+                card.severity
+              }
+              info={
+                card.info
+              }
+              onClick={
+                card.onClick
+              }
+            />
+          )
+        )}
+      </KpiGrid>
+
       {/* ATALHOS PARA A OPERAÇÃO / ANÁLISE ASSISTIDA */}
       <Card variant="outlined" sx={{ borderRadius: 2.5, mb: 2.25, bgcolor: "background.paper" }}>
         <CardContent sx={{ p: { xs: 1.75, md: 2.25 }, "&:last-child": { pb: 2.25 } }}>
@@ -1185,38 +1224,6 @@ export function Dashboard() {
         <Typography sx={{ fontWeight: 850, mb: 1 }}>Sua operação agora</Typography>
         <HomeWorkspace embedded />
       </Box>
-
-      {/* =================================================
-          KPIs
-      ================================================= */}
-
-      <KpiGrid sx={{mb: 2.5}}>
-        {cards.map(
-          (card) => (
-            <KpiCard
-              key={card.title}
-              title={
-                card.title
-              }
-              value={
-                card.value
-              }
-              description={
-                card.description
-              }
-              severity={
-                card.severity
-              }
-              info={
-                card.info
-              }
-              onClick={
-                card.onClick
-              }
-            />
-          )
-        )}
-      </KpiGrid>
 
       {/* =================================================
           DESENVOLVIMENTO / AZURE DEVOPS
