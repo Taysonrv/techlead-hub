@@ -7,6 +7,8 @@ import { api, getApiErrorMessage } from "../services/api";
 import { subscribeTicketSnapshotRefresh } from "../services/ticketSnapshot";
 import { aliareColors } from "../theme/theme";
 import { PageHeader } from "../components/PageHeader";
+import { AsyncState } from "../components/AsyncState";
+import { ContentState } from "../components/ContentState";
 import { useFilters } from "../context/FiltersContext";
 import { KpiCard } from "../components/KpiCard";
 import { DetailFieldGrid, DetailPanelHeader, DetailSection } from "../components/DetailPanel";
@@ -205,7 +207,7 @@ export function MyOperation() {
       {metrics.map(([key, label, info, valueKey]) => <KpiCard key={key} title={label} value={data?.summary[valueKey] ?? 0} subtitle="Clique para filtrar a operação" info={info} accent={metric === key ? aliareColors.green : aliareColors.greenDark} active={metric === key} onClick={() => setMetric(metric === key ? "" : key)} />)}
     </KpiGrid>
 
-    {loading ? <Box sx={{ py: 10, textAlign: "center" }}><CircularProgress /></Box> : items.length === 0 ? <Card variant="outlined" sx={{mt:2,borderStyle:"dashed"}}><CardContent sx={{py:5,textAlign:"center"}}><FilterAltOutlined sx={{fontSize:34,color:"text.disabled"}}/><Typography sx={{fontWeight:850,mt:1}}>Nenhum registro neste recorte</Typography><Typography variant="body2" color="text.secondary" sx={{mt:.5}}>Revise os filtros, altere o conteúdo entre Atendimentos/Tarefas ou volte para a visão completa.</Typography><Button sx={{mt:1.5}} variant="outlined" onClick={()=>{setClient("");setAnalyst("");setTeam("");setType("");setSearch("");setMetric("");setSourceView("tickets");setSort("priority");}}>Limpar recorte</Button></CardContent></Card> : view === "kanban" ?
+    {loading ? <AsyncState status="loading" data={data} loading={<ContentState kind="loading" title="Carregando minha operação" minHeight={360} />}>{() => null}</AsyncState> : error && !data ? <AsyncState status="error" data={data} error={error}>{() => null}</AsyncState> : items.length === 0 ? <Card variant="outlined" sx={{mt:2,borderStyle:"dashed"}}><CardContent sx={{py:5,textAlign:"center"}}><FilterAltOutlined sx={{fontSize:34,color:"text.disabled"}}/><Typography sx={{fontWeight:850,mt:1}}>Nenhum registro neste recorte</Typography><Typography variant="body2" color="text.secondary" sx={{mt:.5}}>Revise os filtros, altere o conteúdo entre Atendimentos/Tarefas ou volte para a visão completa.</Typography><Button sx={{mt:1.5}} variant="outlined" onClick={()=>{setClient("");setAnalyst("");setTeam("");setType("");setSearch("");setMetric("");setSourceView("tickets");setSort("priority");}}>Limpar recorte</Button></CardContent></Card> : view === "kanban" ?
       <Box sx={{ mt: 2, display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))", md: "repeat(3, minmax(0, 1fr))", xl: "repeat(6, minmax(0, 1fr))" }, alignItems: "stretch", gap: 1, width: "100%", minWidth: 0, pb: 2 }}>
         {lanes.map((column) => {
           const columnItems = items.filter((item) => lane(item.status) === column);
