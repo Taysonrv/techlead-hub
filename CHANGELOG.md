@@ -6,6 +6,8 @@
 - Diagnóstico do frontend React/MUI/Vite e plano de migração por fases, preservando contratos de API, rotas, Prisma e backend.
 - Tokens CSS semânticos de tema claro e escuro: superfícies, texto, bordas, destaques, estados, espaçamento, raios, sombras, tipografia e movimento reduzido.
 - Melhorias incrementais prévias nos indicadores, seções, cabeçalhos, filtros, tabelas e estados de conteúdo.
+- Dashboard: indicadores essenciais passam a aparecer imediatamente após o cabeçalho, antes dos atalhos e do workspace; título de seção e contagem de indicadores adicionados sem alterar métricas ou filtros.
+- Estados de conteúdo: wrapper genérico AsyncState e suporte opcional a retry, ação vazia e detalhe técnico; adoção pelas telas segue em andamento.
 
 > Ainda não publicado. Build, lint, validação Web/Electron e migração das telas restantes pendentes de homologação. Nenhuma alteração de backend ou banco de dados nesta etapa.
 
