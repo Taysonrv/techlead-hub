@@ -36,6 +36,9 @@ export function ChartPanel({
         minWidth: 0,
         overflow: "hidden",
         bgcolor: "background.paper",
+        borderRadius: "var(--hub-radius-lg)",
+        boxShadow: "var(--hub-shadow-card)",
+        backdropFilter: "blur(var(--hub-glass-blur))",
         borderColor: "divider",
         background: dark
           ? "linear-gradient(145deg, rgba(10,33,48,.96), rgba(7,25,38,.985))"
@@ -45,10 +48,10 @@ export function ChartPanel({
       <CardContent
         sx={{
           height: "100%",
-          p: { xs: 1.4, md: 1.65 },
+          p: { xs: 2, md: 2.5 },
           display: "flex",
           flexDirection: "column",
-          "&:last-child": { pb: { xs: 1.4, md: 1.65 } },
+          "&:last-child": { pb: { xs: 2, md: 2.5 } },
         }}
       >
         <Stack
@@ -65,8 +68,8 @@ export function ChartPanel({
             <Stack direction="row" spacing={0.8} sx={{ alignItems: "center" }}>
               <Box
                 sx={{
-                  width: 3,
-                  height: 18,
+                  width: 4,
+                  height: 24,
                   borderRadius: "2px",
                   bgcolor: "primary.main",
                   flexShrink: 0,
@@ -76,6 +79,7 @@ export function ChartPanel({
                 variant="subtitle2"
                 sx={{
                   fontWeight: 820,
+                  fontSize: "1.06rem",
                   lineHeight: 1.3,
                   letterSpacing: "-.008em",
                 }}
@@ -121,7 +125,7 @@ export function ChartPanel({
             minHeight,
             minWidth: 0,
             width: "100%",
-            borderRadius: "10px",
+            borderRadius: "var(--hub-radius-md)",
             "& > .recharts-responsive-container": {
               minHeight,
             },
