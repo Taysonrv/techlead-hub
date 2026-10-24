@@ -1,6 +1,6 @@
 import { KpiGrid } from "../components/KpiGrid";
 import {
-  Alert, Autocomplete, Box, Button, Card, CardContent, Checkbox, Chip, CircularProgress,
+  Alert, Autocomplete, Box, Button, Card, CardContent, Checkbox, Chip,
   Drawer, FormControl, InputLabel, MenuItem, Select, Stack,
   TextField, Typography, useTheme,
 } from "@mui/material";
