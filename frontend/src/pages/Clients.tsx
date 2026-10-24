@@ -62,6 +62,7 @@ import { useFilters } from "../context/FiltersContext";
 import { PeriodFilter } from "../components/PeriodFilter";
 import { PageHeader } from "../components/PageHeader";
 import { ContentState } from "../components/ContentState";
+import { StatusPill } from "../components/StatusPill";
 import { ExportTicketsButton } from "../components/ExportTicketsButton";
 import { detailDrawerPaperSx } from "../theme/layoutTokens";
 import { KpiCard as ExecutiveKpiCard } from "../components/KpiCard";
@@ -1494,11 +1495,7 @@ export function Clients() {
   }
 
   if (error && tickets.length === 0) {
-    return (
-      <Alert severity="error">
-        {error}
-      </Alert>
-    );
+    return <ContentState kind="error" title="Não foi possível carregar" description="Não foi possível consultar os dados. Tente novamente em instantes." errorDetail={error} />;
   }
 
   /* =======================================================
@@ -1958,8 +1955,8 @@ export function Clients() {
 
       </KpiGrid>
       <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap", mb: 2 }}>
-        <Chip variant="outlined" color={clientRiskSummary.high ? "error" : "default"} label={`${clientRiskSummary.high} cliente(s) com risco agregado alto`} />
-        <Chip variant="outlined" color={clientRiskSummary.moderate ? "warning" : "default"} label={`${clientRiskSummary.moderate} cliente(s) em atenção`} />
+        <StatusPill tone={clientRiskSummary.high ? "error" : "neutral"} label={`${clientRiskSummary.high} cliente(s) com risco agregado alto`} />
+        <StatusPill tone={clientRiskSummary.moderate ? "warning" : "neutral"} label={`${clientRiskSummary.moderate} cliente(s) em atenção`} />
         <Typography variant="caption" color="text.secondary" sx={{ alignSelf: "center" }}>Risco agregado por cliente não equivale à quantidade de tickets críticos.</Typography>
       </Stack>
 
