@@ -1259,10 +1259,10 @@ export function Dashboard() {
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>Resumo dos indicadores operacionais. O backlog é uma fotografia atual e pode incluir tickets de períodos anteriores.</Typography>
                 <Stack spacing={1.5} sx={{ flexGrow: 1 }}>
                   {cards.slice(0, 4).map((card) => (
-                    <Box key={card.title} role={card.onClick ? "button" : undefined} tabIndex={card.onClick ? 0 : undefined}
+                    <Box key={card.title} role="button" tabIndex={0}
                       onClick={card.onClick}
-                      onKeyDown={(event) => { if (card.onClick && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); card.onClick(); } }}
-                      sx={{ p: 1.4, borderRadius: 2, border: "1px solid", borderColor: "divider", cursor: card.onClick ? "pointer" : "default", minWidth: 0, "&:hover": { borderColor: "primary.main" }, "&:focus-visible": { outline: "2px solid", outlineColor: "primary.main", outlineOffset: 2 } }}>
+                      onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); card.onClick(); } }}
+                      sx={{ p: 1.4, borderRadius: 2, border: "1px solid", borderColor: "divider", cursor: "pointer", minWidth: 0, "&:hover": { borderColor: "primary.main" }, "&:focus-visible": { outline: "2px solid", outlineColor: "primary.main", outlineOffset: 2 } }}>
                       <Typography variant="caption" color="text.secondary" sx={{ display: "block", fontWeight: 700 }}>{card.title}</Typography>
                       <Typography sx={{ fontWeight: 850, fontSize: "1.45rem", fontVariantNumeric: "tabular-nums", lineHeight: 1.3 }}>{card.value}</Typography>
                     </Box>
