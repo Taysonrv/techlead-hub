@@ -58,6 +58,7 @@ import { detailDrawerPaperSx } from "../theme/layoutTokens";
 import { useTheme } from "@mui/material/styles";
 import { ExecutiveSection } from "../components/ExecutiveSection";
 import { ContentState } from "../components/ContentState";
+import { AsyncState } from "../components/AsyncState";
 
 import {
   aliareColors,
@@ -603,12 +604,17 @@ export function Performance() {
     },
   ].filter((item) => item.value > 0);
 
-  if (loading) {
-    return <ContentState kind="loading" title="Carregando desempenho" minHeight={360} />;
-  }
-
-  if (error && tickets.length === 0) {
-    return <Alert severity="error">{error}</Alert>;
+  if (loading || (error && tickets.length === 0)) {
+    return (
+      <AsyncState
+        status={loading ? "loading" : "error"}
+        data={tickets}
+        error={error}
+        loading={<ContentState kind="loading" title="Carregando desempenho" minHeight={360} />}
+      >
+        {() => null}
+      </AsyncState>
+    );
   }
 
   return (
