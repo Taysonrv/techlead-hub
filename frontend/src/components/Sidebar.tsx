@@ -678,7 +678,17 @@ export function Sidebar() {
           },
       }}
     >
-      <Box sx={{ display: "flex", justifyContent: sidebarCollapsed ? "center" : "flex-end", px: 1, pt: 1 }}>
+      <Box sx={{
+        position: sidebarCollapsed ? "relative" : "absolute",
+        top: sidebarCollapsed ? undefined : 10,
+        right: sidebarCollapsed ? undefined : 10,
+        zIndex: 2,
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
+        height: sidebarCollapsed ? 54 : 36,
+        px: sidebarCollapsed ? 1 : 0,
+      }}>
         <IconButton
           size="small"
           onClick={toggleSidebar}
@@ -753,6 +763,7 @@ export function Sidebar() {
         <Box
           className="techlead-sidebar-identity"
           sx={{
+            pr: 6,
             px:
               1.75,
 
@@ -924,7 +935,7 @@ export function Sidebar() {
           </Box>
         </Box>
 
-        {canAccess("dashboard") && <Box sx={{ px: 1, mb: .5 }}>
+        {canAccess("dashboard") && <Box sx={{ px: 1, mb: .5, mt: sidebarCollapsed ? 0 : .25 }}>
           <ListItemButton component={NavLink} to="/inicio" end title="Central de Trabalho" sx={{ minHeight: 40, px: 1.15, borderRadius: 1.5, color: "rgba(255,255,255,.72)", "&:hover": { bgcolor: "rgba(24,199,122,.08)", color: "#fff" }, "&.active": { bgcolor: "rgba(24,199,122,.13)", color: "#fff" }, "&.active .MuiListItemIcon-root": { color: aliareColors.green } }}>
             <ListItemIcon sx={{ minWidth: 34, color: "rgba(255,255,255,.44)", "& .MuiSvgIcon-root": { fontSize: 19 } }}><HomeOutlined fontSize="small" /></ListItemIcon>
             <ListItemText primary="Início" slotProps={{ primary: { sx: { fontSize: ".8rem", fontWeight: 600, lineHeight: 1.35 } } }} />
