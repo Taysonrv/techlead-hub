@@ -5,7 +5,6 @@ import {
   CardContent,
   Stack,
   Typography,
-  useTheme,
 } from "@mui/material";
 
 type ChartPanelProps = {
@@ -25,9 +24,6 @@ export function ChartPanel({
   minHeight = 280,
   footer,
 }: ChartPanelProps) {
-  const theme = useTheme();
-  const dark = theme.palette.mode === "dark";
-
   return (
     <Card
       variant="outlined"
@@ -40,9 +36,7 @@ export function ChartPanel({
         boxShadow: "var(--hub-shadow-card)",
         backdropFilter: "blur(var(--hub-glass-blur))",
         borderColor: "divider",
-        background: dark
-          ? "linear-gradient(145deg, rgba(10,33,48,.96), rgba(7,25,38,.985))"
-          : "linear-gradient(180deg, #FFFFFF, #FBFCFD)",
+        background: "var(--hub-surface)",
       }}
     >
       <CardContent
@@ -59,7 +53,7 @@ export function ChartPanel({
           spacing={0.9}
           sx={{
             mb: 1.1,
-            minHeight: 38,
+            minHeight: { xs: 0, sm: 38 },
             justifyContent: "space-between",
             alignItems: { xs: "stretch", sm: "flex-start" },
           }}
@@ -79,7 +73,7 @@ export function ChartPanel({
                 variant="subtitle2"
                 sx={{
                   fontWeight: 820,
-                  fontSize: "1.06rem",
+                  fontSize: { xs: "1rem", sm: "1.06rem" },
                   lineHeight: 1.3,
                   letterSpacing: "-.008em",
                 }}
@@ -122,7 +116,7 @@ export function ChartPanel({
           sx={{
             position: "relative",
             flex: "1 1 auto",
-            minHeight,
+            minHeight: { xs: Math.min(minHeight, 220), sm: minHeight },
             minWidth: 0,
             width: "100%",
             borderRadius: "var(--hub-radius-md)",
