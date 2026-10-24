@@ -150,13 +150,14 @@ export function Sidebar() {
     try { return window.localStorage.getItem("techlead-hub.sidebar-collapsed") === "true"; }
     catch { return false; }
   });
-  const toggleSidebar = () => {
-    setSidebarCollapsed((previous) => {
-      const next = !previous;
-      try { window.localStorage.setItem("techlead-hub.sidebar-collapsed", String(next)); } catch { /* armazenamento opcional */ }
-      return next;
-    });
-  };
+  const toggleSidebar = useCallback(() => {
+    setSidebarCollapsed((previous) => !previous);
+  }, []);
+
+  useEffect(() => {
+    try { window.localStorage.setItem("techlead-hub.sidebar-collapsed", String(sidebarCollapsed)); }
+    catch { /* armazenamento opcional */ }
+  }, [sidebarCollapsed]);
 
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [chatUnread, setChatUnread] = useState(0);
@@ -643,12 +644,14 @@ export function Sidebar() {
 
         flexShrink:
           0,
-        transition: "width 180ms ease",
+        transition: "width 220ms cubic-bezier(0.2, 0, 0, 1)",
+        willChange: "width",
 
         "& .MuiDrawer-paper":
           {
             width: sidebarCollapsed ? 76 : drawerWidth,
-            transition: "width 180ms ease",
+            transition: "width 220ms cubic-bezier(0.2, 0, 0, 1)",
+            willChange: "width",
 
             boxSizing:
               "border-box",
@@ -702,6 +705,9 @@ export function Sidebar() {
 
           overflowY:
             "auto",
+
+          contain: "layout paint",
+          overscrollBehavior: "contain",
 
           overflowX:
             "hidden",
@@ -939,6 +945,7 @@ export function Sidebar() {
           title="Gestão"
           ariaLabel="Navegação de gestão"
           items={managementMenu}
+          compact={sidebarCollapsed}
           open={openSections.gestao}
           onToggle={() => setOpenSections((current) => ({ ...current, gestao: !current.gestao }))}
         />
@@ -947,6 +954,7 @@ export function Sidebar() {
           title="Análises"
           ariaLabel="Navegação de análises"
           items={analysisMenu}
+          compact={sidebarCollapsed}
           open={openSections.analises}
           onToggle={() => setOpenSections((current) => ({ ...current, analises: !current.analises }))}
         />
@@ -955,6 +963,7 @@ export function Sidebar() {
           title="Desenvolvimento"
           ariaLabel="Navegação de desenvolvimento"
           items={developmentMenu}
+          compact={sidebarCollapsed}
           open={openSections.development}
           onToggle={() => setOpenSections((current) => ({ ...current, development: !current.development }))}
         />
@@ -963,6 +972,7 @@ export function Sidebar() {
           title="Cadastros"
           ariaLabel="Navegação de cadastros"
           items={registrationMenu}
+          compact={sidebarCollapsed}
           open={openSections.cadastros}
           onToggle={() => setOpenSections((current) => ({ ...current, cadastros: !current.cadastros }))}
         />
@@ -971,6 +981,7 @@ export function Sidebar() {
           title="Conhecimento"
           ariaLabel="Navegação de conhecimento"
           items={knowledgeMenu}
+          compact={sidebarCollapsed}
           open={openSections.conhecimento}
           onToggle={() => setOpenSections((current) => ({ ...current, conhecimento: !current.conhecimento }))}
         />
@@ -1409,7 +1420,7 @@ function MenuSection({
         {open ? <ExpandLessRounded sx={{ fontSize: 18, opacity: .7 }} /> : <ExpandMoreRounded sx={{ fontSize: 18, opacity: .7 }} />}
       </ListItemButton>}
 
-      <Collapse in={compact || open} timeout="auto" unmountOnExit>
+      <Collapse in={compact || open} timeout={compact ? 0 : 160} unmountOnExit>
       <List
         disablePadding
         sx={{
