@@ -63,6 +63,7 @@ import { simerMapRoutes } from "./simer-map.routes";
 import { knownProblemRoutes } from "./known-problems.routes";
 import { intelligenceRoutes } from "./intelligence.routes";
 import { publicEnrichmentRoutes } from "./public-enrichment.routes";
+import { integrationDiagnosticsRoutes } from "./integration-diagnostics.routes";
 
 /* =========================================================
    ROUTER
@@ -121,6 +122,7 @@ routes.use("/api/simer-map", simerMapRoutes);
 routes.use("/api/known-problems", knownProblemRoutes);
 routes.use("/api/intelligence", intelligenceRoutes);
 routes.use("/api/public-enrichment", publicEnrichmentRoutes);
+routes.use("/api/integration-diagnostics", integrationDiagnosticsRoutes);
 
 /* =========================================================
    ADMINISTRAÇÃO DE USUÁRIOS
