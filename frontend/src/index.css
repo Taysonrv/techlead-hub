@@ -478,3 +478,66 @@ svg {
 @media (prefers-reduced-motion: reduce) {
   .techlead-sidebar .MuiDrawer-paper { transition: none; }
 }
+
+
+/* Dashboard executivo — referência visual: cards luminosos e gráficos em camadas.
+   Estilização limitada ao Dashboard; números e séries vêm das consultas existentes. */
+.techlead-executive-dashboard {
+  --dashboard-glow-blue: rgba(20, 144, 255, .14);
+  --dashboard-glow-teal: rgba(24, 199, 176, .11);
+  min-width: 0;
+}
+
+.techlead-executive-dashboard .MuiCard-root {
+  border-radius: 16px;
+  position: relative;
+  isolation: isolate;
+  border-color: var(--hub-border);
+  transition: border-color .2s ease, box-shadow .2s ease, transform .2s ease;
+}
+
+.techlead-executive-dashboard [data-kpi-card] {
+  background-image:
+    radial-gradient(ellipse at 100% 100%, var(--dashboard-glow-blue), transparent 65%),
+    linear-gradient(145deg, var(--hub-surface-raised), var(--hub-surface)) !important;
+  box-shadow: var(--hub-shadow-card);
+}
+
+.techlead-executive-dashboard [data-kpi-card]:nth-child(even) {
+  background-image:
+    radial-gradient(ellipse at 100% 100%, var(--dashboard-glow-teal), transparent 65%),
+    linear-gradient(145deg, var(--hub-surface-raised), var(--hub-surface)) !important;
+}
+
+.techlead-executive-dashboard .MuiCard-root:hover {
+  border-color: var(--hub-accent);
+}
+
+.techlead-executive-dashboard .recharts-cartesian-grid line {
+  stroke-opacity: .38;
+}
+
+.techlead-executive-dashboard .recharts-line-curve,
+.techlead-executive-dashboard .recharts-area-curve {
+  stroke-width: 2.5px;
+  filter: drop-shadow(0 0 4px rgba(32, 171, 238, .17));
+}
+
+.techlead-executive-dashboard .recharts-bar-rectangle {
+  opacity: .94;
+}
+
+.techlead-executive-dashboard .recharts-default-tooltip {
+  border: 1px solid var(--hub-border) !important;
+  border-radius: 12px !important;
+}
+
+@media (max-width: 600px) {
+  .techlead-executive-dashboard .MuiCardContent-root { padding: 14px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .techlead-executive-dashboard .MuiCard-root { transition: none; }
+  .techlead-executive-dashboard .recharts-line-curve,
+  .techlead-executive-dashboard .recharts-area-curve { filter: none; }
+}
