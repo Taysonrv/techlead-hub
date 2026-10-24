@@ -12,6 +12,8 @@
 - Sidebar com superfície azul-marinho em gradiente; busca global da topbar com superfície elevada e maior área de interação.
 - Componente `StatusPill` tipado criado para adoção progressiva em telas operacionais (sem alteração de status de negócio).
 - Telas Tickets e Clientes passaram a usar `AsyncState` para carregamento/erro sem alterar as consultas; indicadores de risco de Clientes adotam `StatusPill`.
+- Pontos de Atenção e Desempenho passaram a usar `AsyncState` para carregamento/erro; indicador de indício de encerramento adota `StatusPill`.
+- Correção de propriedades duplicadas do tema MUI (TS1117) e documentação do carregamento inicial no Assistente de Análise; CI da correção aprovado.
 - Tema MUI centraliza estilos de tabelas (cabeçalhos fixos, números tabulares, hover, scroll contido) e chips por meio dos tokens semânticos.
 
 > Ainda não publicado. Build, lint, validação Web/Electron e migração das telas restantes pendentes de homologação. Nenhuma alteração de backend ou banco de dados nesta etapa.
