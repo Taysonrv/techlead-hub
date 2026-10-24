@@ -2,7 +2,7 @@ import { KpiGrid } from "../components/KpiGrid";
 import { AsyncState } from "../components/AsyncState";
 import { ContentState } from "../components/ContentState";
 import {
-  Alert, Box, Button, Card, CardContent, Chip, CircularProgress, Drawer,
+  Alert, Box, Button, Card, CardContent, Chip, Drawer,
   FormControl, IconButton, InputLabel, MenuItem, Select, Stack, Tab, Tabs, Tooltip, Typography,
 } from "@mui/material";
 import {
