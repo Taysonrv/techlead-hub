@@ -272,7 +272,7 @@ export function GlobalTopBar() {
 
   return (
     <Box sx={{ position: "relative", zIndex: (theme) => theme.zIndex.appBar, pt: { xs: 6.5, lg: 0 }, mb: 3, minHeight: 58, height: "auto", opacity: 1, transform: "translateY(0)", overflow: "visible", boxSizing: "border-box", bgcolor: "transparent", pointerEvents: "none" }}>
-      <Box sx={{ position: "relative", width: { xs: "100%", lg: "calc(100% - 500px)" }, maxWidth: 740, minWidth: 0, mr: "auto", minHeight: 48, pointerEvents: "auto" }}>
+      <Box sx={{ position: "relative", width: { xs: "100%", lg: "calc(100% - 500px)" }, maxWidth: 740, minWidth: 0, maxInlineSize: "100%", mr: "auto", minHeight: 48, pointerEvents: "auto" }}>
           <TextField id="global-search" inputRef={searchInputRef} fullWidth size="small" value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={handleSearchKeyDown} placeholder="Busque telas, rotinas, cards, tickets, clientes, tarefas ou versões..." slotProps={{ htmlInput: { "aria-label": "Busca global do Hub" }, input: { startAdornment: <InputAdornment position="start"><SearchOutlined fontSize="small" /></InputAdornment>, endAdornment: searching ? <CircularProgress size={16} /> : <Box component="span" sx={{px:.7,py:.25,border:"1px solid",borderColor:"divider",borderRadius:1,color:"text.secondary",fontSize:".68rem",fontWeight:800,whiteSpace:"nowrap"}}>Ctrl K</Box>, sx: { height: 48, bgcolor: "background.paper", borderRadius: "var(--hub-radius-lg)", boxShadow: "var(--hub-shadow-card)", border: "1px solid", borderColor: "divider" } } }} data-accessibility-patched="global-search" />
           {query.trim().length >= 2 && (
             <Paper elevation={8} sx={{ position: "absolute", top: 46, left: 0, right: 0, maxHeight: 430, overflowY: "auto", border: "1px solid", borderColor: "divider", zIndex: 20 }}>
@@ -285,7 +285,7 @@ export function GlobalTopBar() {
         <Alert
           severity={updateState.status === "downloaded" ? "success" : "info"}
           variant="outlined"
-          sx={{ mt: 1, width: { xs: "100%", lg: "calc(100% - 500px)" }, maxWidth: 620, pointerEvents: "auto", borderRadius: 2, py: .25, "& .MuiAlert-message": { width: "100%" } }}
+          sx={{ mt: 1, width: { xs: "100%", lg: "calc(100% - 500px)" }, maxWidth: 620, minWidth: 0, maxInlineSize: "100%", pointerEvents: "auto", borderRadius: 2, py: .25, "& .MuiAlert-message": { width: "100%" } }}
           action={
             updateState.status === "available" || updateState.status === "downloaded"
               ? <Button size="small" color="inherit" onClick={() => void handleUpdateAction()}>{updateState.status === "downloaded" ? "Instalar e reiniciar" : "Baixar"}</Button>
