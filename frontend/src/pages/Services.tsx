@@ -1,9 +1,11 @@
 import { KpiGrid } from "../components/KpiGrid";
 import { subscribeTicketSnapshotRefresh } from "../services/ticketSnapshot";
-import { Alert, Autocomplete, Box, Button, Card, CardContent, Chip, CircularProgress, FormControl, InputLabel, MenuItem, Select, Stack, TextField, Typography, useTheme } from "@mui/material";
+import { Alert, Autocomplete, Box, Button, Card, CardContent, Chip, FormControl, InputLabel, MenuItem, Select, Stack, TextField, Typography, useTheme } from "@mui/material";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, ResponsiveContainer, Tooltip as ChartTooltip, XAxis, YAxis } from "recharts";
 import { PageHeader } from "../components/PageHeader";
+import { AsyncState } from "../components/AsyncState";
+import { ContentState } from "../components/ContentState";
 import { KpiCard } from "../components/KpiCard";
 import { api, getApiErrorMessage } from "../services/api";
 import { aliareColors } from "../theme/theme";
@@ -55,7 +57,7 @@ export function Services() {
     </Box></CardContent></Card>
     {error&&<Alert severity="error" sx={{mt:2}}>{error}</Alert>}
     {loading&&<Typography variant="caption" sx={{display:"block",mt:1}}>Atualizando serviços…</Typography>}
-    {loading&&!data?<Box sx={{py:10,display:"grid",placeItems:"center"}}><CircularProgress/></Box>:data&&<Stack spacing={2} sx={{mt:2}}>
+    {loading && !data ? <AsyncState status="loading" data={data} loading={<ContentState kind="loading" title="Carregando serviços" minHeight={360} />}>{() => null}</AsyncState> : error && !data ? <AsyncState status="error" data={data} error={error}>{() => null}</AsyncState> : data && <Stack spacing={2} sx={{mt:2}}>
       <KpiGrid>
         <KpiCard title="Classificação específica" value={data.total ? `${data.classificationRate}%` : "—"} subtitle={`${data.specific} atendimento(s)`} info="Percentual de tickets com Serviço específico no período." accent={aliareColors.green}/>
         <KpiCard title="SIMER genérico" value={data.generic} subtitle="Requer revisão" info="Classificações somente em níveis genéricos do SIMER." onClick={()=>navigate("/qualidade-dados?issue=genericSimerService")} accent={aliareColors.warning}/>
