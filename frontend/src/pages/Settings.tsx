@@ -32,6 +32,7 @@ import {
   useState,
 } from "react";
 import { PageHeader } from "../components/PageHeader";
+import { ContentState } from "../components/ContentState";
 import { Import } from "./Import";
 import { api, getApiErrorMessage } from "../services/api";
 import { getLocalNotificationPreferences, saveLocalNotificationPreferences, type LocalNotificationPreferences } from "../utils/notificationSound";
@@ -551,11 +552,7 @@ export function Settings() {
   }
 
   if (loading) {
-    return (
-      <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
-        <CircularProgress size={32} />
-      </Box>
-    );
+    return <ContentState kind="loading" title="Carregando configurações" minHeight={360} />;
   }
 
   return (
