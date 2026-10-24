@@ -163,6 +163,8 @@ function AuthenticatedLayout({
           sx={{
             display: "flex",
             width: "100%",
+            minWidth: 0,
+            maxWidth: "100vw",
             minHeight: "100vh",
             height: fixedWorkspace ? "100dvh" : "auto",
             overflow: fixedWorkspace ? "hidden" : "visible",
@@ -177,6 +179,7 @@ function AuthenticatedLayout({
             sx={{
               flexGrow: 1,
               minWidth: 0,
+              maxWidth: "100%",
               minHeight: fixedWorkspace ? 0 : "100vh",
               height: fixedWorkspace ? "100dvh" : "auto",
               boxSizing: "border-box",
