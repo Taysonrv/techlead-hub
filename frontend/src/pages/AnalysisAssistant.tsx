@@ -83,6 +83,8 @@ export function AnalysisAssistant() {
       setLoadError("Não foi possível consultar os tickets nesta instância. Confira a conexão com o backend.");
     } finally { setLoading(false); }
   };
+  // Carregamento intencional apenas na montagem: mudanças no campo não disparam nova consulta.
+  // oxlint-disable-next-line react-hooks/exhaustive-deps -- preservar o carregamento inicial do ticket
   useEffect(() => { if (params.get("ticket")) void loadTicket(); /* Executar somente no acesso inicial */ }, []);
   const references = useMemo(() => {
     if (!research) return [] as Array<{ key: string; kind: string; title: string; description: string; url: string }>;
