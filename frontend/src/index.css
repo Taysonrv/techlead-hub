@@ -610,7 +610,7 @@ svg {
       linear-gradient(145deg, var(--hub-surface-raised), var(--hub-surface)) !important;
   }
 
-  .techlead-executive-clients .techlead-clients-primary-kpis > :nth-child(even) [data-kpi-card] {
+  .techlead-executive-clients .techlead-clients-primary-kpis > :nth-child(even)[data-kpi-card] {
     background-image:
       radial-gradient(ellipse at 100% 100%, var(--clients-glow-teal), transparent 65%),
       linear-gradient(145deg, var(--hub-surface-raised), var(--hub-surface)) !important;
