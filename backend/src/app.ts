@@ -319,16 +319,17 @@ app.use(
     res: express.Response,
     _next: express.NextFunction
   ) => {
-    console.error(
-      "[server] Erro não tratado:",
-      error
-    );
-
-    if (
-      res.headersSent
-    ) {
+    if (res.headersSent) {
       return;
     }
+
+    // Preserva o contrato legado { error: string }, mas diferencia payloads
+    // excessivos de falhas internas e evita registrar o conteúdo recebido.
+    if (error instanceof Error && "type" in error && error.type === "entity.too.large") {
+      return res.status(413).json({ error: "O conteúdo enviado excede o limite permitido." });
+    }
+
+    console.error("[server] Erro não tratado:", error instanceof Error ? error.name : "erro desconhecido");
 
     return res
       .status(500)
