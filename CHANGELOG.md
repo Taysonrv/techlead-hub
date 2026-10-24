@@ -25,6 +25,8 @@
 - Segurança dos uploads Movidesk: validação preliminar de extensão e assinatura ZIP para XLSX e conteúdo inicial JSON antes de preview/importação; testes unitários adicionados.
 - Consolidação visual: painéis de gráficos com superfícies semânticas claro/escuro e cabeçalhos compactos em telas pequenas.
 - Responsividade: tabelas com rolagem horizontal contida no painel, prevenção de overflow em cards e espaçamento reduzido em células no mobile.
+- Cabeçalhos de páginas: título fluido em janelas estreitas, espaçamento adaptativo e sombras padronizadas.
+- Seções executivas: superfícies, sombras e cantos conectados aos tokens visuais compartilhados.
 - Correção de propriedades duplicadas do tema MUI (TS1117) e documentação do carregamento inicial no Assistente de Análise; CI da correção aprovado.
 - Tema MUI centraliza estilos de tabelas (cabeçalhos fixos, números tabulares, hover, scroll contido) e chips por meio dos tokens semânticos.
 
