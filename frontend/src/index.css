@@ -462,6 +462,12 @@ svg {
 .techlead-sidebar--collapsed .techlead-sidebar-meta {
   display: none;
 }
+/* No modo compacto, nenhum chevron de expansão ocupa espaço de navegação. */
+.techlead-sidebar--collapsed .MuiDrawer-paper nav svg[data-testid="ExpandMoreRoundedIcon"],
+.techlead-sidebar--collapsed .MuiDrawer-paper nav svg[data-testid="ExpandLessRoundedIcon"],
+.techlead-sidebar--collapsed .MuiDrawer-paper nav svg[data-testid="ChevronRightRoundedIcon"] {
+  display: none;
+}
 .techlead-sidebar--collapsed .MuiDrawer-paper nav {
   padding-inline: 8px;
 }
