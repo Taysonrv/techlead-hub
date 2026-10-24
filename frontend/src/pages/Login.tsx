@@ -23,6 +23,8 @@ import {
   VisibilityOffOutlined,
   VisibilityOutlined,
   AutoGraphOutlined,
+  OpenInNewOutlined,
+  NewspaperOutlined,
 } from "@mui/icons-material";
 
 import {
@@ -55,6 +57,8 @@ import { useColorMode } from "../context/ColorModeContext";
 /* =========================================================
    TIPOS
 ========================================================= */
+
+type CooperativeHeadline = { title: string; link: string; source: string; publishedAt: string | null };
 
 type LocationState = {
   from?: string;
@@ -116,6 +120,7 @@ export function Login() {
 
   const { mode: colorMode } = useColorMode();
   const [workMessage, setLeadershipMessage] = useState(0);
+  const [cooperativeNews, setCooperativeNews] = useState<CooperativeHeadline[]>([]);
 
   const [
     mode,
@@ -401,6 +406,16 @@ export function Login() {
       setLeadershipMessage((current) => (current + 1) % workMessages.length);
     }, 5200);
     return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    void api.get<{ items: CooperativeHeadline[] }>("/public-news/cooperatives", { timeout: 8000 })
+      .then(({ data }) => {
+        if (active && Array.isArray(data.items)) setCooperativeNews(data.items.slice(0, 3));
+      })
+      .catch(() => { /* notícias são opcionais; login permanece funcional */ });
+    return () => { active = false; };
   }, []);
 
   /* =======================================================
@@ -931,6 +946,36 @@ export function Login() {
 
 
         </Box>
+
+        {cooperativeNews.length > 0 && (
+          <Box sx={{ mt: 2.5, mb: 2, maxWidth: 540 }}>
+            <Stack direction="row" spacing={1} sx={{ alignItems: "center", mb: 1 }}>
+              <NewspaperOutlined sx={{ color: aliareColors.green, fontSize: 19 }} />
+              <Typography variant="overline" sx={{ color: aliareColors.green, fontWeight: 800, letterSpacing: ".08em" }}>
+                Notícias do agro e cooperativismo
+              </Typography>
+            </Stack>
+            <Stack spacing={1}>
+              {cooperativeNews.map((item) => (
+                <Box key={item.link} component="a" href={item.link} target="_blank" rel="noopener noreferrer"
+                  sx={{ display: "block", textDecoration: "none", color: "inherit", px: 1.5, py: 1.1,
+                    border: "1px solid", borderColor: "divider", borderRadius: 2,
+                    bgcolor: "rgba(127,145,160,.05)", "&:hover": { borderColor: aliareColors.green } }}>
+                  <Stack direction="row" spacing={1} sx={{ justifyContent: "space-between", alignItems: "flex-start" }}>
+                    <Typography variant="body2" sx={{ fontWeight: 650, lineHeight: 1.4 }}>{item.title}</Typography>
+                    <OpenInNewOutlined sx={{ fontSize: 15, flexShrink: 0, opacity: .65 }} />
+                  </Stack>
+                  <Typography variant="caption" sx={{ opacity: .65 }}>
+                    {item.source}{item.publishedAt ? ` · ${new Date(item.publishedAt).toLocaleDateString("pt-BR")}` : ""}
+                  </Typography>
+                </Box>
+              ))}
+            </Stack>
+            <Typography variant="caption" sx={{ opacity: .55, display: "block", mt: .75 }}>
+              Manchetes públicas via Google Notícias · links externos
+            </Typography>
+          </Box>
+        )}
 
         <Box
           sx={{
