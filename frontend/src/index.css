@@ -451,3 +451,30 @@ svg {
     max-width: calc(100vw - 24px);
   }
 }
+
+
+/* Sidebar em modo ícones: preserva links, grupos e badges originais. */
+.techlead-sidebar--collapsed .MuiDrawer-paper > .MuiBox-root:nth-child(2) > .MuiBox-root:first-of-type {
+  display: none;
+}
+.techlead-sidebar--collapsed .MuiDrawer-paper .MuiListItemText-root,
+.techlead-sidebar--collapsed .MuiDrawer-paper .MuiListItemButton-root > .MuiIconButton-root,
+.techlead-sidebar--collapsed .MuiDrawer-paper .MuiListItemButton-root > .MuiBox-root,
+.techlead-sidebar--collapsed .MuiDrawer-paper > .MuiBox-root:last-child {
+  display: none;
+}
+.techlead-sidebar--collapsed .MuiDrawer-paper nav {
+  padding-inline: 8px;
+}
+.techlead-sidebar--collapsed .MuiDrawer-paper nav .MuiListItemButton-root,
+.techlead-sidebar--collapsed .MuiDrawer-paper .MuiListItemButton-root {
+  justify-content: center;
+  padding-inline: 8px;
+}
+.techlead-sidebar--collapsed .MuiDrawer-paper .MuiListItemIcon-root {
+  min-width: 0;
+  justify-content: center;
+}
+@media (prefers-reduced-motion: reduce) {
+  .techlead-sidebar .MuiDrawer-paper { transition: none; }
+}
