@@ -63,6 +63,7 @@ import { simerMapRoutes } from "./simer-map.routes";
 import { knownProblemRoutes } from "./known-problems.routes";
 import { intelligenceRoutes } from "./intelligence.routes";
 import { publicEnrichmentRoutes } from "./public-enrichment.routes";
+import { cooperativeNewsRoutes } from "./cooperative-news.routes";
 import { integrationDiagnosticsRoutes } from "./integration-diagnostics.routes";
 
 /* =========================================================
@@ -99,6 +100,8 @@ routes.use(
   "/api/auth",
   authRoutes,
 );
+
+routes.use("/api/public-news", cooperativeNewsRoutes);
 
 /* =========================================================
    ÁREA AUTENTICADA
