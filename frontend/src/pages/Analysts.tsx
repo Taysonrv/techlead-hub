@@ -1,4 +1,6 @@
 import { KpiGrid } from "../components/KpiGrid";
+import { AsyncState } from "../components/AsyncState";
+import { ContentState } from "../components/ContentState";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
@@ -1781,34 +1783,18 @@ export function Analysts() {
      LOADING / ERROR
   ===================================================== */
 
-  if (loading) {
+  if (loading || (error && tickets.length === 0)) {
     return (
-      <Box
-        sx={{
-          display: "flex",
-          justifyContent:
-            "center",
-          mt: 8,
-        }}
+      <AsyncState
+        status={loading ? "loading" : "error"}
+        data={tickets}
+        error={error}
+        loading={<ContentState kind="loading" title="Carregando analistas" minHeight={360} />}
       >
-        <CircularProgress
-          sx={{
-            color:
-              aliareColors.green,
-          }}
-        />
-      </Box>
+        {() => null}
+      </AsyncState>
     );
   }
-
-  if (error && tickets.length === 0) {
-    return (
-      <Alert severity="error">
-        {error}
-      </Alert>
-    );
-  }
-
 
   const visibleAnalystPieData = analystPieData.filter((item) => !hiddenAnalystSlices.has(item.name));
   const visibleStatusPieData = statusPieData.filter((item) => !hiddenStatusSlices.has(item.name));
