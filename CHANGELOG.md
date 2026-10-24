@@ -23,6 +23,8 @@
 - `ContentState` passa a utilizar tokens semânticos de superfície, borda e raio, melhorando consistência claro/escuro.
 - Diagnóstico preliminar do backend documentado em `docs/backend-evolution-diagnostic.md`, sem alterar API, schema ou dependências.
 - Segurança dos uploads Movidesk: validação preliminar de extensão e assinatura ZIP para XLSX e conteúdo inicial JSON antes de preview/importação; testes unitários adicionados.
+- Consolidação visual: painéis de gráficos com superfícies semânticas claro/escuro e cabeçalhos compactos em telas pequenas.
+- Responsividade: tabelas com rolagem horizontal contida no painel, prevenção de overflow em cards e espaçamento reduzido em células no mobile.
 - Correção de propriedades duplicadas do tema MUI (TS1117) e documentação do carregamento inicial no Assistente de Análise; CI da correção aprovado.
 - Tema MUI centraliza estilos de tabelas (cabeçalhos fixos, números tabulares, hover, scroll contido) e chips por meio dos tokens semânticos.
 
