@@ -159,6 +159,20 @@ export function Sidebar() {
     catch { /* armazenamento opcional */ }
   }, [sidebarCollapsed]);
 
+  // Atalho opcional de navegação: Alt+M alterna o menu sem interferir nos campos.
+  useEffect(() => {
+    const onSidebarShortcut = (event: KeyboardEvent) => {
+      const target = event.target;
+      const editing = target instanceof HTMLElement &&
+        (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName));
+      if (editing || event.repeat || !event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || event.key.toLowerCase() !== "m") return;
+      event.preventDefault();
+      toggleSidebar();
+    };
+    window.addEventListener("keydown", onSidebarShortcut);
+    return () => window.removeEventListener("keydown", onSidebarShortcut);
+  }, [toggleSidebar]);
+
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [chatUnread, setChatUnread] = useState(0);
   const [chatPopup, setChatPopup] = useState<{ channelId: number; channelName: string; authorName: string; preview: string } | null>(null);
@@ -693,7 +707,7 @@ export function Sidebar() {
           size="small"
           onClick={toggleSidebar}
           aria-label={sidebarCollapsed ? "Expandir menu lateral" : "Recolher menu lateral"}
-          title={sidebarCollapsed ? "Expandir menu lateral" : "Recolher menu lateral"}
+          title={sidebarCollapsed ? "Expandir menu lateral (Alt+M)" : "Recolher menu lateral (Alt+M)"}
           aria-expanded={!sidebarCollapsed}
           sx={{ color: "rgba(255,255,255,.8)", border: "1px solid rgba(255,255,255,.14)", borderRadius: 2, "&:hover": { bgcolor: "rgba(255,255,255,.10)" } }}
         >
@@ -1407,6 +1421,9 @@ function MenuSection({
   onToggle: () => void;
   compact?: boolean;
 }) {
+  const location = useLocation();
+  const activeSection = items.some((item) => location.pathname === item.path || location.pathname.startsWith(item.path + "/"));
+
   if (
     items.length === 0
   ) {
@@ -1426,7 +1443,7 @@ function MenuSection({
           0.2,
       }}
     >
-      {!compact && <ListItemButton aria-expanded={open} onClick={onToggle} sx={{ minHeight: 36, px: 1.25, borderRadius: 1.5, color: open ? "rgba(255,255,255,.90)" : "rgba(255,255,255,.52)", bgcolor: open ? "rgba(255,255,255,.045)" : "transparent", "&:hover": { bgcolor: "rgba(255,255,255,.04)", color: "rgba(255,255,255,.82)" } }}>
+      {!compact && <ListItemButton aria-expanded={open} aria-current={activeSection ? "location" : undefined} onClick={onToggle} sx={{ minHeight: 36, px: 1.25, borderRadius: 1.5, color: activeSection ? "#fff" : open ? "rgba(255,255,255,.90)" : "rgba(255,255,255,.52)", bgcolor: activeSection ? "rgba(24,199,122,.09)" : open ? "rgba(255,255,255,.045)" : "transparent", borderLeft: activeSection ? `2px solid ${aliareColors.green}` : "2px solid transparent", "&:hover": { bgcolor: "rgba(255,255,255,.06)", color: "#fff" } }}>
         <ListItemText primary={title} slotProps={{ primary: { sx: { fontSize: ".68rem", fontWeight: 650, letterSpacing: ".075em", textTransform: "uppercase" } } }} />
         {open ? <ExpandLessRounded sx={{ fontSize: 18, opacity: .7 }} /> : <ExpandMoreRounded sx={{ fontSize: 18, opacity: .7 }} />}
       </ListItemButton>}
