@@ -26,26 +26,24 @@ export function PageHeader({
       sx={{
         justifyContent: "space-between",
         alignItems: { xs: "stretch", lg: "center" },
-        gap: { xs: 1.4, lg: 2 },
+        gap: { xs: 1.2, sm: 1.4, lg: 2 },
         minWidth: 0,
         mb: { xs: 1.5, md: 2 },
         position: "relative",
         overflow: "hidden",
-        p: { xs: 2, sm: 2.4, md: 3 },
-        minHeight: { md: 154 },
+        p: { xs: 1.75, sm: 2.4, md: 3 },
+        minHeight: { xs: 0, md: 154 },
         width: "100%",
         maxWidth: "100%",
         boxSizing: "border-box",
-        borderRadius: "20px",
+        borderRadius: "var(--hub-radius-lg)",
         isolation: "isolate",
         border: "1px solid",
         borderColor: dark
           ? "rgba(76,190,230,.18)"
           : "rgba(15,118,110,.12)",
         backgroundColor: dark ? "#0C1E33" : "#F5F8FC",
-        boxShadow: dark
-          ? "0 14px 34px rgba(0,0,0,.15), inset 0 1px rgba(255,255,255,.03)"
-          : "0 7px 20px rgba(16,24,40,.035)",
+        boxShadow: "var(--hub-shadow-card)",
         "&::before": {
           content: '""',
           position: "absolute",
@@ -102,7 +100,7 @@ export function PageHeader({
             fontWeight: 820,
             letterSpacing: "-.028em",
             fontSize: {
-              xs: "1.75rem",
+              xs: "clamp(1.4rem, 5.5vw, 1.75rem)",
               sm: "2rem",
               md: "2.3rem",
               xl: "2.5rem",
@@ -157,7 +155,7 @@ export function PageHeader({
             background: "transparent",
             boxShadow: "none",
             backdropFilter: "none",
-            "& > *": { maxWidth: "100%" },
+            "& > *": { maxWidth: "100%", minWidth: 0 },
             "& .MuiButton-root": { width: { xs: "100%", sm: "auto" } },
           }}
         >
