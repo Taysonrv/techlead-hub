@@ -454,13 +454,13 @@ svg {
 
 
 /* Sidebar em modo ícones: preserva links, grupos e badges originais. */
-.techlead-sidebar--collapsed .MuiDrawer-paper > .MuiBox-root:nth-child(2) > .MuiBox-root:first-of-type {
+.techlead-sidebar--collapsed .techlead-sidebar-identity {
   display: none;
 }
 .techlead-sidebar--collapsed .MuiDrawer-paper .MuiListItemText-root,
 .techlead-sidebar--collapsed .MuiDrawer-paper .MuiListItemButton-root > .MuiIconButton-root,
 .techlead-sidebar--collapsed .MuiDrawer-paper .MuiListItemButton-root > .MuiBox-root,
-.techlead-sidebar--collapsed .MuiDrawer-paper > .MuiBox-root:last-child {
+.techlead-sidebar--collapsed .techlead-sidebar-meta {
   display: none;
 }
 .techlead-sidebar--collapsed .MuiDrawer-paper nav {
