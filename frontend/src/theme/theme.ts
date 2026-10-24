@@ -134,6 +134,45 @@ export function createAppTheme(mode: PaletteMode = "light") {
           "::selection": { backgroundColor: dark ? "rgba(24,199,122,.32)" : aliareColors.greenLight, color: dark ? "#FFFFFF" : aliareColors.black },
         },
       },
+      MuiTableContainer: {
+        styleOverrides: {
+          root: {
+            maxWidth: "100%",
+            overflowX: "auto",
+            borderRadius: "var(--hub-radius-md)",
+            scrollbarWidth: "thin",
+          },
+        },
+      },
+      MuiTableCell: {
+        styleOverrides: {
+          root: {
+            fontVariantNumeric: "tabular-nums",
+            borderBottomColor: "var(--hub-border)",
+          },
+          head: {
+            position: "sticky",
+            top: 0,
+            zIndex: 1,
+            backgroundColor: "var(--hub-surface-raised)",
+            color: "var(--hub-text-secondary)",
+            fontWeight: 750,
+          },
+        },
+      },
+      MuiTableRow: {
+        styleOverrides: {
+          root: {
+            transition: "background-color var(--hub-motion-fast) ease",
+            "&.MuiTableRow-hover:hover": { backgroundColor: "var(--hub-surface-raised)" },
+          },
+        },
+      },
+      MuiChip: {
+        styleOverrides: {
+          root: { fontWeight: 650, borderRadius: "var(--hub-radius-sm)" },
+        },
+      },
       MuiCard: {
         styleOverrides: {
           root: {
