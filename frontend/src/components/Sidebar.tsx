@@ -765,7 +765,6 @@ export function Sidebar() {
           sx={{
             px:
               1.75,
-            paddingRight: 6,
 
             pt:
               1.75,
@@ -778,8 +777,9 @@ export function Sidebar() {
             direction="row"
             spacing={1}
             sx={{
-              alignItems:
-                "center",
+              alignItems: "center",
+              pr: 4.5,
+              minHeight: 28,
             }}
           >
             <Box
