@@ -414,3 +414,40 @@ svg {
     font-size: .72rem !important;
   }
 }
+
+
+/* =========================================================
+   RESPONSIVIDADE — TABELAS E AÇÕES EXECUTIVAS
+   Mantém a rolagem horizontal dentro do painel, sem ampliar
+   a largura da janela Web ou do Electron.
+========================================================= */
+.techlead-page-surface .MuiTableContainer-root {
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: thin;
+}
+
+.techlead-page-surface .MuiTable-root {
+  font-variant-numeric: tabular-nums;
+}
+
+.techlead-page-surface .MuiCard-root,
+.techlead-page-surface .MuiPaper-root {
+  min-width: 0;
+}
+
+@media (max-width: 600px) {
+  .techlead-page-surface .MuiCardContent-root {
+    overflow-wrap: anywhere;
+  }
+
+  .techlead-page-surface .MuiTableCell-root {
+    padding: 10px 12px;
+  }
+
+  .techlead-page-surface .MuiDialog-paper {
+    max-width: calc(100vw - 24px);
+  }
+}
