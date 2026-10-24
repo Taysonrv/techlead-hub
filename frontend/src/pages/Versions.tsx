@@ -1,3 +1,4 @@
+import { GitHubReleasePanel } from "../components/PublicIntegrations";
 import { KpiGrid } from "../components/KpiGrid";
 import {
   Alert,
@@ -1460,6 +1461,8 @@ export function Versions() {
         meta={<>{summary.total} Work Item(s) no recorte • {summary.versions} versão(ões) identificada(s)</>}
         action={<Button variant="outlined" size="small" onClick={() => void load()} disabled={loading}>{loading ? "Atualizando..." : "Recarregar"}</Button>}
       />
+
+      <GitHubReleasePanel />
 
       {error && (
         <Alert
