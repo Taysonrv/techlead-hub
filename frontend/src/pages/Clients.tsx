@@ -1509,7 +1509,7 @@ export function Clients() {
   ======================================================= */
 
   return (
-    <>
+    <Box className="techlead-executive-clients" sx={{ width: "100%", minWidth: 0, maxWidth: "100%", boxSizing: "border-box" }}>
       <style>{`
         @media print {
           @page { size: A4 portrait; margin: 9mm; }
@@ -1837,7 +1837,7 @@ export function Clients() {
       </Card>
 
       {/* Resumo operacional com as mesmas coortes do Dashboard */}
-      <KpiGrid sx={{ mb: 2, gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))", xl: "repeat(4, minmax(0, 1fr))" } }}>
+      <KpiGrid className="techlead-clients-primary-kpis" sx={{ mb: 2, gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))", lg: "repeat(4, minmax(0, 1fr))" } }}>
         <MetricCard title="Abertos no período · SIMER" value={clientOperationalCohorts.entries.length} description="Abertura no intervalo"
           info={{ title: "Abertos no período · SIMER", summary: "Abertura no intervalo", calculation: "Contagem de tickets únicos com os mesmos critérios de data e escopo do Dashboard.", source: "Movidesk", reference: "Ticket.createdDate", periodRule: "Evento ocorrido dentro do período selecionado." }}
           onClick={() => showTickets("Abertos no período · SIMER", clientOperationalCohorts.entries, "Abertura no intervalo")} />
@@ -3752,7 +3752,7 @@ export function Clients() {
         }
         message={copyMessage}
       />
-    </>
+    </Box>
   );
 }
 
