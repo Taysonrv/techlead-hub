@@ -177,6 +177,7 @@ export function Sidebar() {
   const [chatUnread, setChatUnread] = useState(0);
   const [chatPopup, setChatPopup] = useState<{ channelId: number; channelName: string; authorName: string; preview: string } | null>(null);
   const chatSnapshotRef = useRef<Map<number, { unread: number; lastMessageId: number | null }>>(new Map());
+  const chatPollInFlightRef = useRef(false);
   type FloatingChat = { channelId: number; channelName: string; minimized: boolean; unread: number; peerId?: number; peerName?: string; presence?: "ONLINE" | "AWAY" | "BUSY" | "OFFLINE"; typingNames: string[]; messages: Array<{ id: number; content: string; createdAt: string; author: { id: number; name: string } }> };
   const [floatingChats, setFloatingChats] = useState<FloatingChat[]>([]);
   const [floatingDrafts, setFloatingDrafts] = useState<Record<number, string>>({});
@@ -204,10 +205,6 @@ export function Sidebar() {
       setFloatingChats([]);
     } catch { localStorage.removeItem(`techlead-floating-chats-${userId}`); }
   }, [userId]);
-
-  useEffect(() => {
-    // Não persiste mini-chats: abrir/fechar é uma decisão da sessão de navegação atual.
-  }, [floatingChats, userId]);
 
   const [
     appVersion,
@@ -257,11 +254,23 @@ export function Sidebar() {
     type GlobalChatMessage = { id: number; content: string; author: { id: number; name: string } };
     type GlobalChatChannel = { id: number; name: string; type?: string; unread?: number; updatedAt?: string; members?: Array<{ user: SharePerson }>; messages?: GlobalChatMessage[] };
     const loadChatUnread = async () => {
+      if (chatPollInFlightRef.current || document.visibilityState === "hidden") return;
+      chatPollInFlightRef.current = true;
       try {
         const response = await api.get<{ channels: GlobalChatChannel[] }>("/chat/channels");
         const channels = Array.isArray(response.data.channels) ? response.data.channels : [];
-        setShareChannels(channels as ShareChannel[]);
-        setChatUnread(channels.reduce((total, channel) => total + (channel.unread ?? 0), 0));
+        setShareChannels((previous) => {
+          const next = channels as ShareChannel[];
+          if (previous.length === next.length && previous.every((item, index) =>
+            item.id === next[index]?.id &&
+            item.updatedAt === next[index]?.updatedAt &&
+            item.name === next[index]?.name &&
+            item.type === next[index]?.type
+          )) return previous;
+          return next;
+        });
+        const unreadTotal = channels.reduce((total, channel) => total + (channel.unread ?? 0), 0);
+        setChatUnread((previous) => previous === unreadTotal ? previous : unreadTotal);
 
         const previous = chatSnapshotRef.current;
         if (previous.size && location.pathname !== "/chat") {
@@ -289,12 +298,18 @@ export function Sidebar() {
           lastMessageId: channel.messages?.[channel.messages.length - 1]?.id ?? null,
         }]));
       } catch { /* chat global não deve afetar a navegação */ }
+      finally { chatPollInFlightRef.current = false; }
     };
     void loadChatUnread();
     const timer = window.setInterval(() => void loadChatUnread(), 8_000);
     const refresh = () => void loadChatUnread();
     window.addEventListener("techlead-hub:chat-read", refresh);
-    return () => { window.clearInterval(timer); window.removeEventListener("techlead-hub:chat-read", refresh); };
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("techlead-hub:chat-read", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+    };
   }, [userId, location.pathname]);
 
   const openFloatingChat = useCallback(async (channelId: number, channelName: string) => {
