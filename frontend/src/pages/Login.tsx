@@ -679,12 +679,10 @@ export function Login() {
   return (
     <Box
       sx={{
-        minHeight:
-          "100dvh",
-
-        display:
-          "flex",
-
+        minHeight: "100dvh",
+        height: { md: "100dvh" },
+        boxSizing: "border-box",
+        display: "flex",
         position: "relative",
         overflow: "hidden",
         background:
@@ -720,9 +718,9 @@ export function Login() {
             lg: "50%",
           },
 
-          minHeight:
-            "100dvh",
-
+          height: "100%",
+          minHeight: 0,
+          boxSizing: "border-box",
           flexDirection:
             "column",
 
@@ -736,9 +734,11 @@ export function Login() {
             "hidden",
 
           p: {
-            md: 5,
-            lg: 7,
+            md: 3,
+            lg: 4,
+            xl: 5,
           },
+          gap: 1.5,
 
           background:
             "transparent",
@@ -921,7 +921,7 @@ export function Login() {
             }}
           />
 
-          <Box key={workMessage} sx={{ minHeight: 190, p: 2.25, borderRadius: 3, border: "1px solid", borderColor: colorMode === "dark" ? "rgba(255,255,255,.08)" : "rgba(16,33,27,.09)", background: colorMode === "dark" ? "linear-gradient(135deg,rgba(255,255,255,.05),rgba(255,255,255,.015))" : "linear-gradient(135deg,rgba(255,255,255,.70),rgba(255,255,255,.42))", backdropFilter: "blur(10px)", boxShadow: "0 18px 50px rgba(0,0,0,.16)", animation: "workMessageIn .55s ease both", "@keyframes workMessageIn": { from: { opacity: 0, transform: "translateY(8px)" }, to: { opacity: 1, transform: "translateY(0)" } } }}>
+          <Box key={workMessage} sx={{ minHeight: 0, p: 2, borderRadius: 3, border: "1px solid", borderColor: colorMode === "dark" ? "rgba(255,255,255,.08)" : "rgba(16,33,27,.09)", background: colorMode === "dark" ? "linear-gradient(135deg,rgba(255,255,255,.05),rgba(255,255,255,.015))" : "linear-gradient(135deg,rgba(255,255,255,.70),rgba(255,255,255,.42))", backdropFilter: "blur(10px)", boxShadow: "0 18px 50px rgba(0,0,0,.16)", animation: "workMessageIn .55s ease both", "@keyframes workMessageIn": { from: { opacity: 0, transform: "translateY(8px)" }, to: { opacity: 1, transform: "translateY(0)" } } }}>
             <Stack direction="row" spacing={1} sx={{ alignItems: "center", mb: 1.2 }}>
               <AutoGraphOutlined sx={{ color: aliareColors.green, fontSize: 19 }} />
               <Typography variant="caption" sx={{ color: aliareColors.green, fontWeight: 700, letterSpacing: ".085em", textTransform: "uppercase" }}>
@@ -948,7 +948,12 @@ export function Login() {
         </Box>
 
         {cooperativeNews.length > 0 && (
-          <Box sx={{ mt: 2.5, mb: 2, maxWidth: 540 }}>
+          <Box sx={{
+            mt: 0.5, mb: 0.5, maxWidth: 540, minHeight: 0, overflow: "hidden",
+            "@media (max-height: 860px)": { "& .cooperative-news-item:nth-of-type(n+3)": { display: "none" } },
+            "@media (max-height: 730px)": { "& .cooperative-news-item:nth-of-type(n+2)": { display: "none" } },
+            "@media (max-height: 630px)": { display: "none" },
+          }}>
             <Stack direction="row" spacing={1} sx={{ alignItems: "center", mb: 1 }}>
               <NewspaperOutlined sx={{ color: aliareColors.green, fontSize: 19 }} />
               <Typography variant="overline" sx={{ color: aliareColors.green, fontWeight: 800, letterSpacing: ".08em" }}>
@@ -957,12 +962,12 @@ export function Login() {
             </Stack>
             <Stack spacing={1}>
               {cooperativeNews.map((item) => (
-                <Box key={item.link} component="a" href={item.link} target="_blank" rel="noopener noreferrer"
-                  sx={{ display: "block", textDecoration: "none", color: "inherit", px: 1.5, py: 1.1,
+                <Box key={item.link} className="cooperative-news-item" component="a" href={item.link} target="_blank" rel="noopener noreferrer"
+                  sx={{ display: "block", textDecoration: "none", color: "inherit", px: 1.25, py: 0.8,
                     border: "1px solid", borderColor: "divider", borderRadius: 2,
                     bgcolor: "rgba(127,145,160,.05)", "&:hover": { borderColor: aliareColors.green } }}>
                   <Stack direction="row" spacing={1} sx={{ justifyContent: "space-between", alignItems: "flex-start" }}>
-                    <Typography variant="body2" sx={{ fontWeight: 650, lineHeight: 1.4 }}>{item.title}</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 650, lineHeight: 1.35, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{item.title}</Typography>
                     <OpenInNewOutlined sx={{ fontSize: 15, flexShrink: 0, opacity: .65 }} />
                   </Stack>
                   <Typography variant="caption" sx={{ opacity: .65 }}>
