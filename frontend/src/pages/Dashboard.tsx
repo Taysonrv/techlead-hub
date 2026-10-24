@@ -1165,7 +1165,7 @@ export function Dashboard() {
         </Box>
         <Chip label={`${cards.length} indicadores`} variant="outlined" size="small" />
       </Box>
-      <KpiGrid sx={{mb: 2.5}}>
+      <KpiGrid className="techlead-dashboard-kpis" sx={{ mb: 2.5 }}>
         {cards.map(
           (card) => (
             <KpiCard
@@ -1543,7 +1543,7 @@ export function Dashboard() {
               EVOLUÇÃO MENSAL POR CATEGORIA
           ============================================== */}
 
-          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", xl: "1fr 1fr" }, gap: 2, mb: 2 }}>
+          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "repeat(2, minmax(0, 1fr))" }, gap: 2, mb: 2 }}>
             <CardBase>
               <Box sx={{ textAlign: "center" }}><Typography sx={{ fontWeight: 850, fontSize: "1.05rem" }}>
                 Principais causas
@@ -1594,7 +1594,7 @@ export function Dashboard() {
             />
           </Box>
 
-          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", xl: "1fr 1fr" }, gap: 1.5 }}>
+          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "repeat(2, minmax(0, 1fr))" }, gap: 1.5 }}>
             <OperationalRankingCard
               title="Áreas de negócio"
               subtitle={`Área de negócio informada no Movidesk • cobertura ${businessAreaCoverage.filled}/${businessAreaCoverage.total} • sem fallback para Serviço`}
