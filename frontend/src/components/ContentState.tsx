@@ -1,4 +1,4 @@
-import { Box, Skeleton, Stack, Typography, useTheme } from "@mui/material";
+import { Box, Button, Skeleton, Stack, Typography, useTheme } from "@mui/material";
 import InboxOutlined from "@mui/icons-material/InboxOutlined";
 import ErrorOutlineOutlined from "@mui/icons-material/ErrorOutlineOutlined";
 
@@ -7,6 +7,10 @@ type ContentStateProps = {
   title?: string;
   description?: string;
   minHeight?: number;
+  onRetry?: () => void;
+  onEmptyAction?: () => void;
+  emptyActionLabel?: string;
+  errorDetail?: string;
 };
 
 export function ContentState({
@@ -14,6 +18,10 @@ export function ContentState({
   title,
   description,
   minHeight = 180,
+  onRetry,
+  onEmptyAction,
+  emptyActionLabel = "Limpar filtros",
+  errorDetail,
 }: ContentStateProps) {
   const theme = useTheme();
   const dark = theme.palette.mode === "dark";
@@ -40,7 +48,7 @@ export function ContentState({
           py: 2.5,
           border: "1px solid",
           borderColor: "divider",
-          borderRadius: "18px",
+          borderRadius: "var(--hub-radius-lg)",
           bgcolor: "background.paper",
         }}
       >
@@ -80,7 +88,7 @@ export function ContentState({
             ? "rgba(239,83,80,.42)"
             : "rgba(229,57,53,.28)"
           : "divider",
-        borderRadius: "12px",
+        borderRadius: "var(--hub-radius-lg)",
         background: dark
           ? "linear-gradient(145deg,rgba(9,30,44,.62),rgba(8,24,37,.52))"
           : "linear-gradient(145deg,rgba(248,250,252,.96),rgba(255,255,255,.96))",
@@ -113,6 +121,9 @@ export function ContentState({
         <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.45 }}>
           {description ?? defaults[1]}
         </Typography>
+        {error && onRetry ? <Button variant="contained" color="primary" onClick={onRetry}>Tentar novamente</Button> : null}
+        {!error && onEmptyAction ? <Button variant="outlined" onClick={onEmptyAction}>{emptyActionLabel}</Button> : null}
+        {error && errorDetail ? <Box component="details" sx={{ mt: 1, maxWidth: "100%", textAlign: "left" }}><Typography component="summary" variant="caption" sx={{ cursor: "pointer" }}>Detalhes técnicos</Typography><Typography component="pre" variant="caption" sx={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere", mt: 1 }}>{errorDetail}</Typography></Box> : null}
       </Stack>
     </Box>
   );
