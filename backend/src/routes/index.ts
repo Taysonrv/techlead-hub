@@ -62,6 +62,7 @@ import { coordinationRoutes } from "./coordination.routes";
 import { simerMapRoutes } from "./simer-map.routes";
 import { knownProblemRoutes } from "./known-problems.routes";
 import { intelligenceRoutes } from "./intelligence.routes";
+import { publicEnrichmentRoutes } from "./public-enrichment.routes";
 
 /* =========================================================
    ROUTER
@@ -119,6 +120,7 @@ routes.use("/api/coordination", coordinationRoutes);
 routes.use("/api/simer-map", simerMapRoutes);
 routes.use("/api/known-problems", knownProblemRoutes);
 routes.use("/api/intelligence", intelligenceRoutes);
+routes.use("/api/public-enrichment", publicEnrichmentRoutes);
 
 /* =========================================================
    ADMINISTRAÇÃO DE USUÁRIOS
