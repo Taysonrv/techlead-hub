@@ -1,3 +1,4 @@
+import { PublicClientEnrichment } from "../components/PublicIntegrations";
 import { KpiGrid } from "../components/KpiGrid";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
@@ -1630,6 +1631,8 @@ export function Clients() {
           />
         </Box>
       </Stack>
+
+      <PublicClientEnrichment />
 
       {/* =================================================
           FILTROS
