@@ -43,11 +43,9 @@ export function ExecutiveSection({
         overflow: "hidden",
         isolation: "isolate",
         borderColor: "divider",
-        borderRadius: "18px",
-        boxShadow: dark ? "0 16px 38px rgba(0,0,0,.17)" : "0 12px 34px rgba(15,23,42,.07)",
-        background: dark
-          ? "linear-gradient(145deg, rgba(11,34,50,.97), rgba(7,24,38,.99))"
-          : "linear-gradient(180deg,#FFFFFF,#FBFCFD)",
+        borderRadius: "var(--hub-radius-lg)",
+        boxShadow: "var(--hub-shadow-card)",
+        background: "var(--hub-surface)",
         "&::before": {
           content: '""',
           position: "absolute",
