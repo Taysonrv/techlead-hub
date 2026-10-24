@@ -10,7 +10,6 @@ import {
   CardContent,
   Checkbox,
   Chip,
-  CircularProgress,
   Divider,
   Drawer,
   FormControl,
@@ -47,6 +46,9 @@ import { api } from "../services/api";
 import { useFilters } from "../context/FiltersContext";
 import { PeriodFilter } from "../components/PeriodFilter";
 import { PageHeader } from "../components/PageHeader";
+import { AsyncState } from "../components/AsyncState";
+import { ContentState } from "../components/ContentState";
+import { StatusPill } from "../components/StatusPill";
 import { detailDrawerPaperSx } from "../theme/layoutTokens";
 import { KpiCard as ExecutiveKpiCard } from "../components/KpiCard";
 import { aliareColors } from "../theme/theme";
@@ -886,31 +888,16 @@ export function Attention() {
      LOADING / ERROR
   ===================================================== */
 
-  if (loading) {
+  if (loading || (error && tickets.length === 0)) {
     return (
-      <Box
-        sx={{
-          display: "flex",
-          justifyContent:
-            "center",
-          mt: 8,
-        }}
+      <AsyncState
+        status={loading ? "loading" : "error"}
+        data={tickets}
+        error={error}
+        loading={<ContentState kind="loading" title="Carregando pontos de atenção" minHeight={360} />}
       >
-        <CircularProgress
-          sx={{
-            color:
-              aliareColors.green,
-          }}
-        />
-      </Box>
-    );
-  }
-
-  if (error && tickets.length === 0) {
-    return (
-      <Alert severity="error">
-        {error}
-      </Alert>
+        {() => null}
+      </AsyncState>
     );
   }
 
@@ -1028,7 +1015,7 @@ export function Attention() {
                           <Typography variant="body2" sx={{ fontWeight: 650, lineHeight: 1.35 }}>{item.ownerTeam || item.area}</Typography>
                           <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>{item.owner || "Sem responsável"}</Typography>
                         </TableCell>
-                        <TableCell><Chip size="small" variant="outlined" color={item.hasClosureRequest ? "warning" : "default"} label={item.hasClosureRequest ? "Com indício" : "Sem indício"} sx={{ fontWeight: 650 }} /></TableCell>
+                        <TableCell><StatusPill tone={item.hasClosureRequest ? "warning" : "neutral"} label={item.hasClosureRequest ? "Com indício" : "Sem indício"} /></TableCell>
                         <TableCell><Chip size="small" variant="outlined" color={item.stillOpen ? "warning" : "success"} label={item.status} sx={{ fontWeight: 650 }} /></TableCell>
                         <TableCell>
                           <Typography variant="caption" sx={{ fontWeight: 650, display: "block" }}>{item.actionAuthor || "Não identificado"}</Typography>
