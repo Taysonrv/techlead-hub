@@ -645,15 +645,15 @@ export function Sidebar() {
               "column",
 
             background:
-              "linear-gradient(180deg, #0A0A0A 0%, #101312 52%, #0A0A0A 100%)",
+              "linear-gradient(180deg, #0b1827 0%, #10263a 52%, #091421 100%)",
 
             color:
               "#FFFFFF",
 
             borderRight:
-              "1px solid rgba(255,255,255,0.07)",
+              "1px solid rgba(141,198,224,0.16)",
             boxShadow:
-              "8px 0 24px rgba(0,0,0,0.08)",
+              "8px 0 32px rgba(0,0,0,0.16)",
 
             overflow:
               "hidden",
