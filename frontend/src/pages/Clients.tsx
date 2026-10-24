@@ -62,6 +62,7 @@ import { useFilters } from "../context/FiltersContext";
 import { PeriodFilter } from "../components/PeriodFilter";
 import { PageHeader } from "../components/PageHeader";
 import { ContentState } from "../components/ContentState";
+import { AsyncState } from "../components/AsyncState";
 import { StatusPill } from "../components/StatusPill";
 import { ExportTicketsButton } from "../components/ExportTicketsButton";
 import { detailDrawerPaperSx } from "../theme/layoutTokens";
@@ -1490,12 +1491,17 @@ export function Clients() {
      LOADING / ERROR
   ======================================================= */
 
-  if (loading) {
-    return <ContentState kind="loading" title="Carregando visão executiva" minHeight={360} />;
-  }
-
-  if (error && tickets.length === 0) {
-    return <ContentState kind="error" title="Não foi possível carregar" description="Não foi possível consultar os dados. Tente novamente em instantes." errorDetail={error} />;
+  if (loading || (error && tickets.length === 0)) {
+    return (
+      <AsyncState
+        status={loading ? "loading" : "error"}
+        data={tickets}
+        error={error}
+        loading={<ContentState kind="loading" title="Carregando visão executiva" minHeight={360} />}
+      >
+        {() => null}
+      </AsyncState>
+    );
   }
 
   /* =======================================================
