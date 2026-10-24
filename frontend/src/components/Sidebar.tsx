@@ -745,6 +745,7 @@ export function Sidebar() {
         ================================================= */}
 
         <Box
+          className="techlead-sidebar-identity"
           sx={{
             px:
               1.75,
@@ -982,11 +983,29 @@ export function Sidebar() {
         />
       </Box>
 
+      {user && (
+        <Box sx={{ px: sidebarCollapsed ? 1 : 1.5, pb: 1.1, pt: 0.8, borderTop: "1px solid rgba(255,255,255,.12)" }}>
+          <Button
+            fullWidth
+            title={user.name}
+            aria-label={`Abrir menu de perfil de ${user.name}`}
+            aria-haspopup="menu"
+            aria-expanded={profileMenuOpen}
+            onClick={handleOpenProfileMenu}
+            sx={{ minWidth: 0, px: sidebarCollapsed ? 0.5 : 1, py: 0.75, color: "#fff", justifyContent: sidebarCollapsed ? "center" : "flex-start", textTransform: "none", borderRadius: 2, "&:hover": { bgcolor: "rgba(255,255,255,.09)" } }}
+          >
+            <UserAvatar user={user} size={32} sx={{ backgroundColor: aliareColors.green, color: aliareColors.black }} />
+            {!sidebarCollapsed && <Typography noWrap sx={{ ml: 1.1, fontSize: ".78rem", fontWeight: 700, minWidth: 0 }}>{user.name}</Typography>}
+          </Button>
+        </Box>
+      )}
+
       {/* ===================================================
           RODAPÉ FIXO
       =================================================== */}
 
       <Box
+        className="techlead-sidebar-meta"
         sx={{
           flexShrink:
             0,
