@@ -1,3 +1,4 @@
+import { IntegrationDiagnosticsPanel } from "../components/IntegrationDiagnosticsPanel";
 import { KpiGrid } from "../components/KpiGrid";
 import { aliareColors } from "../theme/theme";
 import { KpiCard as ExecutiveKpiCard } from "../components/KpiCard";
@@ -768,6 +769,8 @@ export function Import({ embedded = false }: { embedded?: boolean }) {
       ===================================================== */}
 
       {!embedded && <PageHeader eyebrow="Gestão" title="Dados e Sincronizações" description="Central operacional das integrações Movidesk e Azure DevOps, com cargas automáticas, importações manuais e histórico de processamento." />}
+
+      <IntegrationDiagnosticsPanel />
 
       {syncHealth && (
         <Card elevation={0} sx={{ mb: 3, border: "1px solid", borderColor: syncHealth.health === "critical" ? "error.main" : syncHealth.health === "attention" ? "warning.main" : "divider", borderRadius: 2.5 }}>
