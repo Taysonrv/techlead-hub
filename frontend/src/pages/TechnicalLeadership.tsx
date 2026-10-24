@@ -1,4 +1,6 @@
 import { KpiGrid } from "../components/KpiGrid";
+import { AsyncState } from "../components/AsyncState";
+import { ContentState } from "../components/ContentState";
 import {
   Alert, Box, Button, Card, CardContent, Chip, CircularProgress, Drawer,
   FormControl, IconButton, InputLabel, MenuItem, Select, Stack, Tab, Tabs, Tooltip, Typography,
@@ -272,7 +274,7 @@ export function TechnicalLeadership() {
     } else navigate(`/tickets?movidesk=${item.movideskId}`);
   };
 
-  if (loading && !data) return <Box sx={{ minHeight: 420, display: "grid", placeItems: "center" }}><CircularProgress /></Box>;
+  if (!data && (loading || error)) return <AsyncState status={loading ? "loading" : "error"} data={data} error={error} loading={<ContentState kind="loading" title="Carregando liderança técnica" minHeight={420} />}>{() => null}</AsyncState>;
 
   return <Box sx={{
     minWidth: 0,
