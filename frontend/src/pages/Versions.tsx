@@ -75,6 +75,7 @@ import { InfoPopover, type InfoPopoverContent } from "../components/InfoPopover"
 import { subscribeTicketSnapshotRefresh } from "../services/ticketSnapshot";
 import { PageHeader } from "../components/PageHeader";
 import { ContentState } from "../components/ContentState";
+import { AsyncState } from "../components/AsyncState";
 import { useTheme } from "@mui/material/styles";
 import { ExecutiveSection } from "../components/ExecutiveSection";
 import { KpiCard as ExecutiveKpiCard } from "../components/KpiCard";
@@ -1437,8 +1438,17 @@ export function Versions() {
     );
   }
 
-  if (loading && !data) {
-    return <ContentState kind="loading" title="Carregando versões" minHeight={360} />;
+  if ((loading || error) && !data) {
+    return (
+      <AsyncState
+        status={loading ? "loading" : "error"}
+        data={data}
+        error={error}
+        loading={<ContentState kind="loading" title="Carregando versões" minHeight={360} />}
+      >
+        {() => null}
+      </AsyncState>
+    );
   }
 
   return (
