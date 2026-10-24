@@ -1124,7 +1124,9 @@ export function Dashboard() {
       p: 0,
       minHeight: "100vh",
       boxSizing: "border-box",
-      background: "transparent",
+      background: isDark
+        ? "radial-gradient(ellipse at 90% 0%, rgba(11,184,173,.065), transparent 44%)"
+        : "radial-gradient(ellipse at 90% 0%, rgba(23,129,229,.035), transparent 44%)",
       "& > *": {
         width: "100%",
         maxWidth: "100%",
