@@ -1115,7 +1115,7 @@ export function Dashboard() {
   ======================================================= */
 
   return (
-    <Box sx={{
+    <Box className="techlead-executive-dashboard" sx={{
       width: "100%",
       maxWidth: "100%",
       minWidth: 0,
@@ -2843,11 +2843,11 @@ function CardBase({
 
         borderColor: isDark ? "rgba(77,153,210,.24)" : "divider",
 
-        borderRadius: 3,
+        borderRadius: "var(--hub-radius-lg)",
 
         background: isDark
-          ? "linear-gradient(145deg, rgba(11,35,56,.98), rgba(7,25,43,.98))"
-          : "background.paper",
+          ? "linear-gradient(145deg, rgba(22,33,53,.98), rgba(8,36,47,.98))"
+          : "var(--hub-surface)",
 
         boxShadow: isDark
           ? "0 16px 38px rgba(0,0,0,.20), inset 0 1px rgba(255,255,255,.025)"
