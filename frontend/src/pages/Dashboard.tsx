@@ -519,41 +519,6 @@ export function Dashboard() {
     return result;
   }, [openedInPeriod, resolvedInPeriod, closedInPeriod, effectiveStartDate, effectiveEndDate]);
 
-  // Agrega o fluxo diário já auditado pelo período selecionado, sem novas consultas.
-  const monthlyFlow = useMemo(() => {
-    const months = new Map<string, { month: string; opened: number; resolved: number; closed: number }>();
-    dailyFlow.forEach((day) => {
-      const key = day.sortDate.slice(0, 7);
-      let current = months.get(key);
-      if (!current) {
-        const [year, month] = key.split("-").map(Number);
-        const label = new Intl.DateTimeFormat("pt-BR", { month: "short", year: "2-digit", timeZone: "UTC" })
-          .format(new Date(Date.UTC(year, month - 1, 1))).replace(".", "");
-        current = { month: label, opened: 0, resolved: 0, closed: 0 };
-        months.set(key, current);
-      }
-      current.opened += day.opened;
-      current.resolved += day.resolved;
-      current.closed += day.closed;
-    });
-    return [...months.values()];
-  }, [dailyFlow]);
-
-  const monthlyVariation = useMemo(() => {
-    if (monthlyFlow.length < 2) return null;
-    const current = monthlyFlow[monthlyFlow.length - 1];
-    const previous = monthlyFlow[monthlyFlow.length - 2];
-    const variation = (value: number, baseline: number): number | null =>
-      baseline === 0 ? null : ((value - baseline) / baseline) * 100;
-    return {
-      current,
-      previous,
-      opened: variation(current.opened, previous.opened),
-      resolved: variation(current.resolved, previous.resolved),
-      closed: variation(current.closed, previous.closed),
-    };
-  }, [monthlyFlow]);
-
   const canonicalCategory = (value?: string | null) => {
     const normalized = normalize(value ?? "");
     if (normalized === "adequacao") return "Adequação";
@@ -1227,85 +1192,6 @@ export function Dashboard() {
           )
         )}
       </KpiGrid>
-
-      {/* EVOLUÇÃO MENSAL — MESMA BASE E FILTRO DO FLUXO DIÁRIO */}
-      {monthlyFlow.length > 0 && (
-        <Card variant="outlined" sx={{ mb: 2.5, borderRadius: "var(--hub-radius-lg)", overflow: "hidden" }}>
-          <CardContent sx={{ p: { xs: 2, md: 2.5 }, "&:last-child": { pb: 2.5 } }}>
-            <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ justifyContent: "space-between", alignItems: { sm: "center" }, mb: 1.5 }}>
-              <Box>
-                <Typography variant="overline" sx={{ color: "primary.main", fontWeight: 850, letterSpacing: ".1em" }}>
-                  Histórico operacional
-                </Typography>
-                <Typography variant="h6" sx={{ fontWeight: 850, letterSpacing: "-.025em" }}>
-                  Evolução mensal dos tickets
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  Aberturas, resoluções e fechamentos agrupados pelo mês do evento, dentro do período selecionado.
-                </Typography>
-              </Box>
-              <Chip size="small" variant="outlined" label={`${monthlyFlow.length} mês(es)`} />
-            </Stack>
-            {monthlyVariation && (
-              <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(3, minmax(0, 1fr))" }, gap: 1.5, mb: 2 }}>
-                {([
-                  ["Abertos", "opened", semanticChartColors.normal],
-                  ["Resolvidos", "resolved", semanticChartColors.positive],
-                  ["Fechados", "closed", semanticChartColors.neutral],
-                ] as const).map(([label, key, color]) => {
-                  const percent = monthlyVariation[key];
-                  const current = monthlyVariation.current[key];
-                  const previous = monthlyVariation.previous[key];
-                  const direction = current > previous ? "Alta" : current < previous ? "Queda" : "Estável";
-                  return (
-                    <Box key={key} sx={{ p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: 2, minWidth: 0 }}>
-                      <Stack direction="row" spacing={1} sx={{ alignItems: "center", justifyContent: "space-between", flexWrap: "wrap" }}>
-                        <Typography variant="body2" sx={{ fontWeight: 750, color }}>{label}</Typography>
-                        <Chip size="small" variant="outlined" color={percent === null ? "default" : percent > 0 ? "info" : percent < 0 ? "warning" : "default"}
-                          label={percent === null ? "Sem base" : `${percent > 0 ? "+" : ""}${percent.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`} />
-                      </Stack>
-                      <Typography sx={{ fontWeight: 850, fontSize: "1.4rem", mt: 0.75 }}>{current.toLocaleString("pt-BR")}</Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        {direction} · anterior: {previous.toLocaleString("pt-BR")}
-                      </Typography>
-                    </Box>
-                  );
-                })}
-                <Typography variant="caption" color="text.secondary" sx={{ gridColumn: "1 / -1" }}>
-                  Comparação entre {monthlyVariation.previous.month} e {monthlyVariation.current.month}.
-                  {monthlyVariation.current.month} pode ser um mês parcial, conforme o filtro selecionado.
-                  Quando o mês anterior tem zero ocorrências, a variação percentual não é calculável.
-                </Typography>
-              </Box>
-            )}
-            <Box role="img" aria-label="Gráfico de barras da evolução mensal dos tickets abertos, resolvidos e fechados" sx={{ height: { xs: 280, sm: 320 }, minWidth: 0 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={monthlyFlow} margin={{ top: 10, right: 10, bottom: 8, left: -12 }} barCategoryGap="24%">
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={chartGrid} />
-                  <XAxis dataKey="month" tick={{ fill: chartTick, fontSize: 11 }} minTickGap={8} />
-                  <YAxis allowDecimals={false} tick={{ fill: chartTick, fontSize: 11 }} />
-                  <Tooltip contentStyle={chartTooltipStyle} formatter={(value, name) => [Number(value ?? 0).toLocaleString("pt-BR"), String(name)]} />
-                  <Bar dataKey="opened" name="Abertos" fill={semanticChartColors.normal} radius={[4, 4, 0, 0]} maxBarSize={30} />
-                  <Bar dataKey="resolved" name="Resolvidos" fill={semanticChartColors.positive} radius={[4, 4, 0, 0]} maxBarSize={30} />
-                  <Bar dataKey="closed" name="Fechados" fill={semanticChartColors.neutral} radius={[4, 4, 0, 0]} maxBarSize={30} />
-                </BarChart>
-              </ResponsiveContainer>
-            </Box>
-            <Stack direction="row" spacing={2} useFlexGap sx={{ mt: 1, flexWrap: "wrap", justifyContent: "center" }}>
-              {([
-                ["Abertos", semanticChartColors.normal],
-                ["Resolvidos", semanticChartColors.positive],
-                ["Fechados", semanticChartColors.neutral],
-              ] as const).map(([label, color]) => (
-                <Stack key={label} direction="row" spacing={0.75} sx={{ alignItems: "center" }}>
-                  <Box sx={{ width: 10, height: 10, borderRadius: 0.75, bgcolor: color }} />
-                  <Typography variant="caption" color="text.secondary">{label}</Typography>
-                </Stack>
-              ))}
-            </Stack>
-          </CardContent>
-        </Card>
-      )}
 
       {/* EVOLUÇÃO DE TICKETS — DESTAQUE EXECUTIVO */}
       {filteredTickets.length > 0 && (
