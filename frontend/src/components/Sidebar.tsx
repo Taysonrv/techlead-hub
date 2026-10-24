@@ -983,23 +983,6 @@ export function Sidebar() {
         />
       </Box>
 
-      {user && (
-        <Box sx={{ px: sidebarCollapsed ? 1 : 1.5, pb: 1.1, pt: 0.8, borderTop: "1px solid rgba(255,255,255,.12)" }}>
-          <Button
-            fullWidth
-            title={user.name}
-            aria-label={`Abrir menu de perfil de ${user.name}`}
-            aria-haspopup="menu"
-            aria-expanded={profileMenuOpen}
-            onClick={handleOpenProfileMenu}
-            sx={{ minWidth: 0, px: sidebarCollapsed ? 0.5 : 1, py: 0.75, color: "#fff", justifyContent: sidebarCollapsed ? "center" : "flex-start", textTransform: "none", borderRadius: 2, "&:hover": { bgcolor: "rgba(255,255,255,.09)" } }}
-          >
-            <UserAvatar user={user} size={32} sx={{ backgroundColor: aliareColors.green, color: aliareColors.black }} />
-            {!sidebarCollapsed && <Typography noWrap sx={{ ml: 1.1, fontSize: ".78rem", fontWeight: 700, minWidth: 0 }}>{user.name}</Typography>}
-          </Button>
-        </Box>
-      )}
-
       {/* ===================================================
           RODAPÉ FIXO
       =================================================== */}
@@ -1421,10 +1404,10 @@ function MenuSection({
           0.2,
       }}
     >
-      <ListItemButton aria-expanded={compact || open} onClick={onToggle} sx={{ display: compact ? "none" : undefined, minHeight: 36, px: 1.25, borderRadius: 1.5, color: open ? "rgba(255,255,255,.90)" : "rgba(255,255,255,.52)", bgcolor: open ? "rgba(255,255,255,.045)" : "transparent", "&:hover": { bgcolor: "rgba(255,255,255,.04)", color: "rgba(255,255,255,.82)" } }}>
+      {!compact && <ListItemButton aria-expanded={open} onClick={onToggle} sx={{ minHeight: 36, px: 1.25, borderRadius: 1.5, color: open ? "rgba(255,255,255,.90)" : "rgba(255,255,255,.52)", bgcolor: open ? "rgba(255,255,255,.045)" : "transparent", "&:hover": { bgcolor: "rgba(255,255,255,.04)", color: "rgba(255,255,255,.82)" } }}>
         <ListItemText primary={title} slotProps={{ primary: { sx: { fontSize: ".68rem", fontWeight: 650, letterSpacing: ".075em", textTransform: "uppercase" } } }} />
         {open ? <ExpandLessRounded sx={{ fontSize: 18, opacity: .7 }} /> : <ExpandMoreRounded sx={{ fontSize: 18, opacity: .7 }} />}
-      </ListItemButton>
+      </ListItemButton>}
 
       <Collapse in={compact || open} timeout="auto" unmountOnExit>
       <List
