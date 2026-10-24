@@ -1497,6 +1497,10 @@ export function Dashboard() {
       {filteredTickets.length >
         0 && (
         <>
+          <Box sx={{ mb: 1.5 }}>
+            <Typography variant="overline" sx={{ color: "primary.main", fontWeight: 850, letterSpacing: ".1em" }}>Distribuição e prioridades</Typography>
+            <Typography variant="h6" sx={{ fontWeight: 850, letterSpacing: "-.025em" }}>Análise do período</Typography>
+          </Box>
           {/* =============================================
               VISÃO ANALÍTICA PRINCIPAL
           ============================================== */}
@@ -1505,8 +1509,8 @@ export function Dashboard() {
             sx={{
               display: "grid",
               gridTemplateColumns: { xs: "1fr", lg: "repeat(2, minmax(0, 1fr))" },
-              gap: 2,
-              mb: 2,
+              gap: { xs: 1.5, md: 2.5 },
+              mb: 2.5,
             }}
           >
             <DonutAnalysisCard
