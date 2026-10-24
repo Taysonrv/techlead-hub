@@ -1256,7 +1256,7 @@ export function Dashboard() {
               <CardContent sx={{ height: "100%", display: "flex", flexDirection: "column", p: { xs: 2, md: 2.5 }, "&:last-child": { pb: 2.5 } }}>
                 <Typography variant="overline" sx={{ color: "primary.main", fontWeight: 850, letterSpacing: ".1em" }}>Leitura executiva</Typography>
                 <Typography variant="h6" sx={{ fontWeight: 850, mb: 0.5 }}>Fluxo do período</Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>Aberturas, resoluções e fechamentos do mesmo recorte apresentado nos indicadores.</Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>Resumo dos indicadores operacionais. O backlog é uma fotografia atual e pode incluir tickets de períodos anteriores.</Typography>
                 <Stack spacing={1.5} sx={{ flexGrow: 1 }}>
                   {cards.slice(0, 4).map((card) => (
                     <Box key={card.title} role={card.onClick ? "button" : undefined} tabIndex={card.onClick ? 0 : undefined}
