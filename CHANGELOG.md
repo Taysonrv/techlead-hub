@@ -22,6 +22,7 @@
 - Mapa SIMER: carregamento inicial da investigação migrado para `ContentState`, preservando o indicador de carregamento da árvore.
 - `ContentState` passa a utilizar tokens semânticos de superfície, borda e raio, melhorando consistência claro/escuro.
 - Diagnóstico preliminar do backend documentado em `docs/backend-evolution-diagnostic.md`, sem alterar API, schema ou dependências.
+- Segurança dos uploads Movidesk: validação preliminar de extensão e assinatura ZIP para XLSX e conteúdo inicial JSON antes de preview/importação; testes unitários adicionados.
 - Correção de propriedades duplicadas do tema MUI (TS1117) e documentação do carregamento inicial no Assistente de Análise; CI da correção aprovado.
 - Tema MUI centraliza estilos de tabelas (cabeçalhos fixos, números tabulares, hover, scroll contido) e chips por meio dos tokens semânticos.
 
