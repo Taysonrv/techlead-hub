@@ -134,45 +134,6 @@ export function createAppTheme(mode: PaletteMode = "light") {
           "::selection": { backgroundColor: dark ? "rgba(24,199,122,.32)" : aliareColors.greenLight, color: dark ? "#FFFFFF" : aliareColors.black },
         },
       },
-      MuiTableContainer: {
-        styleOverrides: {
-          root: {
-            maxWidth: "100%",
-            overflowX: "auto",
-            borderRadius: "var(--hub-radius-md)",
-            scrollbarWidth: "thin",
-          },
-        },
-      },
-      MuiTableCell: {
-        styleOverrides: {
-          root: {
-            fontVariantNumeric: "tabular-nums",
-            borderBottomColor: "var(--hub-border)",
-          },
-          head: {
-            position: "sticky",
-            top: 0,
-            zIndex: 1,
-            backgroundColor: "var(--hub-surface-raised)",
-            color: "var(--hub-text-secondary)",
-            fontWeight: 750,
-          },
-        },
-      },
-      MuiTableRow: {
-        styleOverrides: {
-          root: {
-            transition: "background-color var(--hub-motion-fast) ease",
-            "&.MuiTableRow-hover:hover": { backgroundColor: "var(--hub-surface-raised)" },
-          },
-        },
-      },
-      MuiChip: {
-        styleOverrides: {
-          root: { fontWeight: 650, borderRadius: "var(--hub-radius-sm)" },
-        },
-      },
       MuiCard: {
         styleOverrides: {
           root: {
@@ -355,7 +316,7 @@ export function createAppTheme(mode: PaletteMode = "light") {
         defaultProps: { size: "small" },
         styleOverrides: {
           root: {
-            borderRadius: 7,
+            borderRadius: "var(--hub-radius-sm)",
             minHeight: 25,
             fontWeight: 700,
             fontSize: ".78rem",
@@ -384,8 +345,9 @@ export function createAppTheme(mode: PaletteMode = "light") {
             "&::-webkit-scrollbar": { height: 9, width: 9 },
             "&::-webkit-scrollbar-track": { background: dark ? "#091827" : "#EEF1F3" },
             "&::-webkit-scrollbar-thumb": { background: dark ? "#31516E" : "#C7CDD3", borderRadius: 99 },
-            borderRadius: 14,
+            borderRadius: "var(--hub-radius-md)",
             border: `1px solid ${border}`,
+            maxWidth: "100%",
             overflowX: "auto",
             overscrollBehaviorX: "contain",
             ...(dark && { background: "linear-gradient(145deg,rgba(9,34,44,.94),rgba(6,25,36,.97))", boxShadow: "inset 0 1px rgba(255,255,255,.025), 0 12px 28px rgba(0,0,0,.10)" }),
@@ -396,6 +358,7 @@ export function createAppTheme(mode: PaletteMode = "light") {
         styleOverrides: {
           root: {
             borderBottomColor: border,
+            fontVariantNumeric: "tabular-nums",
             padding: "12px 16px",
             fontSize: ".85rem",
             lineHeight: 1.4,
@@ -406,6 +369,7 @@ export function createAppTheme(mode: PaletteMode = "light") {
       MuiTableRow: {
         styleOverrides: {
           root: {
+            transition: "background-color var(--hub-motion-fast) ease",
             "&:nth-of-type(even)": { backgroundColor: dark ? "rgba(112,160,207,.035)" : "rgba(15,23,42,.018)" },
             "&:hover": { backgroundColor: dark ? "rgba(24,199,122,.075)" : "rgba(24,199,122,.055)" },
             ...(dark && { transition: "background-color .14s ease, box-shadow .14s ease", "&:hover td:first-of-type": { boxShadow: "inset 2px 0 #18C77A" } }),
