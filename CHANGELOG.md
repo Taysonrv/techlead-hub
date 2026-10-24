@@ -18,6 +18,8 @@
 - Configurações e Usuários: estados de carregamento migrados para `ContentState`; demais módulos ainda exigem auditoria individual e homologação desktop.
 - Liderança Técnica e Central da Coordenação: estados iniciais de carregamento/erro padronizados; Coordenação mantém ação de tentar novamente e estado vazio contextual.
 - Base de Conhecimento: status de conexão com Wiki Azure padronizado via `StatusPill` e estado vazio via `ContentState`.
+- Central de Investigação: estados de início e ausência de correlações migrados para `ContentState`.
+- Mapa SIMER: carregamento inicial da investigação migrado para `ContentState`, preservando o indicador de carregamento da árvore.
 - Correção de propriedades duplicadas do tema MUI (TS1117) e documentação do carregamento inicial no Assistente de Análise; CI da correção aprovado.
 - Tema MUI centraliza estilos de tabelas (cabeçalhos fixos, números tabulares, hover, scroll contido) e chips por meio dos tokens semânticos.
 
