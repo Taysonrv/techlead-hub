@@ -1198,7 +1198,7 @@ export function Dashboard() {
         <Box sx={{ mb: 2.5 }}>
           <Typography variant="overline" sx={{ fontWeight: 850, color: "primary.main", letterSpacing: ".1em" }}>Tendência operacional</Typography>
           <Typography variant="h6" sx={{ fontWeight: 850, mb: 1, letterSpacing: "-.025em" }}>Evolução dos tickets</Typography>
-          <Box sx={{ my: 2 }}>
+          <Box className="techlead-dashboard-featured" sx={{ my: 2, display: "grid", gridTemplateColumns: { xs: "minmax(0, 1fr)", xl: "minmax(0, 1.85fr) minmax(280px, 1fr)" }, gap: 2, alignItems: "stretch" }}>
             <CardBase>
               <Stack direction={{ xs: "column", sm: "row" }} sx={{ justifyContent: "space-between", alignItems: "center", gap: 1 }}>
                 <Box sx={{ textAlign: "left" }}>
@@ -1252,6 +1252,25 @@ export function Dashboard() {
                 })}
               </Stack>
             </CardBase>
+            <Card variant="outlined" className="techlead-dashboard-featured-summary" sx={{ minWidth: 0, height: "100%", borderRadius: "var(--hub-radius-lg)", bgcolor: "background.paper" }}>
+              <CardContent sx={{ height: "100%", display: "flex", flexDirection: "column", p: { xs: 2, md: 2.5 }, "&:last-child": { pb: 2.5 } }}>
+                <Typography variant="overline" sx={{ color: "primary.main", fontWeight: 850, letterSpacing: ".1em" }}>Leitura executiva</Typography>
+                <Typography variant="h6" sx={{ fontWeight: 850, mb: 0.5 }}>Fluxo do período</Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>Aberturas, resoluções e fechamentos do mesmo recorte apresentado nos indicadores.</Typography>
+                <Stack spacing={1.5} sx={{ flexGrow: 1 }}>
+                  {cards.slice(0, 4).map((card) => (
+                    <Box key={card.title} role={card.onClick ? "button" : undefined} tabIndex={card.onClick ? 0 : undefined}
+                      onClick={card.onClick}
+                      onKeyDown={(event) => { if (card.onClick && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); card.onClick(); } }}
+                      sx={{ p: 1.4, borderRadius: 2, border: "1px solid", borderColor: "divider", cursor: card.onClick ? "pointer" : "default", minWidth: 0, "&:hover": { borderColor: "primary.main" }, "&:focus-visible": { outline: "2px solid", outlineColor: "primary.main", outlineOffset: 2 } }}>
+                      <Typography variant="caption" color="text.secondary" sx={{ display: "block", fontWeight: 700 }}>{card.title}</Typography>
+                      <Typography sx={{ fontWeight: 850, fontSize: "1.45rem", fontVariantNumeric: "tabular-nums", lineHeight: 1.3 }}>{card.value}</Typography>
+                    </Box>
+                  ))}
+                </Stack>
+                <Typography variant="caption" color="text.secondary" sx={{ mt: 1.5 }}>Selecione um indicador para abrir os tickets relacionados.</Typography>
+              </CardContent>
+            </Card>
           </Box>
 
         </Box>
@@ -1508,6 +1527,7 @@ export function Dashboard() {
           ============================================== */}
 
           <Box
+            className="techlead-dashboard-analysis-grid"
             sx={{
               display: "grid",
               gridTemplateColumns: { xs: "1fr", lg: "repeat(2, minmax(0, 1fr))" },
