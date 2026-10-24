@@ -30,6 +30,8 @@ import {
   BugReportOutlined,
   ConfirmationNumberOutlined,
   ExpandMoreRounded,
+  ChevronLeftRounded,
+  ChevronRightRounded,
   ExpandLessRounded,
   InfoOutlined,
   Inventory2Outlined,
@@ -143,6 +145,18 @@ export function Sidebar() {
   } =
     useAuth();
   const userId = user?.id ?? null;
+
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    try { return window.localStorage.getItem("techlead-hub.sidebar-collapsed") === "true"; }
+    catch { return false; }
+  });
+  const toggleSidebar = () => {
+    setSidebarCollapsed((previous) => {
+      const next = !previous;
+      try { window.localStorage.setItem("techlead-hub.sidebar-collapsed", String(next)); } catch { /* armazenamento opcional */ }
+      return next;
+    });
+  };
 
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [chatUnread, setChatUnread] = useState(0);
@@ -623,17 +637,18 @@ export function Sidebar() {
     <>
       <Drawer
       variant="permanent"
+      className={sidebarCollapsed ? "techlead-sidebar techlead-sidebar--collapsed" : "techlead-sidebar"}
       sx={{
-        width:
-          drawerWidth,
+        width: sidebarCollapsed ? 76 : drawerWidth,
 
         flexShrink:
           0,
+        transition: "width 180ms ease",
 
         "& .MuiDrawer-paper":
           {
-            width:
-              drawerWidth,
+            width: sidebarCollapsed ? 76 : drawerWidth,
+            transition: "width 180ms ease",
 
             boxSizing:
               "border-box",
@@ -660,6 +675,19 @@ export function Sidebar() {
           },
       }}
     >
+      <Box sx={{ display: "flex", justifyContent: sidebarCollapsed ? "center" : "flex-end", px: 1, pt: 1 }}>
+        <IconButton
+          size="small"
+          onClick={toggleSidebar}
+          aria-label={sidebarCollapsed ? "Expandir menu lateral" : "Recolher menu lateral"}
+          title={sidebarCollapsed ? "Expandir menu lateral" : "Recolher menu lateral"}
+          aria-expanded={!sidebarCollapsed}
+          sx={{ color: "rgba(255,255,255,.8)", border: "1px solid rgba(255,255,255,.14)", borderRadius: 2, "&:hover": { bgcolor: "rgba(255,255,255,.10)" } }}
+        >
+          {sidebarCollapsed ? <ChevronRightRounded fontSize="small" /> : <ChevronLeftRounded fontSize="small" />}
+        </IconButton>
+      </Box>
+
       {/* ===================================================
           CONTEÚDO ROLÁVEL
       =================================================== */}
@@ -901,6 +929,7 @@ export function Sidebar() {
           title="Operação"
           ariaLabel="Navegação de operação"
           items={movementMenu}
+          compact={sidebarCollapsed}
           open={openSections.movimentos}
           onToggle={() => setOpenSections((current) => ({ ...current, movimentos: !current.movimentos }))}
         />
@@ -1345,12 +1374,14 @@ function MenuSection({
   items,
   open,
   onToggle,
+  compact = false,
 }: {
   title: string;
   ariaLabel: string;
   items: MenuItemData[];
   open: boolean;
   onToggle: () => void;
+  compact?: boolean;
 }) {
   if (
     items.length === 0
@@ -1371,12 +1402,12 @@ function MenuSection({
           0.2,
       }}
     >
-      <ListItemButton aria-expanded={open} onClick={onToggle} sx={{ minHeight: 36, px: 1.25, borderRadius: 1.5, color: open ? "rgba(255,255,255,.90)" : "rgba(255,255,255,.52)", bgcolor: open ? "rgba(255,255,255,.045)" : "transparent", "&:hover": { bgcolor: "rgba(255,255,255,.04)", color: "rgba(255,255,255,.82)" } }}>
+      <ListItemButton aria-expanded={compact || open} onClick={onToggle} sx={{ display: compact ? "none" : undefined, minHeight: 36, px: 1.25, borderRadius: 1.5, color: open ? "rgba(255,255,255,.90)" : "rgba(255,255,255,.52)", bgcolor: open ? "rgba(255,255,255,.045)" : "transparent", "&:hover": { bgcolor: "rgba(255,255,255,.04)", color: "rgba(255,255,255,.82)" } }}>
         <ListItemText primary={title} slotProps={{ primary: { sx: { fontSize: ".68rem", fontWeight: 650, letterSpacing: ".075em", textTransform: "uppercase" } } }} />
         {open ? <ExpandLessRounded sx={{ fontSize: 18, opacity: .7 }} /> : <ExpandMoreRounded sx={{ fontSize: 18, opacity: .7 }} />}
       </ListItemButton>
 
-      <Collapse in={open} timeout="auto" unmountOnExit>
+      <Collapse in={compact || open} timeout="auto" unmountOnExit>
       <List
         disablePadding
         sx={{
