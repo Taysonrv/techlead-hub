@@ -8,13 +8,14 @@ type Props = {
 
 export function ConversationListSearch({ value, onChange }: Props) {
   return (
-    <Box sx={{ px: 1.25, pb: 1 }}>
+    <Box sx={{ px: 1.75, pb: 1.75 }}>
       <TextField
         size="small"
         fullWidth
+        sx={{ "& .MuiOutlinedInput-root": { borderRadius: 5, bgcolor: "action.hover", "& fieldset": { borderColor: "transparent" }, "&:hover fieldset": { borderColor: "divider" } } }}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        placeholder="Buscar conversa..."
+        placeholder="Pesquisar pessoas ou canais"
         slotProps={{ input: { startAdornment: <SearchOutlined sx={{ mr: .7, fontSize: 18, color: "text.secondary" }} /> } }}
         aria-label="Buscar conversa"
       />
