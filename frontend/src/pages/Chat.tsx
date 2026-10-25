@@ -185,9 +185,10 @@ export function Chat() {
   }, [searchParams, setSearchParams, user?.id]);
 
   const loadMessages = useCallback(async (channelId: number, quiet = false) => {
-    messageRequest.current?.abort();
+    // SSE/polling refreshes must not cancel an in-flight initial history load.
+    if (!quiet) messageRequest.current?.abort();
     const controller = new AbortController();
-    messageRequest.current = controller;
+    if (!quiet) messageRequest.current = controller;
     try {
       if (!quiet) setLoading(true);
       const response = await api.get<{ messages: Message[] }>(`/chat/channels/${channelId}/messages`, { signal: controller.signal });
