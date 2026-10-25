@@ -24,7 +24,7 @@ A implementação foi iniciada na branch `feat/chat-war-room`, derivada de `feat
 - A implementação atual mantém anexos em mensagens legadas, pois sua migração para tabela/armazenamento separado ainda não foi concluída.
 - SSE funciona por processo único; implantação com múltiplas réplicas precisará de Redis/pub-sub compartilhado.
 - O campo `clientMessageId` previne duplicatas quando repetido pelo cliente, mas ainda faltam testes concorrentes e estratégia completa de retry.
-- O chat original permanece em arquivo grande. Extração de componentes e hooks, paginação infinita/virtualização, pesquisa multi-canal e indexação de busca, painel contextual com dados vivos com dados vivos, métricas e layout de três colunas completo **continuam pendentes**.
+- O chat original permanece em arquivo grande. Extração de componentes e hooks, paginação infinita/virtualização, pesquisa multi-canal e indexação de busca, painel contextual com dados vivos, métricas e layout de três colunas completo **continuam pendentes**.
 - Não há captura Playwright de antes/depois nem homologação real em claro/escuro, por ausência de navegador autenticado conectado neste ambiente.
 - Permissões de visualização dos dados de tickets/tarefas precisam ser integradas à política de escopo operacional antes de expor painel detalhado ou sugerir membros automaticamente.
 
@@ -53,3 +53,11 @@ Validar em banco de homologação: mensagens antigas, sala já existente, sala n
 ## Revisão da evolução visual (25/10/2026)
 
 O usuário relatou commit local `ff20d42` na branch `feat/evolucao-visual-design-system`, contendo Inter auto-hospedada, KpiGrid balanceado, tokens de raio e aviso recolhível em Tickets. **A branch não está publicada no GitHub remoto** na data da verificação; portanto, não houve inspeção do diff, cherry-pick nem integração. O typecheck foi informado pelo usuário, não reproduzido aqui. Permanecem pendentes build, lint, screenshots e os itens visuais mencionados pelo usuário. Evitar sobrescrever esses arquivos até disponibilizar o commit remoto.
+
+## Diagnóstico de continuidade (25/10/2026)
+
+- O pipeline de imagem Docker do commit `f9947598` falhou por TypeScript TS2345 em `backend/src/routes/cooperative-news.routes.ts` (grupo opcional da expressão regular). Correção mínima enviada no commit `fdd5add6`, aplicando `match[1] ?? ""`; aguarda validação na próxima CI.
+- A análise do SSE detectou que `chat.routes.ts` declara `sequence`, mas os snapshots enviados não têm campo `id:` e não há replay de `Last-Event-ID`. A publicação em memória acelera o refresh, porém não garante entrega de eventos durante desconexões. Manter isso como pendência real, sem descrever o requisito como concluído.
+- `Chat.tsx` ainda contém a maior parte das telas e regras; separar por componentes/hooks em alterações posteriores com testes, sem alterar o comportamento legado.
+- O painel lateral atual apresenta metadados do canal e atalhos; dados operacionais vivos, segregação por escopo do ticket e gerenciamento seguro de participantes ainda não foram homologados.
+- A branch permanece isolada da `main`; não fazer merge antes da validação de build, migrations, testes e autorização de acesso.
