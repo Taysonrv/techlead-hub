@@ -3,7 +3,7 @@ import { Box, Button, Chip, IconButton, Stack, TextField, Tooltip, Typography } 
 import type { Channel, Presence } from "./chatTypes";
 
 type Props = {
-  selected: Channel | undefined;
+  selected: Channel | null | undefined;
   selectedPresence: Presence | undefined;
   presence: Presence[];
   messageSearch: string;
