@@ -209,7 +209,7 @@ export function Chat() {
     } catch (requestError: any) {
       if (!controller.signal.aborted && !quiet) setError(requestError?.response?.data?.error || "Não foi possível carregar a conversa.");
     } finally {
-      if (!controller.signal.aborted) setLoading(false);
+      if (!quiet && !controller.signal.aborted) setLoading(false);
     }
   }, [markRead]);
 
