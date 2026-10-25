@@ -61,3 +61,15 @@ O usuário relatou commit local `ff20d42` na branch `feat/evolucao-visual-design
 - `Chat.tsx` ainda contém a maior parte das telas e regras; separar por componentes/hooks em alterações posteriores com testes, sem alterar o comportamento legado.
 - O painel lateral atual apresenta metadados do canal e atalhos; dados operacionais vivos, segregação por escopo do ticket e gerenciamento seguro de participantes ainda não foram homologados.
 - A branch permanece isolada da `main`; não fazer merge antes da validação de build, migrations, testes e autorização de acesso.
+
+
+## Atualização: extração do Composer e anexos persistidos (25/10/2026)
+
+- O Composer foi extraído para `frontend/src/components/chat/Composer.tsx`, mantendo as ações existentes e o envio de eventos de digitação na página.
+- Nova migração `20261025190000_chat_secure_attachments`: tabela `ChatAttachment` com canal, mensagem, nome, MIME, tamanho, SHA-256 e binário `BYTEA` no PostgreSQL.
+- Novos uploads: validação de tamanho (8 MB), lista de MIME, assinaturas básicas para PDF/imagens/ZIP e persistência transacional. A mensagem recebe `kind=ATTACHMENT` e deixa de carregar Base64 no campo `content`.
+- Download: `GET /chat/channels/:channelId/attachments/:messageId` com checagem de pertencimento e `Content-Disposition: attachment`; frontend solicita o binário via API autenticada.
+- Anexos legados `[anexo]` continuam renderizados sem migração destrutiva.
+- **Limitações:** upload ainda trafega Base64 no JSON HTTP; armazenamento é no banco, não objeto externo; validação por assinatura não substitui antivírus; não há testes de integração executados nesta sessão.
+- **Antes de executar o novo backend:** `cd backend && npx prisma migrate deploy && npx prisma generate && npm run build`. No frontend: `npm run lint && npm run build`.
+- **Ainda pendente:** hooks, virtualização, SSE replay completo, contexto vivo, comandos, handoff, notificações, responsividade definitiva, screenshots e testes de segurança/performance. A missão integral permanece aberta.
