@@ -83,6 +83,8 @@ export function Chat() {
   const [maintenanceMessage, setMaintenanceMessage] = useState("");
   const theme = useTheme();
   const compactContext = useMediaQuery(theme.breakpoints.down("lg"));
+  const wideContext = useMediaQuery(theme.breakpoints.up("xl"));
+  const [widePanelVisible, setWidePanelVisible] = useState(true);
   const [conversationInfoOpen, setConversationInfoOpen] = useState(false);
   const [incidentActionsOpen, setIncidentActionsOpen] = useState(false);
   const [historySearchOpen, setHistorySearchOpen] = useState(false);
@@ -96,6 +98,7 @@ export function Chat() {
   useEffect(() => () => { if (typingTimer.current) window.clearTimeout(typingTimer.current); }, []);
 
   const selected = useMemo(() => channels.find((channel) => channel.id === selectedId) ?? null, [channels, selectedId]);
+  const showSidePanel = Boolean(selected) && (conversationInfoOpen || selected?.type === "CONTEXT" || (selected?.type === "TEAM" && teamPanelOpen) || (wideContext && widePanelVisible));
   const selectConversation = useCallback((channelId: number) => { setSelectedId(channelId); setMobileConversationOpen(true); }, []);
   const backToConversations = useCallback(() => { setMobileConversationOpen(false); setConversationInfoOpen(false); }, []);
   const selectedPeer = useMemo(() => selected?.type === "DIRECT" ? selected.members?.map((member) => member.user).find((person) => person.id !== user?.id) : null, [selected, user?.id]);
@@ -787,10 +790,10 @@ export function Chat() {
       gridTemplateColumns: {
         xs: "minmax(0, 1fr)",
         md: "276px minmax(0, 1fr)",
-        lg: (conversationInfoOpen || selected?.type === "CONTEXT" || (selected?.type === "TEAM" && teamPanelOpen))
+        lg: showSidePanel
           ? "284px minmax(0, 1fr) 276px"
           : "284px minmax(0, 1fr)",
-        xl: (conversationInfoOpen || selected?.type === "CONTEXT" || (selected?.type === "TEAM" && teamPanelOpen))
+        xl: showSidePanel
           ? "300px minmax(0, 1fr) 310px"
           : "300px minmax(0, 1fr)",
       },
@@ -823,7 +826,7 @@ export function Chat() {
       </Box>
       <Box sx={{ display: { xs: mobileConversationOpen ? "flex" : "none", md: "flex" }, flexDirection: "column", minWidth: 0, minHeight: 0, overflow: "hidden", borderRadius: 0, bgcolor: "background.paper" }}>
         <Box sx={{ display: { xs: "flex", md: "none" }, alignItems: "center", gap: 1, px: 1, py: .5, borderBottom: "1px solid", borderColor: "divider" }}><IconButton aria-label="Voltar para conversas" onClick={backToConversations}><ArrowBackRounded /></IconButton><Typography variant="body2" color="text.secondary">Conversas</Typography></Box>
-        <ConversationHeader selected={selected} selectedPresence={selectedPresence} presence={presence} messageSearch={messageSearch} onMessageSearch={setMessageSearch} onOpenActions={() => setIncidentActionsOpen(true)} onSearchHistory={() => setHistorySearchOpen(true)} onOpenOrigin={(contextType, contextId) => navigate(contextType === "TICKET" ? `/operacao/tickets?movidesk=${encodeURIComponent(contextId)}` : `/correcoes?task=${encodeURIComponent(contextId)}`)} teamPanelOpen={teamPanelOpen} onToggleTeamPanel={() => setTeamPanelOpen((value) => !value)} conversationInfoOpen={conversationInfoOpen} onToggleConversationInfo={() => setConversationInfoOpen((value) => !value)} onOpenMenu={setConversationMenuAnchor} />
+        <ConversationHeader selected={selected} selectedPresence={selectedPresence} presence={presence} messageSearch={messageSearch} onMessageSearch={setMessageSearch} onOpenActions={() => setIncidentActionsOpen(true)} onSearchHistory={() => setHistorySearchOpen(true)} onOpenOrigin={(contextType, contextId) => navigate(contextType === "TICKET" ? `/operacao/tickets?movidesk=${encodeURIComponent(contextId)}` : `/correcoes?task=${encodeURIComponent(contextId)}`)} teamPanelOpen={teamPanelOpen} onToggleTeamPanel={() => setTeamPanelOpen((value) => !value)} conversationInfoOpen={wideContext ? showSidePanel : conversationInfoOpen} onToggleConversationInfo={() => { if (wideContext) { setWidePanelVisible((value) => !value); setConversationInfoOpen(false); } else setConversationInfoOpen((value) => !value); }} onOpenMenu={setConversationMenuAnchor} />
         <Divider />
         <Box ref={messagesRef} onScroll={handleMessagesScroll} sx={{ position: "relative", flex: "1 1 0", height: 0, minHeight: 0, overflowY: "auto", overflowX: "hidden", overscrollBehavior: "contain", p: { xs: 1.25, md: 1.75 }, scrollbarWidth: "thin", "&::-webkit-scrollbar": { width: 7 }, "&::-webkit-scrollbar-thumb": { bgcolor: "action.disabled", borderRadius: 8 }, "&::-webkit-scrollbar-track": { bgcolor: "transparent" }, bgcolor: "background.paper" }}>
           {!selected && !loading && <Stack spacing={2} sx={{ height: "100%", alignItems: "center", justifyContent: "center", textAlign: "center", px: 3 }}>
@@ -843,7 +846,7 @@ export function Chat() {
         {replyTo && <Stack direction="row" sx={{ px: 1.5, py: .7, alignItems: "center", justifyContent: "space-between", bgcolor: "action.hover", borderTop: "1px solid", borderColor: "divider" }}><Box><Typography variant="caption" sx={{ fontWeight: 850 }}>Respondendo a {replyTo.author.name}</Typography><Typography variant="caption" color="text.secondary" noWrap sx={{ display: "block", maxWidth: 620 }}>{replyTo.content}</Typography></Box><IconButton size="small" onClick={() => setReplyTo(null)}><CloseOutlined fontSize="small" /></IconButton></Stack>}
         <Composer channelId={selectedId} channelType={selected?.type} content={content} sending={sending} uploadingAttachment={uploadingAttachment} soundEnabled={soundEnabled} attachmentInputRef={attachmentInputRef} onAttach={(file) => void sendAttachment(file)} onOpenEmoji={setEmojiAnchor} onOpenStickers={() => setStickersOpen(true)} onOpenQuickActions={setQuickActionsAnchor} onToggleSound={() => { const next = !soundEnabled; setSoundEnabled(next); localStorage.setItem("techlead-chat-sound", next ? "on" : "off"); if ("Notification" in window && Notification.permission === "default") void Notification.requestPermission(); }} onContentChange={(value) => { setContent(value); if (selectedId && Date.now() - typingSentAt.current > 2500) { typingSentAt.current = Date.now(); void api.post(`/chat/channels/${selectedId}/typing`, { active: true }).catch(() => undefined); } if (typingTimer.current) window.clearTimeout(typingTimer.current); typingTimer.current = window.setTimeout(() => { if (selectedId) void api.post(`/chat/channels/${selectedId}/typing`, { active: false }).catch(() => undefined); }, 1200); }} onSend={() => void send()} />
       </Box>
-      {(conversationInfoOpen || selected?.type === "CONTEXT" || (selected?.type === "TEAM" && teamPanelOpen)) && selected && <Box sx={{ display: { xs: "none", lg: "block" }, border: "1px solid", borderColor: "divider", borderRadius: 3, p: 1.6, overflowY: "auto", my: .1, bgcolor: "background.default" }}>
+      {showSidePanel && selected && <Box sx={{ display: { xs: "none", lg: "block" }, border: "1px solid", borderColor: "divider", borderRadius: 3, p: 1.6, overflowY: "auto", my: .1, bgcolor: "background.paper", borderLeft: "1px solid", borderRight: 0, borderTop: 0, borderBottom: 0, borderRadius: 0, my: 0 }}>
         <Stack spacing={2}>
           <Box sx={{ textAlign: "center", pt: 1 }}>
             <Box sx={{ width: 64, height: 64, mx: "auto", mb: 1, borderRadius: "50%", bgcolor: "primary.main", color: "primary.contrastText", display: "grid", placeItems: "center", fontSize: "1.35rem", fontWeight: 950, boxShadow: "0 10px 24px rgba(24,199,122,.18)" }}>{selected.name.slice(0,1).toUpperCase()}</Box>
