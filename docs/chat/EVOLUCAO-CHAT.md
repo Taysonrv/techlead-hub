@@ -168,3 +168,14 @@ O usuário relatou commit local `ff20d42` na branch `feat/evolucao-visual-design
 - Refresh de mensagens em segundo plano não cancela o carregamento inicial nem altera indevidamente o indicador de carregamento.
 - **Não homologado:** é obrigatório executar `npm run lint`, `npm run build` e `npm run test` no frontend e verificar manualmente reconexão, status de digitação, leitura e troca de canais.
 - **Ainda pendente:** refatoração integral da página, testes de integração automatizados, replay SSE `Last-Event-ID`, virtualização, integrações com tickets/tarefas e workflows operacionais completos.
+
+
+## Bloco maior — extração de histórico e envio (25/10/2026)
+
+- `useChatHistory.ts`: gerenciamento de mensagens, carregamento inicial, sincronização silenciosa, paginação por cursor, preservação da posição de leitura, indicador de novas mensagens e cancelamento de requisições ao trocar de conversa.
+- Carregamentos de histórico, páginas anteriores e atualizações silenciosas usam controladores independentes; respostas de um canal anteriormente selecionado não alteram a conversa atual.
+- A mesclagem de mensagens é feita por ID para evitar duplicações entre páginas e atualizações.
+- `useChatSend.ts`: envio de texto com `clientMessageId` idempotente, proteção contra envios simultâneos, resposta descartada após troca de canal e preservação do rascunho em caso de falha.
+- A página mantém o indicador de envio compartilhado com emojis e figurinhas; busca e resposta em andamento são limpas ao alternar conversas.
+- **Validação pendente:** `npm run lint`, `npm run build` e `npm run test`; cenários manuais com 100+ mensagens, troca rápida de canal, falha de envio, reconexão e envio de emoji/figurinha.
+- **Limites:** não há ainda envio otimista de mensagens, virtualização, testes de integração de UI nem replay persistente de SSE. Integração viva Movidesk/Azure e passagem de turno estruturada continuam pendentes.
