@@ -93,6 +93,9 @@ const techLeadHubApi = {
     get: async () =>
       ipcRenderer.invoke("configuration:get"),
 
+    diagnoseDatabase: async (databaseUrl: string): Promise<{ ok: boolean; message: string }> =>
+      ipcRenderer.invoke("configuration:diagnose-database", databaseUrl),
+
     importEnv: async (): Promise<ConfigurationInput | null> =>
       ipcRenderer.invoke("configuration:import-env"),
 
