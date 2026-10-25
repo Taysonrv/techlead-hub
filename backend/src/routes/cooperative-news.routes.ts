@@ -33,7 +33,7 @@ cooperativeNewsRoutes.get("/cooperatives", async (_req, res) => {
     const xml = await response.text();
     if (xml.length > 300_000) throw new Error("Feed excedeu o limite");
     const items = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)].slice(0, 8).map((match) => {
-      const body = match[1];
+      const body = match[1] ?? "";
       const link = field(body, "link");
       const title = field(body, "title");
       const published = field(body, "pubDate");
