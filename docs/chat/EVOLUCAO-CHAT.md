@@ -100,3 +100,13 @@ O usuário relatou commit local `ff20d42` na branch `feat/evolucao-visual-design
 - Abertura por conversa direta, criação de canal, sala contextual e aviso de nova mensagem também navega para a conversa no mobile.
 - Layout desktop `md+` mantém lista e mensagens lado a lado; o painel contextual responsivo permanece disponível.
 - **Pendente:** teste local `npm run lint && npm run build`, validação manual nos breakpoints e testes E2E.
+
+
+## Evolução visual — mensagens e participantes (25/10/2026)
+
+- Mensagens agora têm avatar com iniciais reais do autor, nome e horário na primeira mensagem de cada sequência.
+- Mensagens consecutivas do mesmo autor, com intervalo inferior a cinco minutos e na mesma data, são agrupadas visualmente; a data sempre reinicia o agrupamento.
+- Área de leitura centralizada com largura máxima de 1120px; balões de largura adaptativa, superfície suave e ações de responder/fixar acessíveis.
+- Menções, anexos persistidos e legados, respostas e cards operacionais continuam suportados.
+- Os avatares usam iniciais, não fotografias: o modelo atual de usuário não fornece URL de foto.
+- **Validação pendente:** lint, build e revisão manual em temas claro/escuro, mobile e histórico longo.
