@@ -1,5 +1,4 @@
 import { KpiGrid } from "../components/KpiGrid";
-import { AsyncState } from "../components/AsyncState";
 import { ContentState } from "../components/ContentState";
 import {
   Alert, Box, Button, Card, CardContent, Chip, Drawer,
@@ -288,7 +287,6 @@ export function TechnicalLeadership() {
 
   if (!data && loading) return <ContentState kind="loading" title="Carregando liderança técnica" minHeight={420} />;
   if (!data && error) return <Stack spacing={2}><Alert severity="error">{error}</Alert><Button variant="contained" onClick={() => setRefreshVersion((value) => value + 1)}>Tentar novamente</Button></Stack>;
-  if (!data && period === "custom") return <Alert severity="info">Informe uma data inicial e final válidas para carregar a análise. A data inicial não pode ser posterior à final.</Alert>;
 
   return <Box sx={{
     minWidth: 0,
@@ -302,6 +300,7 @@ export function TechnicalLeadership() {
       action={<Stack direction="row" spacing={1}><Chip icon={<RadarOutlined />} label={`${attention} sinais de atenção`} color={attention ? "warning" : "success"} sx={{ fontWeight: 850, boxShadow: attention ? "0 0 22px rgba(255,167,38,.18)" : "0 0 22px rgba(0,199,142,.18)" }} /></Stack>}
     />
 
+    {period === "custom" && (!customStart || !customEnd || customStart > customEnd) && <Alert severity="info" sx={{ mb: 2 }}>Informe um intervalo personalizado válido: data inicial e final obrigatórias, com início anterior ou igual ao fim.</Alert>}
     {error && <Alert severity="error" sx={{ mb: 2 }} action={<Button size="small" color="inherit" onClick={() => setRefreshVersion((value) => value + 1)}>Recarregar</Button>}>{error}</Alert>}
     {indicatorErrors.length > 0 && <Alert severity="warning" sx={{ mb: 2 }} action={<Button size="small" color="inherit" onClick={() => setRefreshVersion((value) => value + 1)}>Tentar novamente</Button>}>Não foi possível atualizar {indicatorErrors.length} gráfico(s) com período individual. Os dados gerais permanecem disponíveis.</Alert>}
 
