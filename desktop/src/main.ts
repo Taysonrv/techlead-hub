@@ -2074,8 +2074,8 @@ async function showIntegratedSetup(): Promise<string | null> {
 
     const html = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Configuração inicial</title><style>
       *{box-sizing:border-box}body{margin:0;font-family:Segoe UI,Arial,sans-serif;background:#f4f6f8;color:#101828}.page{max-width:720px;margin:auto;padding:32px}.card{background:white;border:1px solid #e4e7ec;border-radius:18px;padding:28px;box-shadow:0 8px 28px rgba(16,24,40,.08)}h1{margin:0 0 6px;font-size:25px}.lead{color:#667085;margin:0 0 24px}.section{border-top:1px solid #eaecf0;padding-top:20px;margin-top:20px}label{display:block;font-size:13px;font-weight:700;margin:12px 0 6px}input{width:100%;padding:11px 12px;border:1px solid #d0d5dd;border-radius:9px;font-size:14px}small{color:#667085}.actions{display:flex;gap:10px;margin-top:24px}.button{border:0;border-radius:9px;padding:11px 16px;font-weight:700;cursor:pointer}.primary{background:#18c77a;color:#071a12}.secondary{background:#fff;border:1px solid #18c77a;color:#087443}.error{display:none;margin-top:16px;padding:11px;border-radius:8px;background:#fef3f2;color:#b42318}.optional{font-weight:400;color:#667085}
-    </style></head><body><main class="page"><section class="card"><h1>Central de Recuperação</h1><p class="lead">Instalação inicial ou falha após atualização: verifique a conexão e restaure as configurações sem reinstalar. Credenciais são protegidas pelo Windows.</p><button class="button secondary" id="import">Selecionar arquivo .env</button><div class="section"><h3>Diagnóstico do PostgreSQL</h3><label>DATABASE_URL</label><input id="databaseUrl" type="password" autocomplete="off" placeholder="postgresql://usuario:senha@servidor:5432/banco"><small>O diagnóstico verifica rede e porta. O acesso ao banco será validado após reiniciar.</small><div class="actions"><button class="button secondary" id="diagnose">Testar conectividade</button></div><p id="diagnostic" role="status"></p></div><div class="section"><h3>Chave de integração (opcional)</h3><label>SYSTEM_CONFIG_KEY</label><input id="systemConfigKey" type="password" autocomplete="off" placeholder="Mantenha em branco para preservar a chave existente"><small>Somente importe a chave original usada para criptografar as integrações. Não substitua por uma chave nova.</small></div><div id="error" class="error" role="alert"></div><div class="actions"><button class="button primary" id="save">Validar e reiniciar</button></div></section></main><script>
-      const ids=['databaseUrl','systemConfigKey'];const error=document.getElementById('error');const diagnostic=document.getElementById('diagnostic');
+    </style></head><body><main class="page"><section class="card"><h1>Central de Recuperação</h1><p class="lead">Instalação inicial ou falha após atualização: verifique a conexão e restaure as configurações sem reinstalar. Credenciais são protegidas pelo Windows.</p><button class="button secondary" id="import">Selecionar arquivo .env</button><div class="section"><h3>Diagnóstico do PostgreSQL</h3><label>DATABASE_URL</label><input id="databaseUrl" type="password" autocomplete="off" placeholder="postgresql://usuario:senha@servidor:5432/banco"><small>O diagnóstico verifica rede e porta. O acesso ao banco será validado após reiniciar.</small><div class="actions"><button class="button secondary" id="diagnose">Testar conectividade</button></div><p id="diagnostic" role="status"></p></div><p class="lead">As credenciais Azure e Movidesk são recuperadas em Administração &gt; Configurações após a conexão. A chave de criptografia original deve ser preservada.</p><div id="error" class="error" role="alert"></div><div class="actions"><button class="button primary" id="save">Validar e reiniciar</button></div></section></main><script>
+      const error=document.getElementById('error');const diagnostic=document.getElementById('diagnostic');
       document.getElementById('import').onclick=async()=>{try{const data=await window.techLeadHub.configuration.importEnv();if(data){document.getElementById('databaseUrl').value=data.databaseUrl||'';diagnostic.textContent='Arquivo selecionado. Confira os campos antes de salvar.'}}catch(e){error.textContent=e?.message||'Falha ao ler arquivo';error.style.display='block'}};
       document.getElementById('diagnose').onclick=async()=>{diagnostic.textContent='Verificando conectividade...';try{const result=await window.techLeadHub.configuration.diagnoseDatabase(document.getElementById('databaseUrl').value);diagnostic.textContent=result.message}catch(e){diagnostic.textContent='Diagnóstico indisponível.'}};
       document.getElementById('save').onclick=async()=>{error.style.display='none';try{const data={databaseUrl:document.getElementById('databaseUrl').value};const check=await window.techLeadHub.configuration.diagnoseDatabase(data.databaseUrl);if(!check.ok)throw new Error(check.message);await window.techLeadHub.configuration.save(data);window.close()}catch(e){error.textContent=e?.message||String(e);error.style.display='block'}};
@@ -3188,7 +3188,7 @@ async function bootstrap() {
   if (
     !backendOnline
   ) {
-    await dialog.showMessageBox(
+    const failure = await dialog.showMessageBox(
       {
         type:
           "error",
@@ -3203,11 +3203,24 @@ async function bootstrap() {
           `O backend não respondeu na porta ${BACKEND_PORT} dentro do tempo esperado.`,
 
         buttons: [
+          "Recuperar configurações",
           "Fechar",
         ],
+        defaultId: 0,
+        cancelId: 1,
       }
     );
 
+    if (failure.response === 0) {
+      stopBackend();
+      const corrected = await showIntegratedSetup();
+      if (corrected) {
+        isQuitting = true;
+        app.relaunch();
+        app.exit(0);
+        return;
+      }
+    }
     app.quit();
 
     return;
