@@ -1,5 +1,6 @@
 import { api } from "../../services/api";
 import { useState } from "react";
+import type { MouseEvent } from "react";
 import { AttachFileRounded, DownloadRounded } from "@mui/icons-material";
 import { Box, Paper, Typography } from "@mui/material";
 
@@ -8,7 +9,7 @@ import type { LegacyAttachment } from "./legacyAttachment";
 export function AttachmentChip({ attachment, channelId, messageId }: { attachment: LegacyAttachment; channelId?: number; messageId?: number }) {
   const [downloading, setDownloading] = useState(false);
   const secure = channelId !== undefined && messageId !== undefined;
-  async function downloadSecure(event: React.MouseEvent<HTMLAnchorElement>) {
+  async function downloadSecure(event: MouseEvent<HTMLAnchorElement>) {
     if (!secure) return;
     event.preventDefault();
     if (downloading) return;
