@@ -8,6 +8,7 @@ import { playNotificationSound } from "../utils/notificationSound";
 import { IncidentActionsPanel } from "../components/IncidentActionsPanel";
 import { ChatHistorySearch } from "../components/ChatHistorySearch";
 import { IncidentContextSummary } from "../components/chat/IncidentContextSummary";
+import { ConversationListHeader } from "../components/chat/ConversationListHeader";
 
 
 import { presenceColor } from "../components/chat/chatTypes";
@@ -718,14 +719,7 @@ export function Chat() {
     {error && <Alert severity="error" onClose={() => setError("")}>{error}</Alert>}
     <Paper elevation={0} sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "244px minmax(0,1fr)", lg: "252px minmax(0,1fr)", xl: (conversationInfoOpen || selected?.type === "CONTEXT" || (selected?.type === "TEAM" && teamPanelOpen)) ? "258px minmax(0,1fr) 292px" : "258px minmax(0,1fr)" }, gap: { xs: 0, md: .9 }, p: { xs: 0, md: .8 }, minHeight: 0, flex: 1, overflow: "hidden", borderRadius: 3.5, maxHeight: "100%", height: "100%", border: "1px solid", borderColor: "divider", boxShadow: "0 16px 42px rgba(15,23,42,.075)", bgcolor: "background.paper", backgroundImage: (theme) => theme.palette.mode === "dark" ? "linear-gradient(145deg,rgba(12,31,46,.98),rgba(11,27,42,.98))" : "linear-gradient(145deg,#ffffff,#fbfdff)" }}>
       <Box sx={{ position: "relative", minHeight: 0, overflow: "hidden", display: "grid", gridTemplateRows: "auto auto 1px minmax(0, 1fr)", alignContent: "stretch", borderRadius: { xs: 0, md: 3.25 }, bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(255,255,255,.022)" : "rgba(248,250,252,.76)", border: { md: "1px solid" }, borderColor: { md: "divider" }, boxShadow: (theme) => theme.palette.mode === "dark" ? "0 10px 28px rgba(0,0,0,.10), inset 0 1px rgba(255,255,255,.02)" : "0 8px 24px rgba(15,23,42,.045)" }}>
-        <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between", px: 1.35, py: 1, minHeight: 52 }}>
-          <Box sx={{ minWidth: 0, pl: .25 }}><Stack direction="row" spacing={.7} sx={{ alignItems: "center" }}><Typography sx={{ fontWeight: 900, lineHeight: 1.2 }}>Conversas</Typography>{totalUnread > 0 && <Chip size="small" color="primary" label={totalUnread > 99 ? "99+" : totalUnread} sx={{ height: 20, fontWeight: 900 }} />}</Stack><Typography variant="caption" color="text.secondary">{channels.length} conversa(s){totalUnread ? ` · ${totalUnread} não lida(s)` : ""}</Typography></Box>
-          <Stack direction="row">
-            {["ADMIN","COORDENADOR"].includes(user?.role ?? "") && <Tooltip title="Consolidar conversas privadas duplicadas"><span><IconButton size="small" disabled={maintenanceRunning} onClick={() => void consolidateDirectDuplicates()}>{maintenanceRunning ? <CircularProgress size={17} /> : <CleaningServicesOutlined fontSize="small" />}</IconButton></span></Tooltip>}
-            <Tooltip title="Conversa privada"><IconButton size="small" onClick={() => setDirectOpen(true)}><PersonOutlineRounded /></IconButton></Tooltip>
-            <Tooltip title="Novo canal"><IconButton size="small" aria-label="Criar canal" onClick={() => setCreateOpen(true)}><AddCommentOutlined /></IconButton></Tooltip>
-          </Stack>
-        </Stack>
+        <ConversationListHeader channelCount={channels.length} unreadCount={totalUnread} canMaintain={["ADMIN", "COORDENADOR"].includes(user?.role ?? "")} maintenanceRunning={maintenanceRunning} onConsolidate={() => void consolidateDirectDuplicates()} onOpenDirect={() => setDirectOpen(true)} onCreateChannel={() => setCreateOpen(true)} />
         <Box sx={{ px: 1.25, pb: 1 }}><TextField size="small" fullWidth value={conversationSearch} onChange={(event) => setConversationSearch(event.target.value)} placeholder="Buscar conversa..." slotProps={{ input: { startAdornment: <SearchOutlined sx={{ mr: .7, fontSize: 18, color: "text.secondary" }} /> } }} /></Box>
         <Box sx={{ mx: 1.2, height: 6 }} />
         <Box sx={{ minHeight: 0, height: "100%", overflowY: "auto", overflowX: "hidden", overscrollBehavior: "contain", scrollbarWidth: "none", "&::-webkit-scrollbar": { display: "none" } }}>
