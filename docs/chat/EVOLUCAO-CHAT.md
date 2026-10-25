@@ -73,3 +73,13 @@ O usuário relatou commit local `ff20d42` na branch `feat/evolucao-visual-design
 - **Limitações:** upload ainda trafega Base64 no JSON HTTP; armazenamento é no banco, não objeto externo; validação por assinatura não substitui antivírus; não há testes de integração executados nesta sessão.
 - **Antes de executar o novo backend:** `cd backend && npx prisma migrate deploy && npx prisma generate && npm run build`. No frontend: `npm run lint && npm run build`.
 - **Ainda pendente:** hooks, virtualização, SSE replay completo, contexto vivo, comandos, handoff, notificações, responsividade definitiva, screenshots e testes de segurança/performance. A missão integral permanece aberta.
+
+
+## Evolução visual — primeira entrega (25/10/2026)
+
+- Banner "Hub de Conversas" ocultado enquanto uma conversa estiver selecionada, liberando altura útil.
+- Layout principal agora usa grid responsivo com três colunas em telas grandes quando o painel está ativo, e duas colunas nos demais casos; cores e sombras vêm do tema MUI.
+- Conversas agrupadas visualmente em Incidentes ativos, Favoritos, Equipes e Conversas diretas, mantendo a ordem interna existente em cada grupo.
+- Cabeçalho da conversa mais compacto e responsivo, com melhor truncamento e ações de acessibilidade.
+- **Ainda não entregue:** gaveta de contexto para telas menores, navegação mobile lista → conversa, painel com dados vivos, refinamento de mensagens/composer, screenshots de comparação e verificação visual.
+- Executar `cd frontend && npm run lint && npm run build` após atualizar a branch. Essas validações não foram executadas nesta sessão.
