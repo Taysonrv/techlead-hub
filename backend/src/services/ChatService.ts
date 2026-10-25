@@ -44,6 +44,7 @@ export class ChatService {
     await this.assertMember(userId, channelId);
     if (!active) {
       await prisma.$executeRawUnsafe(`DELETE FROM "ChatTyping" WHERE "channelId"=$1 AND "userId"=$2`, channelId, userId);
+      await this.notifyChannel(channelId);
       return;
     }
     await prisma.$executeRawUnsafe(
@@ -51,6 +52,7 @@ export class ChatService {
        ON CONFLICT ("channelId","userId") DO UPDATE SET "expiresAt"=EXCLUDED."expiresAt"`,
       channelId, userId,
     );
+    await this.notifyChannel(channelId);
   }
 
   async realtimeSnapshot(userId: number) {
@@ -279,9 +281,9 @@ export class ChatService {
     // Nome e cliente vêm da fonte persistida, nunca do texto enviado pelo navegador.
     const title = dataProtectionService.normalizeText("subject" in source ? source.subject : source.title, 120);
     const clientName = dataProtectionService.normalizeText(source.client, 160) || null;
-    const memberIds = Array.isArray(input.memberIds) ? input.memberIds.map(Number).filter(Number.isSafeInteger) : [];
-    const requested = [...new Set([userId, ...memberIds])];
-    if (requested.length > 20) throw Object.assign(new Error("A sala permite no máximo 20 participantes."), { statusCode: 400 });
+    // Inclusão de outros membros exige uma política de acesso por registro;
+    // até ela existir, a sala nasce restrita ao solicitante.
+    const requested = [userId];
     const members = await prisma.user.findMany({
       where: { id: { in: requested }, active: true, approvalStatus: "APPROVED" },
       select: { id: true },
