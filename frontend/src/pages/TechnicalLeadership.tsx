@@ -163,6 +163,8 @@ export function TechnicalLeadership() {
   const [data, setData] = useState<Data | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [refreshVersion, setRefreshVersion] = useState(0);
+  const [indicatorErrors, setIndicatorErrors] = useState<string[]>([]);
   const [tab, setTab] = useState<TabKey>("indicators");
   const [client, setClient] = useState("");
   const [user, setUser] = useState("");
@@ -170,7 +172,10 @@ export function TechnicalLeadership() {
   const [indicatorPeriods, setIndicatorPeriods] = useState<Record<string, PeriodPreset>>({});
   const [indicatorData, setIndicatorData] = useState<Record<string, Data["analytics"]>>({});
   const indicatorPeriod = (key: string) => indicatorPeriods[key] ?? period;
-  const setIndicatorPeriod = (key: string, value: PeriodPreset) => setIndicatorPeriods((current) => ({ ...current, [key]: value }));
+  const setIndicatorPeriod = (key: string, value: PeriodPreset) => {
+    setIndicatorData((current) => { const next = { ...current }; delete next[key]; return next; });
+    setIndicatorPeriods((current) => ({ ...current, [key]: value }));
+  };
   const analyticsFor = (key: string) => indicatorData[key] ?? data?.analytics;
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState("");
@@ -214,34 +219,41 @@ export function TechnicalLeadership() {
 
   useEffect(() => {
     const entries = Object.entries(indicatorPeriods);
+    setIndicatorErrors([]);
     if (!entries.length) return;
     let active = true;
     const requests = entries.map(async ([key, preset]) => {
-      if (preset === "custom" && (!customStart || !customEnd)) return;
+      if (preset === "custom" && (!customStart || !customEnd || customStart > customEnd)) return;
       const range = resolvePeriod(preset, customStart, customEnd);
-      const response = await api.get<Data>("/workspace/technical-leadership", { params: { client: client || undefined, user: user || undefined, ...range } });
-      if (active) setIndicatorData((current) => ({ ...current, [key]: response.data.analytics }));
+      try {
+        const response = await api.get<Data>("/workspace/technical-leadership", { params: { client: client || undefined, user: user || undefined, ...range } });
+        if (active) setIndicatorData((current) => ({ ...current, [key]: response.data.analytics }));
+      } catch {
+        if (active) setIndicatorErrors((current) => [...current, key]);
+      }
     });
     void Promise.allSettled(requests);
     return () => { active = false; };
-  }, [indicatorPeriods, client, user, customStart, customEnd]);
+  }, [indicatorPeriods, client, user, customStart, customEnd, refreshVersion]);
 
   useEffect(() => {
     setIndicatorData({});
-  }, [period]);
+    setIndicatorPeriods({});
+    setIndicatorErrors([]);
+  }, [period, client, user]);
 
   useEffect(() => {
     let active = true;
     setLoading(true);
     setError("");
     const range = resolvePeriod(period, customStart, customEnd);
-    if (period === "custom" && (!customStart || !customEnd)) { setLoading(false); return () => { active = false; }; }
+    if (period === "custom" && (!customStart || !customEnd || customStart > customEnd)) { setData(null); setLoading(false); return () => { active = false; }; }
     api.get<Data>("/workspace/technical-leadership", { params: { client: client || undefined, user: user || undefined, ...range } })
       .then((response) => active && setData(response.data))
-      .catch(() => active && setError("Não foi possível carregar a Central de Liderança Técnica."))
+      .catch(() => { if (active) { setData(null); setError("Não foi possível carregar a Central de Liderança Técnica."); } })
       .finally(() => active && setLoading(false));
     return () => { active = false; };
-  }, [client, user, period, customStart, customEnd]);
+  }, [client, user, period, customStart, customEnd, refreshVersion]);
 
   const attention = useMemo(() => data ? [
     data.radar.slaOverdue, data.radar.newTooLong, data.radar.pausedTooLong, data.radar.blocked,
@@ -274,7 +286,9 @@ export function TechnicalLeadership() {
     } else navigate(`/tickets?movidesk=${item.movideskId}`);
   };
 
-  if (!data && (loading || error)) return <AsyncState status={loading ? "loading" : "error"} data={data} error={error} loading={<ContentState kind="loading" title="Carregando liderança técnica" minHeight={420} />}>{() => null}</AsyncState>;
+  if (!data && loading) return <ContentState kind="loading" title="Carregando liderança técnica" minHeight={420} />;
+  if (!data && error) return <Stack spacing={2}><Alert severity="error">{error}</Alert><Button variant="contained" onClick={() => setRefreshVersion((value) => value + 1)}>Tentar novamente</Button></Stack>;
+  if (!data && period === "custom") return <Alert severity="info">Informe uma data inicial e final válidas para carregar a análise. A data inicial não pode ser posterior à final.</Alert>;
 
   return <Box sx={{
     minWidth: 0,
@@ -288,7 +302,8 @@ export function TechnicalLeadership() {
       action={<Stack direction="row" spacing={1}><Chip icon={<RadarOutlined />} label={`${attention} sinais de atenção`} color={attention ? "warning" : "success"} sx={{ fontWeight: 850, boxShadow: attention ? "0 0 22px rgba(255,167,38,.18)" : "0 0 22px rgba(0,199,142,.18)" }} /></Stack>}
     />
 
-    {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+    {error && <Alert severity="error" sx={{ mb: 2 }} action={<Button size="small" color="inherit" onClick={() => setRefreshVersion((value) => value + 1)}>Recarregar</Button>}>{error}</Alert>}
+    {indicatorErrors.length > 0 && <Alert severity="warning" sx={{ mb: 2 }} action={<Button size="small" color="inherit" onClick={() => setRefreshVersion((value) => value + 1)}>Tentar novamente</Button>}>Não foi possível atualizar {indicatorErrors.length} gráfico(s) com período individual. Os dados gerais permanecem disponíveis.</Alert>}
 
     <Card sx={{
       mb: 2.5,
