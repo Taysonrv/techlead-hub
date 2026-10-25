@@ -15,13 +15,16 @@ A implementação foi iniciada na branch `feat/chat-war-room`, derivada de `feat
 
 7. **Registro operacional persistido:** tabela `ChatIncidentAction` e endpoints para criar, listar e atualizar decisões, escalonamentos, handoffs e ações, com auditoria, controle de membros e painel dedicado no frontend. O responsável por uma ação pode ser informado via API, mas a UI inicial registra ações sem atribuição automática.
 
+8. **Pesquisa de histórico:** endpoint de busca textual por canal, limitado a membros e 50 resultados, com diálogo dedicado no frontend; pesquisa no banco inclui mensagens anteriores às últimas 100.
+9. **Terceira coluna contextual:** salas de incidentes exibem automaticamente informações de origem, cliente e atalhos de ações/pesquisa em monitores largos; layouts menores mantêm duas colunas.
+
 ### Compatibilidade e limitações
 
 - **Migração obrigatória** antes de usar a nova API: `npx prisma migrate deploy` dentro de `backend`, seguido da geração de Prisma Client na pipeline normal.
 - A implementação atual mantém anexos em mensagens legadas, pois sua migração para tabela/armazenamento separado ainda não foi concluída.
 - SSE funciona por processo único; implantação com múltiplas réplicas precisará de Redis/pub-sub compartilhado.
 - O campo `clientMessageId` previne duplicatas quando repetido pelo cliente, mas ainda faltam testes concorrentes e estratégia completa de retry.
-- O chat original permanece em arquivo grande. Extração de componentes e hooks, paginação infinita/virtualização, busca avançada, painel contextual com dados vivos, métricas e layout de três colunas completo **continuam pendentes**.
+- O chat original permanece em arquivo grande. Extração de componentes e hooks, paginação infinita/virtualização, pesquisa multi-canal e indexação de busca, painel contextual com dados vivos com dados vivos, métricas e layout de três colunas completo **continuam pendentes**.
 - Não há captura Playwright de antes/depois nem homologação real em claro/escuro, por ausência de navegador autenticado conectado neste ambiente.
 - Permissões de visualização dos dados de tickets/tarefas precisam ser integradas à política de escopo operacional antes de expor painel detalhado ou sugerir membros automaticamente.
 
