@@ -38,6 +38,7 @@ export function Chat() {
   const olderCursor = useRef<number | null>(null);
   const loadingOlderRef = useRef(false);
   const restoreScroll = useRef<{ channelId: number; height: number; top: number } | null>(null);
+  const skipNextAutoScroll = useRef(false);
   const [content, setContent] = useState("");
   const [quickActionsAnchor, setQuickActionsAnchor] = useState<HTMLElement | null>(null);
   const [loading, setLoading] = useState(false);
@@ -259,7 +260,7 @@ export function Chat() {
   }, [searchParams, setSearchParams, loadChannels]);
 
   useEffect(() => {
-    setMessages([]);olderCursor.current = null;restoreScroll.current = null;setHasOlder(false);setReplyTo(null);setContent("");setMessageSearch("");setShowJumpToLatest(false);
+    setMessages([]);olderCursor.current = null;restoreScroll.current = null;skipNextAutoScroll.current = false;setHasOlder(false);setReplyTo(null);setContent("");setMessageSearch("");setShowJumpToLatest(false);
     if (!selectedId) { setLoading(false); return; }
     void loadMessages(selectedId);
     return () => { messageRequest.current?.abort(); };
@@ -268,6 +269,7 @@ export function Chat() {
     const container = messagesRef.current;
     if (!container) return;
     const nearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 140;
+    if (skipNextAutoScroll.current) { skipNextAutoScroll.current = false; return; }
     if (!restoreScroll.current && (nearBottom || !showJumpToLatest)) {
       container.scrollTo({ top: container.scrollHeight, behavior: "auto" });
       setShowJumpToLatest(false);
@@ -288,8 +290,9 @@ export function Chat() {
       const older = response.data.messages;
       setHasOlder(older.length === 100);
       if (older.length) {
-        olderCursor.current = older[0].id;
+        olderCursor.current = older[0]?.id ?? beforeId;
         restoreScroll.current = position;
+        skipNextAutoScroll.current = true;
         setMessages((current) => {
           const ids = new Set(current.map((message) => message.id));
           return [...older.filter((message) => !ids.has(message.id)), ...current];
