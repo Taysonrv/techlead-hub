@@ -246,6 +246,8 @@ export function TechnicalLeadership() {
   useEffect(() => {
     let active = true;
     setLoading(true);
+    setData(null);
+    setDrawer(null);
     setError("");
     const range = resolvePeriod(period, customStart, customEnd);
     if (period === "custom" && (!customStart || !customEnd || customStart > customEnd)) { setData(null); setLoading(false); return () => { active = false; }; }
