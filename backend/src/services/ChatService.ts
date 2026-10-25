@@ -241,13 +241,15 @@ export class ChatService {
     const name = dataProtectionService.normalizeText(input.name, 180).replace(/[\\/:*?"<>|\r\n\x00-\x1f]/g, "_");
     const data = String(input.data ?? "");
     const match = /^data:([^;]+);base64,([A-Za-z0-9+/]+={0,2})$/.exec(data);
-    if (!name || !match) throw Object.assign(new Error("Anexo inválido."), { statusCode: 400 });
-    const mimeType = match[1].toLowerCase();
+    const rawMimeType = match?.[1];
+    const encoded = match?.[2];
+    if (!name || !rawMimeType || !encoded) throw Object.assign(new Error("Anexo inválido."), { statusCode: 400 });
+    const mimeType = rawMimeType.toLowerCase();
     const allowed = new Set(["image/png", "image/jpeg", "image/webp", "image/gif", "application/pdf", "text/plain", "text/csv", "application/zip", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/vnd.openxmlformats-officedocument.presentationml.presentation"]);
     if (!allowed.has(mimeType)) throw Object.assign(new Error("Tipo de anexo não permitido."), { statusCode: 400 });
-    if (match[2].length > Math.ceil(8 * 1024 * 1024 * 4 / 3) + 4) throw Object.assign(new Error("Anexo excede 8 MB."), { statusCode: 400 });
-    const bytes = Buffer.from(match[2], "base64");
-    if (!bytes.length || bytes.length > 8 * 1024 * 1024 || bytes.toString("base64") !== match[2]) {
+    if (encoded.length > Math.ceil(8 * 1024 * 1024 * 4 / 3) + 4) throw Object.assign(new Error("Anexo excede 8 MB."), { statusCode: 400 });
+    const bytes = Buffer.from(encoded, "base64");
+    if (!bytes.length || bytes.length > 8 * 1024 * 1024 || bytes.toString("base64") !== encoded) {
       throw Object.assign(new Error("Conteúdo do anexo inválido."), { statusCode: 400 });
     }
     const signatureOk = mimeType === "application/pdf" ? bytes.subarray(0, 5).toString() === "%PDF-" :
