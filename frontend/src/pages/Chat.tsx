@@ -429,7 +429,7 @@ export function Chat() {
       requestAnimationFrame(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }));
     } catch { setError("Não foi possível enviar o emoji."); }
     finally { setSending(false); }
-  }, [selectedId, sending, launchEmojiFx]);
+  }, [selectedId, sending, launchEmojiFx, setSending, setMessages]);
   const sendSticker = useCallback(async (sticker: string) => {
     if (!selectedId || sending) return;
     setStickersOpen(false);
@@ -442,7 +442,7 @@ export function Chat() {
       requestAnimationFrame(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }));
     } catch { setError("Não foi possível enviar a figurinha."); }
     finally { setSending(false); }
-  }, [selectedId, sending, launchStickerFx, soundEnabled]);
+  }, [selectedId, sending, launchStickerFx, soundEnabled, setSending, setMessages]);
   const append = (value: string) => setContent((current) => current ? `${current} ${value}` : value);
 
   return <Stack spacing={0} sx={{ height: "100%", maxHeight: "100%", minHeight: 0, overflow: "hidden", px: { xs: .5, sm: 1, md: 1.5 }, pb: { xs: .5, md: 1.25 }, pt: { xs: .5, md: 1.25 }, boxSizing: "border-box", bgcolor: "background.default" }}>
