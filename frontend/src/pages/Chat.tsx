@@ -848,10 +848,9 @@ export function Chat() {
       </Box>
       {showSidePanel && selected && <Box sx={{ display: { xs: "none", lg: "block" }, borderLeft: "1px solid", borderColor: "divider", borderRadius: 0, p: 1.6, overflowY: "auto", my: 0, bgcolor: "background.paper" }}>
         <Stack spacing={2}>
-          <Box sx={{ textAlign: "center", pt: 1 }}>
-            <Box sx={{ width: 64, height: 64, mx: "auto", mb: 1, borderRadius: "50%", bgcolor: "primary.main", color: "primary.contrastText", display: "grid", placeItems: "center", fontSize: "1.35rem", fontWeight: 950, boxShadow: "0 10px 24px rgba(24,199,122,.18)" }}>{selected.name.slice(0,1).toUpperCase()}</Box>
-            <Typography sx={{ fontWeight: 900 }}>{selected.name}</Typography>
-            <Typography variant="caption" color="text.secondary">{selected.type === "DIRECT" ? "Conversa privada" : selected.type === "CONTEXT" ? "Sala de incidente" : "Canal da equipe"}</Typography>
+          <Box sx={{ pb: 1, borderBottom: "1px solid", borderColor: "divider" }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 850 }}>Informações e arquivos</Typography>
+            <Typography variant="caption" color="text.secondary" noWrap sx={{ display: "block", mt: .4 }}>{selected.name}</Typography>
           </Box>
           {selected.type === "CONTEXT" && <IncidentContextSummary channel={selected} onOpenActions={() => setIncidentActionsOpen(true)} onSearchHistory={() => setHistorySearchOpen(true)} />}
           <SharedFilesPanel channelId={selected.id} messages={messages} />
