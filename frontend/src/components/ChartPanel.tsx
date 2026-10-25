@@ -34,7 +34,6 @@ export function ChartPanel({
         bgcolor: "background.paper",
         borderRadius: "var(--hub-radius-lg)",
         boxShadow: "var(--hub-shadow-card)",
-        backdropFilter: "blur(var(--hub-glass-blur))",
         borderColor: "divider",
         background: "var(--hub-surface)",
       }}
@@ -52,8 +51,8 @@ export function ChartPanel({
           direction={{ xs: "column", sm: "row" }}
           spacing={0.9}
           sx={{
-            mb: 1.1,
-            minHeight: { xs: 0, sm: 38 },
+            mb: 1.5,
+            minHeight: { xs: 0, sm: 40 },
             justifyContent: "space-between",
             alignItems: { xs: "stretch", sm: "flex-start" },
           }}
