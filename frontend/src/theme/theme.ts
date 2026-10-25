@@ -139,11 +139,11 @@ export function createAppTheme(mode: PaletteMode = "light") {
           root: {
             position: "relative",
             border: `1px solid ${border}`,
-            boxShadow: dark ? "0 16px 42px rgba(0,0,0,.18), inset 0 1px rgba(255,255,255,.025)" : "0 8px 24px rgba(15,23,42,.055)",
+            boxShadow: dark ? "0 6px 20px rgba(0,0,0,.12)" : "0 3px 14px rgba(16,24,40,.045)",
             borderRadius: 16,
             overflow: "hidden",
-            backdropFilter: dark ? "blur(16px)" : undefined,
-            background: dark ? "linear-gradient(145deg, rgba(10,35,45,.94), rgba(7,27,39,.97))" : "linear-gradient(180deg,#FFFFFF,#FBFCFD)",
+            backdropFilter: undefined,
+            background: paper,
             backgroundColor: paper,
             transition: "border-color .18s ease, box-shadow .18s ease, transform .18s ease, background-color .18s ease",
             "&::after": dark ? { content: '""', position: "absolute", inset: "0 0 auto", height: 1, background: "linear-gradient(90deg, rgba(24,199,122,.30), rgba(47,141,255,.16), transparent 72%)", pointerEvents: "none" } : undefined,
@@ -359,7 +359,7 @@ export function createAppTheme(mode: PaletteMode = "light") {
           root: {
             borderBottomColor: border,
             fontVariantNumeric: "tabular-nums",
-            padding: "12px 16px",
+            padding: "11px 16px",
             fontSize: ".85rem",
             lineHeight: 1.4,
             ...(dark && { color: "#DCE9F7" }),
@@ -371,7 +371,7 @@ export function createAppTheme(mode: PaletteMode = "light") {
           root: {
             transition: "background-color var(--hub-motion-fast) ease",
             "&:nth-of-type(even)": { backgroundColor: dark ? "rgba(112,160,207,.035)" : "rgba(15,23,42,.018)" },
-            "&:hover": { backgroundColor: dark ? "rgba(24,199,122,.075)" : "rgba(24,199,122,.055)" },
+            "&:hover": { backgroundColor: dark ? "rgba(24,199,122,.075)" : "rgba(24,199,122,.045)" },
             ...(dark && { transition: "background-color .14s ease, box-shadow .14s ease", "&:hover td:first-of-type": { boxShadow: "inset 2px 0 #18C77A" } }),
           },
         },
