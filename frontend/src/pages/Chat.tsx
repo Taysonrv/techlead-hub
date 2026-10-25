@@ -1,5 +1,6 @@
+import { useTheme } from "@mui/material/styles";
 import { ForumOutlined, ReplyOutlined, CloseOutlined, SearchOutlined, Circle, DeleteOutlineRounded, StarOutlineRounded, VolumeOffOutlined, GroupsOutlined, PersonOutlineRounded, BoltOutlined, AssignmentTurnedInOutlined, AlternateEmailOutlined, KeyboardArrowDownRounded } from "@mui/icons-material";
-import { Alert, Box, Button, Checkbox, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Divider, Drawer, FormControlLabel, IconButton, List, ListItemButton, ListItemIcon, ListItemText, Menu, MenuItem, Paper, Popover, Skeleton, Snackbar, Stack, TextField, Tooltip, Typography } from "@mui/material";
+import { Alert, Box, Button, Checkbox, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Divider, Drawer, FormControlLabel, IconButton, List, ListItemButton, ListItemIcon, ListItemText, Menu, MenuItem, Paper, Popover, Skeleton, Snackbar, Stack, TextField, Tooltip, Typography, useMediaQuery } from "@mui/material";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { api, getAccessToken, getApiBaseUrl } from "../services/api";
@@ -78,6 +79,8 @@ export function Chat() {
   const [deletingConversation, setDeletingConversation] = useState(false);
   const [maintenanceRunning, setMaintenanceRunning] = useState(false);
   const [maintenanceMessage, setMaintenanceMessage] = useState("");
+  const theme = useTheme();
+  const compactContext = useMediaQuery(theme.breakpoints.down("md"));
   const [conversationInfoOpen, setConversationInfoOpen] = useState(false);
   const [incidentActionsOpen, setIncidentActionsOpen] = useState(false);
   const [historySearchOpen, setHistorySearchOpen] = useState(false);
@@ -764,7 +767,7 @@ export function Chat() {
     {selected?.type === "CONTEXT" && selectedId && <IncidentActionsPanel channelId={selectedId} open={incidentActionsOpen} onClose={() => setIncidentActionsOpen(false)} />}
     {selectedId && <ChatHistorySearch channelId={selectedId} open={historySearchOpen} onClose={() => setHistorySearchOpen(false)} />}
     {error && <Alert severity="error" onClose={() => setError("")}>{error}</Alert>}
-    <Drawer anchor="right" open={conversationInfoOpen && Boolean(selected)} onClose={() => setConversationInfoOpen(false)}
+    <Drawer anchor="right" open={compactContext && conversationInfoOpen && Boolean(selected)} onClose={() => setConversationInfoOpen(false)}
       sx={{ display: { xs: "block", lg: "none" } }}
       slotProps={{ paper: { sx: { width: { xs: "min(92vw, 360px)", sm: 380 }, maxWidth: "100vw", p: 2, bgcolor: "background.paper" } } }}>
       <Stack spacing={2}>
