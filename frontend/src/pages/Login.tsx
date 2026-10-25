@@ -739,6 +739,8 @@ export function Login() {
             xl: 5,
           },
           gap: 1.5,
+          "@media (max-height: 760px)": { gap: 1, py: 2.5 },
+          "@media (max-height: 660px)": { "& .login-rotating-message": { display: "none" } },
 
           background:
             "transparent",
@@ -895,6 +897,7 @@ export function Login() {
         </Box>
 
         <Box
+          className="login-rotating-message"
           sx={{
             position:
               "relative",
@@ -948,7 +951,7 @@ export function Login() {
         </Box>
 
         {cooperativeNews.length > 0 && (
-          <Box sx={{
+          <Box component="section" aria-label="Notícias do agro e cooperativismo" sx={{
             mt: 0.5, mb: 0.5, maxWidth: 540, minHeight: 0, overflow: "hidden",
             "@media (max-height: 860px)": { "& .cooperative-news-item:nth-of-type(n+3)": { display: "none" } },
             "@media (max-height: 730px)": { "& .cooperative-news-item:nth-of-type(n+2)": { display: "none" } },
@@ -960,17 +963,22 @@ export function Login() {
                 Notícias do agro e cooperativismo
               </Typography>
             </Stack>
-            <Stack spacing={1}>
+            <Stack spacing={0.75}>
               {cooperativeNews.map((item) => (
                 <Box key={item.link} className="cooperative-news-item" component="a" href={item.link} target="_blank" rel="noopener noreferrer"
                   sx={{ display: "block", textDecoration: "none", color: "inherit", px: 1.25, py: 0.8,
                     border: "1px solid", borderColor: "divider", borderRadius: 2,
-                    bgcolor: "rgba(127,145,160,.05)", "&:hover": { borderColor: aliareColors.green } }}>
+                    bgcolor: "rgba(127,145,160,.05)",
+                    transition: "border-color .18s ease, background-color .18s ease, transform .18s ease",
+                    "&:hover": { borderColor: aliareColors.green, bgcolor: "rgba(24,199,122,.07)", transform: "translateY(-1px)" },
+                    "&:focus-visible": { outline: "2px solid", outlineColor: aliareColors.green, outlineOffset: 2 },
+                    "@media (prefers-reduced-motion: reduce)": { transition: "none", "&:hover": { transform: "none" } },
+                  }}>
                   <Stack direction="row" spacing={1} sx={{ justifyContent: "space-between", alignItems: "flex-start" }}>
                     <Typography variant="body2" sx={{ fontWeight: 650, lineHeight: 1.35, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{item.title}</Typography>
                     <OpenInNewOutlined sx={{ fontSize: 15, flexShrink: 0, opacity: .65 }} />
                   </Stack>
-                  <Typography variant="caption" sx={{ opacity: .65 }}>
+                  <Typography variant="caption" sx={{ opacity: .72, display: "block", mt: 0.4 }}>
                     {item.source}{item.publishedAt ? ` · ${new Date(item.publishedAt).toLocaleDateString("pt-BR")}` : ""}
                   </Typography>
                 </Box>
