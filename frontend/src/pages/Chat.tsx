@@ -1,7 +1,7 @@
 import { useTheme } from "@mui/material/styles";
 import { ArrowBackRounded, ForumOutlined, ReplyOutlined, CloseOutlined, SearchOutlined, Circle, DeleteOutlineRounded, StarOutlineRounded, VolumeOffOutlined, GroupsOutlined, PersonOutlineRounded, BoltOutlined, AssignmentTurnedInOutlined, AlternateEmailOutlined, KeyboardArrowDownRounded } from "@mui/icons-material";
 import { Alert, Box, Button, Checkbox, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Divider, Drawer, FormControlLabel, IconButton, List, ListItemButton, ListItemIcon, ListItemText, Menu, MenuItem, Paper, Popover, Skeleton, Snackbar, Stack, TextField, Typography, useMediaQuery } from "@mui/material";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "../services/api";
 import { useAuth } from "../context/AuthContext";
@@ -22,6 +22,7 @@ import { useChatRealtime } from "../components/chat/hooks/useChatRealtime";
 import { useChatPresence } from "../components/chat/hooks/useChatPresence";
 import { useChatReadReceipts } from "../components/chat/hooks/useChatReadReceipts";
 import { useChatTyping } from "../components/chat/hooks/useChatTyping";
+import { useChatHistory } from "../components/chat/hooks/useChatHistory";
 
 
 import { presenceColor } from "../components/chat/chatTypes";
@@ -34,22 +35,11 @@ export function Chat() {
   const [channels, setChannels] = useState<Channel[]>([]);
   const [participants, setParticipants] = useState<Person[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(() => { const value = Number(new URLSearchParams(window.location.search).get("channel")); return Number.isFinite(value) && value > 0 ? value : null; });
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [mobileConversationOpen, setMobileConversationOpen] = useState(() => Boolean(new URLSearchParams(window.location.search).get("channel")));
-  const [hasOlder, setHasOlder] = useState(false);
-  const [loadingOlder, setLoadingOlder] = useState(false);
-  const olderCursor = useRef<number | null>(null);
-  const loadingOlderRef = useRef(false);
-  const restoreScroll = useRef<{ channelId: number; height: number; top: number } | null>(null);
-  const skipNextAutoScroll = useRef(false);
   const [content, setContent] = useState("");
   const notifyTyping = useChatTyping(selectedId);
   const [quickActionsAnchor, setQuickActionsAnchor] = useState<HTMLElement | null>(null);
-  const [loading, setLoading] = useState(false);
   const [channelsLoading, setChannelsLoading] = useState(true);
-  const [showJumpToLatest, setShowJumpToLatest] = useState(false);
   const [sending, setSending] = useState(false);
-  const messageRequest = useRef<AbortController | null>(null);
   const sendingRef = useRef(false);
   const [error, setError] = useState("");
   const { availability, statusMessage, cycleAvailability } = useChatPresence(setError);
@@ -101,6 +91,8 @@ export function Chat() {
     setChannels((current) => current.map((channel) => channel.id === channelId ? { ...channel, unread: 0 } : channel));
     window.dispatchEvent(new Event("techlead-hub:chat-read"));
   } });
+  const { messages, setMessages, loading, hasOlder, loadingOlder, showJumpToLatest, setShowJumpToLatest, loadMessages, loadOlder, handleMessagesScroll: handleHistoryScroll, jumpToLatest } = useChatHistory({ selectedId, messagesRef, markRead, setError });
+  const handleMessagesScroll = useCallback(() => handleHistoryScroll(messageSearch), [handleHistoryScroll, messageSearch]);
   const selectedIdRef = useRef<number | null>(null);
   selectedIdRef.current = selectedId;
 
@@ -183,36 +175,6 @@ export function Chat() {
     }
   }, [searchParams, setSearchParams, user?.id]);
 
-  const loadMessages = useCallback(async (channelId: number, quiet = false) => {
-    // SSE/polling refreshes must not cancel an in-flight initial history load.
-    if (!quiet) messageRequest.current?.abort();
-    const controller = new AbortController();
-    if (!quiet) messageRequest.current = controller;
-    try {
-      if (!quiet) setLoading(true);
-      const response = await api.get<{ messages: Message[] }>(`/chat/channels/${channelId}/messages`, { signal: controller.signal });
-      if (controller.signal.aborted || selectedIdRef.current !== channelId) return;
-      if (quiet) {
-        setMessages((current) => { const byId = new Map(current.map((message) => [message.id, message])); response.data.messages.forEach((message) => byId.set(message.id, message)); return [...byId.values()].sort((a, b) => a.id - b.id); });
-      } else {
-        setMessages(response.data.messages);
-        olderCursor.current = response.data.messages[0]?.id ?? null;
-        setHasOlder(response.data.messages.length === 100);
-      }
-      if (document.visibilityState === "visible" && !quiet) {
-        const container = messagesRef.current;
-        if (!container || container.scrollHeight - container.scrollTop - container.clientHeight < 160) {
-          markRead(channelId);
-        }
-      }
-      setError("");
-    } catch (requestError: any) {
-      if (!controller.signal.aborted && !quiet) setError(requestError?.response?.data?.error || "Não foi possível carregar a conversa.");
-    } finally {
-      if (!quiet && !controller.signal.aborted) setLoading(false);
-    }
-  }, [markRead]);
-
   useEffect(() => {
     let active = true;
     const bootstrap = async () => {
@@ -258,80 +220,6 @@ export function Chat() {
         setSearchParams(next, { replace: true });
       });
   }, [searchParams, setSearchParams, loadChannels]);
-
-  useEffect(() => {
-    setMessages([]);olderCursor.current = null;restoreScroll.current = null;skipNextAutoScroll.current = false;setHasOlder(false);setReplyTo(null);setContent("");setMessageSearch("");setShowJumpToLatest(false);
-    if (!selectedId) { setLoading(false); return; }
-    void loadMessages(selectedId);
-    return () => { messageRequest.current?.abort(); };
-  }, [loadMessages, selectedId]);
-  useEffect(() => {
-    const container = messagesRef.current;
-    if (!container) return;
-    const nearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 140;
-    if (skipNextAutoScroll.current) { skipNextAutoScroll.current = false; return; }
-    if (!restoreScroll.current && (nearBottom || !showJumpToLatest)) {
-      container.scrollTo({ top: container.scrollHeight, behavior: "auto" });
-      setShowJumpToLatest(false);
-    }
-  }, [messages, selectedId, showJumpToLatest]);
-
-  const loadOlder = useCallback(async () => {
-    const channelId = selectedIdRef.current;
-    const beforeId = olderCursor.current;
-    if (!channelId || !beforeId || loadingOlderRef.current) return;
-    loadingOlderRef.current = true;
-    setLoadingOlder(true);
-    const el = messagesRef.current;
-    const position = el ? { channelId, height: el.scrollHeight, top: el.scrollTop } : null;
-    try {
-      const response = await api.get<{ messages: Message[] }>(`/chat/channels/${channelId}/messages`, { params: { beforeId } });
-      if (selectedIdRef.current !== channelId) return;
-      const older = response.data.messages;
-      setHasOlder(older.length === 100);
-      if (older.length) {
-        olderCursor.current = older[0]?.id ?? beforeId;
-        restoreScroll.current = position;
-        skipNextAutoScroll.current = true;
-        setMessages((current) => {
-          const ids = new Set(current.map((message) => message.id));
-          return [...older.filter((message) => !ids.has(message.id)), ...current];
-        });
-      }
-    } catch {
-      if (selectedIdRef.current === channelId) setError("Não foi possível carregar o histórico anterior.");
-    } finally {
-      loadingOlderRef.current = false;
-      setLoadingOlder(false);
-    }
-  }, []);
-
-  useLayoutEffect(() => {
-    const position = restoreScroll.current;
-    const el = messagesRef.current;
-    if (!position || !el || position.channelId !== selectedId) return;
-    el.scrollTop = position.top + el.scrollHeight - position.height;
-    restoreScroll.current = null;
-  }, [messages, selectedId]);
-
-  const handleMessagesScroll = useCallback(() => {
-    const container = messagesRef.current;
-    if (!container) return;
-    const distance = container.scrollHeight - container.scrollTop - container.clientHeight;
-    setShowJumpToLatest(distance > 180);
-    if (container.scrollTop < 120 && hasOlder && !loadingOlder && !messageSearch.trim()) void loadOlder();
-    if (distance < 140 && document.visibilityState === "visible" && selectedIdRef.current) {
-      const channelId = selectedIdRef.current;
-      markRead(channelId);
-    }
-  }, [hasOlder, loadingOlder, loadOlder, markRead, messageSearch]);
-
-  const jumpToLatest = useCallback(() => {
-    const container = messagesRef.current;
-    if (!container) return;
-    container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
-    setShowJumpToLatest(false);
-  }, []);
 
   useEffect(() => {
     const unread = channels.reduce((sum, channel) => sum + channel.unread, 0);
@@ -507,7 +395,6 @@ export function Chat() {
     if (!selectedId || !text || sendingRef.current) return;
     const channelId=selectedId;
     sendingRef.current=true;
-    messageRequest.current?.abort();
     try {
       setSending(true);
       const response = await api.post<Message>(`/chat/channels/${selectedId}/messages`, { content: text, parentId: replyTo?.id ?? null, clientMessageId: crypto.randomUUID() });
