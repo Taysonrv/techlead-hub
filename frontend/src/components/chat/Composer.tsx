@@ -69,10 +69,10 @@ export function Composer({ channelId, channelType, content, sending, uploadingAt
       onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node)) setDragging(false); }}
       onDrop={handleDrop} onPaste={handlePaste}
       sx={{ position: "relative", px: { xs: 1, md: 1.5 }, pb: 1, pt: .5, bgcolor: "background.paper" }}>
-      {dragging && <Box sx={{ position: "absolute", inset: 0, zIndex: 2, bgcolor: "action.hover", border: "2px dashed", borderColor: "primary.main", borderRadius: 2, display: "grid", placeItems: "center", pointerEvents: "none" }}><Typography fontWeight={800}>Solte o arquivo para anexar</Typography></Box>}
+      {dragging && <Box sx={{ position: "absolute", inset: 0, zIndex: 2, bgcolor: "action.hover", border: "2px dashed", borderColor: "primary.main", borderRadius: 2, display: "grid", placeItems: "center", pointerEvents: "none" }}><Typography sx={{ fontWeight: 800 }}>Solte o arquivo para anexar</Typography></Box>}
       {pendingFile && <Paper variant="outlined" sx={{ display: "flex", alignItems: "center", gap: 1, px: 1.25, py: .75, mb: 1, borderRadius: 2, bgcolor: "action.hover" }}>
         <UploadFileOutlined color="primary" />
-        <Box sx={{ flex: 1, minWidth: 0 }}><Typography variant="body2" noWrap fontWeight={700}>{pendingFile.name}</Typography><Typography variant="caption" color="text.secondary">{(pendingFile.size / 1024).toFixed(1)} KB · Pronto para anexar</Typography></Box>
+        <Box sx={{ flex: 1, minWidth: 0 }}><Typography variant="body2" noWrap sx={{ fontWeight: 700 }}>{pendingFile.name}</Typography><Typography variant="caption" color="text.secondary">{(pendingFile.size / 1024).toFixed(1)} KB · Pronto para anexar</Typography></Box>
         <Tooltip title="Cancelar anexo"><IconButton size="small" onClick={() => setPendingFile(null)} disabled={uploadingAttachment} aria-label="Cancelar anexo"><CloseRounded fontSize="small" /></IconButton></Tooltip>
         <Button size="small" variant="contained" disabled={uploadingAttachment || !channelId} onClick={() => { onAttach(pendingFile); setPendingFile(null); }} startIcon={uploadingAttachment ? <CircularProgress size={14} /> : <UploadFileOutlined />}>Enviar arquivo</Button>
       </Paper>}
