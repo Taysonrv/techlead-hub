@@ -217,7 +217,7 @@ export class ChatService {
       where: { channelId, deletedAt: null, ...(beforeId ? { id: { lt: beforeId } } : {}) },
       orderBy: { id: "desc" },
       take: 100,
-      include: { author: { select: memberUserSelect } },
+      include: { author: { select: memberUserSelect }, attachment: { select: { name: true, mimeType: true, size: true } } },
     });
     return messages.reverse();
   }
