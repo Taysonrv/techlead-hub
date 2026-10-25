@@ -166,6 +166,25 @@ model ChatMessage {
 }
 
 
+model ChatIncidentAction {
+  id          Int      @id @default(autoincrement())
+  channelId   Int
+  authorId    Int
+  kind        String   @db.VarChar(24)
+  title       String   @db.VarChar(200)
+  details     String?  @db.VarChar(2000)
+  status      String   @default("OPEN") @db.VarChar(24)
+  assigneeId  Int?
+  dueAt       DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  closedAt    DateTime?
+
+  @@index([channelId, createdAt])
+  @@index([assigneeId, status])
+}
+
+// =========================================================
 // =========================================================
 // CALENDÁRIO / REUNIÕES
 // =========================================================
