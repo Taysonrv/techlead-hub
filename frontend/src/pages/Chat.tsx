@@ -771,13 +771,13 @@ export function Chat() {
       sx={{ display: { xs: "block", lg: "none" } }}
       slotProps={{ paper: { sx: { width: { xs: "min(92vw, 360px)", sm: 380 }, maxWidth: "100vw", p: 2, bgcolor: "background.paper" } } }}>
       <Stack spacing={2}>
-        <Stack direction="row" alignItems="center" justifyContent="space-between">
-          <Typography variant="h6" fontWeight={800}>Informações da conversa</Typography>
+        <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between" }}>
+          <Typography variant="h6" sx={{ fontWeight: 800 }}>Informações da conversa</Typography>
           <IconButton aria-label="Fechar informações" onClick={() => setConversationInfoOpen(false)}><CloseOutlined /></IconButton>
         </Stack>
         <Divider />
         {selected && <>
-          <Typography fontWeight={800}>{selected.name}</Typography>
+          <Typography sx={{ fontWeight: 800 }}>{selected.name}</Typography>
           <Chip size="small" label={selected.type === "CONTEXT" ? "Sala de incidente" : selected.type === "DIRECT" ? "Conversa direta" : "Canal da equipe"} sx={{ alignSelf: "flex-start" }} />
           {selected.description && <Typography variant="body2" color="text.secondary">{selected.description}</Typography>}
           {selected.type === "CONTEXT" && <IncidentContextSummary channel={selected} onOpenActions={() => { setConversationInfoOpen(false); setIncidentActionsOpen(true); }} onSearchHistory={() => { setConversationInfoOpen(false); setHistorySearchOpen(true); }} />}
