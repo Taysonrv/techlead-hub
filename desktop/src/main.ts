@@ -1997,6 +1997,8 @@ async function selectConfigurationFile() {
     return null;
   }
 
+  const size = fs.statSync(selectedFile).size;
+  if (size > 128 * 1024) throw new Error("Arquivo .env muito grande (máximo de 128 KB).");
   const content = fs.readFileSync(selectedFile, "utf8");
 
   return {
@@ -2005,6 +2007,8 @@ async function selectConfigurationFile() {
     project: parseEnvValue(content, "AZURE_DEVOPS_PROJECT") || "",
     wiki: parseEnvValue(content, "AZURE_DEVOPS_WIKI") || "",
     pat: parseEnvValue(content, "AZURE_DEVOPS_PAT") || "",
+    movideskToken: parseEnvValue(content, "MOVIDESK_TOKEN") || "",
+    movideskUrl: parseEnvValue(content, "MOVIDESK_URL") || "",
     smtpHost: parseEnvValue(content, "SMTP_HOST") || "",
     smtpPort: parseEnvValue(content, "SMTP_PORT") || "",
     smtpSecure: parseEnvValue(content, "SMTP_SECURE") || "",
