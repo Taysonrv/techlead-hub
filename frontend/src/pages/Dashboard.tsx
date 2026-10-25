@@ -1099,7 +1099,11 @@ export function Dashboard() {
   ======================================================= */
 
   if (loading) {
-    return <ContentState kind="loading" title="Carregando visão executiva" minHeight={360} />;
+    return (
+      <Box sx={{ width: "100%", minWidth: 0, p: { xs: 1, sm: 2 } }}>
+        <ContentState kind="loading" title="Carregando visão executiva" description="Preparando indicadores, gráficos e análises da operação." minHeight={360} />
+      </Box>
+    );
   }
 
   if (error && tickets.length === 0) {
@@ -2844,34 +2848,27 @@ function CardBase({
         border:
           "1px solid",
 
-        borderColor: isDark ? "rgba(77,153,210,.24)" : "divider",
+        borderColor: "divider",
 
         borderRadius: "var(--hub-radius-lg)",
 
-        background: isDark
-          ? "linear-gradient(145deg, rgba(22,33,53,.98), rgba(8,36,47,.98))"
-          : "var(--hub-surface)",
+        background: "var(--hub-surface)",
 
-        boxShadow: isDark
-          ? "0 16px 38px rgba(0,0,0,.20), inset 0 1px rgba(255,255,255,.025)"
-          : "0 4px 18px rgba(16,24,40,.055)",
+        boxShadow: isDark ? "0 6px 20px rgba(0,0,0,.12)" : "0 3px 14px rgba(16,24,40,.045)",
 
         overflow: "hidden",
         height: "100%",
-        transition: "border-color .18s ease, box-shadow .18s ease, transform .18s ease",
+        transition: "border-color .18s ease, box-shadow .18s ease",
         "&:hover": {
-          borderColor: isDark ? "rgba(47,208,255,.34)" : "rgba(24,199,122,.32)",
-          boxShadow: isDark ? "0 18px 44px rgba(0,0,0,.26)" : "0 8px 24px rgba(16,24,40,.08)",
+          borderColor: "primary.main",
+          boxShadow: isDark ? "0 8px 24px rgba(0,0,0,.16)" : "0 6px 18px rgba(16,24,40,.065)",
         },
       }}
     >
       <CardContent
         sx={{
-          p: 2,
-
-          "&:last-child": {
-            pb: 2,
-          },
+          p: { xs: 1.75, sm: 2.25 },
+          "&:last-child": { pb: { xs: 1.75, sm: 2.25 } },
         }}
       >
         {children}
@@ -2908,7 +2905,6 @@ function OperationalRankingCard({
   onItemClick: (label: string) => void;
 }) {
   const theme = useTheme();
-  const dark = theme.palette.mode === "dark";
   return (
     <CardBase>
       <Box sx={{ textAlign: "center" }}>
@@ -2916,13 +2912,13 @@ function OperationalRankingCard({
         <Typography variant="caption" color="text.secondary">{subtitle}</Typography>
       </Box>
       {data.length ? (
-        <Box sx={{ height: Math.max(250, Math.min(330, data.length * 44 + 64)), mt: 1.25 }}>
+        <Box sx={{ height: Math.max(250, Math.min(330, data.length * 44 + 64)), mt: 1.25, minWidth: 0 }}>
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={data} layout="vertical" margin={{ left: 10, right: 34, top: 4, bottom: 4 }}>
-              <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={dark ? "rgba(148,163,184,.16)" : "#E4E7EC"} />
-              <XAxis type="number" allowDecimals={false} tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
-              <YAxis type="category" dataKey="label" width={150} tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
-              <Tooltip cursor={false} />
+              <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={theme.palette.divider} />
+              <XAxis type="number" allowDecimals={false} tick={{ fontSize: 10, fill: theme.palette.text.secondary }} axisLine={false} tickLine={false} />
+              <YAxis type="category" dataKey="label" width={150} tick={{ fontSize: 10, fill: theme.palette.text.secondary }} axisLine={false} tickLine={false} />
+              <Tooltip cursor={false} contentStyle={{ backgroundColor: theme.palette.background.paper, color: theme.palette.text.primary, border: `1px solid ${theme.palette.divider}`, borderRadius: 10 }} />
               <Bar dataKey="total" name="Tickets" fill={aliareColors.green} radius={[0, 7, 7, 0]} barSize={18} cursor="pointer" minPointSize={3}
                 onClick={(_, index) => {
                   const item = data[index];
