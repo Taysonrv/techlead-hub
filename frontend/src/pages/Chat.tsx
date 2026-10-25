@@ -9,6 +9,7 @@ import { playNotificationSound } from "../utils/notificationSound";
 import { IncidentActionsPanel } from "../components/IncidentActionsPanel";
 import { ChatHistorySearch } from "../components/ChatHistorySearch";
 import { IncidentContextSummary } from "../components/chat/IncidentContextSummary";
+import { SharedFilesPanel } from "../components/chat/SharedFilesPanel";
 import { ConversationListHeader } from "../components/chat/ConversationListHeader";
 import { ConversationListSearch } from "../components/chat/ConversationListSearch";
 import { ChannelList } from "../components/chat/ChannelList";
@@ -774,6 +775,7 @@ export function Chat() {
           <Chip size="small" label={selected.type === "CONTEXT" ? "Sala de incidente" : selected.type === "DIRECT" ? "Conversa direta" : "Canal da equipe"} sx={{ alignSelf: "flex-start" }} />
           {selected.description && <Typography variant="body2" color="text.secondary">{selected.description}</Typography>}
           {selected.type === "CONTEXT" && <IncidentContextSummary channel={selected} onOpenActions={() => { setConversationInfoOpen(false); setIncidentActionsOpen(true); }} onSearchHistory={() => { setConversationInfoOpen(false); setHistorySearchOpen(true); }} />}
+          <SharedFilesPanel channelId={selected.id} messages={messages} />
           <Typography variant="subtitle2">Participantes ({selected.members?.length ?? 0})</Typography>
           <Stack spacing={1}>{selected.members?.map((member) => <Typography variant="body2" key={member.user.id}>{member.user.name} · @{member.user.username}</Typography>)}</Stack>
           <Button variant="outlined" onClick={() => { setConversationInfoOpen(false); setHistorySearchOpen(true); }}>Pesquisar histórico</Button>
@@ -849,6 +851,7 @@ export function Chat() {
             <Typography variant="caption" color="text.secondary">{selected.type === "DIRECT" ? "Conversa privada" : selected.type === "CONTEXT" ? "Sala de incidente" : "Canal da equipe"}</Typography>
           </Box>
           {selected.type === "CONTEXT" && <IncidentContextSummary channel={selected} onOpenActions={() => setIncidentActionsOpen(true)} onSearchHistory={() => setHistorySearchOpen(true)} />}
+          <SharedFilesPanel channelId={selected.id} messages={messages} />
           <Divider />
           {selected.type === "DIRECT" && selectedPeer ? <Stack spacing={1}>
             <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 900 }}>Contato</Typography>
