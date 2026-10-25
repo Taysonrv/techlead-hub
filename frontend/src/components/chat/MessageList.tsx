@@ -15,7 +15,7 @@ type Props = {
 
 export function MessageList({ visibleMessages, messages, currentUserId, currentUsername, pinnedIds, onTogglePinned, onReply, onOpenRecord }: Props) {
   return (
-    <>
+    <div role="log" aria-label="Histórico de mensagens" aria-live="off" style={{ maxWidth: 1120, margin: "0 auto", width: "100%" }}>
       {visibleMessages.map((message, messageIndex) => {
         const mine = message.author.id === currentUserId;
         const messageDay = new Date(message.createdAt).toLocaleDateString("pt-BR");
@@ -23,10 +23,10 @@ export function MessageList({ visibleMessages, messages, currentUserId, currentU
         const showDay = messageDay !== previousDay;
         const parent = message.parentId ? messages.find((item) => item.id === message.parentId) : null;
         const previous = visibleMessages[messageIndex - 1];
-        const sameAuthor = previous?.author.id === message.author.id && (new Date(message.createdAt).getTime() - new Date(previous.createdAt).getTime()) < 5 * 60_000;
+        const sameAuthor = !showDay && previous?.author.id === message.author.id && (new Date(message.createdAt).getTime() - new Date(previous.createdAt).getTime()) >= 0 && (new Date(message.createdAt).getTime() - new Date(previous.createdAt).getTime()) < 5 * 60_000;
         const mentioned = Boolean(currentUsername && message.content.toLowerCase().includes(`@${currentUsername.toLowerCase()}`));
         return <MessageBubble key={message.id} message={message} parent={parent} mine={mine} messageDay={messageDay} showDay={showDay} sameAuthor={sameAuthor} mentioned={mentioned} pinned={pinnedIds.has(message.id)} onTogglePinned={onTogglePinned} onReply={onReply} onOpenRecord={onOpenRecord} />;
       })}
-    </>
+    </div>
   );
 }
