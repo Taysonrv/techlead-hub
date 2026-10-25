@@ -1,5 +1,5 @@
 import { Box, Chip, IconButton, List, ListItemButton, ListItemText, Stack, Tooltip, Typography } from "@mui/material";
-import { Circle, GroupsOutlined, PersonOutlineRounded } from "@mui/icons-material";
+import { Circle, GroupsOutlined, PersonOutlineRounded, ReportProblemOutlined } from "@mui/icons-material";
 import { presenceColor } from "./chatTypes";
 import type { Channel, Presence, RealtimeSnapshot } from "./chatTypes";
 
@@ -15,18 +15,22 @@ type Props = {
 };
 
 export function ChannelList({ channels, selectedId, favorites, presence, remoteTyping, currentUserId, onSelect, onToggleFavorite }: Props) {
+  const groupOf = (channel: Channel) => favorites.includes(channel.id) ? "Favoritos" : channel.type === "CONTEXT" ? "Incidentes ativos" : channel.type === "DIRECT" ? "Conversas diretas" : "Equipes";
+  const groupOrder = ["Incidentes ativos", "Favoritos", "Equipes", "Conversas diretas"];
+  const groupedChannels = [...channels].sort((a, b) => groupOrder.indexOf(groupOf(a)) - groupOrder.indexOf(groupOf(b)));
   return (
         <List disablePadding sx={{ width: "100%", py: .35 }}>
-          {channels.map((channel, index) => {
-            const group = favorites.includes(channel.id) ? "Favoritos" : channel.type === "DIRECT" ? "Recentes" : "Equipes";
-            const previousChannel = channels[index - 1];
-            const previousGroup = previousChannel ? (favorites.includes(previousChannel.id) ? "Favoritos" : previousChannel.type === "DIRECT" ? "Recentes" : "Equipes") : null;
+          {groupedChannels.map((channel, index) => {
+            const group = groupOf(channel);
+            const previousChannel = groupedChannels[index - 1];
+            const previousGroup = previousChannel ? groupOf(previousChannel) : null;
             return <Box key={channel.id}>
               {group !== previousGroup && <Typography variant="overline" sx={{ display: "block", px: 1.35, pt: index ? .9 : .7, pb: .2, fontSize: ".61rem", lineHeight: 1.4, letterSpacing: ".09em", fontWeight: 900, color: "text.secondary" }}>{group}</Typography>}
               
               <ListItemButton
                 key={channel.id}
                 selected={channel.id === selectedId}
+                aria-label={`Abrir conversa ${channel.name}${channel.unread ? `, ${channel.unread} não lidas` : ""}`}
                 onClick={() => onSelect(channel.id)}
                 sx={{
                   py: .58,
@@ -36,8 +40,8 @@ export function ChannelList({ channels, selectedId, favorites, presence, remoteT
                   minHeight: 52,
                   borderRadius: 2.5,
                   border: "1px solid transparent",
-                  transition: "background-color .18s ease, border-color .18s ease, transform .18s ease, box-shadow .18s ease",
-                  "&:hover": { transform: "translateX(2px)", bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(255,255,255,.035)" : "rgba(15,23,42,.035)", borderColor: (theme) => theme.palette.mode === "dark" ? "rgba(148,163,184,.10)" : "rgba(148,163,184,.16)" },
+                  transition: (theme) => theme.transitions.create(["background-color", "border-color"], { duration: theme.transitions.duration.shorter }),
+                  "&:hover": { bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(255,255,255,.035)" : "rgba(15,23,42,.035)", borderColor: (theme) => theme.palette.mode === "dark" ? "rgba(148,163,184,.10)" : "rgba(148,163,184,.16)" },
                   "&.Mui-selected": { bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(39,57,72,.88)" : "rgba(239,247,244,.96)", borderColor: (theme) => theme.palette.mode === "dark" ? "rgba(24,199,122,.18)" : "rgba(24,199,122,.16)", boxShadow: "inset 3px 0 0 rgba(24,199,122,.78), 0 8px 22px rgba(15,23,42,.055)" },
                   "&.Mui-selected:hover": { bgcolor: "action.selected" },
                 }}
@@ -49,7 +53,7 @@ export function ChannelList({ channels, selectedId, favorites, presence, remoteT
                 <ListItemText
                   primary={
                     <Stack direction="row" spacing={.5} sx={{ alignItems: "center", minWidth: 0 }}>
-                      <Box sx={{ color: "text.secondary", display: "flex", alignItems: "center" }}>{channel.type === "DIRECT" ? <PersonOutlineRounded sx={{ fontSize: 14 }} /> : <GroupsOutlined sx={{ fontSize: 14 }} />}</Box><Typography noWrap sx={{ fontWeight: channel.unread ? 900 : 780, fontSize: ".84rem", lineHeight: 1.2, letterSpacing: "-.01em", flex: 1 }}>{channel.name}</Typography>
+                      <Box sx={{ color: "text.secondary", display: "flex", alignItems: "center" }}>{channel.type === "DIRECT" ? <PersonOutlineRounded sx={{ fontSize: 14 }} /> : channel.type === "CONTEXT" ? <ReportProblemOutlined sx={{ fontSize: 14 }} /> : <GroupsOutlined sx={{ fontSize: 14 }} />}</Box><Typography noWrap sx={{ fontWeight: channel.unread ? 900 : 780, fontSize: ".84rem", lineHeight: 1.2, letterSpacing: "-.01em", flex: 1 }}>{channel.name}</Typography>
                       {favorites.includes(channel.id) && <Typography component="span" sx={{ color: "warning.main", fontSize: ".72rem" }}>★</Typography>}
                     </Stack>
                   }
@@ -58,7 +62,7 @@ export function ChannelList({ channels, selectedId, favorites, presence, remoteT
                     if (typing) return `${typing.name} está digitando...`;
                     const latest = channel.messages?.[channel.messages.length - 1];
                     if (!latest) return channel.clientName || channel.description || "Sem mensagens ainda";
-                    const preview = latest.content.startsWith("[hub-card]") ? "Compartilhou um registro" : latest.content.startsWith("[anexo] ") ? "📎 Enviou um arquivo" : latest.content.replace(/\s+/g, " ");
+                    const preview = latest.kind === "ATTACHMENT" ? "📎 Enviou um arquivo" : latest.content.startsWith("[hub-card]") ? "Compartilhou um registro" : latest.content.startsWith("[anexo] ") ? "📎 Enviou um arquivo" : latest.content.replace(/\s+/g, " ");
                     return `${latest.author.id === currentUserId ? "Você: " : ""}${preview}`;
                   })()}
                   slotProps={{ secondary: { sx: { fontSize: ".69rem", mt: .28, lineHeight: 1.25, fontWeight: channel.unread ? 750 : 450, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } } }}
