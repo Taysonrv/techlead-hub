@@ -143,6 +143,9 @@ model ChatChannelMember {
 }
 
 model ChatMessage {
+  kind      String @default("TEXT") @db.VarChar(24)
+  payload   Json?
+  clientMessageId String? @db.VarChar(80)
   id        Int @id @default(autoincrement())
   channelId Int
   authorId  Int
@@ -157,6 +160,7 @@ model ChatMessage {
   replies   ChatMessage[] @relation("ChatMessageReplies")
 
   @@index([channelId, createdAt])
+  @@unique([channelId, authorId, clientMessageId])
   @@index([authorId, createdAt])
   @@index([parentId])
 }
