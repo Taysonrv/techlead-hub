@@ -345,7 +345,7 @@ export function Settings() {
       }
       setForm((current) => {
         const next = { ...current };
-        for (const key of recovered) next[key] = imported[key];
+        for (const key of recovered) next[key] = imported[key] ?? current[key];
         return next;
       });
       setSuccess(
