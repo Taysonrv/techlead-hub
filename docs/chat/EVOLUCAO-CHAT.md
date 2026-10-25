@@ -91,3 +91,12 @@ O usuário relatou commit local `ff20d42` na branch `feat/evolucao-visual-design
 - Bolhas de mensagem com superfícies derivadas do tema MUI, melhor largura responsiva, ações ao hover/foco e rótulos acessíveis.
 - Drawer de informações da conversa em larguras menores que o breakpoint `lg`; o painel lateral permanece no grid desktop a partir de `lg`.
 - **Pendente de validação local:** `npm run lint` e `npm run build` no frontend, testes de arrastar/colar/upload, screenshots e verificação mobile. Ainda falta a navegação mobile lista/conversa completa e painel contextual com dados vivos.
+
+
+## Navegação mobile — terceira entrega (25/10/2026)
+
+- Em telas `xs`, a lista de conversas é exibida isoladamente até o usuário selecionar um canal.
+- A seleção de conversa abre a visualização de mensagens em tela cheia, com ação "Voltar para conversas".
+- Abertura por conversa direta, criação de canal, sala contextual e aviso de nova mensagem também navega para a conversa no mobile.
+- Layout desktop `md+` mantém lista e mensagens lado a lado; o painel contextual responsivo permanece disponível.
+- **Pendente:** teste local `npm run lint && npm run build`, validação manual nos breakpoints e testes E2E.
