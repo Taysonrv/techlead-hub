@@ -119,3 +119,13 @@ O usuário relatou commit local `ff20d42` na branch `feat/evolucao-visual-design
 - Agrupamentos existentes preservados; favoritos continuam acessíveis pelo botão próprio, sem abrir a conversa acidentalmente.
 - Nenhuma fotografia ou mensagem fictícia foi adicionada; os dados são os retornados pelas APIs.
 - **Validação pendente:** lint, build, screenshots e inspeção de estados de hover, foco, tema escuro e canais com nomes longos.
+
+
+## Revisão baseada em captura real — 25/10/2026
+
+- Captura real confirmou boa evolução da lista e dos balões, mas destacou cabeçalho com duas buscas e ausência do painel de compartilhamentos em monitor largo.
+- Em breakpoint `xl`, o painel de informações e arquivos agora é exibido por padrão ao selecionar conversa, com alternância pelo botão de informações. Breakpoints menores preservam abertura manual.
+- Removida a busca inline duplicada do cabeçalho; o ícone de pesquisa abre a busca de histórico existente.
+- Painel direito usa superfície integrada ao workspace e separador vertical, reduzindo o aspecto de cartão administrativo.
+- Nenhuma mensagem, imagem ou anexo de exemplo foi criado; a galeria reflete apenas arquivos realmente carregados.
+- **Validação necessária no ambiente local:** `npm run lint`, `npm run build`, screenshot desktop com conversa aberta e testes dos controles de painel e pesquisa.
