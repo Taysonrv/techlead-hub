@@ -51,7 +51,6 @@ export function useChatRealtime({ selectedId, onChannelsChanged, onMessagesChang
       const handlers = current.current;
       handlers.setPresence(snapshot.presence);
       handlers.setRemoteTyping(snapshot.typing);
-      lastRefreshAt = Date.now();
       const latestId = snapshot.latestMessage?.id ?? null;
       if (lastMessageId.current !== null && latestId !== lastMessageId.current) {
         void handlers.onChannelsChanged().catch(() => undefined);
