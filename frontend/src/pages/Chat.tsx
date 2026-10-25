@@ -678,7 +678,7 @@ export function Chat() {
   const append = (value: string) => setContent((current) => current ? `${current} ${value}` : value);
 
   return <Stack spacing={.9} sx={{ height: "100%", maxHeight: "100%", minHeight: 0, overflow: "hidden", px: { xs: .75, sm: 1, md: 1.15, xl: 1.35 }, pb: { xs: .75, md: 1.1 }, pt: { xs: .75, md: 1.05 }, boxSizing: "border-box", bgcolor: "background.default" }}>
-    <Paper elevation={0} sx={{ flexShrink: 0, minHeight: 68, px: 1.8, py: .8, borderRadius: 4, border: "1px solid", borderColor: "divider", borderLeft: "4px solid", borderLeftColor: "primary.main", overflow: "hidden", position: "relative", background: (theme) => theme.palette.mode === "dark" ? "linear-gradient(115deg,rgba(10,43,55,.96),rgba(16,34,55,.98) 56%,rgba(19,28,43,.98))" : "linear-gradient(115deg,#f2fffa,#f7fbff 58%,#f3f7fd)", boxShadow: (theme) => theme.palette.mode === "dark" ? "0 14px 34px rgba(0,0,0,.20), inset 0 1px rgba(255,255,255,.025)" : "0 14px 34px rgba(15,23,42,.075)" }}>
+    <Paper elevation={0} sx={{ display: selected ? "none" : "block", flexShrink: 0, minHeight: 68, px: 1.8, py: .8, borderRadius: 4, border: "1px solid", borderColor: "divider", borderLeft: "4px solid", borderLeftColor: "primary.main", overflow: "hidden", position: "relative", background: (theme) => theme.palette.mode === "dark" ? "linear-gradient(115deg,rgba(10,43,55,.96),rgba(16,34,55,.98) 56%,rgba(19,28,43,.98))" : "linear-gradient(115deg,#f2fffa,#f7fbff 58%,#f3f7fd)", boxShadow: (theme) => theme.palette.mode === "dark" ? "0 14px 34px rgba(0,0,0,.20), inset 0 1px rgba(255,255,255,.025)" : "0 14px 34px rgba(15,23,42,.075)" }}>
       <Stack direction="row" spacing={1.35} sx={{ alignItems: "center", minWidth: 0, pr: { md: 28 } }}>
         <Box sx={{ width: 40, height: 40, borderRadius: 2.4, display: "grid", placeItems: "center", flexShrink: 0, color: "primary.main", bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(24,199,122,.08)" : "rgba(24,199,122,.07)", border: "1px solid rgba(24,199,122,.24)", boxShadow: "0 8px 22px rgba(24,199,122,.10)" }}><ForumOutlined /></Box>
         <Box sx={{ minWidth: 0, flex: 1 }}>
@@ -764,7 +764,31 @@ export function Chat() {
     {selected?.type === "CONTEXT" && selectedId && <IncidentActionsPanel channelId={selectedId} open={incidentActionsOpen} onClose={() => setIncidentActionsOpen(false)} />}
     {selectedId && <ChatHistorySearch channelId={selectedId} open={historySearchOpen} onClose={() => setHistorySearchOpen(false)} />}
     {error && <Alert severity="error" onClose={() => setError("")}>{error}</Alert>}
-    <Paper elevation={0} sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "244px minmax(0,1fr)", lg: "252px minmax(0,1fr)", xl: (conversationInfoOpen || selected?.type === "CONTEXT" || (selected?.type === "TEAM" && teamPanelOpen)) ? "258px minmax(0,1fr) 292px" : "258px minmax(0,1fr)" }, gap: { xs: 0, md: .9 }, p: { xs: 0, md: .8 }, minHeight: 0, flex: 1, overflow: "hidden", borderRadius: 3.5, maxHeight: "100%", height: "100%", border: "1px solid", borderColor: "divider", boxShadow: "0 16px 42px rgba(15,23,42,.075)", bgcolor: "background.paper", backgroundImage: (theme) => theme.palette.mode === "dark" ? "linear-gradient(145deg,rgba(12,31,46,.98),rgba(11,27,42,.98))" : "linear-gradient(145deg,#ffffff,#fbfdff)" }}>
+    <Paper elevation={0} sx={{
+      display: "grid",
+      gridTemplateColumns: {
+        xs: "minmax(0, 1fr)",
+        md: "248px minmax(0, 1fr)",
+        lg: (conversationInfoOpen || selected?.type === "CONTEXT" || (selected?.type === "TEAM" && teamPanelOpen))
+          ? "252px minmax(0, 1fr) 276px"
+          : "252px minmax(0, 1fr)",
+        xl: (conversationInfoOpen || selected?.type === "CONTEXT" || (selected?.type === "TEAM" && teamPanelOpen))
+          ? "272px minmax(0, 1fr) 310px"
+          : "272px minmax(0, 1fr)",
+      },
+      gap: { xs: 0, md: 1 },
+      p: { xs: 0, md: 1 },
+      minHeight: 0,
+      flex: 1,
+      overflow: "hidden",
+      borderRadius: 3,
+      maxHeight: "100%",
+      height: "100%",
+      border: "1px solid",
+      borderColor: "divider",
+      boxShadow: (theme) => theme.shadows[2],
+      bgcolor: "background.paper",
+    }}>
       <Box sx={{ position: "relative", minHeight: 0, overflow: "hidden", display: "grid", gridTemplateRows: "auto auto 1px minmax(0, 1fr)", alignContent: "stretch", borderRadius: { xs: 0, md: 3.25 }, bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(255,255,255,.022)" : "rgba(248,250,252,.76)", border: { md: "1px solid" }, borderColor: { md: "divider" }, boxShadow: (theme) => theme.palette.mode === "dark" ? "0 10px 28px rgba(0,0,0,.10), inset 0 1px rgba(255,255,255,.02)" : "0 8px 24px rgba(15,23,42,.045)" }}>
         <ConversationListHeader channelCount={channels.length} unreadCount={totalUnread} canMaintain={["ADMIN", "COORDENADOR"].includes(user?.role ?? "")} maintenanceRunning={maintenanceRunning} onConsolidate={() => void consolidateDirectDuplicates()} onOpenDirect={() => setDirectOpen(true)} onCreateChannel={() => setCreateOpen(true)} />
         <ConversationListSearch value={conversationSearch} onChange={setConversationSearch} />
@@ -787,7 +811,7 @@ export function Chat() {
         {replyTo && <Stack direction="row" sx={{ px: 1.5, py: .7, alignItems: "center", justifyContent: "space-between", bgcolor: "action.hover", borderTop: "1px solid", borderColor: "divider" }}><Box><Typography variant="caption" sx={{ fontWeight: 850 }}>Respondendo a {replyTo.author.name}</Typography><Typography variant="caption" color="text.secondary" noWrap sx={{ display: "block", maxWidth: 620 }}>{replyTo.content}</Typography></Box><IconButton size="small" onClick={() => setReplyTo(null)}><CloseOutlined fontSize="small" /></IconButton></Stack>}
         <Composer channelId={selectedId} channelType={selected?.type} content={content} sending={sending} uploadingAttachment={uploadingAttachment} soundEnabled={soundEnabled} attachmentInputRef={attachmentInputRef} onAttach={(file) => void sendAttachment(file)} onOpenEmoji={setEmojiAnchor} onOpenStickers={() => setStickersOpen(true)} onOpenQuickActions={setQuickActionsAnchor} onToggleSound={() => { const next = !soundEnabled; setSoundEnabled(next); localStorage.setItem("techlead-chat-sound", next ? "on" : "off"); if ("Notification" in window && Notification.permission === "default") void Notification.requestPermission(); }} onContentChange={(value) => { setContent(value); if (selectedId && Date.now() - typingSentAt.current > 2500) { typingSentAt.current = Date.now(); void api.post(`/chat/channels/${selectedId}/typing`, { active: true }).catch(() => undefined); } if (typingTimer.current) window.clearTimeout(typingTimer.current); typingTimer.current = window.setTimeout(() => { if (selectedId) void api.post(`/chat/channels/${selectedId}/typing`, { active: false }).catch(() => undefined); }, 1200); }} onSend={() => void send()} />
       </Box>
-      {(conversationInfoOpen || selected?.type === "CONTEXT" || (selected?.type === "TEAM" && teamPanelOpen)) && selected && <Box sx={{ display: { xs: "none", xl: "block" }, border: "1px solid", borderColor: "divider", borderRadius: 3, p: 1.6, overflowY: "auto", my: .1, bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(255,255,255,.015)" : "rgba(248,250,252,.72)" }}>
+      {(conversationInfoOpen || selected?.type === "CONTEXT" || (selected?.type === "TEAM" && teamPanelOpen)) && selected && <Box sx={{ display: { xs: "none", lg: "block" }, border: "1px solid", borderColor: "divider", borderRadius: 3, p: 1.6, overflowY: "auto", my: .1, bgcolor: "background.default" }}>
         <Stack spacing={2}>
           <Box sx={{ textAlign: "center", pt: 1 }}>
             <Box sx={{ width: 64, height: 64, mx: "auto", mb: 1, borderRadius: "50%", bgcolor: "primary.main", color: "primary.contrastText", display: "grid", placeItems: "center", fontSize: "1.35rem", fontWeight: 950, boxShadow: "0 10px 24px rgba(24,199,122,.18)" }}>{selected.name.slice(0,1).toUpperCase()}</Box>
