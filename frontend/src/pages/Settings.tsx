@@ -336,12 +336,20 @@ export function Settings() {
         return;
       }
 
-      setForm({
-        ...EMPTY_FORM,
-        ...imported,
+      // A importação apenas prepara a revisão: não grava credenciais nem substitui
+      // campos existentes por valores vazios de um .env incompleto.
+      const supported = ["databaseUrl", "organization", "project", "wiki", "pat", "movideskToken", "movideskUrl"] as const;
+      const recovered = supported.filter((key) => typeof imported[key] === "string" && imported[key].trim().length > 0);
+      if (!recovered.length) {
+        throw new Error("O arquivo não contém configurações reconhecidas de banco, Azure ou Movidesk.");
+      }
+      setForm((current) => {
+        const next = { ...current };
+        for (const key of recovered) next[key] = imported[key];
+        return next;
       });
       setSuccess(
-        "Arquivo carregado. Revise os dados e clique em Salvar configurações.",
+        `Arquivo lido localmente: ${recovered.length} campo(s) reconhecido(s). Revise as credenciais antes de salvar. A importação não altera a configuração até sua confirmação.`,
       );
     } catch (importError) {
       setError(
@@ -993,7 +1001,7 @@ export function Settings() {
             disabled={saving}
             onClick={() => void importEnvironment()}
           >
-            Importar .env
+            Recuperar configurações (.env)
           </Button>}
 
           <Button
