@@ -24,14 +24,26 @@ export class WorkspaceController {
       analyst: typeof request.query.analyst === "string" ? request.query.analyst.trim() : null,
     }));
 
-  public technicalLeadership = async (request: AuthenticatedRequest, response: Response) =>
-    response.json(await this.service.technicalLeadership({
+  public technicalLeadership = async (request: AuthenticatedRequest, response: Response) => {
+    const startDate = typeof request.query.startDate === "string" ? request.query.startDate.trim() : null;
+    const endDate = typeof request.query.endDate === "string" ? request.query.endDate.trim() : null;
+    const validDate = (value: string) => {
+      if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(value)) return false;
+      const parsed = new Date(`${value}T00:00:00Z`);
+      return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+    };
+    if ((startDate && !validDate(startDate)) || (endDate && !validDate(endDate)) ||
+        Boolean(startDate) !== Boolean(endDate) || (startDate && endDate && startDate > endDate)) {
+      return response.status(400).json({ message: "Informe datas inicial e final válidas, no formato AAAA-MM-DD e em ordem cronológica." });
+    }
+    return response.json(await this.service.technicalLeadership({
       client: typeof request.query.client === "string" ? request.query.client.trim() : null,
       user: typeof request.query.user === "string" ? request.query.user.trim() : null,
       days: Number.isFinite(Number(request.query.days)) ? Number(request.query.days) : 30,
-      startDate: typeof request.query.startDate === "string" ? request.query.startDate.trim() : null,
-      endDate: typeof request.query.endDate === "string" ? request.query.endDate.trim() : null,
+      startDate,
+      endDate,
     }));
+  };
 
   public dataQuality = async (request: AuthenticatedRequest, response: Response) =>
     response.json(await this.service.dataQuality({
