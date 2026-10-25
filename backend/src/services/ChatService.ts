@@ -1,6 +1,7 @@
 import { prisma } from "../database/prisma";
 import { Prisma } from "@prisma/client";
 import { dataProtectionService } from "./DataProtectionService";
+import { chatEventBus } from "./ChatEventBus";
 
 const memberUserSelect = { id: true, name: true, username: true, role: true, avatarUpdatedAt: true } as const;
 
@@ -242,6 +243,7 @@ export class ChatService {
     });
     await prisma.chatChannel.update({ where: { id: channelId }, data: { updatedAt: new Date() } });
     await this.audit(userId, "CHAT_ATTACHMENT_CREATED", "ChatMessage", message.id, { channelId, name: safeName, mimeType, size: bytes.length });
+    await this.notifyChannel(channelId);
     return message;
   }
 
@@ -251,6 +253,7 @@ export class ChatService {
       where: { channelId_userId: { channelId, userId } },
       data: { lastReadAt: new Date() },
     });
+    await this.notifyChannel(channelId);
     return { ok: true };
   }
 
@@ -319,6 +322,7 @@ export class ChatService {
       return created;
     });
     await this.audit(userId, "CHAT_CONTEXT_OPENED", "ChatChannel", channel.id, { contextType, contextId });
+    await this.notifyChannel(channel.id);
     return channel;
   }
 
@@ -374,6 +378,7 @@ export class ChatService {
       length: content.length,
       mentionCount: mentions.length,
     });
+    await this.notifyChannel(channelId);
     return { ...message, mentions };
   }
 
@@ -464,6 +469,11 @@ export class ChatService {
     if (message.authorId !== userId && role === "ANALISTA") throw Object.assign(new Error("Você não pode remover esta mensagem."), { statusCode: 403 });
     await prisma.chatMessage.update({ where: { id: messageId }, data: { content: "[mensagem removida]", deletedAt: new Date() } });
     await this.audit(userId, "CHAT_MESSAGE_DELETED", "ChatMessage", messageId, { channelId: message.channelId });
+  }
+
+  private async notifyChannel(channelId: number) {
+    const members = await prisma.chatChannelMember.findMany({ where: { channelId }, select: { userId: true } });
+    chatEventBus.publish(members.map((member) => member.userId));
   }
 
   private async assertMember(userId: number, channelId: number) {
