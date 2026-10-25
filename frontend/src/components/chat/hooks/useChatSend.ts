@@ -49,5 +49,5 @@ export function useChatSend({ selectedId, content, replyTo, setMessages, setCont
       setSending(false);
     }
   }, [selectedId, content, replyTo, setMessages, setContent, setReplyTo, setShowJumpToLatest, setError]);
-  return { send, sending };
+  return { send, sending, setSending };
 }
