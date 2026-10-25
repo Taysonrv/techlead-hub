@@ -7,6 +7,7 @@ import { useAuth } from "../context/AuthContext";
 import { playNotificationSound } from "../utils/notificationSound";
 import { IncidentActionsPanel } from "../components/IncidentActionsPanel";
 import { ChatHistorySearch } from "../components/ChatHistorySearch";
+import { IncidentContextSummary } from "../components/chat/IncidentContextSummary";
 
 
 import { presenceColor } from "../components/chat/chatTypes";
@@ -829,14 +830,7 @@ export function Chat() {
             <Typography sx={{ fontWeight: 900 }}>{selected.name}</Typography>
             <Typography variant="caption" color="text.secondary">{selected.type === "DIRECT" ? "Conversa privada" : selected.type === "CONTEXT" ? "Sala de incidente" : "Canal da equipe"}</Typography>
           </Box>
-          {selected.type === "CONTEXT" && <Stack spacing={1.2}>
-            <Chip size="small" color="primary" label={selected.contextType === "TICKET" ? "Atendimento Movidesk" : "Tarefa Azure"} />
-            <Typography variant="body2"><b>Registro:</b> #{selected.contextId}</Typography>
-            {selected.clientName && <Typography variant="body2"><b>Cliente:</b> {selected.clientName}</Typography>}
-            <Button variant="contained" size="small" onClick={() => setIncidentActionsOpen(true)}>Decisões e acompanhamento</Button>
-            <Button variant="outlined" size="small" onClick={() => setHistorySearchOpen(true)}>Pesquisar histórico</Button>
-            <Divider />
-          </Stack>}
+          {selected.type === "CONTEXT" && <IncidentContextSummary channel={selected} onOpenActions={() => setIncidentActionsOpen(true)} onSearchHistory={() => setHistorySearchOpen(true)} />}
           <Divider />
           {selected.type === "DIRECT" && selectedPeer ? <Stack spacing={1}>
             <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 900 }}>Contato</Typography>
