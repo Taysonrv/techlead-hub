@@ -298,7 +298,7 @@ export function Chat() {
     const contextId = ticket || task;
     void api.post<Channel>("/chat/context", { contextType, contextId })
       .then(async ({ data: channel }) => {
-        setSelectedId(channel.id);
+        setSelectedId(channel.id); setMobileConversationOpen(true);
         await loadChannels();
         setError("");
       })
@@ -471,7 +471,7 @@ export function Chat() {
       channel.members?.some((member) => member.user.id === user?.id),
     );
     if (existing) {
-      setSelectedId(existing.id);
+      setSelectedId(existing.id); setMobileConversationOpen(true);
       setDirectOpen(false);
       setError("");
       if (pendingShare) {
@@ -489,7 +489,7 @@ export function Chat() {
       setOpeningDirectId(person.id);
       const response = await api.post<Channel>(`/chat/direct/${person.id}`);
       setChannels((current) => current.some((item) => item.id === response.data.id) ? current : [response.data, ...current]);
-      setSelectedId(response.data.id);
+      setSelectedId(response.data.id); setMobileConversationOpen(true);
       setDirectOpen(false);
       setError("");
       if (pendingShare) {
@@ -523,7 +523,7 @@ export function Chat() {
         memberIds,
       });
       await loadChannels();
-      setSelectedId(response.data.id);
+      setSelectedId(response.data.id); setMobileConversationOpen(true);
       setCreateOpen(false);
       setChannelName("");
       setMemberIds([]);
@@ -881,7 +881,7 @@ export function Chat() {
       message={incomingPopup ? <Paper elevation={10} sx={{ width: 340, maxWidth: "calc(100vw - 24px)", p: 1.35, borderRadius: 2.5, border: "1px solid", borderColor: "rgba(24,199,122,.35)", borderLeft: "4px solid", borderLeftColor: "primary.main", background: (theme) => theme.palette.mode === "dark" ? "linear-gradient(135deg,rgba(16,30,46,.98),rgba(17,48,42,.98))" : "linear-gradient(135deg,#fff,#f2fff9)", boxShadow: "0 18px 48px rgba(15,23,42,.20)" }}>
         <Stack direction="row" spacing={1} sx={{ alignItems: "flex-start" }}>
           <Box sx={{ width: 38, height: 38, borderRadius: "50%", bgcolor: "primary.main", color: "primary.contrastText", display: "grid", placeItems: "center", fontWeight: 950, flexShrink: 0 }}>{incomingPopup.authorName.slice(0,1).toUpperCase()}</Box>
-          <Box sx={{ minWidth: 0, flex: 1 }}><Typography variant="caption" color="primary.main" sx={{ fontWeight: 900 }}>NOVA MENSAGEM</Typography><Typography sx={{ fontWeight: 900, lineHeight: 1.2 }}>{incomingPopup.authorName}</Typography><Typography variant="caption" color="text.secondary">{incomingPopup.channelName}</Typography><Typography variant="body2" sx={{ mt: .55, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{incomingPopup.preview}</Typography><Button size="small" sx={{ mt: .65, px: 0 }} onClick={() => { setSelectedId(incomingPopup.channelId); setIncomingPopup(null); }}>Abrir conversa</Button></Box>
+          <Box sx={{ minWidth: 0, flex: 1 }}><Typography variant="caption" color="primary.main" sx={{ fontWeight: 900 }}>NOVA MENSAGEM</Typography><Typography sx={{ fontWeight: 900, lineHeight: 1.2 }}>{incomingPopup.authorName}</Typography><Typography variant="caption" color="text.secondary">{incomingPopup.channelName}</Typography><Typography variant="body2" sx={{ mt: .55, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{incomingPopup.preview}</Typography><Button size="small" sx={{ mt: .65, px: 0 }} onClick={() => { setSelectedId(incomingPopup.channelId); setMobileConversationOpen(true); setIncomingPopup(null); }}>Abrir conversa</Button></Box>
           <IconButton size="small" onClick={() => setIncomingPopup(null)}><CloseOutlined fontSize="small" /></IconButton>
         </Stack>
       </Paper> : undefined}
