@@ -23,6 +23,7 @@ import path from "node:path";
 import http from "node:http";
 import https from "node:https";
 import crypto from "node:crypto";
+import net from "node:net";
 
 import {
   autoUpdater,
@@ -801,6 +802,7 @@ function registerIpcHandlers() {
 
   ipcMain.removeHandler("configuration:get");
   ipcMain.removeHandler("configuration:import-env");
+  ipcMain.removeHandler("configuration:diagnose-database");
   ipcMain.removeHandler("configuration:save");
   ipcMain.removeHandler("configuration:recover-key");
   ipcMain.removeHandler("startup:get");
@@ -883,6 +885,36 @@ function registerIpcHandlers() {
 
   ipcMain.handle("configuration:import-env", async () => {
     return selectConfigurationFile();
+  });
+
+  // Diagnóstico de rede sem transmitir a senha ou abrir conexão ao banco.
+  // A autenticação real é verificada pelo readiness do backend após reiniciar.
+  ipcMain.handle("configuration:diagnose-database", async (_event, candidate: unknown) => {
+    const raw = typeof candidate === "string" && candidate.trim()
+      ? candidate.trim() : (readSecureValue("databaseUrl") || "");
+    let parsed: URL;
+    try {
+      parsed = new URL(raw);
+      if (!["postgres:", "postgresql:"].includes(parsed.protocol) || !parsed.hostname)
+        throw new Error("URL inválida");
+    } catch {
+      return { ok: false, message: "DATABASE_URL inválida ou ausente." };
+    }
+    const host = parsed.hostname;
+    const port = Number(parsed.port || "5432");
+    if (!Number.isInteger(port) || port < 1 || port > 65535)
+      return { ok: false, message: "Porta PostgreSQL inválida." };
+    return await new Promise<{ ok: boolean; message: string }>((resolve) => {
+      const socket = net.createConnection({ host, port });
+      const finish = (ok: boolean, message: string) => {
+        socket.destroy();
+        resolve({ ok, message });
+      };
+      socket.setTimeout(4500);
+      socket.once("connect", () => finish(true, "Servidor PostgreSQL acessível pela rede. A autenticação será validada ao reiniciar."));
+      socket.once("timeout", () => finish(false, "Tempo limite de conexão. Verifique rede, VPN e firewall."));
+      socket.once("error", () => finish(false, "Não foi possível alcançar o PostgreSQL. Verifique endereço, porta e VPN."));
+    });
   });
 
   ipcMain.handle("configuration:recover-key", async (event, input: unknown) => {
