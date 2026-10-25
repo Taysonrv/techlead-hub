@@ -4,7 +4,7 @@ import type { Channel, Presence } from "./chatTypes";
 
 type Props = {
   selected: Channel | null | undefined;
-  selectedPresence: Presence | undefined;
+  selectedPresence: Presence | null | undefined;
   presence: Presence[];
   messageSearch: string;
   onMessageSearch: (value: string) => void;
