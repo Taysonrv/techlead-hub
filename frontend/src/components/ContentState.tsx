@@ -47,6 +47,7 @@ export function ContentState({
           borderColor: "divider",
           borderRadius: "var(--hub-radius-lg)",
           bgcolor: "background.paper",
+          boxShadow: "var(--hub-shadow-card)",
         }}
       >
         <Stack spacing={1.1}>
