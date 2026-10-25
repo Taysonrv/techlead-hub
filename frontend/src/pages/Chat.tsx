@@ -1,6 +1,6 @@
 import { ForumOutlined, ReplyOutlined, CloseOutlined, SearchOutlined, Circle, DeleteOutlineRounded, StarOutlineRounded, VolumeOffOutlined, GroupsOutlined, PersonOutlineRounded, BoltOutlined, AssignmentTurnedInOutlined, AlternateEmailOutlined, KeyboardArrowDownRounded } from "@mui/icons-material";
 import { Alert, Box, Button, Checkbox, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Divider, FormControlLabel, IconButton, List, ListItemButton, ListItemIcon, ListItemText, Menu, MenuItem, Paper, Popover, Skeleton, Snackbar, Stack, TextField, Tooltip, Typography } from "@mui/material";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { api, getAccessToken, getApiBaseUrl } from "../services/api";
 import { useAuth } from "../context/AuthContext";
@@ -27,6 +27,11 @@ export function Chat() {
   const [participants, setParticipants] = useState<Person[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(() => { const value = Number(new URLSearchParams(window.location.search).get("channel")); return Number.isFinite(value) && value > 0 ? value : null; });
   const [messages, setMessages] = useState<Message[]>([]);
+  const [hasOlder, setHasOlder] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const olderCursor = useRef<number | null>(null);
+  const loadingOlderRef = useRef(false);
+  const restoreScroll = useRef<{ channelId: number; height: number; top: number } | null>(null);
   const [content, setContent] = useState("");
   const [quickActionsAnchor, setQuickActionsAnchor] = useState<HTMLElement | null>(null);
   const [loading, setLoading] = useState(false);
@@ -229,7 +234,13 @@ export function Chat() {
       if (!quiet) setLoading(true);
       const response = await api.get<{ messages: Message[] }>(`/chat/channels/${channelId}/messages`, { signal: controller.signal });
       if (controller.signal.aborted || selectedIdRef.current !== channelId) return;
-      setMessages(response.data.messages);
+      if (quiet) {
+        setMessages((current) => { const byId = new Map(current.map((message) => [message.id, message])); response.data.messages.forEach((message) => byId.set(message.id, message)); return [...byId.values()].sort((a, b) => a.id - b.id); });
+      } else {
+        setMessages(response.data.messages);
+        olderCursor.current = response.data.messages[0]?.id ?? null;
+        setHasOlder(response.data.messages.length === 100);
+      }
       if (document.visibilityState === "visible" && !quiet) {
         const container = messagesRef.current;
         if (!container || container.scrollHeight - container.scrollTop - container.clientHeight < 160) {
@@ -296,7 +307,7 @@ export function Chat() {
   }, [searchParams, setSearchParams, loadChannels]);
 
   useEffect(() => {
-    setMessages([]);setReplyTo(null);setContent("");setMessageSearch("");setShowJumpToLatest(false);
+    setMessages([]);olderCursor.current = null;restoreScroll.current = null;setHasOlder(false);setReplyTo(null);setContent("");setMessageSearch("");setShowJumpToLatest(false);
     if (!selectedId) { setLoading(false); return; }
     void loadMessages(selectedId);
     return () => { messageRequest.current?.abort(); };
@@ -305,17 +316,55 @@ export function Chat() {
     const container = messagesRef.current;
     if (!container) return;
     const nearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 140;
-    if (nearBottom || !showJumpToLatest) {
+    if (!restoreScroll.current && (nearBottom || !showJumpToLatest)) {
       container.scrollTo({ top: container.scrollHeight, behavior: "auto" });
       setShowJumpToLatest(false);
     }
   }, [messages, selectedId, showJumpToLatest]);
+
+  const loadOlder = useCallback(async () => {
+    const channelId = selectedIdRef.current;
+    const beforeId = olderCursor.current;
+    if (!channelId || !beforeId || loadingOlderRef.current) return;
+    loadingOlderRef.current = true;
+    setLoadingOlder(true);
+    const el = messagesRef.current;
+    const position = el ? { channelId, height: el.scrollHeight, top: el.scrollTop } : null;
+    try {
+      const response = await api.get<{ messages: Message[] }>(`/chat/channels/${channelId}/messages`, { params: { beforeId } });
+      if (selectedIdRef.current !== channelId) return;
+      const older = response.data.messages;
+      setHasOlder(older.length === 100);
+      if (older.length) {
+        olderCursor.current = older[0].id;
+        restoreScroll.current = position;
+        setMessages((current) => {
+          const ids = new Set(current.map((message) => message.id));
+          return [...older.filter((message) => !ids.has(message.id)), ...current];
+        });
+      }
+    } catch {
+      if (selectedIdRef.current === channelId) setError("Não foi possível carregar o histórico anterior.");
+    } finally {
+      loadingOlderRef.current = false;
+      setLoadingOlder(false);
+    }
+  }, []);
+
+  useLayoutEffect(() => {
+    const position = restoreScroll.current;
+    const el = messagesRef.current;
+    if (!position || !el || position.channelId !== selectedId) return;
+    el.scrollTop = position.top + el.scrollHeight - position.height;
+    restoreScroll.current = null;
+  }, [messages, selectedId]);
 
   const handleMessagesScroll = useCallback(() => {
     const container = messagesRef.current;
     if (!container) return;
     const distance = container.scrollHeight - container.scrollTop - container.clientHeight;
     setShowJumpToLatest(distance > 180);
+    if (container.scrollTop < 120 && hasOlder && !loadingOlder && !messageSearch.trim()) void loadOlder();
     if (distance < 140 && document.visibilityState === "visible" && selectedIdRef.current) {
       const channelId = selectedIdRef.current;
       void api.post(`/chat/channels/${channelId}/read`).then(() => {
@@ -323,7 +372,7 @@ export function Chat() {
         window.dispatchEvent(new Event("techlead-hub:chat-read"));
       }).catch(() => undefined);
     }
-  }, []);
+  }, [hasOlder, loadingOlder, loadOlder, messageSearch]);
 
   const jumpToLatest = useCallback(() => {
     const container = messagesRef.current;
@@ -729,7 +778,7 @@ export function Chat() {
         <ConversationHeader selected={selected} selectedPresence={selectedPresence} presence={presence} messageSearch={messageSearch} onMessageSearch={setMessageSearch} onOpenActions={() => setIncidentActionsOpen(true)} onSearchHistory={() => setHistorySearchOpen(true)} onOpenOrigin={(contextType, contextId) => navigate(contextType === "TICKET" ? `/operacao/tickets?movidesk=${encodeURIComponent(contextId)}` : `/correcoes?task=${encodeURIComponent(contextId)}`)} teamPanelOpen={teamPanelOpen} onToggleTeamPanel={() => setTeamPanelOpen((value) => !value)} conversationInfoOpen={conversationInfoOpen} onToggleConversationInfo={() => setConversationInfoOpen((value) => !value)} onOpenMenu={setConversationMenuAnchor} />
         <Divider />
         <Box ref={messagesRef} onScroll={handleMessagesScroll} sx={{ position: "relative", flex: "1 1 0", height: 0, minHeight: 0, overflowY: "auto", overflowX: "hidden", overscrollBehavior: "contain", p: { xs: 1.25, md: 1.75 }, scrollbarWidth: "thin", "&::-webkit-scrollbar": { width: 7 }, "&::-webkit-scrollbar-thumb": { bgcolor: "action.disabled", borderRadius: 8 }, "&::-webkit-scrollbar-track": { bgcolor: "transparent" }, bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(7,22,34,.22)" : "#f7f9fb", backgroundImage: (theme) => theme.palette.mode === "dark" ? "radial-gradient(circle at 50% 0%, rgba(24,199,122,.025), transparent 32%), radial-gradient(circle at 100% 100%, rgba(59,130,246,.025), transparent 28%)" : "radial-gradient(circle at 50% 0%, rgba(24,199,122,.035), transparent 34%), radial-gradient(circle at 100% 100%, rgba(59,130,246,.035), transparent 30%)" }}>
-          {loading ? <Stack spacing={1.1} sx={{ p: 1 }}><Skeleton variant="rounded" width="36%" height={48} /><Skeleton variant="rounded" width="52%" height={68} sx={{ alignSelf: "flex-end" }} /><Skeleton variant="rounded" width="28%" height={44} /></Stack> : <MessageList visibleMessages={visibleMessages} messages={messages} currentUserId={user?.id} currentUsername={user?.username} pinnedIds={pinState} onTogglePinned={(id) => void togglePinnedMessage(id)} onReply={setReplyTo} onOpenRecord={openSharedRecord} />}
+          {loading ? <Stack spacing={1.1} sx={{ p: 1 }}><Skeleton variant="rounded" width="36%" height={48} /><Skeleton variant="rounded" width="52%" height={68} sx={{ alignSelf: "flex-end" }} /><Skeleton variant="rounded" width="28%" height={44} /></Stack> : <><Box sx={{ textAlign: "center" }}>{hasOlder && !messageSearch.trim() && <Button size="small" disabled={loadingOlder} onClick={() => void loadOlder()}>{loadingOlder ? "Carregando..." : "Mensagens anteriores"}</Button>}</Box><MessageList visibleMessages={visibleMessages} messages={messages} currentUserId={user?.id} currentUsername={user?.username} pinnedIds={pinState} onTogglePinned={(id) => void togglePinnedMessage(id)} onReply={setReplyTo} onOpenRecord={openSharedRecord} /></>}
           <div ref={bottomRef} />
           {showJumpToLatest && <Button variant="contained" size="small" startIcon={<KeyboardArrowDownRounded />} onClick={jumpToLatest} sx={{ position: "sticky", bottom: 10, left: "50%", transform: "translateX(-50%)", zIndex: 4, borderRadius: 99, px: 1.5, boxShadow: "0 10px 28px rgba(15,23,42,.22)", textTransform: "none" }}>Mensagens recentes</Button>}
         </Box>
