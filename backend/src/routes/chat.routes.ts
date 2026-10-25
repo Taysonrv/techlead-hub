@@ -69,6 +69,18 @@ chatRoutes.post("/context", async (req: AuthenticatedRequest, res) => {
   try { res.status(201).json(await chatService.openContextChannel(req.auth!.userId, req.body ?? {})); }
   catch (error) { fail(res, error); }
 });
+chatRoutes.get("/channels/:channelId/actions", async (req: AuthenticatedRequest, res) => {
+  try { res.json({ actions: await chatService.listIncidentActions(req.auth!.userId, id(req.params.channelId)) }); }
+  catch (error) { fail(res, error); }
+});
+chatRoutes.post("/channels/:channelId/actions", async (req: AuthenticatedRequest, res) => {
+  try { res.status(201).json(await chatService.createIncidentAction(req.auth!.userId, id(req.params.channelId), req.body ?? {})); }
+  catch (error) { fail(res, error); }
+});
+chatRoutes.patch("/channels/:channelId/actions/:actionId", async (req: AuthenticatedRequest, res) => {
+  try { res.json(await chatService.updateIncidentAction(req.auth!.userId, id(req.params.channelId), id(req.params.actionId), req.body ?? {})); }
+  catch (error) { fail(res, error); }
+});
 chatRoutes.post("/channels/:channelId/read", async (req: AuthenticatedRequest, res) => {
   try { res.json(await chatService.markRead(req.auth!.userId, id(req.params.channelId))); }
   catch (error) { fail(res, error); }
