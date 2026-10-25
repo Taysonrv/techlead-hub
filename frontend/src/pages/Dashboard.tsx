@@ -1122,7 +1122,7 @@ export function Dashboard() {
       mx: 0,
       mt: 0,
       p: 0,
-      minHeight: "100vh",
+      minHeight: "100%",
       boxSizing: "border-box",
       background: isDark
         ? "radial-gradient(ellipse at 90% 0%, rgba(11,184,173,.065), transparent 44%)"
@@ -1158,14 +1158,14 @@ export function Dashboard() {
           KPIs
       ================================================= */}
 
-      <Box sx={{ mb: 1.5, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1, flexWrap: "wrap" }}>
+      <Box sx={{ mt: { xs: 1.5, md: 2 }, mb: 1.25, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1.5, flexWrap: "wrap" }}>
         <Box>
           <Typography variant="overline" sx={{ color: "primary.main", fontWeight: 850, letterSpacing: ".1em" }}>Visão em tempo real</Typography>
           <Typography variant="h6" sx={{ fontWeight: 850, letterSpacing: "-.025em" }}>Indicadores essenciais</Typography>
         </Box>
         <Chip label={`${cards.length} indicadores`} variant="outlined" size="small" />
       </Box>
-      <KpiGrid className="techlead-dashboard-kpis" sx={{ mb: 2.5 }}>
+      <KpiGrid className="techlead-dashboard-kpis" sx={{ mb: { xs: 2.5, md: 3.5 } }}>
         {cards.map(
           (card) => (
             <KpiCard
@@ -1195,12 +1195,12 @@ export function Dashboard() {
 
       {/* EVOLUÇÃO DE TICKETS — DESTAQUE EXECUTIVO */}
       {filteredTickets.length > 0 && (
-        <Box sx={{ mb: 2.5 }}>
+        <Box component="section" aria-label="Evolução dos tickets" sx={{ mb: { xs: 2.5, md: 3.5 }, minWidth: 0 }}>
           <Typography variant="overline" sx={{ fontWeight: 850, color: "primary.main", letterSpacing: ".1em" }}>Tendência operacional</Typography>
-          <Typography variant="h6" sx={{ fontWeight: 850, mb: 1, letterSpacing: "-.025em" }}>Evolução dos tickets</Typography>
-          <Box className="techlead-dashboard-featured" sx={{ my: 2, display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 2, alignItems: "stretch" }}>
+          <Typography variant="h6" sx={{ fontWeight: 850, mb: 1.5, letterSpacing: "-.025em" }}>Evolução dos tickets</Typography>
+          <Box className="techlead-dashboard-featured" sx={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 2, alignItems: "stretch" }}>
             <CardBase>
-              <Stack direction={{ xs: "column", sm: "row" }} sx={{ justifyContent: "space-between", alignItems: "center", gap: 1 }}>
+              <Stack direction={{ xs: "column", sm: "row" }} sx={{ justifyContent: "space-between", alignItems: { xs: "flex-start", sm: "center" }, gap: 1 }}>
                 <Box sx={{ textAlign: "left" }}>
                   <Typography sx={{ fontWeight: 850, fontSize: "1.05rem" }}>
                     Abertos × Resolvidos × Fechados
@@ -1210,7 +1210,7 @@ export function Dashboard() {
                   </Typography>
                 </Box>
               </Stack>
-              <Box sx={{ height: { xs: 280, md: 350 }, mt: 1.25 }}>
+              <Box sx={{ height: { xs: 260, sm: 300, md: 340 }, mt: 1.5, minWidth: 0 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={dailyFlow} margin={{ top: 8, right: 12, left: 4, bottom: 4 }}>
                     <defs>
@@ -1258,7 +1258,7 @@ export function Dashboard() {
       )}
 
       {/* ATALHOS PARA A OPERAÇÃO / ANÁLISE ASSISTIDA */}
-      <Card variant="outlined" sx={{ borderRadius: 2.5, mb: 2.25, bgcolor: "background.paper" }}>
+      <Card variant="outlined" sx={{ borderRadius: 2.5, mb: { xs: 2.5, md: 3 }, bgcolor: "background.paper" }}>
         <CardContent sx={{ p: { xs: 1.75, md: 2.25 }, "&:last-child": { pb: 2.25 } }}>
           <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ justifyContent: "space-between", alignItems: { sm: "center" }, mb: 1.5 }}>
             <Box>
@@ -1267,7 +1267,7 @@ export function Dashboard() {
             </Box>
             <Button variant="contained" onClick={() => navigate("/analise-atendimento")}>Analisar atendimento</Button>
           </Stack>
-          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "repeat(2,minmax(0,1fr))", sm: "repeat(3,minmax(0,1fr))", lg: "repeat(5,minmax(0,1fr))" }, gap: 1 }}>
+          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "repeat(2,minmax(0,1fr))", sm: "repeat(3,minmax(0,1fr))", lg: "repeat(4,minmax(0,1fr))", xl: "repeat(5,minmax(0,1fr))" }, gap: 1 }}>
             {[
               ["Tickets", "/operacao/tickets"], ["Minha Operação", "/operacao/minha-operacao"],
               ["Pendências & Riscos", "/pendencias-riscos"], ["Qualidade de Dados", "/pendencias-riscos/qualidade"],
@@ -1286,8 +1286,8 @@ export function Dashboard() {
           </Box>
         </CardContent>
       </Card>
-      <Box sx={{ mb: 2.25 }}>
-        <Typography sx={{ fontWeight: 850, mb: 1 }}>Sua operação agora</Typography>
+      <Box component="section" aria-label="Sua operação agora" sx={{ mb: { xs: 2.5, md: 3 }, minWidth: 0 }}>
+        <Typography variant="h6" sx={{ fontWeight: 850, mb: 1.5, letterSpacing: "-.025em" }}>Sua operação agora</Typography>
         <HomeWorkspace embedded />
       </Box>
 
