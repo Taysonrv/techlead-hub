@@ -36,12 +36,13 @@ export function Chat() {
   const [channels, setChannels] = useState<Channel[]>([]);
   const [participants, setParticipants] = useState<Person[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(() => { const value = Number(new URLSearchParams(window.location.search).get("channel")); return Number.isFinite(value) && value > 0 ? value : null; });
+  const [mobileConversationOpen, setMobileConversationOpen] = useState(false);
   const [content, setContent] = useState("");
   const notifyTyping = useChatTyping(selectedId);
   const [quickActionsAnchor, setQuickActionsAnchor] = useState<HTMLElement | null>(null);
   const [channelsLoading, setChannelsLoading] = useState(true);
   const [error, setError] = useState("");
-  const { availability, statusMessage, cycleAvailability } = useChatPresence(setError);
+  const { availability, cycleAvailability } = useChatPresence(setError);
   const [createOpen, setCreateOpen] = useState(false);
   const [channelName, setChannelName] = useState("");
   const [memberIds, setMemberIds] = useState<number[]>([]);
