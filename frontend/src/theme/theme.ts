@@ -391,7 +391,7 @@ export function createAppTheme(mode: PaletteMode = "light") {
         styleOverrides: { root: { fontWeight: 850, letterSpacing: "-.012em" } },
       },
       MuiDialogContent: {
-        styleOverrides: { root: { scrollbarGutter: "stable" } },
+        styleOverrides: { root: { scrollbarGutter: "stable", minWidth: 0, overflowWrap: "anywhere" } },
       },
       MuiAlert: {
         styleOverrides: {
@@ -536,8 +536,11 @@ export function createAppTheme(mode: PaletteMode = "light") {
           paper: {
             border: `1px solid ${border}`,
             borderRadius: 14,
-            background: dark ? "linear-gradient(145deg,#0E2338,#0A192B)" : undefined,
-            boxShadow: dark ? "0 28px 80px rgba(0,0,0,.42)" : "0 24px 64px rgba(16,24,40,.18)",
+            background: paper,
+            color: text,
+            maxWidth: "calc(100vw - 24px)",
+            maxHeight: "calc(100dvh - 24px)",
+            boxShadow: dark ? "0 22px 64px rgba(0,0,0,.34)" : "0 20px 56px rgba(16,24,40,.16)",
           },
         },
       },
