@@ -80,7 +80,7 @@ export function Chat() {
   const [maintenanceRunning, setMaintenanceRunning] = useState(false);
   const [maintenanceMessage, setMaintenanceMessage] = useState("");
   const theme = useTheme();
-  const compactContext = useMediaQuery(theme.breakpoints.down("md"));
+  const compactContext = useMediaQuery(theme.breakpoints.down("lg"));
   const [conversationInfoOpen, setConversationInfoOpen] = useState(false);
   const [incidentActionsOpen, setIncidentActionsOpen] = useState(false);
   const [historySearchOpen, setHistorySearchOpen] = useState(false);
