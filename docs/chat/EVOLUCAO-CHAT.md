@@ -13,13 +13,15 @@ A implementação foi iniciada na branch `feat/chat-war-room`, derivada de `feat
 5. **Leitura explícita:** `POST /chat/channels/:id/read` substitui a marcação implícita ao buscar mensagens; o frontend envia confirmação quando a janela está visível e a conversa está no final.
 6. **Atualização por eventos:** `ChatEventBus` em memória notifica membros autorizados sobre mensagens, anexos, digitação e leitura. O SSE dispara snapshots imediatamente, mantendo a reconsulta a cada 30 s como fallback. Eventos não carregam conteúdo sensível.
 
+7. **Registro operacional persistido:** tabela `ChatIncidentAction` e endpoints para criar, listar e atualizar decisões, escalonamentos, handoffs e ações, com auditoria, controle de membros e painel dedicado no frontend. O responsável por uma ação pode ser informado via API, mas a UI inicial registra ações sem atribuição automática.
+
 ### Compatibilidade e limitações
 
 - **Migração obrigatória** antes de usar a nova API: `npx prisma migrate deploy` dentro de `backend`, seguido da geração de Prisma Client na pipeline normal.
 - A implementação atual mantém anexos em mensagens legadas, pois sua migração para tabela/armazenamento separado ainda não foi concluída.
 - SSE funciona por processo único; implantação com múltiplas réplicas precisará de Redis/pub-sub compartilhado.
 - O campo `clientMessageId` previne duplicatas quando repetido pelo cliente, mas ainda faltam testes concorrentes e estratégia completa de retry.
-- O chat original permanece em arquivo grande. Extração de componentes e hooks, paginação infinita/virtualização, decisões persistidas, escalonamentos, busca avançada, painel contextual com dados vivos, métricas e layout de três colunas completo **continuam pendentes**.
+- O chat original permanece em arquivo grande. Extração de componentes e hooks, paginação infinita/virtualização, busca avançada, painel contextual com dados vivos, métricas e layout de três colunas completo **continuam pendentes**.
 - Não há captura Playwright de antes/depois nem homologação real em claro/escuro, por ausência de navegador autenticado conectado neste ambiente.
 - Permissões de visualização dos dados de tickets/tarefas precisam ser integradas à política de escopo operacional antes de expor painel detalhado ou sugerir membros automaticamente.
 
@@ -40,7 +42,11 @@ Validar em banco de homologação: mensagens antigas, sala já existente, sala n
 2. Mover anexos para tabela/storage seguro, adicionar cursores e deduplicação robusta.
 3. Separar `Chat.tsx` em componentes/hooks pequenos, preservar UI existente.
 4. Painel de contexto com dados autorizados e sala colaborativa com gestão de membros.
-5. Decisões, escalonamentos, handoff e pesquisa com permissões e auditoria.
+5. Evoluir o registro básico de decisões, escalonamentos e handoff com atribuição, notificações e pesquisa autorizada.
 6. Polimento visual, responsividade e Playwright antes/depois.
 
 **Não realizar merge em main sem migração, testes e revisão de segurança.**
+
+## Revisão da evolução visual (25/10/2026)
+
+O usuário relatou commit local `ff20d42` na branch `feat/evolucao-visual-design-system`, contendo Inter auto-hospedada, KpiGrid balanceado, tokens de raio e aviso recolhível em Tickets. **A branch não está publicada no GitHub remoto** na data da verificação; portanto, não houve inspeção do diff, cherry-pick nem integração. O typecheck foi informado pelo usuário, não reproduzido aqui. Permanecem pendentes build, lint, screenshots e os itens visuais mencionados pelo usuário. Evitar sobrescrever esses arquivos até disponibilizar o commit remoto.
