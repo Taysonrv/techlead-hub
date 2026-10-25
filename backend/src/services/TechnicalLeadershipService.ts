@@ -57,7 +57,7 @@ export class TechnicalLeadershipService {
     };
     const tickets = await prisma.ticket.findMany({
       where: scopedTicketWhere(ticketWhere),
-      orderBy: [{ lastUpdate: "asc" }, { createdDate: "asc" }],
+      orderBy: [{ lastUpdate: "desc" }, { createdDate: "desc" }],
       take: 5000,
       select: {
         id: true, movideskId: true, subject: true, category: true, cause: true, reason: true, urgency: true,
@@ -82,7 +82,7 @@ export class TechnicalLeadershipService {
           ...(ticketIds.length ? [{ movideskTicket: { in: ticketIds } }] : []),
         ],
       }),
-      orderBy: [{ azureChangedAt: "asc" }, { id: "asc" }],
+      orderBy: [{ azureChangedAt: "desc" }, { id: "desc" }],
       take: 5000,
       select: {
         id: true, workItemType: true, title: true, state: true, client: true, module: true,
@@ -398,6 +398,7 @@ export class TechnicalLeadershipService {
 
     const result = {
       generatedAt: now,
+      coverage: { ticketsLoaded: tickets.length, tasksLoaded: tasks.length, ticketLimitReached: tickets.length >= 5000, taskLimitReached: tasks.length >= 5000 },
       periodDays: days,
       periodStart,
       periodEnd,
