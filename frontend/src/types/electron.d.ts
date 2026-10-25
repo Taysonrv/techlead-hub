@@ -73,6 +73,8 @@ declare global {
           project: string;
           wiki: string;
           pat: string;
+          movideskToken?: string;
+          movideskUrl?: string;
           smtpHost?: string;
           smtpPort?: string;
           smtpSecure?: string;
@@ -106,6 +108,7 @@ declare global {
           restartRequired: boolean;
         }>;
         recoverKey: (candidate: string) => Promise<{ saved: boolean }>;
+        diagnoseDatabase: (databaseUrl: string) => Promise<{ ok: boolean; message: string }>;
       };
 
       startup: {
