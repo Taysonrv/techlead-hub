@@ -157,3 +157,14 @@ O usuário relatou commit local `ff20d42` na branch `feat/evolucao-visual-design
 - `Chat.tsx` foi reduzido de cerca de 886 para 825 linhas, preservando contratos de API e layout atual.
 - **Pendente antes de homologação:** lint/build no checkout local; teste manual de desconexão/reconexão, status de presença, paginação com 100+ mensagens e alternância rápida de canais.
 - **Ainda pendentes no prompt original:** divisão adicional de estado e UI, testes automatizados, replay durável SSE, virtualização, painel com dados vivos de Movidesk/Azure, passagem de turno estruturada e comandos operacionais.
+
+
+## Bloco ampliado de confiabilidade — 25/10/2026
+
+- Novo `useChatReadReceipts`: deduplicação por canal, limite de frequência de cinco segundos, bloqueio de requisições simultâneas e verificação do canal selecionado antes de atualizar o contador de não lidas.
+- Novo `useChatTyping`: emissão de digitação com throttle de 2,5 segundos, inatividade de 1,2 segundo e encerramento do indicador ao trocar de conversa/desmontar.
+- `useChatRealtime`: fallback de sincronização de canais e mensagens a cada 30 segundos, inclusive quando o SSE continua conectado, e atualização ao retornar à aba. Não substitui replay durável de eventos no backend.
+- `Chat.tsx`: removido o bootstrap dependente da contagem de canais, que repetia buscas após mudanças na lista.
+- Refresh de mensagens em segundo plano não cancela o carregamento inicial nem altera indevidamente o indicador de carregamento.
+- **Não homologado:** é obrigatório executar `npm run lint`, `npm run build` e `npm run test` no frontend e verificar manualmente reconexão, status de digitação, leitura e troca de canais.
+- **Ainda pendente:** refatoração integral da página, testes de integração automatizados, replay SSE `Last-Event-ID`, virtualização, integrações com tickets/tarefas e workflows operacionais completos.
