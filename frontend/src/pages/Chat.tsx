@@ -3,7 +3,7 @@ import { ArrowBackRounded, ForumOutlined, ReplyOutlined, CloseOutlined, SearchOu
 import { Alert, Box, Button, Checkbox, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Divider, Drawer, FormControlLabel, IconButton, List, ListItemButton, ListItemIcon, ListItemText, Menu, MenuItem, Paper, Popover, Skeleton, Snackbar, Stack, TextField, Typography, useMediaQuery } from "@mui/material";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { api, getAccessToken, getApiBaseUrl } from "../services/api";
+import { api } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { playNotificationSound } from "../utils/notificationSound";
 import { IncidentActionsPanel } from "../components/IncidentActionsPanel";
@@ -18,6 +18,7 @@ import { MessageList } from "../components/chat/MessageList";
 import { Composer } from "../components/chat/Composer";
 import { normalizeChatChannels, useChannelDirectory } from "../components/chat/hooks/useChannelDirectory";
 import { useMessageView } from "../components/chat/hooks/useMessageView";
+import { useChatRealtime } from "../components/chat/hooks/useChatRealtime";
 
 
 import { presenceColor } from "../components/chat/chatTypes";
@@ -72,7 +73,6 @@ export function Chat() {
   });
   const [openingDirectId, setOpeningDirectId] = useState<number | null>(null);
   const typingTimer = useRef<number | null>(null);
-  const lastRealtimeMessageId = useRef<number | null>(null);
   const [presence, setPresence] = useState<Presence[]>([]);
   const [remoteTyping, setRemoteTyping] = useState<RealtimeSnapshot["typing"]>([]);
   const [availability, setAvailability] = useState<"ONLINE" | "AWAY" | "BUSY">(() => (localStorage.getItem("techlead-chat-status") as "ONLINE" | "AWAY" | "BUSY") || "ONLINE");
@@ -342,62 +342,13 @@ export function Chat() {
     previousUnread.current = unread;
   }, [channels, soundEnabled]);
 
-  useEffect(() => {
-    let stopped = false;
-    const controller = new AbortController();
-    const connect = async () => {
-      let retryMs = 1800;
-      while (!stopped) {
-        try {
-          const token = getAccessToken();
-          const base = getApiBaseUrl();
-          const url = new URL(`${base.replace(/\/$/, "")}/chat/events`, window.location.origin);
-          const response = await fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : {}, signal: controller.signal });
-          if (response.status === 429) {
-            const retryAfter = Number(response.headers.get("Retry-After") ?? 5);
-            await new Promise((resolve) => window.setTimeout(resolve, Math.max(5, Number.isFinite(retryAfter) ? retryAfter : 5) * 1_000));
-            continue;
-          }
-          if (!response.ok || !response.body) throw new Error("stream indisponível");
-          retryMs = 1800;
-          const reader = response.body.getReader();
-          const decoder = new TextDecoder();
-          let buffer = "";
-          while (!stopped) {
-            const { value, done } = await reader.read();
-            if (done) break;
-            buffer += decoder.decode(value, { stream: true });
-            const blocks = buffer.split("\n\n"); buffer = blocks.pop() ?? "";
-            for (const block of blocks) {
-              const dataLine = block.split("\n").find((line) => line.startsWith("data: "));
-              if (!dataLine) continue;
-              const snapshot = JSON.parse(dataLine.slice(6)) as RealtimeSnapshot;
-              setPresence(snapshot.presence);
-              setRemoteTyping(snapshot.typing);
-              const latestId = snapshot.latestMessage?.id ?? null;
-              if (lastRealtimeMessageId.current !== null && latestId !== lastRealtimeMessageId.current) {
-                void loadChannels().catch(() => undefined);
-                if (selectedId && snapshot.latestMessage?.channelId === selectedId) void loadMessages(selectedId, true);
-              }
-              lastRealtimeMessageId.current = latestId;
-            }
-          }
-          // Um stream finalizado normalmente também exige intervalo antes de reconectar.
-          if (!stopped && !controller.signal.aborted) {
-            await new Promise((resolve) => window.setTimeout(resolve, retryMs));
-            retryMs = Math.min(retryMs * 2, 30_000);
-          }
-        } catch {
-          if (!stopped && !controller.signal.aborted) {
-            await new Promise((resolve) => window.setTimeout(resolve, retryMs));
-            retryMs = Math.min(retryMs * 2, 30_000);
-          }
-        }
-      }
-    };
-    void connect();
-    return () => { stopped = true; controller.abort(); };
-  }, [loadChannels, loadMessages, selectedId]);
+  useChatRealtime({
+    selectedId,
+    onChannelsChanged: loadChannels,
+    onMessagesChanged: (channelId) => loadMessages(channelId, true),
+    setPresence,
+    setRemoteTyping,
+  });
 
   useEffect(() => {
     const sendPresence = (status = document.visibilityState === "hidden" ? "AWAY" : availability) =>
