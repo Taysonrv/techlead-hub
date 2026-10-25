@@ -147,3 +147,13 @@ O usuário relatou commit local `ff20d42` na branch `feat/evolucao-visual-design
 - Extraído `components/chat/hooks/useMessageView.ts`: filtro de mensagens, pins legados e destaques operacionais.
 - `Chat.tsx` passou de aproximadamente 944 para 886 linhas. A separação completa em hooks de rede, SSE, envio, presença e painéis continua pendente; nenhuma mudança de contrato/API foi introduzida nesta etapa.
 - **Validação pendente:** `npm run lint` e `npm run build` no frontend, além de testes de seleção de DMs duplicadas, filtros, mensagens fixadas e alternância de canais. Não considerar concluída a Fase 1.
+
+
+## Bloco técnico ampliado — hooks de comunicação e presença (25/10/2026)
+
+- Criado `useChatRealtime.ts`: conexão SSE isolada, callbacks atuais via refs, reconexão com backoff exponencial limitado a 30 segundos e jitter, interpretação tolerante de eventos e atualização de canais/mensagens ao reconectar. **Não é replay durável por Last-Event-ID**; essa capacidade exige suporte do servidor.
+- Criado `useChatPresence.ts`: estado Online/Ausente/Ocupado, persistência local, heartbeat de 25 segundos e atualização quando a aba muda de visibilidade.
+- Corrigida a rolagem do histórico ao carregar páginas antigas: uma atualização que insere mensagens no início não deve forçar a rolagem para o fim.
+- `Chat.tsx` foi reduzido de cerca de 886 para 825 linhas, preservando contratos de API e layout atual.
+- **Pendente antes de homologação:** lint/build no checkout local; teste manual de desconexão/reconexão, status de presença, paginação com 100+ mensagens e alternância rápida de canais.
+- **Ainda pendentes no prompt original:** divisão adicional de estado e UI, testes automatizados, replay durável SSE, virtualização, painel com dados vivos de Movidesk/Azure, passagem de turno estruturada e comandos operacionais.
