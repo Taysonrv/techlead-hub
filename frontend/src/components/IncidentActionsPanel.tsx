@@ -66,8 +66,8 @@ export function IncidentActionsPanel({ channelId, open, onClose }: {
         <TextField select size="small" label="Tipo" value={kind} onChange={(event) => setKind(event.target.value)}>
           {Object.entries(kindLabels).map(([value, label]) => <MenuItem key={value} value={value}>{label}</MenuItem>)}
         </TextField>
-        <TextField size="small" label="Título" value={title} onChange={(event) => setTitle(event.target.value)} inputProps={{ maxLength: 200 }} />
-        <TextField size="small" label="Detalhes" multiline minRows={2} value={details} onChange={(event) => setDetails(event.target.value)} inputProps={{ maxLength: 2000 }} />
+        <TextField size="small" label="Título" value={title} onChange={(event) => setTitle(event.target.value)} slotProps={{ htmlInput: { maxLength: 200 } }} />
+        <TextField size="small" label="Detalhes" multiline minRows={2} value={details} onChange={(event) => setDetails(event.target.value)} slotProps={{ htmlInput: { maxLength: 2000 } }} />
         <Button variant="contained" disabled={saving || title.trim().length < 4} onClick={() => void create()}>
           {saving ? "Registrando..." : "Registrar no incidente"}
         </Button>
@@ -75,7 +75,7 @@ export function IncidentActionsPanel({ channelId, open, onClose }: {
         {loading && <CircularProgress size={22} />}
         {!loading && actions.length === 0 && <Typography variant="body2" color="text.secondary">Nenhuma ação registrada.</Typography>}
         {actions.map((action) => <Box key={action.id} sx={{ p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: 2 }}>
-          <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+          <Stack direction="row" spacing={1} sx={{ alignItems: "center", flexWrap: "wrap" }}>
             <Chip size="small" variant="outlined" label={kindLabels[action.kind] ?? action.kind} />
             <Chip size="small" color={action.status === "DONE" ? "success" : "default"} label={statusLabels[action.status] ?? action.status} />
           </Stack>
