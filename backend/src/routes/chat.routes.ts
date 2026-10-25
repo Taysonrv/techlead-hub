@@ -1,6 +1,7 @@
 import { Router, type Response } from "express";
 import type { AuthenticatedRequest } from "../middlewares/authMiddleware";
 import { chatService } from "../services/ChatService";
+import { chatEventBus } from "../services/ChatEventBus";
 
 const chatRoutes = Router();
 const id = (value: unknown) => { const parsed = Number(value); if (!Number.isSafeInteger(parsed) || parsed <= 0) throw Object.assign(new Error("Identificador inválido."), { statusCode: 400 }); return parsed; };
@@ -17,10 +18,15 @@ chatRoutes.get("/events", async (req: AuthenticatedRequest, res) => {
   let running = false;
   let previous = "";
   let timer: ReturnType<typeof setInterval> | null = null;
+  let fallback: ReturnType<typeof setInterval> | null = null;
+  let unsubscribe: (() => void) | null = null;
+  let sequence = 0;
   const stop = () => {
     if (closed) return;
     closed = true;
     if (timer) clearInterval(timer);
+    if (fallback) clearInterval(fallback);
+    unsubscribe?.();
   };
   req.on("close", stop);
   res.on("close", stop);
@@ -50,12 +56,11 @@ chatRoutes.get("/events", async (req: AuthenticatedRequest, res) => {
     if (!closed) res.write(": heartbeat\n\n");
   }, 20_000);
 
-  while (!closed) {
-    await new Promise((resolve) => setTimeout(resolve, 30_000));
-    await refresh();
-  }
-  stop();
-  if (!res.writableEnded) res.end();
+  // Publicação imediata por evento; snapshot periódico apenas como rede de segurança.
+  unsubscribe = chatEventBus.subscribe(req.auth!.userId, () => { void refresh(); });
+  fallback = setInterval(() => { void refresh(); }, 30_000);
+  // O ciclo de vida da resposta fica a cargo dos eventos 'close'.
+
 });
 chatRoutes.get("/participants", async (_req, res) => { try { res.json({ participants: await chatService.listParticipants() }); } catch (error) { fail(res, error); } });
 chatRoutes.get("/channels", async (req: AuthenticatedRequest, res) => { try { res.json({ channels: await chatService.listChannels(req.auth!.userId) }); } catch (error) { fail(res, error); } });
