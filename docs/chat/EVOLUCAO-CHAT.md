@@ -83,3 +83,11 @@ O usuário relatou commit local `ff20d42` na branch `feat/evolucao-visual-design
 - Cabeçalho da conversa mais compacto e responsivo, com melhor truncamento e ações de acessibilidade.
 - **Ainda não entregue:** gaveta de contexto para telas menores, navegação mobile lista → conversa, painel com dados vivos, refinamento de mensagens/composer, screenshots de comparação e verificação visual.
 - Executar `cd frontend && npm run lint && npm run build` após atualizar a branch. Essas validações não foram executadas nesta sessão.
+
+
+## Evolução visual — segunda entrega (25/10/2026)
+
+- Composer com pré-visualização de arquivo, cancelamento, arrastar e soltar, colar arquivos da área de transferência, indicação de erro, MIME permitido e limite de 8 MB; envio do anexo segue explícito pelo botão "Enviar arquivo".
+- Bolhas de mensagem com superfícies derivadas do tema MUI, melhor largura responsiva, ações ao hover/foco e rótulos acessíveis.
+- Drawer de informações da conversa em larguras menores que o breakpoint `lg`; o painel lateral permanece no grid desktop a partir de `lg`.
+- **Pendente de validação local:** `npm run lint` e `npm run build` no frontend, testes de arrastar/colar/upload, screenshots e verificação mobile. Ainda falta a navegação mobile lista/conversa completa e painel contextual com dados vivos.
