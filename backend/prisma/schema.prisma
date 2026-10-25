@@ -127,6 +127,7 @@ model ChatChannel {
   members     ChatChannelMember[]
   messages    ChatMessage[]
   incidentActions ChatIncidentAction[]
+  attachments ChatAttachment[]
 
   @@index([type, archivedAt])
   @@index([contextType, contextId])
@@ -161,6 +162,7 @@ model ChatMessage {
   author    User @relation("ChatMessageAuthor", fields: [authorId], references: [id], onDelete: Restrict)
   parent    ChatMessage? @relation("ChatMessageReplies", fields: [parentId], references: [id], onDelete: SetNull)
   replies   ChatMessage[] @relation("ChatMessageReplies")
+  attachment ChatAttachment?
 
   @@index([channelId, createdAt])
   @@unique([channelId, authorId, clientMessageId])
@@ -168,6 +170,22 @@ model ChatMessage {
   @@index([parentId])
 }
 
+
+model ChatAttachment {
+  id        Int @id @default(autoincrement())
+  channelId Int
+  messageId Int @unique
+  name      String @db.VarChar(180)
+  mimeType  String @db.VarChar(100)
+  size      Int
+  sha256    String @db.VarChar(64)
+  storage   String @default("DATABASE") @db.VarChar(32)
+  data      Bytes
+  createdAt DateTime @default(now())
+  channel   ChatChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  message   ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  @@index([channelId, createdAt])
+}
 
 model ChatIncidentAction {
   id          Int      @id @default(autoincrement())
