@@ -177,7 +177,7 @@ export function TechnicalLeadership() {
     setIndicatorData((current) => { const next = { ...current }; delete next[key]; return next; });
     setIndicatorPeriods((current) => ({ ...current, [key]: value }));
   };
-  const analyticsFor = (key: string) => indicatorData[key] ?? data?.analytics;
+  const analyticsFor = (key: string) => indicatorPeriods[key] ? indicatorData[key] : data?.analytics;
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState("");
   const [drawer, setDrawer] = useState<DrawerState>(null);
@@ -305,6 +305,7 @@ export function TechnicalLeadership() {
     {period === "custom" && (!customStart || !customEnd || customStart > customEnd) && <Alert severity="info" sx={{ mb: 2 }}>Informe um intervalo personalizado válido: data inicial e final obrigatórias, com início anterior ou igual ao fim.</Alert>}
     {error && <Alert severity="error" sx={{ mb: 2 }} action={<Button size="small" color="inherit" onClick={() => setRefreshVersion((value) => value + 1)}>Recarregar</Button>}>{error}</Alert>}
     {data?.coverage && (data.coverage.ticketLimitReached || data.coverage.taskLimitReached) && <Alert severity="warning" sx={{ mb: 2 }}>A análise atingiu o limite de 5.000 registros. Os indicadores podem não representar toda a carteira; considere reduzir o recorte.</Alert>}
+    {Object.keys(indicatorPeriods).some((key) => !indicatorData[key] && !indicatorErrors.includes(key)) && <Alert severity="info" sx={{ mb: 2 }}>Atualizando gráficos com períodos individuais. Até a conclusão, os gráficos correspondentes permanecem sem dados para evitar exibir valores de outro período.</Alert>}
     {indicatorErrors.length > 0 && <Alert severity="warning" sx={{ mb: 2 }} action={<Button size="small" color="inherit" onClick={() => setRefreshVersion((value) => value + 1)}>Tentar novamente</Button>}>Não foi possível atualizar {indicatorErrors.length} gráfico(s) com período individual. Os dados gerais permanecem disponíveis.</Alert>}
 
     <Card sx={{
