@@ -238,29 +238,50 @@ export class ChatService {
 
   async sendAttachment(userId: number, channelId: number, input: Record<string, unknown>) {
     await this.assertMember(userId, channelId);
-    const name = dataProtectionService.normalizeText(input.name, 180);
-    const mimeType = dataProtectionService.normalizeText(input.mimeType, 100) || "application/octet-stream";
+    const name = dataProtectionService.normalizeText(input.name, 180).replace(/[\\/:*?"<>|\r\n\x00-\x1f]/g, "_");
     const data = String(input.data ?? "");
-    if (!name || !data) throw Object.assign(new Error("Anexo inválido."), { statusCode: 400 });
-    const match = data.match(/^data:([^;]+);base64,(.+)$/);
-    if (!match) throw Object.assign(new Error("Formato do anexo inválido."), { statusCode: 400 });
-    const encoded = match[2];
-    if (!encoded) throw Object.assign(new Error("Conteúdo do anexo inválido."), { statusCode: 400 });
-    const bytes = Buffer.from(encoded, "base64");
-    if (!bytes.length || bytes.length > 8 * 1024 * 1024) throw Object.assign(new Error("O anexo deve ter no máximo 8 MB."), { statusCode: 400 });
-    const blocked = ["application/x-msdownload", "application/x-msdos-program", "application/x-sh", "application/x-bat"];
-    if (blocked.includes(mimeType)) throw Object.assign(new Error("Este tipo de arquivo não é permitido."), { statusCode: 400 });
-    const safeName = name.replace(/[\\/:*?"<>|\r\n]/g, "_");
-    const content = `[anexo] ${safeName}|${mimeType}|${bytes.length}|${match[2]}`;
-    if (content.length > 12_000_000) throw Object.assign(new Error("Anexo excede o limite permitido."), { statusCode: 400 });
-    const message = await prisma.chatMessage.create({
-      data: { channelId, authorId: userId, content },
-      include: { author: { select: memberUserSelect } },
+    const match = /^data:([^;]+);base64,([A-Za-z0-9+/]+={0,2})$/.exec(data);
+    if (!name || !match) throw Object.assign(new Error("Anexo inválido."), { statusCode: 400 });
+    const mimeType = match[1].toLowerCase();
+    const allowed = new Set(["image/png", "image/jpeg", "image/webp", "image/gif", "application/pdf", "text/plain", "text/csv", "application/zip", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/vnd.openxmlformats-officedocument.presentationml.presentation"]);
+    if (!allowed.has(mimeType)) throw Object.assign(new Error("Tipo de anexo não permitido."), { statusCode: 400 });
+    if (match[2].length > Math.ceil(8 * 1024 * 1024 * 4 / 3) + 4) throw Object.assign(new Error("Anexo excede 8 MB."), { statusCode: 400 });
+    const bytes = Buffer.from(match[2], "base64");
+    if (!bytes.length || bytes.length > 8 * 1024 * 1024 || bytes.toString("base64") !== match[2]) {
+      throw Object.assign(new Error("Conteúdo do anexo inválido."), { statusCode: 400 });
+    }
+    const signatureOk = mimeType === "application/pdf" ? bytes.subarray(0, 5).toString() === "%PDF-" :
+      mimeType === "image/png" ? bytes.subarray(0, 8).equals(Buffer.from("89504e470d0a1a0a", "hex")) :
+      mimeType === "image/jpeg" ? bytes.subarray(0, 3).equals(Buffer.from("ffd8ff", "hex")) :
+      mimeType === "image/gif" ? ["GIF87a", "GIF89a"].includes(bytes.subarray(0, 6).toString()) :
+      mimeType === "image/webp" ? bytes.subarray(0, 4).toString() === "RIFF" && bytes.subarray(8, 12).toString() === "WEBP" :
+      mimeType === "application/zip" || mimeType.startsWith("application/vnd.openxmlformats") ? bytes.subarray(0, 2).toString() === "PK" : true;
+    if (!signatureOk) throw Object.assign(new Error("O conteúdo não corresponde ao tipo de arquivo."), { statusCode: 400 });
+    const { createHash } = await import("node:crypto");
+    const hash = createHash("sha256").update(bytes).digest("hex");
+    const message = await prisma.$transaction(async (tx) => {
+      const created = await tx.chatMessage.create({
+        data: { channelId, authorId: userId, kind: "ATTACHMENT", content: `Anexo: ${name}` },
+        include: { author: { select: memberUserSelect } },
+      });
+      await tx.chatAttachment.create({
+        data: { channelId, messageId: created.id, name, mimeType, size: bytes.length, sha256: hash, data: bytes },
+      });
+      await tx.chatChannel.update({ where: { id: channelId }, data: { updatedAt: new Date() } });
+      return created;
     });
-    await prisma.chatChannel.update({ where: { id: channelId }, data: { updatedAt: new Date() } });
-    await this.audit(userId, "CHAT_ATTACHMENT_CREATED", "ChatMessage", message.id, { channelId, name: safeName, mimeType, size: bytes.length });
+    await this.audit(userId, "CHAT_ATTACHMENT_CREATED", "ChatMessage", message.id, { channelId, name, mimeType, size: bytes.length });
     await this.notifyChannel(channelId);
-    return message;
+    return { ...message, attachment: { id: message.id, name, mimeType, size: bytes.length } };
+  }
+
+  async downloadAttachment(userId: number, channelId: number, messageId: number) {
+    await this.assertMember(userId, channelId);
+    const attachment = await prisma.chatAttachment.findFirst({
+      where: { channelId, messageId, message: { deletedAt: null } },
+    });
+    if (!attachment) throw Object.assign(new Error("Anexo não encontrado."), { statusCode: 404 });
+    return attachment;
   }
 
   async markRead(userId: number, channelId: number) {
