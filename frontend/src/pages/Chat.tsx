@@ -683,17 +683,7 @@ export function Chat() {
   }, [selectedId, sending, launchStickerFx, soundEnabled]);
   const append = (value: string) => setContent((current) => current ? `${current} ${value}` : value);
 
-  return <Stack spacing={.9} sx={{ height: "100%", maxHeight: "100%", minHeight: 0, overflow: "hidden", px: { xs: .75, sm: 1, md: 1.15, xl: 1.35 }, pb: { xs: .75, md: 1.1 }, pt: { xs: .75, md: 1.05 }, boxSizing: "border-box", bgcolor: "background.default" }}>
-    <Paper elevation={0} sx={{ display: selected ? "none" : "block", flexShrink: 0, minHeight: 68, px: 1.8, py: .8, borderRadius: 4, border: "1px solid", borderColor: "divider", borderLeft: "4px solid", borderLeftColor: "primary.main", overflow: "hidden", position: "relative", background: (theme) => theme.palette.mode === "dark" ? "linear-gradient(115deg,rgba(10,43,55,.96),rgba(16,34,55,.98) 56%,rgba(19,28,43,.98))" : "linear-gradient(115deg,#f2fffa,#f7fbff 58%,#f3f7fd)", boxShadow: (theme) => theme.palette.mode === "dark" ? "0 14px 34px rgba(0,0,0,.20), inset 0 1px rgba(255,255,255,.025)" : "0 14px 34px rgba(15,23,42,.075)" }}>
-      <Stack direction="row" spacing={1.35} sx={{ alignItems: "center", minWidth: 0, pr: { md: 28 } }}>
-        <Box sx={{ width: 40, height: 40, borderRadius: 2.4, display: "grid", placeItems: "center", flexShrink: 0, color: "primary.main", bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(24,199,122,.08)" : "rgba(24,199,122,.07)", border: "1px solid rgba(24,199,122,.24)", boxShadow: "0 8px 22px rgba(24,199,122,.10)" }}><ForumOutlined /></Box>
-        <Box sx={{ minWidth: 0, flex: 1 }}>
-          <Typography variant="overline" sx={{ display: "block", mb: .15, color: "primary.main", fontSize: ".58rem", lineHeight: 1, letterSpacing: ".14em", fontWeight: 950 }}>COLABORAÇÃO</Typography>
-          <Stack direction="row" spacing={.8} sx={{ alignItems: "center", flexWrap: "wrap", rowGap: .5 }}><Typography sx={{ fontWeight: 950, fontSize: "1.08rem", lineHeight: 1.05, letterSpacing: "-.025em", whiteSpace: "nowrap" }}>Hub de Conversas</Typography><Chip size="small" label={{ ONLINE: "Online", AWAY: "Ausente", BUSY: "Ocupado" }[availability]} color={availability === "BUSY" ? "error" : availability === "AWAY" ? "warning" : "success"} onClick={() => { const next = availability === "ONLINE" ? "AWAY" : availability === "AWAY" ? "BUSY" : "ONLINE"; setAvailability(next); localStorage.setItem("techlead-chat-status", next); }} sx={{ height: 22, fontWeight: 850 }} /><Tooltip title="Ver quem está online"><Chip size="small" clickable icon={<GroupsOutlined sx={{ fontSize: "15px !important" }} />} label={`${onlinePeople.length} online`} color={onlinePeople.length ? "success" : "default"} variant="outlined" onClick={(event) => setOnlineAnchor(event.currentTarget)} sx={{ height: 22, fontWeight: 850 }} /></Tooltip></Stack>
-          <Stack direction="row" spacing={.8} sx={{ alignItems: "center", minWidth: 0 }}><Typography variant="caption" color="text.secondary" noWrap>Mensagens, presença e colaboração em tempo real</Typography>{statusMessage && <Typography variant="caption" color="text.secondary" noWrap sx={{ opacity: .75 }}>· {statusMessage}</Typography>}</Stack>
-        </Box>
-      </Stack>
-    </Paper>
+  return <Stack spacing={0} sx={{ height: "100%", maxHeight: "100%", minHeight: 0, overflow: "hidden", px: { xs: .5, sm: 1, md: 1.5 }, pb: { xs: .5, md: 1.25 }, pt: { xs: .5, md: 1.25 }, boxSizing: "border-box", bgcolor: "background.default" }}>
     <Popover
       open={Boolean(onlineAnchor)}
       anchorEl={onlineAnchor}
@@ -794,28 +784,28 @@ export function Chat() {
       display: "grid",
       gridTemplateColumns: {
         xs: "minmax(0, 1fr)",
-        md: "248px minmax(0, 1fr)",
+        md: "276px minmax(0, 1fr)",
         lg: (conversationInfoOpen || selected?.type === "CONTEXT" || (selected?.type === "TEAM" && teamPanelOpen))
-          ? "252px minmax(0, 1fr) 276px"
-          : "252px minmax(0, 1fr)",
+          ? "284px minmax(0, 1fr) 276px"
+          : "284px minmax(0, 1fr)",
         xl: (conversationInfoOpen || selected?.type === "CONTEXT" || (selected?.type === "TEAM" && teamPanelOpen))
-          ? "272px minmax(0, 1fr) 310px"
-          : "272px minmax(0, 1fr)",
+          ? "300px minmax(0, 1fr) 310px"
+          : "300px minmax(0, 1fr)",
       },
-      gap: { xs: 0, md: 1 },
-      p: { xs: 0, md: 1 },
+      gap: 0,
+      p: 0,
       minHeight: 0,
       flex: 1,
       overflow: "hidden",
-      borderRadius: 3,
+      borderRadius: { xs: 2, md: 4 },
       maxHeight: "100%",
       height: "100%",
       border: "1px solid",
       borderColor: "divider",
-      boxShadow: (theme) => theme.shadows[2],
+      boxShadow: (theme) => theme.shadows[3],
       bgcolor: "background.paper",
     }}>
-      <Box sx={{ position: "relative", minHeight: 0, overflow: "hidden", display: { xs: mobileConversationOpen ? "none" : "grid", md: "grid" }, gridTemplateRows: "auto auto 1px minmax(0, 1fr)", alignContent: "stretch", borderRadius: { xs: 0, md: 3.25 }, bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(255,255,255,.022)" : "rgba(248,250,252,.76)", border: { md: "1px solid" }, borderColor: { md: "divider" }, boxShadow: (theme) => theme.palette.mode === "dark" ? "0 10px 28px rgba(0,0,0,.10), inset 0 1px rgba(255,255,255,.02)" : "0 8px 24px rgba(15,23,42,.045)" }}>
+      <Box sx={{ position: "relative", minHeight: 0, overflow: "hidden", display: { xs: mobileConversationOpen ? "none" : "grid", md: "grid" }, gridTemplateRows: "auto auto 1px minmax(0, 1fr)", alignContent: "stretch", borderRadius: 0, bgcolor: "background.paper", borderRight: { md: "1px solid" }, borderColor: "divider" }}>
         <ConversationListHeader channelCount={channels.length} unreadCount={totalUnread} canMaintain={["ADMIN", "COORDENADOR"].includes(user?.role ?? "")} maintenanceRunning={maintenanceRunning} onConsolidate={() => void consolidateDirectDuplicates()} onOpenDirect={() => setDirectOpen(true)} onCreateChannel={() => setCreateOpen(true)} />
         <ConversationListSearch value={conversationSearch} onChange={setConversationSearch} />
         <Box sx={{ mx: 1.2, height: 6 }} />
@@ -824,11 +814,11 @@ export function Chat() {
         </Box>
         {channelsLoading && !channels.length ? <Stack spacing={1} sx={{ px: 1.2, py: 1 }}><Skeleton variant="rounded" height={54} /><Skeleton variant="rounded" height={54} /><Skeleton variant="rounded" height={54} /></Stack> : !channels.length && <Box sx={{ px: 2, py: 4, textAlign: "center" }}><Box sx={{ width: 44, height: 44, mx: "auto", mb: 1.2, borderRadius: "50%", display: "grid", placeItems: "center", bgcolor: "action.hover", color: "text.secondary" }}><ForumOutlined fontSize="small" /></Box><Typography sx={{ fontWeight: 850, fontSize: ".88rem" }}>Nenhuma conversa ainda</Typography><Typography color="text.secondary" variant="caption" sx={{ display: "block", mt: .35 }}>Inicie uma conversa privada ou crie um canal para sua equipe.</Typography><Button size="small" variant="outlined" startIcon={<PersonOutlineRounded />} onClick={() => setDirectOpen(true)} sx={{ mt: 1.4, borderRadius: 2 }}>Nova conversa</Button></Box>}
       </Box>
-      <Box sx={{ display: { xs: mobileConversationOpen ? "flex" : "none", md: "flex" }, flexDirection: "column", minWidth: 0, minHeight: 0, overflow: "hidden", borderRadius: { xs: 0, md: 3.25 }, border: { md: "1px solid" }, borderColor: { md: "divider" }, bgcolor: "background.paper" }}>
+      <Box sx={{ display: { xs: mobileConversationOpen ? "flex" : "none", md: "flex" }, flexDirection: "column", minWidth: 0, minHeight: 0, overflow: "hidden", borderRadius: 0, bgcolor: "background.paper" }}>
         <Box sx={{ display: { xs: "flex", md: "none" }, alignItems: "center", gap: 1, px: 1, py: .5, borderBottom: "1px solid", borderColor: "divider" }}><IconButton aria-label="Voltar para conversas" onClick={backToConversations}><ArrowBackRounded /></IconButton><Typography variant="body2" color="text.secondary">Conversas</Typography></Box>
         <ConversationHeader selected={selected} selectedPresence={selectedPresence} presence={presence} messageSearch={messageSearch} onMessageSearch={setMessageSearch} onOpenActions={() => setIncidentActionsOpen(true)} onSearchHistory={() => setHistorySearchOpen(true)} onOpenOrigin={(contextType, contextId) => navigate(contextType === "TICKET" ? `/operacao/tickets?movidesk=${encodeURIComponent(contextId)}` : `/correcoes?task=${encodeURIComponent(contextId)}`)} teamPanelOpen={teamPanelOpen} onToggleTeamPanel={() => setTeamPanelOpen((value) => !value)} conversationInfoOpen={conversationInfoOpen} onToggleConversationInfo={() => setConversationInfoOpen((value) => !value)} onOpenMenu={setConversationMenuAnchor} />
         <Divider />
-        <Box ref={messagesRef} onScroll={handleMessagesScroll} sx={{ position: "relative", flex: "1 1 0", height: 0, minHeight: 0, overflowY: "auto", overflowX: "hidden", overscrollBehavior: "contain", p: { xs: 1.25, md: 1.75 }, scrollbarWidth: "thin", "&::-webkit-scrollbar": { width: 7 }, "&::-webkit-scrollbar-thumb": { bgcolor: "action.disabled", borderRadius: 8 }, "&::-webkit-scrollbar-track": { bgcolor: "transparent" }, bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(7,22,34,.22)" : "#f7f9fb", backgroundImage: (theme) => theme.palette.mode === "dark" ? "radial-gradient(circle at 50% 0%, rgba(24,199,122,.025), transparent 32%), radial-gradient(circle at 100% 100%, rgba(59,130,246,.025), transparent 28%)" : "radial-gradient(circle at 50% 0%, rgba(24,199,122,.035), transparent 34%), radial-gradient(circle at 100% 100%, rgba(59,130,246,.035), transparent 30%)" }}>
+        <Box ref={messagesRef} onScroll={handleMessagesScroll} sx={{ position: "relative", flex: "1 1 0", height: 0, minHeight: 0, overflowY: "auto", overflowX: "hidden", overscrollBehavior: "contain", p: { xs: 1.25, md: 1.75 }, scrollbarWidth: "thin", "&::-webkit-scrollbar": { width: 7 }, "&::-webkit-scrollbar-thumb": { bgcolor: "action.disabled", borderRadius: 8 }, "&::-webkit-scrollbar-track": { bgcolor: "transparent" }, bgcolor: "background.paper" }}>
           {loading ? <Stack spacing={1.1} sx={{ p: 1 }}><Skeleton variant="rounded" width="36%" height={48} /><Skeleton variant="rounded" width="52%" height={68} sx={{ alignSelf: "flex-end" }} /><Skeleton variant="rounded" width="28%" height={44} /></Stack> : <><Box sx={{ textAlign: "center" }}>{hasOlder && !messageSearch.trim() && <Button size="small" disabled={loadingOlder} onClick={() => void loadOlder()}>{loadingOlder ? "Carregando..." : "Mensagens anteriores"}</Button>}</Box><MessageList visibleMessages={visibleMessages} messages={messages} currentUserId={user?.id} currentUsername={user?.username} pinnedIds={pinState} onTogglePinned={(id) => void togglePinnedMessage(id)} onReply={setReplyTo} onOpenRecord={openSharedRecord} /></>}
           <div ref={bottomRef} />
           {showJumpToLatest && <Button variant="contained" size="small" startIcon={<KeyboardArrowDownRounded />} onClick={jumpToLatest} sx={{ position: "sticky", bottom: 10, left: "50%", transform: "translateX(-50%)", zIndex: 4, borderRadius: 99, px: 1.5, boxShadow: "0 10px 28px rgba(15,23,42,.22)", textTransform: "none" }}>Mensagens recentes</Button>}
