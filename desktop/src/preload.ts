@@ -49,6 +49,8 @@ type ConfigurationInput = {
   project: string;
   wiki: string;
   pat: string;
+  movideskToken?: string;
+  movideskUrl?: string;
   smtpHost?: string;
   smtpPort?: string;
   smtpSecure?: string;
