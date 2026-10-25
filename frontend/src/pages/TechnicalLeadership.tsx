@@ -40,6 +40,7 @@ type Gap = { id: string; type: string; title: string; evidence: string; impact: 
 type Development = { analyst: string; tickets: number; stale: number; linkedTasks?: number; blockedTasks?: number; finishedTasks?: number; themes: Array<{ topic: string; count: number }>; examples?: Ticket[] };
 type Data = {
   generatedAt: string; periodDays: number; periodStart?: string; periodEnd?: string;
+  coverage?: { ticketsLoaded: number; tasksLoaded: number; ticketLimitReached: boolean; taskLimitReached: boolean };
   radar: Record<string, number>;
   radarSamples: Record<string, Array<Ticket | Task>>;
   audit: { candidates: number; sample: Array<Ticket & { reason: string; reasons: string[]; evidenceCount: number; sources: string[]; auditScore: number; confidence: "ALTA" | "MÉDIA" }> };
@@ -148,6 +149,7 @@ function IndicatorPeriodFilter({ value, onChange }: { value: PeriodPreset; onCha
 
 function Delta({ value }: { value: number | null }) {
   if (value === null) return <Chip size="small" label="Sem base anterior" variant="outlined" />;
+  if (value === 0) return <Chip size="small" label="Sem variação vs. período anterior" variant="outlined" />;
   const Icon = value > 0 ? TrendingUpOutlined : TrendingDownOutlined;
   return <Chip size="small" icon={<Icon />} color={value > 0 ? "warning" : "success"} label={`${value > 0 ? "+" : ""}${value}% vs. período anterior`} />;
 }
@@ -297,11 +299,12 @@ export function TechnicalLeadership() {
       title="Central de Liderança Técnica"
       description="Radar executivo para transformar sinais da operação em investigação, orientação e ação acompanhada."
       meta={data ? `Atualizado em ${new Date(data.generatedAt).toLocaleString("pt-BR")} · ${data.periodStart && data.periodEnd ? `${new Date(data.periodStart).toLocaleDateString("pt-BR")} a ${new Date(data.periodEnd).toLocaleDateString("pt-BR")}` : `janela de ${data.periodDays} dias`}` : undefined}
-      action={<Stack direction="row" spacing={1}><Chip icon={<RadarOutlined />} label={`${attention} sinais de atenção`} color={attention ? "warning" : "success"} sx={{ fontWeight: 850, boxShadow: attention ? "0 0 22px rgba(255,167,38,.18)" : "0 0 22px rgba(0,199,142,.18)" }} /></Stack>}
+      action={<Stack direction="row" spacing={1}><Chip icon={<RadarOutlined />} label={`${attention} ocorrências de sinais`} color={attention ? "warning" : "success"} sx={{ fontWeight: 850, boxShadow: attention ? "0 0 22px rgba(255,167,38,.18)" : "0 0 22px rgba(0,199,142,.18)" }} /></Stack>}
     />
 
     {period === "custom" && (!customStart || !customEnd || customStart > customEnd) && <Alert severity="info" sx={{ mb: 2 }}>Informe um intervalo personalizado válido: data inicial e final obrigatórias, com início anterior ou igual ao fim.</Alert>}
     {error && <Alert severity="error" sx={{ mb: 2 }} action={<Button size="small" color="inherit" onClick={() => setRefreshVersion((value) => value + 1)}>Recarregar</Button>}>{error}</Alert>}
+    {data?.coverage && (data.coverage.ticketLimitReached || data.coverage.taskLimitReached) && <Alert severity="warning" sx={{ mb: 2 }}>A análise atingiu o limite de 5.000 registros. Os indicadores podem não representar toda a carteira; considere reduzir o recorte.</Alert>}
     {indicatorErrors.length > 0 && <Alert severity="warning" sx={{ mb: 2 }} action={<Button size="small" color="inherit" onClick={() => setRefreshVersion((value) => value + 1)}>Tentar novamente</Button>}>Não foi possível atualizar {indicatorErrors.length} gráfico(s) com período individual. Os dados gerais permanecem disponíveis.</Alert>}
 
     <Card sx={{
