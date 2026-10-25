@@ -17,6 +17,7 @@ import { ConversationHeader } from "../components/chat/ConversationHeader";
 import { MessageList } from "../components/chat/MessageList";
 import { Composer } from "../components/chat/Composer";
 import { normalizeChatChannels, useChannelDirectory } from "../components/chat/hooks/useChannelDirectory";
+import { useMessageView } from "../components/chat/hooks/useMessageView";
 
 
 import { presenceColor } from "../components/chat/chatTypes";
@@ -105,18 +106,7 @@ export function Chat() {
   const selectedPeer = useMemo(() => selected?.type === "DIRECT" ? selected.members?.map((member) => member.user).find((person) => person.id !== user?.id) : null, [selected, user?.id]);
   const selectedPresence = selectedPeer ? presence.find((item) => item.userId === selectedPeer.id) : null;
   const typingNames = remoteTyping.filter((item) => item.channelId === selectedId).map((item) => item.name);
-  const pinState = useMemo(() => {
-    const ids = new Set<number>();
-    messages.forEach((message) => {
-      if (message.content.startsWith("[chat-pin]")) ids.add(Number(message.content.slice(10)));
-      if (message.content.startsWith("[chat-unpin]")) ids.delete(Number(message.content.slice(12)));
-    });
-    return ids;
-  }, [messages]);
-  const visibleMessages = useMemo(() => messages.filter((message) => !message.content.startsWith("[chat-pin]") && !message.content.startsWith("[chat-unpin]") && (!messageSearch.trim() || message.content.toLowerCase().includes(messageSearch.toLowerCase()))), [messages, messageSearch]);
-  const pinnedMessages = useMemo(() => visibleMessages.filter((message) => pinState.has(message.id)).slice(-4).reverse(), [visibleMessages, pinState]);
-  const coordinationHighlights = useMemo(() => visibleMessages.filter((message) => /PRIORIDADE DO TIME|ALINHAMENTO \/ DECISÃO|ESCALONAMENTO PARA COORDENAÇÃO/.test(message.content)).slice(-5).reverse(), [visibleMessages]);
-  const channelPendencies = useMemo(() => visibleMessages.filter((message) => /PRIORIDADE DO TIME|ESCALONAMENTO PARA COORDENAÇÃO|PASSAGEM DE TURNO/.test(message.content)).slice(-4).reverse(), [visibleMessages]);
+  const { pinState, visibleMessages, pinnedMessages, coordinationHighlights, channelPendencies } = useMessageView(messages, messageSearch);
   const selectedOnlineCount = useMemo(() => selected?.members?.filter((member) => presence.find((item) => item.userId === member.user.id)?.effectiveStatus === "ONLINE").length ?? 0, [selected, presence]);
   const participantPresence = useMemo(() => participants
     .filter((person) => person.id !== user?.id)
