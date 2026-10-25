@@ -19,6 +19,7 @@ import { Composer } from "../components/chat/Composer";
 import { normalizeChatChannels, useChannelDirectory } from "../components/chat/hooks/useChannelDirectory";
 import { useMessageView } from "../components/chat/hooks/useMessageView";
 import { useChatRealtime } from "../components/chat/hooks/useChatRealtime";
+import { useChatPresence } from "../components/chat/hooks/useChatPresence";
 
 
 import { presenceColor } from "../components/chat/chatTypes";
@@ -49,6 +50,7 @@ export function Chat() {
   const sendingRef = useRef(false);
   const typingSentAt = useRef(0);
   const [error, setError] = useState("");
+  const { availability, statusMessage, cycleAvailability } = useChatPresence(setError);
   const [createOpen, setCreateOpen] = useState(false);
   const [channelName, setChannelName] = useState("");
   const [memberIds, setMemberIds] = useState<number[]>([]);
@@ -76,7 +78,6 @@ export function Chat() {
   const typingTimer = useRef<number | null>(null);
   const [presence, setPresence] = useState<Presence[]>([]);
   const [remoteTyping, setRemoteTyping] = useState<RealtimeSnapshot["typing"]>([]);
-  const [availability, setAvailability] = useState<"ONLINE" | "AWAY" | "BUSY">(() => (localStorage.getItem("techlead-chat-status") as "ONLINE" | "AWAY" | "BUSY") || "ONLINE");
   const attachmentInputRef = useRef<HTMLInputElement | null>(null);
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
   const [conversationMenuAnchor, setConversationMenuAnchor] = useState<HTMLElement | null>(null);
@@ -93,7 +94,6 @@ export function Chat() {
   const [historySearchOpen, setHistorySearchOpen] = useState(false);
   const [teamPanelOpen, setTeamPanelOpen] = useState(true);
   const [onlineAnchor, setOnlineAnchor] = useState<HTMLElement | null>(null);
-  const [statusMessage] = useState(() => localStorage.getItem("techlead-chat-status-message") || "");
   const [incomingPopup, setIncomingPopup] = useState<{ channelId: number; channelName: string; authorName: string; preview: string } | null>(null);
   const previousChannelState = useRef<Map<number, { unread: number; lastMessageId: number | null }>>(new Map());
   const selectedIdRef = useRef<number | null>(null);
@@ -352,16 +352,6 @@ export function Chat() {
     setPresence,
     setRemoteTyping,
   });
-
-  useEffect(() => {
-    const sendPresence = (status = document.visibilityState === "hidden" ? "AWAY" : availability) =>
-      api.post("/chat/presence", { status, statusMessage }).catch(() => undefined);
-    void sendPresence();
-    const timer = window.setInterval(() => void sendPresence(), 25_000);
-    const visibility = () => void sendPresence();
-    document.addEventListener("visibilitychange", visibility);
-    return () => { window.clearInterval(timer); document.removeEventListener("visibilitychange", visibility); };
-  }, [availability, statusMessage]);
 
   async function openDirect(person: Person) {
     if (openingDirectId) return;
@@ -707,12 +697,7 @@ export function Chat() {
       bgcolor: "background.paper",
     }}>
       <Box sx={{ position: "relative", minHeight: 0, overflow: "hidden", display: { xs: mobileConversationOpen ? "none" : "grid", md: "grid" }, gridTemplateRows: "auto auto 1px minmax(0, 1fr)", alignContent: "stretch", borderRadius: 0, bgcolor: "background.paper", borderRight: { md: "1px solid" }, borderColor: "divider" }}>
-        <ConversationListHeader channelCount={channels.length} unreadCount={totalUnread} availability={availability} onChangeAvailability={() => {
-          const next = availability === "ONLINE" ? "AWAY" : availability === "AWAY" ? "BUSY" : "ONLINE";
-          setAvailability(next);
-          localStorage.setItem("techlead-chat-status", next);
-          void api.post("/chat/presence", { status: next, statusMessage }).catch(() => setError("Não foi possível atualizar o status de presença."));
-        }} canMaintain={["ADMIN", "COORDENADOR"].includes(user?.role ?? "")} maintenanceRunning={maintenanceRunning} onConsolidate={() => void consolidateDirectDuplicates()} onOpenDirect={() => setDirectOpen(true)} onCreateChannel={() => setCreateOpen(true)} />
+        <ConversationListHeader channelCount={channels.length} unreadCount={totalUnread} availability={availability} onChangeAvailability={cycleAvailability} canMaintain=={["ADMIN", "COORDENADOR"].includes(user?.role ?? "")} maintenanceRunning={maintenanceRunning} onConsolidate={() => void consolidateDirectDuplicates()} onOpenDirect={() => setDirectOpen(true)} onCreateChannel={() => setCreateOpen(true)} />
         <ConversationListSearch value={conversationSearch} onChange={setConversationSearch} />
         <Box sx={{ mx: 1.2, height: 6 }} />
         <Box sx={{ minHeight: 0, height: "100%", overflowY: "auto", overflowX: "hidden", overscrollBehavior: "contain", scrollbarWidth: "none", "&::-webkit-scrollbar": { display: "none" } }}>
