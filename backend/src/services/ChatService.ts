@@ -473,6 +473,73 @@ export class ChatService {
     await this.audit(userId, "CHAT_MESSAGE_DELETED", "ChatMessage", messageId, { channelId: message.channelId });
   }
 
+  async listIncidentActions(userId: number, channelId: number) {
+    await this.assertMember(userId, channelId);
+    return prisma.chatIncidentAction.findMany({
+      where: { channelId },
+      orderBy: [{ status: "asc" }, { createdAt: "desc" }],
+      take: 100,
+      include: {
+        author: { select: memberUserSelect },
+        assignee: { select: memberUserSelect },
+      },
+    });
+  }
+
+  async createIncidentAction(userId: number, channelId: number, input: Record<string, unknown>) {
+    await this.assertMember(userId, channelId);
+    const channel = await prisma.chatChannel.findUnique({ where: { id: channelId }, select: { type: true, archivedAt: true } });
+    if (!channel || channel.archivedAt || channel.type !== "CONTEXT") {
+      throw Object.assign(new Error("Ações operacionais exigem uma sala de incidente ativa."), { statusCode: 400 });
+    }
+    const kind = String(input.kind ?? "").toUpperCase();
+    if (!["DECISION", "ESCALATION", "HANDOFF", "ACTION"].includes(kind)) {
+      throw Object.assign(new Error("Tipo de ação inválido."), { statusCode: 400 });
+    }
+    const title = dataProtectionService.normalizeText(input.title, 200);
+    const details = dataProtectionService.normalizeText(input.details, 2000);
+    if (title.length < 4) throw Object.assign(new Error("Descreva a ação em ao menos 4 caracteres."), { statusCode: 400 });
+    const assigneeId = input.assigneeId == null ? null : Number(input.assigneeId);
+    if (assigneeId !== null) {
+      if (!Number.isSafeInteger(assigneeId) || assigneeId <= 0) {
+        throw Object.assign(new Error("Responsável inválido."), { statusCode: 400 });
+      }
+      await this.assertMember(assigneeId, channelId);
+    }
+    const dueAt = typeof input.dueAt === "string" && input.dueAt ? new Date(input.dueAt) : null;
+    if (dueAt && !Number.isFinite(dueAt.getTime())) {
+      throw Object.assign(new Error("Prazo inválido."), { statusCode: 400 });
+    }
+    const action = await prisma.chatIncidentAction.create({
+      data: { channelId, authorId: userId, kind, title, details: details || null, assigneeId, dueAt },
+      include: { author: { select: memberUserSelect }, assignee: { select: memberUserSelect } },
+    });
+    await this.audit(userId, "CHAT_INCIDENT_ACTION_CREATED", "ChatIncidentAction", action.id, { channelId, kind });
+    await this.notifyChannel(channelId);
+    return action;
+  }
+
+  async updateIncidentAction(userId: number, channelId: number, actionId: number, input: Record<string, unknown>) {
+    await this.assertMember(userId, channelId);
+    const current = await prisma.chatIncidentAction.findFirst({ where: { id: actionId, channelId } });
+    if (!current) throw Object.assign(new Error("Ação não localizada."), { statusCode: 404 });
+    if (current.authorId !== userId && current.assigneeId !== userId) {
+      throw Object.assign(new Error("Somente autor ou responsável pode atualizar a ação."), { statusCode: 403 });
+    }
+    const status = String(input.status ?? "").toUpperCase();
+    if (!["OPEN", "IN_PROGRESS", "DONE", "CANCELLED"].includes(status)) {
+      throw Object.assign(new Error("Situação inválida."), { statusCode: 400 });
+    }
+    const action = await prisma.chatIncidentAction.update({
+      where: { id: actionId },
+      data: { status, closedAt: ["DONE", "CANCELLED"].includes(status) ? new Date() : null },
+      include: { author: { select: memberUserSelect }, assignee: { select: memberUserSelect } },
+    });
+    await this.audit(userId, "CHAT_INCIDENT_ACTION_UPDATED", "ChatIncidentAction", action.id, { channelId, status });
+    await this.notifyChannel(channelId);
+    return action;
+  }
+
   private async notifyChannel(channelId: number) {
     const members = await prisma.chatChannelMember.findMany({ where: { channelId }, select: { userId: true } });
     chatEventBus.publish(members.map((member) => member.userId));
