@@ -21,6 +21,7 @@ import { useMessageView } from "../components/chat/hooks/useMessageView";
 import { useChatRealtime } from "../components/chat/hooks/useChatRealtime";
 import { useChatPresence } from "../components/chat/hooks/useChatPresence";
 import { useChatReadReceipts } from "../components/chat/hooks/useChatReadReceipts";
+import { useChatTyping } from "../components/chat/hooks/useChatTyping";
 
 
 import { presenceColor } from "../components/chat/chatTypes";
@@ -42,6 +43,7 @@ export function Chat() {
   const restoreScroll = useRef<{ channelId: number; height: number; top: number } | null>(null);
   const skipNextAutoScroll = useRef(false);
   const [content, setContent] = useState("");
+  const notifyTyping = useChatTyping(selectedId);
   const [quickActionsAnchor, setQuickActionsAnchor] = useState<HTMLElement | null>(null);
   const [loading, setLoading] = useState(false);
   const [channelsLoading, setChannelsLoading] = useState(true);
@@ -49,7 +51,6 @@ export function Chat() {
   const [sending, setSending] = useState(false);
   const messageRequest = useRef<AbortController | null>(null);
   const sendingRef = useRef(false);
-  const typingSentAt = useRef(0);
   const [error, setError] = useState("");
   const { availability, statusMessage, cycleAvailability } = useChatPresence(setError);
   const [createOpen, setCreateOpen] = useState(false);
@@ -76,7 +77,6 @@ export function Chat() {
     try { return JSON.parse(raw); } catch { return null; }
   });
   const [openingDirectId, setOpeningDirectId] = useState<number | null>(null);
-  const typingTimer = useRef<number | null>(null);
   const [presence, setPresence] = useState<Presence[]>([]);
   const [remoteTyping, setRemoteTyping] = useState<RealtimeSnapshot["typing"]>([]);
   const attachmentInputRef = useRef<HTMLInputElement | null>(null);
@@ -103,7 +103,6 @@ export function Chat() {
   } });
   const selectedIdRef = useRef<number | null>(null);
   selectedIdRef.current = selectedId;
-  useEffect(() => () => { if (typingTimer.current) window.clearTimeout(typingTimer.current); }, []);
 
   const { selected, sidebarChannels, totalUnread } = useChannelDirectory({ channels, selectedId, conversationSearch, favorites });
   const showSidePanel = Boolean(selected) && (conversationInfoOpen || selected?.type === "CONTEXT" || (selected?.type === "TEAM" && teamPanelOpen) || (wideContext && widePanelVisible));
@@ -723,7 +722,7 @@ export function Chat() {
         <Divider />
         {typingNames.length > 0 && <Typography variant="caption" color="text.secondary" sx={{ px: 1.6, pt: .45 }}>{typingNames.join(", ")} {typingNames.length === 1 ? "está" : "estão"} digitando...</Typography>}
         {replyTo && <Stack direction="row" sx={{ px: 1.5, py: .7, alignItems: "center", justifyContent: "space-between", bgcolor: "action.hover", borderTop: "1px solid", borderColor: "divider" }}><Box><Typography variant="caption" sx={{ fontWeight: 850 }}>Respondendo a {replyTo.author.name}</Typography><Typography variant="caption" color="text.secondary" noWrap sx={{ display: "block", maxWidth: 620 }}>{replyTo.content}</Typography></Box><IconButton size="small" onClick={() => setReplyTo(null)}><CloseOutlined fontSize="small" /></IconButton></Stack>}
-        <Composer channelId={selectedId} channelType={selected?.type} content={content} sending={sending} uploadingAttachment={uploadingAttachment} soundEnabled={soundEnabled} attachmentInputRef={attachmentInputRef} onAttach={(file) => void sendAttachment(file)} onOpenEmoji={setEmojiAnchor} onOpenStickers={() => setStickersOpen(true)} onOpenQuickActions={setQuickActionsAnchor} onToggleSound={() => { const next = !soundEnabled; setSoundEnabled(next); localStorage.setItem("techlead-chat-sound", next ? "on" : "off"); if ("Notification" in window && Notification.permission === "default") void Notification.requestPermission(); }} onContentChange={(value) => { setContent(value); if (selectedId && Date.now() - typingSentAt.current > 2500) { typingSentAt.current = Date.now(); void api.post(`/chat/channels/${selectedId}/typing`, { active: true }).catch(() => undefined); } if (typingTimer.current) window.clearTimeout(typingTimer.current); typingTimer.current = window.setTimeout(() => { if (selectedId) void api.post(`/chat/channels/${selectedId}/typing`, { active: false }).catch(() => undefined); }, 1200); }} onSend={() => void send()} />
+        <Composer channelId={selectedId} channelType={selected?.type} content={content} sending={sending} uploadingAttachment={uploadingAttachment} soundEnabled={soundEnabled} attachmentInputRef={attachmentInputRef} onAttach={(file) => void sendAttachment(file)} onOpenEmoji={setEmojiAnchor} onOpenStickers={() => setStickersOpen(true)} onOpenQuickActions={setQuickActionsAnchor} onToggleSound={() => { const next = !soundEnabled; setSoundEnabled(next); localStorage.setItem("techlead-chat-sound", next ? "on" : "off"); if ("Notification" in window && Notification.permission === "default") void Notification.requestPermission(); }} onContentChange={(value) => { setContent(value); notifyTyping(value); }} onSend={() => void send()} />
       </Box>
       {showSidePanel && selected && <Box sx={{ display: { xs: "none", lg: "block" }, borderLeft: "1px solid", borderColor: "divider", borderRadius: 0, p: 1.6, overflowY: "auto", my: 0, bgcolor: "background.paper" }}>
         <Stack spacing={2}>
