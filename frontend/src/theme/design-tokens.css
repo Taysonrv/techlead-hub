@@ -1,14 +1,14 @@
 /* TechLead Hub — tokens semânticos de apresentação (tema MUI é a fonte dos valores). */
 :root,
 :root[data-color-mode="light"] {
-  --hub-bg: #f5f7fb;
+  --hub-bg: #f5f6f7;
   --hub-surface: #ffffff;
-  --hub-surface-raised: #f9fbff;
-  --hub-border: #dce4ec;
+  --hub-surface-raised: #f8fafb;
+  --hub-border: #e3e6e8;
   --hub-text: #142333;
   --hub-text-secondary: #526476;
   --hub-text-muted: #66788b;
-  --hub-accent: #0891b2;
+  --hub-accent: #18c77a;
   --hub-accent-blue: #2563eb;
   --hub-success: #16865f;
   --hub-warning: #a9670b;
@@ -23,27 +23,27 @@
   --hub-radius-sm: 8px;
   --hub-radius-md: 12px;
   --hub-radius-lg: 16px;
-  --hub-shadow-card: 0 14px 34px rgb(15 23 42 / 8%);
+  --hub-shadow-card: 0 3px 14px rgb(16 24 40 / 4.5%);
   --hub-glass-blur: 16px;
   --hub-font: Inter, "Segoe UI", Roboto, Arial, sans-serif;
   --hub-motion-fast: 180ms;
   --hub-motion-normal: 240ms;
 }
 :root[data-color-mode="dark"] {
-  --hub-bg: #071421;
-  --hub-surface: #0d2232;
-  --hub-surface-raised: #142c40;
+  --hub-bg: #061522;
+  --hub-surface: #0a2030;
+  --hub-surface-raised: #102b3e;
   --hub-border: #29465a;
   --hub-text: #edf6fb;
   --hub-text-secondary: #b1c5d2;
   --hub-text-muted: #94acbc;
-  --hub-accent: #3ac5e0;
+  --hub-accent: #18c77a;
   --hub-accent-blue: #60a5fa;
   --hub-success: #43d39a;
   --hub-warning: #fbbf65;
   --hub-error: #fb7777;
   --hub-info: #79b4ff;
-  --hub-shadow-card: 0 16px 40px rgb(0 0 0 / 24%);
+  --hub-shadow-card: 0 6px 20px rgb(0 0 0 / 12%);
 }
 @media (prefers-reduced-motion: reduce) {
   :root { --hub-motion-fast: 0ms; --hub-motion-normal: 0ms; }
