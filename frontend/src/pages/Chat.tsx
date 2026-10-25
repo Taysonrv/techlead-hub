@@ -697,7 +697,7 @@ export function Chat() {
       bgcolor: "background.paper",
     }}>
       <Box sx={{ position: "relative", minHeight: 0, overflow: "hidden", display: { xs: mobileConversationOpen ? "none" : "grid", md: "grid" }, gridTemplateRows: "auto auto 1px minmax(0, 1fr)", alignContent: "stretch", borderRadius: 0, bgcolor: "background.paper", borderRight: { md: "1px solid" }, borderColor: "divider" }}>
-        <ConversationListHeader channelCount={channels.length} unreadCount={totalUnread} availability={availability} onChangeAvailability={cycleAvailability} canMaintain=={["ADMIN", "COORDENADOR"].includes(user?.role ?? "")} maintenanceRunning={maintenanceRunning} onConsolidate={() => void consolidateDirectDuplicates()} onOpenDirect={() => setDirectOpen(true)} onCreateChannel={() => setCreateOpen(true)} />
+        <ConversationListHeader channelCount={channels.length} unreadCount={totalUnread} availability={availability} onChangeAvailability={cycleAvailability} canMaintain={["ADMIN", "COORDENADOR"].includes(user?.role ?? "")} maintenanceRunning={maintenanceRunning} onConsolidate={() => void consolidateDirectDuplicates()} onOpenDirect={() => setDirectOpen(true)} onCreateChannel={() => setCreateOpen(true)} />
         <ConversationListSearch value={conversationSearch} onChange={setConversationSearch} />
         <Box sx={{ mx: 1.2, height: 6 }} />
         <Box sx={{ minHeight: 0, height: "100%", overflowY: "auto", overflowX: "hidden", overscrollBehavior: "contain", scrollbarWidth: "none", "&::-webkit-scrollbar": { display: "none" } }}>
