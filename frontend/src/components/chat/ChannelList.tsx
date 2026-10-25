@@ -1,5 +1,5 @@
 import { Avatar, Badge, Box, IconButton, List, ListItemButton, Stack, Tooltip, Typography } from "@mui/material";
-import { Circle, GroupsOutlined, PushPinOutlined, ReportProblemOutlined, StarRounded } from "@mui/icons-material";
+import { GroupsOutlined, PushPinOutlined, ReportProblemOutlined, StarRounded } from "@mui/icons-material";
 import { presenceColor } from "./chatTypes";
 import type { Channel, Presence, RealtimeSnapshot } from "./chatTypes";
 
