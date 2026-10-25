@@ -1,5 +1,5 @@
 import { ForumOutlined, ReplyOutlined, CloseOutlined, SearchOutlined, Circle, DeleteOutlineRounded, StarOutlineRounded, VolumeOffOutlined, GroupsOutlined, PersonOutlineRounded, BoltOutlined, AssignmentTurnedInOutlined, AlternateEmailOutlined, KeyboardArrowDownRounded } from "@mui/icons-material";
-import { Alert, Box, Button, Checkbox, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Divider, FormControlLabel, IconButton, List, ListItemButton, ListItemIcon, ListItemText, Menu, MenuItem, Paper, Popover, Skeleton, Snackbar, Stack, TextField, Tooltip, Typography } from "@mui/material";
+import { Alert, Box, Button, Checkbox, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Divider, Drawer, FormControlLabel, IconButton, List, ListItemButton, ListItemIcon, ListItemText, Menu, MenuItem, Paper, Popover, Skeleton, Snackbar, Stack, TextField, Tooltip, Typography } from "@mui/material";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { api, getAccessToken, getApiBaseUrl } from "../services/api";
@@ -764,6 +764,26 @@ export function Chat() {
     {selected?.type === "CONTEXT" && selectedId && <IncidentActionsPanel channelId={selectedId} open={incidentActionsOpen} onClose={() => setIncidentActionsOpen(false)} />}
     {selectedId && <ChatHistorySearch channelId={selectedId} open={historySearchOpen} onClose={() => setHistorySearchOpen(false)} />}
     {error && <Alert severity="error" onClose={() => setError("")}>{error}</Alert>}
+    <Drawer anchor="right" open={conversationInfoOpen && Boolean(selected)} onClose={() => setConversationInfoOpen(false)}
+      sx={{ display: { xs: "block", lg: "none" } }}
+      slotProps={{ paper: { sx: { width: { xs: "min(92vw, 360px)", sm: 380 }, maxWidth: "100vw", p: 2, bgcolor: "background.paper" } } }}>
+      <Stack spacing={2}>
+        <Stack direction="row" alignItems="center" justifyContent="space-between">
+          <Typography variant="h6" fontWeight={800}>Informações da conversa</Typography>
+          <IconButton aria-label="Fechar informações" onClick={() => setConversationInfoOpen(false)}><CloseOutlined /></IconButton>
+        </Stack>
+        <Divider />
+        {selected && <>
+          <Typography fontWeight={800}>{selected.name}</Typography>
+          <Chip size="small" label={selected.type === "CONTEXT" ? "Sala de incidente" : selected.type === "DIRECT" ? "Conversa direta" : "Canal da equipe"} sx={{ alignSelf: "flex-start" }} />
+          {selected.description && <Typography variant="body2" color="text.secondary">{selected.description}</Typography>}
+          {selected.type === "CONTEXT" && <IncidentContextSummary channel={selected} onOpenActions={() => { setConversationInfoOpen(false); setIncidentActionsOpen(true); }} onSearchHistory={() => { setConversationInfoOpen(false); setHistorySearchOpen(true); }} />}
+          <Typography variant="subtitle2">Participantes ({selected.members?.length ?? 0})</Typography>
+          <Stack spacing={1}>{selected.members?.map((member) => <Typography variant="body2" key={member.user.id}>{member.user.name} · @{member.user.username}</Typography>)}</Stack>
+          <Button variant="outlined" onClick={() => { setConversationInfoOpen(false); setHistorySearchOpen(true); }}>Pesquisar histórico</Button>
+        </>}
+      </Stack>
+    </Drawer>
     <Paper elevation={0} sx={{
       display: "grid",
       gridTemplateColumns: {
