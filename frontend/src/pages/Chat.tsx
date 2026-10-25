@@ -9,7 +9,7 @@ import { playNotificationSound } from "../utils/notificationSound";
 
 type Person = { id: number; name: string; username: string; role: string };
 type Message = { id: number; content: string; createdAt: string; parentId?: number | null; author: Person };
-type Channel = { id: number; name: string; type: string; description?: string | null; clientName?: string | null; unread: number; messages: Message[]; members?: Array<{ user: Person }> };
+type Channel = { id: number; name: string; type: string; contextType?: string | null; contextId?: string | null; description?: string | null; clientName?: string | null; unread: number; messages: Message[]; members?: Array<{ user: Person }> };
 type Presence = { userId: number; status: string; effectiveStatus: "ONLINE" | "AWAY" | "BUSY" | "OFFLINE"; statusMessage?: string | null; lastSeenAt: string; name: string; username: string };
 type RealtimeSnapshot = { presence: Presence[]; typing: Array<{ channelId: number; userId: number; name: string }>; latestMessage: { id: number; channelId: number; authorId: number } | null };
 
@@ -48,6 +48,7 @@ export function Chat() {
   const [soundEnabled, setSoundEnabled] = useState(() => localStorage.getItem("techlead-chat-sound") !== "off");
   const [directOpen, setDirectOpen] = useState(false);
   const [directSearch, setDirectSearch] = useState("");
+  const contextRequestStarted = useRef(false);
   const [pendingShare, setPendingShare] = useState<{ label: string; recordId?: number; title: string; client?: string | null; status?: string | null; path: string } | null>(() => {
     const raw = new URLSearchParams(window.location.search).get("share");
     if (!raw) return null;
@@ -221,8 +222,15 @@ export function Chat() {
       const response = await api.get<{ messages: Message[] }>(`/chat/channels/${channelId}/messages`, { signal: controller.signal });
       if (controller.signal.aborted || selectedIdRef.current !== channelId) return;
       setMessages(response.data.messages);
-      setChannels((current) => current.map((channel) => channel.id === channelId ? { ...channel, unread: 0 } : channel));
-      window.dispatchEvent(new Event("techlead-hub:chat-read"));
+      if (document.visibilityState === "visible" && !quiet) {
+        const container = messagesRef.current;
+        if (!container || container.scrollHeight - container.scrollTop - container.clientHeight < 160) {
+          void api.post(`/chat/channels/${channelId}/read`).then(() => {
+            setChannels((current) => current.map((channel) => channel.id === channelId ? { ...channel, unread: 0 } : channel));
+            window.dispatchEvent(new Event("techlead-hub:chat-read"));
+          }).catch(() => undefined);
+        }
+      }
       setError("");
     } catch (requestError: any) {
       if (!controller.signal.aborted && !quiet) setError(requestError?.response?.data?.error || "Não foi possível carregar a conversa.");
@@ -257,6 +265,29 @@ export function Chat() {
   }, [pendingShare]);
 
   useEffect(() => {
+    const ticket = searchParams.get("contextTicket");
+    const task = searchParams.get("contextTask");
+    if ((!ticket && !task) || contextRequestStarted.current) return;
+    contextRequestStarted.current = true;
+    const contextType = ticket ? "TICKET" : "TASK";
+    const contextId = ticket || task;
+    void api.post<Channel>("/chat/context", { contextType, contextId })
+      .then(async ({ data: channel }) => {
+        setSelectedId(channel.id);
+        await loadChannels();
+        setError("");
+      })
+      .catch((requestError) => {
+        setError(requestError?.response?.data?.error || "Não foi possível abrir a sala de incidente.");
+      })
+      .finally(() => {
+        const next = new URLSearchParams(searchParams);
+        ["contextTicket", "contextTask", "contextTitle", "contextClient"].forEach((key) => next.delete(key));
+        setSearchParams(next, { replace: true });
+      });
+  }, [searchParams, setSearchParams, loadChannels]);
+
+  useEffect(() => {
     setMessages([]);setReplyTo(null);setContent("");setMessageSearch("");setShowJumpToLatest(false);
     if (!selectedId) { setLoading(false); return; }
     void loadMessages(selectedId);
@@ -275,7 +306,15 @@ export function Chat() {
   const handleMessagesScroll = useCallback(() => {
     const container = messagesRef.current;
     if (!container) return;
-    setShowJumpToLatest(container.scrollHeight - container.scrollTop - container.clientHeight > 180);
+    const distance = container.scrollHeight - container.scrollTop - container.clientHeight;
+    setShowJumpToLatest(distance > 180);
+    if (distance < 140 && document.visibilityState === "visible" && selectedIdRef.current) {
+      const channelId = selectedIdRef.current;
+      void api.post(`/chat/channels/${channelId}/read`).then(() => {
+        setChannels((current) => current.map((channel) => channel.id === channelId ? { ...channel, unread: 0 } : channel));
+        window.dispatchEvent(new Event("techlead-hub:chat-read"));
+      }).catch(() => undefined);
+    }
   }, []);
 
   const jumpToLatest = useCallback(() => {
@@ -528,7 +567,7 @@ export function Chat() {
     messageRequest.current?.abort();
     try {
       setSending(true);
-      const response = await api.post<Message>(`/chat/channels/${selectedId}/messages`, { content: text, parentId: replyTo?.id ?? null });
+      const response = await api.post<Message>(`/chat/channels/${selectedId}/messages`, { content: text, parentId: replyTo?.id ?? null, clientMessageId: crypto.randomUUID() });
       if (selectedIdRef.current !== channelId) return;
       setMessages((current) => current.some(item=>item.id===response.data.id)?current:[...current, response.data]);
       setShowJumpToLatest(false);
