@@ -224,15 +224,13 @@ export function Chat() {
       if (participantsResult.status === "fulfilled") setParticipants(participantsResult.value.data.participants);
       if (channelsResult.status === "rejected") {
         const requestError = channelsResult.reason as { response?: { data?: { error?: string } } };
-        if (!channels.length) setError(requestError?.response?.data?.error || "Não foi possível atualizar a lista de conversas.");
-      } else {
-        setError("");
+        setError(requestError?.response?.data?.error || "Não foi possível atualizar a lista de conversas.");
       }
       setChannelsLoading(false);
     };
     void bootstrap();
     return () => { active = false; };
-  }, [loadChannels, channels.length]);
+  }, [loadChannels]);
   useEffect(() => {
     if (!pendingShare) return;
     setDirectOpen(true);
