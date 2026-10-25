@@ -23,6 +23,7 @@ import { useChatPresence } from "../components/chat/hooks/useChatPresence";
 import { useChatReadReceipts } from "../components/chat/hooks/useChatReadReceipts";
 import { useChatTyping } from "../components/chat/hooks/useChatTyping";
 import { useChatHistory } from "../components/chat/hooks/useChatHistory";
+import { useChatSend } from "../components/chat/hooks/useChatSend";
 
 
 import { presenceColor } from "../components/chat/chatTypes";
@@ -39,8 +40,6 @@ export function Chat() {
   const notifyTyping = useChatTyping(selectedId);
   const [quickActionsAnchor, setQuickActionsAnchor] = useState<HTMLElement | null>(null);
   const [channelsLoading, setChannelsLoading] = useState(true);
-  const [sending, setSending] = useState(false);
-  const sendingRef = useRef(false);
   const [error, setError] = useState("");
   const { availability, statusMessage, cycleAvailability } = useChatPresence(setError);
   const [createOpen, setCreateOpen] = useState(false);
@@ -93,6 +92,7 @@ export function Chat() {
   } });
   const { messages, setMessages, loading, hasOlder, loadingOlder, showJumpToLatest, setShowJumpToLatest, loadMessages, loadOlder, handleMessagesScroll: handleHistoryScroll, jumpToLatest } = useChatHistory({ selectedId, messagesRef, markRead, setError });
   const handleMessagesScroll = useCallback(() => handleHistoryScroll(messageSearch), [handleHistoryScroll, messageSearch]);
+  const { send, sending } = useChatSend({ selectedId, content, replyTo, setMessages, setContent, setReplyTo, setShowJumpToLatest, setError });
   useEffect(() => {
     setReplyTo(null);
     setContent("");
@@ -393,24 +393,6 @@ export function Chat() {
     } finally {
       setMaintenanceRunning(false);
     }
-  }
-
-  async function send() {
-    const text = content.trim();
-    if (!selectedId || !text || sendingRef.current) return;
-    const channelId=selectedId;
-    sendingRef.current=true;
-    try {
-      setSending(true);
-      const response = await api.post<Message>(`/chat/channels/${selectedId}/messages`, { content: text, parentId: replyTo?.id ?? null, clientMessageId: crypto.randomUUID() });
-      if (selectedIdRef.current !== channelId) return;
-      setMessages((current) => current.some(item=>item.id===response.data.id)?current:[...current, response.data]);
-      setShowJumpToLatest(false);
-      setContent("");
-      setReplyTo(null);
-      setError("");
-    } catch (requestError: any) { setError(requestError?.response?.data?.error || "Não foi possível enviar a mensagem."); }
-    finally { sendingRef.current=false;setSending(false); }
   }
 
   const togglePinnedMessage = useCallback(async (messageId: number) => {
