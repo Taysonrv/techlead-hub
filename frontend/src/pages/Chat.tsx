@@ -1,5 +1,5 @@
 import { useTheme } from "@mui/material/styles";
-import { ForumOutlined, ReplyOutlined, CloseOutlined, SearchOutlined, Circle, DeleteOutlineRounded, StarOutlineRounded, VolumeOffOutlined, GroupsOutlined, PersonOutlineRounded, BoltOutlined, AssignmentTurnedInOutlined, AlternateEmailOutlined, KeyboardArrowDownRounded } from "@mui/icons-material";
+import { ArrowBackRounded, ForumOutlined, ReplyOutlined, CloseOutlined, SearchOutlined, Circle, DeleteOutlineRounded, StarOutlineRounded, VolumeOffOutlined, GroupsOutlined, PersonOutlineRounded, BoltOutlined, AssignmentTurnedInOutlined, AlternateEmailOutlined, KeyboardArrowDownRounded } from "@mui/icons-material";
 import { Alert, Box, Button, Checkbox, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Divider, Drawer, FormControlLabel, IconButton, List, ListItemButton, ListItemIcon, ListItemText, Menu, MenuItem, Paper, Popover, Skeleton, Snackbar, Stack, TextField, Tooltip, Typography, useMediaQuery } from "@mui/material";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -28,6 +28,7 @@ export function Chat() {
   const [participants, setParticipants] = useState<Person[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(() => { const value = Number(new URLSearchParams(window.location.search).get("channel")); return Number.isFinite(value) && value > 0 ? value : null; });
   const [messages, setMessages] = useState<Message[]>([]);
+  const [mobileConversationOpen, setMobileConversationOpen] = useState(() => Boolean(new URLSearchParams(window.location.search).get("channel")));
   const [hasOlder, setHasOlder] = useState(false);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const olderCursor = useRef<number | null>(null);
@@ -94,6 +95,8 @@ export function Chat() {
   useEffect(() => () => { if (typingTimer.current) window.clearTimeout(typingTimer.current); }, []);
 
   const selected = useMemo(() => channels.find((channel) => channel.id === selectedId) ?? null, [channels, selectedId]);
+  const selectConversation = useCallback((channelId: number) => { setSelectedId(channelId); setMobileConversationOpen(true); }, []);
+  const backToConversations = useCallback(() => { setMobileConversationOpen(false); setConversationInfoOpen(false); }, []);
   const selectedPeer = useMemo(() => selected?.type === "DIRECT" ? selected.members?.map((member) => member.user).find((person) => person.id !== user?.id) : null, [selected, user?.id]);
   const selectedPresence = selectedPeer ? presence.find((item) => item.userId === selectedPeer.id) : null;
   const typingNames = remoteTyping.filter((item) => item.channelId === selectedId).map((item) => item.name);
@@ -812,16 +815,17 @@ export function Chat() {
       boxShadow: (theme) => theme.shadows[2],
       bgcolor: "background.paper",
     }}>
-      <Box sx={{ position: "relative", minHeight: 0, overflow: "hidden", display: "grid", gridTemplateRows: "auto auto 1px minmax(0, 1fr)", alignContent: "stretch", borderRadius: { xs: 0, md: 3.25 }, bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(255,255,255,.022)" : "rgba(248,250,252,.76)", border: { md: "1px solid" }, borderColor: { md: "divider" }, boxShadow: (theme) => theme.palette.mode === "dark" ? "0 10px 28px rgba(0,0,0,.10), inset 0 1px rgba(255,255,255,.02)" : "0 8px 24px rgba(15,23,42,.045)" }}>
+      <Box sx={{ position: "relative", minHeight: 0, overflow: "hidden", display: { xs: mobileConversationOpen ? "none" : "grid", md: "grid" }, gridTemplateRows: "auto auto 1px minmax(0, 1fr)", alignContent: "stretch", borderRadius: { xs: 0, md: 3.25 }, bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(255,255,255,.022)" : "rgba(248,250,252,.76)", border: { md: "1px solid" }, borderColor: { md: "divider" }, boxShadow: (theme) => theme.palette.mode === "dark" ? "0 10px 28px rgba(0,0,0,.10), inset 0 1px rgba(255,255,255,.02)" : "0 8px 24px rgba(15,23,42,.045)" }}>
         <ConversationListHeader channelCount={channels.length} unreadCount={totalUnread} canMaintain={["ADMIN", "COORDENADOR"].includes(user?.role ?? "")} maintenanceRunning={maintenanceRunning} onConsolidate={() => void consolidateDirectDuplicates()} onOpenDirect={() => setDirectOpen(true)} onCreateChannel={() => setCreateOpen(true)} />
         <ConversationListSearch value={conversationSearch} onChange={setConversationSearch} />
         <Box sx={{ mx: 1.2, height: 6 }} />
         <Box sx={{ minHeight: 0, height: "100%", overflowY: "auto", overflowX: "hidden", overscrollBehavior: "contain", scrollbarWidth: "none", "&::-webkit-scrollbar": { display: "none" } }}>
-        <ChannelList channels={sidebarChannels} selectedId={selectedId} favorites={favorites} presence={presence} remoteTyping={remoteTyping} currentUserId={user?.id} onSelect={setSelectedId} onToggleFavorite={toggleFavorite} />
+        <ChannelList channels={sidebarChannels} selectedId={selectedId} favorites={favorites} presence={presence} remoteTyping={remoteTyping} currentUserId={user?.id} onSelect={selectConversation} onToggleFavorite={toggleFavorite} />
         </Box>
         {channelsLoading && !channels.length ? <Stack spacing={1} sx={{ px: 1.2, py: 1 }}><Skeleton variant="rounded" height={54} /><Skeleton variant="rounded" height={54} /><Skeleton variant="rounded" height={54} /></Stack> : !channels.length && <Box sx={{ px: 2, py: 4, textAlign: "center" }}><Box sx={{ width: 44, height: 44, mx: "auto", mb: 1.2, borderRadius: "50%", display: "grid", placeItems: "center", bgcolor: "action.hover", color: "text.secondary" }}><ForumOutlined fontSize="small" /></Box><Typography sx={{ fontWeight: 850, fontSize: ".88rem" }}>Nenhuma conversa ainda</Typography><Typography color="text.secondary" variant="caption" sx={{ display: "block", mt: .35 }}>Inicie uma conversa privada ou crie um canal para sua equipe.</Typography><Button size="small" variant="outlined" startIcon={<PersonOutlineRounded />} onClick={() => setDirectOpen(true)} sx={{ mt: 1.4, borderRadius: 2 }}>Nova conversa</Button></Box>}
       </Box>
-      <Box sx={{ display: "flex", flexDirection: "column", minWidth: 0, minHeight: 0, overflow: "hidden", borderRadius: { xs: 0, md: 3.25 }, border: { md: "1px solid" }, borderColor: { md: "divider" }, bgcolor: "background.paper" }}>
+      <Box sx={{ display: { xs: mobileConversationOpen ? "flex" : "none", md: "flex" }, flexDirection: "column", minWidth: 0, minHeight: 0, overflow: "hidden", borderRadius: { xs: 0, md: 3.25 }, border: { md: "1px solid" }, borderColor: { md: "divider" }, bgcolor: "background.paper" }}>
+        <Box sx={{ display: { xs: "flex", md: "none" }, alignItems: "center", gap: 1, px: 1, py: .5, borderBottom: "1px solid", borderColor: "divider" }}><IconButton aria-label="Voltar para conversas" onClick={backToConversations}><ArrowBackRounded /></IconButton><Typography variant="body2" color="text.secondary">Conversas</Typography></Box>
         <ConversationHeader selected={selected} selectedPresence={selectedPresence} presence={presence} messageSearch={messageSearch} onMessageSearch={setMessageSearch} onOpenActions={() => setIncidentActionsOpen(true)} onSearchHistory={() => setHistorySearchOpen(true)} onOpenOrigin={(contextType, contextId) => navigate(contextType === "TICKET" ? `/operacao/tickets?movidesk=${encodeURIComponent(contextId)}` : `/correcoes?task=${encodeURIComponent(contextId)}`)} teamPanelOpen={teamPanelOpen} onToggleTeamPanel={() => setTeamPanelOpen((value) => !value)} conversationInfoOpen={conversationInfoOpen} onToggleConversationInfo={() => setConversationInfoOpen((value) => !value)} onOpenMenu={setConversationMenuAnchor} />
         <Divider />
         <Box ref={messagesRef} onScroll={handleMessagesScroll} sx={{ position: "relative", flex: "1 1 0", height: 0, minHeight: 0, overflowY: "auto", overflowX: "hidden", overscrollBehavior: "contain", p: { xs: 1.25, md: 1.75 }, scrollbarWidth: "thin", "&::-webkit-scrollbar": { width: 7 }, "&::-webkit-scrollbar-thumb": { bgcolor: "action.disabled", borderRadius: 8 }, "&::-webkit-scrollbar-track": { bgcolor: "transparent" }, bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(7,22,34,.22)" : "#f7f9fb", backgroundImage: (theme) => theme.palette.mode === "dark" ? "radial-gradient(circle at 50% 0%, rgba(24,199,122,.025), transparent 32%), radial-gradient(circle at 100% 100%, rgba(59,130,246,.025), transparent 28%)" : "radial-gradient(circle at 50% 0%, rgba(24,199,122,.035), transparent 34%), radial-gradient(circle at 100% 100%, rgba(59,130,246,.035), transparent 30%)" }}>
