@@ -216,7 +216,6 @@ export class ChatService {
       take: 100,
       include: { author: { select: memberUserSelect } },
     });
-    await prisma.chatChannelMember.update({ where: { channelId_userId: { channelId, userId } }, data: { lastReadAt: new Date() } });
     return messages.reverse();
   }
 
@@ -246,9 +245,92 @@ export class ChatService {
     return message;
   }
 
+  async markRead(userId: number, channelId: number) {
+    await this.assertMember(userId, channelId);
+    await prisma.chatChannelMember.update({
+      where: { channelId_userId: { channelId, userId } },
+      data: { lastReadAt: new Date() },
+    });
+    return { ok: true };
+  }
+
+  async openContextChannel(userId: number, input: Record<string, unknown>) {
+    const contextType = String(input.contextType ?? "").toUpperCase();
+    if (!["TICKET", "TASK", "CLIENT"].includes(contextType)) {
+      throw Object.assign(new Error("Tipo de contexto inválido."), { statusCode: 400 });
+    }
+    const contextId = dataProtectionService.normalizeText(input.contextId, 120);
+    if (!contextId || !/^[a-zA-Z0-9_-]{1,120}$/.test(contextId)) {
+      throw Object.assign(new Error("Identificador de contexto inválido."), { statusCode: 400 });
+    }
+    const title = dataProtectionService.normalizeText(input.title, 120);
+    const clientName = dataProtectionService.normalizeText(input.clientName, 160) || null;
+    const memberIds = Array.isArray(input.memberIds) ? input.memberIds.map(Number).filter(Number.isSafeInteger) : [];
+    const requested = [...new Set([userId, ...memberIds])];
+    if (requested.length > 20) throw Object.assign(new Error("A sala permite no máximo 20 participantes."), { statusCode: 400 });
+    const members = await prisma.user.findMany({
+      where: { id: { in: requested }, active: true, approvalStatus: "APPROVED" },
+      select: { id: true },
+    });
+    if (members.length !== requested.length) throw Object.assign(new Error("Há participantes não aprovados ou inativos."), { statusCode: 400 });
+    const channel = await prisma.$transaction(async (tx) => {
+      // Serializa a criação para impedir salas duplicadas em requisições simultâneas.
+      const lockKey = `chat-context:${contextType}:${contextId}`;
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
+      const existing = await tx.chatChannel.findFirst({
+        where: { type: "CONTEXT", contextType, contextId, archivedAt: null },
+        include: { members: { include: { user: { select: memberUserSelect } } } },
+      });
+      if (existing) {
+        if (!existing.members.some((member) => member.userId === userId)) {
+          // Não revela nem adiciona membros a uma sala já existente sem autorização.
+          throw Object.assign(new Error("Sala existente. Solicite acesso à coordenação."), { statusCode: 403 });
+        }
+        return existing;
+      }
+      const created = await tx.chatChannel.create({
+        data: {
+          name: title || `${contextType} #${contextId}`,
+          type: "CONTEXT",
+          description: `Sala de acompanhamento de ${contextType.toLowerCase()}`,
+          contextType, contextId, clientName,
+          members: { create: requested.map((memberId) => ({ userId: memberId })) },
+        },
+        include: { members: { include: { user: { select: memberUserSelect } } } },
+      });
+      await tx.chatMessage.create({
+        data: {
+          channelId: created.id, authorId: userId, kind: "SYSTEM",
+          content: `Sala criada para ${contextType} #${contextId}. Registre decisões e próximos passos neste canal.`,
+          payload: { contextType, contextId },
+        },
+      });
+      return created;
+    });
+    await this.audit(userId, "CHAT_CONTEXT_OPENED", "ChatChannel", channel.id, { contextType, contextId });
+    return channel;
+  }
+
   async sendMessage(userId: number, channelId: number, input: Record<string, unknown>) {
     await this.assertMember(userId, channelId);
     const content = dataProtectionService.normalizeText(input.content);
+    const requestedKind = String(input.kind ?? "TEXT").toUpperCase();
+    const kind = ["TEXT", "RECORD_CARD", "SYSTEM"].includes(requestedKind) ? requestedKind : "TEXT";
+    if (kind === "SYSTEM") throw Object.assign(new Error("Mensagens de sistema são reservadas ao servidor."), { statusCode: 403 });
+    const clientMessageId = typeof input.clientMessageId === "string" && /^[a-zA-Z0-9_-]{8,80}$/.test(input.clientMessageId)
+      ? input.clientMessageId : null;
+    if (clientMessageId) {
+      const previous = await prisma.chatMessage.findUnique({
+        where: { channelId_authorId_clientMessageId: { channelId, authorId: userId, clientMessageId } },
+        include: { author: { select: memberUserSelect } },
+      });
+      if (previous) return { ...previous, mentions: [] };
+    }
+    const payload = kind === "RECORD_CARD" && input.payload && typeof input.payload === "object" && !Array.isArray(input.payload)
+      ? input.payload as Record<string, unknown> : null;
+    if (kind === "RECORD_CARD" && (!payload || !["ticket", "task"].includes(String(payload.type ?? "").toLowerCase()))) {
+      throw Object.assign(new Error("Card de registro inválido."), { statusCode: 400 });
+    }
     if (!content) throw Object.assign(new Error("A mensagem não pode ficar vazia."), { statusCode: 400 });
     dataProtectionService.assertNoSecrets(content);
     const parentId = Number(input.parentId) || null;
@@ -257,7 +339,7 @@ export class ChatService {
       if (!parent) throw Object.assign(new Error("Mensagem respondida não foi localizada."), { statusCode: 404 });
     }
     const message = await prisma.chatMessage.create({
-      data: { channelId, authorId: userId, parentId, content },
+      data: { channelId, authorId: userId, parentId, content, kind, payload: payload as Prisma.InputJsonValue | undefined ?? undefined, clientMessageId },
       include: { author: { select: memberUserSelect } },
     });
     await prisma.chatChannel.update({ where: { id: channelId }, data: { updatedAt: new Date() } });
