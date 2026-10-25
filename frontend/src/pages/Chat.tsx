@@ -20,6 +20,7 @@ import { normalizeChatChannels, useChannelDirectory } from "../components/chat/h
 import { useMessageView } from "../components/chat/hooks/useMessageView";
 import { useChatRealtime } from "../components/chat/hooks/useChatRealtime";
 import { useChatPresence } from "../components/chat/hooks/useChatPresence";
+import { useChatReadReceipts } from "../components/chat/hooks/useChatReadReceipts";
 
 
 import { presenceColor } from "../components/chat/chatTypes";
@@ -96,6 +97,10 @@ export function Chat() {
   const [onlineAnchor, setOnlineAnchor] = useState<HTMLElement | null>(null);
   const [incomingPopup, setIncomingPopup] = useState<{ channelId: number; channelName: string; authorName: string; preview: string } | null>(null);
   const previousChannelState = useRef<Map<number, { unread: number; lastMessageId: number | null }>>(new Map());
+  const markRead = useChatReadReceipts({ selectedId, onRead: (channelId) => {
+    setChannels((current) => current.map((channel) => channel.id === channelId ? { ...channel, unread: 0 } : channel));
+    window.dispatchEvent(new Event("techlead-hub:chat-read"));
+  } });
   const selectedIdRef = useRef<number | null>(null);
   selectedIdRef.current = selectedId;
   useEffect(() => () => { if (typingTimer.current) window.clearTimeout(typingTimer.current); }, []);
@@ -197,10 +202,7 @@ export function Chat() {
       if (document.visibilityState === "visible" && !quiet) {
         const container = messagesRef.current;
         if (!container || container.scrollHeight - container.scrollTop - container.clientHeight < 160) {
-          void api.post(`/chat/channels/${channelId}/read`).then(() => {
-            setChannels((current) => current.map((channel) => channel.id === channelId ? { ...channel, unread: 0 } : channel));
-            window.dispatchEvent(new Event("techlead-hub:chat-read"));
-          }).catch(() => undefined);
+          markRead(channelId);
         }
       }
       setError("");
@@ -209,7 +211,7 @@ export function Chat() {
     } finally {
       if (!controller.signal.aborted) setLoading(false);
     }
-  }, []);
+  }, [markRead]);
 
   useEffect(() => {
     let active = true;
@@ -322,12 +324,9 @@ export function Chat() {
     if (container.scrollTop < 120 && hasOlder && !loadingOlder && !messageSearch.trim()) void loadOlder();
     if (distance < 140 && document.visibilityState === "visible" && selectedIdRef.current) {
       const channelId = selectedIdRef.current;
-      void api.post(`/chat/channels/${channelId}/read`).then(() => {
-        setChannels((current) => current.map((channel) => channel.id === channelId ? { ...channel, unread: 0 } : channel));
-        window.dispatchEvent(new Event("techlead-hub:chat-read"));
-      }).catch(() => undefined);
+      markRead(channelId);
     }
-  }, [hasOlder, loadingOlder, loadOlder, messageSearch]);
+  }, [hasOlder, loadingOlder, loadOlder, markRead, messageSearch]);
 
   const jumpToLatest = useCallback(() => {
     const container = messagesRef.current;
