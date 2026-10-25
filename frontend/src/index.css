@@ -709,3 +709,79 @@ svg {
     padding: 16px;
   }
 }
+
+
+/* =========================================================
+   POLIMENTO TRANSVERSAL — TELAS AUTENTICADAS
+   Aplica a mesma hierarquia do Dashboard sem alterar conteúdo,
+   lógica, densidade de dados ou layouts especiais (chat/login).
+========================================================= */
+.techlead-page-surface:not(.techlead-chat-workspace) {
+  min-width: 0;
+}
+.techlead-page-surface > :is(.MuiBox-root, .MuiStack-root, .MuiGrid-root) {
+  min-width: 0;
+}
+.techlead-page-surface .MuiCard-root,
+.techlead-page-surface .MuiPaper-root {
+  min-width: 0;
+}
+.techlead-page-surface .MuiCardHeader-title,
+.techlead-page-surface .MuiCardContent-root > .MuiTypography-h6 {
+  letter-spacing: -0.02em;
+  line-height: 1.35;
+}
+.techlead-page-surface .MuiCardHeader-subheader {
+  line-height: 1.45;
+}
+.techlead-page-surface .MuiTableContainer-root {
+  max-width: 100%;
+  border-radius: var(--hub-radius-md);
+  overscroll-behavior-inline: contain;
+}
+.techlead-page-surface .MuiTableHead-root .MuiTableCell-root {
+  background-color: var(--hub-surface-raised);
+  color: var(--hub-text-secondary);
+  white-space: nowrap;
+}
+.techlead-page-surface .MuiTableBody-root .MuiTableCell-root {
+  vertical-align: middle;
+}
+.techlead-page-surface .MuiTableBody-root .MuiTableRow-root:last-child .MuiTableCell-root {
+  border-bottom-color: transparent;
+}
+.techlead-page-surface .MuiChip-root {
+  max-width: 100%;
+}
+.techlead-page-surface .MuiChip-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.techlead-page-surface .recharts-responsive-container {
+  min-width: 0;
+}
+.techlead-page-surface .recharts-tooltip-wrapper {
+  z-index: 4;
+}
+.techlead-page-surface .MuiSkeleton-root {
+  border-radius: var(--hub-radius-sm);
+}
+@media (max-width: 600px) {
+  .techlead-page-surface .MuiCardHeader-root {
+    padding: 16px;
+  }
+  .techlead-page-surface .MuiTableCell-root {
+    padding: 10px 12px;
+  }
+  .techlead-page-surface .MuiCardActions-root {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .techlead-page-surface .MuiCard-root,
+  .techlead-page-surface .MuiPaper-root,
+  .techlead-page-surface .MuiTableRow-root {
+    transition: none;
+  }
+}
