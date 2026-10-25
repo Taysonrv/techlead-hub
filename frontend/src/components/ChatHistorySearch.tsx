@@ -35,7 +35,7 @@ export function ChatHistorySearch({ channelId, open, onClose }: {
           <TextField size="small" fullWidth autoFocus label="Buscar mensagem" value={query}
             onChange={(event) => setQuery(event.target.value)}
             onKeyDown={(event) => { if (event.key === "Enter") void search(); }}
-            inputProps={{ maxLength: 120 }} />
+            slotProps={{ htmlInput: { maxLength: 120 } }} />
           <Button variant="contained" disabled={loading || query.trim().length < 2} onClick={() => void search()}>Buscar</Button>
         </Stack>
         <Typography variant="caption" color="text.secondary">Pesquisa no histórico armazenado, inclusive mensagens anteriores às últimas 100. Até 50 resultados por consulta.</Typography>
