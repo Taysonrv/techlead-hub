@@ -93,6 +93,11 @@ export function Chat() {
   } });
   const { messages, setMessages, loading, hasOlder, loadingOlder, showJumpToLatest, setShowJumpToLatest, loadMessages, loadOlder, handleMessagesScroll: handleHistoryScroll, jumpToLatest } = useChatHistory({ selectedId, messagesRef, markRead, setError });
   const handleMessagesScroll = useCallback(() => handleHistoryScroll(messageSearch), [handleHistoryScroll, messageSearch]);
+  useEffect(() => {
+    setReplyTo(null);
+    setContent("");
+    setMessageSearch("");
+  }, [selectedId]);
   const selectedIdRef = useRef<number | null>(null);
   selectedIdRef.current = selectedId;
 
