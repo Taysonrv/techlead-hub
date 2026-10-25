@@ -222,6 +222,20 @@ export class ChatService {
     return messages.reverse();
   }
 
+  async searchMessages(userId: number, channelId: number, query: string) {
+    await this.assertMember(userId, channelId);
+    const term = query.trim();
+    if (term.length < 2 || term.length > 120) {
+      throw Object.assign(new Error("A pesquisa deve ter entre 2 e 120 caracteres."), { statusCode: 400 });
+    }
+    return prisma.chatMessage.findMany({
+      where: { channelId, deletedAt: null, content: { contains: term, mode: "insensitive" } },
+      orderBy: { id: "desc" },
+      take: 50,
+      include: { author: { select: memberUserSelect } },
+    });
+  }
+
   async sendAttachment(userId: number, channelId: number, input: Record<string, unknown>) {
     await this.assertMember(userId, channelId);
     const name = dataProtectionService.normalizeText(input.name, 180);
