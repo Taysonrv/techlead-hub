@@ -86,6 +86,12 @@ chatRoutes.post("/channels/:channelId/read", async (req: AuthenticatedRequest, r
   catch (error) { fail(res, error); }
 });
 chatRoutes.post("/channels", async (req: AuthenticatedRequest, res) => { try { res.status(201).json(await chatService.createChannel(req.auth!.userId, req.auth!.role, req.body ?? {})); } catch (error) { fail(res, error); } });
+chatRoutes.get("/channels/:channelId/search", async (req: AuthenticatedRequest, res) => {
+  try {
+    const query = typeof req.query.q === "string" ? req.query.q : "";
+    res.json({ messages: await chatService.searchMessages(req.auth!.userId, id(req.params.channelId), query) });
+  } catch (error) { fail(res, error); }
+});
 chatRoutes.get("/channels/:channelId/messages", async (req: AuthenticatedRequest, res) => { try { res.json({ messages: await chatService.listMessages(req.auth!.userId, id(req.params.channelId), req.query.beforeId ? id(String(req.query.beforeId)) : undefined) }); } catch (error) { fail(res, error); } });
 chatRoutes.post("/channels/:channelId/attachments", async (req: AuthenticatedRequest, res) => { try { res.status(201).json(await chatService.sendAttachment(req.auth!.userId, id(req.params.channelId), req.body ?? {})); } catch (error) { fail(res, error); } });
 chatRoutes.post("/channels/:channelId/messages", async (req: AuthenticatedRequest, res) => { try { res.status(201).json(await chatService.sendMessage(req.auth!.userId, id(req.params.channelId), req.body ?? {})); } catch (error) { fail(res, error); } });
