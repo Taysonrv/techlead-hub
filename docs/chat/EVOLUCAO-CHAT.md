@@ -110,3 +110,12 @@ O usuário relatou commit local `ff20d42` na branch `feat/evolucao-visual-design
 - Menções, anexos persistidos e legados, respostas e cards operacionais continuam suportados.
 - Os avatares usam iniciais, não fotografias: o modelo atual de usuário não fornece URL de foto.
 - **Validação pendente:** lint, build e revisão manual em temas claro/escuro, mobile e histórico longo.
+
+
+## Evolução visual — lista de conversas (25/10/2026)
+
+- Itens de conversa com avatar de 42px, iniciais para conversas diretas, ícones para canais e incidentes e indicador de presença online.
+- Nome, prévia de mensagem, horário contextual (hoje/ontem/data), indicação de digitação e contador de não lidas em layout compacto.
+- Agrupamentos existentes preservados; favoritos continuam acessíveis pelo botão próprio, sem abrir a conversa acidentalmente.
+- Nenhuma fotografia ou mensagem fictícia foi adicionada; os dados são os retornados pelas APIs.
+- **Validação pendente:** lint, build, screenshots e inspeção de estados de hover, foco, tema escuro e canais com nomes longos.
