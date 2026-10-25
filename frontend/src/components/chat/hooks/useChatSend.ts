@@ -20,6 +20,26 @@ export function useChatSend({ selectedId, content, replyTo, setMessages, setCont
   const sendingRef = useRef(false);
   const selectedRef = useRef(selectedId);
   selectedRef.current = selectedId;
+  const sendQuick = useCallback(async (value: string) => {
+    if (!selectedId || !value.trim() || sendingRef.current) return false;
+    const channelId = selectedId;
+    sendingRef.current = true;
+    setSending(true);
+    try {
+      const response = await api.post<Message>(`/chat/channels/${channelId}/messages`, { content: value, clientMessageId: crypto.randomUUID() });
+      if (selectedRef.current === channelId) {
+        setMessages((current) => current.some((message) => message.id === response.data.id) ? current : [...current, response.data]);
+        setShowJumpToLatest(false);
+      }
+      return true;
+    } catch {
+      if (selectedRef.current === channelId) setError("Não foi possível enviar a mensagem.");
+      return false;
+    } finally {
+      sendingRef.current = false;
+      setSending(false);
+    }
+  }, [selectedId, setMessages, setShowJumpToLatest, setError]);
   const send = useCallback(async () => {
     const text = content.trim();
     if (!selectedId || !text || sendingRef.current) return;
@@ -49,5 +69,5 @@ export function useChatSend({ selectedId, content, replyTo, setMessages, setCont
       setSending(false);
     }
   }, [selectedId, content, replyTo, setMessages, setContent, setReplyTo, setShowJumpToLatest, setError]);
-  return { send, sending, setSending };
+  return { send, sendQuick, sending };
 }
