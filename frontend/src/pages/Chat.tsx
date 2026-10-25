@@ -16,6 +16,7 @@ import { ChannelList } from "../components/chat/ChannelList";
 import { ConversationHeader } from "../components/chat/ConversationHeader";
 import { MessageList } from "../components/chat/MessageList";
 import { Composer } from "../components/chat/Composer";
+import { normalizeChatChannels, useChannelDirectory } from "../components/chat/hooks/useChannelDirectory";
 
 
 import { presenceColor } from "../components/chat/chatTypes";
@@ -97,22 +98,13 @@ export function Chat() {
   selectedIdRef.current = selectedId;
   useEffect(() => () => { if (typingTimer.current) window.clearTimeout(typingTimer.current); }, []);
 
-  const selected = useMemo(() => channels.find((channel) => channel.id === selectedId) ?? null, [channels, selectedId]);
+  const { selected, sidebarChannels, totalUnread } = useChannelDirectory({ channels, selectedId, conversationSearch, favorites });
   const showSidePanel = Boolean(selected) && (conversationInfoOpen || selected?.type === "CONTEXT" || (selected?.type === "TEAM" && teamPanelOpen) || (wideContext && widePanelVisible));
   const selectConversation = useCallback((channelId: number) => { setSelectedId(channelId); setMobileConversationOpen(true); }, []);
   const backToConversations = useCallback(() => { setMobileConversationOpen(false); setConversationInfoOpen(false); }, []);
   const selectedPeer = useMemo(() => selected?.type === "DIRECT" ? selected.members?.map((member) => member.user).find((person) => person.id !== user?.id) : null, [selected, user?.id]);
   const selectedPresence = selectedPeer ? presence.find((item) => item.userId === selectedPeer.id) : null;
   const typingNames = remoteTyping.filter((item) => item.channelId === selectedId).map((item) => item.name);
-  const visibleChannels = useMemo(() => {
-    const query = conversationSearch.trim().toLowerCase();
-    return channels.filter((channel) => {
-      if (!query) return true;
-      const peerNames = channel.members?.map((member) => member.user.name).join(" ") ?? "";
-      return [channel.name, channel.description, channel.clientName, peerNames]
-        .some((value) => value?.toLowerCase().includes(query));
-    });
-  }, [channels, conversationSearch]);
   const pinState = useMemo(() => {
     const ids = new Set<number>();
     messages.forEach((message) => {
@@ -141,50 +133,10 @@ export function Chat() {
       const weight = (status: Presence["effectiveStatus"] | undefined) => status === "BUSY" ? 0 : 1;
       return weight(a.presence?.effectiveStatus)-weight(b.presence?.effectiveStatus) || a.person.name.localeCompare(b.person.name, "pt-BR");
     }), [participantPresence]);
-  const totalUnread = useMemo(() => channels.reduce((sum, channel) => sum + channel.unread, 0), [channels]);
-  const sortedVisibleChannels = useMemo(() => visibleChannels.slice().sort((a, b) => {
-    const group = (channel: Channel) => favorites.includes(channel.id) ? 0 : channel.type === "DIRECT" ? 1 : 2;
-    return group(a) - group(b) || b.unread - a.unread || ((b.messages?.[b.messages.length - 1]?.id ?? 0) - (a.messages?.[a.messages.length - 1]?.id ?? 0));
-  }), [visibleChannels, favorites]);
-  const sidebarChannels = useMemo(() => {
-    if (!selected || sortedVisibleChannels.some((channel) => channel.id === selected.id)) return sortedVisibleChannels;
-    return [selected, ...sortedVisibleChannels];
-  }, [selected, sortedVisibleChannels]);
-
   const loadChannels = useCallback(async () => {
     const response = await api.get<{ channels: Channel[] }>("/chat/channels");
     const rawChannels = Array.isArray(response.data.channels) ? response.data.channels : [];
-    const directByPeer = new Map<number, Channel>();
-    const nonDirect: Channel[] = [];
-    rawChannels.forEach((channel) => {
-      if (channel.type !== "DIRECT") { nonDirect.push(channel); return; }
-      const peerId = channel.members?.map((member) => member.user.id).find((id) => id !== user?.id);
-      if (!peerId) { nonDirect.push(channel); return; }
-      const existing = directByPeer.get(peerId);
-      if (!existing) { directByPeer.set(peerId, channel); return; }
-      const existingLatest = existing.messages?.[existing.messages.length - 1]?.id ?? 0;
-      const currentLatest = channel.messages?.[channel.messages.length - 1]?.id ?? 0;
-      if (currentLatest > existingLatest || (currentLatest === existingLatest && channel.unread > existing.unread)) directByPeer.set(peerId, channel);
-    });
-    let nextChannels = [...directByPeer.values(), ...nonDirect];
-
-    // Nunca deixe a conversa atualmente aberta desaparecer da coluna lateral.
-    // Em DIRECTs legados/duplicados, o canal selecionado pode não ser o canônico
-    // escolhido pelo dedupe; nesse caso substituímos o representante daquele par
-    // pelo canal efetivamente aberto.
-    const activeId = selectedIdRef.current;
-    const activeRaw = activeId ? rawChannels.find((channel) => channel.id === activeId) : undefined;
-    if (activeRaw && !nextChannels.some((channel) => channel.id === activeRaw.id)) {
-      if (activeRaw.type === "DIRECT") {
-        const activePeerId = activeRaw.members?.map((member) => member.user.id).find((id) => id !== user?.id);
-        nextChannels = nextChannels.filter((channel) => {
-          if (channel.type !== "DIRECT" || !activePeerId) return true;
-          const peerId = channel.members?.map((member) => member.user.id).find((id) => id !== user?.id);
-          return peerId !== activePeerId;
-        });
-      }
-      nextChannels.unshift(activeRaw);
-    }
+    const { channels: nextChannels, directByPeer } = normalizeChatChannels(rawChannels, user?.id, selectedIdRef.current);
     const requestedId = Number(searchParams.get("channel"));
     const requestedChannel = rawChannels.find((channel) => channel.id === requestedId);
     let requestedTargetId: number | null = null;
