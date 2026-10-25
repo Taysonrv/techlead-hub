@@ -139,3 +139,11 @@ O usuário relatou commit local `ff20d42` na branch `feat/evolucao-visual-design
 - Filtragem explícita por `channelId` para não misturar anexos de conversas ao alternar rapidamente.
 - **Limitação:** não há thumbnails autenticadas nem consulta a todo o histórico; as seções mostram apenas anexos presentes nas mensagens já carregadas.
 - **Validação pendente:** lint/build local, screenshot desktop e testes de expansão, download e alternância de conversa.
+
+
+## Refatoração incremental — diretório e visualização de mensagens (25/10/2026)
+
+- Extraído `components/chat/hooks/useChannelDirectory.ts`: normalização de conversas diretas duplicadas, manutenção da conversa selecionada, busca local, ordenação e total de não lidas.
+- Extraído `components/chat/hooks/useMessageView.ts`: filtro de mensagens, pins legados e destaques operacionais.
+- `Chat.tsx` passou de aproximadamente 944 para 886 linhas. A separação completa em hooks de rede, SSE, envio, presença e painéis continua pendente; nenhuma mudança de contrato/API foi introduzida nesta etapa.
+- **Validação pendente:** `npm run lint` e `npm run build` no frontend, além de testes de seleção de DMs duplicadas, filtros, mensagens fixadas e alternância de canais. Não considerar concluída a Fase 1.
