@@ -718,7 +718,7 @@ export function Chat() {
     {selected?.type === "CONTEXT" && selectedId && <IncidentActionsPanel channelId={selectedId} open={incidentActionsOpen} onClose={() => setIncidentActionsOpen(false)} />}
     {selectedId && <ChatHistorySearch channelId={selectedId} open={historySearchOpen} onClose={() => setHistorySearchOpen(false)} />}
     {error && <Alert severity="error" onClose={() => setError("")}>{error}</Alert>}
-    <Paper elevation={0} sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "244px minmax(0,1fr)", lg: "252px minmax(0,1fr)", xl: (conversationInfoOpen || (selected?.type === "TEAM" && teamPanelOpen)) ? "258px minmax(0,1fr) 292px" : "258px minmax(0,1fr)" }, gap: { xs: 0, md: .9 }, p: { xs: 0, md: .8 }, minHeight: 0, flex: 1, overflow: "hidden", borderRadius: 3.5, maxHeight: "100%", height: "100%", border: "1px solid", borderColor: "divider", boxShadow: "0 16px 42px rgba(15,23,42,.075)", bgcolor: "background.paper", backgroundImage: (theme) => theme.palette.mode === "dark" ? "linear-gradient(145deg,rgba(12,31,46,.98),rgba(11,27,42,.98))" : "linear-gradient(145deg,#ffffff,#fbfdff)" }}>
+    <Paper elevation={0} sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "244px minmax(0,1fr)", lg: "252px minmax(0,1fr)", xl: (conversationInfoOpen || selected?.type === "CONTEXT" || (selected?.type === "TEAM" && teamPanelOpen)) ? "258px minmax(0,1fr) 292px" : "258px minmax(0,1fr)" }, gap: { xs: 0, md: .9 }, p: { xs: 0, md: .8 }, minHeight: 0, flex: 1, overflow: "hidden", borderRadius: 3.5, maxHeight: "100%", height: "100%", border: "1px solid", borderColor: "divider", boxShadow: "0 16px 42px rgba(15,23,42,.075)", bgcolor: "background.paper", backgroundImage: (theme) => theme.palette.mode === "dark" ? "linear-gradient(145deg,rgba(12,31,46,.98),rgba(11,27,42,.98))" : "linear-gradient(145deg,#ffffff,#fbfdff)" }}>
       <Box sx={{ position: "relative", minHeight: 0, overflow: "hidden", display: "grid", gridTemplateRows: "auto auto 1px minmax(0, 1fr)", alignContent: "stretch", borderRadius: { xs: 0, md: 3.25 }, bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(255,255,255,.022)" : "rgba(248,250,252,.76)", border: { md: "1px solid" }, borderColor: { md: "divider" }, boxShadow: (theme) => theme.palette.mode === "dark" ? "0 10px 28px rgba(0,0,0,.10), inset 0 1px rgba(255,255,255,.02)" : "0 8px 24px rgba(15,23,42,.045)" }}>
         <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between", px: 1.35, py: 1, minHeight: 52 }}>
           <Box sx={{ minWidth: 0, pl: .25 }}><Stack direction="row" spacing={.7} sx={{ alignItems: "center" }}><Typography sx={{ fontWeight: 900, lineHeight: 1.2 }}>Conversas</Typography>{totalUnread > 0 && <Chip size="small" color="primary" label={totalUnread > 99 ? "99+" : totalUnread} sx={{ height: 20, fontWeight: 900 }} />}</Stack><Typography variant="caption" color="text.secondary">{channels.length} conversa(s){totalUnread ? ` · ${totalUnread} não lida(s)` : ""}</Typography></Box>
@@ -825,13 +825,21 @@ export function Chat() {
           <Button variant="contained" endIcon={sending ? <CircularProgress size={16} color="inherit" /> : <SendRounded />} disabled={!selectedId || !content.trim() || sending} onClick={() => void send()} sx={{ minWidth: 42, width: 42, height: 38, px: 0, borderRadius: 2.5, boxShadow: "none", "&:hover": { boxShadow: "0 6px 16px rgba(24,199,122,.18)" }, "& .MuiButton-endIcon": { m: 0 } }}><Box component="span" sx={{ display: "none" }}>Enviar</Box></Button>
         </Stack>
       </Box>
-      {(conversationInfoOpen || (selected?.type === "TEAM" && teamPanelOpen)) && selected && <Box sx={{ display: { xs: "none", xl: "block" }, border: "1px solid", borderColor: "divider", borderRadius: 3, p: 1.6, overflowY: "auto", my: .1, bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(255,255,255,.015)" : "rgba(248,250,252,.72)" }}>
+      {(conversationInfoOpen || selected?.type === "CONTEXT" || (selected?.type === "TEAM" && teamPanelOpen)) && selected && <Box sx={{ display: { xs: "none", xl: "block" }, border: "1px solid", borderColor: "divider", borderRadius: 3, p: 1.6, overflowY: "auto", my: .1, bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(255,255,255,.015)" : "rgba(248,250,252,.72)" }}>
         <Stack spacing={2}>
           <Box sx={{ textAlign: "center", pt: 1 }}>
             <Box sx={{ width: 64, height: 64, mx: "auto", mb: 1, borderRadius: "50%", bgcolor: "primary.main", color: "primary.contrastText", display: "grid", placeItems: "center", fontSize: "1.35rem", fontWeight: 950, boxShadow: "0 10px 24px rgba(24,199,122,.18)" }}>{selected.name.slice(0,1).toUpperCase()}</Box>
             <Typography sx={{ fontWeight: 900 }}>{selected.name}</Typography>
-            <Typography variant="caption" color="text.secondary">{selected.type === "DIRECT" ? "Conversa privada" : "Canal da equipe"}</Typography>
+            <Typography variant="caption" color="text.secondary">{selected.type === "DIRECT" ? "Conversa privada" : selected.type === "CONTEXT" ? "Sala de incidente" : "Canal da equipe"}</Typography>
           </Box>
+          {selected.type === "CONTEXT" && <Stack spacing={1.2}>
+            <Chip size="small" color="primary" label={selected.contextType === "TICKET" ? "Atendimento Movidesk" : "Tarefa Azure"} />
+            <Typography variant="body2"><b>Registro:</b> #{selected.contextId}</Typography>
+            {selected.clientName && <Typography variant="body2"><b>Cliente:</b> {selected.clientName}</Typography>}
+            <Button variant="contained" size="small" onClick={() => setIncidentActionsOpen(true)}>Decisões e acompanhamento</Button>
+            <Button variant="outlined" size="small" onClick={() => setHistorySearchOpen(true)}>Pesquisar histórico</Button>
+            <Divider />
+          </Stack>}
           <Divider />
           {selected.type === "DIRECT" && selectedPeer ? <Stack spacing={1}>
             <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 900 }}>Contato</Typography>
