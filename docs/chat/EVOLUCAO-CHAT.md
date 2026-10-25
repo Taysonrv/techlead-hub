@@ -129,3 +129,13 @@ O usuário relatou commit local `ff20d42` na branch `feat/evolucao-visual-design
 - Painel direito usa superfície integrada ao workspace e separador vertical, reduzindo o aspecto de cartão administrativo.
 - Nenhuma mensagem, imagem ou anexo de exemplo foi criado; a galeria reflete apenas arquivos realmente carregados.
 - **Validação necessária no ambiente local:** `npm run lint`, `npm run build`, screenshot desktop com conversa aberta e testes dos controles de painel e pesquisa.
+
+
+## Refinamento do painel direito — 25/10/2026
+
+- Cabeçalho compacto "Informações e arquivos", sem avatar grande redundante.
+- Seções de compartilhamentos recolhíveis e acessíveis, com contagem de imagens, vídeos e arquivos.
+- Cinco anexos recentes por seção, com ação "Ver todos" para expandir os anexos já carregados; arquivos continuam baixados pelo endpoint autenticado.
+- Filtragem explícita por `channelId` para não misturar anexos de conversas ao alternar rapidamente.
+- **Limitação:** não há thumbnails autenticadas nem consulta a todo o histórico; as seções mostram apenas anexos presentes nas mensagens já carregadas.
+- **Validação pendente:** lint/build local, screenshot desktop e testes de expansão, download e alternância de conversa.
