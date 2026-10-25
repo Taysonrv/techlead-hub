@@ -4,6 +4,8 @@ import { Box, Chip, CircularProgress, IconButton, Stack, Tooltip, Typography } f
 type Props = {
   channelCount: number;
   unreadCount: number;
+  availability: "ONLINE" | "AWAY" | "BUSY";
+  onChangeAvailability: () => void;
   canMaintain: boolean;
   maintenanceRunning: boolean;
   onConsolidate: () => void;
@@ -11,7 +13,7 @@ type Props = {
   onCreateChannel: () => void;
 };
 
-export function ConversationListHeader({ channelCount, unreadCount, canMaintain, maintenanceRunning, onConsolidate, onOpenDirect, onCreateChannel }: Props) {
+export function ConversationListHeader({ channelCount, unreadCount, availability, onChangeAvailability, canMaintain, maintenanceRunning, onConsolidate, onOpenDirect, onCreateChannel }: Props) {
   return (
     <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between", px: 2, pt: 2, pb: 1.25, minHeight: 68 }}>
       <Box sx={{ minWidth: 0, pl: .25 }}>
@@ -21,7 +23,14 @@ export function ConversationListHeader({ channelCount, unreadCount, canMaintain,
         </Stack>
         <Typography variant="caption" color="text.secondary">{channelCount ? `${channelCount} conversas` : "Seu espaço de colaboração"}{unreadCount ? ` · ${unreadCount} não lidas` : ""}</Typography>
       </Box>
-      <Stack direction="row">
+      <Stack direction="row" sx={{ alignItems: "center", gap: .25 }}>
+        <Tooltip title="Alterar status: Online → Ausente → Ocupado">
+          <Chip size="small" clickable onClick={onChangeAvailability}
+            aria-label={`Status atual: ${({ ONLINE: "Online", AWAY: "Ausente", BUSY: "Ocupado" }[availability])}. Clique para alterar`}
+            color={availability === "BUSY" ? "error" : availability === "AWAY" ? "warning" : "success"}
+            variant="outlined" label={{ ONLINE: "Online", AWAY: "Ausente", BUSY: "Ocupado" }[availability]}
+            sx={{ height: 25, fontWeight: 750, "& .MuiChip-label": { px: .75 } }} />
+        </Tooltip>
         {canMaintain && <Tooltip title="Consolidar conversas privadas duplicadas"><span><IconButton size="small" aria-label="Consolidar conversas privadas duplicadas" disabled={maintenanceRunning} onClick={onConsolidate}>{maintenanceRunning ? <CircularProgress size={17} /> : <CleaningServicesOutlined fontSize="small" />}</IconButton></span></Tooltip>}
         <Tooltip title="Conversa privada"><IconButton size="small" aria-label="Iniciar conversa privada" onClick={onOpenDirect}><PersonOutlineRounded /></IconButton></Tooltip>
         <Tooltip title="Novo canal"><IconButton size="small" aria-label="Criar canal" onClick={onCreateChannel}><AddCommentOutlined /></IconButton></Tooltip>
