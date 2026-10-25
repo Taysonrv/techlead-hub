@@ -1,6 +1,7 @@
 import { Box, Chip, Divider, IconButton, Paper, Stack, Tooltip, Typography } from "@mui/material";
 import { PushPinOutlined, ReplyOutlined } from "@mui/icons-material";
-import { AttachmentChip, parseLegacyAttachment } from "./AttachmentChip";
+import { AttachmentChip } from "./AttachmentChip";
+import { parseLegacyAttachment } from "./legacyAttachment";
 import { SharedRecordCard } from "./SharedRecordCard";
 import type { SharedRecord } from "./SharedRecordCard";
 import type { Message } from "./chatTypes";
