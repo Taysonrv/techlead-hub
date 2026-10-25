@@ -28,7 +28,7 @@ export class WorkspaceController {
     const startDate = typeof request.query.startDate === "string" ? request.query.startDate.trim() : null;
     const endDate = typeof request.query.endDate === "string" ? request.query.endDate.trim() : null;
     const validDate = (value: string) => {
-      if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(value)) return false;
+      if (!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(value)) return false;
       const parsed = new Date(`${value}T00:00:00Z`);
       return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
     };
