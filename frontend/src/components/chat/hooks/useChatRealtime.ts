@@ -24,6 +24,23 @@ export function useChatRealtime({ selectedId, onChannelsChanged, onMessagesChang
     let stopped = false;
     let retryMs = 1800;
     let retryWake: (() => void) | null = null;
+    let lastRefreshAt = Date.now();
+    let refreshInFlight = false;
+    const refresh = async () => {
+      if (stopped || refreshInFlight || document.visibilityState !== "visible") return;
+      refreshInFlight = true;
+      try {
+        await current.current.onChannelsChanged();
+        if (current.current.selectedId) await current.current.onMessagesChanged(current.current.selectedId);
+        lastRefreshAt = Date.now();
+      } catch { /* A próxima verificação tentará novamente. */ }
+      finally { refreshInFlight = false; }
+    };
+    const fallback = window.setInterval(() => {
+      if (Date.now() - lastRefreshAt >= 30_000) void refresh();
+    }, 30_000);
+    const onVisibility = () => { if (document.visibilityState === "visible") void refresh(); };
+    document.addEventListener("visibilitychange", onVisibility);
     const wait = (ms: number) => new Promise<void>((resolve) => {
       if (stopped) { resolve(); return; }
       const timer = window.setTimeout(() => { retryWake = null; resolve(); }, ms);
@@ -34,6 +51,7 @@ export function useChatRealtime({ selectedId, onChannelsChanged, onMessagesChang
       const handlers = current.current;
       handlers.setPresence(snapshot.presence);
       handlers.setRemoteTyping(snapshot.typing);
+      lastRefreshAt = Date.now();
       const latestId = snapshot.latestMessage?.id ?? null;
       if (lastMessageId.current !== null && latestId !== lastMessageId.current) {
         void handlers.onChannelsChanged().catch(() => undefined);
@@ -60,10 +78,7 @@ export function useChatRealtime({ selectedId, onChannelsChanged, onMessagesChang
           if (!response.ok || !response.body) throw new Error("Stream indisponível");
           retryMs = 1800;
           // A reconexão recupera alterações ocorridas durante a desconexão.
-          if (lastMessageId.current !== null) {
-            void current.current.onChannelsChanged().catch(() => undefined);
-            if (current.current.selectedId) void current.current.onMessagesChanged(current.current.selectedId).catch(() => undefined);
-          }
+          if (lastMessageId.current !== null) void refresh();
           const reader = response.body.getReader();
           const decoder = new TextDecoder();
           let buffer = "";
@@ -89,6 +104,6 @@ export function useChatRealtime({ selectedId, onChannelsChanged, onMessagesChang
       }
     };
     void connect();
-    return () => { stopped = true; controller.abort(); retryWake?.(); };
+    return () => { stopped = true; controller.abort(); retryWake?.(); window.clearInterval(fallback); document.removeEventListener("visibilitychange", onVisibility); };
   }, []);
 }
