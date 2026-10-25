@@ -256,15 +256,26 @@ export class ChatService {
 
   async openContextChannel(userId: number, input: Record<string, unknown>) {
     const contextType = String(input.contextType ?? "").toUpperCase();
-    if (!["TICKET", "TASK", "CLIENT"].includes(contextType)) {
+    if (!["TICKET", "TASK"].includes(contextType)) {
       throw Object.assign(new Error("Tipo de contexto inválido."), { statusCode: 400 });
     }
     const contextId = dataProtectionService.normalizeText(input.contextId, 120);
     if (!contextId || !/^[a-zA-Z0-9_-]{1,120}$/.test(contextId)) {
       throw Object.assign(new Error("Identificador de contexto inválido."), { statusCode: 400 });
     }
-    const title = dataProtectionService.normalizeText(input.title, 120);
-    const clientName = dataProtectionService.normalizeText(input.clientName, 160) || null;
+    const numericId = Number(contextId);
+    if (!Number.isSafeInteger(numericId) || numericId <= 0) {
+      throw Object.assign(new Error("Identificador do registro inválido."), { statusCode: 400 });
+    }
+    const source = contextType === "TICKET"
+      ? await prisma.ticket.findUnique({ where: { movideskId: numericId }, select: { subject: true, client: true, isDeleted: true } })
+      : await prisma.azureWorkItem.findUnique({ where: { id: numericId }, select: { title: true, client: true } });
+    if (!source || ("isDeleted" in source && source.isDeleted)) {
+      throw Object.assign(new Error("Registro de origem não localizado."), { statusCode: 404 });
+    }
+    // Nome e cliente vêm da fonte persistida, nunca do texto enviado pelo navegador.
+    const title = dataProtectionService.normalizeText("subject" in source ? source.subject : source.title, 120);
+    const clientName = dataProtectionService.normalizeText(source.client, 160) || null;
     const memberIds = Array.isArray(input.memberIds) ? input.memberIds.map(Number).filter(Number.isSafeInteger) : [];
     const requested = [...new Set([userId, ...memberIds])];
     if (requested.length > 20) throw Object.assign(new Error("A sala permite no máximo 20 participantes."), { statusCode: 400 });
