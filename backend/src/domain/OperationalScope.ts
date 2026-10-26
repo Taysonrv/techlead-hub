@@ -171,6 +171,22 @@ export function simerSupportTicketScope(includeDeleted = false): Prisma.TicketWh
   };
 }
 
+/**
+ * Movidesk dashboard export parity: event history must include older tickets and
+ * other service trees handled by the same SIMER support agents. Do not apply
+ * the strict current-service or created-since-2026 operational filter here.
+ * This scope is intentionally limited to SIMER client accounts and support owners.
+ */
+export function movideskDashboardScope(): Prisma.TicketWhereInput {
+  return {
+    AND: [
+      { isDeleted: false },
+      { client: { in: [...SIMER_CLIENTS], mode: "insensitive" } },
+      { owner: { in: [...SUPPORT_ANALYSTS, "SUPORTE SIMER | BDS"], mode: "insensitive" } },
+    ],
+  };
+}
+
 export function ticketOperationalScope(includeDeleted = false): Prisma.TicketWhereInput {
   return simerSupportTicketScope(includeDeleted);
 }
