@@ -46,6 +46,7 @@ export function IncidentActionsPanel({ channelId, open, onClose }: {
       await api.post(`/chat/channels/${channelId}/actions`, { kind, title: title.trim(), details: details.trim() });
       setTitle(""); setDetails("");
       await refresh();
+      window.dispatchEvent(new CustomEvent("techlead-hub:incident-actions-changed", { detail: { channelId } }));
     } catch { setError("Não foi possível registrar a ação."); }
     finally { setSaving(false); }
   }
@@ -54,6 +55,7 @@ export function IncidentActionsPanel({ channelId, open, onClose }: {
     try {
       await api.patch(`/chat/channels/${channelId}/actions/${actionId}`, { status });
       await refresh();
+      window.dispatchEvent(new CustomEvent("techlead-hub:incident-actions-changed", { detail: { channelId } }));
     } catch { setError("Você não tem permissão para alterar esta ação ou ocorreu um erro."); }
   }
 
