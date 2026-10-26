@@ -78,13 +78,13 @@ export function useChatHistory({ selectedId, messagesRef, markRead, setError }: 
     setShowJumpToLatest(false);
     if (selectedId) void loadMessages(selectedId);
     else setLoading(false);
-    const initial = initialRequest;
-    const quiet = quietRequest;
-    const older = olderRequest;
+    const initial = initialRequest.current;
+    const quiet = quietRequest.current;
+    const older = olderRequest.current;
     return () => {
-      initial.current?.abort();
-      quiet.current?.abort();
-      older.current?.abort();
+      initial?.abort();
+      quiet?.abort();
+      older?.abort();
     };
   }, [selectedId, loadMessages]);
 
