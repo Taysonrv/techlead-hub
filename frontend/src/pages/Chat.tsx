@@ -93,7 +93,7 @@ export function Chat() {
   } });
   const { messages, setMessages, loading, hasOlder, loadingOlder, showJumpToLatest, setShowJumpToLatest, loadMessages, loadOlder, handleMessagesScroll: handleHistoryScroll, jumpToLatest } = useChatHistory({ selectedId, messagesRef, markRead, setError });
   const handleMessagesScroll = useCallback(() => handleHistoryScroll(messageSearch), [handleHistoryScroll, messageSearch]);
-  const { send, sending, setSending } = useChatSend({ selectedId, content, replyTo, setMessages, setContent, setReplyTo, setShowJumpToLatest, setError });
+  const { send, sendQuick, sending } = useChatSend({ selectedId, content, replyTo, setMessages, setContent, setReplyTo, setShowJumpToLatest, setError });
   useEffect(() => {
     setReplyTo(null);
     setContent("");
@@ -421,28 +421,22 @@ export function Chat() {
   const sendEmoji = useCallback(async (emoji: string) => {
     if (!selectedId || sending) return;
     setEmojiAnchor(null);
-    launchEmojiFx(emoji);
-    setSending(true);
-    try {
-      const response = await api.post<Message>(`/chat/channels/${selectedId}/messages`, { content: emoji });
-      setMessages((current) => [...current, response.data]);
+    const success = await sendQuick(emoji);
+    if (success) {
+      launchEmojiFx(emoji);
       requestAnimationFrame(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }));
-    } catch { setError("Não foi possível enviar o emoji."); }
-    finally { setSending(false); }
-  }, [selectedId, sending, launchEmojiFx, setSending, setMessages]);
+    }
+  }, [selectedId, sending, sendQuick, launchEmojiFx]);
   const sendSticker = useCallback(async (sticker: string) => {
     if (!selectedId || sending) return;
     setStickersOpen(false);
-    launchStickerFx(sticker);
-    setSending(true);
-    try {
-      const response = await api.post<Message>(`/chat/channels/${selectedId}/messages`, { content: sticker });
-      setMessages((current) => [...current, response.data]);
+    const success = await sendQuick(sticker);
+    if (success) {
+      launchStickerFx(sticker);
       if (soundEnabled) window.setTimeout(() => playNotificationSound("sent"), 180);
       requestAnimationFrame(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }));
-    } catch { setError("Não foi possível enviar a figurinha."); }
-    finally { setSending(false); }
-  }, [selectedId, sending, launchStickerFx, soundEnabled, setSending, setMessages]);
+    }
+  }, [selectedId, sending, sendQuick, launchStickerFx, soundEnabled]);
   const append = (value: string) => setContent((current) => current ? `${current} ${value}` : value);
 
   return <Stack spacing={0} sx={{ height: "100%", maxHeight: "100%", minHeight: 0, overflow: "hidden", px: { xs: .5, sm: 1, md: 1.5 }, pb: { xs: .5, md: 1.25 }, pt: { xs: .5, md: 1.25 }, boxSizing: "border-box", bgcolor: "background.default" }}>
