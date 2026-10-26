@@ -295,7 +295,7 @@ export function About() {
                 <InfoOutlined />
               </Box>
               <Box>
-                <Typography sx={{ fontWeight: 800 }}>Hub Suporte Simer</Typography>
+                <Typography sx={{ fontWeight: 800 }}>HUB SUPORTE SIMER</Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>
                   Support Intelligence para acompanhamento operacional do suporte SIMER.
                 </Typography>
@@ -524,7 +524,7 @@ export function About() {
             <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, mb: 1.5 }}>
               Dados úteis para homologação e suporte.
             </Typography>
-            <InfoRow label="Aplicação" value="Hub Suporte Simer" />
+            <InfoRow label="Aplicação" value="HUB SUPORTE SIMER" />
             <Divider />
             <InfoRow label="Criado por" value="Tayson" />
             <Divider />
