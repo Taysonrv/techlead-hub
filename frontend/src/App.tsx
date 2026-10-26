@@ -136,7 +136,7 @@ function AuthenticatedLayout({
       "/sobre": "Sobre",
       "/perfil": "Perfil",
     };
-    document.title = routineTitles[location.pathname] ?? "Hub Suporte Simer";
+    document.title = `${routineTitles[location.pathname] ?? "Início"} | HUB SUPORTE SIMER`;
   }, [location.pathname]);
   useEffect(() => {
     const unavailable = () => setBackendUnavailable(true);
