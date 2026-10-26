@@ -259,3 +259,14 @@ O usuário relatou commit local `ff20d42` na branch `feat/evolucao-visual-design
 - Testes de regressão em `frontend/tests/appBranding.test.mjs`.
 - Nomes internos de variáveis, eventos, chaves de armazenamento, APIs e nomes técnicos do projeto **não foram alterados**, para evitar quebrar integrações e dados existentes.
 - **Validação pendente:** executar `npm run lint && npm run test && npm run build` no frontend; confirmar cache de favicon no navegador e aparência visual. O pacote web não substitui automaticamente os ícones binários de instaladores desktop.
+
+
+## Conciliação dos arquivos Movidesk — correção da origem dos dados
+
+- Arquivo (2): 95 IDs únicos pendentes em 26/10, distribuídos em Aguardando 52, Pausado 30, Em Andamento 8, Aguardando Interno 3 e Novo 2. Inclui um registro atribuído a `SUPORTE SIMER | BDS`.
+- Arquivo (3): 168 IDs únicos abertos em outubro. Treze registros possuem serviço sem a palavra `SIMER` na hierarquia.
+- Arquivo (4): 174 IDs únicos resolvidos em outubro. Inclui dois tickets abertos em 2025 e quatorze serviços sem `SIMER` na hierarquia.
+- Arquivo (5): referência reportada de 179 fechados; leitura do XLSX falhou neste ambiente, portanto os IDs não foram verificados.
+- **Causa encontrada no código:** `GET /dashboard/tickets` aplicava `scopedTicketWhere` e `getLatestSnapshotWhere` com a regra estrita `ticketOperationalScope`, que exige abertura a partir de 2026 e serviço SIMER, ocultando parte do universo presente nos exports. Criado `movideskDashboardScope` para preservar clientes e responsáveis da operação, mas aceitar histórico anterior e outras árvores de serviço. A mudança foi aplicada apenas ao snapshot e ao resumo do Dashboard, não às demais rotinas.
+- Resolvidos agora são contabilizados pela data de resolução mesmo se o ticket foi reaberto depois; regra ajustada tanto no frontend quanto no resumo backend.
+- **Não homologado:** os números 168/174/179/95 não podem ser garantidos sem executar a consulta contra o PostgreSQL real e confrontar IDs. Se houver IDs ausentes no banco, será necessária correção de importação/sincronização. O backlog 95 é snapshot em 26/10 e não equivale necessariamente ao estoque atual em outra data.
