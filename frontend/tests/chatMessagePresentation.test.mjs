@@ -43,8 +43,8 @@ test("handles absent reply references and case-insensitive mentions", () => {
 
 test("separates message groups across calendar dates", () => {
   const list = [
-    message(1, 1, "Antes", "2026-10-26T23:59:00.000-03:00"),
-    message(2, 1, "Depois", "2026-10-27T00:01:00.000-03:00"),
+    message(1, 1, "Antes", new Date(2026, 9, 26, 23, 59).toISOString()),
+    message(2, 1, "Depois", new Date(2026, 9, 27, 0, 1).toISOString()),
   ];
   const result = prepareMessagePresentation(list, list);
   assert.equal(result[1].showDay, true);
