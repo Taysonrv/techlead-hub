@@ -205,3 +205,12 @@ O usuário relatou commit local `ff20d42` na branch `feat/evolucao-visual-design
 - `MessageList` consome o preparo compartilhado e mantém as mesmas propriedades visuais da bolha de mensagem.
 - `useChatHistory` ignora erros de requisições que já pertencem a outro canal e impede que paginações abortadas alterem o indicador de carregamento do canal ativo.
 - **Pendente de homologação local:** frontend lint/build/test, backend build/test, navegação rápida entre canais, mensagens respondidas e histórico paginado.
+
+
+## Pacote de anexos e renderização — 26/10/2026
+
+- `Composer` associa arquivos preparados ao canal selecionado e limpa o estado de preparação na troca de conversa, reduzindo o risco de envio acidental a outro destinatário.
+- Bloqueios de interação durante envio evitam tentativas concorrentes de preparar/enviar anexos.
+- `MessageList` memoriza o preparo linear do histórico, reduzindo trabalho repetido em renders causados por presença, digitação e outros estados.
+- **Pendente de validação:** lint, build, testes, troca de canal com anexo preparado, arrastar/colar arquivo, envio concorrente e upload em rede lenta.
+- **Limitação conhecida:** a função de upload de `Chat.tsx` ainda precisa de isolamento completo do canal de origem durante uma leitura assíncrona do arquivo. Não homologar esse cenário sem teste integrado.
