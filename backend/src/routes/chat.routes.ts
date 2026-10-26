@@ -21,6 +21,7 @@ chatRoutes.get("/events", async (req: AuthenticatedRequest, res) => {
   let fallback: ReturnType<typeof setInterval> | null = null;
   let unsubscribe: (() => void) | null = null;
   let sequence = 0;
+  let cursor = typeof req.headers["last-event-id"] === "string" && /^\\d{1,20}$/.test(req.headers["last-event-id"]) ? req.headers["last-event-id"] : "0";
   const stop = () => {
     if (closed) return;
     closed = true;
@@ -37,11 +38,15 @@ chatRoutes.get("/events", async (req: AuthenticatedRequest, res) => {
     if (closed || running) return;
     running = true;
     try {
-      const snapshot = await chatService.realtimeSnapshot(req.auth!.userId);
+      const [snapshot, changes] = await Promise.all([
+        chatService.realtimeSnapshot(req.auth!.userId),
+        chatService.deliveryChangesSince(req.auth!.userId, cursor),
+      ]);
       const serialized = JSON.stringify(snapshot);
-      if (!closed && serialized !== previous) {
-        res.write(`event: chat\ndata: ${serialized}\n\n`);
+      if (!closed && (serialized !== previous || changes.changed)) {
+        res.write(`id: ${changes.cursor}\nevent: chat\ndata: ${serialized}\n\n`);
         previous = serialized;
+        cursor = changes.cursor;
       }
     } catch {
       if (!closed) res.write(": realtime temporarily unavailable\n\n");
@@ -58,9 +63,15 @@ chatRoutes.get("/events", async (req: AuthenticatedRequest, res) => {
 
   // Publicação imediata por evento; snapshot periódico apenas como rede de segurança.
   unsubscribe = chatEventBus.subscribe(req.auth!.userId, () => { void refresh(); });
-  fallback = setInterval(() => { void refresh(); }, 30_000);
+  fallback = setInterval(() => { void refresh(); }, 5_000);
   // O ciclo de vida da resposta fica a cargo dos eventos 'close'.
 
+});
+chatRoutes.get("/events/changes", async (req: AuthenticatedRequest, res) => {
+  try {
+    const cursor = typeof req.query.after === "string" ? req.query.after : "0";
+    res.json(await chatService.deliveryChangesSince(req.auth!.userId, cursor));
+  } catch (error) { fail(res, error); }
 });
 chatRoutes.get("/participants", async (_req, res) => { try { res.json({ participants: await chatService.listParticipants() }); } catch (error) { fail(res, error); } });
 chatRoutes.get("/channels", async (req: AuthenticatedRequest, res) => { try { res.json({ channels: await chatService.listChannels(req.auth!.userId) }); } catch (error) { fail(res, error); } });
