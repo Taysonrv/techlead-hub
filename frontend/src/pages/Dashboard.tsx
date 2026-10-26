@@ -1,4 +1,5 @@
 import { KpiGrid } from "../components/KpiGrid";
+import { TeamDashboardCards } from "../components/TeamDashboardCards";
 import { HomeWorkspace } from "./HomeWorkspace";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
@@ -1196,6 +1197,8 @@ export function Dashboard() {
           )
         )}
       </KpiGrid>
+
+      <TeamDashboardCards tickets={tickets} period={periodBounds} />
 
       {/* EVOLUÇÃO DE TICKETS — DESTAQUE EXECUTIVO */}
       {filteredTickets.length > 0 && (
