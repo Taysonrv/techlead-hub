@@ -40,3 +40,31 @@ test("chat event bus removes listeners after unsubscribe", () => {
   chatEventBus.publish([901004]);
   assert.equal(delivered, 0);
 });
+
+test("chat event bus safely handles unsubscribe during delivery", () => {
+  const calls: string[] = [];
+  let unsubscribeSecond = () => {};
+  const unsubscribeFirst = chatEventBus.subscribe(901005, () => {
+    calls.push("first");
+    unsubscribeSecond();
+  });
+  unsubscribeSecond = chatEventBus.subscribe(901005, () => { calls.push("second"); });
+  try {
+    chatEventBus.publish([901005]);
+    chatEventBus.publish([901005]);
+    assert.deepEqual(calls, ["first", "first"]);
+  } finally {
+    unsubscribeFirst();
+    unsubscribeSecond();
+  }
+});
+
+test("chat event bus does not deliver after final unsubscribe", () => {
+  let received = 0;
+  const unsubscribe = chatEventBus.subscribe(901006, () => { received += 1; });
+  chatEventBus.publish([901006]);
+  unsubscribe();
+  unsubscribe();
+  chatEventBus.publish([901006]);
+  assert.equal(received, 1);
+});
