@@ -1,0 +1,19 @@
+{
+  "name": "HUB SUPORTE SIMER",
+  "short_name": "SUPORTE SIMER",
+  "description": "Integração, operação e resultados para o suporte SIMER",
+  "lang": "pt-BR",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#071d2b",
+  "theme_color": "#071d2b",
+  "icons": [
+    {
+      "src": "/hub-suporte-simer.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
