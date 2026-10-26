@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Box, Card, CardContent, Chip, FormControl, MenuItem, Select, Stack, Typography } from "@mui/material";
-import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 export type DashboardTicket = {
   movideskId: number;
@@ -39,7 +39,7 @@ const pending = (ticket: DashboardTicket) => {
 };
 const cardSx = { border: "1px solid", borderColor: "divider", borderRadius: 3, boxShadow: "0 12px 32px rgba(0,0,0,.045)", backgroundImage: "none" };
 function PeriodChoice({ value, onChange }: { value: Override; onChange: (next: Override) => void }) {
-  return <FormControl size="small"><Select aria-label="Período do indicador" value={value} onChange={(event) => onChange(event.target.value as Override)} sx={{ fontSize: 12, minWidth: 130 }}>
+  return <FormControl size="small"><Select aria-label="Período do indicador" value={value} onChange={(event) => onChange(event.target.value as Override)} sx={{ fontSize: 12, minWidth: 125 }}>
     <MenuItem value="global">Filtro geral</MenuItem><MenuItem value="month">Este mês*</MenuItem><MenuItem value="7d">Últimos 7 dias*</MenuItem><MenuItem value="30d">Últimos 30 dias*</MenuItem>
   </Select></FormControl>;
 }
@@ -112,15 +112,15 @@ export function TeamDashboardCards({ tickets, period, onOpenTickets }: { tickets
       </Stack>
       <Stack direction="row" spacing={1} sx={{ alignItems: "center", mb: 0.5, flexWrap: "wrap" }}><Chip clickable onClick={() => openBacklog()} color="warning" label={`Backlog atual: ${currentBacklog}`} /><Chip size="small" variant="outlined" label="Histórico estimado" /></Stack>
       <Box sx={{ height: 310, minWidth: 0 }}><ResponsiveContainer width="100%" height="100%"><BarChart data={backlog} margin={{ top: 8, right: 4, left: -20, bottom: 0 }}><CartesianGrid strokeDasharray="3 3" vertical={false} /><XAxis dataKey="day" fontSize={11} /><YAxis allowDecimals={false} fontSize={11} /><Tooltip labelFormatter={(_label, payload) => payload?.[0]?.payload?.date?.toLocaleDateString("pt-BR") ?? ""} /><Bar dataKey="total" name="Pendentes" fill="#168cbd" radius={[4, 4, 0, 0]} maxBarSize={32} cursor="pointer" onClick={(data) => { const date = data?.payload?.date; if (date) openBacklog(new Date(date)); }} /></BarChart></ResponsiveContainer></Box>
-      <Typography variant="caption" color="text.secondary">* Períodos locais terminam na data final do filtro geral. O histórico exato do Movidesk exige snapshots diários de status.</Typography>
+      <Typography variant="caption" color="text.secondary">Clique em uma barra para consultar os tickets daquele dia. * Períodos locais terminam na data final do filtro geral. O histórico exato do Movidesk exige snapshots diários de status.</Typography>
     </CardContent></Card>
-    <Card sx={cardSx}><CardContent sx={{ p: 2.5 }}>
+    <Card sx={{ ...cardSx, minWidth: 0 }}><CardContent sx={{ p: { xs: 1.5, sm: 2 }, "&:last-child": { pb: 1.5 } }}>
       <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "center", gap: 1, flexWrap: "wrap", mb: 1 }}>
         <Box><Typography variant="h6" sx={{ fontWeight: 800 }}>Indicador de resolução por agente</Typography><Typography variant="caption" color="text.secondary">Eventos de resolução e fechamento no período selecionado</Typography></Box>
         <PeriodChoice value={agentPeriod} onChange={setAgentPeriod} />
       </Stack>
       <Stack direction="row" sx={{ gap: 1, alignItems: "center", mb: 0.5, flexWrap: "wrap" }}><FormControl size="small" sx={{ width: { xs: "100%", sm: 205 }, maxWidth: "100%", minWidth: 0 }}><Select aria-label="Filtrar agente" sx={{ fontSize: 12 }} value={selectedAgent} onChange={(event) => setSelectedAgent(event.target.value)}><MenuItem value="all">Todos os agentes</MenuItem>{agents.map((item) => <MenuItem key={item.owner} value={item.owner}>{item.owner}</MenuItem>)}</Select></FormControl><Chip size="small" clickable color={agentMetric === "resolved" ? "primary" : "default"} onClick={() => setAgentMetric("resolved")} label="Resolvidos" /><Chip size="small" clickable color={agentMetric === "closed" ? "success" : "default"} onClick={() => setAgentMetric("closed")} label="Fechados" /></Stack>
-      <Box sx={{ height: 275, minWidth: 0 }}><ResponsiveContainer width="100%" height="100%"><BarChart data={visibleAgents} margin={{ top: 8, right: 4, left: -20, bottom: 0 }}><CartesianGrid strokeDasharray="3 3" vertical={false} /><XAxis dataKey="owner" fontSize={10} tickFormatter={(name: string) => name.split(" ").slice(0, 2).join(" ")} angle={-25} textAnchor="end" interval={0} height={72} /><YAxis allowDecimals={false} fontSize={11} /><Tooltip /><Bar dataKey={agentMetric} name={agentMetric === "resolved" ? "Resolvidos" : "Fechados"} fill={agentMetric === "resolved" ? "#0c5366" : "#23c58e"} radius={[4, 4, 0, 0]} maxBarSize={44} cursor="pointer" onClick={(data) => { const owner = data?.payload?.owner; if (owner) openAgent(String(owner), agentMetric); }} /></BarChart></ResponsiveContainer></Box>
+      <Box sx={{ height: 310, minWidth: 0 }}><ResponsiveContainer width="100%" height="100%"><BarChart data={visibleAgents} margin={{ top: 8, right: 4, left: -20, bottom: 0 }}><CartesianGrid strokeDasharray="3 3" vertical={false} /><XAxis dataKey="owner" fontSize={10} tickFormatter={(name: string) => name.split(" ").slice(0, 2).join(" ")} angle={-25} textAnchor="end" interval={0} height={72} /><YAxis allowDecimals={false} fontSize={11} /><Tooltip /><Bar dataKey={agentMetric} name={agentMetric === "resolved" ? "Resolvidos" : "Fechados"} fill={agentMetric === "resolved" ? "#0c5366" : "#23c58e"} radius={[4, 4, 0, 0]} maxBarSize={44} cursor="pointer" onClick={(data) => { const owner = data?.payload?.owner; if (owner) openAgent(String(owner), agentMetric); }} /></BarChart></ResponsiveContainer></Box>
       <Typography variant="caption" color="text.secondary">Clique nas barras para abrir os tickets. Os valores usam o responsável atual; histórico de ações do Movidesk é necessário para atribuir cada resolução ao agente correto.</Typography>
     </CardContent></Card>
   </Box>;
