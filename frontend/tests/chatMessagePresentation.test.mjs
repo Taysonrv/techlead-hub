@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { pathToFileURL } from "node:url";
 import ts from "typescript";
 
 const source = readFileSync(new URL("../src/components/chat/messagePresentation.ts", import.meta.url), "utf8");
