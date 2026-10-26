@@ -69,6 +69,10 @@ chatRoutes.post("/context", async (req: AuthenticatedRequest, res) => {
   try { res.status(201).json(await chatService.openContextChannel(req.auth!.userId, req.body ?? {})); }
   catch (error) { fail(res, error); }
 });
+chatRoutes.get("/channels/:channelId/context", async (req: AuthenticatedRequest, res) => {
+  try { res.json(await chatService.incidentContext(req.auth!.userId, id(req.params.channelId))); }
+  catch (error) { fail(res, error); }
+});
 chatRoutes.get("/channels/:channelId/actions", async (req: AuthenticatedRequest, res) => {
   try { res.json({ actions: await chatService.listIncidentActions(req.auth!.userId, id(req.params.channelId)) }); }
   catch (error) { fail(res, error); }
