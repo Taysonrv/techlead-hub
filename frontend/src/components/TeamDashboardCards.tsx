@@ -87,16 +87,16 @@ export function TeamDashboardCards({ tickets, period }: { tickets: DashboardTick
 
   return <Box component="section" aria-label="Indicadores de backlog e resolução por agente" sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", xl: "1fr 1fr" }, gap: 2.5, mb: 3 }}>
     <Card sx={cardSx}><CardContent sx={{ p: 2.5 }}>
-      <Stack direction="row" justifyContent="space-between" alignItems="center" gap={1} flexWrap="wrap" sx={{ mb: 1 }}>
+      <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "center", gap: 1, flexWrap: "wrap", mb: 1 }}>
         <Box><Typography variant="h6" sx={{ fontWeight: 800 }}>Tickets pendentes · Backlog</Typography><Typography variant="caption" color="text.secondary">Evolução diária estimada a partir das datas de abertura e conclusão</Typography></Box>
         <PeriodChoice value={backlogPeriod} onChange={setBacklogPeriod} />
       </Stack>
-      <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1.5 }}><Chip color="warning" label={`Backlog atual: ${currentBacklog}`} /><Chip size="small" variant="outlined" label="Histórico estimado" /></Stack>
+      <Stack direction="row" spacing={1} sx={{ alignItems: "center", mb: 1.5 }}><Chip color="warning" label={`Backlog atual: ${currentBacklog}`} /><Chip size="small" variant="outlined" label="Histórico estimado" /></Stack>
       <Box sx={{ height: 275, minWidth: 0 }}><ResponsiveContainer width="100%" height="100%"><BarChart data={backlog}><CartesianGrid strokeDasharray="3 3" vertical={false} /><XAxis dataKey="day" fontSize={11} /><YAxis allowDecimals={false} fontSize={11} /><Tooltip labelFormatter={(_label, payload) => payload?.[0]?.payload?.date?.toLocaleDateString("pt-BR") ?? ""} /><Bar dataKey="total" name="Pendentes" fill="#168cbd" radius={[4, 4, 0, 0]} maxBarSize={32} /></BarChart></ResponsiveContainer></Box>
       <Typography variant="caption" color="text.secondary">* Períodos locais terminam na data final do filtro geral. O histórico exato do Movidesk exige snapshots diários de status.</Typography>
     </CardContent></Card>
     <Card sx={cardSx}><CardContent sx={{ p: 2.5 }}>
-      <Stack direction="row" justifyContent="space-between" alignItems="center" gap={1} flexWrap="wrap" sx={{ mb: 1 }}>
+      <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "center", gap: 1, flexWrap: "wrap", mb: 1 }}>
         <Box><Typography variant="h6" sx={{ fontWeight: 800 }}>Indicador de resolução por agente</Typography><Typography variant="caption" color="text.secondary">Eventos de resolução e fechamento no período selecionado</Typography></Box>
         <PeriodChoice value={agentPeriod} onChange={setAgentPeriod} />
       </Stack>
