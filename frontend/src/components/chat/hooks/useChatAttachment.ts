@@ -40,7 +40,10 @@ export function useChatAttachment({ selectedId, attachmentInputRef, refreshMessa
         mimeType: file.type || "application/octet-stream",
         data,
       });
-      if (activeChannelRef.current === targetChannel) await refreshMessages(targetChannel);
+      if (activeChannelRef.current === targetChannel) {
+        try { await refreshMessages(targetChannel); }
+        catch { /* Upload confirmed; realtime synchronization will retry the history refresh. */ }
+      }
       return true;
     } catch (error: unknown) {
       if (activeChannelRef.current === targetChannel) {
