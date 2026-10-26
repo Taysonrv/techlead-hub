@@ -239,3 +239,13 @@ O usuário relatou commit local `ff20d42` na branch `feat/evolucao-visual-design
 - `useChatAttachment` separa confirmação de upload de falha posterior de recarregamento do histórico, evitando repetir um envio que já foi persistido.
 - Cobertura do `ChatEventBus` ampliada para remoção de assinantes durante a distribuição e limpeza idempotente.
 - **Ainda não homologado neste pacote:** executar lint/build/test frontend e backend, verificar upload em rede lenta, falha HTTP e reconexão SSE. O transporte em memória continua limitado a instância única e não implementa replay persistente.
+
+
+## Pacote de consolidação: contexto real, eventos duráveis e duas contas — 26/10/2026
+
+- Endpoint autenticado `GET /chat/channels/:id/context` consulta Ticket Movidesk e AzureWorkItem sincronizados, com checagem de participação e relacionamento entre registros. Painel lateral mostra estado, responsável, criticidade, SLA e data da sincronização, quando disponíveis.
+- Migração `ChatDeliveryEvent`: cursor persistido por usuário; `notifyChannel` registra eventos antes de notificar listeners locais; SSE transmite `id` e aceita `Last-Event-ID`. Consulta periódica de cinco segundos permite perceber notificações escritas por outra instância.
+- Endpoint `GET /chat/events/changes?after=<cursor>` filtra canais pela participação atual, sem retornar conteúdo de mensagens.
+- Suíte opcional `chatTwoUser.integration.test.ts` valida isolamento de dois usuários; exige duas contas reais de teste e variáveis de ambiente.
+- Comando `npm run chat:events:prune` remove cursores antigos; requer agendamento externo. Runbook completo: `docs/chat/HOMOLOGACAO-WAR-ROOM.md`.
+- **Status:** implementado e enviado à branch; ainda requer migração de banco, lint/build/test e homologação com duas instâncias. Não promover à produção antes disso.
