@@ -230,3 +230,12 @@ O usuário relatou commit local `ff20d42` na branch `feat/evolucao-visual-design
 - Novo decodificador `sseFrames.ts` utilizado pelo hook de tempo real para eventos recebidos em fragmentos, CRLF, comentários de heartbeat e dados multilinha.
 - Quatro novos testes de regressão para SSE, incluindo quebra de CRLF entre chunks.
 - **Limite atual:** o decodificador de frames não implementa replay persistente no servidor; o fallback de sincronização continua necessário. Ainda faltam build/testes do backend e testes integrados de dois usuários.
+
+
+## Estabilização de reconexão e upload — 26/10/2026
+
+- `useChatRealtime` reconcilia o canal ativo após diferenças no último evento, mesmo que o evento recebido seja de outro canal; solicitações simultâneas de reconciliação ficam enfileiradas.
+- `Composer` mantém o arquivo preparado quando o upload falha e bloqueia novas interações de anexo durante a tentativa; `Chat` recebe o resultado booleano do hook.
+- `useChatAttachment` separa confirmação de upload de falha posterior de recarregamento do histórico, evitando repetir um envio que já foi persistido.
+- Cobertura do `ChatEventBus` ampliada para remoção de assinantes durante a distribuição e limpeza idempotente.
+- **Ainda não homologado neste pacote:** executar lint/build/test frontend e backend, verificar upload em rede lenta, falha HTTP e reconexão SSE. O transporte em memória continua limitado a instância única e não implementa replay persistente.
