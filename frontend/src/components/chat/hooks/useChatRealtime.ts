@@ -28,6 +28,7 @@ export function useChatRealtime({ selectedId, onChannelsChanged, onMessagesChang
     let lastRefreshAt = Date.now();
     let refreshInFlight = false;
     let connectedOnce = false;
+    let lastEventId = "";
     let refreshQueued = false;
     const refresh = async () => {
       if (stopped || document.visibilityState !== "visible") return;
@@ -75,7 +76,7 @@ export function useChatRealtime({ selectedId, onChannelsChanged, onMessagesChang
           const token = getAccessToken();
           const url = new URL(`${getApiBaseUrl().replace(/\/$/, "")}/chat/events`, window.location.origin);
           const response = await fetch(url, {
-            headers: token ? { Authorization: `Bearer ${token}` } : {},
+            headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(lastEventId ? { "Last-Event-ID": lastEventId } : {}) },
             signal: controller.signal,
           });
           if (response.status === 429) {
@@ -97,6 +98,7 @@ export function useChatRealtime({ selectedId, onChannelsChanged, onMessagesChang
             const decoded = consumeSseFrames(buffer, decoder.decode(value, { stream: true }));
             buffer = decoded.remainder;
             for (const frame of decoded.frames) {
+              if (frame.id !== null) lastEventId = frame.id;
               try { apply(JSON.parse(frame.data) as RealtimeSnapshot); } catch { /* Ignore malformed events without dropping the stream. */ }
             }
           }
