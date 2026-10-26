@@ -29,11 +29,13 @@ export function IncidentWorkSummary({ channelId, onManage }: { channelId: number
   const [actions, setActions] = useState<Action[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
   const refresh = useCallback(async (signal?: AbortSignal) => {
     try {
       const { data } = await api.get<Response>(`/chat/channels/${channelId}/actions`, { signal });
       if (signal?.aborted) return;
       setActions(data.actions ?? []);
+      setUpdatedAt(new Date());
       setError("");
     } catch {
       if (!signal?.aborted) setError("Não foi possível consultar o acompanhamento.");
@@ -46,8 +48,10 @@ export function IncidentWorkSummary({ channelId, onManage }: { channelId: number
     const controller = new AbortController();
     setLoading(true);
     setActions([]);
+    setUpdatedAt(null);
     void refresh(controller.signal);
     const onFocus = () => { if (document.visibilityState === "visible") void refresh(controller.signal); };
+    const poll = window.setInterval(onFocus, 60_000);
     document.addEventListener("visibilitychange", onFocus);
     const onChanged = (event: Event) => {
       if ((event as CustomEvent<{ channelId: number }>).detail?.channelId === channelId) void refresh(controller.signal);
@@ -55,6 +59,7 @@ export function IncidentWorkSummary({ channelId, onManage }: { channelId: number
     window.addEventListener("techlead-hub:incident-actions-changed", onChanged);
     return () => {
       controller.abort();
+      window.clearInterval(poll);
       document.removeEventListener("visibilitychange", onFocus);
       window.removeEventListener("techlead-hub:incident-actions-changed", onChanged);
     };
@@ -82,6 +87,7 @@ export function IncidentWorkSummary({ channelId, onManage }: { channelId: number
           {action.dueAt && <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>Prazo: {new Date(action.dueAt).toLocaleDateString("pt-BR")}</Typography>}
         </Box>
       ))}
+      {updatedAt && <Typography variant="caption" color="text.secondary">Atualizado às {updatedAt.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</Typography>}
       <Button size="small" variant="outlined" onClick={onManage}>Ver decisões, escalonamentos e passagem de turno</Button>
     </Stack>
   );
