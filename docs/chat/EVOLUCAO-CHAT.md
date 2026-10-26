@@ -214,3 +214,11 @@ O usuário relatou commit local `ff20d42` na branch `feat/evolucao-visual-design
 - `MessageList` memoriza o preparo linear do histórico, reduzindo trabalho repetido em renders causados por presença, digitação e outros estados.
 - **Pendente de validação:** lint, build, testes, troca de canal com anexo preparado, arrastar/colar arquivo, envio concorrente e upload em rede lenta.
 - **Limitação conhecida:** a função de upload de `Chat.tsx` ainda precisa de isolamento completo do canal de origem durante uma leitura assíncrona do arquivo. Não homologar esse cenário sem teste integrado.
+
+
+## Upload por canal e regressão de mensagens — 26/10/2026
+
+- Extraído `useChatAttachment` do componente de página; captura o canal de origem antes da leitura assíncrona e envia o anexo exclusivamente para esse canal.
+- Respostas de upload não recarregam nem exibem erro na conversa que foi selecionada posteriormente; guarda de operação em andamento impede upload concorrente.
+- Criados quatro testes de apresentação de mensagens: agrupamento temporal, resposta a mensagem fora do filtro, menção sem diferenciar maiúsculas/minúsculas e separação de dias independente do fuso da máquina.
+- **Homologação ainda necessária:** frontend lint/build/test, backend build/test, envio de arquivo com troca de canal durante FileReader/rede lenta e testes entre dois usuários.
