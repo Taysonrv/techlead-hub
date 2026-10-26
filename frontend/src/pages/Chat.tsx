@@ -9,6 +9,7 @@ import { playNotificationSound } from "../utils/notificationSound";
 import { IncidentActionsPanel } from "../components/IncidentActionsPanel";
 import { ChatHistorySearch } from "../components/ChatHistorySearch";
 import { IncidentContextSummary } from "../components/chat/IncidentContextSummary";
+import { IncidentWorkSummary } from "../components/chat/IncidentWorkSummary";
 import { SharedFilesPanel } from "../components/chat/SharedFilesPanel";
 import { ConversationListHeader } from "../components/chat/ConversationListHeader";
 import { ConversationListSearch } from "../components/chat/ConversationListSearch";
@@ -599,7 +600,8 @@ export function Chat() {
             <Typography variant="subtitle2" sx={{ fontWeight: 850 }}>Informações e arquivos</Typography>
             <Typography variant="caption" color="text.secondary" noWrap sx={{ display: "block", mt: .4 }}>{selected.name}</Typography>
           </Box>
-          {selected.type === "CONTEXT" && <IncidentContextSummary channel={selected} onOpenActions={() => setIncidentActionsOpen(true)} onSearchHistory={() => setHistorySearchOpen(true)} />}
+          {selected.type === "CONTEXT" && <IncidentContextSummary channel={selected} onOpenActions={() => setIncidentActionsOpen(true)} onSearchHistory={() => setHistorySearchOpen(true)} />
+          {selected.type === "CONTEXT" && <IncidentWorkSummary channelId={selected.id} onManage={() => setIncidentActionsOpen(true)} />}}
           <SharedFilesPanel channelId={selected.id} messages={messages} />
           <Divider />
           {selected.type === "DIRECT" && selectedPeer ? <Stack spacing={1}>
