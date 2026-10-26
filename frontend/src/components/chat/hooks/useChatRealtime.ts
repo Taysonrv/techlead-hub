@@ -47,7 +47,9 @@ export function useChatRealtime({ selectedId, onChannelsChanged, onMessagesChang
       if (Date.now() - lastRefreshAt >= 30_000) void refresh();
     }, 30_000);
     const onVisibility = () => { if (document.visibilityState === "visible") void refresh(); };
+    const onOnline = () => { void refresh(); };
     document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("online", onOnline);
     const wait = (ms: number) => new Promise<void>((resolve) => {
       if (stopped) { resolve(); return; }
       const timer = window.setTimeout(() => { retryWake = null; resolve(); }, ms);
@@ -108,6 +110,6 @@ export function useChatRealtime({ selectedId, onChannelsChanged, onMessagesChang
       }
     };
     void connect();
-    return () => { stopped = true; controller.abort(); retryWake?.(); window.clearInterval(fallback); document.removeEventListener("visibilitychange", onVisibility); };
+    return () => { stopped = true; controller.abort(); retryWake?.(); window.clearInterval(fallback); document.removeEventListener("visibilitychange", onVisibility); window.removeEventListener("online", onOnline); };
   }, []);
 }
