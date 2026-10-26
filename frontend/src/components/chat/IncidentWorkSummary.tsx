@@ -49,11 +49,16 @@ export function IncidentWorkSummary({ channelId, onManage }: { channelId: number
     void refresh(controller.signal);
     const onFocus = () => { if (document.visibilityState === "visible") void refresh(controller.signal); };
     document.addEventListener("visibilitychange", onFocus);
+    const onChanged = (event: Event) => {
+      if ((event as CustomEvent<{ channelId: number }>).detail?.channelId === channelId) void refresh(controller.signal);
+    };
+    window.addEventListener("techlead-hub:incident-actions-changed", onChanged);
     return () => {
       controller.abort();
       document.removeEventListener("visibilitychange", onFocus);
+      window.removeEventListener("techlead-hub:incident-actions-changed", onChanged);
     };
-  }, [refresh]);
+  }, [refresh, channelId]);
 
   const pending = actions.filter((action) => action.status === "OPEN" || action.status === "IN_PROGRESS");
   const latest = pending.slice(0, 4);
