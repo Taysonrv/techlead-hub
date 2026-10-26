@@ -651,7 +651,7 @@ export class ChatService {
       select: { channelId: true },
     }) : [];
     return {
-      cursor: changes.length ? changes[changes.length - 1].id.toString() : since === 0n ? await this.deliveryCursor(userId) : cursor,
+      cursor: changes.at(-1)?.id.toString() ?? (since === 0n ? await this.deliveryCursor(userId) : cursor),
       changedChannelIds: authorized.map((item) => item.channelId),
       hasMore: changes.length === 100,
       changed: changes.length > 0,
