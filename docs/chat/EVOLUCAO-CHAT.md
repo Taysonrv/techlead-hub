@@ -197,3 +197,11 @@ O usuário relatou commit local `ff20d42` na branch `feat/evolucao-visual-design
 - Confirmação de leitura condicionada à visibilidade da aba.
 - Resumo de ações de incidentes sincronizado a cada 60 segundos enquanto visível, além da atualização após edição e retorno à aba; indicador do horário da última consulta bem-sucedida.
 - **Critério de aceite antes de encerrar:** executar lint, build e testes do frontend, testes e build do backend e fluxo manual de dois usuários (conversa, anexo, leitura, canal, incidentes). Não homologar a partir de commits sem validação.
+
+
+## Desempenho e concorrência — 26/10/2026
+
+- `messagePresentation.ts` centraliza a preparação de agrupamento, menções e vínculo com mensagens respondidas; referências a respostas usam índice por ID, evitando busca linear para cada item do histórico.
+- `MessageList` consome o preparo compartilhado e mantém as mesmas propriedades visuais da bolha de mensagem.
+- `useChatHistory` ignora erros de requisições que já pertencem a outro canal e impede que paginações abortadas alterem o indicador de carregamento do canal ativo.
+- **Pendente de homologação local:** frontend lint/build/test, backend build/test, navegação rápida entre canais, mensagens respondidas e histórico paginado.
