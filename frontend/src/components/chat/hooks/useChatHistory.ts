@@ -35,6 +35,14 @@ export function useChatHistory({ selectedId, messagesRef, markRead, setError }: 
   const skipNextAutoScroll = useRef(false);
   const activeId = useRef(selectedId);
   activeId.current = selectedId;
+  const abortRequests = useCallback(() => {
+    initialRequest.current?.abort();
+    quietRequest.current?.abort();
+    olderRequest.current?.abort();
+    initialRequest.current = null;
+    quietRequest.current = null;
+    olderRequest.current = null;
+  }, []);
 
   const loadMessages = useCallback(async (channelId: number, quiet = false) => {
     const request = quiet ? quietRequest : initialRequest;
@@ -52,7 +60,7 @@ export function useChatHistory({ selectedId, messagesRef, markRead, setError }: 
         olderCursor.current = response.data.messages[0]?.id ?? null;
         setHasOlder(response.data.messages.length === 100);
         const container = messagesRef.current;
-        if (!container || container.scrollHeight - container.scrollTop - container.clientHeight < 160) markRead(channelId);
+        if (document.visibilityState === "visible" && (!container || container.scrollHeight - container.scrollTop - container.clientHeight < 160)) markRead(channelId);
       }
       setError("");
     } catch (error: unknown) {
@@ -67,9 +75,7 @@ export function useChatHistory({ selectedId, messagesRef, markRead, setError }: 
   }, [markRead, messagesRef, setError]);
 
   useEffect(() => {
-    initialRequest.current?.abort();
-    quietRequest.current?.abort();
-    olderRequest.current?.abort();
+    abortRequests();
     olderCursor.current = null;
     restoreScroll.current = null;
     skipNextAutoScroll.current = false;
@@ -79,15 +85,8 @@ export function useChatHistory({ selectedId, messagesRef, markRead, setError }: 
     setShowJumpToLatest(false);
     if (selectedId) void loadMessages(selectedId);
     else setLoading(false);
-    const initial = initialRequest.current;
-    const quiet = quietRequest.current;
-    const older = olderRequest.current;
-    return () => {
-      initial?.abort();
-      quiet?.abort();
-      older?.abort();
-    };
-  }, [selectedId, loadMessages]);
+    return () => abortRequests();
+  }, [selectedId, loadMessages, abortRequests]);
 
   const loadOlder = useCallback(async () => {
     const channelId = activeId.current;
@@ -145,7 +144,7 @@ export function useChatHistory({ selectedId, messagesRef, markRead, setError }: 
     const distance = container.scrollHeight - container.scrollTop - container.clientHeight;
     setShowJumpToLatest(distance > 180);
     if (container.scrollTop < 120 && hasOlder && !loadingOlder && !search.trim()) void loadOlder();
-    if (distance < 140 && activeId.current) markRead(activeId.current);
+    if (distance < 140 && activeId.current && document.visibilityState === "visible") markRead(activeId.current);
   }, [hasOlder, loadingOlder, loadOlder, markRead, messagesRef]);
 
   const jumpToLatest = useCallback(() => {
