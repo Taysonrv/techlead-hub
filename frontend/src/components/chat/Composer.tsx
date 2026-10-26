@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { DragEvent, ClipboardEvent, RefObject } from "react";
 import { AttachFileRounded, BoltOutlined, CelebrationOutlined, CloseRounded, EmojiEmotionsOutlined, NotificationsActiveOutlined, SendRounded, UploadFileOutlined } from "@mui/icons-material";
 import { Box, Button, CircularProgress, IconButton, Paper, Stack, TextField, Tooltip, Typography } from "@mui/material";
@@ -33,6 +33,13 @@ export function Composer({ channelId, channelType, content, sending, uploadingAt
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [dragging, setDragging] = useState(false);
   const [fileError, setFileError] = useState("");
+  const [stagedChannelId, setStagedChannelId] = useState<number | null>(null);
+  useEffect(() => {
+    setPendingFile(null);
+    setStagedChannelId(null);
+    setFileError("");
+    setDragging(false);
+  }, [channelId]);
 
   function stageFile(file: File) {
     setFileError("");
@@ -46,17 +53,19 @@ export function Composer({ channelId, channelType, content, sending, uploadingAt
       return;
     }
     setPendingFile(file);
+    setStagedChannelId(channelId);
   }
 
   function handleDrop(event: DragEvent<HTMLDivElement>) {
     event.preventDefault();
+    if (!channelId || uploadingAttachment || sending) return;
     setDragging(false);
     const file = event.dataTransfer.files?.[0];
     if (file) stageFile(file);
   }
 
   function handlePaste(event: ClipboardEvent<HTMLDivElement>) {
-    if (!channelId || event.clipboardData.files.length === 0) return;
+    if (!channelId || uploadingAttachment || sending || event.clipboardData.files.length === 0) return;
     const file = event.clipboardData.files[0];
     if (file) {
       event.preventDefault();
@@ -65,16 +74,16 @@ export function Composer({ channelId, channelType, content, sending, uploadingAt
   }
 
   return (
-    <Box onDragOver={(event) => { if (channelId && event.dataTransfer.types.includes("Files")) { event.preventDefault(); setDragging(true); } }}
+    <Box onDragOver={(event) => { if (channelId && !uploadingAttachment && !sending && event.dataTransfer.types.includes("Files")) { event.preventDefault(); setDragging(true); } }}
       onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node)) setDragging(false); }}
       onDrop={handleDrop} onPaste={handlePaste}
       sx={{ position: "relative", px: { xs: 1, md: 1.5 }, pb: 1, pt: .5, bgcolor: "background.paper" }}>
       {dragging && <Box sx={{ position: "absolute", inset: 0, zIndex: 2, bgcolor: "action.hover", border: "2px dashed", borderColor: "primary.main", borderRadius: 2, display: "grid", placeItems: "center", pointerEvents: "none" }}><Typography sx={{ fontWeight: 800 }}>Solte o arquivo para anexar</Typography></Box>}
-      {pendingFile && <Paper variant="outlined" sx={{ display: "flex", alignItems: "center", gap: 1, px: 1.25, py: .75, mb: 1, borderRadius: 2, bgcolor: "action.hover" }}>
+      {pendingFile && stagedChannelId === channelId && <Paper variant="outlined" sx={{ display: "flex", alignItems: "center", gap: 1, px: 1.25, py: .75, mb: 1, borderRadius: 2, bgcolor: "action.hover" }}>
         <UploadFileOutlined color="primary" />
         <Box sx={{ flex: 1, minWidth: 0 }}><Typography variant="body2" noWrap sx={{ fontWeight: 700 }}>{pendingFile.name}</Typography><Typography variant="caption" color="text.secondary">{(pendingFile.size / 1024).toFixed(1)} KB · Pronto para anexar</Typography></Box>
         <Tooltip title="Cancelar anexo"><IconButton size="small" onClick={() => setPendingFile(null)} disabled={uploadingAttachment} aria-label="Cancelar anexo"><CloseRounded fontSize="small" /></IconButton></Tooltip>
-        <Button size="small" variant="contained" disabled={uploadingAttachment || !channelId} onClick={() => { onAttach(pendingFile); setPendingFile(null); }} startIcon={uploadingAttachment ? <CircularProgress size={14} /> : <UploadFileOutlined />}>Enviar arquivo</Button>
+        <Button size="small" variant="contained" disabled={uploadingAttachment || !channelId} onClick={() => { if (stagedChannelId !== channelId) return; onAttach(pendingFile); setPendingFile(null); setStagedChannelId(null); }} startIcon={uploadingAttachment ? <CircularProgress size={14} /> : <UploadFileOutlined />}>Enviar arquivo</Button>
       </Paper>}
       {fileError && <Typography role="alert" color="error" variant="caption" sx={{ display: "block", mb: .75 }}>{fileError}</Typography>}
       <Stack direction="row" spacing={.5} sx={{ alignItems: "flex-end", p: .65, border: "1px solid", borderColor: "divider", borderRadius: 3, bgcolor: "background.default", "&:focus-within": { borderColor: "primary.main" } }}>
