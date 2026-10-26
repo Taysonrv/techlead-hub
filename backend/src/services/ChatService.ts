@@ -510,6 +510,54 @@ export class ChatService {
     await this.audit(userId, "CHAT_MESSAGE_DELETED", "ChatMessage", messageId, { channelId: message.channelId });
   }
 
+  async incidentContext(userId: number, channelId: number) {
+    await this.assertMember(userId, channelId);
+    const channel = await prisma.chatChannel.findUnique({
+      where: { id: channelId },
+      select: { type: true, contextType: true, contextId: true },
+    });
+    if (!channel || channel.type !== "CONTEXT") {
+      throw Object.assign(new Error("Sala de incidente não localizada."), { statusCode: 404 });
+    }
+    const externalId = Number(channel.contextId);
+    if (!Number.isSafeInteger(externalId) || externalId <= 0) {
+      return { source: "UNAVAILABLE", record: null, linked: null, syncedAt: null };
+    }
+    const kind = (channel.contextType ?? "").toUpperCase();
+    if (kind === "TICKET" || kind === "MOVIDESK") {
+      const ticket = await prisma.ticket.findUnique({
+        where: { movideskId: externalId },
+        select: {
+          movideskId: true, subject: true, status: true, urgency: true,
+          client: true, owner: true, ownerTeam: true, dueDate: true,
+          solutionSlaIndicator: true, responseSlaIndicator: true,
+          taskNumber: true, lastUpdate: true, importedAt: true,
+        },
+      });
+      const linked = ticket?.taskNumber ? await prisma.azureWorkItem.findUnique({
+        where: { id: ticket.taskNumber },
+        select: { id: true, title: true, state: true, workItemType: true, assignedToName: true, criticality: true, syncedAt: true },
+      }) : null;
+      return { source: "MOVIDESK", record: ticket, linked, syncedAt: ticket?.importedAt ?? null };
+    }
+    if (kind === "AZURE" || kind === "TASK" || kind === "WORK_ITEM") {
+      const task = await prisma.azureWorkItem.findUnique({
+        where: { id: externalId },
+        select: {
+          id: true, title: true, state: true, workItemType: true,
+          assignedToName: true, client: true, criticality: true,
+          slaLimit: true, movideskTicket: true, syncedAt: true,
+        },
+      });
+      const linked = task?.movideskTicket ? await prisma.ticket.findUnique({
+        where: { movideskId: task.movideskTicket },
+        select: { movideskId: true, subject: true, status: true, urgency: true, owner: true, importedAt: true },
+      }) : null;
+      return { source: "AZURE", record: task, linked, syncedAt: task?.syncedAt ?? null };
+    }
+    return { source: "UNAVAILABLE", record: null, linked: null, syncedAt: null };
+  }
+
   async listIncidentActions(userId: number, channelId: number) {
     await this.assertMember(userId, channelId);
     return prisma.chatIncidentAction.findMany({
