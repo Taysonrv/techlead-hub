@@ -600,8 +600,12 @@ export function Chat() {
             <Typography variant="subtitle2" sx={{ fontWeight: 850 }}>Informações e arquivos</Typography>
             <Typography variant="caption" color="text.secondary" noWrap sx={{ display: "block", mt: .4 }}>{selected.name}</Typography>
           </Box>
-          {selected.type === "CONTEXT" && <IncidentContextSummary channel={selected} onOpenActions={() => setIncidentActionsOpen(true)} onSearchHistory={() => setHistorySearchOpen(true)} />
-          {selected.type === "CONTEXT" && <IncidentWorkSummary channelId={selected.id} onManage={() => setIncidentActionsOpen(true)} />}}
+          {selected.type === "CONTEXT" && (
+            <>
+              <IncidentContextSummary channel={selected} onOpenActions={() => setIncidentActionsOpen(true)} onSearchHistory={() => setHistorySearchOpen(true)} />
+              <IncidentWorkSummary channelId={selected.id} onManage={() => setIncidentActionsOpen(true)} />
+            </>
+          )}
           <SharedFilesPanel channelId={selected.id} messages={messages} />
           <Divider />
           {selected.type === "DIRECT" && selectedPeer ? <Stack spacing={1}>
