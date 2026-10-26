@@ -19,7 +19,7 @@ export function OperationalOverview() {
       <HubNavigation<Section>
         value={section}
         ariaLabel="Visão operacional"
-        caption="VISÃO OPERACIONAL"
+        caption="SUPORTE SIMER"
         onChange={(value) =>
           navigate(
             value === "performance"
@@ -30,7 +30,7 @@ export function OperationalOverview() {
         items={[
           {
             value: "summary",
-            label: "Resumo executivo",
+            label: "Dashboard",
             icon: <DashboardOutlined fontSize="small" />,
           },
           {
