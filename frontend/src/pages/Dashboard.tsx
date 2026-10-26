@@ -1198,7 +1198,7 @@ export function Dashboard() {
         )}
       </KpiGrid>
 
-      <TeamDashboardCards tickets={tickets} period={periodBounds} />
+      <TeamDashboardCards tickets={tickets} period={periodBounds} onOpenTickets={(title, ids, subtitle) => { const selectedIds = new Set(ids); showTickets(title, tickets.filter((ticket) => selectedIds.has(ticket.movideskId)), subtitle); }} />
 
       {/* EVOLUÇÃO DE TICKETS — DESTAQUE EXECUTIVO */}
       {filteredTickets.length > 0 && (
