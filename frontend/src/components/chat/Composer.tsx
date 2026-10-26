@@ -11,7 +11,7 @@ type Props = {
   uploadingAttachment: boolean;
   soundEnabled: boolean;
   attachmentInputRef: RefObject<HTMLInputElement | null>;
-  onAttach: (file: File) => void;
+  onAttach: (file: File) => Promise<boolean>;
   onOpenEmoji: (anchor: HTMLElement) => void;
   onOpenStickers: () => void;
   onOpenQuickActions: (anchor: HTMLElement) => void;
@@ -32,6 +32,7 @@ const ALLOWED_MIME = new Set([
 export function Composer({ channelId, channelType, content, sending, uploadingAttachment, soundEnabled, attachmentInputRef, onAttach, onOpenEmoji, onOpenStickers, onOpenQuickActions, onToggleSound, onContentChange, onSend }: Props) {
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [dragging, setDragging] = useState(false);
+  const [submittingFile, setSubmittingFile] = useState(false);
   const [fileError, setFileError] = useState("");
   const [stagedChannelId, setStagedChannelId] = useState<number | null>(null);
   useEffect(() => {
@@ -43,7 +44,7 @@ export function Composer({ channelId, channelType, content, sending, uploadingAt
 
   function stageFile(file: File) {
     setFileError("");
-    if (!channelId || uploadingAttachment || sending) return;
+    if (!channelId || uploadingAttachment || sending || submittingFile) return;
     if (!ALLOWED_MIME.has(file.type)) {
       setFileError("Tipo de arquivo não permitido. Utilize PDF, imagem, texto, CSV, ZIP ou Office.");
       return;
@@ -65,12 +66,26 @@ export function Composer({ channelId, channelType, content, sending, uploadingAt
   }
 
   function handlePaste(event: ClipboardEvent<HTMLDivElement>) {
-    if (!channelId || uploadingAttachment || sending || event.clipboardData.files.length === 0) return;
+    if (!channelId || uploadingAttachment || sending || submittingFile || event.clipboardData.files.length === 0) return;
     const file = event.clipboardData.files[0];
     if (file) {
       event.preventDefault();
       stageFile(file);
     }
+  }
+
+  async function submitFile() {
+    if (!pendingFile || stagedChannelId !== channelId || submittingFile) return;
+    const targetChannel = channelId;
+    const file = pendingFile;
+    setSubmittingFile(true);
+    try {
+      const success = await onAttach(file);
+      if (success && targetChannel === channelId) {
+        setPendingFile((current) => current === file ? null : current);
+        setStagedChannelId(null);
+      }
+    } finally { setSubmittingFile(false); }
   }
 
   return (
@@ -83,12 +98,12 @@ export function Composer({ channelId, channelType, content, sending, uploadingAt
         <UploadFileOutlined color="primary" />
         <Box sx={{ flex: 1, minWidth: 0 }}><Typography variant="body2" noWrap sx={{ fontWeight: 700 }}>{pendingFile.name}</Typography><Typography variant="caption" color="text.secondary">{(pendingFile.size / 1024).toFixed(1)} KB · Pronto para anexar</Typography></Box>
         <Tooltip title="Cancelar anexo"><IconButton size="small" onClick={() => setPendingFile(null)} disabled={uploadingAttachment} aria-label="Cancelar anexo"><CloseRounded fontSize="small" /></IconButton></Tooltip>
-        <Button size="small" variant="contained" disabled={uploadingAttachment || sending || !channelId} onClick={() => { if (stagedChannelId !== channelId) return; onAttach(pendingFile); setPendingFile(null); setStagedChannelId(null); }} startIcon={uploadingAttachment ? <CircularProgress size={14} /> : <UploadFileOutlined />}>Enviar arquivo</Button>
+        <Button size="small" variant="contained" disabled={uploadingAttachment || submittingFile || sending || !channelId} onClick={() => void submitFile()} startIcon={uploadingAttachment ? <CircularProgress size={14} /> : <UploadFileOutlined />}>Enviar arquivo</Button>
       </Paper>}
       {fileError && <Typography role="alert" color="error" variant="caption" sx={{ display: "block", mb: .75 }}>{fileError}</Typography>}
       <Stack direction="row" spacing={.5} sx={{ alignItems: "flex-end", p: .65, border: "1px solid", borderColor: "divider", borderRadius: 3, bgcolor: "background.default", "&:focus-within": { borderColor: "primary.main" } }}>
         <input ref={attachmentInputRef} type="file" hidden accept={[...ALLOWED_MIME].join(",")} onChange={(event) => { const file = event.target.files?.[0]; if (file) stageFile(file); event.target.value = ""; }} />
-        <Tooltip title="Anexar arquivo (máx. 8 MB)"><span><IconButton aria-label="Anexar arquivo" disabled={!channelId || uploadingAttachment || sending} onClick={() => attachmentInputRef.current?.click()}><AttachFileRounded /></IconButton></span></Tooltip>
+        <Tooltip title="Anexar arquivo (máx. 8 MB)"><span><IconButton aria-label="Anexar arquivo" disabled={!channelId || uploadingAttachment || submittingFile || sending} onClick={() => attachmentInputRef.current?.click()}><AttachFileRounded /></IconButton></span></Tooltip>
         <Box sx={{ display: { xs: "none", sm: "flex" } }}>
           <Tooltip title="Emojis"><span><IconButton aria-label="Emojis" onClick={(event) => onOpenEmoji(event.currentTarget)} disabled={!channelId}><EmojiEmotionsOutlined /></IconButton></span></Tooltip>
           <Tooltip title="Figurinhas"><span><IconButton aria-label="Figurinhas" onClick={onOpenStickers} disabled={!channelId}><CelebrationOutlined /></IconButton></span></Tooltip>
