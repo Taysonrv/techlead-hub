@@ -244,7 +244,7 @@ export function Performance() {
   }), [effectiveStartDate, effectiveEndDate]);
 
   const operationalCohorts = useMemo(
-    () => buildOperationalCohorts(tickets, periodBounds),
+    () => buildOperationalCohorts(tickets, periodBounds, "allImported"),
     [tickets, periodBounds],
   );
   const periodTickets = operationalCohorts.entries;
