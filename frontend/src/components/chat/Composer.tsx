@@ -83,7 +83,7 @@ export function Composer({ channelId, channelType, content, sending, uploadingAt
         <UploadFileOutlined color="primary" />
         <Box sx={{ flex: 1, minWidth: 0 }}><Typography variant="body2" noWrap sx={{ fontWeight: 700 }}>{pendingFile.name}</Typography><Typography variant="caption" color="text.secondary">{(pendingFile.size / 1024).toFixed(1)} KB · Pronto para anexar</Typography></Box>
         <Tooltip title="Cancelar anexo"><IconButton size="small" onClick={() => setPendingFile(null)} disabled={uploadingAttachment} aria-label="Cancelar anexo"><CloseRounded fontSize="small" /></IconButton></Tooltip>
-        <Button size="small" variant="contained" disabled={uploadingAttachment || !channelId} onClick={() => { if (stagedChannelId !== channelId) return; onAttach(pendingFile); setPendingFile(null); setStagedChannelId(null); }} startIcon={uploadingAttachment ? <CircularProgress size={14} /> : <UploadFileOutlined />}>Enviar arquivo</Button>
+        <Button size="small" variant="contained" disabled={uploadingAttachment || sending || !channelId} onClick={() => { if (stagedChannelId !== channelId) return; onAttach(pendingFile); setPendingFile(null); setStagedChannelId(null); }} startIcon={uploadingAttachment ? <CircularProgress size={14} /> : <UploadFileOutlined />}>Enviar arquivo</Button>
       </Paper>}
       {fileError && <Typography role="alert" color="error" variant="caption" sx={{ display: "block", mb: .75 }}>{fileError}</Typography>}
       <Stack direction="row" spacing={.5} sx={{ alignItems: "flex-end", p: .65, border: "1px solid", borderColor: "divider", borderRadius: 3, bgcolor: "background.default", "&:focus-within": { borderColor: "primary.main" } }}>
