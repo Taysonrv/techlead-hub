@@ -646,7 +646,7 @@ export class ChatService {
       select: { id: true, channelId: true },
     });
     return {
-      cursor: changes.length ? changes[changes.length - 1].id.toString() : await this.deliveryCursor(userId),
+      cursor: changes.length ? changes[changes.length - 1].id.toString() : since === 0n ? await this.deliveryCursor(userId) : cursor,
       changedChannelIds: [...new Set(changes.map((item) => item.channelId).filter((id): id is number => id !== null))],
       hasMore: changes.length === 100,
       changed: changes.length > 0,
