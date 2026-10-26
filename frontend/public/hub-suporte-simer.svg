@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title">
+<title>HUB SUPORTE SIMER</title>
+<defs>
+<linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#063b35"/><stop offset="1" stop-color="#061724"/></linearGradient>
+<linearGradient id="green" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#0bf3b3"/><stop offset=".56" stop-color="#00d69b"/><stop offset="1" stop-color="#008b73"/></linearGradient>
+<linearGradient id="white" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#ffffff"/><stop offset="1" stop-color="#b8f8e9"/></linearGradient>
+</defs>
+<rect x="3" y="3" width="122" height="122" rx="29" fill="url(#bg)" stroke="#00d99b" stroke-width="3"/>
+<path d="M32 32h15v27h34V32h15v65H81V73H47v24H32z" fill="url(#white)"/>
+<path d="M81 32h15v65H81z" fill="url(#green)"/>
+<path d="M15 85c21 5 49-9 76-30 9-7 16-15 20-22 2 12-4 22-16 33-28 26-61 42-79 32-5-3-6-7-1-13z" fill="url(#green)"/>
+<path d="M19 87c21 4 54-10 79-31" fill="none" stroke="#c8fff0" stroke-width="3" stroke-linecap="round" opacity=".8"/>
+</svg>
