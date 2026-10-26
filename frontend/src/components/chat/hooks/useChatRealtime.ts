@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { getAccessToken, getApiBaseUrl } from "../../../services/api";
 import type { Presence, RealtimeSnapshot } from "../chatTypes";
+import { consumeSseFrames } from "../sseFrames";
 
 type Options = {
   selectedId: number | null;
@@ -84,13 +85,10 @@ export function useChatRealtime({ selectedId, onChannelsChanged, onMessagesChang
           while (!stopped) {
             const { value, done } = await reader.read();
             if (done) break;
-            buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, "\n");
-            const blocks = buffer.split("\n\n");
-            buffer = blocks.pop() ?? "";
-            for (const block of blocks) {
-              const line = block.split("\n").filter((entry) => entry.startsWith("data:")).map((entry) => entry.slice(5).trimStart()).join("\n");
-              if (!line) continue;
-              try { apply(JSON.parse(line) as RealtimeSnapshot); } catch { /* Ignore malformed events without dropping the stream. */ }
+            const decoded = consumeSseFrames(buffer, decoder.decode(value, { stream: true }));
+            buffer = decoded.remainder;
+            for (const frame of decoded.frames) {
+              try { apply(JSON.parse(frame.data) as RealtimeSnapshot); } catch { /* Ignore malformed events without dropping the stream. */ }
             }
           }
         } catch {
