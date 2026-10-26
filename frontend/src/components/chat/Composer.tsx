@@ -89,7 +89,7 @@ export function Composer({ channelId, channelType, content, sending, uploadingAt
   }
 
   return (
-    <Box onDragOver={(event) => { if (channelId && !uploadingAttachment && !sending && event.dataTransfer.types.includes("Files")) { event.preventDefault(); setDragging(true); } }}
+    <Box onDragOver={(event) => { if (channelId && !uploadingAttachment && !submittingFile && !sending && event.dataTransfer.types.includes("Files")) { event.preventDefault(); setDragging(true); } }}
       onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node)) setDragging(false); }}
       onDrop={handleDrop} onPaste={handlePaste}
       sx={{ position: "relative", px: { xs: 1, md: 1.5 }, pb: 1, pt: .5, bgcolor: "background.paper" }}>
@@ -97,7 +97,7 @@ export function Composer({ channelId, channelType, content, sending, uploadingAt
       {pendingFile && stagedChannelId === channelId && <Paper variant="outlined" sx={{ display: "flex", alignItems: "center", gap: 1, px: 1.25, py: .75, mb: 1, borderRadius: 2, bgcolor: "action.hover" }}>
         <UploadFileOutlined color="primary" />
         <Box sx={{ flex: 1, minWidth: 0 }}><Typography variant="body2" noWrap sx={{ fontWeight: 700 }}>{pendingFile.name}</Typography><Typography variant="caption" color="text.secondary">{(pendingFile.size / 1024).toFixed(1)} KB · Pronto para anexar</Typography></Box>
-        <Tooltip title="Cancelar anexo"><IconButton size="small" onClick={() => setPendingFile(null)} disabled={uploadingAttachment} aria-label="Cancelar anexo"><CloseRounded fontSize="small" /></IconButton></Tooltip>
+        <Tooltip title="Cancelar anexo"><IconButton size="small" onClick={() => setPendingFile(null)} disabled={uploadingAttachment || submittingFile} aria-label="Cancelar anexo"><CloseRounded fontSize="small" /></IconButton></Tooltip>
         <Button size="small" variant="contained" disabled={uploadingAttachment || submittingFile || sending || !channelId} onClick={() => void submitFile()} startIcon={uploadingAttachment ? <CircularProgress size={14} /> : <UploadFileOutlined />}>Enviar arquivo</Button>
       </Paper>}
       {fileError && <Typography role="alert" color="error" variant="caption" sx={{ display: "block", mb: .75 }}>{fileError}</Typography>}
