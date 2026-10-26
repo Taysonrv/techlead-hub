@@ -25,6 +25,7 @@ import { useChatReadReceipts } from "../components/chat/hooks/useChatReadReceipt
 import { useChatTyping } from "../components/chat/hooks/useChatTyping";
 import { useChatHistory } from "../components/chat/hooks/useChatHistory";
 import { useChatSend } from "../components/chat/hooks/useChatSend";
+import { useChatAttachment } from "../components/chat/hooks/useChatAttachment";
 
 
 import { presenceColor } from "../components/chat/chatTypes";
@@ -71,7 +72,6 @@ export function Chat() {
   const [presence, setPresence] = useState<Presence[]>([]);
   const [remoteTyping, setRemoteTyping] = useState<RealtimeSnapshot["typing"]>([]);
   const attachmentInputRef = useRef<HTMLInputElement | null>(null);
-  const [uploadingAttachment, setUploadingAttachment] = useState(false);
   const [conversationMenuAnchor, setConversationMenuAnchor] = useState<HTMLElement | null>(null);
   const [deleteConversationOpen, setDeleteConversationOpen] = useState(false);
   const [deletingConversation, setDeletingConversation] = useState(false);
@@ -94,6 +94,7 @@ export function Chat() {
   } });
   const { messages, setMessages, loading, hasOlder, loadingOlder, showJumpToLatest, setShowJumpToLatest, loadMessages, loadOlder, handleMessagesScroll: handleHistoryScroll, jumpToLatest } = useChatHistory({ selectedId, messagesRef, markRead, setError });
   const handleMessagesScroll = useCallback(() => handleHistoryScroll(messageSearch), [handleHistoryScroll, messageSearch]);
+  const { sendAttachment, uploadingAttachment } = useChatAttachment({ selectedId, attachmentInputRef, refreshMessages: loadMessages, setError });
   const { send, sendQuick, sending } = useChatSend({ selectedId, content, replyTo, setMessages, setContent, setReplyTo, setShowJumpToLatest, setError });
   useEffect(() => {
     setReplyTo(null);
@@ -312,19 +313,6 @@ export function Chat() {
     } catch (requestError: any) { setError(requestError?.response?.data?.error || "Não foi possível criar o canal."); }
   }
 
-  async function sendAttachment(file: File) {
-    if (!selectedId) return;
-    if (file.size > 8 * 1024 * 1024) { setError("O anexo deve ter no máximo 8 MB."); return; }
-    setUploadingAttachment(true); setError("");
-    try {
-      const data = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader(); reader.onload = () => resolve(String(reader.result ?? "")); reader.onerror = () => reject(new Error("Falha ao ler o arquivo.")); reader.readAsDataURL(file);
-      });
-      await api.post(`/chat/channels/${selectedId}/attachments`, { name: file.name, mimeType: file.type || "application/octet-stream", data });
-      await loadMessages(selectedId);
-    } catch (requestError: any) { setError(requestError?.response?.data?.error || "Não foi possível enviar o anexo."); }
-    finally { setUploadingAttachment(false); if (attachmentInputRef.current) attachmentInputRef.current.value = ""; }
-  }
 
   function openSharedRecord(card: { type: string; id?: number; path?: string }) {
     const id = Number(card.id);
