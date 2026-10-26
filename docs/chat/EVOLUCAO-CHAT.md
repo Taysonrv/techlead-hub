@@ -270,3 +270,18 @@ O usuário relatou commit local `ff20d42` na branch `feat/evolucao-visual-design
 - **Causa encontrada no código:** `GET /dashboard/tickets` aplicava `scopedTicketWhere` e `getLatestSnapshotWhere` com a regra estrita `ticketOperationalScope`, que exige abertura a partir de 2026 e serviço SIMER, ocultando parte do universo presente nos exports. Criado `movideskDashboardScope` para preservar clientes e responsáveis da operação, mas aceitar histórico anterior e outras árvores de serviço. A mudança foi aplicada apenas ao snapshot e ao resumo do Dashboard, não às demais rotinas.
 - Resolvidos agora são contabilizados pela data de resolução mesmo se o ticket foi reaberto depois; regra ajustada tanto no frontend quanto no resumo backend.
 - **Não homologado:** os números 168/174/179/95 não podem ser garantidos sem executar a consulta contra o PostgreSQL real e confrontar IDs. Se houver IDs ausentes no banco, será necessária correção de importação/sincronização. O backlog 95 é snapshot em 26/10 e não equivale necessariamente ao estoque atual em outra data.
+
+
+### Auditoria por ID do backlog (26/10)
+
+Criado `backend/scripts/reconcile-movidesk-export.ts` e comando `npm run metrics:reconcile` para comparar uma exportação oficial XLSX do Movidesk diretamente com a tabela Ticket no PostgreSQL. O script é **somente leitura**; não altera o banco nem amplia permissões. Produz CSV em stdout e resumo em stderr, classificando cada ID como `NAO_SINCRONIZADO`, `EXCLUIDO_PELO_ESCOPO`, `STATUS_DIVERGENTE` ou `CONTABILIZAVEL`.
+
+Exemplo PowerShell, a partir da pasta `backend`:
+
+```powershell
+npm run metrics:reconcile -- "C:\caminho\file (2)(1).xlsx" > conciliacao-backlog.csv
+```
+
+A classificação compara o status literal do Movidesk com `baseStatus`/`status` local; diferenças de idioma/codificação podem exigir revisão humana antes de serem consideradas atraso de sincronização. A auditoria usa o escopo do Dashboard mas não reproduz todos os filtros temporais do gráfico de backlog estimado. Execute com as credenciais de banco locais já configuradas. O arquivo `.xls` exportado pelo HUB não é aceito pelo script; ele serve como segunda referência para comparação manual de IDs.
+
+O teste de regressão `OperationalDashboardMetrics.test.ts` foi atualizado para refletir a regra de eventos: tickets reabertos ainda contam como resolvidos quando a data de resolução está no período. Não foi executada validação local nesta sessão; executar testes/build antes de homologar.
