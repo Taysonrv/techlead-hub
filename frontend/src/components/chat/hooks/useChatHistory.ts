@@ -61,7 +61,8 @@ export function useChatHistory({ selectedId, messagesRef, markRead, setError }: 
         setError(failure.response?.data?.error || "Não foi possível carregar a conversa.");
       }
     } finally {
-      if (!quiet && !controller.signal.aborted) setLoading(false);
+      if (request.current === controller) request.current = null;
+      if (!quiet && !controller.signal.aborted && activeId.current === channelId) setLoading(false);
     }
   }, [markRead, messagesRef, setError]);
 
@@ -78,13 +79,16 @@ export function useChatHistory({ selectedId, messagesRef, markRead, setError }: 
     setShowJumpToLatest(false);
     if (selectedId) void loadMessages(selectedId);
     else setLoading(false);
-    const initial = initialRequest.current;
-    const quiet = quietRequest.current;
-    const older = olderRequest.current;
+    const initial = initialRequest;
+    const quiet = quietRequest;
+    const older = olderRequest;
     return () => {
-      initial?.abort();
-      quiet?.abort();
-      older?.abort();
+      const initialController = initial.current;
+      const quietController = quiet.current;
+      const olderController = older.current;
+      initialController?.abort();
+      quietController?.abort();
+      olderController?.abort();
     };
   }, [selectedId, loadMessages]);
 
