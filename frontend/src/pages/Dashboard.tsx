@@ -311,7 +311,7 @@ export function Dashboard() {
   }), [effectiveStartDate, effectiveEndDate]);
 
   const operationalCohorts = useMemo(
-    () => buildOperationalCohorts(tickets, periodBounds),
+    () => buildOperationalCohorts(tickets, periodBounds, "allImported"),
     [tickets, periodBounds],
   );
 
@@ -952,18 +952,18 @@ export function Dashboard() {
   const cards = [
     {
       title: "Abertos no Período",
-      value: summary.abertosOperacaoNoPeriodo,
-      description: "Entradas do período atribuídas à operação SIMER",
+      value: summary.abertosNoPeriodo,
+      description: "Tickets abertos no período na base importada",
       severity: "default" as Severity,
       info: {
         title: "Abertos no Período",
-        summary: "Tickets abertos no período sob responsabilidade da operação SIMER.",
-        calculation: "createdDate no período + responsabilidade operacional SIMER.",
+        summary: "Tickets com data de abertura no período, independentemente do responsável atual.",
+        calculation: "createdDate no período, sem restringir pelo responsável atual.",
         source: "Movidesk",
-        reference: "Ticket.createdDate + Ticket.owner/ownerTeam",
+        reference: "Ticket.createdDate",
         periodRule: "Respeita integralmente o período global selecionado.",
       },
-      onClick: () => showTickets("Abertos no Período", openedBySimerOperationInPeriod, "Tickets abertos no período atribuídos à operação SIMER"),
+      onClick: () => showTickets("Abertos no Período", openedInPeriod, "Tickets abertos no período na base importada"),
     },
     {
       title: "Backlog atual",
@@ -989,7 +989,7 @@ export function Dashboard() {
       info: {
         title: "Resolvidos",
         summary: "Tickets com resolução no período e status resolvido ou fechado, independentemente da data de abertura.",
-        calculation: "resolvedDate no período + status resolvido/fechado + escopo SIMER.",
+        calculation: "resolvedDate no período + status resolvido/fechado, sem filtro por responsável atual.",
         source: "Movidesk",
         reference: "Ticket.resolvedDate",
         periodRule: "Usa a data de resolução, e não a data de abertura.",
@@ -1005,7 +1005,7 @@ export function Dashboard() {
       info: {
         title: "Fechados",
         summary: "Tickets cuja data de fechamento está dentro do período selecionado.",
-        calculation: "Contagem dos tickets com closedDate dentro do período.",
+        calculation: "Contagem dos tickets com closedDate dentro do período, sem filtro por responsável atual.",
         source: "Movidesk",
         reference: "Ticket.closedDate",
         periodRule: "Usa a data de fechamento, e não a data de abertura.",
@@ -1147,7 +1147,7 @@ export function Dashboard() {
       {error && <Alert severity="warning" sx={{ mb: 2 }}>{error}</Alert>}
       <PageHeader
         eyebrow="Operação"
-        title="Dashboard Executivo"
+        title="Dashboard"
         description="Visão consolidada da operação de suporte"
         meta={<>{periodLabel(period)}{" • "}{filteredTickets.length} ticket(s) analisado(s){lastLoadedAt>0&&` · Leitura do Hub às ${new Date(lastLoadedAt).toLocaleTimeString("pt-BR")}`}</>}
         action={<PeriodFilter />}
