@@ -27,15 +27,21 @@ export function useChatRealtime({ selectedId, onChannelsChanged, onMessagesChang
     let retryWake: (() => void) | null = null;
     let lastRefreshAt = Date.now();
     let refreshInFlight = false;
+    let connectedOnce = false;
+    let refreshQueued = false;
     const refresh = async () => {
-      if (stopped || refreshInFlight || document.visibilityState !== "visible") return;
+      if (stopped || document.visibilityState !== "visible") return;
+      if (refreshInFlight) { refreshQueued = true; return; }
       refreshInFlight = true;
       try {
         await current.current.onChannelsChanged();
         if (current.current.selectedId) await current.current.onMessagesChanged(current.current.selectedId);
         lastRefreshAt = Date.now();
       } catch { /* A próxima verificação tentará novamente. */ }
-      finally { refreshInFlight = false; }
+      finally {
+        refreshInFlight = false;
+        if (refreshQueued && !stopped) { refreshQueued = false; void refresh(); }
+      }
     };
     const fallback = window.setInterval(() => {
       if (Date.now() - lastRefreshAt >= 30_000) void refresh();
@@ -55,7 +61,7 @@ export function useChatRealtime({ selectedId, onChannelsChanged, onMessagesChang
       const latestId = snapshot.latestMessage?.id ?? null;
       if (lastMessageId.current !== null && latestId !== lastMessageId.current) {
         void handlers.onChannelsChanged().catch(() => undefined);
-        if (handlers.selectedId && snapshot.latestMessage?.channelId === handlers.selectedId) {
+        if (handlers.selectedId) {
           void handlers.onMessagesChanged(handlers.selectedId).catch(() => undefined);
         }
       }
@@ -78,7 +84,8 @@ export function useChatRealtime({ selectedId, onChannelsChanged, onMessagesChang
           if (!response.ok || !response.body) throw new Error("Stream indisponível");
           retryMs = 1800;
           // A reconexão recupera alterações ocorridas durante a desconexão.
-          if (lastMessageId.current !== null) void refresh();
+          if (connectedOnce) void refresh();
+          connectedOnce = true;
           const reader = response.body.getReader();
           const decoder = new TextDecoder();
           let buffer = "";
