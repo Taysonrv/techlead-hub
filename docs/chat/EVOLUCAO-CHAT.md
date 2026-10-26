@@ -189,3 +189,11 @@ O usuário relatou commit local `ff20d42` na branch `feat/evolucao-visual-design
 - Testes de backend adicionados para isolamento de destinatários, deduplicação, tolerância a falha de listener e cancelamento de assinatura do `ChatEventBus`.
 - **Validação pendente:** `frontend: npm run lint && npm run build && npm run test`; `backend: npm run test && npm run build`. Ainda não executados neste ambiente.
 - **Não considerar concluído:** SSE durável com replay/Redis, painel vivo com dados de ticket e Azure, testes end-to-end de upload/acesso, busca avançada unificada, responsividade do acompanhamento em telas pequenas e auditoria completa de permissões.
+
+
+## Robustez adicional — 26/10/2026
+
+- Cancelamento explícito de todas as requisições do histórico quando o canal muda ou o componente desmonta; inclui paginação e sincronização silenciosa.
+- Confirmação de leitura condicionada à visibilidade da aba.
+- Resumo de ações de incidentes sincronizado a cada 60 segundos enquanto visível, além da atualização após edição e retorno à aba; indicador do horário da última consulta bem-sucedida.
+- **Critério de aceite antes de encerrar:** executar lint, build e testes do frontend, testes e build do backend e fluxo manual de dois usuários (conversa, anexo, leitura, canal, incidentes). Não homologar a partir de commits sem validação.
