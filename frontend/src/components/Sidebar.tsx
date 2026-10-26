@@ -811,28 +811,7 @@ export function Sidebar() {
               minHeight: 28,
             }}
           >
-            <Box
-              aria-hidden
-              sx={{
-                width:
-                  10,
-
-                height:
-                  10,
-
-                borderRadius:
-                  "2px",
-
-                backgroundColor:
-                  aliareColors.green,
-
-                transform:
-                  "rotate(-6deg)",
-
-                flexShrink:
-                  0,
-              }}
-            />
+            <Box component="img" src="/hub-suporte-simer.svg" alt="" aria-hidden="true" sx={{ width: 27, height: 27, borderRadius: 1, flexShrink: 0 }} />
 
             <Typography
               sx={{
@@ -852,7 +831,7 @@ export function Sidebar() {
                   "rgba(255,255,255,0.72)",
               }}
             >
-              aliare
+              HUB SUPORTE SIMER
             </Typography>
           </Stack>
 
