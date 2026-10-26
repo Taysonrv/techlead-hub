@@ -179,3 +179,13 @@ O usuário relatou commit local `ff20d42` na branch `feat/evolucao-visual-design
 - A página mantém o indicador de envio compartilhado com emojis e figurinhas; busca e resposta em andamento são limpas ao alternar conversas.
 - **Validação pendente:** `npm run lint`, `npm run build` e `npm run test`; cenários manuais com 100+ mensagens, troca rápida de canal, falha de envio, reconexão e envio de emoji/figurinha.
 - **Limites:** não há ainda envio otimista de mensagens, virtualização, testes de integração de UI nem replay persistente de SSE. Integração viva Movidesk/Azure e passagem de turno estruturada continuam pendentes.
+
+
+## Pacote de estabilização e acompanhamento de incidentes — 26/10/2026
+
+- `useChatHistory`: requisições concluídas deixam de ocupar os controladores de cancelamento; atualização do indicador de carregamento verifica canal ativo, reduzindo efeitos de respostas atrasadas.
+- `IncidentWorkSummary`: nova visualização de acompanhamento no painel contextual de salas de incidente, consultando o endpoint autenticado `GET /chat/channels/:channelId/actions` em vez de dados fictícios. Exibe pendências, decisões, escalonamentos, passagem de turno, responsáveis e prazos quando informados.
+- Atualização da visão contextual após criar ou alterar uma ação no `IncidentActionsPanel`, por evento local de escopo de canal, e ao retornar à aba. O diálogo existente permanece como editor autorizado.
+- Testes de backend adicionados para isolamento de destinatários, deduplicação, tolerância a falha de listener e cancelamento de assinatura do `ChatEventBus`.
+- **Validação pendente:** `frontend: npm run lint && npm run build && npm run test`; `backend: npm run test && npm run build`. Ainda não executados neste ambiente.
+- **Não considerar concluído:** SSE durável com replay/Redis, painel vivo com dados de ticket e Azure, testes end-to-end de upload/acesso, busca avançada unificada, responsividade do acompanhamento em telas pequenas e auditoria completa de permissões.
