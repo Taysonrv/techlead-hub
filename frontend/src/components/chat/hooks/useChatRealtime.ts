@@ -98,8 +98,9 @@ export function useChatRealtime({ selectedId, onChannelsChanged, onMessagesChang
             const decoded = consumeSseFrames(buffer, decoder.decode(value, { stream: true }));
             buffer = decoded.remainder;
             for (const frame of decoded.frames) {
+              const changedCursor = frame.id !== null && lastEventId !== "" && frame.id !== lastEventId;
               if (frame.id !== null) lastEventId = frame.id;
-              try { apply(JSON.parse(frame.data) as RealtimeSnapshot); } catch { /* Ignore malformed events without dropping the stream. */ }
+              try { apply(JSON.parse(frame.data) as RealtimeSnapshot); if (changedCursor) void refresh(); } catch { /* Ignore malformed events without dropping the stream. */ }
             }
           }
         } catch {
