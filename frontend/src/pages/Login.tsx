@@ -821,21 +821,7 @@ export function Login() {
                 "center",
             }}
           >
-            <Box
-              sx={{
-                width: 11,
-                height: 11,
-
-                borderRadius:
-                  "2px",
-
-                backgroundColor:
-                  aliareColors.green,
-
-                transform:
-                  "rotate(-6deg)",
-              }}
-            />
+            <Box component="img" src="/hub-suporte-simer.svg" alt="" aria-hidden="true" sx={{ width: 34, height: 34, borderRadius: 1 }} />
 
             <Typography
               sx={{
@@ -855,7 +841,7 @@ export function Login() {
                   colorMode === "dark" ? "rgba(255,255,255,0.72)" : "rgba(16,33,27,.62)",
               }}
             >
-              aliare
+              HUB SUPORTE SIMER
             </Typography>
           </Stack>
 
@@ -878,7 +864,7 @@ export function Login() {
                 "-0.04em",
             }}
           >
-            TechLead Hub · SIMER
+            HUB SUPORTE SIMER
           </Typography>
 
           <Typography
@@ -1082,7 +1068,7 @@ export function Login() {
                   "-.025em",
               }}
             >
-              TechLead Hub · SIMER
+              HUB SUPORTE SIMER
             </Typography>
 
             <Typography
@@ -2306,7 +2292,7 @@ function RegisterSuccess({
         >
           Sua solicitação foi registrada com sucesso.
           Aguarde a aprovação de um administrador para
-          acessar o TechLead Hub · SIMER.
+          acessar o HUB SUPORTE SIMER.
         </Typography>
       </Box>
 
@@ -2494,7 +2480,7 @@ function getErrorMessage(
     }
 
     if (!error.response) {
-      return "Não foi possível conectar ao servidor do TechLead Hub · SIMER.";
+      return "Não foi possível conectar ao servidor do HUB SUPORTE SIMER.";
     }
   }
 
