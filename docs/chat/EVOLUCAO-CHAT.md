@@ -249,3 +249,13 @@ O usuário relatou commit local `ff20d42` na branch `feat/evolucao-visual-design
 - Suíte opcional `chatTwoUser.integration.test.ts` valida isolamento de dois usuários; exige duas contas reais de teste e variáveis de ambiente.
 - Comando `npm run chat:events:prune` remove cursores antigos; requer agendamento externo. Runbook completo: `docs/chat/HOMOLOGACAO-WAR-ROOM.md`.
 - **Status:** implementado e enviado à branch; ainda requer migração de banco, lint/build/test e homologação com duas instâncias. Não promover à produção antes disso.
+
+
+## Identidade da aplicação — HUB SUPORTE SIMER
+
+- Nome oficial de exibição: **HUB SUPORTE SIMER**.
+- Paleta aprovada: azul-marinho escuro (`#071d2b`) e verde (`#00d99b`), com ícone vetorial H e traço de movimento em `frontend/public/hub-suporte-simer.svg`.
+- Aplicação web: favicon, `index.html`, metadados e `manifest.webmanifest`; cabeçalho da sidebar, login, cadastro, recuperação de senha, tela Sobre e títulos de todas as rotas autenticadas.
+- Testes de regressão em `frontend/tests/appBranding.test.mjs`.
+- Nomes internos de variáveis, eventos, chaves de armazenamento, APIs e nomes técnicos do projeto **não foram alterados**, para evitar quebrar integrações e dados existentes.
+- **Validação pendente:** executar `npm run lint && npm run test && npm run build` no frontend; confirmar cache de favicon no navegador e aparência visual. O pacote web não substitui automaticamente os ícones binários de instaladores desktop.
