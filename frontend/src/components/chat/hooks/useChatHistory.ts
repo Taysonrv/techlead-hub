@@ -64,7 +64,7 @@ export function useChatHistory({ selectedId, messagesRef, markRead, setError }: 
       }
       setError("");
     } catch (error: unknown) {
-      if (!controller.signal.aborted && !quiet) {
+      if (!controller.signal.aborted && !quiet && activeId.current === channelId) {
         const failure = error as { response?: { data?: { error?: string } } };
         setError(failure.response?.data?.error || "Não foi possível carregar a conversa.");
       }
@@ -115,7 +115,7 @@ export function useChatHistory({ selectedId, messagesRef, markRead, setError }: 
       if (!controller.signal.aborted && activeId.current === channelId) setError("Não foi possível carregar o histórico anterior.");
     } finally {
       if (olderRequest.current === controller) olderRequest.current = null;
-      if (activeId.current === channelId) setLoadingOlder(false);
+      if (!controller.signal.aborted && activeId.current === channelId) setLoadingOlder(false);
     }
   }, [messagesRef, setError]);
 
