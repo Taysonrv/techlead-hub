@@ -23,8 +23,9 @@ export const isOperationallyOpen = (ticket: OperationalMetricTicket) => {
 export function buildOperationalCohorts<T extends OperationalMetricTicket>(
   tickets: T[],
   period: OperationalPeriod,
+  scope: "currentSimer" | "allImported" = "currentSimer",
 ) {
-  const simer = tickets.filter((ticket) => ticket.isWithSimer === true);
+  const simer = scope === "allImported" ? tickets : tickets.filter((ticket) => ticket.isWithSimer === true);
   return {
     entries: simer.filter((ticket) => inPeriod(ticket.createdDate, period)),
     resolved: simer.filter((ticket) => inPeriod(ticket.resolvedDate, period) &&
