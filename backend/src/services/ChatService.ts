@@ -645,9 +645,14 @@ export class ChatService {
       take: 100,
       select: { id: true, channelId: true },
     });
+    const candidateIds = [...new Set(changes.map((item) => item.channelId).filter((id): id is number => id !== null))];
+    const authorized = candidateIds.length ? await prisma.chatChannelMember.findMany({
+      where: { userId, channelId: { in: candidateIds }, channel: { archivedAt: null } },
+      select: { channelId: true },
+    }) : [];
     return {
       cursor: changes.length ? changes[changes.length - 1].id.toString() : since === 0n ? await this.deliveryCursor(userId) : cursor,
-      changedChannelIds: [...new Set(changes.map((item) => item.channelId).filter((id): id is number => id !== null))],
+      changedChannelIds: authorized.map((item) => item.channelId),
       hasMore: changes.length === 100,
       changed: changes.length > 0,
     };
