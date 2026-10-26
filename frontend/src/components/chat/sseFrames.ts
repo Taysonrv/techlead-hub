@@ -1,7 +1,7 @@
 /** Pure SSE frame decoder. Handles split TCP chunks, CRLF and multiple frames per chunk. */
 export type SseFrame = { id: string | null; data: string };
 export function consumeSseFrames(buffer: string, chunk: string): { frames: SseFrame[]; remainder: string } {
-  const normalized = (buffer + chunk).replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  const normalized = (buffer + chunk).replace(/\r\n/g, "\n").replace(/\r(?=.)/g, "\n");
   const blocks = normalized.split("\n\n");
   const remainder = blocks.pop() ?? "";
   const frames = blocks.flatMap((block) => {
