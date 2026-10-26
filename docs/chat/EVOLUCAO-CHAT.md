@@ -222,3 +222,11 @@ O usuário relatou commit local `ff20d42` na branch `feat/evolucao-visual-design
 - Respostas de upload não recarregam nem exibem erro na conversa que foi selecionada posteriormente; guarda de operação em andamento impede upload concorrente.
 - Criados quatro testes de apresentação de mensagens: agrupamento temporal, resposta a mensagem fora do filtro, menção sem diferenciar maiúsculas/minúsculas e separação de dias independente do fuso da máquina.
 - **Homologação ainda necessária:** frontend lint/build/test, backend build/test, envio de arquivo com troca de canal durante FileReader/rede lenta e testes entre dois usuários.
+
+
+## Validação frontend e transporte SSE — 26/10/2026
+
+- Validação local reportada: frontend build de produção concluído, 10/10 testes aprovados e lint com apenas um aviso de importação não utilizada. Importação removida.
+- Novo decodificador `sseFrames.ts` utilizado pelo hook de tempo real para eventos recebidos em fragmentos, CRLF, comentários de heartbeat e dados multilinha.
+- Quatro novos testes de regressão para SSE, incluindo quebra de CRLF entre chunks.
+- **Limite atual:** o decodificador de frames não implementa replay persistente no servidor; o fallback de sincronização continua necessário. Ainda faltam build/testes do backend e testes integrados de dois usuários.
