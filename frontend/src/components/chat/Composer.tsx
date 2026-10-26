@@ -43,7 +43,7 @@ export function Composer({ channelId, channelType, content, sending, uploadingAt
 
   function stageFile(file: File) {
     setFileError("");
-    if (!channelId) return;
+    if (!channelId || uploadingAttachment || sending) return;
     if (!ALLOWED_MIME.has(file.type)) {
       setFileError("Tipo de arquivo não permitido. Utilize PDF, imagem, texto, CSV, ZIP ou Office.");
       return;
@@ -88,7 +88,7 @@ export function Composer({ channelId, channelType, content, sending, uploadingAt
       {fileError && <Typography role="alert" color="error" variant="caption" sx={{ display: "block", mb: .75 }}>{fileError}</Typography>}
       <Stack direction="row" spacing={.5} sx={{ alignItems: "flex-end", p: .65, border: "1px solid", borderColor: "divider", borderRadius: 3, bgcolor: "background.default", "&:focus-within": { borderColor: "primary.main" } }}>
         <input ref={attachmentInputRef} type="file" hidden accept={[...ALLOWED_MIME].join(",")} onChange={(event) => { const file = event.target.files?.[0]; if (file) stageFile(file); event.target.value = ""; }} />
-        <Tooltip title="Anexar arquivo (máx. 8 MB)"><span><IconButton aria-label="Anexar arquivo" disabled={!channelId || uploadingAttachment} onClick={() => attachmentInputRef.current?.click()}><AttachFileRounded /></IconButton></span></Tooltip>
+        <Tooltip title="Anexar arquivo (máx. 8 MB)"><span><IconButton aria-label="Anexar arquivo" disabled={!channelId || uploadingAttachment || sending} onClick={() => attachmentInputRef.current?.click()}><AttachFileRounded /></IconButton></span></Tooltip>
         <Box sx={{ display: { xs: "none", sm: "flex" } }}>
           <Tooltip title="Emojis"><span><IconButton aria-label="Emojis" onClick={(event) => onOpenEmoji(event.currentTarget)} disabled={!channelId}><EmojiEmotionsOutlined /></IconButton></span></Tooltip>
           <Tooltip title="Figurinhas"><span><IconButton aria-label="Figurinhas" onClick={onOpenStickers} disabled={!channelId}><CelebrationOutlined /></IconButton></span></Tooltip>
