@@ -28,3 +28,11 @@ test("existing SIMER-only cohort behavior remains available for other reports", 
   assert.equal(result.closed.length, 0);
   assert.equal(result.backlog.length, 1);
 });
+
+
+test("resolution event remains counted after ticket is reopened", () => {
+  const reopened = { createdDate: "2026-09-12T12:00:00Z", resolvedDate: "2026-10-18T12:00:00Z", closedDate: null, baseStatus: "InAttendance", isWithSimer: true };
+  const result = buildOperationalCohorts([reopened], period, "allImported");
+  assert.equal(result.resolved.length, 1);
+  assert.equal(result.backlog.length, 1);
+});
