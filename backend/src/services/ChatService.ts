@@ -625,9 +625,40 @@ export class ChatService {
     return action;
   }
 
+  async deliveryCursor(userId: number) {
+    const latest = await prisma.chatDeliveryEvent.findFirst({
+      where: { userId },
+      orderBy: { id: "desc" },
+      select: { id: true },
+    });
+    return latest?.id.toString() ?? "0";
+  }
+
+  async deliveryChangesSince(userId: number, cursor: string) {
+    if (!/^\\d{1,20}$/.test(cursor)) {
+      throw Object.assign(new Error("Cursor de eventos inválido."), { statusCode: 400 });
+    }
+    const since = BigInt(cursor);
+    const changes = await prisma.chatDeliveryEvent.findMany({
+      where: { userId, id: { gt: since } },
+      orderBy: { id: "asc" },
+      take: 100,
+      select: { id: true, channelId: true },
+    });
+    return {
+      cursor: changes.length ? changes[changes.length - 1].id.toString() : await this.deliveryCursor(userId),
+      changedChannelIds: [...new Set(changes.map((item) => item.channelId).filter((id): id is number => id !== null))],
+      hasMore: changes.length === 100,
+      changed: changes.length > 0,
+    };
+  }
+
   private async notifyChannel(channelId: number) {
     const members = await prisma.chatChannelMember.findMany({ where: { channelId }, select: { userId: true } });
-    chatEventBus.publish(members.map((member) => member.userId));
+    if (members.length) {
+      await prisma.chatDeliveryEvent.createMany({ data: members.map((member) => ({ userId: member.userId, channelId })) });
+      chatEventBus.publish(members.map((member) => member.userId));
+    }
   }
 
   private async assertMember(userId: number, channelId: number) {
