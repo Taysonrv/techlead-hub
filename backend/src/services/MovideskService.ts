@@ -4,7 +4,7 @@ import crypto from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../database/prisma";
 import { MovideskJsonImportService } from "./MovideskJsonImportService";
-import { isSimerClient, SIMER_CLIENTS } from "../domain/OperationalScope";
+import { isSimerClient, isConditionalSupportTicket, SIMER_CLIENTS, SUPPORT_ANALYSTS } from "../domain/OperationalScope";
 import { movideskRateLimiter } from "./MovideskRateLimiter";
 import { hasMovideskApiPriorityRequest } from "../jobs/MovideskSyncCoordinator";
 import { MOVIDESK_SAFETY_LOOKBACK_MINUTES, MOVIDESK_RECONCILIATION_DAYS, movideskSyncAnchor, movideskReconciliationDue, movideskSyncIntervalMinutes } from "../domain/MovideskSyncPolicy";
@@ -144,7 +144,9 @@ export class MovideskService {
     const clients = SIMER_CLIENTS.map(
       (client) => `c/organization/businessName eq ${this.odataString(client)}`,
     ).join(" or ");
-    return `clients/any(c: ${clients})`;
+    const conditionalOwner = SUPPORT_ANALYSTS.map((name) => `owner/businessName eq ${this.odataString(name)}`).join(" or ");
+    const conditionalClient = `clients/any(c: c/organization/businessName eq ${this.odataString("SIAGRI SISTEMAS")})`;
+    return `(${`clients/any(c: ${clients})`}) or ((${conditionalClient}) and (${conditionalOwner}))`;
   }
 
   private remoteScopeFilter(extra?: string | null) {
@@ -656,7 +658,7 @@ export class MovideskService {
 
     const rows = (response.data as Array<Record<string, unknown>>).filter(row => {
       const owner = row.owner as { businessName?: string } | null;
-      return isSimerClient(this.ticketClientName(row)) && isSupportAnalyst(owner?.businessName);
+      return (isSimerClient(this.ticketClientName(row)) || isConditionalSupportTicket(this.ticketClientName(row), owner?.businessName)) && isSupportAnalyst(owner?.businessName);
     });
     return {
       readOnly: true,
@@ -1469,7 +1471,7 @@ export class MovideskService {
       summary.queriedPages = (summary.queriedPages ?? 0) + 1;
       if (!rows.length) break;
 
-      const scopedRows = rows.filter((row) => isSimerClient(this.ticketClientName(row)));
+      const scopedRows = rows.filter((row) => (isSimerClient(this.ticketClientName(row)) || isConditionalSupportTicket(this.ticketClientName(row), (row.owner as { businessName?: string } | null)?.businessName)));
       const result = scopedRows.length
         ? await new MovideskJsonImportService().execute(
             Buffer.from(JSON.stringify(scopedRows), "utf8"),
