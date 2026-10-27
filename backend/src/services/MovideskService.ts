@@ -4,7 +4,7 @@ import crypto from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../database/prisma";
 import { MovideskJsonImportService } from "./MovideskJsonImportService";
-import { isSimerClient, isConditionalSupportTicket, SIMER_CLIENTS, SUPPORT_ANALYSTS } from "../domain/OperationalScope";
+import { isSimerClient, isConditionalSupportTicket, SIMER_CLIENTS } from "../domain/OperationalScope";
 import { movideskRateLimiter } from "./MovideskRateLimiter";
 import { hasMovideskApiPriorityRequest } from "../jobs/MovideskSyncCoordinator";
 import { MOVIDESK_SAFETY_LOOKBACK_MINUTES, MOVIDESK_RECONCILIATION_DAYS, movideskSyncAnchor, movideskReconciliationDue, movideskSyncIntervalMinutes } from "../domain/MovideskSyncPolicy";
@@ -1471,7 +1471,7 @@ export class MovideskService {
       summary.queriedPages = (summary.queriedPages ?? 0) + 1;
       if (!rows.length) break;
 
-      const scopedRows = rows.filter((row) => (isSimerClient(this.ticketClientName(row)) || isConditionalSupportTicket(this.ticketClientName(row), (row.owner as { businessName?: string } | null)?.businessName)));
+      const scopedRows = rows.filter((row) => (isSimerClient(this.ticketClientName(row)) || isConditionalSupportTicket(this.ticketClientName(row), ((row as { owner?: { businessName?: string } | null }).owner)?.businessName)));
       const result = scopedRows.length
         ? await new MovideskJsonImportService().execute(
             Buffer.from(JSON.stringify(scopedRows), "utf8"),
@@ -1518,7 +1518,7 @@ export class MovideskService {
         const rows = await this.getPastPage(pastSkip);
         summary.queriedPages = (summary.queriedPages ?? 0) + 1;
         if (!rows.length) break;
-        const scopedRows = rows.filter((row) => isSimerClient(this.ticketClientName(row)) || isConditionalSupportTicket(this.ticketClientName(row), (row.owner as { businessName?: string } | null)?.businessName));
+        const scopedRows = rows.filter((row) => isSimerClient(this.ticketClientName(row)) || isConditionalSupportTicket(this.ticketClientName(row), ((row as { owner?: { businessName?: string } | null }).owner)?.businessName));
         const result = scopedRows.length
           ? await new MovideskJsonImportService().execute(
               Buffer.from(JSON.stringify(scopedRows), "utf8"),
