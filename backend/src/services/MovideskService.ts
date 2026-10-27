@@ -146,7 +146,7 @@ export class MovideskService {
     ).join(" or ");
     const conditionalOwner = SUPPORT_ANALYSTS.map((name) => `owner/businessName eq ${this.odataString(name)}`).join(" or ");
     const conditionalClient = `clients/any(c: c/organization/businessName eq ${this.odataString("SIAGRI SISTEMAS")})`;
-    return `(${`clients/any(c: ${clients})`}) or ((${conditionalClient}) and (${conditionalOwner}))`;
+    return `(clients/any(c: ${clients})) or ((${conditionalClient}) and (${conditionalOwner}))`;
   }
 
   private remoteScopeFilter(extra?: string | null) {
@@ -1518,7 +1518,7 @@ export class MovideskService {
         const rows = await this.getPastPage(pastSkip);
         summary.queriedPages = (summary.queriedPages ?? 0) + 1;
         if (!rows.length) break;
-        const scopedRows = rows.filter((row) => isSimerClient(this.ticketClientName(row)));
+        const scopedRows = rows.filter((row) => isSimerClient(this.ticketClientName(row)) || isConditionalSupportTicket(this.ticketClientName(row), (row.owner as { businessName?: string } | null)?.businessName));
         const result = scopedRows.length
           ? await new MovideskJsonImportService().execute(
               Buffer.from(JSON.stringify(scopedRows), "utf8"),
