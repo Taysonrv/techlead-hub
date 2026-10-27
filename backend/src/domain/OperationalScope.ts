@@ -139,6 +139,13 @@ export function simerClientTicketScope(): Prisma.TicketWhereInput {
  * Cliente, produto e responsável precisam pertencer à carteira operacional.
  */
 
+export const CONDITIONAL_SUPPORT_CLIENTS = ["SIAGRI SISTEMAS"] as const;
+
+/** SIAGRI Sistemas is included only when assigned to a named SIMER support analyst. */
+export function isConditionalSupportTicket(client: string | null | undefined, owner: string | null | undefined): boolean {
+  return Boolean(client && CONDITIONAL_SUPPORT_CLIENTS.some(name => normalizeClientScopeValue(client).startsWith(normalizeClientScopeValue(name))) && isSupportAnalyst(owner));
+}
+
 export const SIMER_EXCLUDED_PRODUCTS = ["AGB", "CLOVER", "SIAGRI WEB"] as const;
 
 export function simerSupportTicketScope(includeDeleted = false): Prisma.TicketWhereInput {
@@ -181,8 +188,12 @@ export function movideskDashboardScope(): Prisma.TicketWhereInput {
   return {
     AND: [
       { isDeleted: false },
-      { client: { in: [...SIMER_CLIENTS], mode: "insensitive" } },
-      { owner: { in: [...SUPPORT_ANALYSTS, "SUPORTE SIMER | BDS"], mode: "insensitive" } },
+      {
+        OR: [
+          { client: { in: [...SIMER_CLIENTS], mode: "insensitive" }, owner: { in: [...SUPPORT_ANALYSTS, "SUPORTE SIMER | BDS"], mode: "insensitive" } },
+          { client: { startsWith: "SIAGRI SISTEMAS", mode: "insensitive" }, owner: { in: [...SUPPORT_ANALYSTS], mode: "insensitive" } },
+        ],
+      },
     ],
   };
 }
