@@ -16,6 +16,7 @@
     "prisma:studio": "prisma studio",
     "chat:events:prune": "tsx scripts/prune-chat-delivery-events.ts",
     "metrics:reconcile": "tsx scripts/reconcile-movidesk-export.ts",
+    "movidesk:reconcile-ids": "tsx scripts/reconcile-movidesk-ids.ts",
     "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"",
     "config:key-migrate": "tsx scripts/migrate-config-key.ts",
     "config:inspect-metadata": "tsx scripts/inspect-settings-metadata.ts"
