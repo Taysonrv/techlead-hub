@@ -285,3 +285,13 @@ npm run metrics:reconcile -- "C:\caminho\file (2)(1).xlsx" > conciliacao-backlog
 A classificação compara o status literal do Movidesk com `baseStatus`/`status` local; diferenças de idioma/codificação podem exigir revisão humana antes de serem consideradas atraso de sincronização. A auditoria usa o escopo do Dashboard mas não reproduz todos os filtros temporais do gráfico de backlog estimado. Execute com as credenciais de banco locais já configuradas. O arquivo `.xls` exportado pelo HUB não é aceito pelo script; ele serve como segunda referência para comparação manual de IDs.
 
 O teste de regressão `OperationalDashboardMetrics.test.ts` foi atualizado para refletir a regra de eventos: tickets reabertos ainda contam como resolvidos quando a data de resolução está no período. Não foi executada validação local nesta sessão; executar testes/build antes de homologar.
+
+
+### Evolução visual e conciliação — exportações de 26/10/2026 às 22:43
+
+- `TeamDashboardCards`: os dois cards agora ocupam **100% da largura**, em linhas separadas; o gráfico por agente apresenta **simultaneamente** as três séries resolvidos, fechados e avaliados, cada uma com drilldown independente.
+- A exportação `Backlogmovidesk.xlsx` contém **97 IDs únicos** (Aguardando 51, Pausado 32, Novo 6, Em Andamento 5, Aguardando Interno 3).
+- A exportação `Backloghub.xls` (XML Spreadsheet 2003, apesar da extensão XLS) contém **68 IDs únicos**. Todos os 68 estão no Movidesk; **29 estão somente no Movidesk**.
+- IDs ausentes na exportação HUB: `714688,742704,779161,797868,801200,803562,804830,806799,807567,808047,808933,813274,816434,827712,829533,833874,834080,834184,834874,835010,835361,835645,835947,836505,837028,837040,837087,837106,837181`.
+- Não é possível inferir apenas dos exports se os 29 estão ausentes do PostgreSQL ou excluídos pelo escopo. Executar `npm run metrics:reconcile -- "C:\\caminho\\Backlogmovidesk.xlsx" > conciliacao.csv` no ambiente com banco configurado.
+- O Movidesk da captura posterior mostra **174 abertos, 177 resolvidos e 180 fechados**, enquanto o HUB mostra **130, 122 e 125**. São referências de captura diferentes das anteriores (168/174/179); nunca inserir valores estáticos para forçar a equivalência.
