@@ -145,7 +145,7 @@ export class MovideskService {
       (client) => `c/organization/businessName eq ${this.odataString(client)}`,
     ).join(" or ");
     const conditionalOwner = SUPPORT_ANALYSTS.map((name) => `owner/businessName eq ${this.odataString(name)}`).join(" or ");
-    const conditionalClient = `clients/any(c: c/organization/businessName eq ${this.odataString("SIAGRI SISTEMAS")})`;
+    const conditionalClient = `clients/any(c: c/organization/businessName eq ${this.odataString("SIAGRI SISTEMAS - RIO VERDE-GO (MATRIZ)")} or c/organization/businessName eq ${this.odataString("SIAGRI SISTEMAS")})`;
     return `(clients/any(c: ${clients})) or ((${conditionalClient}) and (${conditionalOwner}))`;
   }
 
@@ -1424,6 +1424,39 @@ export class MovideskService {
     const incrementalSince = computeMovideskIncrementalSince(movideskSyncAnchor(lastIncremental), now);
     const recoverySince = new Date(Math.max(SYNC_SCOPE_START.getTime(), now.getTime() - MOVIDESK_RECONCILIATION_DAYS * 24 * 60 * 60_000));
     return { since: reconciliation && recoverySince < incrementalSince ? recoverySince : incrementalSince, reconciliation };
+  }
+
+  /** Reconciliação pontual: consulta IDs explícitos, valida carteira e só grava com apply=true. */
+  async reconcileTicketIds(ids: number[], apply = false) {
+    const unique = [...new Set(ids)];
+    if (!unique.length || unique.length > 20 || unique.some(id => !Number.isSafeInteger(id) || id <= 0)) {
+      throw new Error("Informe entre 1 e 20 IDs numéricos válidos.");
+    }
+    const results: Array<{ id: number; outcome: string; client?: string | null; owner?: string | null; status?: string | null; errors?: number }> = [];
+    for (const id of unique) {
+      const response = await this.getWithRetry(`${this.url}/tickets`, {
+        params: { token: this.token(), $filter: `id eq ${id}`, $select: TICKET_SELECT, $expand: TICKET_EXPAND, $top: 2 },
+        timeout: 120_000,
+      }, `reconciliação pontual ${id}`);
+      if (!Array.isArray(response.data)) throw new Error(`Resposta inválida para ticket ${id}.`);
+      const rows = response.data as Array<Record<string, unknown>>;
+      const row = rows.find(item => Number(item.id) === id);
+      if (!row) { results.push({ id, outcome: "NAO_RETORNADO_PELA_API" }); continue; }
+      const client = this.ticketClientName(row);
+      const owner = (row.owner as { businessName?: string } | null)?.businessName ?? null;
+      const status = typeof row.status === "string" ? row.status : null;
+      const created = typeof row.createdDate === "string" ? new Date(row.createdDate) : null;
+      const permitted = Boolean(created && !Number.isNaN(created.getTime()) && created >= SYNC_SCOPE_START &&
+        isSupportAnalyst(owner) && (isSimerClient(client) || isConditionalSupportTicket(client, owner)));
+      if (!permitted) { results.push({ id, outcome: "FORA_DO_ESCOPO", client, owner, status }); continue; }
+      if (!apply) { results.push({ id, outcome: "APTO_PARA_IMPORTACAO", client, owner, status }); continue; }
+      const imported = await new MovideskJsonImportService().execute(
+        Buffer.from(JSON.stringify([row]), "utf8"),
+        { fileName: `API Movidesk · reconciliação ID ${id}`, userId: null, source: "MOVIDESK_API" },
+      );
+      results.push({ id, outcome: imported.errors ? "ERRO_IMPORTACAO" : "IMPORTADO", client, owner, status, errors: imported.errors });
+    }
+    return { applied: apply, results };
   }
 
   async syncTickets(
