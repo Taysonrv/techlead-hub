@@ -1435,11 +1435,11 @@ export class MovideskService {
     const results: Array<{ id: number; outcome: string; client?: string | null; owner?: string | null; status?: string | null; errors?: number }> = [];
     for (const id of unique) {
       const response = await this.getWithRetry(`${this.url}/tickets`, {
-        params: { token: this.token(), $filter: `id eq ${id}`, $select: TICKET_SELECT, $expand: TICKET_EXPAND, $top: 2 },
+        params: { token: this.token(), id, $select: TICKET_SELECT, $expand: TICKET_EXPAND },
         timeout: 120_000,
       }, `reconciliação pontual ${id}`);
-      if (!Array.isArray(response.data)) throw new Error(`Resposta inválida para ticket ${id}.`);
-      const rows = response.data as Array<Record<string, unknown>>;
+      const rows = (Array.isArray(response.data) ? response.data : response.data && typeof response.data === "object" ? [response.data] : []) as Array<Record<string, unknown>>;
+      if (!rows.length) { results.push({ id, outcome: "NAO_RETORNADO_PELA_API" }); continue; }
       const row = rows.find(item => Number(item.id) === id);
       if (!row) { results.push({ id, outcome: "NAO_RETORNADO_PELA_API" }); continue; }
       const client = this.ticketClientName(row);
