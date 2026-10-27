@@ -205,7 +205,7 @@ export class MovideskService {
                 ? JSON.stringify(error.response.data).slice(0, 300)
                 : error.message
             : error instanceof Error ? error.message : "falha desconhecida";
-          throw new Error(`${context}: falha após ${attempt} tentativa(s) (${code ?? status ?? "rede"}). ${remoteMessage}`);
+          throw new Error(`${context}: falha após ${attempt} tentativa(s) (HTTP ${status ?? "sem resposta"}, ${code ?? "sem código"}). ${remoteMessage || "(API não forneceu detalhes)"}`);
         }
         const retryAfterSeconds = axios.isAxiosError(error) ? Number(error.response?.headers?.["retry-after"]) : NaN;
         if (status === 429) movideskRateLimiter.registerThrottle(Number.isFinite(retryAfterSeconds) ? retryAfterSeconds : null);
@@ -1435,7 +1435,7 @@ export class MovideskService {
     const results: Array<{ id: number; outcome: string; client?: string | null; owner?: string | null; status?: string | null; errors?: number }> = [];
     for (const id of unique) {
       const response = await this.getWithRetry(`${this.url}/tickets`, {
-        params: { token: this.token(), id, $select: TICKET_SELECT, $expand: TICKET_EXPAND },
+        params: { token: this.token(), id },
         timeout: 120_000,
       }, `reconciliação pontual ${id}`);
       const rows = (Array.isArray(response.data) ? response.data : response.data && typeof response.data === "object" ? [response.data] : []) as Array<Record<string, unknown>>;
