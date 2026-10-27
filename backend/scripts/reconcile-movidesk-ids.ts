@@ -5,7 +5,7 @@ async function main() {
   const args = process.argv.slice(2);
   const apply = args.includes("--apply");
   const rawIds = args.filter(arg => arg !== "--apply");
-  if (!rawIds.length || rawIds.length > 20 || rawIds.some(value => !/^\\d+$/.test(value))) {
+  if (!rawIds.length || rawIds.length > 20 || rawIds.some(value => !/^[0-9]+$/.test(value))) {
     throw new Error("Uso: npm run movidesk:reconcile-ids -- 816434 827712 834184 835645 [--apply]");
   }
   const ids = rawIds.map(Number);
