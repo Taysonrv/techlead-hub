@@ -15,6 +15,20 @@ function valueOf(cell: ExcelJS.Cell): string {
   if (typeof value === "object" && "result" in value) return String(value.result ?? "").trim();
   return String(value).trim();
 }
+function canonicalStatus(value: string): string {
+  const normalized = value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR").trim().replace(/[ _-]+/g, " ");
+  const aliases: Record<string, string> = {
+    "new": "new", "novo": "new",
+    "inattendance": "inattendance", "em atendimento": "inattendance", "em andamento": "inattendance",
+    "waiting": "waiting", "aguardando": "waiting",
+    "stopped": "stopped", "paused": "stopped", "pausado": "stopped",
+    "waitinginternal": "waitinginternal", "aguardando interno": "waitinginternal",
+    "resolved": "resolved", "resolvido": "resolved",
+    "closed": "closed", "fechado": "closed",
+    "canceled": "canceled", "cancelled": "canceled", "cancelado": "canceled",
+  };
+  return aliases[normalized.replace(/\s/g, "")] ?? aliases[normalized] ?? normalized;
+}
 function csv(value: unknown): string {
   const text = String(value ?? "");
   return '"' + text.replace(/"/g, '""') + '"';
@@ -66,7 +80,7 @@ async function main() {
     const statusHub = ticket?.baseStatus || ticket?.status || "";
     const classification = !ticket ? "NAO_SINCRONIZADO"
       : !visibleIds.has(id) ? "EXCLUIDO_PELO_ESCOPO"
-      : row.status && row.status.toLocaleLowerCase("pt-BR") !== statusHub.toLocaleLowerCase("pt-BR") ? "STATUS_DIVERGENTE"
+      : row.status && canonicalStatus(row.status) !== canonicalStatus(statusHub) ? "STATUS_DIVERGENTE"
       : "CONTABILIZAVEL";
     counters[classification] = (counters[classification] ?? 0) + 1;
     lines.push([id, classification, row.status, statusHub, row.client, ticket?.client, row.owner, ticket?.owner, ticket?.service, ticket?.importedAt?.toISOString()].map(csv).join(","));
