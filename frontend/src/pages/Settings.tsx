@@ -12,6 +12,7 @@ import {
   Switch,
   TextField,
   FormControl,
+  FormControlLabel,
   InputLabel,
   MenuItem,
   Select,
@@ -47,6 +48,33 @@ type ConfigurationState = {
   movideskConfigured: boolean;
   movideskUrl: string;
   runtime?: string;
+  teamsWorkflows?: {
+    supportTicketsEnabled: boolean;
+    supportTicketsWebhookConfigured: boolean;
+    taskCreatedEnabled: boolean;
+    taskCreatedWebhookConfigured: boolean;
+    taskRegistroEnabled: boolean;
+    taskRegistroWebhookConfigured: boolean;
+    ticketBaseUrlConfigured: boolean;
+  };
+};
+
+type TeamsWorkflowForm = {
+  supportTicketsEnabled: boolean;
+  supportTicketsWebhookUrl: string;
+  taskCreatedEnabled: boolean;
+  taskCreatedWebhookUrl: string;
+  taskRegistroEnabled: boolean;
+  taskRegistroWebhookUrl: string;
+};
+
+const EMPTY_TEAMS_WORKFLOW_FORM: TeamsWorkflowForm = {
+  supportTicketsEnabled: false,
+  supportTicketsWebhookUrl: "",
+  taskCreatedEnabled: false,
+  taskCreatedWebhookUrl: "",
+  taskRegistroEnabled: false,
+  taskRegistroWebhookUrl: "",
 };
 
 type ConfigurationForm = {
@@ -145,6 +173,8 @@ export function Settings() {
     useState<ConfigurationState | null>(null);
   const [form, setForm] =
     useState<ConfigurationForm>(EMPTY_FORM);
+  const [teamsWorkflowForm, setTeamsWorkflowForm] = useState<TeamsWorkflowForm>(EMPTY_TEAMS_WORKFLOW_FORM);
+  const [savingTeamsWorkflows, setSavingTeamsWorkflows] = useState(false);
   const [loading, setLoading] =
     useState(true);
   const [saving, setSaving] =
@@ -224,6 +254,23 @@ export function Settings() {
     }
   }
 
+  async function importRecoveryKey() {
+    if (!window.techLeadHub?.configuration?.importEnv) return;
+    setRecoveryMessage(null);
+    try {
+      const imported = await window.techLeadHub.configuration.importEnv();
+      const candidate = imported?.systemConfigKey?.trim() ?? "";
+      if (!candidate) {
+        setRecoveryMessage("O arquivo selecionado não contém SYSTEM_CONFIG_KEY. Nenhuma configuração foi alterada.");
+        return;
+      }
+      setRecoveryKey(candidate);
+      setRecoveryMessage("Chave importada localmente. Clique em Validar e recuperar para confirmar e armazenar neste Desktop.");
+    } catch {
+      setRecoveryMessage("Não foi possível ler o arquivo .env. Nenhuma configuração foi alterada.");
+    }
+  }
+
   async function diagnoseCredentials() {
     setCredentialHealthBusy(true);
     setCredentialHealth(null);
@@ -277,6 +324,12 @@ export function Settings() {
       }
       const current = configResult.value.data;
       setConfiguration(current);
+      setTeamsWorkflowForm((previous) => ({
+        ...previous,
+        supportTicketsEnabled: current.teamsWorkflows?.supportTicketsEnabled ?? false,
+        taskCreatedEnabled: current.teamsWorkflows?.taskCreatedEnabled ?? false,
+        taskRegistroEnabled: current.teamsWorkflows?.taskRegistroEnabled ?? false,
+      }));
       setForm((previous) => ({
         ...previous,
         organization: current.organization ?? "",
@@ -559,6 +612,29 @@ export function Settings() {
     }
   }
 
+  async function saveTeamsWorkflows() {
+    try {
+      setSavingTeamsWorkflows(true);
+      setError(null);
+      setSuccess(null);
+      const response = await api.put<ConfigurationState>("/system-settings/teams-workflows", {
+        supportTicketsEnabled: teamsWorkflowForm.supportTicketsEnabled,
+        ...(teamsWorkflowForm.supportTicketsWebhookUrl.trim() ? { supportTicketsWebhookUrl: teamsWorkflowForm.supportTicketsWebhookUrl.trim() } : {}),
+        taskCreatedEnabled: teamsWorkflowForm.taskCreatedEnabled,
+        ...(teamsWorkflowForm.taskCreatedWebhookUrl.trim() ? { taskCreatedWebhookUrl: teamsWorkflowForm.taskCreatedWebhookUrl.trim() } : {}),
+        taskRegistroEnabled: teamsWorkflowForm.taskRegistroEnabled,
+        ...(teamsWorkflowForm.taskRegistroWebhookUrl.trim() ? { taskRegistroWebhookUrl: teamsWorkflowForm.taskRegistroWebhookUrl.trim() } : {}),
+      });
+      setConfiguration(response.data);
+      setTeamsWorkflowForm((current) => ({ ...current, supportTicketsWebhookUrl: "", taskCreatedWebhookUrl: "", taskRegistroWebhookUrl: "" }));
+      setSuccess("Fluxos do Teams atualizados. As alterações são aplicadas sem reiniciar o Hub.");
+    } catch (saveError) {
+      setError(getApiErrorMessage(saveError, "Não foi possível salvar os fluxos do Teams."));
+    } finally {
+      setSavingTeamsWorkflows(false);
+    }
+  }
+
   if (loading) {
     return <ContentState kind="loading" title="Carregando configurações" minHeight={360} />;
   }
@@ -584,7 +660,7 @@ export function Settings() {
 
       <Card variant="outlined" sx={{ mb: 2 }}><CardContent>
         <Typography sx={{fontWeight:850}}>Notificações</Typography>
-        <Typography variant="body2" color="text.secondary" sx={{mt:.4,mb:1.5}}>Escolha quais eventos podem gerar avisos. Estas preferências também controlam os alertas rápidos no canto inferior direito.</Typography>
+        <Typography variant="body2" color="text.secondary" sx={{mt:.4,mb:1.5}}>Escolha quais eventos ficam visíveis neste dispositivo e quais sons são reproduzidos. No sino, você também pode configurar preferências da conta, sincronizadas entre dispositivos.</Typography>
         <Stack>{([["sound","Som das notificações"],["chat","Chat e menções"],["operation","Alertas operacionais e problemas conhecidos"],["appVersion","Novas versões do Hub Suporte Simer"],["simerVersion","Novas versões do SIMER"],["azureCompleted","Correções, Evoluções e APOIOs concluídos"],["azureUpdated","Alterações em Correções, Evoluções e APOIOs"]] as Array<[keyof LocalNotificationPreferences,string]>).map(([key,label])=><Stack key={key} direction="row" sx={{py:.75,alignItems:"center",justifyContent:"space-between",borderBottom:"1px solid",borderColor:"divider"}}><Typography variant="body2">{label}</Typography><Switch size="small" checked={notificationPreferences[key]} onChange={(_,enabled)=>changeNotificationPreference(key,enabled)}/></Stack>)}</Stack>
       </CardContent></Card>
 
@@ -610,23 +686,26 @@ export function Settings() {
                 {credentialHealthBusy ? "Verificando..." : "Diagnosticar credenciais"}
               </Button>
             </Stack>
-            {window.techLeadHub?.configuration?.recoverKey && credentialHealth?.status === "incompatible" && (
+            {window.techLeadHub?.configuration?.recoverKey && (
               <Stack spacing={1.25} sx={{ mt: 2 }}>
-                <Typography sx={{ fontWeight: 750 }}>Recuperação administrativa de credenciais</Typography>
+                <Typography sx={{ fontWeight: 750 }}>Recuperar integrações neste computador</Typography>
                 <Typography variant="body2" color="text.secondary">
-                  Informe a chave original que consegue ler as seis integrações. O valor será verificado no servidor e armazenado no Windows somente após confirmação. Não use uma chave nova aleatória nem cole segredos em logs.
+                  Se Azure ou Movidesk não carregarem após instalar ou atualizar, importe a SYSTEM_CONFIG_KEY original do arquivo .env. A chave será validada com os registros do banco antes de ser armazenada com proteção do Windows. Não use uma chave nova.
                 </Typography>
+                <Button variant="outlined" startIcon={<FileUploadOutlined />} onClick={() => void importRecoveryKey()} disabled={recoveringKey}>
+                  Importar chave do arquivo .env
+                </Button>
                 <TextField
                   size="small"
                   type="password"
                   fullWidth
                   autoComplete="off"
-                  label="Chave original de criptografia"
+                  label="SYSTEM_CONFIG_KEY original"
                   value={recoveryKey}
                   onChange={(event) => setRecoveryKey(event.target.value)}
                 />
                 <Button variant="contained" disabled={recoveringKey || recoveryKey.length < 32} onClick={() => void recoverDesktopKey()}>
-                  {recoveringKey ? "Validando..." : "Validar e recuperar no Desktop"}
+                  {recoveringKey ? "Validando..." : "Validar e recuperar neste computador"}
                 </Button>
                 {recoveryMessage && <Alert severity="info">{recoveryMessage}</Alert>}
               </Stack>
@@ -867,6 +946,41 @@ export function Settings() {
                 <Typography variant="caption" color="text.secondary" sx={{ overflowWrap: "anywhere" }}>{check.message ?? "Resposta JSON válida da API."}</Typography>
               </Box>)}
             </Box>}
+          </CardContent>
+        </Card>
+
+        <Card elevation={0} sx={{ mb: 2, border: "1px solid", borderColor: "divider", borderRadius: 2.5 }}>
+          <CardContent sx={{ p: { xs: 2, md: 2.5 } }}>
+            <Typography sx={{ fontWeight: 800 }}>Notificações de fluxos do Teams</Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+              Processos independentes do alerta AgriQ. As URLs são armazenadas criptografadas e nunca retornam à tela; deixe o campo vazio para manter a URL cadastrada.
+            </Typography>
+            {!configuration?.teamsWorkflows?.ticketBaseUrlConfigured && <Alert severity="warning" sx={{ mt: 1.5 }}>
+              Configure TEAMS_TICKET_BASE_URL no ambiente do backend para habilitar cards com link do Movidesk.
+            </Alert>}
+            <Divider sx={{ my: 2 }} />
+            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "minmax(260px, .8fr) minmax(300px, 1.2fr)" }, gap: 2, alignItems: "center" }}>
+              <FormControlLabel
+                control={<Switch checked={teamsWorkflowForm.supportTicketsEnabled} onChange={(event) => setTeamsWorkflowForm((current) => ({ ...current, supportTicketsEnabled: event.target.checked }))} />}
+                label={<Box><Typography variant="body2" sx={{ fontWeight: 750 }}>Ticket Novo na carteira SIMER</Typography><Typography variant="caption" color="text.secondary">Grupo Suporte SIMER | Cooperativa</Typography></Box>}
+              />
+              <TextField type="password" autoComplete="new-password" label="URL do Workflow de tickets" value={teamsWorkflowForm.supportTicketsWebhookUrl} onChange={(event) => setTeamsWorkflowForm((current) => ({ ...current, supportTicketsWebhookUrl: event.target.value }))} placeholder={configuration?.teamsWorkflows?.supportTicketsWebhookConfigured ? "Configurada · cole apenas para substituir" : "Cole a URL HTTPS do Workflow"} helperText={configuration?.teamsWorkflows?.supportTicketsWebhookConfigured ? "URL já configurada; valor oculto." : "URL HTTPS fornecida pelo Workflow do Teams."} />
+
+              <FormControlLabel
+                control={<Switch checked={teamsWorkflowForm.taskCreatedEnabled} onChange={(event) => setTeamsWorkflowForm((current) => ({ ...current, taskCreatedEnabled: event.target.checked }))} />}
+                label={<Box><Typography variant="body2" sx={{ fontWeight: 750 }}>Task Azure criada pelo N3</Typography><Typography variant="caption" color="text.secondary">Somente tasks vinculadas a atendimento</Typography></Box>}
+              />
+              <TextField type="password" autoComplete="new-password" label="URL do Workflow de tasks criadas" value={teamsWorkflowForm.taskCreatedWebhookUrl} onChange={(event) => setTeamsWorkflowForm((current) => ({ ...current, taskCreatedWebhookUrl: event.target.value }))} placeholder={configuration?.teamsWorkflows?.taskCreatedWebhookConfigured ? "Configurada · cole apenas para substituir" : "Cole a URL HTTPS do Workflow"} helperText={configuration?.teamsWorkflows?.taskCreatedWebhookConfigured ? "URL já configurada; valor oculto." : "URL HTTPS fornecida pelo Workflow do Teams."} />
+
+              <FormControlLabel
+                control={<Switch checked={teamsWorkflowForm.taskRegistroEnabled} onChange={(event) => setTeamsWorkflowForm((current) => ({ ...current, taskRegistroEnabled: event.target.checked }))} />}
+                label={<Box><Typography variant="body2" sx={{ fontWeight: 750 }}>Task retornou para Registro</Typography><Typography variant="caption" color="text.secondary">Cada retorno observado avisa o grupo N3</Typography></Box>}
+              />
+              <TextField type="password" autoComplete="new-password" label="URL do Workflow do N3 · Registro" value={teamsWorkflowForm.taskRegistroWebhookUrl} onChange={(event) => setTeamsWorkflowForm((current) => ({ ...current, taskRegistroWebhookUrl: event.target.value }))} placeholder={configuration?.teamsWorkflows?.taskRegistroWebhookConfigured ? "Configurada · cole apenas para substituir" : "Cole a URL HTTPS do Workflow"} helperText={configuration?.teamsWorkflows?.taskRegistroWebhookConfigured ? "URL já configurada; valor oculto." : "URL HTTPS fornecida pelo Workflow específico do N3."} />
+            </Box>
+            <Stack direction="row" sx={{ mt: 2, justifyContent: "flex-end" }}>
+              <Button variant="contained" disabled={savingTeamsWorkflows} onClick={() => void saveTeamsWorkflows()}>{savingTeamsWorkflows ? "Salvando fluxos..." : "Salvar fluxos do Teams"}</Button>
+            </Stack>
           </CardContent>
         </Card>
 

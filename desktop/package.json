@@ -1,13 +1,14 @@
 {
   "name": "techlead-hub-desktop",
-  "version": "2.1.0-rc.2",
+  "version": "2.1.0-rc.9",
   "description": "TechLead Hub - Support Intelligence",
   "main": "dist/main.js",
   "author": "Aliare - Suporte e Sustentação - SIMER",
   "license": "UNLICENSED",
   "private": true,
   "scripts": {
-    "build:desktop": "npm run clean:desktop && tsc",
+    "icons:generate": "node scripts/generate-app-icons.mjs",
+    "build:desktop": "npm run icons:generate && npm run clean:desktop && tsc",
     "build:backend": "npm --prefix ../backend run prisma:generate && npm --prefix ../backend run build",
     "build:frontend": "npm --prefix ../frontend run build",
     "build": "npm run build:desktop",
@@ -49,6 +50,7 @@
     },
     "files": [
       "dist/**/*",
+      "assets/**/*",
       "package.json"
     ],
     "extraResources": [
@@ -97,6 +99,7 @@
       }
     ],
     "win": {
+      "icon": "assets/hub-icon.ico",
       "target": [
         {
           "target": "nsis",
@@ -114,6 +117,8 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
+      "installerIcon": "assets/hub-icon.ico",
+      "uninstallerIcon": "assets/hub-icon.ico",
       "shortcutName": "TechLead Hub",
       "runAfterFinish": true,
       "deleteAppDataOnUninstall": false

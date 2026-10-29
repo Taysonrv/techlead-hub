@@ -1,5 +1,4 @@
 import { KpiGrid } from "../components/KpiGrid";
-import { AzureFollowButton } from "../components/AzureFollowButton";
 import { KpiCard as ExecutiveKpiCard } from "../components/KpiCard";
 import {
   Accordion,
@@ -42,7 +41,10 @@ import {
   CloseOutlined,
   ExpandMoreOutlined,
   InfoOutlined,
+  HistoryOutlined,
   LinkOutlined,
+  NotificationsActiveOutlined,
+  NotificationsNoneOutlined,
   OpenInNewOutlined,
   PersonOffOutlined,
   PriorityHighOutlined,
@@ -213,6 +215,13 @@ type SyncRun = {
 
 type AzureWorkItemDetail =
   AzureWorkItem & {
+    history?: Array<{
+      id: number;
+      field: string;
+      oldValue: string | null;
+      newValue: string | null;
+      changedAt: string;
+    }>;
     areaPath?: string | null;
     iterationPath?: string | null;
     nodeName?: string | null;
@@ -451,6 +460,34 @@ function formatDateTime(
         "short",
     },
   ).format(date);
+}
+
+function workItemFieldLabel(field: string): string {
+  const labels: Record<string, string> = {
+    assignedToName: "Responsável",
+    prioritized: "Priorização",
+    blockedProcess: "Processo bloqueado",
+    registeredVersion: "Versão cadastrada",
+    deliveredVersion: "Versão entregue",
+    movideskTicket: "Ticket Movidesk",
+    client: "Cliente",
+    participantClients: "Clientes participantes",
+    participantMovideskTickets: "Tickets participantes",
+  };
+  return labels[field] ?? field;
+}
+
+function historyValueLabel(value: string | null): string {
+  if (!value) return "—";
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (Array.isArray(parsed)) return parsed.map(String).join(", ") || "—";
+    if (typeof parsed === "object" && parsed !== null) return JSON.stringify(parsed);
+    if (typeof parsed === "boolean") return parsed ? "Sim" : "Não";
+    return String(parsed) || "—";
+  } catch {
+    return value;
+  }
 }
 
 function formatNumber(
@@ -4186,10 +4223,8 @@ export function AzureWorkItems({
         >
           <Box
             sx={{
-              px:
-                2.5,
-              py:
-                2,
+              px: 2,
+              py: 1.35,
               borderBottom:
                 "1px solid",
               borderColor:
@@ -4206,8 +4241,8 @@ export function AzureWorkItems({
           >
             <Stack
               direction="row"
-              spacing={1.5}
-              alignItems="flex-start"
+              spacing={1}
+              alignItems="center"
               justifyContent="space-between"
             >
               <Box
@@ -4216,14 +4251,7 @@ export function AzureWorkItems({
                     0,
                 }}
               >
-                <Typography
-                  variant="overline"
-                  color="text.secondary"
-                  sx={{
-                    fontWeight:
-                      800,
-                  }}
-                >
+                <Typography variant="overline" color="primary.main" sx={{ fontWeight: 900, fontSize: ".68rem", lineHeight: 1.2 }}>
                   {selectedWorkItem?.workItemType ??
                     type}
                   {selectedWorkItem
@@ -4232,14 +4260,13 @@ export function AzureWorkItems({
                 </Typography>
 
                 <Typography
-                  variant="h6"
+                  variant="subtitle1"
                   sx={{
-                    mt:
-                      0.15,
-                    fontWeight:
-                      800,
-                    lineHeight:
-                      1.25,
+                    mt: .35,
+                    fontWeight: 850,
+                    fontSize: "1.08rem",
+                    lineHeight: 1.2,
+                    letterSpacing: "-.015em",
                   }}
                 >
                   {selectedWorkItem?.title ??
@@ -4248,6 +4275,7 @@ export function AzureWorkItems({
               </Box>
 
               <IconButton
+                size="small"
                 aria-label="Fechar detalhes"
                 onClick={
                   closeDetail
@@ -4257,14 +4285,16 @@ export function AzureWorkItems({
               </IconButton>
             </Stack>
 
-            {selectedWorkItem && <AzureFollowButton key={selectedWorkItem.id} workItemId={selectedWorkItem.id} />}
-
             {selectedWorkItem && (
-              <Button size="small" sx={{ mt: 1, mb: .5 }} variant={followedTasks.has(selectedWorkItem.id) ? "contained" : "outlined"}
+              <Button size="small" sx={{ mt: .85, mb: .3, py: .55, px: 1.2, fontWeight: 800 }} variant={followedTasks.has(selectedWorkItem.id) ? "contained" : "outlined"}
+                startIcon={followedTasks.has(selectedWorkItem.id) ? <NotificationsActiveOutlined /> : <NotificationsNoneOutlined />}
                 disabled={followBusy} onClick={() => void toggleFollow(selectedWorkItem.id)}>
-                {followedTasks.has(selectedWorkItem.id) ? "Seguindo · deixar de seguir" : "Seguir Task e receber avisos"}
+                {followedTasks.has(selectedWorkItem.id) ? "Seguindo no Hub · deixar de seguir" : "Seguir tarefa no Hub"}
               </Button>
             )}
+            {selectedWorkItem && <Typography variant="caption" color="text.secondary" sx={{ display: "block", fontSize: ".7rem", lineHeight: 1.35 }}>
+              Receba avisos pelo sino do Hub. O acompanhamento no Azure é independente.
+            </Typography>}
             {selectedWorkItem && (
               <Stack
                 direction="row"
@@ -4272,8 +4302,7 @@ export function AzureWorkItems({
                 flexWrap="wrap"
                 useFlexGap
                 sx={{
-                  mt:
-                    1.25,
+                  mt: .8,
                 }}
               >
                 <Chip
@@ -4381,6 +4410,48 @@ export function AzureWorkItems({
               <Stack
                 spacing={2.25}
               >
+                <Box sx={{
+                  p: 1.5,
+                  borderRadius: 2,
+                  border: "1px solid",
+                  borderColor: "primary.main",
+                  borderLeftWidth: 4,
+                  bgcolor: "action.hover",
+                }}>
+                  <Stack direction="row" spacing={1} alignItems="flex-start">
+                    <HistoryOutlined color="primary" fontSize="small" sx={{ mt: .15 }} />
+                    <Box sx={{ minWidth: 0 }}>
+                      <Typography variant="overline" color="primary.main" sx={{ fontWeight: 900, lineHeight: 1.2 }}>
+                        Última alteração registrada
+                      </Typography>
+                      {selectedWorkItem.history?.[0] ? <>
+                        <Typography variant="body2" sx={{ mt: .35, fontWeight: 850 }}>
+                          {workItemFieldLabel(selectedWorkItem.history[0].field)}
+                        </Typography>
+                        <Typography variant="body2" sx={{ mt: .25, overflowWrap: "anywhere" }}>
+                          {historyValueLabel(selectedWorkItem.history[0].oldValue)}
+                          <Box component="span" sx={{ px: .8, color: "text.secondary", fontWeight: 900 }}>→</Box>
+                          <Box component="span" sx={{ fontWeight: 800 }}>{historyValueLabel(selectedWorkItem.history[0].newValue)}</Box>
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {normalizeText(selectedWorkItem.changedByName) !== "-" ? `Por ${normalizeText(selectedWorkItem.changedByName)} · ` : ""}
+                          sincronizada em {formatDateTime(selectedWorkItem.history[0].changedAt)}
+                        </Typography>
+                      </> : <>
+                        <Typography variant="body2" sx={{ mt: .35, fontWeight: 800 }}>
+                          {normalizeText(selectedWorkItem.changedByName) !== "-"
+                            ? `Alterada por ${normalizeText(selectedWorkItem.changedByName)}`
+                            : "Detalhe da alteração ainda não disponível"}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {formatDateTime(selectedWorkItem.azureChangedAt)}
+                          {selectedWorkItem.revision ? ` · revisão ${selectedWorkItem.revision}` : ""}
+                        </Typography>
+                      </>}
+                    </Box>
+                  </Stack>
+                </Box>
+
                 {/* RESUMO */}
 
                 <Box>
@@ -5061,10 +5132,8 @@ export function AzureWorkItems({
           {selectedWorkItem && (
             <Box
               sx={{
-                px:
-                  2.5,
-                py:
-                  1.5,
+                px: 2,
+                py: 1,
                 borderTop:
                   "1px solid",
                 borderColor:
@@ -5073,16 +5142,17 @@ export function AzureWorkItems({
                   "background.paper",
               }}
             >
-              <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 900 }}>Ações rápidas</Typography>
-              <Box sx={{ mt: .45, display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))" }, gap: 1 }}>
-                <Button fullWidth variant="contained" startIcon={<ShareOutlined />} onClick={() => {
+              <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 900, fontSize: ".65rem", lineHeight: 1 }}>Ações</Typography>
+              <Box sx={{ mt: .45, display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: .75 }}>
+                <Button size="small" fullWidth variant="outlined" startIcon={<ShareOutlined fontSize="small" />} sx={{ minHeight: 34, py: .4, fontSize: ".78rem" }} onClick={() => {
                   const value = selectedWorkItem.workItemType.toLocaleLowerCase("pt-BR");
                   const route = value.includes("apoio") ? "/apoios" : value.includes("evolu") ? "/evolucoes" : "/correcoes";
                   window.dispatchEvent(new CustomEvent("techlead-hub:share-chat", { detail: { label: selectedWorkItem.workItemType, recordId: selectedWorkItem.id, title: selectedWorkItem.title, client: selectedWorkItem.client, status: selectedWorkItem.state, path: `${route}?task=${selectedWorkItem.id}` } }));
                 }}>Compartilhar</Button>
-                {selectedWorkItem.azureWebUrl && <Button fullWidth variant="outlined" startIcon={<OpenInNewOutlined />} component="a" href={selectedWorkItem.azureWebUrl} target="_blank" rel="noopener noreferrer">Abrir origem</Button>}
+                {selectedWorkItem.azureWebUrl && <Button size="small" fullWidth variant="outlined" startIcon={<OpenInNewOutlined fontSize="small" />} sx={{ minHeight: 34, py: .4, fontSize: ".78rem" }} component="a" href={selectedWorkItem.azureWebUrl} target="_blank" rel="noopener noreferrer">Abrir origem</Button>}
               </Box>
-              <Button size="small" startIcon={<TaskAltOutlined />} onClick={closeDetail} sx={{ mt: .6, alignSelf: "flex-start" }}>Voltar à lista</Button>     </Box>
+              <Button size="small" startIcon={<TaskAltOutlined />} onClick={closeDetail} sx={{ mt: .25, px: .6, minHeight: 28, alignSelf: "flex-start", fontSize: ".76rem" }}>Voltar à lista</Button>
+            </Box>
           )}
         </Stack>
       </Drawer>

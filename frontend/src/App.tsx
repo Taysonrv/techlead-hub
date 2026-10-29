@@ -62,19 +62,7 @@ const OperationalOverview = lazy(() => import("./pages/OperationalOverview").the
 const OperationsHub = lazy(() => import("./pages/OperationsHub").then((module) => ({ default: module.OperationsHub })));
 const RiskPendingHub = lazy(() => import("./pages/RiskPendingHub").then((module) => ({ default: module.RiskPendingHub })));
 
-const warmRouteChunks = () => {
-  void import("./pages/OperationalOverview");
-  void import("./pages/OperationsHub");
-  void import("./pages/AzureWorkItems");
-  void import("./pages/Versions");
-  void import("./pages/ManagementIntelligence");
-  window.setTimeout(() => {
-    void import("./pages/Analysts");
-    void import("./pages/Clients");
-    void import("./pages/Chat");
-    void import("./pages/Investigation");
-  }, 1200);
-};
+const warmTaskRoute = () => void import("./pages/AzureWorkItems");
 
 import {
   aliareColors,
@@ -95,7 +83,17 @@ function AuthenticatedLayout({
   children: ReactNode;
 }) {
   useEffect(() => {
-    const id = window.setTimeout(warmRouteChunks, 250);
+    // Prepare the task screen during idle time without competing with the
+    // initial page render and its first API requests.
+    const idleWindow = window as Window & {
+      requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number;
+      cancelIdleCallback?: (id: number) => void;
+    };
+    if (idleWindow.requestIdleCallback) {
+      const id = idleWindow.requestIdleCallback(warmTaskRoute, { timeout: 2_500 });
+      return () => idleWindow.cancelIdleCallback?.(id);
+    }
+    const id = window.setTimeout(warmTaskRoute, 1_000);
     return () => window.clearTimeout(id);
   }, []);
   const [forbiddenMessage, setForbiddenMessage] = useState<string | null>(null);
@@ -130,7 +128,7 @@ function AuthenticatedLayout({
       "/importar": "Configurações · Dados & Sincronizações",
       "/relatorios": "Relatórios",
       "/minha-operacao": "Minha Operação",
-      "/qualidade-dados": "Pendências",
+      "/qualidade-dados": "Qualidade dos dados",
       "/usuarios": "Usuários",
       "/configuracoes": "Configurações",
       "/sobre": "Sobre",

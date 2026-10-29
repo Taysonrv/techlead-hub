@@ -63,6 +63,7 @@ model User {
 
   // Controle de acesso
   permissions        Json?
+  weatherCity        String?  @db.VarChar(120)
   active             Boolean @default(false)
   mustChangePassword Boolean @default(false)
 
@@ -990,4 +991,30 @@ model TeamsAlertOutbox {
   @@unique([movideskId, eventType])
   @@index([status, nextAttemptAt])
   @@index([lockedUntil])
+}
+
+// Fila separada para os novos processos de notificação Teams (carteira SIMER/Azure).
+// eventKey identifica a inserção ou revisão de estado e permite reentradas em Registro.
+model TeamsWorkflowOutbox {
+  id             String           @id @default(cuid())
+  eventKey       String           @unique @db.VarChar(180)
+  eventType      String           @db.VarChar(40)
+  movideskId     Int
+  azureWorkItemId Int?
+  payload        Json
+  status         TeamsAlertStatus @default(PENDING)
+  attempts       Int              @default(0)
+  nextAttemptAt  DateTime         @default(now())
+  lockedUntil    DateTime?
+  sentAt         DateTime?
+  lastHttpStatus Int?
+  lastError      String?          @db.VarChar(500)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@index([status, nextAttemptAt])
+  @@index([lockedUntil])
+  @@index([eventType, createdAt])
+  @@index([movideskId])
+  @@index([azureWorkItemId])
 }

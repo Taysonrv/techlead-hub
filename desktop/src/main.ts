@@ -3,8 +3,10 @@ import {
   BrowserWindow,
   Menu,
   Tray,
+  Notification,
   dialog,
   ipcMain,
+  nativeImage,
   safeStorage,
   screen,
   shell,
@@ -54,6 +56,9 @@ import {
 
 const APP_NAME =
   "TechLead Hub";
+
+const APP_USER_MODEL_ID =
+  "com.aliare.techleadhub";
 
 const BACKEND_HOST =
   "127.0.0.1";
@@ -200,6 +205,7 @@ let isQuitting =
   false;
 
 let tray: Tray | null = null;
+const desktopNotificationTimers = new Map<string, NodeJS.Timeout>();
 
 
 let startedBackendHere =
@@ -807,6 +813,7 @@ function registerIpcHandlers() {
   ipcMain.removeHandler("configuration:recover-key");
   ipcMain.removeHandler("startup:get");
   ipcMain.removeHandler("startup:set");
+  ipcMain.removeHandler("notifications:show");
 
   ipcMain.handle("startup:get", () => ({ enabled: process.platform === "win32" && app.getLoginItemSettings().openAtLogin }));
   ipcMain.handle("startup:set", (_event, enabled: unknown) => {
@@ -814,6 +821,39 @@ function registerIpcHandlers() {
     const openAtLogin = Boolean(enabled);
     app.setLoginItemSettings({ openAtLogin, path: process.execPath });
     return { enabled: app.getLoginItemSettings().openAtLogin };
+  });
+
+  ipcMain.handle("notifications:show", (event, input: unknown) => {
+    if (!mainWindow || mainWindow.isDestroyed() || event.sender !== mainWindow.webContents || !Notification.isSupported()) return false;
+    if (!input || typeof input !== "object") return false;
+    const payload = input as { key?: unknown; title?: unknown; body?: unknown; silent?: unknown };
+    const key = typeof payload.key === "string" ? payload.key.slice(0, 500) : "";
+    const title = typeof payload.title === "string" ? payload.title.trim().slice(0, 180) : "";
+    const body = typeof payload.body === "string" ? payload.body.trim().slice(0, 800) : "";
+    if (!key || !title || !body || desktopNotificationTimers.has(key)) return false;
+
+    const notification = new Notification({
+      title,
+      body,
+      silent: Boolean(payload.silent),
+      icon: path.join(app.getAppPath(), "assets", "hub-icon.png"),
+    });
+    const closeTimer = setTimeout(() => notification.close(), 8_000);
+    desktopNotificationTimers.set(key, closeTimer);
+    notification.once("close", () => {
+      clearTimeout(closeTimer);
+      desktopNotificationTimers.delete(key);
+    });
+    notification.once("click", () => {
+      if (!mainWindow || mainWindow.isDestroyed()) return;
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.show();
+      mainWindow.focus();
+      // Abrir o aviso do Windows não confirma leitura. O item permanece
+      // pendente no sino até o usuário abri-lo no Hub.
+    });
+    notification.show();
+    return true;
   });
 
   ipcMain.handle(
@@ -1350,6 +1390,15 @@ function readSecureConfig():
       ) as
         Partial<SecureConfig>;
 
+    if (!parsed || typeof parsed !== "object" || (parsed.version !== undefined && parsed.version !== 1)) {
+      throw new Error("Versão de configuração local não reconhecida.");
+    }
+    for (const [key, value] of Object.entries(parsed)) {
+      if (key !== "version" && value !== undefined && typeof value !== "string") {
+        throw new Error("Formato de configuração local inválido.");
+      }
+    }
+
     return {
       version:
         1,
@@ -1418,15 +1467,8 @@ function readSecureConfig():
           : undefined,
     };
   } catch (error) {
-    console.error(
-      "[desktop] Não foi possível ler a configuração segura:",
-      error
-    );
-
-    return {
-      version:
-        1,
-    };
+    console.error("[desktop] O arquivo de configuração segura está inválido; dados existentes foram preservados.", error instanceof Error ? error.name : "erro desconhecido");
+    throw new Error("O arquivo de configurações locais está inválido. Ele foi preservado para recuperação e não será sobrescrito automaticamente.");
   }
 }
 
@@ -1449,21 +1491,20 @@ function writeSecureConfig(
     }
   );
 
-  fs.writeFileSync(
-    secureConfigPath,
-    `${JSON.stringify(
-      config,
-      null,
-      2
-    )}\n`,
-    {
-      encoding:
-        "utf8",
-
-      mode:
-        0o600,
-    }
-  );
+  const temporaryPath = `${secureConfigPath}.${process.pid}.${crypto.randomBytes(8).toString("hex")}.tmp`;
+  let descriptor: number | undefined;
+  try {
+    descriptor = fs.openSync(temporaryPath, "wx", 0o600);
+    fs.writeFileSync(descriptor, `${JSON.stringify(config, null, 2)}\n`, "utf8");
+    fs.fsyncSync(descriptor);
+    fs.closeSync(descriptor);
+    descriptor = undefined;
+    fs.renameSync(temporaryPath, secureConfigPath);
+  } catch (error) {
+    if (descriptor !== undefined) fs.closeSync(descriptor);
+    try { fs.rmSync(temporaryPath, { force: true }); } catch { /* preserva o arquivo anterior */ }
+    throw error;
+  }
 }
 
 function encryptSecret(
@@ -1515,12 +1556,8 @@ function readSecureValue(
       encryptedValue
     );
   } catch (error) {
-    console.error(
-      `[desktop] Não foi possível descriptografar ${key}:`,
-      error
-    );
-
-    return null;
+    console.error(`[desktop] Não foi possível descriptografar a configuração local '${key}'.`, error instanceof Error ? error.name : "erro desconhecido");
+    throw new Error(`Não foi possível recuperar '${key}' do armazenamento protegido do Windows. O arquivo foi preservado; não salve novas configurações até recuperar o acesso.`);
   }
 }
 
@@ -1842,6 +1879,7 @@ function resolveMicrosoftConfiguration(): MicrosoftConfiguration {
 
 type ConfigurationInput = {
   databaseUrl?: unknown;
+  systemConfigKey?: unknown;
   organization?: unknown;
   project?: unknown;
   wiki?: unknown;
@@ -1860,6 +1898,7 @@ type ConfigurationInput = {
 
 type ConfigurationValues = {
   databaseUrl: string;
+  systemConfigKey: string;
   organization: string;
   project: string;
   wiki: string;
@@ -1887,6 +1926,7 @@ function normalizeConfigurationInput(input: unknown): ConfigurationValues {
 
   return {
     databaseUrl: text(value.databaseUrl),
+    systemConfigKey: text(value.systemConfigKey),
     organization: text(value.organization),
     project: text(value.project),
     wiki: text(value.wiki),
@@ -1906,6 +1946,9 @@ function normalizeConfigurationInput(input: unknown): ConfigurationValues {
 
 function saveApplicationConfiguration(input: unknown) {
   const value = normalizeConfigurationInput(input);
+  if (value.systemConfigKey && value.systemConfigKey.length < 32) {
+    throw new Error("A SYSTEM_CONFIG_KEY deve ter pelo menos 32 caracteres.");
+  }
 
   const databaseUrl =
     value.databaseUrl ||
@@ -1975,6 +2018,7 @@ function saveApplicationConfiguration(input: unknown) {
   }
 
   saveSecureValue("databaseUrl", databaseUrl);
+  if (value.systemConfigKey) saveSecureValue("systemConfigKey", value.systemConfigKey);
 
   if (hasAllAzure) {
     saveSecureValue("azureOrganization", organization);
@@ -2035,6 +2079,7 @@ async function selectConfigurationFile() {
 
   return {
     databaseUrl: parseEnvValue(content, "DATABASE_URL") || "",
+    systemConfigKey: parseEnvValue(content, "SYSTEM_CONFIG_KEY") || "",
     organization: parseEnvValue(content, "AZURE_DEVOPS_ORGANIZATION") || "",
     project: parseEnvValue(content, "AZURE_DEVOPS_PROJECT") || "",
     wiki: parseEnvValue(content, "AZURE_DEVOPS_WIKI") || "",
@@ -2057,6 +2102,7 @@ async function selectConfigurationFile() {
 async function showIntegratedSetup(): Promise<string | null> {
   return new Promise((resolve) => {
     setupWindow = new BrowserWindow({
+      icon: path.join(app.getAppPath(), "assets", "hub-icon.png"),
       width: 760,
       height: 720,
       minWidth: 680,
@@ -2074,11 +2120,11 @@ async function showIntegratedSetup(): Promise<string | null> {
 
     const html = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Configuração inicial</title><style>
       *{box-sizing:border-box}body{margin:0;font-family:Segoe UI,Arial,sans-serif;background:#f4f6f8;color:#101828}.page{max-width:720px;margin:auto;padding:32px}.card{background:white;border:1px solid #e4e7ec;border-radius:18px;padding:28px;box-shadow:0 8px 28px rgba(16,24,40,.08)}h1{margin:0 0 6px;font-size:25px}.lead{color:#667085;margin:0 0 24px}.section{border-top:1px solid #eaecf0;padding-top:20px;margin-top:20px}label{display:block;font-size:13px;font-weight:700;margin:12px 0 6px}input{width:100%;padding:11px 12px;border:1px solid #d0d5dd;border-radius:9px;font-size:14px}small{color:#667085}.actions{display:flex;gap:10px;margin-top:24px}.button{border:0;border-radius:9px;padding:11px 16px;font-weight:700;cursor:pointer}.primary{background:#18c77a;color:#071a12}.secondary{background:#fff;border:1px solid #18c77a;color:#087443}.error{display:none;margin-top:16px;padding:11px;border-radius:8px;background:#fef3f2;color:#b42318}.optional{font-weight:400;color:#667085}
-    </style></head><body><main class="page"><section class="card"><h1>Central de Recuperação</h1><p class="lead">Instalação inicial ou falha após atualização: verifique a conexão e restaure as configurações sem reinstalar. Credenciais são protegidas pelo Windows.</p><button class="button secondary" id="import">Selecionar arquivo .env</button><div class="section"><h3>Diagnóstico do PostgreSQL</h3><label>DATABASE_URL</label><input id="databaseUrl" type="password" autocomplete="off" placeholder="postgresql://usuario:senha@servidor:5432/banco"><small>O diagnóstico verifica rede e porta. O acesso ao banco será validado após reiniciar.</small><div class="actions"><button class="button secondary" id="diagnose">Testar conectividade</button></div><p id="diagnostic" role="status"></p></div><p class="lead">As credenciais Azure e Movidesk são recuperadas em Administração &gt; Configurações após a conexão. A chave de criptografia original deve ser preservada.</p><div id="error" class="error" role="alert"></div><div class="actions"><button class="button primary" id="save">Validar e reiniciar</button></div></section></main><script>
+    </style></head><body><main class="page"><section class="card"><h1>Central de Recuperação</h1><p class="lead">Instalação inicial ou falha após atualização: verifique a conexão e restaure as configurações sem reinstalar. Credenciais são protegidas pelo Windows.</p><button class="button secondary" id="import">Selecionar arquivo .env</button><div class="section"><h3>Diagnóstico do PostgreSQL</h3><label>DATABASE_URL</label><input id="databaseUrl" type="password" autocomplete="off" placeholder="postgresql://usuario:senha@servidor:5432/banco"><small>O diagnóstico verifica rede e porta. O acesso ao banco será validado após reiniciar.</small><div class="actions"><button class="button secondary" id="diagnose">Testar conectividade</button></div><p id="diagnostic" role="status"></p><label>Chave compartilhada das integrações <span class="optional">(se o banco já possui credenciais)</span></label><input id="systemConfigKey" type="password" autocomplete="off" placeholder="SYSTEM_CONFIG_KEY"><small>Use a mesma chave original das outras instalações. Não gere uma nova; ela permite ler as credenciais Azure e Movidesk já salvas.</small></div><p class="lead">As credenciais Azure e Movidesk são recuperadas do banco após a conexão. A SYSTEM_CONFIG_KEY informada aqui é protegida pelo Windows.</p><div id="error" class="error" role="alert"></div><div class="actions"><button class="button primary" id="save">Validar e reiniciar</button></div></section></main><script>
       const error=document.getElementById('error');const diagnostic=document.getElementById('diagnostic');
-      document.getElementById('import').onclick=async()=>{try{const data=await window.techLeadHub.configuration.importEnv();if(data){document.getElementById('databaseUrl').value=data.databaseUrl||'';diagnostic.textContent='Arquivo selecionado. Confira os campos antes de salvar.'}}catch(e){error.textContent=e?.message||'Falha ao ler arquivo';error.style.display='block'}};
+      document.getElementById('import').onclick=async()=>{try{const data=await window.techLeadHub.configuration.importEnv();if(data){document.getElementById('databaseUrl').value=data.databaseUrl||'';document.getElementById('systemConfigKey').value=data.systemConfigKey||'';diagnostic.textContent='Arquivo selecionado. Confira os campos antes de salvar.'}}catch(e){error.textContent=e?.message||'Falha ao ler arquivo';error.style.display='block'}};
       document.getElementById('diagnose').onclick=async()=>{diagnostic.textContent='Verificando conectividade...';try{const result=await window.techLeadHub.configuration.diagnoseDatabase(document.getElementById('databaseUrl').value);diagnostic.textContent=result.message}catch(e){diagnostic.textContent='Diagnóstico indisponível.'}};
-      document.getElementById('save').onclick=async()=>{error.style.display='none';try{const data={databaseUrl:document.getElementById('databaseUrl').value};const check=await window.techLeadHub.configuration.diagnoseDatabase(data.databaseUrl);if(!check.ok)throw new Error(check.message);await window.techLeadHub.configuration.save(data);window.close()}catch(e){error.textContent=e?.message||String(e);error.style.display='block'}};
+      document.getElementById('save').onclick=async()=>{error.style.display='none';try{const data={databaseUrl:document.getElementById('databaseUrl').value,systemConfigKey:document.getElementById('systemConfigKey').value};const check=await window.techLeadHub.configuration.diagnoseDatabase(data.databaseUrl);if(!check.ok)throw new Error(check.message);await window.techLeadHub.configuration.save(data);window.close()}catch(e){error.textContent=e?.message||String(e);error.style.display='block'}};
     </script></body></html>`;
 
     setupWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
@@ -2680,6 +2726,26 @@ async function checkBackendHealth() {
   );
 }
 
+async function warnIfIntegrationConfigurationNeedsRecovery() {
+  const probe = await requestProbe(HEALTH_URL);
+  if (!probe.body) return;
+
+  try {
+    const payload = JSON.parse(probe.body) as { integrationsConfiguration?: string };
+    if (payload.integrationsConfiguration !== "unreadable") return;
+  } catch {
+    return;
+  }
+
+  await dialog.showMessageBox({
+    type: "warning",
+    title: APP_NAME,
+    message: "As integrações precisam recuperar a chave de criptografia.",
+    detail: "O banco está acessível, mas as credenciais Azure/Movidesk não puderam ser descriptografadas. Os dados permanecem preservados. Abra Configurações > Diagnóstico e informe a SYSTEM_CONFIG_KEY original usada quando as credenciais foram salvas. Não grave novas credenciais antes da recuperação.",
+    buttons: ["Entendi"],
+  });
+}
+
 async function getBackendReadyProbe() {
   return requestProbe(
     READY_URL
@@ -2840,7 +2906,11 @@ function getWindowMetrics() {
 async function ensureTray() {
   if (tray || process.platform !== "win32") return;
   try {
-    const icon = await app.getFileIcon(process.execPath, { size: "small" });
+    const iconPath = path.join(app.getAppPath(), "assets", "hub-icon.png");
+    const appIcon = nativeImage.createFromPath(iconPath);
+    const icon = appIcon.isEmpty()
+      ? await app.getFileIcon(process.execPath, { size: "small" })
+      : appIcon;
     tray = new Tray(icon);
     tray.setToolTip(APP_NAME);
     const show = () => {
@@ -2888,6 +2958,9 @@ function createWindow() {
 
       title:
         APP_NAME,
+
+      icon:
+        path.join(app.getAppPath(), "assets", "hub-icon.png"),
 
       backgroundColor:
         "#f5f7fa",
@@ -3077,6 +3150,7 @@ async function bootstrap() {
       return;
     }
     createWindow();
+    void warnIfIntegrationConfigurationNeedsRecovery();
     scheduleInitialUpdateCheck();
     return;
   }
@@ -3085,8 +3159,20 @@ async function bootstrap() {
    * Garante um segredo persistente para autenticação do backend.
    * Instalações antigas são migradas automaticamente.
    */
-  const jwtSecret =
-    resolveJwtSecret();
+  let jwtSecret: string;
+  try {
+    jwtSecret = resolveJwtSecret();
+  } catch (error) {
+    await dialog.showMessageBox({
+      type: "error",
+      title: APP_NAME,
+      message: "Não foi possível ler a configuração local do TechLead Hub.",
+      detail: error instanceof Error ? error.message : "O arquivo local foi preservado. Recupere-o antes de iniciar para evitar substituir credenciais existentes.",
+      buttons: ["Fechar"],
+    });
+    app.quit();
+    return;
+  }
 
   /*
    * Se já houver uma instância válida do backend na porta 3333
@@ -3103,6 +3189,8 @@ async function bootstrap() {
     );
 
     createWindow();
+
+    void warnIfIntegrationConfigurationNeedsRecovery();
 
     scheduleInitialUpdateCheck();
 
@@ -3128,6 +3216,7 @@ async function bootstrap() {
 
     if (existingDatabaseReady) {
       createWindow();
+      void warnIfIntegrationConfigurationNeedsRecovery();
       scheduleInitialUpdateCheck();
       return;
     }
@@ -3302,6 +3391,8 @@ async function bootstrap() {
 
   createWindow();
 
+  void warnIfIntegrationConfigurationNeedsRecovery();
+
   scheduleInitialUpdateCheck();
 }
 
@@ -3311,6 +3402,10 @@ async function bootstrap() {
 
 const gotSingleInstanceLock =
   app.requestSingleInstanceLock();
+
+if (process.platform === "win32") {
+  app.setAppUserModelId(APP_USER_MODEL_ID);
+}
 
 if (
   !gotSingleInstanceLock

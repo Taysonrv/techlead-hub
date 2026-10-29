@@ -3,6 +3,7 @@ import { MovideskController } from "../controllers/MovideskController";
 import { requirePermission } from "../middlewares/roleMiddleware";
 import { prisma } from "../database/prisma";
 import { SIMER_CLIENTS, SIMER_CLIENT_SCOPE_NAMES, resolveSimerClient } from "../domain/OperationalScope";
+import { OPEN_TICKET_BASE_STATES } from "../domain/OperationalLifecycleRules";
 
 export const movideskRoutes = Router();
 const controller = new MovideskController();
@@ -105,7 +106,7 @@ movideskRoutes.get("/closure-requests", requirePermission("attention"), async (r
       const chosen = matches[0];
       const action = chosen?.action;
       const evidence = chosen?.evidence ?? "";
-      const stillOpen = !["Closed", "Resolved", "Canceled", "Cancelled"].includes(ticket.baseStatus ?? "");
+      const stillOpen = OPEN_TICKET_BASE_STATES.some((state) => state === ticket.baseStatus);
       // A classificação utiliza a equipe atual do Movidesk e não o texto da ação.
       // Equipes não reconhecidas permanecem em "Outros", sem inferência automática.
       const teamText = (ticket.ownerTeam ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();

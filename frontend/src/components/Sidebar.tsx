@@ -673,14 +673,16 @@ export function Sidebar() {
 
         flexShrink:
           0,
-        transition: "width 220ms cubic-bezier(0.2, 0, 0, 1)",
-        willChange: "width",
+        // Alterar a largura só uma vez evita redimensionar gráficos e cards
+        // em cada quadro da animação.
+        transition: "none",
 
         "& .MuiDrawer-paper":
           {
+            // O contêiner muda o espaço do conteúdo uma vez por clique; só o
+            // painel visual anima, sem redimensionar os gráficos a cada quadro.
             width: sidebarCollapsed ? 76 : drawerWidth,
-            transition: "width 220ms cubic-bezier(0.2, 0, 0, 1)",
-            willChange: "width",
+            transition: "width 240ms cubic-bezier(0.22, 1, 0.36, 1)",
 
             boxSizing:
               "border-box",
@@ -1646,12 +1648,13 @@ function MenuItem({
             34,
 
           color:
-            "rgba(255,255,255,0.44)",
+            "rgba(220,232,244,0.52)",
 
           transition:
-            "color 0.15s ease",
+            "color 0.15s ease, opacity 0.15s ease",
           "& .MuiSvgIcon-root": {
-            fontSize: 19,
+            fontSize: 18,
+            opacity: .9,
           },
         }}
       >

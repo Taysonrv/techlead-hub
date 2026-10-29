@@ -18,7 +18,7 @@ test("app manifest and vector icon use approved dark-green branding", () => {
   assert.equal(manifest.theme_color, "#071d2b");
   assert.equal(manifest.icons[0].src, "/hub-suporte-simer.svg");
   assert.match(icon, /viewBox="0 0 128 128"/);
-  assert.match(icon, /#00d99b/);
+  assert.match(icon, /#20c995/i);
 });
 
 test("sidebar login About and page titles use the same application name", () => {

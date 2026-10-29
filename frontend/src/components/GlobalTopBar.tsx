@@ -8,7 +8,14 @@ import { aliareColors } from "../theme/theme";
 import { useColorMode } from "../context/ColorModeContext";
 import { TopBarActionButton } from "./TopBarActionButton";
 
-type SearchItem = { id: string; type: string; title: string; subtitle: string; path: string };
+type SearchItem = {
+  id: string;
+  type: string;
+  title: string;
+  subtitle: string;
+  path: string;
+  details?: { openedAt?: string; owner?: string | null; taskNumber?: number | null; taskState?: string | null; deliveredVersion?: string | null };
+};
 type CalendarPerson = { id: number; name: string; username: string; email: string | null; role: string };
 type CalendarMeeting = {
   id:number; title:string; description:string|null; startAt:string; endAt:string; timezone:string; reminderMinutes:number;
@@ -18,6 +25,12 @@ type CalendarMeeting = {
 type CalendarEvent = { id: string; date: string; kind: string; title: string; subtitle: string; path: string; meeting?: CalendarMeeting };
 type MeetingForm = { title:string; startAt:string; endAt:string; reminderMinutes:number; participantIds:number[]; externalAttendees:string; location:string; meetingUrl:string; description:string };
 type Holiday = { date: string; name: string };
+type CalendarWeather = {
+  configured: boolean;
+  city: string | null;
+  location: string | null;
+  days: Array<{ date: string; condition: string; iconUrl: string; minC: number; maxC: number; chanceOfRain: number }>;
+};
 type DesktopUpdateState = { status: "idle" | "disabled" | "checking" | "available" | "not-available" | "downloading" | "downloaded" | "error"; availableVersion: string | null; percent?: number; message?: string | null };
 
 export function GlobalTopBar() {
@@ -35,6 +48,11 @@ export function GlobalTopBar() {
   const [selectedDate, setSelectedDate] = useState(() => dateKey(new Date()));
   const [calendarPortal, setCalendarPortal] = useState<HTMLElement | null>(null);
   const [calendarVersion, setCalendarVersion] = useState(0);
+  const [weatherCityInput, setWeatherCityInput] = useState("");
+  const [calendarWeather, setCalendarWeather] = useState<CalendarWeather | null>(null);
+  const [weatherLoading, setWeatherLoading] = useState(false);
+  const [weatherSaving, setWeatherSaving] = useState(false);
+  const [weatherError, setWeatherError] = useState("");
   const [meetingParticipants, setMeetingParticipants] = useState<CalendarPerson[]>([]);
   const [meetingDialogOpen, setMeetingDialogOpen] = useState(false);
   const [cancelMeetingDialogOpen, setCancelMeetingDialogOpen] = useState(false);
@@ -43,6 +61,7 @@ export function GlobalTopBar() {
   const [editingMeeting, setEditingMeeting] = useState<CalendarMeeting | null>(null);
   const [meetingForm, setMeetingForm] = useState<MeetingForm>(() => defaultMeetingForm(dateKey(new Date())));
   const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const searchContainerRef = useRef<HTMLDivElement | null>(null);
   const openingMeetingIdRef = useRef<number | null>(null);
   const [updateState, setUpdateState] = useState<DesktopUpdateState | null>(null);
 
@@ -78,6 +97,18 @@ export function GlobalTopBar() {
   }, []);
 
   useEffect(() => {
+    const closeSearchOnOutsideClick = (event: globalThis.PointerEvent) => {
+      if (event.target instanceof Node && !searchContainerRef.current?.contains(event.target)) {
+        setQuery("");
+        setResults([]);
+        setSearchError("");
+      }
+    };
+    document.addEventListener("pointerdown", closeSearchOnOutsideClick);
+    return () => document.removeEventListener("pointerdown", closeSearchOnOutsideClick);
+  }, []);
+
+  useEffect(() => {
     if (query.trim().length < 2) { setResults([]); setSearching(false); setSearchError(""); return; }
     setSearching(true);
     setSearchError("");
@@ -98,9 +129,43 @@ export function GlobalTopBar() {
       .catch(() => { setEvents([]); setHolidays([]); });
   }, [month, calendarVersion]);
 
+  const loadCalendarWeather = useCallback(async () => {
+    setWeatherLoading(true);
+    setWeatherError("");
+    try {
+      const response = await api.get<CalendarWeather>("/global/calendar/weather");
+      setCalendarWeather(response.data);
+      setWeatherCityInput(response.data.city ?? "");
+    } catch (error) {
+      setCalendarWeather(null);
+      setWeatherError(getApiErrorMessage(error, "Não foi possível carregar a previsão."));
+    } finally {
+      setWeatherLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (calendarAnchor) void loadCalendarWeather();
+  }, [calendarAnchor, loadCalendarWeather]);
+
+  async function saveWeatherCity() {
+    setWeatherSaving(true);
+    setWeatherError("");
+    try {
+      await api.put("/global/calendar/weather/location", { city: weatherCityInput.trim() });
+      await loadCalendarWeather();
+    } catch (error) {
+      setWeatherError(getApiErrorMessage(error, "Não foi possível salvar a cidade."));
+    } finally {
+      setWeatherSaving(false);
+    }
+  }
+
   const days = useMemo(() => calendarDays(month), [month]);
+  const weatherByDate = useMemo(() => new Map((calendarWeather?.days ?? []).map((day) => [day.date, day])), [calendarWeather]);
   const selectedEvents = events.filter((item) => dateKey(new Date(item.date)) === selectedDate);
   const selectedHoliday = holidays.find((item) => holidayDateKey(item.date) === selectedDate);
+  const selectedWeather = weatherByDate.get(selectedDate);
 
   const ensureMeetingParticipants = useCallback(async () => {
     if (meetingParticipants.length) return;
@@ -272,11 +337,29 @@ export function GlobalTopBar() {
 
   return (
     <Box sx={{ position: "relative", zIndex: (theme) => theme.zIndex.appBar, pt: { xs: 6.5, lg: 0 }, mb: 3, minHeight: 58, height: "auto", opacity: 1, transform: "translateY(0)", overflow: "visible", boxSizing: "border-box", bgcolor: "transparent", pointerEvents: "none" }}>
-      <Box sx={{ position: "relative", width: { xs: "100%", lg: "calc(100% - 500px)" }, maxWidth: 740, minWidth: 0, maxInlineSize: "100%", mr: "auto", minHeight: 48, pointerEvents: "auto" }}>
+      <Box ref={searchContainerRef} sx={{ position: "relative", width: { xs: "100%", lg: "calc(100% - 500px)" }, maxWidth: 740, minWidth: 0, maxInlineSize: "100%", mr: "auto", minHeight: 48, pointerEvents: "auto" }}>
           <TextField id="global-search" inputRef={searchInputRef} fullWidth size="small" value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={handleSearchKeyDown} placeholder="Busque telas, rotinas, cards, tickets, clientes, tarefas ou versões..." slotProps={{ htmlInput: { "aria-label": "Busca global do Hub" }, input: { startAdornment: <InputAdornment position="start"><SearchOutlined fontSize="small" /></InputAdornment>, endAdornment: searching ? <CircularProgress size={16} /> : <Box component="span" sx={{px:.7,py:.25,border:"1px solid",borderColor:"divider",borderRadius:1,color:"text.secondary",fontSize:".68rem",fontWeight:800,whiteSpace:"nowrap"}}>Ctrl K</Box>, sx: { height: 48, bgcolor: "background.paper", borderRadius: "var(--hub-radius-lg)", boxShadow: "var(--hub-shadow-card)", border: "1px solid", borderColor: "divider" } } }} data-accessibility-patched="global-search" />
           {query.trim().length >= 2 && (
             <Paper elevation={8} sx={{ position: "absolute", top: 46, left: 0, right: 0, maxHeight: 430, overflowY: "auto", border: "1px solid", borderColor: "divider", zIndex: 20 }}>
-              {results.length ? <List dense disablePadding>{results.map((item) => <ListItemButton key={item.id} onClick={() => go(item.path)} sx={{ py: .9 }}><Box sx={{ minWidth: 88 }}><Typography variant="caption" sx={{ color: item.type === "Card" ? "info.main" : item.type === "Tela" ? "success.main" : item.type === "Rotina" ? "warning.main" : aliareColors.greenDark, fontWeight: 800 }}>{item.type}</Typography></Box><ListItemText primary={item.title} secondary={item.subtitle} slotProps={{ primary: { noWrap: true, sx: { fontSize: ".82rem", fontWeight: 700 } }, secondary: { noWrap: true, sx: { fontSize: ".7rem" } } }} /></ListItemButton>)}</List> : !searching && <Typography variant="body2" color={searchError ? "error" : "text.secondary"} sx={{ p: 2 }}>{searchError || "Nenhum resultado encontrado."}</Typography>}
+              {results.length ? <List dense disablePadding>{results.map((item) => {
+                const details = item.details ? [
+                  item.details.openedAt && `Aberto ${new Date(item.details.openedAt).toLocaleDateString("pt-BR")}`,
+                  item.details.owner && `Resp. ${item.details.owner}`,
+                  item.details.taskNumber && `Task #${item.details.taskNumber}${item.details.taskState ? ` · ${item.details.taskState}` : ""}`,
+                  item.details.deliveredVersion && `Versão entregue ${item.details.deliveredVersion}`,
+                ].filter(Boolean).join(" · ") : "";
+                return <ListItemButton key={item.id} onClick={() => go(item.path)} sx={{ py: .65, alignItems: "flex-start" }}>
+                  <Box sx={{ minWidth: 88, pt: .15 }}><Typography variant="caption" sx={{ color: item.type === "Card" ? "info.main" : item.type === "Tela" ? "success.main" : item.type === "Rotina" ? "warning.main" : aliareColors.greenDark, fontWeight: 800 }}>{item.type}</Typography></Box>
+                  <ListItemText
+                    primary={item.title}
+                    secondary={<Box sx={{ minWidth: 0 }}>
+                      <Typography component="span" variant="caption" noWrap sx={{ display: "block", fontSize: ".7rem", color: "text.secondary" }}>{item.subtitle}</Typography>
+                      {details && <Typography component="span" variant="caption" noWrap title={details} sx={{ display: "block", fontSize: ".66rem", lineHeight: 1.3, color: "text.secondary", opacity: .82 }}>{details}</Typography>}
+                    </Box>}
+                    slotProps={{ primary: { noWrap: true, sx: { fontSize: ".82rem", fontWeight: 700 } } }}
+                  />
+                </ListItemButton>;
+              })}</List> : !searching && <Typography variant="body2" color={searchError ? "error" : "text.secondary"} sx={{ p: 2 }}>{searchError || "Nenhum resultado encontrado."}</Typography>}
             </Paper>
           )}
       </Box>
@@ -316,12 +399,57 @@ export function GlobalTopBar() {
       <Popover open={Boolean(calendarAnchor)} anchorEl={calendarAnchor} onClose={() => setCalendarAnchor(null)} anchorOrigin={{ vertical: "bottom", horizontal: "right" }} transformOrigin={{ vertical: "top", horizontal: "right" }} slotProps={{ paper: { sx: { mt: 1, width: { xs: 340, sm: 420 }, maxWidth: "calc(100vw - 24px)", maxHeight: "calc(100dvh - 90px)", borderRadius: 2 } } }}>
         <Box sx={{ p: 1.5 }}>
           <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between", mb: 1 }}><IconButton size="small" aria-label="Mês anterior" onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))}><ChevronLeft /></IconButton><Typography sx={{ fontWeight: 850, textTransform: "capitalize" }}>{month.toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}</Typography><IconButton size="small" aria-label="Próximo mês" onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))}><ChevronRight /></IconButton></Stack>
-          <Box sx={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: .25 }}>{["D","S","T","Q","Q","S","S"].map((label, index) => <Typography key={`${label}-${index}`} variant="caption" sx={{ textAlign: "center", fontWeight: 800, color: "text.secondary" }}>{label}</Typography>)}{days.map((day) => { const key = dateKey(day); const count = events.filter((item) => dateKey(new Date(item.date)) === key).length; const holiday = holidays.some((item) => holidayDateKey(item.date) === key); const inMonth = day.getMonth() === month.getMonth(); return <Box component="button" key={key} onClick={() => setSelectedDate(key)} sx={{ appearance: "none", border: "1px solid", borderColor: key === selectedDate ? aliareColors.green : "transparent", borderRadius: 1, minHeight: 34, bgcolor: key === selectedDate ? "rgba(24,199,122,.10)" : "transparent", color: inMonth ? "text.primary" : "text.disabled", cursor: "pointer", position: "relative" }}><Typography variant="caption" sx={{ fontWeight: 700 }}>{day.getDate()}</Typography>{count > 0 && <Box sx={{ position: "absolute", bottom: 2, left: "50%", transform: "translateX(-50%)", width: 5, height: 5, borderRadius: "50%", bgcolor: aliareColors.green }} />}{holiday && <Box sx={{ position: "absolute", top: 2, right: 2, width: 4, height: 4, borderRadius: "50%", bgcolor: "warning.main" }} />}</Box>; })}</Box>
+          <Paper variant="outlined" sx={{ p: 1, mb: 1, borderRadius: 1.8 }}>
+            <Stack direction="row" spacing={.75} sx={{ alignItems: "center" }}>
+              <TextField
+                size="small"
+                fullWidth
+                label="Cidade da previsão"
+                placeholder="Ex.: Curitiba, PR"
+                value={weatherCityInput}
+                onChange={(event) => setWeatherCityInput(event.target.value)}
+                onKeyDown={(event) => { if (event.key === "Enter") void saveWeatherCity(); }}
+                slotProps={{ htmlInput: { maxLength: 120, "aria-label": "Cidade da previsão do tempo" } }}
+              />
+              {weatherCityInput.trim() !== (calendarWeather?.city ?? "").trim() && <Button size="small" variant="outlined" onClick={() => void saveWeatherCity()} disabled={weatherSaving || weatherLoading} sx={{ whiteSpace: "nowrap", textTransform: "none" }}>
+                {weatherSaving ? <CircularProgress size={16} /> : "Salvar"}
+              </Button>}
+            </Stack>
+            {weatherError && <Alert severity="warning" sx={{ mt: .8, py: 0, "& .MuiAlert-message": { py: .6, fontSize: ".72rem" } }}>{weatherError}</Alert>}
+            {weatherLoading && <Stack direction="row" spacing={.8} sx={{ alignItems: "center", mt: .9 }}><CircularProgress size={16} /><Typography variant="caption" color="text.secondary">Carregando previsão...</Typography></Stack>}
+            {!weatherLoading && calendarWeather && !calendarWeather.configured && <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: .7 }}>Previsão desativada. Configure WEATHER_API_KEY no ambiente do backend.</Typography>}
+            {!weatherLoading && calendarWeather?.configured && !calendarWeather.city && <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: .7 }}>Informe uma cidade para consultar os próximos 3 dias.</Typography>}
+            {!weatherLoading && calendarWeather?.days.length ? <>
+              <Typography variant="caption" sx={{ display: "block", mt: .8, fontWeight: 800 }}>Previsão para os próximos 3 dias</Typography>
+              <Stack direction="row" spacing={.6} sx={{ mt: 1 }}>
+                {calendarWeather.days.map((day) => <Box key={day.date} sx={{ flex: 1, minWidth: 0, p: .75, borderRadius: 1.3, bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(255,255,255,.045)" : "rgba(15,23,42,.035)" }}>
+                  <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between", gap: .25 }}>
+                    <Typography variant="caption" sx={{ fontWeight: 800, textTransform: "capitalize" }}>{new Date(`${day.date}T12:00:00`).toLocaleDateString("pt-BR", { weekday: "short", day: "2-digit" })}</Typography>
+                    {day.iconUrl && <Box component="img" src={day.iconUrl} alt="" aria-hidden="true" sx={{ width: 28, height: 28, flexShrink: 0 }} />}
+                  </Stack>
+                  <Typography variant="caption" sx={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={day.condition}>{day.condition}</Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 850, mt: .25 }}>{Math.round(day.minC)}° / {Math.round(day.maxC)}°</Typography>
+                  <Typography variant="caption" color="text.secondary">Chuva {Math.round(day.chanceOfRain)}%</Typography>
+                </Box>)}
+              </Stack>
+              <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: .55 }}>
+                <a href="https://www.weatherapi.com/" target="_blank" rel="noreferrer" style={{ color: "inherit" }}>WeatherAPI.com</a> · Previsão probabilística e informativa; pode divergir do local e horário.
+              </Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: .45, lineHeight: 1.35 }}>
+                Não use como única base para decisões de segurança, aviação, navegação ou emergências; consulte fontes oficiais.
+              </Typography>
+            </> : null}
+          </Paper>
+          <Box sx={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: .25 }}>{["D","S","T","Q","Q","S","S"].map((label, index) => <Typography key={`${label}-${index}`} variant="caption" sx={{ textAlign: "center", fontWeight: 800, color: "text.secondary" }}>{label}</Typography>)}{days.map((day) => { const key = dateKey(day); const count = events.filter((item) => dateKey(new Date(item.date)) === key).length; const holiday = holidays.some((item) => holidayDateKey(item.date) === key); const weather = weatherByDate.get(key); const inMonth = day.getMonth() === month.getMonth(); return <Box component="button" key={key} onClick={() => setSelectedDate(key)} aria-label={`${day.toLocaleDateString("pt-BR", { dateStyle: "full" })}${weather ? `, ${weather.condition}, ${Math.round(weather.minC)} a ${Math.round(weather.maxC)} graus, chuva ${Math.round(weather.chanceOfRain)} por cento` : ""}`} title={weather ? `${weather.condition} · ${Math.round(weather.minC)}°/${Math.round(weather.maxC)}° · chuva ${Math.round(weather.chanceOfRain)}%` : undefined} sx={{ appearance: "none", border: "1px solid", borderColor: key === selectedDate ? aliareColors.green : "transparent", borderRadius: 1, minHeight: 42, bgcolor: key === selectedDate ? "rgba(24,199,122,.10)" : "transparent", color: inMonth ? "text.primary" : "text.disabled", cursor: "pointer", position: "relative", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", p: .1 }}><Typography variant="caption" sx={{ fontWeight: 700, lineHeight: 1 }}>{day.getDate()}</Typography>{weather?.iconUrl && <Box component="img" src={weather.iconUrl} alt="" aria-hidden="true" sx={{ width: 19, height: 19, display: "block", my: -.15 }} />}{!weather?.iconUrl && <Box sx={{ height: 16 }} />}{count > 0 && <Box sx={{ position: "absolute", bottom: 2, left: "50%", transform: "translateX(-50%)", width: 5, height: 5, borderRadius: "50%", bgcolor: aliareColors.green }} />}{holiday && <Box sx={{ position: "absolute", top: 2, right: 2, width: 4, height: 4, borderRadius: "50%", bgcolor: "warning.main" }} />}</Box>; })}</Box>
           <Box sx={{ mt: 1, pt: 1, borderTop: "1px solid", borderColor: "divider" }}>
             <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between", gap: 1 }}>
               <Box sx={{ minWidth: 0 }}>
                 <Typography sx={{ fontWeight: 800, fontSize: ".88rem" }}>{new Date(`${selectedDate}T12:00:00`).toLocaleDateString("pt-BR", { dateStyle: "full" })}</Typography>
                 {selectedHoliday && <Typography variant="caption" sx={{ color: "warning.dark", fontWeight: 750 }}>Feriado: {selectedHoliday.name}</Typography>}
+                {selectedWeather && <Stack direction="row" spacing={.35} sx={{ alignItems: "center", mt: .2 }}>
+                  {selectedWeather.iconUrl && <Box component="img" src={selectedWeather.iconUrl} alt={selectedWeather.condition} sx={{ width: 28, height: 28 }} />}
+                  <Typography variant="caption" color="text.secondary">{selectedWeather.condition} · {Math.round(selectedWeather.minC)}° / {Math.round(selectedWeather.maxC)}° · chuva {Math.round(selectedWeather.chanceOfRain)}%</Typography>
+                </Stack>}
               </Box>
               <Button size="small" variant="contained" startIcon={<AddOutlined />} onClick={() => openCreateMeeting(selectedDate)} sx={{ whiteSpace: "nowrap", textTransform: "none" }}>Reunião</Button>
             </Stack>

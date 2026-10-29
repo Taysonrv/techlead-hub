@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "../services/api";
 import { useAuth } from "../context/AuthContext";
-import { playNotificationSound } from "../utils/notificationSound";
+import { getDesktopAlertsEnabled, getLocalNotificationPreferences, playNotificationSound } from "../utils/notificationSound";
 import { IncidentActionsPanel } from "../components/IncidentActionsPanel";
 import { ChatHistorySearch } from "../components/ChatHistorySearch";
 import { IncidentContextSummary } from "../components/chat/IncidentContextSummary";
@@ -231,12 +231,15 @@ export function Chat() {
 
   useEffect(() => {
     const unread = channels.reduce((sum, channel) => sum + channel.unread, 0);
-    if (unread > previousUnread.current && soundEnabled) {
-      playNotificationSound("chat");
-      if (document.visibilityState !== "visible" && "Notification" in window && Notification.permission === "granted") new Notification("TechLead Hub", { body: "Você recebeu uma nova mensagem no chat." });
+    if (unread > previousUnread.current) {
+      const notificationPreferences = getLocalNotificationPreferences();
+      if (soundEnabled && notificationPreferences.sound && notificationPreferences.chat) playNotificationSound("chat");
+      if (notificationPreferences.chat && getDesktopAlertsEnabled(user?.id) && document.visibilityState !== "visible" && "Notification" in window && Notification.permission === "granted") {
+        new Notification("TechLead Hub", { body: "Você recebeu uma nova mensagem no chat." });
+      }
     }
     previousUnread.current = unread;
-  }, [channels, soundEnabled]);
+  }, [channels, soundEnabled, user?.id]);
 
   useChatRealtime({
     selectedId,
@@ -580,7 +583,7 @@ export function Chat() {
         <Divider />
         {typingNames.length > 0 && <Typography variant="caption" color="text.secondary" sx={{ px: 1.6, pt: .45 }}>{typingNames.join(", ")} {typingNames.length === 1 ? "está" : "estão"} digitando...</Typography>}
         {replyTo && <Stack direction="row" sx={{ px: 1.5, py: .7, alignItems: "center", justifyContent: "space-between", bgcolor: "action.hover", borderTop: "1px solid", borderColor: "divider" }}><Box><Typography variant="caption" sx={{ fontWeight: 850 }}>Respondendo a {replyTo.author.name}</Typography><Typography variant="caption" color="text.secondary" noWrap sx={{ display: "block", maxWidth: 620 }}>{replyTo.content}</Typography></Box><IconButton size="small" onClick={() => setReplyTo(null)}><CloseOutlined fontSize="small" /></IconButton></Stack>}
-        <Composer channelId={selectedId} channelType={selected?.type} content={content} sending={sending} uploadingAttachment={uploadingAttachment} soundEnabled={soundEnabled} attachmentInputRef={attachmentInputRef} onAttach={sendAttachment} onOpenEmoji={setEmojiAnchor} onOpenStickers={() => setStickersOpen(true)} onOpenQuickActions={setQuickActionsAnchor} onToggleSound={() => { const next = !soundEnabled; setSoundEnabled(next); localStorage.setItem("techlead-chat-sound", next ? "on" : "off"); if ("Notification" in window && Notification.permission === "default") void Notification.requestPermission(); }} onContentChange={(value) => { setContent(value); notifyTyping(value); }} onSend={() => void send()} />
+        <Composer channelId={selectedId} channelType={selected?.type} content={content} sending={sending} uploadingAttachment={uploadingAttachment} soundEnabled={soundEnabled} attachmentInputRef={attachmentInputRef} onAttach={sendAttachment} onOpenEmoji={setEmojiAnchor} onOpenStickers={() => setStickersOpen(true)} onOpenQuickActions={setQuickActionsAnchor} onToggleSound={() => { const next = !soundEnabled; setSoundEnabled(next); localStorage.setItem("techlead-chat-sound", next ? "on" : "off"); }} onContentChange={(value) => { setContent(value); notifyTyping(value); }} onSend={() => void send()} />
       </Box>
       {showSidePanel && selected && <Box sx={{ display: { xs: "none", lg: "block" }, borderLeft: "1px solid", borderColor: "divider", borderRadius: 0, p: 1.6, overflowY: "auto", my: 0, bgcolor: "background.paper" }}>
         <Stack spacing={2}>

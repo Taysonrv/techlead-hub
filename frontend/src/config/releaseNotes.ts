@@ -12,6 +12,21 @@ export type ReleaseNote = {
 export const FALLBACK_APP_VERSION = import.meta.env.VITE_APP_VERSION || "development";
 
 export const releaseNotes: Record<string, ReleaseNote> = {
+  "2.1.0-rc.9": {
+    version: "2.1.0-rc.9",
+    title: "Operação mais confiável, notificações e experiência renovada",
+    items: [
+      { title: "Dashboard executivo", description: "Cards, gráficos, filtros e indicadores foram padronizados; as séries temporais usam linhas retas e as regras de leitura operacional foram revisadas." },
+      { title: "Pendências por analista", description: "Filtros e indicadores foram alinhados à finalidade da tela, com correções para evitar tarefas concluídas como pendências e melhorar a leitura da dívida operacional." },
+      { title: "Alertas no Teams", description: "Novos fluxos podem avisar sobre tickets Novos encaminhados ao Suporte e Tasks Azure abertas pelo N3 ou retornadas a Registro, com controle individual nas configurações." },
+      { title: "Notificações no Desktop", description: "Avisos podem aparecer com som quando o aplicativo está minimizado; eles desaparecem após alguns segundos e permanecem no sino para leitura posterior." },
+      { title: "Acompanhamento de Tasks", description: "O painel lateral prioriza a última alteração registrada e organiza as ações rápidas em uma área mais compacta." },
+      { title: "Calendário com previsão", description: "A cidade de previsão fica associada ao usuário, com localização brasileira mais precisa e informações meteorológicas resumidas nos dias disponíveis." },
+      { title: "Navegação e identidade visual", description: "Ícones, cards, sidebar e gráficos receberam ajustes de consistência, responsividade e apresentação nos temas claro e escuro." },
+      { title: "Atualização e recuperação", description: "A inicialização do Desktop cria estruturas compatíveis do banco local, preservando configurações e notificações após a atualização." },
+      { title: "Sincronizações mais seguras", description: "Importações completas e históricas não são tratadas como eventos novos para alertas, evitando notificações antigas em massa no Teams." },
+    ],
+  },
   "2.1.0-rc.8": {
     version: "2.1.0-rc.8",
     title: "Detalhamento operacional e acompanhamento Azure",

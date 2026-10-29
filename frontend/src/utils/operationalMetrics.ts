@@ -4,6 +4,7 @@ export type OperationalMetricTicket = {
   closedDate?: string | null;
   baseStatus?: string | null;
   status?: string | null;
+  canceledDate?: string | null;
   isWithSimer?: boolean;
 };
 
@@ -15,9 +16,21 @@ const inPeriod = (value: string | null | undefined, period: OperationalPeriod) =
   return Number.isFinite(date.getTime()) && date >= period.start && date <= period.end;
 };
 
+const OPEN_BASE_STATUSES = new Set(["new", "inattendance", "stopped"]);
+
+/**
+ * Backlog atual segue os estados canônicos aceitos pelo backend.
+ * Status ausente/desconhecido não deve ser presumido como pendente.
+ */
 export const isOperationallyOpen = (ticket: OperationalMetricTicket) => {
-  const status = (ticket.baseStatus ?? ticket.status ?? "").trim().toLowerCase();
-  return !["resolved", "closed", "canceled", "cancelled", "resolvido", "fechado", "cancelado"].includes(status);
+  const baseStatus = (ticket.baseStatus ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase();
+  return OPEN_BASE_STATUSES.has(baseStatus);
+};
+
+export const isTicketCancelled = (ticket: OperationalMetricTicket) => {
+  const baseStatus = (ticket.baseStatus ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase();
+  const status = (ticket.status ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase();
+  return Boolean(ticket.canceledDate) || baseStatus === "canceled" || status.includes("cancel");
 };
 
 export function buildOperationalCohorts<T extends OperationalMetricTicket>(
@@ -29,7 +42,7 @@ export function buildOperationalCohorts<T extends OperationalMetricTicket>(
   return {
     entries: simer.filter((ticket) => inPeriod(ticket.createdDate, period)),
     resolved: simer.filter((ticket) => inPeriod(ticket.resolvedDate, period)),
-    closed: simer.filter((ticket) => inPeriod(ticket.closedDate, period)),
+    closed: simer.filter((ticket) => inPeriod(ticket.closedDate, period) && !isTicketCancelled(ticket)),
     backlog: simer.filter(isOperationallyOpen),
   };
 }

@@ -52,6 +52,7 @@ export class WorkspaceController {
       user: typeof request.query.user === "string" ? request.query.user.trim() : null,
       issue: typeof request.query.issue === "string" ? request.query.issue.trim() : null,
       search: typeof request.query.search === "string" ? request.query.search.trim() : null,
+      exportAll: request.query.exportAll === "true",
     }));
 
   public ticketDetail = async (request: AuthenticatedRequest, response: Response) => {

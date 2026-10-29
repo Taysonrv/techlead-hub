@@ -63,7 +63,7 @@ export function FiltersProvider({
     setPeriod,
   ] =
     useState<PeriodOption>(
-      "30d"
+      "month"
     );
 
   const [

@@ -23,7 +23,7 @@ import {
 } from "@mui/material";
 
 import {
-  InfoOutlined,
+  InfoOutlined, InsightsOutlined,
 } from "@mui/icons-material";
 
 import {
@@ -53,8 +53,10 @@ import { getTicketSnapshot, getTicketSnapshotState, subscribeTicketSnapshotRefre
 import { useFilters } from "../context/FiltersContext";
 import { PeriodFilter } from "../components/PeriodFilter";
 import { PageHeader } from "../components/PageHeader";
+import { useVisiblePolling } from "../hooks/useVisiblePolling";
 import { ExportTicketsButton } from "../components/ExportTicketsButton";
 import { detailDrawerPaperSx } from "../theme/layoutTokens";
+import { analyticalPanelSx } from "../theme/layoutTokens";
 import { useTheme } from "@mui/material/styles";
 import { ExecutiveSection } from "../components/ExecutiveSection";
 import { ContentState } from "../components/ContentState";
@@ -76,7 +78,7 @@ import {
   type ServiceLevelResult,
 } from "../utils/serviceLevel";
 import { calculateTimestampSla } from "../utils/timestampSla";
-import { auditOperationalMetrics, buildOperationalCohorts } from "../utils/operationalMetrics";
+import { auditOperationalMetrics, buildOperationalCohorts, isOperationallyOpen } from "../utils/operationalMetrics";
 
 const SUPPORT_ANALYSTS = [
   "ALAN KARDEK DA SILVA BARROS NETO",
@@ -177,6 +179,19 @@ type AnalystPerformance = {
 export function Performance() {
   const navigate = useNavigate();
   const theme = useTheme();
+  const isDark = theme.palette.mode === "dark";
+  const performancePanelSx = {
+    ...analyticalPanelSx,
+    mb: 1.75,
+    borderRadius: { xs: 2.5, md: 3 },
+    borderColor: isDark ? "rgba(80,157,190,.22)" : "rgba(30,96,130,.13)",
+    background: isDark
+      ? "radial-gradient(ellipse at 100% 0%, rgba(32,173,197,.10), transparent 38%), linear-gradient(145deg, #0D2236 0%, #0A192A 100%)"
+      : "radial-gradient(ellipse at 100% 0%, rgba(35,173,191,.07), transparent 38%), linear-gradient(145deg, #FFFFFF 0%, #F5FAFC 100%)",
+    boxShadow: isDark ? "0 16px 40px rgba(0,0,0,.17), inset 0 1px 0 rgba(255,255,255,.025)" : "0 14px 34px rgba(21,54,76,.055), inset 0 1px 0 rgba(255,255,255,.8)",
+    "&:before": { content: '""', position: "absolute", inset: "0 0 auto", height: 2, background: "linear-gradient(90deg, transparent, rgba(42,205,201,.8), rgba(56,189,248,.65), transparent)", opacity: isDark ? .72 : .48 },
+    "&:hover": { borderColor: isDark ? "rgba(56,189,248,.34)" : "rgba(30,140,166,.26)", boxShadow: isDark ? "0 20px 48px rgba(0,0,0,.22)" : "0 18px 40px rgba(21,54,76,.08)" },
+  } as const;
   const [hiddenTrendSeries, setHiddenTrendSeries] = useState<Set<string>>(() => new Set());
   const [analystsPage, setAnalystsPage] = useState(0);
   const [tickets, setTickets] = useState<Ticket[]>([]);
@@ -185,6 +200,8 @@ export function Performance() {
   const loadRequestRef = useRef<AbortController | null>(null);
   const [drilldown, setDrilldown] = useState<DrilldownState | null>(null);
   const [executiveQuality, setExecutiveQuality] = useState<ExecutiveQuality | null>(null);
+  const [qualityRefreshVersion, setQualityRefreshVersion] = useState(0);
+  useVisiblePolling(() => setQualityRefreshVersion((value) => value + 1), 120_000);
 
   const {
     effectiveStartDate,
@@ -236,7 +253,7 @@ export function Performance() {
     })
       .catch(()=>{ if(!controller.signal.aborted) setExecutiveQuality(null); });
     return ()=>controller.abort();
-  }, []);
+  }, [qualityRefreshVersion]);
 
   const periodBounds = useMemo(() => ({
     start: startOfDay(effectiveStartDate),
@@ -618,7 +635,12 @@ export function Performance() {
   }
 
   return (
-    <>
+    <Box className="performance-sla-page" sx={{
+      width: "100%", minWidth: 0,
+      background: isDark ? "radial-gradient(ellipse at 90% 0%, rgba(11,184,173,.055), transparent 44%)" : "radial-gradient(ellipse at 90% 0%, rgba(23,129,229,.03), transparent 44%)",
+      "& .recharts-cartesian-grid line": { stroke: theme.palette.divider },
+      "& .recharts-cartesian-axis-tick text": { fill: theme.palette.text.secondary },
+    }}>
       {error && <Alert severity="warning" sx={{ mb: 2 }}>{error}</Alert>}
       <PageHeader
         eyebrow="Qualidade operacional"
@@ -637,7 +659,7 @@ export function Performance() {
       <Alert
         severity="info"
         variant="outlined"
-        sx={{ mb: 1.5, borderRadius: 2 }}
+        sx={{ mb: 1.5, borderRadius: 2.5, borderColor: isDark ? "rgba(56,189,248,.20)" : "rgba(30,96,130,.14)", bgcolor: isDark ? "rgba(10,29,48,.64)" : "rgba(255,255,255,.72)" }}
       >
         <strong>SLA do suporte:</strong> usa os prazos e timestamps sincronizados do Movidesk. A 1ª resposta segue as entradas do período; a solução segue os tickets resolvidos no período. Atendimentos
         sem prazo ou marco de resposta/solução válido não entram no denominador, independentemente da categoria.
@@ -911,14 +933,7 @@ export function Performance() {
 
       <Card
         elevation={0}
-        sx={{
-          mb: 1.75,
-          border: "1px solid",
-          borderColor: "divider",
-          borderRadius: 2.25,
-          backgroundColor: "background.paper",
-          boxShadow: "0 1px 2px rgba(16,24,40,0.035)",
-        }}
+        sx={performancePanelSx}
       >
         <CardContent>
           <CardSectionHeader
@@ -997,7 +1012,7 @@ export function Performance() {
                   />
 
                   <Line
-                    type="monotone"
+                    type="linear"
                     dataKey="firstResponse"
                     name="Primeira resposta"
                     stroke={aliareColors.green}
@@ -1009,7 +1024,7 @@ export function Performance() {
                   />
 
                   <Line
-                    type="monotone"
+                    type="linear"
                     dataKey="resolution"
                     name="Resolução"
                     stroke={semanticChartColors.normal}
@@ -1030,14 +1045,7 @@ export function Performance() {
 
       <Card
         elevation={0}
-        sx={{
-          mb: 1.75,
-          border: "1px solid",
-          borderColor: "divider",
-          borderRadius: 2.25,
-          backgroundColor: "background.paper",
-          boxShadow: "0 1px 2px rgba(16,24,40,0.035)",
-        }}
+        sx={performancePanelSx}
       >
         <CardContent>
           <CardSectionHeader
@@ -1124,14 +1132,7 @@ export function Performance() {
 
       <Card
         elevation={0}
-        sx={{
-          border: "1px solid",
-          borderColor: "divider",
-          borderRadius: 2.25,
-          overflow: "hidden",
-          backgroundColor: "background.paper",
-          boxShadow: "0 1px 2px rgba(16,24,40,0.035)",
-        }}
+        sx={{ ...performancePanelSx, overflow: "hidden" }}
       >
         <CardContent
           sx={{
@@ -1485,7 +1486,7 @@ export function Performance() {
           )}
         </Box>
       </Drawer>
-    </>
+    </Box>
   );
 }
 
@@ -1916,7 +1917,7 @@ function percentage(numerator: number, denominator: number) {
 }
 
 function isOpen(ticket: Ticket) {
-  return !["Resolved", "Closed", "Canceled"].includes(ticket.baseStatus ?? "");
+  return isOperationallyOpen(ticket);
 }
 
 function startOfDay(date: Date) {
@@ -2088,19 +2089,21 @@ function CardSectionHeader({
   info: CardInfo;
 }) {
   return (
-    <Box sx={{ position: "relative", textAlign: "center", minHeight: 42 }}>
-      <Box>
-        <Typography sx={{ fontWeight: 800, fontSize: "1rem" }}>
+    <Stack direction="row" spacing={1.25} sx={{ alignItems: "center", justifyContent: "space-between", minWidth: 0 }}>
+      <Stack direction="row" spacing={1.1} sx={{ alignItems: "center", minWidth: 0 }}>
+        <Box sx={{ width: 40, height: 40, flex: "0 0 auto", display: "grid", placeItems: "center", borderRadius: 1.8, color: "primary.main", bgcolor: "action.hover", border: "1px solid", borderColor: "divider" }}><InsightsOutlined fontSize="small" /></Box>
+        <Box sx={{ minWidth: 0 }}>
+        <Typography sx={{ fontWeight: 850, fontSize: "1.02rem", letterSpacing: "-.015em" }}>
           {title}
         </Typography>
 
-        <Typography variant="caption" color="text.secondary">
+        <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: .15 }}>
           {subtitle}
         </Typography>
       </Box>
-
-      <Box sx={{ position: "absolute", right: 0, top: 0 }}><CardInfoButton info={info} /></Box>
-    </Box>
+      </Stack>
+      <CardInfoButton info={info} />
+    </Stack>
   );
 }
 

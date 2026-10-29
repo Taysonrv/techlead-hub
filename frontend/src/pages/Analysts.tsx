@@ -50,6 +50,7 @@ import { useAuth } from "../context/AuthContext";
 import { useTheme } from "@mui/material/styles";
 
 import { api } from "../services/api";
+import { isOperationallyOpen } from "../utils/operationalMetrics";
 import { getTicketSnapshot, getTicketSnapshotState, subscribeTicketSnapshotRefresh } from "../services/ticketSnapshot";
 import { useFilters } from "../context/FiltersContext";
 import { PeriodFilter } from "../components/PeriodFilter";
@@ -5648,14 +5649,7 @@ function TicketField({
 function isOpen(
   ticket: Ticket
 ) {
-  return (
-    ticket.baseStatus ===
-      "New" ||
-    ticket.baseStatus ===
-      "InAttendance" ||
-    ticket.baseStatus ===
-      "Stopped"
-  );
+  return isOperationallyOpen(ticket);
 }
 
 /* =====================================================

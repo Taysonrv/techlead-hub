@@ -24,7 +24,7 @@ type Sample = {
   serviceFirstLevel?: string | null; serviceSecondLevel?: string | null; serviceThirdLevel?: string | null; servicePath?: string | null;
   serviceSuggestion?: { path: string; service: string; module: string | null; confidence: "HIGH" | "MEDIUM" | "LOW"; score: number; evidence: string[]; reasons: string[]; alternatives: Array<{ path: string; service: string; score: number }> } | null;
   classificationReview?: { suggestedCategory: "Problema" | "Dúvida" | null; suggestedCause: string | null; confidence: "ALTA" | "MÉDIA"; evidence: string[]; reason: string } | null;
-  assignedToName: string | null; movideskTicket: number | null;
+  assignedToName: string | null; createdByName?: string | null; taskAssignedToName?: string | null; movideskTicket: number | null;
   participantClients?: string | string[] | null;
   participantMovideskTickets?: string | number[] | null;
   registeredVersion?: string | null; deliveredVersion: string | null; taskNumber: number | null; taskState?: string | null;
@@ -54,7 +54,7 @@ const metrics = [
   ["ticketOpenTaskWithoutDelivery", "Tarefa finalizada sem entrega", "Tarefa concluída vinculada a ticket aberto, porém sem versão entregue registrada no Azure. Exige validar publicação antes de encerrar.", "Fluxo"],
   ["ticketClosedTaskOpen", "Ticket encerrado com Tarefa ativa", "Ticket concluído, fechado ou resolvido enquanto a Tarefa relacionada ainda está em andamento.", "Fluxo"],
   ["activeTaskWithVersion", "Tarefa ativa com versão entregue", "Tarefa não finalizada vinculada a atendimento que já possui versão entregue. Pode indicar estado desatualizado.", "Versão"],
-  ["completedWithoutVersion", "Tarefa finalizada sem versão entregue", "Correção ou evolução concluída e vinculada a atendimento sem versão entregue no Azure.", "Versão"],
+  ["completedWithoutVersion", "Tarefas concluídas sem versão registrada", "Revisão de registros históricos: a tarefa já foi concluída; esta sinalização não representa uma tarefa operacional em aberto.", "Histórico"],
   ["clientMismatch", "Cliente divergente", "O cliente do atendimento não consta como cliente principal nem como cliente participante da Correção ou Evolução relacionada. APOIO não exige cliente.", "Vínculo"],
   ["supportLinkDivergence", "APOIO com vínculo divergente", "APOIO referencia ticket inexistente no recorte ou ticket que aponta para outra Tarefa. Cliente e versão não são obrigatórios para APOIO.", "APOIO"],
   ["danglingTaskTickets", "Referência de Tarefa inexistente", "Ticket aponta para um ID de Tarefa ausente no snapshot atual do Azure.", "Vínculo"],
@@ -72,7 +72,6 @@ const coordinationMetricKeys = new Set([
   "excessiveOwnerHandoffs",
   "withoutTicket",
   "withoutClient",
-  "completedWithoutVersion",
   "problemWithoutCause",
   "doubtWithoutReason",
   "withoutCategory",
@@ -80,13 +79,30 @@ const coordinationMetricKeys = new Set([
   "genericSimerService",
 ]);
 const coordinationMetrics = metrics.filter(([key]) => coordinationMetricKeys.has(key));
+const supportAnalysts = [
+  "ALAN KARDEK DA SILVA BARROS NETO",
+  "DÉBORA DAL CORREIA",
+  "DIEGO OLIVEIRA ARANTES",
+  "LUIZ ANTÔNIO COSTA CUNHA",
+  "RENAN BRENO CARVALHO",
+  "TAYSON ALVES DE ARAUJO",
+  "THIAGO DE LIMA MACHADO",
+];
+const analystDisplayNames: Record<string, string> = {
+  "ALAN KARDEK DA SILVA BARROS NETO": "Alan Kardek da Silva Barros Neto",
+  "DÉBORA DAL CORREIA": "Débora Dal Correia",
+  "DIEGO OLIVEIRA ARANTES": "Diego Oliveira Arantes",
+  "LUIZ ANTÔNIO COSTA CUNHA": "Luiz Antônio Costa Cunha",
+  "RENAN BRENO CARVALHO": "Renan Breno Carvalho",
+  "TAYSON ALVES DE ARAUJO": "Tayson Alves de Araujo",
+  "THIAGO DE LIMA MACHADO": "Thiago de Lima Machado",
+};
 
 const priorityWeight: Record<string, number> = {
   ticketClosedTaskOpen: 100,
   ticketOpenTaskFinished: 92,
   ticketOpenTaskWithoutDelivery: 90,
   danglingTaskTickets: 88,
-  completedWithoutVersion: 82,
   reopenedTickets: 72,
   excessiveOwnerHandoffs: 68,
   withoutTicket: 64,
@@ -118,6 +134,8 @@ export function DataQuality() {
   const [issue, setIssue] = useState(() => searchParams.get("issue") ?? "");
   const [selected, setSelected] = useState<Sample | null>(null);
   const [detail, setDetail] = useState<Record<string, unknown> | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState("");
 
   const load = useCallback(async (signal?: AbortSignal) => {
     try {
@@ -171,7 +189,7 @@ export function DataQuality() {
       ticketOpenTaskWithoutDelivery: "Confirmar publicação ou preencher a versão entregue.",
       ticketClosedTaskOpen: "Atualizar o estado da Tarefa ou reabrir o atendimento.",
       activeTaskWithVersion: "Validar se a Tarefa já pode ser concluída.",
-      completedWithoutVersion: "Informar a versão efetivamente entregue.",
+      completedWithoutVersion: "Revisar e registrar, se disponível, a versão que foi entregue. A tarefa permanece concluída; esta é uma correção de histórico, não uma pendência operacional ativa.",
       clientMismatch: "Revisar cliente principal e clientes participantes.",
       supportLinkDivergence: "Corrigir o vínculo do APOIO com o atendimento.",
       danglingTaskTickets: "Corrigir ou remover a referência de Tarefa no atendimento.",
@@ -182,11 +200,31 @@ export function DataQuality() {
     return { reason: metric?.[2] ?? "Inconsistência identificada no cruzamento de dados.", action: actions[issue] ?? "Revisar o registro e seus vínculos." };
   }
 
-  function exportPendingList() {
-    const rows = data?.samples ?? [];
+  async function exportPendingList() {
+    let rows = data?.samples ?? [];
+    setExportError("");
+    if (issue && user.length === 1) {
+      try {
+        setExporting(true);
+        const response = await api.get<Data>("/workspace/data-quality", { params: {
+          type: type.length ? type.join("|||") : undefined,
+          client: client.length ? client.join("|||") : undefined,
+          user: user[0],
+          issue,
+          search: search || undefined,
+          exportAll: true,
+        }, timeout: 60_000 });
+        rows = response.data.samples;
+      } catch {
+        setExportError("Não foi possível gerar o relatório completo. Tente novamente.");
+        return;
+      } finally {
+        setExporting(false);
+      }
+    }
     const escape = (value: unknown) => `"${String(value ?? "").replace(/"/g, '""')}"`;
     const guidance = issueGuidance();
-    const header = ["Origem", "Tipo", "Atendimento", "Assunto / Título", "Cliente do ticket", "Cliente da Tarefa", "Categoria", "Causa", "Motivo", "Sugestão Categoria", "Sugestão Causa", "Confiança revisão", "Evidências revisão", "Serviço", "Analista", "Status do atendimento", "Última movimentação", "Reaberturas", "Trocas de responsável", "Satisfação", "Tarefa", "Estado da Tarefa", "Versão de cadastro", "Versão entregue", "Motivo da pendência", "Ação recomendada"];
+    const header = ["Origem", "Tipo", "Atendimento", "Assunto / Título", "Cliente do ticket", "Cliente da Tarefa", "Categoria", "Causa", "Motivo", "Sugestão Categoria", "Sugestão Causa", "Confiança revisão", "Evidências revisão", "Serviço", "Responsável atual", "Responsável da Tarefa", "Criador da Tarefa (Azure)", "Status do atendimento", "Última movimentação", "Reaberturas", "Trocas de responsável", "Satisfação", "Tarefa", "Estado da Tarefa", "Versão de cadastro", "Versão entregue", "Motivo da pendência", "Ação recomendada"];
     const csv = [header, ...rows.map((item) => [
       item.source,
       item.workItemType,
@@ -203,6 +241,8 @@ export function DataQuality() {
       item.classificationReview?.evidence?.join(", "),
       item.servicePath ?? item.service,
       item.assignedToName,
+      item.taskAssignedToName ?? (item.source === "AZURE" ? item.assignedToName : null),
+      item.createdByName,
       item.state,
       item.lastMovement,
       item.reopenCount,
@@ -214,8 +254,8 @@ export function DataQuality() {
       item.deliveredVersion,
       guidance.reason,
       guidance.action,
-    ])].map((row) => row.map(escape).join(";")).join("\\r\\n");
-    const blob = new Blob(["\\uFEFF", csv], { type: "text/csv;charset=utf-8" });
+    ])].map((row) => row.map(escape).join(";")).join("\r\n");
+    const blob = new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     const analyst = user.length ? user.join("-").normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").replace(/[^a-zA-Z0-9]+/g, "-").toLowerCase() : "equipe";
@@ -223,12 +263,15 @@ export function DataQuality() {
     const recorte = (issue || "todas-pendencias").replace(/([a-z])([A-Z])/g, "$1-$2").toLowerCase();
     anchor.download = `pendencias-${recorte}-${analyst}.csv`;
     anchor.click();
-    URL.revokeObjectURL(url);
+    window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
   }
 
   const hasFilters = Boolean(type.length || client.length || user.length || search || issue);
   const filterCount = type.length + client.length + user.length + (search ? 1 : 0);
   const title = useMemo(() => metrics.find(([key]) => key === issue)?.[1] ?? "Pendências encontradas", [issue]);
+  const historicalReview = issue === "completedWithoutVersion";
+  const selectedTotal = issue ? Number(data?.summary[issue] ?? 0) : data?.samples.length ?? 0;
+  const analystOptions = useMemo(() => [...new Set([...supportAnalysts, ...(data?.filters.users ?? [])])], [data?.filters.users]);
   const rankedPriorities = useMemo(() => coordinationMetrics
     .map(([key, label, info, group]) => {
       const total = Number(data?.summary[key] ?? 0);
@@ -240,7 +283,7 @@ export function DataQuality() {
     .sort((left, right) => right.score - left.score || right.total - left.total), [data]);
 
   return <Box sx={{ pb: 4 }}>
-    <PageHeader eyebrow="Governança operacional" title="Pendências 2.0" description="Radar preventivo de inconsistências, continuidade, classificação e vínculos entre Movidesk e Azure na operação SIMER." meta={issue ? `${data?.samples.length ?? 0} evidência(s) no recorte selecionado` : `${coordinationMetrics.reduce((total, [key]) => total + (data?.summary[key] ?? 0), 0)} sinal(is) prioritário(s)`} />
+    <PageHeader eyebrow="Pendências e governança" title="Qualidade operacional" description="Inconsistências de tickets e tarefas, classificação, continuidade e vínculos entre Movidesk e Azure na operação SIMER." meta={issue ? `${selectedTotal} ocorrência(s) no recorte selecionado` : `${coordinationMetrics.reduce((total, [key]) => total + (data?.summary[key] ?? 0), 0)} sinal(is) prioritário(s)`} />
 
     <Card variant="outlined" sx={{ mt: 1.5, overflow: "visible" }}><CardContent sx={{ p: { xs: 1.5, md: 1.75 }, "&:last-child": { pb: { xs: 1.5, md: 1.75 } } }}>
       <Stack direction={{ xs: "column", md: "row" }} spacing={1.25} sx={{ mb: 1.75, justifyContent: "space-between", alignItems: { md: "center" } }}>
@@ -250,7 +293,7 @@ export function DataQuality() {
             <Typography sx={{ fontWeight: 850 }}>Recorte das pendências</Typography>
             {filterCount > 0 && <Chip size="small" color="primary" variant="outlined" label={`${filterCount} filtro(s)`} />}
           </Stack>
-          <Typography variant="caption" color="text.secondary">Combine tipo, cliente e analista. Todos os indicadores respeitam o escopo operacional do Suporte SIMER.</Typography>
+          <Typography variant="caption" color="text.secondary">Todos os indicadores respeitam o escopo SIMER. Tickets são atribuídos pelo responsável atual; tarefas, pelo criador ou responsável atual.</Typography>
         </Box>
         <Stack direction="row" spacing={.75} useFlexGap sx={{ flexWrap: "wrap" }}>
           {issue && <Chip size="small" color="warning" variant="outlined" label={`Drill-down · ${title}`} />}
@@ -277,7 +320,30 @@ export function DataQuality() {
         <TextField fullWidth size="small" label="Pesquisar" placeholder="ID, título, assunto ou vínculo..." value={search} onChange={(e) => setSearch(e.target.value)} slotProps={{ inputLabel: { shrink: true }, input: { startAdornment: <SearchOutlined sx={{ mr: 1, color: "text.disabled" }} /> } }} />
         <FormControl fullWidth size="small"><InputLabel shrink id="dataquality-select-1-label">Tipo</InputLabel><Select notched labelId="dataquality-select-1-label" inputProps={{ id: "dataquality-select-1", "aria-labelledby": "dataquality-select-1-label" }} multiple displayEmpty label="Tipo" value={type} onChange={(e) => { const next = typeof e.target.value === "string" ? e.target.value.split(",") : e.target.value; const options = data?.filters.types ?? []; setType(next.includes("__all__") ? [...options] : next.filter((item) => item !== "__all__")); }} renderValue={(selected) => !selected.length ? "Todos os tipos" : selected.length === 1 ? selected[0] : `${selected.length} tipos`}><MenuItem value="__all__"><Checkbox size="small" checked={Boolean(data?.filters.types.length) && type.length === data?.filters.types.length} indeterminate={type.length > 0 && type.length < (data?.filters.types.length ?? 0)} />Todos os tipos</MenuItem>{data?.filters.types.map((value) => <MenuItem key={value} value={value}><Checkbox size="small" checked={type.includes(value)} />{value}</MenuItem>)}</Select></FormControl>
         <Autocomplete multiple fullWidth size="small" options={data?.filters.clients ?? []} value={client} onChange={(_, value) => setClient(value)} renderInput={(params) => <TextField {...params} label="Cliente" placeholder={!client.length ? "Todos os clientes" : undefined} slotProps={{ inputLabel: { shrink: true } }} />} limitTags={1} />
-        <Autocomplete multiple fullWidth size="small" options={data?.filters.users ?? []} value={user} onChange={(_, value) => setUser(value)} renderInput={(params) => <TextField {...params} label="Analista" placeholder={!user.length ? "Todos os analistas" : undefined} slotProps={{ inputLabel: { shrink: true } }} />} limitTags={1} />
+        <FormControl fullWidth size="small">
+          <InputLabel id="dataquality-analyst-label" shrink>Analista</InputLabel>
+          <Select
+            multiple
+            displayEmpty
+            labelId="dataquality-analyst-label"
+            label="Analista"
+            value={user}
+            onChange={(event) => {
+              const next = typeof event.target.value === "string" ? event.target.value.split(",") : event.target.value;
+              setUser(next);
+            }}
+            renderValue={(selected) => selected.length === 1
+              ? analystDisplayNames[selected[0]] ?? selected[0]
+              : selected.length > 1 ? `${selected.length} analistas selecionados` : "Todos os analistas"}
+          >
+            {analystOptions.map((analyst) => (
+              <MenuItem key={analyst} value={analyst}>
+                <Checkbox size="small" checked={user.includes(analyst)} />
+                {analystDisplayNames[analyst] ?? analyst}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
       </Box>
     </CardContent></Card>
     {error && <Alert severity="error" sx={{ mt: 2 }}>Não foi possível analisar a qualidade dos dados.</Alert>}
@@ -329,11 +395,11 @@ export function DataQuality() {
 
     <Card variant="outlined" sx={{ mt: 2 }}><CardContent>
       <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ justifyContent: "space-between", alignItems: { sm: "center" } }}>
-        <Box><Typography variant="h6" sx={{ fontWeight: 850 }}>Tendência da dívida operacional</Typography><Typography variant="body2" color="text.secondary">Snapshots diários reais do escopo SIMER. A série começa a ser construída a partir desta versão.</Typography></Box>
-        <Chip variant="outlined" label={data?.trend?.length ? `${data.trend.length} dia(s) registrados` : "Aguardando histórico"} />
+        <Box><Typography variant="h6" sx={{ fontWeight: 850 }}>Tendência das pendências operacionais</Typography><Typography variant="body2" color="text.secondary">Histórico diário do recorte atual, separado por analista, cliente e tipo.</Typography></Box>
+        <Chip variant="outlined" label={data?.trend?.length ? `${data.trend.length} dia(s) neste recorte` : "Aguardando primeiro snapshot"} />
       </Stack>
       <Box sx={{ height: 260, mt: 1.5 }}>
-        {data?.trend?.length ? <ResponsiveContainer width="100%" height="100%"><LineChart data={data.trend.map((item) => ({ ...item, day: new Date(item.date).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }) }))}><CartesianGrid stroke={theme.palette.divider} strokeDasharray="4 4" vertical={false} opacity={.5}/><XAxis dataKey="day" tick={{ fontSize: 11, fill: theme.palette.text.secondary }} axisLine={false} tickLine={false}/><YAxis allowDecimals={false} tick={{ fontSize: 11, fill: theme.palette.text.secondary }} axisLine={false} tickLine={false}/><ChartTooltip cursor={false} contentStyle={{ borderRadius: 12, border: `1px solid ${theme.palette.divider}`, background: theme.palette.background.paper, color: theme.palette.text.primary }}/><Line type="monotone" dataKey="total" name="Pendências prioritárias" stroke={theme.palette.primary.main} strokeWidth={2.5} dot={false}/><Line type="monotone" dataKey="critical" name="Fluxo crítico" stroke={theme.palette.error.main} strokeWidth={2.2} dot={false}/></LineChart></ResponsiveContainer> : <Alert severity="info">O primeiro snapshot será gravado ao abrir a visão sem filtros. A tendência ficará comparável conforme os próximos dias forem registrados.</Alert>}
+        {data?.trend?.length ? <><ResponsiveContainer width="100%" height="100%"><LineChart data={data.trend.map((item) => ({ ...item, day: new Date(item.date).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }) }))}><CartesianGrid stroke={theme.palette.divider} strokeDasharray="4 4" vertical={false} opacity={.5}/><XAxis dataKey="day" tick={{ fontSize: 11, fill: theme.palette.text.secondary }} axisLine={false} tickLine={false}/><YAxis allowDecimals={false} tick={{ fontSize: 11, fill: theme.palette.text.secondary }} axisLine={false} tickLine={false}/><ChartTooltip cursor={false} contentStyle={{ borderRadius: 12, border: `1px solid ${theme.palette.divider}`, background: theme.palette.background.paper, color: theme.palette.text.primary }}/><Line type="linear" dataKey="total" name="Pendências prioritárias" stroke={theme.palette.primary.main} strokeWidth={2.5} dot={{ r: 4 }}/><Line type="linear" dataKey="critical" name="Fluxo crítico" stroke={theme.palette.error.main} strokeWidth={2.2} dot={{ r: 3 }}/></LineChart></ResponsiveContainer>{data.trend.length === 1 && <Typography variant="caption" color="text.secondary">Primeiro snapshot deste recorte. A comparação ficará disponível após os próximos registros diários.</Typography>}</> : <Alert severity="info">Ainda não há snapshots diários para este recorte. A tendência começará a ser comparável após o primeiro registro.</Alert>}
       </Box>
     </CardContent></Card>
 
@@ -380,13 +446,19 @@ export function DataQuality() {
     <Card variant="outlined" sx={{ mt: 2 }}><CardContent>
       <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ justifyContent: "space-between", alignItems: { sm: "center" } }}>
         <Box>
-          <Typography variant="h6" sx={{ fontWeight: 800 }}>{title}</Typography>
-          <Typography variant="caption" color="text.secondary">{data?.samples.length ?? 0} registro(s) no recorte atual</Typography>
+          <Typography variant="h6" sx={{ fontWeight: 800 }}>{historicalReview ? "Revisão do histórico" : issue ? title : "Pendências encontradas"}</Typography>
+          <Typography variant="caption" color="text.secondary">{issue ? `${selectedTotal} ocorrência(s) no filtro · ${data?.samples.length ?? 0} exibida(s)` : `${data?.samples.length ?? 0} registro(s) no recorte atual`}</Typography>
         </Box>
-        <Button variant="outlined" startIcon={<DownloadOutlined />} disabled={!data?.samples.length} onClick={exportPendingList}>
-          Exportar lista{user.length ? " do analista" : ""}
+        <Button variant="outlined" startIcon={<DownloadOutlined />} disabled={!data?.samples.length || exporting} onClick={() => void exportPendingList()}>
+          {exporting ? "Preparando relatório…" : issue && user.length === 1 ? "Exportar relatório completo do analista" : `Exportar lista${user.length ? " visível do analista" : " visível"}`}
         </Button>
       </Stack>
+      {historicalReview && <Alert severity="info" sx={{ mt: 1 }}>Os registros abaixo são de tarefas concluídas. O Hub os separa das pendências operacionais ativas; revise apenas o dado histórico de versão.</Alert>}
+      {issue === "ticketOpenTaskFinished" && <Alert severity="info" sx={{ mt: 1 }}>A tarefa já foi concluída. A pendência operacional é o atendimento Movidesk que continua aberto e precisa ser encerrado após validar a entrega.</Alert>}
+      {issue === "ticketOpenTaskWithoutDelivery" && <Alert severity="warning" sx={{ mt: 1 }}>A tarefa já foi concluída, mas não há versão entregue registrada. A ação pendente é confirmar a publicação e atualizar esse dado antes de encerrar o atendimento.</Alert>}
+      {issue === "ticketClosedTaskOpen" && <Alert severity="warning" sx={{ mt: 1 }}>O atendimento foi encerrado enquanto a tarefa permanece ativa. Revise o estado da tarefa com o analista responsável.</Alert>}
+      {exportError && <Alert severity="error" sx={{ mt: 1 }}>{exportError}</Alert>}
+      {issue && user.length === 1 && <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: .75 }}>O arquivo buscará todas as ocorrências desta pendência para {user[0]}, sem o limite de linhas da lista exibida.</Typography>}
       {loading ? <AsyncState status="loading" data={data} loading={<ContentState kind="loading" title="Carregando pendências" minHeight={320} />}>{() => null}</AsyncState> : error && !data ? <AsyncState status="error" data={data} error="Não foi possível analisar a qualidade dos dados.">{() => null}</AsyncState> : !data?.samples.length ? <ContentState kind="empty" title="Nenhuma pendência encontrada" description="Ajuste os filtros para consultar outros registros." /> : <Stack spacing={1} sx={{ mt: 2 }}>{data?.samples.map((item) => <Button key={`${item.source}-${item.id}`} onClick={() => void open(item)} sx={{ justifyContent: "flex-start", textTransform: "none", border: "1px solid", borderColor: "divider", p: 1.3, borderRadius: 1.5 }}><Box sx={{ textAlign: "left", minWidth: 0 }}><Stack direction="row" spacing={1} sx={{ alignItems: "center" }}><Chip size="small" label={item.workItemType} /><Typography sx={{ fontWeight: 750 }}>#{item.source === "MOVIDESK" ? item.movideskTicket ?? item.id : item.id} · {item.title}</Typography></Stack><Typography variant="caption" color="text.secondary">{[item.state, item.client ?? "Sem cliente", item.category ? `Categoria ${item.category}` : "Sem categoria", item.cause ? `Causa ${item.cause}` : "Sem causa", item.reason ? `Motivo ${item.reason}` : "Sem motivo", item.classificationReview?.suggestedCategory ? `Sugestão Categoria ${item.classificationReview.suggestedCategory}` : null, item.classificationReview?.suggestedCause ? `Sugestão Causa ${item.classificationReview.suggestedCause}` : null, item.servicePath ? `Serviço ${item.servicePath}` : "Sem serviço", item.serviceSuggestion ? `Sugestão ${item.serviceSuggestion.service} · ${item.serviceSuggestion.confidence}` : null, item.module ?? "Sem módulo", item.assignedToName ?? "Sem responsável", item.movideskTicket ? `Ticket ${item.movideskTicket}` : "Sem ticket", item.taskNumber ? `Tarefa #${item.taskNumber}` : "Sem Tarefa", item.taskState ?? null, item.registeredVersion ? `Cadastro ${item.registeredVersion}` : null, item.deliveredVersion ? `Entrega ${item.deliveredVersion}` : "Sem versão entregue"].filter(Boolean).join(" · ")}</Typography></Box></Button>)}</Stack>}
     </CardContent></Card>
 

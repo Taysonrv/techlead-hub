@@ -202,6 +202,30 @@ export function ticketOperationalScope(includeDeleted = false): Prisma.TicketWhe
   return simerSupportTicketScope(includeDeleted);
 }
 
+export type OperationalSupportTicketSnapshot = {
+  createdDate: Date;
+  client: string | null;
+  owner: string | null;
+  service: string | null;
+  serviceFirstLevel: string | null;
+  serviceSecondLevel: string | null;
+  serviceThirdLevel: string | null;
+  ownerTeam: string | null;
+  isDeleted: boolean;
+};
+
+/** Mirrors ticketOperationalScope for a persisted row, used to detect portfolio entry transitions. */
+export function isInOperationalSimerSupportPortfolio(ticket: OperationalSupportTicketSnapshot): boolean {
+  if (ticket.isDeleted || ticket.createdDate < OPERATIONAL_SCOPE_START || !isSupportAnalyst(ticket.owner)) return false;
+  const normalizedClient = normalizeClientScopeValue(ticket.client ?? "");
+  if (!SIMER_CLIENTS.some((client) => normalizeClientScopeValue(client) === normalizedClient)) return false;
+  const products = [ticket.service, ticket.serviceFirstLevel, ticket.serviceSecondLevel, ticket.serviceThirdLevel, ticket.ownerTeam]
+    .filter((value): value is string => Boolean(value))
+    .map(normalizeClientScopeValue);
+  if (SIMER_EXCLUDED_PRODUCTS.some((product) => products.some((value) => value.includes(normalizeClientScopeValue(product))))) return false;
+  return products.some((value) => value.includes("SIMER"));
+}
+
 /** A Coordenação usa a mesma carteira estrita das demais telas. */
 export function coordinationTicketScope(): Prisma.TicketWhereInput {
   return ticketOperationalScope();

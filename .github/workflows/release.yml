@@ -78,6 +78,8 @@ jobs:
           Write-Host "Provisionamento sensível deve ser realizado no primeiro acesso e armazenado no safeStorage."
       - name: Compilar e testar
         shell: pwsh
+        env:
+          VITE_APP_VERSION: ${{ needs.metadata.outputs.version }}
         run: |
           npm run prisma:generate --prefix backend
           npm run build --prefix backend

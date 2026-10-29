@@ -69,6 +69,7 @@ declare global {
 
         importEnv: () => Promise<{
           databaseUrl: string;
+          systemConfigKey?: string;
           organization: string;
           project: string;
           wiki: string;
@@ -114,6 +115,10 @@ declare global {
       startup: {
         get: () => Promise<{ enabled: boolean }>;
         set: (enabled: boolean) => Promise<{ enabled: boolean }>;
+      };
+
+      notifications: {
+        show: (notification: { key: string; title: string; body: string; silent: boolean }) => Promise<boolean>;
       };
 
       updates: {

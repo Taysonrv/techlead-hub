@@ -9,6 +9,7 @@ import {
 import { alpha } from "@mui/material/styles";
 import type { ReactNode } from "react";
 import { aliareColors } from "../theme/theme";
+import { analyticalPanelSx } from "../theme/layoutTokens";
 
 type ExecutiveSectionProps = {
   title?: string;
@@ -36,16 +37,9 @@ export function ExecutiveSection({
     <Card
       elevation={0}
       sx={{
-        minWidth: 0,
-        width: "100%",
-        height: "100%",
+        ...analyticalPanelSx,
         maxWidth: "100%",
-        overflow: "hidden",
         isolation: "isolate",
-        borderColor: "divider",
-        borderRadius: "var(--hub-radius-lg)",
-        boxShadow: "var(--hub-shadow-card)",
-        background: "var(--hub-surface)",
         "&::before": {
           content: '""',
           position: "absolute",

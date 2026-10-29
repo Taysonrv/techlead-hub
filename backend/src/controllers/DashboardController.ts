@@ -150,6 +150,13 @@ export class DashboardController {
           where: dashboardWhere({
             ...snapshotWhere,
             ...closedDateWhere,
+            NOT: {
+              OR: [
+                { baseStatus: "Canceled" },
+                { status: { contains: "cancel", mode: "insensitive" } },
+                { canceledDate: { not: null } },
+              ],
+            },
           }),
         }),
 

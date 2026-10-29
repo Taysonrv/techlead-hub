@@ -172,6 +172,7 @@ app.get("/health", (_req, res) => {
     status: databaseReady ? "ok" : "degraded",
     database: databaseReady ? "ready" : "unavailable",
     scheduler: databaseReady ? "enabled" : "disabled",
+    integrationsConfiguration: process.env.APP_INTEGRATIONS_CONFIG_STATUS ?? "unknown",
     timestamp: new Date().toISOString(),
   });
 });

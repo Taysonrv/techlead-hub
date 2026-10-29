@@ -45,6 +45,7 @@ type UpdateStateListener = (
 
 type ConfigurationInput = {
   databaseUrl: string;
+  systemConfigKey?: string;
   organization: string;
   project: string;
   wiki: string;
@@ -109,6 +110,11 @@ const techLeadHubApi = {
   startup: {
     get: async (): Promise<{ enabled: boolean }> => ipcRenderer.invoke("startup:get"),
     set: async (enabled: boolean): Promise<{ enabled: boolean }> => ipcRenderer.invoke("startup:set", enabled),
+  },
+
+  notifications: {
+    show: async (notification: { key: string; title: string; body: string; silent: boolean }): Promise<boolean> =>
+      ipcRenderer.invoke("notifications:show", notification),
   },
 
   /* =======================================================

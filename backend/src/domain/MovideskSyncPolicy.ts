@@ -1,5 +1,7 @@
 export const MOVIDESK_SAFETY_LOOKBACK_MINUTES = 360;
-export const MOVIDESK_RECONCILIATION_DAYS = 7;
+// Cobre o mês corrente do Dashboard e atualizações em tickets criados antes
+// do início da carga anual, que ainda podem ser resolvidos neste período.
+export const MOVIDESK_RECONCILIATION_DAYS = 35;
 export const MOVIDESK_RECONCILIATION_INTERVAL_MS = 24 * 60 * 60_000;
 
 export function movideskSyncIntervalMinutes(raw = process.env.MOVIDESK_SYNC_INTERVAL_MINUTES) {

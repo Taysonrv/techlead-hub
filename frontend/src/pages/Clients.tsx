@@ -58,7 +58,7 @@ import { useNavigate } from "react-router-dom";
 
 import { getTicketSnapshot, getTicketSnapshotState, subscribeTicketSnapshotRefresh } from "../services/ticketSnapshot";
 import { calculateTimestampSla } from "../utils/timestampSla";
-import { buildOperationalCohorts } from "../utils/operationalMetrics";
+import { buildOperationalCohorts, isOperationallyOpen } from "../utils/operationalMetrics";
 import { useFilters } from "../context/FiltersContext";
 import { PeriodFilter } from "../components/PeriodFilter";
 import { PageHeader } from "../components/PageHeader";
@@ -1868,9 +1868,9 @@ export function Clients() {
                 <YAxis allowDecimals={false} width={38} />
                 <Tooltip />
                 <Legend onClick={(entry) => toggleLine(String(entry.dataKey ?? ""), 3, setHiddenMovementLines)} formatter={(value, entry) => <span style={{ cursor: "pointer", opacity: hiddenMovementLines.has(String(entry.dataKey ?? "")) ? 0.38 : 1, textDecoration: hiddenMovementLines.has(String(entry.dataKey ?? "")) ? "line-through" : "none" }}>{value}</span>} />
-                <Line type="monotone" dataKey="abertos" hide={hiddenMovementLines.has("abertos")} name="Abertos" stroke={semanticChartColors.normal} strokeWidth={2.5} dot={false} activeDot={{ r: 5 }} />
-                <Line type="monotone" dataKey="resolvidos" hide={hiddenMovementLines.has("resolvidos")} name="Resolvidos" stroke={semanticChartColors.positive} strokeWidth={2.5} dot={false} activeDot={{ r: 5 }} />
-                <Line type="monotone" dataKey="encerrados" hide={hiddenMovementLines.has("encerrados")} name="Encerrados" stroke={semanticChartColors.attention} strokeWidth={2.5} dot={false} activeDot={{ r: 5 }} />
+                <Line type="linear" dataKey="abertos" hide={hiddenMovementLines.has("abertos")} name="Abertos" stroke={semanticChartColors.normal} strokeWidth={2.5} dot={false} activeDot={{ r: 5 }} />
+                <Line type="linear" dataKey="resolvidos" hide={hiddenMovementLines.has("resolvidos")} name="Resolvidos" stroke={semanticChartColors.positive} strokeWidth={2.5} dot={false} activeDot={{ r: 5 }} />
+                <Line type="linear" dataKey="encerrados" hide={hiddenMovementLines.has("encerrados")} name="Encerrados" stroke={semanticChartColors.attention} strokeWidth={2.5} dot={false} activeDot={{ r: 5 }} />
               </LineChart>
             </ResponsiveContainer>
           </Box>
@@ -1895,7 +1895,7 @@ export function Clients() {
                   <Tooltip />
                   <Legend onClick={(entry) => toggleLine(String(entry.dataKey ?? ""), monthlyCategoryTrend.types.length, setHiddenCategoryLines)} formatter={(value, entry) => <span style={{ cursor: "pointer", opacity: hiddenCategoryLines.has(String(entry.dataKey ?? "")) ? 0.38 : 1, textDecoration: hiddenCategoryLines.has(String(entry.dataKey ?? "")) ? "line-through" : "none" }}>{value}</span>} />
                   {monthlyCategoryTrend.types.map((type, index) => (
-                    <Line key={type} type="monotone" dataKey={type} hide={hiddenCategoryLines.has(type)} name={type}
+                    <Line key={type} type="linear" dataKey={type} hide={hiddenCategoryLines.has(type)} name={type}
                       stroke={PIE_COLORS[index % PIE_COLORS.length]} strokeWidth={2.5} dot={{ r: 3 }} activeDot={{ r: 5 }} />
                   ))}
                 </LineChart>
@@ -2002,9 +2002,9 @@ export function Clients() {
                     </span>
                   )}
                 />
-                <Line type="monotone" dataKey="resposta" name="SLA 1ª resposta" stroke={PIE_COLORS[0]} strokeWidth={2.5} connectNulls={false} hide={hiddenPerformanceLines.has("resposta")} />
-                <Line type="monotone" dataKey="solucao" name="SLA solução" stroke={PIE_COLORS[1]} strokeWidth={2.5} connectNulls={false} hide={hiddenPerformanceLines.has("solucao")} />
-                <Line type="monotone" dataKey="resolucao" name="Taxa de resolução" stroke={PIE_COLORS[2]} strokeWidth={2.5} connectNulls={false} hide={hiddenPerformanceLines.has("resolucao")} />
+                <Line type="linear" dataKey="resposta" name="SLA 1ª resposta" stroke={PIE_COLORS[0]} strokeWidth={2.5} connectNulls={false} hide={hiddenPerformanceLines.has("resposta")} />
+                <Line type="linear" dataKey="solucao" name="SLA solução" stroke={PIE_COLORS[1]} strokeWidth={2.5} connectNulls={false} hide={hiddenPerformanceLines.has("solucao")} />
+                <Line type="linear" dataKey="resolucao" name="Taxa de resolução" stroke={PIE_COLORS[2]} strokeWidth={2.5} connectNulls={false} hide={hiddenPerformanceLines.has("resolucao")} />
               </LineChart>
             </ResponsiveContainer>
           </Box>
@@ -4396,14 +4396,7 @@ function formatSlaPercent(value: number | null) {
 function isOpen(
   ticket: Ticket
 ) {
-  return (
-    ticket.baseStatus ===
-      "New" ||
-    ticket.baseStatus ===
-      "InAttendance" ||
-    ticket.baseStatus ===
-      "Stopped"
-  );
+  return isOperationallyOpen(ticket);
 }
 
 /* =========================================================

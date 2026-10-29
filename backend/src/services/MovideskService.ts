@@ -12,7 +12,9 @@ import { MOVIDESK_SAFETY_LOOKBACK_MINUTES, MOVIDESK_RECONCILIATION_DAYS, movides
 const PAGE_SIZE = 50;
 const INCREMENTAL_SAFETY_LOOKBACK_MINUTES = MOVIDESK_SAFETY_LOOKBACK_MINUTES;
 const INITIAL_INCREMENTAL_CATCHUP_HOURS = 24;
-const INCREMENTAL_COMPLETED_ACTION = "MOVIDESK_INCREMENTAL_COMPLETED_2026_V1";
+// V2 inicia uma reconciliação ampliada após o deploy, recuperando mudanças
+// antigas que ficaram fora da janela curta usada anteriormente.
+const INCREMENTAL_COMPLETED_ACTION = "MOVIDESK_INCREMENTAL_COMPLETED_2026_V2";
 const ANALYTICAL_REFRESH_DAYS = 70;
 const ANALYTICAL_REFRESH_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const ANALYTICAL_BATCH_SIZE = 8;
@@ -140,19 +142,32 @@ export class MovideskService {
     return `'${value.replace(/'/g, "''")}'`;
   }
 
-  private remoteClientScopeFilter() {
+  private remoteClientScopeFilters() {
     const clients = SIMER_CLIENTS.map(
       (client) => `c/organization/businessName eq ${this.odataString(client)}`,
     ).join(" or ");
     const conditionalOwner = SUPPORT_ANALYSTS.map((name) => `owner/businessName eq ${this.odataString(name)}`).join(" or ");
     const conditionalClient = `clients/any(c: c/organization/businessName eq ${this.odataString("SIAGRI SISTEMAS - RIO VERDE-GO (MATRIZ)")} or c/organization/businessName eq ${this.odataString("SIAGRI SISTEMAS")})`;
-    return `(clients/any(c: ${clients})) or ((${conditionalClient}) and (${conditionalOwner}))`;
+    return {
+      simerClients: `clients/any(c: ${clients})`,
+      conditionalSupport: `(${conditionalClient}) and (${conditionalOwner})`,
+    };
   }
 
-  private remoteScopeFilter(extra?: string | null) {
+  private remoteScopeFilter(
+    extra?: string | null,
+    scope: "all" | "simer-clients" | "conditional-support" = "all",
+    includeCreatedDateFloor = true,
+  ) {
+    const scopes = this.remoteClientScopeFilters();
+    const clientScope = scope === "simer-clients"
+      ? scopes.simerClients
+      : scope === "conditional-support"
+        ? scopes.conditionalSupport
+        : `(${scopes.simerClients}) or (${scopes.conditionalSupport})`;
     const filters = [
-      `createdDate ge ${SYNC_SCOPE_START.toISOString()}`,
-      this.remoteClientScopeFilter(),
+      includeCreatedDateFloor ? `createdDate ge ${SYNC_SCOPE_START.toISOString()}` : null,
+      clientScope,
       extra?.trim() || null,
     ].filter((value): value is string => Boolean(value));
     return filters.map((value) => `(${value})`).join(" and ");
@@ -1321,7 +1336,11 @@ export class MovideskService {
       }
     }
 
-    return names.find((name) => isSimerClient(name)) ?? null;
+    const owner = (row as Record<string, unknown>).owner;
+    const ownerName = owner && typeof owner === "object" && !Array.isArray(owner)
+      ? (owner as Record<string, unknown>).businessName
+      : null;
+    return names.find((name) => isSimerClient(name) || isConditionalSupportTicket(name, typeof ownerName === "string" ? ownerName : null)) ?? null;
   }
 
   private async getPage(
@@ -1334,21 +1353,51 @@ export class MovideskService {
       : since
         ? `lastUpdate gt ${since.toISOString()}`
         : null;
-    const filter = this.remoteScopeFilter(cursorFilter);
-    const response = await this.getWithRetry(`${this.url}/tickets`, {
-      params: {
-        token: this.token(),
-        $select: TICKET_SELECT,
-        $expand: TICKET_EXPAND,
-        $orderby: "lastUpdate asc,id asc",
-        $top: PAGE_SIZE,
-        ...(cursor ? {} : { $skip: skip }),
-        ...(filter ? { $filter: filter } : {}),
-      },
-      timeout: 120_000,
-    }, cursor ? `página cursor após id=${cursor.id}` : `página skip=${skip}`);
-    if (!Array.isArray(response.data)) throw new Error("Resposta inesperada da API Movidesk.");
-    return response.data as unknown[];
+    const requestPage = async (scope: "all" | "simer-clients" | "conditional-support") => {
+      // Incrementais precisam reencontrar tickets antigos atualizados agora;
+      // a janela é limitada por lastUpdate, não pela data original de abertura.
+      const filter = this.remoteScopeFilter(cursorFilter, scope, !since);
+      const response = await this.getWithRetry(`${this.url}/tickets`, {
+        params: {
+          token: this.token(),
+          $select: TICKET_SELECT,
+          $expand: TICKET_EXPAND,
+          $orderby: "lastUpdate asc,id asc",
+          $top: PAGE_SIZE,
+          ...(cursor ? {} : { $skip: skip }),
+          $filter: filter,
+        },
+        timeout: 120_000,
+      }, cursor ? `página cursor após id=${cursor.id}` : `página skip=${skip}`);
+      if (!Array.isArray(response.data)) throw new Error("Resposta inesperada da API Movidesk.");
+      return response.data as Array<Record<string, unknown>>;
+    };
+
+    // A combinação de todos os clientes e da exceção SIAGRI por responsável
+    // excede o limite de nós OData quando acrescentamos a janela incremental.
+    // As partições são mutuamente exclusivas e são mescladas localmente pela
+    // mesma ordenação/cursor, preservando o conjunto elegível original.
+    if (since) {
+      const [simerRows, conditionalRows] = await Promise.all([
+        requestPage("simer-clients"),
+        requestPage("conditional-support"),
+      ]);
+      const unique = new Map<number, Record<string, unknown>>();
+      for (const row of [...simerRows, ...conditionalRows]) {
+        const id = Number(row.id);
+        if (Number.isSafeInteger(id) && !unique.has(id)) unique.set(id, row);
+      }
+      return [...unique.values()]
+        .sort((left, right) => {
+          const leftDate = Date.parse(String(left.lastUpdate ?? ""));
+          const rightDate = Date.parse(String(right.lastUpdate ?? ""));
+          if (leftDate !== rightDate) return leftDate - rightDate;
+          return Number(left.id) - Number(right.id);
+        })
+        .slice(0, PAGE_SIZE);
+    }
+
+    return requestPage("all");
   }
 
   private async getPastPage(skip: number) {
@@ -1486,6 +1535,7 @@ export class MovideskService {
     let fullCursor = mode === "FULL" && checkpoint?.cursorLastUpdate && checkpoint?.cursorId
       ? { lastUpdate: checkpoint.cursorLastUpdate, id: checkpoint.cursorId }
       : null;
+    let incrementalCursor: { lastUpdate: string; id: number } | null = null;
     if (mode === "FULL" && initialSkip >= OFFSET_TO_CURSOR_THRESHOLD && !fullCursor) {
       const reconstructedCursor = await this.reconstructFullCursor(initialSkip);
       if (!reconstructedCursor) {
@@ -1499,16 +1549,32 @@ export class MovideskService {
     }
 
     for (let skip = initialSkip; ; skip += PAGE_SIZE) {
-      const useCursor = mode === "FULL" && (skip >= OFFSET_TO_CURSOR_THRESHOLD || Boolean(fullCursor));
-      const rows = await this.getPage(skip, since, useCursor ? fullCursor : null);
+      const useCursor = mode === "INCREMENTAL" || (mode === "FULL" && (skip >= OFFSET_TO_CURSOR_THRESHOLD || Boolean(fullCursor)));
+      const activeCursor = mode === "INCREMENTAL" ? incrementalCursor : fullCursor;
+      const rows = await this.getPage(skip, since, useCursor ? activeCursor : null);
       summary.queriedPages = (summary.queriedPages ?? 0) + 1;
       if (!rows.length) break;
+
+      if (mode === "INCREMENTAL") {
+        const lastRow = rows[rows.length - 1] as { id?: unknown; lastUpdate?: unknown };
+        const lastId = Number(lastRow.id);
+        const lastUpdate = typeof lastRow.lastUpdate === "string" ? lastRow.lastUpdate : "";
+        if (!Number.isSafeInteger(lastId) || !lastUpdate) {
+          throw new Error("Não foi possível avançar o cursor incremental do Movidesk: a última linha não contém id e lastUpdate válidos.");
+        }
+        incrementalCursor = { id: lastId, lastUpdate: normalizeMovideskDateTimeOffset(lastUpdate) };
+      }
 
       const scopedRows = rows.filter((row) => (isSimerClient(this.ticketClientName(row)) || isConditionalSupportTicket(this.ticketClientName(row), ((row as { owner?: { businessName?: string } | null }).owner)?.businessName)));
       const result = scopedRows.length
         ? await new MovideskJsonImportService().execute(
             Buffer.from(JSON.stringify(scopedRows), "utf8"),
-            { fileName: `API Movidesk · ${mode} · página ${summary.pages + 1}`, userId: userId ?? null, source: "MOVIDESK_API" },
+            {
+              fileName: `API Movidesk · ${mode} · página ${summary.pages + 1}`,
+              userId: userId ?? null,
+              source: "MOVIDESK_API",
+              workflowEventSince: mode === "INCREMENTAL" ? since : null,
+            },
           )
         : { totalRows: 0, created: 0, updated: 0, ignored: 0, errors: 0 };
       summary.pages += 1;

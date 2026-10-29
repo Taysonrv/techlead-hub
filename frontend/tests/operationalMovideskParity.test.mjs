@@ -5,7 +5,7 @@ import ts from "typescript";
 
 const source = readFileSync(new URL("../src/utils/operationalMetrics.ts", import.meta.url), "utf8");
 const js = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
-const { buildOperationalCohorts } = await import(`data:text/javascript,${encodeURIComponent(js)}`);
+const { buildOperationalCohorts, isOperationallyOpen } = await import(`data:text/javascript,${encodeURIComponent(js)}`);
 const period = { start: new Date("2026-10-01T00:00:00Z"), end: new Date("2026-10-31T23:59:59Z") };
 const records = [
   { createdDate: "2026-10-02T12:00:00Z", resolvedDate: null, closedDate: null, baseStatus: "InAttendance", isWithSimer: false },
@@ -35,4 +35,14 @@ test("resolution event remains counted after ticket is reopened", () => {
   const result = buildOperationalCohorts([reopened], period, "allImported");
   assert.equal(result.resolved.length, 1);
   assert.equal(result.backlog.length, 1);
+});
+
+test("backlog accepts only canonical open states and ignores missing or unknown states", () => {
+  assert.equal(isOperationallyOpen({ baseStatus: "New" }), true);
+  assert.equal(isOperationallyOpen({ baseStatus: "inattendance" }), true);
+  assert.equal(isOperationallyOpen({ baseStatus: "Stopped" }), true);
+  assert.equal(isOperationallyOpen({ baseStatus: "Resolved" }), false);
+  assert.equal(isOperationallyOpen({ baseStatus: "Cancelled" }), false);
+  assert.equal(isOperationallyOpen({ baseStatus: "Awaiting customer" }), false);
+  assert.equal(isOperationallyOpen({ baseStatus: null, status: "Open" }), false);
 });

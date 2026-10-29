@@ -2,8 +2,8 @@ import { scopedTicketWhere, scopedAzureWhere } from "../domain/OperationalScope"
 import { prisma } from "../database/prisma";
 import type { Prisma } from "@prisma/client";
 import { SIMER_CLIENTS, SUPPORT_ANALYSTS, OPERATIONAL_SCOPE_START, coordinationAzureScope, coordinationTicketScope } from "../domain/OperationalScope";
-import { OPERATIONAL_AGING, daysBefore, hoursBefore, isOperationalTicketOpen, isTerminalWorkItemState, normalizeOperationalText, ticketLastMovement, workItemLastMovement } from "../domain/OperationalLifecycleRules";
-import { TECHNICAL_LEADERSHIP_AUDIT_SIGNALS, TECHNICAL_LEADERSHIP_THRESHOLDS, leadershipAuditConfidence, recurrenceAction, recurrenceConfidence, recurrenceGapConfidence, recurrenceGapImpact, recurrencePattern, recurrenceReading, recurrenceReadingAction, recurrenceTrend, volumeGapImpact } from "../domain/TechnicalLeadershipRules";
+import { OPERATIONAL_AGING, daysBefore, hoursBefore, isOperationalTicketFinalized, isOperationalTicketOpen, isTerminalWorkItemState, normalizeOperationalText, ticketLastMovement, workItemLastMovement } from "../domain/OperationalLifecycleRules";
+import { classifyLeadershipSla, inclusiveCalendarDays, TECHNICAL_LEADERSHIP_AUDIT_SIGNALS, TECHNICAL_LEADERSHIP_THRESHOLDS, leadershipAuditConfidence, recurrenceAction, recurrenceConfidence, recurrenceGapConfidence, recurrenceGapImpact, recurrencePattern, recurrenceReading, recurrenceReadingAction, recurrenceTrend, volumeGapImpact } from "../domain/TechnicalLeadershipRules";
 
 const technicalLeadershipCache = new Map<string, { expiresAt: number; value: unknown }>();
 
@@ -35,8 +35,9 @@ export class TechnicalLeadershipService {
     const customRange = Boolean(parsedStart && parsedEnd && !Number.isNaN(parsedStart.getTime()) && !Number.isNaN(parsedEnd.getTime()) && parsedStart <= parsedEnd);
     const periodStart = customRange ? parsedStart! : new Date(now.getTime() - requestedDays * 86400000);
     const periodEnd = customRange ? parsedEnd! : now;
-    const days = Math.max(1, Math.ceil((periodEnd.getTime() - periodStart.getTime()) / 86400000));
-    const previousStart = new Date(periodStart.getTime() - days * 86400000);
+    const days = customRange ? inclusiveCalendarDays(periodStart, periodEnd) : requestedDays;
+    const previousStart = new Date(periodStart);
+    previousStart.setDate(previousStart.getDate() - days);
     const stale3d = hoursBefore(now, OPERATIONAL_AGING.ticketStaleHours);
     const stale5d = daysBefore(now, OPERATIONAL_AGING.pausedTicketDays);
     const stale7d = daysBefore(now, OPERATIONAL_AGING.newTicketDays);
@@ -46,6 +47,8 @@ export class TechnicalLeadershipService {
     // para o segundo parâmetro opcional de isOperationalTicketOpen.
     const openTicket = (ticket: { baseStatus: string | null; status: string }) =>
       isOperationalTicketOpen(ticket);
+    const finalizedTicket = (ticket: { baseStatus: string | null; status: string }) =>
+      isOperationalTicketFinalized(ticket);
     const terminalTask = isTerminalWorkItemState;
     const ticketWhere: Prisma.TicketWhereInput = {
       AND: [
@@ -101,19 +104,17 @@ export class TechnicalLeadershipService {
     // Mantê-los separados evita comparar o card "Prazos vencidos" da Coordenação
     // com um indicador híbrido de prazo + SLA na Liderança Técnica.
     const overdue = openTickets.filter((ticket) => Boolean(ticket.dueDate && ticket.dueDate < now));
-    const slaViolated = openTickets.filter((ticket) =>
-      /venc|viol|fora|estour|atras/.test(normalize(ticket.solutionSlaIndicator)),
-    );
+    const slaViolated = openTickets.filter((ticket) => classifyLeadershipSla(ticket.solutionSlaIndicator) === "outside");
     const riskOverdue = openTickets.filter((ticket) => overdue.includes(ticket) || slaViolated.includes(ticket));
     const slaSoon = openTickets.filter((ticket) => ticket.dueDate && ticket.dueDate >= now && ticket.dueDate <= new Date(now.getTime() + 86400000));
     const blocked = openTasks.filter((task) => task.blockedProcess);
     const taskStale = openTasks.filter((task) => (workItemLastMovement(task) ?? now) < daysBefore(now, OPERATIONAL_AGING.workItemStaleDays));
-    const unassigned = openTasks.filter((task) => !task.assignedToName);
+    const unassigned = openTasks.filter((task) => !task.assignedToName?.trim());
     const ticketByTask = new Map(tickets.filter((t) => t.taskNumber).map((t) => [t.taskNumber!, t]));
     const taskById = new Map(tasks.map((task) => [task.id, task]));
     const taskByTicket = new Map(tasks.filter((t) => t.movideskTicket).map((t) => [t.movideskTicket!, t]));
     const linkedTask = (ticket: (typeof tickets)[number]) => (ticket.taskNumber ? taskById.get(ticket.taskNumber) : undefined) ?? taskByTicket.get(ticket.movideskId);
-    const closedTicketActiveTask = tickets.filter((ticket) => !openTicket(ticket) && linkedTask(ticket) && !terminalTask(linkedTask(ticket)!.state));
+    const closedTicketActiveTask = tickets.filter((ticket) => finalizedTicket(ticket) && linkedTask(ticket) && !terminalTask(linkedTask(ticket)!.state));
     const openTicketFinishedTask = openTickets.filter((ticket) => linkedTask(ticket) && terminalTask(linkedTask(ticket)!.state));
 
     const periodTickets = tickets.filter((ticket) => ticket.createdDate >= periodStart && ticket.createdDate <= periodEnd);
@@ -199,7 +200,10 @@ export class TechnicalLeadershipService {
         const moduleCounts = new Map<string, number>(); modules.forEach((module) => moduleCounts.set(module, (moduleCounts.get(module) ?? 0) + 1));
         const topModule = [...moduleCounts.entries()].sort((a,b) => b[1]-a[1])[0] ?? null;
         const trend = recurrenceTrend({ current: value.count, previous });
-        const clientSharePct = topClient ? Math.round(topClient[1] / Math.max(1, value.examples.length) * 100) : 0;
+        const identifiedClientTickets = [...clientCounts.values()].reduce((total, count) => total + count, 0);
+        const clientSharePct = topClient && identifiedClientTickets
+          ? Math.round(topClient[1] / identifiedClientTickets * 100)
+          : 0;
         const pattern = recurrencePattern({ clientCount: value.clients.size, topClientSharePct: clientSharePct });
         const reading = recurrenceReading({ trend, pattern });
         return { topic, count: value.count, previous, changePct, trend, reading, clients: [...value.clients], analysts: [...value.analysts], action: recurrenceReadingAction(reading, action), examples: value.examples.slice(0, 50), linkedExamples, confidence,
@@ -261,30 +265,76 @@ export class TechnicalLeadershipService {
       const d = String(value.getDate()).padStart(2, "0");
       return `${y}-${m}-${d}`;
     };
-    const daySeries: Array<{ date: string; opened: number; resolved: number; closed: number; reopened: number; pending: number }> = [];
-    for (let cursor = new Date(periodStart); cursor <= periodEnd; cursor.setDate(cursor.getDate() + 1)) {
-      const startDay = new Date(cursor); startDay.setHours(0, 0, 0, 0);
-      const endDay = new Date(cursor); endDay.setHours(23, 59, 59, 999);
-      const opened = tickets.filter((ticket) => ticket.createdDate >= startDay && ticket.createdDate <= endDay).length;
-      const resolved = tickets.filter((ticket) => Boolean(ticket.resolvedDate && ticket.resolvedDate >= startDay && ticket.resolvedDate <= endDay)).length;
-      const closed = tickets.filter((ticket) => Boolean(ticket.closedDate && ticket.closedDate >= startDay && ticket.closedDate <= endDay)).length;
-      const reopened = tickets.filter((ticket) => Boolean(ticket.reopenedDate && ticket.reopenedDate >= startDay && ticket.reopenedDate <= endDay)).length;
-      const pending = tickets.filter((ticket) =>
-        ticket.createdDate <= endDay
-        && (!ticket.resolvedDate || ticket.resolvedDate > endDay)
-        && (!ticket.closedDate || ticket.closedDate > endDay)
-        && (!ticket.canceledDate || ticket.canceledDate > endDay)
-      ).length;
-      daySeries.push({ date: dateKey(startDay), opened, resolved, closed, reopened, pending });
+    const dayStarts: Date[] = [];
+    const dayEnds: Date[] = [];
+    const firstDay = new Date(periodStart);
+    firstDay.setHours(0, 0, 0, 0);
+    for (const cursor = new Date(firstDay); cursor <= periodEnd; cursor.setDate(cursor.getDate() + 1)) {
+      dayStarts.push(new Date(cursor));
+      const end = new Date(cursor);
+      end.setHours(23, 59, 59, 999);
+      dayEnds.push(end);
+    }
+    const dayBuckets = new Map(dayStarts.map((start) => [dateKey(start), {
+      date: dateKey(start), opened: 0, resolved: 0, closed: 0, reopened: 0, pending: 0,
+    }]));
+    const countEvent = (date: Date | null, key: "opened" | "resolved" | "closed" | "reopened") => {
+      if (!inRange(date)) return;
+      const bucket = dayBuckets.get(dateKey(date!));
+      if (bucket) bucket[key] += 1;
+    };
+    for (const ticket of tickets) {
+      countEvent(ticket.createdDate, "opened");
+      countEvent(ticket.resolvedDate, "resolved");
+      countEvent(ticket.closedDate, "closed");
+      countEvent(ticket.reopenedDate, "reopened");
     }
 
-    const slaBucket = (value: string | null | undefined): "within" | "outside" | "unmeasured" => {
-      const normalized = normalize(value);
-      if (!normalized || /sem sla|nao defin|nao med|n\/a/.test(normalized)) return "unmeasured";
-      if (/fora|venc|viol|estour|atras/.test(normalized)) return "outside";
-      return "within";
+    // Historical backlog is reconstructed by lifecycle intervals. Today's value
+    // comes from the current operational status snapshot, including re-openings.
+    let currentDayIndex = 0;
+    while (currentDayIndex < dayStarts.length && dayStarts[currentDayIndex]! < new Date(now.getFullYear(), now.getMonth(), now.getDate())) currentDayIndex += 1;
+    const firstDayAtOrAfter = (date: Date) => {
+      let low = 0;
+      let high = dayEnds.length;
+      while (low < high) {
+        const middle = (low + high) >>> 1;
+        if (dayEnds[middle]!.getTime() < date.getTime()) low = middle + 1;
+        else high = middle;
+      }
+      return low;
     };
-    const resolvedPeriod = tickets.filter((ticket) => inRange(ticket.resolvedDate) || inRange(ticket.closedDate));
+    const backlogChanges = new Int32Array(dayStarts.length + 1);
+    const addBacklogInterval = (from: number, to: number) => {
+      const first = Math.max(0, Math.min(dayStarts.length, from));
+      const afterLast = Math.max(first, Math.min(dayStarts.length, to));
+      if (first >= afterLast) return;
+      backlogChanges[first] = (backlogChanges[first] ?? 0) + 1;
+      backlogChanges[afterLast] = (backlogChanges[afterLast] ?? 0) - 1;
+    };
+    for (const ticket of tickets) {
+      const reopened = ticket.reopenedDate && ticket.reopenedDate > ticket.createdDate ? ticket.reopenedDate : null;
+      const cycleStart = reopened ?? ticket.createdDate;
+      if (openTicket(ticket)) {
+        addBacklogInterval(firstDayAtOrAfter(cycleStart), currentDayIndex);
+        continue;
+      }
+      const terminal = [ticket.resolvedDate, ticket.closedDate, ticket.canceledDate]
+        .filter((date): date is Date => Boolean(date && date >= cycleStart))
+        .sort((a, b) => a.getTime() - b.getTime())[0];
+      if (terminal) addBacklogInterval(firstDayAtOrAfter(cycleStart), Math.min(firstDayAtOrAfter(terminal), currentDayIndex));
+    }
+    let historicalBacklog = 0;
+    const daySeries = dayStarts.map((start, index) => {
+      historicalBacklog += backlogChanges[index] ?? 0;
+      const bucket = dayBuckets.get(dateKey(start))!;
+      bucket.pending = index >= currentDayIndex ? openTickets.length : historicalBacklog;
+      return bucket;
+    });
+
+    const slaBucket = classifyLeadershipSla;
+    const resolutionDate = (ticket: (typeof tickets)[number]) => ticket.resolvedDate ?? ticket.closedDate;
+    const resolvedPeriod = tickets.filter((ticket) => inRange(resolutionDate(ticket)));
     const resolutionSla = resolvedPeriod.reduce((acc, ticket) => {
       acc[slaBucket(ticket.solutionSlaIndicator)] += 1; return acc;
     }, { within: 0, outside: 0, unmeasured: 0 });

@@ -6,6 +6,7 @@ import {
   Stack,
   Typography,
 } from "@mui/material";
+import { analyticalPanelSx } from "../theme/layoutTokens";
 
 type ChartPanelProps = {
   title: string;
@@ -28,14 +29,7 @@ export function ChartPanel({
     <Card
       variant="outlined"
       sx={{
-        height: "100%",
-        minWidth: 0,
-        overflow: "hidden",
-        bgcolor: "background.paper",
-        borderRadius: "var(--hub-radius-lg)",
-        boxShadow: "var(--hub-shadow-card)",
-        borderColor: "divider",
-        background: "var(--hub-surface)",
+        ...analyticalPanelSx,
       }}
     >
       <CardContent

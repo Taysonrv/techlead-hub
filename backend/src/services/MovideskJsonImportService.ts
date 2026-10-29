@@ -4,8 +4,11 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../database/prisma";
 import {
   areMovideskTeamsAlertsEnabled,
+  isMovideskNewTicketStatus,
   shouldAlertForMovideskSubject,
 } from "./MovideskAlertMatcher";
+import { enqueueNewSupportTicket } from "./TeamsWorkflowEvents";
+import { isInOperationalSimerSupportPortfolio } from "../domain/OperationalScope";
 
 type JsonObject = Record<string, unknown>;
 
@@ -56,6 +59,7 @@ export class MovideskJsonImportService {
       fileHash?: string | null;
       userId?: number | null;
       source?: "MOVIDESK_JSON" | "MOVIDESK_API";
+      workflowEventSince?: Date | null;
     } = {},
   ): Promise<ImportResult> {
     if (!fileBuffer?.length) {
@@ -124,8 +128,16 @@ export class MovideskJsonImportService {
         const existing = await prisma.$transaction(async (tx) => {
           const previous = await tx.ticket.findUnique({
             where: { movideskId: ticket.movideskId },
-            select: { id: true, cause: true, reason: true, businessArea: true },
+            select: {
+              id: true, cause: true, reason: true, businessArea: true,
+              createdDate: true, client: true, owner: true, service: true,
+              serviceFirstLevel: true, serviceSecondLevel: true, serviceThirdLevel: true,
+              ownerTeam: true, isDeleted: true,
+            },
           });
+          const previouslyInPortfolio = previous
+            ? isInOperationalSimerSupportPortfolio(previous)
+            : false;
 
           await tx.ticket.upsert({
             where: { movideskId: ticket.movideskId },
@@ -156,6 +168,7 @@ export class MovideskJsonImportService {
           if (
             areMovideskTeamsAlertsEnabled() &&
             !previous &&
+            isMovideskNewTicketStatus(ticket.status) &&
             shouldAlertForMovideskSubject(ticket.subject)
           ) {
             await tx.teamsAlertOutbox.createMany({
@@ -170,6 +183,20 @@ export class MovideskJsonImportService {
               skipDuplicates: true,
             });
           }
+          const eventWithinIncrementalWindow = Boolean(
+            options.workflowEventSince
+            && (ticket.lastUpdate ?? ticket.createdDate) >= options.workflowEventSince,
+          );
+          await enqueueNewSupportTicket(tx, previouslyInPortfolio, eventWithinIncrementalWindow, {
+              movideskId: ticket.movideskId,
+              subject: ticket.subject,
+              client: ticket.client ?? null,
+              createdDate: ticket.createdDate,
+              urgency: ticket.urgency ?? null,
+              status: ticket.status,
+              owner: ticket.owner ?? null,
+              ownerTeam: ticket.ownerTeam ?? null,
+          });
           return previous;
         });
 
@@ -426,7 +453,19 @@ export class MovideskJsonImportService {
   private toDate(value: unknown) {
     const text = this.toText(value);
     if (!text) return null;
-    const date = new Date(text);
+    // O Movidesk pode retornar DateTime sem sufixo de fuso. Esses valores
+    // representam UTC; sem normalização, o Node os interpreta como horário
+    // local do servidor e o card do Teams volta a aplicar America/Sao_Paulo,
+    // deslocando a abertura em três horas.
+    const hasTimezone = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(text);
+    const normalized = hasTimezone
+      ? text
+      : /^\d{4}-\d{2}-\d{2} \d{2}:/.test(text)
+        ? `${text.replace(" ", "T")}Z`
+        : /T\d{2}:\d{2}/.test(text)
+          ? `${text}Z`
+          : text;
+    const date = new Date(normalized);
     return Number.isNaN(date.getTime()) ? null : date;
   }
 

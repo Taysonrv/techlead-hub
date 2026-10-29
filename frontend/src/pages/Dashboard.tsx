@@ -46,13 +46,13 @@ import { getTicketSnapshot, getTicketSnapshotState, subscribeTicketSnapshotRefre
 import { PeriodFilter } from "../components/PeriodFilter";
 import { PageHeader } from "../components/PageHeader";
 import { ContentState } from "../components/ContentState";
-import { detailDrawerPaperSx } from "../theme/layoutTokens";
+import { analyticalPanelSx, detailDrawerPaperSx } from "../theme/layoutTokens";
 import { KpiCard as ExecutiveKpiCard } from "../components/KpiCard";
 import { ExportTicketsButton } from "../components/ExportTicketsButton";
 import { useFilters } from "../context/FiltersContext";
 import { aliareColors } from "../theme/theme";
 import { calculateTimestampSla } from "../utils/timestampSla";
-import { auditOperationalMetrics, buildOperationalCohorts } from "../utils/operationalMetrics";
+import { auditOperationalMetrics, buildOperationalCohorts, isOperationallyOpen } from "../utils/operationalMetrics";
 import { calculateServiceLevel } from "../utils/serviceLevel";
 import {
   chartPalette,
@@ -125,6 +125,8 @@ type Ticket = {
 
   resolvedDate: string | null;
   closedDate: string | null;
+  canceledDate?: string | null;
+  reopenedDate?: string | null;
 
   lifetimeMinutes: number | null;
   stoppedMinutes: number | null;
@@ -214,6 +216,7 @@ export function Dashboard() {
   const isDark = mode === "dark";
   const chartGrid = isDark ? "rgba(148,163,184,.16)" : "#E4E7EC";
   const chartTick = isDark ? "#8EA4BC" : "#667085";
+  const closedFlowColor = isDark ? "#B9A0FF" : "#7657C7";
   const chartTooltipStyle = {
     background: isDark ? "rgba(7,23,39,.96)" : "#FFFFFF",
     border: `1px solid ${isDark ? "rgba(56,189,248,.24)" : "#E4E7EC"}`,
@@ -221,6 +224,17 @@ export function Dashboard() {
     boxShadow: isDark ? "0 14px 34px rgba(0,0,0,.38)" : "0 12px 28px rgba(16,24,40,.12)",
     color: isDark ? "#EAF4FF" : "#101828",
   };
+  const dashboardSurfaceSx = {
+    ...analyticalPanelSx,
+    borderRadius: { xs: 2.5, md: 3 },
+    borderColor: isDark ? "rgba(80,157,190,.22)" : "rgba(30,96,130,.13)",
+    background: isDark
+      ? "radial-gradient(ellipse at 100% 0%, rgba(32,173,197,.10), transparent 38%), linear-gradient(145deg, #0D2236 0%, #0A192A 100%)"
+      : "radial-gradient(ellipse at 100% 0%, rgba(35,173,191,.07), transparent 38%), linear-gradient(145deg, #FFFFFF 0%, #F5FAFC 100%)",
+    boxShadow: isDark ? "0 16px 40px rgba(0,0,0,.17), inset 0 1px 0 rgba(255,255,255,.025)" : "0 14px 34px rgba(21,54,76,.055), inset 0 1px 0 rgba(255,255,255,.8)",
+    "&:before": { content: '""', position: "absolute", inset: "0 0 auto", height: 2, background: "linear-gradient(90deg, transparent, rgba(42,205,201,.8), rgba(56,189,248,.65), transparent)", opacity: isDark ? .72 : .48 },
+    "&:hover": { borderColor: isDark ? "rgba(56,189,248,.34)" : "rgba(30,140,166,.26)", boxShadow: isDark ? "0 20px 48px rgba(0,0,0,.22)" : "0 18px 40px rgba(21,54,76,.08)" },
+  } as const;
 
   const [tickets, setTickets] =
     useState<Ticket[]>([]);
@@ -284,20 +298,8 @@ export function Dashboard() {
 
     void loadTickets(true);
     const unsubscribeRefresh = subscribeTicketSnapshotRefresh(() => { void loadTickets(); });
-    // Atualização a cada 60s, reutilizando o cache e impedindo overlap.
-    // Não efetuar chamadas enquanto a aba estiver oculta; a próxima leitura
-    // será realizada assim que a página voltar a ficar visível.
-    const refreshOnce = () => {
-      if (document.visibilityState !== "visible" || refreshing) return;
-      void loadTickets();
-    };
-    const intervalId = window.setInterval(refreshOnce, 60_000);
-    const onVisibilityChange = () => { if (document.visibilityState === "visible") refreshOnce(); };
-    document.addEventListener("visibilitychange", onVisibilityChange);
     return () => {
       unsubscribeRefresh();
-      window.clearInterval(intervalId);
-      document.removeEventListener("visibilitychange", onVisibilityChange);
       controller.abort();
     };
   }, []);
@@ -336,7 +338,6 @@ export function Dashboard() {
   const newTickets = useMemo(() => pendingTickets.filter((ticket) => ticket.baseStatus === "New"), [pendingTickets]);
   const attendanceTickets = useMemo(() => pendingTickets.filter((ticket) => ticket.baseStatus === "InAttendance"), [pendingTickets]);
   const stoppedTickets = useMemo(() => pendingTickets.filter((ticket) => ticket.baseStatus === "Stopped"), [pendingTickets]);
-  const criticalTickets = useMemo(() => pendingTickets.filter((ticket) => normalize(ticket.urgency) === "critica"), [pendingTickets]);
 
   const responseSla = useMemo(() => calculateTimestampSla(openedBySimerOperationInPeriod, "response"), [openedBySimerOperationInPeriod]);
 
@@ -367,8 +368,7 @@ export function Dashboard() {
     novos: newTickets.length,
     emAtendimento: attendanceTickets.length,
     parados: stoppedTickets.length,
-    criticos: criticalTickets.length,
-  }), [openedInPeriod, openedBySimerOperationInPeriod, openedWithSimerInPeriod, pendingTickets, resolvedInPeriod, closedInPeriod, newTickets, attendanceTickets, stoppedTickets, criticalTickets]);
+  }), [openedInPeriod, openedBySimerOperationInPeriod, openedWithSimerInPeriod, pendingTickets, resolvedInPeriod, closedInPeriod, newTickets, attendanceTickets, stoppedTickets]);
 
   /* =======================================================
      DESENVOLVIMENTO / AZURE DEVOPS
@@ -1005,8 +1005,8 @@ export function Dashboard() {
       severity: "success" as Severity,
       info: {
         title: "Fechados",
-        summary: "Tickets cuja data de fechamento está dentro do período selecionado.",
-        calculation: "Contagem dos tickets com closedDate dentro do período, sem filtro por responsável atual.",
+        summary: "Tickets fechados no período; atendimentos cancelados são excluídos.",
+        calculation: "Contagem dos tickets com closedDate dentro do período, excluindo cancelados.",
         source: "Movidesk",
         reference: "Ticket.closedDate",
         periodRule: "Usa a data de fechamento, e não a data de abertura.",
@@ -1062,21 +1062,6 @@ export function Dashboard() {
         periodRule: "Respeita o período e os filtros aplicados ao Dashboard.",
       },
       onClick: () => showTickets("Tickets com avaliação CSAT", filteredTickets.filter((ticket)=>ticket.satisfactionScore != null), "Pesquisa de Satisfação Movidesk"),
-    },
-    {
-      title: "Críticos",
-      value: summary.criticos,
-      description: "Pendentes com urgência crítica",
-      severity: "error" as Severity,
-      info: {
-        title: "Críticos",
-        summary: "Tickets atualmente pendentes classificados com urgência crítica.",
-        calculation: "Ticket aberto e urgência normalizada igual a Crítica.",
-        source: "Movidesk",
-        reference: "Ticket.urgency + Ticket.baseStatus",
-        periodRule: "Representa o backlog atual, independentemente da abertura.",
-      },
-      onClick: () => showTickets("Tickets críticos", criticalTickets, "Prioridade imediata no backlog atual"),
     },
     {
       title: "Parados",
@@ -1229,19 +1214,23 @@ export function Dashboard() {
                         <stop offset="5%" stopColor={semanticChartColors.positive} stopOpacity={0.20} />
                         <stop offset="95%" stopColor={semanticChartColors.positive} stopOpacity={0.01} />
                       </linearGradient>
+                      <linearGradient id="closedFlow" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor={closedFlowColor} stopOpacity={0.24} />
+                        <stop offset="95%" stopColor={closedFlowColor} stopOpacity={0.015} />
+                      </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={chartGrid} />
                     <XAxis dataKey="date" tick={{ fontSize: 10 }} minTickGap={24} interval="preserveStartEnd" tickMargin={8} />
                     <YAxis allowDecimals={false} tick={{ fontSize: 10 }} width={42} />
                     <Tooltip contentStyle={chartTooltipStyle} />
                     {!flowHidden.has("opened") && (
-                      <Area type="monotone" dataKey="opened" name="Abertos" stroke={semanticChartColors.normal} strokeWidth={2.4} fill="url(#openedFlow)" activeDot={{ r: 6, cursor: "pointer", onClick: (_event, payload: any) => { const day = payload?.payload?.sortDate; if (day) showTickets(`Abertos em ${formatShortDate(day)}`, openedInPeriod.filter((ticket) => formatIsoDate(new Date(ticket.createdDate)) === day), "Tickets abertos no dia selecionado"); } }} />
+                      <Area type="linear" dataKey="opened" name="Abertos" stroke={semanticChartColors.normal} strokeWidth={2.4} fill="url(#openedFlow)" activeDot={{ r: 6, cursor: "pointer", onClick: (_event, payload: any) => { const day = payload?.payload?.sortDate; if (day) showTickets(`Abertos em ${formatShortDate(day)}`, openedInPeriod.filter((ticket) => formatIsoDate(new Date(ticket.createdDate)) === day), "Tickets abertos no dia selecionado"); } }} />
                     )}
                     {!flowHidden.has("resolved") && (
-                      <Area type="monotone" dataKey="resolved" name="Resolvidos" stroke={semanticChartColors.positive} strokeWidth={2.4} fill="url(#resolvedFlow)" activeDot={{ r: 6, cursor: "pointer", onClick: (_event, payload: any) => { const day = payload?.payload?.sortDate; if (day) showTickets(`Resolvidos em ${formatShortDate(day)}`, resolvedInPeriod.filter((ticket) => Boolean(ticket.resolvedDate) && formatIsoDate(new Date(ticket.resolvedDate!)) === day), "Tickets resolvidos no dia selecionado"); } }} />
+                      <Area type="linear" dataKey="resolved" name="Resolvidos" stroke={semanticChartColors.positive} strokeWidth={2.4} fill="url(#resolvedFlow)" activeDot={{ r: 6, cursor: "pointer", onClick: (_event, payload: any) => { const day = payload?.payload?.sortDate; if (day) showTickets(`Resolvidos em ${formatShortDate(day)}`, resolvedInPeriod.filter((ticket) => Boolean(ticket.resolvedDate) && formatIsoDate(new Date(ticket.resolvedDate!)) === day), "Tickets resolvidos no dia selecionado"); } }} />
                     )}
                     {!flowHidden.has("closed") && (
-                      <Area type="monotone" dataKey="closed" name="Fechados" stroke={semanticChartColors.neutral} strokeWidth={2.2} fillOpacity={0} activeDot={{ r: 6, cursor: "pointer", onClick: (_event, payload: any) => { const day = payload?.payload?.sortDate; if (day) showTickets(`Fechados em ${formatShortDate(day)}`, closedInPeriod.filter((ticket) => Boolean(ticket.closedDate) && formatIsoDate(new Date(ticket.closedDate!)) === day), "Tickets fechados no dia selecionado"); } }} />
+                      <Area type="linear" dataKey="closed" name="Fechados" stroke={closedFlowColor} strokeWidth={2.8} fill="url(#closedFlow)" activeDot={{ r: 6, fill: closedFlowColor, stroke: isDark ? "#0A192A" : "#FFFFFF", strokeWidth: 2, cursor: "pointer", onClick: (_event, payload: any) => { const day = payload?.payload?.sortDate; if (day) showTickets(`Fechados em ${formatShortDate(day)}`, closedInPeriod.filter((ticket) => Boolean(ticket.closedDate) && formatIsoDate(new Date(ticket.closedDate!)) === day), "Tickets fechados no dia selecionado"); } }} />
                     )}
                   </AreaChart>
                 </ResponsiveContainer>
@@ -1250,12 +1239,13 @@ export function Dashboard() {
                 {([
                   ["opened","Abertos",semanticChartColors.normal],
                   ["resolved","Resolvidos",semanticChartColors.positive],
-                  ["closed","Fechados",semanticChartColors.neutral],
+                  ["closed","Fechados",closedFlowColor],
                 ] as const).map(([key,label,color]) => {
                   const active = !flowHidden.has(key);
-                  return <Chip key={key} size="small" clickable variant={active ? "filled" : "outlined"} label={`● ${label}`}
+                  return <Chip key={key} size="small" clickable variant={active ? "filled" : "outlined"} label={label}
+                    icon={<Box component="span" sx={{ width: 9, height: 9, borderRadius: "50%", bgcolor: active ? color : "text.disabled", display: "inline-block" }} />}
                     onClick={() => setFlowHidden((current) => { const next = new Set(current); if (next.has(key)) next.delete(key); else if (current.size < 2) next.add(key); return next; })}
-                    sx={{ color: active ? color : "text.disabled", fontWeight: 800, opacity: active ? 1 : .55 }} />;
+                    sx={{ color: active ? color : "text.disabled", borderColor: active ? `${color}70` : "divider", bgcolor: active ? `${color}18` : "transparent", fontWeight: 800, opacity: active ? 1 : .58, "&:hover": { bgcolor: active ? `${color}28` : "action.hover" }, "& .MuiChip-icon": { ml: 1 } }} />;
                 })}
               </Stack>
             </CardBase>
@@ -1265,7 +1255,7 @@ export function Dashboard() {
       )}
 
       {/* ATALHOS PARA A OPERAÇÃO / ANÁLISE ASSISTIDA */}
-      <Card variant="outlined" sx={{ borderRadius: 2.5, mb: { xs: 2.5, md: 3 }, bgcolor: "background.paper" }}>
+      <Card variant="outlined" sx={{ ...dashboardSurfaceSx, mb: { xs: 2.5, md: 3 } }}>
         <CardContent sx={{ p: { xs: 1.75, md: 2.25 }, "&:last-child": { pb: 2.25 } }}>
           <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ justifyContent: "space-between", alignItems: { sm: "center" }, mb: 1.5 }}>
             <Box>
@@ -1305,10 +1295,8 @@ export function Dashboard() {
       <Card
         elevation={0}
         sx={{
+          ...dashboardSurfaceSx,
           mb: 2.5,
-          border: "1px solid",
-          borderColor: "divider",
-          borderRadius: 2,
         }}
       >
         <CardContent>
@@ -1648,6 +1636,7 @@ export function Dashboard() {
           <Card
             elevation={0}
             sx={{
+              ...dashboardSurfaceSx,
               border:
                 "1px solid",
 
@@ -1657,8 +1646,6 @@ export function Dashboard() {
                   ? "error.light"
                   : "divider",
 
-              borderRadius:
-                2.5,
             }}
           >
             <CardContent
@@ -2848,23 +2835,20 @@ function CardBase({
     <Card
       elevation={0}
       sx={{
-        border:
-          "1px solid",
-
-        borderColor: "divider",
-
-        borderRadius: "var(--hub-radius-lg)",
-
-        background: "var(--hub-surface)",
-
-        boxShadow: isDark ? "0 6px 20px rgba(0,0,0,.12)" : "0 3px 14px rgba(16,24,40,.045)",
-
-        overflow: "hidden",
-        height: "100%",
-        transition: "border-color .18s ease, box-shadow .18s ease",
+        ...analyticalPanelSx,
+        border: "1px solid",
+        borderColor: isDark ? "rgba(80,157,190,.22)" : "rgba(30,96,130,.13)",
+        borderRadius: { xs: 2.5, md: 3 },
+        background: isDark
+          ? "radial-gradient(ellipse at 100% 0%, rgba(32,173,197,.10), transparent 38%), linear-gradient(145deg, #0D2236 0%, #0A192A 100%)"
+          : "radial-gradient(ellipse at 100% 0%, rgba(35,173,191,.07), transparent 38%), linear-gradient(145deg, #FFFFFF 0%, #F5FAFC 100%)",
+        boxShadow: isDark ? "0 16px 40px rgba(0,0,0,.17), inset 0 1px 0 rgba(255,255,255,.025)" : "0 14px 34px rgba(21,54,76,.055), inset 0 1px 0 rgba(255,255,255,.8)",
+        transition: "border-color .18s ease, box-shadow .18s ease, transform .18s ease",
+        "&:before": { content: '""', position: "absolute", inset: "0 0 auto", height: 2, background: "linear-gradient(90deg, transparent, rgba(42,205,201,.8), rgba(56,189,248,.65), transparent)", opacity: isDark ? .72 : .48 },
         "&:hover": {
-          borderColor: "primary.main",
-          boxShadow: isDark ? "0 8px 24px rgba(0,0,0,.16)" : "0 6px 18px rgba(16,24,40,.065)",
+          borderColor: isDark ? "rgba(56,189,248,.34)" : "rgba(30,140,166,.26)",
+          transform: "translateY(-1px)",
+          boxShadow: isDark ? "0 20px 48px rgba(0,0,0,.22)" : "0 18px 40px rgba(21,54,76,.08)",
         },
       }}
     >
@@ -3342,14 +3326,7 @@ function slaSeverity(summary: { percentage: number | null }): Severity {
 function isOpen(
   ticket: Ticket
 ) {
-  return (
-    ticket.baseStatus ===
-      "New" ||
-    ticket.baseStatus ===
-      "InAttendance" ||
-    ticket.baseStatus ===
-      "Stopped"
-  );
+  return isOperationallyOpen(ticket);
 }
 
 /* =========================================================

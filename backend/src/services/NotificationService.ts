@@ -447,15 +447,6 @@ export class NotificationService {
     }));
 
     const preferences = await this.preferences(userId);
-    const readRows = await prisma.$queryRaw<Array<{
-      notificationKey: string;
-    }>>`
-      SELECT "notificationKey"
-      FROM "AppNotificationRead"
-      WHERE "userId" = ${userId}
-    `;
-    const readKeys = new Set(readRows.map((row) => row.notificationKey));
-
     const notifications = [...onlineNotifications, ...meetingNotifications, ...knownProblemNotifications, ...operationalAlerts, ...mentionNotifications, ...itemNotifications, ...followedNotifications, ...versionNotifications]
       .filter((item) =>
         item.kind === "USER_ONLINE" || item.kind === "CHAT_MENTION" || item.kind === "OPERATION_ALERT" || item.kind === "KNOWN_PROBLEM" || item.kind === "MEETING_REMINDER"
@@ -469,13 +460,22 @@ export class NotificationService {
       .sort((left, right) =>
         right.occurredAt.getTime() - left.occurredAt.getTime(),
       )
-      .slice(0, 50)
-      .map((item) => ({
-        ...item,
-        read: readKeys.has(item.key),
-      }));
+      .slice(0, 50);
 
-    return { notifications, preferences };
+    // Read status is needed only for the items sent to the client. Avoid
+    // loading a user's entire read-key history on every notification poll.
+    const readRows = notifications.length ? await prisma.$queryRaw<Array<{
+      notificationKey: string;
+    }>>(Prisma.sql`
+      SELECT "notificationKey"
+      FROM "AppNotificationRead"
+      WHERE "userId" = ${userId}
+        AND "notificationKey" IN (${Prisma.join(notifications.map((item) => item.key))})
+    `) : [];
+    const readKeys = new Set(readRows.map((row) => row.notificationKey));
+    const itemsWithReadState = notifications.map((item) => ({ ...item, read: readKeys.has(item.key) }));
+
+    return { notifications: itemsWithReadState, preferences };
   }
 
   public async markRead(userId: number, keys: string[]) {

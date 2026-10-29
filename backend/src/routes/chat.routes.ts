@@ -63,7 +63,9 @@ chatRoutes.get("/events", async (req: AuthenticatedRequest, res) => {
 
   // Publicação imediata por evento; snapshot periódico apenas como rede de segurança.
   unsubscribe = chatEventBus.subscribe(req.auth!.userId, () => { void refresh(); });
-  fallback = setInterval(() => { void refresh(); }, 5_000);
+  // Publicação via event bus é imediata; snapshots periódicos cobrem eventos
+  // perdidos sem consultar o banco a cada cinco segundos por aba conectada.
+  fallback = setInterval(() => { void refresh(); }, 30_000);
   // O ciclo de vida da resposta fica a cargo dos eventos 'close'.
 
 });

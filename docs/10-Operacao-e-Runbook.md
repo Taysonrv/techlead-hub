@@ -3,9 +3,19 @@
 ## Verificações
 
 - Liveness: `GET /health`.
-- Readiness: `GET /health/ready`.
-- Conferir banco, versão e runtime em Configurações.
-- Validar Central de Sincronizações após atualização.
+- Readiness: `GET /health/ready` confirma conexão mínima com PostgreSQL e informa estado/idade da última sincronização Azure. HTTP 200 não significa que as integrações estejam completas nem que Movidesk esteja atualizado.
+- Para detalhes de execução, usar a Central de Sincronizações autenticada: conferir última execução Movidesk e Azure, duração, contagens, erros e configuração do scheduler. Comparar idade com os intervalos configurados; investigar `PROCESSING` sem conclusão por mais de duas janelas esperadas ou ausência de novas execuções por três janelas.
+- Conferir versão e runtime em Configurações. Após deploy, validar health, Central de Sincronizações, log da aplicação pelo `X-Request-Id` e os fluxos essenciais.
+- Os schedulers Movidesk usam coordenação em memória. Não habilitar schedulers em múltiplas réplicas que compartilham as mesmas credenciais/banco; manter uma instância ativa até haver lease distribuído para esses jobs.
+- Azure tem advisory lock PostgreSQL entre instâncias. A fila de alertas Teams usa reivindicação atômica e lease; acompanhar logs `[teams-alerts]` para falhas/itens em DEAD e confirmar a entrega no destino. O endpoint de readiness não verifica a fila Teams.
+- A previsão do tempo do calendário usa a chave `WEATHER_API_KEY` no ambiente do backend e a API da WeatherAPI. Configure a chave no `.env` local do backend, nunca no frontend ou no controle de versão. Sem a chave, o calendário continua funcionando e informa que a previsão não está configurada. A cidade padrão fica salva por usuário na tabela `User`.
+
+## Atualização e configuração das instalações Windows
+
+- Atualizações do instalador mantêm o mesmo `appId` (`com.aliare.techleadhub`) e não removem o `userData` do usuário. Os segredos locais ficam criptografados pelo Windows nesse diretório. Não escolha remover dados do aplicativo nem apague a pasta `userData` do TechLead Hub ao atualizar.
+- Em uma máquina nova, importe o `.env` de provisionamento na Central de Recuperação e confirme `DATABASE_URL` e `SYSTEM_CONFIG_KEY`. A chave deve ser a mesma usada para criptografar as configurações Azure e Movidesk do banco compartilhado; gerar outra chave não recupera os valores.
+- Mantenha `SYSTEM_CONFIG_KEY` em cofre corporativo ou distribuição segura de TI. Não a inclua no instalador, repositório, release ou chamado. Sem ela, a instalação avisa que as integrações estão ilegíveis e preserva os dados para recuperação posterior.
+- Se uma atualização não abrir, preserve `%APPDATA%` e os logs. A configuração local inválida ou protegida por outro perfil do Windows não deve ser apagada nem regravada automaticamente.
 
 ## Publicação RC
 
@@ -23,11 +33,12 @@
 - Guardar tag e digest da imagem anterior.
 - Migrações RC devem ser compatíveis com rollback da aplicação.
 - Em incidente, restaurar aplicação anterior; restaurar banco apenas mediante análise, para evitar perda de dados novos.
+- Acompanhar mensalmente crescimento das tabelas e dos backups. Consultar `11-Retencao-de-Dados.md`; medição não autoriza expurgo sem prazo aprovado.
 
 ## Tasks e tickets sem atualização
 
 - Builds concluídos e agendador habilitado não confirmam uma sincronização bem-sucedida. Azure HTTP 401 exige validar organização, projeto e credencial em Configurações > Azure DevOps. A credencial central salva no Hub prevalece sobre o `.env`; testar uma nova credencial não a salva. Após salvar e testar, conferir uma execução concluída em Dados e Sincronizações. Uma carga completa pode recuperar Tasks omitidas por cargas antigas que registraram sucesso sem dados.
-- Movidesk executa a cada 5 minutos por padrão. A primeira incremental após esta atualização e uma vez a cada 24 horas reconsultam os últimos 7 dias, sempre no escopo SIMER e respeitando o limite global de requisições. Se o cursor anterior for mais antigo, essa janela maior é preservada. Isso recupera lacunas recentes; não comprova completude de períodos anteriores aos sete dias.
+- Movidesk executa a cada 5 minutos por padrão. A primeira incremental após esta atualização e uma vez a cada 24 horas reconsultam os últimos 35 dias, sempre no escopo SIMER e respeitando o limite global de requisições. A janela é aplicada à última atualização do ticket, sem limitar a data original de abertura; isso permite recuperar resoluções recentes de tickets antigos e cobre o mês corrente do Dashboard. Se o cursor anterior for mais antigo, essa janela maior é preservada.
 - O cursor passa a usar o início da execução concluída, com sobreposição de 6 horas. Erros de consulta ou importação não confirmam nem avançam a janela. A reconciliação não força a reimportação do baseline anual.
 - `consultas=1`, `paginas=0`, `total=0` significa que a API respondeu sem tickets na janela consultada. A tela registra a última incremental concluída mesmo quando não houve importação. Esse resultado não comprova que um ticket específico está ausente no Movidesk.
 - Logs `movidesk-metadata` e `movidesk-enrichment` tratam pendências de metadados de tickets já existentes; não significam que novos tickets foram importados. Compare IDs ausentes, cliente, responsável e data da última atualização no Movidesk com o escopo e a janela registrados no ciclo.

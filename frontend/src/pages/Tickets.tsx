@@ -50,6 +50,7 @@ import {
 } from "react";
 
 import { api } from "../services/api";
+import { isOperationallyOpen } from "../utils/operationalMetrics";
 import { getTicketSnapshot, getTicketSnapshotState, subscribeTicketSnapshotRefresh } from "../services/ticketSnapshot";
 import { useFilters } from "../context/FiltersContext";
 import { PeriodFilter } from "../components/PeriodFilter";
@@ -4589,14 +4590,7 @@ function isOpen(
   ticket:
     Ticket
 ) {
-  return ![
-    "Resolved",
-    "Closed",
-    "Canceled",
-  ].includes(
-    ticket.baseStatus ??
-      ""
-  );
+  return isOperationallyOpen(ticket);
 }
 
 function uniqueValues(

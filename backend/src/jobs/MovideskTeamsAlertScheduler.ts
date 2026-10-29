@@ -3,10 +3,15 @@ import {
   TeamsWebhookHttpError,
   TeamsWorkflowWebhookService,
 } from "../services/TeamsWorkflowWebhookService";
+import {
+  isMovideskNewTicketStatus,
+  shouldAlertForMovideskSubject,
+} from "../services/MovideskAlertMatcher";
 
 const POLL_MS = 15_000;
 const LEASE_MS = 45_000;
 const MAX_ATTEMPTS = 8;
+const METRICS_LOG_INTERVAL_MS = 5 * 60_000;
 
 function retryDelay(attempt: number): number {
   const base = Math.min(60 * 60_000, 15_000 * 2 ** Math.min(attempt, 8));
@@ -17,6 +22,7 @@ export class MovideskTeamsAlertScheduler {
   private timer: NodeJS.Timeout | undefined;
   private running = false;
   private stopped = false;
+  private lastMetricsLoggedAt = 0;
   private readonly webhook: TeamsWorkflowWebhookService;
 
   constructor(
@@ -49,6 +55,7 @@ export class MovideskTeamsAlertScheduler {
     try {
       if (process.env.TEAMS_ALERTS_ENABLED?.trim().toLowerCase() !== "true") return;
       await this.processOne();
+      await this.logQueueMetrics();
     } catch (error) {
       console.warn("[teams-alerts] Falha no ciclo da fila:", error instanceof Error ? error.message : "erro desconhecido");
     } finally {
@@ -58,6 +65,36 @@ export class MovideskTeamsAlertScheduler {
         this.timer.unref();
       }
     }
+  }
+
+  private async logQueueMetrics() {
+    const now = Date.now();
+    if (now - this.lastMetricsLoggedAt < METRICS_LOG_INTERVAL_MS) return;
+
+    const [pending, processing, sent, dead, oldestPending] = await Promise.all([
+      this.db.teamsAlertOutbox.count({ where: { status: "PENDING" } }),
+      this.db.teamsAlertOutbox.count({ where: { status: "PROCESSING" } }),
+      this.db.teamsAlertOutbox.count({ where: { status: "SENT" } }),
+      this.db.teamsAlertOutbox.count({ where: { status: "DEAD" } }),
+      this.db.teamsAlertOutbox.findFirst({
+        where: { status: "PENDING" },
+        orderBy: { createdAt: "asc" },
+        select: { createdAt: true },
+      }),
+    ]);
+
+    this.lastMetricsLoggedAt = now;
+    const oldestPendingAgeMinutes = oldestPending
+      ? Math.max(0, Math.round((now - oldestPending.createdAt.getTime()) / 60_000))
+      : null;
+    console.log([
+      "[teams-alerts] Métricas da outbox.",
+      `pending=${pending}`,
+      `processing=${processing}`,
+      `sent=${sent}`,
+      `dead=${dead}`,
+      `idadePendenteMaisAntigaMin=${oldestPendingAgeMinutes ?? "n/a"}`,
+    ].join(" | "));
   }
 
   private async processOne() {
@@ -131,6 +168,30 @@ export class MovideskTeamsAlertScheduler {
         select: { movideskId: true, subject: true, client: true, createdDate: true, urgency: true, status: true, owner: true },
       });
       if (!ticket) throw new Error("Ticket não encontrado no banco para montar o alerta.");
+      if (!shouldAlertForMovideskSubject(ticket.subject)) {
+        await this.db.teamsAlertOutbox.update({
+          where: { id: candidate.id },
+          data: {
+            status: "DEAD",
+            lockedUntil: null,
+            lastError: "Alerta descartado: assunto fora do escopo AgriQ/receituário.",
+          },
+        });
+        console.log("[teams-alerts] Alerta descartado por assunto | ticket=" + candidate.movideskId);
+        return;
+      }
+      if (!isMovideskNewTicketStatus(ticket.status)) {
+        await this.db.teamsAlertOutbox.update({
+          where: { id: candidate.id },
+          data: {
+            status: "DEAD",
+            lockedUntil: null,
+            lastError: `Alerta descartado: status atual do atendimento é "${ticket.status}", não "Novo".`,
+          },
+        });
+        console.log(`[teams-alerts] Alerta descartado por status | ticket=${candidate.movideskId} | status=${ticket.status}`);
+        return;
+      }
       const result = await this.webhook.sendNewTicket(ticket);
       await this.db.teamsAlertOutbox.update({
         where: { id: candidate.id },

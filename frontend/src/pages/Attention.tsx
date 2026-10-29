@@ -43,6 +43,7 @@ import {
 import { useNavigate } from "react-router-dom";
 
 import { api } from "../services/api";
+import { isOperationallyOpen } from "../utils/operationalMetrics";
 import { useFilters } from "../context/FiltersContext";
 import { PeriodFilter } from "../components/PeriodFilter";
 import { PageHeader } from "../components/PageHeader";
@@ -1480,8 +1481,23 @@ export function Attention() {
           </Stack>
         </CardContent>
 
-        <TableContainer>
-          <Table size="small">
+        <TableContainer sx={{ width: "100%", maxWidth: "100%", overflowX: "hidden" }}>
+          <Table size="small" sx={{
+            width: "100%",
+            tableLayout: "fixed",
+            "& th:nth-of-type(1)": { width: "8%" },
+            "& th:nth-of-type(2)": { width: "10%" },
+            "& th:nth-of-type(3)": { width: "18%" },
+            "& th:nth-of-type(4)": { width: "16%" },
+            "& th:nth-of-type(5)": { width: "15%" },
+            "& th:nth-of-type(6)": { width: "9%" },
+            "& th:nth-of-type(7)": { width: "11%" },
+            "& th:nth-of-type(8)": { width: "7%" },
+            "& th:nth-of-type(9)": { width: "6%" },
+            "& .MuiTableCell-root": { minWidth: 0, px: { xs: 0.65, sm: 0.9 }, py: 1.2, verticalAlign: "top", overflowWrap: "anywhere", wordBreak: "normal" },
+            "& .MuiChip-root": { maxWidth: "100%", height: "auto", minHeight: 24 },
+            "& .MuiChip-label": { whiteSpace: "normal", display: "block", overflowWrap: "anywhere", py: 0.25 },
+          }}>
             <TableHead
               sx={{
                 backgroundColor:
@@ -1500,6 +1516,8 @@ export function Attention() {
 
                     letterSpacing:
                       "0.02em",
+
+                    whiteSpace: "normal",
 
                     borderBottomColor:
                       "divider",
@@ -1606,6 +1624,8 @@ export function Attention() {
                         sx={{
                           alignItems:
                             "center",
+                          flexWrap: "wrap",
+                          minWidth: 0,
                         }}
                       >
                         <Typography
@@ -1687,6 +1707,7 @@ export function Attention() {
                         variant="body2"
                         sx={{
                           maxWidth: 280,
+                          overflowWrap: "anywhere",
                         }}
                       >
                         {ticket.subject}
@@ -2557,8 +2578,8 @@ function AzureAttentionSummary({
     return (
       <Box
         sx={{
-          minWidth: 130,
-          maxWidth: 210,
+          minWidth: 0,
+          maxWidth: "100%",
         }}
       >
         <Stack
@@ -2612,9 +2633,7 @@ function AzureAttentionSummary({
             mt: 0.2,
             fontWeight: 700,
             color: aliareColors.greenDark,
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
+            overflowWrap: "anywhere",
           }}
           title={azure.state}
         >
@@ -2629,9 +2648,7 @@ function AzureAttentionSummary({
             sx={{
               display: "block",
               mt: 0.1,
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
+            overflowWrap: "anywhere",
             }}
             title={[
               azure.assignedToName,
@@ -2871,14 +2888,7 @@ function uniqueValues(
 function isOpen(
   ticket: Ticket
 ) {
-  return (
-    ticket.baseStatus ===
-      "New" ||
-    ticket.baseStatus ===
-      "InAttendance" ||
-    ticket.baseStatus ===
-      "Stopped"
-  );
+  return isOperationallyOpen(ticket);
 }
 
 /* =====================================================

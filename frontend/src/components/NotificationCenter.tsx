@@ -15,15 +15,15 @@ import {
 } from "@mui/material";
 
 import {
-  CheckCircleOutlined,
-  Inventory2Outlined,
-  NotificationsNoneOutlined,
+  CheckCircleRounded,
+  Inventory2Rounded,
+  NotificationsActiveRounded,
   OpenInNewOutlined,
-  TaskAltOutlined,
-  AlternateEmailOutlined,
-  WarningAmberOutlined,
-  VideoCallOutlined,
-  PersonAddAltOutlined,
+  TaskAltRounded,
+  AlternateEmailRounded,
+  WarningAmberRounded,
+  VideoCallRounded,
+  PersonAddAltRounded,
 } from "@mui/icons-material";
 
 import {
@@ -50,7 +50,7 @@ import {
 import {
   aliareColors,
 } from "../theme/theme";
-import { getLocalNotificationPreferences, saveLocalNotificationPreferences, playNotificationSound, type LocalNotificationPreferences } from "../utils/notificationSound";
+import { getLocalNotificationPreferences, saveDesktopAlertsEnabled, saveLocalNotificationPreferences, playNotificationSound, type LocalNotificationPreferences } from "../utils/notificationSound";
 import { mergeNotificationItems } from "../utils/notificationItems";
 import { TopBarActionButton } from "./TopBarActionButton";
 
@@ -146,7 +146,12 @@ export function NotificationCenter() {
   }, [storageKey]);
 
   const persistReadKeys = useCallback((keys: string[]) => {
-    const limited = keys.slice(-500);
+    let stored: string[] = [];
+    try {
+      const parsed: unknown = JSON.parse(localStorage.getItem(storageKey) ?? "[]");
+      if (Array.isArray(parsed)) stored = parsed.filter((key): key is string => typeof key === "string");
+    } catch { /* estado local opcional */ }
+    const limited = [...new Set([...stored, ...keys])].slice(-500);
     setReadKeys(limited);
     try { localStorage.setItem(storageKey, JSON.stringify(limited)); } catch { /* leitura persistida no servidor */ }
   }, [storageKey]);
@@ -187,7 +192,14 @@ export function NotificationCenter() {
       if(identityRef.current!==userId) return;
       setLoadError("");
       setPreferences(response.data.preferences);
-      setReadKeys(response.data.notifications.filter((item) => item.read).map((item) => item.key));
+      saveDesktopAlertsEnabled(userId, response.data.preferences.desktopAlerts);
+      let storedReadKeys: string[] = [];
+      try {
+        const stored: unknown = JSON.parse(localStorage.getItem(storageKey) ?? "[]");
+        if (Array.isArray(stored)) storedReadKeys = stored.filter((key): key is string => typeof key === "string");
+      } catch { /* estado local opcional */ }
+      const serverReadKeys = response.data.notifications.filter((item) => item.read).map((item) => item.key);
+      setReadKeys([...new Set([...storedReadKeys, ...serverReadKeys])].slice(-500));
       setItems(current=>mergeNotificationItems(current,response.data.notifications));
     } catch (error) {
       if(identityRef.current===userId) setLoadError("Não foi possível atualizar as notificações. Tente novamente.");
@@ -196,7 +208,7 @@ export function NotificationCenter() {
       loadingRef.current = false;
       setLoading(false);
     }
-  }, [userId]);
+  }, [userId, storageKey]);
 
   const loadMeetingReminders = useCallback(async () => {
     if (!userId || meetingLoadingRef.current || Date.now() < meetingRetryAtRef.current) return;
@@ -249,7 +261,8 @@ export function NotificationCenter() {
 
   useEffect(() => {
     void load();
-    const timer = window.setInterval(() => { if(window.techLeadHub || document.visibilityState!=="hidden") void load(); }, 60_000);
+    const interval = window.techLeadHub ? 30_000 : 60_000;
+    const timer = window.setInterval(() => { if(window.techLeadHub || document.visibilityState!=="hidden") void load(); }, interval);
     return () => window.clearInterval(timer);
   }, [load]);
 
@@ -278,6 +291,18 @@ export function NotificationCenter() {
     [items, readKeys, enabledForKind],
   );
 
+  const openNotification = useCallback((item: HubNotification) => {
+    if (!readKeys.includes(item.key)) {
+      persistReadKeys([...readKeys, item.key]);
+      void api.post("/notifications/read", { keys: [item.key] }).catch(() => {
+        setLoadError("Não foi possível salvar a leitura da notificação.");
+        void load();
+      });
+    }
+    setAnchor(null);
+    navigate(item.path);
+  }, [readKeys, persistReadKeys, load, navigate]);
+
   // Pop-ups são avisos transitórios, não uma caixa de entrada paralela.
   // Histórico completo permanece no sino. Chaves já exibidas nesta sessão
   // sobrevivem a remounts/navegação, sem incluir conteúdos confidenciais.
@@ -302,29 +327,53 @@ export function NotificationCenter() {
     const isUrgent = (item: HubNotification) =>
       item.kind === "CHAT_MENTION" || item.kind === "MEETING_REMINDER" ||
       item.kind === "OPERATION_ALERT";
+    const hiddenDesktopBatch = document.visibilityState === "hidden" && preferences.desktopAlerts
+      ? fresh.slice(0, 2)
+      : [];
     const toShow = document.visibilityState === "visible"
       ? fresh.filter(isUrgent).slice(0, 2)
       : [];
 
-    if (document.visibilityState === "hidden" && window.techLeadHub &&
-        preferences.desktopAlerts && "Notification" in window && Notification.permission === "granted") {
-      fresh.filter(isUrgent).slice(0, 2).forEach((item) => {
-        const native = new Notification(item.title, { body: item.message });
-        native.onclick = () => {
-          window.focus();
-          navigate(item.path);
-          native.close();
-        };
+    if (document.visibilityState === "hidden" && preferences.desktopAlerts) {
+      hiddenDesktopBatch.forEach((item) => {
+        if (window.techLeadHub?.notifications) {
+          void window.techLeadHub.notifications.show({
+            key: item.key,
+            title: item.title,
+            body: item.message,
+            silent: !localPreferences.sound,
+          }).then((shown) => {
+            if (shown) return;
+            if ("Notification" in window && Notification.permission === "granted") {
+              const native = new Notification(item.title, { body: item.message, silent: !localPreferences.sound });
+              native.onclick = () => window.focus();
+              window.setTimeout(() => native.close(), 8_000);
+            }
+          }).catch(() => undefined);
+          return;
+        }
+        if ("Notification" in window && Notification.permission === "granted") {
+          const native = new Notification(item.title, { body: item.message, silent: !localPreferences.sound });
+          native.onclick = () => window.focus();
+          window.setTimeout(() => native.close(), 8_000);
+        }
       });
     }
-    unseen.forEach((item) => alertedKeys.current.add(item.key));
+    const hiddenBatchKeys = new Set(hiddenDesktopBatch.map((item) => item.key));
+    const freshKeys = new Set(fresh.map((item) => item.key));
+    unseen.forEach((item) => {
+      // Deixa os próximos itens recentes para a próxima consulta, em vez de
+      // descartá-los quando mais de dois avisos chegam no mesmo intervalo.
+      if (document.visibilityState === "hidden" && preferences.desktopAlerts && freshKeys.has(item.key) && !hiddenBatchKeys.has(item.key)) return;
+      alertedKeys.current.add(item.key);
+    });
     notificationHydratedRef.current = true;
     try { sessionStorage.setItem(sessionKey, JSON.stringify([...alertedKeys.current].slice(-500))); } catch { /* opcional */ }
     if (toShow.length) setToastQueue((current) => {
       const keys = new Set(current.map((item) => item.key));
       return [...current, ...toShow.filter((item) => !keys.has(item.key))].slice(0, 2);
     });
-  }, [unread, items.length, userId, preferences.desktopAlerts, navigate]);
+  }, [unread, items.length, userId, preferences.desktopAlerts, localPreferences.sound, navigate, openNotification]);
 
   useEffect(() => {
     if (!toast) return;
@@ -340,21 +389,9 @@ export function NotificationCenter() {
     setToastQueue([]);setItems([]);setAnchor(null);setLoadError("");
   }, [userId]);
 
-  async function openMenu(event: MouseEvent<HTMLElement>) {
+  function openMenu(event: MouseEvent<HTMLElement>) {
     setAnchor(event.currentTarget);
-    if (window.techLeadHub && "Notification" in window && Notification.permission === "default") {
-      await Notification.requestPermission().catch(() => "denied");
-    }
     void load();
-  }
-
-  function openNotification(item: HubNotification) {
-    if (!readKeys.includes(item.key)) {
-      persistReadKeys([...readKeys, item.key]);
-      void api.post("/notifications/read", { keys: [item.key] }).catch(()=>{setLoadError("Não foi possível salvar a leitura da notificação.");void load();});
-    }
-    setAnchor(null);
-    navigate(item.kind === "MEETING_REMINDER" && item.meetingId ? `${window.location.pathname}?meeting=${encodeURIComponent(String(item.meetingId))}` : item.path);
   }
 
   async function markAllRead() {
@@ -374,8 +411,28 @@ export function NotificationCenter() {
   }
 
   function changePreference(key: keyof NotificationPreferences, checked: boolean) {
+    if (key === "desktopAlerts" && checked && window.techLeadHub && "Notification" in window && Notification.permission === "default") {
+      void Notification.requestPermission().then((permission) => {
+        if (permission !== "granted") {
+          setLoadError("A permissão de notificações do Windows não foi concedida. Você ainda pode usar o sino dentro do Hub.");
+          return;
+        }
+        savePreferenceChange(key, checked);
+      }).catch(() => setLoadError("Não foi possível solicitar a permissão de notificações do Windows."));
+      return;
+    }
+    if (key === "desktopAlerts" && checked && window.techLeadHub && "Notification" in window && Notification.permission !== "granted") {
+      setLoadError("A permissão de notificações do Windows está bloqueada. Ajuste-a nas configurações do sistema para ativar este canal.");
+      return;
+    }
+    savePreferenceChange(key, checked);
+  }
+
+  function savePreferenceChange(key: keyof NotificationPreferences, checked: boolean) {
     const next = { ...preferences, [key]: checked };
     setPreferences(next);
+    setLoadError("");
+    if (key === "desktopAlerts") saveDesktopAlertsEnabled(userId, checked);
     void api.put("/notifications/preferences", next).catch(()=>{setLoadError("Não foi possível salvar suas preferências.");void load();});
   }
 
@@ -390,7 +447,7 @@ export function NotificationCenter() {
         onClick={openMenu}
       >
         <Badge badgeContent={unread.length} color="error" max={99}>
-          <NotificationsNoneOutlined />
+          <NotificationsActiveRounded />
         </Badge>
       </TopBarActionButton>
 
@@ -439,7 +496,9 @@ export function NotificationCenter() {
 
         {!loading && !loadError && items.length === 0 && (
           <Box sx={{ p: 3, textAlign: "center" }}>
-            <NotificationsNoneOutlined color="disabled" />
+            <Box sx={{ width: 52, height: 52, mx: "auto", display: "grid", placeItems: "center", borderRadius: "18px", color: "primary.main", bgcolor: "rgba(24,199,122,.10)", border: "1px solid rgba(24,199,122,.2)", boxShadow: "0 0 24px rgba(24,199,122,.10)" }}>
+              <NotificationsActiveRounded sx={{ fontSize: 27 }} />
+            </Box>
             <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
               Nenhuma notificação no momento.
             </Typography>
@@ -450,20 +509,29 @@ export function NotificationCenter() {
         {items.filter(item=>enabledForKind(item.kind)&&(!onlyUnread||!readKeys.includes(item.key))).map((item) => {
           const isUnread = !readKeys.includes(item.key);
           const Icon = item.kind === "APP_VERSION"
-            ? Inventory2Outlined
+            ? Inventory2Rounded
             : item.kind === "SIMER_VERSION"
               ? OpenInNewOutlined
               : item.kind === "MEETING_REMINDER"
-                ? VideoCallOutlined
+                ? VideoCallRounded
               : item.kind === "USER_ONLINE"
-                ? PersonAddAltOutlined
+                ? PersonAddAltRounded
               : item.kind === "CHAT_MENTION"
-                ? AlternateEmailOutlined
+                ? AlternateEmailRounded
                 : (item.kind === "OPERATION_ALERT" || item.kind === "KNOWN_PROBLEM")
-                  ? WarningAmberOutlined
+                  ? WarningAmberRounded
               : item.kind === "AZURE_COMPLETED"
-                ? CheckCircleOutlined
-                : TaskAltOutlined;
+                ? CheckCircleRounded
+                : TaskAltRounded;
+          const iconColor = item.kind === "OPERATION_ALERT" || item.kind === "KNOWN_PROBLEM"
+            ? "#f59e0b"
+            : item.kind === "MEETING_REMINDER"
+              ? "#7c83ff"
+              : item.kind === "CHAT_MENTION" || item.kind === "USER_ONLINE"
+                ? "#20c9b5"
+                : item.kind === "AZURE_COMPLETED"
+                  ? "#18c77a"
+                  : "#48a9ff";
 
           return (
             <MenuItem
@@ -471,14 +539,19 @@ export function NotificationCenter() {
               onClick={() => openNotification(item)}
               sx={{
                 alignItems: "flex-start",
-                gap: 1.2,
-                px: 2,
-                py: 1.25,
+                gap: 1.35,
+                px: 1.75,
+                py: 1.35,
                 whiteSpace: "normal",
                 backgroundColor: isUnread ? "rgba(24,199,122,0.07)" : "transparent",
+                borderLeft: isUnread ? "2px solid rgba(24,199,122,.8)" : "2px solid transparent",
+                transition: "background-color .16s ease, border-color .16s ease",
+                "&:hover": { backgroundColor: isUnread ? "rgba(24,199,122,.12)" : "action.hover" },
               }}
             >
-              <Icon sx={{ mt: 0.2, color: (item.kind === "OPERATION_ALERT" || item.kind === "KNOWN_PROBLEM") ? "warning.main" : isUnread ? aliareColors.green : "text.secondary" }} />
+              <Box sx={{ mt: .05, width: 36, height: 36, flex: "0 0 36px", display: "grid", placeItems: "center", borderRadius: "12px", color: iconColor, bgcolor: `${iconColor}18`, border: `1px solid ${iconColor}38`, boxShadow: isUnread ? `0 0 18px ${iconColor}20` : "none" }}>
+                <Icon sx={{ fontSize: 20 }} />
+              </Box>
               <Box sx={{ minWidth: 0, flex: 1 }}>
                 <Typography sx={{ fontSize: "0.82rem", fontWeight: isUnread ? 800 : 650 }}>
                   {item.title}
@@ -506,10 +579,10 @@ export function NotificationCenter() {
         </Button>
         {showPreferences && (
           <Stack sx={{ px: 2, pb: 1.5 }}>
-            <Typography variant="caption" sx={{ fontWeight: 850, color: "text.secondary", mb: .5 }}>Canais e sons</Typography>
+            <Typography variant="caption" sx={{ fontWeight: 850, color: "text.secondary", mb: .5 }}>Neste dispositivo · sons e tipos exibidos</Typography>
             {([["sound","Som das notificações"],["chat","Chat e menções"],["operation","Alertas operacionais e reuniões"]] as Array<[keyof LocalNotificationPreferences,string]>).map(([key,label]) => <FormControlLabel key={key} control={<Switch size="small" checked={localPreferences[key]} onChange={(_,checked)=>changeLocalPreference(key,checked)} />} label={label} sx={{ "& .MuiFormControlLabel-label": { fontSize: "0.76rem" } }} />)}
             <Divider sx={{ my: .75 }} />
-            <Typography variant="caption" sx={{ fontWeight: 850, color: "text.secondary", mb: .5 }}>Sistema e desenvolvimento</Typography>
+            <Typography variant="caption" sx={{ fontWeight: 850, color: "text.secondary", mb: .5 }}>Conta Hub · sincronizado entre dispositivos</Typography>
             {([
               ["appVersion", "Versões do TechLead Hub"],
               ["simerVersion", "Versões do SIMER"],

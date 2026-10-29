@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { requireRoles } from "../middlewares/roleMiddleware";
 import type { AuthenticatedRequest } from "../middlewares/authMiddleware";
-import { systemConfigurationService, type SystemConfigurationInput, type SystemConfigurationTestInput } from "../services/SystemConfigurationService";
+import { systemConfigurationService, type SystemConfigurationInput, type SystemConfigurationTestInput, type TeamsWorkflowSettingsInput } from "../services/SystemConfigurationService";
 import { prisma } from "../database/prisma";
 
 export const systemSettingsRoutes = Router();
@@ -75,6 +75,20 @@ systemSettingsRoutes.post("/test", async (request: AuthenticatedRequest, respons
     return response.json(await systemConfigurationService.test(request.body as SystemConfigurationTestInput));
   } catch (error) {
     return response.status(400).json({ message: error instanceof Error ? error.message : "Não foi possível validar a integração." });
+  }
+});
+
+systemSettingsRoutes.put("/teams-workflows", async (request: AuthenticatedRequest, response) => {
+  try {
+    const userId = request.auth?.userId;
+    if (!userId) return response.status(401).json({ message: "Autenticação necessária." });
+    const settings = await systemConfigurationService.saveTeamsWorkflowSettings(
+      request.body as TeamsWorkflowSettingsInput,
+      userId,
+    );
+    return response.json(settings);
+  } catch (error) {
+    return response.status(400).json({ message: error instanceof Error ? error.message : "Não foi possível salvar os fluxos do Teams." });
   }
 });
 

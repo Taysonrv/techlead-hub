@@ -4,6 +4,8 @@ import SearchRoundedIcon from "@mui/icons-material/SearchRounded";
 import TimelineRoundedIcon from "@mui/icons-material/TimelineRounded";
 import InsightsRoundedIcon from "@mui/icons-material/InsightsRounded";
 import { api } from "../services/api";
+import { useTheme } from "@mui/material/styles";
+import { analyticalPanelSx } from "../theme/layoutTokens";
 
 type Metric = { minutes:number|null; targetMinutes:number|null; percent:number|null; overdue:boolean|null };
 type Investigation = { profile?:{tier:"PADRAO"|"VIP";kind:"BUG"|"OUTROS";priority:string|null;calendar:string;reference:string}; ticket:{id:number;subject:string;client:string|null;urgency:string|null;category?:string|null;status?:string;owner?:string|null;createdAt?:string}; task:null|{id:number;title:string;state:string;version:string|null;criticality?:string|null;createdAt?:string|null;concludedAt?:string|null}; metrics:Record<"response"|"support"|"factory"|"total",Metric>; timeline:Array<{at:string;title:string;detail:string;evidence:string}>; issues:string[]; summary:string };
@@ -12,6 +14,8 @@ const metricLabels = { response:"1ª resposta", support:"OLA · Suporte", factor
 const duration = (m:number|null) => m===null ? "Sem dados" : m < 60 ? `${m} min` : `${(m/60).toLocaleString("pt-BR",{maximumFractionDigits:1})} h`;
 
 export function SlaInvestigationPanel() {
+ const theme=useTheme();
+ const dark=theme.palette.mode==="dark";
  const [number,setNumber]=useState("");
  const [tier,setTier]=useState("PADRAO");
  const [data,setData]=useState<Investigation|null>(null);
@@ -30,8 +34,8 @@ export function SlaInvestigationPanel() {
   } finally { setLoading(false); }
  }
 
- return <Card variant="outlined" sx={{borderRadius:3,mb:2,overflow:"hidden",borderColor:"divider"}}>
-  <Box sx={{height:4,background:"linear-gradient(90deg, #16a765 0%, #4f8df7 100%)"}} />
+ return <Card variant="outlined" sx={{...analyticalPanelSx,borderRadius:{xs:2.5,md:3},mb:2,overflow:"hidden",borderColor:dark?"rgba(80,157,190,.22)":"rgba(30,96,130,.13)",background:dark?"radial-gradient(ellipse at 100% 0%, rgba(32,173,197,.10), transparent 38%), linear-gradient(145deg, #0D2236 0%, #0A192A 100%)":"radial-gradient(ellipse at 100% 0%, rgba(35,173,191,.07), transparent 38%), linear-gradient(145deg, #FFFFFF 0%, #F5FAFC 100%)",boxShadow:dark?"0 16px 40px rgba(0,0,0,.17)":"0 14px 34px rgba(21,54,76,.055)"}}>
+  <Box sx={{height:2,background:"linear-gradient(90deg, transparent, #2ACDC9 45%, #38BDF8 70%, transparent)"}} />
   <CardContent sx={{p:{xs:2,md:3}}}>
    <Stack spacing={2.5}>
     <Stack direction="row" spacing={1.5} sx={{alignItems:"center"}}>

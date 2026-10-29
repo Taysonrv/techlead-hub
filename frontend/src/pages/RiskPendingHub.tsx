@@ -19,7 +19,7 @@ export function RiskPendingHub() {
       <HubNavigation<Section>
         value={section}
         ariaLabel="Pendências e riscos"
-        caption="PENDÊNCIAS & RISCOS"
+        caption="ACOMPANHAMENTO OPERACIONAL"
         onChange={(value) =>
           navigate(
             value === "quality"
@@ -30,12 +30,12 @@ export function RiskPendingHub() {
         items={[
           {
             value: "risk",
-            label: "Riscos & Atenção",
+            label: "Riscos operacionais",
             icon: <WarningAmberOutlined fontSize="small" />,
           },
           {
             value: "quality",
-            label: "Qualidade & Governança",
+            label: "Qualidade dos dados",
             icon: <FactCheckOutlined fontSize="small" />,
           },
         ]}

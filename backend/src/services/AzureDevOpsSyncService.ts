@@ -15,6 +15,10 @@ import {
   AzureDevOpsWorkItemResponse,
   mapAzureWorkItem,
 } from "./AzureWorkItemMapper";
+import {
+  enqueueCreatedSupportTask,
+  enqueueSupportTaskReturnedToRegistro,
+} from "./TeamsWorkflowEvents";
 
 /* =========================================================
    TIPOS
@@ -141,6 +145,7 @@ type BatchSyncOptions = {
     | "SCHEDULED";
   allowEmpty: boolean;
   startedAt?: Date;
+  workflowEventSince?: Date | null;
 };
 
 /* =========================================================
@@ -616,6 +621,7 @@ export class AzureDevOpsSyncService {
         true,
       startedAt:
         syncStartedAt,
+      workflowEventSince: changedSince,
     });
   }
 
@@ -933,6 +939,9 @@ export class AzureDevOpsSyncService {
               await this.persistMappedWorkItem(
                 mapped,
                 existing,
+                options.source === "INCREMENTAL" || options.source === "SCHEDULED"
+                  ? options.workflowEventSince ?? null
+                  : null,
               );
 
             this.applyPersistResult(
@@ -1045,6 +1054,7 @@ export class AzureDevOpsSyncService {
       Prisma.AzureWorkItemUncheckedCreateInput,
     existing:
       ExistingWorkItem | null,
+    workflowEventSince: Date | null = null,
   ): Promise<PersistResult> {
     if (
       this.shouldSkip(
@@ -1056,28 +1066,26 @@ export class AzureDevOpsSyncService {
     }
 
     if (existing) {
-      await prisma.azureWorkItem
-        .update({
-          where: {
-            id:
-              mapped.id,
-          },
-          data:
-            this.toUpdateData(
-              mapped,
-            ),
+      await prisma.$transaction(async (tx) => {
+        await tx.azureWorkItem.update({
+          where: { id: mapped.id },
+          data: this.toUpdateData(mapped),
         });
-
-      await this.recordHistory(existing, mapped);
+        await this.recordHistory(existing, mapped, tx);
+        if (workflowEventSince && mapped.azureChangedAt && mapped.azureChangedAt >= workflowEventSince) {
+          await enqueueSupportTaskReturnedToRegistro(tx, existing.state, mapped);
+        }
+      });
 
       return "updated";
     }
 
-    await prisma.azureWorkItem
-      .create({
-        data:
-          mapped,
-      });
+    await prisma.$transaction(async (tx) => {
+      await tx.azureWorkItem.create({ data: mapped });
+      if (workflowEventSince && mapped.azureCreatedAt && mapped.azureCreatedAt >= workflowEventSince) {
+        await enqueueCreatedSupportTask(tx, mapped);
+      }
+    });
 
     return "inserted";
   }
@@ -1085,6 +1093,7 @@ export class AzureDevOpsSyncService {
   private async recordHistory(
     existing: ExistingWorkItem,
     mapped: Prisma.AzureWorkItemUncheckedCreateInput,
+    tx: Prisma.TransactionClient,
   ) {
     const tracked: Array<[string, unknown, unknown]> = [
       ["state", existing.state, mapped.state],
@@ -1108,7 +1117,7 @@ export class AzureDevOpsSyncService {
       : null;
 
     await Promise.all(changes.map(([field, oldValue, newValue]) =>
-      prisma.$executeRaw`
+      tx.$executeRaw`
         INSERT INTO "AzureWorkItemHistory"
           ("workItemId", "syncRunId", "field", "oldValue", "newValue", "changedAt")
         VALUES

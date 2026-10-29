@@ -12,10 +12,24 @@ const SETTING_ENV = {
   pat: "AZURE_DEVOPS_PAT",
   movideskToken: "MOVIDESK_TOKEN",
   movideskUrl: "MOVIDESK_URL",
+  teamsSupportTicketsEnabled: "TEAMS_SUPPORT_NEW_TICKETS_ENABLED",
+  teamsSupportTicketsWebhook: "TEAMS_SUPPORT_NEW_TICKETS_WEBHOOK_URL",
+  teamsTaskCreatedEnabled: "TEAMS_AZURE_TASK_CREATED_ENABLED",
+  teamsTaskCreatedWebhook: "TEAMS_AZURE_TASK_CREATED_WEBHOOK_URL",
+  teamsTaskRegistroEnabled: "TEAMS_AZURE_TASK_REGISTRO_ENABLED",
+  teamsTaskRegistroWebhook: "TEAMS_AZURE_TASK_REGISTRO_WEBHOOK_URL",
 } as const;
 
 export type SystemConfigurationInput = Partial<Record<keyof typeof SETTING_ENV, string>>;
 export type SystemConfigurationTestInput = SystemConfigurationInput & { integration?: "azure" | "movidesk"; reportMonth?: string };
+export type TeamsWorkflowSettingsInput = Partial<{
+  supportTicketsEnabled: boolean;
+  supportTicketsWebhookUrl: string;
+  taskCreatedEnabled: boolean;
+  taskCreatedWebhookUrl: string;
+  taskRegistroEnabled: boolean;
+  taskRegistroWebhookUrl: string;
+}>;
 
 type SettingRow = { key: string; value: string };
 
@@ -79,6 +93,43 @@ class SystemConfigurationService {
     throw new Error("Configuração criptografada incompatível com as chaves disponíveis.");
   }
 
+  private validateWorkflowWebhook(value: string): string {
+    if (value.trim().length > 4096) throw new Error("A URL do Workflow do Teams excede o tamanho permitido.");
+    let url: URL;
+    try { url = new URL(value.trim()); }
+    catch { throw new Error("Informe uma URL válida do Workflow do Teams."); }
+    if (url.protocol !== "https:" || url.username || url.password) {
+      throw new Error("A URL do Workflow do Teams deve usar HTTPS e não pode conter usuário ou senha.");
+    }
+    return url.toString();
+  }
+
+  private async saveEncryptedSettings(
+    values: Array<[keyof typeof SETTING_ENV, string]>,
+    updatedById: number,
+    action: string,
+  ) {
+    if (!values.length) return;
+    const entries = values.map(([key, value]) => ({ key, value: this.encrypt(value) }));
+    await prisma.$transaction(async (tx) => {
+      for (const entry of entries) {
+        await tx.$executeRaw`
+          INSERT INTO "SystemSetting" ("key", "value", "encrypted", "updatedAt", "updatedById")
+          VALUES (${entry.key}, ${entry.value}, TRUE, CURRENT_TIMESTAMP, ${updatedById})
+          ON CONFLICT ("key") DO UPDATE SET
+            "value" = EXCLUDED."value",
+            "encrypted" = TRUE,
+            "updatedAt" = CURRENT_TIMESTAMP,
+            "updatedById" = EXCLUDED."updatedById"
+        `;
+      }
+      await tx.auditLog.create({
+        data: { userId: updatedById, action, entity: "SystemSetting", metadata: { keys: entries.map(({ key }) => key) } },
+      });
+    });
+    for (const [key, value] of values) process.env[SETTING_ENV[key]] = value;
+  }
+
   // Compara uma chave candidata com os registros de integração existentes.
   // Somente leitura; não altera a chave do processo nem retorna valores.
   async validateRecoveryKey(candidate: string) {
@@ -120,6 +171,7 @@ class SystemConfigurationService {
       persistedKeys.add(row.key);
     }
     for (const entry of resolved) process.env[entry.envName] = entry.value;
+    process.env.APP_INTEGRATIONS_CONFIG_STATUS = "ready";
     return persistedKeys;
   }
 
@@ -135,7 +187,55 @@ class SystemConfigurationService {
       movideskConfigured: Boolean(process.env.MOVIDESK_TOKEN),
       movideskUrl: process.env.MOVIDESK_URL?.trim() || "https://api.movidesk.com/public/v1",
       runtime: process.env.APP_RUNTIME?.trim() || "desktop",
+      teamsWorkflows: {
+        supportTicketsEnabled: process.env.TEAMS_SUPPORT_NEW_TICKETS_ENABLED?.trim().toLowerCase() === "true",
+        supportTicketsWebhookConfigured: Boolean(process.env.TEAMS_SUPPORT_NEW_TICKETS_WEBHOOK_URL?.trim()),
+        taskCreatedEnabled: process.env.TEAMS_AZURE_TASK_CREATED_ENABLED?.trim().toLowerCase() === "true",
+        taskCreatedWebhookConfigured: Boolean(process.env.TEAMS_AZURE_TASK_CREATED_WEBHOOK_URL?.trim()),
+        taskRegistroEnabled: process.env.TEAMS_AZURE_TASK_REGISTRO_ENABLED?.trim().toLowerCase() === "true",
+        taskRegistroWebhookConfigured: Boolean(process.env.TEAMS_AZURE_TASK_REGISTRO_WEBHOOK_URL?.trim()),
+        ticketBaseUrlConfigured: Boolean(process.env.TEAMS_TICKET_BASE_URL?.trim()),
+      },
     };
+  }
+
+  async saveTeamsWorkflowSettings(input: TeamsWorkflowSettingsInput, updatedById: number) {
+    await this.loadIntoEnvironment();
+    const updates: Array<[keyof typeof SETTING_ENV, string]> = [];
+    const processInputs = [
+      { enabled: input.supportTicketsEnabled, webhook: input.supportTicketsWebhookUrl, enabledKey: "teamsSupportTicketsEnabled", webhookKey: "teamsSupportTicketsWebhook", label: "aviso de tickets novos" },
+      { enabled: input.taskCreatedEnabled, webhook: input.taskCreatedWebhookUrl, enabledKey: "teamsTaskCreatedEnabled", webhookKey: "teamsTaskCreatedWebhook", label: "aviso de task criada" },
+      { enabled: input.taskRegistroEnabled, webhook: input.taskRegistroWebhookUrl, enabledKey: "teamsTaskRegistroEnabled", webhookKey: "teamsTaskRegistroWebhook", label: "aviso de retorno ao Registro" },
+    ] as const;
+
+    for (const item of processInputs) {
+      if (item.enabled !== undefined) {
+        if (typeof item.enabled !== "boolean") throw new Error("Os controles dos processos Teams devem ser booleanos.");
+        updates.push([item.enabledKey, String(item.enabled)]);
+      }
+      if (item.webhook?.trim()) updates.push([item.webhookKey, this.validateWorkflowWebhook(item.webhook)]);
+    }
+
+    const effectiveValue = (key: keyof typeof SETTING_ENV) =>
+      updates.find(([candidate]) => candidate === key)?.[1] ?? process.env[SETTING_ENV[key]] ?? "";
+    for (const item of processInputs) {
+      const enabledKey = item.enabledKey;
+      const webhookKey = item.webhookKey;
+      if (effectiveValue(enabledKey) === "true" && !effectiveValue(webhookKey).trim()) {
+        throw new Error(`Configure a URL do Workflow antes de ativar o ${item.label}.`);
+      }
+    }
+    if (processInputs.some((item) => effectiveValue(item.enabledKey) === "true")) {
+      let baseUrl: URL;
+      try { baseUrl = new URL(process.env.TEAMS_TICKET_BASE_URL?.trim() || ""); }
+      catch { throw new Error("Configure uma URL válida em TEAMS_TICKET_BASE_URL antes de ativar os cards."); }
+      if (baseUrl.protocol !== "https:" || baseUrl.username || baseUrl.password) {
+        throw new Error("TEAMS_TICKET_BASE_URL deve ser HTTPS e não pode conter usuário ou senha.");
+      }
+    }
+
+    await this.saveEncryptedSettings(updates, updatedById, "TEAMS_WORKFLOW_SETTINGS_UPDATED");
+    return this.status();
   }
 
   private async validateAzureCandidate(input: SystemConfigurationInput) {

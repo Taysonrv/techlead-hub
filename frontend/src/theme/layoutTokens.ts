@@ -17,6 +17,23 @@ export const detailDrawerPaperSx = {
     : "linear-gradient(180deg, rgba(24,199,122,.025), rgba(255,255,255,.99) 180px)",
 };
 
+/** Shared base for analytical panels across pages. KPI cards keep their own accent treatment. */
+export const analyticalPanelSx = {
+  position: "relative",
+  minWidth: 0,
+  width: "100%",
+  height: "100%",
+  overflow: "hidden",
+  border: "1px solid var(--hub-border)",
+  borderRadius: "var(--hub-radius-lg)",
+  boxShadow: "var(--hub-shadow-card)",
+  background: "var(--hub-surface)",
+  backgroundImage: "none",
+  color: "var(--hub-text)",
+  transition: "border-color var(--hub-motion-fast) ease, box-shadow var(--hub-motion-fast) ease",
+  "&:hover": { borderColor: "var(--hub-accent)" },
+} as const;
+
 // Mesmas medidas dos indicadores do Resumo Executivo (Dashboard).
 export const kpiLayout = {
   height: { xs: 132, md: 148 },

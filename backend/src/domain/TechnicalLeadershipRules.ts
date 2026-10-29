@@ -1,6 +1,34 @@
 export type LeadershipConfidence = "ALTA" | "MÉDIA";
 export type LeadershipGapConfidence = "Alta" | "Média" | "Baixa";
 export type LeadershipGapImpact = "Alto" | "Médio";
+export type LeadershipSlaBucket = "within" | "outside" | "unmeasured";
+
+/** Classifica somente resultados explícitos; texto desconhecido nunca vira "no prazo". */
+export function classifyLeadershipSla(value: string | null | undefined): LeadershipSlaBucket {
+  const normalized = (value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLocaleLowerCase("pt-BR");
+  if (!normalized || /sem\s+(?:sla|medicao)|nao\s+(?:definid|medid|calculad|informad)|n\/a|indisponivel/.test(normalized)) {
+    return "unmeasured";
+  }
+  if (/\bnao\s+(?:foi\s+)?(?:violad|vencid|estourad|atrasad|fora)\w*\b/.test(normalized)) return "within";
+  if (/\bfora\s+(?:do|da)\s+(?:prazo|sla)\b|\b(?:vencid|violad|estourad|atrasad|descumprid|excedid)\w*\b/.test(normalized)) {
+    return "outside";
+  }
+  if (/\b(?:dentro\s+(?:do|da)\s+(?:prazo|sla)|no\s+prazo|cumprid\w*|atendid\w*|respeitad\w*)\b/.test(normalized)) {
+    return "within";
+  }
+  return "unmeasured";
+}
+
+/** Calendar-day duration for inclusive local-date filters (not elapsed 24-hour blocks). */
+export function inclusiveCalendarDays(start: Date, end: Date): number {
+  const startDay = Date.UTC(start.getFullYear(), start.getMonth(), start.getDate());
+  const endDay = Date.UTC(end.getFullYear(), end.getMonth(), end.getDate());
+  return Math.max(1, Math.floor((endDay - startDay) / 86_400_000) + 1);
+}
 
 export const TECHNICAL_LEADERSHIP_THRESHOLDS = {
   recurrenceMinimum: 3,

@@ -1,5 +1,26 @@
 # Changelog
 
+## 2.1.0-rc.9 — 2026-10-29
+
+### Operação e indicadores
+- Dashboard e Desempenho/SLA receberam padronização visual, linhas retas nos gráficos e revisão dos indicadores operacionais.
+- Pendências ganhou recorte por analista e ajustes para não classificar Tasks concluídas como pendências, além de melhorias na leitura da dívida operacional.
+- Cards de backlog e resolução por agente receberam ajustes de apresentação e interação para análise da coordenação.
+
+### Notificações e colaboração
+- Novos fluxos opcionais do Teams cobrem tickets Novos encaminhados às equipes de Suporte e Tasks Azure abertas pelo N3 ou retornadas ao estado Registro, com controles independentes.
+- A sincronização completa/histórica não dispara alertas de eventos antigos como se fossem novos.
+- Notificações do Desktop podem aparecer com som quando o aplicativo está minimizado; permanecem disponíveis no sino até serem lidas.
+- O painel lateral de Tasks destaca a última alteração e usa ações rápidas mais compactas.
+
+### Desktop, calendário e estabilidade
+- O calendário associa a cidade da previsão ao usuário e resume as condições meteorológicas nos dias disponíveis.
+- A identidade visual foi refinada em ícones, sidebar, cards e gráficos, nos temas claro e escuro.
+- A inicialização do Desktop prepara estruturas compatíveis do banco para as novas funções de clima e notificações, preservando as configurações existentes durante atualizações.
+- A tela de novidades apresenta todos os destaques da versão no primeiro acesso e volta a aparecer quando uma nova versão é instalada.
+
+> Pré-release beta. Validar o CI, instalação/atualização Desktop, integração PostgreSQL e os fluxos operacionais no ambiente de homologação antes da publicação.
+
 ## Em preparação — modernização visual executiva (branch de homologação)
 
 ### Fundação de apresentação
@@ -37,7 +58,7 @@
 - Correção de propriedades duplicadas do tema MUI (TS1117) e documentação do carregamento inicial no Assistente de Análise; CI da correção aprovado.
 - Tema MUI centraliza estilos de tabelas (cabeçalhos fixos, números tabulares, hover, scroll contido) e chips por meio dos tokens semânticos.
 
-> Ainda não publicado. Build, lint, validação Web/Electron e migração das telas restantes pendentes de homologação. Nenhuma alteração de backend ou banco de dados nesta etapa.
+> Etapa visual incorporada à 2.1.0-rc.9. Consulte a seção acima para o escopo desta pré-release.
 
 ## 2.1.0-rc.8 — 2026-10-17
 
