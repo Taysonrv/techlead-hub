@@ -100,10 +100,14 @@ const READY_URL =
   `${APP_URL}/health/ready`;
 
 const BACKEND_START_TIMEOUT =
-  30_000;
+  60_000;
 
 const DATABASE_READY_TIMEOUT =
-  30_000;
+  60_000;
+
+const STARTUP_LOG_FILENAME = "startup.log";
+const STARTUP_LOG_MAX_BYTES = 2 * 1024 * 1024;
+const STARTUP_LOG_TAIL_LINES = 160;
 
 const HEALTH_CHECK_INTERVAL =
   400;
@@ -198,6 +202,10 @@ let mainWindow:
   | BrowserWindow
   | null = null;
 
+let startupWindow:
+  | BrowserWindow
+  | null = null;
+
 let setupWindow:
   | BrowserWindow
   | null = null;
@@ -211,7 +219,8 @@ let isQuitting =
 
 let tray: Tray | null = null;
 const desktopNotificationTimers = new Map<string, NodeJS.Timeout>();
-
+let startupStatus = "Preparando o TechLead Hub…";
+const startupLogTail: string[] = [];
 
 let startedBackendHere =
   false;
@@ -1065,6 +1074,57 @@ function getDevelopmentEnvPath() {
     getBackendRoot(),
     ".env"
   );
+}
+
+function getStartupLogPath() {
+  return path.join(getUserConfigDirectory(), STARTUP_LOG_FILENAME);
+}
+
+function redactStartupLog(value: string) {
+  return value
+    .replace(/("(?:DATABASE_URL|SYSTEM_CONFIG_KEY|JWT_SECRET|AZURE_DEVOPS_PAT|MOVIDESK_TOKEN|SMTP_PASSWORD|token|secret|password|authorization)"\s*:\s*")[^"]*(")/gi, "$1[REDACTED]$2")
+    .replace(/((?:DATABASE_URL|SYSTEM_CONFIG_KEY|JWT_SECRET|AZURE_DEVOPS_PAT|MOVIDESK_TOKEN|SMTP_PASSWORD)\s*[=:]\s*)[^\s,;]+/gi, "$1[REDACTED]")
+    .replace(/(postgres(?:ql)?:\/\/[^:/\s]+:)[^@/\s]+@/gi, "$1[REDACTED]@")
+    .replace(/([?&](?:token|pat|secret|password|key)=)[^&#\s]+/gi, "$1[REDACTED]")
+    .replace(/(Bearer\s+)[A-Za-z0-9._~+/-]+/gi, "$1[REDACTED]");
+}
+
+function writeStartupLog(source: string, value: unknown) {
+  const content = redactStartupLog(String(value ?? "")).slice(0, 32_000);
+  if (!content.trim()) return;
+  const timestamp = new Date().toISOString();
+  const entries = content.split(/\r?\n/).filter(Boolean).map((line) => `${timestamp} [${source}] ${line}`);
+  startupLogTail.push(...entries);
+  if (startupLogTail.length > STARTUP_LOG_TAIL_LINES) {
+    startupLogTail.splice(0, startupLogTail.length - STARTUP_LOG_TAIL_LINES);
+  }
+
+  try {
+    const logPath = getStartupLogPath();
+    fs.mkdirSync(path.dirname(logPath), { recursive: true });
+    if (fs.existsSync(logPath) && fs.statSync(logPath).size > STARTUP_LOG_MAX_BYTES) {
+      const previousPath = `${logPath}.previous`;
+      try { fs.rmSync(previousPath, { force: true }); } catch { /* manter o log atual */ }
+      fs.renameSync(logPath, previousPath);
+    }
+    fs.appendFileSync(logPath, `${entries.join("\n")}\n`, { encoding: "utf8", mode: 0o600 });
+  } catch (error) {
+    console.warn("[desktop] Não foi possível gravar o log de inicialização.", error instanceof Error ? error.name : "erro desconhecido");
+  }
+}
+
+function startupFailureDetails(reason: string) {
+  const tail = startupLogTail.slice(-35).join("\n").slice(-5_000);
+  return `${reason}\n\nLog completo: ${getStartupLogPath()}${tail ? `\n\nÚltimos eventos:\n${tail}` : ""}`;
+}
+
+async function openStartupLog() {
+  try {
+    const result = await shell.openPath(getStartupLogPath());
+    if (result) console.warn("[desktop] Não foi possível abrir o log:", result);
+  } catch (error) {
+    console.warn("[desktop] Não foi possível abrir o log.", error instanceof Error ? error.name : "erro desconhecido");
+  }
 }
 
 /* =========================================================
@@ -2029,6 +2089,7 @@ async function selectConfigurationFile() {
 }
 
 async function showIntegratedSetup(): Promise<string | null> {
+  closeStartupWindow();
   return new Promise((resolve) => {
     setupWindow = new BrowserWindow({
       icon: path.join(app.getAppPath(), "assets", "hub-icon.png"),
@@ -2373,6 +2434,7 @@ function startBackend(
     "[desktop] Backend:",
     backendEntry
   );
+  writeStartupLog("desktop", `Backend: ${backendEntry}`);
 
   startedBackendHere =
     true;
@@ -2472,6 +2534,7 @@ function startBackend(
           .trim();
 
       if (message) {
+        writeStartupLog("backend stdout", message);
         console.log(
           `[backend] ${message}`
         );
@@ -2490,6 +2553,7 @@ function startBackend(
           .trim();
 
       if (message) {
+        writeStartupLog("backend stderr", message);
         console.error(
           `[backend] ${message}`
         );
@@ -2500,6 +2564,7 @@ function startBackend(
   backendProcess.on(
     "error",
     (error) => {
+      writeStartupLog("backend spawn error", `${error.name}: ${error.message}`);
       console.error(
         "[desktop] Falha ao iniciar backend:",
         error
@@ -2510,6 +2575,7 @@ function startBackend(
   backendProcess.on(
     "exit",
     (code, signal) => {
+      writeStartupLog("backend exit", `code=${code ?? "null"}; signal=${signal ?? "none"}`);
       console.log(`[desktop] Backend finalizado. Code=${code}, Signal=${signal}`);
       backendProcess = null;
       if (isQuitting || backendStopRequested || !startedBackendHere) return;
@@ -2867,6 +2933,65 @@ async function ensureTray() {
   }
 }
 
+function renderStartupStatus() {
+  if (!startupWindow || startupWindow.isDestroyed() || startupWindow.webContents.isDestroyed()) return;
+  const status = JSON.stringify(startupStatus);
+  void startupWindow.webContents.executeJavaScript(
+    `const statusNode=document.getElementById("startup-status");if(statusNode)statusNode.textContent=${status};`
+  ).catch(() => undefined);
+}
+
+function updateStartupStatus(status: string) {
+  startupStatus = status;
+  writeStartupLog("startup", status);
+  if (startupWindow && !startupWindow.isDestroyed()) {
+    startupWindow.setProgressBar(0.5, { mode: "indeterminate" });
+    renderStartupStatus();
+  }
+}
+
+function showStartupWindow() {
+  if (startupWindow && !startupWindow.isDestroyed()) return;
+  startupStatus = "Preparando o TechLead Hub…";
+  startupWindow = new BrowserWindow({
+    width: 460,
+    height: 250,
+    frame: false,
+    resizable: false,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    show: false,
+    center: true,
+    backgroundColor: "#081521",
+    autoHideMenuBar: true,
+    webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true },
+  });
+  startupWindow.setMenuBarVisibility(false);
+  startupWindow.webContents.on("did-finish-load", renderStartupStatus);
+  startupWindow.once("ready-to-show", () => {
+    if (!startupWindow || startupWindow.isDestroyed()) return;
+    startupWindow.setProgressBar(0.5, { mode: "indeterminate" });
+    startupWindow.show();
+    renderStartupStatus();
+  });
+  startupWindow.on("closed", () => { startupWindow = null; });
+
+  const html = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Iniciando TechLead Hub</title><style>
+    *{box-sizing:border-box}html,body{width:100%;height:100%;margin:0}body{display:grid;place-items:center;background:radial-gradient(ellipse at 20% 0%,rgba(15,120,107,.23),transparent 55%),#081521;color:#e9f3f7;font:14px "Segoe UI",Arial,sans-serif}.card{width:100%;padding:34px 38px;text-align:center}.brand{display:flex;align-items:center;justify-content:center;gap:11px;margin-bottom:19px;color:#c2d2dc;font-size:12px;font-weight:800;letter-spacing:2px;text-transform:uppercase}.logo{display:grid;place-items:center;width:34px;height:34px;border:1px solid #16c784;border-radius:11px;color:#16c784;font-size:20px;font-weight:900;box-shadow:0 0 20px rgba(22,199,132,.13)}h1{margin:0 0 9px;font-size:21px;letter-spacing:-.3px}.status{min-height:22px;color:#a9beca;font-size:13px}.track{height:5px;margin:22px auto 12px;overflow:hidden;border-radius:99px;background:#173043}.bar{width:38%;height:100%;border-radius:inherit;background:linear-gradient(90deg,#0abf78,#39edaa);box-shadow:0 0 15px rgba(22,199,132,.38);animation:loading 1.45s ease-in-out infinite}@keyframes loading{0%{transform:translateX(-110%)}100%{transform:translateX(290%)}}.hint{color:#708a99;font-size:11px}@media(prefers-reduced-motion:reduce){.bar{animation-duration:3s}}
+    </style></head><body><main class="card"><div class="brand"><span class="logo">H</span><span>Hub Suporte Simer</span></div><h1>Iniciando sua central de trabalho</h1><div id="startup-status" class="status">Preparando o TechLead Hub…</div><div class="track" role="progressbar" aria-label="Carregando"><div class="bar"></div></div><div class="hint">Aguarde enquanto conectamos os serviços e seus dados.</div></main></body></html>`;
+  const url = `data:text/html;charset=utf-8,${encodeURIComponent(html)}`;
+  void startupWindow.loadURL(url).catch((error) => writeStartupLog("startup-window", error instanceof Error ? error.message : error));
+  writeStartupLog("desktop", `Iniciando ${APP_NAME} ${app.getVersion()}`);
+}
+
+function closeStartupWindow() {
+  if (!startupWindow || startupWindow.isDestroyed()) return;
+  startupWindow.setProgressBar(-1);
+  startupWindow.close();
+  startupWindow = null;
+}
+
 function createWindow() {
   const metrics =
     getWindowMetrics();
@@ -3004,6 +3129,8 @@ function createWindow() {
       async (
         error
       ) => {
+        writeStartupLog("desktop error", error instanceof Error ? error.stack ?? error.message : error);
+        closeStartupWindow();
         console.error(
           "[desktop] Falha ao carregar interface:",
           error
@@ -3039,6 +3166,7 @@ function createWindow() {
       mainWindow?.show();
 
       mainWindow?.focus();
+      closeStartupWindow();
 
       mainWindow
         ?.webContents
@@ -3063,21 +3191,23 @@ function createWindow() {
 ========================================================= */
 
 async function bootstrap() {
-  console.log(
-    `[desktop] Iniciando ${APP_NAME} ${app.getVersion()}...`
-  );
+  showStartupWindow();
+  updateStartupStatus("Verificando conexão com o Hub…");
 
   if (USE_CENTRAL_SERVER) {
+    updateStartupStatus("Aguardando o servidor central…");
     console.log(`[desktop] Usando servidor central: ${APP_URL}`);
     const centralReady = await waitForBackendReady();
     if (!centralReady) {
-      await dialog.showMessageBox({
+      closeStartupWindow();
+      const result = await dialog.showMessageBox({
         type: "error",
         title: APP_NAME,
         message: "O servidor central do TechLead Hub não está disponível.",
-        detail: `Não foi possível acessar ${APP_URL}. Verifique a rede/VPN e tente novamente.`,
-        buttons: ["Fechar"],
+        detail: startupFailureDetails(`Não foi possível acessar ${APP_URL}. Verifique a rede/VPN e tente novamente.`),
+        buttons: ["Abrir log", "Fechar"],
       });
+      if (result.response === 0) await openStartupLog();
       app.quit();
       return;
     }
@@ -3093,13 +3223,16 @@ async function bootstrap() {
    */
   let jwtSecret: string;
   try {
+    updateStartupStatus("Carregando as configurações protegidas…");
     jwtSecret = resolveJwtSecret();
   } catch (error) {
+    writeStartupLog("configuration", error instanceof Error ? error.message : error);
+    closeStartupWindow();
     await dialog.showMessageBox({
       type: "error",
       title: APP_NAME,
       message: "Não foi possível ler a configuração local do TechLead Hub.",
-      detail: error instanceof Error ? error.message : "O arquivo local foi preservado. Recupere-o antes de iniciar para evitar substituir credenciais existentes.",
+      detail: startupFailureDetails(error instanceof Error ? error.message : "O arquivo local foi preservado. Recupere-o antes de iniciar para evitar substituir credenciais existentes."),
       buttons: ["Fechar"],
     });
     app.quit();
@@ -3110,8 +3243,8 @@ async function bootstrap() {
    * Se já houver uma instância válida do backend na porta 3333
    * e ela conseguir consultar o banco, apenas reutilizamos.
    */
-  const backendAlreadyReady =
-    await checkBackendReady();
+  updateStartupStatus("Verificando se o backend já está ativo…");
+  const backendAlreadyReady = await checkBackendReady();
 
   if (
     backendAlreadyReady
@@ -3135,14 +3268,15 @@ async function bootstrap() {
    * exemplo, após atualização/reinício enquanto o backend anterior ainda
    * está encerrando ou quando ele iniciou em modo degradado.
    */
-  const backendAlreadyOnline =
-    await checkBackendHealth();
+  updateStartupStatus("Verificando a disponibilidade do serviço…");
+  const backendAlreadyOnline = await checkBackendHealth();
 
   if (backendAlreadyOnline) {
     console.log(
       "[desktop] Backend já está respondendo; aguardando somente a prontidão do banco."
     );
 
+    updateStartupStatus("O serviço iniciou. Aguardando conexão com o banco…");
     const existingDatabaseReady =
       await waitForBackendReady();
 
@@ -3153,14 +3287,16 @@ async function bootstrap() {
       return;
     }
 
-    await dialog.showMessageBox({
+    closeStartupWindow();
+    const result = await dialog.showMessageBox({
       type: "error",
       title: APP_NAME,
-      message: "O backend está online, mas o banco de dados não ficou disponível.",
+      message: "O serviço iniciou, mas a conexão com o banco não ficou pronta.",
       detail:
-        "A porta 3333 está respondendo normalmente. Verifique a conexão com o PostgreSQL/rede/VPN e tente novamente. O TechLead Hub não iniciará uma segunda instância do backend.",
-      buttons: ["Fechar"],
+        startupFailureDetails("A porta 3333 está respondendo. Verifique a conexão com o PostgreSQL, a rede/VPN e a porta 5432. O Hub não iniciará uma segunda instância do backend."),
+      buttons: ["Abrir log", "Fechar"],
     });
+    if (result.response === 0) await openStartupLog();
 
     app.quit();
     return;
@@ -3170,6 +3306,7 @@ async function bootstrap() {
     await resolveDatabaseUrl();
 
   if (!databaseUrl) {
+    closeStartupWindow();
     await dialog.showMessageBox(
       {
         type:
@@ -3195,6 +3332,7 @@ async function bootstrap() {
     return;
   }
 
+  updateStartupStatus("Iniciando os serviços locais…");
   startBackend(
     databaseUrl,
     jwtSecret,
@@ -3209,6 +3347,7 @@ async function bootstrap() {
   if (
     !backendOnline
   ) {
+    closeStartupWindow();
     const failure = await dialog.showMessageBox(
       {
         type:
@@ -3218,21 +3357,28 @@ async function bootstrap() {
           APP_NAME,
 
         message:
-          "Não foi possível iniciar o TechLead Hub.",
+          backendProcess ? "O serviço ainda está iniciando." : "O serviço encerrou antes de ficar disponível.",
 
         detail:
-          `O backend não respondeu na porta ${BACKEND_PORT} dentro do tempo esperado.`,
+          startupFailureDetails(`O backend não respondeu na porta ${BACKEND_PORT} em até ${Math.round(BACKEND_START_TIMEOUT / 1000)} segundos. Consulte o log para ver a etapa e o erro retornado.`),
 
         buttons: [
+          "Abrir log",
           "Recuperar configurações",
           "Fechar",
         ],
         defaultId: 0,
-        cancelId: 1,
+        cancelId: 2,
       }
     );
 
     if (failure.response === 0) {
+      await openStartupLog();
+      app.quit();
+      return;
+    }
+
+    if (failure.response === 1) {
       stopBackend();
       const corrected = await showIntegratedSetup();
       if (corrected) {
@@ -3251,12 +3397,14 @@ async function bootstrap() {
     "[desktop] Backend online. Validando banco de dados..."
   );
 
+  updateStartupStatus("Conectando ao banco e preparando os dados…");
   const databaseReady =
     await waitForBackendReady();
 
   if (
     !databaseReady
   ) {
+    closeStartupWindow();
     const readyProbe = await getBackendReadyProbe();
     let diagnostic =
       "O backend foi iniciado, mas o PostgreSQL não respondeu corretamente.";
@@ -3288,20 +3436,25 @@ async function bootstrap() {
           APP_NAME,
 
         message:
-          "Não foi possível conectar ao banco de dados.",
+          "O banco de dados ainda não ficou pronto.",
 
         detail:
-          `${diagnostic} Verifique principalmente se esta máquina consegue alcançar o servidor PostgreSQL pela rede/VPN e se a porta 5432 está liberada.`,
+          startupFailureDetails(`${diagnostic} Verifique se esta máquina alcança o PostgreSQL pela rede/VPN e se a porta 5432 está liberada.`),
 
-        buttons: ["Reconfigurar", "Fechar"],
+        buttons: ["Abrir log", "Reconfigurar", "Fechar"],
         defaultId: 0,
-        cancelId: 1,
+        cancelId: 2,
       }
     );
 
-    stopBackend();
-
     if (response.response === 0) {
+      await openStartupLog();
+      app.quit();
+      return;
+    }
+
+    stopBackend();
+    if (response.response === 1) {
       const correctedDatabaseUrl = await showIntegratedSetup();
 
       if (correctedDatabaseUrl) {
@@ -3321,6 +3474,7 @@ async function bootstrap() {
     "[desktop] Backend e banco de dados prontos."
   );
 
+  updateStartupStatus("Tudo pronto. Abrindo o TechLead Hub…");
   createWindow();
 
   void warnIfIntegrationConfigurationNeedsRecovery();
@@ -3381,12 +3535,14 @@ if (
       async (
         error
       ) => {
+        writeStartupLog("desktop error", error instanceof Error ? error.stack ?? error.message : error);
+        closeStartupWindow();
         console.error(
           "[desktop] Erro durante inicialização:",
           error
         );
 
-        await dialog.showMessageBox(
+        const failure = await dialog.showMessageBox(
           {
             type:
               "error",
@@ -3398,17 +3554,16 @@ if (
               "O TechLead Hub não conseguiu iniciar.",
 
             detail:
-              error instanceof Error
-                ? error.message
-                : String(
-                    error
-                  ),
+              startupFailureDetails(error instanceof Error ? error.message : String(error)),
 
             buttons: [
+              "Abrir log",
               "Fechar",
             ],
           }
         );
+
+        if (failure.response === 0) await openStartupLog();
 
         app.quit();
       }

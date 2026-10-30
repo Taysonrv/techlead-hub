@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.1.0-rc.13 — 2026-10-30
+
+### Inicialização e diagnóstico
+- O Desktop mostra uma janela de carregamento com o estágio atual enquanto inicia o backend e conecta ao banco.
+- A inicialização aguarda até 60 segundos para permitir conexão e preparação do banco em máquinas mais lentas.
+- Saída e erros do backend ficam registrados localmente em `startup.log`, com rotação do arquivo e ocultação de segredos conhecidos.
+- Falhas de inicialização informam o caminho do log e permitem abri-lo para diagnóstico antes de recuperar configurações.
+
+> Pré-release beta. Validar atualização, início em máquina configurada e primeira execução em conta Windows sem configuração local.
+
 ## 2.1.0-rc.12 — 2026-10-30
 
 ### Integração com Teams
