@@ -108,7 +108,7 @@ declare global {
           success: boolean;
           restartRequired: boolean;
         }>;
-        recoverKey: (candidate: string) => Promise<{ saved: boolean }>;
+        recoverKey: (candidate: string, legacyRekey?: boolean) => Promise<{ saved: boolean }>;
         diagnoseDatabase: (databaseUrl: string) => Promise<{ ok: boolean; message: string }>;
       };
 

@@ -103,8 +103,8 @@ const techLeadHubApi = {
     save: async (input: ConfigurationInput) =>
       ipcRenderer.invoke("configuration:save", input),
 
-    recoverKey: async (candidate: string): Promise<{ saved: boolean }> =>
-      ipcRenderer.invoke("configuration:recover-key", candidate),
+    recoverKey: async (candidate: string, legacyRekey = false): Promise<{ saved: boolean }> =>
+      ipcRenderer.invoke("configuration:recover-key", { candidate, legacyRekey }),
   },
 
   startup: {

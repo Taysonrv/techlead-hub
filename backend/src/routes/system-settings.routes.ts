@@ -6,8 +6,6 @@ import { prisma } from "../database/prisma";
 
 export const systemSettingsRoutes = Router();
 
-systemSettingsRoutes.use(requireRoles("ADMIN"));
-
 systemSettingsRoutes.get("/", async (_request, response) => {
   try {
     return response.json(await systemConfigurationService.status());
@@ -39,16 +37,15 @@ systemSettingsRoutes.get("/credentials-health", async (_request, response) => {
 });
 
 // Apenas ADMIN. A chave é testada em memória; não há escrita nem retorno de segredo.
-systemSettingsRoutes.post("/recovery/validate", async (request, response) => {
+systemSettingsRoutes.post("/recovery/validate", requireRoles("ADMIN"), async (request, response) => {
   const candidate = typeof request.body?.candidate === "string" ? request.body.candidate : "";
   if (candidate.length < 32 || candidate.length > 4096) {
     return response.status(400).json({ valid: false, message: "Informe uma chave válida (mínimo 32 caracteres)." });
   }
   try {
-    const valid = await systemConfigurationService.validateRecoveryKey(candidate);
-    return response.json({ valid });
+    return response.json(await systemConfigurationService.validateRecoveryKey(candidate));
   } catch {
-    return response.status(503).json({ valid: false, message: "Não foi possível verificar os registros no banco." });
+    return response.status(503).json({ valid: false, candidateVerified: false, message: "Não foi possível verificar os registros no banco." });
   }
 });
 
@@ -70,7 +67,7 @@ systemSettingsRoutes.get("/diagnostics", async (_request, response) => {
   }
 });
 
-systemSettingsRoutes.post("/test", async (request: AuthenticatedRequest, response) => {
+systemSettingsRoutes.post("/test", requireRoles("ADMIN"), async (request: AuthenticatedRequest, response) => {
   try {
     return response.json(await systemConfigurationService.test(request.body as SystemConfigurationTestInput));
   } catch (error) {
@@ -78,7 +75,7 @@ systemSettingsRoutes.post("/test", async (request: AuthenticatedRequest, respons
   }
 });
 
-systemSettingsRoutes.put("/teams-workflows", async (request: AuthenticatedRequest, response) => {
+systemSettingsRoutes.put("/teams-workflows", requireRoles("ADMIN"), async (request: AuthenticatedRequest, response) => {
   try {
     const userId = request.auth?.userId;
     if (!userId) return response.status(401).json({ message: "Autenticação necessária." });
@@ -92,7 +89,7 @@ systemSettingsRoutes.put("/teams-workflows", async (request: AuthenticatedReques
   }
 });
 
-systemSettingsRoutes.put("/", async (request: AuthenticatedRequest, response) => {
+systemSettingsRoutes.put("/", requireRoles("ADMIN"), async (request: AuthenticatedRequest, response) => {
   try {
     const userId = request.auth?.userId;
     if (!userId) return response.status(401).json({ message: "Autenticação necessária." });

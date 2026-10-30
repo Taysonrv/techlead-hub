@@ -14,8 +14,10 @@
 
 - Atualizações do instalador mantêm o mesmo `appId` (`com.aliare.techleadhub`) e não removem o `userData` do usuário. Os segredos locais ficam criptografados pelo Windows nesse diretório. Não escolha remover dados do aplicativo nem apague a pasta `userData` do TechLead Hub ao atualizar.
 - Em uma máquina nova, importe o `.env` de provisionamento na Central de Recuperação e confirme `DATABASE_URL` e `SYSTEM_CONFIG_KEY`. A chave deve ser a mesma usada para criptografar as configurações Azure e Movidesk do banco compartilhado; gerar outra chave não recupera os valores.
+- Se existirem registros antigos criptografados pela `JWT_SECRET` desta instalação, a recuperação aceita a chave compartilhada quando ela valida os registros correspondentes e os demais ainda podem ser lidos localmente. No próximo carregamento, os registros legados recuperáveis são recriptografados com `SYSTEM_CONFIG_KEY`, em uma transação protegida contra sobrescrever alterações concorrentes.
 - Mantenha `SYSTEM_CONFIG_KEY` em cofre corporativo ou distribuição segura de TI. Não a inclua no instalador, repositório, release ou chamado. Sem ela, a instalação avisa que as integrações estão ilegíveis e preserva os dados para recuperação posterior.
 - Se uma atualização não abrir, preserve `%APPDATA%` e os logs. A configuração local inválida ou protegida por outro perfil do Windows não deve ser apagada nem regravada automaticamente.
+- O certificado Authenticode é opcional no workflow de release. Quando não configurado, o instalador é publicado sem assinatura e o SmartScreen pode exibir um aviso ao usuário. Se `WINDOWS_SIGNING_CERTIFICATE_PFX` e, quando aplicável, `WINDOWS_SIGNING_CERTIFICATE_PASSWORD` estiverem configurados, o electron-builder usa essas credenciais para assinar o instalador. Mesmo uma assinatura válida pode precisar acumular reputação para reduzir avisos do SmartScreen.
 
 ## Publicação RC
 
@@ -23,7 +25,7 @@
 2. Disparar `Publicar TechLead Hub` com versão sem prefixo `v` e canal `beta`.
 3. Confirmar imagem `ghcr.io/taysonrv/techlead-hub:<versão>` e tag `beta`.
 4. Confirmar `.exe`, `.blockmap` e `beta.yml` na release.
-5. Confirmar que a release está publicada como **prerelease** (não draft). O aplicativo consulta a API pública do GitHub, seleciona a maior versão RC com `beta.yml` e usa diretamente os artefatos dessa tag; se a API estiver indisponível, usa o provedor GitHub do `electron-updater` como contingência.
+5. Confirmar no log da pipeline se o instalador foi assinado ou publicado sem assinatura e se a release está publicada como **prerelease** (não draft). O aplicativo consulta a API pública do GitHub, seleciona a maior versão RC com `beta.yml` e usa diretamente os artefatos dessa tag; se a API estiver indisponível, usa o provedor GitHub do `electron-updater` como contingência.
 6. Testar atualização partindo da RC anterior.
 7. Realizar smoke test: login, dashboard, chat, coordenação, importação e logout.
 

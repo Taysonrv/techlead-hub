@@ -1,5 +1,18 @@
 # Changelog
 
+## 2.1.0-rc.10 — 2026-10-29
+
+### Configurações e acesso
+- Usuários autenticados podem consultar as configurações e o estado das integrações em modo somente leitura; campos e botões de alteração ficam disponíveis apenas para administradores.
+- A API reforça a permissão de administrador nas gravações, testes de credenciais, recuperação e configuração dos fluxos do Teams.
+- Registros legados ainda legíveis pela chave local podem ser recriptografados com a chave compartilhada durante a recuperação confirmada.
+
+### Atualização e instalação
+- O backend Desktop passa a informar a versão real do aplicativo no diagnóstico.
+- A assinatura Authenticode do instalador é opcional na publicação. Sem certificado, o Windows pode exibir um aviso do SmartScreen até que o arquivo acumule reputação.
+
+> Pré-release beta. Validar instalação e atualização Desktop, leitura somente para usuários, gravação administrativa e recuperação das integrações em homologação.
+
 ## 2.1.0-rc.9 — 2026-10-29
 
 ### Operação e indicadores

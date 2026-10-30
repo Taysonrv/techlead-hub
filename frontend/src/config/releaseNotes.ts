@@ -12,6 +12,16 @@ export type ReleaseNote = {
 export const FALLBACK_APP_VERSION = import.meta.env.VITE_APP_VERSION || "development";
 
 export const releaseNotes: Record<string, ReleaseNote> = {
+  "2.1.0-rc.10": {
+    version: "2.1.0-rc.10",
+    title: "Configuração central protegida e instalação mais confiável",
+    items: [
+      { title: "Configurações somente para administradores", description: "Todos podem consultar o estado das integrações; apenas administradores podem alterar credenciais, fluxos e parâmetros do sistema." },
+      { title: "Compatibilidade com credenciais legadas", description: "Na recuperação confirmada, configurações antigas que ainda possam ser lidas na instalação de origem podem ser migradas para a chave compartilhada." },
+      { title: "Diagnóstico de versão", description: "O diagnóstico do Desktop exibe a versão instalada corretamente." },
+      { title: "Publicação sem certificado obrigatório", description: "A assinatura do instalador é opcional. Sem ela, o Windows pode exibir um aviso do SmartScreen ao instalar." },
+    ],
+  },
   "2.1.0-rc.9": {
     version: "2.1.0-rc.9",
     title: "Operação mais confiável, notificações e experiência renovada",

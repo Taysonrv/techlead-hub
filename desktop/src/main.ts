@@ -961,7 +961,11 @@ function registerIpcHandlers() {
     if (!mainWindow || event.sender !== mainWindow.webContents) {
       throw new Error("A recuperação deve ser iniciada pela janela principal.");
     }
-    const candidate = typeof input === "string" ? input.trim() : "";
+    const recovery = input && typeof input === "object"
+      ? input as { candidate?: unknown; legacyRekey?: unknown }
+      : { candidate: input, legacyRekey: false };
+    const candidate = typeof recovery.candidate === "string" ? recovery.candidate.trim() : "";
+    const legacyRekey = recovery.legacyRekey === true;
     if (candidate.length < 32 || candidate.length > 4096) {
       throw new Error("Chave de recuperação inválida.");
     }
@@ -969,7 +973,9 @@ function registerIpcHandlers() {
       type: "warning",
       title: "Recuperação de credenciais",
       message: "Confirmar recuperação da chave de integração?",
-      detail: "A chave foi validada contra os registros pelo administrador. Ela será armazenada com proteção do Windows e o TechLead Hub será reiniciado. A JWT_SECRET de autenticação não será alterada.",
+      detail: legacyRekey
+        ? "Os registros estão legíveis apenas com a chave legada desta instalação, então o valor informado não pôde ser confirmado pelo banco. Ao continuar, o Hub usará esse valor como SYSTEM_CONFIG_KEY e recriptografará os registros recuperáveis. Confirme que esta é a chave compartilhada correta para todas as instalações. A JWT_SECRET de autenticação não será alterada."
+        : "A chave foi confirmada contra os registros existentes. Ela será armazenada com proteção do Windows e o TechLead Hub será reiniciado. A JWT_SECRET de autenticação não será alterada.",
       buttons: ["Cancelar", "Confirmar recuperação"],
       defaultId: 0,
       cancelId: 0,
@@ -2508,6 +2514,9 @@ function startBackend(
 
           NODE_ENV:
             "production",
+
+          APP_VERSION:
+            app.getVersion(),
 
           HOST:
             BACKEND_HOST,

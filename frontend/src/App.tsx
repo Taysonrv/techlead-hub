@@ -606,11 +606,9 @@ function App() {
           <Route
             path="/configuracoes"
             element={
-              <AdminOnly>
-                <AuthenticatedLayout>
-                  <Settings />
-                </AuthenticatedLayout>
-              </AdminOnly>
+              <AuthenticatedLayout>
+                <Settings />
+              </AuthenticatedLayout>
             }
           />
 

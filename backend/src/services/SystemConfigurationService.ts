@@ -69,10 +69,6 @@ class SystemConfigurationService {
   }
 
   private decrypt(value: string) {
-    const [version, iv, tag, encrypted] = value.split(":");
-    if (version !== "v1" || !iv || !tag || !encrypted) throw new Error("Configuração central inválida.");
-    // Dados legados podem ter sido criptografados com JWT_SECRET antes da
-    // introdução de SYSTEM_CONFIG_KEY. Tentar as chaves sem alterar registros.
     const secrets = [
       process.env.SYSTEM_CONFIG_KEY?.trim(),
       process.env.JWT_SECRET?.trim(),
@@ -82,15 +78,21 @@ class SystemConfigurationService {
       if (tried.has(secret)) continue;
       tried.add(secret);
       try {
-        const key = crypto.createHash("sha256").update(secret).digest();
-        const decipher = crypto.createDecipheriv("aes-256-gcm", key, Buffer.from(iv, "base64"));
-        decipher.setAuthTag(Buffer.from(tag, "base64"));
-        return Buffer.concat([decipher.update(Buffer.from(encrypted, "base64")), decipher.final()]).toString("utf8");
+        return this.decryptWithSecret(value, secret);
       } catch {
-        // Só as chaves disponíveis são testadas; nunca registrar seus valores.
+        // Tentar a próxima chave legada disponível sem registrar segredos.
       }
     }
     throw new Error("Configuração criptografada incompatível com as chaves disponíveis.");
+  }
+
+  private decryptWithSecret(value: string, secret: string) {
+    const [version, iv, tag, encrypted] = value.split(":");
+    if (version !== "v1" || !iv || !tag || !encrypted) throw new Error("Configuração central inválida.");
+    const key = crypto.createHash("sha256").update(secret).digest();
+    const decipher = crypto.createDecipheriv("aes-256-gcm", key, Buffer.from(iv, "base64"));
+    decipher.setAuthTag(Buffer.from(tag, "base64"));
+    return Buffer.concat([decipher.update(Buffer.from(encrypted, "base64")), decipher.final()]).toString("utf8");
   }
 
   private validateWorkflowWebhook(value: string): string {
@@ -130,45 +132,77 @@ class SystemConfigurationService {
     for (const [key, value] of values) process.env[SETTING_ENV[key]] = value;
   }
 
-  // Compara uma chave candidata com os registros de integração existentes.
-  // Somente leitura; não altera a chave do processo nem retorna valores.
+  // A chave candidata pode abrir registros diretamente; outros podem depender
+  // exclusivamente da JWT_SECRET desta instalação. A validação informa se a
+  // candidata foi comprovada pelo banco ou se haverá recriptografia explícita
+  // dos registros legados que ainda são legíveis localmente.
   async validateRecoveryKey(candidate: string) {
-    if (candidate.length < 32 || candidate.length > 4096) return false;
+    if (candidate.length < 32 || candidate.length > 4096) return { valid: false, candidateVerified: false };
     const rows = await prisma.$queryRaw<SettingRow[]>`
       SELECT "key", "value" FROM "SystemSetting"
     `;
     const known = rows.filter(row => Object.prototype.hasOwnProperty.call(SETTING_ENV, row.key));
-    if (!known.length) return false;
-    const key = crypto.createHash("sha256").update(candidate).digest();
+    if (!known.length) return { valid: false, candidateVerified: false };
+    const fallbackSecrets = [process.env.SYSTEM_CONFIG_KEY?.trim(), process.env.JWT_SECRET?.trim()]
+      .filter((secret): secret is string => Boolean(secret && secret.length >= 32 && secret !== candidate));
+    let openedWithCandidate = 0;
     for (const row of known) {
+      let readable = false;
       try {
-        const [version, iv, tag, payload] = row.value.split(":");
-        if (version !== "v1" || !iv || !tag || !payload) return false;
-        const decipher = crypto.createDecipheriv("aes-256-gcm", key, Buffer.from(iv, "base64"));
-        decipher.setAuthTag(Buffer.from(tag, "base64"));
-        Buffer.concat([decipher.update(Buffer.from(payload, "base64")), decipher.final()]);
-      } catch {
-        return false;
+        this.decryptWithSecret(row.value, candidate);
+        openedWithCandidate += 1;
+        readable = true;
+      } catch { /* Tentar as chaves de compatibilidade desta instalação. */ }
+      if (!readable) {
+        for (const secret of fallbackSecrets) {
+          try {
+            this.decryptWithSecret(row.value, secret);
+            readable = true;
+            break;
+          } catch { /* Continuar apenas com as chaves já disponíveis. */ }
+        }
       }
+      if (!readable) return { valid: false, candidateVerified: false };
     }
-    return true;
+    return { valid: true, candidateVerified: openedWithCandidate > 0 };
   }
 
   async loadIntoEnvironment() {
     const rows = await prisma.$queryRawUnsafe<SettingRow[]>(`SELECT "key", "value" FROM "SystemSetting"`);
     const persistedKeys = new Set<string>();
     const resolved: Array<{ envName: string; value: string }> = [];
+    const legacyRows: Array<{ key: string; originalValue: string; value: string }> = [];
+    const sharedKey = process.env.SYSTEM_CONFIG_KEY?.trim();
     for (const row of rows) {
       const envName = SETTING_ENV[row.key as keyof typeof SETTING_ENV];
       if (!envName) continue;
       try {
-        resolved.push({ envName, value: this.decrypt(row.value) });
+        const value = this.decrypt(row.value);
+        resolved.push({ envName, value });
+        if (sharedKey && sharedKey.length >= 32) {
+          try {
+            this.decryptWithSecret(row.value, sharedKey);
+          } catch {
+            legacyRows.push({ key: row.key, originalValue: row.value, value: this.encrypt(value) });
+          }
+        }
       } catch {
         // Não expor valores criptografados, segredos ou detalhes de autenticação.
         // Uma chave de instalação diferente não deve provocar carregamento parcial.
         throw new Error(`Falha ao descriptografar a configuração '${row.key}'. Confira se SYSTEM_CONFIG_KEY/JWT_SECRET corresponde à chave utilizada quando a credencial foi salva. Nenhuma configuração foi alterada.`);
       }
       persistedKeys.add(row.key);
+    }
+    if (legacyRows.length) {
+      await prisma.$transaction(async (tx) => {
+        for (const row of legacyRows) {
+          await tx.$executeRaw`
+            UPDATE "SystemSetting"
+            SET "value" = ${row.value}, "encrypted" = TRUE, "updatedAt" = CURRENT_TIMESTAMP
+            WHERE "key" = ${row.key} AND "value" = ${row.originalValue}
+          `;
+        }
+      });
     }
     for (const entry of resolved) process.env[entry.envName] = entry.value;
     process.env.APP_INTEGRATIONS_CONFIG_STATUS = "ready";

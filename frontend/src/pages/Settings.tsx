@@ -36,6 +36,7 @@ import { PageHeader } from "../components/PageHeader";
 import { ContentState } from "../components/ContentState";
 import { Import } from "./Import";
 import { api, getApiErrorMessage } from "../services/api";
+import { useAuth } from "../context/AuthContext";
 import { getLocalNotificationPreferences, saveLocalNotificationPreferences, type LocalNotificationPreferences } from "../utils/notificationSound";
 
 type ConfigurationState = {
@@ -168,6 +169,7 @@ const EMPTY_FORM: ConfigurationForm = {
 };
 
 export function Settings() {
+  const { isAdmin } = useAuth();
   const [section, setSection] = useState<"general" | "data">(() => window.location.hash === "#dados" ? "data" : "general");
   const [configuration, setConfiguration] =
     useState<ConfigurationState | null>(null);
@@ -219,9 +221,9 @@ export function Settings() {
 
   useEffect(() => {
     void loadConfiguration();
-    void api.get<{users:PermissionUser[]}>("/users").then(r=>setPermissionUsers(r.data.users)).catch(()=>setPermissionUsers([]));
+    if (isAdmin) void api.get<{users:PermissionUser[]}>("/users").then(r=>setPermissionUsers(r.data.users)).catch(()=>setPermissionUsers([]));
     if (window.techLeadHub?.platform === "win32" && window.techLeadHub.startup) void window.techLeadHub.startup.get().then((state) => setStartupEnabled(state.enabled)).catch(() => undefined);
-  }, []);
+  }, [isAdmin]);
 
   useEffect(() => {
     if (!configuration?.movideskConfigured) return;
@@ -235,17 +237,17 @@ export function Settings() {
   }, [movideskBaseline?.status]);
 
   async function recoverDesktopKey() {
-    if (!window.techLeadHub?.configuration?.recoverKey || recoveryKey.length < 32) return;
+    if (!isAdmin || !window.techLeadHub?.configuration?.recoverKey || recoveryKey.length < 32) return;
     setRecoveringKey(true);
     setRecoveryMessage(null);
     try {
-      const validation = await api.post<{ valid: boolean }>("/system-settings/recovery/validate", { candidate: recoveryKey });
+      const validation = await api.post<{ valid: boolean; candidateVerified: boolean }>("/system-settings/recovery/validate", { candidate: recoveryKey });
       if (!validation.data.valid) {
-        setRecoveryMessage("A chave informada não consegue ler todos os registros criptografados. Nenhuma alteração realizada.");
+        setRecoveryMessage("A chave informada não corresponde às configurações recuperáveis deste banco. Nenhuma alteração foi realizada. Confirme se selecionou o .env original usado para salvar as integrações.");
         return;
       }
-      const result = await window.techLeadHub.configuration.recoverKey(recoveryKey);
-      setRecoveryMessage(result.saved ? "Chave armazenada com segurança. O Desktop será reiniciado." : "Operação cancelada. Nenhuma chave alterada.");
+      const result = await window.techLeadHub.configuration.recoverKey(recoveryKey, !validation.data.candidateVerified);
+      setRecoveryMessage(result.saved ? "Chave armazenada com segurança. O Desktop será reiniciado e, se necessário, migrará os registros legados recuperáveis." : "Operação cancelada. Nenhuma chave alterada.");
       if (result.saved) setRecoveryKey("");
     } catch {
       setRecoveryMessage("Falha na validação ou no armazenamento seguro. Nenhuma configuração foi substituída.");
@@ -255,7 +257,7 @@ export function Settings() {
   }
 
   async function importRecoveryKey() {
-    if (!window.techLeadHub?.configuration?.importEnv) return;
+    if (!isAdmin || !window.techLeadHub?.configuration?.importEnv) return;
     setRecoveryMessage(null);
     try {
       const imported = await window.techLeadHub.configuration.importEnv();
@@ -311,13 +313,17 @@ export function Settings() {
       setLoading(true);
       setError(null);
 
-      const [configResult, sessionsResult, diagnosticsResult] = await Promise.allSettled([
+      const [configResult, diagnosticsResult] = await Promise.allSettled([
         api.get<ConfigurationState>("/system-settings"),
-        api.get<{ sessions: ActiveSession[] }>("/sessions"),
         api.get<Diagnostics>("/system-settings/diagnostics"),
       ]);
-      if (sessionsResult.status === "fulfilled") setSessions(sessionsResult.value.data.sessions);
       if (diagnosticsResult.status === "fulfilled") setDiagnostics(diagnosticsResult.value.data);
+      if (isAdmin) {
+        try {
+          const sessionsResult = await api.get<{ sessions: ActiveSession[] }>("/sessions");
+          setSessions(sessionsResult.data.sessions);
+        } catch { setSessions([]); }
+      }
       if (configResult.status === "rejected") {
         setConfiguration(null);
         throw new Error("Não foi possível verificar as configurações das integrações. Nenhuma credencial foi alterada. Confira o diagnóstico do backend.");
@@ -337,8 +343,8 @@ export function Settings() {
         wiki: current.wiki ?? "",
         movideskUrl: current.movideskUrl ?? "https://api.movidesk.com/public/v1",
       }));
-      if (sessionsResult.status === "rejected" || diagnosticsResult.status === "rejected") {
-        setError("As configurações foram carregadas, mas o diagnóstico de sessões ou plataforma está temporariamente indisponível.");
+      if (diagnosticsResult.status === "rejected") {
+        setError("As configurações foram carregadas, mas o diagnóstico da plataforma está temporariamente indisponível.");
       }
     } catch (loadError) {
       setError(
@@ -572,6 +578,7 @@ export function Settings() {
   }
 
   async function saveConfiguration() {
+    if (!isAdmin) return;
     try {
       setSaving(true);
       setError(null);
@@ -613,6 +620,7 @@ export function Settings() {
   }
 
   async function saveTeamsWorkflows() {
+    if (!isAdmin) return;
     try {
       setSavingTeamsWorkflows(true);
       setError(null);
@@ -641,22 +649,23 @@ export function Settings() {
 
   return (
     <Box>
-      <PageHeader eyebrow="Administração" title="Configurações" description="Administração central do TechLead Hub: integrações, sincronizações, acesso e saúde das fontes de dados." />
+      <PageHeader eyebrow="Administração" title="Configurações" description={isAdmin ? "Administração central do TechLead Hub: integrações, sincronizações, acesso e saúde das fontes de dados." : "Consulte o estado das integrações e configurações do TechLead Hub. Alterações são realizadas pelo administrador."} />
+      {!isAdmin && <Alert severity="info" sx={{ mb: 2 }}>Visualização somente leitura. Solicite ao administrador qualquer alteração nas integrações ou configurações.</Alert>}
       <Card variant="outlined" sx={{ mb: 2, borderRadius: 3 }}>
         <CardContent sx={{ py: 1.25, "&:last-child": { pb: 1.25 } }}>
           <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
             <Button startIcon={<StorageOutlined />} variant={section === "general" ? "contained" : "text"} onClick={() => { setSection("general"); window.history.replaceState(null, "", "/configuracoes"); }}>Geral & Acessos</Button>
-            <Button startIcon={<SyncOutlined />} variant={section === "data" ? "contained" : "text"} onClick={() => { setSection("data"); window.history.replaceState(null, "", "/configuracoes#dados"); }}>Dados & Sincronizações</Button>
+            {isAdmin && <Button startIcon={<SyncOutlined />} variant={section === "data" ? "contained" : "text"} onClick={() => { setSection("data"); window.history.replaceState(null, "", "/configuracoes#dados"); }}>Dados & Sincronizações</Button>}
           </Stack>
         </CardContent>
       </Card>
-      {section === "data" ? <Import embedded /> : <>
-      <Card variant="outlined" sx={{ mb: 2 }}><CardContent>
+      {isAdmin && section === "data" ? <Import embedded /> : <>
+      {isAdmin && <Card variant="outlined" sx={{ mb: 2 }}><CardContent>
         <Typography sx={{fontWeight:850}}>Permissões por usuário</Typography>
         <Typography variant="body2" color="text.secondary" sx={{mt:.4,mb:1.5}}>Defina exatamente quais rotinas cada usuário pode acessar. Administradores permanecem com acesso integral.</Typography>
         <FormControl fullWidth size="small" sx={{mb:1.5}}><InputLabel shrink id="settings-select-1-label">Usuário</InputLabel><Select labelId="settings-select-1-label" inputProps={{ id: "settings-select-1", "aria-labelledby": "settings-select-1-label" }} label="Usuário" value={permissionUserId} onChange={e=>setPermissionUserId(Number(e.target.value))} displayEmpty><MenuItem value=""><em>Selecione um usuário</em></MenuItem>{permissionUsers.map(user=><MenuItem key={user.id} value={user.id}>{user.name} · {user.role}</MenuItem>)}</Select></FormControl>
         {permissionUserId!=="" && (()=>{const selected=permissionUsers.find(user=>user.id===permissionUserId);if(!selected)return null;if(selected.role==="ADMIN")return <Alert severity="info">Administradores possuem acesso integral a todas as rotinas.</Alert>;const explicit=Array.isArray(selected.permissions);const defaults=selected.role==="COORDENADOR"?ROUTINE_PERMISSIONS.map(([key])=>key):["dashboard","tickets","known-problems","attention","clients","reports","corrections","evolutions","support","versions","knowledge"];const active=explicit?selected.permissions!:defaults;return <Box sx={{display:"grid",gridTemplateColumns:{xs:"1fr",md:"repeat(2,minmax(0,1fr))"},gap:.5}}>{ROUTINE_PERMISSIONS.map(([key,label])=><Stack key={key} direction="row" sx={{alignItems:"center",justifyContent:"space-between",borderBottom:"1px solid",borderColor:"divider",py:.55}}><Typography variant="body2">{label}</Typography><Switch size="small" disabled={permissionSaving} checked={active.includes(key)} onChange={(_,checked)=>{const next=checked?[...active,key]:active.filter(item=>item!==key);void saveUserPermissions(selected.id,next)}}/></Stack>)}</Box>})()}
-      </CardContent></Card>
+      </CardContent></Card>}
 
       <Card variant="outlined" sx={{ mb: 2 }}><CardContent>
         <Typography sx={{fontWeight:850}}>Notificações</Typography>
@@ -682,11 +691,11 @@ export function Settings() {
           <CardContent sx={{ p: { xs: 2, md: 2.5 } }}>
             <Stack direction={{ xs: "column", sm: "row" }} sx={{ alignItems: { sm: "center" }, justifyContent: "space-between" }} spacing={1}>
               <Typography sx={{ fontWeight: 800 }}>Diagnóstico da plataforma</Typography>
-              <Button size="small" variant="outlined" disabled={credentialHealthBusy} startIcon={credentialHealthBusy ? <CircularProgress size={15} /> : <StorageOutlined />} onClick={() => void diagnoseCredentials()}>
+              {isAdmin && <Button size="small" variant="outlined" disabled={credentialHealthBusy} startIcon={credentialHealthBusy ? <CircularProgress size={15} /> : <StorageOutlined />} onClick={() => void diagnoseCredentials()}>
                 {credentialHealthBusy ? "Verificando..." : "Diagnosticar credenciais"}
-              </Button>
+              </Button>}
             </Stack>
-            {window.techLeadHub?.configuration?.recoverKey && (
+            {isAdmin && window.techLeadHub?.configuration?.recoverKey && (
               <Stack spacing={1.25} sx={{ mt: 2 }}>
                 <Typography sx={{ fontWeight: 750 }}>Recuperar integrações neste computador</Typography>
                 <Typography variant="body2" color="text.secondary">
@@ -725,7 +734,7 @@ export function Settings() {
           </CardContent>
         </Card>
 
-        <Box component="details" sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2.5, overflow: "hidden", "& summary": { cursor: "pointer", px: 2.5, py: 1.5, fontWeight: 750, bgcolor: "background.paper" } }}>
+        {isAdmin && <Box component="details" sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2.5, overflow: "hidden", "& summary": { cursor: "pointer", px: 2.5, py: 1.5, fontWeight: 750, bgcolor: "background.paper" } }}>
           <Box component="summary">Sessões e dispositivos · ${sessions.length} ativa(s) · Administração avançada</Box>
         <Card elevation={0} sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2.5 }}>
           <CardContent sx={{ p: { xs: 2, md: 2.5 } }}>
@@ -736,9 +745,9 @@ export function Settings() {
         </Card>
 
 
-        </Box>
+        </Box>}
 
-        {window.techLeadHub?.platform === "win32" && window.techLeadHub.startup && <Card elevation={0} sx={{ border: "1px solid", borderColor: startupEnabled ? "rgba(24,199,122,.28)" : "divider", borderRadius: 2.5, background: startupEnabled ? "linear-gradient(120deg,rgba(24,199,122,.055),transparent)" : undefined }}>
+        {isAdmin && window.techLeadHub?.platform === "win32" && window.techLeadHub.startup && <Card elevation={0} sx={{ border: "1px solid", borderColor: startupEnabled ? "rgba(24,199,122,.28)" : "divider", borderRadius: 2.5, background: startupEnabled ? "linear-gradient(120deg,rgba(24,199,122,.055),transparent)" : undefined }}>
           <CardContent sx={{ p: { xs: 2, md: 2.5 } }}>
             <Stack direction={{xs:"column",sm:"row"}} spacing={2} sx={{alignItems:{sm:"center"},justifyContent:"space-between"}}>
               <Box><Typography sx={{fontWeight:850}}>Inicialização com o Windows</Typography><Typography variant="body2" color="text.secondary">Mantenha o Hub Suporte Simer disponível desde o início da sessão para receber atualizações e avisos operacionais.</Typography></Box>
@@ -805,9 +814,10 @@ export function Settings() {
               }
               placeholder={
                 configuration?.databaseConfigured
-                  ? "Deixe vazio para manter a conexão atual"
-                  : "postgresql://usuario:senha@servidor:5432/banco"
+                  ? "Banco configurado · endereço oculto"
+                  : "Não configurado"
               }
+              disabled={!isAdmin}
               autoComplete="new-password"
               helperText="A conexão atual não é exibida por segurança."
             />
@@ -875,6 +885,7 @@ export function Settings() {
               <TextField
                 label="Organização"
                 value={form.organization}
+                disabled={!isAdmin}
                 onChange={(event) =>
                   updateField("organization", event.target.value)
                 }
@@ -884,6 +895,7 @@ export function Settings() {
               <TextField
                 label="Projeto"
                 value={form.project}
+                disabled={!isAdmin}
                 onChange={(event) =>
                   updateField("project", event.target.value)
                 }
@@ -893,6 +905,7 @@ export function Settings() {
               <TextField
                 label="Wiki"
                 value={form.wiki}
+                disabled={!isAdmin}
                 onChange={(event) =>
                   updateField("wiki", event.target.value)
                 }
@@ -902,35 +915,36 @@ export function Settings() {
                 type="password"
                 label="Novo PAT"
                 value={form.pat}
+                disabled={!isAdmin}
                 onChange={(event) =>
                   updateField("pat", event.target.value)
                 }
                 autoComplete="new-password"
                 placeholder={
                   configuration?.patConfigured
-                    ? "Deixe vazio para manter o PAT atual"
-                    : "Informe o Personal Access Token"
+                    ? "PAT configurado · valor oculto"
+                    : "Não configurado"
                 }
                 helperText={configuration?.azureCredentialSource === "central"
                   ? "PAT salvo no Hub. Esta configuração prevalece sobre o .env do serviço."
                   : configuration?.azureCredentialSource === "environment" ? "PAT carregado do ambiente do serviço. Preencha para salvar uma nova credencial no Hub." : "Informe um PAT com leitura de Work Items e acesso ao projeto."}
               />
             </Box>
-            <Stack direction="row" spacing={1} sx={{ mt: 2, justifyContent: "flex-end" }}>
+            {isAdmin && <Stack direction="row" spacing={1} sx={{ mt: 2, justifyContent: "flex-end" }}>
               <Button variant="outlined" disabled={saving || testingAzure || (!configuration?.patConfigured && !form.pat.trim())} onClick={() => void testAzureConnection()}>
                 {testingAzure ? "Testando..." : form.pat.trim() ? "Testar novo PAT" : "Testar conexão atual"}
               </Button>
-            </Stack>
+            </Stack>}
             <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1 }}>
               Ao alterar PAT, organização ou projeto, o Hub valida a conexão antes de salvar. Uma resposta de login ou HTML não confirma acesso à API.
             </Typography>
             <Divider sx={{ my: 2 }} />
-            <Stack direction={{ xs: "column", sm: "row" }} spacing={1.25} sx={{ alignItems: { sm: "center" } }}>
+            {isAdmin && <Stack direction={{ xs: "column", sm: "row" }} spacing={1.25} sx={{ alignItems: { sm: "center" } }}>
               <TextField label="Mês do relatório" type="month" value={azureHistoryMonth} onChange={event => setAzureHistoryMonth(event.target.value)} slotProps={{ inputLabel: { shrink: true } }} sx={{ minWidth: 210 }} />
               <Button variant="outlined" disabled={saving || testingAzure || !azureHistoryMonth || (!configuration?.patConfigured && !form.pat.trim())} onClick={() => void testAzureConnection(true)}>
                 {testingAzure ? "Testando..." : "Testar histórico do mês"}
               </Button>
-            </Stack>
+            </Stack>}
             <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1 }}>
               Verifica os mesmos campos, revisões e snapshots de abertura/fechamento usados pelo report. O teste usa uma amostra e não aprova os totais do mês.
             </Typography>
@@ -961,26 +975,26 @@ export function Settings() {
             <Divider sx={{ my: 2 }} />
             <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "minmax(260px, .8fr) minmax(300px, 1.2fr)" }, gap: 2, alignItems: "center" }}>
               <FormControlLabel
-                control={<Switch checked={teamsWorkflowForm.supportTicketsEnabled} onChange={(event) => setTeamsWorkflowForm((current) => ({ ...current, supportTicketsEnabled: event.target.checked }))} />}
+                control={<Switch disabled={!isAdmin} checked={teamsWorkflowForm.supportTicketsEnabled} onChange={(event) => setTeamsWorkflowForm((current) => ({ ...current, supportTicketsEnabled: event.target.checked }))} />}
                 label={<Box><Typography variant="body2" sx={{ fontWeight: 750 }}>Ticket Novo na carteira SIMER</Typography><Typography variant="caption" color="text.secondary">Grupo Suporte SIMER | Cooperativa</Typography></Box>}
               />
-              <TextField type="password" autoComplete="new-password" label="URL do Workflow de tickets" value={teamsWorkflowForm.supportTicketsWebhookUrl} onChange={(event) => setTeamsWorkflowForm((current) => ({ ...current, supportTicketsWebhookUrl: event.target.value }))} placeholder={configuration?.teamsWorkflows?.supportTicketsWebhookConfigured ? "Configurada · cole apenas para substituir" : "Cole a URL HTTPS do Workflow"} helperText={configuration?.teamsWorkflows?.supportTicketsWebhookConfigured ? "URL já configurada; valor oculto." : "URL HTTPS fornecida pelo Workflow do Teams."} />
+              <TextField disabled={!isAdmin} type="password" autoComplete="new-password" label="URL do Workflow de tickets" value={teamsWorkflowForm.supportTicketsWebhookUrl} onChange={(event) => setTeamsWorkflowForm((current) => ({ ...current, supportTicketsWebhookUrl: event.target.value }))} placeholder={configuration?.teamsWorkflows?.supportTicketsWebhookConfigured ? "Configurada · valor oculto" : "Não configurada"} helperText={configuration?.teamsWorkflows?.supportTicketsWebhookConfigured ? "URL já configurada; valor oculto." : "URL HTTPS fornecida pelo Workflow do Teams."} />
 
               <FormControlLabel
-                control={<Switch checked={teamsWorkflowForm.taskCreatedEnabled} onChange={(event) => setTeamsWorkflowForm((current) => ({ ...current, taskCreatedEnabled: event.target.checked }))} />}
+                control={<Switch disabled={!isAdmin} checked={teamsWorkflowForm.taskCreatedEnabled} onChange={(event) => setTeamsWorkflowForm((current) => ({ ...current, taskCreatedEnabled: event.target.checked }))} />}
                 label={<Box><Typography variant="body2" sx={{ fontWeight: 750 }}>Task Azure criada pelo N3</Typography><Typography variant="caption" color="text.secondary">Somente tasks vinculadas a atendimento</Typography></Box>}
               />
-              <TextField type="password" autoComplete="new-password" label="URL do Workflow de tasks criadas" value={teamsWorkflowForm.taskCreatedWebhookUrl} onChange={(event) => setTeamsWorkflowForm((current) => ({ ...current, taskCreatedWebhookUrl: event.target.value }))} placeholder={configuration?.teamsWorkflows?.taskCreatedWebhookConfigured ? "Configurada · cole apenas para substituir" : "Cole a URL HTTPS do Workflow"} helperText={configuration?.teamsWorkflows?.taskCreatedWebhookConfigured ? "URL já configurada; valor oculto." : "URL HTTPS fornecida pelo Workflow do Teams."} />
+              <TextField disabled={!isAdmin} type="password" autoComplete="new-password" label="URL do Workflow de tasks criadas" value={teamsWorkflowForm.taskCreatedWebhookUrl} onChange={(event) => setTeamsWorkflowForm((current) => ({ ...current, taskCreatedWebhookUrl: event.target.value }))} placeholder={configuration?.teamsWorkflows?.taskCreatedWebhookConfigured ? "Configurada · valor oculto" : "Não configurada"} helperText={configuration?.teamsWorkflows?.taskCreatedWebhookConfigured ? "URL já configurada; valor oculto." : "URL HTTPS fornecida pelo Workflow do Teams."} />
 
               <FormControlLabel
-                control={<Switch checked={teamsWorkflowForm.taskRegistroEnabled} onChange={(event) => setTeamsWorkflowForm((current) => ({ ...current, taskRegistroEnabled: event.target.checked }))} />}
+                control={<Switch disabled={!isAdmin} checked={teamsWorkflowForm.taskRegistroEnabled} onChange={(event) => setTeamsWorkflowForm((current) => ({ ...current, taskRegistroEnabled: event.target.checked }))} />}
                 label={<Box><Typography variant="body2" sx={{ fontWeight: 750 }}>Task retornou para Registro</Typography><Typography variant="caption" color="text.secondary">Cada retorno observado avisa o grupo N3</Typography></Box>}
               />
-              <TextField type="password" autoComplete="new-password" label="URL do Workflow do N3 · Registro" value={teamsWorkflowForm.taskRegistroWebhookUrl} onChange={(event) => setTeamsWorkflowForm((current) => ({ ...current, taskRegistroWebhookUrl: event.target.value }))} placeholder={configuration?.teamsWorkflows?.taskRegistroWebhookConfigured ? "Configurada · cole apenas para substituir" : "Cole a URL HTTPS do Workflow"} helperText={configuration?.teamsWorkflows?.taskRegistroWebhookConfigured ? "URL já configurada; valor oculto." : "URL HTTPS fornecida pelo Workflow específico do N3."} />
+              <TextField disabled={!isAdmin} type="password" autoComplete="new-password" label="URL do Workflow do N3 · Registro" value={teamsWorkflowForm.taskRegistroWebhookUrl} onChange={(event) => setTeamsWorkflowForm((current) => ({ ...current, taskRegistroWebhookUrl: event.target.value }))} placeholder={configuration?.teamsWorkflows?.taskRegistroWebhookConfigured ? "Configurada · valor oculto" : "Não configurada"} helperText={configuration?.teamsWorkflows?.taskRegistroWebhookConfigured ? "URL já configurada; valor oculto." : "URL HTTPS fornecida pelo Workflow específico do N3."} />
             </Box>
-            <Stack direction="row" sx={{ mt: 2, justifyContent: "flex-end" }}>
+            {isAdmin && <Stack direction="row" sx={{ mt: 2, justifyContent: "flex-end" }}>
               <Button variant="contained" disabled={savingTeamsWorkflows} onClick={() => void saveTeamsWorkflows()}>{savingTeamsWorkflows ? "Salvando fluxos..." : "Salvar fluxos do Teams"}</Button>
-            </Stack>
+            </Stack>}
           </CardContent>
         </Card>
 
@@ -995,14 +1009,14 @@ export function Settings() {
             </Stack>
             <Divider sx={{ my: 2 }} />
             <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" }, gap: 2 }}>
-              <TextField label="Endpoint da API" value={form.movideskUrl} onChange={(event) => updateField("movideskUrl", event.target.value)} />
-              <TextField type="password" label="Novo token Movidesk" value={form.movideskToken} onChange={(event) => updateField("movideskToken", event.target.value)} autoComplete="new-password" placeholder={configuration?.movideskConfigured ? "Deixe vazio para manter o token atual" : "Cole o token recebido"} helperText="O token atual nunca é exibido e fica criptografado no banco." />
+              <TextField label="Endpoint da API" value={form.movideskUrl} disabled={!isAdmin} onChange={(event) => updateField("movideskUrl", event.target.value)} />
+              <TextField type="password" label="Novo token Movidesk" value={form.movideskToken} disabled={!isAdmin} onChange={(event) => updateField("movideskToken", event.target.value)} autoComplete="new-password" placeholder={configuration?.movideskConfigured ? "Token configurado · valor oculto" : "Não configurado"} helperText="O token atual nunca é exibido e fica criptografado no banco." />
             </Box>
-            <Stack direction="row" spacing={1} sx={{ mt: 2, justifyContent: "flex-end", flexWrap: "wrap" }}>
+            {isAdmin && <Stack direction="row" spacing={1} sx={{ mt: 2, justifyContent: "flex-end", flexWrap: "wrap" }}>
               <Button variant="outlined" disabled={saving || testingMovidesk || (!configuration?.movideskConfigured && !form.movideskToken.trim())} onClick={() => void testMovideskConnection()}>{testingMovidesk ? "Testando..." : form.movideskToken.trim() ? "Testar novo token" : "Testar conexão atual"}</Button>
               <Button variant="outlined" disabled={saving || previewingMovidesk || !configuration?.movideskConfigured || Boolean(form.movideskToken.trim())} onClick={() => void previewMovidesk()}>{previewingMovidesk ? "Validando amostra..." : "Validar amostra (25)"}</Button>
               <Button variant="contained" disabled={saving || testingMovidesk || previewingMovidesk || !form.movideskToken.trim()} onClick={() => void saveAndTestMovidesk()}>{saving ? "Validando e salvando..." : "Validar e substituir token"}</Button>
-            </Stack>
+            </Stack>}
             <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1 }}>
               Um novo token só substitui a credencial atual após validação bem-sucedida. Em caso de erro, o token anterior é preservado.
             </Typography>
@@ -1012,7 +1026,7 @@ export function Settings() {
                   <Typography sx={{ fontWeight: 800 }}>Baseline Movidesk</Typography>
                   <Typography variant="body2" color="text.secondary">{movideskBaseline?.completed ? `Concluído · ${movideskBaseline.database.tickets} tickets na base` : movideskBaseline?.status === "RUNNING" ? "Carga FULL em execução em segundo plano." : "Pronto para a primeira carga completa."}</Typography>
                 </Box>
-                <Button variant="contained" disabled={baselineBusy || movideskBaseline?.status === "RUNNING" || movideskBaseline?.completed || !movideskPreview?.validForImport} onClick={() => void startMovideskBaseline()}>{movideskBaseline?.status === "RUNNING" ? "FULL em execução" : movideskBaseline?.completed ? "Baseline concluído" : "Iniciar carga FULL"}</Button>
+                {isAdmin && <Button variant="contained" disabled={baselineBusy || movideskBaseline?.status === "RUNNING" || movideskBaseline?.completed || !movideskPreview?.validForImport} onClick={() => void startMovideskBaseline()}>{movideskBaseline?.status === "RUNNING" ? "FULL em execução" : movideskBaseline?.completed ? "Baseline concluído" : "Iniciar carga FULL"}</Button>}
               </Stack>
               {movideskBaseline?.result && <Typography variant="body2" sx={{ mt: 1 }}>Páginas: <b>{movideskBaseline.result.pages}</b> · Lidos: <b>{movideskBaseline.result.totalRows}</b> · Novos: <b>{movideskBaseline.result.created}</b> · Atualizados: <b>{movideskBaseline.result.updated}</b> · Erros: <b>{movideskBaseline.result.errors}</b></Typography>}
               {!movideskPreview?.validForImport && !movideskBaseline?.completed && <Alert severity="info" sx={{ mt: 1 }}>Valide a amostra da API para liberar a primeira carga FULL.</Alert>}
@@ -1033,12 +1047,12 @@ export function Settings() {
                         {movideskCoverage.enrichment.pending} pendente(s) · {movideskCoverage.enrichment.errors} com erro · scheduler incremental em lotes controlados
                       </Typography>
                     </Box>
-                    <Button size="small" variant="outlined" disabled={enrichmentBusy || !movideskBaseline?.completed} onClick={() => void syncMovideskEnrichment()}>
+                    {isAdmin && <Button size="small" variant="outlined" disabled={enrichmentBusy || !movideskBaseline?.completed} onClick={() => void syncMovideskEnrichment()}>
                       {enrichmentBusy ? "Enriquecendo..." : "Processar próximo lote"}
-                    </Button>
-                    <Button size="small" variant="text" disabled={causeBackfillBusy || !movideskBaseline?.completed} onClick={() => void backfillMovideskCauses()}>
+                    </Button>}
+                    {isAdmin && <Button size="small" variant="text" disabled={causeBackfillBusy || !movideskBaseline?.completed} onClick={() => void backfillMovideskCauses()}>
                       {causeBackfillBusy ? "Consolidando causas..." : "Consolidar causas e motivos 2026+"}
-                    </Button>
+                    </Button>}
                   </Stack>
                   <Box sx={{ mt: 1.25, display: "grid", gridTemplateColumns: { xs: "repeat(2,minmax(0,1fr))", md: "repeat(4,minmax(0,1fr))" }, gap: 1 }}>
                     {[
@@ -1109,7 +1123,7 @@ export function Settings() {
           spacing={1.5}
           sx={{ justifyContent: "flex-end" }}
         >
-          {window.techLeadHub && configuration?.runtime !== "web" && <Button
+          {isAdmin && window.techLeadHub && configuration?.runtime !== "web" && <Button
             variant="outlined"
             startIcon={<FileUploadOutlined />}
             disabled={saving}
@@ -1118,7 +1132,7 @@ export function Settings() {
             Recuperar configurações (.env)
           </Button>}
 
-          <Button
+          {isAdmin && <Button
             variant="contained"
             startIcon={
               saving
@@ -1129,7 +1143,7 @@ export function Settings() {
             onClick={() => void saveConfiguration()}
           >
             {saving ? "Salvando..." : "Salvar configurações"}
-          </Button>
+          </Button>}
         </Stack>
       </Stack>
       </>}
