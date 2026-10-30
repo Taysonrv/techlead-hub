@@ -18,6 +18,7 @@ const SETTING_ENV = {
   teamsTaskCreatedWebhook: "TEAMS_AZURE_TASK_CREATED_WEBHOOK_URL",
   teamsTaskRegistroEnabled: "TEAMS_AZURE_TASK_REGISTRO_ENABLED",
   teamsTaskRegistroWebhook: "TEAMS_AZURE_TASK_REGISTRO_WEBHOOK_URL",
+  teamsTicketBaseUrl: "TEAMS_TICKET_BASE_URL",
 } as const;
 
 export type SystemConfigurationInput = Partial<Record<keyof typeof SETTING_ENV, string>>;
@@ -29,6 +30,7 @@ export type TeamsWorkflowSettingsInput = Partial<{
   taskCreatedWebhookUrl: string;
   taskRegistroEnabled: boolean;
   taskRegistroWebhookUrl: string;
+  ticketBaseUrl: string;
 }>;
 
 type SettingRow = { key: string; value: string };
@@ -104,6 +106,17 @@ class SystemConfigurationService {
       throw new Error("A URL do Workflow do Teams deve usar HTTPS e não pode conter usuário ou senha.");
     }
     return url.toString();
+  }
+
+  private validateTicketBaseUrl(value: string): string {
+    if (value.trim().length > 2048) throw new Error("A URL base do Movidesk excede o tamanho permitido.");
+    let url: URL;
+    try { url = new URL(value.trim()); }
+    catch { throw new Error("Informe uma URL válida para o Movidesk."); }
+    if (url.protocol !== "https:" || url.username || url.password || url.search || url.hash) {
+      throw new Error("A URL base do Movidesk deve usar HTTPS e não pode conter usuário, senha, consulta ou fragmento.");
+    }
+    return url.toString().replace(/\/$/, "");
   }
 
   private async saveEncryptedSettings(
@@ -229,6 +242,7 @@ class SystemConfigurationService {
         taskRegistroEnabled: process.env.TEAMS_AZURE_TASK_REGISTRO_ENABLED?.trim().toLowerCase() === "true",
         taskRegistroWebhookConfigured: Boolean(process.env.TEAMS_AZURE_TASK_REGISTRO_WEBHOOK_URL?.trim()),
         ticketBaseUrlConfigured: Boolean(process.env.TEAMS_TICKET_BASE_URL?.trim()),
+        ticketBaseUrl: process.env.TEAMS_TICKET_BASE_URL?.trim() ?? "",
       },
     };
   }
@@ -236,6 +250,7 @@ class SystemConfigurationService {
   async saveTeamsWorkflowSettings(input: TeamsWorkflowSettingsInput, updatedById: number) {
     await this.loadIntoEnvironment();
     const updates: Array<[keyof typeof SETTING_ENV, string]> = [];
+    if (input.ticketBaseUrl?.trim()) updates.push(["teamsTicketBaseUrl", this.validateTicketBaseUrl(input.ticketBaseUrl)]);
     const processInputs = [
       { enabled: input.supportTicketsEnabled, webhook: input.supportTicketsWebhookUrl, enabledKey: "teamsSupportTicketsEnabled", webhookKey: "teamsSupportTicketsWebhook", label: "aviso de tickets novos" },
       { enabled: input.taskCreatedEnabled, webhook: input.taskCreatedWebhookUrl, enabledKey: "teamsTaskCreatedEnabled", webhookKey: "teamsTaskCreatedWebhook", label: "aviso de task criada" },
@@ -260,12 +275,8 @@ class SystemConfigurationService {
       }
     }
     if (processInputs.some((item) => effectiveValue(item.enabledKey) === "true")) {
-      let baseUrl: URL;
-      try { baseUrl = new URL(process.env.TEAMS_TICKET_BASE_URL?.trim() || ""); }
-      catch { throw new Error("Configure uma URL válida em TEAMS_TICKET_BASE_URL antes de ativar os cards."); }
-      if (baseUrl.protocol !== "https:" || baseUrl.username || baseUrl.password) {
-        throw new Error("TEAMS_TICKET_BASE_URL deve ser HTTPS e não pode conter usuário ou senha.");
-      }
+      if (!effectiveValue("teamsTicketBaseUrl").trim()) throw new Error("Configure a URL base do Movidesk antes de ativar os fluxos do Teams.");
+      this.validateTicketBaseUrl(effectiveValue("teamsTicketBaseUrl"));
     }
 
     await this.saveEncryptedSettings(updates, updatedById, "TEAMS_WORKFLOW_SETTINGS_UPDATED");

@@ -57,6 +57,7 @@ type ConfigurationState = {
     taskRegistroEnabled: boolean;
     taskRegistroWebhookConfigured: boolean;
     ticketBaseUrlConfigured: boolean;
+    ticketBaseUrl: string;
   };
 };
 
@@ -67,6 +68,7 @@ type TeamsWorkflowForm = {
   taskCreatedWebhookUrl: string;
   taskRegistroEnabled: boolean;
   taskRegistroWebhookUrl: string;
+  ticketBaseUrl: string;
 };
 
 const EMPTY_TEAMS_WORKFLOW_FORM: TeamsWorkflowForm = {
@@ -76,6 +78,7 @@ const EMPTY_TEAMS_WORKFLOW_FORM: TeamsWorkflowForm = {
   taskCreatedWebhookUrl: "",
   taskRegistroEnabled: false,
   taskRegistroWebhookUrl: "",
+  ticketBaseUrl: "",
 };
 
 type ConfigurationForm = {
@@ -335,6 +338,7 @@ export function Settings() {
         supportTicketsEnabled: current.teamsWorkflows?.supportTicketsEnabled ?? false,
         taskCreatedEnabled: current.teamsWorkflows?.taskCreatedEnabled ?? false,
         taskRegistroEnabled: current.teamsWorkflows?.taskRegistroEnabled ?? false,
+        ticketBaseUrl: current.teamsWorkflows?.ticketBaseUrl ?? "",
       }));
       setForm((previous) => ({
         ...previous,
@@ -632,9 +636,10 @@ export function Settings() {
         ...(teamsWorkflowForm.taskCreatedWebhookUrl.trim() ? { taskCreatedWebhookUrl: teamsWorkflowForm.taskCreatedWebhookUrl.trim() } : {}),
         taskRegistroEnabled: teamsWorkflowForm.taskRegistroEnabled,
         ...(teamsWorkflowForm.taskRegistroWebhookUrl.trim() ? { taskRegistroWebhookUrl: teamsWorkflowForm.taskRegistroWebhookUrl.trim() } : {}),
+        ticketBaseUrl: teamsWorkflowForm.ticketBaseUrl.trim(),
       });
       setConfiguration(response.data);
-      setTeamsWorkflowForm((current) => ({ ...current, supportTicketsWebhookUrl: "", taskCreatedWebhookUrl: "", taskRegistroWebhookUrl: "" }));
+      setTeamsWorkflowForm((current) => ({ ...current, supportTicketsWebhookUrl: "", taskCreatedWebhookUrl: "", taskRegistroWebhookUrl: "", ticketBaseUrl: response.data.teamsWorkflows?.ticketBaseUrl ?? current.ticketBaseUrl }));
       setSuccess("Fluxos do Teams atualizados. As alterações são aplicadas sem reiniciar o Hub.");
     } catch (saveError) {
       setError(getApiErrorMessage(saveError, "Não foi possível salvar os fluxos do Teams."));
@@ -967,11 +972,21 @@ export function Settings() {
           <CardContent sx={{ p: { xs: 2, md: 2.5 } }}>
             <Typography sx={{ fontWeight: 800 }}>Notificações de fluxos do Teams</Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-              Processos independentes do alerta AgriQ. As URLs são armazenadas criptografadas e nunca retornam à tela; deixe o campo vazio para manter a URL cadastrada.
+              Processos independentes do alerta AgriQ. As URLs dos Workflows são armazenadas criptografadas e nunca retornam à tela; deixe esses campos vazios para manter as URLs cadastradas.
             </Typography>
             {!configuration?.teamsWorkflows?.ticketBaseUrlConfigured && <Alert severity="warning" sx={{ mt: 1.5 }}>
-              Configure TEAMS_TICKET_BASE_URL no ambiente do backend para habilitar cards com link do Movidesk.
+              Informe a URL base do Movidesk abaixo para habilitar os links de atendimento nos cards.
             </Alert>}
+            <TextField
+              fullWidth
+              disabled={!isAdmin}
+              label="URL base do Movidesk"
+              value={teamsWorkflowForm.ticketBaseUrl}
+              onChange={(event) => setTeamsWorkflowForm((current) => ({ ...current, ticketBaseUrl: event.target.value }))}
+              placeholder="https://suporte.aliare.co"
+              helperText="Usada para montar os links Ticket/Edit/{id} nos cards; compartilhada entre as instalações."
+              sx={{ mt: 2 }}
+            />
             <Divider sx={{ my: 2 }} />
             <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "minmax(260px, .8fr) minmax(300px, 1.2fr)" }, gap: 2, alignItems: "center" }}>
               <FormControlLabel

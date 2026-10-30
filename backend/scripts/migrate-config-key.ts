@@ -5,7 +5,24 @@ import { PrismaClient } from "@prisma/client";
 // Executar somente em janela de manutencao, com backup do PostgreSQL.
 // Nunca imprime segredos ou valores de configuracao.
 const prisma = new PrismaClient();
-const knownKeys = ["organization", "project", "wiki", "pat", "movideskToken", "movideskUrl"];
+// Keep this in sync with SETTING_ENV in SystemConfigurationService.ts. Every
+// integration setting is encrypted with the same shared key, including the
+// optional Teams workflow switches and webhook URLs.
+const knownKeys = [
+  "organization",
+  "project",
+  "wiki",
+  "pat",
+  "movideskToken",
+  "movideskUrl",
+  "teamsSupportTicketsEnabled",
+  "teamsSupportTicketsWebhook",
+  "teamsTaskCreatedEnabled",
+  "teamsTaskCreatedWebhook",
+  "teamsTaskRegistroEnabled",
+  "teamsTaskRegistroWebhook",
+  "teamsTicketBaseUrl",
+];
 const apply = process.argv.includes("--apply");
 const jwt = process.env.JWT_SECRET?.trim() ?? "";
 const dedicated = process.env.SYSTEM_CONFIG_KEY?.trim() ?? "";

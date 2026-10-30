@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.1.0-rc.12 — 2026-10-30
+
+### Integração com Teams
+- A URL base do Movidesk agora pode ser configurada uma vez por um administrador nas configurações compartilhadas dos fluxos do Teams.
+- Os cards montam os links de atendimento com essa configuração central; as instalações Desktop não dependem mais de `TEAMS_TICKET_BASE_URL` em um `.env` local.
+- A URL é validada como HTTPS antes de ser salva e aplicada sem reiniciar o Hub.
+
+> Pré-release beta. Após atualizar, um administrador deve informar `https://suporte.aliare.co` em “URL base do Movidesk” e salvar os fluxos do Teams.
+
 ## 2.1.0-rc.11 — 2026-10-30
 
 ### Recuperação de integrações
