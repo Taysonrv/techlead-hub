@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.1.0-rc.11 — 2026-10-30
+
+### Recuperação de integrações
+- O importador de `.env` reconhece arquivos UTF-8 com BOM, comuns em alguns editores do Windows.
+- No Desktop instalado, a chave recuperada e armazenada pelo Windows tem precedência sobre uma variável de ambiente antiga, evitando que ela sobrescreva a recuperação após reiniciar.
+- O diagnóstico separa a conectividade do banco da legibilidade das credenciais: informa banco pronto mesmo quando a chave de integração é incompatível.
+
+> Pré-release beta. Após atualizar, importe o `.env` original que contém a `SYSTEM_CONFIG_KEY` usada quando as credenciais foram salvas e confirme a recuperação. Se essa chave não corresponder ao histórico, as credenciais não podem ser descriptografadas; nenhum segredo deve ser enviado em chamados ou chats.
+
 ## 2.1.0-rc.10 — 2026-10-29
 
 ### Configurações e acesso

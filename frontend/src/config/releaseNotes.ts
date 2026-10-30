@@ -12,6 +12,15 @@ export type ReleaseNote = {
 export const FALLBACK_APP_VERSION = import.meta.env.VITE_APP_VERSION || "development";
 
 export const releaseNotes: Record<string, ReleaseNote> = {
+  "2.1.0-rc.11": {
+    version: "2.1.0-rc.11",
+    title: "Recuperação de integrações mais confiável",
+    items: [
+      { title: "Importação de .env do Windows", description: "Arquivos com BOM UTF-8 agora são lidos corretamente ao recuperar a SYSTEM_CONFIG_KEY." },
+      { title: "Prioridade da chave recuperada", description: "No Desktop instalado, a chave protegida pelo Windows prevalece sobre uma variável de ambiente antiga após reiniciar." },
+      { title: "Diagnóstico mais claro", description: "A conectividade do banco é informada separadamente da compatibilidade da chave de criptografia." },
+    ],
+  },
   "2.1.0-rc.10": {
     version: "2.1.0-rc.10",
     title: "Configuração central protegida e instalação mais confiável",

@@ -20,6 +20,16 @@ systemSettingsRoutes.get("/credentials-health", async (_request, response) => {
     ? "dedicated"
     : process.env.JWT_SECRET?.trim() ? "legacy-jwt" : "missing";
   try {
+    await prisma.$queryRaw`SELECT 1`;
+  } catch {
+    return response.status(503).json({
+      status: "unavailable",
+      keySource,
+      database: "unavailable",
+      message: "Não foi possível conectar ao banco de dados.",
+    });
+  }
+  try {
     await systemConfigurationService.status();
     return response.json({ status: "readable", keySource, database: "ready" });
   } catch (error) {
@@ -28,7 +38,7 @@ systemSettingsRoutes.get("/credentials-health", async (_request, response) => {
     return response.status(incompatible ? 409 : 503).json({
       status: incompatible ? "incompatible" : "unavailable",
       keySource,
-      database: "unknown",
+      database: "ready",
       message: incompatible
         ? "Credenciais persistidas incompatíveis com a chave atual. Não altere configurações antes de recuperar a chave original."
         : "Não foi possível verificar as configurações.",

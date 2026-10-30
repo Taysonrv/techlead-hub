@@ -17,6 +17,7 @@
 - Se existirem registros antigos criptografados pela `JWT_SECRET` desta instalação, a recuperação aceita a chave compartilhada quando ela valida os registros correspondentes e os demais ainda podem ser lidos localmente. No próximo carregamento, os registros legados recuperáveis são recriptografados com `SYSTEM_CONFIG_KEY`, em uma transação protegida contra sobrescrever alterações concorrentes.
 - Mantenha `SYSTEM_CONFIG_KEY` em cofre corporativo ou distribuição segura de TI. Não a inclua no instalador, repositório, release ou chamado. Sem ela, a instalação avisa que as integrações estão ilegíveis e preserva os dados para recuperação posterior.
 - Se uma atualização não abrir, preserve `%APPDATA%` e os logs. A configuração local inválida ou protegida por outro perfil do Windows não deve ser apagada nem regravada automaticamente.
+- No Desktop instalado, a chave armazenada no safeStorage do Windows prevalece sobre uma variável `SYSTEM_CONFIG_KEY` antiga do processo. Importe a chave original pelo diagnóstico e reinicie para que a chave recuperada seja usada.
 - O certificado Authenticode é opcional no workflow de release. Quando não configurado, o instalador é publicado sem assinatura e o SmartScreen pode exibir um aviso ao usuário. Se `WINDOWS_SIGNING_CERTIFICATE_PFX` e, quando aplicável, `WINDOWS_SIGNING_CERTIFICATE_PASSWORD` estiverem configurados, o electron-builder usa essas credenciais para assinar o instalador. Mesmo uma assinatura válida pode precisar acumular reputação para reduzir avisos do SmartScreen.
 
 ## Publicação RC

@@ -50,6 +50,11 @@ import {
   PROVISIONED_DATABASE_URL,
 } from "./provisioned-config.js";
 
+import {
+  parseEnvironmentValue,
+  selectSystemConfigKey,
+} from "./configuration/environment.js";
+
 /* =========================================================
    CONFIGURAÇÕES
 ========================================================= */
@@ -1111,89 +1116,8 @@ type SecureConfigKey =
   | "smtpPassword"
   | "smtpFrom";
 
-function parseEnvValue(
-  content: string,
-  key: string
-) {
-  const lines =
-    content.split(
-      /\r?\n/
-    );
-
-  for (
-    const originalLine of lines
-  ) {
-    const line =
-      originalLine.trim();
-
-    if (
-      !line ||
-      line.startsWith("#")
-    ) {
-      continue;
-    }
-
-    const normalized =
-      line.startsWith("export ")
-        ? line.slice(
-            "export ".length
-          )
-        : line;
-
-    const separatorIndex =
-      normalized.indexOf("=");
-
-    if (
-      separatorIndex < 1
-    ) {
-      continue;
-    }
-
-    const currentKey =
-      normalized
-        .slice(
-          0,
-          separatorIndex
-        )
-        .trim();
-
-    if (
-      currentKey !== key
-    ) {
-      continue;
-    }
-
-    let value =
-      normalized
-        .slice(
-          separatorIndex + 1
-        )
-        .trim();
-
-    if (
-      value.length >= 2 &&
-      (
-        (
-          value.startsWith('"') &&
-          value.endsWith('"')
-        ) ||
-        (
-          value.startsWith("'") &&
-          value.endsWith("'")
-        )
-      )
-    ) {
-      value =
-        value.slice(
-          1,
-          -1
-        );
-    }
-
-    return value.trim();
-  }
-
-  return null;
+function parseEnvValue(content: string, key: string) {
+  return parseEnvironmentValue(content, key);
 }
 
 function readEnvValueFromFile(
@@ -1628,10 +1552,9 @@ function migrateLegacyEnvValue(
 
 function resolveSystemConfigKey() {
   const provided = process.env.SYSTEM_CONFIG_KEY?.trim();
-  if (provided) return provided;
-
   const secure = readSecureValue("systemConfigKey");
-  if (secure) return secure;
+  const selected = selectSystemConfigKey({ packaged: app.isPackaged, environmentValue: provided, secureValue: secure });
+  if (selected) return selected;
 
   // Instalações antigas podem conter configuração legada. Nunca gerar
   // chave aleatória sobre dados existentes em SystemSetting.
