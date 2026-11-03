@@ -220,7 +220,11 @@ test("prévia responde sem aguardar Azure e persiste fechamento para outra inst�
   assert.equal(protectedSnapshot.reliable,true);
   assert.equal(protectedSnapshot.rows[0]?.id,5001);
   const writes=saved.size;
-  await (other as unknown as {saveClosing(month:string,data:Report):Promise<void>}).saveClosing("2026-10",local);
+  const saoPauloNow = new Intl.DateTimeFormat("en-US", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit" }).formatToParts(new Date());
+  const year = saoPauloNow.find(part => part.type === "year")?.value;
+  const month = saoPauloNow.find(part => part.type === "month")?.value;
+  assert.ok(year && month);
+  await (other as unknown as {saveClosing(month:string,data:Report):Promise<void>}).saveClosing(`${year}-${month}`,local);
   assert.equal(saved.size,writes,"mês em andamento não é persistido como fechamento");
 });
 
