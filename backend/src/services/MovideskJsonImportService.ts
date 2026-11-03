@@ -292,6 +292,7 @@ export class MovideskJsonImportService {
 
     return {
       movideskId,
+      ticketType: [1, 2].includes(Number(row.type)) ? Number(row.type) : null,
       protocol: this.toText(row.protocol) ?? String(movideskId),
       subject,
       category: this.toText(row.category),
