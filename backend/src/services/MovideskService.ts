@@ -68,7 +68,7 @@ function normalizeMovideskToken(raw?: string | null) {
 }
 
 const TICKET_SELECT = [
-  "id", "protocol", "subject", "category", "urgency", "status", "baseStatus",
+  "id", "protocol", "type", "subject", "category", "urgency", "status", "baseStatus",
   "justification", "createdDate", "lastUpdate", "lastActionDate", "resolvedIn",
   "closedIn", "canceledIn", "reopenedIn", "actionCount", "resolvedInFirstCall",
   "ownerTeam", "serviceFirstLevel", "serviceSecondLevel", "serviceThirdLevel",
