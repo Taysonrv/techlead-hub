@@ -3,6 +3,7 @@ export type OperationalMetricTicket = {
   resolvedDate?: string | null;
   closedDate?: string | null;
   baseStatus?: string | null;
+  ticketType?: number | null;
   status?: string | null;
   canceledDate?: string | null;
   isWithSimer?: boolean;
@@ -43,7 +44,7 @@ export function buildOperationalCohorts<T extends OperationalMetricTicket>(
     entries: simer.filter((ticket) => inPeriod(ticket.createdDate, period)),
     resolved: simer.filter((ticket) => inPeriod(ticket.resolvedDate, period)),
     closed: simer.filter((ticket) => inPeriod(ticket.closedDate, period) && !isTicketCancelled(ticket)),
-    backlog: simer.filter(isOperationallyOpen),
+    backlog: simer.filter((ticket) => ticket.ticketType === 2 && isOperationallyOpen(ticket)),
   };
 }
 
