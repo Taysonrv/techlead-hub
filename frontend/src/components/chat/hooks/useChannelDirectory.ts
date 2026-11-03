@@ -6,7 +6,13 @@ export function normalizeChatChannels(rawChannels: Channel[], userId: number | u
   const directByPeer = new Map<number, Channel>();
   const nonDirect: Channel[] = [];
   const peerId = (channel: Channel) => channel.members?.map((member) => member.user.id).find((id) => id !== userId);
-  for (const channel of rawChannels) {
+  for (const original of rawChannels) {
+    // A direct channel may carry the creator\u0027s name from legacy records.
+    // The visible title must always be the other participant, never the logged-in user.
+    const peerMember = original.type === "DIRECT"
+      ? original.members?.find((member) => member.user.id !== userId)?.user
+      : undefined;
+    const channel = peerMember ? { ...original, name: peerMember.name } : original;
     if (channel.type !== "DIRECT") { nonDirect.push(channel); continue; }
     const peer = peerId(channel);
     if (!peer) { nonDirect.push(channel); continue; }
@@ -18,12 +24,14 @@ export function normalizeChatChannels(rawChannels: Channel[], userId: number | u
   }
   let channels = [...directByPeer.values(), ...nonDirect];
   const active = activeId ? rawChannels.find((channel) => channel.id === activeId) : undefined;
+  const activePeer = active?.type === "DIRECT" ? active.members?.find((member) => member.user.id !== userId)?.user : undefined;
+  const activeDisplay = activePeer && active ? { ...active, name: activePeer.name } : active;
   if (active && !channels.some((channel) => channel.id === active.id)) {
     if (active.type === "DIRECT") {
       const peer = peerId(active);
       if (peer) channels = channels.filter((channel) => channel.type !== "DIRECT" || peerId(channel) !== peer);
     }
-    channels.unshift(active);
+    channels.unshift(activeDisplay!);
   }
   return { channels, directByPeer };
 }
