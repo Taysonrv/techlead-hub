@@ -13,6 +13,43 @@ movideskRoutes.post("/sync", requirePermission("imports"), controller.sync.bind(
 movideskRoutes.post("/baseline/start", requirePermission("imports"), controller.startBaseline.bind(controller));
 movideskRoutes.get("/baseline/status", requirePermission("imports"), controller.baselineStatus.bind(controller));
 movideskRoutes.get("/coverage", requirePermission("imports"), controller.coverage.bind(controller));
+/**
+ * Auditoria local, somente leitura, dos pendentes públicos.
+ * Não consulta a API externa nem altera tickets, apontamentos ou status.
+ */
+movideskRoutes.get("/pending/audit", requirePermission("imports"), async (_request, response) => {
+  try {
+    const openStates = [...OPEN_TICKET_BASE_STATES];
+    const where = { isDeleted: false, baseStatus: { in: openStates } };
+    const [publicCount, internalCount, unknownCount, sampleInternal, sampleUnknown] = await Promise.all([
+      prisma.ticket.count({ where: { ...where, ticketType: 2 } }),
+      prisma.ticket.count({ where: { ...where, ticketType: 1 } }),
+      prisma.ticket.count({ where: { ...where, ticketType: null } }),
+      prisma.ticket.findMany({
+        where: { ...where, ticketType: 1 },
+        select: { movideskId: true, status: true, baseStatus: true, lastUpdate: true },
+        orderBy: { movideskId: "desc" }, take: 50,
+      }),
+      prisma.ticket.findMany({
+        where: { ...where, ticketType: null },
+        select: { movideskId: true, status: true, baseStatus: true, lastUpdate: true },
+        orderBy: { movideskId: "desc" }, take: 50,
+      }),
+    ]);
+    response.setHeader("Cache-Control", "no-store");
+    return response.json({
+      checkedAt: new Date().toISOString(),
+      definition: "baseStatus aberto, não excluído, type=2 para pendentes públicos",
+      counts: { publicPending: publicCount, internalExcluded: internalCount, unknownType: unknownCount, totalOpen: publicCount + internalCount + unknownCount },
+      samples: { internal: sampleInternal, unknownType: sampleUnknown },
+      warning: unknownCount > 0 ? "Existem tickets abertos sem tipo; sincronize ou concilie antes de validar o total." : null,
+      note: "Contagem local; não equivale a uma consulta em tempo real ao Movidesk. Apontamentos internos permanecem preservados.",
+    });
+  } catch {
+    return response.status(500).json({ message: "Falha na auditoria local dos pendentes." });
+  }
+});
+
 movideskRoutes.post("/sync/full", requirePermission("imports"), controller.fullSync.bind(controller));
 movideskRoutes.get("/test", requirePermission("imports"), controller.test.bind(controller));
 movideskRoutes.get("/scope/diagnostic", requirePermission("imports"), controller.diagnoseScope.bind(controller));
