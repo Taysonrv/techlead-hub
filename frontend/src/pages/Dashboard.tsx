@@ -2871,8 +2871,8 @@ function CardPeriodHeader({ title, subtitle, value, onChange }: { title: string;
       <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: .35 }}>{subtitle}</Typography>
     </Box>
     {value && onChange && <FormControl size="small" sx={{ width: { xs: "100%", sm: 152 }, maxWidth: "100%", minWidth: 0 }}>
-      <Select inputProps={{ "aria-label": `Período de ${title}` }} value={value} onChange={(event) => onChange(event.target.value as CardPeriod)} sx={{ height: 32, fontSize: ".75rem", fontWeight: 750, textAlign: "center" }}>
-        <MenuItem value="7d">7 dias</MenuItem><MenuItem value="30d">30 dias</MenuItem><MenuItem value="60d">60 dias</MenuItem><MenuItem value="90d">90 dias</MenuItem><MenuItem value="month">Este mês</MenuItem><MenuItem value="semester">Semestre</MenuItem><MenuItem value="year">Este ano</MenuItem>
+      <Select inputProps={{ "aria-label": `Período de ${title}` }} value={value} onChange={(event) => onChange(event.target.value as CardPeriod)} sx={{ minHeight: 40, borderRadius: "8px", bgcolor: "background.paper", fontSize: ".875rem", fontWeight: 650, "& .MuiSelect-select": { py: 1.05, px: 1.4, pr: "36px !important", display: "flex", alignItems: "center" } }}>
+        <MenuItem value="7d">Últimos 7 dias</MenuItem><MenuItem value="30d">Últimos 30 dias</MenuItem><MenuItem value="60d">Últimos 60 dias</MenuItem><MenuItem value="90d">Últimos 90 dias</MenuItem><MenuItem value="month">Este mês</MenuItem><MenuItem value="semester">Este semestre</MenuItem><MenuItem value="year">Este ano</MenuItem>
       </Select>
     </FormControl>}
   </Box>;
