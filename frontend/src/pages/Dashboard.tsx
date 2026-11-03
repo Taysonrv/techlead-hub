@@ -85,6 +85,7 @@ type AzureTaskSummary = {
 type Ticket = {
   id: number;
   movideskId: number;
+  ticketType?: number | null;
 
   protocol: string | null;
   subject: string;
