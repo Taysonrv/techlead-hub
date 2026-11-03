@@ -404,6 +404,7 @@ model Ticket {
   // Identificação Movidesk
   movideskId Int     @unique
   protocol   String?
+  ticketType Int? // Movidesk: 1 = Interno; 2 = Público
 
   // Atendimento
   subject       String
