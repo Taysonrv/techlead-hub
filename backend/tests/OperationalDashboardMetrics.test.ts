@@ -3,7 +3,7 @@ import test from "node:test";
 import { buildOperationalCohorts } from "../../frontend/src/utils/operationalMetrics";
 import { calculateTimestampSla } from "../../frontend/src/utils/timestampSla";
 test("resolutions include older entries even when reopened later", () => {
-  const common = { createdDate: "2026-09-01", resolvedDate: "2026-10-05", isWithSimer: true };
+  const common = { createdDate: "2026-09-01", resolvedDate: "2026-10-05", ticketType: 2, isWithSimer: true };
   const result = buildOperationalCohorts([{ ...common, baseStatus: "Closed" }, { ...common, baseStatus: "InAttendance" }], { start: new Date("2026-10-01"), end: new Date("2026-10-31") });
   assert.equal(result.entries.length, 0);
   assert.equal(result.resolved.length, 2);
