@@ -128,8 +128,8 @@ function buildBacklogSeries(tickets: DashboardTicket[], period: Period) {
   });
 }
 function PeriodChoice({ value, onChange }: { value: Override; onChange: (next: Override) => void }) {
-  return <FormControl size="small" sx={{ minWidth: { xs: "100%", sm: 148 }, maxWidth: "100%" }}><Select aria-label="Período do indicador" value={value} onChange={(event) => onChange(event.target.value as Override)} sx={{ fontSize: 12, minWidth: 0, height: 38 }}>
-    <MenuItem value="global">Filtro geral</MenuItem><MenuItem value="month">Este mês*</MenuItem><MenuItem value="7d">Últimos 7 dias*</MenuItem><MenuItem value="30d">Últimos 30 dias*</MenuItem>
+  return <FormControl size="small" sx={{ minWidth: { xs: "100%", sm: 148 }, maxWidth: "100%" }}><Select aria-label="Período do indicador" value={value} onChange={(event) => onChange(event.target.value as Override)} sx={{ fontSize: ".875rem", fontWeight: 650, minWidth: 0, minHeight: 40, borderRadius: "8px", bgcolor: "background.paper", "& .MuiSelect-select": { py: 1.05, px: 1.4, pr: "36px !important", display: "flex", alignItems: "center" } }}>
+    <MenuItem value="global">Filtro geral</MenuItem><MenuItem value="month">Este mês</MenuItem><MenuItem value="7d">Últimos 7 dias</MenuItem><MenuItem value="30d">Últimos 30 dias</MenuItem>
   </Select></FormControl>;
 }
 export function TeamDashboardCards({ tickets, period, onOpenTickets, isDark }: { tickets: DashboardTicket[]; period: Period; onOpenTickets: OpenTickets; isDark: boolean }) {
