@@ -129,7 +129,7 @@ export class MovideskJsonImportService {
           const previous = await tx.ticket.findUnique({
             where: { movideskId: ticket.movideskId },
             select: {
-              id: true, cause: true, reason: true, businessArea: true,
+              id: true, ticketType: true, cause: true, reason: true, businessArea: true,
               createdDate: true, client: true, owner: true, service: true,
               serviceFirstLevel: true, serviceSecondLevel: true, serviceThirdLevel: true,
               ownerTeam: true, isDeleted: true,
@@ -150,6 +150,8 @@ export class MovideskJsonImportService {
             },
             update: {
               ...ticket,
+              // Payloads parciais não devem apagar o tipo oficial já identificado.
+              ticketType: ticket.ticketType ?? previous?.ticketType ?? null,
               // A API pode deixar de devolver customFieldValues históricos. Não
               // apagamos uma classificação oficial já persistida só porque o
               // campo deixou de vir no payload atual.
