@@ -7,6 +7,7 @@ import { analyticalPanelSx } from "../theme/layoutTokens";
 
 export type DashboardTicket = {
   movideskId: number;
+  ticketType?: number | null;
   owner?: string | null;
   status?: string | null;
   baseStatus?: string | null;
@@ -141,9 +142,10 @@ export function TeamDashboardCards({ tickets, period, onOpenTickets, isDark }: {
   const agentBounds = useMemo(() => bounds(agentPeriod, period), [agentPeriod, period]);
 
   // Current statuses are not historical snapshots. For past dates, display a reconstructed estimate.
+  const publicTickets = useMemo(() => tickets.filter((ticket) => ticket.ticketType === 2), [tickets]);
   const backlog = useMemo(() => {
-    return buildBacklogSeries(tickets, backlogBounds);
-  }, [tickets, backlogBounds]);
+    return buildBacklogSeries(publicTickets, backlogBounds);
+  }, [publicTickets, backlogBounds]);
   const chartGrid = isDark ? "rgba(148,163,184,.18)" : "#E4E7EC";
   const chartText = isDark ? "#C8D5E3" : "#526477";
   const tooltipStyle = { backgroundColor: isDark ? "#0B1E30" : "#FFFFFF", color: isDark ? "#EAF4FF" : "#15263A", border: `1px solid ${isDark ? "rgba(56,189,248,.32)" : "#D8E3EC"}`, borderRadius: 12, boxShadow: isDark ? "0 18px 38px rgba(0,0,0,.38)" : "0 14px 34px rgba(15,23,42,.14)" };
@@ -162,7 +164,7 @@ export function TeamDashboardCards({ tickets, period, onOpenTickets, isDark }: {
     return [...byOwner.values()].filter((item) => item.resolved || item.closed || item.evaluated).sort((a, b) => b.resolved - a.resolved);
   }, [tickets, agentBounds]);
   const visibleAgents = selectedAgent === "all" ? agents : agents.filter((item) => item.owner === selectedAgent);
-  const currentBacklog = tickets.filter(pending).length;
+  const currentBacklog = publicTickets.filter(pending).length;
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const latestBacklogPoint = backlog.at(-1);
@@ -201,7 +203,7 @@ export function TeamDashboardCards({ tickets, period, onOpenTickets, isDark }: {
   const openBacklog = (date?: Date) => {
     const at = date ? new Date(date) : new Date();
     at.setHours(23, 59, 59, 999);
-    const selected = tickets.filter((ticket) => {
+    const selected = publicTickets.filter((ticket) => {
       if (!date) return pending(ticket);
       return estimatedBacklogAt(ticket, at, today);
     });
