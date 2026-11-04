@@ -78,13 +78,15 @@ export class DashboardController {
        * Resolvidos -> resolvedDate
        * Fechados   -> closedDate
        *
-       * "Pendentes" é estoque operacional atual e não deve ser
-       * confundido com "Abertos no período".
+       * "Pendentes" considera tickets públicos atualmente abertos,
+       * cuja criação ocorreu no período. "Backlog atual" é o estoque
+       * público independentemente da data de abertura.
        */
       const [
         totalTickets,
         abertos,
         pendentes,
+        backlogAtual,
         novos,
         emAtendimento,
         parados,
@@ -106,19 +108,24 @@ export class DashboardController {
         prisma.ticket.count({
           where: dashboardWhere({
             ...snapshotWhere,
-            baseStatus: {
-              in: [
-                "New",
-                "InAttendance",
-                "Stopped",
-              ],
-            },
+            ticketType: 2,
+            ...createdDateWhere,
+            baseStatus: { in: ["New", "InAttendance", "Stopped"] },
           }),
         }),
 
         prisma.ticket.count({
           where: dashboardWhere({
             ...snapshotWhere,
+            ticketType: 2,
+            baseStatus: { in: ["New", "InAttendance", "Stopped"] },
+          }),
+        }),
+
+        prisma.ticket.count({
+          where: dashboardWhere({
+            ...snapshotWhere,
+            ticketType: 2,
             baseStatus: "New",
           }),
         }),
@@ -126,6 +133,7 @@ export class DashboardController {
         prisma.ticket.count({
           where: dashboardWhere({
             ...snapshotWhere,
+            ticketType: 2,
             baseStatus:
               "InAttendance",
           }),
@@ -134,6 +142,7 @@ export class DashboardController {
         prisma.ticket.count({
           where: dashboardWhere({
             ...snapshotWhere,
+            ticketType: 2,
             baseStatus:
               "Stopped",
           }),
@@ -163,6 +172,7 @@ export class DashboardController {
         prisma.ticket.count({
           where: dashboardWhere({
             ...snapshotWhere,
+            ticketType: 2,
             urgency: "Crítica",
 
             baseStatus: {
@@ -187,9 +197,10 @@ export class DashboardController {
         fechados,
 
         /*
-         * Backlog atual.
+         * Pendentes públicos abertos no período e backlog público atual.
          */
         pendentes,
+        backlogAtual,
         novos,
         emAtendimento,
         parados,
