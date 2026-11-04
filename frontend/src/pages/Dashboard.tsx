@@ -329,6 +329,7 @@ export function Dashboard() {
     [openedBySimerOperationInPeriod],
   );
   const pendingTickets = operationalCohorts.backlog;
+  const pendingInPeriod = operationalCohorts.pendingInPeriod;
   const resolvedInPeriod = operationalCohorts.resolved;
   const closedInPeriod = operationalCohorts.closed;
 
@@ -364,12 +365,13 @@ export function Dashboard() {
     abertosOperacaoNoPeriodo: openedBySimerOperationInPeriod.length,
     abertosComSimerNoPeriodo: openedWithSimerInPeriod.length,
     pendentes: pendingTickets.length,
+    pendentesNoPeriodo: pendingInPeriod.length,
     resolvidosNoPeriodo: resolvedInPeriod.length,
     fechadosNoPeriodo: closedInPeriod.length,
     novos: newTickets.length,
     emAtendimento: attendanceTickets.length,
     parados: stoppedTickets.length,
-  }), [openedInPeriod, openedBySimerOperationInPeriod, openedWithSimerInPeriod, pendingTickets, resolvedInPeriod, closedInPeriod, newTickets, attendanceTickets, stoppedTickets]);
+  }), [openedInPeriod, openedBySimerOperationInPeriod, openedWithSimerInPeriod, pendingTickets, pendingInPeriod, resolvedInPeriod, closedInPeriod, newTickets, attendanceTickets, stoppedTickets]);
 
   /* =======================================================
      DESENVOLVIMENTO / AZURE DEVOPS
@@ -968,20 +970,36 @@ export function Dashboard() {
       onClick: () => showTickets("Abertos no Período", openedInPeriod, "Tickets abertos no período na base importada"),
     },
     {
+      title: "Pendentes no Período",
+      value: summary.pendentesNoPeriodo,
+      description: "Tickets públicos ainda pendentes, abertos no período selecionado",
+      severity: "warning" as Severity,
+      info: {
+        title: "Pendentes no Período",
+        summary: "Tickets públicos atualmente pendentes cuja abertura ocorreu dentro do período global.",
+        calculation: "ticketType = 2, baseStatus New/InAttendance/Stopped e createdDate dentro do período.",
+        source: "Movidesk",
+        reference: "Ticket.ticketType, Ticket.baseStatus e Ticket.createdDate",
+        periodRule: "Respeita o filtro global de período, inclusive datas personalizadas.",
+        notes: "Não representa o estoque histórico na data de encerramento do período; o backlog total permanece disponível em card separado. Tickets sem tipo confirmado não são presumidos públicos.",
+      },
+      onClick: () => showTickets("Pendentes no Período", pendingInPeriod, "Tickets públicos ainda pendentes, abertos no período selecionado"),
+    },
+    {
       title: "Backlog atual",
       value: summary.pendentes,
-      description: "Estoque atual de tickets ativos",
+      description: "Estoque atual de tickets públicos ativos",
       severity: "warning" as Severity,
       info: {
         title: "Backlog atual",
         summary: "Estoque atual de tickets ainda ativos, independentemente da data de abertura. Não equivale ao indicador histórico Pendentes no fim do período do Movidesk.",
-        calculation: "Contagem de tickets com baseStatus New, InAttendance ou Stopped.",
+        calculation: "Contagem de tickets públicos (ticketType = 2) com baseStatus New, InAttendance ou Stopped.",
         source: "Movidesk",
         reference: "Ticket.baseStatus",
         periodRule: "Não é limitado pela data de abertura, pois representa o backlog atual.",
         notes: "Clique para visualizar todos os tickets que permanecem ativos. Para períodos passados, o Hub não reconstrói artificialmente o estado histórico sem snapshot daquele dia.",
       },
-      onClick: () => showTickets("Backlog atual", pendingTickets, "Tickets que permanecem ativos neste momento"),
+      onClick: () => showTickets("Backlog atual", pendingTickets, "Tickets públicos que permanecem ativos neste momento"),
     },
     {
       title: "Resolvidos",
