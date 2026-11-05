@@ -61,6 +61,7 @@ import {
   DoneAllRounded,
   InsightsOutlined,
   SpeedOutlined,
+  StarOutlineRounded,
 } from "@mui/icons-material";
 
 import {
@@ -103,6 +104,7 @@ import {
   NotificationCenter,
 } from "./NotificationCenter";
 import { TopBarActionButton } from "./TopBarActionButton";
+import { readFavorites, type Favorite } from "../utils/favorites";
 
 /* =========================================================
    CONFIGURAÇÃO
@@ -145,6 +147,15 @@ export function Sidebar() {
   } =
     useAuth();
   const userId = user?.id ?? null;
+  const [favorites, setFavorites] = useState<Favorite[]>([]);
+  useEffect(() => {
+    const refresh = () => setFavorites(userId == null ? [] : readFavorites(userId));
+    refresh();
+    window.addEventListener("techlead-favorites-changed", refresh);
+    window.addEventListener("storage", refresh);
+    return () => { window.removeEventListener("techlead-favorites-changed", refresh); window.removeEventListener("storage", refresh); };
+  }, [userId]);
+
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     try { return window.localStorage.getItem("techlead-hub.sidebar-collapsed") === "true"; }
@@ -970,6 +981,15 @@ export function Sidebar() {
           open={openSections.gestao}
           onToggle={() => setOpenSections((current) => ({ ...current, gestao: !current.gestao }))}
         />
+
+        {favorites.length > 0 && <MenuSection
+          title="Favoritos"
+          ariaLabel="Navegação de favoritos"
+          items={favorites.filter((favorite) => favorite.kind === "card" ? canAccess("dashboard") : [...analysisMenu, ...developmentMenu, ...managementMenu].some((item) => item.path === favorite.path)).map((favorite) => ({ label: favorite.label, path: favorite.path, icon: <StarOutlineRounded fontSize="small" /> }))}
+          compact={sidebarCollapsed}
+          open={true}
+          onToggle={() => {}}
+        />}
 
         <MenuSection
           title="Análises"
