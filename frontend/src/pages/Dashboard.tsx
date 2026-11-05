@@ -41,6 +41,9 @@ import {
 import { useColorMode } from "../context/ColorModeContext";
 
 import { useNavigate } from "react-router-dom";
+import { StarRounded, StarBorderRounded } from "@mui/icons-material";
+import { useAuth } from "../context/AuthContext";
+import { readFavorites, toggleFavorite } from "../utils/favorites";
 
 import { getTicketSnapshot, getTicketSnapshotState, subscribeTicketSnapshotRefresh } from "../services/ticketSnapshot";
 import { PeriodFilter } from "../components/PeriodFilter";
@@ -213,6 +216,9 @@ type MetricInfoDefinition = {
 
 export function Dashboard() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const [favoriteCards, setFavoriteCards] = useState<string[]>([]);
+  useEffect(() => { if (user?.id != null) setFavoriteCards(readFavorites(user.id).filter((item) => item.kind === "card").map((item) => item.id)); }, [user?.id]);
   const { mode } = useColorMode();
   const isDark = mode === "dark";
   const chartGrid = isDark ? "rgba(148,163,184,.16)" : "#E4E7EC";
@@ -1164,6 +1170,7 @@ export function Dashboard() {
       <KpiGrid className="techlead-dashboard-kpis" sx={{ mb: { xs: 2.5, md: 3.5 } }}>
         {cards.map(
           (card) => (
+            <Box key={card.title} sx={{ position: "relative", minWidth: 0, "& > *:first-of-type": { height: "100%" } }}>
             <KpiCard
               key={card.title}
               title={
@@ -1185,6 +1192,10 @@ export function Dashboard() {
                 card.onClick
               }
             />
+            <IconButton aria-label={favoriteCards.includes("card:" + card.title) ? "Remover dos favoritos" : "Favoritar card"} title={favoriteCards.includes("card:" + card.title) ? "Remover dos favoritos" : "Favoritar card"} size="small" sx={{ position: "absolute", top: 8, right: 34, zIndex: 2 }} onClick={(event) => { event.stopPropagation(); if (user?.id == null) return; const next = toggleFavorite(user.id, { id: "card:" + card.title, label: card.title, path: "/visao-operacional", kind: "card" }); setFavoriteCards(next.filter((item) => item.kind === "card").map((item) => item.id)); }}>
+              {favoriteCards.includes("card:" + card.title) ? <StarRounded fontSize="small" color="warning" /> : <StarBorderRounded fontSize="small" />}
+            </IconButton>
+            </Box>
           )
         )}
       </KpiGrid>
