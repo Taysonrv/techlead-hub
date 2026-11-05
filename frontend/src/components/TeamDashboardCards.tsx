@@ -143,6 +143,7 @@ export function TeamDashboardCards({ tickets, period, onOpenTickets, isDark }: {
 
   // Current statuses are not historical snapshots. For past dates, display a reconstructed estimate.
   const publicTickets = useMemo(() => tickets.filter((ticket) => ticket.ticketType === 2), [tickets]);
+  const unclassifiedPending = useMemo(() => tickets.filter((ticket) => ticket.ticketType == null && pending(ticket)).length, [tickets]);
   const backlog = useMemo(() => {
     return buildBacklogSeries(publicTickets, backlogBounds);
   }, [publicTickets, backlogBounds]);
@@ -224,6 +225,8 @@ export function TeamDashboardCards({ tickets, period, onOpenTickets, isDark }: {
         </Stack>
         <Box sx={{ width: { xs: "100%", sm: 178 }, flexShrink: 0 }}><PeriodChoice value={backlogPeriod} onChange={setBacklogPeriod} /></Box>
       </Stack>
+      {publicTickets.length === 0 && <Typography role="status" variant="body2" color="warning.main" sx={{ mb: 1.5 }}>Nenhum ticket público classificado foi recebido pelo painel. Verifique a carga e o escopo da API; zero não significa ausência de pendências.</Typography>}
+      {unclassifiedPending > 0 && <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>Há {unclassifiedPending} tickets pendentes sem classificação de tipo neste escopo, não contabilizados no backlog público.</Typography>}
       <Stack direction="row" useFlexGap spacing={1} sx={{ mb: 1.5, flexWrap: "wrap" }}>
         <Box component="button" onClick={() => openBacklog()} sx={{ ...metricSx, textAlign: "left", cursor: "pointer", color: "inherit", font: "inherit", "&:hover": { borderColor: isDark ? "rgba(56,189,248,.38)" : "rgba(8,126,158,.32)", transform: "translateY(-1px)" }, "&:focus-visible": { outline: `3px solid ${isDark ? "#38BDF8" : "#087E9E"}`, outlineOffset: 2 }, transition: "all .18s ease" }}><Typography variant="caption" color="text.secondary" sx={{ display: "block", fontWeight: 750 }}>BACKLOG ATUAL</Typography><Stack direction="row" spacing={.75} sx={{ alignItems: "baseline", mt: .25 }}><Typography sx={{ fontSize: { xs: "1.55rem", md: "1.85rem" }, lineHeight: 1.1, fontWeight: 900, letterSpacing: "-.04em", color: isDark ? "#7DD3FC" : "#087E9E" }}>{currentBacklog}</Typography><Typography variant="caption" color="text.secondary">tickets</Typography></Stack></Box>
         <Box sx={metricSx}><Typography variant="caption" color="text.secondary" sx={{ display: "block", fontWeight: 750 }}>VARIAÇÃO DIÁRIA</Typography><Stack direction="row" spacing={.75} sx={{ alignItems: "center", mt: .55 }}>{backlogDelta === null ? <Typography variant="body2" sx={{ fontWeight: 800 }}>Sem comparação</Typography> : <><Box sx={{ color: backlogDelta > 0 ? "warning.main" : backlogDelta < 0 ? "success.main" : "text.secondary", display: "flex" }}>{backlogDelta > 0 ? <TrendingUpOutlined fontSize="small" /> : backlogDelta < 0 ? <TrendingDownOutlined fontSize="small" /> : null}</Box><Typography variant="h6" sx={{ fontWeight: 900, color: backlogDelta > 0 ? "warning.main" : backlogDelta < 0 ? "success.main" : "text.secondary" }}>{backlogDelta > 0 ? "+" : ""}{backlogDelta}</Typography><Typography variant="caption" color="text.secondary">vs. dia anterior</Typography></>}</Stack></Box>
