@@ -62,6 +62,7 @@ import {
   InsightsOutlined,
   SpeedOutlined,
   StarOutlineRounded,
+  StarRounded,
 } from "@mui/icons-material";
 
 import {
@@ -104,7 +105,7 @@ import {
   NotificationCenter,
 } from "./NotificationCenter";
 import { TopBarActionButton } from "./TopBarActionButton";
-import { readFavorites, type Favorite } from "../utils/favorites";
+import { readFavorites, toggleFavorite, type Favorite } from "../utils/favorites";
 
 /* =========================================================
    CONFIGURAÇÃO
@@ -1554,6 +1555,15 @@ function MenuItem({
   icon: ReactNode;
   badge?: number;
 }) {
+  const { user } = useAuth();
+  const [starred, setStarred] = useState(false);
+  useEffect(() => {
+    const refresh = () => setStarred(user?.id != null && readFavorites(user.id).some((favorite) => favorite.id === "routine:" + path));
+    refresh();
+    window.addEventListener("techlead-favorites-changed", refresh);
+    return () => window.removeEventListener("techlead-favorites-changed", refresh);
+  }, [user?.id, path]);
+
   const hasBadge =
     typeof badge ===
       "number" &&
@@ -1745,6 +1755,7 @@ function MenuItem({
         }}
       />
 
+      {user?.id != null && <IconButton size="small" aria-label={starred ? `Desfavoritar ${label}` : `Favoritar ${label}`} title={starred ? "Remover dos favoritos" : "Favoritar rotina"} onClick={(event) => { event.preventDefault(); event.stopPropagation(); toggleFavorite(user.id, { id: "routine:" + path, label, path, kind: "routine" }); }} sx={{ p: .4, color: starred ? "#F5C451" : "rgba(255,255,255,.40)" }}>{starred ? <StarRounded sx={{ fontSize: 16 }} /> : <StarOutlineRounded sx={{ fontSize: 16 }} />}</IconButton>}
       {!window.techLeadHub?.desktop && <RoutineNewTabButton path={path} label={label} />}
 
       {hasBadge && (
