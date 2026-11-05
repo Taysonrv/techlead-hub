@@ -1082,19 +1082,6 @@ export function Dashboard() {
       },
       onClick: () => showTickets("Tickets com avaliação CSAT", filteredTickets.filter((ticket)=>ticket.satisfactionScore != null), "Pesquisa de Satisfação Movidesk"),
     },
-    {
-      title: "Parados",
-      value: summary.parados,
-      description: "Pendentes em situação de parada",
-      severity: "warning" as Severity,
-      info: {
-        title: "Parados",
-        summary: "Tickets atualmente em status de espera ou parada.",
-        calculation: "Contagem de tickets com baseStatus = Stopped.",
-        source: "Movidesk",
-        reference: "Ticket.baseStatus",
-        periodRule: "Representa o backlog atual.",
-      },
       onClick: () => showTickets("Tickets parados", stoppedTickets, "Chamados atualmente parados"),
     },
   ];
