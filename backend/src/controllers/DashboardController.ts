@@ -1183,6 +1183,9 @@ export class DashboardController {
             movideskId:
               ticket.movideskId,
 
+            ticketType:
+              ticket.ticketType,
+
             protocol:
               ticket.protocol,
 
