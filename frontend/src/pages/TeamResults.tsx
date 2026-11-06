@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Box, Button, Card, CardContent, Chip, FormControl, MenuItem, Select, Stack, TextField, Typography, Alert, CircularProgress, Drawer, IconButton, Divider } from "@mui/material";
-import { Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { getTicketSnapshot, getTicketSnapshotState, subscribeTicketSnapshotRefresh } from "../services/ticketSnapshot";
 import { isOperationallyOpen } from "../utils/operationalMetrics";
 import { FavoriteAction } from "../components/FavoriteAction";
@@ -267,21 +267,39 @@ export default function TeamResults() {
           </Stack>
         </Section>
       </Box>
-      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "minmax(0,1.5fr) minmax(0,1fr)" }, gap: 2, mb: 2 }}>
+      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "1.5fr 1fr" }, gap: 2, mb: 2 }}>
         <Section id="team-results-trend" title="Evolução de entradas e resoluções">
-          <Box sx={{ height: 310 }}><ResponsiveContainer width="100%" height="100%"><LineChart data={results.chart}><CartesianGrid strokeDasharray="3 3" opacity={.25}/><XAxis dataKey="label" tick={{ fontSize: 11 }}/><YAxis allowDecimals={false}/><Tooltip/><Legend/><Line dataKey="abertos" name="Abertos" stroke={palette[1]} strokeWidth={3} dot={false}/><Line dataKey="resolvidos" name="Resolvidos" stroke={palette[0]} strokeWidth={3} dot={false}/></LineChart></ResponsiveContainer></Box>
+          <Stack spacing={1} sx={{ maxHeight: 350, minHeight: 200, overflowY: "auto" }}>
+            {results.chart.filter(row => row.abertos + row.resolvidos > 0).map(row => <Box key={row.date}>
+              <Typography variant="caption">{row.label}</Typography>
+              {([{ label: "Abertos", count: row.abertos, color: palette[1] }, { label: "Resolvidos", count: row.resolvidos, color: palette[0] }]).map(item => <Stack key={item.label} direction="row" spacing={1} sx={{ alignItems: "center" }}>
+                <Box sx={{ width: 75 }}><Typography variant="caption">{item.label}</Typography></Box>
+                <Box sx={{ flex: 1, bgcolor: "action.hover", borderRadius: 1, height: 12, overflow: "hidden" }}><Box sx={{ bgcolor: item.color, height: "100%", width: 100 * item.count / Math.max(1, ...results.chart.map(r => Math.max(r.abertos, r.resolvidos))) + "%" }} /></Box>
+                <Typography variant="caption" sx={{ width: 30, textAlign: "right" }}>{item.count}</Typography>
+              </Stack>)}
+            </Box>)}
+            {!results.chart.some(row => row.abertos + row.resolvidos > 0) && <Alert severity="info">Sem movimentações no período.</Alert>}
+          </Stack>
         </Section>
         <Section id="team-results-status" title="Composição da carteira pendente">
-          <Box sx={{ height: 310 }}><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={donut} dataKey="value" nameKey="name" cx="50%" cy="46%" innerRadius={65} outerRadius={102} label={({ value }) => value > 0 ? value : ""}>{donut.map((item, index) => <Cell key={item.name} fill={palette[index]} />)}</Pie><Tooltip/><Legend/></PieChart></ResponsiveContainer></Box>
+          <Box sx={{ minHeight: 240, display: "grid", placeItems: "center" }}>
+            <Box sx={{ width: 180, height: 180, borderRadius: "50%", background: results.backlog.length ? "conic-gradient(" + palette[2] + " 0% " + 100 * results.stopped.length / results.backlog.length + "%, " + palette[0] + " 0% 100%)" : "linear-gradient(#445,#445)", display: "grid", placeItems: "center" }}>
+              <Box sx={{ width: 118, height: 118, borderRadius: "50%", bgcolor: "background.paper", display: "grid", placeContent: "center", textAlign: "center" }}><Typography variant="h4" sx={{ fontWeight: 800 }}>{results.backlog.length}</Typography><Typography variant="caption">Pendentes</Typography></Box>
+            </Box>
+          </Box>
+          <Stack direction="row" spacing={1} sx={{ justifyContent: "center", flexWrap: "wrap" }}><Chip label={"Parados: " + results.stopped.length} onClick={() => setDetail({ title: "Parados", tickets: results.stopped })}/><Chip label={"Demais: " + (results.backlog.length - results.stopped.length)} onClick={() => setDetail({ title: "Demais pendentes", tickets: results.backlog.filter(t => !results.stopped.includes(t)) })}/></Stack>
         </Section>
       </Box>
-      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "minmax(0,1.5fr) minmax(0,1fr)" }, gap: 2, mb: 2 }}>
-        <Section id="team-results-owners" title="Resultados por responsável">
-          <Box sx={{ height: Math.max(290, results.team.length * 37 + 60) }}><ResponsiveContainer width="100%" height="100%"><BarChart data={results.team} layout="vertical" margin={{ left: 18, right: 20 }}><CartesianGrid strokeDasharray="3 3" opacity={.25}/><XAxis type="number" allowDecimals={false}/><YAxis type="category" dataKey="name" width={145} tick={{ fontSize: 11 }}/><Tooltip/><Legend/><Bar dataKey="opened" name="Abertos" fill={palette[1]} radius={[0,4,4,0]}/><Bar dataKey="resolved" name="Resolvidos" fill={palette[0]} radius={[0,4,4,0]}/></BarChart></ResponsiveContainer></Box>
-        </Section>
-        <Section id="team-results-backlog" title="Carteira por responsável">
-          <Box sx={{ height: Math.max(290, results.team.length * 37 + 60) }}><ResponsiveContainer width="100%" height="100%"><BarChart data={[...results.team].sort((a,b)=>b.backlog-a.backlog)} layout="vertical" margin={{ left: 18, right: 20 }}><CartesianGrid strokeDasharray="3 3" opacity={.25}/><XAxis type="number" allowDecimals={false}/><YAxis type="category" dataKey="name" width={145} tick={{ fontSize: 11 }}/><Tooltip/><Bar dataKey="backlog" name="Pendentes" fill={palette[2]} radius={[0,4,4,0]}/></BarChart></ResponsiveContainer></Box>
-        </Section>
+      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "1fr 1fr" }, gap: 2, mb: 2 }}>
+        {([{ id: "team-results-owners", title: "Resultados por responsável", field: "resolved" as const }, { id: "team-results-backlog", title: "Carteira por responsável", field: "backlog" as const }]).map(panel => <Section key={panel.id} id={panel.id} title={panel.title}>
+          <Stack spacing={1.5} sx={{ minHeight: 180, maxHeight: 430, overflowY: "auto" }}>
+            {[...results.team].sort((a, b) => b[panel.field] - a[panel.field]).map(row => <Box key={row.name} role="button" tabIndex={0} onClick={() => setDetail({ title: panel.title + " · " + row.name, tickets: (panel.field === "resolved" ? results.resolved : results.backlog).filter(t => (t.owner?.trim() || "Sem responsável") === row.name) })} onKeyDown={event => { if (event.key === "Enter") setDetail({ title: panel.title + " · " + row.name, tickets: (panel.field === "resolved" ? results.resolved : results.backlog).filter(t => (t.owner?.trim() || "Sem responsável") === row.name) }); }} sx={{ cursor: "pointer", "&:hover": { bgcolor: "action.hover" }, p: .5, borderRadius: 1 }}>
+              <Stack direction="row" sx={{ justifyContent: "space-between" }}><Typography variant="body2">{row.name}</Typography><Typography variant="body2" sx={{ fontWeight: 800 }}>{row[panel.field]}</Typography></Stack>
+              <Box sx={{ height: 12, bgcolor: "action.hover", borderRadius: 1, overflow: "hidden" }}><Box sx={{ height: "100%", width: 100 * row[panel.field] / Math.max(1, ...results.team.map(t => t[panel.field])) + "%", bgcolor: panel.field === "resolved" ? palette[0] : palette[2] }} /></Box>
+            </Box>)}
+            {results.team.length === 0 && <Alert severity="info">Sem responsáveis para o período.</Alert>}
+          </Stack>
+        </Section>)}
       </Box>
       <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "repeat(3, minmax(0, 1fr))" }, gap: 2, mb: 2 }}>
         {periodBreakdown.windows.map((item, index) => <Section key={item.name} id={"team-results-period-" + index} title={"Abertos × fechados · " + item.name}>
