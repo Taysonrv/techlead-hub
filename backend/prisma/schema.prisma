@@ -1037,3 +1037,21 @@ model TeamResultsMeeting {
 
   @@index([updatedAt])
 }
+
+model LeadershipOkrEvidence {
+  id          Int      @id @default(autoincrement())
+  deliverable String   @db.VarChar(40)
+  title       String   @db.VarChar(200)
+  description String   @db.Text
+  evidenceUrl String?  @db.VarChar(1000)
+  owner       String   @db.VarChar(200)
+  status      String   @default("PLANNED") @db.VarChar(24)
+  dueDate     DateTime? @db.Date
+  createdById Int
+  updatedById Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([deliverable, status])
+  @@index([dueDate])
+}
