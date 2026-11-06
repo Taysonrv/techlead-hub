@@ -986,7 +986,7 @@ export function Sidebar() {
         {favorites.length > 0 && <MenuSection
           title="Favoritos"
           ariaLabel="Navegação de favoritos"
-          items={favorites.filter((favorite) => favorite.kind === "card" ? canAccess("dashboard") : [...analysisMenu, ...developmentMenu, ...managementMenu].some((item) => item.path === favorite.path)).map((favorite) => ({ label: favorite.label, path: favorite.path, icon: <StarOutlineRounded fontSize="small" /> }))}
+          items={favorites.filter((favorite) => favorite.kind === "card" ? canAccess("dashboard") : [...analysisMenu, ...developmentMenu, ...managementMenu].some((item) => item.path === favorite.path)).map((favorite) => ({ label: favorite.label, path: favorite.kind === "card" ? "/visao-operacional#kpi-" + encodeURIComponent(favorite.label) : favorite.path, icon: <StarOutlineRounded fontSize="small" /> }))}
           compact={sidebarCollapsed}
           open={true}
           onToggle={() => {}}
