@@ -402,7 +402,7 @@ export function Users({ embedded = false }: { embedded?: boolean } = {}) {
       {/* HEADER */}
 
       {!embedded && <PageHeader eyebrow="Sistema" title="Usuários" description="Gerencie perfis de acesso e funções organizacionais." action={<Button variant="outlined" startIcon={<RefreshOutlined />} disabled={loading} onClick={()=>void loadUsers()}>Atualizar</Button>} />}
-      {embedded && <Stack direction="row" justifyContent="space-between" alignItems="center"><Box><Typography variant="h6" fontWeight={850}>Equipe e funções</Typography><Typography variant="body2" color="text.secondary">Gerencie perfis, funções e vínculos com responsáveis Movidesk.</Typography></Box><Button size="small" variant="outlined" startIcon={<RefreshOutlined/>} disabled={loading} onClick={()=>void loadUsers()}>Atualizar</Button></Stack>}
+      {embedded && <Stack direction="row" sx={{justifyContent:"space-between",alignItems:"center"}}><Box><Typography variant="h6" sx={{fontWeight:850}}>Equipe e funções</Typography><Typography variant="body2" color="text.secondary">Gerencie perfis, funções e vínculos com responsáveis Movidesk.</Typography></Box><Button size="small" variant="outlined" startIcon={<RefreshOutlined/>} disabled={loading} onClick={()=>void loadUsers()}>Atualizar</Button></Stack>}
 
       {/* ALERTAS */}
 
@@ -503,12 +503,12 @@ export function Users({ embedded = false }: { embedded?: boolean } = {}) {
               <Box sx={{ display:"grid", gridTemplateColumns:{xs:"minmax(0,1fr)",lg:"repeat(2,minmax(0,1fr))"}, gap:1.5, p:2, minWidth:0 }}>
                 {users.slice(usersPage*10,usersPage*10+10).map(user=><Card key={user.id} variant="outlined" sx={{borderRadius:2.5,minWidth:0}}>
                   <CardContent sx={{display:"flex",flexDirection:"column",gap:1.5}}>
-                    <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={1}>
+                    <Stack direction="row" spacing={1} sx={{justifyContent:"space-between",alignItems:"flex-start"}}>
                       <Box sx={{minWidth:0}}>
-                        <Typography fontWeight={800} variant="subtitle2">{user.name}</Typography>
+                        <Typography sx={{fontWeight:800}} variant="subtitle2">{user.name}</Typography>
                         <Typography variant="caption" color="text.secondary" sx={{overflowWrap:"anywhere"}}>@{user.username}{user.email?` · ${user.email}`:""}</Typography>
                       </Box>
-                      <Stack direction="row" spacing={.5} flexWrap="wrap" useFlexGap justifyContent="flex-end">
+                      <Stack direction="row" spacing={.5} useFlexGap sx={{flexWrap:"wrap",justifyContent:"flex-end"}}>
                         <Chip size="small" label={getRoleLabel(user.role)} variant="outlined"/>
                         <ApprovalChip status={user.approvalStatus}/>
                         <Chip size="small" color={user.active?"success":"default"} label={user.active?"Ativo":"Inativo"}/>
@@ -765,39 +765,6 @@ function getRoleLabel(
     default:
       return "Analista";
   }
-}
-
-function formatDate(
-  value:
-    string | null | undefined
-) {
-  if (!value) {
-    return "—";
-  }
-
-  const date =
-    new Date(value);
-
-  if (
-    Number.isNaN(
-      date.getTime()
-    )
-  ) {
-    return "—";
-  }
-
-  return new Intl.DateTimeFormat(
-    "pt-BR",
-    {
-      dateStyle:
-        "short",
-
-      timeStyle:
-        "short",
-    }
-  ).format(
-    date
-  );
 }
 
 function getActionTitle(
