@@ -2,6 +2,7 @@ import { Router } from "express";
 import type { AuthenticatedRequest } from "../middlewares/authMiddleware";
 import { requirePermission, requireRoles } from "../middlewares/roleMiddleware";
 import { prisma } from "../database/prisma";
+import { scopedAzureWhere } from "../domain/OperationalScope";
 
 export const teamResultsMeetingRoutes = Router();
 teamResultsMeetingRoutes.use(requirePermission("dashboard"));
@@ -26,6 +27,22 @@ const cleanActions = (value: unknown) => {
   if (!value.every(row => row && typeof row === "object" && typeof row.id === "string" && row.id.length <= 100 && typeof row.description === "string" && row.description.length <= 4000 && typeof row.owner === "string" && row.owner.length <= 200 && isoDate(row.due) && ["pending","doing","done"].includes(row.status))) return null;
   return value.map(row => ({ id: text(row.id, 100), description: text(row.description, 4000), owner: text(row.owner, 200), due: row.due, status: row.status }));
 };
+
+teamResultsMeetingRoutes.get("/bugs-summary", async (req: AuthenticatedRequest, res) => {
+  const start = isoDate(req.query.start);
+  const end = isoDate(req.query.end);
+  if (!start || !end || start > end) { res.status(400).json({ message: "Período inválido." }); return; }
+  const endExclusive = new Date(end.getTime() + 86_400_000);
+  try {
+    const rows = await prisma.azureWorkItem.findMany({
+      where: scopedAzureWhere({ workItemType: "Correção Clientes", azureCreatedAt: { gte: start, lt: endExclusive } }),
+      select: { id: true, state: true, azureCreatedAt: true, deliveredVersion: true },
+      orderBy: { azureCreatedAt: "desc" },
+      take: 5000,
+    });
+    res.json({ total: rows.length, limited: rows.length === 5000, delivered: rows.filter(row => Boolean(row.deliveredVersion)).length });
+  } catch (error) { console.error("[team-meetings] bugs", error); res.status(500).json({ message: "Falha ao consultar correções do período." }); }
+});
 
 teamResultsMeetingRoutes.get("/", async (_req: AuthenticatedRequest, res) => {
   try {
