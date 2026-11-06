@@ -9,7 +9,8 @@ type Goal = { name: string; target: number };
 type Highlight = { id: string; kind: "achievement" | "attention"; text: string };
 type Action = { id: string; description: string; owner: string; due: string; status: "pending" | "doing" | "done" };
 type MeetingData = { goals: Goal[]; highlights: Highlight[]; actions: Action[] };
-type Meeting = MeetingData & { id: number; meetingDate: string; title: string; notes: string; version: number; updatedAt: string };
+type MeetingSnapshot = { periodStart: string; periodEnd: string; opened: number; resolved: number; closed: number; backlog: number; stopped: number; capturedAt: string };
+type Meeting = MeetingData & { snapshot?: MeetingSnapshot | null; id: number; meetingDate: string; title: string; notes: string; version: number; updatedAt: string };
 type MeetingSummary = Pick<Meeting, "id" | "meetingDate" | "title" | "version" | "updatedAt">;
 const empty = (): MeetingData => ({ goals: [], highlights: [], actions: [] });
 const uid = () => String(Date.now()) + "-" + Math.random().toString(36).slice(2, 8);
@@ -20,10 +21,11 @@ const messageOf = (error: unknown) => {
   const value = error as { response?: { data?: { message?: string }; status?: number } };
   return value.response?.data?.message || "Não foi possível concluir a operação. Verifique a conexão com o servidor.";
 };
-export function TeamMeetingManagement({ actual, team, weekLabel }: {
+export function TeamMeetingManagement({ actual, team, weekLabel, snapshot }: {
   actual: number;
   team: { name: string; resolved: number }[];
   weekLabel: string;
+  snapshot: MeetingSnapshot;
 }) {
   const { user } = useAuth();
   const editable = user?.role === "ADMIN" || user?.role === "COORDENADOR";
@@ -31,6 +33,7 @@ export function TeamMeetingManagement({ actual, team, weekLabel }: {
   const [history, setHistory] = useState<MeetingSummary[]>([]);
   const [data, setData] = useState<MeetingData>(empty);
   const [version, setVersion] = useState(0);
+  const [savedSnapshot, setSavedSnapshot] = useState<MeetingSnapshot | null>(null);
   const [title, setTitle] = useState("Reunião de resultados");
   const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(true);
@@ -58,6 +61,7 @@ export function TeamMeetingManagement({ actual, team, weekLabel }: {
       setTitle(meeting?.title || "Reunião de resultados");
       setNotes(meeting?.notes || "");
       setVersion(meeting?.version ?? 0);
+      setSavedSnapshot(meeting?.snapshot ?? null);
       setDirty(false);
     } catch (err) { setError(messageOf(err)); }
     finally { setLoading(false); }
@@ -96,8 +100,9 @@ export function TeamMeetingManagement({ actual, team, weekLabel }: {
     if (!editable || loading || saving) return;
     setSaving(true); setError(""); setNotice("");
     try {
-      const response = await api.put<Meeting>("/team-results/meetings/" + date, { title, notes, goals: data.goals, highlights: data.highlights, actions: data.actions, version });
+      const response = await api.put<Meeting>("/team-results/meetings/" + date, { title, notes, goals: data.goals, highlights: data.highlights, actions: data.actions, snapshot, version });
       setVersion(response.data.version);
+      setSavedSnapshot(response.data.snapshot ?? null);
       setDirty(false);
       setNotice("Reunião salva no servidor e disponível para os demais usuários.");
       await loadHistory();
@@ -135,6 +140,11 @@ export function TeamMeetingManagement({ actual, team, weekLabel }: {
       <TextField label="Título da reunião" fullWidth size="small" value={title} disabled={!canEdit} onChange={event => { setTitle(event.target.value); setDirty(true); }} sx={{ mt: 2 }} />
       <TextField label="Ata / resumo da reunião" fullWidth multiline minRows={3} value={notes} disabled={!canEdit} onChange={event => { setNotes(event.target.value); setDirty(true); }} sx={{ mt: 1.5 }} />
       <Typography variant="caption" color="text.secondary">Período dos indicadores na tela: {weekLabel}. Metas de resoluções são comparadas com o período atualmente filtrado.</Typography>
+      {savedSnapshot && <Alert severity="info" sx={{ mt: 1.5 }}>
+        <Typography variant="body2" sx={{ fontWeight: 700 }}>Resultado registrado na reunião · {new Date(savedSnapshot.capturedAt).toLocaleString("pt-BR")}</Typography>
+        <Typography variant="body2">Período: {savedSnapshot.periodStart} a {savedSnapshot.periodEnd} · Abertos: {savedSnapshot.opened} · Resolvidos: {savedSnapshot.resolved} · Fechados: {savedSnapshot.closed} · Backlog: {savedSnapshot.backlog} · Parados: {savedSnapshot.stopped}</Typography>
+        <Typography variant="caption">Registro histórico congelado no último salvamento. Os gráficos acima continuam refletindo os filtros e a base atual.</Typography>
+      </Alert>}
       {loading && <CircularProgress size={18} sx={{ ml: 2 }} />}
       {dirty && <Chip label="Alterações não salvas" color="warning" size="small" sx={{ ml: 1 }} />}
       {notice && <Alert severity="success" sx={{ mt: 1.5 }}>{notice}</Alert>}
