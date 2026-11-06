@@ -1,3 +1,4 @@
+import { TicketDrilldownExplorer } from "../components/TicketDrilldownExplorer";
 import { KpiGrid } from "../components/KpiGrid";
 import { FavoriteAction } from "../components/FavoriteAction";
 import { SlaInvestigationPanel } from "../components/SlaInvestigationPanel";
@@ -1425,64 +1426,12 @@ export function Performance() {
 
               <Divider sx={{ my: 2 }} />
 
-              <Stack spacing={1}>
-                {drilldown.tickets.map((ticket) => (
-                  <Box
-                    key={ticket.id}
-                    sx={{
-                      p: 1.2,
-                      border: "1px solid",
-                      borderColor: "divider",
-                      borderRadius: 1.5,
-                      backgroundColor: "action.hover",
-                    }}
-                  >
-                    <Stack
-                      direction="row"
-                      sx={{ justifyContent: "space-between", gap: 1 }}
-                    >
-                      <Box sx={{ minWidth: 0 }}>
-                        <Typography sx={{ fontSize: "0.78rem", fontWeight: 800 }}>
-                          #{ticket.movideskId}
-                        </Typography>
-
-                        <Typography
-                          title={ticket.subject}
-                          sx={{
-                            mt: 0.25,
-                            fontSize: "0.8rem",
-                            fontWeight: 650,
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                            display: "-webkit-box",
-                            WebkitLineClamp: 2,
-                            WebkitBoxOrient: "vertical",
-                          }}
-                        >
-                          {ticket.subject}
-                        </Typography>
-
-                        <Typography variant="caption" color="text.secondary">
-                          {ticket.client ?? "Sem cliente"} · {ticket.owner ?? "Sem responsável"}
-                        </Typography>
-
-                        <Typography
-                          variant="caption"
-                          sx={{ display: "block", mt: 0.2, color: "text.secondary" }}
-                        >
-                          Solução: {formatRemainingTime(ticket)}
-                        </Typography>
-                      </Box>
-
-                      <DeadlineMiniChip bucket={getDeadlineBucketFromTicket(ticket)} />
-                    </Stack>
-                  </Box>
-                ))}
-
-                {drilldown.tickets.length === 0 && (
-                  <EmptyState text="Nenhum atendimento compõe este indicador." />
-                )}
-              </Stack>
+              <TicketDrilldownExplorer key={drilldown.title} tickets={drilldown.tickets}
+                extra={(ticket) => <Stack direction="row" spacing={1} sx={{alignItems:"center",justifyContent:"space-between",mt:1}}>
+                  <Typography variant="caption" color="text.secondary">Solução: {formatRemainingTime(ticket)}</Typography>
+                  <DeadlineMiniChip bucket={getDeadlineBucketFromTicket(ticket)}/>
+                </Stack>}
+              />
             </>
           )}
         </Box>
