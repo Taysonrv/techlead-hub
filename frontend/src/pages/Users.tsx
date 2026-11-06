@@ -16,6 +16,7 @@ import {
   Stack,
   Select,
   MenuItem,
+  TextField,
   Table,
   TableBody,
   TableCell,
@@ -75,6 +76,7 @@ type ManagedUser = {
 
   role: UserRole;
   jobFunction: string | null;
+  movideskOwnerName: string | null;
 
   active: boolean;
 
@@ -131,6 +133,7 @@ type ConfirmationState = {
 
 export function Users() {
   const [usersPage, setUsersPage] = useState(0);
+  const [ownerEditing, setOwnerEditing] = useState<{id:number; value:string} | null>(null);
   const [
     users,
     setUsers,
@@ -378,6 +381,19 @@ export function Users() {
     }
   }
 
+  async function saveMovideskOwnerName() {
+    if (!ownerEditing) return;
+    setActionLoading(ownerEditing.id);
+    setError(null);
+    try {
+      const response = await api.patch<{message:string;user:ManagedUser}>(`/users/${ownerEditing.id}/movidesk-owner`, {movideskOwnerName: ownerEditing.value.trim() || null});
+      setUsers(current => current.map(user => user.id === response.data.user.id ? response.data.user : user));
+      setOwnerEditing(null);
+      setSuccess(response.data.message);
+    } catch (requestError) { setError(getErrorMessage(requestError)); }
+    finally { setActionLoading(null); }
+  }
+
   /* =======================================================
      RENDER
   ======================================================= */
@@ -515,6 +531,7 @@ export function Users() {
                       Perfil
                     </TableCell>
                     <TableCell>Função na equipe</TableCell>
+                    <TableCell>Responsável Movidesk</TableCell>
 
                     <TableCell>
                       Aprovação
@@ -599,6 +616,12 @@ export function Users() {
                         </TableCell>
 
                         <TableCell>
+                          <Button size="small" variant="text" disabled={actionLoading !== null} onClick={() => setOwnerEditing({id:user.id,value:user.movideskOwnerName || ""})} sx={{textTransform:"none",justifyContent:"flex-start",maxWidth:240}}>
+                            {user.movideskOwnerName || "Vincular responsável"}
+                          </Button>
+                        </TableCell>
+
+                        <TableCell>
                           <ApprovalChip
                             status={
                               user.approvalStatus
@@ -666,7 +689,7 @@ export function Users() {
                     0 && (
                     <TableRow>
                       <TableCell
-                        colSpan={7}
+                        colSpan={8}
                       >
                         <Box
                           sx={{
@@ -705,6 +728,18 @@ export function Users() {
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={Boolean(ownerEditing)} onClose={() => actionLoading === null && setOwnerEditing(null)} maxWidth="sm" fullWidth>
+        <DialogTitle>Vincular responsável dos atendimentos</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{mb:2}}>Informe exatamente o nome do responsável recebido do Movidesk. O vínculo permite relacionar atendimentos à função do colaborador sem alterar os dados importados.</Typography>
+          <TextField fullWidth label="Nome do responsável no Movidesk" value={ownerEditing?.value ?? ""} onChange={event => setOwnerEditing(current => current ? {...current,value:event.target.value} : null)} slotProps={{htmlInput:{maxLength:200}}}/>
+        </DialogContent>
+        <DialogActions>
+          <Button disabled={actionLoading !== null} onClick={() => setOwnerEditing(null)}>Cancelar</Button>
+          <Button variant="contained" disabled={actionLoading !== null} onClick={() => void saveMovideskOwnerName()}>Salvar vínculo</Button>
+        </DialogActions>
+      </Dialog>
 
       {/* CONFIRMAÇÃO */}
 
