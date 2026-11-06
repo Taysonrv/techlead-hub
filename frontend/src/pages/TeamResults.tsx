@@ -1,3 +1,4 @@
+import { TicketDrilldownExplorer } from "../components/TicketDrilldownExplorer";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Box, Button, Chip, FormControl, MenuItem, Select, Stack, TextField, Typography, Alert, CircularProgress, Drawer, IconButton, Divider } from "@mui/material";
 import { getTicketSnapshot, getTicketSnapshotState, subscribeTicketSnapshotRefresh } from "../services/ticketSnapshot";
@@ -508,17 +509,12 @@ export default function TeamResults() {
       </Section>
     </>}
     <Drawer anchor="right" open={Boolean(detail)} onClose={() => setDetail(null)} slotProps={{ paper: { sx: detailDrawerPaperSx } }}>
-      <Box sx={{ width: { xs: "100vw", sm: 560 }, maxWidth: "100vw", p: 2.5 }}>
-        <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between" }}>
-          <Box><Typography variant="h6" sx={{ fontWeight: 800 }}>{detail?.title}</Typography><Typography variant="body2" color="text.secondary">{detail?.tickets.length ?? 0} tickets encontrados</Typography></Box>
-          <IconButton aria-label="Fechar detalhes" onClick={() => setDetail(null)}>×</IconButton>
+      <Box sx={{ p:{xs:2,sm:3},minWidth:0 }}>
+        <Stack direction="row" sx={{alignItems:"flex-start",justifyContent:"space-between",gap:1,mb:2}}>
+          <Box><Typography variant="h6" sx={{fontWeight:850}}>{detail?.title}</Typography><Typography variant="body2" color="text.secondary">Explore os atendimentos que compõem este indicador.</Typography></Box>
+          <IconButton aria-label="Fechar detalhes" onClick={()=>setDetail(null)}>×</IconButton>
         </Stack>
-        <Divider sx={{ my: 2 }} />
-        <Stack spacing={1.5}>{detail?.tickets.map((ticket, index) => <Box key={ticket.movideskId || index} sx={{ p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: 2 }}>
-          <Typography variant="body2" sx={{ fontWeight: 800 }}>#{ticket.movideskId} · {ticket.subject || "Sem assunto"}</Typography>
-          <Typography variant="caption" color="text.secondary">{ticket.client || "Cliente não informado"} · {ticket.owner || "Sem responsável"}</Typography>
-          <Typography variant="body2">{ticket.status || ticket.baseStatus || "Sem status"}</Typography>
-        </Box>)}</Stack>
+        {detail && <TicketDrilldownExplorer key={detail.title} tickets={detail.tickets} />}
       </Box>
     </Drawer>
   </Box>;
