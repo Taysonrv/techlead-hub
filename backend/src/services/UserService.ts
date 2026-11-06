@@ -1,5 +1,6 @@
 import { prisma } from "../database/prisma";
 import { Prisma } from "@prisma/client";
+import { ticketOperationalScope } from "../domain/OperationalScope";
 import { AuthError } from "./AuthService";
 
 /* =========================================================
@@ -100,6 +101,40 @@ export class UserService {
       data: { permissions: normalized },
       select: USER_ADMIN_SELECT,
     });
+  }
+
+  async ticketOwnershipByFunction(adminUserId: number) {
+    await this.ensureAdmin(adminUserId);
+    const [users, owners] = await Promise.all([
+      prisma.user.findMany({ where: { active: true, approvalStatus: "APPROVED" }, select: { id: true, name: true, jobFunction: true, movideskOwnerName: true } }),
+      prisma.ticket.groupBy({ by: ["owner"], where: { AND: [ticketOperationalScope(), { isDeleted: false }] }, _count: { _all: true } }),
+    ]);
+    const normalize = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().replace(/\s+/g, " ").toLocaleUpperCase("pt-BR");
+    const byOwner = new Map(users.filter(user => user.movideskOwnerName).map(user => [normalize(user.movideskOwnerName!), user]));
+    const byFunction = new Map<string, { function: string; tickets: number; owners: number }>();
+    const unmatched: { owner: string; tickets: number }[] = [];
+    for (const item of owners) {
+      if (!item.owner?.trim()) continue;
+      const owner = byOwner.get(normalize(item.owner));
+      if (!owner) { unmatched.push({ owner: item.owner, tickets: item._count._all }); continue; }
+      const key = owner.jobFunction || "SEM_FUNCAO";
+      const row = byFunction.get(key) || { function: key, tickets: 0, owners: 0 };
+      row.tickets += item._count._all;
+      byFunction.set(key, row);
+    }
+    for (const user of users) if (user.movideskOwnerName) {
+      const key = user.jobFunction || "SEM_FUNCAO";
+      const row = byFunction.get(key) || { function: key, tickets: 0, owners: 0 };
+      row.owners++;
+      byFunction.set(key, row);
+    }
+    return {
+      byFunction: [...byFunction.values()].sort((a,b) => b.tickets-a.tickets),
+      unmatched: unmatched.sort((a,b) => b.tickets-a.tickets).slice(0,30),
+      linkedUsers: users.filter(user => user.movideskOwnerName).length,
+      totalUsers: users.length,
+      note: "Contagem por responsável atual do Movidesk, dentro do escopo operacional SIMER; não representa autoria ou histórico de atribuições.",
+    };
   }
 
   async updateMovideskOwnerName(adminUserId: number, targetUserId: number, value: unknown) {
