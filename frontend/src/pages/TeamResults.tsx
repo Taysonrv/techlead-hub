@@ -232,7 +232,7 @@ export default function TeamResults() {
           <Box sx={{ height: Math.max(290, results.team.length * 37 + 60) }}><ResponsiveContainer width="100%" height="100%"><BarChart data={[...results.team].sort((a,b)=>b.backlog-a.backlog)} layout="vertical" margin={{ left: 18, right: 20 }}><CartesianGrid strokeDasharray="3 3" opacity={.25}/><XAxis type="number" allowDecimals={false}/><YAxis type="category" dataKey="name" width={145} tick={{ fontSize: 11 }}/><Tooltip/><Bar dataKey="backlog" name="Pendentes" fill={palette[2]} radius={[0,4,4,0]}/></BarChart></ResponsiveContainer></Box>
         </Section>
       </Box>
-      <TeamMeetingManagement actual={results.resolved.length} team={results.team} weekLabel={range ? range.start.toLocaleDateString("pt-BR") + " a " + range.end.toLocaleDateString("pt-BR") : ""} />
+      <TeamMeetingManagement actual={results.resolved.length} team={results.team} weekLabel={range ? range.start.toLocaleDateString("pt-BR") + " a " + range.end.toLocaleDateString("pt-BR") : ""} snapshot={{ periodStart: range.start.toISOString().slice(0, 10), periodEnd: range.end.toISOString().slice(0, 10), opened: results.opened.length, resolved: results.resolved.length, closed: results.closed.length, backlog: results.backlog.length, stopped: results.stopped.length, capturedAt: new Date().toISOString() }} />
       <Section id="team-results-actions" title="Pontos para discussão e encaminhamentos">
         <Stack spacing={1}>
           <Typography variant="body2">• Avaliar a diferença entre entradas ({results.opened.length}) e resoluções ({results.resolved.length}) no período.</Typography>
