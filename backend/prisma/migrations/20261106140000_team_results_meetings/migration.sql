@@ -3,6 +3,7 @@ CREATE TABLE "TeamResultsMeeting" (
   "meetingDate" DATE NOT NULL,
   "title" VARCHAR(200) NOT NULL,
   "notes" TEXT NOT NULL DEFAULT '',
+  "snapshot" JSONB,
   "goals" JSONB NOT NULL DEFAULT '[]'::jsonb,
   "highlights" JSONB NOT NULL DEFAULT '[]'::jsonb,
   "actions" JSONB NOT NULL DEFAULT '[]'::jsonb,
