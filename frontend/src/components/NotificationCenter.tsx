@@ -63,7 +63,8 @@ type NotificationKind =
   | "CHAT_MENTION"
   | "OPERATION_ALERT"
   | "KNOWN_PROBLEM"
-  | "MEETING_REMINDER";
+  | "MEETING_REMINDER"
+  | "TEAM_ACTION";
 
 type HubNotification = {
   key: string;
