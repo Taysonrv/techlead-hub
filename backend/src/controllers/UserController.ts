@@ -254,6 +254,13 @@ export class UserController {
     }
   }
 
+  async ticketOwnershipByFunction(request: AuthenticatedRequest, response: Response) {
+    try {
+      const data = await userService.ticketOwnershipByFunction(getAuthenticatedUserId(request));
+      return response.status(200).json(data);
+    } catch (error) { return handleUserError(error, response); }
+  }
+
   async updateMovideskOwnerName(request: AuthenticatedRequest, response: Response) {
     try {
       const adminUserId = getAuthenticatedUserId(request);
