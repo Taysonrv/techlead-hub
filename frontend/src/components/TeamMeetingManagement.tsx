@@ -20,7 +20,6 @@ export function TeamMeetingManagement({ actual, team, weekLabel }: {
   const { user } = useAuth();
   const [data, setData] = useState<MeetingData>(empty);
   const [ready, setReady] = useState(false);
-  const [target, setTarget] = useState("");
   const [highlight, setHighlight] = useState("");
   const [kind, setKind] = useState<Highlight["kind"]>("achievement");
   const [description, setDescription] = useState("");
@@ -56,21 +55,21 @@ export function TeamMeetingManagement({ actual, team, weekLabel }: {
     <Alert severity="info" sx={{ "@media print": { display: "none" } }}>Metas, destaques e compromissos são registrados neste navegador, por usuário. Ainda não são compartilhados com a equipe nem sincronizados com o servidor. As metas são manuais e referem-se a resoluções no período selecionado.</Alert>
     {storageError && <Alert severity="warning">Não foi possível acessar o armazenamento local. Os registros podem não persistir.</Alert>}
     <Card id="meeting-goals" sx={section}><CardContent>
-      <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "center", mb: 2 }}><Typography variant="h6" fontWeight={800}>Metas e atingimento</Typography><FavoriteAction title="Metas da equipe" targetId="meeting-goals" /></Stack>
+      <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "center", mb: 2 }}><Typography variant="h6" sx={{ fontWeight: 800 }}>Metas e atingimento</Typography><FavoriteAction title="Metas da equipe" targetId="meeting-goals" /></Stack>
       <Stack direction={{ xs: "column", sm: "row" }} spacing={2} sx={{ alignItems: { sm: "center" }, mb: 2 }}>
         <TextField label="Meta de resoluções da equipe" type="number" size="small" value={goals.has("__team__") ? String(teamGoal) : ""} onChange={event => updateGoal("__team__", event.target.value)} slotProps={{ htmlInput: { min: 0, max: 1000000 } }} />
-        <Typography fontWeight={700}>Realizado: {actual} · Atingimento: {attainment(actual, teamGoal)}</Typography>
+        <Typography sx={{ fontWeight: 700 }}>Realizado: {actual} · Atingimento: {attainment(actual, teamGoal)}</Typography>
       </Stack>
       <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 1.5 }}>
         {team.map(person => <Stack key={person.name} spacing={.5} sx={{ p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: 2 }}>
-          <Typography variant="body2" fontWeight={700}>{person.name}</Typography>
+          <Typography variant="body2" sx={{ fontWeight: 700 }}>{person.name}</Typography>
           <TextField size="small" type="number" label="Meta de resoluções" value={goals.has(person.name) ? String(goals.get(person.name)) : ""} onChange={event => updateGoal(person.name, event.target.value)} slotProps={{ htmlInput: { min: 0, max: 1000000 } }} />
           <Typography variant="caption">Realizado: {person.resolved} · {attainment(person.resolved, goals.get(person.name) ?? 0)}</Typography>
         </Stack>)}
       </Box>
     </CardContent></Card>
     <Card id="meeting-highlights" sx={section}><CardContent>
-      <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "center", mb: 2 }}><Typography variant="h6" fontWeight={800}>Destaques e pontos de atenção</Typography><FavoriteAction title="Destaques da reunião" targetId="meeting-highlights" /></Stack>
+      <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "center", mb: 2 }}><Typography variant="h6" sx={{ fontWeight: 800 }}>Destaques e pontos de atenção</Typography><FavoriteAction title="Destaques da reunião" targetId="meeting-highlights" /></Stack>
       <Stack direction={{ xs: "column", md: "row" }} spacing={1} sx={{ mb: 2, "@media print": { display: "none" } }}>
         <TextField select size="small" label="Tipo" value={kind} onChange={e => setKind(e.target.value as Highlight["kind"])} sx={{ minWidth: 180 }}><MenuItem value="achievement">Entrega / avanço</MenuItem><MenuItem value="attention">Ponto de atenção</MenuItem></TextField>
         <TextField size="small" label="Registrar destaque" value={highlight} onChange={e => setHighlight(e.target.value)} sx={{ flex: 1 }} />
@@ -79,7 +78,7 @@ export function TeamMeetingManagement({ actual, team, weekLabel }: {
       {data.highlights.length === 0 ? <Typography color="text.secondary">Nenhum destaque registrado.</Typography> : <Stack spacing={1}>{data.highlights.map(item => <Stack key={item.id} direction="row" sx={{ alignItems: "center", gap: 1 }}><Chip size="small" color={item.kind === "achievement" ? "success" : "warning"} label={item.kind === "achievement" ? "Avanço" : "Atenção"} /><Typography sx={{ flex: 1 }}>{item.text}</Typography><IconButton aria-label="Excluir destaque" onClick={() => setData(d => ({ ...d, highlights: d.highlights.filter(h => h.id !== item.id) }))} sx={{ "@media print": { display: "none" } }}><DeleteOutlineRounded fontSize="small" /></IconButton></Stack>)}</Stack>}
     </CardContent></Card>
     <Card id="meeting-actions" sx={section}><CardContent>
-      <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "center", mb: 1 }}><Typography variant="h6" fontWeight={800}>Plano de ação e compromissos</Typography><FavoriteAction title="Plano de ação" targetId="meeting-actions" /></Stack>
+      <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "center", mb: 1 }}><Typography variant="h6" sx={{ fontWeight: 800 }}>Plano de ação e compromissos</Typography><FavoriteAction title="Plano de ação" targetId="meeting-actions" /></Stack>
       <Typography variant="caption" color="text.secondary">Acompanhamento contínuo entre reuniões. Referência atual: {weekLabel}.</Typography>
       <Stack direction={{ xs: "column", md: "row" }} spacing={1} sx={{ my: 2, "@media print": { display: "none" } }}>
         <TextField size="small" label="Compromisso" value={description} onChange={e => setDescription(e.target.value)} sx={{ flex: 2 }} />
@@ -88,7 +87,7 @@ export function TeamMeetingManagement({ actual, team, weekLabel }: {
         <Button variant="contained" disabled={!description.trim() || !responsible.trim() || !due} onClick={() => { setData(d => ({ ...d, actions: [...d.actions, { id: uid(), description: description.trim(), owner: responsible.trim(), due, status: "pending" }] })); setDescription(""); setResponsible(""); setDue(""); }}>Adicionar</Button>
       </Stack>
       {data.actions.length === 0 ? <Typography color="text.secondary">Nenhum compromisso registrado.</Typography> : <Stack spacing={1}>{data.actions.map(item => <Stack key={item.id} direction={{ xs: "column", md: "row" }} sx={{ gap: 1, p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: 2, alignItems: { md: "center" } }}>
-        <Box sx={{ flex: 1 }}><Typography fontWeight={700}>{item.description}</Typography><Typography variant="caption" color="text.secondary">{item.owner} · Prazo: {item.due.split("-").reverse().join("/")}</Typography></Box>
+        <Box sx={{ flex: 1 }}><Typography sx={{ fontWeight: 700 }}>{item.description}</Typography><Typography variant="caption" color="text.secondary">{item.owner} · Prazo: {item.due.split("-").reverse().join("/")}</Typography></Box>
         <TextField select size="small" label="Situação" value={item.status} onChange={e => setData(d => ({ ...d, actions: d.actions.map(a => a.id === item.id ? { ...a, status: e.target.value as Action["status"] } : a) }))} sx={{ minWidth: 160, "@media print": { display: "none" } }}>{(Object.keys(statusLabel) as Action["status"][]).map(status => <MenuItem key={status} value={status}>{statusLabel[status]}</MenuItem>)}</TextField>
         <Chip label={statusLabel[item.status]} color={item.status === "done" ? "success" : item.status === "doing" ? "info" : "default"} />
         <IconButton aria-label="Excluir compromisso" onClick={() => setData(d => ({ ...d, actions: d.actions.filter(a => a.id !== item.id) }))} sx={{ "@media print": { display: "none" } }}><DeleteOutlineRounded fontSize="small" /></IconButton>
