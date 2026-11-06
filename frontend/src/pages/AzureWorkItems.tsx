@@ -1,3 +1,4 @@
+import { detailDrawerPaperSx } from "../theme/layoutTokens";
 import { KpiGrid } from "../components/KpiGrid";
 import { KpiCard as ExecutiveKpiCard } from "../components/KpiCard";
 import {
@@ -4202,18 +4203,7 @@ export function AzureWorkItems({
           closeDetail
         }
         ModalProps={{ disableEnforceFocus: true }}
-        slotProps={{
-          paper: {
-            sx: {
-              width: {
-                xs: "calc(100vw - 16px)",
-                sm: 520,
-                lg: 560,
-              },
-              maxWidth: "100vw",
-            },
-          },
-        }}
+        slotProps={{ paper: { sx: detailDrawerPaperSx } }}
       >
         <Stack
           sx={{
