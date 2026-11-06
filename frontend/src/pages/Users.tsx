@@ -133,6 +133,7 @@ type ConfirmationState = {
 
 export function Users() {
   const [usersPage, setUsersPage] = useState(0);
+  const [ownership, setOwnership] = useState<{byFunction:{function:string;tickets:number;owners:number}[];unmatched:{owner:string;tickets:number}[];linkedUsers:number;totalUsers:number;note:string} | null>(null);
   const [ownerEditing, setOwnerEditing] = useState<{id:number; value:string} | null>(null);
   const [
     users,
@@ -199,6 +200,7 @@ export function Users() {
           setUsers(
             response.data.users
           );
+          void api.get<typeof ownership>("/users/ticket-ownership-by-function").then(result => setOwnership(result.data)).catch(() => setOwnership(null));
         } catch (
           requestError
         ) {
@@ -390,6 +392,7 @@ export function Users() {
       setUsers(current => current.map(user => user.id === response.data.user.id ? response.data.user : user));
       setOwnerEditing(null);
       setSuccess(response.data.message);
+      void api.get<typeof ownership>("/users/ticket-ownership-by-function").then(result => setOwnership(result.data)).catch(() => setOwnership(null));
     } catch (requestError) { setError(getErrorMessage(requestError)); }
     finally { setActionLoading(null); }
   }
@@ -740,6 +743,21 @@ export function Users() {
           <Button variant="contained" disabled={actionLoading !== null} onClick={() => void saveMovideskOwnerName()}>Salvar vínculo</Button>
         </DialogActions>
       </Dialog>
+
+      {ownership && <Card variant="outlined" sx={{borderRadius:3}}>
+        <CardContent>
+          <Typography variant="h6" sx={{fontWeight:800}}>Atendimentos por função da equipe</Typography>
+          <Typography variant="body2" color="text.secondary" sx={{mb:2}}>{ownership.note} · {ownership.linkedUsers} de {ownership.totalUsers} usuários vinculados ao Movidesk.</Typography>
+          <Box sx={{display:"grid",gridTemplateColumns:{xs:"1fr",md:"repeat(3,minmax(0,1fr))"},gap:1.5}}>
+            {ownership.byFunction.map(row => <Box key={row.function} sx={{border:"1px solid",borderColor:"divider",borderRadius:2,p:2}}>
+              <Typography variant="caption" color="text.secondary">{JOB_FUNCTIONS.find(item=>item[0]===row.function)?.[1] || "Sem função definida"}</Typography>
+              <Typography variant="h5" sx={{fontWeight:850}}>{row.tickets.toLocaleString("pt-BR")}</Typography>
+              <Typography variant="caption" color="text.secondary">{row.owners} colaborador(es) vinculado(s)</Typography>
+            </Box>)}
+          </Box>
+          {ownership.unmatched.length > 0 && <Alert severity="info" sx={{mt:2}}>Há {ownership.unmatched.length} responsáveis não vinculados entre os 30 principais. Exemplos: {ownership.unmatched.slice(0,5).map(item=>item.owner).join(", ")}. Vincule-os acima para classificar seus atendimentos por função.</Alert>}
+        </CardContent>
+      </Card>}
 
       {/* CONFIRMAÇÃO */}
 
