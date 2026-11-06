@@ -1,10 +1,10 @@
 import { Router } from "express";
 import type { AuthenticatedRequest } from "../middlewares/authMiddleware";
-import { requirePermission, requireRoles } from "../middlewares/roleMiddleware";
+import { requirePermission } from "../middlewares/roleMiddleware";
 import { prisma } from "../database/prisma";
 
 export const leadershipOkrRoutes = Router();
-leadershipOkrRoutes.use(requirePermission("dashboard"));
+leadershipOkrRoutes.use(requirePermission("technical-leadership"));
 const deliverables = new Set(["CAUSES", "INTERNAL_ESCALATION", "KNOWLEDGE", "EXTERNAL_ESCALATION"]);
 const statuses = new Set(["PLANNED", "IN_PROGRESS", "VERIFIED", "CANCELLED"]);
 const string = (value: unknown, max: number) => typeof value === "string" ? value.trim().slice(0, max) : "";
@@ -41,7 +41,7 @@ leadershipOkrRoutes.get("/", async (_req: AuthenticatedRequest, res) => {
     res.json(records);
   } catch (error) { console.error("[leadership-okr] list", error); res.status(500).json({ message: "Não foi possível consultar as evidências." }); }
 });
-leadershipOkrRoutes.post("/", requireRoles("ADMIN", "COORDENADOR"), async (req: AuthenticatedRequest, res) => {
+leadershipOkrRoutes.post("/", requirePermission("technical-leadership"), async (req: AuthenticatedRequest, res) => {
   const data = payload(req.body);
   if (!data) { res.status(400).json({ message: "Registro inválido. Uma evidência verificada exige URL de comprovação." }); return; }
   try {
@@ -50,7 +50,7 @@ leadershipOkrRoutes.post("/", requireRoles("ADMIN", "COORDENADOR"), async (req: 
     res.status(201).json(created);
   } catch (error) { console.error("[leadership-okr] create", error); res.status(500).json({ message: "Não foi possível registrar a evidência." }); }
 });
-leadershipOkrRoutes.put("/:id", requireRoles("ADMIN", "COORDENADOR"), async (req: AuthenticatedRequest, res) => {
+leadershipOkrRoutes.put("/:id", requirePermission("technical-leadership"), async (req: AuthenticatedRequest, res) => {
   const id = Number(req.params.id);
   const data = payload(req.body);
   if (!Number.isSafeInteger(id) || id <= 0 || !data) { res.status(400).json({ message: "Registro inválido." }); return; }
