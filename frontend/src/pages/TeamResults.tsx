@@ -249,6 +249,24 @@ export default function TeamResults() {
         </Box>
         <Typography variant="caption" color="text.secondary">Backlog histórico não comparado: a base atual não contém snapshots históricos confiáveis de estoque.</Typography>
       </Section></Box>}
+      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "1fr 1fr" }, gap: 2, mb: 2 }}>
+        <Section id="team-results-trend-summary" title="Resumo de movimentações">
+          <Stack spacing={1.5}>
+            {([{ label: "Abertos no período", count: results.opened.length, tickets: results.opened, color: palette[1] }, { label: "Resolvidos no período", count: results.resolved.length, tickets: results.resolved, color: palette[0] }]).map(item => <Box key={item.label} role="button" tabIndex={0} onClick={() => setDetail({ title: item.label, tickets: item.tickets })} onKeyDown={e => { if (e.key === "Enter") setDetail({ title: item.label, tickets: item.tickets }); }} sx={{ cursor: "pointer" }}>
+              <Stack direction="row" sx={{ justifyContent: "space-between" }}><Typography variant="body2">{item.label}</Typography><Typography variant="body2" sx={{ fontWeight: 800 }}>{item.count}</Typography></Stack>
+              <Box sx={{ height: 12, bgcolor: "action.hover", borderRadius: 2, overflow: "hidden" }}><Box sx={{ height: "100%", width: 100 * item.count / Math.max(1, results.opened.length, results.resolved.length) + "%", bgcolor: item.color, borderRadius: 2 }}/></Box>
+            </Box>)}
+          </Stack>
+        </Section>
+        <Section id="team-results-backlog-summary" title="Distribuição de pendências">
+          <Stack spacing={1.5}>
+            {([{ label: "Parados", tickets: results.stopped, color: palette[2] }, { label: "Demais pendentes", tickets: results.backlog.filter(t => !results.stopped.includes(t)), color: palette[0] }]).map(item => <Box key={item.label} role="button" tabIndex={0} onClick={() => setDetail({ title: item.label, tickets: item.tickets })} onKeyDown={e => { if (e.key === "Enter") setDetail({ title: item.label, tickets: item.tickets }); }} sx={{ cursor: "pointer" }}>
+              <Stack direction="row" sx={{ justifyContent: "space-between" }}><Typography variant="body2">{item.label}</Typography><Typography variant="body2" sx={{ fontWeight: 800 }}>{item.tickets.length}</Typography></Stack>
+              <Box sx={{ height: 12, bgcolor: "action.hover", borderRadius: 2, overflow: "hidden" }}><Box sx={{ height: "100%", width: 100 * item.tickets.length / Math.max(1, results.backlog.length) + "%", bgcolor: item.color, borderRadius: 2 }}/></Box>
+            </Box>)}
+          </Stack>
+        </Section>
+      </Box>
       <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "minmax(0,1.5fr) minmax(0,1fr)" }, gap: 2, mb: 2 }}>
         <Section id="team-results-trend" title="Evolução de entradas e resoluções">
           <Box sx={{ height: 310 }}><ResponsiveContainer width="100%" height="100%"><LineChart data={results.chart}><CartesianGrid strokeDasharray="3 3" opacity={.25}/><XAxis dataKey="label" tick={{ fontSize: 11 }}/><YAxis allowDecimals={false}/><Tooltip/><Legend/><Line dataKey="abertos" name="Abertos" stroke={palette[1]} strokeWidth={3} dot={false}/><Line dataKey="resolvidos" name="Resolvidos" stroke={palette[0]} strokeWidth={3} dot={false}/></LineChart></ResponsiveContainer></Box>
