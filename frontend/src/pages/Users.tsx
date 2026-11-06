@@ -1,4 +1,3 @@
-import { KpiGrid } from "../components/KpiGrid";
 import { KpiCard as ExecutiveKpiCard } from "../components/KpiCard";
 import {
   Alert,
@@ -128,6 +127,7 @@ type ConfirmationState = {
 export function Users({ embedded = false }: { embedded?: boolean } = {}) {
   const [usersPage, setUsersPage] = useState(0);
   const [ownership, setOwnership] = useState<{byFunction:{function:string;tickets:number;owners:number}[];unmatched:{owner:string;tickets:number}[];linkedUsers:number;totalUsers:number;note:string} | null>(null);
+  const [usersLoaded, setUsersLoaded] = useState(false);
   const [ownerEditing, setOwnerEditing] = useState<{id:number; value:string} | null>(null);
   const [
     users,
@@ -194,10 +194,12 @@ export function Users({ embedded = false }: { embedded?: boolean } = {}) {
           setUsers(
             response.data.users
           );
+          setUsersLoaded(true);
           void api.get<typeof ownership>("/users/ticket-ownership-by-function").then(result => setOwnership(result.data)).catch(() => setOwnership(null));
         } catch (
           requestError
         ) {
+          setUsersLoaded(false);
           setError(
             getErrorMessage(
               requestError
@@ -430,7 +432,7 @@ export function Users({ embedded = false }: { embedded?: boolean } = {}) {
 
       {/* CARDS */}
 
-      <KpiGrid sx={{gridTemplateColumns:{xs:"repeat(2,minmax(0,1fr))",md:"repeat(4,minmax(0,1fr))"}}}>
+      {usersLoaded && <Box sx={{display:"grid",gridTemplateColumns:{xs:"repeat(2,minmax(0,1fr))",md:"repeat(4,minmax(0,1fr))"},gap:2,width:"100%",minWidth:0,"& > *":{minWidth:0}}}>
         <SummaryCard
           label="Total"
           value={
@@ -470,7 +472,7 @@ export function Users({ embedded = false }: { embedded?: boolean } = {}) {
             <BlockOutlined />
           }
         />
-      </KpiGrid>
+      </Box>}
 
       {/* TABLE */}
 
@@ -853,5 +855,8 @@ function getErrorMessage(
     }
   }
 
-  return "Não foi possível concluir a operação.";
+  if (axios.isAxiosError(error) && error.response) {
+    return `Falha na administração de usuários (HTTP ${error.response.status}). Verifique o backend e seus logs.`;
+  }
+  return "Não foi possível concluir a operação de administração de usuários.";
 }
