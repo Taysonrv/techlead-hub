@@ -2936,8 +2936,8 @@ function OperationalRankingCard({
   const theme = useTheme();
   return (
     <CardBase>
-      <Box sx={{ textAlign: "center" }}>
-        <Typography sx={{ fontWeight: 850, fontSize: "1.05rem" }}>{title}</Typography>
+      <Box id={"section-" + encodeURIComponent(title)} sx={{ textAlign: "center" }}>
+        <Stack direction="row" spacing={.5} justifyContent="center" alignItems="center"><Typography sx={{ fontWeight: 850, fontSize: "1.05rem" }}>{title}</Typography><FavoriteAction title={title} targetId={"section-" + encodeURIComponent(title)} /></Stack>
         <Typography variant="caption" color="text.secondary">{subtitle}</Typography>
       </Box>
       {data.length ? (
