@@ -4,6 +4,7 @@ import { InsightsOutlined, PendingActionsOutlined, TrendingDownOutlined, Trendin
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { isOperationallyOpen } from "../utils/operationalMetrics";
 import { analyticalPanelSx } from "../theme/layoutTokens";
+import { FavoriteAction } from "./FavoriteAction";
 
 export type DashboardTicket = {
   movideskId: number;
@@ -247,13 +248,13 @@ export function TeamDashboardCards({ tickets, period, onOpenTickets, isDark }: {
   };
 
   return <Box component="section" aria-label="Indicadores de backlog e resolução por agente" sx={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: { xs: 1.5, md: 2 }, mb: 2 }}>
-    <Card sx={cardSx}><CardContent sx={{ height: "100%", display: "flex", flexDirection: "column", p: { xs: 1.5, sm: 2.5, lg: 3 }, "&:last-child": { pb: { xs: 1.5, sm: 2.5, lg: 3 } } }}>
+    <Card id="section-backlog-pendentes" sx={cardSx}><CardContent sx={{ height: "100%", display: "flex", flexDirection: "column", p: { xs: 1.5, sm: 2.5, lg: 3 }, "&:last-child": { pb: { xs: 1.5, sm: 2.5, lg: 3 } } }}>
       <Stack direction={{ xs: "column", sm: "row" }} sx={{ justifyContent: "space-between", alignItems: { xs: "stretch", sm: "center" }, gap: 1.5, mb: 2 }}>
         <Stack direction="row" spacing={1.4} sx={{ minWidth: 0, alignItems: "center" }}>
           <Box sx={{ width: 44, height: 44, flex: "0 0 auto", display: "grid", placeItems: "center", borderRadius: 2, color: isDark ? "#69D8F3" : "#087E9E", bgcolor: isDark ? "rgba(56,189,248,.11)" : "rgba(8,126,158,.09)", border: `1px solid ${isDark ? "rgba(56,189,248,.18)" : "rgba(8,126,158,.14)"}` }}><PendingActionsOutlined /></Box>
           <Box sx={{ minWidth: 0 }}><Typography variant="overline" sx={{ color: isDark ? "#66D5E8" : "#087E9E", fontWeight: 850, letterSpacing: ".12em", lineHeight: 1.25 }}>Carteira · posição diária</Typography><Typography variant="h6" sx={{ fontWeight: 850, letterSpacing: "-.025em", lineHeight: 1.25 }}>Tickets pendentes · Backlog</Typography><Typography variant="body2" color="text.secondary" sx={{ mt: .25 }}>Evolução do estoque ativo de atendimentos</Typography></Box>
         </Stack>
-        <Box sx={{ width: { xs: "100%", sm: 178 }, flexShrink: 0 }}><PeriodChoice value={backlogPeriod} onChange={setBacklogPeriod} dates={backlogDates} onDatesChange={setBacklogDates} /></Box>
+        <Stack direction="row" spacing={1} sx={{ alignItems: "flex-start" }}><FavoriteAction title="Tickets pendentes · Backlog" targetId="section-backlog-pendentes" /><Box sx={{ width: { xs: "100%", sm: 178 }, flexShrink: 0 }}><PeriodChoice value={backlogPeriod} onChange={setBacklogPeriod} dates={backlogDates} onDatesChange={setBacklogDates} /></Box></Stack>
       </Stack>
       {publicTickets.length === 0 && <Typography role="status" variant="body2" color="warning.main" sx={{ mb: 1.5 }}>Nenhum ticket público classificado foi recebido pelo painel. Verifique a carga e o escopo da API; zero não significa ausência de pendências.</Typography>}
       {unclassifiedPending > 0 && <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>Há {unclassifiedPending} tickets pendentes sem classificação de tipo neste escopo, não contabilizados no backlog público.</Typography>}
@@ -265,7 +266,7 @@ export function TeamDashboardCards({ tickets, period, onOpenTickets, isDark }: {
       <Box sx={{ height: { xs: 270, md: 330 }, minWidth: 0, flex: "0 0 auto", mt: .25, px: { xs: 0, sm: .5 } }}><ResponsiveContainer width="100%" height="100%"><BarChart data={backlog} margin={{ top: 12, right: 12, left: -12, bottom: 4 }}><defs><linearGradient id="backlogBarGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={isDark ? "#73E4F5" : "#18A9C4"} /><stop offset="100%" stopColor={isDark ? "#1684B4" : "#087E9E"} /></linearGradient></defs><CartesianGrid stroke={chartGrid} strokeDasharray="2 6" vertical={false} /><XAxis dataKey="day" fontSize={11} tick={{ fill: chartText }} tickLine={false} axisLine={{ stroke: chartGrid }} tickMargin={9} interval={backlog.length > 90 ? Math.ceil(backlog.length / 18) : backlog.length > 45 ? 2 : 0} /><YAxis allowDecimals={false} fontSize={11} tick={{ fill: chartText }} tickLine={false} axisLine={false} width={48} /><Tooltip cursor={{ fill: isDark ? "rgba(56,189,248,.10)" : "rgba(22,140,189,.08)" }} contentStyle={tooltipStyle} labelStyle={{ color: chartText, fontWeight: 800 }} labelFormatter={(_label, payload) => payload?.[0]?.payload?.date?.toLocaleDateString("pt-BR", { dateStyle: "full" }) ?? ""} formatter={(value) => [`${value} tickets`, "Backlog"]} /><Bar dataKey="total" name="Backlog" fill="url(#backlogBarGradient)" radius={[5, 5, 1, 1]} maxBarSize={38} cursor="pointer" onClick={(data) => { const date = data?.payload?.date; if (date) openBacklog(new Date(date)); }} /></BarChart></ResponsiveContainer></Box>
       <Box sx={{ mt: 1.1, px: 1.35, py: 1, borderRadius: 1.75, border: `1px solid ${isDark ? "rgba(139,186,211,.11)" : "rgba(30,96,130,.09)"}`, bgcolor: isDark ? "rgba(5,17,30,.34)" : "rgba(238,246,249,.68)" }}><Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.55 }}>Os dias anteriores são estimativas reconstruídas por abertura, reabertura e conclusão; o Movidesk não fornece snapshots históricos diários. O dia atual usa os status operacionais abertos. Selecione uma barra para abrir os atendimentos considerados no cálculo.</Typography></Box>
     </CardContent></Card>
-    <Card sx={cardSx}><CardContent sx={{ height: "100%", display: "flex", flexDirection: "column", p: { xs: 1.5, sm: 2.5, lg: 3 }, "&:last-child": { pb: { xs: 1.5, sm: 2.5, lg: 3 } } }}>
+    <Card id="section-agent-performance" sx={cardSx}><CardContent sx={{ height: "100%", display: "flex", flexDirection: "column", p: { xs: 1.5, sm: 2.5, lg: 3 }, "&:last-child": { pb: { xs: 1.5, sm: 2.5, lg: 3 } } }}>
       <Stack direction={{ xs: "column", sm: "row" }} sx={{ justifyContent: "space-between", alignItems: { xs: "stretch", sm: "center" }, gap: 1.5, mb: 2 }}>
         <Stack direction="row" spacing={1.4} sx={{ minWidth: 0, alignItems: "center" }}>
           <Box sx={{ width: 44, height: 44, flex: "0 0 auto", display: "grid", placeItems: "center", borderRadius: 2, color: isDark ? "#6EE7B7" : "#07875D", bgcolor: isDark ? "rgba(35,197,142,.11)" : "rgba(8,135,93,.08)", border: `1px solid ${isDark ? "rgba(35,197,142,.18)" : "rgba(8,135,93,.14)"}` }}><InsightsOutlined /></Box>
