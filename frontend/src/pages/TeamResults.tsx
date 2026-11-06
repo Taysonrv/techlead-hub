@@ -4,6 +4,7 @@ import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAx
 import { getTicketSnapshot, getTicketSnapshotState, subscribeTicketSnapshotRefresh } from "../services/ticketSnapshot";
 import { isOperationallyOpen } from "../utils/operationalMetrics";
 import { FavoriteAction } from "../components/FavoriteAction";
+import { SectionInfo } from "../components/SectionInfo";
 import { calculateTimestampSla } from "../utils/timestampSla";
 import { detailDrawerPaperSx } from "../theme/layoutTokens";
 import { TeamMeetingManagement } from "../components/TeamMeetingManagement";
@@ -63,17 +64,17 @@ function rangeFor(period: Period, startInput: string, endInput: string) {
 const formatDay = (date: Date) => date.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
 const formatNumber = (value: number) => new Intl.NumberFormat("pt-BR").format(value);
 const sectionSx = { borderRadius: 3, bgcolor: "background.paper", border: "1px solid", borderColor: "divider", minWidth: 0 };
-function Section({ id, title, children }: { id: string; title: string; children: React.ReactNode }) {
+function Section({ id, title, children, info }: { id: string; title: string; children: React.ReactNode; info?: string }) {
   return <Card id={id} sx={{ ...sectionSx, scrollMarginTop: 100 }}><CardContent>
     <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between", mb: 2 }}>
-      <Typography variant="h6" sx={{ fontWeight: 800 }}>{title}</Typography>
+      <Stack direction="row" sx={{ alignItems: "center", minWidth: 0 }}><Typography variant="h6" sx={{ fontWeight: 800 }}>{title}</Typography><SectionInfo title={info || title + ". Os valores respeitam os filtros da tela, salvo indicadores identificados como carteira atual ou recortes fixos."} /></Stack>
       <FavoriteAction title={title} targetId={id} />
     </Stack>{children}
   </CardContent></Card>;
 }
 function Metric({ title, value, subtitle, onClick }: { title: string; value: string | number; subtitle: string; onClick?: () => void }) {
   return <Card onClick={onClick} role={onClick ? "button" : undefined} tabIndex={onClick ? 0 : undefined} onKeyDown={onClick ? e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(); } } : undefined} sx={{ ...sectionSx, borderTop: "3px solid #24BF90", cursor: onClick ? "pointer" : "default", "&:hover": onClick ? { borderColor: "primary.main", transform: "translateY(-2px)" } : {}, transition: "transform .15s" }}><CardContent>
-    <Typography variant="body2" sx={{ fontWeight: 700 }}>{title}</Typography>
+    <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between" }}><Typography variant="body2" sx={{ fontWeight: 700 }}>{title}</Typography><SectionInfo title={subtitle} /></Stack>
     <Typography variant="h4" sx={{ fontWeight: 850, my: 1, color: "primary.main" }}>{typeof value === "number" ? formatNumber(value) : value}</Typography>
     <Typography variant="caption" color="text.secondary">{subtitle}</Typography>
   </CardContent></Card>;
@@ -200,10 +201,6 @@ export default function TeamResults() {
   const changeLabel = (current: number, previous: number) =>
     previous === 0 ? current === 0 ? "0%" : "Novo (base anterior zero)" :
     `${current >= previous ? "+" : ""}${((current - previous) / previous * 100).toFixed(1).replace(".", ",")}%`;
-  const donut = results ? [
-    { name: "Parados", value: results.stopped.length },
-    { name: "Demais pendentes", value: results.backlog.length - results.stopped.length },
-  ] : [];
   return <Box ref={presentationRef} sx={{ px: { xs: 2, md: 3 }, py: 3, maxWidth: 1800, mx: "auto", bgcolor: "background.default", color: "text.primary", overflowY: presentation ? "auto" : "visible", height: presentation ? "100vh" : "auto", "& .recharts-wrapper": { maxWidth: "100%" }, "@media print": { maxWidth: "none", p: 1, overflow: "visible", height: "auto", "& .MuiCard-root": { breakInside: "avoid" } } }}>
     <Stack direction={{ xs: "column", md: "row" }} spacing={2} sx={{ justifyContent: "space-between", alignItems: { md: "center" }, mb: 3 }}>
       <Box><Typography variant="overline" color="primary.main" sx={{ fontWeight: 800 }}>REUNIÃO DE RESULTADOS</Typography>
@@ -269,7 +266,7 @@ export default function TeamResults() {
       </Box>
       <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "1.5fr 1fr" }, gap: 2, mb: 2 }}>
         <Section id="team-results-trend" title="Evolução de entradas e resoluções">
-          <Stack spacing={1} sx={{ maxHeight: 350, minHeight: 200, overflowY: "auto" }}>
+          <Stack spacing={1} sx={{ minHeight: 200, overflow: "visible" }}>
             {results.chart.filter(row => row.abertos + row.resolvidos > 0).map(row => <Box key={row.date}>
               <Typography variant="caption">{row.label}</Typography>
               {([{ label: "Abertos", count: row.abertos, color: palette[1] }, { label: "Resolvidos", count: row.resolvidos, color: palette[0] }]).map(item => <Stack key={item.label} direction="row" spacing={1} sx={{ alignItems: "center" }}>
