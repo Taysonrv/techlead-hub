@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Box, Button, Card, CardContent, Chip, FormControl, MenuItem, Select, Stack, TextField, Typography, Alert, CircularProgress, Drawer, IconButton, Divider } from "@mui/material";
-import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { getTicketSnapshot, getTicketSnapshotState, subscribeTicketSnapshotRefresh } from "../services/ticketSnapshot";
 import { isOperationallyOpen } from "../utils/operationalMetrics";
 import { FavoriteAction } from "../components/FavoriteAction";
@@ -304,7 +303,12 @@ export default function TeamResults() {
             <Chip label={"Abertos: " + item.opened.length} color="info" onClick={() => setDetail({ title: "Abertos · " + item.name, tickets: item.opened })} />
             <Chip label={"Fechados: " + item.closed.length} color="success" onClick={() => setDetail({ title: "Fechados · " + item.name, tickets: item.closed })} />
           </Stack>
-          <Box sx={{ height: 210 }}><ResponsiveContainer width="100%" height="100%"><BarChart data={[{ name: item.name, Abertos: item.opened.length, Fechados: item.closed.length }]} margin={{ left: 0, right: 10 }}><CartesianGrid strokeDasharray="3 3" opacity={.2}/><XAxis dataKey="name"/><YAxis allowDecimals={false}/><Tooltip/><Legend/><Bar dataKey="Abertos" fill={palette[1]} radius={[5,5,0,0]}/><Bar dataKey="Fechados" fill={palette[0]} radius={[5,5,0,0]}/></BarChart></ResponsiveContainer></Box>
+          <Stack spacing={1.5} sx={{ py: 2 }}>
+            {([{ label: "Abertos", value: item.opened.length, color: palette[1], tickets: item.opened }, { label: "Fechados", value: item.closed.length, color: palette[0], tickets: item.closed }]).map(row => <Box key={row.label} onClick={() => setDetail({ title: row.label + " · " + item.name, tickets: row.tickets })} role="button" tabIndex={0} onKeyDown={event => { if (event.key === "Enter") setDetail({ title: row.label + " · " + item.name, tickets: row.tickets }); }} sx={{ cursor: "pointer" }}>
+              <Stack direction="row" sx={{ justifyContent: "space-between" }}><Typography variant="body2">{row.label}</Typography><Typography sx={{ fontWeight: 800 }}>{row.value}</Typography></Stack>
+              <Box sx={{ height: 20, borderRadius: 1, bgcolor: "action.hover", overflow: "hidden" }}><Box sx={{ width: 100 * row.value / Math.max(1, item.opened.length, item.closed.length) + "%", height: "100%", bgcolor: row.color, borderRadius: 1 }} /></Box>
+            </Box>)}
+          </Stack>
         </Section>)}
       </Box>
       <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "1fr 1fr" }, gap: 2, mb: 2 }}>
