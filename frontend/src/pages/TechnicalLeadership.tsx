@@ -1,4 +1,5 @@
 import { KpiGrid } from "../components/KpiGrid";
+import { LeadershipOkrPanel } from "../components/LeadershipOkrPanel";
 import { ContentState } from "../components/ContentState";
 import {
   Alert, Box, Button, Card, CardContent, Chip, Drawer,
@@ -68,7 +69,7 @@ type Data = {
   filters: { clients: string[]; users: string[] };
 };
 
-type TabKey = "indicators" | "radar" | "audit" | "recurrences" | "gaps" | "development";
+type TabKey = "indicators" | "radar" | "audit" | "recurrences" | "gaps" | "development" | "okrs";
 type PeriodPreset = "7" | "30" | "60" | "90" | "month" | "lastMonth" | "semester" | "year" | "custom";
 
 function dateInputValue(date: Date) {
@@ -119,6 +120,7 @@ const tabInfo: Record<TabKey, string> = {
   recurrences: "Agrupa temas repetidos e compara o período atual com o anterior para sugerir investigação, treinamento ou causa raiz.",
   gaps: "Transforma sinais recorrentes da operação em pontos de atenção técnicos, explicando evidência, impacto e próxima ação sugerida. Não altera prioridade formal do atendimento ou do Azure.",
   development: "Mostra concentração de temas e pontos de apoio por analista para orientar desenvolvimento técnico, sem ranking.",
+  okrs: "Acompanhamento compartilhado dos quatro entregáveis de qualidade, com evidências, responsáveis, prazos e histórico no PostgreSQL.",
 };
 
 function AreaTitle({ title, info, icon }: { title: string; info: string; icon?: ReactNode }) {
@@ -406,8 +408,11 @@ export function TechnicalLeadership() {
         ["recurrences", "Recorrências", <TrackChangesOutlined key="recurrences" fontSize="small" />],
         ["gaps", "Gaps técnicos", <ErrorOutlineOutlined key="gaps" fontSize="small" />],
         ["development", "Desenvolvimento", <GroupsOutlined key="development" fontSize="small" />],
+        ["okrs", "OKRs e melhoria", <AssignmentTurnedInOutlined key="okrs" fontSize="small" />],
       ] as Array<[TabKey, string, ReactElement]>).map(([key, label, icon]) => <Tab key={key} value={key} icon={icon} iconPosition="start" label={<Stack direction="row" spacing={.5} sx={{ alignItems: "center" }}><span>{label}</span><Tooltip title={tabInfo[key]}><InfoOutlined onClick={(e) => e.stopPropagation()} sx={{ fontSize: 15, color: "text.secondary" }} /></Tooltip></Stack>} />)}
     </Tabs></Card>
+
+    {tab === "okrs" && <LeadershipOkrPanel />}
 
     {data && tab === "indicators" && <Box>
       <Stack direction={{ xs: "column", md: "row" }} sx={{ justifyContent: "space-between", alignItems: { md: "center" }, gap: 1, mb: 1.5 }}>
