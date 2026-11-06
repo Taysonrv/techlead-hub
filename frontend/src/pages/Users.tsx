@@ -14,6 +14,8 @@ import {
   DialogContentText,
   DialogTitle,
   Stack,
+  Select,
+  MenuItem,
   Table,
   TableBody,
   TableCell,
@@ -72,6 +74,7 @@ type ManagedUser = {
   email: string | null;
 
   role: UserRole;
+  jobFunction: string | null;
 
   active: boolean;
 
@@ -93,6 +96,15 @@ type ManagedUser = {
   updatedAt:
     string;
 };
+
+const JOB_FUNCTIONS = [
+  ["COORDENADOR", "Coordenador"],
+  ["LIDER", "Líder"],
+  ["SUPORTE_SIMER_N1", "Suporte SIMER · Nível 1"],
+  ["SUPORTE_SIMER_N2", "Suporte SIMER · Nível 2"],
+  ["SUPORTE_SIMER_N3", "Suporte SIMER · Nível 3"],
+  ["BANCO_DE_DADOS", "Banco de Dados"],
+] as const;
 
 type UsersResponse = {
   users: ManagedUser[];
@@ -348,6 +360,24 @@ export function Users() {
     }
   }
 
+  async function updateJobFunction(user: ManagedUser, jobFunction: string) {
+    setActionLoading(user.id);
+    setError(null);
+    setSuccess(null);
+    try {
+      const response = await api.patch<{ message: string; user: ManagedUser }>(
+        `/users/${user.id}/job-function`,
+        { jobFunction: jobFunction || null },
+      );
+      setUsers(current => current.map(item => item.id === user.id ? response.data.user : item));
+      setSuccess(response.data.message);
+    } catch (requestError) {
+      setError(getErrorMessage(requestError));
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
   /* =======================================================
      RENDER
   ======================================================= */
@@ -358,7 +388,7 @@ export function Users() {
     >
       {/* HEADER */}
 
-      <PageHeader eyebrow="Sistema" title="Usuários" description="Aprovação e controle de acesso ao Hub Suporte Simer." action={<Button
+      <PageHeader eyebrow="Sistema" title="Usuários" description="Gerencie perfis de acesso e atribua funções organizacionais. A função não concede permissões automaticamente." action={<Button
           variant="outlined"
           startIcon={
             <RefreshOutlined />
@@ -484,6 +514,7 @@ export function Users() {
                     <TableCell>
                       Perfil
                     </TableCell>
+                    <TableCell>Função na equipe</TableCell>
 
                     <TableCell>
                       Aprovação
@@ -549,6 +580,22 @@ export function Users() {
                             }
                             variant="outlined"
                           />
+                        </TableCell>
+
+                        <TableCell>
+                          <Select
+                            size="small"
+                            fullWidth
+                            displayEmpty
+                            value={user.jobFunction ?? ""}
+                            disabled={actionLoading !== null || user.approvalStatus !== "APPROVED"}
+                            onChange={event => void updateJobFunction(user, event.target.value)}
+                            inputProps={{ "aria-label": `Função de ${user.name}` }}
+                            sx={{ minWidth: 190, maxWidth: 250, fontSize: 13, borderRadius: 2 }}
+                          >
+                            <MenuItem value=""><em>Sem função definida</em></MenuItem>
+                            {JOB_FUNCTIONS.map(([value, label]) => <MenuItem key={value} value={value}>{label}</MenuItem>)}
+                          </Select>
                         </TableCell>
 
                         <TableCell>
@@ -619,7 +666,7 @@ export function Users() {
                     0 && (
                     <TableRow>
                       <TableCell
-                        colSpan={6}
+                        colSpan={7}
                       >
                         <Box
                           sx={{
