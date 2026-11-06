@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Box, Card, CardContent, Chip, FormControl, MenuItem, Select, Stack, Typography } from "@mui/material";
+import { Box, Card, CardContent, Chip, FormControl, MenuItem, Select, Stack, TextField, Typography } from "@mui/material";
 import { InsightsOutlined, PendingActionsOutlined, TrendingDownOutlined, TrendingUpOutlined } from "@mui/icons-material";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { isOperationallyOpen } from "../utils/operationalMetrics";
@@ -22,7 +22,7 @@ export type DashboardTicket = {
 };
 
 type Period = { start: Date; end: Date };
-type Override = "global" | "month" | "7d" | "30d";
+type Override = "global" | "7d" | "30d" | "60d" | "90d" | "month" | "lastMonth" | "semester" | "year" | "custom";
 type AgentMetric = "resolved" | "closed" | "evaluated";
 type OpenTickets = (title: string, ticketIds: number[], subtitle: string) => void;
 const validDate = (value?: string | null) => {
@@ -34,14 +34,33 @@ const between = (value: string | null | undefined, period: Period) => {
   const date = validDate(value);
   return Boolean(date && date >= period.start && date <= period.end);
 };
-const bounds = (selection: Override, global: Period): Period => {
+const bounds = (selection: Override, global: Period, custom: Period): Period => {
   if (selection === "global") return global;
+  if (selection === "custom") return custom;
   const end = new Date(global.end);
   const start = new Date(end);
   if (selection === "month") start.setDate(1);
-  else start.setDate(start.getDate() - (selection === "7d" ? 6 : 29));
+  else if (selection === "lastMonth") {
+    start.setDate(1);
+    start.setMonth(start.getMonth() - 1);
+    end.setDate(0);
+    end.setHours(23, 59, 59, 999);
+  } else if (selection === "semester") {
+    start.setMonth(start.getMonth() < 6 ? 0 : 6, 1);
+  } else if (selection === "year") {
+    start.setMonth(0, 1);
+  } else {
+    start.setDate(start.getDate() - Number(selection.slice(0, -1)) + 1);
+  }
   start.setHours(0, 0, 0, 0);
   return { start, end };
+};
+const dateString = (date: Date) => [date.getFullYear(), String(date.getMonth() + 1).padStart(2, "0"), String(date.getDate()).padStart(2, "0")].join("-");
+const localDate = (value: string, endOfDay = false): Date | null => {
+  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(value)) return null;
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(year, month - 1, day, endOfDay ? 23 : 0, endOfDay ? 59 : 0, endOfDay ? 59 : 0, endOfDay ? 999 : 0);
+  return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day ? date : null;
 };
 const pending = isOperationallyOpen;
 function estimatedBacklogAt(ticket: DashboardTicket, at: Date, today: Date) {
@@ -71,7 +90,7 @@ function buildBacklogSeries(tickets: DashboardTicket[], period: Period) {
   cursor.setHours(0, 0, 0, 0);
   const last = new Date(period.end);
   last.setHours(0, 0, 0, 0);
-  for (let i = 0; i < 366 && cursor <= last; i++, cursor.setDate(cursor.getDate() + 1)) {
+  for (let i = 0; i < 3660 && cursor <= last; i++, cursor.setDate(cursor.getDate() + 1)) {
     starts.push(new Date(cursor));
     const end = new Date(cursor);
     end.setHours(23, 59, 59, 999);
@@ -128,18 +147,29 @@ function buildBacklogSeries(tickets: DashboardTicket[], period: Period) {
     return { day: dayLabel, date, total };
   });
 }
-function PeriodChoice({ value, onChange }: { value: Override; onChange: (next: Override) => void }) {
-  return <FormControl size="small" sx={{ minWidth: { xs: "100%", sm: 148 }, maxWidth: "100%" }}><Select aria-label="Período do indicador" value={value} onChange={(event) => onChange(event.target.value as Override)} sx={{ fontSize: ".875rem", fontWeight: 650, minWidth: 0, minHeight: 40, borderRadius: "8px", bgcolor: "background.paper", "& .MuiSelect-select": { py: 1.05, px: 1.4, pr: "36px !important", display: "flex", alignItems: "center" } }}>
-    <MenuItem value="global">Filtro geral</MenuItem><MenuItem value="month">Este mês</MenuItem><MenuItem value="7d">Últimos 7 dias</MenuItem><MenuItem value="30d">Últimos 30 dias</MenuItem>
-  </Select></FormControl>;
+function PeriodChoice({ value, onChange, dates, onDatesChange }: { value: Override; onChange: (next: Override) => void; dates: { start: string; end: string }; onDatesChange: (dates: { start: string; end: string }) => void }) {
+  return <Stack spacing={1} sx={{ minWidth: { xs: "100%", sm: 180 }, maxWidth: "100%" }}>
+    <FormControl size="small" fullWidth><Select aria-label="Período do indicador" value={value} onChange={(event) => onChange(event.target.value as Override)} sx={{ fontSize: ".875rem", fontWeight: 650, minWidth: 0, minHeight: 40, borderRadius: "8px", bgcolor: "background.paper", "& .MuiSelect-select": { py: 1.05, px: 1.4, pr: "36px !important", display: "flex", alignItems: "center" } }}>
+      <MenuItem value="global">Filtro geral</MenuItem><MenuItem value="7d">Últimos 7 dias</MenuItem><MenuItem value="30d">Últimos 30 dias</MenuItem><MenuItem value="60d">Últimos 60 dias</MenuItem><MenuItem value="90d">Últimos 90 dias</MenuItem><MenuItem value="month">Este mês</MenuItem><MenuItem value="lastMonth">Mês passado</MenuItem><MenuItem value="semester">Este semestre</MenuItem><MenuItem value="year">Este ano</MenuItem><MenuItem value="custom">Personalizado</MenuItem>
+    </Select></FormControl>
+    {value === "custom" && <Stack direction={{ xs: "column", md: "row" }} spacing={1}><TextField label="De" type="date" size="small" value={dates.start} onChange={(event) => onDatesChange({ ...dates, start: event.target.value })} slotProps={{ inputLabel: { shrink: true } }} /><TextField label="Até" type="date" size="small" value={dates.end} onChange={(event) => onDatesChange({ ...dates, end: event.target.value })} slotProps={{ inputLabel: { shrink: true } }} /></Stack>}
+    {value === "custom" && (!localDate(dates.start) || !localDate(dates.end) || localDate(dates.start)!.getTime() > localDate(dates.end)!.getTime()) && <Typography variant="caption" color="error">Informe um intervalo válido (data inicial até data final).</Typography>}
+  </Stack>;
 }
 export function TeamDashboardCards({ tickets, period, onOpenTickets, isDark }: { tickets: DashboardTicket[]; period: Period; onOpenTickets: OpenTickets; isDark: boolean }) {
   const [backlogPeriod, setBacklogPeriod] = useState<Override>("global");
   const [agentPeriod, setAgentPeriod] = useState<Override>("global");
   const [selectedAgent, setSelectedAgent] = useState("all");
   const [hiddenAgentMetrics, setHiddenAgentMetrics] = useState<Set<AgentMetric>>(() => new Set());
-  const backlogBounds = useMemo(() => bounds(backlogPeriod, period), [backlogPeriod, period]);
-  const agentBounds = useMemo(() => bounds(agentPeriod, period), [agentPeriod, period]);
+  const [backlogDates, setBacklogDates] = useState(() => ({ start: dateString(period.start), end: dateString(period.end) }));
+  const [agentDates, setAgentDates] = useState(() => ({ start: dateString(period.start), end: dateString(period.end) }));
+  const customPeriod = (dates: { start: string; end: string }) => {
+    const start = localDate(dates.start);
+    const end = localDate(dates.end, true);
+    return start && end && start <= end ? { start, end } : period;
+  };
+  const backlogBounds = useMemo(() => bounds(backlogPeriod, period, customPeriod(backlogDates)), [backlogPeriod, period, backlogDates]);
+  const agentBounds = useMemo(() => bounds(agentPeriod, period, customPeriod(agentDates)), [agentPeriod, period, agentDates]);
 
   // Current statuses are not historical snapshots. For past dates, display a reconstructed estimate.
   const publicTickets = useMemo(() => tickets.filter((ticket) => ticket.ticketType === 2), [tickets]);
@@ -223,7 +253,7 @@ export function TeamDashboardCards({ tickets, period, onOpenTickets, isDark }: {
           <Box sx={{ width: 44, height: 44, flex: "0 0 auto", display: "grid", placeItems: "center", borderRadius: 2, color: isDark ? "#69D8F3" : "#087E9E", bgcolor: isDark ? "rgba(56,189,248,.11)" : "rgba(8,126,158,.09)", border: `1px solid ${isDark ? "rgba(56,189,248,.18)" : "rgba(8,126,158,.14)"}` }}><PendingActionsOutlined /></Box>
           <Box sx={{ minWidth: 0 }}><Typography variant="overline" sx={{ color: isDark ? "#66D5E8" : "#087E9E", fontWeight: 850, letterSpacing: ".12em", lineHeight: 1.25 }}>Carteira · posição diária</Typography><Typography variant="h6" sx={{ fontWeight: 850, letterSpacing: "-.025em", lineHeight: 1.25 }}>Tickets pendentes · Backlog</Typography><Typography variant="body2" color="text.secondary" sx={{ mt: .25 }}>Evolução do estoque ativo de atendimentos</Typography></Box>
         </Stack>
-        <Box sx={{ width: { xs: "100%", sm: 178 }, flexShrink: 0 }}><PeriodChoice value={backlogPeriod} onChange={setBacklogPeriod} /></Box>
+        <Box sx={{ width: { xs: "100%", sm: 178 }, flexShrink: 0 }}><PeriodChoice value={backlogPeriod} onChange={setBacklogPeriod} dates={backlogDates} onDatesChange={setBacklogDates} /></Box>
       </Stack>
       {publicTickets.length === 0 && <Typography role="status" variant="body2" color="warning.main" sx={{ mb: 1.5 }}>Nenhum ticket público classificado foi recebido pelo painel. Verifique a carga e o escopo da API; zero não significa ausência de pendências.</Typography>}
       {unclassifiedPending > 0 && <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>Há {unclassifiedPending} tickets pendentes sem classificação de tipo neste escopo, não contabilizados no backlog público.</Typography>}
@@ -243,7 +273,7 @@ export function TeamDashboardCards({ tickets, period, onOpenTickets, isDark }: {
         </Stack>
         <Stack direction={{ xs: "column", sm: "row" }} spacing={.8} sx={{ width: { xs: "100%", sm: "auto" }, minWidth: { sm: 340 }, maxWidth: { sm: 470 } }}>
           <FormControl size="small" sx={{ flex: 1, minWidth: 0 }}><Select aria-label="Filtrar agente" sx={{ fontSize: 12, height: 40, borderRadius: 1.5, bgcolor: isDark ? "rgba(6,20,34,.48)" : "rgba(255,255,255,.78)" }} value={selectedAgent} onChange={(event) => setSelectedAgent(event.target.value)}><MenuItem value="all">Todos os agentes</MenuItem>{agents.map((item) => <MenuItem key={item.owner} value={item.owner}>{item.owner}</MenuItem>)}</Select></FormControl>
-          <Box sx={{ width: { xs: "100%", sm: 174 }, flexShrink: 0 }}><PeriodChoice value={agentPeriod} onChange={setAgentPeriod} /></Box>
+          <Box sx={{ width: { xs: "100%", sm: 174 }, flexShrink: 0 }}><PeriodChoice value={agentPeriod} onChange={setAgentPeriod} dates={agentDates} onDatesChange={setAgentDates} /></Box>
         </Stack>
       </Stack>
       <Stack direction="row" useFlexGap spacing={1} sx={{ mb: 1.25, flexWrap: "wrap" }}>
