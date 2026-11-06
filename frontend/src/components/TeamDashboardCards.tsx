@@ -164,13 +164,16 @@ export function TeamDashboardCards({ tickets, period, onOpenTickets, isDark }: {
   const [hiddenAgentMetrics, setHiddenAgentMetrics] = useState<Set<AgentMetric>>(() => new Set());
   const [backlogDates, setBacklogDates] = useState(() => ({ start: dateString(period.start), end: dateString(period.end) }));
   const [agentDates, setAgentDates] = useState(() => ({ start: dateString(period.start), end: dateString(period.end) }));
-  const customPeriod = (dates: { start: string; end: string }) => {
-    const start = localDate(dates.start);
-    const end = localDate(dates.end, true);
-    return start && end && start <= end ? { start, end } : period;
-  };
-  const backlogBounds = useMemo(() => bounds(backlogPeriod, period, customPeriod(backlogDates)), [backlogPeriod, period, backlogDates]);
-  const agentBounds = useMemo(() => bounds(agentPeriod, period, customPeriod(agentDates)), [agentPeriod, period, agentDates]);
+  const backlogBounds = useMemo(() => {
+    const start = localDate(backlogDates.start);
+    const end = localDate(backlogDates.end, true);
+    return bounds(backlogPeriod, period, start && end && start <= end ? { start, end } : period);
+  }, [backlogPeriod, period, backlogDates]);
+  const agentBounds = useMemo(() => {
+    const start = localDate(agentDates.start);
+    const end = localDate(agentDates.end, true);
+    return bounds(agentPeriod, period, start && end && start <= end ? { start, end } : period);
+  }, [agentPeriod, period, agentDates]);
 
   // Current statuses are not historical snapshots. For past dates, display a reconstructed estimate.
   const publicTickets = useMemo(() => tickets.filter((ticket) => ticket.ticketType === 2), [tickets]);
