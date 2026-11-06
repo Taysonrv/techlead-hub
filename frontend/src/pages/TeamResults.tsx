@@ -129,7 +129,7 @@ export default function TeamResults() {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const [azureSummary, setAzureSummary] = useState<{ total: number } | null>(null);
+  const [azureSummary, setAzureSummary] = useState<{ total: number; limited: boolean; delivered: number } | null>(null);
   const [versionSummary, setVersionSummary] = useState<{ summary: { total: number; versions: number; corrections: number; evolutions: number; withVersion: number; withoutVersion: number } } | null>(null);
   const [detail, setDetail] = useState<{ title: string; tickets: Ticket[] } | null>(null);
   const [loading, setLoading] = useState(true);
@@ -164,13 +164,19 @@ export default function TeamResults() {
 
   useEffect(() => {
     let active = true;
-    void api.get<{ total: number }>("/azure-work-items/summary", { params: { type: "Correção Clientes" } })
-      .then(response => { if (active) setAzureSummary(response.data); }).catch(() => { if (active) setAzureSummary(null); });
     void api.get<{ summary: { total: number; versions: number; corrections: number; evolutions: number; withVersion: number; withoutVersion: number } }>("/azure-work-items/versions/summary")
       .then(response => { if (active) setVersionSummary(response.data); }).catch(() => { if (active) setVersionSummary(null); });
     return () => { active = false; };
   }, []);
   const range = useMemo(() => rangeFor(period, startInput, endInput), [period, startInput, endInput]);
+  useEffect(() => {
+    if (!range) { setAzureSummary(null); return; }
+    let active = true;
+    const localDate = (date: Date) => [date.getFullYear(), String(date.getMonth() + 1).padStart(2, "0"), String(date.getDate()).padStart(2, "0")].join("-");
+    void api.get<{ total: number; limited: boolean; delivered: number }>("/team-results/meetings/bugs-summary", { params: { start: localDate(range.start), end: localDate(range.end) } })
+      .then(response => { if (active) setAzureSummary(response.data); }).catch(() => { if (active) setAzureSummary(null); });
+    return () => { active = false; };
+  }, [range]);
   const owners = useMemo(() => [...new Set(tickets.map(t => t.owner?.trim()).filter((v): v is string => Boolean(v)))].sort((a,b) => a.localeCompare(b,"pt-BR")), [tickets]);
   const scope = useMemo(() => tickets.filter(t => owner === "all" || t.owner === owner), [tickets, owner]);
   const results = useMemo(() => {
@@ -427,9 +433,11 @@ export default function TeamResults() {
         </Section>)}
       </Box>
       <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "1fr 1fr" }, gap: 2, mb: 2 }}>
-        <Section id="team-results-bugs" title="Bugs / correções" info="Total de tarefas do tipo Correção Clientes registradas no Azure DevOps. Esta contagem é global da carteira e não corresponde necessariamente ao período selecionado.">
+        <Section id="team-results-bugs" title="Bugs / correções" info="Quantidade de tarefas Correção Clientes criadas no Azure DevOps durante o período selecionado. Contagem por data de criação da tarefa, não pela data do atendimento.">
           <Typography variant="h4" sx={{ fontWeight: 800 }}>{azureSummary ? formatNumber(azureSummary.total) : "—"}</Typography>
-          <Typography variant="body2" color="text.secondary">Tarefas de correção no Azure · total da carteira (sem recorte temporal)</Typography>
+          <Typography variant="body2" color="text.secondary">Correções criadas no Azure durante o período selecionado</Typography>
+          {azureSummary?.limited && <Alert severity="warning">Resultado limitado a 5.000 tarefas.</Alert>}
+          <Typography variant="caption" color="text.secondary">{azureSummary ? azureSummary.delivered + " com versão de entrega vinculada" : "Dados indisponíveis ou sem permissão"}</Typography>
           <Button onClick={() => navigate("/correcoes")}>Abrir correções</Button>
         </Section>
         <Section id="team-results-versions" title="Versões e entregas" info="Resumo de versões registradas nas tarefas do Azure DevOps. É uma visão acumulada, não limitada ao período dos tickets.">
@@ -438,7 +446,7 @@ export default function TeamResults() {
           <Button onClick={() => navigate("/versoes")}>Abrir versões</Button>
         </Section>
       </Box>
-      <TeamMeetingManagement weekLabel={range ? range.start.toLocaleDateString("pt-BR") + " a " + range.end.toLocaleDateString("pt-BR") : ""} snapshot={{ periodStart: range?.start.toISOString().slice(0, 10) ?? "", periodEnd: range?.end.toISOString().slice(0, 10) ?? "", opened: results.opened.length, resolved: results.resolved.length, closed: results.closed.length, backlog: results.backlog.length, stopped: results.stopped.length, capturedAt: new Date().toISOString() }} />
+      <TeamMeetingManagement initialDate={searchParams.get("meeting") || undefined} weekLabel={range ? range.start.toLocaleDateString("pt-BR") + " a " + range.end.toLocaleDateString("pt-BR") : ""} snapshot={{ periodStart: range?.start.toISOString().slice(0, 10) ?? "", periodEnd: range?.end.toISOString().slice(0, 10) ?? "", opened: results.opened.length, resolved: results.resolved.length, closed: results.closed.length, backlog: results.backlog.length, stopped: results.stopped.length, capturedAt: new Date().toISOString() }} />
       <Section id="team-results-actions" title="Pontos para discussão e encaminhamentos">
         <Stack spacing={1}>
           <Typography variant="body2">• Avaliar a diferença entre entradas ({results.opened.length}) e resoluções ({results.resolved.length}) no período.</Typography>
