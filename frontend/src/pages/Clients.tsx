@@ -13,6 +13,8 @@ import {
   Chip,
   Divider,
   Drawer,
+  TextField,
+  InputAdornment,
   FormControl,
   IconButton,
   InputLabel,
@@ -33,6 +35,10 @@ import { useTheme } from "@mui/material/styles";
 
 import {
   ArrowBackOutlined,
+  SearchOutlined,
+  CloseOutlined,
+  OpenInNewOutlined,
+  ContentCopyOutlined,
   ArrowForwardOutlined,
   FullscreenExitOutlined,
   PictureAsPdfOutlined,
@@ -266,6 +272,9 @@ export function Clients() {
     drilldown,
     setDrilldown,
   ] = useState<DrilldownState>(null);
+
+  const [drilldownQuery, setDrilldownQuery] = useState("");
+  const [drilldownStatus, setDrilldownStatus] = useState<"all"|"open"|"resolved">("all");
 
   const [
     selectedTicket,
@@ -1286,6 +1295,8 @@ export function Clients() {
     subtitle?: string
   ) {
     setSelectedTicket(null);
+    setDrilldownQuery("");
+    setDrilldownStatus("all");
 
     setDrilldown({
       title,
@@ -3130,241 +3141,92 @@ export function Clients() {
         Os sinais de desenvolvimento apoiam o acompanhamento da carteira e não representam, por si só, uma medição contratual de SLA.
       </Alert>
 
-      {/* =================================================
-          DRAWER - LISTAGEM
-      ================================================= */}
-
-      <Drawer
-        anchor="right"
-        open={
-          Boolean(
-            drilldown
-          ) &&
-          !selectedTicket
-        }
-        onClose={() =>
-          setDrilldown(null)
-        }
-      slotProps={{ paper: { sx: detailDrawerPaperSx } }}
-      >
-        <Box
-          sx={{
-            width: {
-              xs: 320,
-              sm: 500,
-            },
-            p: 2.5,
-          }}
-        >
-          {drilldown && (
-            <>
-              <Stack
-                direction="row"
-                sx={{
-                  justifyContent:
-                    "space-between",
-
-                  alignItems:
-                    "flex-start",
-
-                  gap: 2,
-                }}
-              >
-                <Box>
-                  <Typography
-                    variant="h6"
-                  sx={{ fontWeight: 800 }}
-                  >
-                    {
-                      drilldown.title
-                    }
-                  </Typography>
-
-                  {drilldown.subtitle && (
-                    <Typography
-                      variant="body2"
-                      color="text.secondary"
-                    >
-                      {
-                        drilldown.subtitle
-                      }
-                    </Typography>
-                  )}
+      {/* DRAWER - VISÃO GERENCIAL DO RECORTE */}
+      <Drawer anchor="right" open={Boolean(drilldown) && !selectedTicket} onClose={() => setDrilldown(null)}
+        slotProps={{paper:{sx:{...detailDrawerPaperSx,width:{xs:"100%",sm:620,md:680},maxWidth:"100vw"}}}}>
+        {drilldown && (() => {
+          const all = drilldown.tickets;
+          const openCount = all.filter(ticket => isOperationallyOpen(ticket)).length;
+          const resolvedCount = all.length - openCount;
+          const bugCount = all.filter(ticket => /bug/i.test(ticket.category ?? "")).length;
+          const filtered = all.filter(ticket => {
+            if (drilldownStatus === "open" && !isOperationallyOpen(ticket)) return false;
+            if (drilldownStatus === "resolved" && isOperationallyOpen(ticket)) return false;
+            const query = drilldownQuery.trim().toLocaleLowerCase("pt-BR");
+            return !query || [ticket.movideskId,ticket.subject,ticket.owner,ticket.status,ticket.category,ticket.service,ticket.client].some(value => String(value ?? "").toLocaleLowerCase("pt-BR").includes(query));
+          });
+          return <Box sx={{display:"flex",flexDirection:"column",height:"100%",minHeight:0}}>
+            <Box sx={{p:{xs:2,sm:3},pb:2,borderBottom:"1px solid",borderColor:"divider",background:"linear-gradient(125deg,rgba(16,185,129,.09),transparent 72%)"}}>
+              <Stack direction="row" spacing={2} sx={{justifyContent:"space-between",alignItems:"flex-start"}}>
+                <Box sx={{minWidth:0}}>
+                  <Typography variant="overline" color="success.main" sx={{fontWeight:900,letterSpacing:1.1}}>Análise de carteira · Clientes</Typography>
+                  <Typography variant="h6" sx={{fontWeight:900,lineHeight:1.3,mt:.5}}>{drilldown.title}</Typography>
+                  {drilldown.subtitle && <Typography variant="body2" color="text.secondary" sx={{mt:.5}}>{drilldown.subtitle}</Typography>}
                 </Box>
-
-                <IconButton
-                  size="small"
-                  aria-label="Fechar lista de tickets"
-                  title="Fechar"
-                  onClick={() =>
-                    setDrilldown(
-                      null
-                    )
-                  }
-                >
-                  ✕
-                </IconButton>
+                <IconButton onClick={() => setDrilldown(null)} aria-label="Fechar painel"><CloseOutlined /></IconButton>
               </Stack>
-
-              <Stack
-                direction="row"
-                spacing={1}
-                sx={{
-                  mt: 2,
-                  mb: 2,
-                  alignItems:
-                    "center",
-                }}
-              >
-                <Chip
-                  size="small"
-                  variant="outlined"
-                  label={`${drilldown.tickets.length} ticket(s)`}
-                />
-
-                <Button
-                  size="small"
-                  onClick={() =>
-                    navigate(
-                      "/tickets"
-                    )
-                  }
-                >
-                  Ir para Tickets
-                </Button>
+              <Box sx={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:1,mt:2.5}}>
+                {[
+                  {label:"Atendimentos",value:all.length,color:"primary.main"},
+                  {label:"Em aberto",value:openCount,color:"warning.main"},
+                  {label:"Concluídos",value:resolvedCount,color:"success.main"},
+                ].map(item=><Box key={item.label} sx={{border:"1px solid",borderColor:"divider",borderRadius:2,p:1.5,backgroundColor:"background.paper"}}>
+                  <Typography variant="caption" color="text.secondary">{item.label}</Typography>
+                  <Typography variant="h5" sx={{fontWeight:900,color:item.color}}>{item.value}</Typography>
+                </Box>)}
+              </Box>
+              <Stack direction="row" spacing={1} useFlexGap sx={{flexWrap:"wrap",alignItems:"center",mt:1.5}}>
+                <Chip size="small" variant="outlined" label={`${bugCount} bug(s)`}/>
+                <Chip size="small" variant="outlined" label={`${all.filter(ticket=>Boolean(ticket.taskNumber||ticket.azureWorkItem)).length} com Task`}/>
+                <Box sx={{flex:1}}/>
+                <ExportTicketsButton tickets={filtered} title={drilldown.title} subtitle={drilldown.subtitle??"Análise por cliente"}/>
               </Stack>
-
-              <ExportTicketsButton tickets={drilldown.tickets} title={drilldown.title} subtitle={drilldown.subtitle ?? "Análise por cliente"} />
-
-              <Divider sx={{ mt: 1 }} />
-
-              {drilldown.tickets.length ===
-                0 && (
-                <Alert
-                  severity="info"
-                  sx={{
-                    mt: 2,
-                  }}
-                >
-                  Nenhum ticket encontrado.
-                </Alert>
-              )}
-
-              {drilldown.tickets.map(
-                (ticket) => (
-                  <Box
-                    key={
-                      ticket.id
-                    }
-                    role="button"
-                    tabIndex={0}
-                    onClick={() =>
-                      setSelectedTicket(
-                        ticket
-                      )
-                    }
-                    onKeyDown={(
-                      event
-                    ) => {
-                      if (
-                        event.key ===
-                          "Enter" ||
-                        event.key ===
-                          " "
-                      ) {
-                        setSelectedTicket(
-                          ticket
-                        );
-                      }
-                    }}
-                    sx={{
-                      py: 1.5,
-
-                      borderBottom:
-                        "1px solid",
-
-                      borderColor:
-                        "divider",
-
-                      cursor:
-                        "pointer",
-
-                      "&:hover": {
-                        backgroundColor:
-                          "action.hover",
-                      },
-                    }}
-                  >
-                    <Stack
-                      direction="row"
-                      spacing={0.5}
-                      sx={{
-                        alignItems:
-                          "center",
-                      }}
-                    >
-                      <Typography
-                        variant="body2"
-                      sx={{ fontWeight: 800 }}
-                      >
-                        #{ticket.movideskId}
-                      </Typography>
-
-                      <IconButton
-                        size="small"
-                        title="Copiar número do ticket"
-                        onClick={(
-                          event
-                        ) => {
-                          event.stopPropagation();
-
-                          void copyTicketNumber(
-                            ticket
-                          );
-                        }}
-                        sx={{
-                          width: 24,
-                          height: 24,
-                          fontSize:
-                            "0.75rem",
-                        }}
-                      >
-                        ⧉
-                      </IconButton>
+            </Box>
+            <Box sx={{px:{xs:2,sm:3},py:2,borderBottom:"1px solid",borderColor:"divider"}}>
+              <TextField fullWidth size="small" placeholder="Buscar ticket, assunto, analista, serviço..." value={drilldownQuery} onChange={event=>setDrilldownQuery(event.target.value)}
+                slotProps={{input:{startAdornment:<InputAdornment position="start"><SearchOutlined fontSize="small"/></InputAdornment>}}}/>
+              <Stack direction="row" spacing={.75} sx={{mt:1.25}}>
+                {([{key:"all",label:"Todos"},{key:"open",label:"Em aberto"},{key:"resolved",label:"Concluídos"}] as const).map(option=>
+                  <Chip key={option.key} size="small" clickable color={drilldownStatus===option.key?"primary":"default"} variant={drilldownStatus===option.key?"filled":"outlined"} label={option.label} onClick={()=>setDrilldownStatus(option.key)}/>)}
+                <Box sx={{flex:1}}/>
+                <Typography variant="caption" color="text.secondary" sx={{alignSelf:"center"}}>{filtered.length} de {all.length}</Typography>
+              </Stack>
+            </Box>
+            <Box sx={{flex:1,overflowY:"auto",px:{xs:2,sm:3},py:1.5}}>
+              {filtered.length===0 && <Alert severity="info">Nenhum atendimento encontrado para os filtros selecionados.</Alert>}
+              <Stack spacing={1.25}>
+                {filtered.map(ticket=><Card key={ticket.id} variant="outlined" sx={{borderRadius:2.5,transition:"border-color .15s,background-color .15s","&:hover":{borderColor:"primary.main",backgroundColor:"action.hover"}}}>
+                  <CardContent sx={{p:1.75,"&:last-child":{pb:1.75}}}>
+                    <Stack direction="row" spacing={1} sx={{justifyContent:"space-between",alignItems:"center"}}>
+                      <Typography variant="subtitle2" sx={{fontWeight:900}}>#{ticket.movideskId}</Typography>
+                      <Stack direction="row" spacing={.5} sx={{alignItems:"center"}}>
+                        <Chip size="small" color={isOperationallyOpen(ticket)?"warning":"success"} variant="outlined" label={ticket.status||"Sem status"}/>
+                        <IconButton size="small" aria-label="Copiar número do ticket" onClick={()=>void copyTicketNumber(ticket)}><ContentCopyOutlined fontSize="small"/></IconButton>
+                      </Stack>
                     </Stack>
-
-                    <Typography
-                      variant="body2"
-                    sx={{ fontWeight: 600 }}
-                    >
-                      {
-                        ticket.subject
-                      }
-                    </Typography>
-
-                    <Typography
-                      variant="caption"
-                      color="text.secondary"
-                    >
-                      {ticket.client ??
-                        "Sem cliente"}
-
-                      {" • "}
-
-                      {ticket.owner ??
-                        "Sem responsável"}
-
-                      {" • "}
-
-                      {ticket.category ??
-                        "Sem categoria"}
-                    </Typography>
-                  </Box>
-                )
-              )}
-            </>
-          )}
-        </Box>
+                    <Typography variant="body2" sx={{fontWeight:800,mt:.7,lineHeight:1.45}}>{ticket.subject}</Typography>
+                    <Stack direction="row" spacing={.6} useFlexGap sx={{flexWrap:"wrap",mt:1}}>
+                      {ticket.category && <Chip size="small" label={ticket.category}/>}
+                      {ticket.urgency && <Chip size="small" variant="outlined" label={ticket.urgency}/>}
+                      {(ticket.taskNumber||ticket.azureWorkItem) && <Chip size="small" color="info" variant="outlined" label="Com Task"/>}
+                    </Stack>
+                    <Box sx={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:1,mt:1.5}}>
+                      <Box><Typography variant="caption" color="text.secondary">Responsável</Typography><Typography variant="body2" sx={{fontWeight:650,overflowWrap:"anywhere"}}>{ticket.owner||"Não atribuído"}</Typography></Box>
+                      <Box><Typography variant="caption" color="text.secondary">Abertura</Typography><Typography variant="body2">{formatDateTime(ticket.createdDate)}</Typography></Box>
+                    </Box>
+                    <Stack direction="row" spacing={1} sx={{mt:1.5}}>
+                      <Button size="small" variant="contained" onClick={()=>setSelectedTicket(ticket)}>Ver detalhes</Button>
+                      <Button size="small" variant="outlined" endIcon={<OpenInNewOutlined/>} onClick={()=>openMovideskTicket(ticket)}>Movidesk</Button>
+                    </Stack>
+                  </CardContent>
+                </Card>)}
+              </Stack>
+            </Box>
+            <Box sx={{p:1.5,borderTop:"1px solid",borderColor:"divider"}}>
+              <Button size="small" fullWidth variant="outlined" onClick={()=>navigate("/tickets")}>Abrir central de Tickets</Button>
+            </Box>
+          </Box>;
+        })()}
       </Drawer>
 
       {/* =================================================
