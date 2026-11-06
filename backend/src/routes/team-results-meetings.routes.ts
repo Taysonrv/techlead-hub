@@ -58,6 +58,7 @@ teamResultsMeetingRoutes.put("/:date", requireRoles("ADMIN", "COORDENADOR"), asy
   if (!title || goals === null || highlights === null || actions === null || !Number.isInteger(version) || Number(version) < 0 || !validSnapshot) {
     res.status(400).json({ message: "Dados da reunião inválidos." }); return;
   }
+  const normalizedSnapshot = snapshot && typeof snapshot === "object" && !Array.isArray(snapshot) ? JSON.parse(JSON.stringify(snapshot)) as Record<string, string | number | null> : undefined;
   try {
     const userId = req.auth!.userId;
     const existing = await prisma.teamResultsMeeting.findUnique({ where: { meetingDate: date } });
@@ -66,7 +67,7 @@ teamResultsMeetingRoutes.put("/:date", requireRoles("ADMIN", "COORDENADOR"), asy
     }
     if (!existing) {
       try {
-        const created = await prisma.teamResultsMeeting.create({ data: { meetingDate: date, title, notes, snapshot: snapshot ?? undefined, goals, highlights, actions, createdById: userId, updatedById: userId } });
+        const created = await prisma.teamResultsMeeting.create({ data: { meetingDate: date, title, notes, snapshot: normalizedSnapshot, goals, highlights, actions, createdById: userId, updatedById: userId } });
         res.json(created);
       } catch (error) {
         // Corrida entre duas criações da mesma reunião.
@@ -75,7 +76,7 @@ teamResultsMeetingRoutes.put("/:date", requireRoles("ADMIN", "COORDENADOR"), asy
       }
       return;
     }
-    const updated = await prisma.teamResultsMeeting.updateMany({ where: { id: existing.id, version: existing.version }, data: { title, notes, snapshot: snapshot ?? undefined, goals, highlights, actions, updatedById: userId, version: { increment: 1 } } });
+    const updated = await prisma.teamResultsMeeting.updateMany({ where: { id: existing.id, version: existing.version }, data: { title, notes, snapshot: normalizedSnapshot, goals, highlights, actions, updatedById: userId, version: { increment: 1 } } });
     if (updated.count === 0) { res.status(409).json({ message: "A reunião foi atualizada em outra máquina. Recarregue os dados." }); return; }
     res.json(await prisma.teamResultsMeeting.findUnique({ where: { id: existing.id } }));
   } catch (error) { console.error("[team-meetings] save", error); res.status(500).json({ message: "Não foi possível salvar a reunião." }); }
