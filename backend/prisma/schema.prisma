@@ -59,6 +59,7 @@ model User {
   passwordHash String
   role         UserRole @default(ANALISTA)
   jobFunction  String?  @db.VarChar(40)
+  movideskOwnerName String? @db.VarChar(200)
 
   // Controle de acesso
   permissions        Json?
