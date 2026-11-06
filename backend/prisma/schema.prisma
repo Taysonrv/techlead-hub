@@ -58,6 +58,7 @@ model User {
   // Autenticação
   passwordHash String
   role         UserRole @default(ANALISTA)
+  jobFunction  String?  @db.VarChar(40)
 
   // Controle de acesso
   permissions        Json?
@@ -98,6 +99,7 @@ model User {
 
   @@index([name])
   @@index([role])
+  @@index([jobFunction])
   @@index([active])
   @@index([approvalStatus])
   @@index([approvedById])
