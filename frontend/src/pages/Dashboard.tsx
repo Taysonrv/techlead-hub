@@ -40,8 +40,7 @@ import {
 
 import { useColorMode } from "../context/ColorModeContext";
 
-import { useNavigate } from "react-router-dom";
-import { StarRounded, StarBorderRounded } from "@mui/icons-material";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { readFavorites, toggleFavorite } from "../utils/favorites";
 
@@ -216,8 +215,17 @@ type MetricInfoDefinition = {
 
 export function Dashboard() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
   const [favoriteCards, setFavoriteCards] = useState<string[]>([]);
+  useEffect(() => {
+    if (!location.hash.startsWith("#kpi-")) return;
+    const id = decodeURIComponent(location.hash.slice(1));
+    const scroll = () => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    const handle = window.setTimeout(scroll, 150);
+    return () => window.clearTimeout(handle);
+  }, [location.hash]);
+
   useEffect(() => { if (user?.id != null) setFavoriteCards(readFavorites(user.id).filter((item) => item.kind === "card").map((item) => item.id)); }, [user?.id]);
   const { mode } = useColorMode();
   const isDark = mode === "dark";
@@ -1168,7 +1176,7 @@ export function Dashboard() {
       <KpiGrid className="techlead-dashboard-kpis" sx={{ mb: { xs: 2.5, md: 3.5 } }}>
         {cards.map(
           (card) => (
-            <Box key={card.title} sx={{ position: "relative", minWidth: 0, "& > *:first-of-type": { height: "100%" } }}>
+            <Box key={card.title} id={"kpi-" + encodeURIComponent(card.title)} sx={{ position: "relative", minWidth: 0, scrollMarginTop: "100px" }}>
             <KpiCard
               key={card.title}
               title={
@@ -1186,13 +1194,10 @@ export function Dashboard() {
               info={
                 card.info
               }
-              onClick={
-                card.onClick
-              }
+              onClick={card.onClick}
+              favorite={favoriteCards.includes("card:" + card.title)}
+              onToggleFavorite={() => { if (user?.id == null) return; const next = toggleFavorite(user.id, { id: "card:" + card.title, label: card.title, path: "/visao-operacional#kpi-" + encodeURIComponent(card.title), kind: "card" }); setFavoriteCards(next.filter((item) => item.kind === "card").map((item) => item.id)); }}
             />
-            <IconButton aria-label={favoriteCards.includes("card:" + card.title) ? "Remover dos favoritos" : "Favoritar card"} title={favoriteCards.includes("card:" + card.title) ? "Remover dos favoritos" : "Favoritar card"} size="small" sx={{ position: "absolute", top: 8, right: 34, zIndex: 2 }} onClick={(event) => { event.stopPropagation(); if (user?.id == null) return; const next = toggleFavorite(user.id, { id: "card:" + card.title, label: card.title, path: "/visao-operacional", kind: "card" }); setFavoriteCards(next.filter((item) => item.kind === "card").map((item) => item.id)); }}>
-              {favoriteCards.includes("card:" + card.title) ? <StarRounded fontSize="small" color="warning" /> : <StarBorderRounded fontSize="small" />}
-            </IconButton>
             </Box>
           )
         )}
@@ -2776,6 +2781,8 @@ function KpiCard({
   info,
   severity,
   onClick,
+  favorite,
+  onToggleFavorite,
 }: {
   title: string;
   value: ReactNode;
@@ -2783,6 +2790,8 @@ function KpiCard({
   info: MetricInfoDefinition;
   severity: Severity;
   onClick: () => void;
+  favorite?: boolean;
+  onToggleFavorite?: () => void;
 }) {
   const accentColor =
     severity === "error"
@@ -2801,6 +2810,8 @@ function KpiCard({
       info={info}
       accentColor={accentColor}
       onClick={onClick}
+      favorite={favorite}
+      onToggleFavorite={onToggleFavorite}
     />
   );
 }
@@ -2812,6 +2823,8 @@ function StandardMetricCard({
   info,
   accentColor,
   onClick,
+  favorite,
+  onToggleFavorite,
 }: {
   title: string;
   value: ReactNode;
@@ -2819,6 +2832,8 @@ function StandardMetricCard({
   info: MetricInfoDefinition;
   accentColor: string;
   onClick?: () => void;
+  favorite?: boolean;
+  onToggleFavorite?: () => void;
 }) {
   return (
     <ExecutiveKpiCard
@@ -2828,6 +2843,8 @@ function StandardMetricCard({
       info={`${info.summary} • ${info.periodRule}`}
       accent={accentColor}
       onClick={onClick}
+      favorite={favorite}
+      onToggleFavorite={onToggleFavorite}
     />
   );
 }
