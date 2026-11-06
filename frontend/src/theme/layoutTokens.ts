@@ -1,21 +1,40 @@
+/** Standard visual foundation for analytical side panels across the Hub.
+ * Keeps each screen's own data, filters, actions and permission checks intact.
+ */
 export const detailDrawerPaperSx = {
-  width: {
-    xs: "100vw",
-    sm: 520,
-    lg: 560,
-  },
+  width: { xs: "100vw", sm: "min(92vw, 640px)", lg: "min(52vw, 720px)" },
   maxWidth: "100vw",
-  p: { xs: 1.5, sm: 2.25 },
   boxSizing: "border-box",
+  p: 0,
   overflowX: "hidden",
   overscrollBehavior: "contain",
+  scrollbarGutter: "stable",
   bgcolor: "background.paper",
   color: "text.primary",
-  backgroundColor: "background.paper",
   backgroundImage: (theme: any) => theme.palette.mode === "dark"
-    ? "linear-gradient(180deg, rgba(24,199,122,.055), rgba(7,20,32,.98) 180px)"
-    : "linear-gradient(180deg, rgba(24,199,122,.025), rgba(255,255,255,.99) 180px)",
-};
+    ? "linear-gradient(180deg, rgba(24,199,122,.075), rgba(7,20,32,.98) 240px)"
+    : "linear-gradient(180deg, rgba(24,199,122,.055), rgba(255,255,255,.99) 240px)",
+  boxShadow: "-18px 0 48px rgba(0,0,0,.14)",
+  borderLeft: "1px solid",
+  borderColor: "divider",
+  "& > .MuiBox-root": {
+    maxWidth: "100%",
+    minWidth: 0,
+    boxSizing: "border-box",
+  },
+  "& .MuiCard-root": {
+    minWidth: 0,
+  },
+  "& .MuiTypography-root": {
+    overflowWrap: "anywhere",
+  },
+  "& .MuiTableContainer-root": {
+    maxWidth: "100%",
+  },
+  "& .MuiButton-root": {
+    textTransform: "none",
+  },
+} as const;
 
 /** Shared base for analytical panels across pages. KPI cards keep their own accent treatment. */
 export const analyticalPanelSx = {
