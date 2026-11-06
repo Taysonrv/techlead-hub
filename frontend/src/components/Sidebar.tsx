@@ -965,6 +965,15 @@ export function Sidebar() {
           </ListItemButton>
         </Box>}
 
+        {favorites.length > 0 && <MenuSection
+          title="Favoritos"
+          ariaLabel="Navegação de favoritos"
+          items={favorites.filter((favorite) => favorite.kind === "card" ? canAccess("dashboard") : [...movementMenu, ...managementMenu, ...analysisMenu, ...developmentMenu, ...registrationMenu, ...knowledgeMenu].some((item) => item.path === favorite.path)).map((favorite) => ({ label: favorite.label, path: favorite.kind === "card" ? "/visao-operacional#kpi-" + encodeURIComponent(favorite.label) : favorite.path, icon: <StarOutlineRounded fontSize="small" /> }))}
+          compact={sidebarCollapsed}
+          open={true}
+          onToggle={() => setFavorites((current) => [...current])}
+        />}
+
         <MenuSection
           title="Operação"
           ariaLabel="Navegação de operação"
@@ -982,15 +991,6 @@ export function Sidebar() {
           open={openSections.gestao}
           onToggle={() => setOpenSections((current) => ({ ...current, gestao: !current.gestao }))}
         />
-
-        {favorites.length > 0 && <MenuSection
-          title="Favoritos"
-          ariaLabel="Navegação de favoritos"
-          items={favorites.filter((favorite) => favorite.kind === "card" ? canAccess("dashboard") : [...analysisMenu, ...developmentMenu, ...managementMenu].some((item) => item.path === favorite.path)).map((favorite) => ({ label: favorite.label, path: favorite.kind === "card" ? "/visao-operacional#kpi-" + encodeURIComponent(favorite.label) : favorite.path, icon: <StarOutlineRounded fontSize="small" /> }))}
-          compact={sidebarCollapsed}
-          open={true}
-          onToggle={() => {}}
-        />}
 
         <MenuSection
           title="Análises"
