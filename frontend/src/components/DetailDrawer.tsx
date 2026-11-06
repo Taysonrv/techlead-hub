@@ -28,7 +28,6 @@ export function DetailDrawer({ open, onClose, title, subtitle, children, actions
             flexDirection: "column",
           },
         },
-        },
       }}
     >
       <Stack sx={{ height: "100%" }}>
