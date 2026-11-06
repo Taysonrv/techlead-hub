@@ -57,7 +57,7 @@ const bounds = (selection: Override, global: Period, custom: Period): Period => 
 };
 const dateString = (date: Date) => [date.getFullYear(), String(date.getMonth() + 1).padStart(2, "0"), String(date.getDate()).padStart(2, "0")].join("-");
 const localDate = (value: string, endOfDay = false): Date | null => {
-  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(value)) return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
   const [year, month, day] = value.split("-").map(Number);
   const date = new Date(year, month - 1, day, endOfDay ? 23 : 0, endOfDay ? 59 : 0, endOfDay ? 59 : 0, endOfDay ? 999 : 0);
   return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day ? date : null;
