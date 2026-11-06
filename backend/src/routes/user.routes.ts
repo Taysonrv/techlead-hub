@@ -39,6 +39,11 @@ userRoutes.get(
 );
 
 userRoutes.get(
+  "/ticket-ownership-by-function",
+  users.ticketOwnershipByFunction.bind(users)
+);
+
+userRoutes.get(
   "/pending",
   users.pending.bind(
     users
