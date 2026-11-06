@@ -274,7 +274,7 @@ export function TeamDashboardCards({ tickets, period, onOpenTickets, isDark }: {
         </Stack>
         <Stack direction={{ xs: "column", sm: "row" }} spacing={.8} sx={{ width: { xs: "100%", sm: "auto" }, minWidth: { sm: 340 }, maxWidth: { sm: 470 } }}>
           <FormControl size="small" sx={{ flex: 1, minWidth: 0 }}><Select aria-label="Filtrar agente" sx={{ fontSize: 12, height: 40, borderRadius: 1.5, bgcolor: isDark ? "rgba(6,20,34,.48)" : "rgba(255,255,255,.78)" }} value={selectedAgent} onChange={(event) => setSelectedAgent(event.target.value)}><MenuItem value="all">Todos os agentes</MenuItem>{agents.map((item) => <MenuItem key={item.owner} value={item.owner}>{item.owner}</MenuItem>)}</Select></FormControl>
-          <Box sx={{ width: { xs: "100%", sm: 174 }, flexShrink: 0 }}><PeriodChoice value={agentPeriod} onChange={setAgentPeriod} dates={agentDates} onDatesChange={setAgentDates} /></Box>
+          <FavoriteAction title="Indicadores por agente" targetId="section-agent-performance" /><Box sx={{ width: { xs: "100%", sm: 174 }, flexShrink: 0 }}><PeriodChoice value={agentPeriod} onChange={setAgentPeriod} dates={agentDates} onDatesChange={setAgentDates} /></Box>
         </Stack>
       </Stack>
       <Stack direction="row" useFlexGap spacing={1} sx={{ mb: 1.25, flexWrap: "wrap" }}>
