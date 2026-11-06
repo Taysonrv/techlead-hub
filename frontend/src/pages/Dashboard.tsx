@@ -218,14 +218,6 @@ export function Dashboard() {
   const location = useLocation();
   const { user } = useAuth();
   const [favoriteCards, setFavoriteCards] = useState<string[]>([]);
-  useEffect(() => {
-    if (!location.hash.startsWith("#kpi-")) return;
-    const id = decodeURIComponent(location.hash.slice(1));
-    const scroll = () => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "center" });
-    const handle = window.setTimeout(scroll, 150);
-    return () => window.clearTimeout(handle);
-  }, [location.hash]);
-
   useEffect(() => { if (user?.id != null) setFavoriteCards(readFavorites(user.id).filter((item) => item.kind === "card").map((item) => item.id)); }, [user?.id]);
   const { mode } = useColorMode();
   const isDark = mode === "dark";
@@ -256,6 +248,15 @@ export function Dashboard() {
 
   const [loading, setLoading] =
     useState(true);
+
+  useEffect(() => {
+    if (!location.hash.startsWith("#kpi-")) return;
+    const id = decodeURIComponent(location.hash.slice(1));
+    const scroll = () => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    if (loading) return;
+    const handle = window.setTimeout(scroll, 100);
+    return () => window.clearTimeout(handle);
+  }, [location.hash, loading]);
 
   const [error, setError] =
     useState<string | null>(null);
