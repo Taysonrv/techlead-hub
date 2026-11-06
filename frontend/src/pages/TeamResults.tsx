@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Box, Button, Card, CardContent, Chip, FormControl, MenuItem, Select, Stack, TextField, Typography, Alert, CircularProgress, Drawer, IconButton, Divider } from "@mui/material";
+import { Box, Button, Chip, FormControl, MenuItem, Select, Stack, TextField, Typography, Alert, CircularProgress, Drawer, IconButton, Divider } from "@mui/material";
 import { getTicketSnapshot, getTicketSnapshotState, subscribeTicketSnapshotRefresh } from "../services/ticketSnapshot";
 import { isOperationallyOpen } from "../utils/operationalMetrics";
 import { FavoriteAction } from "../components/FavoriteAction";
@@ -242,7 +242,7 @@ export default function TeamResults() {
   const changeLabel = (current: number, previous: number) =>
     previous === 0 ? current === 0 ? "0%" : "Novo (base anterior zero)" :
     `${current >= previous ? "+" : ""}${((current - previous) / previous * 100).toFixed(1).replace(".", ",")}%`;
-  return <Box ref={presentationRef} sx={{ px: { xs: 2, md: 3 }, py: 3, maxWidth: 1800, mx: "auto", bgcolor: "background.default", color: "text.primary", overflowY: presentation ? "auto" : "visible", height: presentation ? "100vh" : "auto", "& .recharts-wrapper": { maxWidth: "100%" }, "@media print": { maxWidth: "none", p: 1, overflow: "visible", height: "auto", "& .MuiCard-root": { breakInside: "avoid" } } }}>
+  return <Box ref={presentationRef} sx={{ px: { xs: 2, md: 3 }, py: 3, maxWidth: 1920, mx: "auto", bgcolor: "background.default", color: "text.primary", overflowY: presentation ? "auto" : "visible", height: presentation ? "100vh" : "auto", "& .recharts-wrapper": { maxWidth: "100%" }, "@media print": { maxWidth: "none", p: 1, overflow: "visible", height: "auto", "& .MuiCard-root": { breakInside: "avoid" } } }}>
     <PageHeader eyebrow="INTELIGÊNCIA OPERACIONAL • REUNIÃO SEMANAL" title="Resultados da Equipe"
       description="Painel executivo de produtividade, carteira, qualidade e compromissos da operação"
       meta={<Stack direction="row" spacing={1} sx={{ alignItems: "center", flexWrap: "wrap" }}>
@@ -253,7 +253,7 @@ export default function TeamResults() {
         <Button variant="outlined" startIcon={<FileDownloadOutlined />} onClick={printReport}>Exportar PDF</Button>
         <Button variant="contained" startIcon={presentation ? <TrendingUpOutlined /> : <PresentToAllOutlined />} onClick={() => void togglePresentation()}>{presentation ? "Sair da apresentação" : "Apresentar"}</Button>
       </Stack>} />
-    <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5} sx={{ mb: 3, alignItems: { sm: "center" }, flexWrap: "wrap" }}>
+    <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5} sx={{ mb: 3, p: { xs: 1.5, md: 2 }, border: "1px solid", borderColor: "divider", borderRadius: "var(--hub-radius-lg)", bgcolor: "background.paper", boxShadow: "var(--hub-shadow-card)", alignItems: { sm: "center" }, flexWrap: "wrap", "& .MuiOutlinedInput-root": { borderRadius: 2 } }}>
       <FormControl size="small" sx={{ minWidth: 180 }}><Select aria-label="Período dos resultados" value={period} onChange={e => setPeriod(e.target.value as Period)}>
         <MenuItem value="day">Hoje</MenuItem><MenuItem value="week">Esta semana</MenuItem><MenuItem value="month">Este mês</MenuItem><MenuItem value="semester">Este semestre</MenuItem><MenuItem value="year">Este ano</MenuItem><MenuItem value="custom">Personalizado</MenuItem>
       </Select></FormControl>
@@ -269,7 +269,7 @@ export default function TeamResults() {
     {!range && <Alert severity="info">Selecione um intervalo personalizado válido para apresentar os resultados.</Alert>}
     {results && <>
       {results.missingType > 0 && <Alert severity="info" sx={{ mb: 2 }}>{results.missingType} tickets pendentes sem classificação público/interno foram excluídos das métricas públicas. Confira a importação antes da reunião.</Alert>}
-      <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 2, mb: 2 }}>
+      <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 220px), 1fr))", gap: 2, mb: 2 }}>
         <Metric title="Abertos no período" value={results.opened.length} onClick={() => setDetail({ title: "Abertos no período", tickets: results.opened })} subtitle="Tickets públicos criados" />
         <Metric title="Resolvidos" value={results.resolved.length} onClick={() => setDetail({ title: "Resolvidos", tickets: results.resolved })} subtitle="Resoluções registradas no período" />
         <Metric title="Fechados" value={results.closed.length} onClick={() => setDetail({ title: "Fechados", tickets: results.closed })} subtitle="Encerramentos no período" />
