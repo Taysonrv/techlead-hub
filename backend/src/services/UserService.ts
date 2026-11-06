@@ -13,6 +13,7 @@ const USER_ADMIN_SELECT = {
   email: true,
   role: true,
   jobFunction: true,
+  movideskOwnerName: true,
   permissions: true,
   active: true,
   approvalStatus: true,
@@ -97,6 +98,27 @@ export class UserService {
     return prisma.user.update({
       where: { id: targetUserId },
       data: { permissions: normalized },
+      select: USER_ADMIN_SELECT,
+    });
+  }
+
+  async updateMovideskOwnerName(adminUserId: number, targetUserId: number, value: unknown) {
+    await this.ensureAdmin(adminUserId);
+    await this.getTargetUser(targetUserId);
+    if (value !== null && (typeof value !== "string" || value.trim().length > 200)) {
+      throw new AuthError("Responsável Movidesk inválido (máximo 200 caracteres).", 400);
+    }
+    const name = typeof value === "string" ? value.trim() : "";
+    if (name) {
+      const existing = await prisma.user.findFirst({
+        where: { movideskOwnerName: { equals: name, mode: "insensitive" }, id: { not: targetUserId } },
+        select: { id: true },
+      });
+      if (existing) throw new AuthError("Este responsável Movidesk já está vinculado a outro usuário.", 409);
+    }
+    return prisma.user.update({
+      where: { id: targetUserId },
+      data: { movideskOwnerName: name || null },
       select: USER_ADMIN_SELECT,
     });
   }
