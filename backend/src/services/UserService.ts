@@ -101,6 +101,21 @@ export class UserService {
     });
   }
 
+  /** Função organizacional, separada de perfil e permissões. */
+  async updateUserJobFunction(adminUserId: number, targetUserId: number, value: unknown) {
+    await this.ensureAdmin(adminUserId);
+    await this.getTargetUser(targetUserId);
+    const allowed = ["COORDENADOR", "LIDER", "SUPORTE_SIMER_N1", "SUPORTE_SIMER_N2", "SUPORTE_SIMER_N3", "BANCO_DE_DADOS"] as const;
+    if (value !== null && (typeof value !== "string" || !allowed.includes(value as typeof allowed[number]))) {
+      throw new AuthError("Função inválida. Selecione uma das funções disponíveis.", 400);
+    }
+    return prisma.user.update({
+      where: { id: targetUserId },
+      data: { jobFunction: value as string | null },
+      select: USER_ADMIN_SELECT,
+    });
+  }
+
   /* =======================================================
      LISTAR TODOS OS USUÁRIOS
   ======================================================= */
