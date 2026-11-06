@@ -62,18 +62,45 @@ function rangeFor(period: Period, startInput: string, endInput: string) {
 }
 const formatDay = (date: Date) => date.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
 const formatNumber = (value: number) => new Intl.NumberFormat("pt-BR").format(value);
+const cardExplanations: Record<string, string> = {
+  "Abertos no período": "Quantidade de tickets públicos criados dentro do intervalo selecionado, independentemente da situação atual.",
+  "Resolvidos": "Quantidade de tickets públicos com data de resolução no período selecionado. Um ticket resolvido pode ainda não estar fechado.",
+  "Fechados": "Quantidade de tickets públicos com data de encerramento no período selecionado. Fechamento e resolução são eventos diferentes.",
+  "Backlog atual": "Total de tickets públicos que permanecem em situação operacionalmente aberta na base atual. É uma fotografia da carteira de hoje, não do encerramento do período filtrado.",
+  "Pendentes do período": "Tickets públicos criados no intervalo selecionado que ainda estão operacionalmente abertos na base atual.",
+  "Parados": "Tickets públicos do backlog atual classificados com status-base 'stopped'. Fazem parte do backlog, não são um volume adicional.",
+  "CSAT": "Percentual de avaliações de satisfação consideradas positivas entre as avaliações disponíveis para o recorte selecionado. O número de avaliações aparece abaixo do percentual.",
+  "SLA primeira resposta": "Percentual de tickets com primeira resposta dentro do prazo entre aqueles com medição válida, conforme os dados de SLA disponíveis na base. Tickets sem medição não entram no denominador.",
+  "SLA atendimento": "Percentual de tickets resolvidos dentro do prazo de atendimento entre aqueles com medição válida. Tickets sem medição não entram no denominador.",
+  "Comparativo com período anterior": "Compara entradas, resoluções e fechamentos do intervalo selecionado com um intervalo imediatamente anterior de mesma duração. Variação percentual = (atual − anterior) ÷ anterior × 100; se a base anterior for zero, não há percentual comparável.",
+  "Resumo de movimentações": "Compara o total de tickets públicos criados e resolvidos no período filtrado. As barras são proporcionais ao maior dos dois totais.",
+  "Distribuição de pendências": "Divide o backlog público atual entre tickets parados e os demais tickets ainda abertos. As duas categorias somam o backlog atual.",
+  "Evolução de entradas e resoluções": "Apresenta, por dia do intervalo selecionado, quantos tickets públicos foram criados e quantos tiveram resolução registrada. As barras representam eventos distintos.",
+  "Composição da carteira pendente": "Mostra a participação dos tickets parados e dos demais tickets no backlog público atual. O total central corresponde aos tickets ainda abertos.",
+  "Resultados por responsável": "Quantidade de tickets públicos resolvidos no período filtrado por responsável atualmente registrado no ticket. As barras são proporcionais ao maior volume exibido; não representam horas trabalhadas.",
+  "Carteira por responsável": "Quantidade de tickets públicos ainda abertos, agrupados pelo responsável atualmente registrado. É uma visão do estoque atual, mesmo quando o filtro de datas aponta para outro período.",
+  "Abertos × fechados · Semana": "Compara tickets públicos criados e fechados desde o início da semana atual até hoje, respeitando o filtro de responsável.",
+  "Abertos × fechados · Mês": "Compara tickets públicos criados e fechados desde o início do mês atual até hoje, respeitando o filtro de responsável.",
+  "Abertos × fechados · Semestre": "Compara tickets públicos criados e fechados desde o início do semestre atual até hoje, respeitando o filtro de responsável.",
+  "Resolvidos por analista · Semana": "Distribui as resoluções de tickets públicos ocorridas na semana atual pelo responsável atualmente registrado. Clique em um analista para consultar os tickets.",
+  "Resolvidos por analista · Mês": "Distribui as resoluções de tickets públicos ocorridas no mês atual pelo responsável atualmente registrado. Clique em um analista para consultar os tickets.",
+  "CSAT · Satisfação": "Exibe a proporção de avaliações positivas sobre o total de avaliações de satisfação disponíveis no recorte selecionado.",
+  "SLA · Primeira resposta": "Exibe a taxa de cumprimento do prazo de primeira resposta, com quantidades no prazo, fora do prazo e sem medição.",
+  "SLA · Atendimento": "Exibe a taxa de cumprimento do prazo de resolução/atendimento, com quantidades no prazo, fora do prazo e sem medição.",
+  "Pontos para discussão e encaminhamentos": "Reúne alertas operacionais e questões para a reunião, com base nos indicadores apresentados. Não substitui a ata e os compromissos registrados.",
+};
 const sectionSx = { borderRadius: 3, bgcolor: "background.paper", border: "1px solid", borderColor: "divider", minWidth: 0 };
 function Section({ id, title, children, info }: { id: string; title: string; children: React.ReactNode; info?: string }) {
   return <Card id={id} sx={{ ...sectionSx, scrollMarginTop: 100 }}><CardContent>
     <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between", mb: 2 }}>
-      <Stack direction="row" sx={{ alignItems: "center", minWidth: 0 }}><Typography variant="h6" sx={{ fontWeight: 800 }}>{title}</Typography><SectionInfo title={info || title + ". Os valores respeitam os filtros da tela, salvo indicadores identificados como carteira atual ou recortes fixos."} /></Stack>
+      <Stack direction="row" sx={{ alignItems: "center", minWidth: 0 }}><Typography variant="h6" sx={{ fontWeight: 800 }}>{title}</Typography><SectionInfo title={info || cardExplanations[title] || "Indicador de resultados da equipe. Consulte o título, os valores e os filtros exibidos nesta seção."} /></Stack>
       <FavoriteAction title={title} targetId={id} />
     </Stack>{children}
   </CardContent></Card>;
 }
 function Metric({ title, value, subtitle, onClick }: { title: string; value: string | number; subtitle: string; onClick?: () => void }) {
   return <Card onClick={onClick} role={onClick ? "button" : undefined} tabIndex={onClick ? 0 : undefined} onKeyDown={onClick ? e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(); } } : undefined} sx={{ ...sectionSx, borderTop: "3px solid #24BF90", cursor: onClick ? "pointer" : "default", "&:hover": onClick ? { borderColor: "primary.main", transform: "translateY(-2px)" } : {}, transition: "transform .15s" }}><CardContent>
-    <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between" }}><Typography variant="body2" sx={{ fontWeight: 700 }}>{title}</Typography><SectionInfo title={subtitle} /></Stack>
+    <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between" }}><Typography variant="body2" sx={{ fontWeight: 700 }}>{title}</Typography><SectionInfo title={cardExplanations[title] || subtitle} /></Stack>
     <Typography variant="h4" sx={{ fontWeight: 850, my: 1, color: "primary.main" }}>{typeof value === "number" ? formatNumber(value) : value}</Typography>
     <Typography variant="caption" color="text.secondary">{subtitle}</Typography>
   </CardContent></Card>;
