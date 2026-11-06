@@ -7,6 +7,10 @@ import { SectionInfo } from "../components/SectionInfo";
 import { calculateTimestampSla } from "../utils/timestampSla";
 import { detailDrawerPaperSx } from "../theme/layoutTokens";
 import { TeamMeetingManagement } from "../components/TeamMeetingManagement";
+import { PageHeader } from "../components/PageHeader";
+import { KpiCard } from "../components/KpiCard";
+import { ExecutiveSection } from "../components/ExecutiveSection";
+import { AssessmentOutlined, AutoGraphOutlined, CalendarMonthOutlined, FileDownloadOutlined, GroupsOutlined, PresentToAllOutlined, QueryStatsOutlined, SpeedOutlined, TaskAltOutlined, TrendingUpOutlined, WarningAmberOutlined } from "@mui/icons-material";
 
 type Ticket = {
   movideskId: number;
@@ -89,21 +93,32 @@ const cardExplanations: Record<string, string> = {
   "SLA · Atendimento": "Exibe a taxa de cumprimento do prazo de resolução/atendimento, com quantidades no prazo, fora do prazo e sem medição.",
   "Pontos para discussão e encaminhamentos": "Reúne alertas operacionais e questões para a reunião, com base nos indicadores apresentados. Não substitui a ata e os compromissos registrados.",
 };
-const sectionSx = { borderRadius: 3, bgcolor: "background.paper", border: "1px solid", borderColor: "divider", minWidth: 0 };
+const metricAccents: Record<string, string> = {
+  "Abertos no período": "#22B8CF", "Resolvidos": "#18C77A", "Fechados": "#32C7A2",
+  "Backlog atual": "#8C9EFF", "Pendentes do período": "#E9B949", "Parados": "#F59E67",
+  "CSAT": "#22C7BA", "SLA primeira resposta": "#4BAFE8", "SLA atendimento": "#A28CF4",
+};
+const metricIcons: Record<string, React.ReactNode> = {
+  "Abertos no período": <AutoGraphOutlined />, "Resolvidos": <TaskAltOutlined />,
+  "Fechados": <TaskAltOutlined />, "Backlog atual": <GroupsOutlined />,
+  "Pendentes do período": <WarningAmberOutlined />, "Parados": <WarningAmberOutlined />,
+  "CSAT": <AssessmentOutlined />, "SLA primeira resposta": <SpeedOutlined />,
+  "SLA atendimento": <QueryStatsOutlined />,
+};
 function Section({ id, title, children, info }: { id: string; title: string; children: React.ReactNode; info?: string }) {
-  return <Card id={id} sx={{ ...sectionSx, scrollMarginTop: 100 }}><CardContent>
-    <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between", mb: 2 }}>
-      <Stack direction="row" sx={{ alignItems: "center", minWidth: 0 }}><Typography variant="h6" sx={{ fontWeight: 800 }}>{title}</Typography><SectionInfo title={info || cardExplanations[title] || "Indicador de resultados da equipe. Consulte o título, os valores e os filtros exibidos nesta seção."} /></Stack>
-      <FavoriteAction title={title} targetId={id} />
-    </Stack>{children}
-  </CardContent></Card>;
+  return <Box id={id} sx={{ minWidth: 0, scrollMarginTop: 100, height: "100%" }}>
+    <ExecutiveSection title={title} accent={title.includes("SLA") ? "#4BAFE8" : title.includes("pendente") || title.includes("Carteira") ? "#E9B949" : "#18C77A"}
+      action={<Stack direction="row" spacing={.5} sx={{ alignItems: "center" }}>
+        <SectionInfo title={info || cardExplanations[title] || "Indicador de resultados da equipe."} />
+        <FavoriteAction title={title} targetId={id} />
+      </Stack>}>
+      {children}
+    </ExecutiveSection>
+  </Box>;
 }
 function Metric({ title, value, subtitle, onClick }: { title: string; value: string | number; subtitle: string; onClick?: () => void }) {
-  return <Card onClick={onClick} role={onClick ? "button" : undefined} tabIndex={onClick ? 0 : undefined} onKeyDown={onClick ? e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(); } } : undefined} sx={{ ...sectionSx, borderTop: "3px solid #24BF90", cursor: onClick ? "pointer" : "default", "&:hover": onClick ? { borderColor: "primary.main", transform: "translateY(-2px)" } : {}, transition: "transform .15s" }}><CardContent>
-    <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between" }}><Typography variant="body2" sx={{ fontWeight: 700 }}>{title}</Typography><SectionInfo title={cardExplanations[title] || subtitle} /></Stack>
-    <Typography variant="h4" sx={{ fontWeight: 850, my: 1, color: "primary.main" }}>{typeof value === "number" ? formatNumber(value) : value}</Typography>
-    <Typography variant="caption" color="text.secondary">{subtitle}</Typography>
-  </CardContent></Card>;
+  return <KpiCard title={title} value={typeof value === "number" ? formatNumber(value) : value} subtitle={subtitle}
+    info={cardExplanations[title] || subtitle} icon={metricIcons[title]} accent={metricAccents[title] || "#18C77A"} onClick={onClick} />;
 }
 export default function TeamResults() {
   const [tickets, setTickets] = useState<Ticket[]>([]);
@@ -228,12 +243,16 @@ export default function TeamResults() {
     previous === 0 ? current === 0 ? "0%" : "Novo (base anterior zero)" :
     `${current >= previous ? "+" : ""}${((current - previous) / previous * 100).toFixed(1).replace(".", ",")}%`;
   return <Box ref={presentationRef} sx={{ px: { xs: 2, md: 3 }, py: 3, maxWidth: 1800, mx: "auto", bgcolor: "background.default", color: "text.primary", overflowY: presentation ? "auto" : "visible", height: presentation ? "100vh" : "auto", "& .recharts-wrapper": { maxWidth: "100%" }, "@media print": { maxWidth: "none", p: 1, overflow: "visible", height: "auto", "& .MuiCard-root": { breakInside: "avoid" } } }}>
-    <Stack direction={{ xs: "column", md: "row" }} spacing={2} sx={{ justifyContent: "space-between", alignItems: { md: "center" }, mb: 3 }}>
-      <Box><Typography variant="overline" color="primary.main" sx={{ fontWeight: 800 }}>REUNIÃO DE RESULTADOS</Typography>
-        <Typography variant="h4" sx={{ fontWeight: 850 }}>Resultados da Equipe</Typography>
-        <Typography color="text.secondary">Acompanhamento de volume, produtividade, carteira e prioridades da operação</Typography></Box>
-      <Stack direction="row" spacing={1} sx={{ "@media print": { display: "none" } }}><Button variant="outlined" onClick={printReport}>Exportar / Salvar PDF</Button><Button variant="contained" onClick={() => void togglePresentation()}>{presentation ? "Sair da apresentação" : "Modo apresentação"}</Button></Stack>
-    </Stack>
+    <PageHeader eyebrow="INTELIGÊNCIA OPERACIONAL • REUNIÃO SEMANAL" title="Resultados da Equipe"
+      description="Painel executivo de produtividade, carteira, qualidade e compromissos da operação"
+      meta={<Stack direction="row" spacing={1} sx={{ alignItems: "center", flexWrap: "wrap" }}>
+        <Chip size="small" icon={<GroupsOutlined />} label={owner === "all" ? "Equipe completa" : owner} variant="outlined" />
+        {range && <Chip size="small" icon={<CalendarMonthOutlined />} label={range.start.toLocaleDateString("pt-BR") + " — " + range.end.toLocaleDateString("pt-BR")} variant="outlined" />}
+      </Stack>}
+      action={<Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ "@media print": { display: "none" } }}>
+        <Button variant="outlined" startIcon={<FileDownloadOutlined />} onClick={printReport}>Exportar PDF</Button>
+        <Button variant="contained" startIcon={presentation ? <TrendingUpOutlined /> : <PresentToAllOutlined />} onClick={() => void togglePresentation()}>{presentation ? "Sair da apresentação" : "Apresentar"}</Button>
+      </Stack>} />
     <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5} sx={{ mb: 3, alignItems: { sm: "center" }, flexWrap: "wrap" }}>
       <FormControl size="small" sx={{ minWidth: 180 }}><Select aria-label="Período dos resultados" value={period} onChange={e => setPeriod(e.target.value as Period)}>
         <MenuItem value="day">Hoje</MenuItem><MenuItem value="week">Esta semana</MenuItem><MenuItem value="month">Este mês</MenuItem><MenuItem value="semester">Este semestre</MenuItem><MenuItem value="year">Este ano</MenuItem><MenuItem value="custom">Personalizado</MenuItem>
