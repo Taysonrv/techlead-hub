@@ -74,6 +74,11 @@ userRoutes.patch(
 );
 
 userRoutes.patch(
+  "/:id/movidesk-owner",
+  users.updateMovideskOwnerName.bind(users)
+);
+
+userRoutes.patch(
   "/:id/job-function",
   users.updateJobFunction.bind(users)
 );
