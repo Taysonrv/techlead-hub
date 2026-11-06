@@ -131,7 +131,7 @@ type ConfirmationState = {
    PAGE
 ========================================================= */
 
-export function Users() {
+export function Users({ embedded = false }: { embedded?: boolean } = {}) {
   const [usersPage, setUsersPage] = useState(0);
   const [ownership, setOwnership] = useState<{byFunction:{function:string;tickets:number;owners:number}[];unmatched:{owner:string;tickets:number}[];linkedUsers:number;totalUsers:number;note:string} | null>(null);
   const [ownerEditing, setOwnerEditing] = useState<{id:number; value:string} | null>(null);
@@ -407,10 +407,10 @@ export function Users() {
     >
       {/* HEADER */}
 
-      <PageHeader eyebrow="Sistema" title="Usuários" description="Gerencie perfis de acesso e atribua funções organizacionais. A função não concede permissões automaticamente." action={<Button
+      {!embedded &&       <PageHeader eyebrow="Sistema" title="Usuários" description="Gerencie perfis de acesso e atribua funções organizacionais. A função não concede permissões automaticamente." action={<Button
           variant="outlined"
           startIcon={
-            <RefreshOutlined />
+            <RefreshOutlined />}
           }
           onClick={() =>
             void loadUsers()
@@ -452,7 +452,7 @@ export function Users() {
 
       {/* CARDS */}
 
-      <KpiGrid>
+      <KpiGrid columns={{ xs: 2, md: 4 }}>
         <SummaryCard
           label="Total"
           value={
@@ -522,198 +522,42 @@ export function Users() {
             <ContentState kind="loading" title="Carregando usuários" minHeight={320} />
           ) : (
             <>
-              <TableContainer>
-                <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>
-                      Usuário
-                    </TableCell>
-
-                    <TableCell>
-                      Perfil
-                    </TableCell>
-                    <TableCell>Função na equipe</TableCell>
-                    <TableCell>Responsável Movidesk</TableCell>
-
-                    <TableCell>
-                      Aprovação
-                    </TableCell>
-
-                    <TableCell>
-                      Acesso
-                    </TableCell>
-
-                    <TableCell>
-                      Cadastro
-                    </TableCell>
-
-                    <TableCell
-                      align="right"
-                    >
-                      Ações
-                    </TableCell>
-                  </TableRow>
-                </TableHead>
-
-                <TableBody>
-                  {users.slice(usersPage * 10, usersPage * 10 + 10).map(
-                    (
-                      user
-                    ) => (
-                      <TableRow
-                        key={
-                          user.id
-                        }
-                        hover
-                      >
-                        <TableCell>
-                          <Typography
-                            variant="body2"
-                            sx={{
-                              fontWeight:
-                                700,
-                            }}
-                          >
-                            {user.name}
-                          </Typography>
-
-                          <Typography
-                            variant="caption"
-                            color="text.secondary"
-                          >
-                            @{user.username}
-
-                            {user.email
-                              ? ` · ${user.email}`
-                              : ""}
-                          </Typography>
-                        </TableCell>
-
-                        <TableCell>
-                          <Chip
-                            size="small"
-                            label={
-                              getRoleLabel(
-                                user.role
-                              )
-                            }
-                            variant="outlined"
-                          />
-                        </TableCell>
-
-                        <TableCell>
-                          <Select
-                            size="small"
-                            fullWidth
-                            displayEmpty
-                            value={user.jobFunction ?? ""}
-                            disabled={actionLoading !== null || user.approvalStatus !== "APPROVED"}
-                            onChange={event => void updateJobFunction(user, event.target.value)}
-                            inputProps={{ "aria-label": `Função de ${user.name}` }}
-                            sx={{ minWidth: 190, maxWidth: 250, fontSize: 13, borderRadius: 2 }}
-                          >
-                            <MenuItem value=""><em>Sem função definida</em></MenuItem>
-                            {JOB_FUNCTIONS.map(([value, label]) => <MenuItem key={value} value={value}>{label}</MenuItem>)}
-                          </Select>
-                        </TableCell>
-
-                        <TableCell>
-                          <Button size="small" variant="text" disabled={actionLoading !== null} onClick={() => setOwnerEditing({id:user.id,value:user.movideskOwnerName || ""})} sx={{textTransform:"none",justifyContent:"flex-start",maxWidth:240}}>
-                            {user.movideskOwnerName || "Vincular responsável"}
-                          </Button>
-                        </TableCell>
-
-                        <TableCell>
-                          <ApprovalChip
-                            status={
-                              user.approvalStatus
-                            }
-                          />
-                        </TableCell>
-
-                        <TableCell>
-                          <Chip
-                            size="small"
-                            label={
-                              user.active
-                                ? "Ativo"
-                                : "Inativo"
-                            }
-                            color={
-                              user.active
-                                ? "success"
-                                : "default"
-                            }
-                            variant={
-                              user.active
-                                ? "filled"
-                                : "outlined"
-                            }
-                          />
-                        </TableCell>
-
-                        <TableCell>
-                          <Typography
-                            variant="body2"
-                          >
-                            {formatDate(
-                              user.createdAt
-                            )}
-                          </Typography>
-                        </TableCell>
-
-                        <TableCell
-                          align="right"
-                        >
-                          <UserActions
-                            user={
-                              user
-                            }
-                            loading={
-                              actionLoading ===
-                              user.id
-                            }
-                            onAction={(
-                              type
-                            ) =>
-                              setConfirmation({
-                                type,
-                                user,
-                              })
-                            }
-                          />
-                        </TableCell>
-                      </TableRow>
-                    )
-                  )}
-
-                  {users.length ===
-                    0 && (
-                    <TableRow>
-                      <TableCell
-                        colSpan={8}
-                      >
-                        <Box
-                          sx={{
-                            py: 6,
-
-                            textAlign:
-                              "center",
-                          }}
-                        >
-                          <Typography
-                            color="text.secondary"
-                          >
-                            Nenhum usuário encontrado.
-                          </Typography>
-                        </Box>
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-                </Table>
-              </TableContainer>
+              <Box sx={{ display:"grid", gridTemplateColumns:{xs:"minmax(0,1fr)",lg:"repeat(2,minmax(0,1fr))"}, gap:1.5, p:2, minWidth:0 }}>
+                {users.slice(usersPage*10,usersPage*10+10).map(user=><Card key={user.id} variant="outlined" sx={{borderRadius:2.5,minWidth:0}}>
+                  <CardContent sx={{display:"flex",flexDirection:"column",gap:1.5}}>
+                    <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={1}>
+                      <Box sx={{minWidth:0}}>
+                        <Typography fontWeight={800} variant="subtitle2">{user.name}</Typography>
+                        <Typography variant="caption" color="text.secondary" sx={{overflowWrap:"anywhere"}}>@{user.username}{user.email?` · ${user.email}`:""}</Typography>
+                      </Box>
+                      <Stack direction="row" spacing={.5} flexWrap="wrap" useFlexGap justifyContent="flex-end">
+                        <Chip size="small" label={getRoleLabel(user.role)} variant="outlined"/>
+                        <ApprovalChip status={user.approvalStatus}/>
+                        <Chip size="small" color={user.active?"success":"default"} label={user.active?"Ativo":"Inativo"}/>
+                      </Stack>
+                    </Stack>
+                    <Box sx={{display:"grid",gridTemplateColumns:{xs:"1fr",sm:"minmax(0,1fr) minmax(0,1fr)"},gap:1.5}}>
+                      <Box sx={{minWidth:0}}>
+                        <Typography variant="caption" color="text.secondary">Função na equipe</Typography>
+                        <Select size="small" fullWidth displayEmpty value={user.jobFunction??""} disabled={actionLoading!==null||user.approvalStatus!=="APPROVED"} onChange={event=>void updateJobFunction(user,event.target.value)} slotProps={{input:{"aria-label":`Função de ${user.name}`}}} sx={{mt:.5,fontSize:13,borderRadius:2}}>
+                          <MenuItem value=""><em>Sem função definida</em></MenuItem>
+                          {JOB_FUNCTIONS.map(([value,label])=><MenuItem key={value} value={value}>{label}</MenuItem>)}
+                        </Select>
+                      </Box>
+                      <Box sx={{minWidth:0}}>
+                        <Typography variant="caption" color="text.secondary">Responsável Movidesk</Typography>
+                        <Button fullWidth size="small" variant="outlined" disabled={actionLoading!==null} onClick={()=>setOwnerEditing({id:user.id,value:user.movideskOwnerName||""})} sx={{mt:.5,minHeight:40,justifyContent:"flex-start",textTransform:"none",overflow:"hidden"}}>
+                          <Typography noWrap variant="body2">{user.movideskOwnerName||"Vincular responsável"}</Typography>
+                        </Button>
+                      </Box>
+                    </Box>
+                    <Box sx={{borderTop:"1px solid",borderColor:"divider",pt:1.5,minWidth:0}}>
+                      <UserActions user={user} loading={actionLoading===user.id} onAction={type=>setConfirmation({type,user})}/>
+                    </Box>
+                  </CardContent>
+                </Card>)}
+                {users.length===0&&<Typography color="text.secondary" sx={{p:3}}>Nenhum usuário encontrado.</Typography>}
+              </Box>
 
               <TablePagination
                 component="div"
