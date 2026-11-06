@@ -985,7 +985,7 @@ export function Sidebar() {
         {favorites.length > 0 && <MenuSection
           title="Favoritos"
           ariaLabel="Navegação de favoritos"
-          items={favorites.filter((favorite) => favorite.kind === "card" ? canAccess("dashboard") : [...movementMenu, ...managementMenu, ...analysisMenu, ...developmentMenu, ...registrationMenu, ...knowledgeMenu].some((item) => item.path === favorite.path)).map((favorite) => ({ label: favorite.label, path: favorite.kind === "card" && favorite.id.startsWith("card:") && !favorite.id.includes(":/") ? "/visao-operacional#kpi-" + encodeURIComponent(favorite.label) : favorite.path, icon: <StarOutlineRounded fontSize="small" /> }))}
+          items={favorites.filter((favorite) => [...movementMenu, ...managementMenu, ...analysisMenu, ...developmentMenu, ...registrationMenu, ...knowledgeMenu].some((item) => favorite.kind === "card" ? (favorite.path.split("#")[0] === item.path || favorite.path.split("#")[0].startsWith(item.path + "/")) : item.path === favorite.path)).map((favorite) => ({ label: favorite.label, path: favorite.kind === "card" && favorite.id.startsWith("card:") && !favorite.id.includes(":/") ? "/visao-operacional#kpi-" + encodeURIComponent(favorite.label) : favorite.path, icon: <StarOutlineRounded fontSize="small" /> }))}
           compact={sidebarCollapsed}
           open={true}
           onToggle={() => setFavorites((current) => [...current])}
