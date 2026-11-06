@@ -1025,6 +1025,7 @@ model TeamResultsMeeting {
   meetingDate DateTime @unique @db.Date
   title       String   @db.VarChar(200)
   notes       String   @default("") @db.Text
+  snapshot    Json?
   goals       Json
   highlights  Json
   actions     Json
