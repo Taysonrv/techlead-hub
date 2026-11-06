@@ -8,6 +8,7 @@ import { calculateTimestampSla } from "../utils/timestampSla";
 import { detailDrawerPaperSx } from "../theme/layoutTokens";
 import { TeamMeetingManagement } from "../components/TeamMeetingManagement";
 import { api } from "../services/api";
+import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { PageHeader } from "../components/PageHeader";
 import { KpiCard } from "../components/KpiCard";
@@ -119,6 +120,43 @@ function Section({ id, title, children, info }: { id: string; title: string; chi
       </Stack>}>
       {children}
     </ExecutiveSection>
+  </Box>;
+}
+function DonutSummary({ title, segments, total }: { title: string; segments: { label: string; value: number; color: string }[]; total: number }) {
+  let progress = 0;
+  const gradient = segments.filter(segment => segment.value > 0).map(segment => {
+    const start = progress;
+    progress += 100 * segment.value / Math.max(1, total);
+    return segment.color + " " + start + "% " + progress + "%";
+  }).join(", ");
+  return <Stack spacing={1.5} sx={{ alignItems: "center", justifyContent: "center", minWidth: 0 }}>
+    <Box role="img" aria-label={title + ": " + segments.map(segment => segment.label + " " + segment.value).join(", ")} sx={{ width: 156, height: 156, flexShrink: 0, borderRadius: "50%", background: total > 0 ? "conic-gradient(" + gradient + ")" : "var(--mui-palette-action-disabledBackground)", display: "grid", placeItems: "center" }}>
+      <Box sx={{ width: 106, height: 106, borderRadius: "50%", bgcolor: "background.paper", display: "grid", placeContent: "center", textAlign: "center" }}>
+        <Typography variant="h5" sx={{ fontWeight: 800 }}>{formatNumber(total)}</Typography><Typography variant="caption">{title}</Typography>
+      </Box>
+    </Box>
+    <Stack spacing={.6} sx={{ width: "100%", maxWidth: 340 }}>
+      {segments.filter(segment => segment.value > 0).map(segment => <Stack key={segment.label} direction="row" spacing={1} sx={{ alignItems: "center", minWidth: 0 }}>
+        <Box sx={{ width: 10, height: 10, borderRadius: "50%", bgcolor: segment.color, flexShrink: 0 }} />
+        <Typography variant="caption" color="text.secondary" sx={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={segment.label}>{segment.label}</Typography>
+        <Typography variant="caption" sx={{ fontWeight: 800, whiteSpace: "nowrap" }}>{segment.value} · {(100 * segment.value / Math.max(1, total)).toFixed(0)}%</Typography>
+      </Stack>)}
+      {total === 0 && <Typography variant="caption">Sem dados no período</Typography>}
+    </Stack>
+  </Stack>;
+}
+function TrendLines({ rows }: { rows: { label: string; abertos: number; resolvidos: number }[] }) {
+  return <Box sx={{ width: "100%", height: 290, minWidth: 0 }}>
+    <ResponsiveContainer width="100%" height="100%">
+      <LineChart data={rows} margin={{ top: 12, right: 14, left: -22, bottom: 4 }}>
+        <CartesianGrid strokeDasharray="3 4" vertical={false} />
+        <XAxis dataKey="label" tick={{ fontSize: 11 }} interval="preserveStartEnd" minTickGap={25} />
+        <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
+        <Tooltip />
+        <Line type="monotone" dataKey="abertos" name="Abertos" stroke={palette[1]} strokeWidth={3} dot={rows.length <= 14} />
+        <Line type="monotone" dataKey="resolvidos" name="Resolvidos" stroke={palette[0]} strokeWidth={3} dot={rows.length <= 14} />
+      </LineChart>
+    </ResponsiveContainer>
   </Box>;
 }
 function Metric({ title, value, subtitle, onClick }: { title: string; value: string | number; subtitle: string; onClick?: () => void }) {
