@@ -7,6 +7,8 @@ import { SectionInfo } from "../components/SectionInfo";
 import { calculateTimestampSla } from "../utils/timestampSla";
 import { detailDrawerPaperSx } from "../theme/layoutTokens";
 import { TeamMeetingManagement } from "../components/TeamMeetingManagement";
+import { api } from "../services/api";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { PageHeader } from "../components/PageHeader";
 import { KpiCard } from "../components/KpiCard";
 import { ExecutiveSection } from "../components/ExecutiveSection";
@@ -21,6 +23,9 @@ type Ticket = {
   firstResponseDueDate?: string | null;
   dueDate?: string | null;
   category?: string | null;
+  service?: string | null;
+  serviceFirstLevel?: string | null;
+  serviceSecondLevel?: string | null;
   ticketType?: number | null;
   owner?: string | null;
   createdDate: string;
@@ -122,6 +127,10 @@ function Metric({ title, value, subtitle, onClick }: { title: string; value: str
 }
 export default function TeamResults() {
   const [tickets, setTickets] = useState<Ticket[]>([]);
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const [azureSummary, setAzureSummary] = useState<{ total: number } | null>(null);
+  const [versionSummary, setVersionSummary] = useState<{ summary: { total: number; versions: number; corrections: number; evolutions: number; withVersion: number; withoutVersion: number } } | null>(null);
   const [detail, setDetail] = useState<{ title: string; tickets: Ticket[] } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -153,6 +162,14 @@ export default function TeamResults() {
     return () => { active = false; unsubscribe(); };
   }, []);
 
+  useEffect(() => {
+    let active = true;
+    void api.get<{ total: number }>("/azure-work-items/summary", { params: { type: "Correção Clientes" } })
+      .then(response => { if (active) setAzureSummary(response.data); }).catch(() => { if (active) setAzureSummary(null); });
+    void api.get<{ summary: { total: number; versions: number; corrections: number; evolutions: number; withVersion: number; withoutVersion: number } }>("/azure-work-items/versions/summary")
+      .then(response => { if (active) setVersionSummary(response.data); }).catch(() => { if (active) setVersionSummary(null); });
+    return () => { active = false; };
+  }, []);
   const range = useMemo(() => rangeFor(period, startInput, endInput), [period, startInput, endInput]);
   const owners = useMemo(() => [...new Set(tickets.map(t => t.owner?.trim()).filter((v): v is string => Boolean(v)))].sort((a,b) => a.localeCompare(b,"pt-BR")), [tickets]);
   const scope = useMemo(() => tickets.filter(t => owner === "all" || t.owner === owner), [tickets, owner]);
@@ -200,6 +217,24 @@ export default function TeamResults() {
     return { opened, resolved, closed, backlog, pendingOpened, stopped, missingType, team, chart, satisfaction, good, responseSla, solutionSla };
   }, [scope, range]);
 
+  const distributions = useMemo(() => {
+    if (!results) return [];
+    const groups = [
+      { id: "team-results-by-type", title: "Atendimentos por tipo", field: (t: Ticket) => t.category },
+      { id: "team-results-by-service", title: "Atendimentos por serviço", field: (t: Ticket) => t.serviceSecondLevel || t.serviceFirstLevel || t.service },
+      { id: "team-results-by-client", title: "Atendimentos por cliente", field: (t: Ticket) => t.client },
+    ];
+    return groups.map(group => {
+      const buckets = new Map<string, Ticket[]>();
+      for (const ticket of results.opened) {
+        const name = group.field(ticket)?.trim() || "Não informado";
+        const current = buckets.get(name) || [];
+        current.push(ticket);
+        buckets.set(name, current);
+      }
+      return { id: group.id, title: group.title, rows: [...buckets].map(([name, items]) => ({ name, items })).sort((a, b) => b.items.length - a.items.length || a.name.localeCompare(b.name, "pt-BR")) };
+    });
+  }, [results]);
   const periodBreakdown = useMemo(() => {
     const windows = (["week", "month", "semester"] as const).map(kind => {
       const interval = rangeFor(kind, "", "")!;
@@ -378,6 +413,30 @@ export default function TeamResults() {
           <Typography variant="body2" color="text.secondary">{item.sla.within} no prazo · {item.sla.outside} fora · {item.sla.unmeasured} sem medição</Typography>
           <Stack direction="row" spacing={1}><Button size="small" onClick={() => setDetail({ title: item.label + " · No prazo", tickets: item.sla.withinTickets })}>No prazo</Button><Button size="small" onClick={() => setDetail({ title: item.label + " · Fora do prazo", tickets: item.sla.outsideTickets })}>Fora</Button></Stack>
         </Section>)}
+      </Box>
+      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", xl: "repeat(3, minmax(0, 1fr))" }, gap: 2, mb: 2 }}>
+        {distributions.map(group => <Section key={group.id} id={group.id} title={group.title} info={"Distribuição dos tickets públicos criados no período selecionado, agrupados por " + group.title.toLowerCase().replace("atendimentos por ", "") + ". Clique para consultar os tickets."}>
+          <Stack spacing={1.2}>
+            {group.rows.slice(0, 12).map(row => <Box key={row.name} role="button" tabIndex={0} onClick={() => setDetail({ title: group.title + " · " + row.name, tickets: row.items })} onKeyDown={event => { if (event.key === "Enter") setDetail({ title: group.title + " · " + row.name, tickets: row.items }); }} sx={{ cursor: "pointer", "&:hover": { bgcolor: "action.hover" }, p: .5, borderRadius: 1 }}>
+              <Stack direction="row" sx={{ justifyContent: "space-between", gap: 1 }}><Typography variant="body2" sx={{ overflowWrap: "anywhere" }}>{row.name}</Typography><Typography variant="body2" sx={{ fontWeight: 800 }}>{row.items.length}</Typography></Stack>
+              <Box sx={{ height: 9, borderRadius: 1, bgcolor: "action.hover", overflow: "hidden" }}><Box sx={{ height: "100%", width: 100 * row.items.length / Math.max(1, group.rows[0]?.items.length || 1) + "%", bgcolor: "primary.main" }} /></Box>
+            </Box>)}
+            {group.rows.length === 0 && <Alert severity="info">Sem atendimentos no período.</Alert>}
+            {group.rows.length > 12 && <Typography variant="caption" color="text.secondary">Exibindo os 12 maiores grupos de {group.rows.length}.</Typography>}
+          </Stack>
+        </Section>)}
+      </Box>
+      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "1fr 1fr" }, gap: 2, mb: 2 }}>
+        <Section id="team-results-bugs" title="Bugs / correções" info="Total de tarefas do tipo Correção Clientes registradas no Azure DevOps. Esta contagem é global da carteira e não corresponde necessariamente ao período selecionado.">
+          <Typography variant="h4" sx={{ fontWeight: 800 }}>{azureSummary ? formatNumber(azureSummary.total) : "—"}</Typography>
+          <Typography variant="body2" color="text.secondary">Tarefas de correção no Azure · total da carteira (sem recorte temporal)</Typography>
+          <Button onClick={() => navigate("/correcoes")}>Abrir correções</Button>
+        </Section>
+        <Section id="team-results-versions" title="Versões e entregas" info="Resumo de versões registradas nas tarefas do Azure DevOps. É uma visão acumulada, não limitada ao período dos tickets.">
+          <Typography variant="h4" sx={{ fontWeight: 800 }}>{versionSummary ? formatNumber(versionSummary.summary.versions) : "—"}</Typography>
+          <Typography variant="body2" color="text.secondary">Versões identificadas · {versionSummary ? formatNumber(versionSummary.summary.withVersion) + " tarefas com versão" : "dados indisponíveis ou sem permissão"}</Typography>
+          <Button onClick={() => navigate("/versoes")}>Abrir versões</Button>
+        </Section>
       </Box>
       <TeamMeetingManagement weekLabel={range ? range.start.toLocaleDateString("pt-BR") + " a " + range.end.toLocaleDateString("pt-BR") : ""} snapshot={{ periodStart: range?.start.toISOString().slice(0, 10) ?? "", periodEnd: range?.end.toISOString().slice(0, 10) ?? "", opened: results.opened.length, resolved: results.resolved.length, closed: results.closed.length, backlog: results.backlog.length, stopped: results.stopped.length, capturedAt: new Date().toISOString() }} />
       <Section id="team-results-actions" title="Pontos para discussão e encaminhamentos">
