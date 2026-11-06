@@ -1,4 +1,5 @@
 import { KpiGrid } from "../components/KpiGrid";
+import { FavoriteAction } from "../components/FavoriteAction";
 import { SlaInvestigationPanel } from "../components/SlaInvestigationPanel";
 import { KpiCard as ExecutiveKpiCard } from "../components/KpiCard";
 import {
@@ -2089,7 +2090,7 @@ function CardSectionHeader({
   info: CardInfo;
 }) {
   return (
-    <Stack direction="row" spacing={1.25} sx={{ alignItems: "center", justifyContent: "space-between", minWidth: 0 }}>
+    <Stack id={"section-" + encodeURIComponent(title)} direction="row" spacing={1.25} sx={{ alignItems: "center", justifyContent: "space-between", minWidth: 0 }}>
       <Stack direction="row" spacing={1.1} sx={{ alignItems: "center", minWidth: 0 }}>
         <Box sx={{ width: 40, height: 40, flex: "0 0 auto", display: "grid", placeItems: "center", borderRadius: 1.8, color: "primary.main", bgcolor: "action.hover", border: "1px solid", borderColor: "divider" }}><InsightsOutlined fontSize="small" /></Box>
         <Box sx={{ minWidth: 0 }}>
@@ -2102,7 +2103,7 @@ function CardSectionHeader({
         </Typography>
       </Box>
       </Stack>
-      <CardInfoButton info={info} />
+      <Stack direction="row" spacing={.5} sx={{ alignItems: "center" }}><FavoriteAction title={title} targetId={"section-" + encodeURIComponent(title)} /><CardInfoButton info={info} /></Stack>
     </Stack>
   );
 }
