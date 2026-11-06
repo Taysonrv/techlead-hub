@@ -1,4 +1,5 @@
 import { prisma } from "../database/prisma";
+import { Prisma } from "@prisma/client";
 import { AuthError } from "./AuthService";
 
 /* =========================================================
@@ -11,6 +12,7 @@ const USER_ADMIN_SELECT = {
   username: true,
   email: true,
   role: true,
+  jobFunction: true,
   permissions: true,
   active: true,
   approvalStatus: true,
@@ -487,7 +489,7 @@ export class UserService {
       data: {
         role: role as "ADMIN" | "COORDENADOR" | "ANALISTA",
         // Não herdar permissões específicas do perfil anterior ao trocar de função.
-        permissions: role === "ADMIN" ? [] : null,
+        permissions: role === "ADMIN" ? [] : Prisma.DbNull,
       },
       select: USER_ADMIN_SELECT,
     });
