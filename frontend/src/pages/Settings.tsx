@@ -30,6 +30,7 @@ import {
 
 import {
   useEffect,
+  useCallback,
   useState,
 } from "react";
 import { PageHeader } from "../components/PageHeader";
@@ -220,13 +221,63 @@ export function Settings() {
   const [recentEnrichments, setRecentEnrichments] = useState<RecentEnrichment[]>([]);
   const [classificationCoverage, setClassificationCoverage] = useState<ClassificationCoverage | null>(null);
 
+  const loadConfiguration = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const [configResult, diagnosticsResult] = await Promise.allSettled([
+        api.get<ConfigurationState>("/system-settings"),
+        api.get<Diagnostics>("/system-settings/diagnostics"),
+      ]);
+      if (diagnosticsResult.status === "fulfilled") setDiagnostics(diagnosticsResult.value.data);
+      if (isAdmin) {
+        try {
+          const sessionsResult = await api.get<{ sessions: ActiveSession[] }>("/sessions");
+          setSessions(sessionsResult.data.sessions);
+        } catch { setSessions([]); }
+      }
+      if (configResult.status === "rejected") {
+        setConfiguration(null);
+        throw new Error("Não foi possível verificar as configurações das integrações. Nenhuma credencial foi alterada. Confira o diagnóstico do backend.");
+      }
+      const current = configResult.value.data;
+      setConfiguration(current);
+      setTeamsWorkflowForm((previous) => ({
+        ...previous,
+        supportTicketsEnabled: current.teamsWorkflows?.supportTicketsEnabled ?? false,
+        taskCreatedEnabled: current.teamsWorkflows?.taskCreatedEnabled ?? false,
+        taskRegistroEnabled: current.teamsWorkflows?.taskRegistroEnabled ?? false,
+        ticketBaseUrl: current.teamsWorkflows?.ticketBaseUrl ?? "",
+      }));
+      setForm((previous) => ({
+        ...previous,
+        organization: current.organization ?? "",
+        project: current.project ?? "",
+        wiki: current.wiki ?? "",
+        movideskUrl: current.movideskUrl ?? "https://api.movidesk.com/public/v1",
+      }));
+      if (diagnosticsResult.status === "rejected") {
+        setError("As configurações foram carregadas, mas o diagnóstico da plataforma está temporariamente indisponível.");
+      }
+    } catch (loadError) {
+      setError(
+        loadError instanceof Error
+          ? loadError.message
+          : "Não foi possível carregar as configurações.",
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, [isAdmin]);
+
   useEffect(() => { setAzureHistoricalTest(null); }, [form.organization, form.project, form.pat, azureHistoryMonth]);
 
   useEffect(() => {
     void loadConfiguration();
     if (isAdmin) void api.get<{users:PermissionUser[]}>("/users").then(r=>setPermissionUsers(r.data.users)).catch(()=>setPermissionUsers([]));
     if (window.techLeadHub?.platform === "win32" && window.techLeadHub.startup) void window.techLeadHub.startup.get().then((state) => setStartupEnabled(state.enabled)).catch(() => undefined);
-  }, [isAdmin]);
+  }, [isAdmin, loadConfiguration]);
 
   useEffect(() => {
     if (!configuration?.movideskConfigured) return;
@@ -309,56 +360,6 @@ export function Settings() {
     try { setStartupSaving(true); setError(null); const state=await window.techLeadHub.startup.set(enabled); setStartupEnabled(state.enabled); setSuccess(state.enabled ? "Hub Suporte Simer será iniciado automaticamente com o Windows." : "Inicialização automática com o Windows desativada."); }
     catch { setError("Não foi possível alterar a inicialização com o Windows."); }
     finally { setStartupSaving(false); }
-  }
-
-  async function loadConfiguration() {
-    try {
-      setLoading(true);
-      setError(null);
-
-      const [configResult, diagnosticsResult] = await Promise.allSettled([
-        api.get<ConfigurationState>("/system-settings"),
-        api.get<Diagnostics>("/system-settings/diagnostics"),
-      ]);
-      if (diagnosticsResult.status === "fulfilled") setDiagnostics(diagnosticsResult.value.data);
-      if (isAdmin) {
-        try {
-          const sessionsResult = await api.get<{ sessions: ActiveSession[] }>("/sessions");
-          setSessions(sessionsResult.data.sessions);
-        } catch { setSessions([]); }
-      }
-      if (configResult.status === "rejected") {
-        setConfiguration(null);
-        throw new Error("Não foi possível verificar as configurações das integrações. Nenhuma credencial foi alterada. Confira o diagnóstico do backend.");
-      }
-      const current = configResult.value.data;
-      setConfiguration(current);
-      setTeamsWorkflowForm((previous) => ({
-        ...previous,
-        supportTicketsEnabled: current.teamsWorkflows?.supportTicketsEnabled ?? false,
-        taskCreatedEnabled: current.teamsWorkflows?.taskCreatedEnabled ?? false,
-        taskRegistroEnabled: current.teamsWorkflows?.taskRegistroEnabled ?? false,
-        ticketBaseUrl: current.teamsWorkflows?.ticketBaseUrl ?? "",
-      }));
-      setForm((previous) => ({
-        ...previous,
-        organization: current.organization ?? "",
-        project: current.project ?? "",
-        wiki: current.wiki ?? "",
-        movideskUrl: current.movideskUrl ?? "https://api.movidesk.com/public/v1",
-      }));
-      if (diagnosticsResult.status === "rejected") {
-        setError("As configurações foram carregadas, mas o diagnóstico da plataforma está temporariamente indisponível.");
-      }
-    } catch (loadError) {
-      setError(
-        loadError instanceof Error
-          ? loadError.message
-          : "Não foi possível carregar as configurações.",
-      );
-    } finally {
-      setLoading(false);
-    }
   }
 
   async function revokeSession(sessionId: number) {
