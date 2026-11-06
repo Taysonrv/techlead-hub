@@ -674,7 +674,7 @@ export function Settings() {
           <Box sx={{display:"grid",gridTemplateColumns:{xs:"1fr",md:"repeat(2,minmax(0,1fr))"},gap:1}}>
             {ROUTINE_PERMISSIONS.map(([key,label])=>{const restricted=["coordination","technical-leadership"].includes(key);return <Stack key={key} direction="row" spacing={1} sx={{alignItems:"center",justifyContent:"space-between",border:"1px solid",borderColor:restricted?"warning.main":"divider",borderRadius:2,px:1.5,py:1.1,bgcolor:restricted?"action.hover":"background.paper",transition:"border-color .2s, background-color .2s","&:hover":{borderColor:"primary.main"}}}>
               <Box sx={{minWidth:0}}><Typography variant="body2" sx={{fontWeight:restricted?800:600}}>{label}</Typography>{restricted&&<Typography variant="caption" color="warning.main">Acesso sensível · liberação individual</Typography>}</Box>
-              <Switch size="small" inputProps={{"aria-label":`Permitir ${label} para ${selected.name}`}} disabled={permissionSaving} checked={active.includes(key)} onChange={(_,checked)=>{const next=checked?[...active,key]:active.filter(item=>item!==key);void saveUserPermissions(selected.id,next)}}/>
+              <Switch size="small" slotProps={{input: {"aria-label":`Permitir ${label} para ${selected.name}`}}} disabled={permissionSaving} checked={active.includes(key)} onChange={(_,checked)=>{const next=checked?[...active,key]:active.filter(item=>item!==key);void saveUserPermissions(selected.id,next)}}/>
             </Stack>})}
           </Box>
           <Typography variant="caption" color="text.secondary">As alterações são salvas no servidor e passam a valer nas APIs imediatamente. Ao mudar o perfil de um usuário, as permissões específicas anteriores são redefinidas.</Typography>
