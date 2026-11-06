@@ -21,13 +21,14 @@ const messageOf = (error: unknown) => {
   const value = error as { response?: { data?: { message?: string }; status?: number } };
   return value.response?.data?.message || "Não foi possível concluir a operação. Verifique a conexão com o servidor.";
 };
-export function TeamMeetingManagement({ weekLabel, snapshot }: {
+export function TeamMeetingManagement({ weekLabel, snapshot, initialDate }: {
   weekLabel: string;
   snapshot: MeetingSnapshot;
+  initialDate?: string;
 }) {
   const { user } = useAuth();
   const editable = user?.role === "ADMIN" || user?.role === "COORDENADOR";
-  const [date, setDate] = useState(() => dateKey(new Date()));
+  const [date, setDate] = useState(() => initialDate && /^\d{4}-\d{2}-\d{2}$/.test(initialDate) ? initialDate : dateKey(new Date()));
   const [history, setHistory] = useState<MeetingSummary[]>([]);
   const [data, setData] = useState<MeetingData>(empty);
   const [version, setVersion] = useState(0);
