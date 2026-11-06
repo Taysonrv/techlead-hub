@@ -36,6 +36,7 @@ import {
 import { PageHeader } from "../components/PageHeader";
 import { ContentState } from "../components/ContentState";
 import { Import } from "./Import";
+import { Users } from "./Users";
 import { api, getApiErrorMessage } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { getLocalNotificationPreferences, saveLocalNotificationPreferences, type LocalNotificationPreferences } from "../utils/notificationSound";
@@ -174,7 +175,7 @@ const EMPTY_FORM: ConfigurationForm = {
 
 export function Settings() {
   const { isAdmin } = useAuth();
-  const [section, setSection] = useState<"general" | "data">(() => window.location.hash === "#dados" ? "data" : "general");
+  const [section, setSection] = useState<"general" | "data" | "team">(() => window.location.hash === "#dados" ? "data" : window.location.hash === "#equipe" ? "team" : "general");
   const [configuration, setConfiguration] =
     useState<ConfigurationState | null>(null);
   const [form, setForm] =
@@ -660,13 +661,15 @@ export function Settings() {
       <Card variant="outlined" sx={{ mb: 2, borderRadius: 3 }}>
         <CardContent sx={{ py: 1.25, "&:last-child": { pb: 1.25 } }}>
           <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
-            <Button startIcon={<StorageOutlined />} variant={section === "general" ? "contained" : "text"} onClick={() => { setSection("general"); window.history.replaceState(null, "", "/configuracoes"); }}>Geral & Acessos</Button>
+            <Button startIcon={<StorageOutlined />} variant={section === "general" ? "contained" : "text"} onClick={() => { setSection("general"); window.history.replaceState(null, "", "/configuracoes"); }}>Geral</Button>
+            {isAdmin && <Button variant={section === "team" ? "contained" : "text"} onClick={() => { setSection("team"); window.history.replaceState(null, "", "/configuracoes#equipe"); }}>Equipe & Permissões</Button>}
             {isAdmin && <Button startIcon={<SyncOutlined />} variant={section === "data" ? "contained" : "text"} onClick={() => { setSection("data"); window.history.replaceState(null, "", "/configuracoes#dados"); }}>Dados & Sincronizações</Button>}
           </Stack>
         </CardContent>
       </Card>
       {isAdmin && section === "data" ? <Import embedded /> : <>
-      {isAdmin && <Card variant="outlined" sx={{ mb: 2 }}><CardContent>
+      {isAdmin && section === "team" && <Users embedded />}
+      {isAdmin && section === "team" && <Card variant="outlined" sx={{ mb: 2, mt: 2 }}><CardContent>
         <Typography sx={{fontWeight:850}}>Permissões por usuário</Typography>
         <Typography variant="body2" color="text.secondary" sx={{mt:.4,mb:1.5}}>Defina exatamente quais rotinas cada usuário pode acessar. Administradores permanecem com acesso integral.</Typography>
         <FormControl fullWidth size="small" sx={{mb:1.5}}><InputLabel shrink id="settings-select-1-label">Usuário</InputLabel><Select labelId="settings-select-1-label" inputProps={{ id: "settings-select-1", "aria-labelledby": "settings-select-1-label" }} label="Usuário" value={permissionUserId} onChange={e=>setPermissionUserId(Number(e.target.value))} displayEmpty><MenuItem value=""><em>Selecione um usuário</em></MenuItem>{permissionUsers.map(user=><MenuItem key={user.id} value={user.id}>{user.name} · {user.role}</MenuItem>)}</Select></FormControl>
@@ -682,6 +685,7 @@ export function Settings() {
         </Stack>})()}
       </CardContent></Card>}
 
+      {section === "general" && <>
       <Card variant="outlined" sx={{ mb: 2 }}><CardContent>
         <Typography sx={{fontWeight:850}}>Notificações</Typography>
         <Typography variant="body2" color="text.secondary" sx={{mt:.4,mb:1.5}}>Escolha quais eventos ficam visíveis neste dispositivo e quais sons são reproduzidos. No sino, você também pode configurar preferências da conta, sincronizadas entre dispositivos.</Typography>
@@ -1171,6 +1175,7 @@ export function Settings() {
           </Button>}
         </Stack>
       </Stack>
+      </>}
       </>}
     </Box>
   );
