@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Box, Button, Card, CardContent, Chip, FormControl, MenuItem, Select, Stack, TextField, Typography, Alert, CircularProgress } from "@mui/material";
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { getTicketSnapshot, getTicketSnapshotState, subscribeTicketSnapshotRefresh } from "../services/ticketSnapshot";
 import { isOperationallyOpen } from "../utils/operationalMetrics";
 import { FavoriteAction } from "../components/FavoriteAction";
+import { TeamMeetingManagement } from "../components/TeamMeetingManagement";
 
 type Ticket = {
   movideskId: number;
@@ -77,6 +78,11 @@ export default function TeamResults() {
   const [endInput, setEndInput] = useState("");
   const [owner, setOwner] = useState("all");
   const [presentation, setPresentation] = useState(false);
+  const presentationRef = useRef<HTMLDivElement>(null);
+  const [sectionIndex, setSectionIndex] = useState(0);
+  const sections = ["team-results-comparison", "team-results-trend", "team-results-status", "team-results-owners", "team-results-backlog", "meeting-goals", "meeting-highlights", "meeting-actions", "team-results-actions"];
+  const jump = (index: number) => { const next = Math.max(0, Math.min(sections.length - 1, index)); setSectionIndex(next); document.getElementById(sections[next])?.scrollIntoView({ behavior: "smooth", block: "start" }); };
+  useEffect(() => { const update = () => setPresentation(document.fullscreenElement === presentationRef.current); document.addEventListener("fullscreenchange", update); return () => document.removeEventListener("fullscreenchange", update); }, []);
 
   useEffect(() => {
     let active = true;
@@ -140,22 +146,39 @@ export default function TeamResults() {
     return { opened, resolved, closed, backlog, pendingOpened, stopped, missingType, team, chart, satisfaction, good };
   }, [scope, range]);
 
+  const comparison = useMemo(() => {
+    if (!range) return null;
+    const duration = range.end.getTime() - range.start.getTime() + 1;
+    const previousEnd = new Date(range.start.getTime() - 1);
+    const previousStart = new Date(previousEnd.getTime() - duration + 1);
+    const publicTickets = scope.filter(ticket => ticket.ticketType === 2);
+    const count = (field: "createdDate" | "resolvedDate" | "closedDate", start: Date, end: Date) =>
+      publicTickets.filter(ticket => inRange(ticket[field], start, end)).length;
+    const opened = count("createdDate", previousStart, previousEnd);
+    const resolved = count("resolvedDate", previousStart, previousEnd);
+    const closed = count("closedDate", previousStart, previousEnd);
+    return { opened, resolved, closed, previousStart, previousEnd };
+  }, [scope, range]);
   const togglePresentation = async () => {
     if (!document.fullscreenElement) {
-      try { await document.documentElement.requestFullscreen(); setPresentation(true); } catch { setPresentation(false); }
+      try { await presentationRef.current?.requestFullscreen(); setPresentation(true); setSectionIndex(0); } catch { setPresentation(false); }
     } else { try { await document.exitFullscreen(); } finally { setPresentation(false); } }
   };
+  const printReport = () => window.print();
+  const changeLabel = (current: number, previous: number) =>
+    previous === 0 ? current === 0 ? "0%" : "Novo (base anterior zero)" :
+    `${current >= previous ? "+" : ""}${((current - previous) / previous * 100).toFixed(1).replace(".", ",")}%`;
   const donut = results ? [
     { name: "Em atendimento", value: results.backlog.filter(t => (t.baseStatus || "").toLowerCase() === "inattendance").length },
     { name: "Parados", value: results.stopped.length },
     { name: "Novos", value: results.backlog.filter(t => (t.baseStatus || "").toLowerCase() === "new").length },
   ] : [];
-  return <Box sx={{ px: { xs: 2, md: 3 }, py: 3, maxWidth: 1800, mx: "auto", "& .recharts-wrapper": { maxWidth: "100%" } }}>
+  return <Box ref={presentationRef} sx={{ px: { xs: 2, md: 3 }, py: 3, maxWidth: 1800, mx: "auto", bgcolor: "background.default", color: "text.primary", overflowY: presentation ? "auto" : "visible", height: presentation ? "100vh" : "auto", "& .recharts-wrapper": { maxWidth: "100%" }, "@media print": { maxWidth: "none", p: 1, overflow: "visible", height: "auto", "& .MuiCard-root": { breakInside: "avoid" } } }}>
     <Stack direction={{ xs: "column", md: "row" }} spacing={2} sx={{ justifyContent: "space-between", alignItems: { md: "center" }, mb: 3 }}>
       <Box><Typography variant="overline" color="primary.main" sx={{ fontWeight: 800 }}>REUNIÃO DE RESULTADOS</Typography>
         <Typography variant="h4" sx={{ fontWeight: 850 }}>Resultados da Equipe</Typography>
         <Typography color="text.secondary">Acompanhamento de volume, produtividade, carteira e prioridades da operação</Typography></Box>
-      <Button variant="outlined" onClick={() => void togglePresentation()}>{presentation ? "Sair da apresentação" : "Modo apresentação"}</Button>
+      <Stack direction="row" spacing={1} sx={{ "@media print": { display: "none" } }}><Button variant="outlined" onClick={printReport}>Exportar / Salvar PDF</Button><Button variant="contained" onClick={() => void togglePresentation()}>{presentation ? "Sair da apresentação" : "Modo apresentação"}</Button></Stack>
     </Stack>
     <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5} sx={{ mb: 3, alignItems: { sm: "center" }, flexWrap: "wrap" }}>
       <FormControl size="small" sx={{ minWidth: 180 }}><Select aria-label="Período dos resultados" value={period} onChange={e => setPeriod(e.target.value as Period)}>
@@ -167,6 +190,7 @@ export default function TeamResults() {
       </Select></FormControl>
       {range && <Chip label={`${range.start.toLocaleDateString("pt-BR")} a ${range.end.toLocaleDateString("pt-BR")}`} />}
     </Stack>
+    {presentation && <Stack direction="row" spacing={1} sx={{ position: "sticky", top: 0, zIndex: 5, bgcolor: "background.paper", p: 1, borderRadius: 2, mb: 2, justifyContent: "space-between", "@media print": { display: "none" } }}><Button size="small" disabled={sectionIndex === 0} onClick={() => jump(sectionIndex - 1)}>Anterior</Button><Typography variant="body2" sx={{ alignSelf: "center" }}>Seção {sectionIndex + 1} de {sections.length}</Typography><Button size="small" disabled={sectionIndex === sections.length - 1} onClick={() => jump(sectionIndex + 1)}>Próxima</Button></Stack>}
     {loading && <Stack direction="row" spacing={1} sx={{ alignItems: "center", mb: 2 }}><CircularProgress size={18} /><Typography>Carregando resultados...</Typography></Stack>}
     {error && <Alert severity="warning" sx={{ mb: 2 }}>{error}</Alert>}
     {!range && <Alert severity="info">Selecione um intervalo personalizado válido para apresentar os resultados.</Alert>}
@@ -181,6 +205,17 @@ export default function TeamResults() {
         <Metric title="Parados" value={results.stopped.length} subtitle="Parte do backlog atual" />
         <Metric title="CSAT" value={results.satisfaction.length ? `${(100 * results.good / results.satisfaction.length).toFixed(1).replace(".",",")}%` : "—"} subtitle={`${results.satisfaction.length} avaliações disponíveis`} />
       </Box>
+      {comparison && <Box sx={{ mb: 2 }}><Section id="team-results-comparison" title="Comparativo com período anterior">
+        <Typography variant="caption" color="text.secondary">Período anterior equivalente: {comparison.previousStart.toLocaleDateString("pt-BR")} a {comparison.previousEnd.toLocaleDateString("pt-BR")}. Produtividade é representada por resoluções; não mede esforço ou horas trabalhadas.</Typography>
+        <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 1.5, mt: 2 }}>
+          {[
+            { label: "Entradas", current: results.opened.length, previous: comparison.opened },
+            { label: "Resoluções / produtividade", current: results.resolved.length, previous: comparison.resolved },
+            { label: "Fechamentos", current: results.closed.length, previous: comparison.closed },
+          ].map(item => <Box key={item.label} sx={{ p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: 2 }}><Typography variant="body2" fontWeight={700}>{item.label}</Typography><Typography variant="h5" fontWeight={800}>{item.current} <Typography component="span" variant="body2" color="text.secondary">vs. {item.previous}</Typography></Typography><Chip size="small" label={changeLabel(item.current, item.previous)} /></Box>)}
+        </Box>
+        <Typography variant="caption" color="text.secondary">Backlog histórico não comparado: a base atual não contém snapshots históricos confiáveis de estoque.</Typography>
+      </Section></Box>}
       <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "minmax(0,1.5fr) minmax(0,1fr)" }, gap: 2, mb: 2 }}>
         <Section id="team-results-trend" title="Evolução de entradas e resoluções">
           <Box sx={{ height: 310 }}><ResponsiveContainer width="100%" height="100%"><LineChart data={results.chart}><CartesianGrid strokeDasharray="3 3" opacity={.25}/><XAxis dataKey="label" tick={{ fontSize: 11 }}/><YAxis allowDecimals={false}/><Tooltip/><Legend/><Line dataKey="abertos" name="Abertos" stroke={palette[1]} strokeWidth={3} dot={false}/><Line dataKey="resolvidos" name="Resolvidos" stroke={palette[0]} strokeWidth={3} dot={false}/></LineChart></ResponsiveContainer></Box>
@@ -197,6 +232,7 @@ export default function TeamResults() {
           <Box sx={{ height: Math.max(290, results.team.length * 37 + 60) }}><ResponsiveContainer width="100%" height="100%"><BarChart data={[...results.team].sort((a,b)=>b.backlog-a.backlog)} layout="vertical" margin={{ left: 18, right: 20 }}><CartesianGrid strokeDasharray="3 3" opacity={.25}/><XAxis type="number" allowDecimals={false}/><YAxis type="category" dataKey="name" width={145} tick={{ fontSize: 11 }}/><Tooltip/><Bar dataKey="backlog" name="Pendentes" fill={palette[2]} radius={[0,4,4,0]}/></BarChart></ResponsiveContainer></Box>
         </Section>
       </Box>
+      <TeamMeetingManagement actual={results.resolved.length} team={results.team} weekLabel={range ? range.start.toLocaleDateString("pt-BR") + " a " + range.end.toLocaleDateString("pt-BR") : ""} />
       <Section id="team-results-actions" title="Pontos para discussão e encaminhamentos">
         <Stack spacing={1}>
           <Typography variant="body2">• Avaliar a diferença entre entradas ({results.opened.length}) e resoluções ({results.resolved.length}) no período.</Typography>
