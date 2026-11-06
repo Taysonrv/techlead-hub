@@ -17,6 +17,7 @@ import {
   RadarOutlined,
 } from "@mui/icons-material";
 import { useMemo } from "react";
+import { useAuth } from "../context/AuthContext";
 import { useLocation, useNavigate } from "react-router-dom";
 import { HubNavigation } from "../components/HubNavigation";
 import { PageHeader } from "../components/PageHeader";
@@ -37,6 +38,8 @@ export function ManagementIntelligence() {
   const location = useLocation();
   const navigate = useNavigate();
   const theme = useTheme();
+  const { user } = useAuth();
+  const canAccess = (permission: string) => user?.role === "ADMIN" || (Array.isArray(user?.permissions) ? user.permissions.includes(permission) : user?.role === "COORDENADOR" && !["coordination", "technical-leadership"].includes(permission) || ["dashboard","tickets","known-problems","attention","clients","reports","corrections","evolutions","support","versions","knowledge"].includes(permission));
   const dark = theme.palette.mode === "dark";
 
   const section: Section = location.pathname.endsWith("/inteligencia")
@@ -94,16 +97,16 @@ export function ManagementIntelligence() {
           label: "Inteligência",
           icon: <PsychologyOutlined fontSize="small" />,
         },
-        {
-          value: "coordination",
+        ...(canAccess("coordination") ? [{
+          value: "coordination" as Section,
           label: "Operação & Coordenação",
           icon: <GroupsOutlined fontSize="small" />,
-        },
-        {
-          value: "leadership",
+        }] : []),
+        ...(canAccess("technical-leadership") ? [{
+          value: "leadership" as Section,
           label: "Liderança Técnica",
           icon: <RadarOutlined fontSize="small" />,
-        },
+        }] : []),
       ]}
     />
   );
