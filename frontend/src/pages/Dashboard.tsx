@@ -250,10 +250,17 @@ export function Dashboard() {
     useState(true);
 
   useEffect(() => {
-    if (!location.hash.startsWith("#kpi-")) return;
+    if (loading || !location.hash.startsWith("#kpi-")) return;
     const id = decodeURIComponent(location.hash.slice(1));
-    const scroll = () => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "center" });
-    if (loading) return;
+    let attempts = 0;
+    const scroll = () => {
+      const target = document.getElementById(id);
+      if (target) {
+        target.scrollIntoView({ behavior: "smooth", block: "center" });
+        return;
+      }
+      if (++attempts < 12) window.setTimeout(scroll, 150);
+    };
     const handle = window.setTimeout(scroll, 100);
     return () => window.clearTimeout(handle);
   }, [location.hash, loading]);
@@ -1177,7 +1184,7 @@ export function Dashboard() {
       <KpiGrid className="techlead-dashboard-kpis" sx={{ mb: { xs: 2.5, md: 3.5 } }}>
         {cards.map(
           (card) => (
-            <Box key={card.title} id={"kpi-" + encodeURIComponent(card.title)} sx={{ position: "relative", minWidth: 0, scrollMarginTop: "100px" }}>
+            <Box key={card.title} id={"kpi-" + card.title} sx={{ position: "relative", minWidth: 0, scrollMarginTop: "100px" }}>
             <KpiCard
               key={card.title}
               title={
