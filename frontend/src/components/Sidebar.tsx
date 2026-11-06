@@ -150,6 +150,23 @@ export function Sidebar() {
   const userId = user?.id ?? null;
   const [favorites, setFavorites] = useState<Favorite[]>([]);
   useEffect(() => {
+    if (!location.hash.startsWith("#favorite-card-")) return;
+    let cancelled = false;
+    let attempts = 0;
+    const scroll = () => {
+      if (cancelled) return;
+      const target = document.getElementById(decodeURIComponent(location.hash.slice(1)));
+      if (target) {
+        target.scrollIntoView({ behavior: "smooth", block: "center" });
+        return;
+      }
+      if (++attempts < 25) window.setTimeout(scroll, 200);
+    };
+    const handle = window.setTimeout(scroll, 150);
+    return () => { cancelled = true; window.clearTimeout(handle); };
+  }, [location.pathname, location.hash]);
+
+  useEffect(() => {
     const refresh = () => setFavorites(userId == null ? [] : readFavorites(userId));
     refresh();
     window.addEventListener("techlead-favorites-changed", refresh);
@@ -968,7 +985,7 @@ export function Sidebar() {
         {favorites.length > 0 && <MenuSection
           title="Favoritos"
           ariaLabel="Navegação de favoritos"
-          items={favorites.filter((favorite) => favorite.kind === "card" ? canAccess("dashboard") : [...movementMenu, ...managementMenu, ...analysisMenu, ...developmentMenu, ...registrationMenu, ...knowledgeMenu].some((item) => item.path === favorite.path)).map((favorite) => ({ label: favorite.label, path: favorite.kind === "card" ? "/visao-operacional#kpi-" + encodeURIComponent(favorite.label) : favorite.path, icon: <StarOutlineRounded fontSize="small" /> }))}
+          items={favorites.filter((favorite) => favorite.kind === "card" ? canAccess("dashboard") : [...movementMenu, ...managementMenu, ...analysisMenu, ...developmentMenu, ...registrationMenu, ...knowledgeMenu].some((item) => item.path === favorite.path)).map((favorite) => ({ label: favorite.label, path: favorite.kind === "card" && favorite.id.startsWith("card:") && !favorite.id.includes(":/") ? "/visao-operacional#kpi-" + encodeURIComponent(favorite.label) : favorite.path, icon: <StarOutlineRounded fontSize="small" /> }))}
           compact={sidebarCollapsed}
           open={true}
           onToggle={() => setFavorites((current) => [...current])}
