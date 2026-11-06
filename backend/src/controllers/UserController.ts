@@ -254,6 +254,17 @@ export class UserController {
     }
   }
 
+  async updateJobFunction(request: AuthenticatedRequest, response: Response) {
+    try {
+      const adminUserId = getAuthenticatedUserId(request);
+      const targetUserId = getUserIdFromParams(request.params.id);
+      const user = await userService.updateUserJobFunction(adminUserId, targetUserId, request.body?.jobFunction);
+      return response.status(200).json({ message: "Função do colaborador atualizada com sucesso.", user });
+    } catch (error) {
+      return handleUserError(error, response);
+    }
+  }
+
   async updatePermissions(request: AuthenticatedRequest, response: Response) {
     try {
       const adminUserId = getAuthenticatedUserId(request);
