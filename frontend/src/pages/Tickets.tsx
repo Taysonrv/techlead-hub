@@ -1,3 +1,4 @@
+import { detailDrawerPaperSx } from "../theme/layoutTokens";
 import { KpiGrid } from "../components/KpiGrid";
 import { useId } from "react";
 import {
@@ -2441,22 +2442,15 @@ export function Tickets() {
           )
         }
         ModalProps={{ disableEnforceFocus: true }}
-        slotProps={{
-          paper: {
-            sx: {
-              backgroundColor: "background.paper",
-              color: "text.primary",
-            },
-          },
-        }}
+        slotProps={{ paper: { sx: detailDrawerPaperSx } }}
       >
         <Box
           sx={{
             width: {
               xs:
-                330,
+                "100%",
               sm:
-                540,
+                "100%",
             },
 
             p:
