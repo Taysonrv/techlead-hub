@@ -388,27 +388,31 @@ export default function TeamResults() {
           </Stack>
         </Section>
       </Box>
-      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "1.5fr 1fr" }, gap: 2, mb: 2 }}>
+      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "minmax(0, 1.35fr) minmax(0, 1fr)" }, gap: 2, mb: 2 }}>
         <Section id="team-results-trend" title="Evolução de entradas e resoluções">
-          <Stack spacing={1} sx={{ minHeight: 200, overflow: "visible" }}>
-            {results.chart.filter(row => row.abertos + row.resolvidos > 0).map(row => <Box key={row.date}>
-              <Typography variant="caption">{row.label}</Typography>
-              {([{ label: "Abertos", count: row.abertos, color: palette[1] }, { label: "Resolvidos", count: row.resolvidos, color: palette[0] }]).map(item => <Stack key={item.label} direction="row" spacing={1} sx={{ alignItems: "center" }}>
-                <Box sx={{ width: 75 }}><Typography variant="caption">{item.label}</Typography></Box>
-                <Box sx={{ flex: 1, bgcolor: "action.hover", borderRadius: 1, height: 12, overflow: "hidden" }}><Box sx={{ bgcolor: item.color, height: "100%", width: 100 * item.count / Math.max(1, ...results.chart.map(r => Math.max(r.abertos, r.resolvidos))) + "%" }} /></Box>
-                <Typography variant="caption" sx={{ width: 30, textAlign: "right" }}>{item.count}</Typography>
-              </Stack>)}
-            </Box>)}
-            {!results.chart.some(row => row.abertos + row.resolvidos > 0) && <Alert severity="info">Sem movimentações no período.</Alert>}
+          <Stack spacing={2} sx={{ height: "100%", justifyContent: "space-between" }}>
+            <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap" }}>
+              <Chip size="small" label={"Abertos: " + results.opened.length} />
+              <Chip size="small" label={"Resolvidos: " + results.resolved.length} />
+              <Chip size="small" color={results.opened.length > results.resolved.length ? "warning" : "success"} label={"Diferença: " + (results.opened.length - results.resolved.length)} />
+            </Stack>
+            <TrendLines rows={results.chart} />
+            <Typography variant="caption" color="text.secondary">Azul: entradas · Verde: resoluções. Eventos registrados no período selecionado; não representam necessariamente os mesmos tickets.</Typography>
           </Stack>
         </Section>
         <Section id="team-results-status" title="Composição da carteira pendente">
-          <Box sx={{ minHeight: 240, display: "grid", placeItems: "center" }}>
-            <Box sx={{ width: 180, height: 180, borderRadius: "50%", background: results.backlog.length ? "conic-gradient(" + palette[2] + " 0% " + 100 * results.stopped.length / results.backlog.length + "%, " + palette[0] + " 0% 100%)" : "linear-gradient(#445,#445)", display: "grid", placeItems: "center" }}>
-              <Box sx={{ width: 118, height: 118, borderRadius: "50%", bgcolor: "background.paper", display: "grid", placeContent: "center", textAlign: "center" }}><Typography variant="h4" sx={{ fontWeight: 800 }}>{results.backlog.length}</Typography><Typography variant="caption">Pendentes</Typography></Box>
+          <Stack spacing={2} sx={{ height: "100%", justifyContent: "space-between", py: 1 }}>
+            <DonutSummary title="Pendentes" total={results.backlog.length} segments={[
+              { label: "Parados", value: results.stopped.length, color: palette[2] },
+              { label: "Demais pendentes", value: results.backlog.length - results.stopped.length, color: palette[0] },
+            ]} />
+            <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1 }}>
+              {([{ label: "Parados", tickets: results.stopped }, { label: "Demais pendentes", tickets: results.backlog.filter(t => !results.stopped.includes(t)) }]).map(item => <Box key={item.label} onClick={() => setDetail({ title: item.label, tickets: item.tickets })} role="button" tabIndex={0} onKeyDown={event => { if (event.key === "Enter") setDetail({ title: item.label, tickets: item.tickets }); }} sx={{ p: 1.5, borderRadius: 2, bgcolor: "action.hover", cursor: "pointer" }}>
+                <Typography variant="h5" sx={{ fontWeight: 800 }}>{item.tickets.length}</Typography><Typography variant="caption">{item.label}</Typography>
+              </Box>)}
             </Box>
-          </Box>
-          <Stack direction="row" spacing={1} sx={{ justifyContent: "center", flexWrap: "wrap" }}><Chip label={"Parados: " + results.stopped.length} onClick={() => setDetail({ title: "Parados", tickets: results.stopped })}/><Chip label={"Demais: " + (results.backlog.length - results.stopped.length)} onClick={() => setDetail({ title: "Demais pendentes", tickets: results.backlog.filter(t => !results.stopped.includes(t)) })}/></Stack>
+            <Typography variant="caption" color="text.secondary">Carteira atual, independentemente do filtro temporal de movimentações.</Typography>
+          </Stack>
         </Section>
       </Box>
       <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "1fr 1fr" }, gap: 2, mb: 2 }}>
