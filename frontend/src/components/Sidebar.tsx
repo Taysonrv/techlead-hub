@@ -595,7 +595,8 @@ export function Sidebar() {
 
   const analysisMenu = useMemo<MenuItemData[]>(
     () => [
-      ...(canAccess("dashboard") ? [{ label: "Dashboard Executivo", path: "/visao-operacional", icon: <HomeOutlined fontSize="small" /> }] : []),
+      ...(canAccess("dashboard") ? [{ label: "Dashboard Executivo", path: "/visao-operacional", icon: <HomeOutlined fontSize="small" /> },
+        { label: "Resultados da Equipe", path: "/visao-operacional/resultados-equipe", icon: <AssessmentOutlined fontSize="small" /> }] : []),
       ...(canAccess("performance") ? [{ label: "Desempenho & SLA", path: "/visao-operacional/desempenho", icon: <SpeedOutlined fontSize="small" /> }] : []),
       ...(canAccess("reports") ? [{ label: "Relatórios", path: "/relatorios", icon: <AssessmentOutlined fontSize="small" /> }] : []),
       ...(canAccess("services")
