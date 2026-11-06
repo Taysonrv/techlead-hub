@@ -160,7 +160,7 @@ export class NotificationService {
         key: "team-action:" + id + ":" + (days <= 2 ? "due:" + action.due : "assigned:" + action.updatedAt.toISOString()),
         kind: "TEAM_ACTION", title: reminder, message,
         occurredAt: days <= 2 ? new Date(Math.max(action.updatedAt.getTime(), due.getTime() - 2 * 86_400_000)) : action.updatedAt,
-        path: "/resultados-equipe?meeting=" + action.date,
+        path: "/visao-operacional/resultados-equipe?meeting=" + action.date,
       });
     }
     return notifications.slice(0, 30);
