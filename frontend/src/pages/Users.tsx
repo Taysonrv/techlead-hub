@@ -407,24 +407,8 @@ export function Users({ embedded = false }: { embedded?: boolean } = {}) {
     >
       {/* HEADER */}
 
-      {!embedded &&       <PageHeader eyebrow="Sistema" title="Usuários" description="Gerencie perfis de acesso e atribua funções organizacionais. A função não concede permissões automaticamente." action={<Button
-          variant="outlined"
-          startIcon={
-            <RefreshOutlined />}
-          }
-          onClick={() =>
-            void loadUsers()
-          }
-          disabled={
-            loading
-          }
-          sx={{
-            alignSelf: {
-              xs: "stretch",
-              sm: "center",
-            },
-          }}
-        >Atualizar</Button>} />
+      {!embedded && <PageHeader eyebrow="Sistema" title="Usuários" description="Gerencie perfis de acesso e funções organizacionais." action={<Button variant="outlined" startIcon={<RefreshOutlined />} disabled={loading} onClick={()=>void loadUsers()}>Atualizar</Button>} />}
+      {embedded && <Stack direction="row" justifyContent="space-between" alignItems="center"><Box><Typography variant="h6" fontWeight={850}>Equipe e funções</Typography><Typography variant="body2" color="text.secondary">Gerencie perfis, funções e vínculos com responsáveis Movidesk.</Typography></Box><Button size="small" variant="outlined" startIcon={<RefreshOutlined/>} disabled={loading} onClick={()=>void loadUsers()}>Atualizar</Button></Stack>}
 
       {/* ALERTAS */}
 
@@ -452,7 +436,7 @@ export function Users({ embedded = false }: { embedded?: boolean } = {}) {
 
       {/* CARDS */}
 
-      <KpiGrid columns={{ xs: 2, md: 4 }}>
+      <KpiGrid sx={{gridTemplateColumns:{xs:"repeat(2,minmax(0,1fr))",md:"repeat(4,minmax(0,1fr))"}}}>
         <SummaryCard
           label="Total"
           value={
