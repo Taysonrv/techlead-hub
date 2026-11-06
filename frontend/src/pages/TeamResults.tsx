@@ -1,13 +1,22 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Box, Button, Card, CardContent, Chip, FormControl, MenuItem, Select, Stack, TextField, Typography, Alert, CircularProgress } from "@mui/material";
+import { Box, Button, Card, CardContent, Chip, FormControl, MenuItem, Select, Stack, TextField, Typography, Alert, CircularProgress, Drawer, IconButton, Divider } from "@mui/material";
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { getTicketSnapshot, getTicketSnapshotState, subscribeTicketSnapshotRefresh } from "../services/ticketSnapshot";
 import { isOperationallyOpen } from "../utils/operationalMetrics";
 import { FavoriteAction } from "../components/FavoriteAction";
+import { calculateTimestampSla } from "../utils/timestampSla";
+import { detailDrawerPaperSx } from "../theme/layoutTokens";
 import { TeamMeetingManagement } from "../components/TeamMeetingManagement";
 
 type Ticket = {
   movideskId: number;
+  subject?: string | null;
+  client?: string | null;
+  status?: string | null;
+  firstResponseDate?: string | null;
+  firstResponseDueDate?: string | null;
+  dueDate?: string | null;
+  category?: string | null;
   ticketType?: number | null;
   owner?: string | null;
   createdDate: string;
@@ -62,8 +71,8 @@ function Section({ id, title, children }: { id: string; title: string; children:
     </Stack>{children}
   </CardContent></Card>;
 }
-function Metric({ title, value, subtitle }: { title: string; value: string | number; subtitle: string }) {
-  return <Card sx={{ ...sectionSx, borderTop: "3px solid #24BF90" }}><CardContent>
+function Metric({ title, value, subtitle, onClick }: { title: string; value: string | number; subtitle: string; onClick?: () => void }) {
+  return <Card onClick={onClick} role={onClick ? "button" : undefined} tabIndex={onClick ? 0 : undefined} onKeyDown={onClick ? e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(); } } : undefined} sx={{ ...sectionSx, borderTop: "3px solid #24BF90", cursor: onClick ? "pointer" : "default", "&:hover": onClick ? { borderColor: "primary.main", transform: "translateY(-2px)" } : {}, transition: "transform .15s" }}><CardContent>
     <Typography variant="body2" sx={{ fontWeight: 700 }}>{title}</Typography>
     <Typography variant="h4" sx={{ fontWeight: 850, my: 1, color: "primary.main" }}>{typeof value === "number" ? formatNumber(value) : value}</Typography>
     <Typography variant="caption" color="text.secondary">{subtitle}</Typography>
@@ -71,6 +80,7 @@ function Metric({ title, value, subtitle }: { title: string; value: string | num
 }
 export default function TeamResults() {
   const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [detail, setDetail] = useState<{ title: string; tickets: Ticket[] } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [period, setPeriod] = useState<Period>("week");
@@ -113,6 +123,8 @@ export default function TeamResults() {
     const backlog = publicTickets.filter(isOperationallyOpen);
     const pendingOpened = opened.filter(isOperationallyOpen);
     const stopped = backlog.filter(t => (t.baseStatus || "").toLowerCase() === "stopped");
+    const responseSla = calculateTimestampSla(opened, "response");
+    const solutionSla = calculateTimestampSla(resolved, "solution");
     const missingType = scope.filter(t => t.ticketType == null && isOperationallyOpen(t)).length;
     const agents = new Map<string, { name: string; opened: number; resolved: number; backlog: number }>();
     for (const t of publicTickets) {
@@ -143,7 +155,7 @@ export default function TeamResults() {
     }, []) : timeline;
     const satisfaction = scope.filter(t => inRange(t.closedDate || t.resolvedDate, range.start, range.end) && t.satisfactionScore != null);
     const good = satisfaction.filter(t => Number(t.satisfactionScore) >= 4).length;
-    return { opened, resolved, closed, backlog, pendingOpened, stopped, missingType, team, chart, satisfaction, good };
+    return { opened, resolved, closed, backlog, pendingOpened, stopped, missingType, team, chart, satisfaction, good, responseSla, solutionSla };
   }, [scope, range]);
 
   const comparison = useMemo(() => {
@@ -169,9 +181,8 @@ export default function TeamResults() {
     previous === 0 ? current === 0 ? "0%" : "Novo (base anterior zero)" :
     `${current >= previous ? "+" : ""}${((current - previous) / previous * 100).toFixed(1).replace(".", ",")}%`;
   const donut = results ? [
-    { name: "Em atendimento", value: results.backlog.filter(t => (t.baseStatus || "").toLowerCase() === "inattendance").length },
     { name: "Parados", value: results.stopped.length },
-    { name: "Novos", value: results.backlog.filter(t => (t.baseStatus || "").toLowerCase() === "new").length },
+    { name: "Demais pendentes", value: results.backlog.length - results.stopped.length },
   ] : [];
   return <Box ref={presentationRef} sx={{ px: { xs: 2, md: 3 }, py: 3, maxWidth: 1800, mx: "auto", bgcolor: "background.default", color: "text.primary", overflowY: presentation ? "auto" : "visible", height: presentation ? "100vh" : "auto", "& .recharts-wrapper": { maxWidth: "100%" }, "@media print": { maxWidth: "none", p: 1, overflow: "visible", height: "auto", "& .MuiCard-root": { breakInside: "avoid" } } }}>
     <Stack direction={{ xs: "column", md: "row" }} spacing={2} sx={{ justifyContent: "space-between", alignItems: { md: "center" }, mb: 3 }}>
@@ -197,13 +208,15 @@ export default function TeamResults() {
     {results && <>
       {results.missingType > 0 && <Alert severity="info" sx={{ mb: 2 }}>{results.missingType} tickets pendentes sem classificação público/interno foram excluídos das métricas públicas. Confira a importação antes da reunião.</Alert>}
       <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 2, mb: 2 }}>
-        <Metric title="Abertos no período" value={results.opened.length} subtitle="Tickets públicos criados" />
-        <Metric title="Resolvidos" value={results.resolved.length} subtitle="Resoluções registradas no período" />
-        <Metric title="Fechados" value={results.closed.length} subtitle="Encerramentos no período" />
-        <Metric title="Backlog atual" value={results.backlog.length} subtitle="Estoque público ativo hoje" />
-        <Metric title="Pendentes do período" value={results.pendingOpened.length} subtitle="Abertos no intervalo e ainda pendentes" />
-        <Metric title="Parados" value={results.stopped.length} subtitle="Parte do backlog atual" />
-        <Metric title="CSAT" value={results.satisfaction.length ? `${(100 * results.good / results.satisfaction.length).toFixed(1).replace(".",",")}%` : "—"} subtitle={`${results.satisfaction.length} avaliações disponíveis`} />
+        <Metric title="Abertos no período" value={results.opened.length} onClick={() => setDetail({ title: "Abertos no período", tickets: results.opened })} subtitle="Tickets públicos criados" />
+        <Metric title="Resolvidos" value={results.resolved.length} onClick={() => setDetail({ title: "Resolvidos", tickets: results.resolved })} subtitle="Resoluções registradas no período" />
+        <Metric title="Fechados" value={results.closed.length} onClick={() => setDetail({ title: "Fechados", tickets: results.closed })} subtitle="Encerramentos no período" />
+        <Metric title="Backlog atual" value={results.backlog.length} onClick={() => setDetail({ title: "Backlog atual", tickets: results.backlog })} subtitle="Estoque público ativo hoje" />
+        <Metric title="Pendentes do período" value={results.pendingOpened.length} onClick={() => setDetail({ title: "Pendentes do período", tickets: results.pendingOpened })} subtitle="Abertos no intervalo e ainda pendentes" />
+        <Metric title="Parados" value={results.stopped.length} onClick={() => setDetail({ title: "Parados", tickets: results.stopped })} subtitle="Parte do backlog atual" />
+        <Metric title="CSAT" onClick={() => setDetail({ title: "Avaliações de satisfação", tickets: results.satisfaction })} value={results.satisfaction.length ? `${(100 * results.good / results.satisfaction.length).toFixed(1).replace(".",",")}%` : "—"} subtitle={`${results.satisfaction.length} avaliações disponíveis`} />
+        <Metric title="SLA primeira resposta" value={results.responseSla.percentage == null ? "—" : results.responseSla.percentage.toLocaleString("pt-BR") + "%"} subtitle={results.responseSla.measured + " tickets medidos"} onClick={() => setDetail({ title: "SLA de primeira resposta", tickets: results.responseSla.measuredTickets })} />
+        <Metric title="SLA atendimento" value={results.solutionSla.percentage == null ? "—" : results.solutionSla.percentage.toLocaleString("pt-BR") + "%"} subtitle={results.solutionSla.measured + " tickets medidos"} onClick={() => setDetail({ title: "SLA de atendimento", tickets: results.solutionSla.measuredTickets })} />
       </Box>
       {comparison && <Box sx={{ mb: 2 }}><Section id="team-results-comparison" title="Comparativo com período anterior">
         <Typography variant="caption" color="text.secondary">Período anterior equivalente: {comparison.previousStart.toLocaleDateString("pt-BR")} a {comparison.previousEnd.toLocaleDateString("pt-BR")}. Produtividade é representada por resoluções; não mede esforço ou horas trabalhadas.</Typography>
@@ -242,5 +255,19 @@ export default function TeamResults() {
         </Stack>
       </Section>
     </>}
+    <Drawer anchor="right" open={Boolean(detail)} onClose={() => setDetail(null)} slotProps={{ paper: { sx: detailDrawerPaperSx } }}>
+      <Box sx={{ width: { xs: "100vw", sm: 560 }, maxWidth: "100vw", p: 2.5 }}>
+        <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between" }}>
+          <Box><Typography variant="h6" sx={{ fontWeight: 800 }}>{detail?.title}</Typography><Typography variant="body2" color="text.secondary">{detail?.tickets.length ?? 0} tickets encontrados</Typography></Box>
+          <IconButton aria-label="Fechar detalhes" onClick={() => setDetail(null)}>×</IconButton>
+        </Stack>
+        <Divider sx={{ my: 2 }} />
+        <Stack spacing={1.5}>{detail?.tickets.map((ticket, index) => <Box key={ticket.movideskId || index} sx={{ p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: 2 }}>
+          <Typography variant="body2" sx={{ fontWeight: 800 }}>#{ticket.movideskId} · {ticket.subject || "Sem assunto"}</Typography>
+          <Typography variant="caption" color="text.secondary">{ticket.client || "Cliente não informado"} · {ticket.owner || "Sem responsável"}</Typography>
+          <Typography variant="body2">{ticket.status || ticket.baseStatus || "Sem status"}</Typography>
+        </Box>)}</Stack>
+      </Box>
+    </Drawer>
   </Box>;
 }
