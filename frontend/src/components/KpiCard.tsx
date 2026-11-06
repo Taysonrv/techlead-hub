@@ -10,7 +10,7 @@ import {
   useTheme,
 } from "@mui/material";
 import { alpha } from "@mui/material/styles";
-import { InfoOutlined } from "@mui/icons-material";
+import { InfoOutlined, StarBorderRounded, StarRounded } from "@mui/icons-material";
 import type { KeyboardEvent, ReactNode } from "react";
 import { kpiLayout } from "../theme/layoutTokens";
 import { aliareColors } from "../theme/theme";
@@ -33,6 +33,8 @@ type KpiCardProps = {
   active?: boolean;
   density?: "default" | "compact";
   onClick?: () => void;
+  favorite?: boolean;
+  onToggleFavorite?: () => void;
 };
 
 export function KpiCard({
@@ -48,6 +50,8 @@ export function KpiCard({
   active = false,
   density = "default",
   onClick,
+  favorite,
+  onToggleFavorite,
 }: KpiCardProps) {
   const theme = useTheme();
   const dark = theme.palette.mode === "dark";
@@ -163,6 +167,7 @@ export function KpiCard({
           </Typography>
 
           <Stack direction="row" sx={{ flexShrink: 0, gap: 0.35 }}>
+          {onToggleFavorite && <Tooltip title={favorite ? "Remover dos favoritos" : "Favoritar card"}><IconButton size="small" aria-label={favorite ? "Remover dos favoritos" : "Favoritar card"} onClick={(event) => { event.stopPropagation(); onToggleFavorite(); }} sx={{ width: 24, height: 24, p: .25, color: favorite ? "#F5C451" : "text.secondary", "& .MuiSvgIcon-root": { fontSize: 17 } }}>{favorite ? <StarRounded /> : <StarBorderRounded />}</IconButton></Tooltip>}
           {icon ? <Box sx={{ display: "flex", color: accent, flexShrink: 0, "& .MuiSvgIcon-root": { fontSize: 18 } }}>{icon}</Box> : null}
           {infoContent ? <Box onClick={(event) => event.stopPropagation()} sx={{ flexShrink: 0, mt: -.25, "& .MuiIconButton-root": { width: 22, height: 22, p: .25 }, "& .MuiSvgIcon-root": { fontSize: 16 } }}>{infoContent}</Box> : info || metadata ? (
             <Tooltip
