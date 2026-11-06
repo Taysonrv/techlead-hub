@@ -115,7 +115,7 @@ export function TeamMeetingManagement({ weekLabel, snapshot, initialDate }: {
   return <Stack spacing={2} sx={{ mt: 2 }}>
     <Card sx={section}><CardContent>
       <Stack direction={{ xs: "column", md: "row" }} spacing={1.5} sx={{ alignItems: { md: "center" }, justifyContent: "space-between" }}>
-        <Box><Typography variant="h6" sx={{ fontWeight: 800 }}>Histórico compartilhado de reuniões</Typography><Typography variant="caption" color="text.secondary">Registros centralizados no PostgreSQL, acessíveis em diferentes computadores.</Typography></Box>
+        <Box><Typography variant="h6" sx={{ fontWeight: 800 }}>Ata e compromissos da reunião</Typography><Typography variant="caption" color="text.secondary">Registre encaminhamentos, consulte reuniões anteriores e acompanhe os responsáveis.</Typography></Box>
         <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", "@media print": { display: "none" } }}>
           <Button variant="outlined" disabled={loading || saving} onClick={() => { if (dirty && !window.confirm("Descartar alterações não salvas?")) return; void loadMeeting(date); }}>Atualizar</Button>
           <Button variant="contained" disabled={!canEdit || saving || !dirty} onClick={() => void save()}>{saving ? "Salvando..." : "Salvar reunião"}</Button>
