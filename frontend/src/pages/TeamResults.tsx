@@ -158,6 +158,26 @@ export default function TeamResults() {
     return { opened, resolved, closed, backlog, pendingOpened, stopped, missingType, team, chart, satisfaction, good, responseSla, solutionSla };
   }, [scope, range]);
 
+  const periodBreakdown = useMemo(() => {
+    const windows = (["week", "month", "semester"] as const).map(kind => {
+      const interval = rangeFor(kind, "", "")!;
+      const publicTickets = scope.filter(t => t.ticketType === 2);
+      const opened = publicTickets.filter(t => inRange(t.createdDate, interval.start, interval.end));
+      const closed = publicTickets.filter(t => inRange(t.closedDate, interval.start, interval.end));
+      const resolved = publicTickets.filter(t => inRange(t.resolvedDate, interval.start, interval.end));
+      return { name: kind === "week" ? "Semana" : kind === "month" ? "Mês" : "Semestre", opened, closed, resolved };
+    });
+    const ownerRows = (windowIndex: number) => {
+      const counts = new Map<string, { name: string; total: number; tickets: Ticket[] }>();
+      for (const ticket of windows[windowIndex].resolved) {
+        const name = ticket.owner?.trim() || "Sem responsável";
+        const item = counts.get(name) || { name, total: 0, tickets: [] };
+        item.total++; item.tickets.push(ticket); counts.set(name, item);
+      }
+      return [...counts.values()].sort((a, b) => b.total - a.total || a.name.localeCompare(b.name, "pt-BR"));
+    };
+    return { windows, weeklyOwners: ownerRows(0), monthlyOwners: ownerRows(1) };
+  }, [scope]);
   const comparison = useMemo(() => {
     if (!range) return null;
     const duration = range.end.getTime() - range.start.getTime() + 1;
@@ -244,6 +264,37 @@ export default function TeamResults() {
         <Section id="team-results-backlog" title="Carteira por responsável">
           <Box sx={{ height: Math.max(290, results.team.length * 37 + 60) }}><ResponsiveContainer width="100%" height="100%"><BarChart data={[...results.team].sort((a,b)=>b.backlog-a.backlog)} layout="vertical" margin={{ left: 18, right: 20 }}><CartesianGrid strokeDasharray="3 3" opacity={.25}/><XAxis type="number" allowDecimals={false}/><YAxis type="category" dataKey="name" width={145} tick={{ fontSize: 11 }}/><Tooltip/><Bar dataKey="backlog" name="Pendentes" fill={palette[2]} radius={[0,4,4,0]}/></BarChart></ResponsiveContainer></Box>
         </Section>
+      </Box>
+      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "repeat(3, minmax(0, 1fr))" }, gap: 2, mb: 2 }}>
+        {periodBreakdown.windows.map((item, index) => <Section key={item.name} id={"team-results-period-" + index} title={"Abertos × fechados · " + item.name}>
+          <Stack direction="row" spacing={1.5} sx={{ mb: 2 }}>
+            <Chip label={"Abertos: " + item.opened.length} color="info" onClick={() => setDetail({ title: "Abertos · " + item.name, tickets: item.opened })} />
+            <Chip label={"Fechados: " + item.closed.length} color="success" onClick={() => setDetail({ title: "Fechados · " + item.name, tickets: item.closed })} />
+          </Stack>
+          <Box sx={{ height: 210 }}><ResponsiveContainer width="100%" height="100%"><BarChart data={[{ name: item.name, Abertos: item.opened.length, Fechados: item.closed.length }]} margin={{ left: 0, right: 10 }}><CartesianGrid strokeDasharray="3 3" opacity={.2}/><XAxis dataKey="name"/><YAxis allowDecimals={false}/><Tooltip/><Legend/><Bar dataKey="Abertos" fill={palette[1]} radius={[5,5,0,0]}/><Bar dataKey="Fechados" fill={palette[0]} radius={[5,5,0,0]}/></BarChart></ResponsiveContainer></Box>
+        </Section>)}
+      </Box>
+      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "1fr 1fr" }, gap: 2, mb: 2 }}>
+        {([{ title: "Resolvidos por analista · Semana", rows: periodBreakdown.weeklyOwners, id: "team-results-weekly-resolved" }, { title: "Resolvidos por analista · Mês", rows: periodBreakdown.monthlyOwners, id: "team-results-monthly-resolved" }]).map(panel => <Section key={panel.id} id={panel.id} title={panel.title}>
+          {panel.rows.length === 0 ? <Alert severity="info">Não há resoluções públicas registradas neste intervalo.</Alert> : <Stack spacing={1}>
+            {panel.rows.map(row => <Box key={row.name} onClick={() => setDetail({ title: panel.title + " · " + row.name, tickets: row.tickets })} role="button" tabIndex={0} onKeyDown={e => { if (e.key === "Enter") setDetail({ title: panel.title + " · " + row.name, tickets: row.tickets }); }} sx={{ cursor: "pointer", p: 1, borderRadius: 1, "&:hover": { bgcolor: "action.hover" } }}>
+              <Stack direction="row" sx={{ justifyContent: "space-between" }}><Typography variant="body2">{row.name}</Typography><Typography variant="body2" sx={{ fontWeight: 800 }}>{row.total}</Typography></Stack>
+              <Box sx={{ bgcolor: "action.hover", height: 8, borderRadius: 2, mt: .5, overflow: "hidden" }}><Box sx={{ width: (100 * row.total / Math.max(1, panel.rows[0].total)) + "%", bgcolor: "primary.main", height: "100%", borderRadius: 2 }}/></Box>
+            </Box>)}
+          </Stack>}
+        </Section>)}
+      </Box>
+      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "repeat(3, minmax(0, 1fr))" }, gap: 2, mb: 2 }}>
+        <Section id="team-results-csat-detail" title="CSAT · Satisfação">
+          <Typography variant="h4" sx={{ fontWeight: 800 }}>{results.satisfaction.length ? (100 * results.good / results.satisfaction.length).toFixed(1).replace(".", ",") + "%" : "—"}</Typography>
+          <Typography variant="body2" color="text.secondary">{results.good} positivas de {results.satisfaction.length} avaliações disponíveis</Typography>
+          <Button onClick={() => setDetail({ title: "Avaliações de satisfação", tickets: results.satisfaction })}>Ver avaliações</Button>
+        </Section>
+        {([{ id: "team-results-response-sla", label: "SLA · Primeira resposta", sla: results.responseSla }, { id: "team-results-solution-sla", label: "SLA · Atendimento", sla: results.solutionSla }]).map(item => <Section key={item.id} id={item.id} title={item.label}>
+          <Typography variant="h4" sx={{ fontWeight: 800 }}>{item.sla.percentage == null ? "—" : item.sla.percentage.toLocaleString("pt-BR") + "%"}</Typography>
+          <Typography variant="body2" color="text.secondary">{item.sla.within} no prazo · {item.sla.outside} fora · {item.sla.unmeasured} sem medição</Typography>
+          <Stack direction="row" spacing={1}><Button size="small" onClick={() => setDetail({ title: item.label + " · No prazo", tickets: item.sla.withinTickets })}>No prazo</Button><Button size="small" onClick={() => setDetail({ title: item.label + " · Fora do prazo", tickets: item.sla.outsideTickets })}>Fora</Button></Stack>
+        </Section>)}
       </Box>
       <TeamMeetingManagement actual={results.resolved.length} team={results.team} weekLabel={range ? range.start.toLocaleDateString("pt-BR") + " a " + range.end.toLocaleDateString("pt-BR") : ""} snapshot={{ periodStart: range?.start.toISOString().slice(0, 10) ?? "", periodEnd: range?.end.toISOString().slice(0, 10) ?? "", opened: results.opened.length, resolved: results.resolved.length, closed: results.closed.length, backlog: results.backlog.length, stopped: results.stopped.length, capturedAt: new Date().toISOString() }} />
       <Section id="team-results-actions" title="Pontos para discussão e encaminhamentos">
