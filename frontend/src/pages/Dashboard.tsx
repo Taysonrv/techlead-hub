@@ -1,4 +1,5 @@
 import { KpiGrid } from "../components/KpiGrid";
+import { FavoriteAction } from "../components/FavoriteAction";
 import { TeamDashboardCards } from "../components/TeamDashboardCards";
 import { HomeWorkspace } from "./HomeWorkspace";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -2905,11 +2906,12 @@ function CardBase({
 }
 
 function CardPeriodHeader({ title, subtitle, value, onChange }: { title: string; subtitle: string; value?: CardPeriod; onChange?: (value: CardPeriod) => void }) {
-  return <Box sx={{ display: "grid", gridTemplateRows: "auto auto", justifyItems: "center", gap: .75, minHeight: value ? 76 : "auto" }}>
+  return <Box id={"section-" + encodeURIComponent(title)} sx={{ display: "grid", gridTemplateRows: "auto auto", justifyItems: "center", gap: .75, minHeight: value ? 76 : "auto" }}>
     <Box sx={{ textAlign: "center", minWidth: 0 }}>
       <Typography sx={{ fontWeight: 850, fontSize: "1.05rem", lineHeight: 1.25 }}>{title}</Typography>
       <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: .35 }}>{subtitle}</Typography>
     </Box>
+    <FavoriteAction title={title} targetId={"section-" + encodeURIComponent(title)} />
     {value && onChange && <FormControl size="small" sx={{ width: { xs: "100%", sm: 152 }, maxWidth: "100%", minWidth: 0 }}>
       <Select inputProps={{ "aria-label": `Período de ${title}` }} value={value} onChange={(event) => onChange(event.target.value as CardPeriod)} sx={{ minHeight: 40, borderRadius: "8px", bgcolor: "background.paper", fontSize: ".875rem", fontWeight: 650, "& .MuiSelect-select": { py: 1.05, px: 1.4, pr: "36px !important", display: "flex", alignItems: "center" } }}>
         <MenuItem value="7d">Últimos 7 dias</MenuItem><MenuItem value="30d">Últimos 30 dias</MenuItem><MenuItem value="60d">Últimos 60 dias</MenuItem><MenuItem value="90d">Últimos 90 dias</MenuItem><MenuItem value="month">Este mês</MenuItem><MenuItem value="semester">Este semestre</MenuItem><MenuItem value="year">Este ano</MenuItem>
