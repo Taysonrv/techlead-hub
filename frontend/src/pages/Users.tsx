@@ -31,6 +31,7 @@ import {
   PersonOffOutlined,
   PeopleAltOutlined,
   RefreshOutlined,
+  ManageAccountsOutlined,
 } from "@mui/icons-material";
 
 import {
@@ -102,7 +103,9 @@ type ActionType =
   | "REJECT"
   | "ACTIVATE"
   | "DEACTIVATE"
-  | "SET_ADMIN";
+  | "SET_ADMIN"
+  | "SET_COORDINATOR"
+  | "SET_ANALYST";
 
 type ConfirmationState = {
   type: ActionType;
@@ -293,6 +296,8 @@ export function Users() {
             `/users/${user.id}/deactivate`;
           break;
 
+        case "SET_COORDINATOR":
+        case "SET_ANALYST":
         case "SET_ADMIN":
           endpoint =
             `/users/${user.id}/role`;
@@ -305,10 +310,8 @@ export function Users() {
           user: ManagedUser;
         }>(
           endpoint,
-          type === "SET_ADMIN"
-            ? {
-                role: "ADMIN",
-              }
+          ["SET_ADMIN", "SET_COORDINATOR", "SET_ANALYST"].includes(type)
+            ? { role: type === "SET_ADMIN" ? "ADMIN" : type === "SET_COORDINATOR" ? "COORDENADOR" : "ANALISTA" }
             : undefined
         );
 
@@ -763,166 +766,23 @@ function SummaryCard({
    ACTIONS
 ========================================================= */
 
-function UserActions({
-  user,
-  loading,
-  onAction,
-}: {
-  user: ManagedUser;
-  loading: boolean;
-  onAction: (
-    type: ActionType
-  ) => void;
-}) {
-  if (
-    user.role ===
-    "ADMIN"
-  ) {
-    return (
-      <Typography
-        variant="caption"
-        color="text.secondary"
-      >
-        Administrador
-      </Typography>
-    );
+function UserActions({ user, loading, onAction }: { user: ManagedUser; loading: boolean; onAction: (type: ActionType) => void }) {
+  if (user.approvalStatus === "PENDING" || user.approvalStatus === "REJECTED") {
+    return <Stack direction="row" spacing={1} sx={{ justifyContent: "flex-end" }}>
+      <Button size="small" variant="outlined" disabled={loading} onClick={() => onAction("APPROVE")}>Aprovar</Button>
+      {user.approvalStatus === "PENDING" && <Button size="small" color="error" disabled={loading} onClick={() => onAction("REJECT")}>Rejeitar</Button>}
+    </Stack>;
   }
-
-  if (
-    user.approvalStatus ===
-    "PENDING"
-  ) {
-    return (
-      <Stack
-        direction="row"
-        spacing={1}
-        sx={{
-          justifyContent:
-            "flex-end",
-        }}
-      >
-        <Button
-          size="small"
-          variant="contained"
-          disabled={
-            loading
-          }
-          onClick={() =>
-            onAction(
-              "APPROVE"
-            )
-          }
-          sx={{
-            backgroundColor:
-              aliareColors.greenDark,
-
-            "&:hover": {
-              backgroundColor:
-                aliareColors.greenDark,
-            },
-          }}
-        >
-          Aprovar
-        </Button>
-
-        <Button
-          size="small"
-          color="error"
-          disabled={
-            loading
-          }
-          onClick={() =>
-            onAction(
-              "REJECT"
-            )
-          }
-        >
-          Rejeitar
-        </Button>
-      </Stack>
-    );
-  }
-
-  if (
-    user.approvalStatus ===
-    "REJECTED"
-  ) {
-    return (
-      <Button
-        size="small"
-        variant="outlined"
-        disabled={
-          loading
-        }
-        onClick={() =>
-          onAction(
-            "APPROVE"
-          )
-        }
-      >
-        Aprovar
-      </Button>
-    );
-  }
-
-  return user.active ? (
-    <Stack
-      direction="row"
-      spacing={1}
-      sx={{
-        justifyContent:
-          "flex-end",
-      }}
-    >
-      <Button
-        size="small"
-        variant="outlined"
-        disabled={
-          loading
-        }
-        onClick={() =>
-          onAction(
-            "SET_ADMIN"
-          )
-        }
-      >
-        Tornar administrador
-      </Button>
-
-      <Button
-        size="small"
-        color="error"
-        startIcon={
-          <PersonOffOutlined />
-        }
-        disabled={
-          loading
-        }
-        onClick={() =>
-          onAction(
-            "DEACTIVATE"
-          )
-        }
-      >
-        Desativar
-      </Button>
-    </Stack>
-  ) : (
-    <Button
-      size="small"
-      variant="outlined"
-      disabled={
-        loading
-      }
-      onClick={() =>
-        onAction(
-          "ACTIVATE"
-        )
-      }
-    >
-      Ativar
-    </Button>
-  );
+  return <Stack direction="row" spacing={1} useFlexGap sx={{ justifyContent: "flex-end", alignItems: "center", flexWrap: "wrap" }}>
+    {user.active && <>
+      <Button size="small" startIcon={<ManageAccountsOutlined />} variant="outlined" disabled={loading || user.role === "ANALISTA"} onClick={() => onAction("SET_ANALYST")}>Analista</Button>
+      <Button size="small" variant="outlined" disabled={loading || user.role === "COORDENADOR"} onClick={() => onAction("SET_COORDINATOR")}>Coordenador</Button>
+      <Button size="small" variant="outlined" disabled={loading || user.role === "ADMIN"} onClick={() => onAction("SET_ADMIN")}>Admin</Button>
+    </>}
+    {user.role !== "ADMIN" && (user.active
+      ? <Button size="small" color="error" startIcon={<PersonOffOutlined />} disabled={loading} onClick={() => onAction("DEACTIVATE")}>Desativar</Button>
+      : <Button size="small" variant="outlined" disabled={loading} onClick={() => onAction("ACTIVATE")}>Ativar</Button>)}
+  </Stack>;
 }
 
 /* =========================================================
@@ -1037,6 +897,10 @@ function getActionTitle(
 
     case "SET_ADMIN":
       return "Conceder acesso administrativo";
+    case "SET_COORDINATOR":
+      return "Alterar perfil para coordenador";
+    case "SET_ANALYST":
+      return "Alterar perfil para analista";
 
     default:
       return "Confirmar operação";
@@ -1066,6 +930,12 @@ function getActionDescription(
 
     case "DEACTIVATE":
       return `Deseja desativar o acesso de ${name}? As sessões abertas desse usuário serão encerradas.`;
+    case "SET_ADMIN":
+      return `Conceder acesso integral de administrador a ${name}? Esta conta poderá administrar todos os usuários e acessar todas as rotinas.`;
+    case "SET_COORDINATOR":
+      return `Alterar ${name} para coordenador? As Centrais da Coordenação e de Liderança Técnica continuarão exigindo liberação individual.`;
+    case "SET_ANALYST":
+      return `Alterar ${name} para analista? As permissões específicas existentes serão revisadas conforme o perfil selecionado.`;
   }
 }
 
