@@ -212,7 +212,7 @@ export default function TeamResults() {
             { label: "Entradas", current: results.opened.length, previous: comparison.opened },
             { label: "Resoluções / produtividade", current: results.resolved.length, previous: comparison.resolved },
             { label: "Fechamentos", current: results.closed.length, previous: comparison.closed },
-          ].map(item => <Box key={item.label} sx={{ p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: 2 }}><Typography variant="body2" fontWeight={700}>{item.label}</Typography><Typography variant="h5" fontWeight={800}>{item.current} <Typography component="span" variant="body2" color="text.secondary">vs. {item.previous}</Typography></Typography><Chip size="small" label={changeLabel(item.current, item.previous)} /></Box>)}
+          ].map(item => <Box key={item.label} sx={{ p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: 2 }}><Typography variant="body2" sx={{ fontWeight: 700 }}>{item.label}</Typography><Typography variant="h5" sx={{ fontWeight: 800 }}>{item.current} <Typography component="span" variant="body2" color="text.secondary">vs. {item.previous}</Typography></Typography><Chip size="small" label={changeLabel(item.current, item.previous)} /></Box>)}
         </Box>
         <Typography variant="caption" color="text.secondary">Backlog histórico não comparado: a base atual não contém snapshots históricos confiáveis de estoque.</Typography>
       </Section></Box>}
