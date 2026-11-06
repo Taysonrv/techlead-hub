@@ -485,11 +485,9 @@ export class UserService {
         id: targetUserId,
       },
       data: {
-        role:
-          role as
-            | "ADMIN"
-            | "COORDENADOR"
-            | "ANALISTA",
+        role: role as "ADMIN" | "COORDENADOR" | "ANALISTA",
+        // Não herdar permissões específicas do perfil anterior ao trocar de função.
+        permissions: role === "ADMIN" ? [] : null,
       },
       select: USER_ADMIN_SELECT,
     });
