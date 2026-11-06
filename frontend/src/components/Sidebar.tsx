@@ -1397,8 +1397,8 @@ export function Sidebar() {
               Meu Perfil
             </MuiMenuItem>
 
-            {isAdmin && <MuiMenuItem onClick={() => { handleCloseProfileMenu(); navigate("/usuarios"); }} sx={{ mx: .75, minHeight: 38, borderRadius: 1.2, fontSize: ".78rem", fontWeight: 600, gap: 1.1 }}>
-              <Badge color="error" badgeContent={pendingUsers}><ManageAccountsOutlined sx={{ fontSize: 18 }} /></Badge> Usuários
+            {isAdmin && <MuiMenuItem onClick={() => { handleCloseProfileMenu(); navigate("/configuracoes#equipe"); }} sx={{ mx: .75, minHeight: 38, borderRadius: 1.2, fontSize: ".78rem", fontWeight: 600, gap: 1.1 }}>
+              <Badge color="error" badgeContent={pendingUsers}><ManageAccountsOutlined sx={{ fontSize: 18 }} /></Badge> Equipe e permissões
             </MuiMenuItem>}
 
             <MuiMenuItem onClick={() => { handleCloseProfileMenu(); navigate("/configuracoes"); }} sx={{ mx: .75, minHeight: 38, borderRadius: 1.2, fontSize: ".78rem", fontWeight: 600, gap: 1.1 }}>
