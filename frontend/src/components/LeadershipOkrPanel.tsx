@@ -97,12 +97,12 @@ export function LeadershipOkrPanel() {
       <DialogTitle>{editingId ? "Atualizar acompanhamento" : "Registrar ação ou evidência"}</DialogTitle>
       <DialogContent><Stack spacing={2} sx={{ mt: 1 }}>
         <TextField select size="small" label="Entregável" value={form.deliverable} onChange={e => setForm({ ...form, deliverable: e.target.value as Key })}>{definitions.map(def => <MenuItem key={def.key} value={def.key}>{def.title}</MenuItem>)}</TextField>
-        <TextField size="small" label="Título" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} inputProps={{ maxLength: 200 }} />
+        <TextField size="small" label="Título" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} slotProps={{ htmlInput: { maxLength: 200 } }} />
         <TextField size="small" multiline minRows={3} label="Análise, ação executada e resultado observado" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} />
         <TextField size="small" label="Responsável" value={form.owner} onChange={e => setForm({ ...form, owner: e.target.value })} />
         <TextField select size="small" label="Situação" value={form.status} onChange={e => setForm({ ...form, status: e.target.value as Status })}>{Object.entries(labels).map(([key, label]) => <MenuItem key={key} value={key}>{label}</MenuItem>)}</TextField>
         <TextField size="small" label="Link da evidência (obrigatório para validada)" value={form.evidenceUrl} onChange={e => setForm({ ...form, evidenceUrl: e.target.value })} />
-        <TextField size="small" type="date" label="Prazo" value={form.dueDate} onChange={e => setForm({ ...form, dueDate: e.target.value })} InputLabelProps={{ shrink: true }} />
+        <TextField size="small" type="date" label="Prazo" value={form.dueDate} onChange={e => setForm({ ...form, dueDate: e.target.value })} slotProps={{ inputLabel: { shrink: true } }} />
       </Stack></DialogContent>
       <DialogActions><Button onClick={() => setDialog(false)} disabled={saving}>Cancelar</Button><Button variant="contained" onClick={() => void save()} disabled={saving}>{saving ? "Salvando..." : "Salvar no servidor"}</Button></DialogActions>
     </Dialog>
