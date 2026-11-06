@@ -1088,8 +1088,6 @@ export function Dashboard() {
       },
       onClick: () => showTickets("Tickets com avaliação CSAT", filteredTickets.filter((ticket)=>ticket.satisfactionScore != null), "Pesquisa de Satisfação Movidesk"),
     },
-      onClick: () => showTickets("Tickets parados", stoppedTickets, "Chamados atualmente parados"),
-    },
   ];
 
   /* =======================================================
