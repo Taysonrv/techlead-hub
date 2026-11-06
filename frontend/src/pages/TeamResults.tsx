@@ -132,7 +132,7 @@ export default function TeamResults() {
   const [presentation, setPresentation] = useState(false);
   const presentationRef = useRef<HTMLDivElement>(null);
   const [sectionIndex, setSectionIndex] = useState(0);
-  const sections = ["team-results-comparison", "team-results-trend", "team-results-status", "team-results-owners", "team-results-backlog", "meeting-goals", "meeting-highlights", "meeting-actions", "team-results-actions"];
+  const sections = ["team-results-comparison", "team-results-trend", "team-results-status", "team-results-owners", "team-results-backlog", "meeting-actions", "team-results-actions"];
   const jump = (index: number) => { const next = Math.max(0, Math.min(sections.length - 1, index)); setSectionIndex(next); document.getElementById(sections[next])?.scrollIntoView({ behavior: "smooth", block: "start" }); };
   useEffect(() => { const update = () => setPresentation(document.fullscreenElement === presentationRef.current); document.addEventListener("fullscreenchange", update); return () => document.removeEventListener("fullscreenchange", update); }, []);
 
@@ -379,7 +379,7 @@ export default function TeamResults() {
           <Stack direction="row" spacing={1}><Button size="small" onClick={() => setDetail({ title: item.label + " · No prazo", tickets: item.sla.withinTickets })}>No prazo</Button><Button size="small" onClick={() => setDetail({ title: item.label + " · Fora do prazo", tickets: item.sla.outsideTickets })}>Fora</Button></Stack>
         </Section>)}
       </Box>
-      <TeamMeetingManagement actual={results.resolved.length} team={results.team} weekLabel={range ? range.start.toLocaleDateString("pt-BR") + " a " + range.end.toLocaleDateString("pt-BR") : ""} snapshot={{ periodStart: range?.start.toISOString().slice(0, 10) ?? "", periodEnd: range?.end.toISOString().slice(0, 10) ?? "", opened: results.opened.length, resolved: results.resolved.length, closed: results.closed.length, backlog: results.backlog.length, stopped: results.stopped.length, capturedAt: new Date().toISOString() }} />
+      <TeamMeetingManagement weekLabel={range ? range.start.toLocaleDateString("pt-BR") + " a " + range.end.toLocaleDateString("pt-BR") : ""} snapshot={{ periodStart: range?.start.toISOString().slice(0, 10) ?? "", periodEnd: range?.end.toISOString().slice(0, 10) ?? "", opened: results.opened.length, resolved: results.resolved.length, closed: results.closed.length, backlog: results.backlog.length, stopped: results.stopped.length, capturedAt: new Date().toISOString() }} />
       <Section id="team-results-actions" title="Pontos para discussão e encaminhamentos">
         <Stack spacing={1}>
           <Typography variant="body2">• Avaliar a diferença entre entradas ({results.opened.length}) e resoluções ({results.resolved.length}) no período.</Typography>
