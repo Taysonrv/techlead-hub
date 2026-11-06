@@ -150,7 +150,7 @@ export function Sidebar() {
   const userId = user?.id ?? null;
   const [favorites, setFavorites] = useState<Favorite[]>([]);
   useEffect(() => {
-    if (!location.hash.startsWith("#favorite-card-")) return;
+    if (!location.hash || location.hash.startsWith("#kpi-")) return;
     let cancelled = false;
     let attempts = 0;
     const scroll = () => {
@@ -160,7 +160,7 @@ export function Sidebar() {
         target.scrollIntoView({ behavior: "smooth", block: "center" });
         return;
       }
-      if (++attempts < 25) window.setTimeout(scroll, 200);
+      if (++attempts < 40) window.setTimeout(scroll, 200);
     };
     const handle = window.setTimeout(scroll, 150);
     return () => { cancelled = true; window.clearTimeout(handle); };
