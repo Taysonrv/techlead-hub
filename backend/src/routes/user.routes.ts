@@ -74,6 +74,11 @@ userRoutes.patch(
 );
 
 userRoutes.patch(
+  "/:id/job-function",
+  users.updateJobFunction.bind(users)
+);
+
+userRoutes.patch(
   "/:id/permissions",
   users.updatePermissions.bind(users)
 );
