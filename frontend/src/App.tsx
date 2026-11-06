@@ -379,7 +379,7 @@ function RoutineAccess({ permission, children }: { permission: string; children:
   if (user.role === "ADMIN") return children;
   const allowed = Array.isArray(user.permissions)
     ? user.permissions.includes(permission)
-    : user.role === "COORDENADOR" || DEFAULT_ANALYST_PERMISSIONS.includes(permission);
+    : (user.role === "COORDENADOR" && !["coordination", "technical-leadership"].includes(permission)) || DEFAULT_ANALYST_PERMISSIONS.includes(permission);
   if (allowed) return children;
   return (
     <Box sx={{ minHeight: "100vh", display: "grid", placeItems: "center", p: 3, bgcolor: "background.default" }}>
