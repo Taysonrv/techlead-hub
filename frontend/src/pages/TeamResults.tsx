@@ -179,7 +179,7 @@ export default function TeamResults() {
   const [presentation, setPresentation] = useState(false);
   const presentationRef = useRef<HTMLDivElement>(null);
   const [sectionIndex, setSectionIndex] = useState(0);
-  const sections = ["team-results-comparison", "team-results-trend", "team-results-status", "team-results-owners", "team-results-backlog", "meeting-actions", "team-results-actions"];
+  const sections = ["team-results-comparison", "team-results-trend", "team-results-status", "team-results-by-type", "team-results-by-service", "team-results-by-client", "team-results-owners", "team-results-backlog", "meeting-actions", "team-results-actions"];
   const jump = (index: number) => { const next = Math.max(0, Math.min(sections.length - 1, index)); setSectionIndex(next); document.getElementById(sections[next])?.scrollIntoView({ behavior: "smooth", block: "start" }); };
   useEffect(() => { const update = () => setPresentation(document.fullscreenElement === presentationRef.current); document.addEventListener("fullscreenchange", update); return () => document.removeEventListener("fullscreenchange", update); }, []);
 
@@ -463,16 +463,25 @@ export default function TeamResults() {
         </Section>)}
       </Box>
       <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", xl: "repeat(3, minmax(0, 1fr))" }, gap: 2, mb: 2 }}>
-        {distributions.map(group => <Section key={group.id} id={group.id} title={group.title} info={"Distribuição dos tickets públicos criados no período selecionado, agrupados por " + group.title.toLowerCase().replace("atendimentos por ", "") + ". Clique para consultar os tickets."}>
-          <Stack spacing={1.2}>
-            {group.rows.slice(0, 12).map(row => <Box key={row.name} role="button" tabIndex={0} onClick={() => setDetail({ title: group.title + " · " + row.name, tickets: row.items })} onKeyDown={event => { if (event.key === "Enter") setDetail({ title: group.title + " · " + row.name, tickets: row.items }); }} sx={{ cursor: "pointer", "&:hover": { bgcolor: "action.hover" }, p: .5, borderRadius: 1 }}>
-              <Stack direction="row" sx={{ justifyContent: "space-between", gap: 1 }}><Typography variant="body2" sx={{ overflowWrap: "anywhere" }}>{row.name}</Typography><Typography variant="body2" sx={{ fontWeight: 800 }}>{row.items.length}</Typography></Stack>
-              <Box sx={{ height: 9, borderRadius: 1, bgcolor: "action.hover", overflow: "hidden" }}><Box sx={{ height: "100%", width: 100 * row.items.length / Math.max(1, group.rows[0]?.items.length || 1) + "%", bgcolor: "primary.main" }} /></Box>
-            </Box>)}
-            {group.rows.length === 0 && <Alert severity="info">Sem atendimentos no período.</Alert>}
-            {group.rows.length > 12 && <Typography variant="caption" color="text.secondary">Exibindo os 12 maiores grupos de {group.rows.length}.</Typography>}
-          </Stack>
-        </Section>)}
+        {distributions.map(group => {
+          const top = group.rows.slice(0, 3);
+          const remainder = group.rows.slice(3).reduce((sum, row) => sum + row.items.length, 0);
+          const segments = [...top.map((row, index) => ({ label: row.name, value: row.items.length, color: palette[index] })), { label: "Outros grupos", value: remainder, color: palette[3] }];
+          return <Section key={group.id} id={group.id} title={group.title} info={"Distribuição dos tickets públicos criados no período, por " + group.title.toLowerCase().replace("atendimentos por ", "") + ". O donut representa o total do período."}>
+            <Stack spacing={2}>
+              <DonutSummary title="Atendimentos" total={results.opened.length} segments={segments} />
+              <Divider />
+              <Stack spacing={1}>
+                {group.rows.slice(0, 7).map(row => <Box key={row.name} role="button" tabIndex={0} onClick={() => setDetail({ title: group.title + " · " + row.name, tickets: row.items })} onKeyDown={event => { if (event.key === "Enter") setDetail({ title: group.title + " · " + row.name, tickets: row.items }); }} sx={{ cursor: "pointer", "&:hover": { bgcolor: "action.hover" }, p: .5, borderRadius: 1 }}>
+                  <Stack direction="row" sx={{ justifyContent: "space-between", gap: 1 }}><Typography variant="body2" sx={{ overflowWrap: "anywhere", fontSize: 13 }}>{row.name}</Typography><Typography variant="body2" sx={{ fontWeight: 800 }}>{row.items.length}</Typography></Stack>
+                  <Box sx={{ height: 8, borderRadius: 1, bgcolor: "action.hover", overflow: "hidden", mt: .5 }}><Box sx={{ height: "100%", width: 100 * row.items.length / Math.max(1, group.rows[0]?.items.length || 1) + "%", bgcolor: "primary.main", borderRadius: 1 }} /></Box>
+                </Box>)}
+                {group.rows.length === 0 && <Alert severity="info">Sem atendimentos no período.</Alert>}
+                {group.rows.length > 7 && <Typography variant="caption" color="text.secondary">7 maiores grupos de {group.rows.length}; demais incluídos no donut.</Typography>}
+              </Stack>
+            </Stack>
+          </Section>;
+        })}
       </Box>
       <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "1fr 1fr" }, gap: 2, mb: 2 }}>
         <Section id="team-results-bugs" title="Bugs / correções" info="Quantidade de tarefas Correção Clientes criadas no Azure DevOps durante o período selecionado. Contagem por data de criação da tarefa, não pela data do atendimento.">
