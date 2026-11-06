@@ -1017,3 +1017,22 @@ model TeamsWorkflowOutbox {
   @@index([movideskId])
   @@index([azureWorkItemId])
 }
+
+
+// Registro compartilhado das reuniões de resultados, independente de dispositivo.
+model TeamResultsMeeting {
+  id          Int      @id @default(autoincrement())
+  meetingDate DateTime @unique @db.Date
+  title       String   @db.VarChar(200)
+  notes       String   @default("") @db.Text
+  goals       Json
+  highlights  Json
+  actions     Json
+  version     Int      @default(1)
+  createdById Int
+  updatedById Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([updatedAt])
+}
