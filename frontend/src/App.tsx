@@ -46,7 +46,7 @@ const Clients = lazy(() => import("./pages/Clients").then((module) => ({ default
 const About = lazy(() => import("./pages/About").then((module) => ({ default: module.About })));
 const Profile = lazy(() => import("./pages/Profile").then((module) => ({ default: module.Profile })));
 const Login = lazy(() => import("./pages/Login").then((module) => ({ default: module.Login })));
-const Users = lazy(() => import("./pages/Users").then((module) => ({ default: module.Users })));
+
 const AzureWorkItems = lazy(() => import("./pages/AzureWorkItems").then((module) => ({ default: module.AzureWorkItems })));
 const Versions = lazy(() => import("./pages/Versions").then((module) => ({ default: module.Versions })));
 const Settings = lazy(() => import("./pages/Settings").then((module) => ({ default: module.Settings })));
@@ -599,7 +599,7 @@ function App() {
             element={
               <AdminOnly>
                 <AuthenticatedLayout>
-                  <Users />
+                  <Navigate to="/configuracoes#equipe" replace />
                 </AuthenticatedLayout>
               </AdminOnly>
             }
