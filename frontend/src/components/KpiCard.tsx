@@ -11,7 +11,10 @@ import {
 } from "@mui/material";
 import { alpha } from "@mui/material/styles";
 import { InfoOutlined, StarBorderRounded, StarRounded } from "@mui/icons-material";
-import type { KeyboardEvent, ReactNode } from "react";
+import { useEffect, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useLocation } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
+import { readFavorites, toggleFavorite } from "../utils/favorites";
 import { kpiLayout } from "../theme/layoutTokens";
 import { aliareColors } from "../theme/theme";
 
@@ -53,6 +56,22 @@ export function KpiCard({
   favorite,
   onToggleFavorite,
 }: KpiCardProps) {
+  const { user } = useAuth();
+  const location = useLocation();
+  const favoriteId = "card:" + location.pathname + ":" + title;
+  const targetId = "favorite-card-" + encodeURIComponent(title);
+  const [autoFavorite, setAutoFavorite] = useState(false);
+  useEffect(() => {
+    const refresh = () => setAutoFavorite(user?.id != null && readFavorites(user.id).some((item) => item.id === favoriteId));
+    refresh();
+    window.addEventListener("techlead-favorites-changed", refresh);
+    return () => window.removeEventListener("techlead-favorites-changed", refresh);
+  }, [user?.id, favoriteId]);
+  const selectedFavorite = onToggleFavorite ? favorite : autoFavorite;
+  const handleFavorite = onToggleFavorite ?? (() => {
+    if (user?.id == null) return;
+    toggleFavorite(user.id, { id: favoriteId, label: title, path: location.pathname + "#" + targetId, kind: "card" });
+  });
   const theme = useTheme();
   const dark = theme.palette.mode === "dark";
 
@@ -67,6 +86,7 @@ export function KpiCard({
     <Card
       elevation={0}
       data-kpi-card
+      id={targetId}
       role={onClick ? "button" : undefined}
       tabIndex={onClick ? 0 : undefined}
       aria-pressed={onClick ? active : undefined}
@@ -167,7 +187,7 @@ export function KpiCard({
           </Typography>
 
           <Stack direction="row" sx={{ flexShrink: 0, gap: 0.35 }}>
-          {onToggleFavorite && <Tooltip title={favorite ? "Remover dos favoritos" : "Favoritar card"}><IconButton size="small" aria-label={favorite ? "Remover dos favoritos" : "Favoritar card"} onClick={(event) => { event.stopPropagation(); onToggleFavorite(); }} sx={{ width: 24, height: 24, p: .25, color: favorite ? "#F5C451" : "text.secondary", "& .MuiSvgIcon-root": { fontSize: 17 } }}>{favorite ? <StarRounded /> : <StarBorderRounded />}</IconButton></Tooltip>}
+          {user?.id != null && <Tooltip title={selectedFavorite ? "Remover dos favoritos" : "Favoritar card"}><IconButton size="small" aria-label={selectedFavorite ? "Remover dos favoritos" : "Favoritar card"} onClick={(event) => { event.stopPropagation(); handleFavorite(); }} sx={{ width: 24, height: 24, p: .25, color: selectedFavorite ? "#F5C451" : "text.secondary", "& .MuiSvgIcon-root": { fontSize: 17 } }}>{selectedFavorite ? <StarRounded /> : <StarBorderRounded />}</IconButton></Tooltip>}
           {icon ? <Box sx={{ display: "flex", color: accent, flexShrink: 0, "& .MuiSvgIcon-root": { fontSize: 18 } }}>{icon}</Box> : null}
           {infoContent ? <Box onClick={(event) => event.stopPropagation()} sx={{ flexShrink: 0, mt: -.25, "& .MuiIconButton-root": { width: 22, height: 22, p: .25 }, "& .MuiSvgIcon-root": { fontSize: 16 } }}>{infoContent}</Box> : info || metadata ? (
             <Tooltip
