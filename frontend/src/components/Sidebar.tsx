@@ -569,7 +569,7 @@ export function Sidebar() {
     user?.role === "ADMIN" ||
     (Array.isArray(user?.permissions)
       ? user.permissions.includes(permission)
-      : user?.role === "COORDENADOR" ||
+      : (user?.role === "COORDENADOR" && !["coordination", "technical-leadership"].includes(permission)) ||
         ["dashboard","tickets","my-operation","known-problems","attention","data-quality","clients","simer-map","performance","reports","corrections","evolutions","support","versions","knowledge"].includes(permission)),
     [user?.permissions, user?.role],
   );
