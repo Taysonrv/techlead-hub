@@ -254,6 +254,15 @@ export class UserController {
     }
   }
 
+  async updateMovideskOwnerName(request: AuthenticatedRequest, response: Response) {
+    try {
+      const adminUserId = getAuthenticatedUserId(request);
+      const targetUserId = getUserIdFromParams(request.params.id);
+      const user = await userService.updateMovideskOwnerName(adminUserId, targetUserId, request.body?.movideskOwnerName);
+      return response.status(200).json({ message: "Responsável Movidesk vinculado com sucesso.", user });
+    } catch (error) { return handleUserError(error, response); }
+  }
+
   async updateJobFunction(request: AuthenticatedRequest, response: Response) {
     try {
       const adminUserId = getAuthenticatedUserId(request);
