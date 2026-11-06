@@ -7,7 +7,7 @@ import {
 
 export type AppNotification = {
   key: string;
-  kind: "SIMER_VERSION" | "AZURE_COMPLETED" | "AZURE_UPDATED" | "CHAT_MENTION" | "USER_ONLINE" | "OPERATION_ALERT" | "KNOWN_PROBLEM" | "MEETING_REMINDER";
+  kind: "SIMER_VERSION" | "AZURE_COMPLETED" | "AZURE_UPDATED" | "CHAT_MENTION" | "USER_ONLINE" | "OPERATION_ALERT" | "KNOWN_PROBLEM" | "MEETING_REMINDER" | "TEAM_ACTION";
   title: string;
   message: string;
   occurredAt: Date;
@@ -126,6 +126,44 @@ export class NotificationService {
     return notifications
       .sort((left, right) => right.occurredAt.getTime() - left.occurredAt.getTime())
       .slice(0, 30);
+  }
+
+  public async teamActionNotificationsForUser(userId: number, userName: string): Promise<AppNotification[]> {
+    const normalizedName = userName.trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR");
+    if (!normalizedName) return [];
+    const now = new Date();
+    const meetings = await prisma.teamResultsMeeting.findMany({
+      orderBy: { meetingDate: "desc" }, take: 40,
+      select: { meetingDate: true, actions: true, updatedAt: true },
+    });
+    const latest = new Map<string, { description: string; due: string; status: string; updatedAt: Date; date: string }>();
+    for (const meeting of meetings) {
+      const actions = Array.isArray(meeting.actions) ? meeting.actions : [];
+      for (const raw of actions) {
+        if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
+        const action = raw as Record<string, unknown>;
+        if (typeof action.id !== "string" || typeof action.owner !== "string" || typeof action.description !== "string" || typeof action.due !== "string" || typeof action.status !== "string") continue;
+        const assigned = action.owner.trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR");
+        if (assigned !== normalizedName || latest.has(action.id)) continue;
+        latest.set(action.id, { description: action.description, due: action.due, status: action.status, updatedAt: meeting.updatedAt, date: meeting.meetingDate.toISOString().slice(0, 10) });
+      }
+    }
+    const notifications: AppNotification[] = [];
+    for (const [id, action] of latest) {
+      if (action.status === "done" || !/^\d{4}-\d{2}-\d{2}$/.test(action.due)) continue;
+      const due = new Date(action.due + "T23:59:59.999Z");
+      if (!Number.isFinite(due.getTime())) continue;
+      const days = Math.ceil((due.getTime() - now.getTime()) / 86_400_000);
+      const reminder = days < 0 ? "Compromisso atrasado" : days <= 2 ? "Prazo do compromisso próximo" : "Novo compromisso atribuído";
+      const message = action.description.slice(0, 240) + " · Prazo: " + action.due.split("-").reverse().join("/");
+      notifications.push({
+        key: "team-action:" + id + ":" + (days <= 2 ? "due:" + action.due : "assigned:" + action.updatedAt.toISOString()),
+        kind: "TEAM_ACTION", title: reminder, message,
+        occurredAt: days <= 2 ? new Date(Math.max(action.updatedAt.getTime(), due.getTime() - 2 * 86_400_000)) : action.updatedAt,
+        path: "/resultados-equipe?meeting=" + action.date,
+      });
+    }
+    return notifications.slice(0, 30);
   }
 
   public async listForUser(
@@ -446,10 +484,10 @@ export class NotificationService {
       path: "/chat",
     }));
 
-    const preferences = await this.preferences(userId);
-    const notifications = [...onlineNotifications, ...meetingNotifications, ...knownProblemNotifications, ...operationalAlerts, ...mentionNotifications, ...itemNotifications, ...followedNotifications, ...versionNotifications]
+    const [preferences, teamActionNotifications] = await Promise.all([this.preferences(userId), this.teamActionNotificationsForUser(userId, user.name)]);
+    const notifications = [...teamActionNotifications, ...onlineNotifications, ...meetingNotifications, ...knownProblemNotifications, ...operationalAlerts, ...mentionNotifications, ...itemNotifications, ...followedNotifications, ...versionNotifications]
       .filter((item) =>
-        item.kind === "USER_ONLINE" || item.kind === "CHAT_MENTION" || item.kind === "OPERATION_ALERT" || item.kind === "KNOWN_PROBLEM" || item.kind === "MEETING_REMINDER"
+        item.kind === "USER_ONLINE" || item.kind === "CHAT_MENTION" || item.kind === "OPERATION_ALERT" || item.kind === "KNOWN_PROBLEM" || item.kind === "MEETING_REMINDER" || item.kind === "TEAM_ACTION"
           ? true
           : item.kind === "SIMER_VERSION"
           ? preferences.simerVersion
