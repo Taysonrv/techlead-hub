@@ -1,3 +1,4 @@
+import { GuidedInvestigation } from "../components/GuidedInvestigation";
 import { KpiGrid } from "../components/KpiGrid";
 import { ContentState } from "../components/ContentState";
 import { KpiCard as ExecutiveKpiCard } from "../components/KpiCard";
@@ -426,6 +427,7 @@ return <Box><PageHeader eyebrow="INTELIGÊNCIA" title="Central de Investigação
     </Card>
   </Box>
 )}
+{(data || topicData) && <GuidedInvestigation key={data ? `ticket:${data.ticket.movideskId}` : `topic:${topicData?.query}`} subject={data ? `#${data.ticket.movideskId} · ${data.ticket.subject}` : topicData?.query ?? query} context={data} topicSummary={topicData?.summary} />}
 <Card variant="outlined" sx={{ mt: 2 }}>
   <CardContent>
     <Typography sx={{ fontWeight: 850 }}>Inteligência de diagnóstico</Typography>
