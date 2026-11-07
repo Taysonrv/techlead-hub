@@ -4234,10 +4234,9 @@ export function Analysts() {
       >
         <Box
           sx={{
-            width: {
-              xs: 320,
-              sm: 500,
-            },
+            width: "100%",
+            minWidth: 0,
+            boxSizing: "border-box",
 
             p: 2.5,
           }}
@@ -4544,10 +4543,9 @@ export function Analysts() {
       >
         <Box
           sx={{
-            width: {
-              xs: 340,
-              sm: 620,
-            },
+            width: "100%",
+            minWidth: 0,
+            boxSizing: "border-box",
             p: 2.5,
           }}
         >
@@ -4692,10 +4690,9 @@ export function Analysts() {
       >
         <Box
           sx={{
-            width: {
-              xs: 340,
-              sm: 620,
-            },
+            width: "100%",
+            minWidth: 0,
+            boxSizing: "border-box",
             p: 2.5,
           }}
         >
