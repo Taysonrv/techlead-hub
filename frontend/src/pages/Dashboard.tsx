@@ -2033,7 +2033,7 @@ export function Dashboard() {
           DRAWER - TASKS DE DESENVOLVIMENTO
       ================================================= */}
       <Drawer anchor="right" open={Boolean(developmentDrilldown)} onClose={() => setDevelopmentDrilldown(null)} slotProps={{ paper: { sx: detailDrawerPaperSx } }}>
-        <Box sx={{ width: { xs: "100vw", sm: 560 }, maxWidth: "100vw", p: 2.5 }}>
+        <Box sx={{ width: "100%", minWidth: 0, boxSizing: "border-box", p: 2.5 }}>
           {developmentDrilldown && <>
             <Stack direction="row" sx={{justifyContent:"space-between",alignItems:"flex-start",gap:2}}>
               <Box><Typography variant="h6" sx={{fontWeight:800}}>{developmentDrilldown.title}</Typography><Typography variant="body2" color="text.secondary">{developmentDrilldown.subtitle}</Typography></Box>
@@ -2081,10 +2081,9 @@ export function Dashboard() {
       >
         <Box
           sx={{
-            width: {
-              xs: 320,
-              sm: 500,
-            },
+            width: "100%",
+            minWidth: 0,
+            boxSizing: "border-box",
 
             p: 2.5,
           }}
@@ -2205,10 +2204,9 @@ export function Dashboard() {
       >
         <Box
           sx={{
-            width: {
-              xs: 320,
-              sm: 500,
-            },
+            width: "100%",
+            minWidth: 0,
+            boxSizing: "border-box",
 
             p: 2.5,
           }}
