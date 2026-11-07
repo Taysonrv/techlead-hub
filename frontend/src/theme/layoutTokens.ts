@@ -18,6 +18,7 @@ export const detailDrawerPaperSx = {
   borderLeft: "1px solid",
   borderColor: "divider",
   "& > .MuiBox-root": {
+    width: "100%",
     maxWidth: "100%",
     minWidth: 0,
     boxSizing: "border-box",
