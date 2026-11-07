@@ -1,5 +1,6 @@
 import { KpiGrid } from "../components/KpiGrid";
 import { LeadershipOkrPanel } from "../components/LeadershipOkrPanel";
+import { LeadershipResolutionPanel } from "../components/LeadershipResolutionPanel";
 import { ContentState } from "../components/ContentState";
 import {
   Alert, Box, Button, Card, CardContent, Chip, Drawer,
@@ -419,6 +420,8 @@ export function TechnicalLeadership() {
         <AreaTitle title="Cockpit operacional" info={tabInfo.indicators} icon={<InsightsOutlined color="primary" />} />
         <Chip size="small" variant="outlined" label="Movidesk + inteligência operacional" />
       </Stack>
+
+      <LeadershipResolutionPanel operational={data.analytics.operational} daily={data.analytics.daily} periodLabel={data.periodStart && data.periodEnd ? `${new Date(data.periodStart).toLocaleDateString("pt-BR")} a ${new Date(data.periodEnd).toLocaleDateString("pt-BR")}` : `últimos ${data.periodDays} dias`} coverage={data.coverage} onOpenOkrs={() => setTab("okrs")} onInvestigateRecurrences={() => setTab("recurrences")} />
 
       <KpiGrid sx={{mb: 2}}>
         <KpiCard title="SLA solução" value={data.analytics.operational.resolutionSlaRate === null ? "—" : `${data.analytics.operational.resolutionSlaRate}%`} subtitle="Resolvidos no prazo" accent={aliareColors.green} onClick={() => setDrawer({ kind: "radar", key: "resolutionOutside", title: "Solução fora do SLA", items: data.analytics.samples.resolutionOutside ?? [] })} />
