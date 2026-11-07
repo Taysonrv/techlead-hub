@@ -76,7 +76,7 @@ export function GuidedInvestigation({ subject, context, topicSummary }: Props) {
       <Typography sx={{fontWeight:850,mb:1}}>Roteiro de verificações</Typography>
       <Box sx={{display:"grid",gridTemplateColumns:{xs:"1fr",lg:"repeat(2,minmax(0,1fr))"},gap:1}}>
         {checks.map(item=><Box key={item.id} sx={{display:"flex",gap:1,border:"1px solid",borderColor:"divider",borderRadius:2,p:1.2,minWidth:0}}>
-          <Checkbox size="small" checked={Boolean(checked[item.id])} onChange={e=>setChecked(old=>({...old,[item.id]:e.target.checked}))} inputProps={{"aria-label":item.title}}/>
+          <Checkbox size="small" checked={Boolean(checked[item.id])} onChange={e=>setChecked(old=>({...old,[item.id]:e.target.checked}))} slotProps={{ input: { "aria-label": item.title } }}/>
           <Box sx={{minWidth:0}}><Typography variant="body2" sx={{fontWeight:750}}>{item.title}</Typography><Typography variant="caption" color="text.secondary">{item.hint}</Typography></Box>
         </Box>)}
       </Box>
