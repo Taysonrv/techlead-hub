@@ -51,6 +51,9 @@ export function LeadershipOkrPanel() {
     finally { setSaving(false); }
   };
   const verified = items.filter(item => item.status === "VERIFIED");
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const overdue = items.filter(item => item.dueDate && !["VERIFIED", "CANCELLED"].includes(item.status) && new Date(item.dueDate.slice(0, 10) + "T23:59:59").getTime() < today.getTime());
+  const withoutOwner = items.filter(item => !item.owner.trim());
   return <Stack spacing={2}>
     <Card variant="outlined"><CardContent>
       <Typography variant="h6" sx={{ fontWeight: 850 }}>OKRs · Qualidade e melhoria contínua</Typography>
@@ -59,10 +62,13 @@ export function LeadershipOkrPanel() {
         <Chip color="primary" label={items.length + " registros de acompanhamento"} />
         <Chip color="success" variant="outlined" label={verified.length + " evidências validadas"} />
         <Chip variant="outlined" label={items.filter(item => item.status === "IN_PROGRESS").length + " em andamento"} />
+        <Chip color={overdue.length ? "warning" : "default"} variant="outlined" label={overdue.length + " ações em atraso"} />
       </Stack>
     </CardContent></Card>
     {error && <Alert severity="warning" onClose={() => setError("")}>{error}</Alert>}
     {loading && <Typography color="text.secondary">Carregando evidências...</Typography>}
+    {!loading && overdue.length > 0 && <Alert severity="warning">{overdue.length} ação(ões) com prazo vencido e ainda sem validação. Revise responsáveis, prazos e evidências.</Alert>}
+    {!loading && withoutOwner.length > 0 && <Alert severity="info">{withoutOwner.length} registro(s) sem responsável identificado.</Alert>}
     <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", xl: "1fr 1fr" }, gap: 2 }}>
       {definitions.map(def => {
         const related = items.filter(item => item.deliverable === def.key);
@@ -83,6 +89,7 @@ export function LeadershipOkrPanel() {
                 <Chip size="small" color={item.status === "VERIFIED" ? "success" : item.status === "IN_PROGRESS" ? "warning" : "default"} label={labels[item.status]} />
               </Stack>
               <Typography variant="caption" color="text.secondary">{item.owner} · {item.dueDate ? new Date(item.dueDate).toLocaleDateString("pt-BR", { timeZone: "UTC" }) : "Sem prazo"}</Typography>
+              {overdue.some(overdueItem => overdueItem.id === item.id) && <Chip size="small" color="warning" sx={{ ml: 1 }} label="Prazo vencido" />}
               <Typography variant="body2" sx={{ mt: .5, whiteSpace: "pre-wrap" }}>{item.description}</Typography>
               <Stack direction="row" spacing={1} sx={{ mt: 1, alignItems: "center" }}>
                 {item.evidenceUrl && <Button size="small" component="a" href={item.evidenceUrl} target="_blank" rel="noopener noreferrer">Ver evidência</Button>}
