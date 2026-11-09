@@ -3,6 +3,7 @@ import crypto from "node:crypto";
 import { Prisma } from "@prisma/client";
 
 import { prisma } from "../database/prisma";
+import { observeTicketCategory } from "./TicketCategoryHistoryService";
 
 type ExcelRow = Record<string, unknown>;
 
@@ -222,60 +223,42 @@ export class MovideskExcelImportService {
           );
         }
 
-        const existing =
-          await prisma.ticket.findUnique(
-            {
-              where: {
-                movideskId:
-                  ticket.movideskId,
-              },
-
-              select: {
-                id: true,
-              },
-            }
+        const existing = await prisma.$transaction(async (tx) => {
+          const previous = await tx.ticket.findUnique({
+            where: { movideskId: ticket.movideskId },
+            select: { id: true, category: true, lastUpdate: true },
+          });
+          const staleCategoryPayload = Boolean(
+            previous?.lastUpdate && ticket.lastUpdate && ticket.lastUpdate < previous.lastUpdate,
           );
-
-        await prisma.ticket.upsert(
-          {
-            where: {
-              movideskId:
-                ticket.movideskId,
-            },
-
+          const observedCategory = staleCategoryPayload ? previous?.category ?? ticket.category : ticket.category;
+          const saved = await tx.ticket.upsert({
+            where: { movideskId: ticket.movideskId },
             create: {
               ...ticket,
-
-              importSource:
-                "MOVÍDESK_EXCEL",
-
-              importBatch:
-                batchId,
-
-              importedAt:
-                new Date(),
-
-              importRunId:
-                importRun.id,
+              importSource: "MOVÍDESK_EXCEL",
+              importBatch: batchId,
+              importedAt: new Date(),
+              importRunId: importRun.id,
             },
-
             update: {
               ...ticket,
-
-              importSource:
-                "MOVÍDESK_EXCEL",
-
-              importBatch:
-                batchId,
-
-              importedAt:
-                new Date(),
-
-              importRunId:
-                importRun.id,
+              category: observedCategory,
+              importSource: "MOVÍDESK_EXCEL",
+              importBatch: batchId,
+              importedAt: new Date(),
+              importRunId: importRun.id,
             },
-          }
-        );
+          });
+          await observeTicketCategory(tx, {
+            ticketId: saved.id,
+            previousCategory: previous?.category ?? null,
+            category: observedCategory,
+            source: "MOVIDESK_EXCEL",
+            sourceLastUpdate: staleCategoryPayload ? previous?.lastUpdate : ticket.lastUpdate,
+          });
+          return previous;
+        });
 
         if (existing) {
           updated++;
