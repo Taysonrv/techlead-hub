@@ -140,7 +140,7 @@ export class MovideskJsonImportService {
             ? isInOperationalSimerSupportPortfolio(previous)
             : false;
 
-          const staleCategoryPayload = Boolean(previous?.lastUpdate && ticket.lastUpdate && ticket.lastUpdate < previous.lastUpdate);
+          const staleCategoryPayload = Boolean(previous?.lastUpdate && (!ticket.lastUpdate || ticket.lastUpdate < previous.lastUpdate));
           const observedCategory = staleCategoryPayload ? previous?.category ?? ticket.category : ticket.category;
           const savedTicket = await tx.ticket.upsert({
             where: { movideskId: ticket.movideskId },
@@ -154,13 +154,14 @@ export class MovideskJsonImportService {
             update: {
               ...ticket,
               category: observedCategory,
+              lastUpdate: staleCategoryPayload ? previous?.lastUpdate : ticket.lastUpdate,
               // Payloads parciais não devem apagar o tipo oficial já identificado.
               ticketType: ticket.ticketType ?? previous?.ticketType ?? null,
               // A API pode deixar de devolver customFieldValues históricos. Não
               // apagamos uma classificação oficial já persistida só porque o
               // campo deixou de vir no payload atual.
-              cause: this.isCategory(ticket.category, "problema") ? (ticket.cause ?? previous?.cause ?? null) : null,
-              reason: this.isCategory(ticket.category, "duvida") ? (ticket.reason ?? previous?.reason ?? null) : null,
+              cause: this.isCategory(observedCategory, "problema") ? (ticket.cause ?? previous?.cause ?? null) : null,
+              reason: this.isCategory(observedCategory, "duvida") ? (ticket.reason ?? previous?.reason ?? null) : null,
               businessArea: ticket.businessArea ?? previous?.businessArea ?? null,
               importSource: source,
               importBatch: batchId,
