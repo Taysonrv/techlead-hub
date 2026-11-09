@@ -60,7 +60,7 @@ export async function bomJesusReport(startDate: string, endDate: string) {
   });
   const rows: BomJesusRow[] = prepared.map(({ t, classification, vistra, recurrenceKey, productAction, linkedTask }) => ({
     id: t.movideskId, subject: t.subject, client: t.client || "", createdDate: t.createdDate.toISOString(),
-    status: t.status, category: t.category || "", taskNumber: t.taskNumber, taskType: t.taskType || "",
+    status: t.status, category: t.category || "", taskNumber: t.taskNumber, taskType: linkedTask?.workItemType || t.taskType || "",
     classification, vistra, recurrenceKey, recurrenceCount: keys.get(recurrenceKey) || 0,
     actionCount: t.actions.length,
     taskState: linkedTask?.state || "", deliveredVersion: linkedTask?.deliveredVersion || "",
@@ -86,7 +86,7 @@ export async function bomJesusReport(startDate: string, endDate: string) {
       currentImprovements: rows.filter(x => x.classification === "Melhoria atual — validar origem").length,
       vistraCandidates: rows.filter(x => x.vistra).length,
       recurrenceCandidates: rows.filter(x => x.recurrenceCount > 1).length,
-      confirmedBugs: null, reclassified: null, olaBreaches: rows.filter(x => x.supportOlaBreached === true && x.taskCreatedAt && includesAny(text(x.taskType) + " " + text(byTask.get(x.taskNumber || -1)?.workItemType), bugWords)).length,
+      confirmedBugs: null, reclassified: null, olaBreaches: rows.filter(x => x.supportOlaBreached === true && includesAny(text(x.taskType), bugWords)).length,
       linkedCorrectionTasks: prepared.filter(x => !!x.linkedTask && includesAny(text(x.linkedTask.workItemType), bugWords)).length,
       deliveredCorrectionTasks: prepared.filter(x => !!x.linkedTask && includesAny(text(x.linkedTask.workItemType), bugWords) && !!x.linkedTask.deliveredVersion).length,
     },
