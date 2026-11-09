@@ -86,7 +86,7 @@ export function CoordinationWeeklyWorkspace() {
         <TextField select size="small" label="Situação" value={draft.status} onChange={e => setDraft(d => ({ ...d, status: e.target.value as Status }))}>{statuses.map(s => <MenuItem key={s} value={s}>{s}</MenuItem>)}</TextField>
         <TextField size="small" label="Ticket / Task (referência)" value={draft.ticket} onChange={e => setDraft(d => ({ ...d, ticket: e.target.value }))} />
         <TextField size="small" label="Notas / próximos passos" multiline minRows={1} sx={{ gridColumn: { md: "span 2" } }} value={draft.notes} onChange={e => setDraft(d => ({ ...d, notes: e.target.value }))} />
-        <Stack direction="row" spacing={1} alignItems="center">
+        <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
           <Button type="submit" variant="contained">{editing ? "Salvar edição" : "Adicionar"}</Button>
           {editing && <Button onClick={() => { setDraft(empty); setEditing(null); }}>Cancelar</Button>}
         </Stack>
