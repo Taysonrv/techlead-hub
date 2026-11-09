@@ -4,9 +4,9 @@ import { api, getApiErrorMessage } from "../services/api";
 
 type CategorySnapshot = { previousCategory: string | null; category: string; source: string; observedAt: string; sourceLastUpdate: string | null; kind: string };
 type SlaMetric = { minutes: number | null; targetMinutes: number | null; exceeded: boolean | null; overMinutes: number | null; percent: number | null; state: string };
-type SlaEvidence = { tier: "PADRAO" | "VIP"; tierSource: string; tierVerified: boolean; priority: string | null; kind: string; eligible: boolean; warnings: string[]; response: SlaMetric; support: SlaMetric; factory: SlaMetric; total: SlaMetric; pauseMinutesSupport: number; pauseMinutesFactory: number };
-type Row = { sla: SlaEvidence; initialObservedCategory: string | null; initialObservedAt: string | null; initialSource: string | null; openingCategoryVerified: boolean; categoryHistory: CategorySnapshot[]; id: number; subject: string; createdDate: string; status: string; category: string; taskNumber: number | null; classification: string; vistra: boolean; recurrenceCount: number; ola: string; evidence: string; taskState: string; deliveredVersion: string; supportOlaBreached: boolean | null; categoryChangedAt: string | null; categoryChangeEvidence: string; vistraType: string; recurrenceEvidence: string };
-type Report = { generatedAt: string; methodology: string; totals: { tickets: number; possibleBugs: number; currentImprovements: number; vistraCandidates: number; recurrenceCandidates: number; confirmedBugs: null; reclassified: number; categoryChangeEvidenceCount: number; categoryHistoryCoverage: number; categoryOpeningVerified: number; recurrenceGroups: number; olaBreaches: number; olaBreachesPreliminary: number; responseBreaches: number; factoryBreaches: number; factoryOverdueOpen: number; totalSlaBreaches: number; withoutVerifiedProfile: number; slaCalculationEligible: number; linkedCorrectionTasks: number; deliveredCorrectionTasks: number }; monthly: { month: string; tickets: number; vistra: number }[]; rows: Row[] };
+type SlaEvidence = { agreement: string | null; tier: "PADRAO" | "VIP"; tierSource: string; tierVerified: boolean; priority: string | null; kind: string; eligible: boolean; warnings: string[]; response: SlaMetric; support: SlaMetric; factory: SlaMetric; total: SlaMetric; pauseMinutesSupport: number; pauseMinutesFactory: number };
+type Row = { sla: SlaEvidence; initialObservedCategory: string | null; initialObservedAt: string | null; initialSource: string | null; openingCategoryVerified: boolean; categoryHistory: CategorySnapshot[]; id: number; subject: string; createdDate: string; status: string; category: string; taskNumber: number | null; taskConcludedAt: string | null; classification: string; vistra: boolean; recurrenceCount: number; ola: string; evidence: string; taskState: string; deliveredVersion: string; supportOlaBreached: boolean | null; categoryChangedAt: string | null; categoryChangeEvidence: string; vistraType: string; recurrenceEvidence: string };
+type Report = { generatedAt: string; methodology: string; totals: { tickets: number; possibleBugs: number; currentImprovements: number; vistraCandidates: number; recurrenceCandidates: number; confirmedBugs: number; concludedCorrectionTasks: number; openCorrectionTasks: number; correctionWithVersion: number; reclassified: number; categoryChangeEvidenceCount: number; categoryHistoryCoverage: number; categoryOpeningVerified: number; recurrenceGroups: number; olaBreaches: number; olaBreachesPreliminary: number; responseBreaches: number; factoryBreaches: number; factoryOverdueOpen: number; totalSlaBreaches: number; withoutVerifiedProfile: number; slaCalculationEligible: number; linkedCorrectionTasks: number; deliveredCorrectionTasks: number }; monthly: { month: string; tickets: number; vistra: number }[]; rows: Row[] };
 export function BomJesusReportPanel() {
   const [startDate, setStartDate] = useState("2026-06-01");
   const [endDate, setEndDate] = useState(() => new Date().toISOString().slice(0, 10));
@@ -52,18 +52,22 @@ export function BomJesusReportPanel() {
         <Button variant="contained" onClick={() => void download()} disabled={!report || exporting}>{exporting ? "Exportando..." : "Exportar Excel (.xlsx)"}</Button>
       </Stack>
     </Stack>
-    <Alert severity="warning" sx={{ mb: 2 }}>As alterações de categoria são capturadas nas sincronizações. A primeira categoria observada não comprova a categoria na abertura, e a data registrada é a da observação pelo HUB. Dados anteriores à implantação não podem ser reconstruídos automaticamente. Bugs e falhas recorrentes permanecem sujeitos à validação técnica.</Alert>
+    <Alert severity="warning" sx={{ mb: 2 }}>As alterações de categoria são capturadas nas sincronizações. A abertura da Task é utilizada como referência aproximada da passagem ao Desenvolvimento, e os números de OLA/SLA são preliminares até validação de pausas e feriados adicionais. A primeira categoria observada não comprova a categoria na abertura, e a data registrada é a da observação pelo HUB. Dados anteriores à implantação não podem ser reconstruídos automaticamente. Bugs e falhas recorrentes permanecem sujeitos à validação técnica.</Alert>
     {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
     {loading && <CircularProgress size={24} />}
     {report && <>
       <Stack direction="row" sx={{ gap: 1, flexWrap: "wrap", mb: 2 }}>
         <Chip label={`Tickets: ${report.totals.tickets}`} />
+        <Chip color="success" label={`Bugs reais · Tasks de correção: ${report.totals.confirmedBugs}`} />
         <Chip color="info" label={`Possíveis bugs: ${report.totals.possibleBugs}`} />
         <Chip label={`Melhorias atuais: ${report.totals.currentImprovements}`} />
         <Chip color="success" label={`Tasks de correção: ${report.totals.linkedCorrectionTasks}`} />
-        <Chip label={`Com versão vinculada: ${report.totals.deliveredCorrectionTasks}`} />
-        <Chip color="error" label={`OLA Suporte excedido · perfil identificado: ${report.totals.olaBreaches}`} />
-        <Chip color="warning" label={`OLA Suporte excedido · perfil presumido: ${report.totals.olaBreachesPreliminary}`} />
+        <Chip label={`Tasks de correção abertas: ${report.totals.openCorrectionTasks}`} />
+        <Chip label={`Tasks concluídas: ${report.totals.concludedCorrectionTasks}`} />
+        <Chip label={`Tasks com versão vinculada: ${report.totals.correctionWithVersion}`} />
+        <Chip label={`Concluídas e com versão: ${report.totals.deliveredCorrectionTasks}`} />
+        <Chip color="error" label={`OLA Suporte possivelmente excedido · perfil identificado: ${report.totals.olaBreaches}`} />
+        <Chip color="warning" label={`OLA Suporte possivelmente excedido · perfil presumido: ${report.totals.olaBreachesPreliminary}`} />
         <Chip label={`OLA Fábrica excedido (concluídos): ${report.totals.factoryBreaches}`} />
         <Chip label={`OLA Fábrica vencido (abertos): ${report.totals.factoryOverdueOpen}`} />
         <Chip label={`SLA total excedido (concluídos): ${report.totals.totalSlaBreaches}`} />
