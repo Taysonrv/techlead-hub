@@ -11,7 +11,7 @@ const BRT = 180 * MINUTE;
 export type StatusChange = { status: string; changedDate: Date | null };
 export type SlaMetric = { minutes: number | null; targetMinutes: number | null; exceeded: boolean | null; overMinutes: number | null; percent: number | null; state: "concluido" | "em andamento" | "sem marco" | "fora de escopo" };
 export type SlaEvidence = {
-  tier: SlaTier; tierSource: string; tierVerified: boolean; priority: SlaPriority | null;
+  tier: SlaTier; tierSource: string; tierVerified: boolean; agreement: string | null; priority: SlaPriority | null;
   kind: SlaKind; eligible: boolean; warnings: string[];
   response: SlaMetric; support: SlaMetric; factory: SlaMetric; total: SlaMetric;
   supportDeadlineAt: string | null; supportEndAt: string | null; factoryEndAt: string | null;
@@ -84,7 +84,8 @@ export function computeBomJesusSla(input: {
   if (input.statusHistories.length && !input.statusHistories.some(h => h.changedDate && h.changedDate <= input.createdDate)) warnings.push("Estado inicial do histórico de status não comprovado; pausas anteriores ao primeiro registro podem faltar.");
   warnings.push("Feriados nacionais de 2026 descontados; feriados locais e outras indisponibilidades externas não foram identificados automaticamente.");
   warnings.push("A prioridade atual foi utilizada; alterações históricas de urgência podem alterar os prazos.");
-  if (input.taskKind && !input.taskCreatedAt) warnings.push("Sem data de criação da Task; não é possível confirmar passagem ao Desenvolvimento.");
+  if (input.taskKind && !input.taskCreatedAt) warnings.push("Sem data de criação da Task; não é possível estimar passagem ao Desenvolvimento.");
+  if (input.taskKind && input.taskCreatedAt) warnings.push("A abertura da Task é proxy temporal da passagem; não comprova o instante efetivo de envio ao Desenvolvimento.");
   if (input.taskIsConcluded && !input.taskClosedAt) warnings.push("Task consta concluída, mas não há data técnica de conclusão.");
   const metric = (start: Date | null, end: Date | null, targetMinutes: number | null, state: SlaMetric["state"]): SlaMetric => {
     if (!eligible) return { minutes: null, targetMinutes, exceeded: null, overMinutes: null, percent: null, state: "fora de escopo" };
@@ -111,7 +112,7 @@ export function computeBomJesusSla(input: {
   const supportPause = supportEnd ? observedPauseMinutes(input.createdDate,supportEnd,kind,input.statusHistories) : 0;
   const factoryPause = input.taskCreatedAt && factoryEnd && factoryEnd >= input.taskCreatedAt
     ? observedPauseMinutes(input.taskCreatedAt,factoryEnd,kind,input.statusHistories) : 0;
-  return { tier: profile.tier,tierSource:profile.source,tierVerified:profile.verified,priority:input.urgencyPriority,
+  return { tier: profile.tier,tierSource:profile.source,tierVerified:profile.verified,agreement:input.slaAgreement,priority:input.urgencyPriority,
     kind,eligible,warnings,response,support,factory,total,
     supportDeadlineAt:null,supportEndAt:supportEnd?.toISOString()??null,
     factoryEndAt:input.taskKind && input.taskCreatedAt && factoryEnd ? factoryEnd.toISOString():null,
