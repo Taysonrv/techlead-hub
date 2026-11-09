@@ -2,8 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 import { Alert, Box, Button, Card, CardContent, Chip, CircularProgress, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography } from "@mui/material";
 import { api, getApiErrorMessage } from "../services/api";
 
-type Row = { id: number; subject: string; createdDate: string; status: string; category: string; taskNumber: number | null; classification: string; vistra: boolean; recurrenceCount: number; ola: string; evidence: string };
-type Report = { generatedAt: string; methodology: string; totals: { tickets: number; possibleBugs: number; currentImprovements: number; vistraCandidates: number; recurrenceCandidates: number; confirmedBugs: null; reclassified: null; olaBreaches: null }; monthly: { month: string; tickets: number; vistra: number }[]; rows: Row[] };
+type Row = { id: number; subject: string; createdDate: string; status: string; category: string; taskNumber: number | null; classification: string; vistra: boolean; recurrenceCount: number; ola: string; evidence: string; taskState: string; deliveredVersion: string; supportOlaBreached: boolean | null };
+type Report = { generatedAt: string; methodology: string; totals: { tickets: number; possibleBugs: number; currentImprovements: number; vistraCandidates: number; recurrenceCandidates: number; confirmedBugs: null; reclassified: null; olaBreaches: number; linkedCorrectionTasks: number; deliveredCorrectionTasks: number }; monthly: { month: string; tickets: number; vistra: number }[]; rows: Row[] };
 export function BomJesusReportPanel() {
   const [startDate, setStartDate] = useState("2026-08-01");
   const [endDate, setEndDate] = useState(() => new Date().toISOString().slice(0, 10));
@@ -50,6 +50,9 @@ export function BomJesusReportPanel() {
         <Chip label={`Tickets: ${report.totals.tickets}`} />
         <Chip color="info" label={`Possíveis bugs: ${report.totals.possibleBugs}`} />
         <Chip label={`Melhorias atuais: ${report.totals.currentImprovements}`} />
+        <Chip color="success" label={`Tasks de correção: ${report.totals.linkedCorrectionTasks}`} />
+        <Chip label={`Com versão vinculada: ${report.totals.deliveredCorrectionTasks}`} />
+        <Chip color="error" label={`OLA Suporte excedido: ${report.totals.olaBreaches}`} />
         <Chip color="warning" label={`Vistra/relatórios: ${report.totals.vistraCandidates}`} />
         <Chip label={`Possíveis recorrências: ${report.totals.recurrenceCandidates}`} />
       </Stack>
@@ -58,12 +61,12 @@ export function BomJesusReportPanel() {
       <Stack direction="row" sx={{ gap: 1, flexWrap: "wrap", mb: 2 }}>{report.monthly.map(x => <Chip key={x.month} variant="outlined" label={`${x.month}: ${x.tickets} tickets · ${x.vistra} Vistra/relatórios`} />)}</Stack>
       <TextField size="small" label="Buscar ticket ou assunto" value={filter} onChange={e => setFilter(e.target.value)} sx={{ mb: 1, minWidth: 270 }} />
       <TableContainer sx={{ maxHeight: 430 }}><Table size="small" stickyHeader>
-        <TableHead><TableRow>{["Ticket", "Assunto", "Abertura", "Categoria", "Classificação", "Vistra", "Grupo", "OLA"].map(h => <TableCell key={h}>{h}</TableCell>)}</TableRow></TableHead>
+        <TableHead><TableRow>{["Ticket", "Assunto", "Abertura", "Categoria", "Classificação", "Vistra", "Grupo", "Task", "Estado", "Versão", "OLA"].map(h => <TableCell key={h}>{h}</TableCell>)}</TableRow></TableHead>
         <TableBody>{rows.slice(0, 200).map(x => <TableRow key={x.id} hover>
           <TableCell>{x.id}</TableCell><TableCell sx={{ minWidth: 240 }}>{x.subject}</TableCell>
           <TableCell>{x.createdDate.slice(0, 10)}</TableCell><TableCell>{x.category}</TableCell>
           <TableCell>{x.classification}</TableCell><TableCell>{x.vistra ? "Validar" : "—"}</TableCell>
-          <TableCell>{x.recurrenceCount > 1 ? x.recurrenceCount : "—"}</TableCell><TableCell>Não apurado</TableCell>
+          <TableCell>{x.recurrenceCount > 1 ? x.recurrenceCount : "—"}</TableCell><TableCell>{x.taskNumber ?? "—"}</TableCell><TableCell>{x.taskState || "—"}</TableCell><TableCell>{x.deliveredVersion || "—"}</TableCell><TableCell>{x.supportOlaBreached === null ? "Não calculável" : x.supportOlaBreached ? "Excedido" : "Dentro do prazo"}</TableCell>
         </TableRow>)}</TableBody>
       </Table></TableContainer>
       {rows.length > 200 && <Typography variant="caption" color="text.secondary">Exibindo 200 de {rows.length} tickets filtrados. O Excel inclui todos os registros do período.</Typography>}
