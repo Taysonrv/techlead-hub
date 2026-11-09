@@ -56,3 +56,13 @@ test("mudança para Melhoria não é contabilizada como Bug -> Adequação", asy
   await observeTicketCategory(tx, { ticketId: 11, category: "Melhoria", source: "MOVIDESK_API" });
   assert.equal(summarizeCategoryEvents(rows).bugToAdequacaoChanges, 0);
 });
+
+test("alteração detectada na primeira sincronização após migration preserva baseline legado", async () => {
+  const { tx, rows } = fakeTx();
+  await observeTicketCategory(tx, { ticketId: 12, previousCategory: "Bug", category: "Adequação", source: "MOVIDESK_API", sourceLastUpdate: t("2026-11-09T19:00:00Z") });
+  assert.deepEqual(rows.map(x => x.kind), ["BASELINE", "CHANGE"]);
+  assert.equal(rows[0]?.source, "HUB_LEGACY");
+  const summary = summarizeCategoryEvents(rows);
+  assert.equal(summary.bugToAdequacaoChanges, 1);
+  assert.equal(summary.openingCategoryVerified, false);
+});
