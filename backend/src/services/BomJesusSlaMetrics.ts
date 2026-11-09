@@ -72,13 +72,14 @@ export function computeBomJesusSla(input: {
   statusHistories: StatusChange[]; asOf: Date;
 }): SlaEvidence {
   const kind: SlaKind = input.taskKind ? "BUG" : "OUTROS";
-  const eligible = isSlaEligibleCategory(input.category);
+  const eligible = Boolean(input.category?.trim()) && isSlaEligibleCategory(input.category);
   const profile = resolveSlaTier(input.slaAgreement, input.tierOverride);
   const target = input.urgencyPriority ? ALIARE_TARGETS[profile.tier][kind][input.urgencyPriority] : null;
   const warnings: string[] = [];
   if (!profile.verified) warnings.push("Perfil Padrão/VIP não confirmado pelo contrato; resultado é cenário preliminar.");
   if (!input.urgencyPriority) warnings.push("Prioridade não identificada.");
-  if (!eligible) warnings.push("Categoria atual excluída do SLA (Adequação/Solicitação de Serviço); verificar histórico da mudança.");
+  if (!input.category?.trim()) warnings.push("Categoria do ticket não identificada; não é possível aferir enquadramento no SLA.");
+  else if (!eligible) warnings.push("Categoria atual excluída do SLA (Adequação/Solicitação de Serviço); verificar histórico da mudança.");
   if (!input.statusHistories.length) warnings.push("Histórico de status indisponível; eventuais pausas anteriores não estão comprovadas.");
   if (input.statusHistories.length && !input.statusHistories.some(h => h.changedDate && h.changedDate <= input.createdDate)) warnings.push("Estado inicial do histórico de status não comprovado; pausas anteriores ao primeiro registro podem faltar.");
   warnings.push("Feriados nacionais de 2026 descontados; feriados locais e outras indisponibilidades externas não foram identificados automaticamente.");
@@ -96,11 +97,11 @@ export function computeBomJesusSla(input: {
       percent: targetMinutes ? Math.round(minutes/targetMinutes*1000)/10 : null, state };
   };
   const supportEnd = input.taskKind ? input.taskCreatedAt : (input.resolvedDate ?? null);
-  const factoryEnd = input.taskClosedAt ?? input.asOf;
+  const factoryEnd = input.taskIsConcluded ? input.taskClosedAt : input.asOf;
   const response = metric(input.createdDate, input.firstResponseDate, target?.response ?? null, input.firstResponseDate ? "concluido" : "sem marco");
   const support = metric(input.createdDate, supportEnd, target?.support ?? null, input.taskKind && input.taskCreatedAt ? "concluido" : "sem marco");
   const factory = input.taskKind
-    ? metric(input.taskCreatedAt, input.taskCreatedAt && input.asOf >= input.taskCreatedAt ? factoryEnd : null, target?.factory ?? null,
+    ? metric(input.taskCreatedAt, input.taskCreatedAt && factoryEnd && factoryEnd >= input.taskCreatedAt ? factoryEnd : null, target?.factory ?? null,
       input.taskIsConcluded && input.taskClosedAt ? "concluido" : "em andamento")
     : metric(null,null,null,"fora de escopo");
   const total = input.taskKind
@@ -108,12 +109,12 @@ export function computeBomJesusSla(input: {
       input.taskIsConcluded && input.taskClosedAt ? "concluido" : "em andamento")
     : metric(input.createdDate,input.resolvedDate,target?.total ?? null,input.resolvedDate ? "concluido" : "sem marco");
   const supportPause = supportEnd ? observedPauseMinutes(input.createdDate,supportEnd,kind,input.statusHistories) : 0;
-  const factoryPause = input.taskCreatedAt && factoryEnd >= input.taskCreatedAt
+  const factoryPause = input.taskCreatedAt && factoryEnd && factoryEnd >= input.taskCreatedAt
     ? observedPauseMinutes(input.taskCreatedAt,factoryEnd,kind,input.statusHistories) : 0;
   return { tier: profile.tier,tierSource:profile.source,tierVerified:profile.verified,priority:input.urgencyPriority,
     kind,eligible,warnings,response,support,factory,total,
     supportDeadlineAt:null,supportEndAt:supportEnd?.toISOString()??null,
-    factoryEndAt:input.taskKind && input.taskCreatedAt ? factoryEnd.toISOString():null,
+    factoryEndAt:input.taskKind && input.taskCreatedAt && factoryEnd ? factoryEnd.toISOString():null,
     pauseMinutesSupport:supportPause,pauseMinutesFactory:factoryPause,
     holidayPolicy:"Feriados nacionais 2026; sem pontos facultativos, feriados locais ou pausas não demonstradas" };
 }
