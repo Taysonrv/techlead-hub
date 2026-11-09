@@ -145,8 +145,8 @@ export async function bomJesusReport(startDate: string, endDate: string, tierOve
       factoryOverdueOpen: rows.filter(x => x.sla.kind === "BUG" && x.sla.eligible && x.sla.factory.exceeded === true && x.sla.factory.state === "em andamento").length,
       withoutVerifiedProfile: rows.filter(x => x.sla.kind === "BUG" && x.sla.eligible && !x.sla.tierVerified).length,
       slaCalculationEligible: rows.filter(x => x.sla.eligible && x.sla.priority !== null).length,
-      linkedCorrectionTasks: prepared.filter(x => !!x.linkedTask && includesAny(text(x.linkedTask.workItemType), bugWords)).length,
-      deliveredCorrectionTasks: prepared.filter(x => !!x.linkedTask && includesAny(text(x.linkedTask.workItemType), bugWords) && !!x.linkedTask.deliveredVersion).length,
+      linkedCorrectionTasks: prepared.filter(x => x.correctionTask).length,
+      deliveredCorrectionTasks: prepared.filter(x => x.correctionTask && !!x.linkedTask?.deliveredVersion).length,
     },
     monthly, rows,
   };
