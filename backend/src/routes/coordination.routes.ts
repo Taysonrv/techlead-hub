@@ -1,4 +1,6 @@
 import { Router } from "express";
+import ExcelJS from "exceljs";
+import { bomJesusReport } from "../services/BomJesusReportService";
 import { requirePermission } from "../middlewares/roleMiddleware";
 import { requireAnyPermission } from "../middlewares/routinePermissionMiddleware";
 import { coordinationService } from "../services/CoordinationService";
@@ -11,6 +13,63 @@ coordinationRoutes.use((req, res, next) => {
   const permission = req.path.startsWith("/services") ? "services" : "coordination";
   return requirePermission(permission)(req as AuthenticatedRequest, res, next);
 });
+const bomJesusDates = (req: AuthenticatedRequest) => ({
+  startDate: typeof req.query.startDate === "string" ? req.query.startDate : "2026-08-01",
+  endDate: typeof req.query.endDate === "string" ? req.query.endDate : new Date().toISOString().slice(0, 10),
+});
+coordinationRoutes.get("/bom-jesus-report", async (req: AuthenticatedRequest, res) => {
+  try { res.json(await bomJesusReport(bomJesusDates(req).startDate, bomJesusDates(req).endDate)); }
+  catch (error) {
+    if (error instanceof Error && error.message.startsWith("Período inválido")) return res.status(400).json({ error: error.message });
+    console.error("[coordination] Relatório Bom Jesus:", error);
+    res.status(500).json({ error: "Não foi possível gerar o relatório Bom Jesus." });
+  }
+});
+coordinationRoutes.get("/bom-jesus-report.xlsx", async (req: AuthenticatedRequest, res) => {
+  try {
+    const { startDate, endDate } = bomJesusDates(req);
+    const report = await bomJesusReport(startDate, endDate);
+    const book = new ExcelJS.Workbook();
+    book.creator = "TechLead Hub";
+    const overview = book.addWorksheet("Resumo");
+    overview.addRows([
+      ["Relatório Gerencial — Bom Jesus"], ["Período", startDate, endDate],
+      ["Gerado em", report.generatedAt], ["Critério", report.methodology], [],
+      ["Indicador", "Quantidade / situação"],
+      ["Tickets", report.totals.tickets],
+      ["Possíveis bugs (não confirmados)", report.totals.possibleBugs],
+      ["Melhorias atuais (origem não validada)", report.totals.currentImprovements],
+      ["Possíveis falhas Vistra / relatórios", report.totals.vistraCandidates],
+      ["Tickets em grupos possivelmente recorrentes", report.totals.recurrenceCandidates],
+      ["Bugs confirmados", "Pendente de validação"],
+      ["Reclassificados de bug para melhoria", "Pendente de validação"],
+      ["OLA excedido", "Pendente de validação"],
+    ]);
+    const detail = book.addWorksheet("Tickets e evidências");
+    detail.addRow(["Ticket", "Assunto", "Cliente", "Abertura", "Situação", "Categoria", "Task", "Tipo Task", "Classificação indicativa", "Vistra ou relatório", "Grupo de recorrência", "Tamanho grupo", "Ações sincronizadas", "Primeira menção Produto", "OLA", "Observação"]);
+    for (const x of report.rows) detail.addRow([x.id, x.subject, x.client, x.createdDate, x.status, x.category, x.taskNumber, x.taskType, x.classification, x.vistra ? "Sim — validar" : "Não identificado", x.recurrenceKey, x.recurrenceCount, x.actionCount, x.firstProductEvidence, x.ola, x.evidence]);
+    const trend = book.addWorksheet("Periodicidade");
+    trend.addRow(["Mês", "Tickets", "Candidatos Vistra / relatórios"]);
+    for (const x of report.monthly) trend.addRow([x.month, x.tickets, x.vistra]);
+    for (const sheet of book.worksheets) {
+      sheet.views = [{ state: "frozen", ySplit: sheet.name === "Resumo" ? 0 : 1 }];
+      sheet.getRow(sheet.name === "Resumo" ? 6 : 1).font = { bold: true, color: { argb: "FFFFFFFF" } };
+      sheet.getRow(sheet.name === "Resumo" ? 6 : 1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF146C43" } };
+      sheet.columns.forEach(col => { col.width = 25; });
+      if (sheet.name === "Tickets e evidências") { sheet.getColumn(2).width = 55; sheet.getColumn(16).width = 55; sheet.autoFilter = { from: "A1", to: "P1" }; }
+    }
+    const buffer = await book.xlsx.writeBuffer();
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.setHeader("Content-Disposition", 'attachment; filename="relatorio-bom-jesus.xlsx"');
+    res.setHeader("Cache-Control", "no-store");
+    res.send(Buffer.from(buffer));
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith("Período inválido")) return res.status(400).json({ error: error.message });
+    console.error("[coordination] Excel Bom Jesus:", error);
+    res.status(500).json({ error: "Não foi possível exportar o relatório Bom Jesus." });
+  }
+});
+
 coordinationRoutes.get("/details", async (req: AuthenticatedRequest, res) => {
   try {
     const kind = String(req.query.kind ?? "backlog");
