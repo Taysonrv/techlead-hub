@@ -17,3 +17,12 @@ CREATE INDEX "MovideskCategorySnapshot_kind_category_idx" ON "MovideskCategorySn
 ALTER TABLE "MovideskCategorySnapshot"
     ADD CONSTRAINT "MovideskCategorySnapshot_ticketId_fkey"
     FOREIGN KEY ("ticketId") REFERENCES "Ticket"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- Seed the first OBSERVED state of pre-existing tickets.
+-- This is not their category at ticket opening and has no historical changedAt.
+INSERT INTO "MovideskCategorySnapshot"
+  ("ticketId", "sequenceKey", "kind", "category", "previousCategory", "source", "observedAt", "sourceLastUpdate")
+SELECT "id", md5('HUB_LEGACY|' || "id"::text), 'BASELINE', "category", NULL, 'HUB_LEGACY', CURRENT_TIMESTAMP, NULL
+FROM "Ticket"
+WHERE "category" IS NOT NULL AND length(trim("category")) > 0
+ON CONFLICT ("ticketId", "sequenceKey") DO NOTHING;
