@@ -24,7 +24,7 @@ export type BomJesusRow = {
   categoryChangedAt: string | null; categoryChangeEvidence: string; vistraType: string; recurrenceEvidence: string;
   initialObservedCategory: string | null; initialObservedAt: string | null; initialSource: string | null;
   openingCategoryVerified: boolean; categoryHistory: Array<{ previousCategory: string | null; category: string; source: string; observedAt: string; sourceLastUpdate: string | null; kind: string }>;
-  taskState: string; deliveredVersion: string; taskCreatedAt: string | null; supportMinutes: number | null; supportTargetMinutes: number | null; supportOlaBreached: boolean | null;
+  taskState: string; deliveredVersion: string; taskCreatedAt: string | null; taskConcludedAt: string | null; supportMinutes: number | null; supportTargetMinutes: number | null; supportOlaBreached: boolean | null;
   sla: SlaEvidence;
 };
 export async function bomJesusReport(startDate: string, endDate: string, tierOverride: SlaTier | null = null) {
@@ -90,9 +90,9 @@ export async function bomJesusReport(startDate: string, endDate: string, tierOve
       taskClosedAt, taskIsConcluded: Boolean(concluded), statusHistories: t.statusHistories,
       asOf: new Date(),
     });
-    return { t, classification, vistra, vistraType, categoryHistory, lastTransition, recurrenceKey, productAction, linkedTask, sla, correctionTask };
+    return { t, classification, vistra, vistraType, categoryHistory, lastTransition, recurrenceKey, productAction, linkedTask, sla, correctionTask, concluded, taskClosedAt };
   });
-  const rows: BomJesusRow[] = prepared.map(({ t, classification, vistra, vistraType, categoryHistory, lastTransition, recurrenceKey, productAction, linkedTask, sla }) => ({
+  const rows: BomJesusRow[] = prepared.map(({ t, classification, vistra, vistraType, categoryHistory, lastTransition, recurrenceKey, productAction, linkedTask, sla, taskClosedAt }) => ({
     id: t.movideskId, subject: t.subject, client: t.client || "", createdDate: t.createdDate.toISOString(),
     status: t.status, category: t.category || "", taskNumber: linkedTask?.id ?? t.taskNumber, taskType: t.taskType || linkedTask?.workItemType || "",
     classification, vistra, vistraType, recurrenceKey, recurrenceCount: recurrenceKey ? keys.get(recurrenceKey) || 0 : 0,
@@ -109,6 +109,7 @@ export async function bomJesusReport(startDate: string, endDate: string, tierOve
     actionCount: t.actions.length,
     taskState: linkedTask?.state || "", deliveredVersion: linkedTask?.deliveredVersion || "",
     taskCreatedAt: linkedTask?.azureCreatedAt?.toISOString() || null,
+    taskConcludedAt: taskClosedAt?.toISOString() || null,
     supportMinutes: sla.support.minutes,
     supportTargetMinutes: sla.support.targetMinutes,
     supportOlaBreached: sla.support.exceeded,
@@ -126,7 +127,7 @@ export async function bomJesusReport(startDate: string, endDate: string, tierOve
   }));
   return {
     generatedAt: new Date().toISOString(), clientFilter: "Bom Jesus", startDate, endDate,
-    methodology: "Categoria: transições detectadas entre observações sincronizadas, sem reconstrução fictícia da abertura. OLA/SLA: Aliare 2026 v1.0, perfil Padrão/VIP, calendário Bug seg–sex 08–18h, feriados nacionais 2026, pausas registradas em histórico de status, criação da Task como marco de passagem e conclusão Azure como marco final. Quando perfil, pausas ou prioridade histórica não forem comprovados, os resultados são preliminares.",
+    methodology: "Categoria: transições detectadas entre observações sincronizadas, sem reconstrução fictícia da abertura. OLA/SLA: Aliare 2026 v1.0, perfil Padrão/VIP, calendário Bug seg–sex 08–18h, feriados nacionais 2026 e pausas registradas em histórico de status. Criação da Task é PROXY de passagem ao Desenvolvimento, não confirmação do envio; conclusão Azure é referência de encerramento. Perfil, pausas, feriados locais e prioridade histórica precisam de conferência. Todos os desvios apresentados são preliminares.",
     totals: {
       tickets: rows.length, possibleBugs: rows.filter(x => x.classification === "Possível bug — validar").length,
       currentImprovements: rows.filter(x => x.classification === "Melhoria atual — validar origem").length,
@@ -136,7 +137,7 @@ export async function bomJesusReport(startDate: string, endDate: string, tierOve
       categoryOpeningVerified: 0,
       recurrenceGroups: new Set(rows.filter(x => x.recurrenceCount > 1).map(x => x.recurrenceKey)).size,
       recurrenceCandidates: rows.filter(x => x.recurrenceCount > 1).length,
-      confirmedBugs: null, reclassified: rows.filter(x => x.categoryChangeEvidence).length,
+      confirmedBugs: prepared.filter(x => x.correctionTask).length, reclassified: rows.filter(x => x.categoryChangeEvidence).length,
       olaBreaches: rows.filter(x => x.sla.kind === "BUG" && x.sla.eligible && x.sla.support.exceeded === true && x.sla.tierVerified && x.taskCreatedAt).length,
       olaBreachesPreliminary: rows.filter(x => x.sla.kind === "BUG" && x.sla.eligible && x.sla.support.exceeded === true && !x.sla.tierVerified && x.taskCreatedAt).length,
       responseBreaches: rows.filter(x => x.sla.eligible && x.sla.response.exceeded === true).length,
@@ -146,7 +147,10 @@ export async function bomJesusReport(startDate: string, endDate: string, tierOve
       withoutVerifiedProfile: rows.filter(x => x.sla.kind === "BUG" && x.sla.eligible && !x.sla.tierVerified).length,
       slaCalculationEligible: rows.filter(x => x.sla.eligible && x.sla.priority !== null).length,
       linkedCorrectionTasks: prepared.filter(x => x.correctionTask).length,
-      deliveredCorrectionTasks: prepared.filter(x => x.correctionTask && !!x.linkedTask?.deliveredVersion).length,
+      deliveredCorrectionTasks: prepared.filter(x => x.correctionTask && x.concluded && !!x.linkedTask?.deliveredVersion).length,
+      concludedCorrectionTasks: prepared.filter(x => x.correctionTask && x.concluded).length,
+      openCorrectionTasks: prepared.filter(x => x.correctionTask && !x.concluded).length,
+      correctionWithVersion: prepared.filter(x => x.correctionTask && !!x.linkedTask?.deliveredVersion).length,
     },
     monthly, rows,
   };
