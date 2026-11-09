@@ -1,6 +1,7 @@
 import { prisma } from "../database/prisma";
 import { normalizeDomainText, mapPriority, SLA_PRIORITY } from "../domain/TicketClassificationRules";
 import { slaBusinessMinutes } from "../domain/SlaCalendarRules";
+import { summarizeCategoryEvents, isBugToAdequacao } from "./TicketCategoryHistoryService";
 
 const text = (value: string | null | undefined) => normalizeDomainText(value);
 const includesAny = (value: string, terms: string[]) => terms.some(term => value.includes(term));
@@ -14,18 +15,14 @@ const normalizeSymptom = (subject: string) => text(subject)
   .replace(/\b\d{1,4}[-/]\d{1,2}[-/]\d{1,4}\b/g, " ")
   .replace(/\b\d+\b/g, " ")
   .replace(/[^a-z\s]/g, " ").replace(/\s+/g, " ").trim();
-function categoryTransition(actions: Array<{description: string | null; createdDate: Date | null}>) {
-  // Só reconhece registro textual explícito de alteração. Não infere histórico da categoria atual.
-  const pattern = /(?:categoria\s*(?:alterada|modificada|mudou|de|:)\s*(?:de\s*)?bug\s*(?:para|->|→|a)\s*adequacao|bug\s*(?:reclassificado|alterado)\s*(?:para|como)\s*adequacao)/i;
-  const evidence = actions.find(a => pattern.test(text(a.description)));
-  return evidence ? { date: evidence.createdDate?.toISOString() || null, evidence: (evidence.description || "").slice(0, 350) } : null;
-}
 export type BomJesusRow = {
   id: number; subject: string; client: string; createdDate: string; status: string; category: string;
   taskNumber: number | null; taskType: string; classification: string; vistra: boolean;
   recurrenceKey: string; recurrenceCount: number; actionCount: number;
   firstProductEvidence: string | null; ola: string; evidence: string;
   categoryChangedAt: string | null; categoryChangeEvidence: string; vistraType: string; recurrenceEvidence: string;
+  initialObservedCategory: string | null; initialObservedAt: string | null; initialSource: string | null;
+  openingCategoryVerified: boolean; categoryHistory: Array<{ previousCategory: string | null; category: string; source: string; observedAt: string; sourceLastUpdate: string | null; kind: string }>;
   taskState: string; deliveredVersion: string; taskCreatedAt: string | null; supportMinutes: number | null; supportTargetMinutes: number | null; supportOlaBreached: boolean | null;
 };
 export async function bomJesusReport(startDate: string, endDate: string) {
@@ -41,6 +38,7 @@ export async function bomJesusReport(startDate: string, endDate: string) {
       serviceFirstLevel: true, serviceSecondLevel: true, serviceThirdLevel: true,
       actions: { where: { isDeleted: false }, select: { createdDate: true, description: true, status: true }, orderBy: { createdDate: "asc" } },
       statusHistories: { select: { status: true, changedDate: true } },
+      categorySnapshots: { orderBy: { id: "asc" }, select: { kind: true, category: true, previousCategory: true, source: true, observedAt: true, sourceLastUpdate: true } },
     },
     orderBy: { createdDate: "desc" },
   });
@@ -70,19 +68,29 @@ export async function bomJesusReport(startDate: string, endDate: string) {
     const vistra = includesAny(vistraContext, vistraWords);
     const reportFailure = includesAny(vistraContext, reportWords) && includesAny(subject + " " + actionsText, failureWords);
     const vistraType = vistra && includesAny(subject + " " + actionsText, failureWords) ? "Falha Vistra — revisar" : reportFailure ? "Falha de relatório — revisar" : vistra ? "Vistra — sem defeito comprovado" : "Não identificado";
-    const transition = categoryTransition(t.actions);
+    const categoryHistory = summarizeCategoryEvents(t.categorySnapshots);
+    const transitions = categoryHistory.transitions.filter(isBugToAdequacao);
+    const lastTransition = transitions[transitions.length - 1] ?? null;
     const symptom = normalizeSymptom(t.subject);
     const recurrenceKey = symptom.length >= 16 ? symptom.slice(0, 140) : "";
     if (recurrenceKey) keys.set(recurrenceKey, (keys.get(recurrenceKey) || 0) + 1);
     const productAction = t.actions.find(a => includesAny(text(a.description) + " " + text(a.status), ["encaminhad", "enviado ao produto", "time de produto", "desenvolvimento"]));
-    return { t, classification, vistra, vistraType, transition, recurrenceKey, productAction, linkedTask };
+    return { t, classification, vistra, vistraType, categoryHistory, lastTransition, recurrenceKey, productAction, linkedTask };
   });
-  const rows: BomJesusRow[] = prepared.map(({ t, classification, vistra, vistraType, transition, recurrenceKey, productAction, linkedTask }) => ({
+  const rows: BomJesusRow[] = prepared.map(({ t, classification, vistra, vistraType, categoryHistory, lastTransition, recurrenceKey, productAction, linkedTask }) => ({
     id: t.movideskId, subject: t.subject, client: t.client || "", createdDate: t.createdDate.toISOString(),
     status: t.status, category: t.category || "", taskNumber: t.taskNumber, taskType: linkedTask?.workItemType || t.taskType || "",
     classification, vistra, vistraType, recurrenceKey, recurrenceCount: recurrenceKey ? keys.get(recurrenceKey) || 0 : 0,
     recurrenceEvidence: recurrenceKey ? "Mesmo assunto normalizado; confirmar mesma causa-raiz" : "Assunto insuficiente para agrupamento",
-    categoryChangedAt: transition?.date || null, categoryChangeEvidence: transition?.evidence || "",
+    categoryChangedAt: lastTransition?.observedAt || null,
+    categoryChangeEvidence: lastTransition
+      ? `Alteração observada: ${lastTransition.previousCategory} → ${lastTransition.category}. Fonte: ${lastTransition.source}. Data de captura (não é necessariamente a data da alteração no Movidesk).`
+      : "",
+    initialObservedCategory: categoryHistory.initialObservedCategory,
+    initialObservedAt: categoryHistory.initialObservedAt,
+    initialSource: categoryHistory.initialSource,
+    openingCategoryVerified: categoryHistory.openingCategoryVerified,
+    categoryHistory: categoryHistory.transitions,
     actionCount: t.actions.length,
     taskState: linkedTask?.state || "", deliveredVersion: linkedTask?.deliveredVersion || "",
     taskCreatedAt: linkedTask?.azureCreatedAt?.toISOString() || null,
@@ -102,12 +110,14 @@ export async function bomJesusReport(startDate: string, endDate: string) {
   }));
   return {
     generatedAt: new Date().toISOString(), clientFilter: "Bom Jesus", startDate, endDate,
-    methodology: "Dados sincronizados. Mudança Bug→Adequação só é indicada quando há registro explícito nas ações; ausência de evidência não significa ausência de mudança. Recorrência usa assuntos normalizados idênticos, não apenas a rotina; confirmar causa-raiz. Vistra/relatórios exigem evidência de falha. OLA usa criação da Task como marco conforme Desempenho & SLA.",
+    methodology: "Transições Bug→Adequação extraídas de observações estruturadas, não de textos de ações. A primeira categoria observada não comprova a categoria na abertura; observedAt indica a captura pelo HUB, não a alteração original. Tickets anteriores à implantação recebem baseline HUB_LEGACY. Recorrências e falhas Vistra permanecem indicativas. OLA segue regras de Desempenho & SLA.",
     totals: {
       tickets: rows.length, possibleBugs: rows.filter(x => x.classification === "Possível bug — validar").length,
       currentImprovements: rows.filter(x => x.classification === "Melhoria atual — validar origem").length,
       vistraCandidates: vistraMonthly.length,
       categoryChangeEvidenceCount: rows.filter(x => x.categoryChangeEvidence).length,
+      categoryHistoryCoverage: rows.filter(x => x.categoryHistory.length > 0).length,
+      categoryOpeningVerified: 0,
       recurrenceGroups: new Set(rows.filter(x => x.recurrenceCount > 1).map(x => x.recurrenceKey)).size,
       recurrenceCandidates: rows.filter(x => x.recurrenceCount > 1).length,
       confirmedBugs: null, reclassified: rows.filter(x => x.categoryChangeEvidence).length, olaBreaches: rows.filter(x => x.supportOlaBreached === true && includesAny(text(x.taskType), bugWords)).length,
