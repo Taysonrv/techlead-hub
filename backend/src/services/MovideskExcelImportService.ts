@@ -229,7 +229,7 @@ export class MovideskExcelImportService {
             select: { id: true, category: true, lastUpdate: true },
           });
           const staleCategoryPayload = Boolean(
-            previous?.lastUpdate && ticket.lastUpdate && ticket.lastUpdate < previous.lastUpdate,
+            previous?.lastUpdate && (!ticket.lastUpdate || ticket.lastUpdate < previous.lastUpdate),
           );
           const observedCategory = staleCategoryPayload ? previous?.category ?? ticket.category : ticket.category;
           const saved = await tx.ticket.upsert({
@@ -244,6 +244,7 @@ export class MovideskExcelImportService {
             update: {
               ...ticket,
               category: observedCategory,
+              lastUpdate: staleCategoryPayload ? previous?.lastUpdate : ticket.lastUpdate,
               importSource: "MOVÍDESK_EXCEL",
               importBatch: batchId,
               importedAt: new Date(),
