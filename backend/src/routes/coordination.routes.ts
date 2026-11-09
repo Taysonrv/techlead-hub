@@ -44,13 +44,31 @@ coordinationRoutes.get("/bom-jesus-report.xlsx", async (req: AuthenticatedReques
       ["Bugs confirmados", "Pendente de validação do tipo de Task"],
       ["Tasks de correção vinculadas", report.totals.linkedCorrectionTasks],
       ["Tasks de correção com versão vinculada", report.totals.deliveredCorrectionTasks],
-      ["Indícios explícitos Bug para Adequação", report.totals.reclassified],
+      ["Transições observadas Bug → Adequação", report.totals.reclassified],
+      ["Tickets com histórico de categoria registrado", report.totals.categoryHistoryCoverage],
+      ["Categorias de abertura verificadas", "Não disponíveis na API de tickets"],
       ["Grupos de assuntos recorrentes", report.totals.recurrenceGroups],
       ["OLA do Suporte excedido (Task de correção)", report.totals.olaBreaches],
     ]);
     const detail = book.addWorksheet("Tickets e evidências");
-    detail.addRow(["Ticket", "Assunto", "Cliente", "Abertura", "Situação", "Categoria", "Task", "Tipo Task", "Classificação indicativa", "Vistra ou relatório", "Grupo de recorrência", "Tamanho grupo", "Ações sincronizadas", "Primeira menção Produto", "OLA", "Observação", "Estado da Task", "Versão entregue", "Criação da Task", "Tempo Suporte (min)", "Meta Suporte (min)", "OLA excedido", "Data alteração categoria", "Evidência Bug para Adequação", "Tipo de falha Vistra/relatório", "Evidência de recorrência"]);
-    for (const x of report.rows) detail.addRow([x.id, x.subject, x.client, x.createdDate, x.status, x.category, x.taskNumber, x.taskType, x.classification, x.vistra ? "Sim — validar" : "Não identificado", x.recurrenceKey, x.recurrenceCount, x.actionCount, x.firstProductEvidence, x.ola, x.evidence, x.taskState, x.deliveredVersion, x.taskCreatedAt, x.supportMinutes, x.supportTargetMinutes, x.supportOlaBreached === null ? "Não calculável" : x.supportOlaBreached ? "Sim" : "Não", x.categoryChangedAt, x.categoryChangeEvidence, x.vistraType, x.recurrenceEvidence]);
+    detail.addRow(["Ticket", "Assunto", "Cliente", "Abertura", "Situação", "Categoria", "Task", "Tipo Task", "Classificação indicativa", "Vistra ou relatório", "Grupo de recorrência", "Tamanho grupo", "Ações sincronizadas", "Primeira menção Produto", "OLA", "Observação", "Estado da Task", "Versão entregue", "Criação da Task", "Tempo Suporte (min)", "Meta Suporte (min)", "OLA excedido", "Data observada Bug → Adequação", "Evidência da transição", "Tipo de falha Vistra/relatório", "Evidência de recorrência", "Primeira categoria observada", "Data primeira observação", "Origem primeira observação", "Categoria na abertura comprovada?"]);
+    for (const x of report.rows) detail.addRow([x.id, x.subject, x.client, x.createdDate, x.status, x.category, x.taskNumber, x.taskType, x.classification, x.vistra ? "Sim — validar" : "Não identificado", x.recurrenceKey, x.recurrenceCount, x.actionCount, x.firstProductEvidence, x.ola, x.evidence, x.taskState, x.deliveredVersion, x.taskCreatedAt, x.supportMinutes, x.supportTargetMinutes, x.supportOlaBreached === null ? "Não calculável" : x.supportOlaBreached ? "Sim" : "Não", x.categoryChangedAt, x.categoryChangeEvidence, x.vistraType, x.recurrenceEvidence, x.initialObservedCategory, x.initialObservedAt, x.initialSource, x.openingCategoryVerified ? "Sim" : "Não"]);
+    const categorySheet = book.addWorksheet("Histórico de Categorias");
+    categorySheet.addRow(["Ticket", "Assunto", "Tipo", "Categoria anterior", "Categoria observada", "Capturado em (HUB)", "Atualização remota do ticket", "Fonte", "Bug para Adequação?", "Categoria na abertura comprovada?"]);
+    for (const x of report.rows) {
+      if (!x.categoryHistory.length) {
+        categorySheet.addRow([x.id, x.subject, "SEM HISTÓRICO", null, x.category, null, null, "Sem observação", "Não", "Não"]);
+      }
+      for (const event of x.categoryHistory) {
+        categorySheet.addRow([x.id, x.subject, event.kind === "BASELINE" ? "PRIMEIRA OBSERVAÇÃO" : "ALTERAÇÃO OBSERVADA",
+          event.previousCategory, event.category, event.observedAt, event.sourceLastUpdate,
+          event.source,
+          event.kind === "CHANGE" && event.previousCategory?.normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").toLowerCase() === "bug"
+             && event.category.normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").toLowerCase() === "adequacao" ? "Sim" : "Não",
+          "Não",
+        ]);
+      }
+    }
     const trend = book.addWorksheet("Periodicidade");
     trend.addRow(["Mês", "Tickets", "Candidatos Vistra / relatórios"]);
     for (const x of report.monthly) trend.addRow([x.month, x.tickets, x.vistra]);
@@ -59,7 +77,14 @@ coordinationRoutes.get("/bom-jesus-report.xlsx", async (req: AuthenticatedReques
       sheet.getRow(sheet.name === "Resumo" ? 6 : 1).font = { bold: true, color: { argb: "FFFFFFFF" } };
       sheet.getRow(sheet.name === "Resumo" ? 6 : 1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF146C43" } };
       sheet.columns.forEach(col => { col.width = 25; });
-      if (sheet.name === "Tickets e evidências") { sheet.getColumn(2).width = 55; sheet.getColumn(16).width = 55; sheet.autoFilter = { from: "A1", to: "Z1" }; }
+      if (sheet.name === "Tickets e evidências") {
+        sheet.getColumn(2).width = 55; sheet.getColumn(16).width = 55; sheet.getColumn(30).width = 26;
+        sheet.autoFilter = { from: "A1", to: "AD1" };
+      }
+      if (sheet.name === "Histórico de Categorias") {
+        sheet.getColumn(2).width = 55; sheet.getColumn(3).width = 27; sheet.getColumn(8).width = 23;
+        sheet.autoFilter = { from: "A1", to: "J1" };
+      }
     }
     const buffer = await book.xlsx.writeBuffer();
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
