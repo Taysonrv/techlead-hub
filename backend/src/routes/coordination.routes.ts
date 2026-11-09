@@ -44,9 +44,12 @@ coordinationRoutes.get("/bom-jesus-report.xlsx", async (req: AuthenticatedReques
       ["Melhorias atuais (origem não validada)", report.totals.currentImprovements],
       ["Possíveis falhas Vistra / relatórios", report.totals.vistraCandidates],
       ["Tickets em grupos possivelmente recorrentes", report.totals.recurrenceCandidates],
-      ["Bugs confirmados", "Pendente de validação do tipo de Task"],
+      ["Bugs reais (definição: vinculados a Tasks de correção)", report.totals.confirmedBugs],
       ["Tasks de correção vinculadas", report.totals.linkedCorrectionTasks],
-      ["Tasks de correção com versão vinculada", report.totals.deliveredCorrectionTasks],
+      ["Tasks de correção concluídas", report.totals.concludedCorrectionTasks],
+      ["Tasks de correção ainda abertas", report.totals.openCorrectionTasks],
+      ["Tasks de correção com versão vinculada", report.totals.correctionWithVersion],
+      ["Tasks concluídas com versão vinculada", report.totals.deliveredCorrectionTasks],
       ["Transições observadas Bug → Adequação", report.totals.reclassified],
       ["Tickets com histórico de categoria registrado", report.totals.categoryHistoryCoverage],
       ["Categorias de abertura verificadas", "Não disponíveis na API de tickets"],
@@ -61,13 +64,13 @@ coordinationRoutes.get("/bom-jesus-report.xlsx", async (req: AuthenticatedReques
       ["Atendimentos elegíveis com prioridade identificada", report.totals.slaCalculationEligible],
     ]);
     const detail = book.addWorksheet("Tickets e evidências");
-    detail.addRow(["Ticket", "Assunto", "Cliente", "Abertura", "Situação", "Categoria", "Task", "Tipo Task", "Classificação indicativa", "Vistra ou relatório", "Grupo de recorrência", "Tamanho grupo", "Ações sincronizadas", "Primeira menção Produto", "OLA", "Observação", "Estado da Task", "Versão entregue", "Criação da Task", "Tempo Suporte (min)", "Meta Suporte (min)", "OLA excedido", "Data observada Bug → Adequação", "Evidência da transição", "Tipo de falha Vistra/relatório", "Evidência de recorrência", "Primeira categoria observada", "Data primeira observação", "Origem primeira observação", "Categoria na abertura comprovada?"]);
-    for (const x of report.rows) detail.addRow([x.id, x.subject, x.client, x.createdDate, x.status, x.category, x.taskNumber, x.taskType, x.classification, x.vistra ? "Sim — validar" : "Não identificado", x.recurrenceKey, x.recurrenceCount, x.actionCount, x.firstProductEvidence, x.ola, x.evidence, x.taskState, x.deliveredVersion, x.taskCreatedAt, x.supportMinutes, x.supportTargetMinutes, x.supportOlaBreached === null ? "Não calculável" : x.supportOlaBreached ? "Sim" : "Não", x.categoryChangedAt, x.categoryChangeEvidence, x.vistraType, x.recurrenceEvidence, x.initialObservedCategory, x.initialObservedAt, x.initialSource, x.openingCategoryVerified ? "Sim" : "Não"]);
+    detail.addRow(["Ticket", "Assunto", "Cliente", "Abertura", "Situação", "Categoria", "Task", "Tipo Task", "Classificação indicativa", "Vistra ou relatório", "Grupo de recorrência", "Tamanho grupo", "Ações sincronizadas", "Primeira menção Produto", "OLA", "Observação", "Estado da Task", "Versão entregue", "Criação da Task", "Tempo Suporte (min)", "Meta Suporte (min)", "OLA excedido", "Data observada Bug → Adequação", "Evidência da transição", "Tipo de falha Vistra/relatório", "Evidência de recorrência", "Primeira categoria observada", "Data primeira observação", "Origem primeira observação", "Categoria na abertura comprovada?", "Conclusão técnica Task"]);
+    for (const x of report.rows) detail.addRow([x.id, x.subject, x.client, x.createdDate, x.status, x.category, x.taskNumber, x.taskType, x.classification, x.vistra ? "Sim — validar" : "Não identificado", x.recurrenceKey, x.recurrenceCount, x.actionCount, x.firstProductEvidence, x.ola, x.evidence, x.taskState, x.deliveredVersion, x.taskCreatedAt, x.supportMinutes, x.supportTargetMinutes, x.supportOlaBreached === null ? "Não calculável" : x.supportOlaBreached ? "Sim" : "Não", x.categoryChangedAt, x.categoryChangeEvidence, x.vistraType, x.recurrenceEvidence, x.initialObservedCategory, x.initialObservedAt, x.initialSource, x.openingCategoryVerified ? "Sim" : "Não", x.taskConcludedAt]);
     const slaSheet = book.addWorksheet("Análise SLA e OLA");
     slaSheet.addRow([
       "Ticket", "Assunto", "Categoria atual", "Task", "Estado Task", "Versão vinculada",
-      "Prioridade", "Perfil SLA", "Origem do perfil", "Perfil confirmado?", "Categoria elegível?",
-      "Abertura", "Criação Task (passagem)", "Status SLA",
+      "Prioridade", "Perfil SLA", "Contrato informado no Movidesk", "Origem do perfil", "Perfil confirmado?", "Categoria elegível?",
+      "Abertura", "Criação Task (proxy de passagem)", "Conclusão da Task (se concluída)", "Status SLA",
       "1ª resposta (min úteis)", "Meta 1ª resposta (min)", "1ª resposta excedida?",
       "OLA Suporte (min úteis)", "Meta OLA Suporte (min)", "Excesso OLA Suporte (min)", "OLA Suporte excedido?",
       "OLA Fábrica (min úteis)", "Meta OLA Fábrica (min)", "Excesso OLA Fábrica (min)", "Situação da Fábrica", "OLA Fábrica excedido?",
@@ -79,8 +82,8 @@ coordinationRoutes.get("/bom-jesus-report.xlsx", async (req: AuthenticatedReques
       const status = a.eligible ? a.tierVerified ? "Preliminar — validar pausas/urgência" : "Cenário — confirmar perfil" : "Fora de escopo atual";
       slaSheet.addRow([
         x.id, x.subject, x.category, x.taskNumber, x.taskState, x.deliveredVersion,
-        a.priority, a.tier, a.tierSource, a.tierVerified ? "Sim" : "Não", a.eligible ? "Sim" : "Não",
-        x.createdDate, x.taskCreatedAt, status,
+        a.priority, a.tier, a.agreement, a.tierSource, a.tierVerified ? "Sim" : "Não", a.eligible ? "Sim" : "Não",
+        x.createdDate, x.taskCreatedAt, x.taskConcludedAt, status,
         a.response.minutes, a.response.targetMinutes, a.response.exceeded === null ? "N/D" : a.response.exceeded ? "Sim" : "Não",
         a.support.minutes, a.support.targetMinutes, a.support.overMinutes, a.support.exceeded === null ? "N/D" : a.support.exceeded ? "Sim" : "Não",
         a.factory.minutes, a.factory.targetMinutes, a.factory.overMinutes, a.factory.state, a.factory.exceeded === null ? "N/D" : a.factory.exceeded ? "Sim" : "Não",
@@ -113,11 +116,11 @@ coordinationRoutes.get("/bom-jesus-report.xlsx", async (req: AuthenticatedReques
       sheet.columns.forEach(col => { col.width = 25; });
       if (sheet.name === "Tickets e evidências") {
         sheet.getColumn(2).width = 55; sheet.getColumn(16).width = 55; sheet.getColumn(30).width = 26;
-        sheet.autoFilter = { from: "A1", to: "AD1" };
+        sheet.autoFilter = { from: "A1", to: "AE1" };
       }
       if (sheet.name === "Análise SLA e OLA") {
-        sheet.getColumn(2).width = 56; sheet.getColumn(34).width = 95;
-        sheet.autoFilter = { from: "A1", to: "AH1" };
+        sheet.getColumn(2).width = 56; sheet.getColumn(36).width = 95;
+        sheet.autoFilter = { from: "A1", to: "AJ1" };
       }
       if (sheet.name === "Histórico de Categorias") {
         sheet.getColumn(2).width = 55; sheet.getColumn(3).width = 27; sheet.getColumn(8).width = 23;
