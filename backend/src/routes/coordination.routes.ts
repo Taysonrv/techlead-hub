@@ -15,7 +15,7 @@ coordinationRoutes.use((req, res, next) => {
   return requirePermission(permission)(req as AuthenticatedRequest, res, next);
 });
 const bomJesusDates = (req: AuthenticatedRequest) => ({
-  startDate: typeof req.query.startDate === "string" ? req.query.startDate : "2026-08-01",
+  startDate: typeof req.query.startDate === "string" ? req.query.startDate : "2026-06-01",
   endDate: typeof req.query.endDate === "string" ? req.query.endDate : new Date().toISOString().slice(0, 10),
 });
 coordinationRoutes.get("/bom-jesus-report", async (req: AuthenticatedRequest, res) => {
