@@ -63,10 +63,10 @@ export function CoordinationWeeklyWorkspace() {
   };
   return <Card variant="outlined" sx={{ mb: 2, borderRadius: 3 }} id="solicitacoes-coordenacao">
     <CardContent>
-      <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" gap={1} sx={{ mb: 2 }}>
+      <Stack direction={{ xs: "column", md: "row" }} sx={{ justifyContent: "space-between", gap: 1, mb: 2 }}>
         <Box><Typography variant="h6">Solicitações e combinados da coordenação</Typography>
           <Typography variant="body2" color="text.secondary">Painel operacional para acompanhar entregas, reuniões e retornos durante a semana.</Typography></Box>
-        <Stack direction="row" spacing={1} alignItems="center">
+        <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
           <Chip label={`Ativas: ${active.length}`} size="small" />
           <Chip label={`Vencidas: ${overdue}`} color={overdue ? "error" : "default"} size="small" />
           <Button size="small" variant="outlined" onClick={exportCsv} disabled={!items.length}>Exportar CSV</Button>
@@ -74,7 +74,7 @@ export function CoordinationWeeklyWorkspace() {
       </Stack>
       <Alert severity="info" sx={{ mb: 2 }}>Versão de uso local: os registros ficam somente neste navegador/perfil, não sincronizam com o servidor ou Movidesk. Não registre senhas nem dados sigilosos. Exporte o CSV como backup.</Alert>
       {error && <Alert severity="warning" sx={{ mb: 2 }} onClose={() => setError("")}>{error}</Alert>}
-      <Stack direction={{ xs: "column", sm: "row" }} gap={1} sx={{ mb: 2 }} flexWrap="wrap">
+      <Stack direction={{ xs: "column", sm: "row" }} sx={{ gap: 1, mb: 2, flexWrap: "wrap" }}>
         <Typography variant="body2" color="text.secondary" sx={{ alignSelf: "center" }}>Criar a partir de:</Typography>
         {templates.map(t => <Button key={t.title} size="small" variant="outlined" onClick={() => { setDraft({ ...empty, ...t }); setEditing(null); }}>{t.title}</Button>)}
       </Stack>
@@ -101,10 +101,10 @@ export function CoordinationWeeklyWorkspace() {
       {!visible.length && <Typography color="text.secondary" variant="body2">Nenhuma solicitação neste filtro. Cadastre uma ou use um modelo acima.</Typography>}
       <Stack spacing={1}>
         {visible.map(x => <Box key={x.id} sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2, p: 1.5 }}>
-          <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" gap={1}>
+          <Stack direction={{ xs: "column", md: "row" }} sx={{ justifyContent: "space-between", gap: 1 }}>
             <Box sx={{ minWidth: 0, flex: 1 }}>
-              <Typography fontWeight={700}>{x.title}</Typography>
-              <Stack direction="row" gap={0.75} flexWrap="wrap" sx={{ mt: 0.5 }}>
+              <Typography sx={{ fontWeight: 700 }}>{x.title}</Typography>
+              <Stack direction="row" sx={{ gap: 0.75, flexWrap: "wrap", mt: 0.5 }}>
                 <Chip size="small" label={x.priority} color={x.priority === "Crítica" ? "error" : x.priority === "Alta" ? "warning" : "default"} />
                 {x.owner && <Chip size="small" variant="outlined" label={x.owner} />}
                 {x.due && <Chip size="small" color={x.status !== "Concluído" && x.due < today() ? "error" : "default"} label={`Prazo: ${x.due.split("-").reverse().join("/")}`} />}
@@ -112,7 +112,7 @@ export function CoordinationWeeklyWorkspace() {
               </Stack>
               {x.notes && <Typography variant="body2" color="text.secondary" sx={{ mt: 1, whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{x.notes}</Typography>}
             </Box>
-            <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap">
+            <Stack direction="row" spacing={1} sx={{ alignItems: "center", flexWrap: "wrap" }}>
               <TextField select size="small" label="Situação" value={x.status} onChange={e => change(x.id, e.target.value as Status)} sx={{ minWidth: 160 }}>{statuses.map(s => <MenuItem key={s} value={s}>{s}</MenuItem>)}</TextField>
               <Button size="small" onClick={() => { setEditing(x.id); setDraft({ title: x.title, owner: x.owner, due: x.due, priority: x.priority, status: x.status, ticket: x.ticket, notes: x.notes }); document.getElementById("solicitacoes-coordenacao")?.scrollIntoView({ behavior: "smooth" }); }}>Editar</Button>
               <Button size="small" color="error" onClick={() => { if (window.confirm("Excluir esta solicitação?")) setItems(prev => prev.filter(item => item.id !== x.id)); }}>Excluir</Button>
