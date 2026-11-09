@@ -41,13 +41,15 @@ coordinationRoutes.get("/bom-jesus-report.xlsx", async (req: AuthenticatedReques
       ["Melhorias atuais (origem não validada)", report.totals.currentImprovements],
       ["Possíveis falhas Vistra / relatórios", report.totals.vistraCandidates],
       ["Tickets em grupos possivelmente recorrentes", report.totals.recurrenceCandidates],
-      ["Bugs confirmados", "Pendente de validação"],
+      ["Bugs confirmados", "Pendente de validação do tipo de Task"],
+      ["Tasks de correção vinculadas", report.totals.linkedCorrectionTasks],
+      ["Tasks de correção com versão vinculada", report.totals.deliveredCorrectionTasks],
       ["Reclassificados de bug para melhoria", "Pendente de validação"],
-      ["OLA excedido", "Pendente de validação"],
+      ["OLA do Suporte excedido (Task de correção)", report.totals.olaBreaches],
     ]);
     const detail = book.addWorksheet("Tickets e evidências");
-    detail.addRow(["Ticket", "Assunto", "Cliente", "Abertura", "Situação", "Categoria", "Task", "Tipo Task", "Classificação indicativa", "Vistra ou relatório", "Grupo de recorrência", "Tamanho grupo", "Ações sincronizadas", "Primeira menção Produto", "OLA", "Observação"]);
-    for (const x of report.rows) detail.addRow([x.id, x.subject, x.client, x.createdDate, x.status, x.category, x.taskNumber, x.taskType, x.classification, x.vistra ? "Sim — validar" : "Não identificado", x.recurrenceKey, x.recurrenceCount, x.actionCount, x.firstProductEvidence, x.ola, x.evidence]);
+    detail.addRow(["Ticket", "Assunto", "Cliente", "Abertura", "Situação", "Categoria", "Task", "Tipo Task", "Classificação indicativa", "Vistra ou relatório", "Grupo de recorrência", "Tamanho grupo", "Ações sincronizadas", "Primeira menção Produto", "OLA", "Observação", "Estado da Task", "Versão entregue", "Criação da Task", "Tempo Suporte (min)", "Meta Suporte (min)", "OLA excedido"]);
+    for (const x of report.rows) detail.addRow([x.id, x.subject, x.client, x.createdDate, x.status, x.category, x.taskNumber, x.taskType, x.classification, x.vistra ? "Sim — validar" : "Não identificado", x.recurrenceKey, x.recurrenceCount, x.actionCount, x.firstProductEvidence, x.ola, x.evidence, x.taskState, x.deliveredVersion, x.taskCreatedAt, x.supportMinutes, x.supportTargetMinutes, x.supportOlaBreached === null ? "Não calculável" : x.supportOlaBreached ? "Sim" : "Não"]);
     const trend = book.addWorksheet("Periodicidade");
     trend.addRow(["Mês", "Tickets", "Candidatos Vistra / relatórios"]);
     for (const x of report.monthly) trend.addRow([x.month, x.tickets, x.vistra]);
@@ -56,7 +58,7 @@ coordinationRoutes.get("/bom-jesus-report.xlsx", async (req: AuthenticatedReques
       sheet.getRow(sheet.name === "Resumo" ? 6 : 1).font = { bold: true, color: { argb: "FFFFFFFF" } };
       sheet.getRow(sheet.name === "Resumo" ? 6 : 1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF146C43" } };
       sheet.columns.forEach(col => { col.width = 25; });
-      if (sheet.name === "Tickets e evidências") { sheet.getColumn(2).width = 55; sheet.getColumn(16).width = 55; sheet.autoFilter = { from: "A1", to: "P1" }; }
+      if (sheet.name === "Tickets e evidências") { sheet.getColumn(2).width = 55; sheet.getColumn(16).width = 55; sheet.autoFilter = { from: "A1", to: "V1" }; }
     }
     const buffer = await book.xlsx.writeBuffer();
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
