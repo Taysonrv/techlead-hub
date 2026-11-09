@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { ALIARE_TARGETS } from "../src/domain/AliareSlaRules";
+import { ALIARE_TARGETS, aliareBusinessMinutes } from "../src/domain/AliareSlaRules";
 import { BRAZIL_NATIONAL_HOLIDAYS_2026, businessMinutesAliare2026, computeBomJesusSla, observedPauseMinutes, resolveSlaTier } from "../src/services/BomJesusSlaMetrics";
 
 const d = (iso: string) => new Date(iso);
@@ -59,5 +59,32 @@ test("Adequação não é elegível ao SLA, mesmo se há tarefa antiga de corre�
   });
   assert.equal(metrics.eligible, false);
   assert.equal(metrics.support.minutes, null);
+  assert.equal(metrics.support.exceeded, null);
+});
+
+test("Calendário otimizado tem mesma contagem do calendário oficial em dia útil sem feriado", () => {
+  const from = d("2026-11-05T12:42:30Z");
+  const to = d("2026-11-05T19:31:50Z");
+  assert.equal(businessMinutesAliare2026(from,to,"BUG"), aliareBusinessMinutes(from,to,"BUG"));
+});
+test("Task concluída sem data de conclusão não produz SLA fictício até agora", () => {
+  const metrics = computeBomJesusSla({
+    category: "Bug", taskKind: true, urgencyPriority: "P2", slaAgreement: "VIP",
+    createdDate: d("2026-11-03T11:00:00Z"), firstResponseDate: null, resolvedDate: null,
+    taskCreatedAt: d("2026-11-04T14:00:00Z"), taskClosedAt: null,
+    taskIsConcluded: true, statusHistories: [], asOf: d("2026-11-09T12:00:00Z"),
+  });
+  assert.equal(metrics.factory.minutes, null);
+  assert.equal(metrics.total.minutes, null);
+  assert.equal(metrics.factoryEndAt, null);
+});
+test("Categoria ausente não é utilizada para validar SLA", () => {
+  const metrics = computeBomJesusSla({
+    category: null, taskKind: true, urgencyPriority: "P1", slaAgreement: "SLA Padrão",
+    createdDate: d("2026-11-03T11:00:00Z"), firstResponseDate: null,
+    resolvedDate: null, taskCreatedAt: d("2026-11-05T12:00:00Z"),
+    taskClosedAt: null, taskIsConcluded: false, statusHistories: [], asOf: d("2026-11-09T12:00:00Z"),
+  });
+  assert.equal(metrics.eligible, false);
   assert.equal(metrics.support.exceeded, null);
 });
