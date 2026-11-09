@@ -1,6 +1,7 @@
 import { Router } from "express";
 import ExcelJS from "exceljs";
 import { bomJesusReport } from "../services/BomJesusReportService";
+import { isBugToAdequacao } from "../services/TicketCategoryHistoryService";
 import { requirePermission } from "../middlewares/roleMiddleware";
 import { requireAnyPermission } from "../middlewares/routinePermissionMiddleware";
 import { coordinationService } from "../services/CoordinationService";
@@ -63,8 +64,7 @@ coordinationRoutes.get("/bom-jesus-report.xlsx", async (req: AuthenticatedReques
         categorySheet.addRow([x.id, x.subject, event.kind === "BASELINE" ? "PRIMEIRA OBSERVAÇÃO" : "ALTERAÇÃO OBSERVADA",
           event.previousCategory, event.category, event.observedAt, event.sourceLastUpdate,
           event.source,
-          event.kind === "CHANGE" && event.previousCategory?.normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").toLowerCase() === "bug"
-             && event.category.normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").toLowerCase() === "adequacao" ? "Sim" : "Não",
+          isBugToAdequacao(event) ? "Sim" : "Não",
           "Não",
         ]);
       }
