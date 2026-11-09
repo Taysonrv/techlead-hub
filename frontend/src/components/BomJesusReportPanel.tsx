@@ -6,7 +6,7 @@ type CategorySnapshot = { previousCategory: string | null; category: string; sou
 type Row = { initialObservedCategory: string | null; initialObservedAt: string | null; initialSource: string | null; openingCategoryVerified: boolean; categoryHistory: CategorySnapshot[]; id: number; subject: string; createdDate: string; status: string; category: string; taskNumber: number | null; classification: string; vistra: boolean; recurrenceCount: number; ola: string; evidence: string; taskState: string; deliveredVersion: string; supportOlaBreached: boolean | null; categoryChangedAt: string | null; categoryChangeEvidence: string; vistraType: string; recurrenceEvidence: string };
 type Report = { generatedAt: string; methodology: string; totals: { tickets: number; possibleBugs: number; currentImprovements: number; vistraCandidates: number; recurrenceCandidates: number; confirmedBugs: null; reclassified: number; categoryChangeEvidenceCount: number; categoryHistoryCoverage: number; categoryOpeningVerified: number; recurrenceGroups: number; olaBreaches: number; linkedCorrectionTasks: number; deliveredCorrectionTasks: number }; monthly: { month: string; tickets: number; vistra: number }[]; rows: Row[] };
 export function BomJesusReportPanel() {
-  const [startDate, setStartDate] = useState("2026-08-01");
+  const [startDate, setStartDate] = useState("2026-06-01");
   const [endDate, setEndDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [report, setReport] = useState<Report | null>(null);
   const [loading, setLoading] = useState(false);
