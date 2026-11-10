@@ -14,12 +14,21 @@ export const normalizedCategory = (value?: string | null) => normalizeDomainText
 export const isBugToAdequacao = (event: Pick<CategoryHistoryEvent, "kind" | "previousCategory" | "category">) =>
   event.kind === "CHANGE" && normalizedCategory(event.previousCategory) === "bug" && normalizedCategory(event.category) === "adequacao";
 
+export const isToAdequacao = (event: Pick<CategoryHistoryEvent, "kind" | "previousCategory" | "category">) =>
+  event.kind === "CHANGE" && Boolean(normalizedCategory(event.previousCategory)) &&
+  normalizedCategory(event.previousCategory) !== "adequacao" &&
+  normalizedCategory(event.category) === "adequacao";
+export const isProblemaToAdequacao = (event: Pick<CategoryHistoryEvent, "kind" | "previousCategory" | "category">) =>
+  isToAdequacao(event) && normalizedCategory(event.previousCategory) === "problema";
+
 export type CategorySummary = {
   initialObservedCategory: string | null;
   initialObservedAt: string | null;
   initialSource: string | null;
   openingCategoryVerified: false;
   bugToAdequacaoChanges: number;
+  problemaToAdequacaoChanges: number;
+  anyToAdequacaoChanges: number;
   transitions: Array<{ previousCategory: string | null; category: string; source: string; observedAt: string; sourceLastUpdate: string | null; kind: string }>;
 };
 export function summarizeCategoryEvents(events: CategoryHistoryEvent[]): CategorySummary {
@@ -31,6 +40,8 @@ export function summarizeCategoryEvents(events: CategoryHistoryEvent[]): Categor
     initialSource: baseline?.source || null,
     openingCategoryVerified: false,
     bugToAdequacaoChanges: sorted.filter(isBugToAdequacao).length,
+    problemaToAdequacaoChanges: sorted.filter(isProblemaToAdequacao).length,
+    anyToAdequacaoChanges: sorted.filter(isToAdequacao).length,
     transitions: sorted.map(e => ({
       previousCategory: e.previousCategory, category: e.category, source: e.source,
       observedAt: e.observedAt.toISOString(), sourceLastUpdate: e.sourceLastUpdate?.toISOString() || null, kind: e.kind,
