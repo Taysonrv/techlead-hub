@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { isBugToAdequacao, observeTicketCategory, summarizeCategoryEvents } from "../src/services/TicketCategoryHistoryService";
+import { isBugToAdequacao, isToAdequacao, isProblemaToAdequacao, observeTicketCategory, summarizeCategoryEvents } from "../src/services/TicketCategoryHistoryService";
 
 const t = (value: string) => new Date(value);
 function fakeTx() {
@@ -65,4 +65,22 @@ test("alteração detectada na primeira sincronização após migration preserva
   const summary = summarizeCategoryEvents(rows);
   assert.equal(summary.bugToAdequacaoChanges, 1);
   assert.equal(summary.openingCategoryVerified, false);
+});
+
+test("Problema -> Adequação, Dúvida -> Adequação e Bug -> Adequação são auditados separadamente", async () => {
+  const { tx, rows } = fakeTx();
+  for (const [ticketId, origin] of [[101,"Problema"],[102,"Dúvida"],[103,"Bug"]] as const) {
+    await observeTicketCategory(tx, { ticketId, category: origin, source: "MOVIDESK_API" });
+    await observeTicketCategory(tx, { ticketId, category: "Adequação", source: "MOVIDESK_API" });
+  }
+  const transitions=rows.filter(x=>x.kind==="CHANGE");
+  assert.equal(transitions.filter(isToAdequacao).length, 3);
+  assert.equal(transitions.filter(isProblemaToAdequacao).length, 1);
+  assert.equal(transitions.filter(isBugToAdequacao).length, 1);
+});
+test("Adequação já na primeira observação não comprova mudança", async () => {
+  const { tx, rows }=fakeTx();
+  await observeTicketCategory(tx,{ ticketId: 201, category: "Adequação", source: "HUB_LEGACY" });
+  assert.equal(rows.filter(isToAdequacao).length,0);
+  assert.equal(summarizeCategoryEvents(rows).anyToAdequacaoChanges,0);
 });
