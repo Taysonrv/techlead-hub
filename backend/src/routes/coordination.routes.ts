@@ -1,7 +1,7 @@
 import { Router } from "express";
 import ExcelJS from "exceljs";
 import { bomJesusReport } from "../services/BomJesusReportService";
-import { isBugToAdequacao } from "../services/TicketCategoryHistoryService";
+import { isBugToAdequacao, isToAdequacao } from "../services/TicketCategoryHistoryService";
 import type { SlaTier } from "../domain/AliareSlaRules";
 import { requirePermission } from "../middlewares/roleMiddleware";
 import { requireAnyPermission } from "../middlewares/routinePermissionMiddleware";
@@ -51,6 +51,9 @@ coordinationRoutes.get("/bom-jesus-report.xlsx", async (req: AuthenticatedReques
       ["Tasks de correção com versão vinculada", report.totals.correctionWithVersion],
       ["Tasks concluídas com versão vinculada", report.totals.deliveredCorrectionTasks],
       ["Transições observadas Bug → Adequação", report.totals.reclassified],
+      ["Transições observadas Problema → Adequação", report.totals.problemaToAdequacaoObserved],
+      ["Transições observadas outras categorias → Adequação", report.totals.otherToAdequacaoObserved],
+      ["Tickets com qualquer transição observada → Adequação", report.totals.anyToAdequacaoObserved],
       ["Tickets com histórico de categoria registrado", report.totals.categoryHistoryCoverage],
       ["Categorias de abertura verificadas", "Não disponíveis na API de tickets"],
       ["Grupos de assuntos recorrentes", report.totals.recurrenceGroups],
@@ -64,8 +67,8 @@ coordinationRoutes.get("/bom-jesus-report.xlsx", async (req: AuthenticatedReques
       ["Atendimentos elegíveis com prioridade identificada", report.totals.slaCalculationEligible],
     ]);
     const detail = book.addWorksheet("Tickets e evidências");
-    detail.addRow(["Ticket", "Assunto", "Cliente", "Abertura", "Situação", "Categoria", "Task", "Tipo Task", "Classificação indicativa", "Vistra ou relatório", "Grupo de recorrência", "Tamanho grupo", "Ações sincronizadas", "Primeira menção Produto", "OLA", "Observação", "Estado da Task", "Versão entregue", "Criação da Task", "Tempo Suporte (min)", "Meta Suporte (min)", "OLA excedido", "Data observada Bug → Adequação", "Evidência da transição", "Tipo de falha Vistra/relatório", "Evidência de recorrência", "Primeira categoria observada", "Data primeira observação", "Origem primeira observação", "Categoria na abertura comprovada?", "Conclusão técnica Task"]);
-    for (const x of report.rows) detail.addRow([x.id, x.subject, x.client, x.createdDate, x.status, x.category, x.taskNumber, x.taskType, x.classification, x.vistra ? "Sim — validar" : "Não identificado", x.recurrenceKey, x.recurrenceCount, x.actionCount, x.firstProductEvidence, x.ola, x.evidence, x.taskState, x.deliveredVersion, x.taskCreatedAt, x.supportMinutes, x.supportTargetMinutes, x.supportOlaBreached === null ? "Não calculável" : x.supportOlaBreached ? "Sim" : "Não", x.categoryChangedAt, x.categoryChangeEvidence, x.vistraType, x.recurrenceEvidence, x.initialObservedCategory, x.initialObservedAt, x.initialSource, x.openingCategoryVerified ? "Sim" : "Não", x.taskConcludedAt]);
+    detail.addRow(["Ticket", "Assunto", "Cliente", "Abertura", "Situação", "Categoria", "Task", "Tipo Task", "Classificação indicativa", "Vistra ou relatório", "Grupo de recorrência", "Tamanho grupo", "Ações sincronizadas", "Primeira menção Produto", "OLA", "Observação", "Estado da Task", "Versão entregue", "Criação da Task", "Tempo Suporte (min)", "Meta Suporte (min)", "OLA excedido", "Data observada Bug → Adequação", "Evidência da transição", "Tipo de falha Vistra/relatório", "Evidência de recorrência", "Primeira categoria observada", "Data primeira observação", "Origem primeira observação", "Categoria na abertura comprovada?", "Conclusão técnica Task", "Outra categoria → Adequação?", "Categoria anterior → Adequação", "Data observada → Adequação"]);
+    for (const x of report.rows) detail.addRow([x.id, x.subject, x.client, x.createdDate, x.status, x.category, x.taskNumber, x.taskType, x.classification, x.vistra ? "Sim — validar" : "Não identificado", x.recurrenceKey, x.recurrenceCount, x.actionCount, x.firstProductEvidence, x.ola, x.evidence, x.taskState, x.deliveredVersion, x.taskCreatedAt, x.supportMinutes, x.supportTargetMinutes, x.supportOlaBreached === null ? "Não calculável" : x.supportOlaBreached ? "Sim" : "Não", x.categoryChangedAt, x.categoryChangeEvidence, x.vistraType, x.recurrenceEvidence, x.initialObservedCategory, x.initialObservedAt, x.initialSource, x.openingCategoryVerified ? "Sim" : "Não", x.taskConcludedAt, x.anyToAdequacaoEvidence ? "Sim" : "Não", x.anyToAdequacaoFrom, x.anyToAdequacaoChangedAt]);
     const slaSheet = book.addWorksheet("Análise SLA e OLA");
     slaSheet.addRow([
       "Ticket", "Assunto", "Categoria atual", "Task", "Estado Task", "Versão vinculada",
@@ -92,7 +95,7 @@ coordinationRoutes.get("/bom-jesus-report.xlsx", async (req: AuthenticatedReques
       ]);
     }
     const categorySheet = book.addWorksheet("Histórico de Categorias");
-    categorySheet.addRow(["Ticket", "Assunto", "Tipo", "Categoria anterior", "Categoria observada", "Capturado em (HUB)", "Atualização remota do ticket", "Fonte", "Bug para Adequação?", "Categoria na abertura comprovada?"]);
+    categorySheet.addRow(["Ticket", "Assunto", "Tipo", "Categoria anterior", "Categoria observada", "Capturado em (HUB)", "Atualização remota do ticket", "Fonte", "Bug para Adequação?", "Categoria na abertura comprovada?", "Qualquer categoria para Adequação?"]);
     for (const x of report.rows) {
       if (!x.categoryHistory.length) {
         categorySheet.addRow([x.id, x.subject, "SEM HISTÓRICO", null, x.category, null, null, "Sem observação", "Não", "Não"]);
@@ -102,7 +105,7 @@ coordinationRoutes.get("/bom-jesus-report.xlsx", async (req: AuthenticatedReques
           event.previousCategory, event.category, event.observedAt, event.sourceLastUpdate,
           event.source,
           isBugToAdequacao(event) ? "Sim" : "Não",
-          "Não",
+          "Não", isToAdequacao(event) ? "Sim" : "Não",
         ]);
       }
     }
@@ -116,7 +119,7 @@ coordinationRoutes.get("/bom-jesus-report.xlsx", async (req: AuthenticatedReques
       sheet.columns.forEach(col => { col.width = 25; });
       if (sheet.name === "Tickets e evidências") {
         sheet.getColumn(2).width = 55; sheet.getColumn(16).width = 55; sheet.getColumn(30).width = 26;
-        sheet.autoFilter = { from: "A1", to: "AE1" };
+        sheet.autoFilter = { from: "A1", to: "AH1" };
       }
       if (sheet.name === "Análise SLA e OLA") {
         sheet.getColumn(2).width = 56; sheet.getColumn(36).width = 95;
@@ -124,7 +127,7 @@ coordinationRoutes.get("/bom-jesus-report.xlsx", async (req: AuthenticatedReques
       }
       if (sheet.name === "Histórico de Categorias") {
         sheet.getColumn(2).width = 55; sheet.getColumn(3).width = 27; sheet.getColumn(8).width = 23;
-        sheet.autoFilter = { from: "A1", to: "J1" };
+        sheet.autoFilter = { from: "A1", to: "K1" };
       }
     }
     const buffer = await book.xlsx.writeBuffer();
