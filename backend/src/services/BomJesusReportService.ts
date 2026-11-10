@@ -8,6 +8,7 @@ const text = (value: string | null | undefined) => normalizeDomainText(value);
 const includesAny = (value: string, terms: string[]) => terms.some(term => value.includes(term));
 const bugWords = ["bug", "defeito", "correcao"];
 const improvementWords = ["melhoria", "evolucao", "blindagem", "adequacao"];
+const BOM_JESUS_CLIENT_NAME = "BOM JESUS COOPERATIVA AGROINDUSTRIAL - LAPA-PR";
 const vistraWords = ["vistra"];
 const reportWords = ["relatorio", "dashboard", "painel"];
 const failureWords = ["erro", "falha", "nao funciona", "nao abre", "parou", "indisponivel", "travamento", "bug"];
@@ -34,7 +35,7 @@ export async function bomJesusReport(startDate: string, endDate: string, tierOve
   if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime()) || start > end ||
       (end.getTime() - start.getTime()) > 366 * 86400000) throw new Error("Período inválido ou superior a 366 dias.");
   const tickets = await prisma.ticket.findMany({
-    where: { client: { contains: "Bom Jesus", mode: "insensitive" }, createdDate: { gte: start, lte: end }, isDeleted: false },
+    where: { client: { equals: BOM_JESUS_CLIENT_NAME, mode: "insensitive" }, createdDate: { gte: start, lte: end }, isDeleted: false },
     select: {
       movideskId: true, subject: true, client: true, createdDate: true, status: true, urgency: true,
       category: true, cause: true, taskNumber: true, taskType: true, service: true, slaAgreement: true,
@@ -134,7 +135,7 @@ export async function bomJesusReport(startDate: string, endDate: string, tierOve
     vistra: vistraMonthly.filter(x => x.createdDate.startsWith(month)).length,
   }));
   return {
-    generatedAt: new Date().toISOString(), clientFilter: "Bom Jesus", startDate, endDate,
+    generatedAt: new Date().toISOString(), clientFilter: BOM_JESUS_CLIENT_NAME, startDate, endDate,
     methodology: "Bugs reais = tickets vinculados a Work Items de correção do Azure (ex.: Correção Clientes); código numérico do campo Tipo Task no Movidesk não classifica sozinho. Categoria: transições detectadas entre observações sincronizadas, sem reconstrução fictícia da abertura. OLA/SLA: Aliare 2026 v1.0, perfil Padrão/VIP, calendário Bug seg–sex 08–18h, feriados nacionais 2026 e pausas registradas em histórico de status. Criação da Task é PROXY de passagem ao Desenvolvimento, não confirmação do envio; conclusão Azure é referência de encerramento. Perfil, pausas, feriados locais e prioridade histórica precisam de conferência. Todos os desvios apresentados são preliminares.",
     totals: {
       tickets: rows.length, possibleBugs: rows.filter(x => x.classification === "Possível bug — validar").length,
