@@ -39,7 +39,7 @@ export function BomJesusReportPanel() {
   const rows = report?.rows.filter(x => [x.subject, String(x.id), x.category, x.classification].join(" ").toLocaleLowerCase("pt-BR").includes(filter.toLocaleLowerCase("pt-BR"))) ?? [];
   return <Card variant="outlined" sx={{ mb: 2, borderRadius: 3 }} id="diagnostico-bom-jesus"><CardContent>
     <Stack direction={{ xs: "column", md: "row" }} sx={{ justifyContent: "space-between", gap: 1, mb: 2 }}>
-      <Box><Typography variant="h6">Diagnóstico gerencial — Bom Jesus</Typography><Typography variant="body2" color="text.secondary">Dados sincronizados do HUB, rastreáveis por ticket. Exportação Excel com resumo, evidências e periodicidade.</Typography></Box>
+      <Box><Typography variant="h6">Diagnóstico gerencial — Bom Jesus</Typography><Typography variant="body2" color="text.secondary">Filtro exclusivo de cliente: BOM JESUS COOPERATIVA AGROINDUSTRIAL - LAPA-PR (correspondência exata no Movidesk). Dados rastreáveis por ticket e exportação Excel.</Typography></Box>
       <Stack direction="row" spacing={1} sx={{ alignItems: "center", flexWrap: "wrap" }}>
         <TextField size="small" type="date" label="De" value={startDate} onChange={e => setStartDate(e.target.value)} slotProps={{ inputLabel: { shrink: true } }} />
         <TextField size="small" type="date" label="Até" value={endDate} onChange={e => setEndDate(e.target.value)} slotProps={{ inputLabel: { shrink: true } }} />
