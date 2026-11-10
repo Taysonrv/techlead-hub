@@ -2,7 +2,7 @@ import { prisma } from "../database/prisma";
 import { normalizeDomainText, mapPriority } from "../domain/TicketClassificationRules";
 import type { SlaTier } from "../domain/AliareSlaRules";
 import { computeBomJesusSla, type SlaEvidence } from "./BomJesusSlaMetrics";
-import { summarizeCategoryEvents, isBugToAdequacao } from "./TicketCategoryHistoryService";
+import { summarizeCategoryEvents, isBugToAdequacao, isProblemaToAdequacao, isToAdequacao } from "./TicketCategoryHistoryService";
 
 const text = (value: string | null | undefined) => normalizeDomainText(value);
 const includesAny = (value: string, terms: string[]) => terms.some(term => value.includes(term));
@@ -22,6 +22,7 @@ export type BomJesusRow = {
   recurrenceKey: string; recurrenceCount: number; actionCount: number;
   firstProductEvidence: string | null; ola: string; evidence: string;
   categoryChangedAt: string | null; categoryChangeEvidence: string; vistraType: string; recurrenceEvidence: string;
+  anyToAdequacaoChangedAt: string | null; anyToAdequacaoFrom: string | null; anyToAdequacaoEvidence: string;
   initialObservedCategory: string | null; initialObservedAt: string | null; initialSource: string | null;
   openingCategoryVerified: boolean; categoryHistory: Array<{ previousCategory: string | null; category: string; source: string; observedAt: string; sourceLastUpdate: string | null; kind: string }>;
   taskState: string; deliveredVersion: string; taskCreatedAt: string | null; taskConcludedAt: string | null; supportMinutes: number | null; supportTargetMinutes: number | null; supportOlaBreached: boolean | null;
@@ -75,6 +76,8 @@ export async function bomJesusReport(startDate: string, endDate: string, tierOve
     const categoryHistory = summarizeCategoryEvents(t.categorySnapshots);
     const transitions = categoryHistory.transitions.filter(isBugToAdequacao);
     const lastTransition = transitions[transitions.length - 1] ?? null;
+    const toAdequacaoTransitions = categoryHistory.transitions.filter(isToAdequacao);
+    const lastToAdequacao = toAdequacaoTransitions[toAdequacaoTransitions.length - 1] ?? null;
     const symptom = normalizeSymptom(t.subject);
     const recurrenceKey = symptom.length >= 16 ? symptom.slice(0, 140) : "";
     if (recurrenceKey) keys.set(recurrenceKey, (keys.get(recurrenceKey) || 0) + 1);
@@ -90,13 +93,18 @@ export async function bomJesusReport(startDate: string, endDate: string, tierOve
       taskClosedAt, taskIsConcluded: Boolean(concluded), statusHistories: t.statusHistories,
       asOf: new Date(),
     });
-    return { t, classification, vistra, vistraType, categoryHistory, lastTransition, recurrenceKey, productAction, linkedTask, sla, correctionTask, concluded, taskClosedAt };
+    return { t, classification, vistra, vistraType, categoryHistory, lastTransition, lastToAdequacao, recurrenceKey, productAction, linkedTask, sla, correctionTask, concluded, taskClosedAt };
   });
-  const rows: BomJesusRow[] = prepared.map(({ t, classification, vistra, vistraType, categoryHistory, lastTransition, recurrenceKey, productAction, linkedTask, sla, taskClosedAt }) => ({
+  const rows: BomJesusRow[] = prepared.map(({ t, classification, vistra, vistraType, categoryHistory, lastTransition, lastToAdequacao, recurrenceKey, productAction, linkedTask, sla, taskClosedAt }) => ({
     id: t.movideskId, subject: t.subject, client: t.client || "", createdDate: t.createdDate.toISOString(),
     status: t.status, category: t.category || "", taskNumber: linkedTask?.id ?? t.taskNumber, taskType: linkedTask?.workItemType || t.taskType || "",
     classification, vistra, vistraType, recurrenceKey, recurrenceCount: recurrenceKey ? keys.get(recurrenceKey) || 0 : 0,
     recurrenceEvidence: recurrenceKey ? "Mesmo assunto normalizado; confirmar mesma causa-raiz" : "Assunto insuficiente para agrupamento",
+    anyToAdequacaoChangedAt: lastToAdequacao?.observedAt || null,
+    anyToAdequacaoFrom: lastToAdequacao?.previousCategory || null,
+    anyToAdequacaoEvidence: lastToAdequacao
+      ? `Transição observada: ${lastToAdequacao.previousCategory} → Adequação, registrada pelo HUB em ${lastToAdequacao.observedAt} (${lastToAdequacao.source}). NÃO comprova categoria de abertura.`
+      : "",
     categoryChangedAt: lastTransition?.observedAt || null,
     categoryChangeEvidence: lastTransition
       ? `Alteração observada: ${lastTransition.previousCategory} → ${lastTransition.category}. Fonte: ${lastTransition.source}. Data de captura (não é necessariamente a data da alteração no Movidesk).`
@@ -135,6 +143,9 @@ export async function bomJesusReport(startDate: string, endDate: string, tierOve
       categoryChangeEvidenceCount: rows.filter(x => x.categoryChangeEvidence).length,
       categoryHistoryCoverage: rows.filter(x => x.categoryHistory.length > 0).length,
       categoryOpeningVerified: 0,
+      anyToAdequacaoObserved: rows.filter(x => Boolean(x.anyToAdequacaoEvidence)).length,
+      problemaToAdequacaoObserved: prepared.filter(x => x.categoryHistory.transitions.some(isProblemaToAdequacao)).length,
+      otherToAdequacaoObserved: prepared.filter(x => x.categoryHistory.transitions.some(e => isToAdequacao(e) && !isBugToAdequacao(e) && !isProblemaToAdequacao(e))).length,
       recurrenceGroups: new Set(rows.filter(x => x.recurrenceCount > 1).map(x => x.recurrenceKey)).size,
       recurrenceCandidates: rows.filter(x => x.recurrenceCount > 1).length,
       confirmedBugs: prepared.filter(x => x.correctionTask).length, reclassified: rows.filter(x => x.categoryChangeEvidence).length,
