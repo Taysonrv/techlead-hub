@@ -114,7 +114,7 @@ export function ClientManagementOverview({rows,audit}:{rows:ClientManagementTick
       <Typography variant="subtitle1" sx={{fontWeight:750,mb:.5}}>Composição dos atendimentos por categoria</Typography>
       <Typography variant="caption" color="text.secondary">Distribuição das categorias atuais registradas no Movidesk</Typography>
       <Box sx={{height:Math.max(245,categoryRanking.length*45),mt:1.5}}>
-        <ResponsiveContainer width="100%" height="100%">
+        {categoryRanking.length ? <ResponsiveContainer width="100%" height="100%">
           <BarChart data={categoryRanking} layout="vertical" margin={{top:6,left:5,right:40,bottom:4}}>
             <CartesianGrid strokeDasharray="3 4" horizontal={false} stroke="rgba(110,130,120,.18)"/>
             <XAxis type="number" allowDecimals={false} tick={{fontSize:11}}/>
@@ -125,7 +125,9 @@ export function ClientManagementOverview({rows,audit}:{rows:ClientManagementTick
               <LabelList dataKey="tickets" position="right" style={{fontSize:12,fill:"currentColor"}}/>
             </Bar>
           </BarChart>
-        </ResponsiveContainer>
+        </ResponsiveContainer> : <Box sx={{height:"100%",display:"grid",placeItems:"center"}}>
+          <Typography color="text.secondary" variant="body2">Sem atendimentos no período selecionado</Typography>
+        </Box>}
       </Box>
     </Box>
     <Box sx={{display:"grid",gridTemplateColumns:{xs:"1fr",md:"1fr 1fr"},gap:2}}>
