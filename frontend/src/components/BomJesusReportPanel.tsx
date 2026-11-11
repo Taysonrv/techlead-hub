@@ -81,13 +81,13 @@ export function ClientExecutiveReportPanel() {
           <MenuItem value="VIP">Simulação VIP</MenuItem>
         </TextField>
         <Button variant="outlined" onClick={() => void load()} disabled={loading}>Atualizar</Button>
-        <Button variant="contained" onClick={() => void download()} disabled={!report || exporting}>{exporting ? "Gerando relatório..." : "Exportar relatório da Diretoria (Excel)"}</Button>
+        <Button variant="contained" onClick={() => void download()} disabled={!report || report.clientFilter!==client || exporting}>{exporting ? "Gerando relatório..." : "Exportar relatório da Diretoria (Excel)"}</Button>
       </Stack>
     </Stack>
     <Alert severity="warning" sx={{ mb: 2 }}>As alterações de categoria são capturadas nas sincronizações. A abertura da Task é utilizada como referência aproximada da passagem ao Desenvolvimento, e os números de OLA/SLA são preliminares até validação de pausas e feriados adicionais. A primeira categoria observada não comprova a categoria na abertura, e a data registrada é a da observação pelo HUB. Dados anteriores à implantação não podem ser reconstruídos automaticamente. Bugs e falhas recorrentes permanecem sujeitos à validação técnica.</Alert>
     {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
     {loading && <CircularProgress size={24} />}
-    {report && <>
+    {report && report.clientFilter===client && <>
       <BomJesusExecutiveDashboard executive={report.executive} clientName={report.clientFilter} />
       <Accordion disableGutters elevation={0} sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2 }}>
       <AccordionSummary expandIcon={<span aria-hidden>▾</span>}><Typography sx={{fontWeight:600}}>Abrir tabelas detalhadas e indicadores legados</Typography></AccordionSummary>
