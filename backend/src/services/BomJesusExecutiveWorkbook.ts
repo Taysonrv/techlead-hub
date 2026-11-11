@@ -39,7 +39,7 @@ function setMerged(ws:ExcelJS.Worksheet, address:string, value:string|number|nul
 }
 function banner(ws:ExcelJS.Worksheet,title:string,subtitle:string,cols:number,scope:string,headerRow=7) {
   ws.views=[{state:"frozen",xSplit:1,ySplit:headerRow,showGridLines:false}];
-  ws.pageSetup={paperSize:8,orientation:"landscape",fitToPage:true,fitToWidth:1,fitToHeight:0};
+  ws.pageSetup={paperSize:9,orientation:"landscape",fitToPage:true,fitToWidth:1,fitToHeight:0};
   ws.headerFooter.oddFooter="&LBOM JESUS  |  DIAGNÓSTICO GERENCIAL&CConfidencial - uso interno&R&P / &N";
   ws.properties.defaultRowHeight=19;
   ws.properties.tabColor={argb:"FF"+P.green};
@@ -171,19 +171,19 @@ export function createBomJesusExecutiveWorkbook(report:FullReport) {
     {background:i%2===0?P.light:P.mint,color:P.ink,size:9,wrap:true}));
   titleBar(ws,33,"A","L","02  |  EVOLUÇÃO MENSAL DOS ATENDIMENTOS");
   ["MÊS","TICKETS","BUGS ATUAIS","CORREÇÕES","ALERTAS OLA","VOLUME RELATIVO"].forEach((v,i)=>{
-    const pairs=[["A","B"],["C","D"],["E","F"],["G","H"],["I","J"],["K","L"]];
+    const pairs: ReadonlyArray<readonly [string,string]>=[["A","B"],["C","D"],["E","F"],["G","H"],["I","J"],["K","L"]];
     setMerged(ws,pairs[i]![0]+"34:"+pairs[i]![1]+"34",v,{color:P.secondary,size:9,bold:true,background:P.light});
   });
   const max=Math.max(1,...e.monthly.map(m=>m.tickets));
   e.monthly.slice(-8).forEach((m,i)=>{
-    const n=35+i;const pairs=[["A","B"],["C","D"],["E","F"],["G","H"],["I","J"],["K","L"]];
+    const n=35+i;const pairs: ReadonlyArray<readonly [string,string]>=[["A","B"],["C","D"],["E","F"],["G","H"],["I","J"],["K","L"]];
     const values=[m.month,m.tickets,m.bugs,m.corrections,m.olaAlerts,"▮".repeat(Math.max(1,Math.round(m.tickets/max*12)))];
     values.forEach((v,k)=>setMerged(ws,pairs[k]![0]+n+":"+pairs[k]![1]+n,v,
       {background:i%2===0?P.white:P.light,color:k===4&&m.olaAlerts>0?P.orange:k===5?P.green:P.ink,size:9,bold:k===5,align:k===5?"left":"center"}));
     ws.getRow(n).height=20;
   });
   const sectionRow=44;titleBar(ws,sectionRow,"A","L","03  |  ENCAMINHAMENTOS PRIORITÁRIOS");
-  const decisions=[
+  const decisions: Array<readonly ["P1"|"P2",string]>=[
     ["P1","Auditar "+e.ola.alerts+" alertas de OLA, priorizando maiores excessos e histórico de pausas."],
     ["P1","Revisar "+e.matrix.discordantTicketIds.length+" divergências entre categoria Movidesk e Task Azure."],
     ["P2","Validar "+e.categories.reviewCandidates.length+" Adequações com indícios de classificação anterior."],
