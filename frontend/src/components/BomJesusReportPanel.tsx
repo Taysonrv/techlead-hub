@@ -123,7 +123,8 @@ export function ClientExecutiveReportPanel() {
         variant="scrollable" scrollButtons="auto" aria-label="Painel gerencial da Coordenação SIMER"
         sx={{borderBottom:"1px solid",borderColor:"divider",mb:.8,
           "& .MuiTabs-indicator":{backgroundColor:"#F26727",height:3},
-          "& .Mui-selected":{color:"#D9541C!important"}, "& .MuiTab-root":{minHeight:45,textTransform:"none",fontWeight:650}}}>
+          "& .MuiTab-root":{minHeight:45,textTransform:"none",fontWeight:650,borderTopLeftRadius:1.5,borderTopRightRadius:1.5},
+          "& .MuiTab-root.Mui-selected":{backgroundColor:"#F26727",color:"#fff!important"}}}>
         <Tab icon={<DashboardOutlined fontSize="small"/>} iconPosition="start" label="Visão Geral"/>
         <Tab icon={<EmojiEventsOutlined fontSize="small"/>} iconPosition="start" label="Ranking"/>
         <Tab icon={<FormatListBulletedOutlined fontSize="small"/>} iconPosition="start" label="Lista de Atendimentos"/>
