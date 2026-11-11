@@ -19,7 +19,10 @@ const fill = (hex: string): ExcelJS.Fill => ({
 const font = (color=P.ink, size=10, bold=false): Partial<ExcelJS.Font> => ({
   name: "Aptos", size, bold, color: { argb: "FF" + color },
 });
-const fmtDate=(v:string|null)=>v && !Number.isNaN(Date.parse(v)) ? new Date(v) : null;
+// Excel armazena data/hora sem fuso: converter instante UTC para relógio local de São Paulo.
+// O Brasil não adota horário de verão no período de referência de 2026.
+const fmtDate=(v:string|null)=>v && !Number.isNaN(Date.parse(v))
+  ? new Date(Date.parse(v) - 3*60*60*1000) : null;
 const safeHttps=(url:string|null)=>url && /^https:\/\//i.test(url) ? url : null;
 const hrs=(m:number|null|undefined)=>typeof m==="number" && Number.isFinite(m) ? Math.round(m/60*100)/100 : null;
 const int=(v:number)=>Number(v).toLocaleString("pt-BR");
