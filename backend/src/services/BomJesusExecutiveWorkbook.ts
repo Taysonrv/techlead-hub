@@ -1,4 +1,5 @@
 import ExcelJS from "exceljs";
+import { renderDonut, renderMonthlyLine } from "./ExecutiveChartPng";
 import type { BomJesusRow } from "./BomJesusReportService";
 
 type FullReport = {
@@ -40,7 +41,7 @@ function setMerged(ws:ExcelJS.Worksheet, address:string, value:string|number|nul
 function banner(ws:ExcelJS.Worksheet,title:string,subtitle:string,cols:number,scope:string,headerRow=7) {
   ws.views=[{state:"frozen",xSplit:1,ySplit:headerRow,showGridLines:false}];
   ws.pageSetup={paperSize:9,orientation:"landscape",fitToPage:true,fitToWidth:1,fitToHeight:0};
-  ws.headerFooter.oddFooter="&LBOM JESUS  |  DIAGNÓSTICO GERENCIAL&CConfidencial - uso interno&R&P / &N";
+  ws.headerFooter.oddFooter="&LSUPORTE SIMER  |  RELATÓRIO GERENCIAL&CConfidencial - uso interno&R&P / &N";
   ws.properties.defaultRowHeight=19;
   ws.properties.tabColor={argb:"FF"+P.green};
   const last=ws.getColumn(cols).letter;
@@ -115,22 +116,22 @@ function titleBar(ws:ExcelJS.Worksheet,row:number,start:string,end:string,label:
 export function createBomJesusExecutiveWorkbook(report:FullReport) {
   const book=new ExcelJS.Workbook();
   book.creator="TechLead Hub | Inteligência de Suporte SIMER";
-  book.title="Diagnóstico Executivo — Bom Jesus";
+  book.title="Relatório Executivo — Carteira SIMER";
   book.subject="Qualidade e resolutividade de atendimento | Movidesk + Azure DevOps";
   book.company="TechLead Hub";
   book.calcProperties.fullCalcOnLoad=true;
   const e=report.executive;
-  const scope="BOM JESUS COOPERATIVA AGROINDUSTRIAL - LAPA-PR  •  "+report.startDate+" a "+report.endDate+"  •  Suporte SIMER";
+  const scope=report.clientFilter+"  •  "+report.startDate+" a "+report.endDate+"  •  Suporte SIMER";
   const ws=book.addWorksheet("01 VISAO EXECUTIVA",{properties:{tabColor:{argb:"FF"+P.green}}});
   ws.views=[{showGridLines:false,state:"frozen",ySplit:5}];
   for(let i=1;i<=12;i++)ws.getColumn(i).width=13;
   ws.getColumn(1).width=15; ws.getColumn(12).width=15;
   ws.pageSetup={paperSize:9,orientation:"landscape",fitToPage:true,fitToWidth:1,fitToHeight:1,printArea:"A1:L52",
     margins:{left:.25,right:.25,top:.3,bottom:.3,header:.12,footer:.12}};
-  ws.headerFooter.oddFooter="&LBOM JESUS  •  Direção de Suporte SIMER&CConfidencial  •  Uso interno&R&P / &N";
+  ws.headerFooter.oddFooter="&LRelatório executivo • SIMER&CConfidencial • Uso interno&R&P / &N";
   setMerged(ws,"A1:L2","TECHLEAD HUB  /  INTELIGÊNCIA GERENCIAL",{background:P.dark,color:P.white,size:13,bold:true});
-  setMerged(ws,"A3:L4","DIAGNÓSTICO EXECUTIVO  |  BOM JESUS",{color:P.dark,size:20,bold:true});
-  setMerged(ws,"A5:L5","Base exclusiva do cliente • Atendimento SIMER • Movidesk + Azure DevOps",{color:P.secondary,size:10});
+  setMerged(ws,"A3:L4","RELATÓRIO EXECUTIVO  |  SUPORTE SIMER",{color:P.dark,size:20,bold:true});
+  setMerged(ws,"A5:L5",report.clientFilter+"  •  Atendimento SIMER  •  Movidesk + Azure DevOps",{color:P.secondary,size:10});
   setMerged(ws,"A6:L6",report.startDate+" a "+report.endDate+"   |   Gerado em "+new Date(report.generatedAt).toLocaleString("pt-BR",{timeZone:"America/Sao_Paulo"})+"   |   Indicadores de OLA sujeitos a auditoria",{background:P.light,color:P.secondary,size:9});
   ws.getRow(1).height=25;ws.getRow(2).height=11;ws.getRow(3).height=29;ws.getRow(4).height=18;ws.getRow(5).height=24;ws.getRow(6).height=23;
   card(ws,["A","D"],8,"Atendimentos",int(e.matrix.total),"Carteira SIMER • tickets distintos");
@@ -197,9 +198,49 @@ export function createBomJesusExecutiveWorkbook(report:FullReport) {
   });
   setMerged(ws,"A50:L51","RESSALVA: dados cruzados de Movidesk/Azure. O histórico completo de categorias anteriores ao HUB, a implantação efetiva e o aceite do cliente não são inferidos automaticamente.",{background:P.light,color:P.secondary,size:9,wrap:true});
   ws.getRow(50).height=17;ws.getRow(51).height=18;
-  setMerged(ws,"A52:L52","Detalhamento rastreável nas abas 02–10. Ações não são alteradas nas fontes.",{color:P.secondary,size:8});
+  setMerged(ws,"A52:L52","Gráficos na aba 02; indicadores e evidências auditáveis nas abas 03–12. Fontes somente leitura.",{color:P.secondary,size:8});
 
-  const ola=tableSheet(book,"02 OLA SUPORTE","OLA DO SUPORTE  |  AUDITORIA POR TICKET",
+  // Gráficos são imagens PNG nítidas dentro do XLSX; a base numérica fica disponível e filtrável nas abas posteriores.
+  // ExcelJS não expõe criação de gráficos editáveis; não apresentamos essas visualizações como objetos nativos.
+  const graph=book.addWorksheet("02 GRAFICOS",{properties:{tabColor:{argb:"FF"+P.blue}}});
+  graph.views=[{showGridLines:false,state:"frozen",ySplit:4}];
+  for(let i=1;i<=18;i++) graph.getColumn(i).width=12;
+  for(let i=1;i<=47;i++) graph.getRow(i).height=22;
+  graph.pageSetup={paperSize:9,orientation:"landscape",fitToPage:true,fitToWidth:1,fitToHeight:1,
+    printArea:"A1:R47",margins:{left:.25,right:.25,top:.3,bottom:.3,header:.12,footer:.12}};
+  setMerged(graph,"A1:R2","PAINEL GRÁFICO  |  INDICADORES EXECUTIVOS",{background:P.dark,color:P.white,size:16,bold:true});
+  setMerged(graph,"A3:R3",scope,{color:P.secondary,size:9});
+  setMerged(graph,"A4:R4","Distribuição das correções e do OLA, evolução mensal de atendimentos e alertas",{background:P.light,color:P.ink,size:10});
+  const pngs=[
+    renderDonut("SITUACAO DAS CORRECOES",[
+      {name:"CONCLUIDAS",value:e.corrections.concluded},
+      {name:"EM ABERTO",value:e.corrections.open},
+      {name:"CANCELADAS",value:e.corrections.cancelled},
+    ]),
+    renderDonut("OLA DO SUPORTE",[
+      {name:"DENTRO DA META",value:e.ola.onTime},
+      {name:"ALERTA",value:e.ola.alerts},
+      {name:"NAO MENSURAVEL",value:e.ola.unmeasurable},
+      {name:"CANCELADO",value:e.ola.cancelled},
+    ]),
+    renderMonthlyLine("EVOLUCAO DOS ATENDIMENTOS",e.monthly,"volume"),
+    renderMonthlyLine("CORRECOES E ALERTAS DE OLA",e.monthly,"ola"),
+  ];
+  const positions=[
+    {tl:{col:.20,row:5},ext:{width:650,height:325}},
+    {tl:{col:9.00,row:5},ext:{width:650,height:325}},
+    {tl:{col:.20,row:22},ext:{width:650,height:325}},
+    {tl:{col:9.00,row:22},ext:{width:650,height:325}},
+  ];
+  pngs.forEach((png,i)=>graph.addImage(book.addImage({buffer:png,extension:"png"}),positions[i]!));
+  setMerged(graph,"A41:R42","LEITURA: os gráficos representam capturas dos dados calculados no HUB. As tabelas e critérios auditáveis estão nas próximas abas.",
+    {background:P.mint,color:P.ink,size:9,wrap:true});
+  setMerged(graph,"A44:R45","ATENÇÃO: alertas de OLA são preliminares. A conclusão de Task não comprova implantação ou aceite do cliente.",
+    {background:P.light,color:P.secondary,size:9,wrap:true});
+  graph.getRow(41).height=24;graph.getRow(42).height=20;graph.getRow(44).height=24;graph.getRow(45).height=20;
+  graph.headerFooter.oddFooter="&LRelatório gerencial / Gráficos&CConfidencial&R&P / &N";
+
+  const ola=tableSheet(book,"03 OLA SUPORTE","OLA DO SUPORTE  |  AUDITORIA POR TICKET",
     "Alertas calculados por horas úteis; evidência do prazo interno para passagem à Fábrica.",scope,
     ["Ticket","Assunto","Task Azure","Abertura","Criação Task (proxy)","Prioridade","Perfil","Perfil comprovado","Tempo útil (h)","Meta (h)","Excesso (h)","Pausas (h)","Resultado","Ressalvas de auditoria","Link Azure"],
     e.ola.cases.map(x=>[x.ticketId,x.subject,x.taskId,fmtDate(x.openedAt),fmtDate(x.taskCreatedAt),
@@ -210,7 +251,7 @@ export function createBomJesusExecutiveWorkbook(report:FullReport) {
   ola.properties.tabColor={argb:"FF"+P.orange};
   ola.getCell("N6").note="A criação da Task é proxy de passagem ao Desenvolvimento; o marco efetivo pode ser diferente.";
 
-  const corrections=tableSheet(book,"03 QUALIDADE CORRECOES","CORREÇÕES  |  RESOLUTIVIDADE E RASTREABILIDADE",
+  const corrections=tableSheet(book,"04 QUALIDADE CORRECOES","CORREÇÕES  |  RESOLUTIVIDADE E RASTREABILIDADE",
     "Separação entre conclusão técnica, versão vinculada, resolução no Movidesk e reabertura.",scope,
     ["Ticket","Descrição","Categoria","Task","Estado técnico","Situação","Versão vinculada",
       "Conclusão técnica","Resolução Movidesk","Reabertura","Resolvido após Task?",
@@ -230,7 +271,7 @@ export function createBomJesusExecutiveWorkbook(report:FullReport) {
     ["Outra categoria + correção Azure",e.matrix.correctionNonBug,"Pode haver revisão de classificação; ainda não comprovada"],
     ["Demais atendimentos",e.matrix.others,"Sem essa combinação de sinais"],
   ];
-  const matrix=tableSheet(book,"04 CLASSIFICACOES","MATRIZ BUG × TASK AZURE",
+  const matrix=tableSheet(book,"05 CLASSIFICACOES","MATRIZ BUG × TASK AZURE",
     "Conciliação de categoria atual (Movidesk) com natureza da Task técnica (Azure).",scope,
     ["Cenário","Tickets","Interpretação"],matRows,[46,18,80]);
   matrix.addRow([]);const hdr=matrix.addRow(["Ticket","Assunto","Categoria atual","Task Azure","Tipo Task","Motivo da investigação","Situação Movidesk"]);
@@ -239,7 +280,7 @@ export function createBomJesusExecutiveWorkbook(report:FullReport) {
   e.matrix.cases.forEach(x=>matrix.addRow([x.ticketId,x.subject,x.category,x.taskId,x.taskType,x.reason,x.status]));
   matrix.pageSetup.printArea="A1:G"+matrix.rowCount;
 
-  const reclass=tableSheet(book,"05 RECLASSIFICACOES","ADEQUAÇÕES  |  HISTÓRICO COMPROVÁVEL",
+  const reclass=tableSheet(book,"06 RECLASSIFICACOES","ADEQUAÇÕES  |  HISTÓRICO COMPROVÁVEL",
     "Mudanças observadas no HUB são diferentes de categorias de abertura não recuperadas.",scope,
     ["Ticket","Assunto","Categoria atual","Categoria anterior observada","Data de observação",
       "Primeira conhecida","Task Azure","Status da evidência","Justificativa"],
@@ -251,13 +292,13 @@ export function createBomJesusExecutiveWorkbook(report:FullReport) {
 
   const vistraRows=e.vistra.cases.map(x=>[x.area,x.ticketId,x.subject,fmtDate(x.date),x.category,x.taskId,
     x.suspectedFailure?"Suspeita — validar":"Sem defeito comprovado",x.evidence]);
-  const vistra=tableSheet(book,"06 VISTRA RELATORIOS","VISTRA, ANALÍTICO E RELATÓRIOS",
+  const vistra=tableSheet(book,"07 VISTRA RELATORIOS","VISTRA, ANALÍTICO E RELATÓRIOS",
     "As ferramentas são apresentadas separadamente. Menção ou suspeita não comprova defeito.",scope,
     ["Ferramenta","Ticket","Descrição","Abertura","Categoria","Task Azure","Diagnóstico","Evidência"],
     vistraRows,[25,12,70,23,23,17,29,80],{dateColumns:[4],statusColumn:7});
   vistra.properties.tabColor={argb:"FF"+P.blue};
 
-  const recurrence=tableSheet(book,"07 RECORRENCIAS","RECORRÊNCIAS  |  AGRUPAMENTOS PARA CONFIRMAÇÃO",
+  const recurrence=tableSheet(book,"08 RECORRENCIAS","RECORRÊNCIAS  |  AGRUPAMENTOS PARA CONFIRMAÇÃO",
     "Mesmo assunto ou mesma Task é evidência de relação, mas não prova reincidência por causa-raiz.",scope,
     ["Critério","Assunto base","Tickets","Qtde","Tasks","Primeiro","Último",
       "Surgiu após conclusão técnica?","Tickets posteriores","Nota de validação"],
@@ -267,7 +308,7 @@ export function createBomJesusExecutiveWorkbook(report:FullReport) {
     [24,63,38,12,27,23,23,30,33,90],{dateColumns:[6,7],statusColumn:8});
   recurrence.properties.tabColor={argb:"FF"+P.blue};
 
-  const trend=tableSheet(book,"08 EVOLUCAO MENSAL","EVOLUÇÃO MENSAL  |  BOM JESUS",
+  const trend=tableSheet(book,"09 EVOLUCAO MENSAL","EVOLUÇÃO MENSAL  |  BOM JESUS",
     "Volume de abertura, classificação atual de Bug, correções e alertas preliminares de OLA.",scope,
     ["Mês","Tickets","Categoria Bug","Tasks correção","Alertas OLA","Vistra","Analítico","Relatórios SIMER"],
     e.monthly.map(m=>{
@@ -304,14 +345,14 @@ export function createBomJesusExecutiveWorkbook(report:FullReport) {
     ["P2","Recorrências",e.recurrence.groups,
       "Revisar agrupamentos e entregas; registrar causa-raiz.","Mesmo defeito e pós-entrega evidenciados."],
   ];
-  const plan=tableSheet(book,"09 PLANO DE ACAO","AGENDA EXECUTIVA  |  PLANO DE TRATAMENTO",
+  const plan=tableSheet(book,"10 PLANO DE ACAO","AGENDA EXECUTIVA  |  PLANO DE TRATAMENTO",
     "Ações sugeridas a partir dos achados. Responsável e prazo não foram definidos automaticamente.",scope,
     ["Prioridade","Frente","Casos de referência","Próxima ação","Critério de conclusão","Responsável","Prazo"],
     actions.map(x=>[x[0],x[1],x[2],x[3],x[4],"A definir","A definir"]),
     [18,44,22,85,85,25,20],{statusColumn:1});
   plan.properties.tabColor={argb:"FF"+P.orange};
 
-  const tech=tableSheet(book,"10 BASE AUDITAVEL","BASE ANALÍTICA  |  EVIDÊNCIAS DO HUB",
+  const tech=tableSheet(book,"11 BASE AUDITAVEL","BASE ANALÍTICA  |  EVIDÊNCIAS DO HUB",
     "Todos os tickets do recorte; para investigar prazos utilize principalmente a aba 02.",scope,
     ["Ticket","Assunto","Cliente","Abertura","Categoria atual","Status Movidesk","Task",
       "Tipo Task","Estado Task","Versão","Abertura Task","Conclusão Task","OLA Suporte min",
@@ -328,7 +369,7 @@ export function createBomJesusExecutiveWorkbook(report:FullReport) {
   tech.properties.tabColor={argb:"FF"+P.secondary};
 
   const definitions=[
-    ["UNIVERSO","Aberturas no período, cliente cadastrado Bom Jesus e responsável operacional SIMER.",
+    ["UNIVERSO","Aberturas no período, cliente selecionado da carteira e responsável operacional SIMER.",
       "Ticket Movidesk sincronizado pelo HUB"],
     ["BUG ATUAL","Categoria Bug informada atualmente no Movidesk. Não equivale automaticamente a erro confirmado.",
       "Movidesk Ticket.category"],
@@ -353,7 +394,7 @@ export function createBomJesusExecutiveWorkbook(report:FullReport) {
     ["VISTRA / ANALÍTICO / RELATÓRIOS","Ferramentas tratadas separadamente; palavra-chave e sintoma são sinais, não prova de falha.",
       "Assunto + serviço + natureza da Task"],
   ];
-  const methodology=tableSheet(book,"11 CRITERIOS FONTES","METODOLOGIA  |  CRITÉRIOS DE EVIDÊNCIA",
+  const methodology=tableSheet(book,"12 CRITERIOS FONTES","METODOLOGIA  |  CRITÉRIOS DE EVIDÊNCIA",
     "Glossário auditável, hipóteses de cálculo e limitações para leitura pela Diretoria.",scope,
     ["Conceito","Definição operacional","Evidência e fonte"],definitions,[29,115,71]);
   methodology.properties.tabColor={argb:"FF"+P.secondary};
@@ -366,7 +407,7 @@ export function createBomJesusExecutiveWorkbook(report:FullReport) {
 
   book.worksheets.forEach((sheet,index)=>{
     if(index===0)return;
-    sheet.headerFooter.oddHeader="&LTechLead Hub / Bom Jesus&CDiagnóstico gerencial&R"+report.endDate;
+    sheet.headerFooter.oddHeader="&LTechLead Hub / Carteira SIMER&CDiagnóstico gerencial&R"+report.endDate;
     sheet.headerFooter.oddFooter="&LInformações para revisão interna • não redistribuir sem validação&C"+sheet.name+"&RPágina &P de &N";
     sheet.pageSetup.fitToPage=true;
     // Anexos largos usam duas páginas horizontais para preservar leitura na impressão.
