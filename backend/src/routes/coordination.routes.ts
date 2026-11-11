@@ -17,7 +17,7 @@ coordinationRoutes.use((req, res, next) => {
 });
 const bomJesusTier = (req: AuthenticatedRequest): SlaTier | null => req.query.slaTier === "VIP" ? "VIP" : req.query.slaTier === "PADRAO" ? "PADRAO" : null;
 const bomJesusDates = (req: AuthenticatedRequest) => ({
-  startDate: typeof req.query.startDate === "string" ? req.query.startDate : "2026-06-01",
+  startDate: typeof req.query.startDate === "string" ? req.query.startDate : "2026-07-01",
   endDate: typeof req.query.endDate === "string" ? req.query.endDate : new Date().toISOString().slice(0, 10),
 });
 coordinationRoutes.get("/bom-jesus-report", async (req: AuthenticatedRequest, res) => {
@@ -109,6 +109,78 @@ coordinationRoutes.get("/bom-jesus-report.xlsx", async (req: AuthenticatedReques
         ]);
       }
     }
+    // Abas executivas: o mesmo objeto alimenta a tela e o Excel, sem contagens divergentes.
+    const audit = report.executive;
+    const executive = book.addWorksheet("PAINEL DIRETORIA", { views: [{ state:"frozen", ySplit: 4 }] });
+    executive.addRows([
+      ["DIAGNÓSTICO EXECUTIVO — BOM JESUS | Suporte SIMER"],
+      ["Cliente", report.clientFilter], ["Período de abertura", startDate, endDate],
+      ["Escopo", "Cliente exato + responsabilidade operacional SIMER. Mesma definição do card Clientes."], [],
+      ["Indicador", "Resultado", "Qualificação"],
+      ["Atendimentos", audit.matrix.total, "Tickets distintos no período e carteira SIMER"],
+      ["Categorias Bug", audit.matrix.bugCategory, "Classificação atual no Movidesk"],
+      ["Vinculados a Tasks de correção", audit.corrections.tickets, "Vínculo Azure confirmado"],
+      ["Tasks distintas", audit.corrections.distinctTasks, "Work Items Azure sem dupla contagem"],
+      ["Correções concluídas", audit.corrections.concluded, "Conclusão técnica, não aceite do cliente"],
+      ["Correções concluídas com versão", audit.corrections.concludedWithVersion, "Versão vinculada; implantação não comprovada"],
+      ["Correções abertas", audit.corrections.open, "Exclui canceladas"],
+      ["Correções canceladas", audit.corrections.cancelled, "Analisar separadamente"],
+      ["OLA Suporte: alertas", audit.ola.alerts, "Excesso calculado, sujeito à auditoria de pausas e marco de passagem"],
+      ["OLA Suporte: dentro da meta", audit.ola.onTime, "Tempo calculável em Tasks não canceladas"],
+      ["OLA Suporte: não mensurável", audit.ola.unmeasurable, "Sem marcos/prioridade ou categoria excluída"],
+      ["OLA Suporte: % dentro da meta", audit.ola.withinTargetPercent, "Denominador = casos mensuráveis, não cancelados"],
+      ["Mediana de OLA Suporte (horas úteis)", audit.ola.medianSupportMinutes===null?null:Math.round(audit.ola.medianSupportMinutes/60*100)/100, "Aferição preliminar"],
+      ["Mediana do excesso (horas úteis)", audit.ola.medianExcessMinutes===null?null:Math.round(audit.ola.medianExcessMinutes/60*100)/100, "Somente alertas"],
+      ["Categoria Bug sem Task correção", audit.matrix.bugWithoutCorrection, "Revisar vínculo e classificação"],
+      ["Correção Azure sem categoria Bug", audit.matrix.correctionNonBug, "Investigar reclassificações e contexto"],
+      ["Mudanças observadas para Adequação", audit.categories.observedTicketCount, "Histórico capturado; não prova categoria de abertura"],
+      ["Adequações para revisão histórica", audit.categories.reviewCandidates.length, "Candidatos, não mudanças confirmadas"],
+      ["Vistra explícito com suspeita de falha", audit.vistra.suspectedVistraFailures, "Separado do Analítico e relatórios SIMER"],
+      ["Grupos de recorrência candidatos", audit.recurrence.groups, "Soma de grupos pode sobrepor tickets"],
+      ["Grupos com ocorrência após conclusão técnica", audit.recurrence.afterConclusionGroups, "Não comprova regressão pós-implantação"], [],
+      ["LEITURA CRÍTICA", "Abertura da Task Azure é proxy temporal de passagem, não data oficial confirmada."],
+      ["LEITURA CRÍTICA", "A API pública do Movidesk não disponibiliza histórico nativo de categorias; observações são prospectivas."],
+      ["LEITURA CRÍTICA", "Nenhum encerramento técnico comprova aceite explícito do cliente ou implantação da versão."],
+    ]);
+    executive.getColumn(1).width=54; executive.getColumn(2).width=32; executive.getColumn(3).width=90;
+    executive.getRow(1).font={bold:true,size:16,color:{argb:"FF154532"}};
+    executive.getRow(6).font={bold:true,color:{argb:"FFFFFFFF"}};
+    executive.getRow(6).fill={type:"pattern",pattern:"solid",fgColor:{argb:"FF146C43"}};
+    executive.getRow(18).getCell(2).numFmt="0.0";
+    const hrs=(minutes:number|null)=>minutes===null?null:Math.round(minutes/60*100)/100;
+    const olaAudit = book.addWorksheet("OLA SUPORTE AUDITORIA");
+    olaAudit.addRow(["Ticket","Assunto","Task Azure","Situação Task","Categoria atual","Abertura","Criação da Task (proxy)","Prioridade","Perfil SLA","Perfil identificado?","OLA Suporte (horas úteis)","Meta (horas úteis)","Excesso (horas úteis)","Pausas identificadas (horas)","Classificação","Ressalvas de auditoria","Link da Task"]);
+    for(const x of audit.ola.cases)olaAudit.addRow([x.ticketId,x.subject,x.taskId,x.taskState,x.category,x.openedAt,x.taskCreatedAt,x.priority,x.tier,x.tierVerified?"Sim":"Não",hrs(x.minutes),hrs(x.targetMinutes),hrs(x.excessMinutes),hrs(x.pauseMinutes),x.status,x.warnings.join(" | "),x.taskUrl]);
+    const quality=book.addWorksheet("QUALIDADE CORRECOES");
+    quality.addRow(["Ticket","Assunto","Categoria","Task","Situação Azure","Grupo","Versão vinculada","Data conclusão técnica","Data resolução Movidesk","Última reabertura","Resolvido após conclusão?","Reaberto após conclusão?","Possível reocorrência?","Tickets posteriores com assunto igual","Aceite explícito do cliente","Link Task"]);
+    for(const x of audit.corrections.rows)quality.addRow([x.ticketId,x.subject,x.category,x.taskId,x.taskState,x.outcome,x.version,x.taskConcludedAt,x.ticketResolvedAt,x.ticketReopenedAt,x.resolvedAfterTask?"Sim":"Não",x.reopenedAfterTask?"Sim":"Não",x.reappearanceCandidate?"Sim - conferir":"Não",x.reappearanceTicketIds.join(", "),x.validatedByClient,x.taskUrl]);
+    const matrix=book.addWorksheet("MATRIZ CLASSIFICACOES");
+    matrix.addRows([["MATRIZ MOVIdesk × AZURE","Tickets"],["Bug + Task de correção",audit.matrix.bugWithCorrection],["Bug sem Task de correção",audit.matrix.bugWithoutCorrection],["Outra categoria + Task de correção",audit.matrix.correctionNonBug],["Demais atendimentos",audit.matrix.others],["TOTAL",audit.matrix.total],[],["Ticket","Assunto","Categoria atual","Task","Tipo Azure","Motivo da divergência","Situação Movidesk"]]);
+    for(const x of audit.matrix.cases)matrix.addRow([x.ticketId,x.subject,x.category,x.taskId,x.taskType,x.reason,x.status]);
+    const categoryReview=book.addWorksheet("AUDITORIA ADEQUACOES");
+    categoryReview.addRow(["Ticket","Assunto","Categoria atual","Categoria anterior observada","Data observação","Primeira categoria conhecida","Task","Situação","Fundamentação"]);
+    for(const x of [...audit.categories.observed,...audit.categories.reviewCandidates])categoryReview.addRow([x.ticketId,x.subject,x.category,x.previousCategory,x.observedAt,x.initialObserved,x.taskId,x.evidence,x.reason]);
+    const recurring=book.addWorksheet("RECORRENCIAS CANDIDATAS");
+    recurring.addRow(["Agrupamento","Assunto base","Tickets","Qtd. tickets","Tasks","Primeiro registro","Último registro","Tipo evidência","Houve ticket após conclusão técnica?","Tickets posteriores","Ressalva"]);
+    for(const x of audit.recurrence.groupsDetail)recurring.addRow([x.key,x.title,x.ticketIds.join(", "),x.count,x.taskIds.join(", "),x.firstAt,x.lastAt,x.evidence,x.afterTechnicalConclusion?"Sim - investigar":"Não",x.laterTicketIds.join(", "),x.qualification]);
+    const vistra=book.addWorksheet("VISTRA ANALITICO RELATORIOS");
+    vistra.addRow(["Ferramenta","Ticket","Assunto","Data abertura","Categoria","Task correção","Sintoma de falha?","Evidência"]);
+    for(const x of audit.vistra.cases)vistra.addRow([x.area,x.ticketId,x.subject,x.date,x.category,x.taskId,x.suspectedFailure?"Suspeito - validar":"Não comprovado",x.evidence]);
+    const monitoring=book.addWorksheet("EVOLUCAO MENSAL");
+    monitoring.addRow(["Mês abertura","Tickets","Categorias Bug","Tasks correção","Alertas OLA suporte"]);
+    for(const x of audit.monthly)monitoring.addRow([x.month,x.tickets,x.bugs,x.corrections,x.olaAlerts]);
+    monitoring.addRow([]);monitoring.addRow(["Mês","Vistra","Analítico","Relatórios SIMER"]);
+    for(const x of audit.vistra.monthly)monitoring.addRow([x.month,x.vistra,x.analitico,x.relatorios]);
+    const plans=book.addWorksheet("PLANO DE ACAO");
+    plans.addRows([
+      ["Prioridade","Frente","Quantidade referência","Ação para validação","Critério de conclusão"],
+      ["P1","OLA Suporte",audit.ola.alerts,"Revisar linha do tempo, pausa, mudança de urgência e data efetiva de passagem","Excesso comprovado ou descaracterizado por ticket"],
+      ["P1","Correções pós-conclusão",audit.corrections.postConclusionCandidates,"Confrontar ocorrências novas com implantação efetiva e aceite","Regressão confirmada ou não"],
+      ["P1","Bug / Azure divergentes",audit.matrix.discordantTicketIds.length,"Conferir Task, classificação e contexto de origem","Vínculo e classificação explicados"],
+      ["P2","Mudança para Adequação",audit.categories.reviewCandidates.length,"Consultar histórico de alterações na interface Movidesk","Categoria inicial comprovada ou não disponível"],
+      ["P2","Vistra e relatórios",audit.vistra.cases.length,"Validar ferramenta, causa-raiz e correção","Incidentes confirmados e periodicidade"],
+      ["P2","Recorrências",audit.recurrence.groups,"Investigar grupos e identificar causa-raiz","Recorrência confirmada por defeito"],
+    ]);
     const trend = book.addWorksheet("Periodicidade");
     trend.addRow(["Mês", "Tickets", "Candidatos Vistra / relatórios"]);
     for (const x of report.monthly) trend.addRow([x.month, x.tickets, x.vistra]);
@@ -125,6 +197,15 @@ coordinationRoutes.get("/bom-jesus-report.xlsx", async (req: AuthenticatedReques
         sheet.getColumn(2).width = 56; sheet.getColumn(36).width = 95;
         sheet.autoFilter = { from: "A1", to: "AJ1" };
       }
+      if (["OLA SUPORTE AUDITORIA","QUALIDADE CORRECOES","MATRIZ CLASSIFICACOES","AUDITORIA ADEQUACOES","RECORRENCIAS CANDIDATAS","VISTRA ANALITICO RELATORIOS","EVOLUCAO MENSAL","PLANO DE ACAO"].includes(sheet.name)) {
+        sheet.getColumn(2).width=52;
+        sheet.getRow(1).font={bold:true,color:{argb:"FFFFFFFF"}};
+        sheet.getRow(1).fill={type:"pattern",pattern:"solid",fgColor:{argb:"FF146C43"}};
+      }
+      if(sheet.name==="OLA SUPORTE AUDITORIA") {sheet.getColumn(16).width=85;sheet.autoFilter={from:"A1",to:"Q1"};}
+      if(sheet.name==="QUALIDADE CORRECOES") {sheet.getColumn(2).width=56;sheet.autoFilter={from:"A1",to:"P1"};}
+      if(sheet.name==="AUDITORIA ADEQUACOES") {sheet.getColumn(2).width=55;sheet.autoFilter={from:"A1",to:"I1"};}
+      if(sheet.name==="VISTRA ANALITICO RELATORIOS") {sheet.getColumn(3).width=55;sheet.autoFilter={from:"A1",to:"H1"};}
       if (sheet.name === "Histórico de Categorias") {
         sheet.getColumn(2).width = 55; sheet.getColumn(3).width = 27; sheet.getColumn(8).width = 23;
         sheet.autoFilter = { from: "A1", to: "K1" };
