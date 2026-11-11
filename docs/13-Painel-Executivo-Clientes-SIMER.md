@@ -5,8 +5,8 @@ Transformar o diagnóstico específico da Bom Jesus em um **painel nativo reutil
 
 ## Critérios de acesso e segurança
 - A página utiliza a permissão existente `coordination`; as novas rotas passam pelo mesmo middleware.
-- A lista de clientes vem de `SIMER_CLIENTS` (`backend/src/domain/OperationalScope.ts`). O backend valida `resolveSimerClient` antes de qualquer consulta. Nomes aproximados ou clientes fora da carteira geram HTTP 400.
-- A consulta exige cliente canônico exato + responsável entre os analistas oficiais do Suporte SIMER + período de abertura + tickets não excluídos.
+- A lista vem de `SIMER_CLIENTS` e da conta condicional `SIAGRI SISTEMAS` (`backend/src/domain/OperationalScope.ts`). O backend valida `resolveExecutiveClient` antes de qualquer consulta. Nomes aproximados ou clientes fora da carteira geram HTTP 400.
+- A consulta exige cliente canônico exato (ou prefixo autorizado exclusivo para SIAGRI SISTEMAS) + responsável entre os analistas oficiais do Suporte SIMER + período de abertura + tickets não excluídos.
 - Não há seleção livre de clientes externos, tampouco alteração de dados do Movidesk ou Azure na geração.
 - A exportação usa o **mesmo objeto** da visualização, evitando divergência de totais.
 - A sincronização e o dono do ticket são fotografias atuais; mudanças históricas de responsável exigem consulta específica.
