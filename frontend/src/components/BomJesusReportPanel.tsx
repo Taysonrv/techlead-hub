@@ -195,7 +195,7 @@ export function ClientExecutiveReportPanel() {
       <AccordionDetails>
       <Stack direction="row" sx={{ gap: 1, flexWrap: "wrap", mb: 2 }}>
         <Chip label={`Tickets: ${report.totals.tickets}`} />
-        <Chip color="success" label={`Bugs reais · Tasks de correção: ${report.totals.confirmedBugs}`} />
+        <Chip color="success" label={`Tickets vinculados a correção Azure: ${report.totals.confirmedBugs}`} />
         <Chip color="info" label={`Possíveis bugs: ${report.totals.possibleBugs}`} />
         <Chip label={`Melhorias atuais: ${report.totals.currentImprovements}`} />
         <Chip color="success" label={`Tasks de correção: ${report.totals.linkedCorrectionTasks}`} />
