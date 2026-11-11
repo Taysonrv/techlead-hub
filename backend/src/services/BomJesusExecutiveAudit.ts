@@ -63,7 +63,7 @@ export type ExecutiveVistraCase = {
   area: "VISTRA" | "ANALITICO" | "RELATORIO_SIMER"; suspectedFailure: boolean;
   evidence: string;
 };
-export function buildBomJesusExecutiveAudit(rows: ExecutiveTicketInput[]) {
+export function buildBomJesusExecutiveAudit(rows: ExecutiveTicketInput[], client: string = "Cliente selecionado") {
   const byId = new Map(rows.map(r => [r.id, r]));
   const corrections = rows.filter(r => r.isCorrectionTask);
   const correctionUniqueTasks = unique(corrections.map(r => r.taskNumber).filter((n): n is number => n != null));
@@ -212,7 +212,7 @@ export function buildBomJesusExecutiveAudit(rows: ExecutiveTicketInput[]) {
     };
   });
   return {
-    definition:"Somente tickets do cliente Bom Jesus no período e sob responsabilidade operacional SIMER. Registros com categorias históricas parciais e OLA por criação da Task são auditáveis, porém preliminares.",
+    definition:`Somente tickets do cliente ${client} no período e sob responsabilidade operacional SIMER. Registros com categorias históricas parciais e OLA por criação da Task são auditáveis, porém preliminares.`,
     matrix:{
       total:rows.length, bugCategory:categoryBug.length, correctionTickets:corrections.length,
       bugWithCorrection:bugWithCorrection.length, bugWithoutCorrection:bugWithoutCorrection.length,
