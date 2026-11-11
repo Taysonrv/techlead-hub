@@ -27,7 +27,7 @@ const normalizeSymptom = (subject: string) => text(subject)
   .replace(/\b\d+\b/g, " ")
   .replace(/[^a-z\s]/g, " ").replace(/\s+/g, " ").trim();
 export type BomJesusRow = {
-  id: number; subject: string; client: string; createdDate: string; status: string; baseStatus: string | null; category: string;
+  id: number; subject: string; client: string; owner: string | null; ownerTeam: string | null; createdDate: string; status: string; baseStatus: string | null; category: string;
   resolvedDate: string | null; reopenedDate: string | null; serviceContext: string; isCorrectionTask: boolean; taskRemoteUrl: string | null;
   taskNumber: number | null; taskType: string; classification: string; vistra: boolean;
   recurrenceKey: string; recurrenceCount: number; actionCount: number;
@@ -134,7 +134,7 @@ export async function clientExecutiveReport(
     return { t, classification, vistra, vistraType, categoryHistory, lastTransition, lastToAdequacao, recurrenceKey, productAction, linkedTask, sla, correctionTask, concluded, taskClosedAt };
   });
   const rows: BomJesusRow[] = prepared.map(({ t, classification, vistra, vistraType, categoryHistory, lastTransition, lastToAdequacao, recurrenceKey, productAction, linkedTask, sla, taskClosedAt, correctionTask }) => ({
-    id: t.movideskId, subject: t.subject, client: t.client || "", createdDate: t.createdDate.toISOString(),
+    id: t.movideskId, subject: t.subject, client: t.client || "", owner: t.owner, ownerTeam: t.ownerTeam, createdDate: t.createdDate.toISOString(),
     status: t.status, baseStatus: t.baseStatus || null, category: t.category || "",
     resolvedDate: t.resolvedDate?.toISOString() || null, reopenedDate: t.reopenedDate?.toISOString() || null,
     serviceContext: [t.service,t.serviceFirstLevel,t.serviceSecondLevel,t.serviceThirdLevel].filter(Boolean).join(" / "),
