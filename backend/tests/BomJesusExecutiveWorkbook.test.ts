@@ -47,6 +47,7 @@ test("Excel da Diretoria possui capa executiva, anexos, prazos e rastreabilidade
     "01 VISAO EXECUTIVA","02 GRAFICOS","03 OLA SUPORTE","04 QUALIDADE CORRECOES","05 CLASSIFICACOES",
     "06 RECLASSIFICACOES","07 VISTRA RELATORIOS","08 RECORRENCIAS",
     "09 EVOLUCAO MENSAL","10 PLANO DE ACAO","11 BASE AUDITAVEL","12 CRITERIOS FONTES",
+    "13 RANKINGS","14 MULTIDIMENSIONAL",
   ]);
   assert.equal(wb.getWorksheet("01 VISAO EXECUTIVA")!.getCell("A3").value,"RELATÓRIO EXECUTIVO  |  SUPORTE SIMER");
   assert.equal(wb.getWorksheet("03 OLA SUPORTE")!.getCell("A8").value,842001);
@@ -58,8 +59,10 @@ test("Excel da Diretoria possui capa executiva, anexos, prazos e rastreabilidade
   assert.ok(Buffer.from(bytes).byteLength>3000);
   const reload=new ExcelJS.Workbook();
   await reload.xlsx.load(Buffer.from(bytes));
-  assert.equal(reload.worksheets.length,12);
+  assert.equal(reload.worksheets.length,14);
   assert.equal(reload.getWorksheet("02 GRAFICOS")!.getImages().length,4);
   assert.equal(reload.getWorksheet("03 OLA SUPORTE")!.getCell("M8").value,"ALERTA");
   assert.equal(reload.getWorksheet("11 BASE AUDITAVEL")!.getCell("A8").value,842001);
+  assert.equal(reload.getWorksheet("14 MULTIDIMENSIONAL")!.rowCount>=9,true);
+  assert.equal(reload.getWorksheet("13 RANKINGS")!.getCell("A7").value,"RESPONSÁVEL (CARTEIRA ATUAL)");
 });
