@@ -32,7 +32,7 @@ export function BomJesusReportPanel() {
     try {
       const response = await api.get("/coordination/bom-jesus-report.xlsx", { params: { startDate, endDate, slaTier }, responseType: "blob" });
       const url = URL.createObjectURL(new Blob([response.data], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
-      const a = document.createElement("a"); a.href = url; a.download = `relatorio-bom-jesus-${startDate}-${endDate}.xlsx`; a.click();
+      const a = document.createElement("a"); a.href = url; a.download = `Bom_Jesus_Relatorio_Executivo_${startDate}_a_${endDate}.xlsx`; a.click();
       window.setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (e) { setError(getApiErrorMessage(e, "Falha ao exportar Excel.")); }
     finally { setExporting(false); }
@@ -50,7 +50,7 @@ export function BomJesusReportPanel() {
           <MenuItem value="VIP">Simulação VIP</MenuItem>
         </TextField>
         <Button variant="outlined" onClick={() => void load()} disabled={loading}>Atualizar</Button>
-        <Button variant="contained" onClick={() => void download()} disabled={!report || exporting}>{exporting ? "Exportando..." : "Exportar Excel (.xlsx)"}</Button>
+        <Button variant="contained" onClick={() => void download()} disabled={!report || exporting}>{exporting ? "Gerando relatório..." : "Exportar relatório da Diretoria (Excel)"}</Button>
       </Stack>
     </Stack>
     <Alert severity="warning" sx={{ mb: 2 }}>As alterações de categoria são capturadas nas sincronizações. A abertura da Task é utilizada como referência aproximada da passagem ao Desenvolvimento, e os números de OLA/SLA são preliminares até validação de pausas e feriados adicionais. A primeira categoria observada não comprova a categoria na abertura, e a data registrada é a da observação pelo HUB. Dados anteriores à implantação não podem ser reconstruídos automaticamente. Bugs e falhas recorrentes permanecem sujeitos à validação técnica.</Alert>
