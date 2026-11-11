@@ -25,11 +25,11 @@ export type BomJesusExecutiveAudit = {
 
 const hours=(min:number|null|undefined)=>min==null?"N/D":`${Math.floor(min/60)}h${String(min%60).padStart(2,"0")}`;
 const date=(v:string|null)=>v?new Date(v).toLocaleDateString("pt-BR"):"—";
-const ticket=(id:number)=><Link href={`/tickets?movidesk=${id}`} underline="hover" fontWeight={700}>#{id}</Link>;
+const ticket=(id:number)=><Link href={`/tickets?movidesk=${id}`} underline="hover" sx={{fontWeight:700}}>#{id}</Link>;
 const task=(id:number|null,url:string|null)=>id ? (url?<Link href={url} target="_blank" rel="noopener noreferrer">#{id}</Link>:<span>#{id}</span>):<span>—</span>;
 const indicator=(label:string,value:string|number,note?:string)=><Box key={label} sx={{minWidth:155,flex:"1 1 150px",border:"1px solid",borderColor:"divider",borderRadius:2,p:1.5}}>
   <Typography variant="caption" color="text.secondary">{label}</Typography>
-  <Typography variant="h5" fontWeight={700} sx={{mt:.5}}>{value}</Typography>
+  <Typography variant="h5" sx={{mt:.5,fontWeight:700}}>{value}</Typography>
   {note&&<Typography variant="caption" color="text.secondary">{note}</Typography>}
 </Box>;
 
@@ -49,14 +49,14 @@ export function BomJesusExecutiveDashboard({executive:a}:Props){
   const vistra=a.vistra.cases.filter(r=>(vistraArea==="TODOS"||r.area===vistraArea)&&match(r.ticketId,r.subject,r.area));
 
   return <Card variant="outlined" sx={{borderRadius:3,mb:2}}><CardContent>
-    <Stack direction={{xs:"column",md:"row"}} alignItems={{xs:"flex-start",md:"center"}} justifyContent="space-between" gap={1} sx={{mb:1}}>
+    <Stack direction={{xs:"column",md:"row"}} sx={{alignItems:{xs:"flex-start",md:"center"},justifyContent:"space-between",gap:1,mb:1}}>
       <Box>
         <Typography variant="h6">Visão executiva e trilhas de auditoria</Typography>
         <Typography variant="body2" color="text.secondary">Fonte: Movidesk + Azure, somente cliente Bom Jesus sob responsabilidade operacional SIMER</Typography>
       </Box>
       <Chip color="warning" size="small" label="Indicadores de prazo preliminares"/>
     </Stack>
-    <Stack direction="row" flexWrap="wrap" gap={1} sx={{my:2}}>
+    <Stack direction="row" sx={{flexWrap:"wrap",gap:1,my:2}}>
       {indicator("Tickets do período",a.matrix.total)}
       {indicator("Bugs com Task",a.matrix.bugWithCorrection)}
       {indicator("Correções concluídas",a.corrections.concluded,`${a.corrections.concludedWithVersion} com versão`)}
@@ -70,7 +70,7 @@ export function BomJesusExecutiveDashboard({executive:a}:Props){
         <Tab label="OLA do Suporte"/><Tab label="Qualidade das correções"/><Tab label="Classificações"/><Tab label="Adequações"/><Tab label="Recorrências"/><Tab label="Vistra e relatórios"/>
       </Tabs>
     </Box>
-    <Stack direction="row" gap={1} flexWrap="wrap" sx={{mb:1}}>
+    <Stack direction="row" sx={{gap:1,flexWrap:"wrap",mb:1}}>
       <TextField size="small" value={query} onChange={e=>setQuery(e.target.value)} label="Pesquisar ticket, assunto ou Task" sx={{minWidth:260,flex:"1 1 260px"}}/>
       {tab===0&&<FormControl size="small" sx={{minWidth:190}}><InputLabel>Resultado OLA</InputLabel><Select label="Resultado OLA" value={olaStatus} onChange={e=>setOlaStatus(e.target.value)}>
         <MenuItem value="TODOS">Todos</MenuItem><MenuItem value="ALERTA">Alertas</MenuItem><MenuItem value="DENTRO">Dentro da meta</MenuItem><MenuItem value="NAO_MENSURAVEL">Não mensuráveis</MenuItem><MenuItem value="CANCELADA">Canceladas</MenuItem>
@@ -80,7 +80,7 @@ export function BomJesusExecutiveDashboard({executive:a}:Props){
       </Select></FormControl>}
     </Stack>
     {tab===0&&<>
-      <Stack direction="row" gap={1} flexWrap="wrap" sx={{mb:1}}>
+      <Stack direction="row" sx={{gap:1,flexWrap:"wrap",mb:1}}>
         <Chip label={`Alertas: ${a.ola.alerts}`} color="warning"/>
         <Chip label={`Dentro da meta: ${a.ola.onTime}`}/>
         <Chip label={`Sem medição: ${a.ola.unmeasurable}`}/>
@@ -100,7 +100,7 @@ export function BomJesusExecutiveDashboard({executive:a}:Props){
       <Typography variant="caption" color="text.secondary">Ordenação: excessos maiores primeiro. Para investigação individual, abra o ticket e verifique o histórico de status, a Task e as ações.</Typography>
     </>}
     {tab===1&&<>
-      <Stack direction="row" gap={1} flexWrap="wrap" sx={{mb:1}}>
+      <Stack direction="row" sx={{gap:1,flexWrap:"wrap",mb:1}}>
         <Chip label={`Concluídas: ${a.corrections.concluded}`} color="success"/>
         <Chip label={`Em aberto: ${a.corrections.open}`}/>
         <Chip label={`Canceladas: ${a.corrections.cancelled}`}/>
@@ -120,7 +120,7 @@ export function BomJesusExecutiveDashboard({executive:a}:Props){
       </Table></TableContainer>
     </>}
     {tab===2&&<>
-      <Stack direction="row" gap={1} flexWrap="wrap" sx={{mb:1}}>
+      <Stack direction="row" sx={{gap:1,flexWrap:"wrap",mb:1}}>
         <Chip label={`Bug + correção: ${a.matrix.bugWithCorrection}`} color="success"/>
         <Chip label={`Bug sem correção: ${a.matrix.bugWithoutCorrection}`} color="warning"/>
         <Chip label={`Correção + outra categoria: ${a.matrix.correctionNonBug}`} color="warning"/>
@@ -134,7 +134,7 @@ export function BomJesusExecutiveDashboard({executive:a}:Props){
         </TableRow>)}</TableBody></Table></TableContainer>
     </>}
     {tab===3&&<>
-      <Stack direction="row" gap={1} flexWrap="wrap" sx={{mb:1}}>
+      <Stack direction="row" sx={{gap:1,flexWrap:"wrap",mb:1}}>
         <Chip label={`Mudanças observadas: ${a.categories.observedTicketCount}`} color="info"/>
         <Chip label={`Revisão histórica: ${a.categories.reviewCandidates.length}`} color="warning"/>
       </Stack>
@@ -147,7 +147,7 @@ export function BomJesusExecutiveDashboard({executive:a}:Props){
         </TableRow>)}</TableBody></Table></TableContainer>
     </>}
     {tab===4&&<>
-      <Stack direction="row" gap={1} flexWrap="wrap" sx={{mb:1}}>
+      <Stack direction="row" sx={{gap:1,flexWrap:"wrap",mb:1}}>
         <Chip label={`Grupos candidatos: ${a.recurrence.groups}`}/>
         <Chip label={`Tickets únicos envolvidos: ${a.recurrence.ticketCandidates}`}/>
         <Chip label={`Mesma Task: ${a.recurrence.sameTaskGroups}`}/>
@@ -164,14 +164,14 @@ export function BomJesusExecutiveDashboard({executive:a}:Props){
         </TableRow>)}</TableBody></Table></TableContainer>
     </>}
     {tab===5&&<>
-      <Stack direction="row" gap={1} flexWrap="wrap" sx={{mb:1}}>
+      <Stack direction="row" sx={{gap:1,flexWrap:"wrap",mb:1}}>
         <Chip label={`Vistra citado: ${a.vistra.explicitVistra}`}/>
         <Chip label={`Vistra com suspeita de erro: ${a.vistra.suspectedVistraFailures}`} color="warning"/>
         <Chip label={`Analítico com suspeita: ${a.vistra.suspectedAnaliticoFailures}`}/>
         <Chip label={`Relatórios SIMER com suspeita: ${a.vistra.suspectedReportFailures}`}/>
       </Stack>
       <Typography variant="subtitle2" sx={{mb:1}}>Periodicidade de possíveis falhas</Typography>
-      <Stack direction="row" flexWrap="wrap" gap={1} sx={{mb:2}}>{a.vistra.monthly.map(m=><Chip key={m.month} size="small" variant="outlined" label={`${m.month}: Vistra ${m.vistra} · Analítico ${m.analitico} · Relatórios ${m.relatorios}`}/>)}</Stack>
+      <Stack direction="row" sx={{flexWrap:"wrap",gap:1,mb:2}}>{a.vistra.monthly.map(m=><Chip key={m.month} size="small" variant="outlined" label={`${m.month}: Vistra ${m.vistra} · Analítico ${m.analitico} · Relatórios ${m.relatorios}`}/>)}</Stack>
       <TableContainer sx={{maxHeight:440}}><Table size="small" stickyHeader><TableHead><TableRow>{["Ticket","Assunto","Ferramenta","Data","Task","Falha?","Evidência"].map(x=><TableCell key={x}>{x}</TableCell>)}</TableRow></TableHead>
         <TableBody>{vistra.map(x=><TableRow key={x.ticketId} hover><TableCell>{ticket(x.ticketId)}</TableCell>
           <TableCell>{x.subject}</TableCell><TableCell>{x.area}</TableCell><TableCell>{date(x.date)}</TableCell>
