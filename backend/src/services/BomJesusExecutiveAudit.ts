@@ -24,7 +24,11 @@ const isCancelled = (value: string) => /cancelad|canceled|cancelled|removed|desc
 const isConcluded = (value: string) => /^(concluid[ao]|done|closed|resolved|encerrad[ao])$/.test(norm(value));
 const isBug = (value: string) => norm(value) === "bug";
 const unique = <T,>(values: T[]) => [...new Set(values)];
-const monthsOf = (rows: ExecutiveTicketInput[]) => unique(rows.map(r => r.createdDate.slice(0, 7))).sort();
+const localMonth = (iso: string) => {
+  const time=Date.parse(iso);
+  return Number.isFinite(time)?new Date(time-3*3600000).toISOString().slice(0,7):"";
+};
+const monthsOf = (rows: ExecutiveTicketInput[]) => unique(rows.map(r => localMonth(r.createdDate)).filter(Boolean)).sort();
 
 export type ExecutiveOlaCase = {
   ticketId: number; subject: string; taskId: number | null; taskState: string;
@@ -195,16 +199,16 @@ export function buildBomJesusExecutiveAudit(rows: ExecutiveTicketInput[]) {
   }
   const vistraMonthly = monthsOf(rows).map(month=>({
     month,
-    vistra:vistraCases.filter(x=>x.area==="VISTRA"&&x.date.startsWith(month)&&x.suspectedFailure).length,
+    vistra:vistraCases.filter(x=>x.area==="VISTRA"&&localMonth(x.date)===month&&x.suspectedFailure).length,
     analitico:vistraCases.filter(x=>x.area==="ANALITICO"&&x.date.startsWith(month)&&x.suspectedFailure).length,
     relatorios:vistraCases.filter(x=>x.area==="RELATORIO_SIMER"&&x.date.startsWith(month)&&x.suspectedFailure).length,
   }));
   const monthly = monthsOf(rows).map(month=>{
-    const inMonth=rows.filter(x=>x.createdDate.startsWith(month));
+    const inMonth=rows.filter(x=>localMonth(x.createdDate)===month);
     return {month,tickets:inMonth.length,bugs:inMonth.filter(x=>isBug(x.category)).length,
       corrections:inMonth.filter(x=>x.isCorrectionTask).length,
       olaAlerts:inMonth.filter(x=>alertedOla.some(a=>a.ticketId===x.id)).length,
-      categoryTransitions:categoryTransitions.filter(x=>x.observedAt?.startsWith(month)).length,
+      categoryTransitions:categoryTransitions.filter(x=>x.observedAt && localMonth(x.observedAt)===month).length,
     };
   });
   return {
