@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { Cell, CartesianGrid, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import {
   Alert, Box, Card, CardContent, Chip, Divider, FormControl, InputLabel, Link, MenuItem,
   Select, Stack, Tab, Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
@@ -33,8 +34,8 @@ const indicator=(label:string,value:string|number,note?:string)=><Box key={label
   {note&&<Typography variant="caption" color="text.secondary">{note}</Typography>}
 </Box>;
 
-type Props={executive:BomJesusExecutiveAudit};
-export function BomJesusExecutiveDashboard({executive:a}:Props){
+type Props={executive:BomJesusExecutiveAudit; clientName:string};
+export function BomJesusExecutiveDashboard({executive:a,clientName}:Props){
   const [tab,setTab]=useState(0);
   const [query,setQuery]=useState("");
   const [olaStatus,setOlaStatus]=useState("TODOS");
@@ -52,7 +53,7 @@ export function BomJesusExecutiveDashboard({executive:a}:Props){
     <Stack direction={{xs:"column",md:"row"}} sx={{alignItems:{xs:"flex-start",md:"center"},justifyContent:"space-between",gap:1,mb:1}}>
       <Box>
         <Typography variant="h6">Visão executiva e trilhas de auditoria</Typography>
-        <Typography variant="body2" color="text.secondary">Fonte: Movidesk + Azure, somente cliente Bom Jesus sob responsabilidade operacional SIMER</Typography>
+        <Typography variant="body2" color="text.secondary">Cliente: {clientName} • Fontes: Movidesk + Azure DevOps • Suporte SIMER</Typography>
       </Box>
       <Chip color="warning" size="small" label="Indicadores de prazo preliminares"/>
     </Stack>
@@ -64,6 +65,69 @@ export function BomJesusExecutiveDashboard({executive:a}:Props){
       {indicator("OLA: dentro da meta",a.ola.withinTargetPercent===null?"N/D":`${a.ola.withinTargetPercent}%`)}
       {indicator("Mediana de passagem",hours(a.ola.medianSupportMinutes),"Horas úteis")}
     </Stack>
+    <Box sx={{display:"grid",gridTemplateColumns:{xs:"1fr",lg:"1fr 1fr"},gap:2,mb:2}}>
+      {([
+        {title:"Situação das correções",subtitle:"Distribuição das Tasks técnicas vinculadas",data:[
+          {name:"Concluídas",value:a.corrections.concluded,color:"#197350"},
+          {name:"Em aberto",value:a.corrections.open,color:"#BD7229"},
+          {name:"Canceladas",value:a.corrections.cancelled,color:"#9B3C36"},
+        ]},
+        {title:"OLA do Suporte",subtitle:"Resultado preliminar dos casos vinculados a correção",data:[
+          {name:"Dentro da meta",value:a.ola.onTime,color:"#197350"},
+          {name:"Alertas",value:a.ola.alerts,color:"#BD7229"},
+          {name:"Não mensurável",value:a.ola.unmeasurable,color:"#97A69B"},
+          {name:"Canceladas",value:a.ola.cancelled,color:"#9B3C36"},
+        ]},
+      ] as const).map(chart=><Box key={chart.title} sx={{p:2,border:"1px solid",borderColor:"divider",borderRadius:3,minWidth:0}}>
+        <Typography variant="subtitle1" sx={{fontWeight:750}}>{chart.title}</Typography>
+        <Typography variant="caption" color="text.secondary">{chart.subtitle}</Typography>
+        <Box sx={{height:270,minWidth:0}}>
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie data={chart.data.filter(v=>v.value>0)} dataKey="value" nameKey="name" cx="50%" cy="48%" innerRadius={58} outerRadius={94} paddingAngle={3} stroke="none">
+                {chart.data.filter(v=>v.value>0).map(v=><Cell key={v.name} fill={v.color}/>)}
+              </Pie>
+              <Tooltip formatter={(v,name)=>[`${v} tickets`,String(name)]}/>
+              <Legend verticalAlign="bottom" height={36} wrapperStyle={{fontSize:11}}/>
+            </PieChart>
+          </ResponsiveContainer>
+        </Box>
+      </Box>)}
+      <Box sx={{p:2,border:"1px solid",borderColor:"divider",borderRadius:3,minWidth:0}}>
+        <Typography variant="subtitle1" sx={{fontWeight:750}}>Evolução mensal da carteira</Typography>
+        <Typography variant="caption" color="text.secondary">Aberturas e tickets vinculados a correção por mês</Typography>
+        <Box sx={{height:270,minWidth:0}}>
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={a.monthly} margin={{top:16,right:18,left:-18,bottom:0}}>
+              <CartesianGrid strokeDasharray="3 4" vertical={false} stroke="rgba(127,142,133,.25)"/>
+              <XAxis dataKey="month" tick={{fontSize:11}}/>
+              <YAxis allowDecimals={false} tick={{fontSize:11}}/>
+              <Tooltip formatter={(v,name)=>[v,String(name)]}/>
+              <Legend verticalAlign="bottom" height={30} wrapperStyle={{fontSize:11}}/>
+              <Line type="monotone" dataKey="tickets" name="Atendimentos" stroke="#197350" strokeWidth={3} dot={{r:3}} activeDot={{r:5}}/>
+              <Line type="monotone" dataKey="corrections" name="Correções" stroke="#316885" strokeWidth={3} dot={{r:3}} activeDot={{r:5}}/>
+            </LineChart>
+          </ResponsiveContainer>
+        </Box>
+      </Box>
+      <Box sx={{p:2,border:"1px solid",borderColor:"divider",borderRadius:3,minWidth:0}}>
+        <Typography variant="subtitle1" sx={{fontWeight:750}}>Tendência dos alertas de OLA</Typography>
+        <Typography variant="caption" color="text.secondary">Mês de abertura; alertas sujeitos a auditoria do marco de passagem</Typography>
+        <Box sx={{height:270,minWidth:0}}>
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={a.monthly} margin={{top:16,right:18,left:-18,bottom:0}}>
+              <CartesianGrid strokeDasharray="3 4" vertical={false} stroke="rgba(127,142,133,.25)"/>
+              <XAxis dataKey="month" tick={{fontSize:11}}/>
+              <YAxis allowDecimals={false} tick={{fontSize:11}}/>
+              <Tooltip formatter={(v,name)=>[v,String(name)]}/>
+              <Legend verticalAlign="bottom" height={30} wrapperStyle={{fontSize:11}}/>
+              <Line type="monotone" dataKey="olaAlerts" name="Alertas OLA" stroke="#BD7229" strokeWidth={3} dot={{r:3}} activeDot={{r:5}}/>
+              <Line type="monotone" dataKey="corrections" name="Correções" stroke="#197350" strokeWidth={2} strokeDasharray="5 3" dot={false}/>
+            </LineChart>
+          </ResponsiveContainer>
+        </Box>
+      </Box>
+    </Box>
     <Alert severity="info" sx={{mb:2}}>Os alertas de OLA usam a criação da Task como referência de passagem. Pausas, urgência histórica e perfil contratual precisam de validação. As reclassificações anteriores ao primeiro registro do HUB não são recuperadas automaticamente pela API pública.</Alert>
     <Box sx={{borderBottom:1,borderColor:"divider",mb:2}}>
       <Tabs value={tab} onChange={(_,v:number)=>{setTab(v);setQuery("");}} variant="scrollable" scrollButtons="auto" aria-label="Auditoria Bom Jesus">
