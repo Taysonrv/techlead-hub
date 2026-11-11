@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { BomJesusExecutiveDashboard, type BomJesusExecutiveAudit } from "./BomJesusExecutiveDashboard";
 import { ClientManagementOverview, ClientManagementRankings, ClientManagementTickets, ClientManagementPivot, type ClientManagementTicket } from "./ClientManagementViews";
 import { DashboardOutlined, EmojiEventsOutlined, FormatListBulletedOutlined, AccountTreeOutlined, FactCheckOutlined, TuneOutlined, FileDownloadOutlined, RefreshOutlined } from "@mui/icons-material";
@@ -94,6 +94,11 @@ export function ClientExecutiveReportPanel() {
     finally { setExporting(false); }
   };
   const rows = report?.rows.filter(x => [x.subject, String(x.id), x.category, x.classification].join(" ").toLocaleLowerCase("pt-BR").includes(filter.toLocaleLowerCase("pt-BR"))) ?? [];
+  const managerialRows=useMemo(()=>{
+    if(!report)return [] as ClientManagementTicket[];
+    const statuses=new Map(report.executive.ola.cases.map(x=>[x.ticketId,x.status]));
+    return report.rows.map(r=>({...r,olaStatus:statuses.get(r.id)}));
+  },[report]);
   return <Card variant="outlined" sx={{mb:2,borderRadius:3,overflow:"hidden"}} id="relatorio-executivo-clientes">
     <CardContent sx={{p:{xs:1.5,md:2.5}}}><Box id="diagnostico-bom-jesus" sx={{height:0}}/>
       <Stack direction={{xs:"column",md:"row"}} sx={{justifyContent:"space-between",alignItems:{md:"center"},gap:2,mb:2}}>
@@ -113,7 +118,7 @@ export function ClientExecutiveReportPanel() {
             sx={{textTransform:"none"}}>{exporting?"Exportando...":"Excel da Diretoria"}</Button>
         </Stack>
       </Stack>
-      <Tabs value={activeTab} onChange={(_,value:number)=>setActiveTab(value)}
+      <Tabs value={activeTab} onChange={(_,value:number)=>{if(value===2)setDrilldown(null);setActiveTab(value);}}
         variant="scrollable" scrollButtons="auto" aria-label="Painel gerencial da Coordenação SIMER"
         sx={{borderBottom:"1px solid",borderColor:"divider",mb:.8,
           "& .MuiTabs-indicator":{backgroundColor:"#F26727",height:3},
@@ -168,13 +173,13 @@ export function ClientExecutiveReportPanel() {
       {error&&<Alert severity="error" sx={{mb:2}}>{error}</Alert>}
       {loading&&<Box sx={{py:5,display:"grid",placeItems:"center"}}><CircularProgress size={30}/></Box>}
       {report&&report.clientFilter===client&&<>
-        {activeTab===0&&<ClientManagementOverview rows={report.rows} audit={report.executive}/>}
-        {activeTab===1&&<ClientManagementRankings rows={report.rows} onInspect={(dimension,value)=>{
+        {activeTab===0&&<ClientManagementOverview rows={managerialRows} audit={report.executive}/>}
+        {activeTab===1&&<ClientManagementRankings rows={managerialRows} onInspect={(dimension,value)=>{
           setDrilldown({dimension,value});setActiveTab(2);
         }}/>}
         {activeTab===2&&<ClientManagementTickets key={client+"-"+startDate+"-"+endDate+"-"+(drilldown?.value??"all")}
-          rows={report.rows} initialFilter={drilldown}/>}
-        {activeTab===3&&<ClientManagementPivot rows={report.rows}/>}
+          rows={managerialRows} initialFilter={drilldown}/>}
+        {activeTab===3&&<ClientManagementPivot rows={managerialRows}/>}
         {activeTab===4&&<>
           <Alert severity="warning" sx={{mb:2}}>
             Os alertas de OLA utilizam a criação da Task como referência aproximada do encaminhamento.
