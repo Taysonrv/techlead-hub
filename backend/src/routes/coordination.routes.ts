@@ -1,6 +1,5 @@
 import { Router } from "express";
-import { bomJesusReport, clientExecutiveReport, DEFAULT_EXECUTIVE_CLIENT } from "../services/BomJesusReportService";
-import { SIMER_CLIENTS, resolveSimerClient } from "../domain/OperationalScope";
+import { bomJesusReport, clientExecutiveReport, DEFAULT_EXECUTIVE_CLIENT, EXECUTIVE_CLIENT_CATALOG, resolveExecutiveClient } from "../services/BomJesusReportService";
 import { createBomJesusExecutiveWorkbook } from "../services/BomJesusExecutiveWorkbook";
 import type { SlaTier } from "../domain/AliareSlaRules";
 import { requirePermission } from "../middlewares/roleMiddleware";
@@ -22,7 +21,7 @@ const bomJesusDates = (req: AuthenticatedRequest) => ({
 });
 const requestedExecutiveClient = (req: AuthenticatedRequest): string => {
   const value = typeof req.query.client === "string" ? req.query.client : DEFAULT_EXECUTIVE_CLIENT;
-  const resolved = resolveSimerClient(value);
+  const resolved = resolveExecutiveClient(value);
   if (!resolved) throw new Error("Cliente não autorizado ou não pertence à carteira SIMER.");
   return resolved;
 };
@@ -34,7 +33,7 @@ const executiveReportError = (res: import("express").Response, error: unknown, c
 };
 // Catalog is the vetted operational scope: no generic free-text client query.
 coordinationRoutes.get("/client-executive-report/clients", (_req: AuthenticatedRequest, res) => {
-  res.json({ clients: [...SIMER_CLIENTS], defaultClient: DEFAULT_EXECUTIVE_CLIENT });
+  res.json({ clients: [...EXECUTIVE_CLIENT_CATALOG], defaultClient: DEFAULT_EXECUTIVE_CLIENT });
 });
 coordinationRoutes.get("/client-executive-report", async (req: AuthenticatedRequest, res) => {
   try {
