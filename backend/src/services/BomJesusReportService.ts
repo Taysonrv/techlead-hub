@@ -67,10 +67,20 @@ export async function bomJesusReport(startDate: string, endDate: string, tierOve
     select: { id: true, movideskTicket: true, workItemType: true, state: true, azureCreatedAt: true, azureClosedAt: true, stateChangedAt: true, criticality: true, deliveredVersion: true, remoteUrl: true },
   });
   const byTask = new Map(tasks.map(t => [t.id, t]));
-  const byTicket = new Map(tasks.filter(t => t.movideskTicket !== null).map(t => [t.movideskTicket!, t]));
+  const byTicket = new Map<number, typeof tasks>();
+  for (const item of tasks) {
+    if (item.movideskTicket == null) continue;
+    byTicket.set(item.movideskTicket, [...(byTicket.get(item.movideskTicket) ?? []), item]);
+  }
   const keys = new Map<string, number>();
   const prepared = tickets.map(t => {
-    const linkedTask = (t.taskNumber ? byTask.get(t.taskNumber) : undefined) ?? byTicket.get(t.movideskId);
+    const explicitTask = t.taskNumber ? byTask.get(t.taskNumber) : undefined;
+    const candidates = [...(explicitTask ? [explicitTask] : []), ...(byTicket.get(t.movideskId) ?? [])]
+      .filter((item, index, all) => all.findIndex(x => x.id === item.id) === index);
+    // Se há diversas Tasks Azure relacionadas ao ticket, priorizar a Task de correção.
+    // A categoria do Movidesk e seus campos customizados não substituem o tipo Azure.
+    const linkedTask = candidates.find(item => includesAny(text(item.workItemType), bugWords))
+      ?? explicitTask ?? candidates[0];
     const category = text(t.category);
     const task = text(t.taskType);
     const subject = text(t.subject);
