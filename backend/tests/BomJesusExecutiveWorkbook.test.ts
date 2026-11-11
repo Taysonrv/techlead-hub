@@ -63,6 +63,8 @@ test("Excel da Diretoria possui capa executiva, anexos, prazos e rastreabilidade
   assert.equal(reload.getWorksheet("02 GRAFICOS")!.getImages().length,4);
   assert.equal(reload.getWorksheet("03 OLA SUPORTE")!.getCell("M8").value,"ALERTA");
   assert.equal(reload.getWorksheet("11 BASE AUDITAVEL")!.getCell("A8").value,842001);
+  assert.equal(reload.getWorksheet("11 BASE AUDITAVEL")!.getCell("D8").value,"TAYSON ALVES DE ARAUJO");
+  assert.equal(reload.getWorksheet("11 BASE AUDITAVEL")!.getCell("F8").value,"SIMER / Relatórios");
   assert.equal(reload.getWorksheet("14 MULTIDIMENSIONAL")!.rowCount>=9,true);
   assert.equal(reload.getWorksheet("13 RANKINGS")!.getCell("A7").value,"RESPONSÁVEL (CARTEIRA ATUAL)");
   assert.equal(reload.getWorksheet("13 RANKINGS")!.getCell("A9").value,"TAYSON ALVES DE ARAUJO");
