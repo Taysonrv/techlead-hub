@@ -354,18 +354,20 @@ export function createBomJesusExecutiveWorkbook(report:FullReport) {
 
   const tech=tableSheet(book,"11 BASE AUDITAVEL","BASE ANALÍTICA  |  EVIDÊNCIAS DO HUB",
     "Todos os tickets do recorte; para investigar prazos utilize principalmente a aba 03.",scope,
-    ["Ticket","Assunto","Cliente","Abertura","Categoria atual","Status Movidesk","Task",
+    ["Ticket","Assunto","Cliente","Responsável atual","Equipe atual","Rotina / serviço",
+      "Abertura","Categoria atual","Status Movidesk","Task",
       "Tipo Task","Estado Task","Versão","Abertura Task","Conclusão Task","OLA Suporte min",
       "Meta min","OLA excedido?","Categoria inicial observada","Data observação",
       "Mudança → Adequação?","Categoria anterior","Primeira menção Produto","Vistra/relatório",
       "Agrupamento assunto","Nº ações"],
-    report.rows.map(x=>[x.id,x.subject,x.client,fmtDate(x.createdDate),x.category,x.status,x.taskNumber,
+    report.rows.map(x=>[x.id,x.subject,x.client,x.owner,x.ownerTeam,x.serviceContext,
+      fmtDate(x.createdDate),x.category,x.status,x.taskNumber,
       x.taskType,x.taskState,x.deliveredVersion,fmtDate(x.taskCreatedAt),fmtDate(x.taskConcludedAt),
       x.supportMinutes,x.supportTargetMinutes,x.supportOlaBreached==null?"N/D":x.supportOlaBreached?"Sim":"Não",
       x.initialObservedCategory,fmtDate(x.initialObservedAt),x.anyToAdequacaoEvidence?"Sim":"Não",
       x.anyToAdequacaoFrom,fmtDate(x.firstProductEvidence),x.vistraType,x.recurrenceKey,x.actionCount]),
-    [12,62,47,23,22,26,14,27,23,25,23,23,20,18,18,27,23,24,23,23,37,52,15],
-    {dateColumns:[4,11,12,17,20],statusColumn:15});
+    [12,62,47,40,30,45,23,22,26,14,27,23,25,23,23,20,18,18,27,23,24,23,23,37,52,15],
+    {dateColumns:[7,14,15,20,23],statusColumn:18});
   tech.properties.tabColor={argb:"FF"+P.secondary};
 
   const definitions=[
