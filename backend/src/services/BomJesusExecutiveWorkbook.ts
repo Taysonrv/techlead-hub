@@ -1,6 +1,5 @@
 import ExcelJS from "exceljs";
 import type { BomJesusRow } from "./BomJesusReportService";
-import type { BomJesusExecutiveAudit } from "./BomJesusExecutiveAudit";
 
 type FullReport = {
   generatedAt: string; clientFilter: string; startDate: string; endDate: string;
@@ -170,7 +169,7 @@ export function createBomJesusExecutiveWorkbook(report:FullReport) {
     setMerged(ws,pairs[i]![0]+"34:"+pairs[i]![1]+"34",v,{color:P.secondary,size:9,bold:true,background:P.light});
   });
   const max=Math.max(1,...e.monthly.map(m=>m.tickets));
-  e.monthly.slice(0,8).forEach((m,i)=>{
+  e.monthly.slice(-8).forEach((m,i)=>{
     const n=35+i;const pairs=[["A","B"],["C","D"],["E","F"],["G","H"],["I","J"],["K","L"]];
     const values=[m.month,m.tickets,m.bugs,m.corrections,m.olaAlerts,"▮".repeat(Math.max(1,Math.round(m.tickets/max*12)))];
     values.forEach((v,k)=>setMerged(ws,pairs[k]![0]+n+":"+pairs[k]![1]+n,v,
