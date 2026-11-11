@@ -49,7 +49,7 @@ export const rankTickets=(rows:ClientManagementTicket[],dim:Dimension,measure:Me
 };
 const number=(n:number)=>n.toLocaleString("pt-BR");
 const formatDate=(iso:string)=>new Date(iso).toLocaleDateString("pt-BR",{timeZone:"America/Sao_Paulo"});
-const ticketLink=(id:number)=><Link href={`/tickets?movidesk=${id}`} underline="hover" sx={{fontWeight:700}}>`#${id}`</Link>;
+const ticketLink=(id:number)=><Link href={`/tickets?movidesk=${id}`} underline="hover" sx={{fontWeight:700}}>#{id}</Link>;
 const metricCard=(label:string,value:string|number,note:string,attention=false)=><Box key={label}
   sx={{minWidth:0,p:2,borderRadius:2.5,border:"1px solid",borderColor:"divider",backgroundColor:"background.paper",display:"flex",flexDirection:"column",gap:1}}>
   <Typography variant="caption" color="text.secondary" sx={{fontWeight:600}}>{label}</Typography>
