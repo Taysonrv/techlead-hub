@@ -1,5 +1,5 @@
 import { prisma } from "../database/prisma";
-import { SUPPORT_ANALYSTS } from "../domain/OperationalScope";
+import { SUPPORT_ANALYSTS, SIMER_CLIENTS, resolveSimerClient } from "../domain/OperationalScope";
 import { buildBomJesusExecutiveAudit } from "./BomJesusExecutiveAudit";
 import { normalizeDomainText, mapPriority } from "../domain/TicketClassificationRules";
 import type { SlaTier } from "../domain/AliareSlaRules";
@@ -10,7 +10,7 @@ const text = (value: string | null | undefined) => normalizeDomainText(value);
 const includesAny = (value: string, terms: string[]) => terms.some(term => value.includes(term));
 const bugWords = ["bug", "defeito", "correcao"];
 const improvementWords = ["melhoria", "evolucao", "blindagem", "adequacao"];
-const BOM_JESUS_CLIENT_NAME = "BOM JESUS COOPERATIVA AGROINDUSTRIAL - LAPA-PR";
+export const DEFAULT_EXECUTIVE_CLIENT: string = SIMER_CLIENTS[0];
 const vistraWords = ["vistra"];
 const reportWords = ["relatorio", "dashboard", "painel"];
 const failureWords = ["erro", "falha", "nao funciona", "nao abre", "parou", "indisponivel", "travamento", "bug"];
@@ -32,7 +32,13 @@ export type BomJesusRow = {
   taskState: string; deliveredVersion: string; taskCreatedAt: string | null; taskConcludedAt: string | null; supportMinutes: number | null; supportTargetMinutes: number | null; supportOlaBreached: boolean | null;
   sla: SlaEvidence;
 };
-export async function bomJesusReport(startDate: string, endDate: string, tierOverride: SlaTier | null = null) {
+export async function clientExecutiveReport(
+  clientInput: string, startDate: string, endDate: string, tierOverride: SlaTier | null = null
+) {
+  // Only the explicit SIMER operational allowlist can be queried.
+  // Do not broaden this scope with substring matching or external clients.
+  const client = resolveSimerClient(clientInput);
+  if (!client) throw new Error("Cliente não autorizado ou não pertence à carteira SIMER.");
   // Alinhado ao filtro "Esse semestre" da tela Clientes (dias locais em America/Sao_Paulo).
   // O Brasil não observa horário de verão em 2026.
   if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate) || !/^\d{4}-\d{2}-\d{2}$/.test(endDate))
@@ -43,7 +49,7 @@ export async function bomJesusReport(startDate: string, endDate: string, tierOve
       (end.getTime() - start.getTime()) > 366 * 86400000) throw new Error("Período inválido ou superior a 366 dias.");
   const tickets = await prisma.ticket.findMany({
     // Mesma base da tela Clientes: cliente exato + responsabilidade atual de analista SIMER.
-    where: { client: { equals: BOM_JESUS_CLIENT_NAME, mode: "insensitive" },
+    where: { client: { equals: client, mode: "insensitive" },
       owner: { in: [...SUPPORT_ANALYSTS], mode: "insensitive" },
       createdDate: { gte: start, lte: end }, isDeleted: false },
     select: {
@@ -160,13 +166,13 @@ export async function bomJesusReport(startDate: string, endDate: string, tierOve
     month, tickets: rows.filter(x => x.createdDate.startsWith(month)).length,
     vistra: vistraMonthly.filter(x => x.createdDate.startsWith(month)).length,
   }));
-  const executive = buildBomJesusExecutiveAudit(rows);
+  const executive = buildBomJesusExecutiveAudit(rows, client);
   return {
-    generatedAt: new Date().toISOString(), clientFilter: BOM_JESUS_CLIENT_NAME,
-    scope: { client: BOM_JESUS_CLIENT_NAME, periodStart: startDate, periodEnd: endDate,
+    generatedAt: new Date().toISOString(), clientFilter: client,
+    scope: { client, periodStart: startDate, periodEnd: endDate,
       filter: "CLIENTES_SIMER", rule: "Cliente exato + atual responsável SIMER (mesmo critério da tela Clientes)" },
     startDate, endDate, executive,
-    methodology: "Escopo: cliente exato Bom Jesus, responsabilidade de analistas SIMER, mesmas datas locais da tela Clientes. Bugs reais = tickets vinculados a Work Items de correção do Azure (ex.: Correção Clientes); código numérico do campo Tipo Task no Movidesk não classifica sozinho. Categoria: transições detectadas entre observações sincronizadas, sem reconstrução fictícia da abertura. OLA/SLA: Aliare 2026 v1.0, perfil Padrão/VIP, calendário Bug seg–sex 08–18h, feriados nacionais 2026 e pausas registradas em histórico de status. Criação da Task é PROXY de passagem ao Desenvolvimento, não confirmação do envio; conclusão Azure é referência de encerramento. Perfil, pausas, feriados locais e prioridade histórica precisam de conferência. Todos os desvios apresentados são preliminares.",
+    methodology: "Escopo: cliente exato selecionado na carteira SIMER, responsabilidade de analistas SIMER, mesmas datas locais da tela Clientes. Bugs reais = tickets vinculados a Work Items de correção do Azure (ex.: Correção Clientes); código numérico do campo Tipo Task no Movidesk não classifica sozinho. Categoria: transições detectadas entre observações sincronizadas, sem reconstrução fictícia da abertura. OLA/SLA: Aliare 2026 v1.0, perfil Padrão/VIP, calendário Bug seg–sex 08–18h, feriados nacionais 2026 e pausas registradas em histórico de status. Criação da Task é PROXY de passagem ao Desenvolvimento, não confirmação do envio; conclusão Azure é referência de encerramento. Perfil, pausas, feriados locais e prioridade histórica precisam de conferência. Todos os desvios apresentados são preliminares.",
     totals: {
       tickets: rows.length, possibleBugs: rows.filter(x => x.classification === "Possível bug — validar").length,
       currentImprovements: rows.filter(x => x.classification === "Melhoria atual — validar origem").length,
@@ -197,3 +203,7 @@ export async function bomJesusReport(startDate: string, endDate: string, tierOve
     monthly, rows,
   };
 }
+
+// Compatibilidade com integrações legadas. O novo painel usa clientExecutiveReport.
+export const bomJesusReport = (startDate: string, endDate: string, tierOverride: SlaTier | null = null) =>
+  clientExecutiveReport(DEFAULT_EXECUTIVE_CLIENT, startDate, endDate, tierOverride);
