@@ -65,7 +65,7 @@ export function ClientExecutiveReportPanel() {
     finally { setExporting(false); }
   };
   const rows = report?.rows.filter(x => [x.subject, String(x.id), x.category, x.classification].join(" ").toLocaleLowerCase("pt-BR").includes(filter.toLocaleLowerCase("pt-BR"))) ?? [];
-  return <Card variant="outlined" sx={{ mb: 2, borderRadius: 3 }} id="relatorio-executivo-clientes"><CardContent>
+  return <Card variant="outlined" sx={{ mb: 2, borderRadius: 3 }} id="relatorio-executivo-clientes"><CardContent><Box id="diagnostico-bom-jesus" sx={{height:0}}/>
     <Stack direction={{ xs: "column", md: "row" }} sx={{ justifyContent: "space-between", gap: 1, mb: 2 }}>
       <Box><Typography variant="h6">Painel executivo de clientes</Typography><Typography variant="body2" color="text.secondary">Relatórios por cliente da carteira SIMER • SLA, OLA, correções, qualidade e tendências. Seleção segura pelo cadastro oficial, com exportação executiva em Excel.</Typography></Box>
       <Stack direction="row" spacing={1} sx={{ alignItems: "center", flexWrap: "wrap", maxWidth:"100%" }}>
