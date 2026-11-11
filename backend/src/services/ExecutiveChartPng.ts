@@ -118,11 +118,12 @@ class Raster {
     return Buffer.concat([signature,chunk("IHDR",ihdr),chunk("IDAT",deflateSync(raw,{level:6})),chunk("IEND",Buffer.alloc(0))]);
   }
 }
-const crcTable=Uint32Array.from({length:256},(_,index)=>{
+const crcTable=new Uint32Array(256);
+for(let index=0;index<256;index++){
   let c=index;
   for(let i=0;i<8;i++)c=(c&1)?0xedb88320^(c>>>1):c>>>1;
-  return c>>>0;
-});
+  crcTable[index]=c>>>0;
+}
 function chunk(name:string,data:Buffer){
   const n=Buffer.from(name,"ascii"),part=Buffer.concat([n,data]);
   let crc=0xffffffff;
