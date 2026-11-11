@@ -16,7 +16,10 @@ export type ExecutiveTicketInput = {
 };
 
 const norm = (value: string | null | undefined) => normalizeDomainText(value);
-const hasErrorSignal = (value: string) => /\b(erro|falha|incorret|divergen|nao gera|nao abre|nao funciona|parou|trav|bug|quebra|indisponiv|lento|lentidao)\b/.test(norm(value));
+const hasErrorSignal = (value: string) => {
+  const clean = norm(value).replace(/[^a-z0-9]+/g," ");
+  return /(?:^|\\s)(?:erro|falha|bug|incorret\\w*|divergen\\w*|nao gera\\w*|nao abre|nao funciona|parou|trav\\w*|quebra\\w*|indisponiv\\w*|lent\\w*)(?:\\s|$)/.test(clean);
+};
 const isCancelled = (value: string) => /cancelad|canceled|cancelled|removed|descartad/.test(norm(value));
 const isConcluded = (value: string) => /^(concluid[ao]|done|closed|resolved|encerrad[ao])$/.test(norm(value));
 const isBug = (value: string) => norm(value) === "bug";
