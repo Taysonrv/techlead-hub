@@ -65,8 +65,8 @@ function tableSheet(
   for(const record of rows){
     const row=ws.addRow(record);
     row.height=22;
-    if(row.number%2===0) row.fill=fill(P.light);
     row.eachCell({includeEmpty:true},(cell,i)=>{
+      if(row.number%2===0) cell.fill=fill(P.light);
       cell.font=font(P.ink,10);
       cell.alignment={vertical:"middle",indent:i===1?1:0,wrapText:false};
       cell.border={bottom:{style:"hair",color:{argb:"FF"+P.border}}};
@@ -269,13 +269,20 @@ export function createBomJesusExecutiveWorkbook(report:FullReport) {
       return [m.month,m.tickets,m.bugs,m.corrections,m.olaAlerts,vm?.vistra??0,vm?.analitico??0,vm?.relatorios??0];
     }),[20,20,20,24,22,20,20,23]);
   trend.properties.tabColor={argb:"FF"+P.green};
-  if(e.monthly.length){
-    const end=7+e.monthly.length;
-    for(let col=2;col<=8;col++){
-      trend.addConditionalFormatting({ref:trend.getColumn(col).letter+"8:"+trend.getColumn(col).letter+end,
-        rules:[{type:"dataBar",cfvo:[{type:"min"},{type:"max"}],color:{argb:"FF"+(col===5?P.orange:P.green)},showValue:true}]});
-    }
-  }
+  // Barra de volume textual: não depende da formatação condicional da versão do Excel.
+  trend.getColumn(9).width=30;
+  const trendHead=trend.getCell("I7");trendHead.value="Volume relativo";
+  trendHead.font=font(P.white,10,true);trendHead.fill=fill(P.green);
+  trendHead.alignment={vertical:"middle",indent:1};
+  const maxMonthly=Math.max(1,...e.monthly.map(x=>x.tickets));
+  e.monthly.forEach((m,i)=>{
+    const c=trend.getRow(i+8).getCell(9);
+    c.value="▮".repeat(Math.max(1,Math.round(m.tickets/maxMonthly*20)));
+    c.font=font(P.green,11,true);
+    if((i+8)%2===0)c.fill=fill(P.light);
+  });
+  trend.autoFilter={from:{row:7,column:1},to:{row:Math.max(7,trend.rowCount),column:9}};
+  trend.pageSetup.printArea="A1:I"+trend.rowCount;
 
   const actions=[
     ["P1","Auditoria de OLA",e.ola.alerts,"Validar marcos, pausas, contrato e urgência histórica.",
