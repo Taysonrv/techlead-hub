@@ -4,7 +4,7 @@ import {
   Stack, Table, TableBody, TableCell, TableContainer, TableHead, TablePagination,
   TableRow, TextField, Tooltip, Typography,
 } from "@mui/material";
-import { Cell, CartesianGrid, Bar, BarChart, LabelList, Legend, Pie, PieChart, ResponsiveContainer, Tooltip as ChartTooltip, XAxis, YAxis } from "recharts";
+import { Cell, CartesianGrid, Bar, BarChart, LabelList, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip as ChartTooltip, XAxis, YAxis } from "recharts";
 import type { BomJesusExecutiveAudit } from "./BomJesusExecutiveDashboard";
 
 export type ClientManagementTicket = {
@@ -12,6 +12,7 @@ export type ClientManagementTicket = {
   status:string; owner:string|null; ownerTeam:string|null; serviceContext:string;
   taskNumber:number|null; taskState:string; deliveredVersion:string;
   isCorrectionTask:boolean; supportOlaBreached:boolean|null;
+  olaStatus?:"ALERTA"|"DENTRO"|"NAO_MENSURAVEL"|"CANCELADA";
 };
 type Dimension="owner"|"category"|"status"|"service";
 type Measure="tickets"|"bugs"|"corrections"|"olaAlerts";
@@ -34,7 +35,7 @@ export const dimensionOf=(r:ClientManagementTicket,dim:Dimension):string=>{
 export const measured=(r:ClientManagementTicket,m:Measure):number=>{
   if(m==="bugs")return r.category.toLocaleLowerCase("pt-BR").trim()==="bug"?1:0;
   if(m==="corrections")return r.isCorrectionTask?1:0;
-  if(m==="olaAlerts")return r.isCorrectionTask && r.supportOlaBreached===true?1:0;
+  if(m==="olaAlerts")return r.olaStatus==="ALERTA"?1:0;
   return 1;
 };
 export const rankTickets=(rows:ClientManagementTicket[],dim:Dimension,measure:Measure="tickets")=>{
@@ -136,6 +137,23 @@ export function ClientManagementOverview({rows,audit}:{rows:ClientManagementTick
         {name:"Não mensurável",value:audit.ola.unmeasurable},{name:"Canceladas",value:audit.ola.cancelled},
       ],"Avaliação preliminar: criação da Task como referência de passagem")}
     </Box>
+    <Box sx={panelSx}>
+      <Typography variant="subtitle1" sx={{fontWeight:750}}>Evolução mensal dos atendimentos e correções</Typography>
+      <Typography variant="caption" color="text.secondary">Volume de tickets abertos no mês e vínculos com correções técnicas</Typography>
+      <Box sx={{height:300,mt:1}}>
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={audit.monthly} margin={{top:12,right:22,left:-15,bottom:7}}>
+            <CartesianGrid strokeDasharray="3 4" vertical={false} stroke="rgba(110,130,120,.19)"/>
+            <XAxis dataKey="month" tick={{fontSize:11}}/>
+            <YAxis allowDecimals={false} tick={{fontSize:11}}/>
+            <ChartTooltip/>
+            <Legend verticalAlign="bottom" wrapperStyle={{fontSize:11}}/>
+            <Line type="monotone" dataKey="tickets" name="Atendimentos" stroke="#197350" strokeWidth={3} dot={{r:4}} activeDot={{r:6}}/>
+            <Line type="monotone" dataKey="corrections" name="Correções vinculadas" stroke="#316885" strokeWidth={3} dot={{r:4}} activeDot={{r:6}}/>
+          </LineChart>
+        </ResponsiveContainer>
+      </Box>
+    </Box>
     <Box sx={{display:"grid",gridTemplateColumns:{xs:"1fr",lg:"1fr 1fr"},gap:2}}>
       <RankedTable rows={rows} title="status"/>
       <RankedTable rows={rows} title="service"/>
@@ -201,8 +219,10 @@ export function ClientManagementTickets({rows,initialFilter}:{rows:ClientManagem
         <TableCell>{ticketLink(r.id)}</TableCell><TableCell sx={{minWidth:230,maxWidth:340}}>{r.subject}</TableCell>
         <TableCell>{r.category||"—"}</TableCell><TableCell>{r.owner||"—"}</TableCell>
         <TableCell>{r.status||"—"}</TableCell><TableCell>{r.taskNumber??"—"}</TableCell>
-        <TableCell>{!r.isCorrectionTask?"—":r.supportOlaBreached===null?"Sem medição":
-          r.supportOlaBreached?<Chip label="Alerta preliminar" color="warning" size="small"/>:<Chip label="Dentro da meta" color="success" variant="outlined" size="small"/>}</TableCell>
+        <TableCell>{!r.isCorrectionTask?"—":r.olaStatus==="CANCELADA"?"Task cancelada":
+          r.olaStatus==="NAO_MENSURAVEL"||!r.olaStatus?"Sem medição":
+          r.olaStatus==="ALERTA"?<Chip label="Alerta preliminar" color="warning" size="small"/>:
+          <Chip label="Dentro da meta" color="success" variant="outlined" size="small"/>}</TableCell>
       </TableRow>)}</TableBody>
     </Table></TableContainer>
     {!listed.length&&<Typography sx={{textAlign:"center",py:3}} color="text.secondary">Nenhum atendimento corresponde aos filtros.</Typography>}
