@@ -61,6 +61,7 @@ const panelSx={p:2.2,border:"1px solid",borderColor:"divider",borderRadius:2.5,b
 function RankedTable({rows,title,metric="tickets",onInspect}:{rows:ClientManagementTicket[];title:Dimension;metric?:Measure;onInspect?:(dimension:Dimension,value:string)=>void}){
   const ranking=rankTickets(rows,title,metric);
   const label=dims.find(x=>x.key===title)?.label??title;
+  const measureLabel=measures.find(x=>x.key===metric)?.label??metric;
   const total=ranking.reduce((sum,item)=>sum+item.value,0);
   return <Box sx={panelSx}>
     <Stack direction="row" sx={{justifyContent:"space-between",alignItems:"center",mb:1.5}}>
@@ -68,7 +69,7 @@ function RankedTable({rows,title,metric="tickets",onInspect}:{rows:ClientManagem
         <Typography variant="caption" color="text.secondary">{number(ranking.length)} grupos • base do cliente selecionado</Typography></Box>
     </Stack>
     <TableContainer sx={{maxHeight:340}}><Table stickyHeader size="small">
-      <TableHead><TableRow>{["#","Grupo","Tickets","Correções","Participação"].map(v=><TableCell key={v} sx={{fontWeight:750,whiteSpace:"nowrap"}}>{v}</TableCell>)}</TableRow></TableHead>
+      <TableHead><TableRow>{["#","Grupo","Tickets",metric==="tickets"?"Correções":measureLabel,"Participação"].map(v=><TableCell key={v} sx={{fontWeight:750,whiteSpace:"nowrap"}}>{v}</TableCell>)}</TableRow></TableHead>
       <TableBody>{ranking.slice(0,10).map((r,i)=><TableRow hover key={r.name}>
         <TableCell sx={{color:"text.secondary"}}>{i+1}</TableCell>
         <TableCell sx={{maxWidth:215}}>
@@ -77,7 +78,7 @@ function RankedTable({rows,title,metric="tickets",onInspect}:{rows:ClientManagem
             <Box component="span" sx={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.name}</Box>
           </Button></Tooltip>
         </TableCell>
-        <TableCell align="right">{number(r.tickets)}</TableCell><TableCell align="right">{number(r.corrections)}</TableCell>
+        <TableCell align="right">{number(r.tickets)}</TableCell><TableCell align="right">{number(metric==="tickets"?r.corrections:r.value)}</TableCell>
         <TableCell align="right">{total?(r.value/total*100).toLocaleString("pt-BR",{maximumFractionDigits:1}):"0"}%</TableCell>
       </TableRow>)}</TableBody>
     </Table></TableContainer>
