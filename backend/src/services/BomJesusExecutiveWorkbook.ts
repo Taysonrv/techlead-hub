@@ -308,7 +308,7 @@ export function createBomJesusExecutiveWorkbook(report:FullReport) {
     [24,63,38,12,27,23,23,30,33,90],{dateColumns:[6,7],statusColumn:8});
   recurrence.properties.tabColor={argb:"FF"+P.blue};
 
-  const trend=tableSheet(book,"09 EVOLUCAO MENSAL","EVOLUÇÃO MENSAL  |  BOM JESUS",
+  const trend=tableSheet(book,"09 EVOLUCAO MENSAL","EVOLUÇÃO MENSAL  |  CLIENTE SELECIONADO",
     "Volume de abertura, classificação atual de Bug, correções e alertas preliminares de OLA.",scope,
     ["Mês","Tickets","Categoria Bug","Tasks correção","Alertas OLA","Vistra","Analítico","Relatórios SIMER"],
     e.monthly.map(m=>{
@@ -411,8 +411,8 @@ export function createBomJesusExecutiveWorkbook(report:FullReport) {
     sheet.headerFooter.oddFooter="&LInformações para revisão interna • não redistribuir sem validação&C"+sheet.name+"&RPágina &P de &N";
     sheet.pageSetup.fitToPage=true;
     // Anexos largos usam duas páginas horizontais para preservar leitura na impressão.
-    sheet.pageSetup.fitToWidth=sheet.columnCount>16?2:1;
-    sheet.pageSetup.fitToHeight=0;
+    sheet.pageSetup.fitToWidth=sheet.name==="02 GRAFICOS"?1:sheet.columnCount>16?2:1;
+    sheet.pageSetup.fitToHeight=sheet.name==="02 GRAFICOS"?1:0;
   });
   return book;
 }
