@@ -59,7 +59,7 @@ export function BomJesusReportPanel() {
     {report && <>
       <BomJesusExecutiveDashboard executive={report.executive} />
       <Accordion disableGutters elevation={0} sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2 }}>
-      <AccordionSummary expandIcon={<span aria-hidden>▾</span>}><Typography fontWeight={600}>Abrir tabelas detalhadas e indicadores legados</Typography></AccordionSummary>
+      <AccordionSummary expandIcon={<span aria-hidden>▾</span>}><Typography sx={{fontWeight:600}}>Abrir tabelas detalhadas e indicadores legados</Typography></AccordionSummary>
       <AccordionDetails>
       <Stack direction="row" sx={{ gap: 1, flexWrap: "wrap", mb: 2 }}>
         <Chip label={`Tickets: ${report.totals.tickets}`} />
