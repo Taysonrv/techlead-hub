@@ -196,7 +196,7 @@ export async function clientExecutiveReport(
       otherToAdequacaoObserved: prepared.filter(x => x.categoryHistory.transitions.some(e => isToAdequacao(e) && !isBugToAdequacao(e) && !isProblemaToAdequacao(e))).length,
       recurrenceGroups: new Set(rows.filter(x => x.recurrenceCount > 1).map(x => x.recurrenceKey)).size,
       recurrenceCandidates: rows.filter(x => x.recurrenceCount > 1).length,
-      confirmedBugs: executive.corrections.tickets, reclassified: rows.filter(x => x.categoryChangeEvidence).length,
+      confirmedBugs: executive.corrections.tickets, reclassified: prepared.filter(x => x.categoryHistory.transitions.some(isBugToAdequacao)).length,
       olaBreaches: executive.ola.cases.filter(x => x.status === "ALERTA" && x.tierVerified).length,
       olaBreachesPreliminary: executive.ola.cases.filter(x => x.status === "ALERTA" && !x.tierVerified).length,
       responseBreaches: rows.filter(x => x.sla.eligible && x.sla.response.exceeded === true).length,
