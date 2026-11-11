@@ -16,19 +16,22 @@ Transformar o diagnóstico específico da Bom Jesus em um **painel nativo reutil
 |---|---|---|
 | GET | `/coordination/client-executive-report/clients` | Nomes canônicos autorizados |
 | GET | `/coordination/client-executive-report?client=<nome>&startDate=2026-07-01&endDate=2026-11-11&slaTier=auto` | Relatório com trilhas e indicadores |
-| GET | `/coordination/client-executive-report.xlsx?...mesmos parâmetros` | Excel executivo (12 abas) |
+| GET | `/coordination/client-executive-report.xlsx?...mesmos parâmetros` | Excel executivo (14 abas) |
 
 As rotas antigas `/bom-jesus-report` e `/bom-jesus-report.xlsx` permanecem para compatibilidade, com seleção fixa da Bom Jesus.
 
 ## Painel nativo na Coordenação
-- Seleção do cliente autorizado; padrão Bom Jesus.
-- Períodos rápidos: semestre, mês atual, 90 dias e datas personalizadas (calendário São Paulo).
-- Perfil SLA automático por contrato ou simulação Padrão/VIP, explicitamente identificado.
-- KPIs: tickets, correções, Tasks concluídas/abertas/canceladas, alertas de OLA, percentual no prazo, mediana de tempo útil.
-- Gráficos: distribuição das correções (rosca), situação de OLA (rosca), evolução mensal das aberturas e correções (linha), alertas de OLA ao longo dos meses (linha).
-- Abas de auditoria e busca por ticket/Task/assunto; tabelas legadas continuam em acordeão.
-- Abre atendimento e Task pelas referências existentes; operação somente leitura.
-- Ao mudar de cliente, a tela recarrega todos os indicadores e impede apresentação do resultado do cliente anterior durante a solicitação.
+- Visual inspirado no Painel Gerencial de Vendas do SIMER (referência enviada pelo usuário): barra de navegação horizontal, indicadores compactos, gráficos em cartões, quatro rankings, relação de tickets e matriz multidimensional.
+- Cabeçalho `Painel Gerencial de Atendimento` com botão `Alterar parâmetros`, `Atualizar` e `Excel da Diretoria`.
+- Drawer lateral para seleção do cliente autorizado (padrão Bom Jesus), semestre/mês/90 dias/personalizado, datas e perfil de SLA; `Aplicar parâmetros` atualiza o recorte de uma vez.
+- **Visão Geral:** seis KPIs, barras horizontais por categoria, rosca de situação das correções, rosca de OLA, linha de evolução mensal e tabelas-resumo por status/serviço.
+- **Ranking:** quatro tabelas de participação por analista atual, categoria, situação e rotina; permite trocar a medida entre tickets, Bugs, correções e alertas auditados. Selecionar um grupo abre a Lista filtrada.
+- **Lista de Atendimentos:** pesquisa, filtro de categoria, ordenação, paginação e abertura do ticket no HUB. Situação do OLA é cruzada com a auditoria técnica (não usa diretamente o flag bruto para contar canceladas).
+- **Multidimensional:** matriz analítica com escolha de linhas, colunas, medida e Top 10/20/todos. Pode cruzar analista, categoria, situação e serviço; mostra Outros e Total Geral.
+- **Auditoria SLA / OLA:** preserva os painéis técnicos originais (prazo, qualidade de correções, reclassificações, Vistra e recorrência) e as tabelas legadas em acordeão.
+- Tudo respeita o **cliente selecionado** e o intervalo aplicado; nenhuma tabela de outro cliente é exibida enquanto o novo recorte carrega.
+- Ranking por analista representa **atribuição atual do ticket**, não pontuação, SLA histórico ou produtividade individual.
+
 
 ## Excel para Diretoria
 1. `01 VISAO EXECUTIVA` — capa, 6 indicadores, risco, prazos e plano de ação, A4 paisagem.
@@ -43,6 +46,8 @@ As rotas antigas `/bom-jesus-report` e `/bom-jesus-report.xlsx` permanecem para 
 10. `10 PLANO DE ACAO` — ações sugeridas; responsáveis e prazos a definir.
 11. `11 BASE AUDITAVEL` — dados originais do recorte.
 12. `12 CRITERIOS FONTES` — glossário e metodologia.
+13. `13 RANKINGS` — quatro rankings formatados: analista, categoria, situação e rotina.
+14. `14 MULTIDIMENSIONAL` — matriz de analistas × principais categorias, com Outros e totais completos.
 
 **Nota:** os gráficos do Excel são renderizações PNG de apresentação, não objetos de gráfico nativos editáveis; as séries utilizadas permanecem como dados numéricos nas abas 03, 04 e 09, e podem ser usadas para construir gráficos editáveis no Excel. Não se deve afirmar o contrário.
 
@@ -74,5 +79,15 @@ Critérios de aceite:
 - Cliente fora da carteira retorna 400, sem resultados.
 - Os quatro gráficos exibem zeros sem falhar quando o período está vazio.
 - Os indicadores de cada cliente acompanham todos os filtros e coincidem com o arquivo exportado.
-- O Excel abre sem reparos e a aba `02 GRAFICOS` contém quatro PNGs visíveis; a aba `09 EVOLUCAO MENSAL` fornece a fonte numérica.
+- O Excel abre sem reparos e a aba `02 GRAFICOS` contém quatro PNGs visíveis; a aba `09 EVOLUCAO MENSAL` fornece a fonte numérica. Conferir também as abas `13 RANKINGS` e `14 MULTIDIMENSIONAL`.
 - O backend testa o formato PNG, a integridade do workbook e as regras de auditoria sem precisar consultar APIs reais.
+
+## Homologação do novo modelo visual
+- Abrir `Central da Coordenação → Painel Gerencial de Atendimento`.
+- Em Visão Geral, verificar 6 indicadores, barras de composição, 2 gráficos de rosca, linha mensal e dois resumos tabulares.
+- Em Ranking, alternar medida `Atendimentos` → `Correções` → `Alertas OLA`. Verificar que o ranking por analista corresponde ao `owner` atual, inclusive linha "Não atribuído".
+- Clicar em um grupo do ranking: a Lista de Atendimentos deve abrir somente os tickets do grupo; clicar diretamente na aba Lista remove o filtro de drill-down.
+- Em Lista, filtrar categoria e assunto, ordenar, paginar e abrir um ticket.
+- Em Multidimensional, trocar linhas, colunas e indicador. Confirmar que os totais das categorias e a soma "Outros" preservam o total geral, inclusive ao exibir Top 10.
+- Em Alterar parâmetros, cancelar sem aplicar não deve alterar o recorte; aplicar uma escolha autorizada deve atualizar todas as abas e o Excel. Um intervalo inválido de mais de 366 dias deve ser bloqueado.
+- Conferir o Excel da Diretoria: visual, gráficos, rankings, matriz multidimensional e trilha auditável devem corresponder ao mesmo recorte.
