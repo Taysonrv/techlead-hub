@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
 import { BomJesusExecutiveDashboard, type BomJesusExecutiveAudit } from "./BomJesusExecutiveDashboard";
-import { Accordion, AccordionDetails, AccordionSummary, Alert, Box, Button, Card, CardContent, Chip, CircularProgress, Dialog, DialogContent, DialogTitle, MenuItem, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography } from "@mui/material";
+import { ClientManagementOverview, ClientManagementRankings, ClientManagementTickets, ClientManagementPivot, type ClientManagementTicket } from "./ClientManagementViews";
+import { DashboardOutlined, EmojiEventsOutlined, FormatListBulletedOutlined, AccountTreeOutlined, FactCheckOutlined, TuneOutlined, FileDownloadOutlined, RefreshOutlined } from "@mui/icons-material";
+import { Accordion, AccordionDetails, AccordionSummary, Alert, Box, Button, Card, CardContent, Chip, CircularProgress, Dialog, DialogContent, DialogTitle, Drawer, Divider, MenuItem, Stack, Tab, Tabs, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography } from "@mui/material";
 import { api, getApiErrorMessage } from "../services/api";
 
 type CategorySnapshot = { previousCategory: string | null; category: string; source: string; observedAt: string; sourceLastUpdate: string | null; kind: string };
 type SlaMetric = { minutes: number | null; targetMinutes: number | null; exceeded: boolean | null; overMinutes: number | null; percent: number | null; state: string };
 type SlaEvidence = { agreement: string | null; tier: "PADRAO" | "VIP"; tierSource: string; tierVerified: boolean; priority: string | null; kind: string; eligible: boolean; warnings: string[]; response: SlaMetric; support: SlaMetric; factory: SlaMetric; total: SlaMetric; pauseMinutesSupport: number; pauseMinutesFactory: number };
-type Row = { sla: SlaEvidence; initialObservedCategory: string | null; initialObservedAt: string | null; initialSource: string | null; openingCategoryVerified: boolean; categoryHistory: CategorySnapshot[]; id: number; subject: string; createdDate: string; status: string; category: string; taskNumber: number | null; taskConcludedAt: string | null; classification: string; vistra: boolean; recurrenceCount: number; ola: string; evidence: string; taskState: string; deliveredVersion: string; supportOlaBreached: boolean | null; categoryChangedAt: string | null; categoryChangeEvidence: string; anyToAdequacaoChangedAt: string | null; anyToAdequacaoFrom: string | null; anyToAdequacaoEvidence: string; vistraType: string; recurrenceEvidence: string };
+type Row = ClientManagementTicket & { sla: SlaEvidence; initialObservedCategory: string | null; initialObservedAt: string | null; initialSource: string | null; openingCategoryVerified: boolean; categoryHistory: CategorySnapshot[]; id: number; subject: string; createdDate: string; status: string; category: string; taskNumber: number | null; taskConcludedAt: string | null; classification: string; vistra: boolean; recurrenceCount: number; ola: string; evidence: string; taskState: string; deliveredVersion: string; supportOlaBreached: boolean | null; categoryChangedAt: string | null; categoryChangeEvidence: string; anyToAdequacaoChangedAt: string | null; anyToAdequacaoFrom: string | null; anyToAdequacaoEvidence: string; vistraType: string; recurrenceEvidence: string };
 type Report = { clientFilter: string; executive: BomJesusExecutiveAudit; generatedAt: string; methodology: string; totals: { tickets: number; possibleBugs: number; currentImprovements: number; vistraCandidates: number; recurrenceCandidates: number; confirmedBugs: number; concludedCorrectionTasks: number; openCorrectionTasks: number; correctionWithVersion: number; reclassified: number; anyToAdequacaoObserved: number; problemaToAdequacaoObserved: number; otherToAdequacaoObserved: number; categoryChangeEvidenceCount: number; categoryHistoryCoverage: number; categoryOpeningVerified: number; recurrenceGroups: number; olaBreaches: number; olaBreachesPreliminary: number; responseBreaches: number; factoryBreaches: number; factoryOverdueOpen: number; totalSlaBreaches: number; withoutVerifiedProfile: number; slaCalculationEligible: number; linkedCorrectionTasks: number; deliveredCorrectionTasks: number }; monthly: { month: string; tickets: number; vistra: number }[]; rows: Row[] };
 const DEFAULT_CLIENT="BOM JESUS COOPERATIVA AGROINDUSTRIAL - LAPA-PR";
 const businessToday=()=>new Date(Date.now()-3*3600000).toISOString().slice(0,10);
@@ -27,6 +29,30 @@ export function ClientExecutiveReportPanel() {
   const [error, setError] = useState("");
   const [filter, setFilter] = useState("");
   const [selectedHistory, setSelectedHistory] = useState<Row | null>(null);
+  const [activeTab,setActiveTab]=useState(0);
+  const [settingsOpen,setSettingsOpen]=useState(false);
+  const [drilldown,setDrilldown]=useState<{dimension:"owner"|"category"|"status"|"service";value:string}|null>(null);
+  const [draft,setDraft]=useState({
+    client:DEFAULT_CLIENT,periodPreset:"semester",startDate:startOfCurrentSemester(),
+    endDate:businessToday(),slaTier:"auto" as "auto"|"PADRAO"|"VIP",
+  });
+  const openSettings=()=>{
+    setDraft({client,periodPreset,startDate,endDate,slaTier});
+    setSettingsOpen(true);
+  };
+  const applySettings=()=>{
+    const begin=Date.parse(draft.startDate+"T03:00:00.000Z");
+    const finish=Date.parse(draft.endDate+"T03:00:00.000Z");
+    if(!clients.includes(draft.client) || !Number.isFinite(begin)||!Number.isFinite(finish)||
+       finish<begin||finish-begin>366*86400000){
+      setError("Revise os parâmetros: selecione um cliente autorizado e um intervalo válido de até 366 dias.");
+      return;
+    }
+    setError("");
+    setClient(draft.client);setStartDate(draft.startDate);setEndDate(draft.endDate);
+    setPeriodPreset(draft.periodPreset);setSlaTier(draft.slaTier);
+    setDrilldown(null);setActiveTab(0);setSettingsOpen(false);
+  };
   useEffect(()=>{
     const controller=new AbortController();
     void api.get<{clients:string[],defaultClient:string}>("/coordination/client-executive-report/clients",{signal:controller.signal})
@@ -35,15 +61,18 @@ export function ClientExecutiveReportPanel() {
     return ()=>controller.abort();
   },[]);
   const choosePeriod=(preset:string)=>{
-    setPeriodPreset(preset);
     const today=businessToday();
-    if(preset==="semester"){setStartDate(startOfCurrentSemester());setEndDate(today);}
-    if(preset==="month"){setStartDate(today.slice(0,7)+"-01");setEndDate(today);}
+    let start=draft.startDate;
+    if(preset==="semester")start=startOfCurrentSemester();
+    if(preset==="month")start=today.slice(0,7)+"-01";
     if(preset==="90d"){
       const anchor=new Date(today+"T03:00:00.000Z");
       anchor.setUTCDate(anchor.getUTCDate()-89);
-      setStartDate(anchor.toISOString().slice(0,10));setEndDate(today);
+      start=anchor.toISOString().slice(0,10);
     }
+    setDraft(previous=>({...previous,periodPreset:preset,
+      startDate:preset==="custom"?previous.startDate:start,
+      endDate:preset==="custom"?previous.endDate:today}));
   };
   const load = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);setError("");setReport(null);
@@ -65,30 +94,94 @@ export function ClientExecutiveReportPanel() {
     finally { setExporting(false); }
   };
   const rows = report?.rows.filter(x => [x.subject, String(x.id), x.category, x.classification].join(" ").toLocaleLowerCase("pt-BR").includes(filter.toLocaleLowerCase("pt-BR"))) ?? [];
-  return <Card variant="outlined" sx={{ mb: 2, borderRadius: 3 }} id="relatorio-executivo-clientes"><CardContent><Box id="diagnostico-bom-jesus" sx={{height:0}}/>
-    <Stack direction={{ xs: "column", md: "row" }} sx={{ justifyContent: "space-between", gap: 1, mb: 2 }}>
-      <Box><Typography variant="h6">Painel executivo de clientes</Typography><Typography variant="body2" color="text.secondary">Relatórios por cliente da carteira SIMER • SLA, OLA, correções, qualidade e tendências. Seleção segura pelo cadastro oficial, com exportação executiva em Excel.</Typography></Box>
-      <Stack direction="row" spacing={1} sx={{ alignItems: "center", flexWrap: "wrap", maxWidth:"100%" }}>
-        <TextField select size="small" label="Cliente da carteira" value={client} onChange={e=>setClient(e.target.value)} sx={{minWidth:{xs:235,md:340},maxWidth:420}}>{clients.map(name=><MenuItem key={name} value={name} title={name}>{name}</MenuItem>)}</TextField>
-        <TextField select size="small" label="Período" value={periodPreset} onChange={e=>choosePeriod(e.target.value)} sx={{minWidth:155}}>
-          <MenuItem value="semester">Este semestre</MenuItem><MenuItem value="month">Este mês</MenuItem><MenuItem value="90d">Últimos 90 dias</MenuItem><MenuItem value="custom">Personalizado</MenuItem>
-        </TextField>
-        <TextField size="small" type="date" label="De" value={startDate} onChange={e => {setStartDate(e.target.value);setPeriodPreset("custom");}} slotProps={{ inputLabel: { shrink: true } }} />
-        <TextField size="small" type="date" label="Até" value={endDate} onChange={e => {setEndDate(e.target.value);setPeriodPreset("custom");}} slotProps={{ inputLabel: { shrink: true } }} />
-        <TextField select size="small" label="Perfil SLA" value={slaTier} onChange={e => setSlaTier(e.target.value as "auto" | "PADRAO" | "VIP")} sx={{ minWidth: 190 }}>
-          <MenuItem value="auto">Automático pelo contrato</MenuItem>
-          <MenuItem value="PADRAO">Simulação Padrão</MenuItem>
-          <MenuItem value="VIP">Simulação VIP</MenuItem>
-        </TextField>
-        <Button variant="outlined" onClick={() => void load()} disabled={loading}>Atualizar</Button>
-        <Button variant="contained" onClick={() => void download()} disabled={!report || report.clientFilter!==client || exporting}>{exporting ? "Gerando relatório..." : "Exportar relatório da Diretoria (Excel)"}</Button>
+  return <Card variant="outlined" sx={{mb:2,borderRadius:3,overflow:"hidden"}} id="relatorio-executivo-clientes">
+    <CardContent sx={{p:{xs:1.5,md:2.5}}}><Box id="diagnostico-bom-jesus" sx={{height:0}}/>
+      <Stack direction={{xs:"column",md:"row"}} sx={{justifyContent:"space-between",alignItems:{md:"center"},gap:2,mb:2}}>
+        <Box>
+          <Typography variant="h5" sx={{fontWeight:750,color:"text.primary"}}>Painel Gerencial de Atendimento</Typography>
+          <Typography variant="body2" color="text.secondary">
+            Coordenação SIMER • Indicadores, resolutividade e qualidade por cliente
+          </Typography>
+        </Box>
+        <Stack direction="row" sx={{alignItems:"center",gap:1,flexWrap:"wrap"}}>
+          <Button variant="outlined" startIcon={<TuneOutlined/>} onClick={openSettings}
+            sx={{textTransform:"none",fontWeight:650}}>Alterar parâmetros</Button>
+          <Button variant="outlined" startIcon={<RefreshOutlined/>} onClick={()=>void load()} disabled={loading}
+            sx={{textTransform:"none"}}>Atualizar</Button>
+          <Button variant="contained" startIcon={<FileDownloadOutlined/>} onClick={()=>void download()}
+            disabled={!report||report.clientFilter!==client||exporting||loading}
+            sx={{textTransform:"none"}}>{exporting?"Exportando...":"Excel da Diretoria"}</Button>
+        </Stack>
       </Stack>
-    </Stack>
-    <Alert severity="warning" sx={{ mb: 2 }}>As alterações de categoria são capturadas nas sincronizações. A abertura da Task é utilizada como referência aproximada da passagem ao Desenvolvimento, e os números de OLA/SLA são preliminares até validação de pausas e feriados adicionais. A primeira categoria observada não comprova a categoria na abertura, e a data registrada é a da observação pelo HUB. Dados anteriores à implantação não podem ser reconstruídos automaticamente. Bugs e falhas recorrentes permanecem sujeitos à validação técnica.</Alert>
-    {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-    {loading && <CircularProgress size={24} />}
-    {report && report.clientFilter===client && <>
-      <BomJesusExecutiveDashboard executive={report.executive} clientName={report.clientFilter} />
+      <Tabs value={activeTab} onChange={(_,value:number)=>setActiveTab(value)}
+        variant="scrollable" scrollButtons="auto" aria-label="Painel gerencial da Coordenação SIMER"
+        sx={{borderBottom:"1px solid",borderColor:"divider",mb:.8,
+          "& .MuiTabs-indicator":{backgroundColor:"#F26727",height:3},
+          "& .Mui-selected":{color:"#D9541C!important"}, "& .MuiTab-root":{minHeight:45,textTransform:"none",fontWeight:650}}}>
+        <Tab icon={<DashboardOutlined fontSize="small"/>} iconPosition="start" label="Visão Geral"/>
+        <Tab icon={<EmojiEventsOutlined fontSize="small"/>} iconPosition="start" label="Ranking"/>
+        <Tab icon={<FormatListBulletedOutlined fontSize="small"/>} iconPosition="start" label="Lista de Atendimentos"/>
+        <Tab icon={<AccountTreeOutlined fontSize="small"/>} iconPosition="start" label="Multidimensional"/>
+        <Tab icon={<FactCheckOutlined fontSize="small"/>} iconPosition="start" label="Auditoria SLA / OLA"/>
+      </Tabs>
+      <Box sx={{backgroundColor:"action.hover",border:"1px solid",borderColor:"divider",
+        borderRadius:1.5,px:1.5,py:.8,mb:2}}>
+        <Typography variant="caption" sx={{fontWeight:600}}>
+          {client} • Período: {startDate.split("-").reverse().join("/")} a {endDate.split("-").reverse().join("/")}
+          {slaTier!=="auto"?" • Perfil de SLA simulado: "+slaTier:" • SLA por contrato"} 
+        </Typography>
+      </Box>
+      <Drawer anchor="right" open={settingsOpen} onClose={()=>setSettingsOpen(false)}>
+        <Box sx={{width:{xs:"min(94vw,420px)",sm:420},p:3}}>
+          <Typography variant="h6" sx={{fontWeight:750}}>Alterar parâmetros</Typography>
+          <Typography color="text.secondary" variant="body2" sx={{mt:.5,mb:3}}>Selecione o cliente da carteira, o período de abertura e o perfil de SLA.</Typography>
+          <Stack spacing={2}>
+            <TextField select fullWidth label="Cliente da carteira" size="small" value={draft.client}
+              onChange={e=>setDraft(previous=>({...previous,client:e.target.value}))}>
+              {clients.map(name=><MenuItem key={name} value={name}>{name}</MenuItem>)}
+            </TextField>
+            <TextField select fullWidth label="Período" size="small" value={draft.periodPreset}
+              onChange={e=>choosePeriod(e.target.value)}>
+              <MenuItem value="semester">Este semestre</MenuItem><MenuItem value="month">Este mês</MenuItem>
+              <MenuItem value="90d">Últimos 90 dias</MenuItem><MenuItem value="custom">Personalizado</MenuItem>
+            </TextField>
+            <TextField type="date" size="small" label="De" value={draft.startDate}
+              onChange={e=>setDraft(p=>({...p,startDate:e.target.value,periodPreset:"custom"}))}
+              slotProps={{inputLabel:{shrink:true}}}/>
+            <TextField type="date" size="small" label="Até" value={draft.endDate}
+              onChange={e=>setDraft(p=>({...p,endDate:e.target.value,periodPreset:"custom"}))}
+              slotProps={{inputLabel:{shrink:true}}}/>
+            <TextField select size="small" label="Perfil SLA" value={draft.slaTier}
+              onChange={e=>setDraft(p=>({...p,slaTier:e.target.value as "auto"|"PADRAO"|"VIP"}))}>
+              <MenuItem value="auto">Automático pelo contrato</MenuItem>
+              <MenuItem value="PADRAO">Simulação Padrão</MenuItem><MenuItem value="VIP">Simulação VIP</MenuItem>
+            </TextField>
+            <Divider/>
+            <Typography variant="caption" color="text.secondary">A simulação de SLA não comprova o contrato original. Alertas de OLA dependem da auditoria do marco de passagem e das pausas.</Typography>
+            <Stack direction="row" sx={{justifyContent:"flex-end",gap:1}}>
+              <Button onClick={()=>setSettingsOpen(false)}>Cancelar</Button>
+              <Button variant="contained" onClick={applySettings}>Aplicar parâmetros</Button>
+            </Stack>
+          </Stack>
+        </Box>
+      </Drawer>
+      {error&&<Alert severity="error" sx={{mb:2}}>{error}</Alert>}
+      {loading&&<Box sx={{py:5,display:"grid",placeItems:"center"}}><CircularProgress size={30}/></Box>}
+      {report&&report.clientFilter===client&&<>
+        {activeTab===0&&<ClientManagementOverview rows={report.rows} audit={report.executive}/>}
+        {activeTab===1&&<ClientManagementRankings rows={report.rows} onInspect={(dimension,value)=>{
+          setDrilldown({dimension,value});setActiveTab(2);
+        }}/>}
+        {activeTab===2&&<ClientManagementTickets key={client+"-"+startDate+"-"+endDate+"-"+(drilldown?.value??"all")}
+          rows={report.rows} initialFilter={drilldown}/>}
+        {activeTab===3&&<ClientManagementPivot rows={report.rows}/>}
+        {activeTab===4&&<>
+          <Alert severity="warning" sx={{mb:2}}>
+            Os alertas de OLA utilizam a criação da Task como referência aproximada do encaminhamento.
+            Pausas, perfil, prioridade histórica e feriados precisam de conferência.
+            A primeira categoria observada não comprova a categoria na abertura.
+          </Alert>
+          <BomJesusExecutiveDashboard executive={report.executive} clientName={report.clientFilter}/>
       <Accordion disableGutters elevation={0} sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2 }}>
       <AccordionSummary expandIcon={<span aria-hidden>▾</span>}><Typography sx={{fontWeight:600}}>Abrir tabelas detalhadas e indicadores legados</Typography></AccordionSummary>
       <AccordionDetails>
@@ -151,7 +244,8 @@ export function ClientExecutiveReportPanel() {
       {rows.length > 200 && <Typography variant="caption" color="text.secondary">Exibindo 200 de {rows.length} tickets filtrados. O Excel inclui todos os registros do período.</Typography>}
       <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1 }}>Gerado em {new Date(report.generatedAt).toLocaleString("pt-BR")} · Sem alteração dos dados originais.</Typography>
       </AccordionDetails></Accordion>
-    </>}
+        </>}
+      </>}
   <Dialog open={Boolean(selectedHistory)} onClose={() => setSelectedHistory(null)} fullWidth maxWidth="md">
     <DialogTitle>Histórico observado de categorias · Ticket {selectedHistory?.id}</DialogTitle>
     <DialogContent>
