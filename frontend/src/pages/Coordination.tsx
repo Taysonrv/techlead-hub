@@ -1,6 +1,6 @@
 import { KpiGrid } from "../components/KpiGrid";
 import { CoordinationWeeklyWorkspace } from "../components/CoordinationWeeklyWorkspace";
-import { BomJesusReportPanel } from "../components/BomJesusReportPanel";
+import { ClientExecutiveReportPanel } from "../components/BomJesusReportPanel";
 import { AsyncState } from "../components/AsyncState";
 import { ContentState } from "../components/ContentState";
 import {
@@ -341,7 +341,7 @@ export function Coordination() {
       />
 
       <CoordinationWeeklyWorkspace />
-      <BomJesusReportPanel />
+      <ClientExecutiveReportPanel />
 
       <Card variant="outlined" sx={{ overflow: "hidden", borderRadius: 2.5, backgroundColor: "background.paper", mb: 2 }}>
         <Box sx={{ p: { xs: 1.5, md: 2 }, borderBottom: "1px solid", borderColor: "divider", background: theme.palette.mode === "dark" ? "linear-gradient(110deg,rgba(24,199,122,.055),rgba(47,111,237,.035),transparent)" : "linear-gradient(110deg,rgba(24,199,122,.045),rgba(47,111,237,.025),transparent)" }}>
