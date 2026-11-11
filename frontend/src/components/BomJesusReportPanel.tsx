@@ -7,10 +7,19 @@ type CategorySnapshot = { previousCategory: string | null; category: string; sou
 type SlaMetric = { minutes: number | null; targetMinutes: number | null; exceeded: boolean | null; overMinutes: number | null; percent: number | null; state: string };
 type SlaEvidence = { agreement: string | null; tier: "PADRAO" | "VIP"; tierSource: string; tierVerified: boolean; priority: string | null; kind: string; eligible: boolean; warnings: string[]; response: SlaMetric; support: SlaMetric; factory: SlaMetric; total: SlaMetric; pauseMinutesSupport: number; pauseMinutesFactory: number };
 type Row = { sla: SlaEvidence; initialObservedCategory: string | null; initialObservedAt: string | null; initialSource: string | null; openingCategoryVerified: boolean; categoryHistory: CategorySnapshot[]; id: number; subject: string; createdDate: string; status: string; category: string; taskNumber: number | null; taskConcludedAt: string | null; classification: string; vistra: boolean; recurrenceCount: number; ola: string; evidence: string; taskState: string; deliveredVersion: string; supportOlaBreached: boolean | null; categoryChangedAt: string | null; categoryChangeEvidence: string; anyToAdequacaoChangedAt: string | null; anyToAdequacaoFrom: string | null; anyToAdequacaoEvidence: string; vistraType: string; recurrenceEvidence: string };
-type Report = { executive: BomJesusExecutiveAudit; generatedAt: string; methodology: string; totals: { tickets: number; possibleBugs: number; currentImprovements: number; vistraCandidates: number; recurrenceCandidates: number; confirmedBugs: number; concludedCorrectionTasks: number; openCorrectionTasks: number; correctionWithVersion: number; reclassified: number; anyToAdequacaoObserved: number; problemaToAdequacaoObserved: number; otherToAdequacaoObserved: number; categoryChangeEvidenceCount: number; categoryHistoryCoverage: number; categoryOpeningVerified: number; recurrenceGroups: number; olaBreaches: number; olaBreachesPreliminary: number; responseBreaches: number; factoryBreaches: number; factoryOverdueOpen: number; totalSlaBreaches: number; withoutVerifiedProfile: number; slaCalculationEligible: number; linkedCorrectionTasks: number; deliveredCorrectionTasks: number }; monthly: { month: string; tickets: number; vistra: number }[]; rows: Row[] };
-export function BomJesusReportPanel() {
-  const [startDate, setStartDate] = useState("2026-07-01");
-  const [endDate, setEndDate] = useState("2026-11-10");
+type Report = { clientFilter: string; executive: BomJesusExecutiveAudit; generatedAt: string; methodology: string; totals: { tickets: number; possibleBugs: number; currentImprovements: number; vistraCandidates: number; recurrenceCandidates: number; confirmedBugs: number; concludedCorrectionTasks: number; openCorrectionTasks: number; correctionWithVersion: number; reclassified: number; anyToAdequacaoObserved: number; problemaToAdequacaoObserved: number; otherToAdequacaoObserved: number; categoryChangeEvidenceCount: number; categoryHistoryCoverage: number; categoryOpeningVerified: number; recurrenceGroups: number; olaBreaches: number; olaBreachesPreliminary: number; responseBreaches: number; factoryBreaches: number; factoryOverdueOpen: number; totalSlaBreaches: number; withoutVerifiedProfile: number; slaCalculationEligible: number; linkedCorrectionTasks: number; deliveredCorrectionTasks: number }; monthly: { month: string; tickets: number; vistra: number }[]; rows: Row[] };
+const DEFAULT_CLIENT="BOM JESUS COOPERATIVA AGROINDUSTRIAL - LAPA-PR";
+const businessToday=()=>new Date(Date.now()-3*3600000).toISOString().slice(0,10);
+const startOfCurrentSemester=()=>{
+  const today=businessToday();
+  return today.slice(0,4)+(Number(today.slice(5,7))<=6?"-01-01":"-07-01");
+};
+export function ClientExecutiveReportPanel() {
+  const [client,setClient]=useState(DEFAULT_CLIENT);
+  const [clients,setClients]=useState<string[]>([DEFAULT_CLIENT]);
+  const [periodPreset,setPeriodPreset]=useState("semester");
+  const [startDate, setStartDate] = useState(startOfCurrentSemester);
+  const [endDate, setEndDate] = useState(businessToday);
   const [slaTier, setSlaTier] = useState<"auto" | "PADRAO" | "VIP">("auto");
   const [report, setReport] = useState<Report | null>(null);
   const [loading, setLoading] = useState(false);
@@ -18,32 +27,54 @@ export function BomJesusReportPanel() {
   const [error, setError] = useState("");
   const [filter, setFilter] = useState("");
   const [selectedHistory, setSelectedHistory] = useState<Row | null>(null);
+  useEffect(()=>{
+    const controller=new AbortController();
+    void api.get<{clients:string[],defaultClient:string}>("/coordination/client-executive-report/clients",{signal:controller.signal})
+      .then(response=>{if(!controller.signal.aborted){setClients(response.data.clients);}})
+      .catch(()=>{if(!controller.signal.aborted)setError("Não foi possível carregar a lista atualizada de clientes da carteira SIMER.");});
+    return ()=>controller.abort();
+  },[]);
+  const choosePeriod=(preset:string)=>{
+    setPeriodPreset(preset);
+    const today=businessToday();
+    if(preset==="semester"){setStartDate(startOfCurrentSemester());setEndDate(today);}
+    if(preset==="month"){setStartDate(today.slice(0,7)+"-01");setEndDate(today);}
+    if(preset==="90d"){
+      const anchor=new Date(today+"T03:00:00.000Z");
+      anchor.setUTCDate(anchor.getUTCDate()-89);
+      setStartDate(anchor.toISOString().slice(0,10));setEndDate(today);
+    }
+  };
   const load = useCallback(async (signal?: AbortSignal) => {
-    setLoading(true); setError("");
+    setLoading(true);setError("");setReport(null);
     try {
-      const result = await api.get<Report>("/coordination/bom-jesus-report", { params: { startDate, endDate, slaTier }, signal });
+      const result = await api.get<Report>("/coordination/client-executive-report", { params: { client,startDate, endDate, slaTier }, signal });
       if (!signal?.aborted) setReport(result.data);
     } catch (e) { if (!signal?.aborted) { setError(getApiErrorMessage(e, "Falha ao carregar relatório.")); setReport(null); } }
     finally { if (!signal?.aborted) setLoading(false); }
-  }, [startDate, endDate, slaTier]);
+  }, [client,startDate, endDate, slaTier]);
   useEffect(() => { const controller = new AbortController(); void load(controller.signal); return () => controller.abort(); }, [load]);
   const download = async () => {
     setExporting(true); setError("");
     try {
-      const response = await api.get("/coordination/bom-jesus-report.xlsx", { params: { startDate, endDate, slaTier }, responseType: "blob" });
+      const response = await api.get("/coordination/client-executive-report.xlsx", { params: { client,startDate, endDate, slaTier }, responseType: "blob" });
       const url = URL.createObjectURL(new Blob([response.data], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
-      const a = document.createElement("a"); a.href = url; a.download = `Bom_Jesus_Relatorio_Executivo_${startDate}_a_${endDate}.xlsx`; a.click();
+      const a = document.createElement("a"); a.href = url; a.download = `Relatorio_Executivo_${client.replace(/[^A-Za-z0-9]+/g,"_").slice(0,56)}_${startDate}_a_${endDate}.xlsx`; a.click();
       window.setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (e) { setError(getApiErrorMessage(e, "Falha ao exportar Excel.")); }
     finally { setExporting(false); }
   };
   const rows = report?.rows.filter(x => [x.subject, String(x.id), x.category, x.classification].join(" ").toLocaleLowerCase("pt-BR").includes(filter.toLocaleLowerCase("pt-BR"))) ?? [];
-  return <Card variant="outlined" sx={{ mb: 2, borderRadius: 3 }} id="diagnostico-bom-jesus"><CardContent>
+  return <Card variant="outlined" sx={{ mb: 2, borderRadius: 3 }} id="relatorio-executivo-clientes"><CardContent>
     <Stack direction={{ xs: "column", md: "row" }} sx={{ justifyContent: "space-between", gap: 1, mb: 2 }}>
-      <Box><Typography variant="h6">Diagnóstico gerencial — Bom Jesus</Typography><Typography variant="body2" color="text.secondary">Filtro exclusivo: Bom Jesus + analistas SIMER, alinhado à tela Clientes. Base de referência: 01/07 a 10/11/2026; datas ajustáveis.</Typography></Box>
-      <Stack direction="row" spacing={1} sx={{ alignItems: "center", flexWrap: "wrap" }}>
-        <TextField size="small" type="date" label="De" value={startDate} onChange={e => setStartDate(e.target.value)} slotProps={{ inputLabel: { shrink: true } }} />
-        <TextField size="small" type="date" label="Até" value={endDate} onChange={e => setEndDate(e.target.value)} slotProps={{ inputLabel: { shrink: true } }} />
+      <Box><Typography variant="h6">Painel executivo de clientes</Typography><Typography variant="body2" color="text.secondary">Relatórios por cliente da carteira SIMER • SLA, OLA, correções, qualidade e tendências. Seleção segura pelo cadastro oficial, com exportação executiva em Excel.</Typography></Box>
+      <Stack direction="row" spacing={1} sx={{ alignItems: "center", flexWrap: "wrap", maxWidth:"100%" }}>
+        <TextField select size="small" label="Cliente da carteira" value={client} onChange={e=>setClient(e.target.value)} sx={{minWidth:{xs:235,md:340},maxWidth:420}}>{clients.map(name=><MenuItem key={name} value={name} title={name}>{name}</MenuItem>)}</TextField>
+        <TextField select size="small" label="Período" value={periodPreset} onChange={e=>choosePeriod(e.target.value)} sx={{minWidth:155}}>
+          <MenuItem value="semester">Este semestre</MenuItem><MenuItem value="month">Este mês</MenuItem><MenuItem value="90d">Últimos 90 dias</MenuItem><MenuItem value="custom">Personalizado</MenuItem>
+        </TextField>
+        <TextField size="small" type="date" label="De" value={startDate} onChange={e => {setStartDate(e.target.value);setPeriodPreset("custom");}} slotProps={{ inputLabel: { shrink: true } }} />
+        <TextField size="small" type="date" label="Até" value={endDate} onChange={e => {setEndDate(e.target.value);setPeriodPreset("custom");}} slotProps={{ inputLabel: { shrink: true } }} />
         <TextField select size="small" label="Perfil SLA" value={slaTier} onChange={e => setSlaTier(e.target.value as "auto" | "PADRAO" | "VIP")} sx={{ minWidth: 190 }}>
           <MenuItem value="auto">Automático pelo contrato</MenuItem>
           <MenuItem value="PADRAO">Simulação Padrão</MenuItem>
@@ -57,7 +88,7 @@ export function BomJesusReportPanel() {
     {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
     {loading && <CircularProgress size={24} />}
     {report && <>
-      <BomJesusExecutiveDashboard executive={report.executive} />
+      <BomJesusExecutiveDashboard executive={report.executive} clientName={report.clientFilter} />
       <Accordion disableGutters elevation={0} sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2 }}>
       <AccordionSummary expandIcon={<span aria-hidden>▾</span>}><Typography sx={{fontWeight:600}}>Abrir tabelas detalhadas e indicadores legados</Typography></AccordionSummary>
       <AccordionDetails>
@@ -137,3 +168,6 @@ export function BomJesusReportPanel() {
   </Dialog>
   </CardContent></Card>;
 }
+
+// Export mantido para integrações anteriores da Central de Coordenação.
+export const BomJesusReportPanel=ClientExecutiveReportPanel;
