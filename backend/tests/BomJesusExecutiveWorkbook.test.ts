@@ -30,7 +30,7 @@ const item:ExecutiveTicketInput={
 test("Excel da Diretoria possui capa executiva, anexos, prazos e rastreabilidade; arquivo abre novamente",async()=>{
   const executive=buildBomJesusExecutiveAudit([item]);
   const raw={
-    ...item,client:"BOM JESUS COOPERATIVA AGROINDUSTRIAL - LAPA-PR",
+    ...item,client:"BOM JESUS COOPERATIVA AGROINDUSTRIAL - LAPA-PR",owner:"TAYSON ALVES DE ARAUJO",ownerTeam:"SIMER",
     categoryHistory:[],classification:"Possível bug",vistraType:item.vistraType,
     recurrenceCount:1,actionCount:2,firstProductEvidence:null,
     ola:"OLA Suporte",evidence:"Task Azure",categoryChangedAt:null,categoryChangeEvidence:"",
@@ -65,4 +65,8 @@ test("Excel da Diretoria possui capa executiva, anexos, prazos e rastreabilidade
   assert.equal(reload.getWorksheet("11 BASE AUDITAVEL")!.getCell("A8").value,842001);
   assert.equal(reload.getWorksheet("14 MULTIDIMENSIONAL")!.rowCount>=9,true);
   assert.equal(reload.getWorksheet("13 RANKINGS")!.getCell("A7").value,"RESPONSÁVEL (CARTEIRA ATUAL)");
+  assert.equal(reload.getWorksheet("13 RANKINGS")!.getCell("A9").value,"TAYSON ALVES DE ARAUJO");
+  assert.equal(reload.getWorksheet("13 RANKINGS")!.getCell("B9").value,1);
+  assert.equal(reload.getWorksheet("14 MULTIDIMENSIONAL")!.getCell("A8").value,"TAYSON ALVES DE ARAUJO");
+  assert.equal(reload.getWorksheet("14 MULTIDIMENSIONAL")!.getCell("B8").value,1);
 });
