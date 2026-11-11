@@ -140,6 +140,9 @@ export function createBomJesusExecutiveWorkbook(report:FullReport) {
   card(ws,["E","H"],15,"Mudanças → Adequação",int(e.categories.observedTicketCount),"Detectadas entre sincronizações");
   card(ws,["I","L"],15,"Recorrências potenciais",int(e.recurrence.groups),int(e.recurrence.ticketCandidates)+" tickets únicos em grupos","neutral");
 
+  setMerged(ws,"A21:L21","VISTRA: "+int(e.vistra.suspectedVistraFailures)+" suspeitas  •  ANALÍTICO: "+int(e.vistra.suspectedAnaliticoFailures)+"  •  RELATÓRIOS: "+int(e.vistra.suspectedReportFailures)+"  •  RECORRÊNCIAS: "+int(e.recurrence.groups)+" grupos candidatos",
+    {background:P.mint,color:P.dark,size:9,bold:true});
+  ws.getRow(21).height=24;
   titleBar(ws,22,"A","G","01  |  DESEMPENHO DO SUPORTE — OLA");
   titleBar(ws,22,"I","L","LEITURA E RISCO EXECUTIVO");
   const statRows=[
@@ -366,7 +369,8 @@ export function createBomJesusExecutiveWorkbook(report:FullReport) {
     sheet.headerFooter.oddHeader="&LTechLead Hub / Bom Jesus&CDiagnóstico gerencial&R"+report.endDate;
     sheet.headerFooter.oddFooter="&LInformações para revisão interna • não redistribuir sem validação&C"+sheet.name+"&RPágina &P de &N";
     sheet.pageSetup.fitToPage=true;
-    sheet.pageSetup.fitToWidth=1;
+    // Anexos largos usam duas páginas horizontais para preservar leitura na impressão.
+    sheet.pageSetup.fitToWidth=sheet.columnCount>16?2:1;
     sheet.pageSetup.fitToHeight=0;
   });
   return book;
