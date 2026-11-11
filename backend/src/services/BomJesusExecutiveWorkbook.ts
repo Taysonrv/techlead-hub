@@ -232,7 +232,8 @@ export function createBomJesusExecutiveWorkbook(report:FullReport) {
     {tl:{col:.20,row:22},ext:{width:650,height:325}},
     {tl:{col:9.00,row:22},ext:{width:650,height:325}},
   ];
-  pngs.forEach((png,i)=>graph.addImage(book.addImage({buffer:png,extension:"png"}),positions[i]!));
+  // ExcelJS accepts base64 PNG and avoids Buffer<ArrayBufferLike> vs Buffer<ArrayBuffer> typing in Node 26.
+  pngs.forEach((png,i)=>graph.addImage(book.addImage({base64:png.toString("base64"),extension:"png"}),positions[i]!));
   setMerged(graph,"A41:R42","LEITURA: os gráficos representam capturas dos dados calculados no HUB. As tabelas e critérios auditáveis estão nas próximas abas.",
     {background:P.mint,color:P.ink,size:9,wrap:true});
   setMerged(graph,"A44:R45","ATENÇÃO: alertas de OLA são preliminares. A conclusão de Task não comprova implantação ou aceite do cliente.",
