@@ -130,7 +130,7 @@ export function BomJesusExecutiveDashboard({executive:a,clientName}:Props){
     </Box>
     <Alert severity="info" sx={{mb:2}}>Os alertas de OLA usam a criação da Task como referência de passagem. Pausas, urgência histórica e perfil contratual precisam de validação. As reclassificações anteriores ao primeiro registro do HUB não são recuperadas automaticamente pela API pública.</Alert>
     <Box sx={{borderBottom:1,borderColor:"divider",mb:2}}>
-      <Tabs value={tab} onChange={(_,v:number)=>{setTab(v);setQuery("");}} variant="scrollable" scrollButtons="auto" aria-label="Auditoria Bom Jesus">
+      <Tabs value={tab} onChange={(_,v:number)=>{setTab(v);setQuery("");}} variant="scrollable" scrollButtons="auto" aria-label="Auditoria executiva do cliente selecionado">
         <Tab label="OLA do Suporte"/><Tab label="Qualidade das correções"/><Tab label="Classificações"/><Tab label="Adequações"/><Tab label="Recorrências"/><Tab label="Vistra e relatórios"/>
       </Tabs>
     </Box>
