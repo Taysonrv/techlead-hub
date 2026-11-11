@@ -1,4 +1,6 @@
 import { prisma } from "../database/prisma";
+import { SUPPORT_ANALYSTS } from "../domain/OperationalScope";
+import { buildBomJesusExecutiveAudit } from "./BomJesusExecutiveAudit";
 import { normalizeDomainText, mapPriority } from "../domain/TicketClassificationRules";
 import type { SlaTier } from "../domain/AliareSlaRules";
 import { computeBomJesusSla, type SlaEvidence } from "./BomJesusSlaMetrics";
@@ -18,7 +20,8 @@ const normalizeSymptom = (subject: string) => text(subject)
   .replace(/\b\d+\b/g, " ")
   .replace(/[^a-z\s]/g, " ").replace(/\s+/g, " ").trim();
 export type BomJesusRow = {
-  id: number; subject: string; client: string; createdDate: string; status: string; category: string;
+  id: number; subject: string; client: string; createdDate: string; status: string; baseStatus: string | null; category: string;
+  resolvedDate: string | null; reopenedDate: string | null; serviceContext: string; isCorrectionTask: boolean; taskRemoteUrl: string | null;
   taskNumber: number | null; taskType: string; classification: string; vistra: boolean;
   recurrenceKey: string; recurrenceCount: number; actionCount: number;
   firstProductEvidence: string | null; ola: string; evidence: string;
@@ -30,16 +33,24 @@ export type BomJesusRow = {
   sla: SlaEvidence;
 };
 export async function bomJesusReport(startDate: string, endDate: string, tierOverride: SlaTier | null = null) {
-  const start = new Date(startDate + "T00:00:00.000Z");
-  const end = new Date(endDate + "T23:59:59.999Z");
+  // Alinhado ao filtro "Esse semestre" da tela Clientes (dias locais em America/Sao_Paulo).
+  // O Brasil não observa horário de verão em 2026.
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate) || !/^\d{4}-\d{2}-\d{2}$/.test(endDate))
+    throw new Error("Período inválido: informe YYYY-MM-DD.");
+  const start = new Date(startDate + "T03:00:00.000Z");
+  const end = new Date(Date.parse(endDate + "T03:00:00.000Z") + 86400000 - 1);
   if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime()) || start > end ||
       (end.getTime() - start.getTime()) > 366 * 86400000) throw new Error("Período inválido ou superior a 366 dias.");
   const tickets = await prisma.ticket.findMany({
-    where: { client: { equals: BOM_JESUS_CLIENT_NAME, mode: "insensitive" }, createdDate: { gte: start, lte: end }, isDeleted: false },
+    // Mesma base da tela Clientes: cliente exato + responsabilidade atual de analista SIMER.
+    where: { client: { equals: BOM_JESUS_CLIENT_NAME, mode: "insensitive" },
+      owner: { in: [...SUPPORT_ANALYSTS], mode: "insensitive" },
+      createdDate: { gte: start, lte: end }, isDeleted: false },
     select: {
-      movideskId: true, subject: true, client: true, createdDate: true, status: true, urgency: true,
+      movideskId: true, subject: true, client: true, owner: true, ownerTeam: true,
+      createdDate: true, status: true, baseStatus: true, urgency: true,
       category: true, cause: true, taskNumber: true, taskType: true, service: true, slaAgreement: true,
-      firstResponseDate: true, resolvedDate: true,
+      firstResponseDate: true, resolvedDate: true, reopenedDate: true,
       serviceFirstLevel: true, serviceSecondLevel: true, serviceThirdLevel: true,
       actions: { where: { isDeleted: false }, select: { createdDate: true, description: true, status: true }, orderBy: { createdDate: "asc" } },
       statusHistories: { select: { status: true, changedDate: true } },
@@ -53,7 +64,7 @@ export async function bomJesusReport(startDate: string, endDate: string, tierOve
       ...(taskIds.length ? [{ id: { in: taskIds } }] : []),
       { movideskTicket: { in: tickets.map(t => t.movideskId) } },
     ] },
-    select: { id: true, movideskTicket: true, workItemType: true, state: true, azureCreatedAt: true, azureClosedAt: true, stateChangedAt: true, criticality: true, deliveredVersion: true },
+    select: { id: true, movideskTicket: true, workItemType: true, state: true, azureCreatedAt: true, azureClosedAt: true, stateChangedAt: true, criticality: true, deliveredVersion: true, remoteUrl: true },
   });
   const byTask = new Map(tasks.map(t => [t.id, t]));
   const byTicket = new Map(tasks.filter(t => t.movideskTicket !== null).map(t => [t.movideskTicket!, t]));
@@ -66,7 +77,8 @@ export async function bomJesusReport(startDate: string, endDate: string, tierOve
     const service = text([t.serviceThirdLevel, t.serviceSecondLevel, t.serviceFirstLevel, t.service].filter(Boolean).join(" "));
     const actionsText = t.actions.map(a => text(a.description)).join(" ");
     const bug = includesAny(category, bugWords) || includesAny(task, bugWords) || (!!linkedTask && includesAny(text(linkedTask.workItemType), bugWords));
-    const correctionTask = Boolean(linkedTask && includesAny(text(linkedTask.workItemType) + " " + text(t.taskType), bugWords));
+    // O tipo da Task deve ser confirmado no Azure, não inferido por código customizado do Movidesk.
+    const correctionTask = Boolean(linkedTask && includesAny(text(linkedTask.workItemType), bugWords));
     const improvement = includesAny(category, improvementWords) || includesAny(task, improvementWords);
     // Categoria atual não prova classificação inicial. Não inferir reclassificação sem histórico.
     const classification = bug && !improvement ? "Possível bug — validar" : improvement ? "Melhoria atual — validar origem" : "Não determinado";
@@ -96,9 +108,13 @@ export async function bomJesusReport(startDate: string, endDate: string, tierOve
     });
     return { t, classification, vistra, vistraType, categoryHistory, lastTransition, lastToAdequacao, recurrenceKey, productAction, linkedTask, sla, correctionTask, concluded, taskClosedAt };
   });
-  const rows: BomJesusRow[] = prepared.map(({ t, classification, vistra, vistraType, categoryHistory, lastTransition, lastToAdequacao, recurrenceKey, productAction, linkedTask, sla, taskClosedAt }) => ({
+  const rows: BomJesusRow[] = prepared.map(({ t, classification, vistra, vistraType, categoryHistory, lastTransition, lastToAdequacao, recurrenceKey, productAction, linkedTask, sla, taskClosedAt, correctionTask }) => ({
     id: t.movideskId, subject: t.subject, client: t.client || "", createdDate: t.createdDate.toISOString(),
-    status: t.status, category: t.category || "", taskNumber: linkedTask?.id ?? t.taskNumber, taskType: linkedTask?.workItemType || t.taskType || "",
+    status: t.status, baseStatus: t.baseStatus || null, category: t.category || "",
+    resolvedDate: t.resolvedDate?.toISOString() || null, reopenedDate: t.reopenedDate?.toISOString() || null,
+    serviceContext: [t.service,t.serviceFirstLevel,t.serviceSecondLevel,t.serviceThirdLevel].filter(Boolean).join(" / "),
+    isCorrectionTask: correctionTask, taskRemoteUrl: linkedTask?.remoteUrl || null,
+    taskNumber: linkedTask?.id ?? t.taskNumber, taskType: linkedTask?.workItemType || t.taskType || "",
     classification, vistra, vistraType, recurrenceKey, recurrenceCount: recurrenceKey ? keys.get(recurrenceKey) || 0 : 0,
     recurrenceEvidence: recurrenceKey ? "Mesmo assunto normalizado; confirmar mesma causa-raiz" : "Assunto insuficiente para agrupamento",
     anyToAdequacaoChangedAt: lastToAdequacao?.observedAt || null,
@@ -134,9 +150,13 @@ export async function bomJesusReport(startDate: string, endDate: string, tierOve
     month, tickets: rows.filter(x => x.createdDate.startsWith(month)).length,
     vistra: vistraMonthly.filter(x => x.createdDate.startsWith(month)).length,
   }));
+  const executive = buildBomJesusExecutiveAudit(rows);
   return {
-    generatedAt: new Date().toISOString(), clientFilter: BOM_JESUS_CLIENT_NAME, startDate, endDate,
-    methodology: "Bugs reais = tickets vinculados a Work Items de correção do Azure (ex.: Correção Clientes); código numérico do campo Tipo Task no Movidesk não classifica sozinho. Categoria: transições detectadas entre observações sincronizadas, sem reconstrução fictícia da abertura. OLA/SLA: Aliare 2026 v1.0, perfil Padrão/VIP, calendário Bug seg–sex 08–18h, feriados nacionais 2026 e pausas registradas em histórico de status. Criação da Task é PROXY de passagem ao Desenvolvimento, não confirmação do envio; conclusão Azure é referência de encerramento. Perfil, pausas, feriados locais e prioridade histórica precisam de conferência. Todos os desvios apresentados são preliminares.",
+    generatedAt: new Date().toISOString(), clientFilter: BOM_JESUS_CLIENT_NAME,
+    scope: { client: BOM_JESUS_CLIENT_NAME, periodStart: startDate, periodEnd: endDate,
+      filter: "CLIENTES_SIMER", rule: "Cliente exato + atual responsável SIMER (mesmo critério da tela Clientes)" },
+    startDate, endDate, executive,
+    methodology: "Escopo: cliente exato Bom Jesus, responsabilidade de analistas SIMER, mesmas datas locais da tela Clientes. Bugs reais = tickets vinculados a Work Items de correção do Azure (ex.: Correção Clientes); código numérico do campo Tipo Task no Movidesk não classifica sozinho. Categoria: transições detectadas entre observações sincronizadas, sem reconstrução fictícia da abertura. OLA/SLA: Aliare 2026 v1.0, perfil Padrão/VIP, calendário Bug seg–sex 08–18h, feriados nacionais 2026 e pausas registradas em histórico de status. Criação da Task é PROXY de passagem ao Desenvolvimento, não confirmação do envio; conclusão Azure é referência de encerramento. Perfil, pausas, feriados locais e prioridade histórica precisam de conferência. Todos os desvios apresentados são preliminares.",
     totals: {
       tickets: rows.length, possibleBugs: rows.filter(x => x.classification === "Possível bug — validar").length,
       currentImprovements: rows.filter(x => x.classification === "Melhoria atual — validar origem").length,
