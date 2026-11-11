@@ -143,7 +143,8 @@ coordinationRoutes.get("/bom-jesus-report.xlsx", async (req: AuthenticatedReques
       ["LEITURA CRÍTICA", "Nenhum encerramento técnico comprova aceite explícito do cliente ou implantação da versão."],
     ]);
     executive.getColumn(1).width=54; executive.getColumn(2).width=32; executive.getColumn(3).width=90;
-    executive.getRow(1).font={bold:true,size:16,color:{argb:"FF154532"}};
+    executive.getRow(1).font={bold:true,size:16,color:{argb:"FFFFFFFF"}};
+    executive.getRow(1).fill={type:"pattern",pattern:"solid",fgColor:{argb:"FF146C43"}};
     executive.getRow(6).font={bold:true,color:{argb:"FFFFFFFF"}};
     executive.getRow(6).fill={type:"pattern",pattern:"solid",fgColor:{argb:"FF146C43"}};
     executive.getRow(18).getCell(2).numFmt="0.0";
@@ -188,7 +189,7 @@ coordinationRoutes.get("/bom-jesus-report.xlsx", async (req: AuthenticatedReques
       sheet.views = [{ state: "frozen", ySplit: sheet.name === "Resumo" ? 0 : 1 }];
       sheet.getRow(sheet.name === "Resumo" ? 6 : 1).font = { bold: true, color: { argb: "FFFFFFFF" } };
       sheet.getRow(sheet.name === "Resumo" ? 6 : 1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF146C43" } };
-      sheet.columns.forEach(col => { col.width = 25; });
+      sheet.columns.forEach(col => { if(!col.width || col.width < 12) col.width = 25; });
       if (sheet.name === "Tickets e evidências") {
         sheet.getColumn(2).width = 55; sheet.getColumn(16).width = 55; sheet.getColumn(30).width = 26;
         sheet.autoFilter = { from: "A1", to: "AH1" };
