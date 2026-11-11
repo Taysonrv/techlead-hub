@@ -85,8 +85,6 @@ function RankedTable({rows,title,metric="tickets",onInspect}:{rows:ClientManagem
 }
 export function ClientManagementOverview({rows,audit}:{rows:ClientManagementTicket[];audit:BomJesusExecutiveAudit}){
   const categoryRanking=useMemo(()=>rankTickets(rows,"category").slice(0,7),[rows]);
-  const statusRanking=useMemo(()=>rankTickets(rows,"status").slice(0,6),[rows]);
-  const serviceRanking=useMemo(()=>rankTickets(rows,"service").slice(0,7),[rows]);
   const tickets=rows.length;
   const donut=(title:string,items:Array<{name:string;value:number}>,description:string)=><Box sx={panelSx}>
     <Typography variant="subtitle1" sx={{fontWeight:750}}>{title}</Typography>
