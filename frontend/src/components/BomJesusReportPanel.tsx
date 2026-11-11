@@ -31,6 +31,7 @@ export function ClientExecutiveReportPanel() {
   const [selectedHistory, setSelectedHistory] = useState<Row | null>(null);
   const [activeTab,setActiveTab]=useState(0);
   const [settingsOpen,setSettingsOpen]=useState(false);
+  const [settingsError,setSettingsError]=useState("");
   const [drilldown,setDrilldown]=useState<{dimension:"owner"|"category"|"status"|"service";value:string}|null>(null);
   const [draft,setDraft]=useState({
     client:DEFAULT_CLIENT,periodPreset:"semester",startDate:startOfCurrentSemester(),
@@ -38,17 +39,17 @@ export function ClientExecutiveReportPanel() {
   });
   const openSettings=()=>{
     setDraft({client,periodPreset,startDate,endDate,slaTier});
-    setSettingsOpen(true);
+    setSettingsError("");setSettingsOpen(true);
   };
   const applySettings=()=>{
     const begin=Date.parse(draft.startDate+"T03:00:00.000Z");
     const finish=Date.parse(draft.endDate+"T03:00:00.000Z");
     if(!clients.includes(draft.client) || !Number.isFinite(begin)||!Number.isFinite(finish)||
        finish<begin||finish-begin>366*86400000){
-      setError("Revise os parâmetros: selecione um cliente autorizado e um intervalo válido de até 366 dias.");
+      setSettingsError("Revise os parâmetros: selecione um cliente autorizado e um intervalo válido de até 366 dias.");
       return;
     }
-    setError("");
+    setSettingsError("");setError("");
     setClient(draft.client);setStartDate(draft.startDate);setEndDate(draft.endDate);
     setPeriodPreset(draft.periodPreset);setSlaTier(draft.slaTier);
     setDrilldown(null);setActiveTab(0);setSettingsOpen(false);
@@ -141,6 +142,7 @@ export function ClientExecutiveReportPanel() {
           <Typography variant="h6" sx={{fontWeight:750}}>Alterar parâmetros</Typography>
           <Typography color="text.secondary" variant="body2" sx={{mt:.5,mb:3}}>Selecione o cliente da carteira, o período de abertura e o perfil de SLA.</Typography>
           <Stack spacing={2}>
+            {settingsError&&<Alert severity="error">{settingsError}</Alert>}
             <TextField select fullWidth label="Cliente da carteira" size="small" value={draft.client}
               onChange={e=>setDraft(previous=>({...previous,client:e.target.value}))}>
               {clients.map(name=><MenuItem key={name} value={name}>{name}</MenuItem>)}
