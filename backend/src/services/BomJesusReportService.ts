@@ -1,5 +1,5 @@
 import { prisma } from "../database/prisma";
-import { SUPPORT_ANALYSTS, SIMER_CLIENTS, resolveSimerClient } from "../domain/OperationalScope";
+import { SUPPORT_ANALYSTS, SIMER_CLIENTS, CONDITIONAL_SUPPORT_CLIENTS, resolveSimerClient } from "../domain/OperationalScope";
 import { buildBomJesusExecutiveAudit } from "./BomJesusExecutiveAudit";
 import { normalizeDomainText, mapPriority } from "../domain/TicketClassificationRules";
 import type { SlaTier } from "../domain/AliareSlaRules";
@@ -11,6 +11,13 @@ const includesAny = (value: string, terms: string[]) => terms.some(term => value
 const bugWords = ["bug", "defeito", "correcao"];
 const improvementWords = ["melhoria", "evolucao", "blindagem", "adequacao"];
 export const DEFAULT_EXECUTIVE_CLIENT: string = SIMER_CLIENTS[0];
+export const EXECUTIVE_CLIENT_CATALOG: readonly string[] = [...SIMER_CLIENTS,...CONDITIONAL_SUPPORT_CLIENTS];
+export function resolveExecutiveClient(value: string | null | undefined): string | null {
+  const regular=resolveSimerClient(value);
+  if(regular) return regular;
+  const normalized=value?.trim().toLocaleUpperCase("pt-BR");
+  return CONDITIONAL_SUPPORT_CLIENTS.find(client=>client===normalized)??null;
+}
 const vistraWords = ["vistra"];
 const reportWords = ["relatorio", "dashboard", "painel"];
 const failureWords = ["erro", "falha", "nao funciona", "nao abre", "parou", "indisponivel", "travamento", "bug"];
@@ -37,7 +44,7 @@ export async function clientExecutiveReport(
 ) {
   // Only the explicit SIMER operational allowlist can be queried.
   // Do not broaden this scope with substring matching or external clients.
-  const client = resolveSimerClient(clientInput);
+  const client = resolveExecutiveClient(clientInput);
   if (!client) throw new Error("Cliente não autorizado ou não pertence à carteira SIMER.");
   // Alinhado ao filtro "Esse semestre" da tela Clientes (dias locais em America/Sao_Paulo).
   // O Brasil não observa horário de verão em 2026.
@@ -49,7 +56,9 @@ export async function clientExecutiveReport(
       (end.getTime() - start.getTime()) > 366 * 86400000) throw new Error("Período inválido ou superior a 366 dias.");
   const tickets = await prisma.ticket.findMany({
     // Mesma base da tela Clientes: cliente exato + responsabilidade atual de analista SIMER.
-    where: { client: { equals: client, mode: "insensitive" },
+    where: { client: CONDITIONAL_SUPPORT_CLIENTS.some(name=>name===client)
+        ? { startsWith:client, mode:"insensitive" }
+        : { equals: client, mode: "insensitive" },
       owner: { in: [...SUPPORT_ANALYSTS], mode: "insensitive" },
       createdDate: { gte: start, lte: end }, isDeleted: false },
     select: {
@@ -170,7 +179,9 @@ export async function clientExecutiveReport(
   return {
     generatedAt: new Date().toISOString(), clientFilter: client,
     scope: { client, periodStart: startDate, periodEnd: endDate,
-      filter: "CLIENTES_SIMER", rule: "Cliente exato + atual responsável SIMER (mesmo critério da tela Clientes)" },
+      filter: "CLIENTES_SIMER", rule: CONDITIONAL_SUPPORT_CLIENTS.some(name=>name===client)
+        ? "Prefixo explícito SIAGRI SISTEMAS + responsável SIMER (regra condicional da tela Clientes)"
+        : "Cliente exato + atual responsável SIMER (mesmo critério da tela Clientes)" },
     startDate, endDate, executive,
     methodology: "Escopo: cliente exato selecionado na carteira SIMER, responsabilidade de analistas SIMER, mesmas datas locais da tela Clientes. Bugs reais = tickets vinculados a Work Items de correção do Azure (ex.: Correção Clientes); código numérico do campo Tipo Task no Movidesk não classifica sozinho. Categoria: transições detectadas entre observações sincronizadas, sem reconstrução fictícia da abertura. OLA/SLA: Aliare 2026 v1.0, perfil Padrão/VIP, calendário Bug seg–sex 08–18h, feriados nacionais 2026 e pausas registradas em histórico de status. Criação da Task é PROXY de passagem ao Desenvolvimento, não confirmação do envio; conclusão Azure é referência de encerramento. Perfil, pausas, feriados locais e prioridade histórica precisam de conferência. Todos os desvios apresentados são preliminares.",
     totals: {
