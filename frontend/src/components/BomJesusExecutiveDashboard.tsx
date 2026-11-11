@@ -82,7 +82,7 @@ export function BomJesusExecutiveDashboard({executive:a,clientName}:Props){
         <Typography variant="subtitle1" sx={{fontWeight:750}}>{chart.title}</Typography>
         <Typography variant="caption" color="text.secondary">{chart.subtitle}</Typography>
         <Box sx={{height:270,minWidth:0}}>
-          <ResponsiveContainer width="100%" height="100%">
+          {chart.data.some(v=>v.value>0) ? <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               <Pie data={chart.data.filter(v=>v.value>0)} dataKey="value" nameKey="name" cx="50%" cy="48%" innerRadius={58} outerRadius={94} paddingAngle={3} stroke="none">
                 {chart.data.filter(v=>v.value>0).map(v=><Cell key={v.name} fill={v.color}/>)}
@@ -90,7 +90,9 @@ export function BomJesusExecutiveDashboard({executive:a,clientName}:Props){
               <Tooltip formatter={(v,name)=>[`${v} tickets`,String(name)]}/>
               <Legend verticalAlign="bottom" height={36} wrapperStyle={{fontSize:11}}/>
             </PieChart>
-          </ResponsiveContainer>
+          </ResponsiveContainer> : <Box sx={{height:"100%",display:"grid",placeItems:"center"}}>
+            <Typography variant="body2" color="text.secondary">Sem registros para o período selecionado</Typography>
+          </Box>}
         </Box>
       </Box>)}
       <Box sx={{p:2,border:"1px solid",borderColor:"divider",borderRadius:3,minWidth:0}}>
