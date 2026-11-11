@@ -228,9 +228,9 @@ export class MovideskExcelImportService {
             where: { movideskId: ticket.movideskId },
             select: { id: true, category: true, lastUpdate: true },
           });
-          const staleCategoryPayload = Boolean(
-            previous?.lastUpdate && (!ticket.lastUpdate || ticket.lastUpdate < previous.lastUpdate),
-          );
+          // A planilha não contém "lastUpdate": jamais atribuir a ela uma data remota fictícia.
+          // Se existe um carimbo remoto da API, preservar a categoria canônica durante importação Excel.
+          const staleCategoryPayload = Boolean(previous?.lastUpdate);
           const observedCategory = staleCategoryPayload || !ticket.category?.trim()
             ? previous?.category ?? ticket.category
             : ticket.category;
@@ -246,7 +246,7 @@ export class MovideskExcelImportService {
             update: {
               ...ticket,
               category: observedCategory,
-              lastUpdate: staleCategoryPayload ? previous?.lastUpdate : ticket.lastUpdate,
+              lastUpdate: previous?.lastUpdate ?? null,
               importSource: "MOVÍDESK_EXCEL",
               importBatch: batchId,
               importedAt: new Date(),
@@ -258,7 +258,7 @@ export class MovideskExcelImportService {
             previousCategory: previous?.category ?? null,
             category: observedCategory,
             source: "MOVIDESK_EXCEL",
-            sourceLastUpdate: staleCategoryPayload ? previous?.lastUpdate : ticket.lastUpdate,
+            sourceLastUpdate: previous?.lastUpdate ?? null,
           });
           return previous;
         });
