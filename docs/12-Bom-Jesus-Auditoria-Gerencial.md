@@ -17,7 +17,21 @@
 7. **Reclassificação:** verificar a aba **AUDITORIA ADEQUACOES**. "OBSERVADA" significa categoria A → Adequação capturada entre sincronizações; "INVESTIGAR" é candidato sem categoria inicial recuperada. `HUB_LEGACY` não é a categoria na abertura.
 8. **Vistra:** conferir somente as linhas `VISTRA` para o total explícito da ferramenta; `ANALITICO` e `RELATORIO_SIMER` têm blocos próprios.
 9. **Recorrências:** conferir agrupamentos por Task e por assunto. Grupos podem se sobrepor; utilizar o indicador de **tickets únicos** na contagem geral.
-10. **Excel:** o botão `Exportar Excel` deve baixar `relatorio-bom-jesus-<inicio>-<fim>.xlsx` contendo "PAINEL DIRETORIA", "OLA SUPORTE AUDITORIA", "QUALIDADE CORRECOES", "MATRIZ CLASSIFICACOES", "AUDITORIA ADEQUACOES", "RECORRENCIAS CANDIDATAS", "VISTRA ANALITICO RELATORIOS", "EVOLUCAO MENSAL" e "PLANO DE ACAO", além das abas anteriores.
+10. **Excel da Diretoria:** o botão **Exportar relatório da Diretoria (Excel)** deve produzir o arquivo `Bom_Jesus_Relatorio_Executivo_<inicio>_a_<fim>.xlsx`, com as abas na ordem:
+    - `01 VISAO EXECUTIVA`: capa executiva formatada para impressão A4 paisagem, 6 indicadores, riscos, OLA, tendência mensal e decisões prioritárias;
+    - `02 OLA SUPORTE`: tempo, meta, excesso e pausas em horas úteis, resultados segregados e link à Task;
+    - `03 QUALIDADE CORRECOES`: conclusão técnica, versão, resolução/reabertura e sinais de reincidência;
+    - `04 CLASSIFICACOES`: matriz Bug atual × Task de correção, divergências para auditoria;
+    - `05 RECLASSIFICACOES`: mudanças observadas para Adequação e casos candidatos;
+    - `06 VISTRA RELATORIOS`: Vistra, Analítico e relatórios SIMER individualizados;
+    - `07 RECORRENCIAS`: grupos candidatos e evidências;
+    - `08 EVOLUCAO MENSAL`: abertura, bugs, correções e alertas mês a mês;
+    - `09 PLANO DE ACAO`: decisões sugeridas, sem inventar responsáveis/prazos;
+    - `10 BASE AUDITAVEL`: registros fonte para conciliação;
+    - `11 CRITERIOS FONTES`: conceitos, ressalvas e rastreabilidade.
+11. **Formatação executiva:** confirmar primeira aba legível em A4 paisagem; cabeçalhos fixos, filtros, horas úteis numéricas, datas em horário de Brasília, legendas de evidência e cores sem dependência exclusiva delas.
+12. **Teste de serialização:** executar `npm test` no backend e conferir o teste `BomJesusExecutiveWorkbook.test.ts` (gera, abre novamente e verifica as abas e campos-chave).
+
 
 ## Testes no ambiente de desenvolvimento (PowerShell)
 ```powershell
