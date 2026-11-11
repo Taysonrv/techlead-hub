@@ -353,7 +353,7 @@ export function createBomJesusExecutiveWorkbook(report:FullReport) {
   plan.properties.tabColor={argb:"FF"+P.orange};
 
   const tech=tableSheet(book,"11 BASE AUDITAVEL","BASE ANALÍTICA  |  EVIDÊNCIAS DO HUB",
-    "Todos os tickets do recorte; para investigar prazos utilize principalmente a aba 02.",scope,
+    "Todos os tickets do recorte; para investigar prazos utilize principalmente a aba 03.",scope,
     ["Ticket","Assunto","Cliente","Abertura","Categoria atual","Status Movidesk","Task",
       "Tipo Task","Estado Task","Versão","Abertura Task","Conclusão Task","OLA Suporte min",
       "Meta min","OLA excedido?","Categoria inicial observada","Data observação",
@@ -380,7 +380,7 @@ export function createBomJesusExecutiveWorkbook(report:FullReport) {
     ["ALERTA DE OLA","Tempo útil acima da meta calculada; não é descumprimento auditado até validação de pausas e marco real de passagem.",
       "Cálculo BomJesusSlaMetrics"],
     ["TAXA NO PRAZO","Casos mensuráveis e não cancelados, dentro da meta, divididos por todos os casos mensuráveis e não cancelados.",
-      "Aba 02 OLA SUPORTE"],
+      "Aba 03 OLA SUPORTE"],
     ["VERSÃO","Versão registrada/entregue no Azure; não significa automaticamente que foi implantada no cliente.",
       "Azure Work Item"],
     ["ACEITE CLIENTE","Sem evidência explícita a validação não é afirmada; situação de Task/Movidesk isolada não comprova aceite.",
@@ -405,6 +405,88 @@ export function createBomJesusExecutiveWorkbook(report:FullReport) {
   methodology.addRow(["ALERTAS","Os alertas de SLA/OLA exigem conferência de pausas, mudança histórica de prioridade, feriados locais e efetiva passagem."]);
   methodology.getColumn(2).width=115;
 
+  // Complementos executivos alinhados às novas abas nativas da Coordenação.
+  // O número de casos por responsável representa carteira atual, não desempenho individual.
+  const alertTicketIds=new Set(e.ola.cases.filter(x=>x.status==="ALERTA").map(x=>x.ticketId));
+  const dimension=(row:BomJesusRow,key:"owner"|"category"|"status"|"service")=>{
+    if(key==="owner")return row.owner?.trim()||"Não atribuído";
+    if(key==="category")return row.category?.trim()||"Sem categoria";
+    if(key==="status")return row.status?.trim()||"Sem situação";
+    const levels=(row.serviceContext||"").split(" / ").map(x=>x.trim()).filter(Boolean);
+    return levels.length>1?levels[1]!:levels[0]||"Não classificado";
+  };
+  type RankingRecord={name:string;tickets:number;bugs:number;corrections:number;olaAlerts:number};
+  const rank=(key:"owner"|"category"|"status"|"service")=>{
+    const items=new Map<string,RankingRecord>();
+    for(const row of report.rows){
+      const name=dimension(row,key);
+      const record=items.get(name)??{name,tickets:0,bugs:0,corrections:0,olaAlerts:0};
+      record.tickets++;
+      record.bugs+=row.category?.trim().toLocaleLowerCase("pt-BR")==="bug"?1:0;
+      record.corrections+=row.isCorrectionTask?1:0;
+      record.olaAlerts+=alertTicketIds.has(row.id)?1:0;
+      items.set(name,record);
+    }
+    return [...items.values()].sort((a,b)=>b.tickets-a.tickets||a.name.localeCompare(b.name,"pt-BR"));
+  };
+  const rankingWs=book.addWorksheet("13 RANKINGS",{properties:{tabColor:{argb:"FF"+P.blue}}});
+  banner(rankingWs,"RANKINGS OPERACIONAIS  |  CLIENTE SELECIONADO",
+    "Participação por responsável, categoria, status e rotina. Contagens auditáveis com base no mesmo recorte.",6,scope);
+  [52,21,22,22,24,23].forEach((v,i)=>{rankingWs.getColumn(i+1).width=v;});
+  let nextRow=7;
+  const sections=[
+    {key:"owner" as const,label:"RESPONSÁVEL (CARTEIRA ATUAL)"},
+    {key:"category" as const,label:"CATEGORIA ATUAL"},
+    {key:"status" as const,label:"SITUAÇÃO ATUAL"},
+    {key:"service" as const,label:"ROTINA / SERVIÇO"},
+  ];
+  for(const item of sections){
+    titleBar(rankingWs,nextRow++,"A","F",item.label);
+    const labels=["Grupo","Atendimentos","Categoria Bug","Correções Azure","Alertas OLA","Participação"];
+    const head=rankingWs.getRow(nextRow++);
+    labels.forEach((label,i)=>{const c=head.getCell(i+1);c.value=label;c.font=font(P.white,9,true);
+      c.fill=fill(P.green);c.alignment={wrapText:true,vertical:"middle",indent:1};});
+    head.height=30;
+    const groups=rank(item.key);
+    for(const [i,group] of groups.slice(0,15).entries()){
+      const row=rankingWs.getRow(nextRow++);
+      row.values=[group.name,group.tickets,group.bugs,group.corrections,group.olaAlerts,
+        report.rows.length?group.tickets/report.rows.length:0];
+      row.getCell(6).numFmt="0.0%";
+      row.height=21;
+      row.eachCell(c=>{c.font=font(P.ink,10);c.alignment={vertical:"middle",indent:1};if(i%2)c.fill=fill(P.light);});
+    }
+    if(!groups.length){
+      rankingWs.getCell("A"+nextRow).value="Sem dados neste período.";nextRow++;
+    }
+    nextRow+=2;
+  }
+  rankingWs.views=[{state:"frozen",ySplit:7,showGridLines:false}];
+  rankingWs.pageSetup.printArea="A1:F"+nextRow;
+  rankingWs.pageSetup.printTitlesRow="1:6";
+
+  const allOwners=rank("owner");
+  const allCategories=rank("category");
+  const topCategories=allCategories.slice(0,8).map(x=>x.name);
+  const pivotHeaders=["Analista responsável",...topCategories,"Outras categorias","Total"];
+  const pivotRows=allOwners.map(owner=>{
+    const assigned=report.rows.filter(x=>dimension(x,"owner")===owner.name);
+    const perCategory=topCategories.map(category=>assigned.filter(x=>dimension(x,"category")===category).length);
+    const remaining=assigned.length-perCategory.reduce((sum,n)=>sum+n,0);
+    return [owner.name,...perCategory,remaining,assigned.length];
+  });
+  const summedCategories=topCategories.map(category=>report.rows.filter(x=>dimension(x,"category")===category).length);
+  pivotRows.push(["TOTAL GERAL",...summedCategories,
+    report.rows.length-summedCategories.reduce((sum,n)=>sum+n,0),report.rows.length]);
+  const pivotWs=tableSheet(book,"14 MULTIDIMENSIONAL",
+    "COMPOSIÇÃO MULTIDIMENSIONAL  |  ANALISTA × CATEGORIA",
+    "Distribuição dos atendimentos por responsável atual e categoria atual. Totais por linha e coluna.",
+    scope,pivotHeaders,pivotRows,[52,...topCategories.map(()=>21),23,18]);
+  pivotWs.properties.tabColor={argb:"FF"+P.blue};
+  const lastPivot=pivotWs.getRow(pivotWs.rowCount);
+  lastPivot.eachCell(c=>{c.font=font(P.white,10,true);c.fill=fill(P.dark);});
+  pivotWs.pageSetup.fitToWidth=1;
+  pivotWs.pageSetup.printArea="A1:"+pivotWs.getColumn(pivotHeaders.length).letter+pivotWs.rowCount;
   book.worksheets.forEach((sheet,index)=>{
     if(index===0)return;
     sheet.headerFooter.oddHeader="&LTechLead Hub / Carteira SIMER&CDiagnóstico gerencial&R"+report.endDate;
