@@ -25,20 +25,20 @@ const measures:ReadonlyArray<{key:Measure;label:string}>=[
   {key:"corrections",label:"Correções vinculadas"}, {key:"olaAlerts",label:"Alertas de OLA"},
 ];
 const chartColors=["#197350","#F26727","#CDD936","#316885","#819888","#8A69A5","#D9A244","#9A5751"];
-export const dimensionOf=(r:ClientManagementTicket,dim:Dimension):string=>{
+const dimensionOf=(r:ClientManagementTicket,dim:Dimension):string=>{
   if(dim==="owner")return r.owner?.trim()||"Não atribuído";
   if(dim==="category")return r.category?.trim()||"Sem categoria";
   if(dim==="status")return r.status?.trim()||"Sem situação";
   const context=r.serviceContext?.split(" / ").map(x=>x.trim()).filter(Boolean)??[];
   return context.length ? (context.length>1?context[1]!:context[0]!) : "Não classificado";
 };
-export const measured=(r:ClientManagementTicket,m:Measure):number=>{
+const measured=(r:ClientManagementTicket,m:Measure):number=>{
   if(m==="bugs")return r.category.toLocaleLowerCase("pt-BR").trim()==="bug"?1:0;
   if(m==="corrections")return r.isCorrectionTask?1:0;
   if(m==="olaAlerts")return r.olaStatus==="ALERTA"?1:0;
   return 1;
 };
-export const rankTickets=(rows:ClientManagementTicket[],dim:Dimension,measure:Measure="tickets")=>{
+const rankTickets=(rows:ClientManagementTicket[],dim:Dimension,measure:Measure="tickets")=>{
   const groups=new Map<string,{name:string;tickets:number;value:number;corrections:number;olaAlerts:number}>();
   for(const r of rows){
     const name=dimensionOf(r,dim);
