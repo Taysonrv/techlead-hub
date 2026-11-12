@@ -11,8 +11,11 @@ const includesAny = (value: string, terms: string[]) => terms.some(term => value
 const bugWords = ["bug", "defeito", "correcao"];
 const improvementWords = ["melhoria", "evolucao", "blindagem", "adequacao"];
 export const DEFAULT_EXECUTIVE_CLIENT: string = SIMER_CLIENTS[0];
+export const ALL_EXECUTIVE_CLIENTS = "__ALL__" as const;
+export const ALL_EXECUTIVE_CLIENTS_LABEL = "Todos os clientes da carteira SIMER";
 export const EXECUTIVE_CLIENT_CATALOG: readonly string[] = [...SIMER_CLIENTS,...CONDITIONAL_SUPPORT_CLIENTS];
 export function resolveExecutiveClient(value: string | null | undefined): string | null {
+  if(value===ALL_EXECUTIVE_CLIENTS) return ALL_EXECUTIVE_CLIENTS;
   const regular=resolveSimerClient(value);
   if(regular) return regular;
   const normalized=value?.trim().toLocaleUpperCase("pt-BR");
@@ -56,9 +59,15 @@ export async function clientExecutiveReport(
       (end.getTime() - start.getTime()) > 366 * 86400000) throw new Error("Período inválido ou superior a 366 dias.");
   const tickets = await prisma.ticket.findMany({
     // Mesma base da tela Clientes: cliente exato + responsabilidade atual de analista SIMER.
-    where: { client: CONDITIONAL_SUPPORT_CLIENTS.some(name=>name===client)
-        ? { startsWith:client, mode:"insensitive" }
-        : { equals: client, mode: "insensitive" },
+    where: {
+      ...(client===ALL_EXECUTIVE_CLIENTS
+        ? { OR: [
+            {client: {in:[...SIMER_CLIENTS],mode:"insensitive" as const}},
+            ...CONDITIONAL_SUPPORT_CLIENTS.map(name=>({client:{startsWith:name,mode:"insensitive" as const}})),
+          ]}
+        : {client: CONDITIONAL_SUPPORT_CLIENTS.some(name=>name===client)
+          ? {startsWith:client,mode:"insensitive" as const}
+          : {equals:client,mode:"insensitive" as const}}),
       owner: { in: [...SUPPORT_ANALYSTS], mode: "insensitive" },
       createdDate: { gte: start, lte: end }, isDeleted: false },
     select: {
@@ -117,7 +126,9 @@ export async function clientExecutiveReport(
     const toAdequacaoTransitions = categoryHistory.transitions.filter(isToAdequacao);
     const lastToAdequacao = toAdequacaoTransitions[toAdequacaoTransitions.length - 1] ?? null;
     const symptom = normalizeSymptom(t.subject);
-    const recurrenceKey = symptom.length >= 16 ? symptom.slice(0, 140) : "";
+    // Evita aglutinar ocorrências de cooperativas diferentes ao selecionar toda a carteira.
+    const recurrenceKey = symptom.length >= 16
+      ? (client===ALL_EXECUTIVE_CLIENTS ? text(t.client) + " | " : "") + symptom.slice(0,140) : "";
     if (recurrenceKey) keys.set(recurrenceKey, (keys.get(recurrenceKey) || 0) + 1);
     const productAction = t.actions.find(a => includesAny(text(a.description) + " " + text(a.status), ["encaminhad", "enviado ao produto", "time de produto", "desenvolvimento"]));
     const concluded = linkedTask && ["concluida", "concluido", "done", "closed", "resolved", "encerrado", "encerrada"].includes(text(linkedTask.state));
@@ -175,11 +186,14 @@ export async function clientExecutiveReport(
     month, tickets: rows.filter(x => x.createdDate.startsWith(month)).length,
     vistra: vistraMonthly.filter(x => x.createdDate.startsWith(month)).length,
   }));
-  const executive = buildBomJesusExecutiveAudit(rows, client);
+  const displayClient = client===ALL_EXECUTIVE_CLIENTS ? ALL_EXECUTIVE_CLIENTS_LABEL : client;
+  const executive = buildBomJesusExecutiveAudit(rows, displayClient);
   return {
-    generatedAt: new Date().toISOString(), clientFilter: client,
-    scope: { client, periodStart: startDate, periodEnd: endDate,
-      filter: "CLIENTES_SIMER", rule: CONDITIONAL_SUPPORT_CLIENTS.some(name=>name===client)
+    generatedAt: new Date().toISOString(), clientFilter: displayClient,
+    clientKey: client, scope: { client: displayClient, periodStart: startDate, periodEnd: endDate,
+      filter: "CLIENTES_SIMER", rule: client===ALL_EXECUTIVE_CLIENTS
+        ? "Todas as contas da carteira permitida + suporte SIMER; sem outros clientes"
+        : CONDITIONAL_SUPPORT_CLIENTS.some(name=>name===client)
         ? "Prefixo explícito SIAGRI SISTEMAS + responsável SIMER (regra condicional da tela Clientes)"
         : "Cliente exato + atual responsável SIMER (mesmo critério da tela Clientes)" },
     startDate, endDate, executive,
