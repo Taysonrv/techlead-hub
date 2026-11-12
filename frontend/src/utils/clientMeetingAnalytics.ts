@@ -1,4 +1,4 @@
-import { isOperationallyOpen } from "./operationalMetrics";
+import { isOperationallyOpen, isTicketCancelled } from "./operationalMetrics";
 import { calculateTimestampSla } from "./timestampSla";
 
 /**
@@ -8,7 +8,7 @@ import { calculateTimestampSla } from "./timestampSla";
 export type WeeklyTicket = {
   id:number; movideskId:number; subject:string; client:string|null; owner:string|null;
   category:string|null; urgency:string|null; status:string|null; baseStatus:string|null;
-  ticketType?:number|null; isWithSimer?:boolean;
+  ticketType?:number|null; isWithSimer?:boolean; canceledDate?:string|null;
   createdDate:string; resolvedDate?:string|null; closedDate?:string|null;
   firstResponseDate?:string|null; firstResponseDueDate?:string|null; dueDate?:string|null;
   azureWorkItem?:{id:number;workItemType:string;state:string;deliveredVersion:string|null}|null;
@@ -79,10 +79,11 @@ export function buildClientMeetingAnalytics(
   const inCurrent=(field:"createdDate"|"resolvedDate"|"closedDate")=>valid.filter(t=>eventWithin(t,field,monthStart,monthCutoff));
   const inPrevious=(field:"createdDate"|"resolvedDate"|"closedDate")=>valid.filter(t=>eventWithin(t,field,priorStart,previousCutoff));
   const openedTickets=inCurrent("createdDate");
-  const resolvedTickets=inCurrent("resolvedDate").filter(t=>["Resolved","Closed"].includes(t.baseStatus??""));
+  // Igual ao Dashboard: o evento de resolução conta mesmo se o ticket foi reaberto depois.
+  const resolvedTickets=inCurrent("resolvedDate");
   const currentBugs=openedTickets.filter(isBug);
   const previousOpened=inPrevious("createdDate");
-  const previousResolved=inPrevious("resolvedDate").filter(t=>["Resolved","Closed"].includes(t.baseStatus??""));
+  const previousResolved=inPrevious("resolvedDate");
   const monthly:MonthSnapshot[]=[];
   for(let offset=5;offset>=0;offset--){
     const m=month-offset,y=year;
@@ -90,8 +91,8 @@ export function buildClientMeetingAnalytics(
     const entries=valid.filter(t=>eventWithin(t,"createdDate",start,end));
     monthly.push({
       month:monthKey(start),opened:entries.length,
-      resolved:valid.filter(t=>eventWithin(t,"resolvedDate",start,end)&&["Resolved","Closed"].includes(t.baseStatus??"")).length,
-      closed:valid.filter(t=>eventWithin(t,"closedDate",start,end)).length,
+      resolved:valid.filter(t=>eventWithin(t,"resolvedDate",start,end)).length,
+      closed:valid.filter(t=>eventWithin(t,"closedDate",start,end)&&!isTicketCancelled(t)).length,
       pendingOpened:entries.filter(isPublicPending).length,
       bugs:entries.filter(isBug).length,
     });
