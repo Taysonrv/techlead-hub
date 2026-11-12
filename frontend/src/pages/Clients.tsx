@@ -37,7 +37,6 @@ import {
   TableRow,
   Typography,
 } from "@mui/material";
-import { useTheme } from "@mui/material/styles";
 
 import {
   ArrowBackOutlined,
@@ -214,7 +213,6 @@ const PIE_COLORS = [
 ========================================================= */
 
 export function Clients() {
-  const theme = useTheme();
   const [clientsPage, setClientsPage] = useState(0);
   const navigate = useNavigate();
   const presentationRef = useRef<HTMLDivElement>(null);
@@ -570,32 +568,6 @@ export function Clients() {
     clientOperationalTickets, new Date(Math.min(effectiveEndDate.getTime(),endOfDay(new Date()).getTime())), startOfDay(effectiveStartDate), endOfDay(effectiveEndDate),
   ), [clientOperationalTickets, effectiveStartDate, effectiveEndDate]);
 
-  const movementSeries = useMemo(() => {
-    const end = endOfDay(effectiveEndDate);
-    const firstMonth = new Date(end.getFullYear(), end.getMonth() - 5, 1);
-    const byMonth = new Map<string, { periodo: string; abertos: number; resolvidos: number; encerrados: number }>();
-    for (let month = new Date(firstMonth); month <= end; month.setMonth(month.getMonth() + 1)) {
-      const key = `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, "0")}`;
-      byMonth.set(key, { periodo: key, abertos: 0, resolvidos: 0, encerrados: 0 });
-    }
-    for (const ticket of clientOperationalTickets) {
-      for (const [dateValue, field] of [
-        [ticket.createdDate, "abertos"],
-        [ticket.resolvedDate, "resolvidos"],
-        [ticket.closedDate, "encerrados"],
-      ] as const) {
-        if (!dateValue) continue;
-        if (field === "resolvidos" && !["Resolved", "Closed"].includes(ticket.baseStatus ?? "")) continue;
-        const date = new Date(dateValue);
-        if (!Number.isFinite(date.getTime()) || date < firstMonth || date > end) continue;
-        const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-        const row = byMonth.get(key);
-        if (row) row[field] += 1;
-      }
-    }
-    return [...byMonth.values()];
-  }, [clientOperationalTickets, effectiveEndDate]);
-
   // Evolução mensal por tipo, usando a data de abertura de cada atendimento
   // (independente do intervalo curto selecionado para o indicador diário).
   const monthlyCategoryTrend = useMemo(() => {
@@ -628,7 +600,6 @@ export function Clients() {
     return { types: overflow ? [...types, "Outros"] : types, rows };
   }, [clientOperationalTickets, effectiveEndDate]);
 
-  const [hiddenMovementLines, setHiddenMovementLines] = useState<Set<string>>(() => new Set());
   const [hiddenCategoryLines, setHiddenCategoryLines] = useState<Set<string>>(() => new Set());
   const toggleLine = (key: string, count: number, setter: React.Dispatch<React.SetStateAction<Set<string>>>) => {
     setter((previous) => {
@@ -1766,29 +1737,6 @@ export function Clients() {
           info={{ title: "Fechados no período", summary: "Fechamento no intervalo", calculation: "Contagem de tickets únicos com os mesmos critérios de data e escopo do Dashboard.", source: "Movidesk", reference: "Ticket.closedDate", periodRule: "Evento ocorrido dentro do período selecionado." }}
           onClick={() => showTickets("Fechados no período", clientOperationalCohorts.closed, "Fechamento no intervalo")} />
       </KpiGrid>
-      <Card elevation={0} sx={{ mb: 2, border: "1px solid", borderColor: "divider", borderRadius: 2.5 }}>
-        <CardContent>
-          <Typography sx={{ fontWeight: 800, mb: 0.5 }}>Evolução mensal de abertos, resolvidos e encerrados</Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Últimos seis meses até o período selecionado, pela data de cada evento. Os cards acima continuam seguindo o filtro de período.
-          </Typography>
-          <Box sx={{ width: "100%", height: 300 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={movementSeries} margin={{ top: 10, right: 18, left: 0, bottom: 10 }}>
-                <CartesianGrid strokeDasharray="3 3" opacity={0.25} />
-                <XAxis dataKey="periodo" minTickGap={22} tick={{ fontSize: 11 }} />
-                <YAxis allowDecimals={false} width={38} />
-                <Tooltip />
-                <Legend onClick={(entry) => toggleLine(String(entry.dataKey ?? ""), 3, setHiddenMovementLines)} formatter={(value, entry) => <span style={{ cursor: "pointer", opacity: hiddenMovementLines.has(String(entry.dataKey ?? "")) ? 0.38 : 1, textDecoration: hiddenMovementLines.has(String(entry.dataKey ?? "")) ? "line-through" : "none" }}>{value}</span>} />
-                <Line type="linear" dataKey="abertos" hide={hiddenMovementLines.has("abertos")} name="Abertos" stroke={semanticChartColors.normal} strokeWidth={2.5} dot={false} activeDot={{ r: 5 }} />
-                <Line type="linear" dataKey="resolvidos" hide={hiddenMovementLines.has("resolvidos")} name="Resolvidos" stroke={semanticChartColors.positive} strokeWidth={2.5} dot={false} activeDot={{ r: 5 }} />
-                <Line type="linear" dataKey="encerrados" hide={hiddenMovementLines.has("encerrados")} name="Encerrados" stroke={semanticChartColors.attention} strokeWidth={2.5} dot={false} activeDot={{ r: 5 }} />
-              </LineChart>
-            </ResponsiveContainer>
-          </Box>
-        </CardContent>
-      </Card>
-
       <Card elevation={0} sx={{ mb: 2, border: "1px solid", borderColor: "divider", borderRadius: 2.5 }}>
         <CardContent>
           <Typography sx={{ fontWeight: 800, mb: 0.5 }}>Evolução mensal por tipo de atendimento</Typography>
@@ -3369,113 +3317,6 @@ function CompactPieLegend({
 }
 
 /* =========================================================
-   TOOLTIP COMPACTO DOS GRÁFICOS
-========================================================= */
-
-function CompactPieTooltip({
-  active,
-  payload,
-  valueLabel,
-}: {
-  active?:
-    boolean;
-
-  payload?:
-    Array<{
-      name?:
-        string;
-
-      value?:
-        number;
-
-      payload?:
-        PieDataItem;
-    }>;
-
-  valueLabel:
-    string;
-}) {
-  if (
-    !active ||
-    !payload ||
-    payload.length ===
-      0
-  ) {
-    return null;
-  }
-
-  const entry =
-    payload[0];
-
-  const item =
-    entry?.payload;
-
-  const name =
-    item?.name ??
-    entry?.name ??
-    "Item";
-
-  const value =
-    item?.value ??
-    entry?.value ??
-    0;
-
-  return (
-    <Box
-      sx={{
-        maxWidth:
-          280,
-
-        px: 1.25,
-        py: 1,
-
-        border:
-          "1px solid",
-
-        borderColor:
-          "divider",
-
-        borderRadius:
-          1.5,
-
-        backgroundColor:
-          "background.paper",
-
-        boxShadow:
-          "0 10px 28px rgba(16,24,40,0.12)",
-
-        borderTop:
-          `3px solid ${aliareColors.green}`,
-      }}
-    >
-      <Typography
-        variant="body2"
-        title={
-          name
-        }
-        sx={{
-          fontWeight:
-            700,
-
-          lineHeight:
-            1.35,
-        }}
-      >
-        {name}
-      </Typography>
-
-      <Typography
-        variant="caption"
-        color="text.secondary"
-      >
-        {value}{" "}
-        {valueLabel}
-      </Typography>
-    </Box>
-  );
-}
-
-/* =========================================================
    CARD DE MÉTRICA
 ========================================================= */
 
@@ -3609,48 +3450,6 @@ function ExecutiveBarPanel({ title, data, onClick }: { title: string; data: PieD
       ) : (
         <Typography variant="body2" color="text.secondary" sx={{ py: 4, textAlign: "center" }}>Sem dados no recorte.</Typography>
       )}
-    </Box>
-  );
-}
-
-/* =========================================================
-   CARD DE GRÁFICO
-========================================================= */
-
-function ChartCard({
-  title, subtitle, children,
-}: {
-  title: string; subtitle: string; children: ReactNode;
-}) {
-  return <ExecutiveSection title={title} subtitle={subtitle} compact>{children}</ExecutiveSection>;
-}
-
-/* =========================================================
-   GRÁFICO SEM DADOS
-========================================================= */
-
-function EmptyChart() {
-  return (
-    <Box
-      sx={{
-        height: 280,
-
-        display:
-          "flex",
-
-        alignItems:
-          "center",
-
-        justifyContent:
-          "center",
-      }}
-    >
-      <Typography
-        variant="body2"
-        color="text.secondary"
-      >
-        Nenhum dado disponível para o filtro selecionado.
-      </Typography>
     </Box>
   );
 }
@@ -3972,10 +3771,6 @@ function clientInitials(client: string) {
   const ignored = new Set(["de", "da", "do", "das", "dos", "e"]);
   const words = client.split(/\s+/).filter((word) => word && !ignored.has(normalize(word)));
   return words.slice(0, 3).map((word) => word[0]).join("").toUpperCase();
-}
-
-function abbreviate(value: string, length: number) {
-  return value.length > length ? `${value.slice(0, length - 1)}…` : value;
 }
 
 function formatMinutes(
