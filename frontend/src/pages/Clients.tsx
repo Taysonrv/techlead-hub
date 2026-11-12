@@ -15,6 +15,9 @@ import {
   Chip,
   Divider,
   Drawer,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
   TextField,
   InputAdornment,
   FormControl,
@@ -44,6 +47,7 @@ import {
   ArrowForwardOutlined,
   FullscreenExitOutlined,
   PictureAsPdfOutlined,
+  ExpandMoreOutlined,
 } from "@mui/icons-material";
 
 import {
@@ -409,7 +413,7 @@ export function Clients() {
   const clientOptions = useMemo(() => {
     return Array.from(
       new Set(
-        periodTickets
+        tickets.filter((ticket) => ticket.isWithSimer === true)
           .map(
             (ticket) =>
               ticket.client
@@ -429,7 +433,7 @@ export function Clients() {
         "pt-BR"
       )
     );
-  }, [periodTickets]);
+  }, [tickets]);
 
   /* =======================================================
      FILTRO CLIENTE
