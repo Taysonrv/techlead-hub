@@ -1065,7 +1065,6 @@ export function Clients() {
   const presentationSummary = useMemo(() => {
     const bugs = scopedTickets.filter(isBug);
     const withTask = scopedTickets.filter((ticket) => Boolean(ticket.azureWorkItem || ticket.taskNumber));
-    const pending = scopedTickets.filter(isOpen);
     const taskItems = Array.from(new Map(
       withTask.map((ticket) => [ticket.azureWorkItem?.id ?? ticket.taskNumber, ticket])
     ).values());
@@ -1073,10 +1072,8 @@ export function Clients() {
     return {
       bugs,
       withTask,
-      pending,
       taskItems,
       taskStatuses: groupChartData(taskItems, (ticket) => taskStatusGroup(ticket), 6),
-      pendingStatuses: groupChartData(pending, (ticket) => ticket.justification?.trim() || ticket.status || "Sem motivo informado", 6),
       areas: groupChartData(scopedTickets, classifyExecutiveProcess, 8),
       bugAreas: groupChartData(bugs, classifyExecutiveProcess, 8),
     };
@@ -1808,8 +1805,8 @@ export function Clients() {
 
       </KpiGrid>
       <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap", mb: 2 }}>
-        <StatusPill tone={clientRiskSummary.high ? "error" : "neutral"} label={`${clientRiskSummary.high} cliente(s) com risco agregado alto`} />
-        <StatusPill tone={clientRiskSummary.moderate ? "warning" : "neutral"} label={`${clientRiskSummary.moderate} cliente(s) em atenção`} />
+        <StatusPill tone={clientRiskSummary.high ? "error" : "neutral"} label={`${clientRiskSummary.high} cliente(s) com risco alto no período`} />
+        <StatusPill tone={clientRiskSummary.moderate ? "warning" : "neutral"} label={`${clientRiskSummary.moderate} cliente(s) em atenção no período`} />
         <Typography variant="caption" color="text.secondary" sx={{ alignSelf: "center" }}>Risco agregado por cliente não equivale à quantidade de tickets críticos.</Typography>
       </Stack>
 
@@ -2037,7 +2034,7 @@ export function Clients() {
             {(!isPresenting || presentationPage === 4) && <Box className="client-print-section-grid client-print-page client-print-continuation" sx={{ mt: isPresenting ? 0 : 1.5, height: isPresenting ? "100%" : "auto", display: "grid", gridTemplateColumns: "1fr", gap: 2 }}>
               <Typography className="client-print-page-title" variant="h5" sx={{ fontWeight: 900 }}>Pendências e encaminhamentos</Typography>
               <ExecutiveDonutPanel title="Status das pendências públicas atuais" data={meetingAnalytics.pendingByStatus} total={meetingAnalytics.pendingNow.length} />
-              <Box sx={{ p: 2.25, borderRadius: 2, bgcolor: presentationSummary.pending.length ? "rgba(245,158,11,.10)" : "rgba(22,163,74,.08)", border: "1px solid", borderColor: presentationSummary.pending.length ? "rgba(245,158,11,.28)" : "rgba(22,163,74,.22)" }}>
+              <Box sx={{ p: 2.25, borderRadius: 2, bgcolor: meetingAnalytics.pendingNow.length ? "rgba(245,158,11,.10)" : "rgba(22,163,74,.08)", border: "1px solid", borderColor: meetingAnalytics.pendingNow.length ? "rgba(245,158,11,.28)" : "rgba(22,163,74,.22)" }}>
                 <Typography variant="h6" sx={{ fontWeight: 900 }}>Pontos de atenção e encaminhamento</Typography>
                 <Typography sx={{ mt: 1.5, lineHeight: 1.65 }}>{clientOperationalCohorts.backlog.length ? `${clientOperationalCohorts.backlog.length} ticket(s) público(s) permanecem pendentes no estoque atual, incluindo registros de meses anteriores. ${clientOperationalCohorts.backlog.filter(isBug).length} estão atualmente classificados como Bug e ${clientOperationalCohorts.backlog.filter((ticket) => normalize(ticket.justification).includes("cliente")).length} possuem justificativa relacionada ao cliente.` : "Não há pendências públicas ativas na carteira selecionada."}</Typography>
               </Box>
@@ -2051,12 +2048,12 @@ export function Clients() {
                   Foram analisados {scopedTickets.length} atendimento(s) de {selectedClient}, com taxa de resolução de {portfolioSummary.resolutionRate.toFixed(1)}%, SLA de solução de {formatSlaPercent(portfolioSummary.solutionSla.percent)} e tempo médio de solução de {formatMinutes(clients.find((item) => item.client === selectedClient)?.averageResolutionMinutes ?? null)}.
                 </Typography>
                 <Typography sx={{ mt: 1.5, lineHeight: 1.75 }}>
-                  O recorte possui {presentationSummary.pending.length} pendência(s), {presentationSummary.bugs.length} bug(s) e {presentationSummary.taskItems.length} Tarefa(s) relacionada(s). O processo mais recorrente é {presentationSummary.areas[0]?.name ?? "não identificado"}, com {presentationSummary.areas[0]?.value ?? 0} ocorrência(s).
+                  O cliente possui {meetingAnalytics.pendingNow.length} pendência(s) pública(s) no estoque atual; no período de abertura, {presentationSummary.bugs.length} ticket(s) estão atualmente classificados como Bug e {presentationSummary.taskItems.length} Tarefa(s) estão vinculadas. O processo mais recorrente é {presentationSummary.areas[0]?.name ?? "não identificado"}, com {presentationSummary.areas[0]?.value ?? 0} ocorrência(s).
                 </Typography>
                 <Typography variant="h6" sx={{ mt: 3, fontWeight: 900 }}>Recomendação</Typography>
                 <Typography sx={{ mt: 1, lineHeight: 1.75 }}>
-                  {presentationSummary.pending.length
-                    ? "Priorizar a revisão das pendências, acompanhar as entregas com versão informada e atuar preventivamente nos processos de maior recorrência."
+                  {meetingAnalytics.pendingNow.length
+                    ? "Priorizar a revisão das pendências públicas atuais, acompanhar as entregas com versão informada e atuar preventivamente nos processos de maior recorrência."
                     : "Manter o acompanhamento periódico da carteira e preservar as práticas que sustentam o resultado atual."}
                 </Typography>
               </Box>
