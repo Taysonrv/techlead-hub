@@ -1,4 +1,6 @@
 import { useMemo } from "react";
+import { KpiCard as ExecutiveKpiCard } from "./KpiCard";
+import { semanticChartColors } from "../theme/chartPalette";
 import { Box, Button, Card, CardContent, Chip, Divider, Stack, Typography } from "@mui/material";
 import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { AssessmentOutlined, CalendarMonthOutlined, GroupsOutlined } from "@mui/icons-material";
@@ -20,17 +22,33 @@ const monthKey=(raw:string)=>{const d=new Date(raw);return Number.isFinite(d.get
 const event=(t:WeeklyTicket,field:"createdDate"|"resolvedDate"|"closedDate"|"satisfactionDate"|"reopenedDate",month:string)=>{
   const raw=t[field];return Boolean(raw&&monthKey(raw)===month);
 };
-function Kpi({label,value,note,delta,onClick,color}:{label:string;value:string;note:string;delta?:string;onClick:()=>void;color?:string}){
-  return <Box role="button" tabIndex={0} aria-label={label+"; listar tickets"} onClick={onClick}
-    onKeyDown={e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();onClick();}}}
-    sx={{p:2,minWidth:0,display:"flex",flexDirection:"column",justifyContent:"space-between",gap:.7,
-      borderRadius:2.5,border:"1px solid",borderColor:"divider",backgroundColor:"background.paper",cursor:"pointer",
-      "&:hover":{borderColor:color??"primary.main",boxShadow:2},"&:focus-visible":{outline:"2px solid",outlineColor:"primary.main"}}}>
-    <Typography variant="caption" color="text.secondary" sx={{fontWeight:700}}>{label}</Typography>
-    <Typography variant="h5" sx={{fontWeight:850,color:color??"text.primary",fontVariantNumeric:"tabular-nums"}}>{value}</Typography>
-    <Typography variant="caption" color="text.secondary">{note}</Typography>
-    {delta&&<Typography variant="caption" sx={{fontWeight:750,color:"text.secondary"}}>{delta}</Typography>}
-  </Box>;
+type KpiProps={label:string;value:string;note:string;delta?:string;color?:string;onClick:()=>void};
+const KPI_EXPLANATIONS:Record<string,string>={
+  "Abertos neste mês":"Tickets com data de abertura no mês de referência, até o dia de corte. Compara o mesmo intervalo do mês anterior.",
+  "Resolvidos neste mês":"Tickets com data de resolução no mês, inclusive abertos anteriormente ou reabertos posteriormente.",
+  "Categoria Bug · abertos no mês":"Tickets abertos no mês classificados atualmente como Bug. Não comprova defeito técnico confirmado.",
+  "Pendentes públicos atuais":"Estoque atual de tickets públicos (tipo 2) com status Novo, Em atendimento ou Parado, independentemente da abertura.",
+  "Pendentes abertos no filtro":"Tickets públicos ainda pendentes que foram abertos no período global escolhido em Clientes.",
+  "SLA de 1ª resposta":"Percentual dentro do prazo de primeira resposta; somente tickets com ambas as datas de prazo e resposta.",
+  "SLA de solução":"Percentual de tickets resolvidos no prazo; somente resoluções com prazo e data de solução mensuráveis.",
+  "Resolução no primeiro contato":"Dos tickets resolvidos no mês com resolvedInFirstCall informado, proporção marcada como verdadeira pelo Movidesk.",
+  "Satisfação do cliente (CSAT)":"Notas 4 e 5 das avaliações com resposta recebida no mês. Sem respostas válidas não existe percentual mensurável.",
+  "Tickets reabertos no mês":"Tickets cuja última data de reabertura informada pelo Movidesk está no mês; não representa todas as reaberturas históricas."
+};
+function Kpi({label,value,note,delta,onClick,color}:KpiProps){
+  const accent=color==="success.main"?semanticChartColors.positive
+    :color==="warning.main"?semanticChartColors.attention
+    :color==="error.main"?semanticChartColors.overdue
+    :color??semanticChartColors.normal;
+  const percentage=delta?.match(/[+-]?[0-9]+(?:[.,][0-9]+)?%/)?.[0];
+  const subtitle=delta&&note.startsWith("Mesmo período anterior:")
+    ?"Anterior: "+note.slice("Mesmo período anterior:".length).trim()+(percentage?" • "+percentage:"")
+    :note;
+  const info=[KPI_EXPLANATIONS[label]??"Indicador de Suporte e Sustentação.",note,delta].filter(Boolean).join(" ");
+  return <ExecutiveKpiCard title={label} value={value} subtitle={subtitle}
+    info={info} accent={accent} onClick={onClick}
+    metadata={{source:"Movidesk — snapshot sincronizado no HUB",
+      periodRule:label==="Pendentes públicos atuais"?"Estoque atual, incluindo tickets antigos.":"Mês de referência e filtros da tela Clientes."}}/>;
 }
 export function ClientMeetingInsights({analysis:a,tickets,selectedClient,onShowTickets,onFocusClient,onOpenPresentation}:Props){
   const month=a.month;
@@ -69,7 +87,7 @@ export function ClientMeetingInsights({analysis:a,tickets,selectedClient,onShowT
       </Stack>
     </Box>
     <CardContent sx={{p:{xs:1.5,md:2.4}}}>
-      <Box sx={{display:"grid",gridTemplateColumns:{xs:"repeat(2,minmax(0,1fr))",md:"repeat(3,minmax(0,1fr))",xl:"repeat(6,minmax(0,1fr))"},gap:1.2,mb:2}}>
+      <Box sx={{display:"grid",gridTemplateColumns:{xs:"minmax(0,1fr)",sm:"repeat(2,minmax(0,1fr))",lg:"repeat(3,minmax(0,1fr))"},gap:1.6,mb:2}}>
         <Kpi label="Abertos neste mês" value={br(a.opened.current)} note={"Mesmo período anterior: "+br(a.opened.previous)}
           delta={variation(a.opened.difference,a.opened.rate)} onClick={()=>open("Abertos em "+month,currentOpened)}/>
         <Kpi label="Resolvidos neste mês" value={br(a.resolved.current)} note={"Mesmo período anterior: "+br(a.resolved.previous)}
@@ -92,7 +110,7 @@ export function ClientMeetingInsights({analysis:a,tickets,selectedClient,onShowT
           Comparação mensal: 01/{month.slice(5,7)}–{nowName} × mês anterior até {prevName}
         </Typography>
       </Box>
-      <Box sx={{display:"grid",gridTemplateColumns:{xs:"repeat(2,minmax(0,1fr))",lg:"repeat(4,minmax(0,1fr))"},gap:1.2,mb:1.2}}>
+      <Box sx={{display:"grid",gridTemplateColumns:{xs:"minmax(0,1fr)",sm:"repeat(2,minmax(0,1fr))",lg:"repeat(4,minmax(0,1fr))"},gap:1.6,mb:1.6}}>
         <Kpi label="SLA de solução" value={p(a.solutionSla.percentage)}
           note={br(a.solutionSla.within)+" de "+br(a.solutionSla.measured)+" resoluções com prazo medido"}
           delta={a.solutionSla.outside+" fora da meta"} color="success.main"
@@ -107,7 +125,7 @@ export function ClientMeetingInsights({analysis:a,tickets,selectedClient,onShowT
           onClick={()=>open("Primeiro contato — resolvidos com marcação",
             resolved.filter(t=>typeof t.resolvedInFirstCall==="boolean"))}/>
         <Kpi label="Satisfação do cliente (CSAT)"
-          value={a.csat.percentage===null?"Sem avaliações":p(a.csat.percentage)}
+          value={a.csat.percentage===null?"N/D":p(a.csat.percentage)}
           note={a.csat.measured
             ? br(a.csat.positive)+" avaliações positivas de "+br(a.csat.measured)+" recebidas neste mês"
             : a.csat.historicalMeasured
