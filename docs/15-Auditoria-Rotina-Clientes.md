@@ -86,3 +86,40 @@ A função local `isBug` incluía como "Bug" qualquer ticket com Task Azure de `
 - Os testes de regressão agora também cobrem a idade do backlog quando o relatório está filtrado em mês anterior.
 
 **Atenção:** as provas automáticas da branch foram adicionadas, mas sua execução ainda é necessária no frontend local. Além do build, é fundamental validar o PDF impresso, porque sua paginação depende do navegador e dos estilos de impressão.
+
+## Refinamento dos filtros e indicadores de qualidade — 12/11/2026
+
+### Interface
+- Removido da rota **Clientes** o componente `PublicClientEnrichment`, identificado pelo título **Consulta cadastral pública**. Seu código permanece no componente compartilhado para não prejudicar outros locais que eventualmente o utilizem.
+- Seletor de **Cliente da carteira SIMER** substituído por Autocomplete pesquisável e com limpeza individual, incluindo escolha de toda a carteira.
+- Os filtros **Categoria, Status, Responsável, Área de negócio e Frente de atendimento** ficam recolhidos por padrão em **Mais filtros**. Ativos ocultos são indicados por quantidade e chips removíveis individualmente. **Limpar tudo** preserva a função de limpeza original; **Limpar filtros adicionais** mantém o cliente selecionado.
+- Métricas secundárias de **SLA de solução, resolução no primeiro contato, CSAT e reaberturas** foram promovidas de chips para quatro cards do mesmo padrão dos seis indicadores superiores, com contexto de medição e abertura dos tickets por clique.
+
+### Diagnóstico técnico das métricas que apareciam zeradas
+
+**Primeiro contato (0% / 35 medidos no exemplo visual)**
+- Origem comprovada no código: `MovideskJsonImportService.ts` importa `resolvedInFirstCall` quando a API devolve boolean, e `DashboardController.ts` expõe esse campo no snapshot da tela Clientes.
+- Erro na apresentação anterior: `clientMeetingAnalytics.ts` tratava como mensuráveis **todos os abertos no mês** com boolean, incluindo tickets pendentes, ainda sem resolução. O valor false pode estar presente mesmo nos registros não elegíveis.
+- Correção: elegibilidade agora usa **tickets com evento `resolvedDate` no mês**, e apenas flag booleana explícita compõe o denominador. O card informa quantos tiveram marcação `true` e quantos tinham informação disponível. Se todos forem false, o sistema exibe 0% como informação **retornada pela origem**, com alerta para revisar preenchimento no Movidesk; não inventa resoluções no primeiro contato.
+
+**CSAT (sem medição / 0 avaliações no exemplo visual)**
+- Origem comprovada no código: o snapshot `/dashboard/tickets` faz join de `MovideskSurveyResponse` por `ticketId=movideskId` e `type=2`, preenchendo `satisfactionScore` e `satisfactionDate`. O processo `MovideskSurveySyncService.syncResponses()` busca dados em `/survey/responses` separadamente da importação de tickets.
+- Inconsistência corrigida: o cálculo anterior procurava satisfação nos tickets **abertos no mês**, embora uma pesquisa possa ser respondida em data posterior à abertura. Agora o período é determinado por `satisfactionDate`. Somente valores entre **1 e 5** entram no cálculo; avaliações **4–5** são positivas.
+- Se não houver respostas válidas neste mês, exibe **Sem avaliações** e informa quantas existem em outros meses da carteira sincronizada, quando disponíveis. O sistema **não apresenta 0% de satisfação sem avaliações**.
+- **Limitação de diagnóstico:** código prova de onde vêm as pesquisas, mas sem acesso ao banco não é possível confirmar se 0 respostas decorre de ausência de avaliações reais, sincronização não executada, falha do endpoint `/survey/responses`, filtro `type=2`, ou falta de vínculo com os tickets. A próxima inspeção operacional deve olhar a execução `MovideskSurveySyncService`, a tabela `MovideskSurveyResponse` e os IDs da Bom Jesus.
+
+**Reaberturas (0 no exemplo visual)**
+- Problema no frontend: o cálculo utilizava `reopenCount`, campo não incluído no retorno `/dashboard/tickets`; `reopenedDate` **já estava disponível**.
+- Correção: card **Tickets reabertos no mês** usa o evento `reopenedDate`. O indicador contabiliza tickets com registro de reabertura naquele mês; não representa a soma histórica de todas as reaberturas.
+
+### Critérios de homologação adicionais
+1. Confirmar que `Consulta cadastral pública` não aparece mais no painel Clientes.
+2. Buscar **Bom Jesus** digitando uma parte do nome; trocar para outro cliente e para toda a carteira.
+3. Abrir **Mais filtros**, aplicar critérios, recolher e confirmar que os chips continuam visíveis e removíveis; depois limpar apenas filtros adicionais sem retirar o cliente.
+4. Conferir que os quatro novos cards têm o mesmo padrão dos cards principais e abrem as listas corretas.
+5. Para primeiro contato, conferir especificamente flags `resolvedInFirstCall` e `resolvedDate` de alguns atendimentos: não resolvidos não entram no denominador.
+6. Para CSAT, conferir respostas da tabela `MovideskSurveyResponse` com `type=2`, `responseDate`, `value` e `ticketId`. Uma resposta recebida em novembro para ticket aberto em outubro deve entrar em novembro.
+7. Para reaberturas, conferir `reopenedDate` nos tickets exibidos e o período da referência.
+8. Validar `npm run build && npm test && npm run lint` no frontend local e revisar a apresentação/PDF da Bom Jesus.
+
+**Regressões adicionadas:** `frontend/tests/clientMeetingAnalytics.test.mjs` e `frontend/tests/clientsExecutiveLayout.test.mjs` agora cobrem os três indicadores, a ausência do card removido, a busca de cliente, os filtros recolhidos e os KPIs visuais.
