@@ -1504,8 +1504,14 @@ export function Clients() {
             },
             gap:{xs:1.4,md:1.7},alignItems:"end",minWidth:0
           }}>
-            <Box sx={{minWidth:0,width:"100%",maxWidth:{xs:"100%",xl:650}}}>
+            <Box sx={{minWidth:0,width:"100%",maxWidth:{xs:"100%",xl:620}}}>
+              <Typography component="label" htmlFor="clients-client-selector" variant="caption"
+                color="text.secondary" sx={{display:"block",mb:.45,ml:.15,fontSize:".7rem",fontWeight:700,lineHeight:1.2}}>
+                Cliente da carteira SIMER
+              </Typography>
               <Autocomplete
+                id="clients-client-selector"
+                sx={{"& .MuiOutlinedInput-root":{minHeight:40,borderRadius:"8px",bgcolor:"background.paper"}}}
                 fullWidth size="small" options={clientOptions}
                 value={selectedClient||null}
                 onChange={(_,value)=>setSelectedClient(value??"")}
@@ -1514,7 +1520,7 @@ export function Clients() {
                 openText="Mostrar clientes"
                 closeText="Fechar clientes"
                 slotProps={{paper:{sx:{maxWidth:"min(94vw,640px)","& .MuiAutocomplete-option":{whiteSpace:"normal",overflowWrap:"anywhere"}}}}}
-                renderInput={params=><TextField {...params} label="Cliente da carteira SIMER"
+                renderInput={params=><TextField {...params}
                   placeholder="Pesquise ou selecione um cliente"/>}
               />
             </Box>
