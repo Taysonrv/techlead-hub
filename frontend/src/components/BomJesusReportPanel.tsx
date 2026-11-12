@@ -82,7 +82,7 @@ export function ClientExecutiveReportPanel() {
       endDate:preset==="custom"?previous.endDate:today}));
   };
   const load = useCallback(async (signal?: AbortSignal) => {
-    setLoading(true);setError("");setReport(null);
+    setLoading(true);setError("");setReport(null);setInsight(null);
     try {
       const result = await api.get<Report>("/coordination/client-executive-report", { params: { client,startDate, endDate, slaTier }, signal });
       if (!signal?.aborted) setReport(result.data);
