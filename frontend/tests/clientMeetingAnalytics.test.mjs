@@ -110,3 +110,33 @@ test("antiguidade do backlog continua atual quando o filtro mensal é passado",(
  assert.equal(r.pendingNow.length,1);
  assert.equal(r.pendingByAge[0].name,"31 a 90 dias");
 });
+
+test("resolução no primeiro contato exige resolução efetiva, não abertura com false default",()=>{
+ const stillOpen=input(301,nov,{resolvedInFirstCall:false});
+ const resolvedYes=input(302,nov,{resolvedDate:"2026-11-08T11:00:00-03:00",baseStatus:"Resolved",resolvedInFirstCall:true});
+ const resolvedNo=input(303,oct,{resolvedDate:"2026-11-09T11:00:00-03:00",baseStatus:"Resolved",resolvedInFirstCall:false});
+ const noFlag=input(304,oct,{resolvedDate:"2026-11-10T11:00:00-03:00",baseStatus:"Resolved",resolvedInFirstCall:null});
+ const result=buildClientMeetingAnalytics([stillOpen,resolvedYes,resolvedNo,noFlag],cutoff,periodStart,periodEnd,cutoff);
+ assert.equal(result.firstCall.eligible,3);
+ assert.equal(result.firstCall.measured,2);
+ assert.equal(result.firstCall.count,1);
+ assert.equal(result.firstCall.percentage,50);
+});
+test("CSAT conta no mês da resposta, mesmo quando ticket abriu em mês anterior",()=>{
+ const olderTicket=input(311,oct,{baseStatus:"Closed",satisfactionDate:"2026-11-10T11:00:00-03:00",satisfactionScore:5});
+ const negative=input(312,nov,{satisfactionDate:"2026-11-11T13:00:00-03:00",satisfactionScore:2});
+ const oldSurvey=input(313,nov,{satisfactionDate:"2026-10-10T13:00:00-03:00",satisfactionScore:4});
+ const missingDate=input(314,nov,{satisfactionScore:5});
+ const result=buildClientMeetingAnalytics([olderTicket,negative,oldSurvey,missingDate],cutoff,periodStart,periodEnd,cutoff);
+ assert.equal(result.csat.measured,2);
+ assert.equal(result.csat.positive,1);
+ assert.equal(result.csat.percentage,50);
+ assert.equal(result.csat.historicalMeasured,4);
+ assert.equal(result.csat.undated,1);
+});
+test("reaberturas vêm de reopenedDate, já existente no snapshot Movidesk",()=>{
+ const event=input(321,oct,{reopenedDate:"2026-11-08T12:00:00-03:00",reopenCount:0});
+ const noEvent=input(322,nov,{reopenCount:5});
+ const result=buildClientMeetingAnalytics([event,noEvent],cutoff,periodStart,periodEnd,cutoff);
+ assert.equal(result.reopened,1);
+});
