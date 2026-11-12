@@ -17,7 +17,7 @@ const br=(n:number)=>n.toLocaleString("pt-BR");
 const date=(d:Date)=>d.toLocaleDateString("pt-BR");
 const p=(n:number|null)=>n===null?"Sem medição":n.toLocaleString("pt-BR",{maximumFractionDigits:1})+"%";
 const monthKey=(raw:string)=>{const d=new Date(raw);return Number.isFinite(d.getTime())?d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0"):"";};
-const event=(t:WeeklyTicket,field:"createdDate"|"resolvedDate"|"closedDate",month:string)=>{
+const event=(t:WeeklyTicket,field:"createdDate"|"resolvedDate"|"closedDate"|"satisfactionDate"|"reopenedDate",month:string)=>{
   const raw=t[field];return Boolean(raw&&monthKey(raw)===month);
 };
 function Kpi({label,value,note,delta,onClick,color}:{label:string;value:string;note:string;delta?:string;onClick:()=>void;color?:string}){
