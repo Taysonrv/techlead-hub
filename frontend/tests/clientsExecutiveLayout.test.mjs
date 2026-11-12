@@ -127,5 +127,5 @@ test("cliente e período possuem rótulos alinhados e a seleção do cliente nã
  assert.ok(page.includes('htmlFor="clients-client-selector"'));
  assert.ok(page.includes('id="clients-client-selector"'));
  assert.ok(page.includes('maxWidth:{xs:"100%",xl:620}'));
- assert.ok(page.includes('gridTemplateColumns:{\n              xs:"minmax(0,1fr)"'));
+ assert.match(page, /gridTemplateColumns:\s*\{\s*xs:\s*"minmax\(0,1fr\)"/);
 });
