@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import {
-  Box, Button, Chip, Checkbox, FormControl, InputLabel, Link, Menu, MenuItem, Select,
+  Box, Button, Chip, Checkbox, FormControl, FormControlLabel, InputLabel, Link, Menu, MenuItem, Select,
   Stack, Table, TableBody, TableCell, TableContainer, TableHead, TablePagination,
   TableRow, TextField, Tooltip, Typography,
 } from "@mui/material";
@@ -236,11 +236,13 @@ export function ClientManagementPivot({rows,onInspect}:{rows:ClientManagementTic
   const [colDim,setColDim]=useState<Dimension>("category");
   const [measure,setMeasure]=useState<Measure>("tickets");
   const [onlyTop,setOnlyTop]=useState("10");
+  const [hiddenColumns,setHiddenColumns]=useState<string[]>([]);
+  const choices=useMemo(()=>rankTickets(rows,colDim,measure).slice(0,10).map(x=>x.name),[rows,colDim,measure]);
   const aggregate=useMemo(()=>{
     const rowTotals=rankTickets(rows,rowDim,measure);
     const colTotals=rankTickets(rows,colDim,measure);
     const maxCols=10;
-    const selectedColumns=colTotals.slice(0,maxCols).map(x=>x.name);
+    const selectedColumns=colTotals.slice(0,maxCols).map(x=>x.name).filter(name=>!hiddenColumns.includes(name));
     const selectedRows=onlyTop==="all"?rowTotals:rowTotals.slice(0,Number(onlyTop));
     const matrix=selectedRows.map(row=>{
       const byCol=new Map<string,number>();
@@ -254,7 +256,7 @@ export function ClientManagementPivot({rows,onInspect}:{rows:ClientManagementTic
     const total=rows.reduce((sum,r)=>sum+measured(r,measure),0);
     const byColumn=selectedColumns.map((c)=>rows.filter(r=>dimensionOf(r,colDim)===c).reduce((n,r)=>n+measured(r,measure),0));
     return {matrix,columns:selectedColumns,total,byColumn,others:total-byColumn.reduce((a,b)=>a+b,0)};
-  },[rows,rowDim,colDim,measure,onlyTop]);
+  },[rows,rowDim,colDim,measure,onlyTop,hiddenColumns]);
   const openPivot=(label:string,predicate:(r:ClientManagementTicket)=>boolean)=>
     onInspect?.("Multidimensional — "+label,rows.filter(r=>predicate(r)&&(measure==="tickets"||measured(r,measure)>0)));
   return <Stack spacing={2}>
@@ -278,6 +280,15 @@ export function ClientManagementPivot({rows,onInspect}:{rows:ClientManagementTic
         <FormControl size="small" sx={{minWidth:150}}><InputLabel>Mostrar linhas</InputLabel><Select label="Mostrar linhas" value={onlyTop} onChange={e=>setOnlyTop(e.target.value)}>
           <MenuItem value="10">Top 10</MenuItem><MenuItem value="20">Top 20</MenuItem><MenuItem value="all">Todas</MenuItem>
         </Select></FormControl>
+      </Stack>
+      <Stack direction="row" sx={{alignItems:"center",gap:.7,flexWrap:"wrap",mt:1}}>
+        <Button size="small" onClick={()=>setHiddenColumns([])} sx={{textTransform:"none"}}>Selecionar todos</Button>
+        <Button size="small" onClick={()=>setHiddenColumns([...choices])} sx={{textTransform:"none"}}>Desmarcar todos</Button>
+        {choices.map(name=><FormControlLabel key={name} sx={{m:0,mr:1}}
+          control={<Checkbox size="small" checked={!hiddenColumns.includes(name)}
+            onChange={()=>setHiddenColumns(v=>v.includes(name)?v.filter(x=>x!==name):[...v,name])}/>}
+          label={<Typography variant="caption">{name}</Typography>}
+        />)}
       </Stack>
     </Box>
     <Box sx={panelSx}>
