@@ -3480,7 +3480,8 @@ function ticketResolutionMinutes(ticket: Ticket): number | null {
     return ticket.lifetimeMinutes;
   }
 
-  const endValue = ticket.closedDate || ticket.resolvedDate;
+  // Encerramento administrativo pode ser posterior à solução; priorizar o marco resolvido.
+  const endValue = ticket.resolvedDate || ticket.closedDate;
   if (!endValue) return null;
 
   const createdAt = new Date(ticket.createdDate).getTime();
