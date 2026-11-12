@@ -72,6 +72,9 @@ O HUB lê um **snapshot sincronizado** do Movidesk/Azure, não uma fotografia hi
 - `frontend/tests/clientMeetingAnalytics.test.mjs`
 - `frontend/tests/clientsExecutiveLayout.test.mjs`
 
+## Correção adicional de classificação
+A função local `isBug` incluía como "Bug" qualquer ticket com Task Azure de `Correção Clientes` ou rótulo genérico de "erro de sistema". Essa inferência misturava categorias, tarefas e confirmação técnica. A função agora contabiliza **apenas `ticket.category === "Bug"` após normalização**. Tarefas de correção continuam aparecendo nos indicadores próprios de desenvolvimento e não significam confirmação de causa-raiz.
+
 ## Ajustes finais da revisão
 - O gráfico de **pendentes atuais** mostra a carteira por cliente quando nenhum está selecionado; ao escolher apenas a Bom Jesus, mostra **por responsável atual**, evitando o gráfico trivial de uma barra.
 - Foi criado um comparativo adicional de **antiguidade** dos tickets públicos ainda pendentes. A referência de idade é a data do snapshot atual, não a data de um filtro histórico.
