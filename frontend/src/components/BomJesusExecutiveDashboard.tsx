@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import { Cell, CartesianGrid, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { SelectableDonut, SelectableLines } from "./ExecutiveChartControls";
+import type { ClientManagementTicket, ClientInspect } from "./ClientManagementViews";
 import {
   Alert, Box, Card, CardContent, Chip, Divider, FormControl, InputLabel, Link, MenuItem,
   Select, Stack, Tab, Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
@@ -28,14 +29,18 @@ const hours=(min:number|null|undefined)=>min==null?"N/D":`${Math.floor(min/60)}h
 const date=(v:string|null)=>v?new Date(v).toLocaleDateString("pt-BR"):"—";
 const ticket=(id:number)=><Link href={`/tickets?movidesk=${id}`} underline="hover" sx={{fontWeight:700}}>#{id}</Link>;
 const task=(id:number|null,url:string|null)=>id ? (url?<Link href={url} target="_blank" rel="noopener noreferrer">#{id}</Link>:<span>#{id}</span>):<span>—</span>;
-const indicator=(label:string,value:string|number,note?:string)=><Box key={label} sx={{minWidth:155,flex:"1 1 150px",border:"1px solid",borderColor:"divider",borderRadius:2,p:1.5}}>
+const indicator=(label:string,value:string|number,note?:string,onClick?:()=>void)=><Box key={label}
+  role={onClick?"button":undefined} tabIndex={onClick?0:undefined} onClick={onClick}
+  onKeyDown={onClick?e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();onClick();}}:undefined} sx={{minWidth:155,flex:"1 1 150px",border:"1px solid",borderColor:"divider",borderRadius:2,p:1.5,cursor:onClick?"pointer":undefined,"&:hover":onClick?{borderColor:"primary.main"}:undefined}}>
   <Typography variant="caption" color="text.secondary">{label}</Typography>
   <Typography variant="h5" sx={{mt:.5,fontWeight:700}}>{value}</Typography>
   {note&&<Typography variant="caption" color="text.secondary">{note}</Typography>}
 </Box>;
 
-type Props={executive:BomJesusExecutiveAudit; clientName:string};
-export function BomJesusExecutiveDashboard({executive:a,clientName}:Props){
+type Props={executive:BomJesusExecutiveAudit; clientName:string;rows:ClientManagementTicket[];onInspect?:ClientInspect};
+export function BomJesusExecutiveDashboard({executive:a,clientName,rows,onInspect}:Props){
+  const inspect=(title:string,filter:(row:ClientManagementTicket)=>boolean)=>onInspect?.(title,rows.filter(filter));
+  const month=(iso:string)=>new Date(iso).toLocaleDateString("en-CA",{timeZone:"America/Sao_Paulo",year:"numeric",month:"2-digit"}).slice(0,7);
   const [tab,setTab]=useState(0);
   const [query,setQuery]=useState("");
   const [olaStatus,setOlaStatus]=useState("TODOS");
@@ -58,77 +63,37 @@ export function BomJesusExecutiveDashboard({executive:a,clientName}:Props){
       <Chip color="warning" size="small" label="Indicadores de prazo preliminares"/>
     </Stack>
     <Stack direction="row" sx={{flexWrap:"wrap",gap:1,my:2}}>
-      {indicator("Tickets do período",a.matrix.total)}
-      {indicator("Bugs com Task",a.matrix.bugWithCorrection)}
-      {indicator("Correções concluídas",a.corrections.concluded,`${a.corrections.concludedWithVersion} com versão`)}
-      {indicator("OLA Suporte: alertas",a.ola.alerts,`${a.ola.measured} mensuráveis`)}
-      {indicator("OLA: dentro da meta",a.ola.withinTargetPercent===null?"N/D":`${a.ola.withinTargetPercent}%`)}
-      {indicator("Mediana de passagem",hours(a.ola.medianSupportMinutes),"Horas úteis")}
+      {indicator("Tickets do período",a.matrix.total,undefined,()=>onInspect?.("Todos os atendimentos",rows))}
+      {indicator("Bugs com Task",a.matrix.bugWithCorrection,undefined,()=>inspect("Bugs com Task",r=>r.isCorrectionTask&&r.category.toLocaleLowerCase("pt-BR").trim()==="bug"))}
+      {indicator("Correções concluídas",a.corrections.concluded,String(a.corrections.concludedWithVersion)+" com versão",()=>inspect("Correções concluídas",r=>a.corrections.rows.some(c=>c.ticketId===r.id&&c.outcome==="CONCLUIDA")))}
+      {indicator("OLA Suporte: alertas",a.ola.alerts,String(a.ola.measured)+" mensuráveis",()=>inspect("OLA — alertas",r=>r.olaStatus==="ALERTA"))}
+      {indicator("OLA: dentro da meta",a.ola.withinTargetPercent===null?"N/D":String(a.ola.withinTargetPercent)+"%",undefined,()=>inspect("OLA — dentro da meta",r=>r.olaStatus==="DENTRO"))}
+      {indicator("Mediana de passagem",hours(a.ola.medianSupportMinutes),"Horas úteis",()=>inspect("Cases mensuráveis de OLA",r=>r.olaStatus==="DENTRO"||r.olaStatus==="ALERTA"))}
     </Stack>
     <Box sx={{display:"grid",gridTemplateColumns:{xs:"1fr",lg:"1fr 1fr"},gap:2,mb:2}}>
-      {([
-        {title:"Situação das correções",subtitle:"Distribuição das Tasks técnicas vinculadas",data:[
-          {name:"Concluídas",value:a.corrections.concluded,color:"#197350"},
-          {name:"Em aberto",value:a.corrections.open,color:"#BD7229"},
-          {name:"Canceladas",value:a.corrections.cancelled,color:"#9B3C36"},
-        ]},
-        {title:"OLA do Suporte",subtitle:"Resultado preliminar dos casos vinculados a correção",data:[
-          {name:"Dentro da meta",value:a.ola.onTime,color:"#197350"},
-          {name:"Alertas",value:a.ola.alerts,color:"#BD7229"},
-          {name:"Não mensurável",value:a.ola.unmeasurable,color:"#97A69B"},
-          {name:"Canceladas",value:a.ola.cancelled,color:"#9B3C36"},
-        ]},
-      ] as const).map(chart=><Box key={chart.title} sx={{p:2,border:"1px solid",borderColor:"divider",borderRadius:3,minWidth:0}}>
-        <Typography variant="subtitle1" sx={{fontWeight:750}}>{chart.title}</Typography>
-        <Typography variant="caption" color="text.secondary">{chart.subtitle}</Typography>
-        <Box sx={{height:270,minWidth:0}}>
-          {chart.data.some(v=>v.value>0) ? <ResponsiveContainer width="100%" height="100%">
-            <PieChart>
-              <Pie data={chart.data.filter(v=>v.value>0)} dataKey="value" nameKey="name" cx="50%" cy="48%" innerRadius={58} outerRadius={94} paddingAngle={3} stroke="none">
-                {chart.data.filter(v=>v.value>0).map(v=><Cell key={v.name} fill={v.color}/>)}
-              </Pie>
-              <Tooltip formatter={(v,name)=>[`${v} tickets`,String(name)]}/>
-              <Legend verticalAlign="bottom" height={36} wrapperStyle={{fontSize:11}}/>
-            </PieChart>
-          </ResponsiveContainer> : <Box sx={{height:"100%",display:"grid",placeItems:"center"}}>
-            <Typography variant="body2" color="text.secondary">Sem registros para o período selecionado</Typography>
-          </Box>}
-        </Box>
-      </Box>)}
-      <Box sx={{p:2,border:"1px solid",borderColor:"divider",borderRadius:3,minWidth:0}}>
-        <Typography variant="subtitle1" sx={{fontWeight:750}}>Evolução mensal da carteira</Typography>
-        <Typography variant="caption" color="text.secondary">Aberturas e tickets vinculados a correção por mês</Typography>
-        <Box sx={{height:270,minWidth:0}}>
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={a.monthly} margin={{top:16,right:18,left:-18,bottom:0}}>
-              <CartesianGrid strokeDasharray="3 4" vertical={false} stroke="rgba(127,142,133,.25)"/>
-              <XAxis dataKey="month" tick={{fontSize:11}}/>
-              <YAxis allowDecimals={false} tick={{fontSize:11}}/>
-              <Tooltip formatter={(v,name)=>[v,String(name)]}/>
-              <Legend verticalAlign="bottom" height={30} wrapperStyle={{fontSize:11}}/>
-              <Line type="monotone" dataKey="tickets" name="Atendimentos" stroke="#197350" strokeWidth={3} dot={{r:3}} activeDot={{r:5}}/>
-              <Line type="monotone" dataKey="corrections" name="Correções" stroke="#316885" strokeWidth={3} dot={{r:3}} activeDot={{r:5}}/>
-            </LineChart>
-          </ResponsiveContainer>
-        </Box>
-      </Box>
-      <Box sx={{p:2,border:"1px solid",borderColor:"divider",borderRadius:3,minWidth:0}}>
-        <Typography variant="subtitle1" sx={{fontWeight:750}}>Tendência dos alertas de OLA</Typography>
-        <Typography variant="caption" color="text.secondary">Mês de abertura; alertas sujeitos a auditoria do marco de passagem</Typography>
-        <Box sx={{height:270,minWidth:0}}>
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={a.monthly} margin={{top:16,right:18,left:-18,bottom:0}}>
-              <CartesianGrid strokeDasharray="3 4" vertical={false} stroke="rgba(127,142,133,.25)"/>
-              <XAxis dataKey="month" tick={{fontSize:11}}/>
-              <YAxis allowDecimals={false} tick={{fontSize:11}}/>
-              <Tooltip formatter={(v,name)=>[v,String(name)]}/>
-              <Legend verticalAlign="bottom" height={30} wrapperStyle={{fontSize:11}}/>
-              <Line type="monotone" dataKey="olaAlerts" name="Alertas OLA" stroke="#BD7229" strokeWidth={3} dot={{r:3}} activeDot={{r:5}}/>
-              <Line type="monotone" dataKey="corrections" name="Correções" stroke="#197350" strokeWidth={2} strokeDasharray="5 3" dot={false}/>
-            </LineChart>
-          </ResponsiveContainer>
-        </Box>
-      </Box>
+      <SelectableDonut title="Situação das correções" description="Distribuição das Tasks técnicas vinculadas" parts={[
+        {name:"Concluídas",value:a.corrections.concluded,color:"#197350"},
+        {name:"Em aberto",value:a.corrections.open,color:"#BD7229"},
+        {name:"Canceladas",value:a.corrections.cancelled,color:"#9B3C36"},
+      ]} onInspect={name=>inspect("Correções — "+name,r=>a.corrections.rows.some(c=>c.ticketId===r.id&&c.outcome===(name==="Concluídas"?"CONCLUIDA":name==="Canceladas"?"CANCELADA":"EM_ABERTO")))}/>
+      <SelectableDonut title="OLA do Suporte" description="Resultado preliminar dos casos de correção" parts={[
+        {name:"Dentro da meta",value:a.ola.onTime,color:"#197350"},
+        {name:"Alertas",value:a.ola.alerts,color:"#BD7229"},
+        {name:"Não mensurável",value:a.ola.unmeasurable,color:"#97A69B"},
+        {name:"Canceladas",value:a.ola.cancelled,color:"#9B3C36"},
+      ]} onInspect={name=>inspect("OLA — "+name,r=>r.olaStatus===(name==="Dentro da meta"?"DENTRO":name==="Alertas"?"ALERTA":name==="Canceladas"?"CANCELADA":"NAO_MENSURAVEL"))}/>
+      <SelectableLines title="Evolução mensal da carteira" description="Aberturas e correções vinculadas por mês"
+        data={a.monthly} series={[
+          {key:"tickets",name:"Atendimentos",color:"#197350"},
+          {key:"corrections",name:"Correções",color:"#316885"},
+        ]}
+        onInspect={(m,key)=>inspect("Evolução mensal — "+m,r=>month(r.createdDate)===m&&(key!=="corrections"||r.isCorrectionTask))}/>
+      <SelectableLines title="Tendência dos alertas de OLA" description="Mês de abertura e alertas sujeitos à auditoria"
+        data={a.monthly} series={[
+          {key:"olaAlerts",name:"Alertas OLA",color:"#BD7229"},
+          {key:"corrections",name:"Correções",color:"#197350"},
+        ]}
+        onInspect={(m,key)=>inspect("OLA mensal — "+m,r=>month(r.createdDate)===m&&(key!=="olaAlerts"||r.olaStatus==="ALERTA")&&(key!=="corrections"||r.isCorrectionTask))}/>
     </Box>
     <Alert severity="info" sx={{mb:2}}>Os alertas de OLA usam a criação da Task como referência de passagem. Pausas, urgência histórica e perfil contratual precisam de validação. As reclassificações anteriores ao primeiro registro do HUB não são recuperadas automaticamente pela API pública.</Alert>
     <Box sx={{borderBottom:1,borderColor:"divider",mb:2}}>
