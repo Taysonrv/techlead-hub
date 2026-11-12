@@ -1868,6 +1868,16 @@ export function Clients() {
           showTickets(title,clientOperationalTickets.filter(ticket=>selected.has(ticket.id)),subtitle);
         }}/>
       
+      <Accordion disableGutters elevation={0} sx={{mb:2,border:"1px solid",borderColor:"divider",borderRadius:"12px !important","&:before":{display:"none"}}}>
+        <AccordionSummary expandIcon={<ExpandMoreOutlined/>} sx={{px:2.3,minHeight:61}}>
+          <Box>
+            <Typography sx={{fontWeight:800}}>Detalhamento operacional e histórico</Typography>
+            <Typography variant="caption" color="text.secondary">
+              Cards do Dashboard, tendências por categoria, indicadores de desempenho e resumo executivo — recolhidos para evitar informações repetidas
+            </Typography>
+          </Box>
+        </AccordionSummary>
+        <AccordionDetails sx={{pt:0,px:{xs:1.5,md:2}}}>
       {/* Resumo operacional com as mesmas coortes do Dashboard */}
       <KpiGrid className="techlead-clients-primary-kpis" sx={{ mb: 2, gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))", lg: "repeat(4, minmax(0, 1fr))" } }}>
         <MetricCard title="Abertos no período · SIMER" value={clientOperationalCohorts.entries.length} description="Abertura no intervalo"
@@ -2140,6 +2150,19 @@ export function Clients() {
         </CardContent>
       </Card>
 
+        </AccordionDetails>
+      </Accordion>
+
+      <Accordion disableGutters elevation={0} disabled={!selectedClient} sx={{mb:2,border:"1px solid",borderColor:"divider",borderRadius:"12px !important","&:before":{display:"none"}}}>
+        <AccordionSummary expandIcon={<ExpandMoreOutlined/>} sx={{px:2.3,minHeight:61}}>
+          <Box>
+            <Typography sx={{fontWeight:800}}>Apresentação para o cliente e exportação em PDF</Typography>
+            <Typography variant="caption" color="text.secondary">
+              {selectedClient ? selectedClient+" · Apresentação executiva em seis páginas" : "Selecione um cliente para disponibilizar a apresentação"}
+            </Typography>
+          </Box>
+        </AccordionSummary>
+        <AccordionDetails sx={{p:1.5}}>
       {/* PAINEL PARA APRESENTAÇÃO AO CLIENTE */}
       {selectedClient && (
         <Card id="client-export-content" ref={presentationRef} elevation={0} sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2.25, mb: 2, overflow: "hidden", bgcolor: "background.default", "@media print": { breakInside: "avoid", "& .presentation-actions": { display: "none !important" } }, "&:fullscreen": { position: "fixed", inset: 0, width: "100vw", height: "100dvh", maxWidth: "none", borderRadius: 0, m: 0, zIndex: 99999, display: "flex", flexDirection: "column" } }}>
@@ -2247,6 +2270,19 @@ export function Clients() {
         </Card>
       )}
 
+        </AccordionDetails>
+      </Accordion>
+
+      <Accordion disableGutters elevation={0} sx={{mb:2,border:"1px solid",borderColor:"divider",borderRadius:"12px !important","&:before":{display:"none"}}}>
+        <AccordionSummary expandIcon={<ExpandMoreOutlined/>} sx={{px:2.3,minHeight:61}}>
+          <Box>
+            <Typography sx={{fontWeight:800}}>Distribuições complementares da carteira</Typography>
+            <Typography variant="caption" color="text.secondary">
+              Composição geral por cliente, categoria, situação e responsável, além de leituras automáticas do período
+            </Typography>
+          </Box>
+        </AccordionSummary>
+        <AccordionDetails sx={{p:{xs:1.5,md:2}}}>
       {/* =================================================
           GRÁFICOS
       ================================================= */}
@@ -2674,6 +2710,9 @@ export function Clients() {
           </Box>
         </ChartCard>
       </Box>
+
+        </AccordionDetails>
+      </Accordion>
 
       {/* =================================================
           SEM DADOS
