@@ -142,7 +142,9 @@ type Ticket = {
   resolvedInFirstCall?: boolean | null;
   ownerHandoffs?: number;
   reopenCount?: number;
+  reopenedDate?: string | null;
   satisfactionScore?: number | null;
+  satisfactionDate?: string | null;
 
   taskNumber: number | null;
   taskStatus: string | null;
