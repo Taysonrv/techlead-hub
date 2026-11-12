@@ -1086,66 +1086,20 @@ export function Clients() {
      PIZZA 2 - SITUAÇÃO DOS TICKETS
   ======================================================= */
 
-  const statusPieData =
-    useMemo<PieDataItem[]>(() => {
-      const newTickets =
-        scopedTickets.filter(
-          (ticket) =>
-            ticket.baseStatus ===
-            "New"
-        ).length;
-
-      const attendance =
-        scopedTickets.filter(
-          (ticket) =>
-            ticket.baseStatus ===
-            "InAttendance"
-        ).length;
-
-      const stopped =
-        scopedTickets.filter(
-          (ticket) =>
-            ticket.baseStatus ===
-            "Stopped"
-        ).length;
-
-      const resolved =
-        scopedTickets.filter(
-          (ticket) =>
-            ticket.baseStatus ===
-              "Resolved" ||
-            ticket.baseStatus ===
-              "Closed"
-        ).length;
-
-      return [
-        {
-          name: "Novos",
-          value:
-            newTickets,
-        },
-        {
-          name:
-            "Em Atendimento",
-          value:
-            attendance,
-        },
-        {
-          name: "Parados",
-          value:
-            stopped,
-        },
-        {
-          name:
-            "Resolvidos",
-          value:
-            resolved,
-        },
-      ].filter(
-        (item) =>
-          item.value > 0
-      );
-    }, [scopedTickets]);
+  // Todos os status são contados, inclusive cancelados ou não padronizados.
+  // A soma das fatias precisa coincidir com o universo de abertura exibido.
+  const statusPieData = useMemo<PieDataItem[]>(()=>{
+    const count=(states:string[])=>scopedTickets.filter(t=>states.includes(t.baseStatus??"")).length;
+    const base=[
+      {name:"Novos",value:count(["New"])},
+      {name:"Em Atendimento",value:count(["InAttendance"])},
+      {name:"Parados",value:count(["Stopped"])},
+      {name:"Resolvidos",value:count(["Resolved","Closed"])},
+    ];
+    const other=scopedTickets.length-base.reduce((sum,row)=>sum+row.value,0);
+    if(other>0)base.push({name:"Outras situações",value:other});
+    return base.filter(row=>row.value>0);
+  },[scopedTickets]);
 
   /* =======================================================
      DRILL-DOWN
@@ -2152,6 +2106,7 @@ export function Clients() {
             if(name==="Em Atendimento")showStatusTickets("attendance");
             if(name==="Parados")showStatusTickets("stopped");
             if(name==="Resolvidos")showStatusTickets("resolved");
+            if(name==="Outras situações")showTickets("Outras situações",scopedTickets.filter(t=>!["New","InAttendance","Stopped","Resolved","Closed"].includes(t.baseStatus??"")));
           }}/>
         <SelectableHorizontalBars title="Volume por responsável" description="Distribuição por responsável atual; não indica produtividade individual"
           parts={ownerChartData.map((item,i)=>({name:item.name,value:item.value,color:PIE_COLORS[i%PIE_COLORS.length]!}))}
