@@ -41,17 +41,19 @@ function Selector({parts,visible,toggle,all,clear,onInspect}:{
       <Typography variant="caption" color="text.secondary">Marque ou desmarque para ajustar o gráfico</Typography>
     </Stack>
     <Stack direction="row" sx={{gap:.4,flexWrap:"wrap",alignItems:"center"}}>
-      {parts.map(part=><Tooltip key={part.name} title={part.detail??""} disableHoverListener={!part.detail}>
-        <FormControlLabel
-          sx={{m:0,mr:1.4,"& .MuiFormControlLabel-label":{fontSize:12,whiteSpace:"normal"}}}
-          control={<Checkbox size="small" checked={visible.has(part.key??part.name)} onChange={()=>toggle(part.key??part.name)}
-            sx={{p:.35,color:part.color,"&.Mui-checked":{color:part.color}}}/>}
-          label={part.name+(part.detail?" · "+part.detail:"")}
-        />
-        {onInspect&&<IconButton size="small" aria-label={"Listar atendimentos de "+part.name}
-          onClick={()=>onInspect(part.key??part.name)} sx={{mr:1.5}}>
-          <ListAltOutlined fontSize="small"/>
-        </IconButton>}
+      {parts.map(part=><Tooltip key={part.key??part.name} title={part.detail??""} disableHoverListener={!part.detail}>
+        <Box component="span" sx={{display:"inline-flex",alignItems:"center",minWidth:0}}>
+          <FormControlLabel
+            sx={{m:0,mr:.4,"& .MuiFormControlLabel-label":{fontSize:12,whiteSpace:"normal"}}}
+            control={<Checkbox size="small" checked={visible.has(part.key??part.name)} onChange={()=>toggle(part.key??part.name)}
+              sx={{p:.35,color:part.color,"&.Mui-checked":{color:part.color}}}/>}
+            label={part.name+(part.detail?" · "+part.detail:"")}
+          />
+          {onInspect&&<IconButton size="small" aria-label={"Listar atendimentos de "+part.name}
+            onClick={()=>onInspect(part.key??part.name)} sx={{mr:1.5}}>
+            <ListAltOutlined fontSize="small"/>
+          </IconButton>}
+        </Box>
       </Tooltip>)}
     </Stack>
   </Stack>;
