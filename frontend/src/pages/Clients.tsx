@@ -1487,7 +1487,6 @@ export function Clients() {
             title={selectedClient || "Clientes"}
             description={selectedClient ? "Painel executivo do cliente: atendimento, SLA, demanda e desenvolvimento" : "Resultados da carteira, qualidade do atendimento e acompanhamento do desenvolvimento"}
             meta={<>{scopedTickets.length} ticket(s) analisado(s) no filtro atual</>}
-            action={<PeriodFilter />}
           />
         </Box>
       </Stack>
@@ -1496,8 +1495,16 @@ export function Clients() {
       {/* Seleção rápida do cliente; critérios adicionais permanecem disponíveis sem ocupar a tela. */}
       <Card elevation={0} sx={{border:"1px solid",borderColor:"divider",borderRadius:2.5,mb:2}}>
         <CardContent sx={{px:{xs:2,md:2.5},py:1.75,"&:last-child":{pb:1.75}}}>
-          <Stack direction={{xs:"column",md:"row"}} sx={{alignItems:{md:"center"},gap:1.5}}>
-            <Box sx={{flex:"1 1 460px",minWidth:0}}>
+          <Box sx={{
+            display:"grid",
+            gridTemplateColumns:{
+              xs:"minmax(0,1fr)",
+              md:"minmax(260px,1.1fr) minmax(210px,.9fr)",
+              xl:"minmax(300px,1.25fr) minmax(200px,.95fr) auto"
+            },
+            gap:{xs:1.4,md:1.7},alignItems:"end",minWidth:0
+          }}>
+            <Box sx={{minWidth:0,width:"100%",maxWidth:{xs:"100%",xl:650}}}>
               <Autocomplete
                 fullWidth size="small" options={clientOptions}
                 value={selectedClient||null}
@@ -1508,11 +1515,13 @@ export function Clients() {
                 closeText="Fechar clientes"
                 slotProps={{paper:{sx:{maxWidth:"min(94vw,640px)","& .MuiAutocomplete-option":{whiteSpace:"normal",overflowWrap:"anywhere"}}}}}
                 renderInput={params=><TextField {...params} label="Cliente da carteira SIMER"
-                  placeholder="Pesquise por nome ou escolha um cliente"
-                  helperText={selectedClient?"Dados exclusivos do cliente selecionado":"Mostrando todos os clientes da carteira SIMER"}/>}
+                  placeholder="Pesquise ou selecione um cliente"/>}
               />
             </Box>
-            <Stack direction="row" sx={{flex:"0 0 auto",alignItems:"center",gap:1,flexWrap:"wrap"}}>
+            <Box sx={{minWidth:0,alignSelf:"end"}}>
+              <PeriodFilter />
+            </Box>
+            <Stack direction="row" sx={{alignItems:"center",justifyContent:{xs:"flex-start",xl:"flex-end"},gap:1,flexWrap:"wrap",pb:{xs:0,md:.25}}}>
               <Button size="small" variant={advancedFiltersOpen?"contained":"outlined"}
                 onClick={()=>setAdvancedFiltersOpen(value=>!value)}
                 endIcon={<ExpandMoreOutlined sx={{transform:advancedFiltersOpen?"rotate(180deg)":"none",transition:"transform .2s"}}/>}
@@ -1525,7 +1534,10 @@ export function Clients() {
               {(selectedClient||category||status||owner||businessArea||executiveArea)&&
                 <Button size="small" variant="text" onClick={clearFilters} sx={{textTransform:"none",minHeight:40}}>Limpar tudo</Button>}
             </Stack>
-          </Stack>
+          </Box>
+          <Typography variant="caption" color="text.secondary" sx={{display:"block",mt:.7,ml:.35}}>
+            {selectedClient?"Exibindo somente os atendimentos de "+selectedClient:"Exibindo a carteira SIMER; selecione um cliente para apresentar seus resultados."}
+          </Typography>
           {!advancedFiltersOpen&&[category,status,owner,businessArea,executiveArea].some(Boolean)&&
             <Stack direction="row" sx={{gap:.5,flexWrap:"wrap",mt:1}}>
               {[
