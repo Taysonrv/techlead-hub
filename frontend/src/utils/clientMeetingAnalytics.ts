@@ -100,7 +100,8 @@ export function buildClientMeetingAnalytics(
     });
   }
   const pendingNow=valid.filter(isPublicPending);
-  const snapshotCutoff=new Date(Math.min(reference.getTime(),Date.now()));
+  // O chamador já limita a referência ao dia atual; manter cálculo puro permite testes reprodutíveis.
+  const snapshotCutoff=new Date(reference);
   const pendingAge=(ticket:WeeklyTicket)=>{
     const opening=Date.parse(ticket.createdDate);
     if(!Number.isFinite(opening))return "Abertura não informada";
