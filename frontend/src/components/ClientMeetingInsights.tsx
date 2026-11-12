@@ -4,7 +4,6 @@ import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, X
 import { AssessmentOutlined, CalendarMonthOutlined, GroupsOutlined } from "@mui/icons-material";
 import { SelectableDonut, SelectableHorizontalBars, SelectableLines } from "./ExecutiveChartControls";
 import type { ClientMeetingAnalytics, WeeklyTicket } from "../utils/clientMeetingAnalytics";
-import { isOperationallyOpen } from "../utils/operationalMetrics";
 
 type Props={
   analysis:ClientMeetingAnalytics;
@@ -20,8 +19,6 @@ const monthKey=(raw:string)=>{const d=new Date(raw);return Number.isFinite(d.get
 const event=(t:WeeklyTicket,field:"createdDate"|"resolvedDate"|"closedDate",month:string)=>{
   const raw=t[field];return Boolean(raw&&monthKey(raw)===month);
 };
-const outcome=(t:WeeklyTicket)=>["Resolved","Closed"].includes(t.baseStatus??"");
-const publicPending=(t:WeeklyTicket)=>t.ticketType===2&&isOperationallyOpen(t);
 function Kpi({label,value,note,delta,onClick,color}:{label:string;value:string;note:string;delta?:string;onClick:()=>void;color?:string}){
   return <Box role="button" tabIndex={0} aria-label={label+"; listar tickets"} onClick={onClick}
     onKeyDown={e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();onClick();}}}
@@ -75,7 +72,7 @@ export function ClientMeetingInsights({analysis:a,tickets,selectedClient,onShowT
           delta={variation(a.opened.difference,a.opened.rate)} onClick={()=>open("Abertos em "+month,currentOpened)}/>
         <Kpi label="Resolvidos neste mês" value={br(a.resolved.current)} note={"Mesmo período anterior: "+br(a.resolved.previous)}
           delta={variation(a.resolved.difference,a.resolved.rate)} color="success.main" onClick={()=>open("Resolvidos em "+month,resolved)}/>
-        <Kpi label="Bugs classificados neste mês" value={br(a.bug.current)} note={"Mesmo período anterior: "+br(a.bug.previous)}
+        <Kpi label="Categoria Bug · abertos no mês" value={br(a.bug.current)} note={"Mesmo período anterior: "+br(a.bug.previous)}
           delta={variation(a.bug.difference,a.bug.rate)} onClick={()=>open("Categoria Bug — "+month,a.bug.currentTickets)}/>
         <Kpi label="Pendentes públicos atuais" value={br(allBacklog)}
           note="Estoque atual, inclusive tickets antigos" color="warning.main"
@@ -105,7 +102,7 @@ export function ClientMeetingInsights({analysis:a,tickets,selectedClient,onShowT
             {key:"bugs",name:"Categoria Bug",color:"#F26727"},
           ]}
           onInspect={(m,series)=>open("Movimentação de "+m+" — "+series,
-            tickets.filter(t=>series==="resolved"?event(t,"resolvedDate",m)&&outcome(t):
+            tickets.filter(t=>series==="resolved"?event(t,"resolvedDate",m):
               event(t,"createdDate",m)&&(series!=="bugs"||t.category?.trim().toLocaleLowerCase("pt-BR")==="bug")))}
         />
         <SelectableLines title="Pendentes atuais por mês de abertura"
