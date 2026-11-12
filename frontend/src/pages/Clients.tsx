@@ -621,11 +621,18 @@ export function Clients() {
   };
 
   const monthlyPerformance = useMemo(() => {
-    const end = endOfDay(effectiveEndDate);
+    const end = endOfDay(new Date(Math.min(effectiveEndDate.getTime(), Date.now())));
+    const endDay=end.getDate();
+    const fullCurrentMonth=endDay===new Date(end.getFullYear(),end.getMonth()+1,0).getDate();
     const months = Array.from({ length: 6 }, (_, index) => {
       const date = new Date(end.getFullYear(), end.getMonth() - 5 + index, 1);
       const next = new Date(date.getFullYear(), date.getMonth() + 1, 1);
-      return { periodo: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`, start: date, finish: next };
+      // Mês anterior até o mesmo dia de corte, quando o mês atual está incompleto.
+      const comparisonEnd=index===4&&!fullCurrentMonth
+        ? new Date(date.getFullYear(),date.getMonth(),Math.min(endDay,new Date(date.getFullYear(),date.getMonth()+1,0).getDate()),23,59,59,999)
+        : null;
+      const finish=index===5?new Date(end.getTime()+1):comparisonEnd?new Date(comparisonEnd.getTime()+1):next;
+      return { periodo: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`, start: date, finish: finish };
     });
     return months.map(({ periodo, start, finish }) => {
       const created = clientOperationalTickets.filter((ticket) => {
@@ -633,7 +640,7 @@ export function Clients() {
         return Number.isFinite(d.getTime()) && d >= start && d < finish && d <= end;
       });
       const resolved = clientOperationalTickets.filter((ticket) => {
-        if (!ticket.resolvedDate || !["Resolved", "Closed"].includes(ticket.baseStatus ?? "")) return false;
+        if (!ticket.resolvedDate) return false;
         const d = new Date(ticket.resolvedDate);
         return Number.isFinite(d.getTime()) && d >= start && d < finish && d <= end;
       });
@@ -1856,7 +1863,7 @@ export function Clients() {
         <CardContent>
           <Typography sx={{ fontWeight: 800 }}>Tendência mensal de desempenho</Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Últimos seis meses até a data final selecionada. Variações em pontos percentuais (p.p.) frente ao mês anterior; sem medição não equivale a zero.
+            Últimos seis meses até o corte selecionado. O mês anterior é comparado até o mesmo dia, quando o mês atual está incompleto; sem medição não equivale a zero.
           </Typography>
           <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(3, minmax(0, 1fr))" }, gap: 1.5, mb: 2 }}>
             {performanceDeltas.map((metric) => (
@@ -1892,7 +1899,7 @@ export function Clients() {
             </ResponsiveContainer>
           </Box>
           <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1.5 }}>
-            SLA de resposta: tickets abertos no mês com prazos medidos. SLA de solução: tickets resolvidos no mês com prazos medidos. Taxa de resolução: abertos naquele mês que estão resolvidos ou fechados na data atual.
+            SLA de resposta: tickets abertos no mês com prazos medidos. SLA de solução: tickets resolvidos no mês com prazos medidos (inclusive reabertos posteriormente). Taxa de resolução da coorte: abertos naquele mês que estão resolvidos ou fechados no snapshot atual; não representa o percentual que já estava resolvido naquele mês.
           </Typography>
         </CardContent>
       </Card>
