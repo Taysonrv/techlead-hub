@@ -68,3 +68,21 @@ test("SLA uses only measured timestamps; missing response date is not breach",()
  assert.equal(bj.pendingByClient.length,1);
  assert.equal(bj.pendingNow.length,3);
 });
+
+test("resolução conta pelo evento mesmo com reabertura posterior, como no Dashboard",()=>{
+ const ticket=input(12,"2026-10-02T12:00:00-03:00",{
+  baseStatus:"InAttendance",resolvedDate:"2026-11-03T16:00:00-03:00",
+  firstResponseDueDate:null,firstResponseDate:null,
+ });
+ const r=buildClientMeetingAnalytics([ticket],cutoff,periodStart,periodEnd);
+ assert.equal(r.resolved.current,1);
+ assert.equal(r.pendingNow.length,1);
+ assert.equal(r.months.at(-1).resolved,1);
+});
+test("fechamentos cancelados não entram no indicador de fechamento mensal",()=>{
+ const valid=input(21,nov,{baseStatus:"Closed",closedDate:"2026-11-09T12:00:00-03:00"});
+ const canceled=input(22,nov,{baseStatus:"Canceled",closedDate:"2026-11-09T12:00:00-03:00",
+  canceledDate:"2026-11-09T12:00:00-03:00"});
+ const r=buildClientMeetingAnalytics([valid,canceled],cutoff,periodStart,periodEnd);
+ assert.equal(r.months.at(-1).closed,1);
+});
