@@ -123,8 +123,7 @@ export function SelectableHorizontalBars({title,description,parts,onInspect}:Pro
       </ResponsiveContainer>
     </Box>:empty}
     <Selector parts={parts.map(p=>({...p,detail:percent(p.value,total)}))} visible={choice.visible}
-      toggle={choice.toggle} all={choice.all} clear={choice.clear}
-      onInspect={key=>{if(months.length&&onInspect)onInspect(selectedMonth||months[months.length-1]!,key);}}/>
+      toggle={choice.toggle} all={choice.all} clear={choice.clear} onInspect={onInspect}/>
   </Box>;
 }
 export function SelectableLines({title,description,data,series,onInspect}:Props&{
@@ -156,7 +155,8 @@ export function SelectableLines({title,description,data,series,onInspect}:Props&
       </ResponsiveContainer>
     </Box>:empty}
     <Selector parts={series.map(s=>({name:s.name,key:s.key,color:s.color}))} visible={choice.visible}
-      toggle={choice.toggle} all={choice.all} clear={choice.clear}/>
+      toggle={choice.toggle} all={choice.all} clear={choice.clear}
+      onInspect={key=>{if(months.length&&onInspect)onInspect(selectedMonth||months[months.length-1]!,key);}}/>
     {onInspect&&months.length>0&&<Stack direction="row" sx={{gap:.55,alignItems:"center",flexWrap:"wrap",mt:1}}>
       <Typography variant="caption" color="text.secondary">Consultar mês:</Typography>
       {months.map(month=><Button key={month} size="small" variant={selectedMonth===month?"contained":"outlined"}
