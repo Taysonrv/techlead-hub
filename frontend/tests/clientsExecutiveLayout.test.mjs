@@ -56,3 +56,21 @@ test("tempo de solução não é inflado pela data posterior de encerramento",()
  assert.ok(page.includes("ticket.resolvedDate || ticket.closedDate"));
  assert.ok(page.includes("solvedInPeriod.averageMinutes"));
 });
+
+test("cliente é a seleção primária, filtros avançados recolhíveis, consulta pública removida",()=>{
+ assert.ok(page.includes("<Autocomplete"));
+ assert.ok(page.includes('noOptionsText="Nenhum cliente da carteira encontrado"'));
+ assert.ok(page.includes('aria-controls="clients-advanced-filters"'));
+ assert.ok(page.includes("<Collapse in={advancedFiltersOpen} unmountOnExit>"));
+ assert.ok(page.includes("Limpar filtros adicionais"));
+ assert.ok(!page.includes("<PublicClientEnrichment"));
+ assert.ok(!page.includes('from "../components/PublicIntegrations"'));
+});
+test("qualidade de atendimento aparece em quatro cards e não em chips de métricas",()=>{
+ const metricComponent=readFileSync(new URL("../src/components/ClientMeetingInsights.tsx",import.meta.url),"utf8");
+ for(const label of ["SLA de solução","Resolução no primeiro contato","Satisfação do cliente (CSAT)","Tickets reabertos no mês"]){
+  assert.ok(metricComponent.includes('<Kpi label="'+label),label);
+ }
+ assert.ok(!metricComponent.includes('<Chip size="small" variant="outlined" label={"Primeiro contato:'));
+ assert.ok(metricComponent.includes('a.csat.percentage===null?"Sem avaliações"'));
+});
