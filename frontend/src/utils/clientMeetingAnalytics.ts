@@ -13,6 +13,7 @@ export type WeeklyTicket = {
   firstResponseDate?:string|null; firstResponseDueDate?:string|null; dueDate?:string|null;
   azureWorkItem?:{id:number;workItemType:string;state:string;deliveredVersion:string|null}|null;
   taskNumber?:number|null;
+  satisfactionScore?:number|null; resolvedInFirstCall?:boolean|null; reopenCount?:number;
 };
 export type MonthSnapshot={month:string;opened:number;resolved:number;closed:number;pendingOpened:number;bugs:number};
 export type MeetingComparison={current:number;previous:number;difference:number;rate:number|null;currentTickets:WeeklyTicket[];previousTickets:WeeklyTicket[]};
@@ -25,7 +26,8 @@ export type ClientMeetingAnalytics={
   pendingByClient:Array<{name:string;value:number;ids:number[]}>;
   pendingByStatus:Array<{name:string;value:number;ids:number[]}>;
   responseSla:MeetingSla;solutionSla:MeetingSla;
-  workItems:number; correctionTasks:number;withVersion:number;resolvedFirstCall:number|null;
+  workItems:number; correctionTasks:number;withVersion:number;
+  firstCall:{count:number;measured:number;percentage:number|null}; csat:{positive:number;measured:number;percentage:number|null}; reopened:number;
 };
 
 function eventWithin(ticket:WeeklyTicket,field:"createdDate"|"resolvedDate"|"closedDate",start:Date,end:Date){
@@ -99,6 +101,10 @@ export function buildClientMeetingAnalytics(
   const response=calculateTimestampSla(openedTickets,"response");
   const solution=calculateTimestampSla(resolvedTickets,"solution");
   const azure=Array.from(new Map(valid.filter(t=>t.azureWorkItem).map(t=>[t.azureWorkItem!.id,t.azureWorkItem!])).values());
+  const firstCallMeasured=openedTickets.filter(t=>typeof t.resolvedInFirstCall==="boolean");
+  const firstCallCount=firstCallMeasured.filter(t=>t.resolvedInFirstCall===true).length;
+  const csatTickets=openedTickets.filter(t=>typeof t.satisfactionScore==="number");
+  const csatPositive=csatTickets.filter(t=>(t.satisfactionScore??0)>=4).length;
   return {
     month:monthKey(reference),reference,monthCutoff,previousCutoff,
     months:monthly,
@@ -113,6 +119,8 @@ export function buildClientMeetingAnalytics(
     workItems:azure.length,
     correctionTasks:azure.filter(x=>x.workItemType==="Correção Clientes").length,
     withVersion:azure.filter(x=>Boolean(x.deliveredVersion?.trim())).length,
-    resolvedFirstCall:null,
+    firstCall:{count:firstCallCount,measured:firstCallMeasured.length,percentage:firstCallMeasured.length?Math.round(firstCallCount/firstCallMeasured.length*1000)/10:null},
+    csat:{positive:csatPositive,measured:csatTickets.length,percentage:csatTickets.length?Math.round(csatPositive/csatTickets.length*1000)/10:null},
+    reopened:openedTickets.filter(t=>(t.reopenCount??0)>0).length,
   };
 }
