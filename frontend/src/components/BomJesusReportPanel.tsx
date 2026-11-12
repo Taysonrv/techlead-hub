@@ -95,7 +95,7 @@ export function ClientExecutiveReportPanel() {
     try {
       const response = await api.get("/coordination/client-executive-report.xlsx", { params: { client,startDate, endDate, slaTier }, responseType: "blob" });
       const url = URL.createObjectURL(new Blob([response.data], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
-      const a = document.createElement("a"); a.href = url; a.download = `Relatorio_Executivo_${client.replace(/[^A-Za-z0-9]+/g,"_").slice(0,56)}_${startDate}_a_${endDate}.xlsx`; a.click();
+      const a = document.createElement("a"); a.href = url; a.download = `Relatorio_Executivo_${(client==="__ALL__"?"Carteira_SIMER":client.replace(/[^A-Za-z0-9]+/g,"_").slice(0,56))}_${startDate}_a_${endDate}.xlsx`; a.click();
       window.setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (e) { setError(getApiErrorMessage(e, "Falha ao exportar Excel.")); }
     finally { setExporting(false); }
@@ -272,7 +272,7 @@ export function ClientExecutiveReportPanel() {
         <Button size="small" onClick={()=>setInsight(null)}>Fechar</Button>
       </Stack>
       {insight&&<TicketDrilldownExplorer key={insight.title+"-"+insight.tickets.length}
-        tickets={insight.tickets.map(t=>({...t,movideskId:t.id,service:t.serviceContext,baseStatus:(t as Row).baseStatus??null}))}
+        tickets={insight.tickets.map(t=>({...t,movideskId:t.id,service:t.serviceContext,baseStatus:t.baseStatus??null}))}
         onOpen={ticket=>{setInsight(null);navigate("/tickets?movidesk="+ticket.id);}}
         emptyLabel="Nenhum atendimento pertence a este segmento do gráfico."/>}
     </Box>
