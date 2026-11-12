@@ -9,7 +9,7 @@ import type { BomJesusExecutiveAudit } from "./BomJesusExecutiveDashboard";
 
 export type ClientManagementTicket = {
   id:number; subject:string; createdDate:string; client:string; category:string;
-  status:string; owner:string|null; ownerTeam:string|null; serviceContext:string;
+  status:string; baseStatus:string|null; owner:string|null; ownerTeam:string|null; serviceContext:string;
   taskNumber:number|null; taskState:string; deliveredVersion:string;
   isCorrectionTask:boolean; supportOlaBreached:boolean|null;
   olaStatus?:"ALERTA"|"DENTRO"|"NAO_MENSURAVEL"|"CANCELADA";
@@ -93,7 +93,7 @@ export function ClientManagementOverview({rows,audit,onInspect}:{rows:ClientMana
   const categoryRanking=useMemo(()=>rankTickets(rows,"category").slice(0,15),[rows]);
   const correctionsByTicket=useMemo(()=>new Map(audit.corrections.rows.map(x=>[x.ticketId,x.outcome])),[audit]);
   const inspect=(title:string,filter:(r:ClientManagementTicket)=>boolean)=>onInspect?.(title,rows.filter(filter));
-  const month=(iso:string)=>new Date(iso).toLocaleDateString("en-CA",{timeZone:"America/Sao_Paulo",year:"numeric",month:"2-digit"}).slice(0,7);
+  const month=(iso:string)=>new Date(Date.parse(iso)-3*3600000).toISOString().slice(0,7);
   return <Stack spacing={2}>
     <Box sx={{display:"grid",gridTemplateColumns:{xs:"repeat(2,minmax(0,1fr))",md:"repeat(3,minmax(0,1fr))",xl:"repeat(6,minmax(0,1fr))"},gap:1.5}}>
       {metricCard("Tickets do período",number(rows.length),"Clique para consultar",false,()=>onInspect?.("Todos os atendimentos",rows))}
