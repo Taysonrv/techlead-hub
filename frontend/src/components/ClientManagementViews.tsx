@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import {
-  Box, Button, Chip, FormControl, InputLabel, Link, MenuItem, Select,
+  Box, Button, Chip, Checkbox, FormControl, InputLabel, Link, Menu, MenuItem, Select,
   Stack, Table, TableBody, TableCell, TableContainer, TableHead, TablePagination,
   TableRow, TextField, Tooltip, Typography,
 } from "@mui/material";
@@ -62,17 +62,32 @@ const metricCard=(label:string,value:string|number,note:string,attention=false,o
 const panelSx={p:2.2,border:"1px solid",borderColor:"divider",borderRadius:2.5,backgroundColor:"background.paper",minWidth:0};
 function RankedTable({rows,title,metric="tickets",onInspect}:{rows:ClientManagementTicket[];title:Dimension;metric?:Measure;onInspect?:ClientInspect}){
   const ranking=rankTickets(rows,title,metric);
+  const [hidden,setHidden]=useState<string[]>([]);
+  const [menuAnchor,setMenuAnchor]=useState<HTMLElement|null>(null);
+  const shown=ranking.filter(x=>!hidden.includes(x.name));
   const label=dims.find(x=>x.key===title)?.label??title;
   const measureLabel=measures.find(x=>x.key===metric)?.label??metric;
-  const total=ranking.reduce((sum,item)=>sum+item.value,0);
+  const total=shown.reduce((sum,item)=>sum+item.value,0);
   return <Box sx={panelSx}>
     <Stack direction="row" sx={{justifyContent:"space-between",alignItems:"center",mb:1.5}}>
       <Box><Typography variant="subtitle1" sx={{fontWeight:750}}>Ranking por {label.toLocaleLowerCase("pt-BR")}</Typography>
-        <Typography variant="caption" color="text.secondary">{number(ranking.length)} grupos • base do cliente selecionado</Typography></Box>
+        <Typography variant="caption" color="text.secondary">{number(shown.length)} de {number(ranking.length)} grupos • base do cliente selecionado</Typography></Box>
+      <Button size="small" variant="outlined" sx={{textTransform:"none"}} onClick={e=>setMenuAnchor(e.currentTarget)}>Campos</Button>
+      <Menu anchorEl={menuAnchor} open={Boolean(menuAnchor)} onClose={()=>setMenuAnchor(null)}
+        slotProps={{paper:{sx:{maxWidth:"min(90vw,420px)",maxHeight:370}}}}>
+        <MenuItem onClick={()=>setHidden([])}>Selecionar todos</MenuItem>
+        <MenuItem onClick={()=>setHidden(ranking.map(x=>x.name))}>Desmarcar todos</MenuItem>
+        {ranking.map(item=><MenuItem key={item.name}
+          onClick={()=>setHidden(current=>current.includes(item.name)?current.filter(k=>k!==item.name):[...current,item.name])}
+          sx={{whiteSpace:"normal"}}>
+          <Checkbox size="small" checked={!hidden.includes(item.name)}/>
+          {item.name}
+        </MenuItem>)}
+      </Menu>
     </Stack>
     <TableContainer sx={{maxHeight:340}}><Table stickyHeader size="small">
       <TableHead><TableRow>{["#","Grupo","Tickets",metric==="tickets"?"Correções":measureLabel,"Participação"].map(v=><TableCell key={v} sx={{fontWeight:750,whiteSpace:"nowrap"}}>{v}</TableCell>)}</TableRow></TableHead>
-      <TableBody>{ranking.slice(0,10).map((r,i)=><TableRow hover key={r.name}>
+      <TableBody>{shown.slice(0,10).map((r,i)=><TableRow hover key={r.name}>
         <TableCell sx={{color:"text.secondary"}}>{i+1}</TableCell>
         <TableCell sx={{maxWidth:215}}>
           <Tooltip title={r.name}><Button size="small" color="inherit" onClick={()=>onInspect?.("Ranking — "+label+": "+r.name,rows.filter(ticket=>dimensionOf(ticket,title)===r.name && (metric==="tickets"||measured(ticket,metric)>0)))}
@@ -84,7 +99,7 @@ function RankedTable({rows,title,metric="tickets",onInspect}:{rows:ClientManagem
         <TableCell align="right">{total?(r.value/total*100).toLocaleString("pt-BR",{maximumFractionDigits:1}):"0"}%</TableCell>
       </TableRow>)}</TableBody>
     </Table></TableContainer>
-    {!ranking.length&&<Typography sx={{py:3,textAlign:"center"}} color="text.secondary">Sem registros no período.</Typography>}
+    {!shown.length&&<Typography sx={{py:3,textAlign:"center"}} color="text.secondary">Sem registros no período.</Typography>}
   </Box>;
 }
 
