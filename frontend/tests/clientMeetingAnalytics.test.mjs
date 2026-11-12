@@ -36,7 +36,7 @@ const dataRows=[
  input(9,nov,{baseStatus:"New",isWithSimer:false}),
 ];
 test("six-month meeting comparisons use matching calendar days and ignore future events",()=>{
- const x=buildClientMeetingAnalytics(dataRows,cutoff,periodStart,periodEnd);
+ const x=buildClientMeetingAnalytics(dataRows,cutoff,periodStart,periodEnd,cutoff);
  assert.equal(x.month,"2026-11");
  assert.equal(x.months.length,6);
  assert.equal(x.opened.current,3); // nov: 1,2,5 ; excluded 8 future and 9 non-SIMER
@@ -48,7 +48,7 @@ test("six-month meeting comparisons use matching calendar days and ignore future
  assert.equal(x.months.at(-1).resolved,2);
 });
 test("public backlog matches Dashboard current state, not period openings or internal tickets",()=>{
- const x=buildClientMeetingAnalytics(dataRows,cutoff,periodStart,periodEnd);
+ const x=buildClientMeetingAnalytics(dataRows,cutoff,periodStart,periodEnd,cutoff);
  assert.deepEqual(x.pendingNow.map(t=>t.id),[1,3,4,8]);
  assert.deepEqual(x.pendingInPeriod.map(t=>t.id),[1]);
  assert.deepEqual(x.pendingByClient.map(t=>[t.name,t.value]),[
@@ -58,13 +58,13 @@ test("public backlog matches Dashboard current state, not period openings or int
  assert.equal(x.months.at(-2).pendingOpened,1);
 });
 test("SLA uses only measured timestamps; missing response date is not breach",()=>{
- const x=buildClientMeetingAnalytics(dataRows,cutoff,periodStart,periodEnd);
+ const x=buildClientMeetingAnalytics(dataRows,cutoff,periodStart,periodEnd,cutoff);
  assert.equal(x.responseSla.measured,1);
  assert.equal(x.responseSla.within,1);
  assert.equal(x.responseSla.outside,0);
  assert.equal(x.responseSla.percentage,100);
  const clientOnly=dataRows.filter(t=>t.client.startsWith("BOM JESUS"));
- const bj=buildClientMeetingAnalytics(clientOnly,cutoff,periodStart,periodEnd);
+ const bj=buildClientMeetingAnalytics(clientOnly,cutoff,periodStart,periodEnd,cutoff);
  assert.equal(bj.pendingByClient.length,1);
  assert.equal(bj.pendingNow.length,3);
 });
@@ -74,7 +74,7 @@ test("resolução conta pelo evento mesmo com reabertura posterior, como no Dash
   baseStatus:"InAttendance",resolvedDate:"2026-11-03T16:00:00-03:00",
   firstResponseDueDate:null,firstResponseDate:null,
  });
- const r=buildClientMeetingAnalytics([ticket],cutoff,periodStart,periodEnd);
+ const r=buildClientMeetingAnalytics([ticket],cutoff,periodStart,periodEnd,cutoff);
  assert.equal(r.resolved.current,1);
  assert.equal(r.pendingNow.length,1);
  assert.equal(r.months.at(-1).resolved,1);
@@ -83,7 +83,7 @@ test("fechamentos cancelados não entram no indicador de fechamento mensal",()=>
  const valid=input(21,nov,{baseStatus:"Closed",closedDate:"2026-11-09T12:00:00-03:00"});
  const canceled=input(22,nov,{baseStatus:"Canceled",closedDate:"2026-11-09T12:00:00-03:00",
   canceledDate:"2026-11-09T12:00:00-03:00"});
- const r=buildClientMeetingAnalytics([valid,canceled],cutoff,periodStart,periodEnd);
+ const r=buildClientMeetingAnalytics([valid,canceled],cutoff,periodStart,periodEnd,cutoff);
  assert.equal(r.months.at(-1).closed,1);
 });
 
@@ -92,11 +92,21 @@ test("pending backlog groups by responsible and aging rather than mixing with SL
  const inputB=input(102,"2026-10-20T12:00:00-03:00",{owner:"ANA",baseStatus:"Stopped",ticketType:2});
  const inputC=input(103,"2026-06-01T12:00:00-03:00",{owner:"BIA",baseStatus:"InAttendance",ticketType:2});
  const inputInternal=input(104,"2026-06-01T12:00:00-03:00",{owner:"BIA",baseStatus:"InAttendance",ticketType:1});
- const result=buildClientMeetingAnalytics([inputA,inputB,inputC,inputInternal],cutoff,periodStart,periodEnd);
+ const result=buildClientMeetingAnalytics([inputA,inputB,inputC,inputInternal],cutoff,periodStart,periodEnd,cutoff);
  assert.deepEqual(result.pendingByOwner.map(r=>[r.name,r.value]),[["ANA",2],["BIA",1]]);
  const byAge=Object.fromEntries(result.pendingByAge.map(r=>[r.name,r.value]));
  assert.equal(byAge["Até 7 dias"],1);
  assert.equal(byAge["8 a 30 dias"],1);
  assert.equal(byAge["Mais de 90 dias"],1);
  assert.equal(result.pendingNow.length,3);
+});
+
+test("antiguidade do backlog continua atual quando o filtro mensal é passado",()=>{
+ const opened=input(201,"2026-10-01T12:00:00-03:00",{baseStatus:"New",ticketType:2});
+ const historicEnd=new Date("2026-10-15T23:59:59-03:00");
+ const currentSnapshot=cutoff;
+ const r=buildClientMeetingAnalytics([opened],historicEnd,periodStart,periodEnd,currentSnapshot);
+ assert.equal(r.month,"2026-10");
+ assert.equal(r.pendingNow.length,1);
+ assert.equal(r.pendingByAge[0].name,"31 a 90 dias");
 });
