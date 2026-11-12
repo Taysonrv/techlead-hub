@@ -614,11 +614,10 @@ export function Clients() {
   }, [clientOperationalTickets, effectiveEndDate]);
 
   const [hiddenCategoryLines, setHiddenCategoryLines] = useState<Set<string>>(() => new Set());
-  const toggleLine = (key: string, count: number, setter: React.Dispatch<React.SetStateAction<Set<string>>>) => {
-    setter((previous) => {
-      const next = new Set(previous);
-      if (next.has(key)) next.delete(key);
-      else if (next.size < count - 1) next.add(key);
+  const toggleLine = (key: string, _count: number, setter: React.Dispatch<React.SetStateAction<Set<string>>>) => {
+    setter(previous=>{
+      const next=new Set(previous);
+      if(next.has(key))next.delete(key);else next.add(key);
       return next;
     });
   };
@@ -627,7 +626,7 @@ export function Clients() {
     setHiddenPerformanceLines((previous) => {
       const next = new Set(previous);
       if (next.has(key)) next.delete(key);
-      else if (next.size < 2) next.add(key); // preserve at least one visible series
+      else next.add(key); // todos os campos podem ser ocultados e reativados pela legenda
       return next;
     });
   };
