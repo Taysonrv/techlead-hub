@@ -1366,6 +1366,7 @@ export function Clients() {
             display: none !important;
           }
           body.client-pdf-export .client-presentation-container {
+            break-inside: auto !important;
             display: block !important;
             width: 100% !important;
             max-width: none !important;
@@ -1388,6 +1389,8 @@ export function Clients() {
           }
           body.client-pdf-export #client-export-content {
             display: block !important;
+            overflow: visible !important;
+            break-inside: auto !important;
             width: 100% !important;
             margin: 0 !important;
           }
