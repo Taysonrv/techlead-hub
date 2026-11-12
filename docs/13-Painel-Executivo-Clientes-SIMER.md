@@ -91,3 +91,23 @@ Critérios de aceite:
 - Em Multidimensional, trocar linhas, colunas e indicador. Confirmar que os totais das categorias e a soma "Outros" preservam o total geral, inclusive ao exibir Top 10.
 - Em Alterar parâmetros, cancelar sem aplicar não deve alterar o recorte; aplicar uma escolha autorizada deve atualizar todas as abas e o Excel. Um intervalo inválido de mais de 366 dias deve ser bloqueado.
 - Conferir o Excel da Diretoria: visual, gráficos, rankings, matriz multidimensional e trilha auditável devem corresponder ao mesmo recorte.
+
+## Filtros interativos, séries e exploração lateral (12/11/2026)
+- **Alterar parâmetros:** a lista de clientes inclui `Selecionar todos — carteira SIMER` (`client=__ALL__`) e cada conta individual. O backend executa um OR estritamente limitado à allowlist das cooperativas e à conta condicional SIAGRI Sistemas, sempre exigindo responsável do Suporte SIMER. Não aceita wildcard textual ou cliente externo.
+- **Roscas:** cada card possui `Selecionar todos`, `Desmarcar todos` e checkbox por fatia. Ao ocultar ou restaurar segmentos, os percentuais e o total no centro são recalculados para os itens visíveis. A relação original de tickets não é alterada.
+- **Barras e linhas:** cada série/grupo pode ser ocultado/restituído independentemente. Ao clicar em uma barra, fatia, ponto da linha ou ação de lista na legenda, abrir um painel lateral com os tickets daquele segmento. No gráfico de linha, a seleção da série específica utiliza `activeDataKey` do Recharts; escolher um mês sem série selecionada consulta todos os atendimentos do mês.
+- **Rankings:** botão `Campos` em cada ranking, com seleção individual, selecionar todos/desmarcar todos e participação recalculada.
+- **Multidimensional:** checkboxes para mostrar/ocultar as colunas de categoria. Itens ocultos entram em `Outros` e o total geral continua correto. Clicar no cruzamento mostra exatamente a relação daquela célula.
+- **Indicadores e tabelas:** cards de KPI, rankings, linhas de tickets, auditoria OLA, correções, Adequações, Vistra e recorrências abrem o mesmo Drawer de investigação à direita.
+- **Drawer:** utiliza `detailDrawerPaperSx` e `TicketDrilldownExplorer` já existentes. Inclui pesquisa, status, abrir atendimento e cópia de número, com renderização progressiva de 70 tickets por lote quando chamado no painel executivo.
+- **Excel da Diretoria:** mantém todos os resultados do período/cliente selecionados, independentemente de ocultações visuais temporárias de séries. Esses controles afetam a visualização na tela, não a base canônica exportada.
+
+### Homologação específica
+1. Selecionar Bom Jesus e checar os percentuais das roscas; desmarcar Concluídas e verificar soma de **100%** entre as fatias remanescentes, restaurando com Selecionar todos.
+2. Desmarcar cada categoria no gráfico de barras e cada série do gráfico de linha; verificar comportamento de zero itens e a recomposição ao remarcar.
+3. Clicar em uma fatia, barra e legenda (ícone de lista) e conferir se os IDs do Drawer pertencem somente à classificação clicada.
+4. Clicar em Alertas de OLA e verificar que os tickets têm `olaStatus=ALERTA`, sem contar Tasks canceladas.
+5. Verificar botões `Campos` dos rankings e colunas da matriz; o total geral da matriz deve permanecer invariável mesmo com colunas ocultas.
+6. Alterar Cliente para `Selecionar todos — carteira SIMER`; conferir soma por cliente, isolamento de carteira e abas da Diretoria. Não misturar recorrências de clientes diferentes.
+7. Abrir indicador com mais de 70 tickets e usar Mostrar mais; pesquisa deve operar na relação completa.
+8. Reexecutar `npm run build && npm test` no backend; `npm run build && npm test && npm run lint` no frontend.
