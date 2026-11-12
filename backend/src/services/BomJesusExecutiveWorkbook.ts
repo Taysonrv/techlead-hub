@@ -411,7 +411,8 @@ export function createBomJesusExecutiveWorkbook(report:FullReport) {
   // Complementos executivos alinhados às novas abas nativas da Coordenação.
   // O número de casos por responsável representa carteira atual, não desempenho individual.
   const alertTicketIds=new Set(e.ola.cases.filter(x=>x.status==="ALERTA").map(x=>x.ticketId));
-  const dimension=(row:BomJesusRow,key:"owner"|"category"|"status"|"service")=>{
+  const dimension=(row:BomJesusRow,key:"client"|"owner"|"category"|"status"|"service")=>{
+    if(key==="client")return row.client?.trim()||"Sem cliente";
     if(key==="owner")return row.owner?.trim()||"Não atribuído";
     if(key==="category")return row.category?.trim()||"Sem categoria";
     if(key==="status")return row.status?.trim()||"Sem situação";
@@ -419,7 +420,7 @@ export function createBomJesusExecutiveWorkbook(report:FullReport) {
     return levels.length>1?levels[1]!:levels[0]||"Não classificado";
   };
   type RankingRecord={name:string;tickets:number;bugs:number;corrections:number;olaAlerts:number};
-  const rank=(key:"owner"|"category"|"status"|"service")=>{
+  const rank=(key:"client"|"owner"|"category"|"status"|"service")=>{
     const items=new Map<string,RankingRecord>();
     for(const row of report.rows){
       const name=dimension(row,key);
@@ -442,6 +443,7 @@ export function createBomJesusExecutiveWorkbook(report:FullReport) {
     {key:"category" as const,label:"CATEGORIA ATUAL"},
     {key:"status" as const,label:"SITUAÇÃO ATUAL"},
     {key:"service" as const,label:"ROTINA / SERVIÇO"},
+    {key:"client" as const,label:"CLIENTE DA CARTEIRA"},
   ];
   for(const item of sections){
     titleBar(rankingWs,nextRow++,"A","F",item.label);
