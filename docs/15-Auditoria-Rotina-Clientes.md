@@ -123,3 +123,31 @@ A função local `isBug` incluía como "Bug" qualquer ticket com Task Azure de `
 8. Validar `npm run build && npm test && npm run lint` no frontend local e revisar a apresentação/PDF da Bom Jesus.
 
 **Regressões adicionadas:** `frontend/tests/clientMeetingAnalytics.test.mjs` e `frontend/tests/clientsExecutiveLayout.test.mjs` agora cobrem os três indicadores, a ausência do card removido, a busca de cliente, os filtros recolhidos e os KPIs visuais.
+
+## Padronização da interface executiva — 12/11/2026
+
+### Filtros alinhados
+- O `PeriodFilter` existente foi removido **somente** do slot `PageHeader.action` da página Clientes e reposicionado ao lado do Autocomplete de Cliente na barra imediatamente abaixo do cabeçalho.
+- A barra usa grade responsiva (1 coluna mobile, 2 em médio, 3 em desktop largo), sem duplicar o `PeriodFilter`. O filtro continua conectado ao `FiltersContext`, inclusive para datas personalizadas.
+- O seletor de Cliente recebeu largura máxima de 620 px, altura e borda compatíveis com o controle global de período e rótulo acessível `clients-client-selector`. O helper text extenso saiu da área do campo, substituído por explicação discreta abaixo dos filtros.
+- `Mais filtros`, indicador de filtros ativos, `Limpar tudo`, chips removíveis e demais controles permanecem operacionais.
+
+### Indicadores visuais
+- A implementação customizada de `Kpi` no componente `ClientMeetingInsights` passou a encapsular o **mesmo `KpiCard`** do Dashboard, sem criar outro componente de layout independente.
+- Os dez indicadores do painel semanal agora têm a mesma borda, degradê, barra semântica lateral, tipografia, comportamento de hover/foco, estrela de favorito e botão **Informações (i)** do Dashboard.
+- `KPI_EXPLANATIONS` fornece definição de cada métrica para o tooltip, com origem Movidesk e regra de período. A abertura do Drawer por clique no card foi preservada.
+- Os cards de SLA de primeira resposta e de solução utilizam **exatamente** a régua visual do Dashboard: 90%+ verde; 80% a 89,9% amarelo; abaixo de 80% vermelho; sem medição não sinaliza infração.
+- Os blocos utilizam grid responsivo de três colunas para os seis KPIs principais e quatro para os indicadores de qualidade, com duas/uma coluna(s) em telas pequenas.
+- Indicadores CSAT sem respostas válidas exibem `N/D` com descrição `Sem avaliações` no card e explicação no tooltip, para evitar corte visual de texto longo.
+- Cards da apresentação também recebem tooltip de informação, mas os gráficos e as caixas de apoio do PDF continuam não interativos.
+
+### Homologação
+1. Em Clientes, selecionar Bom Jesus e verificar que o campo Cliente e o Período estão na mesma barra, fora do cabeçalho.
+2. Alternar `Este mês`, `Este semestre` e `Personalizado`. Conferir quebra responsiva sem sobreposição com Mais filtros.
+3. Passar mouse/foco no `i` de cada KPI e conferir a regra de cálculo sem abrir o Drawer.
+4. Favoritar e desfavoritar um card e conferir que a ação não abre os tickets.
+5. Clicar no corpo dos KPIs e verificar abertura do Drawer com o universo correto.
+6. Comparar cores dos SLAs com Dashboard no mesmo recorte: verde 90%+, amarelo 80–89,9%, vermelho abaixo de 80%.
+7. Validar `npm run build`, `npm test` e `npm run lint` no frontend; nenhum build remoto foi executado nesta revisão.
+
+**Arquivos desta evolução:** `frontend/src/pages/Clients.tsx`, `frontend/src/components/ClientMeetingInsights.tsx`, `frontend/tests/clientsExecutiveLayout.test.mjs`. `PeriodFilter.tsx` e `KpiCard.tsx` foram reutilizados sem alterar seu comportamento nas outras telas.
