@@ -587,7 +587,7 @@ export function Clients() {
     { start: startOfDay(effectiveStartDate), end: endOfDay(effectiveEndDate) },
   ), [clientOperationalTickets, effectiveStartDate, effectiveEndDate]);
   const meetingAnalytics = useMemo(() => buildClientMeetingAnalytics(
-    clientOperationalTickets, new Date(Math.min(effectiveEndDate.getTime(),Date.now())), startOfDay(effectiveStartDate), endOfDay(effectiveEndDate),
+    clientOperationalTickets, new Date(Math.min(effectiveEndDate.getTime(),endOfDay(new Date()).getTime())), startOfDay(effectiveStartDate), endOfDay(effectiveEndDate),
   ), [clientOperationalTickets, effectiveStartDate, effectiveEndDate]);
 
   const movementSeries = useMemo(() => {
