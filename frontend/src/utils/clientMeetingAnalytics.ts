@@ -63,6 +63,7 @@ const isPublicPending=(t:WeeklyTicket)=>t.ticketType===2&&isOperationallyOpen(t)
  */
 export function buildClientMeetingAnalytics(
   tickets:WeeklyTicket[],referenceDate:Date,periodStart:Date,periodEnd:Date,
+  backlogSnapshotDate:Date=new Date(),
 ):ClientMeetingAnalytics{
   const valid=tickets.filter(t=>t.isWithSimer===true);
   const reference=new Date(referenceDate);
@@ -100,8 +101,9 @@ export function buildClientMeetingAnalytics(
     });
   }
   const pendingNow=valid.filter(isPublicPending);
-  // O chamador já limita a referência ao dia atual; manter cálculo puro permite testes reprodutíveis.
-  const snapshotCutoff=new Date(reference);
+  // Antiguidade sempre considera a fotografia atual, não a data histórica do filtro.
+  // Parâmetro explícito permite testes reprodutíveis e evita misturar marcos temporais.
+  const snapshotCutoff=new Date(backlogSnapshotDate);
   const pendingAge=(ticket:WeeklyTicket)=>{
     const opening=Date.parse(ticket.createdDate);
     if(!Number.isFinite(opening))return "Abertura não informada";
