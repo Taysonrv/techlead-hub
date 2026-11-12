@@ -86,15 +86,52 @@ export function ClientMeetingInsights({analysis:a,tickets,selectedClient,onShowT
           note={br(a.responseSla.within)+" de "+br(a.responseSla.measured)+" tickets medidos"}
           onClick={()=>open("SLA de 1ª resposta — medidos",a.responseSla.tickets)}/>
       </Box>
-      <Stack direction={{xs:"column",md:"row"}} sx={{justifyContent:"space-between",alignItems:{md:"center"},gap:1,mb:2,px:.5}}>
-        <Stack direction="row" sx={{gap:1,flexWrap:"wrap"}}>
-          <Chip size="small" variant="outlined" color="success" label={"SLA de solução: "+p(a.solutionSla.percentage)+" · "+a.solutionSla.measured+" medidos"}/>
-          <Chip size="small" variant="outlined" label={"Primeiro contato: "+p(a.firstCall.percentage)+" · "+a.firstCall.measured+" medidos"}/>
-          <Chip size="small" variant="outlined" label={"CSAT positivo: "+p(a.csat.percentage)+" · "+a.csat.measured+" avaliações"}/>
-          <Chip size="small" variant="outlined" label={"Reaberturas: "+br(a.reopened)}/>
-        </Stack>
-        <Typography variant="caption" color="text.secondary">Comparação: 01/{month.slice(5,7)}–{nowName} × mês anterior até {prevName}</Typography>
-      </Stack>
+      <Box sx={{mb:1.1,display:"flex",justifyContent:"space-between",gap:1,alignItems:"center",flexWrap:"wrap"}}>
+        <Typography variant="subtitle2" sx={{fontWeight:800}}>Qualidade e efetividade do atendimento</Typography>
+        <Typography variant="caption" color="text.secondary">
+          Comparação mensal: 01/{month.slice(5,7)}–{nowName} × mês anterior até {prevName}
+        </Typography>
+      </Box>
+      <Box sx={{display:"grid",gridTemplateColumns:{xs:"repeat(2,minmax(0,1fr))",lg:"repeat(4,minmax(0,1fr))"},gap:1.2,mb:1.2}}>
+        <Kpi label="SLA de solução" value={p(a.solutionSla.percentage)}
+          note={br(a.solutionSla.within)+" de "+br(a.solutionSla.measured)+" resoluções com prazo medido"}
+          delta={a.solutionSla.outside+" fora da meta"} color="success.main"
+          onClick={()=>open("SLA de solução — tickets medidos no mês",a.solutionSla.tickets)}/>
+        <Kpi label="Resolução no primeiro contato" value={p(a.firstCall.percentage)}
+          note={a.firstCall.measured
+            ? br(a.firstCall.count)+" de "+br(a.firstCall.measured)+" resolvidos marcados como sim no Movidesk"
+            : "Nenhuma marcação disponível entre os resolvidos do mês"}
+          delta={a.firstCall.eligible>a.firstCall.measured
+            ? br(a.firstCall.eligible-a.firstCall.measured)+" resolução(ões) sem campo informado"
+            : a.firstCall.count===0&&a.firstCall.measured>0?"Verificar preenchimento na origem":undefined}
+          onClick={()=>open("Primeiro contato — resolvidos com marcação",
+            resolved.filter(t=>typeof t.resolvedInFirstCall==="boolean"))}/>
+        <Kpi label="Satisfação do cliente (CSAT)"
+          value={a.csat.percentage===null?"Sem avaliações":p(a.csat.percentage)}
+          note={a.csat.measured
+            ? br(a.csat.positive)+" avaliações positivas de "+br(a.csat.measured)+" recebidas neste mês"
+            : a.csat.historicalMeasured
+              ? br(a.csat.historicalMeasured)+" avaliações vinculadas em outros períodos"
+              : "Nenhuma resposta de pesquisa vinculada ao snapshot"}
+          delta={a.csat.undated?"Existem "+br(a.csat.undated)+" avaliações sem data de resposta":undefined}
+          onClick={()=>open("Avaliações de satisfação recebidas em "+month,
+            tickets.filter(t=>typeof t.satisfactionScore==="number" && event(t,"satisfactionDate",month)))}/>
+        <Kpi label="Tickets reabertos no mês" value={br(a.reopened)}
+          note="Último registro de reabertura na API Movidesk"
+          delta="Não equivale à quantidade total de reaberturas"
+          onClick={()=>open("Tickets com reabertura registrada em "+month,
+            tickets.filter(t=>event(t,"reopenedDate",month)))}/>
+      </Box>
+      {(a.csat.measured===0||(a.firstCall.measured>0&&a.firstCall.count===0))&&
+        <Typography variant="caption" color="text.secondary" sx={{display:"block",mb:2,px:.5}}>
+          {a.csat.measured===0
+            ? "CSAT: não há respostas de pesquisa com data neste mês vinculadas aos tickets sincronizados. O resultado depende da importação de pesquisas do Movidesk; ausência de registros não é satisfação zero."
+            : ""}
+          {a.csat.measured===0&&a.firstCall.measured>0&&a.firstCall.count===0?" ":""}
+          {a.firstCall.measured>0&&a.firstCall.count===0
+            ? "Primeiro contato: as resoluções medidas estão marcadas como 'não' pelo Movidesk. Valide o preenchimento desse campo na origem."
+            : ""}
+        </Typography>}
       <Box sx={{display:"grid",gridTemplateColumns:{xs:"1fr",xl:"1fr 1fr"},gap:2,mb:2}}>
         <SelectableLines title="Evolução mensal — demanda e resolutividade"
           description="Seis meses • aberturas pela criação e resoluções pela data de conclusão; selecione séries para analisar"
