@@ -5,7 +5,7 @@ import { TicketDrilldownExplorer } from "./TicketDrilldownExplorer";
 import { detailDrawerPaperSx } from "../theme/layoutTokens";
 import { useNavigate } from "react-router-dom";
 import { DashboardOutlined, EmojiEventsOutlined, FormatListBulletedOutlined, AccountTreeOutlined, FactCheckOutlined, TuneOutlined, FileDownloadOutlined, RefreshOutlined } from "@mui/icons-material";
-import { Accordion, AccordionDetails, AccordionSummary, Alert, Box, Button, Card, CardContent, Chip, CircularProgress, Dialog, DialogContent, DialogTitle, Drawer, Divider, MenuItem, Stack, Tab, Tabs, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography } from "@mui/material";
+import { Accordion, AccordionDetails, AccordionSummary, Alert, Box, Button, Card, CardContent, Chip, CircularProgress, Radio, Dialog, DialogContent, DialogTitle, Drawer, Divider, MenuItem, Stack, Tab, Tabs, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography } from "@mui/material";
 import { api, getApiErrorMessage } from "../services/api";
 
 type CategorySnapshot = { previousCategory: string | null; category: string; source: string; observedAt: string; sourceLastUpdate: string | null; kind: string };
@@ -155,9 +155,9 @@ export function ClientExecutiveReportPanel() {
               slotProps={{select:{MenuProps:{slotProps:{paper:{sx:{maxWidth:"min(94vw,440px)",width:"min(94vw,440px)",maxHeight:"min(55vh,410px)"}}},autoFocus:false}}}}
               sx={{"& .MuiSelect-select":{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}}>
               <MenuItem value="__ALL__" sx={{fontWeight:750,color:"primary.main",whiteSpace:"normal"}}>
-                <Checkbox checked={draft.client==="__ALL__"} size="small" sx={{mr:1}}/>Selecionar todos — carteira SIMER
+                <Radio checked={draft.client==="__ALL__"} size="small" sx={{mr:1}}/>Selecionar todos — carteira SIMER
               </MenuItem>
-              {clients.map(name=><MenuItem key={name} value={name} sx={{whiteSpace:"normal",overflowWrap:"anywhere"}}><Checkbox checked={draft.client===name} size="small" sx={{mr:1}}/>{name}</MenuItem>)}
+              {clients.map(name=><MenuItem key={name} value={name} sx={{whiteSpace:"normal",overflowWrap:"anywhere"}}><Radio checked={draft.client===name} size="small" sx={{mr:1}}/>{name}</MenuItem>)}
             </TextField>
             <TextField select fullWidth label="Período" size="small" value={draft.periodPreset}
               onChange={e=>choosePeriod(e.target.value)}>
