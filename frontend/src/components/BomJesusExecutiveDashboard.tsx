@@ -40,7 +40,7 @@ const indicator=(label:string,value:string|number,note?:string,onClick?:()=>void
 type Props={executive:BomJesusExecutiveAudit; clientName:string;rows:ClientManagementTicket[];onInspect?:ClientInspect};
 export function BomJesusExecutiveDashboard({executive:a,clientName,rows,onInspect}:Props){
   const inspect=(title:string,filter:(row:ClientManagementTicket)=>boolean)=>onInspect?.(title,rows.filter(filter));
-  const month=(iso:string)=>new Date(iso).toLocaleDateString("en-CA",{timeZone:"America/Sao_Paulo",year:"numeric",month:"2-digit"}).slice(0,7);
+  const month=(iso:string)=>new Date(Date.parse(iso)-3*3600000).toISOString().slice(0,7);
   const [tab,setTab]=useState(0);
   const [query,setQuery]=useState("");
   const [olaStatus,setOlaStatus]=useState("TODOS");
