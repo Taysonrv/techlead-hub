@@ -114,14 +114,21 @@ export function ClientMeetingInsights({analysis:a,tickets,selectedClient,onShowT
         />
       </Box>
       <Box sx={{display:"grid",gridTemplateColumns:{xs:"1fr",xl:"1.35fr .8fr"},gap:2}}>
-        <SelectableHorizontalBars title={selectedClient?"Pendentes públicos — "+selectedClient:"Pendentes públicos por cliente"}
-          description="Mesmo conceito do Dashboard: tickets públicos (tipo 2) com status Novo, Em atendimento ou Parado. Estoque atual."
-          parts={a.pendingByClient.map((r,i)=>({name:r.name,value:r.value,color:i===0?"#197350":i%2===0?"#316885":"#65A98C"}))}
-          onInspect={name=>open("Pendentes atuais — "+name,byIds(a.pendingByClient.find(x=>x.name===name)?.ids??[]))}
+        <SelectableHorizontalBars title={selectedClient?"Pendentes públicos por responsável":"Pendentes públicos por cliente"}
+          description={selectedClient?"Distribuição das pendências atuais entre responsáveis da Bom Jesus; não representa produtividade individual.":"Mesmo conceito do Dashboard: estoque atual de tickets públicos ainda abertos por cliente."}
+          parts={(selectedClient?a.pendingByOwner:a.pendingByClient).map((r,i)=>({name:r.name,value:r.value,color:i===0?"#197350":i%2===0?"#316885":"#65A98C"}))}
+          onInspect={name=>open("Pendentes atuais — "+name,byIds((selectedClient?a.pendingByOwner:a.pendingByClient).find(x=>x.name===name)?.ids??[]))}
         />
         <SelectableDonut title="Situação dos pendentes públicos" description="Composição atual por status canônico"
           parts={statusKeys.map((r,i)=>({name:r.name,value:r.value,color:["#197350","#F26727","#316885","#82977F"][i%4]!}))}
           onInspect={name=>open("Pendentes atuais — "+name,byIds(a.pendingByStatus.find(x=>x.name===name)?.ids??[]))}
+        />
+      </Box>
+      <Box sx={{mt:2}}>
+        <SelectableHorizontalBars title="Antiguidade dos pendentes públicos"
+          description="Tempo decorrido desde a abertura dos tickets que permanecem pendentes; não é prazo contratual de SLA."
+          parts={a.pendingByAge.map((r,i)=>({name:r.name,value:r.value,color:["#197350","#316885","#BD7229","#B13F3B","#82977F"][i%5]!}))}
+          onInspect={name=>open("Pendentes com antiguidade — "+name,byIds(a.pendingByAge.find(x=>x.name===name)?.ids??[]))}
         />
       </Box>
       <Divider sx={{my:1.8}}/>
