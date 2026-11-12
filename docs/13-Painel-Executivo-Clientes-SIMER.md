@@ -111,3 +111,11 @@ Critérios de aceite:
 6. Alterar Cliente para `Selecionar todos — carteira SIMER`; conferir soma por cliente, isolamento de carteira e abas da Diretoria. Não misturar recorrências de clientes diferentes.
 7. Abrir indicador com mais de 70 tickets e usar Mostrar mais; pesquisa deve operar na relação completa.
 8. Reexecutar `npm run build && npm test` no backend; `npm run build && npm test && npm run lint` no frontend.
+
+### Complemento de auditoria do filtro Toda a carteira
+- O modo `__ALL__` respeita somente clientes de `SIMER_CLIENTS` e o prefixo condicional `SIAGRI SISTEMAS`, com responsáveis explícitos no Suporte SIMER.
+- Na Visão Geral, quando houver mais de um cliente, aparece um ranking extra por cliente.
+- Rankings e Multidimensional permitem utilizar `Cliente da carteira` como dimensão para identificar diferenças entre cooperativas.
+- Na aba `13 RANKINGS` do Excel, há uma seção adicional `CLIENTE DA CARTEIRA`, mantendo os 14 worksheets originais.
+- Agrupamentos de recorrência no relatório consolidado incorporam a identificação do cliente para evitar falso positivo entre cooperativas.
+- O menu usa escolha exclusiva entre um cliente ou Toda a carteira (não é seleção arbitrária de vários clientes).
