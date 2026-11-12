@@ -14,10 +14,11 @@ export type ClientManagementTicket = {
   isCorrectionTask:boolean; supportOlaBreached:boolean|null;
   olaStatus?:"ALERTA"|"DENTRO"|"NAO_MENSURAVEL"|"CANCELADA";
 };
-export type ClientDimension="owner"|"category"|"status"|"service";
+export type ClientDimension="client"|"owner"|"category"|"status"|"service";
 type Dimension=ClientDimension;
 type Measure="tickets"|"bugs"|"corrections"|"olaAlerts";
 const dims:ReadonlyArray<{key:Dimension;label:string}>=[
+  {key:"client",label:"Cliente da carteira"},
   {key:"owner",label:"Analista responsável"}, {key:"category",label:"Categoria atual"},
   {key:"status",label:"Situação do atendimento"}, {key:"service",label:"Rotina / serviço"},
 ];
@@ -26,6 +27,7 @@ const measures:ReadonlyArray<{key:Measure;label:string}>=[
   {key:"corrections",label:"Correções vinculadas"}, {key:"olaAlerts",label:"Alertas de OLA"},
 ];
 const dimensionOf=(r:ClientManagementTicket,dim:Dimension):string=>{
+  if(dim==="client")return r.client?.trim()||"Sem cliente";
   if(dim==="owner")return r.owner?.trim()||"Não atribuído";
   if(dim==="category")return r.category?.trim()||"Sem categoria";
   if(dim==="status")return r.status?.trim()||"Sem situação";
@@ -155,6 +157,7 @@ export function ClientManagementOverview({rows,audit,onInspect}:{rows:ClientMana
         month(r.createdDate)===selectedMonth&&(series!=="corrections"||r.isCorrectionTask))}
     />
     <Box sx={{display:"grid",gridTemplateColumns:{xs:"1fr",lg:"1fr 1fr"},gap:2}}>
+      {new Set(rows.map(r=>r.client)).size>1&&<RankedTable rows={rows} title="client" onInspect={onInspect}/>}
       <RankedTable rows={rows} title="status" onInspect={onInspect}/>
       <RankedTable rows={rows} title="service" onInspect={onInspect}/>
     </Box>
