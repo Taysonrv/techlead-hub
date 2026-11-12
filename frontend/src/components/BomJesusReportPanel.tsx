@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { BomJesusExecutiveDashboard, type BomJesusExecutiveAudit } from "./BomJesusExecutiveDashboard";
-import { ClientManagementOverview, ClientManagementRankings, ClientManagementTickets, ClientManagementPivot, type ClientManagementTicket } from "./ClientManagementViews";
+import { ClientManagementOverview, ClientManagementRankings, ClientManagementTickets, ClientManagementPivot, type ClientManagementTicket, type ClientInspect } from "./ClientManagementViews";
+import { TicketDrilldownExplorer } from "./TicketDrilldownExplorer";
+import { detailDrawerPaperSx } from "../theme/layoutTokens";
+import { useNavigate } from "react-router-dom";
 import { DashboardOutlined, EmojiEventsOutlined, FormatListBulletedOutlined, AccountTreeOutlined, FactCheckOutlined, TuneOutlined, FileDownloadOutlined, RefreshOutlined } from "@mui/icons-material";
 import { Accordion, AccordionDetails, AccordionSummary, Alert, Box, Button, Card, CardContent, Chip, CircularProgress, Dialog, DialogContent, DialogTitle, Drawer, Divider, MenuItem, Stack, Tab, Tabs, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography } from "@mui/material";
 import { api, getApiErrorMessage } from "../services/api";
@@ -9,7 +12,7 @@ type CategorySnapshot = { previousCategory: string | null; category: string; sou
 type SlaMetric = { minutes: number | null; targetMinutes: number | null; exceeded: boolean | null; overMinutes: number | null; percent: number | null; state: string };
 type SlaEvidence = { agreement: string | null; tier: "PADRAO" | "VIP"; tierSource: string; tierVerified: boolean; priority: string | null; kind: string; eligible: boolean; warnings: string[]; response: SlaMetric; support: SlaMetric; factory: SlaMetric; total: SlaMetric; pauseMinutesSupport: number; pauseMinutesFactory: number };
 type Row = ClientManagementTicket & { sla: SlaEvidence; initialObservedCategory: string | null; initialObservedAt: string | null; initialSource: string | null; openingCategoryVerified: boolean; categoryHistory: CategorySnapshot[]; id: number; subject: string; createdDate: string; status: string; category: string; taskNumber: number | null; taskConcludedAt: string | null; classification: string; vistra: boolean; recurrenceCount: number; ola: string; evidence: string; taskState: string; deliveredVersion: string; supportOlaBreached: boolean | null; categoryChangedAt: string | null; categoryChangeEvidence: string; anyToAdequacaoChangedAt: string | null; anyToAdequacaoFrom: string | null; anyToAdequacaoEvidence: string; vistraType: string; recurrenceEvidence: string };
-type Report = { clientFilter: string; executive: BomJesusExecutiveAudit; generatedAt: string; methodology: string; totals: { tickets: number; possibleBugs: number; currentImprovements: number; vistraCandidates: number; recurrenceCandidates: number; confirmedBugs: number; concludedCorrectionTasks: number; openCorrectionTasks: number; correctionWithVersion: number; reclassified: number; anyToAdequacaoObserved: number; problemaToAdequacaoObserved: number; otherToAdequacaoObserved: number; categoryChangeEvidenceCount: number; categoryHistoryCoverage: number; categoryOpeningVerified: number; recurrenceGroups: number; olaBreaches: number; olaBreachesPreliminary: number; responseBreaches: number; factoryBreaches: number; factoryOverdueOpen: number; totalSlaBreaches: number; withoutVerifiedProfile: number; slaCalculationEligible: number; linkedCorrectionTasks: number; deliveredCorrectionTasks: number }; monthly: { month: string; tickets: number; vistra: number }[]; rows: Row[] };
+type Report = { clientKey: string; clientFilter: string; executive: BomJesusExecutiveAudit; generatedAt: string; methodology: string; totals: { tickets: number; possibleBugs: number; currentImprovements: number; vistraCandidates: number; recurrenceCandidates: number; confirmedBugs: number; concludedCorrectionTasks: number; openCorrectionTasks: number; correctionWithVersion: number; reclassified: number; anyToAdequacaoObserved: number; problemaToAdequacaoObserved: number; otherToAdequacaoObserved: number; categoryChangeEvidenceCount: number; categoryHistoryCoverage: number; categoryOpeningVerified: number; recurrenceGroups: number; olaBreaches: number; olaBreachesPreliminary: number; responseBreaches: number; factoryBreaches: number; factoryOverdueOpen: number; totalSlaBreaches: number; withoutVerifiedProfile: number; slaCalculationEligible: number; linkedCorrectionTasks: number; deliveredCorrectionTasks: number }; monthly: { month: string; tickets: number; vistra: number }[]; rows: Row[] };
 const DEFAULT_CLIENT="BOM JESUS COOPERATIVA AGROINDUSTRIAL - LAPA-PR";
 const businessToday=()=>new Date(Date.now()-3*3600000).toISOString().slice(0,10);
 const startOfCurrentSemester=()=>{
@@ -17,6 +20,7 @@ const startOfCurrentSemester=()=>{
   return today.slice(0,4)+(Number(today.slice(5,7))<=6?"-01-01":"-07-01");
 };
 export function ClientExecutiveReportPanel() {
+  const navigate=useNavigate();
   const [client,setClient]=useState(DEFAULT_CLIENT);
   const [clients,setClients]=useState<string[]>([DEFAULT_CLIENT]);
   const [periodPreset,setPeriodPreset]=useState("semester");
@@ -32,6 +36,8 @@ export function ClientExecutiveReportPanel() {
   const [activeTab,setActiveTab]=useState(0);
   const [settingsOpen,setSettingsOpen]=useState(false);
   const [settingsError,setSettingsError]=useState("");
+  const [insight,setInsight]=useState<{title:string;tickets:ClientManagementTicket[]}|null>(null);
+  const inspect:ClientInspect=(title,tickets)=>setInsight({title,tickets});
   const [drilldown,setDrilldown]=useState<{dimension:"owner"|"category"|"status"|"service";value:string}|null>(null);
   const [draft,setDraft]=useState({
     client:DEFAULT_CLIENT,periodPreset:"semester",startDate:startOfCurrentSemester(),
@@ -44,7 +50,7 @@ export function ClientExecutiveReportPanel() {
   const applySettings=()=>{
     const begin=Date.parse(draft.startDate+"T03:00:00.000Z");
     const finish=Date.parse(draft.endDate+"T03:00:00.000Z");
-    if(!clients.includes(draft.client) || !Number.isFinite(begin)||!Number.isFinite(finish)||
+    if(!(clients.includes(draft.client)||draft.client==="__ALL__") || !Number.isFinite(begin)||!Number.isFinite(finish)||
        finish<begin||finish-begin>366*86400000){
       setSettingsError("Revise os parâmetros: selecione um cliente autorizado e um intervalo válido de até 366 dias.");
       return;
@@ -52,7 +58,7 @@ export function ClientExecutiveReportPanel() {
     setSettingsError("");setError("");
     setClient(draft.client);setStartDate(draft.startDate);setEndDate(draft.endDate);
     setPeriodPreset(draft.periodPreset);setSlaTier(draft.slaTier);
-    setDrilldown(null);setActiveTab(0);setSettingsOpen(false);
+    setDrilldown(null);setInsight(null);setActiveTab(0);setSettingsOpen(false);
   };
   useEffect(()=>{
     const controller=new AbortController();
@@ -115,7 +121,7 @@ export function ClientExecutiveReportPanel() {
           <Button variant="outlined" startIcon={<RefreshOutlined/>} onClick={()=>void load()} disabled={loading}
             sx={{textTransform:"none"}}>Atualizar</Button>
           <Button variant="contained" startIcon={<FileDownloadOutlined/>} onClick={()=>void download()}
-            disabled={!report||report.clientFilter!==client||exporting||loading}
+            disabled={!report||report.clientKey!==client||exporting||loading}
             sx={{textTransform:"none"}}>{exporting?"Exportando...":"Excel da Diretoria"}</Button>
         </Stack>
       </Stack>
@@ -134,7 +140,7 @@ export function ClientExecutiveReportPanel() {
       <Box sx={{backgroundColor:"action.hover",border:"1px solid",borderColor:"divider",
         borderRadius:1.5,px:1.5,py:.8,mb:2}}>
         <Typography variant="caption" sx={{fontWeight:600}}>
-          {client} • Período: {startDate.split("-").reverse().join("/")} a {endDate.split("-").reverse().join("/")}
+          {client==="__ALL__"?"Todos os clientes da carteira SIMER":client} • Período: {startDate.split("-").reverse().join("/")} a {endDate.split("-").reverse().join("/")}
           {slaTier!=="auto"?" • Perfil de SLA simulado: "+slaTier:" • SLA por contrato"} 
         </Typography>
       </Box>
@@ -146,7 +152,8 @@ export function ClientExecutiveReportPanel() {
             {settingsError&&<Alert severity="error">{settingsError}</Alert>}
             <TextField select fullWidth label="Cliente da carteira" size="small" value={draft.client}
               onChange={e=>setDraft(previous=>({...previous,client:e.target.value}))}>
-              {clients.map(name=><MenuItem key={name} value={name}>{name}</MenuItem>)}
+              <MenuItem value="__ALL__" sx={{fontWeight:750,color:"primary.main"}}>Selecionar todos — carteira SIMER</MenuItem>
+              {clients.map(name=><MenuItem key={name} value={name} sx={{whiteSpace:"normal",overflowWrap:"anywhere"}}>{name}</MenuItem>)}
             </TextField>
             <TextField select fullWidth label="Período" size="small" value={draft.periodPreset}
               onChange={e=>choosePeriod(e.target.value)}>
@@ -175,21 +182,19 @@ export function ClientExecutiveReportPanel() {
       </Drawer>
       {error&&<Alert severity="error" sx={{mb:2}}>{error}</Alert>}
       {loading&&<Box sx={{py:5,display:"grid",placeItems:"center"}}><CircularProgress size={30}/></Box>}
-      {report&&report.clientFilter===client&&<>
-        {activeTab===0&&<ClientManagementOverview rows={managerialRows} audit={report.executive}/>}
-        {activeTab===1&&<ClientManagementRankings rows={managerialRows} onInspect={(dimension,value)=>{
-          setDrilldown({dimension,value});setActiveTab(2);
-        }}/>}
+      {report&&report.clientKey===client&&<>
+        {activeTab===0&&<ClientManagementOverview rows={managerialRows} audit={report.executive} onInspect={inspect}/>}
+        {activeTab===1&&<ClientManagementRankings rows={managerialRows} onInspect={inspect}/>}
         {activeTab===2&&<ClientManagementTickets key={client+"-"+startDate+"-"+endDate+"-"+(drilldown?.value??"all")}
-          rows={managerialRows} initialFilter={drilldown}/>}
-        {activeTab===3&&<ClientManagementPivot rows={managerialRows}/>}
+          rows={managerialRows} initialFilter={drilldown} onInspect={inspect}/>}
+        {activeTab===3&&<ClientManagementPivot rows={managerialRows} onInspect={inspect}/>}
         {activeTab===4&&<>
           <Alert severity="warning" sx={{mb:2}}>
             Os alertas de OLA utilizam a criação da Task como referência aproximada do encaminhamento.
             Pausas, perfil, prioridade histórica e feriados precisam de conferência.
             A primeira categoria observada não comprova a categoria na abertura.
           </Alert>
-          <BomJesusExecutiveDashboard executive={report.executive} clientName={report.clientFilter}/>
+          <BomJesusExecutiveDashboard executive={report.executive} clientName={report.clientFilter} rows={managerialRows} onInspect={inspect}/>
       <Accordion disableGutters elevation={0} sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2 }}>
       <AccordionSummary expandIcon={<span aria-hidden>▾</span>}><Typography sx={{fontWeight:600}}>Abrir tabelas detalhadas e indicadores legados</Typography></AccordionSummary>
       <AccordionDetails>
@@ -254,6 +259,24 @@ export function ClientExecutiveReportPanel() {
       </AccordionDetails></Accordion>
         </>}
       </>}
+  <Drawer anchor="right" open={Boolean(insight)} onClose={()=>setInsight(null)}
+    slotProps={{paper:{sx:detailDrawerPaperSx}}}>
+    <Box sx={{p:2.5,height:"100%",overflowY:"auto"}}>
+      <Stack direction="row" sx={{alignItems:"center",justifyContent:"space-between",gap:1,mb:2}}>
+        <Box sx={{minWidth:0}}>
+          <Typography variant="h6" sx={{fontWeight:750}}>{insight?.title||"Atendimentos do indicador"}</Typography>
+          <Typography variant="caption" color="text.secondary">
+            {insight?.tickets.length??0} tickets • {report?.clientFilter} • {startDate} a {endDate}
+          </Typography>
+        </Box>
+        <Button size="small" onClick={()=>setInsight(null)}>Fechar</Button>
+      </Stack>
+      {insight&&<TicketDrilldownExplorer key={insight.title+"-"+insight.tickets.length}
+        tickets={insight.tickets.map(t=>({...t,movideskId:t.id,service:t.serviceContext,baseStatus:(t as Row).baseStatus??null}))}
+        onOpen={ticket=>{setInsight(null);navigate("/tickets?movidesk="+ticket.id);}}
+        emptyLabel="Nenhum atendimento pertence a este segmento do gráfico."/>}
+    </Box>
+  </Drawer>
   <Dialog open={Boolean(selectedHistory)} onClose={() => setSelectedHistory(null)} fullWidth maxWidth="md">
     <DialogTitle>Histórico observado de categorias · Ticket {selectedHistory?.id}</DialogTitle>
     <DialogContent>
