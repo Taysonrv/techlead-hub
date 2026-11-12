@@ -32,7 +32,7 @@ function Kpi({label,value,note,delta,onClick,color}:{label:string;value:string;n
   </Box>;
 }
 export function ClientMeetingInsights({analysis:a,tickets,selectedClient,onShowTickets,onFocusClient}:Props){
-  const month=a.month,prevMonth=a.previousCutoff.getFullYear()+"-"+String(a.previousCutoff.getMonth()+1).padStart(2,"0");
+  const month=a.month;
   const open=(title:string,rows:WeeklyTicket[],description?:string)=>onShowTickets(title,rows.map(x=>x.id),description);
   const byIds=(ids:number[])=>{const set=new Set(ids);return tickets.filter(t=>set.has(t.id));};
   const currentOpened=a.opened.currentTickets;
