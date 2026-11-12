@@ -18,8 +18,10 @@ type Props<T extends TicketRow> = {
   onOpen?: (ticket: T) => void;
   extra?: (ticket: T) => ReactNode;
   emptyLabel?: string;
+  initialVisible?: number;
 };
-export function TicketDrilldownExplorer<T extends TicketRow>({ tickets, onSelect, onOpen, extra, emptyLabel = "Nenhum atendimento encontrado." }: Props<T>) {
+export function TicketDrilldownExplorer<T extends TicketRow>({ tickets, onSelect, onOpen, extra, emptyLabel = "Nenhum atendimento encontrado.", initialVisible = Number.POSITIVE_INFINITY }: Props<T>) {
+  const [visibleLimit,setVisibleLimit]=useState(initialVisible);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<"all" | "open" | "closed">("all");
   const open = useMemo(() => tickets.filter(ticket => isOpen(ticket)).length, [tickets]);
@@ -46,7 +48,7 @@ export function TicketDrilldownExplorer<T extends TicketRow>({ tickets, onSelect
       <Typography variant="caption" color="text.secondary" sx={{ml:"auto"}}>{visible.length} de {tickets.length}</Typography>
     </Stack>
     {visible.length===0&&<Alert severity="info">{emptyLabel}</Alert>}
-    <Stack spacing={1.2}>{visible.map((ticket,index)=><Card key={String(ticket.id??ticket.movideskId??index)} variant="outlined" sx={{borderRadius:2.5,minWidth:0}}>
+    <Stack spacing={1.2}>{visible.slice(0,visibleLimit).map((ticket,index)=><Card key={String(ticket.id??ticket.movideskId??index)} variant="outlined" sx={{borderRadius:2.5,minWidth:0}}>
       <CardContent sx={{p:1.75,"&:last-child":{pb:1.75}}}>
         <Stack direction="row" spacing={1} sx={{alignItems:"center",justifyContent:"space-between"}}>
           <Typography variant="subtitle2" sx={{fontWeight:850}}>#{ticket.movideskId??ticket.id??"—"}</Typography>
@@ -67,5 +69,6 @@ export function TicketDrilldownExplorer<T extends TicketRow>({ tickets, onSelect
         </Stack>
       </CardContent>
     </Card>)}</Stack>
+    {visible.length>visibleLimit&&<Button size="small" variant="outlined" onClick={()=>setVisibleLimit(n=>n+Math.max(1,initialVisible))}>Mostrar mais atendimentos ({visible.length-visibleLimit} restantes)</Button>}
   </Stack>;
 }
