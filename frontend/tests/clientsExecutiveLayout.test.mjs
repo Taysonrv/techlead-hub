@@ -113,3 +113,19 @@ test("cards semanais reutilizam o Dashboard KpiCard com favorito, info e drilldo
  assert.ok(shared.includes("StarBorderRounded"));
  assert.ok(shared.includes('event.stopPropagation()'));
 });
+
+test("indicadores de SLA aplicam a régua visual do Dashboard e possuem explicação no i",()=>{
+ assert.ok(meeting.includes('const slaAccent=(value:number|null)'));
+ assert.ok(meeting.includes('value>=90?semanticChartColors.positive'));
+ assert.ok(meeting.includes('value>=80?semanticChartColors.attention:semanticChartColors.overdue'));
+ assert.ok(meeting.includes('color={slaAccent(a.responseSla.percentage)}'));
+ assert.ok(meeting.includes('color={slaAccent(a.solutionSla.percentage)}'));
+ assert.ok(meeting.includes('metadata={{source:"Movidesk — snapshot sincronizado no HUB"'));
+ assert.ok(meeting.includes("KPI_EXPLANATIONS"));
+});
+test("cliente e período possuem rótulos alinhados e a seleção do cliente não é excessivamente larga",()=>{
+ assert.ok(page.includes('htmlFor="clients-client-selector"'));
+ assert.ok(page.includes('id="clients-client-selector"'));
+ assert.ok(page.includes('maxWidth:{xs:"100%",xl:620}'));
+ assert.ok(page.includes('gridTemplateColumns:{\n              xs:"minmax(0,1fr)"'));
+});
