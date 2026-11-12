@@ -51,3 +51,8 @@ test("categoria Bug não é inferida de uma Task Correção nem de rótulo de pr
  assert.ok(!implementation.includes("workItemType"));
  assert.ok(!implementation.includes("erro de sistema"));
 });
+
+test("tempo de solução não é inflado pela data posterior de encerramento",()=>{
+ assert.ok(page.includes("ticket.resolvedDate || ticket.closedDate"));
+ assert.ok(page.includes("solvedInPeriod.averageMinutes"));
+});
