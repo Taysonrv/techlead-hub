@@ -151,9 +151,13 @@ export function ClientExecutiveReportPanel() {
           <Stack spacing={2}>
             {settingsError&&<Alert severity="error">{settingsError}</Alert>}
             <TextField select fullWidth label="Cliente da carteira" size="small" value={draft.client}
-              onChange={e=>setDraft(previous=>({...previous,client:e.target.value}))}>
-              <MenuItem value="__ALL__" sx={{fontWeight:750,color:"primary.main"}}>Selecionar todos — carteira SIMER</MenuItem>
-              {clients.map(name=><MenuItem key={name} value={name} sx={{whiteSpace:"normal",overflowWrap:"anywhere"}}>{name}</MenuItem>)}
+              onChange={e=>setDraft(previous=>({...previous,client:e.target.value}))}
+              slotProps={{select:{MenuProps:{PaperProps:{sx:{maxWidth:"min(94vw,440px)",width:"min(94vw,440px)",maxHeight:"min(55vh,410px)"}},autoFocus:false}}}}
+              sx={{"& .MuiSelect-select":{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}}>
+              <MenuItem value="__ALL__" sx={{fontWeight:750,color:"primary.main",whiteSpace:"normal"}}>
+                <Checkbox checked={draft.client==="__ALL__"} size="small" sx={{mr:1}}/>Selecionar todos — carteira SIMER
+              </MenuItem>
+              {clients.map(name=><MenuItem key={name} value={name} sx={{whiteSpace:"normal",overflowWrap:"anywhere"}}><Checkbox checked={draft.client===name} size="small" sx={{mr:1}}/>{name}</MenuItem>)}
             </TextField>
             <TextField select fullWidth label="Período" size="small" value={draft.periodPreset}
               onChange={e=>choosePeriod(e.target.value)}>
