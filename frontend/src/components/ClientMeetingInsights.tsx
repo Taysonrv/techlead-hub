@@ -11,6 +11,7 @@ type Props={
   selectedClient:string;
   onShowTickets:(title:string,ids:number[],subtitle?:string)=>void;
   onFocusClient?:(client:string)=>void;
+  onOpenPresentation?:()=>void;
 };
 const br=(n:number)=>n.toLocaleString("pt-BR");
 const date=(d:Date)=>d.toLocaleDateString("pt-BR");
@@ -31,7 +32,7 @@ function Kpi({label,value,note,delta,onClick,color}:{label:string;value:string;n
     {delta&&<Typography variant="caption" sx={{fontWeight:750,color:"text.secondary"}}>{delta}</Typography>}
   </Box>;
 }
-export function ClientMeetingInsights({analysis:a,tickets,selectedClient,onShowTickets,onFocusClient}:Props){
+export function ClientMeetingInsights({analysis:a,tickets,selectedClient,onShowTickets,onFocusClient,onOpenPresentation}:Props){
   const month=a.month;
   const open=(title:string,rows:WeeklyTicket[],description?:string)=>onShowTickets(title,rows.map(x=>x.id),description);
   const byIds=(ids:number[])=>{const set=new Set(ids);return tickets.filter(t=>set.has(t.id));};
@@ -63,6 +64,7 @@ export function ClientMeetingInsights({analysis:a,tickets,selectedClient,onShowT
           <Chip icon={<CalendarMonthOutlined/>} variant="outlined" label={"Referência: "+month.slice(5,7)+"/"+month.slice(0,4)} />
           <Chip size="small" variant="outlined" label={"Até "+nowName}/>
           {!selectedClient&&onFocusClient&&<Button variant="outlined" size="small" onClick={()=>onFocusClient("BOM JESUS COOPERATIVA AGROINDUSTRIAL - LAPA-PR")} sx={{textTransform:"none"}}>Preparar reunião Bom Jesus</Button>}
+          {selectedClient&&onOpenPresentation&&<Button size="small" variant="contained" color="success" onClick={onOpenPresentation} sx={{textTransform:"none"}}>Abrir apresentação / PDF</Button>}
         </Stack>
       </Stack>
     </Box>
