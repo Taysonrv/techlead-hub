@@ -1729,6 +1729,7 @@ export function Clients() {
       {/* Pacote gerencial — análise semanal, comparativos e estoque de pendentes públicos */}
       <ClientMeetingInsights analysis={meetingAnalytics} tickets={clientOperationalTickets}
         selectedClient={selectedClient} onFocusClient={setSelectedClient}
+        onOpenPresentation={()=>{setPresentationExpanded(true);window.requestAnimationFrame(()=>document.getElementById("client-export-content")?.scrollIntoView({behavior:"smooth",block:"start"}));}}
         onShowTickets={(title,ids,subtitle)=>{
           const selected=new Set(ids);
           showTickets(title,clientOperationalTickets.filter(ticket=>selected.has(ticket.id)),subtitle);
