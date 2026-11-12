@@ -24,6 +24,8 @@ export type ClientMeetingAnalytics={
   opened:MeetingComparison;resolved:MeetingComparison;bug:MeetingComparison;
   pendingNow:WeeklyTicket[];pendingInPeriod:WeeklyTicket[];
   pendingByClient:Array<{name:string;value:number;ids:number[]}>;
+  pendingByOwner:Array<{name:string;value:number;ids:number[]}>;
+  pendingByAge:Array<{name:string;value:number;ids:number[]}>;
   pendingByStatus:Array<{name:string;value:number;ids:number[]}>;
   responseSla:MeetingSla;solutionSla:MeetingSla;
   workItems:number; correctionTasks:number;withVersion:number;
@@ -98,6 +100,17 @@ export function buildClientMeetingAnalytics(
     });
   }
   const pendingNow=valid.filter(isPublicPending);
+  const snapshotCutoff=new Date(Math.min(reference.getTime(),Date.now()));
+  const pendingAge=(ticket:WeeklyTicket)=>{
+    const opening=Date.parse(ticket.createdDate);
+    if(!Number.isFinite(opening))return "Abertura não informada";
+    const elapsed=Math.floor((snapshotCutoff.getTime()-opening)/86400000);
+    if(elapsed<0)return "Data futura / verificar";
+    if(elapsed<=7)return "Até 7 dias";
+    if(elapsed<=30)return "8 a 30 dias";
+    if(elapsed<=90)return "31 a 90 dias";
+    return "Mais de 90 dias";
+  };
   const pendingInPeriod=pendingNow.filter(t=>eventWithin(t,"createdDate",periodStart,periodEnd));
   const response=calculateTimestampSla(openedTickets,"response");
   const solution=calculateTimestampSla(resolvedTickets,"solution");
@@ -114,6 +127,8 @@ export function buildClientMeetingAnalytics(
     bug:compare(currentBugs,previousOpened.filter(isBug)),
     pendingNow,pendingInPeriod,
     pendingByClient:group(pendingNow,t=>t.client||"Sem cliente"),
+    pendingByOwner:group(pendingNow,t=>t.owner?.trim()||"Sem responsável"),
+    pendingByAge:group(pendingNow,pendingAge),
     pendingByStatus:group(pendingNow,t=>t.baseStatus==="New"?"Novo":t.baseStatus==="InAttendance"?"Em atendimento":t.baseStatus==="Stopped"?"Parado":t.status||"Outro"),
     responseSla:{percentage:response.percentage,measured:response.measured,within:response.within,outside:response.outside,tickets:response.measuredTickets,outsideTickets:response.outsideTickets},
     solutionSla:{percentage:solution.percentage,measured:solution.measured,within:solution.within,outside:solution.outside,tickets:solution.measuredTickets,outsideTickets:solution.outsideTickets},
