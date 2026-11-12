@@ -216,7 +216,7 @@ export function ClientManagementTickets({rows,initialFilter,onInspect}:{rows:Cli
       labelRowsPerPage="Linhas por página" labelDisplayedRows={({from,to,count})=>`${from}–${to} de ${count}`}/>
   </Box>;
 }
-export function ClientManagementPivot({rows}:{rows:ClientManagementTicket[]}){
+export function ClientManagementPivot({rows,onInspect}:{rows:ClientManagementTicket[];onInspect?:ClientInspect}){
   const [rowDim,setRowDim]=useState<Dimension>("owner");
   const [colDim,setColDim]=useState<Dimension>("category");
   const [measure,setMeasure]=useState<Measure>("tickets");
@@ -240,6 +240,8 @@ export function ClientManagementPivot({rows}:{rows:ClientManagementTicket[]}){
     const byColumn=selectedColumns.map((c)=>rows.filter(r=>dimensionOf(r,colDim)===c).reduce((n,r)=>n+measured(r,measure),0));
     return {matrix,columns:selectedColumns,total,byColumn,others:total-byColumn.reduce((a,b)=>a+b,0)};
   },[rows,rowDim,colDim,measure,onlyTop]);
+  const openPivot=(label:string,predicate:(r:ClientManagementTicket)=>boolean)=>
+    onInspect?.("Multidimensional — "+label,rows.filter(r=>predicate(r)&&(measure==="tickets"||measured(r,measure)>0)));
   return <Stack spacing={2}>
     <Box sx={panelSx}>
       <Typography variant="h6" sx={{fontWeight:750}}>Análise multidimensional</Typography>
@@ -276,17 +278,17 @@ export function ClientManagementPivot({rows}:{rows:ClientManagementTicket[]}){
           <TableCell align="right" sx={{fontWeight:800}}>Outros</TableCell><TableCell align="right" sx={{fontWeight:800}}>Total</TableCell>
         </TableRow></TableHead>
         <TableBody>{aggregate.matrix.map((x,i)=><TableRow key={x.name} hover sx={{backgroundColor:i%2?"action.hover":"transparent"}}>
-          <TableCell sx={{fontWeight:650,position:"sticky",left:0,backgroundColor:"background.paper",zIndex:1,maxWidth:250}}>
+          <TableCell onClick={()=>openPivot(x.name,r=>dimensionOf(r,rowDim)===x.name)} sx={{fontWeight:650,position:"sticky",left:0,backgroundColor:"background.paper",zIndex:1,maxWidth:250,cursor:"pointer","&:hover":{textDecoration:"underline"}}}>
             {x.name}</TableCell>
-          {x.values.map((v,k)=><TableCell key={aggregate.columns[k]} align="right" sx={{fontVariantNumeric:"tabular-nums",
+          {x.values.map((v,k)=><TableCell key={aggregate.columns[k]} align="right" onClick={()=>openPivot(x.name+" × "+aggregate.columns[k],r=>dimensionOf(r,rowDim)===x.name&&dimensionOf(r,colDim)===aggregate.columns[k])} sx={{fontVariantNumeric:"tabular-nums",cursor:"pointer",
             backgroundColor:v>0?"rgba(25,115,80,.07)":undefined}}>{v?number(v):"—"}</TableCell>)}
-          <TableCell align="right">{number(x.others)}</TableCell><TableCell align="right" sx={{fontWeight:800}}>{number(x.total)}</TableCell>
+          <TableCell align="right" onClick={()=>openPivot(x.name+" × Outros",r=>dimensionOf(r,rowDim)===x.name&&!aggregate.columns.includes(dimensionOf(r,colDim)))} sx={{cursor:"pointer"}}>{number(x.others)}</TableCell><TableCell align="right" sx={{fontWeight:800,cursor:"pointer"}} onClick={()=>openPivot(x.name,r=>dimensionOf(r,rowDim)===x.name)}>{number(x.total)}</TableCell>
         </TableRow>)}
         <TableRow sx={{backgroundColor:"action.hover"}}>
           <TableCell sx={{fontWeight:850,position:"sticky",left:0,backgroundColor:"background.paper"}}>Total geral</TableCell>
-          {aggregate.byColumn.map((v,i)=><TableCell key={aggregate.columns[i]} align="right" sx={{fontWeight:850}}>{number(v)}</TableCell>)}
-          <TableCell align="right" sx={{fontWeight:850}}>{number(aggregate.others)}</TableCell>
-          <TableCell align="right" sx={{fontWeight:850}}>{number(aggregate.total)}</TableCell>
+          {aggregate.byColumn.map((v,i)=><TableCell key={aggregate.columns[i]} align="right" onClick={()=>openPivot(aggregate.columns[i],r=>dimensionOf(r,colDim)===aggregate.columns[i])} sx={{fontWeight:850,cursor:"pointer"}}>{number(v)}</TableCell>)}
+          <TableCell align="right" onClick={()=>openPivot("Outros",r=>!aggregate.columns.includes(dimensionOf(r,colDim)))} sx={{fontWeight:850,cursor:"pointer"}}>{number(aggregate.others)}</TableCell>
+          <TableCell align="right" onClick={()=>openPivot("Total geral",()=>true)} sx={{fontWeight:850,cursor:"pointer"}}>{number(aggregate.total)}</TableCell>
         </TableRow>
         </TableBody>
       </Table></TableContainer>
