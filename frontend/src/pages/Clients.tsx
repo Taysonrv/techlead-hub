@@ -1,5 +1,6 @@
 import { PublicClientEnrichment } from "../components/PublicIntegrations";
 import { ClientMeetingInsights, ClientMeetingPresentation } from "../components/ClientMeetingInsights";
+import { SelectableDonut, SelectableHorizontalBars } from "../components/ExecutiveChartControls";
 import { buildClientMeetingAnalytics } from "../utils/clientMeetingAnalytics";
 import { KpiGrid } from "../components/KpiGrid";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -51,15 +52,10 @@ import {
 } from "@mui/icons-material";
 
 import {
-  Bar,
-  BarChart,
   Line,
   LineChart,
   Legend,
   CartesianGrid,
-  Cell,
-  Pie,
-  PieChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -213,32 +209,12 @@ const PIE_COLORS = [
   ...chartPalette,
 ];
 
-const STATUS_COLORS: Record<
-  string,
-  string
-> = {
-  Novos:
-    semanticChartColors.normal,
-
-  "Em Atendimento":
-    aliareColors.green,
-
-  Parados:
-    semanticChartColors.attention,
-
-  Resolvidos:
-    semanticChartColors.positive,
-};
-
 /* =========================================================
    COMPONENTE PRINCIPAL
 ========================================================= */
 
 export function Clients() {
   const theme = useTheme();
-  const [hiddenClientSlices, setHiddenClientSlices] = useState<Set<string>>(() => new Set());
-  const [hiddenCategorySlices, setHiddenCategorySlices] = useState<Set<string>>(() => new Set());
-  const [hiddenStatusSlices, setHiddenStatusSlices] = useState<Set<string>>(() => new Set());
   const [clientsPage, setClientsPage] = useState(0);
   const navigate = useNavigate();
   const presentationRef = useRef<HTMLDivElement>(null);
@@ -1053,115 +1029,15 @@ export function Clients() {
      PIZZA 1 - DISTRIBUIÇÃO POR CLIENTE
   ======================================================= */
 
-  const clientPieData =
-    useMemo<PieDataItem[]>(() => {
-      const grouped =
-        new Map<
-          string,
-          number
-        >();
-
-      scopedTickets.forEach(
-        (ticket) => {
-          const client =
-            ticket.client ??
-            "Sem cliente";
-
-          grouped.set(
-            client,
-            (grouped.get(
-              client
-            ) ?? 0) + 1
-          );
-        }
-      );
-
-      const ordered =
-        Array.from(
-          grouped.entries()
-        )
-          .map(
-            ([
-              name,
-              value,
-            ]) => ({
-              name,
-              value,
-            })
-          )
-          .sort(
-            (a, b) =>
-              b.value -
-              a.value
-          );
-
-      /*
-       * Para preservar a leitura executiva do gráfico,
-       * exibimos os seis principais clientes e agrupamos
-       * o restante em "Outros".
-       */
-      const top =
-        ordered.slice(
-          0,
-          6
-        );
-
-      const otherValue =
-        ordered
-          .slice(6)
-          .reduce(
-            (
-              total,
-              item
-            ) =>
-              total +
-              item.value,
-            0
-          );
-
-      if (
-        otherValue >
-        0
-      ) {
-        top.push({
-          name:
-            "Outros",
-
-          value:
-            otherValue,
-        });
-      }
-
-      return top;
-    }, [
-      scopedTickets,
-    ]);
-
+  const clientPieData = useMemo<PieDataItem[]>(() => groupChartData(
+    scopedTickets,(ticket)=>ticket.client?.trim()||"Sem cliente",Number.POSITIVE_INFINITY,
+  ),[scopedTickets]);
   const categoryPieData = useMemo<PieDataItem[]>(() => groupChartData(
-    scopedTickets,
-    (ticket) => ticket.category?.trim() || "Sem categoria",
-    7,
-  ), [scopedTickets]);
-
+    scopedTickets,(ticket)=>ticket.category?.trim()||"Sem categoria",Number.POSITIVE_INFINITY,
+  ),[scopedTickets]);
   const ownerChartData = useMemo<PieDataItem[]>(() => groupChartData(
-    scopedTickets,
-    (ticket) => ticket.owner?.trim() || "Sem responsável",
-    8,
-  ), [scopedTickets]);
-
-  const visibleClientPieData = useMemo(() => clientPieData.filter((item) => !hiddenClientSlices.has(item.name)), [clientPieData, hiddenClientSlices]);
-  const visibleCategoryPieData = useMemo(() => categoryPieData.filter((item) => !hiddenCategorySlices.has(item.name)), [categoryPieData, hiddenCategorySlices]);
-  const clientChartData = visibleClientPieData.length > 0 ? visibleClientPieData : clientPieData;
-  const categoryChartData = visibleCategoryPieData.length > 0 ? visibleCategoryPieData : categoryPieData;
-
-  const togglePieSlice = (setter: React.Dispatch<React.SetStateAction<Set<string>>>, data: PieDataItem[], name: string) => {
-    setter((current) => {
-      const next = new Set(current);
-      if (next.has(name)) next.delete(name);
-      else if (data.length - next.size > 1) next.add(name);
-      return next;
-    });
-  };
+    scopedTickets,(ticket)=>ticket.owner?.trim()||"Sem responsável",Number.POSITIVE_INFINITY,
+  ),[scopedTickets]);
 
   const executiveInsights = useMemo(() => {
     const topCategory = categoryPieData[0];
@@ -1291,9 +1167,6 @@ export function Clients() {
           item.value > 0
       );
     }, [scopedTickets]);
-
-  const visibleStatusPieData = useMemo(() => statusPieData.filter((item) => !hiddenStatusSlices.has(item.name)), [statusPieData, hiddenStatusSlices]);
-  const statusChartData = visibleStatusPieData.length > 0 ? visibleStatusPieData : statusPieData;
 
   /* =======================================================
      DRILL-DOWN
@@ -2283,433 +2156,38 @@ export function Clients() {
           </Box>
         </AccordionSummary>
         <AccordionDetails sx={{p:{xs:1.5,md:2}}}>
-      {/* =================================================
-          GRÁFICOS
-      ================================================= */}
-
-      <Box
-        sx={{
-          display: "grid",
-
-          gridTemplateColumns: {
-            xs: "1fr",
-            md: "repeat(2, minmax(0, 1fr))",
-          },
-
-          gap: 2,
-          mb: 2,
-        }}
-      >
-        {/* Cliente usa a linha completa para acomodar nomes longos da carteira SIMER. */}
-        <Box sx={{ gridColumn: { xs: "auto", md: "1 / -1" }, minWidth: 0 }}>
-        <ChartCard
-          title="Distribuição por Cliente"
-          subtitle="Participação dos clientes no volume de chamados"
-        >
-          {clientPieData.length >
-          0 ? (
-            <Box
-              sx={{
-                display:
-                  "grid",
-
-                gridTemplateColumns:
-                  {
-                    xs: "1fr",
-                    sm: "minmax(220px, 0.9fr) minmax(0, 1.1fr)",
-                  },
-
-                gap: 1.5,
-
-                alignItems:
-                  "center",
-              }}
-            >
-              <Box
-                sx={{
-                  height: { xs: 215, sm: 225 },
-                  minWidth: 0,
-                }}
-              >
-                <ResponsiveContainer
-                  width="100%"
-                  height="100%"
-                >
-                  <PieChart>
-                    <Pie
-                      data={clientChartData}
-                      dataKey="value"
-                      nameKey="name"
-                      cx="50%"
-                      cy="50%"
-                      outerRadius={92}
-                      innerRadius={62}
-                      paddingAngle={2}
-                      cornerRadius={5}
-                      stroke={theme.palette.background.paper}
-                      strokeWidth={1.5}
-                      cursor="pointer"
-                      onClick={(data) => {
-                        const name =
-                          String(
-                            (
-                              data as {
-                                payload?: {
-                                  name?: unknown;
-                                };
-                              }
-                            ).payload?.name ??
-                              ""
-                          );
-
-                        if (
-                          !name ||
-                          name ===
-                            "Outros"
-                        ) {
-                          return;
-                        }
-
-                        const list =
-                          periodTickets.filter(
-                            (ticket) =>
-                              (ticket.client ??
-                                "Sem cliente") ===
-                                name &&
-                              (!category ||
-                                ticket.category ===
-                                  category)
-                          );
-
-                        showTickets(
-                          `Cliente: ${name}`,
-                          list,
-                          "Tickets que compõem esta participação"
-                        );
-                      }}
-                    >
-                      {clientChartData.map(
-                        (
-                          _,
-                          index
-                        ) => (
-                          <Cell
-                            key={`${clientPieData[index]?.name ?? "client"}-${index}`}
-                            fill={
-                              PIE_COLORS[
-                                index %
-                                  PIE_COLORS.length
-                              ]
-                            }
-                          />
-                        )
-                      )}
-                    </Pie>
-
-                    <Tooltip
-                      content={
-                        <CompactPieTooltip
-                          valueLabel="ticket(s)"
-                        />
-                      }
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
-              </Box>
-
-              <CompactPieLegend
-                data={clientPieData}
-                hiddenItems={hiddenClientSlices}
-                onToggleItem={(name) => togglePieSlice(setHiddenClientSlices, clientPieData, name)}
-                onItemClick={(
-                  name
-                ) => {
-                  if (
-                    name ===
-                    "Outros"
-                  ) {
-                    return;
-                  }
-
-                  const list =
-                    periodTickets.filter(
-                      (ticket) =>
-                        (ticket.client ??
-                          "Sem cliente") ===
-                          name &&
-                        (!category ||
-                          ticket.category ===
-                            category)
-                    );
-
-                  showTickets(
-                    `Cliente: ${name}`,
-                    list,
-                    "Tickets que compõem esta participação"
-                  );
-                }}
-              />
-            </Box>
-          ) : (
-            <EmptyChart />
-          )}
-        </ChartCard>
+      {/* Distribuições sem a implementação duplicada de PieChart/legend.
+          Todos os campos são reversíveis, recalculam percentuais e abrem os tickets reais. */}
+      <Box sx={{display:"grid",gridTemplateColumns:{xs:"1fr",lg:"1fr 1fr"},gap:2,mb:2}}>
+        <SelectableDonut title="Participação por cliente" description="Todos os clientes no recorte; distribuição de atendimentos abertos"
+          parts={clientPieData.map((item,i)=>({name:item.name,value:item.value,color:PIE_COLORS[i%PIE_COLORS.length]!}))}
+          onInspect={name=>showClientTickets(name)}/>
+        <SelectableDonut title="Atendimentos por categoria" description="Categorias atuais dos tickets abertos no filtro"
+          parts={categoryPieData.map((item,i)=>({name:item.name,value:item.value,color:PIE_COLORS[i%PIE_COLORS.length]!}))}
+          onInspect={name=>showTickets("Categoria: "+name,scopedTickets.filter(t=>(t.category?.trim()||"Sem categoria")===name))}/>
+        <SelectableDonut title="Situação dos atendimentos" description="Status atual de todos os tickets abertos no filtro; diferente do backlog público"
+          parts={statusPieData.map((item,i)=>({name:item.name,value:item.value,color:[
+            semanticChartColors.normal,aliareColors.green,semanticChartColors.attention,semanticChartColors.positive
+          ][i%4]!}))}
+          onInspect={name=>{
+            if(name==="Novos")showStatusTickets("new");
+            if(name==="Em Atendimento")showStatusTickets("attendance");
+            if(name==="Parados")showStatusTickets("stopped");
+            if(name==="Resolvidos")showStatusTickets("resolved");
+          }}/>
+        <SelectableHorizontalBars title="Volume por responsável" description="Distribuição por responsável atual; não indica produtividade individual"
+          parts={ownerChartData.map((item,i)=>({name:item.name,value:item.value,color:PIE_COLORS[i%PIE_COLORS.length]!}))}
+          onInspect={name=>showTickets("Responsável: "+name,scopedTickets.filter(t=>(t.owner?.trim()||"Sem responsável")===name))}/>
+      </Box>
+      <ExecutiveSection title="Insights complementares" subtitle="Leituras de qualidade e atenção derivadas do recorte completo" compact>
+        <Box sx={{display:"grid",gridTemplateColumns:{xs:"1fr",lg:"1fr 1fr"},gap:1.25}}>
+          {executiveInsights.map((insight,index)=><Box key={insight} sx={{display:"flex",gap:1,p:1.3,
+            borderRadius:1.5,backgroundColor:"action.hover"}}>
+            <Typography variant="caption" sx={{fontWeight:900,color:"success.main"}}>{index+1}.</Typography>
+            <Typography variant="body2" sx={{lineHeight:1.55}}>{insight}</Typography>
+          </Box>)}
         </Box>
-
-        <ChartCard
-          title="Atendimentos por Categoria"
-          subtitle="Composição dos assuntos no recorte selecionado"
-        >
-          {categoryPieData.length ? (
-            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "minmax(190px,.9fr) minmax(0,1.1fr)" }, gap: 1, alignItems: "center" }}>
-              <Box sx={{ height: { xs: 215, sm: 225 }, minWidth: 0 }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie data={categoryChartData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={90} innerRadius={60} paddingAngle={2} cornerRadius={5} stroke={theme.palette.background.paper} strokeWidth={1.5} cursor="pointer"
-                      onClick={(data) => {
-                        const name = String((data as { payload?: { name?: unknown } }).payload?.name ?? "");
-                        if (name && name !== "Outros") showTickets(`Categoria: ${name}`, scopedTickets.filter((ticket) => (ticket.category?.trim() || "Sem categoria") === name));
-                      }}>
-                      {categoryChartData.map((item, index) => <Cell key={`${item.name}-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />)}
-                    </Pie>
-                    <Tooltip content={<CompactPieTooltip valueLabel="ticket(s)" />} />
-                  </PieChart>
-                </ResponsiveContainer>
-              </Box>
-              <CompactPieLegend data={categoryPieData}
-                hiddenItems={hiddenCategorySlices}
-                onToggleItem={(name) => togglePieSlice(setHiddenCategorySlices, categoryPieData, name)}
-                onItemClick={(name) => name !== "Outros" && showTickets(`Categoria: ${name}`, scopedTickets.filter((ticket) => (ticket.category?.trim() || "Sem categoria") === name))} />
-            </Box>
-          ) : <EmptyChart />}
-        </ChartCard>
-
-        {/* SITUAÇÃO DOS TICKETS */}
-
-        <ChartCard
-          title="Situação dos Tickets"
-          subtitle="Composição operacional da carteira selecionada"
-        >
-          {statusPieData.length >
-          0 ? (
-            <Box
-              sx={{
-                display:
-                  "grid",
-
-                gridTemplateColumns:
-                  {
-                    xs: "1fr",
-                    sm: "minmax(220px, 0.9fr) minmax(0, 1.1fr)",
-                  },
-
-                gap: 1.5,
-
-                alignItems:
-                  "center",
-              }}
-            >
-              <Box
-                sx={{
-                  height: { xs: 215, sm: 225 },
-                  minWidth: 0,
-                }}
-              >
-                <ResponsiveContainer
-                  width="100%"
-                  height="100%"
-                >
-                  <PieChart>
-                    <Pie
-                      data={statusChartData}
-                      dataKey="value"
-                      nameKey="name"
-                      cx="50%"
-                      cy="50%"
-                      outerRadius={92}
-                      innerRadius={62}
-                      paddingAngle={2}
-                      cornerRadius={5}
-                      stroke={theme.palette.background.paper}
-                      strokeWidth={1.5}
-                      cursor="pointer"
-                      onClick={(data) => {
-                        const name =
-                          String(
-                            (
-                              data as {
-                                payload?: {
-                                  name?: unknown;
-                                };
-                              }
-                            ).payload?.name ??
-                              ""
-                          );
-
-                        if (
-                          name ===
-                          "Novos"
-                        ) {
-                          showStatusTickets(
-                            "new"
-                          );
-                        }
-
-                        if (
-                          name ===
-                          "Em Atendimento"
-                        ) {
-                          showStatusTickets(
-                            "attendance"
-                          );
-                        }
-
-                        if (
-                          name ===
-                          "Parados"
-                        ) {
-                          showStatusTickets(
-                            "stopped"
-                          );
-                        }
-
-                        if (
-                          name ===
-                          "Resolvidos"
-                        ) {
-                          showStatusTickets(
-                            "resolved"
-                          );
-                        }
-                      }}
-                    >
-                      {statusChartData.map(
-                        (
-                          _,
-                          index
-                        ) => (
-                          <Cell
-                            key={`${statusPieData[index]?.name ?? "status"}-${index}`}
-                            fill={
-                              STATUS_COLORS[
-                                statusPieData[
-                                  index
-                                ]?.name ??
-                                  ""
-                              ] ??
-                              PIE_COLORS[
-                                index %
-                                  PIE_COLORS.length
-                              ]
-                            }
-                          />
-                        )
-                      )}
-                    </Pie>
-
-                    <Tooltip
-                      content={
-                        <CompactPieTooltip
-                          valueLabel="ticket(s)"
-                        />
-                      }
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
-              </Box>
-
-              <CompactPieLegend
-                data={statusPieData}
-                hiddenItems={hiddenStatusSlices}
-                onToggleItem={(name) => togglePieSlice(setHiddenStatusSlices, statusPieData, name)}
-                onItemClick={(
-                  name
-                ) => {
-                  if (
-                    name ===
-                    "Novos"
-                  ) {
-                    showStatusTickets(
-                      "new"
-                    );
-                  }
-
-                  if (
-                    name ===
-                    "Em Atendimento"
-                  ) {
-                    showStatusTickets(
-                      "attendance"
-                    );
-                  }
-
-                  if (
-                    name ===
-                    "Parados"
-                  ) {
-                    showStatusTickets(
-                      "stopped"
-                    );
-                  }
-
-                  if (
-                    name ===
-                    "Resolvidos"
-                  ) {
-                    showStatusTickets(
-                      "resolved"
-                    );
-                  }
-                }}
-              />
-            </Box>
-          ) : (
-            <EmptyChart />
-          )}
-        </ChartCard>
-      </Box>
-
-      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "minmax(0,1fr)", xl: "minmax(0,1.35fr) minmax(340px,.65fr)" }, gap: 2, mb: 2 }}>
-        <ChartCard title="Volume por Responsável" subtitle="Distribuição da demanda entre os analistas no recorte · clique para investigar">
-          {ownerChartData.length ? (
-            <Box sx={{ mt: 1 }}>
-              <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap", mb: 1.25 }}>
-                <Chip size="small" variant="outlined" label={`${ownerChartData.length} responsável(is)`} />
-                <Chip size="small" variant="outlined" label={`${ownerChartData.reduce((sum, item) => sum + Number(item.value || 0), 0)} tickets distribuídos`} />
-                <Chip size="small" variant="outlined" label={`Maior carteira: ${ownerChartData[0]?.name ?? "—"} · ${ownerChartData[0]?.value ?? 0}`} />
-              </Stack>
-              <Box sx={{ height: Math.max(330, Math.min(540, ownerChartData.length * 54 + 70)), minWidth: 0 }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={ownerChartData} layout="vertical" barCategoryGap="28%" margin={{ top: 6, right: 54, bottom: 4, left: 8 }}>
-                    <CartesianGrid strokeDasharray="4 6" horizontal={false} stroke={theme.palette.divider} opacity={0.4} />
-                    <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11, fill: theme.palette.text.secondary }} axisLine={false} tickLine={false} />
-                    <YAxis type="category" dataKey="name" width={185} tick={{ fontSize: 11, fill: theme.palette.text.secondary }} axisLine={false} tickLine={false} tickFormatter={(value) => abbreviate(String(value), 27)} />
-                    <Tooltip formatter={(value) => [`${Number(value)} ticket(s)`, "Volume"]} labelFormatter={(label) => `Responsável: ${label}`} contentStyle={{ borderRadius: 12, border: `1px solid ${theme.palette.divider}`, background: theme.palette.background.paper, color: theme.palette.text.primary, boxShadow: "0 12px 32px rgba(0,0,0,.16)" }} labelStyle={{ color: theme.palette.text.primary, fontWeight: 800 }} cursor={{ fill: theme.palette.action.hover }} />
-                    <Bar dataKey="value" name="Tickets" fill={aliareColors.green} radius={[0, 7, 7, 0]} maxBarSize={28} cursor="pointer"
-                      label={{ position: "right", fill: theme.palette.text.secondary, fontSize: 11, fontWeight: 800 }}
-                      onClick={(data) => {
-                        const name = String((data as { name?: unknown }).name ?? "");
-                        if (name && name !== "Outros") showTickets(`Responsável: ${name}`, scopedTickets.filter((ticket) => (ticket.owner?.trim() || "Sem responsável") === name));
-                      }} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </Box>
-              <Typography variant="caption" color="text.secondary">Ordenado por volume no período. O número ao final de cada barra representa a quantidade de tickets da carteira do responsável.</Typography>
-            </Box>
-          ) : <EmptyChart />}
-        </ChartCard>
-
-        <ChartCard title="Insights do Período" subtitle="Leituras automáticas para apoiar a apresentação executiva">
-          <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(2,minmax(0,1fr))", xl: "1fr" }, gap: 1.25 }}>
-            {executiveInsights.map((insight, index) => (
-              <Box key={insight} sx={{ display: "flex", gap: 1.2, p: 1.2, borderRadius: 1.5, bgcolor: index === 2 && portfolioSummary.critical ? "rgba(211,47,47,.06)" : "rgba(0,122,96,.055)" }}>
-                <Box sx={{ width: 24, height: 24, flexShrink: 0, borderRadius: "50%", display: "grid", placeItems: "center", bgcolor: index === 2 && portfolioSummary.critical ? "error.main" : aliareColors.green, color: "white", fontSize: 12, fontWeight: 900 }}>{index + 1}</Box>
-                <Typography variant="body2" sx={{ lineHeight: 1.5 }}>{insight}</Typography>
-              </Box>
-            ))}
-          </Box>
-        </ChartCard>
-      </Box>
+      </ExecutiveSection>
 
         </AccordionDetails>
       </Accordion>
