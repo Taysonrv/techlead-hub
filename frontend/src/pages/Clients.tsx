@@ -587,7 +587,7 @@ export function Clients() {
     { start: startOfDay(effectiveStartDate), end: endOfDay(effectiveEndDate) },
   ), [clientOperationalTickets, effectiveStartDate, effectiveEndDate]);
   const meetingAnalytics = useMemo(() => buildClientMeetingAnalytics(
-    clientOperationalTickets, effectiveEndDate, startOfDay(effectiveStartDate), endOfDay(effectiveEndDate),
+    clientOperationalTickets, new Date(Math.min(effectiveEndDate.getTime(),Date.now())), startOfDay(effectiveStartDate), endOfDay(effectiveEndDate),
   ), [clientOperationalTickets, effectiveStartDate, effectiveEndDate]);
 
   const movementSeries = useMemo(() => {
@@ -2167,7 +2167,7 @@ export function Clients() {
                 <PresentationKpi title="Atendimentos" value={scopedTickets.length} detail="no período" color="#075985" onClick={() => showTickets("Atendimentos no foco", scopedTickets)} />
                 <PresentationKpi title="Bugs" value={presentationSummary.bugs.length} detail={`${presentationSummary.bugs.filter((ticket) => ticket.azureWorkItem || ticket.taskNumber).length} com Task`} color="#008A68" onClick={() => showTickets("Bugs identificados", presentationSummary.bugs)} />
                 <PresentationKpi title="Com Task" value={presentationSummary.withTask.length} detail="correção, evolução ou apoio" color="#2676B9" onClick={() => showTickets("Atendimentos com Task", presentationSummary.withTask)} />
-                <PresentationKpi title="Pendências" value={presentationSummary.pending.length} detail="em acompanhamento" color="#B7791F" onClick={() => showTickets("Pendências ativas", presentationSummary.pending)} />
+                <PresentationKpi title="Backlog público atual" value={clientOperationalCohorts.backlog.length} detail="inclui tickets antigos" color="#B7791F" onClick={() => showTickets("Backlog público atual", clientOperationalCohorts.backlog)} />
                 <PresentationKpi title="SLA solução" value={formatSlaPercent(portfolioSummary.solutionSla.percent)} detail={`${portfolioSummary.solutionSla.onTime} de ${portfolioSummary.solutionSla.measured} medidos`} color="#159A68" onClick={() => showTickets("SLA solução", calculateTimestampSla(solutionScopedTickets, "solution").measuredTickets)} />
                 <PresentationKpi title="Tempo médio de solução" value={formatMinutes(clients.find((item) => item.client === selectedClient)?.averageResolutionMinutes ?? null)} detail={`${clients.find((item) => item.client === selectedClient)?.measuredResolutionTimes ?? 0} atendimento(s) medido(s)`} color="#7C3AED" onClick={() => showTickets("Atendimentos com tempo de solução", scopedTickets.filter((ticket) => ticketResolutionMinutes(ticket) !== null))} />
               </KpiGrid>
@@ -2204,10 +2204,10 @@ export function Clients() {
 
             {(!isPresenting || presentationPage === 4) && <Box className="client-print-section-grid client-print-page client-print-continuation" sx={{ mt: isPresenting ? 0 : 1.5, height: isPresenting ? "100%" : "auto", display: "grid", gridTemplateColumns: "1fr", gap: 2 }}>
               <Typography className="client-print-page-title" variant="h5" sx={{ fontWeight: 900 }}>Pendências e encaminhamentos</Typography>
-              <ExecutiveDonutPanel title="Status das pendências" data={presentationSummary.pendingStatuses} total={presentationSummary.pending.length} />
+              <ExecutiveDonutPanel title="Status das pendências públicas atuais" data={meetingAnalytics.pendingByStatus} total={meetingAnalytics.pendingNow.length} />
               <Box sx={{ p: 2.25, borderRadius: 2, bgcolor: presentationSummary.pending.length ? "rgba(245,158,11,.10)" : "rgba(22,163,74,.08)", border: "1px solid", borderColor: presentationSummary.pending.length ? "rgba(245,158,11,.28)" : "rgba(22,163,74,.22)" }}>
                 <Typography variant="h6" sx={{ fontWeight: 900 }}>Pontos de atenção e encaminhamento</Typography>
-                <Typography sx={{ mt: 1.5, lineHeight: 1.65 }}>{presentationSummary.pending.length ? `${presentationSummary.pending.length} pendência(s) permanecem ativas. ${presentationSummary.bugs.filter(isOpen).length} são bugs e ${presentationSummary.pending.filter((ticket) => normalize(ticket.justification).includes("cliente")).length} aguardam ação ou retorno do cliente.` : "Não há pendências ativas no recorte selecionado."}</Typography>
+                <Typography sx={{ mt: 1.5, lineHeight: 1.65 }}>{clientOperationalCohorts.backlog.length ? `${clientOperationalCohorts.backlog.length} ticket(s) público(s) permanecem pendentes no estoque atual, incluindo registros de meses anteriores. ${clientOperationalCohorts.backlog.filter(isBug).length} estão atualmente classificados como Bug e ${clientOperationalCohorts.backlog.filter((ticket) => normalize(ticket.justification).includes("cliente")).length} possuem justificativa relacionada ao cliente.` : "Não há pendências públicas ativas na carteira selecionada."}</Typography>
               </Box>
             </Box>}
 
