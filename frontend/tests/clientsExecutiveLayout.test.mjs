@@ -41,3 +41,13 @@ test("relatório usa uma única fonte para pendências públicas e mantém marco
  assert.ok(page.includes('if (ticket.isWithSimer !== true || !ticket.resolvedDate) return false;'));
  assert.ok(page.includes("solvedInPeriod.averageMinutes"));
 });
+
+test("categoria Bug não é inferida de uma Task Correção nem de rótulo de problema",()=>{
+ const start=page.indexOf("function isBug(ticket: Ticket)");
+ const end=page.indexOf("function taskStatusGroup",start);
+ assert.ok(start>=0&&end>start);
+ const implementation=page.slice(start,end);
+ assert.ok(implementation.includes('normalize(ticket.category)==="bug"'));
+ assert.ok(!implementation.includes("workItemType"));
+ assert.ok(!implementation.includes("erro de sistema"));
+});
