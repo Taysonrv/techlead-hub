@@ -71,3 +71,15 @@ O HUB lê um **snapshot sincronizado** do Movidesk/Azure, não uma fotografia hi
 - `frontend/src/utils/clientMeetingAnalytics.ts`
 - `frontend/tests/clientMeetingAnalytics.test.mjs`
 - `frontend/tests/clientsExecutiveLayout.test.mjs`
+
+## Ajustes finais da revisão
+- O gráfico de **pendentes atuais** mostra a carteira por cliente quando nenhum está selecionado; ao escolher apenas a Bom Jesus, mostra **por responsável atual**, evitando o gráfico trivial de uma barra.
+- Foi criado um comparativo adicional de **antiguidade** dos tickets públicos ainda pendentes. A referência de idade é a data do snapshot atual, não a data de um filtro histórico.
+- A composição das situações soma **100% das aberturas no recorte**: estados fora de Novo/Em Atendimento/Parado/Resolvido entram em `Outras situações`, com os tickets correspondentes acessíveis.
+- Na apresentação, **tempo médio de solução** passou a representar tickets efetivamente resolvidos no período e com tempo medido; o denominador aparece ao lado. Isso evita a comparação equivocada com tickets apenas abertos no período.
+- A conclusão do PDF passou a usar **backlog público atual**, enquanto os indicadores de Bug e Task permanecem qualificados como categoria e vínculo técnico, respectivamente.
+- O comportamento de desmarcar todas as séries de tendência foi permitido também nos gráficos históricos.
+- A revisão reduziu a página `Clients.tsx` de cerca de **4.539 para 3.666 linhas**, com retirada de lógica/markup duplicados de gráficos e componentes legados, sem remover o Drawer e a tabela da carteira.
+- Os testes de regressão agora também cobrem a idade do backlog quando o relatório está filtrado em mês anterior.
+
+**Atenção:** as provas automáticas da branch foram adicionadas, mas sua execução ainda é necessária no frontend local. Além do build, é fundamental validar o PDF impresso, porque sua paginação depende do navegador e dos estilos de impressão.
