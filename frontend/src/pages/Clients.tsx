@@ -3493,9 +3493,9 @@ function ticketResolutionMinutes(ticket: Ticket): number | null {
 }
 
 function isBug(ticket: Ticket) {
-  const category = normalize(ticket.category);
-  const type = normalize(ticket.azureWorkItem?.workItemType);
-  return category === "bug" || category.includes("erro de sistema") || type.includes("correcao");
+  // Categoria atual do Movidesk. Correção Azure e "Problema" não são automaticamente Bug.
+  // Bug tecnicamente confirmado demanda evidência separada da análise de suporte.
+  return normalize(ticket.category)==="bug";
 }
 
 function taskStatusGroup(ticket: Ticket) {
