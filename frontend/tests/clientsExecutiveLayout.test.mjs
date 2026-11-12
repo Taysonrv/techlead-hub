@@ -72,7 +72,7 @@ test("qualidade de atendimento aparece em quatro cards e não em chips de métri
   assert.ok(metricComponent.includes('<Kpi label="'+label),label);
  }
  assert.ok(!metricComponent.includes('<Chip size="small" variant="outlined" label={"Primeiro contato:'));
- assert.ok(metricComponent.includes('a.csat.percentage===null?"Sem avaliações"'));
+ assert.ok(metricComponent.includes('a.csat.percentage===null?"N/D"'));
 });
 
 test("CSAT e primeiro contato possuem trilha completa do Movidesk ao card",()=>{
@@ -86,4 +86,30 @@ test("CSAT e primeiro contato possuem trilha completa do Movidesk ao card",()=>{
  assert.ok(audit.includes('const firstCallMeasured=resolvedTickets.filter'));
  assert.ok(audit.includes('eventWithin(t,"satisfactionDate",monthStart,monthCutoff)'));
  assert.ok(audit.includes('eventWithin(t,"reopenedDate",monthStart,monthCutoff)'));
+});
+
+test("filtro de período fica na mesma barra do cliente, fora do cabeçalho",()=>{
+ assert.equal(occurs(page,"<PeriodFilter />"),1);
+ const headerStart=page.indexOf('<PageHeader');
+ const headerEnd=page.indexOf('/>',headerStart);
+ assert.ok(headerStart>=0&&headerEnd>headerStart);
+ assert.ok(!page.slice(headerStart,headerEnd).includes('action={<PeriodFilter />'));
+ const toolbarStart=page.indexOf("Seleção rápida do cliente");
+ const toolbarEnd=page.indexOf("Pacote gerencial",toolbarStart);
+ assert.ok(toolbarStart>headerEnd);
+ assert.ok(page.slice(toolbarStart,toolbarEnd).includes("<Autocomplete"));
+ assert.ok(page.slice(toolbarStart,toolbarEnd).includes("<PeriodFilter />"));
+ assert.ok(page.slice(toolbarStart,toolbarEnd).includes("Mais filtros"));
+ assert.ok(page.slice(toolbarStart,toolbarEnd).includes("Limpar tudo"));
+});
+test("cards semanais reutilizam o Dashboard KpiCard com favorito, info e drilldown",()=>{
+ assert.ok(meeting.includes('import { KpiCard as ExecutiveKpiCard } from "./KpiCard"'));
+ assert.ok(meeting.includes("<ExecutiveKpiCard title={label}"));
+ assert.ok(meeting.includes("info={info} accent={accent} onClick={onClick}"));
+ assert.ok(meeting.includes("KPI_EXPLANATIONS"));
+ assert.ok(meeting.includes('a.csat.percentage===null?"N/D"'));
+ const shared=readFileSync(new URL("../src/components/KpiCard.tsx",import.meta.url),"utf8");
+ assert.ok(shared.includes("InfoOutlined"));
+ assert.ok(shared.includes("StarBorderRounded"));
+ assert.ok(shared.includes('event.stopPropagation()'));
 });
