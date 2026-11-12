@@ -1,4 +1,3 @@
-import { PublicClientEnrichment } from "../components/PublicIntegrations";
 import { ClientMeetingInsights, ClientMeetingPresentation } from "../components/ClientMeetingInsights";
 import { SelectableDonut, SelectableHorizontalBars } from "../components/ExecutiveChartControls";
 import { buildClientMeetingAnalytics } from "../utils/clientMeetingAnalytics";
@@ -19,6 +18,8 @@ import {
   Accordion,
   AccordionSummary,
   AccordionDetails,
+  Autocomplete,
+  Collapse,
   TextField,
   InputAdornment,
   FormControl,
@@ -247,6 +248,7 @@ export function Clients() {
   const [owner, setOwner] = useState("");
   const [executiveArea, setExecutiveArea] = useState("");
   const [businessArea, setBusinessArea] = useState("");
+  const [advancedFiltersOpen,setAdvancedFiltersOpen]=useState(false);
 
   /* Drill-down */
 
@@ -1491,210 +1493,83 @@ export function Clients() {
         </Box>
       </Stack>
 
-      <PublicClientEnrichment />
 
-      {/* =================================================
-          FILTROS
-      ================================================= */}
-
-      <Card
-        elevation={0}
-        sx={{
-          border:
-            "1px solid",
-
-          borderColor:
-            "divider",
-
-          borderRadius:
-            2.25,
-
-          mb:
-            2,
-
-          backgroundColor:
-            "background.paper",
-
-          boxShadow:
-            "0 1px 2px rgba(16,24,40,0.035)",
-        }}
-      >
-        <CardContent
-          sx={{
-            py: 1.5,
-            px: 2,
-
-            "&:last-child": {
-              pb: 1.5,
-            },
-          }}
-        >
-          <Stack
-            spacing={0}
-            sx={{
-              width: "100%",
-              display: "grid",
-              gridTemplateColumns: {
-                xs: "minmax(0, 1fr)",
-                md: "repeat(2, minmax(0, 1fr))",
-                lg: "repeat(2, minmax(0, 1fr))",
-                xl: "repeat(3, minmax(0, 1fr))",
-              },
-              gap: 1.5,
-              "& .MuiFormControl-root": { width: "100%", minWidth: 0 },
-              "& .MuiInputLabel-root": { maxWidth: "calc(100% - 32px)" },
-              "& .MuiSelect-select": { minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
-              alignItems: {
-                xs: "stretch",
-                md: "center",
-              },
-            }}
-          >
-            <Box sx={{ gridColumn: "1 / -1", display: "flex", alignItems: "baseline", gap: 1.25, flexWrap: "wrap" }}>
-              <Typography
-        sx={{
-          fontWeight: 800,
-                  fontSize:
-                    "1rem",
-                }}
-              >
-                Visão dos clientes
-              </Typography>
-
-              <Typography variant="caption" color="text.secondary">
-                Refine a carteira por cliente, classificação e responsabilidade atual
-              </Typography>
+      {/* Seleção rápida do cliente; critérios adicionais permanecem disponíveis sem ocupar a tela. */}
+      <Card elevation={0} sx={{border:"1px solid",borderColor:"divider",borderRadius:2.5,mb:2}}>
+        <CardContent sx={{px:{xs:2,md:2.5},py:1.75,"&:last-child":{pb:1.75}}}>
+          <Stack direction={{xs:"column",md:"row"}} sx={{alignItems:{md:"center"},gap:1.5}}>
+            <Box sx={{flex:"1 1 460px",minWidth:0}}>
+              <Autocomplete
+                fullWidth size="small" options={clientOptions}
+                value={selectedClient||null}
+                onChange={(_,value)=>setSelectedClient(value??"")}
+                noOptionsText="Nenhum cliente da carteira encontrado"
+                clearText="Limpar cliente"
+                openText="Mostrar clientes"
+                closeText="Fechar clientes"
+                slotProps={{paper:{sx:{maxWidth:"min(94vw,640px)","& .MuiAutocomplete-option":{whiteSpace:"normal",overflowWrap:"anywhere"}}}}}
+                renderInput={params=><TextField {...params} label="Cliente da carteira SIMER"
+                  placeholder="Pesquise por nome ou escolha um cliente"
+                  helperText={selectedClient?"Dados exclusivos do cliente selecionado":"Mostrando todos os clientes da carteira SIMER"}/>}
+              />
             </Box>
-
-            {/* CLIENTE */}
-
-            <FormControl
-              size="small"
-              sx={{
-                minWidth: 0,
-              }}
-            >
-              <InputLabel shrink id="clients-select-1-label">Cliente</InputLabel><Select notched displayEmpty renderValue={(value) => value || "Todos os clientes"} MenuProps={{ sx: { "& .MuiPaper-root": { maxWidth: "min(640px, calc(100vw - 32px))" }, "& .MuiMenuItem-root": { whiteSpace: "normal", overflowWrap: "anywhere" } } }} labelId="clients-select-1-label" inputProps={{ id: "clients-select-1", "aria-labelledby": "clients-select-1-label" }}
-                value={
-                  selectedClient
-                }
-                label="Cliente"
-                onChange={(
-                  event
-                ) =>
-                  setSelectedClient(
-                    event.target
-                      .value
-                  )
-                }
-              >
-                <MenuItem value="">
-                  Todos os clientes
-                </MenuItem>
-
-                {clientOptions.map(
-                  (client) => (
-                    <MenuItem
-                      key={
-                        client
-                      }
-                      value={
-                        client
-                      }
-                    >
-                      {
-                        client
-                      }
-                    </MenuItem>
-                  )
-                )}
-              </Select>
-            </FormControl>
-
-            {/* CATEGORIA */}
-
-            <FormControl
-              size="small"
-              sx={{
-                minWidth: 0,
-              }}
-            >
-              <InputLabel shrink id="clients-select-2-label">Categoria</InputLabel><Select notched displayEmpty renderValue={(value) => value || "Todas as categorias"} MenuProps={{ sx: { "& .MuiPaper-root": { maxWidth: "min(640px, calc(100vw - 32px))" }, "& .MuiMenuItem-root": { whiteSpace: "normal", overflowWrap: "anywhere" } } }} labelId="clients-select-2-label" inputProps={{ id: "clients-select-2", "aria-labelledby": "clients-select-2-label" }}
-                value={
-                  category
-                }
-                label="Categoria"
-                onChange={(
-                  event
-                ) =>
-                  setCategory(
-                    event.target
-                      .value
-                  )
-                }
-              >
-                <MenuItem value="">
-                  Todas as categorias
-                </MenuItem>
-
-                {categories.map(
-                  (item) => (
-                    <MenuItem
-                      key={item}
-                      value={item}
-                    >
-                      {item}
-                    </MenuItem>
-                  )
-                )}
-              </Select>
-            </FormControl>
-
-            <FormControl size="small" sx={{ minWidth: 0 }}>
-              <InputLabel shrink id="clients-select-3-label">Status</InputLabel><Select notched displayEmpty renderValue={(value) => value || "Todos os status"} MenuProps={{ sx: { "& .MuiPaper-root": { maxWidth: "min(640px, calc(100vw - 32px))" }, "& .MuiMenuItem-root": { whiteSpace: "normal", overflowWrap: "anywhere" } } }} labelId="clients-select-3-label" inputProps={{ id: "clients-select-3", "aria-labelledby": "clients-select-3-label" }} value={status} label="Status" onChange={(event) => setStatus(event.target.value)}>
-                <MenuItem value="">Todos os status</MenuItem>
-                {statuses.map((item) => <MenuItem key={item} value={item}>{item}</MenuItem>)}
-              </Select>
-            </FormControl>
-
-            <FormControl size="small" sx={{ minWidth: 0 }}>
-              <InputLabel shrink id="clients-select-4-label">Responsável</InputLabel><Select notched displayEmpty renderValue={(value) => value || "Todos os responsáveis"} MenuProps={{ sx: { "& .MuiPaper-root": { maxWidth: "min(640px, calc(100vw - 32px))" }, "& .MuiMenuItem-root": { whiteSpace: "normal", overflowWrap: "anywhere" } } }} labelId="clients-select-4-label" inputProps={{ id: "clients-select-4", "aria-labelledby": "clients-select-4-label" }} value={owner} label="Responsável" onChange={(event) => setOwner(event.target.value)}>
-                <MenuItem value="">Todos os responsáveis</MenuItem>
-                {owners.map((item) => <MenuItem key={item} value={item}>{item}</MenuItem>)}
-              </Select>
-            </FormControl>
-
-            <FormControl size="small" sx={{ minWidth: 0 }}>
-              <InputLabel shrink id="clients-select-5-label">Área de negócio</InputLabel><Select notched displayEmpty renderValue={(value) => value || "Todas as áreas"} MenuProps={{ sx: { "& .MuiPaper-root": { maxWidth: "min(640px, calc(100vw - 32px))" }, "& .MuiMenuItem-root": { whiteSpace: "normal", overflowWrap: "anywhere" } } }} labelId="clients-select-5-label" inputProps={{ id: "clients-select-5", "aria-labelledby": "clients-select-5-label" }} value={businessArea} label="Área de negócio" onChange={(event) => setBusinessArea(event.target.value)}>
-                <MenuItem value="">Todas as áreas</MenuItem>
-                {businessAreas.map((item) => <MenuItem key={item} value={item}>{item}</MenuItem>)}
-              </Select>
-            </FormControl>
-
-            <FormControl size="small" sx={{ minWidth: 0 }}>
-              <InputLabel shrink id="clients-select-6-label">Frente de atendimento</InputLabel><Select notched displayEmpty renderValue={(value) => value || "Todas as frentes"} MenuProps={{ sx: { "& .MuiPaper-root": { maxWidth: "min(640px, calc(100vw - 32px))" }, "& .MuiMenuItem-root": { whiteSpace: "normal", overflowWrap: "anywhere" } } }} labelId="clients-select-6-label" inputProps={{ id: "clients-select-6", "aria-labelledby": "clients-select-6-label" }} value={executiveArea} label="Frente de atendimento" onChange={(event) => setExecutiveArea(event.target.value)}>
-                <MenuItem value="">Todas as frentes</MenuItem>
-                {executiveAreas.map((item) => <MenuItem key={item} value={item}>{item}</MenuItem>)}
-              </Select>
-            </FormControl>
-
-            {(selectedClient ||
-              category || status || owner || businessArea || executiveArea) && (
-              <Button
-                size="small"
-                variant="outlined"
-                onClick={
-                  clearFilters
-                }
-                sx={{
-                  minHeight: 40,
-                  whiteSpace: "nowrap",
-                }}
-              >
-                Limpar filtros
+            <Stack direction="row" sx={{flex:"0 0 auto",alignItems:"center",gap:1,flexWrap:"wrap"}}>
+              <Button size="small" variant={advancedFiltersOpen?"contained":"outlined"}
+                onClick={()=>setAdvancedFiltersOpen(value=>!value)}
+                endIcon={<ExpandMoreOutlined sx={{transform:advancedFiltersOpen?"rotate(180deg)":"none",transition:"transform .2s"}}/>}
+                aria-expanded={advancedFiltersOpen} aria-controls="clients-advanced-filters"
+                sx={{textTransform:"none",fontWeight:700,minHeight:40}}>
+                {advancedFiltersOpen?"Ocultar filtros":"Mais filtros"}
+                {[category,status,owner,businessArea,executiveArea].filter(Boolean).length>0
+                  ? " ("+[category,status,owner,businessArea,executiveArea].filter(Boolean).length+" ativos)" : ""}
               </Button>
-            )}
+              {(selectedClient||category||status||owner||businessArea||executiveArea)&&
+                <Button size="small" variant="text" onClick={clearFilters} sx={{textTransform:"none",minHeight:40}}>Limpar tudo</Button>}
+            </Stack>
           </Stack>
+          {!advancedFiltersOpen&&[category,status,owner,businessArea,executiveArea].some(Boolean)&&
+            <Stack direction="row" sx={{gap:.5,flexWrap:"wrap",mt:1}}>
+              {[
+                ["Categoria",category,()=>setCategory("")],
+                ["Status",status,()=>setStatus("")],
+                ["Responsável",owner,()=>setOwner("")],
+                ["Área",businessArea,()=>setBusinessArea("")],
+                ["Frente",executiveArea,()=>setExecutiveArea("")],
+              ].filter(([,value])=>Boolean(value)).map(([label,value,reset])=>
+                <Chip key={String(label)} size="small" variant="outlined" label={String(label)+": "+String(value)}
+                  onDelete={reset as ()=>void} sx={{maxWidth:320}}/>)}
+            </Stack>}
+          <Collapse in={advancedFiltersOpen} unmountOnExit>
+            <Box id="clients-advanced-filters"
+              sx={{display:"grid",gridTemplateColumns:{xs:"1fr",sm:"repeat(2,minmax(0,1fr))",lg:"repeat(3,minmax(0,1fr))"},
+                gap:1.5,pt:2,mt:1.5,borderTop:"1px solid",borderColor:"divider"}}>
+              <TextField size="small" select fullWidth label="Categoria" value={category} onChange={e=>setCategory(e.target.value)}>
+                <MenuItem value="">Todas as categorias</MenuItem>
+                {categories.map(item=><MenuItem key={item} value={item}>{item}</MenuItem>)}
+              </TextField>
+              <TextField size="small" select fullWidth label="Status" value={status} onChange={e=>setStatus(e.target.value)}>
+                <MenuItem value="">Todos os status</MenuItem>
+                {statuses.map(item=><MenuItem key={item} value={item}>{item}</MenuItem>)}
+              </TextField>
+              <TextField size="small" select fullWidth label="Responsável" value={owner} onChange={e=>setOwner(e.target.value)}>
+                <MenuItem value="">Todos os responsáveis</MenuItem>
+                {owners.map(item=><MenuItem key={item} value={item}>{item}</MenuItem>)}
+              </TextField>
+              <TextField size="small" select fullWidth label="Área de negócio" value={businessArea} onChange={e=>setBusinessArea(e.target.value)}>
+                <MenuItem value="">Todas as áreas</MenuItem>
+                {businessAreas.map(item=><MenuItem key={item} value={item}>{item}</MenuItem>)}
+              </TextField>
+              <TextField size="small" select fullWidth label="Frente de atendimento" value={executiveArea} onChange={e=>setExecutiveArea(e.target.value)}>
+                <MenuItem value="">Todas as frentes</MenuItem>
+                {executiveAreas.map(item=><MenuItem key={item} value={item}>{item}</MenuItem>)}
+              </TextField>
+              <Box sx={{display:"flex",alignItems:"center"}}>
+                <Button size="small" variant="outlined" disabled={![category,status,owner,businessArea,executiveArea].some(Boolean)}
+                  onClick={()=>{setCategory("");setStatus("");setOwner("");setBusinessArea("");setExecutiveArea("");}}
+                  sx={{textTransform:"none"}}>Limpar filtros adicionais</Button>
+              </Box>
+            </Box>
+          </Collapse>
         </CardContent>
       </Card>
 
