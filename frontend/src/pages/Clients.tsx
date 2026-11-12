@@ -532,7 +532,7 @@ export function Clients() {
     const start = startOfDay(effectiveStartDate);
     const end = endOfDay(effectiveEndDate);
     return tickets.filter((ticket) => {
-      if (ticket.isWithSimer !== true || !ticket.resolvedDate || !["Resolved", "Closed"].includes(ticket.baseStatus ?? "")) return false;
+      if (ticket.isWithSimer !== true || !ticket.resolvedDate) return false;
       const resolved = new Date(ticket.resolvedDate);
       if (!Number.isFinite(resolved.getTime()) || resolved < start || resolved > end) return false;
       return (!selectedClient || ticket.client === selectedClient)
@@ -2183,7 +2183,7 @@ export function Clients() {
             borderRadius: 2,
           }}
         >
-          Nenhum ticket foi encontrado para os filtros selecionados.
+          Nenhum atendimento com abertura no período foi encontrado para este recorte. Isso não significa ausência de pendências antigas — consulte o backlog público atual no painel superior.
         </Alert>
       )}
 
