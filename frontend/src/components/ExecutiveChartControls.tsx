@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
 import {
-  Box, Button, Checkbox, FormControlLabel, Stack, Tooltip, Typography,
+  Box, Button, Checkbox, FormControlLabel, IconButton, Stack, Tooltip, Typography,
 } from "@mui/material";
+import ListAltOutlined from "@mui/icons-material/ListAltOutlined";
 import {
   Bar, BarChart, CartesianGrid, Cell, LabelList, Line, LineChart,
   Pie, PieChart, ResponsiveContainer, Tooltip as RechartsTooltip, XAxis, YAxis,
@@ -29,9 +30,9 @@ function useSelection(keys:string[]){
   };
   return {visible,toggle,all:()=>setSelected(null),clear:()=>setSelected([]),allSelected:keys.every(k=>visible.has(k))};
 }
-function Selector({parts,visible,toggle,all,clear}:{
+function Selector({parts,visible,toggle,all,clear,onInspect}:{
   parts:Array<{name:string;color:string;detail?:string;key?:string}>;
-  visible:Set<string>;toggle:(key:string)=>void;all:()=>void;clear:()=>void;
+  visible:Set<string>;toggle:(key:string)=>void;all:()=>void;clear:()=>void;onInspect?:(key:string)=>void;
 }){
   return <Stack spacing={.65} sx={{mt:1.2}}>
     <Stack direction="row" sx={{gap:.8,flexWrap:"wrap",alignItems:"center"}}>
@@ -47,6 +48,10 @@ function Selector({parts,visible,toggle,all,clear}:{
             sx={{p:.35,color:part.color,"&.Mui-checked":{color:part.color}}}/>}
           label={part.name+(part.detail?" · "+part.detail:"")}
         />
+        {onInspect&&<IconButton size="small" aria-label={"Listar atendimentos de "+part.name}
+          onClick={()=>onInspect(part.key??part.name)} sx={{mr:1.5}}>
+          <ListAltOutlined fontSize="small"/>
+        </IconButton>}
       </Tooltip>)}
     </Stack>
   </Stack>;
@@ -84,7 +89,7 @@ export function SelectableDonut({title,description,parts,onInspect}:Props&{
       </Box>
     </Box>:empty}
     <Selector parts={parts.map(p=>({...p,detail:readable(p.value)+" · "+(choice.visible.has(p.name)?percent(p.value,visibleTotal):"oculto")}))}
-      visible={choice.visible} toggle={choice.toggle} all={choice.all} clear={choice.clear}/>
+      visible={choice.visible} toggle={choice.toggle} all={choice.all} clear={choice.clear} onInspect={onInspect}/>
     <Typography variant="caption" color="text.secondary" sx={{display:"block",mt:.7}}>
       Percentuais recalculados sobre os itens marcados. Clique em um segmento para consultar os atendimentos.
     </Typography>
@@ -116,7 +121,8 @@ export function SelectableHorizontalBars({title,description,parts,onInspect}:Pro
       </ResponsiveContainer>
     </Box>:empty}
     <Selector parts={parts.map(p=>({...p,detail:percent(p.value,total)}))} visible={choice.visible}
-      toggle={choice.toggle} all={choice.all} clear={choice.clear}/>
+      toggle={choice.toggle} all={choice.all} clear={choice.clear}
+      onInspect={key=>{if(months.length&&onInspect)onInspect(selectedMonth||months[months.length-1]!,key);}}/>
   </Box>;
 }
 export function SelectableLines({title,description,data,series,onInspect}:Props&{
