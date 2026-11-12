@@ -30,7 +30,7 @@ function useSelection(keys:string[]){
   return {visible,toggle,all:()=>setSelected(null),clear:()=>setSelected([]),allSelected:keys.every(k=>visible.has(k))};
 }
 function Selector({parts,visible,toggle,all,clear}:{
-  parts:Array<{name:string;color:string;detail?:string}>;
+  parts:Array<{name:string;color:string;detail?:string;key?:string}>;
   visible:Set<string>;toggle:(key:string)=>void;all:()=>void;clear:()=>void;
 }){
   return <Stack spacing={.65} sx={{mt:1.2}}>
@@ -43,7 +43,7 @@ function Selector({parts,visible,toggle,all,clear}:{
       {parts.map(part=><Tooltip key={part.name} title={part.detail??""} disableHoverListener={!part.detail}>
         <FormControlLabel
           sx={{m:0,mr:1.4,"& .MuiFormControlLabel-label":{fontSize:12,whiteSpace:"normal"}}}
-          control={<Checkbox size="small" checked={visible.has(part.name)} onChange={()=>toggle(part.name)}
+          control={<Checkbox size="small" checked={visible.has(part.key??part.name)} onChange={()=>toggle(part.key??part.name)}
             sx={{p:.35,color:part.color,"&.Mui-checked":{color:part.color}}}/>}
           label={part.name+(part.detail?" · "+part.detail:"")}
         />
@@ -83,7 +83,7 @@ export function SelectableDonut({title,description,parts,onInspect}:Props&{
         <Typography variant="caption" color="text.secondary">selecionados</Typography>
       </Box>
     </Box>:empty}
-    <Selector parts={parts.map(p=>({...p,detail:readable(p.value)+" · "+percent(p.value,visibleTotal)}))}
+    <Selector parts={parts.map(p=>({...p,detail:readable(p.value)+" · "+(choice.visible.has(p.name)?percent(p.value,visibleTotal):"oculto")}))}
       visible={choice.visible} toggle={choice.toggle} all={choice.all} clear={choice.clear}/>
     <Typography variant="caption" color="text.secondary" sx={{display:"block",mt:.7}}>
       Percentuais recalculados sobre os itens marcados. Clique em um segmento para consultar os atendimentos.
@@ -147,7 +147,7 @@ export function SelectableLines({title,description,data,series,onInspect}:Props&
         </LineChart>
       </ResponsiveContainer>
     </Box>:empty}
-    <Selector parts={series.map(s=>({...s,name:s.key,detail:s.name}))} visible={choice.visible}
+    <Selector parts={series.map(s=>({name:s.name,key:s.key,color:s.color}))} visible={choice.visible}
       toggle={choice.toggle} all={choice.all} clear={choice.clear}/>
     {onInspect&&months.length>0&&<Stack direction="row" sx={{gap:.55,alignItems:"center",flexWrap:"wrap",mt:1}}>
       <Typography variant="caption" color="text.secondary">Consultar mês:</Typography>
