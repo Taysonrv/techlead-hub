@@ -107,7 +107,7 @@ function RankedTable({rows,title,metric="tickets",onInspect}:{rows:ClientManagem
 
 export type ClientInspect=(title:string,tickets:ClientManagementTicket[])=>void;
 export function ClientManagementOverview({rows,audit,onInspect}:{rows:ClientManagementTicket[];audit:BomJesusExecutiveAudit;onInspect?:ClientInspect}){
-  const categoryRanking=useMemo(()=>rankTickets(rows,"category").slice(0,15),[rows]);
+  const categoryRanking=useMemo(()=>rankTickets(rows,"category"),[rows]);
   const correctionsByTicket=useMemo(()=>new Map(audit.corrections.rows.map(x=>[x.ticketId,x.outcome])),[audit]);
   const inspect=(title:string,filter:(r:ClientManagementTicket)=>boolean)=>onInspect?.(title,rows.filter(filter));
   const month=(iso:string)=>new Date(Date.parse(iso)-3*3600000).toISOString().slice(0,7);
