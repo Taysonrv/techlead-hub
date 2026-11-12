@@ -87,84 +87,64 @@ function RankedTable({rows,title,metric="tickets",onInspect}:{rows:ClientManagem
     {!ranking.length&&<Typography sx={{py:3,textAlign:"center"}} color="text.secondary">Sem registros no período.</Typography>}
   </Box>;
 }
-export function ClientManagementOverview({rows,audit}:{rows:ClientManagementTicket[];audit:BomJesusExecutiveAudit}){
-  const categoryRanking=useMemo(()=>rankTickets(rows,"category").slice(0,7),[rows]);
-  const tickets=rows.length;
-  const donut=(title:string,items:Array<{name:string;value:number}>,description:string)=><Box sx={panelSx}>
-    <Typography variant="subtitle1" sx={{fontWeight:750}}>{title}</Typography>
-    <Typography variant="caption" color="text.secondary">{description}</Typography>
-    {items.some(x=>x.value>0)?
-    <Box sx={{height:270}}><ResponsiveContainer width="100%" height="100%"><PieChart>
-      <Pie data={items.filter(x=>x.value>0)} dataKey="value" nameKey="name" cx="45%" cy="47%" innerRadius={55} outerRadius={90} stroke="none" paddingAngle={2}>
-        {items.filter(x=>x.value>0).map((v,i)=><Cell key={v.name} fill={chartColors[i%chartColors.length]}/>)}
-      </Pie>
-      <ChartTooltip formatter={(value,name)=>[`${value} tickets`,String(name)]}/>
-      <Legend verticalAlign="bottom" height={35} wrapperStyle={{fontSize:11}}/>
-    </PieChart></ResponsiveContainer></Box>:
-    <Box sx={{height:270,display:"grid",placeItems:"center"}}><Typography color="text.secondary" variant="body2">Sem dados para o gráfico</Typography></Box>}
-  </Box>;
+
+export type ClientInspect=(title:string,tickets:ClientManagementTicket[])=>void;
+export function ClientManagementOverview({rows,audit,onInspect}:{rows:ClientManagementTicket[];audit:BomJesusExecutiveAudit;onInspect?:ClientInspect}){
+  const categoryRanking=useMemo(()=>rankTickets(rows,"category").slice(0,15),[rows]);
+  const correctionsByTicket=useMemo(()=>new Map(audit.corrections.rows.map(x=>[x.ticketId,x.outcome])),[audit]);
+  const inspect=(title:string,filter:(r:ClientManagementTicket)=>boolean)=>onInspect?.(title,rows.filter(filter));
+  const month=(iso:string)=>new Date(iso).toLocaleDateString("en-CA",{timeZone:"America/Sao_Paulo",year:"numeric",month:"2-digit"}).slice(0,7);
   return <Stack spacing={2}>
     <Box sx={{display:"grid",gridTemplateColumns:{xs:"repeat(2,minmax(0,1fr))",md:"repeat(3,minmax(0,1fr))",xl:"repeat(6,minmax(0,1fr))"},gap:1.5}}>
-      {metricCard("Tickets do período",number(tickets),"Abertos pelo cliente no intervalo")}
-      {metricCard("Categorias Bug",number(audit.matrix.bugCategory),"Classificação atual Movidesk")}
-      {metricCard("Correções vinculadas",number(audit.corrections.tickets),`${audit.corrections.distinctTasks} Tasks distintas`)}
-      {metricCard("Correções concluídas",number(audit.corrections.concluded),`${audit.corrections.concludedWithVersion} com versão`)}
-      {metricCard("OLA no prazo",audit.ola.withinTargetPercent===null?"N/D":`${audit.ola.withinTargetPercent}%`,`${audit.ola.measured} casos mensuráveis`)}
-      {metricCard("Alertas de OLA",number(audit.ola.alerts),"Sujeitos à auditoria",true)}
+      {metricCard("Tickets do período",number(rows.length),"Clique para consultar",false,()=>onInspect?.("Todos os atendimentos",rows))}
+      {metricCard("Categorias Bug",number(audit.matrix.bugCategory),"Categoria atual Movidesk",false,()=>inspect("Categoria Bug",r=>r.category.toLocaleLowerCase("pt-BR").trim()==="bug"))}
+      {metricCard("Correções vinculadas",number(audit.corrections.tickets),String(audit.corrections.distinctTasks)+" Tasks distintas",false,()=>inspect("Correções vinculadas",r=>r.isCorrectionTask))}
+      {metricCard("Correções concluídas",number(audit.corrections.concluded),String(audit.corrections.concludedWithVersion)+" com versão",false,()=>inspect("Correções concluídas",r=>correctionsByTicket.get(r.id)==="CONCLUIDA"))}
+      {metricCard("OLA no prazo",audit.ola.withinTargetPercent===null?"N/D":String(audit.ola.withinTargetPercent)+"%",String(audit.ola.measured)+" casos mensuráveis",false,()=>inspect("OLA dentro da meta",r=>r.olaStatus==="DENTRO"))}
+      {metricCard("Alertas de OLA",number(audit.ola.alerts),"Sujeitos à auditoria",true,()=>inspect("Alertas de OLA",r=>r.olaStatus==="ALERTA"))}
     </Box>
-    <Box sx={panelSx}>
-      <Typography variant="subtitle1" sx={{fontWeight:750,mb:.5}}>Composição dos atendimentos por categoria</Typography>
-      <Typography variant="caption" color="text.secondary">Distribuição das categorias atuais registradas no Movidesk</Typography>
-      <Box sx={{height:Math.max(245,categoryRanking.length*45),mt:1.5}}>
-        {categoryRanking.length ? <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={categoryRanking} layout="vertical" margin={{top:6,left:5,right:40,bottom:4}}>
-            <CartesianGrid strokeDasharray="3 4" horizontal={false} stroke="rgba(110,130,120,.18)"/>
-            <XAxis type="number" allowDecimals={false} tick={{fontSize:11}}/>
-            <YAxis type="category" dataKey="name" width={170} tick={{fontSize:11}}/>
-            <ChartTooltip formatter={v=>[`${v} tickets`,"Atendimentos"]}/>
-            <Bar dataKey="tickets" name="Atendimentos" radius={[0,6,6,0]} maxBarSize={25}>
-              {categoryRanking.map((r,i)=><Cell key={r.name} fill={chartColors[i%chartColors.length]}/>)}
-              <LabelList dataKey="tickets" position="right" style={{fontSize:12,fill:"currentColor"}}/>
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer> : <Box sx={{height:"100%",display:"grid",placeItems:"center"}}>
-          <Typography color="text.secondary" variant="body2">Sem atendimentos no período selecionado</Typography>
-        </Box>}
-      </Box>
-    </Box>
+    <SelectableHorizontalBars
+      title="Composição dos atendimentos por categoria"
+      description="Categorias atuais do Movidesk • marque/desmarque campos e clique em uma barra"
+      parts={categoryRanking.map((r,i)=>({name:r.name,value:r.tickets,color:["#197350","#F26727","#CDD936","#316885","#819888","#8A69A5","#D9A244","#9A5751"][i%8]!}))}
+      onInspect={name=>inspect("Categoria: "+name,r=>dimensionOf(r,"category")===name)}
+    />
     <Box sx={{display:"grid",gridTemplateColumns:{xs:"1fr",md:"1fr 1fr"},gap:2}}>
-      {donut("Situação das correções",[
-        {name:"Concluídas",value:audit.corrections.concluded},{name:"Em andamento",value:audit.corrections.open},
-        {name:"Canceladas",value:audit.corrections.cancelled},
-      ],"Distribuição das correções vinculadas a Tasks do Azure")}
-      {donut("OLA do Suporte",[
-        {name:"Dentro da meta",value:audit.ola.onTime},{name:"Alerta",value:audit.ola.alerts},
-        {name:"Não mensurável",value:audit.ola.unmeasurable},{name:"Canceladas",value:audit.ola.cancelled},
-      ],"Avaliação preliminar: criação da Task como referência de passagem")}
+      <SelectableDonut title="Situação das correções"
+        description="Distribuição das correções vinculadas às Tasks do Azure"
+        parts={[
+          {name:"Concluídas",value:audit.corrections.concluded,color:"#197350"},
+          {name:"Em andamento",value:audit.corrections.open,color:"#F26727"},
+          {name:"Canceladas",value:audit.corrections.cancelled,color:"#CDD936"},
+        ]}
+        onInspect={name=>inspect("Correções — "+name,r=>correctionsByTicket.get(r.id)===(name==="Concluídas"?"CONCLUIDA":name==="Canceladas"?"CANCELADA":"EM_ABERTO"))}
+      />
+      <SelectableDonut title="OLA do Suporte"
+        description="Avaliação preliminar: criação da Task como marco aproximado de passagem"
+        parts={[
+          {name:"Dentro da meta",value:audit.ola.onTime,color:"#197350"},
+          {name:"Alerta",value:audit.ola.alerts,color:"#F26727"},
+          {name:"Não mensurável",value:audit.ola.unmeasurable,color:"#CDD936"},
+          {name:"Canceladas",value:audit.ola.cancelled,color:"#316885"},
+        ]}
+        onInspect={name=>inspect("OLA — "+name,r=>r.olaStatus===(name==="Dentro da meta"?"DENTRO":name==="Alerta"?"ALERTA":name==="Canceladas"?"CANCELADA":"NAO_MENSURAVEL"))}
+      />
     </Box>
-    <Box sx={panelSx}>
-      <Typography variant="subtitle1" sx={{fontWeight:750}}>Evolução mensal dos atendimentos e correções</Typography>
-      <Typography variant="caption" color="text.secondary">Volume de tickets abertos no mês e vínculos com correções técnicas</Typography>
-      <Box sx={{height:300,mt:1}}>
-        <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={audit.monthly} margin={{top:12,right:22,left:-15,bottom:7}}>
-            <CartesianGrid strokeDasharray="3 4" vertical={false} stroke="rgba(110,130,120,.19)"/>
-            <XAxis dataKey="month" tick={{fontSize:11}}/>
-            <YAxis allowDecimals={false} tick={{fontSize:11}}/>
-            <ChartTooltip/>
-            <Legend verticalAlign="bottom" wrapperStyle={{fontSize:11}}/>
-            <Line type="monotone" dataKey="tickets" name="Atendimentos" stroke="#197350" strokeWidth={3} dot={{r:4}} activeDot={{r:6}}/>
-            <Line type="monotone" dataKey="corrections" name="Correções vinculadas" stroke="#316885" strokeWidth={3} dot={{r:4}} activeDot={{r:6}}/>
-          </LineChart>
-        </ResponsiveContainer>
-      </Box>
-    </Box>
+    <SelectableLines title="Evolução mensal de atendimentos e correções"
+      description="Volume de tickets abertos no mês e correções técnicas vinculadas"
+      data={audit.monthly} series={[
+        {key:"tickets",name:"Atendimentos",color:"#197350"},
+        {key:"corrections",name:"Correções",color:"#316885"},
+      ]}
+      onInspect={(selectedMonth,series)=>inspect("Evolução "+selectedMonth+" — "+series,r=>
+        month(r.createdDate)===selectedMonth&&(series!=="corrections"||r.isCorrectionTask))}
+    />
     <Box sx={{display:"grid",gridTemplateColumns:{xs:"1fr",lg:"1fr 1fr"},gap:2}}>
-      <RankedTable rows={rows} title="status"/>
-      <RankedTable rows={rows} title="service"/>
+      <RankedTable rows={rows} title="status" onInspect={onInspect}/>
+      <RankedTable rows={rows} title="service" onInspect={onInspect}/>
     </Box>
     <Typography variant="caption" color="text.secondary">
-      Os gráficos exibem ocorrências, não valores financeiros. Distribuições por categoria e situação usam o estado atual dos tickets.
+      Percentuais recalculados entre os campos marcados; valores originais preservados. Clique nos indicadores, gráficos ou rankings para consultar os tickets no painel lateral.
     </Typography>
   </Stack>;
 }
