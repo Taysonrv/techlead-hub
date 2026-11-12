@@ -74,3 +74,16 @@ test("qualidade de atendimento aparece em quatro cards e não em chips de métri
  assert.ok(!metricComponent.includes('<Chip size="small" variant="outlined" label={"Primeiro contato:'));
  assert.ok(metricComponent.includes('a.csat.percentage===null?"Sem avaliações"'));
 });
+
+test("CSAT e primeiro contato possuem trilha completa do Movidesk ao card",()=>{
+ const snapshot=readFileSync(new URL("../../backend/src/controllers/DashboardController.ts",import.meta.url),"utf8");
+ const importer=readFileSync(new URL("../../backend/src/services/MovideskJsonImportService.ts",import.meta.url),"utf8");
+ const audit=readFileSync(new URL("../src/utils/clientMeetingAnalytics.ts",import.meta.url),"utf8");
+ assert.ok(snapshot.includes("satisfactionDate:"));
+ assert.ok(snapshot.includes("resolvedInFirstCall:"));
+ assert.ok(snapshot.includes("reopenedDate:"));
+ assert.ok(importer.includes('typeof row.resolvedInFirstCall === "boolean"'));
+ assert.ok(audit.includes('const firstCallMeasured=resolvedTickets.filter'));
+ assert.ok(audit.includes('eventWithin(t,"satisfactionDate",monthStart,monthCutoff)'));
+ assert.ok(audit.includes('eventWithin(t,"reopenedDate",monthStart,monthCutoff)'));
+});
