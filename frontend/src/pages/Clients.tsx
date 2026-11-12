@@ -1,4 +1,6 @@
 import { PublicClientEnrichment } from "../components/PublicIntegrations";
+import { ClientMeetingInsights, ClientMeetingPresentation } from "../components/ClientMeetingInsights";
+import { buildClientMeetingAnalytics } from "../utils/clientMeetingAnalytics";
 import { KpiGrid } from "../components/KpiGrid";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
@@ -95,6 +97,7 @@ type AzureTaskSummary = {
 type Ticket = {
   id: number;
   movideskId: number;
+  ticketType?: number | null;
 
   protocol: string | null;
   subject: string;
@@ -582,6 +585,9 @@ export function Clients() {
   const clientOperationalCohorts = useMemo(() => buildOperationalCohorts(
     clientOperationalTickets,
     { start: startOfDay(effectiveStartDate), end: endOfDay(effectiveEndDate) },
+  ), [clientOperationalTickets, effectiveStartDate, effectiveEndDate]);
+  const meetingAnalytics = useMemo(() => buildClientMeetingAnalytics(
+    clientOperationalTickets, effectiveEndDate, startOfDay(effectiveStartDate), endOfDay(effectiveEndDate),
   ), [clientOperationalTickets, effectiveStartDate, effectiveEndDate]);
 
   const movementSeries = useMemo(() => {
@@ -1850,6 +1856,14 @@ export function Clients() {
         </CardContent>
       </Card>
 
+      {/* Pacote gerencial — análise semanal, comparativos e estoque de pendentes públicos */}
+      <ClientMeetingInsights analysis={meetingAnalytics} tickets={clientOperationalTickets}
+        selectedClient={selectedClient} onFocusClient={setSelectedClient}
+        onShowTickets={(title,ids,subtitle)=>{
+          const selected=new Set(ids);
+          showTickets(title,clientOperationalTickets.filter(ticket=>selected.has(ticket.id)),subtitle);
+        }}/>
+      
       {/* Resumo operacional com as mesmas coortes do Dashboard */}
       <KpiGrid className="techlead-clients-primary-kpis" sx={{ mb: 2, gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))", lg: "repeat(4, minmax(0, 1fr))" } }}>
         <MetricCard title="Abertos no período · SIMER" value={clientOperationalCohorts.entries.length} description="Abertura no intervalo"
@@ -2135,7 +2149,7 @@ export function Clients() {
                 </Typography>
               </Box>
               <Stack className="presentation-actions" direction="row" spacing={1} sx={{ alignItems: "center" }}>
-                {isPresenting && <Typography variant="body2" sx={{ mr: 1, fontWeight: 800 }}>Página {presentationPage + 1} de 5</Typography>}
+                {isPresenting && <Typography variant="body2" sx={{ mr: 1, fontWeight: 800 }}>Página {presentationPage + 1} de 6</Typography>}
                 {!isPresenting && <Button variant="outlined" color="inherit" startIcon={<PictureAsPdfOutlined />} disabled={exportingPresentation} onClick={() => void exportClientPresentation()} sx={{ color: "white", borderColor: "rgba(255,255,255,.65)", "&:hover": { borderColor: "white", bgcolor: "rgba(255,255,255,.10)" } }}>
                   {exportingPresentation ? "Gerando PDF..." : "Exportar PDF"}
                 </Button>}
@@ -2163,7 +2177,12 @@ export function Clients() {
               </Box>
             </Box>}
 
-            {(!isPresenting || presentationPage === 1) && <Box className="client-print-section-grid client-print-page" sx={{ mt: isPresenting ? 0 : 1.5, height: isPresenting ? "100%" : "auto", display: "grid", gridTemplateColumns: "1fr", gap: 2 }}>
+            {(!isPresenting || presentationPage === 1) && <Box className="client-print-section-grid client-print-page"
+              sx={{mt:isPresenting?0:1.5,height:isPresenting?"100%":"auto",display:"flex",flexDirection:"column",gap:1}}>
+              <ClientMeetingPresentation analysis={meetingAnalytics} client={selectedClient}/>
+            </Box>}
+            
+            {(!isPresenting || presentationPage === 2) && <Box className="client-print-section-grid client-print-page" sx={{ mt: isPresenting ? 0 : 1.5, height: isPresenting ? "100%" : "auto", display: "grid", gridTemplateColumns: "1fr", gap: 2 }}>
               <Typography className="client-print-page-title" variant="h5" sx={{ fontWeight: 900 }}>Demanda e recorrência</Typography>
               <ExecutiveBarPanel title="Atendimentos por processo" data={presentationSummary.areas} onClick={(name) => showTickets(`Processo: ${name}`, scopedTickets.filter((ticket) => classifyExecutiveProcess(ticket) === name))} />
               <ExecutiveBarPanel title="Bugs por processo" data={presentationSummary.bugAreas} onClick={(name) => showTickets(`Bugs · ${name}`, presentationSummary.bugs.filter((ticket) => classifyExecutiveProcess(ticket) === name))} />
@@ -2174,7 +2193,7 @@ export function Clients() {
               </Box>
             </Box>}
 
-            {(!isPresenting || presentationPage === 2) && <Box className="client-print-section-grid client-print-page" sx={{ mt: isPresenting ? 0 : 1.5, height: isPresenting ? "100%" : "auto", display: "grid", gridTemplateColumns: "1fr", gap: 2 }}>
+            {(!isPresenting || presentationPage === 3) && <Box className="client-print-section-grid client-print-page" sx={{ mt: isPresenting ? 0 : 1.5, height: isPresenting ? "100%" : "auto", display: "grid", gridTemplateColumns: "1fr", gap: 2 }}>
               <Typography className="client-print-page-title" variant="h5" sx={{ fontWeight: 900 }}>Entregas e desenvolvimento</Typography>
               <ExecutiveDonutPanel title="Status das Tarefas" data={presentationSummary.taskStatuses} total={presentationSummary.taskItems.length} />
               <Box sx={{ p: 2.25, border: "1px solid", borderColor: "divider", borderRadius: 2, bgcolor: "background.paper" }}>
@@ -2183,7 +2202,7 @@ export function Clients() {
               </Box>
             </Box>}
 
-            {(!isPresenting || presentationPage === 3) && <Box className="client-print-section-grid client-print-page client-print-continuation" sx={{ mt: isPresenting ? 0 : 1.5, height: isPresenting ? "100%" : "auto", display: "grid", gridTemplateColumns: "1fr", gap: 2 }}>
+            {(!isPresenting || presentationPage === 4) && <Box className="client-print-section-grid client-print-page client-print-continuation" sx={{ mt: isPresenting ? 0 : 1.5, height: isPresenting ? "100%" : "auto", display: "grid", gridTemplateColumns: "1fr", gap: 2 }}>
               <Typography className="client-print-page-title" variant="h5" sx={{ fontWeight: 900 }}>Pendências e encaminhamentos</Typography>
               <ExecutiveDonutPanel title="Status das pendências" data={presentationSummary.pendingStatuses} total={presentationSummary.pending.length} />
               <Box sx={{ p: 2.25, borderRadius: 2, bgcolor: presentationSummary.pending.length ? "rgba(245,158,11,.10)" : "rgba(22,163,74,.08)", border: "1px solid", borderColor: presentationSummary.pending.length ? "rgba(245,158,11,.28)" : "rgba(22,163,74,.22)" }}>
@@ -2192,7 +2211,7 @@ export function Clients() {
               </Box>
             </Box>}
 
-            {(!isPresenting || presentationPage === 4) && <Box className="client-print-section-grid client-print-page" sx={{ mt: isPresenting ? 0 : 1.5, height: isPresenting ? "100%" : "auto", display: "grid", gridTemplateColumns: "1fr", gap: 2 }}>
+            {(!isPresenting || presentationPage === 5) && <Box className="client-print-section-grid client-print-page" sx={{ mt: isPresenting ? 0 : 1.5, height: isPresenting ? "100%" : "auto", display: "grid", gridTemplateColumns: "1fr", gap: 2 }}>
               <Typography className="client-print-page-title" variant="h5" sx={{ fontWeight: 900 }}>Conclusão executiva</Typography>
               <Box className="client-print-conclusion" sx={{ p: 3, border: "1px solid", borderColor: "divider", borderRadius: 2, bgcolor: "background.paper" }}>
                 <Typography variant="h6" sx={{ fontWeight: 900, color: aliareColors.greenDark }}>Resumo do período</Typography>
@@ -2217,8 +2236,8 @@ export function Clients() {
 
             {isPresenting && <Stack className="presentation-actions" direction="row" spacing={1.5} sx={{ mt: "auto", pt: 2, justifyContent: "space-between", alignItems: "center" }}>
               <Button variant="outlined" color="inherit" startIcon={<ArrowBackOutlined />} disabled={presentationPage === 0} onClick={() => setPresentationPage((page) => Math.max(0, page - 1))}>Anterior</Button>
-              <Stack direction="row" spacing={0.75}>{[0, 1, 2, 3, 4].map((page) => <Box key={page} onClick={() => setPresentationPage(page)} sx={{ width: page === presentationPage ? 28 : 9, height: 9, borderRadius: 5, bgcolor: page === presentationPage ? aliareColors.green : "divider", cursor: "pointer", transition: "all .2s" }} />)}</Stack>
-              <Button variant="contained" endIcon={<ArrowForwardOutlined />} disabled={presentationPage === 4} onClick={() => setPresentationPage((page) => Math.min(4, page + 1))}>Próxima</Button>
+              <Stack direction="row" spacing={0.75}>{[0, 1, 2, 3, 4, 5].map((page) => <Box key={page} onClick={() => setPresentationPage(page)} sx={{ width: page === presentationPage ? 28 : 9, height: 9, borderRadius: 5, bgcolor: page === presentationPage ? aliareColors.green : "divider", cursor: "pointer", transition: "all .2s" }} />)}</Stack>
+              <Button variant="contained" endIcon={<ArrowForwardOutlined />} disabled={presentationPage === 5} onClick={() => setPresentationPage((page) => Math.min(5, page + 1))}>Próxima</Button>
             </Stack>}
           </CardContent>
         </Card>
