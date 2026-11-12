@@ -221,9 +221,9 @@ export function ClientMeetingPresentation({analysis:a,client}:{
     </Box>
     <Stack direction="row" sx={{gap:1,flexWrap:"wrap",mb:1}}>
       <Chip size="small" label={"SLA solução: "+p(a.solutionSla.percentage)+" ("+a.solutionSla.measured+" medidos)"}/>
-      <Chip size="small" label={"1º contato: "+p(a.firstCall.percentage)}/>
-      <Chip size="small" label={"CSAT positivo: "+p(a.csat.percentage)}/>
-      <Chip size="small" label={"Reaberturas: "+a.reopened}/>
+      <Chip size="small" label={"1º contato entre resolvidos: "+p(a.firstCall.percentage)+" · "+a.firstCall.measured+" medidos"}/>
+      <Chip size="small" label={"CSAT por data de resposta: "+(a.csat.measured?p(a.csat.percentage):"Sem avaliações no mês")}/>
+      <Chip size="small" label={"Tickets reabertos no mês: "+a.reopened}/>
     </Stack>
     <Typography variant="caption" color="text.secondary">
       Pendências = tickets públicos em aberto no snapshot atual. Não representa saldo histórico do mês.
