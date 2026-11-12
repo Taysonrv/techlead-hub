@@ -181,7 +181,7 @@ export function ClientManagementRankings({rows,onInspect}:{rows:ClientManagement
     </Box>
   </Stack>;
 }
-export function ClientManagementTickets({rows,initialFilter,onInspect}:{rows:ClientManagementTicket[];initialFilter?:{dimension:Dimension;value:string}|null};onInspect?:ClientInspect}){
+export function ClientManagementTickets({rows,initialFilter,onInspect}:{rows:ClientManagementTicket[];initialFilter?:{dimension:Dimension;value:string}|null;onInspect?:ClientInspect}){
   const [search,setSearch]=useState("");
   const [category,setCategory]=useState("TODAS");
   const [page,setPage]=useState(0);
