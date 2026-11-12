@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { bomJesusReport, clientExecutiveReport, DEFAULT_EXECUTIVE_CLIENT, EXECUTIVE_CLIENT_CATALOG, resolveExecutiveClient } from "../services/BomJesusReportService";
+import { bomJesusReport, clientExecutiveReport, DEFAULT_EXECUTIVE_CLIENT, EXECUTIVE_CLIENT_CATALOG, resolveExecutiveClient, ALL_EXECUTIVE_CLIENTS, ALL_EXECUTIVE_CLIENTS_LABEL } from "../services/BomJesusReportService";
 import { createBomJesusExecutiveWorkbook } from "../services/BomJesusExecutiveWorkbook";
 import type { SlaTier } from "../domain/AliareSlaRules";
 import { requirePermission } from "../middlewares/roleMiddleware";
@@ -33,7 +33,7 @@ const executiveReportError = (res: import("express").Response, error: unknown, c
 };
 // Catalog is the vetted operational scope: no generic free-text client query.
 coordinationRoutes.get("/client-executive-report/clients", (_req: AuthenticatedRequest, res) => {
-  res.json({ clients: [...EXECUTIVE_CLIENT_CATALOG], defaultClient: DEFAULT_EXECUTIVE_CLIENT });
+  res.json({ clients: [...EXECUTIVE_CLIENT_CATALOG], defaultClient: DEFAULT_EXECUTIVE_CLIENT, allClientKey: ALL_EXECUTIVE_CLIENTS, allClientLabel: ALL_EXECUTIVE_CLIENTS_LABEL });
 });
 coordinationRoutes.get("/client-executive-report", async (req: AuthenticatedRequest, res) => {
   try {
