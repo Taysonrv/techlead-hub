@@ -134,7 +134,7 @@ export function SelectableLines({title,description,data,series,onInspect}:Props&
   const selectedSeries=series.filter(s=>choice.visible.has(s.key));
   const [selectedMonth,setSelectedMonth]=useState("");
   const months=data.map(d=>String(d.month));
-  const openMonth=(month:string)=>onInspect?.(month,selectedSeries[0]?.key??series[0]?.key??"tickets");
+  const openMonth=(month:string)=>onInspect?.(month,"tickets");
   return <Box sx={surface}>
     <Typography variant="subtitle1" sx={{fontWeight:750}}>{title}</Typography>
     <Typography variant="caption" color="text.secondary">{description}</Typography>
