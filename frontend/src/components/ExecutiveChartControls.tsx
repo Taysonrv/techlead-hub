@@ -143,7 +143,9 @@ export function SelectableLines({title,description,data,series,onInspect}:Props&
         <LineChart data={data} margin={{top:12,left:-14,right:23,bottom:0}}
           onClick={state=>{
             const month=String(state?.activeLabel??"");
-            if(month&&onInspect)openMonth(month);
+            const key=typeof state?.activeDataKey==="string" && selectedSeries.some(series=>series.key===state.activeDataKey)
+              ? state.activeDataKey : "tickets";
+            if(month&&onInspect)onInspect(month,key);
           }}>
           <CartesianGrid strokeDasharray="3 4" vertical={false} stroke="rgba(110,130,120,.2)"/>
           <XAxis dataKey="month" tick={{fontSize:11}}/>
