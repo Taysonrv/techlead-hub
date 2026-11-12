@@ -60,7 +60,7 @@ const metricCard=(label:string,value:string|number,note:string,attention=false,o
   <Typography variant="caption" color="text.secondary">{note}</Typography>
 </Box>;
 const panelSx={p:2.2,border:"1px solid",borderColor:"divider",borderRadius:2.5,backgroundColor:"background.paper",minWidth:0};
-function RankedTable({rows,title,metric="tickets",onInspect}:{rows:ClientManagementTicket[];title:Dimension;metric?:Measure;onInspect?:(dimension:Dimension,value:string)=>void}){
+function RankedTable({rows,title,metric="tickets",onInspect}:{rows:ClientManagementTicket[];title:Dimension;metric?:Measure;onInspect?:ClientInspect}){
   const ranking=rankTickets(rows,title,metric);
   const label=dims.find(x=>x.key===title)?.label??title;
   const measureLabel=measures.find(x=>x.key===metric)?.label??metric;
@@ -75,7 +75,7 @@ function RankedTable({rows,title,metric="tickets",onInspect}:{rows:ClientManagem
       <TableBody>{ranking.slice(0,10).map((r,i)=><TableRow hover key={r.name}>
         <TableCell sx={{color:"text.secondary"}}>{i+1}</TableCell>
         <TableCell sx={{maxWidth:215}}>
-          <Tooltip title={r.name}><Button size="small" color="inherit" onClick={()=>onInspect?.(title,r.name)}
+          <Tooltip title={r.name}><Button size="small" color="inherit" onClick={()=>onInspect?.("Ranking — "+label+": "+r.name,rows.filter(ticket=>dimensionOf(ticket,title)===r.name && (metric==="tickets"||measured(ticket,metric)>0)))}
             sx={{textTransform:"none",p:0,justifyContent:"flex-start",textAlign:"left",fontSize:12,fontWeight:500,maxWidth:"100%"}}>
             <Box component="span" sx={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.name}</Box>
           </Button></Tooltip>
@@ -148,7 +148,7 @@ export function ClientManagementOverview({rows,audit,onInspect}:{rows:ClientMana
     </Typography>
   </Stack>;
 }
-export function ClientManagementRankings({rows,onInspect}:{rows:ClientManagementTicket[];onInspect?:(dimension:Dimension,value:string)=>void}){
+export function ClientManagementRankings({rows,onInspect}:{rows:ClientManagementTicket[];onInspect?:ClientInspect}){
   const [metric,setMetric]=useState<Measure>("tickets");
   return <Stack spacing={2}>
     <Stack direction={{xs:"column",sm:"row"}} sx={{alignItems:{sm:"center"},justifyContent:"space-between",gap:1}}>
@@ -163,7 +163,7 @@ export function ClientManagementRankings({rows,onInspect}:{rows:ClientManagement
     </Box>
   </Stack>;
 }
-export function ClientManagementTickets({rows,initialFilter}:{rows:ClientManagementTicket[];initialFilter?:{dimension:Dimension;value:string}|null}){
+export function ClientManagementTickets({rows,initialFilter,onInspect}:{rows:ClientManagementTicket[];initialFilter?:{dimension:Dimension;value:string}|null};onInspect?:ClientInspect}){
   const [search,setSearch]=useState("");
   const [category,setCategory]=useState("TODAS");
   const [page,setPage]=useState(0);
@@ -199,7 +199,7 @@ export function ClientManagementTickets({rows,initialFilter}:{rows:ClientManagem
     <TableContainer sx={{maxHeight:590}}><Table stickyHeader size="small" sx={{minWidth:920}}>
       <TableHead><TableRow>{["Abertura","Ticket","Assunto","Categoria","Responsável","Situação","Task Azure","OLA Suporte"].map(label=>
         <TableCell key={label} sx={{fontWeight:750,backgroundColor:"action.hover"}}>{label}</TableCell>)}</TableRow></TableHead>
-      <TableBody>{shown.map((r,i)=><TableRow key={r.id} hover sx={{backgroundColor:i%2?"action.hover":"transparent"}}>
+      <TableBody>{shown.map((r,i)=><TableRow key={r.id} hover onClick={()=>onInspect?.("Atendimento #"+r.id,[r])} sx={{backgroundColor:i%2?"action.hover":"transparent",cursor:"pointer"}}>
         <TableCell sx={{whiteSpace:"nowrap"}}>{formatDate(r.createdDate)}</TableCell>
         <TableCell>{ticketLink(r.id)}</TableCell><TableCell sx={{minWidth:230,maxWidth:340}}>{r.subject}</TableCell>
         <TableCell>{r.category||"—"}</TableCell><TableCell>{r.owner||"—"}</TableCell>
