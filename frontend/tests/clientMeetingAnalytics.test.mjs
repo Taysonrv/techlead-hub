@@ -86,3 +86,17 @@ test("fechamentos cancelados não entram no indicador de fechamento mensal",()=>
  const r=buildClientMeetingAnalytics([valid,canceled],cutoff,periodStart,periodEnd);
  assert.equal(r.months.at(-1).closed,1);
 });
+
+test("pending backlog groups by responsible and aging rather than mixing with SLA",()=>{
+ const inputA=input(101,"2026-11-09T12:00:00-03:00",{owner:"ANA",baseStatus:"New",ticketType:2});
+ const inputB=input(102,"2026-10-20T12:00:00-03:00",{owner:"ANA",baseStatus:"Stopped",ticketType:2});
+ const inputC=input(103,"2026-06-01T12:00:00-03:00",{owner:"BIA",baseStatus:"InAttendance",ticketType:2});
+ const inputInternal=input(104,"2026-06-01T12:00:00-03:00",{owner:"BIA",baseStatus:"InAttendance",ticketType:1});
+ const result=buildClientMeetingAnalytics([inputA,inputB,inputC,inputInternal],cutoff,periodStart,periodEnd);
+ assert.deepEqual(result.pendingByOwner.map(r=>[r.name,r.value]),[["ANA",2],["BIA",1]]);
+ const byAge=Object.fromEntries(result.pendingByAge.map(r=>[r.name,r.value]));
+ assert.equal(byAge["Até 7 dias"],1);
+ assert.equal(byAge["8 a 30 dias"],1);
+ assert.equal(byAge["Mais de 90 dias"],1);
+ assert.equal(result.pendingNow.length,3);
+});
