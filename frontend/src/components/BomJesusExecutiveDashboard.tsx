@@ -120,7 +120,7 @@ export function BomJesusExecutiveDashboard({executive:a,clientName,rows,onInspec
       </Stack>
       <TableContainer sx={{maxHeight:470}}><Table size="small" stickyHeader sx={{minWidth:1050}}>
         <TableHead><TableRow>{["Ticket","Task","Situação","Prioridade / perfil","Horas úteis","Meta","Excesso","Pausas","Ação"].map(x=><TableCell key={x}>{x}</TableCell>)}</TableRow></TableHead>
-        <TableBody>{ola.map(x=><TableRow key={x.ticketId} hover title={x.warnings.join(" | ")}>
+        <TableBody>{ola.map(x=><TableRow key={x.ticketId} hover title={x.warnings.join(" | ")} onClick={()=>inspect("OLA — Ticket #"+x.ticketId,r=>r.id===x.ticketId)} sx={{cursor:"pointer"}}>
           <TableCell>{ticket(x.ticketId)}</TableCell><TableCell>{task(x.taskId,x.taskUrl)}</TableCell><TableCell><Chip size="small" color={x.status==="ALERTA"?"warning":"default"} label={x.status.replaceAll("_"," ")}/></TableCell>
           <TableCell>{x.priority??"N/D"} · {x.tier}{x.tierVerified?"":" (estim.)"}</TableCell>
           <TableCell>{hours(x.minutes)}</TableCell><TableCell>{hours(x.targetMinutes)}</TableCell>
@@ -141,7 +141,7 @@ export function BomJesusExecutiveDashboard({executive:a,clientName,rows,onInspec
       <Alert severity="info" sx={{mb:1}}>Concluída + versão não comprova implantação ou aceite do cliente. Os tickets reabertos após a conclusão técnica são candidatos à investigação, não regressões confirmadas.</Alert>
       <TableContainer sx={{maxHeight:470}}><Table size="small" stickyHeader sx={{minWidth:1000}}>
         <TableHead><TableRow>{["Ticket","Task","Estado","Versão","Conclusão","Resolução Movidesk","Reabertura após conclusão?","Nova ocorrência candidata"].map(x=><TableCell key={x}>{x}</TableCell>)}</TableRow></TableHead>
-        <TableBody>{correction.map(x=><TableRow key={x.ticketId} hover>
+        <TableBody>{correction.map(x=><TableRow key={x.ticketId} hover onClick={()=>inspect("Correção — Ticket #"+x.ticketId,r=>r.id===x.ticketId)} sx={{cursor:"pointer"}}>
           <TableCell>{ticket(x.ticketId)}</TableCell><TableCell>{task(x.taskId,x.taskUrl)}</TableCell>
           <TableCell>{x.outcome}</TableCell><TableCell>{x.version??"—"}</TableCell>
           <TableCell>{date(x.taskConcludedAt)}</TableCell><TableCell>{date(x.ticketResolvedAt)}</TableCell>
@@ -159,7 +159,7 @@ export function BomJesusExecutiveDashboard({executive:a,clientName,rows,onInspec
       </Stack>
       <Typography variant="body2" color="text.secondary" sx={{mb:1}}>A matriz compara a categoria atual do Movidesk com o tipo da Task no Azure. Divergência não prova reclassificação histórica.</Typography>
       <TableContainer sx={{maxHeight:430}}><Table size="small" stickyHeader sx={{minWidth:750}}><TableHead><TableRow>{["Ticket","Assunto","Categoria atual","Task","Tipo","A investigar"].map(x=><TableCell key={x}>{x}</TableCell>)}</TableRow></TableHead>
-        <TableBody>{divergence.map(x=><TableRow key={x.ticketId} hover>
+        <TableBody>{divergence.map(x=><TableRow key={x.ticketId} hover onClick={()=>inspect("Classificação — Ticket #"+x.ticketId,r=>r.id===x.ticketId)} sx={{cursor:"pointer"}}>
           <TableCell>{ticket(x.ticketId)}</TableCell><TableCell>{x.subject}</TableCell><TableCell>{x.category}</TableCell>
           <TableCell>{x.taskId??"—"}</TableCell><TableCell>{x.taskType}</TableCell><TableCell>{x.reason}</TableCell>
         </TableRow>)}</TableBody></Table></TableContainer>
@@ -171,7 +171,7 @@ export function BomJesusExecutiveDashboard({executive:a,clientName,rows,onInspec
       </Stack>
       <Alert severity="warning" sx={{mb:1}}>{a.categories.legacyWarning}</Alert>
       <TableContainer sx={{maxHeight:420}}><Table size="small" stickyHeader sx={{minWidth:850}}><TableHead><TableRow>{["Ticket","Assunto","Categoria atual","Anterior observada","Primeira observada","Task","Evidência","Motivo"].map(x=><TableCell key={x}>{x}</TableCell>)}</TableRow></TableHead>
-        <TableBody>{category.map((x,i)=><TableRow key={x.ticketId+"-"+i} hover>
+        <TableBody>{category.map((x,i)=><TableRow key={x.ticketId+"-"+i} hover onClick={()=>inspect("Adequação — Ticket #"+x.ticketId,r=>r.id===x.ticketId)} sx={{cursor:"pointer"}}>
           <TableCell>{ticket(x.ticketId)}</TableCell><TableCell>{x.subject}</TableCell><TableCell>{x.category}</TableCell>
           <TableCell>{x.previousCategory??"Não recuperada"}</TableCell><TableCell>{x.initialObserved??"—"}</TableCell>
           <TableCell>{x.taskId??"—"}</TableCell><TableCell>{x.evidence}</TableCell><TableCell>{x.reason}</TableCell>
@@ -186,7 +186,7 @@ export function BomJesusExecutiveDashboard({executive:a,clientName,rows,onInspec
       </Stack>
       <Alert severity="info" sx={{mb:1}}>Agrupamentos por Task e assunto podem se sobrepor. Ocorrência posterior à conclusão técnica não comprova regressão após implantação.</Alert>
       <TableContainer sx={{maxHeight:440}}><Table size="small" stickyHeader sx={{minWidth:960}}><TableHead><TableRow>{["Assunto base","Tipo","Tickets","Tasks","Período","Pós-conclusão?","Tickets posteriores"].map(x=><TableCell key={x}>{x}</TableCell>)}</TableRow></TableHead>
-        <TableBody>{recurrence.map(x=><TableRow key={x.key} hover title={x.qualification}>
+        <TableBody>{recurrence.map(x=><TableRow key={x.key} hover title={x.qualification} onClick={()=>inspect("Recorrência — "+x.title,r=>x.ticketIds.includes(r.id))} sx={{cursor:"pointer"}}>
           <TableCell sx={{minWidth:230}}>{x.title}</TableCell><TableCell>{x.evidence==="MESMA_TASK"?"Mesma Task":"Mesmo assunto"}</TableCell>
           <TableCell>{x.ticketIds.map(id=><Box key={id} sx={{display:"inline-block",mr:1}}>{ticket(id)}</Box>)}</TableCell>
           <TableCell>{x.taskIds.join(", ")||"—"}</TableCell><TableCell>{date(x.firstAt)} a {date(x.lastAt)}</TableCell>
@@ -204,7 +204,7 @@ export function BomJesusExecutiveDashboard({executive:a,clientName,rows,onInspec
       <Typography variant="subtitle2" sx={{mb:1}}>Periodicidade de possíveis falhas</Typography>
       <Stack direction="row" sx={{flexWrap:"wrap",gap:1,mb:2}}>{a.vistra.monthly.map(m=><Chip key={m.month} size="small" variant="outlined" label={`${m.month}: Vistra ${m.vistra} · Analítico ${m.analitico} · Relatórios ${m.relatorios}`}/>)}</Stack>
       <TableContainer sx={{maxHeight:440}}><Table size="small" stickyHeader><TableHead><TableRow>{["Ticket","Assunto","Ferramenta","Data","Task","Falha?","Evidência"].map(x=><TableCell key={x}>{x}</TableCell>)}</TableRow></TableHead>
-        <TableBody>{vistra.map(x=><TableRow key={x.ticketId} hover><TableCell>{ticket(x.ticketId)}</TableCell>
+        <TableBody>{vistra.map(x=><TableRow key={x.ticketId} hover onClick={()=>inspect("Vistra/relatório — Ticket #"+x.ticketId,r=>r.id===x.ticketId)} sx={{cursor:"pointer"}}><TableCell>{ticket(x.ticketId)}</TableCell>
           <TableCell>{x.subject}</TableCell><TableCell>{x.area}</TableCell><TableCell>{date(x.date)}</TableCell>
           <TableCell>{x.taskId??"—"}</TableCell><TableCell>{x.suspectedFailure?"Suspeita":"Não comprovada"}</TableCell>
           <TableCell>{x.evidence}</TableCell></TableRow>)}</TableBody></Table></TableContainer>
