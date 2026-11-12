@@ -1,5 +1,4 @@
 import { KpiGrid } from "../components/KpiGrid";
-import { CoordinationWeeklyWorkspace } from "../components/CoordinationWeeklyWorkspace";
 import { ClientExecutiveReportPanel } from "../components/BomJesusReportPanel";
 import { AsyncState } from "../components/AsyncState";
 import { ContentState } from "../components/ContentState";
@@ -340,7 +339,6 @@ export function Coordination() {
         meta={data ? `Coordenação: ${data.scope.coordinator} · ${data.scope.analysts.length} analistas · ${data.scope.clients.length} clientes · Atualizado ${new Date(data.generatedAt).toLocaleTimeString("pt-BR")}` : undefined}
       />
 
-      <CoordinationWeeklyWorkspace />
       <ClientExecutiveReportPanel />
 
       <Card variant="outlined" sx={{ overflow: "hidden", borderRadius: 2.5, backgroundColor: "background.paper", mb: 2 }}>
