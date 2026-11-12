@@ -4,7 +4,7 @@ import {
   Stack, Table, TableBody, TableCell, TableContainer, TableHead, TablePagination,
   TableRow, TextField, Tooltip, Typography,
 } from "@mui/material";
-import { Cell, CartesianGrid, Bar, BarChart, LabelList, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip as ChartTooltip, XAxis, YAxis } from "recharts";
+import { SelectableDonut, SelectableHorizontalBars, SelectableLines } from "./ExecutiveChartControls";
 import type { BomJesusExecutiveAudit } from "./BomJesusExecutiveDashboard";
 
 export type ClientManagementTicket = {
@@ -14,7 +14,8 @@ export type ClientManagementTicket = {
   isCorrectionTask:boolean; supportOlaBreached:boolean|null;
   olaStatus?:"ALERTA"|"DENTRO"|"NAO_MENSURAVEL"|"CANCELADA";
 };
-type Dimension="owner"|"category"|"status"|"service";
+export type ClientDimension="owner"|"category"|"status"|"service";
+type Dimension=ClientDimension;
 type Measure="tickets"|"bugs"|"corrections"|"olaAlerts";
 const dims:ReadonlyArray<{key:Dimension;label:string}>=[
   {key:"owner",label:"Analista responsável"}, {key:"category",label:"Categoria atual"},
@@ -24,7 +25,6 @@ const measures:ReadonlyArray<{key:Measure;label:string}>=[
   {key:"tickets",label:"Quantidade de tickets"}, {key:"bugs",label:"Categoria Bug"},
   {key:"corrections",label:"Correções vinculadas"}, {key:"olaAlerts",label:"Alertas de OLA"},
 ];
-const chartColors=["#197350","#F26727","#CDD936","#316885","#819888","#8A69A5","#D9A244","#9A5751"];
 const dimensionOf=(r:ClientManagementTicket,dim:Dimension):string=>{
   if(dim==="owner")return r.owner?.trim()||"Não atribuído";
   if(dim==="category")return r.category?.trim()||"Sem categoria";
@@ -51,8 +51,10 @@ const rankTickets=(rows:ClientManagementTicket[],dim:Dimension,measure:Measure="
 const number=(n:number)=>n.toLocaleString("pt-BR");
 const formatDate=(iso:string)=>new Date(iso).toLocaleDateString("pt-BR",{timeZone:"America/Sao_Paulo"});
 const ticketLink=(id:number)=><Link href={`/tickets?movidesk=${id}`} underline="hover" sx={{fontWeight:700}}>#{id}</Link>;
-const metricCard=(label:string,value:string|number,note:string,attention=false)=><Box key={label}
-  sx={{minWidth:0,p:2,borderRadius:2.5,border:"1px solid",borderColor:"divider",backgroundColor:"background.paper",display:"flex",flexDirection:"column",gap:1}}>
+const metricCard=(label:string,value:string|number,note:string,attention=false,onClick?:()=>void)=><Box key={label}
+  role={onClick?"button":undefined} tabIndex={onClick?0:undefined} onClick={onClick}
+  onKeyDown={onClick?event=>{if(event.key==="Enter"||event.key===" "){event.preventDefault();onClick();}}:undefined}
+  sx={{minWidth:0,p:2,borderRadius:2.5,border:"1px solid",borderColor:"divider",backgroundColor:"background.paper",display:"flex",flexDirection:"column",gap:1,cursor:onClick?"pointer":undefined,"&:hover":onClick?{borderColor:"primary.main",boxShadow:2}:undefined}}>
   <Typography variant="caption" color="text.secondary" sx={{fontWeight:600}}>{label}</Typography>
   <Typography variant="h5" sx={{fontWeight:800,color:attention?"warning.main":"text.primary",fontVariantNumeric:"tabular-nums"}}>{value}</Typography>
   <Typography variant="caption" color="text.secondary">{note}</Typography>
