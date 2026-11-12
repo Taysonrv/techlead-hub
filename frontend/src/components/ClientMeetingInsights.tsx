@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { KpiCard as ExecutiveKpiCard } from "./KpiCard";
 import { semanticChartColors } from "../theme/chartPalette";
+import { aliareColors } from "../theme/theme";
 import { Box, Button, Card, CardContent, Chip, Divider, Stack, Typography } from "@mui/material";
 import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { AssessmentOutlined, CalendarMonthOutlined, GroupsOutlined } from "@mui/icons-material";
@@ -23,6 +24,10 @@ const event=(t:WeeklyTicket,field:"createdDate"|"resolvedDate"|"closedDate"|"sat
   const raw=t[field];return Boolean(raw&&monthKey(raw)===month);
 };
 type KpiProps={label:string;value:string;note:string;delta?:string;color?:string;onClick:()=>void};
+// Mesma régua visual utilizada pelo Dashboard (sucesso ≥90%, atenção ≥80%, crítico abaixo disso).
+const slaAccent=(value:number|null)=>value===null?aliareColors.green
+  :value>=90?semanticChartColors.positive
+  :value>=80?semanticChartColors.attention:semanticChartColors.overdue;
 const KPI_EXPLANATIONS:Record<string,string>={
   "Abertos neste mês":"Tickets com data de abertura no mês de referência, até o dia de corte. Compara o mesmo intervalo do mês anterior.",
   "Resolvidos neste mês":"Tickets com data de resolução no mês, inclusive abertos anteriormente ou reabertos posteriormente.",
@@ -39,7 +44,7 @@ function Kpi({label,value,note,delta,onClick,color}:KpiProps){
   const accent=color==="success.main"?semanticChartColors.positive
     :color==="warning.main"?semanticChartColors.attention
     :color==="error.main"?semanticChartColors.overdue
-    :color??semanticChartColors.normal;
+    :color??aliareColors.green;
   const percentage=delta?.match(/[+-]?[0-9]+(?:[.,][0-9]+)?%/)?.[0];
   const subtitle=delta&&note.startsWith("Mesmo período anterior:")
     ?"Anterior: "+note.slice("Mesmo período anterior:".length).trim()+(percentage?" • "+percentage:"")
@@ -100,7 +105,7 @@ export function ClientMeetingInsights({analysis:a,tickets,selectedClient,onShowT
         <Kpi label="Pendentes abertos no filtro" value={br(a.pendingInPeriod.length)}
           note="Atualmente abertos; criação dentro do período da tela"
           onClick={()=>open("Pendentes públicos abertos no período",a.pendingInPeriod)}/>
-        <Kpi label="SLA de 1ª resposta" value={p(a.responseSla.percentage)}
+        <Kpi label="SLA de 1ª resposta" value={p(a.responseSla.percentage)} color={slaAccent(a.responseSla.percentage)}
           note={br(a.responseSla.within)+" de "+br(a.responseSla.measured)+" tickets medidos"}
           onClick={()=>open("SLA de 1ª resposta — medidos",a.responseSla.tickets)}/>
       </Box>
@@ -111,9 +116,9 @@ export function ClientMeetingInsights({analysis:a,tickets,selectedClient,onShowT
         </Typography>
       </Box>
       <Box sx={{display:"grid",gridTemplateColumns:{xs:"minmax(0,1fr)",sm:"repeat(2,minmax(0,1fr))",lg:"repeat(4,minmax(0,1fr))"},gap:1.6,mb:1.6}}>
-        <Kpi label="SLA de solução" value={p(a.solutionSla.percentage)}
+        <Kpi label="SLA de solução" value={p(a.solutionSla.percentage)} color={slaAccent(a.solutionSla.percentage)}
           note={br(a.solutionSla.within)+" de "+br(a.solutionSla.measured)+" resoluções com prazo medido"}
-          delta={a.solutionSla.outside+" fora da meta"} color="success.main"
+          delta={a.solutionSla.outside+" fora da meta"}
           onClick={()=>open("SLA de solução — tickets medidos no mês",a.solutionSla.tickets)}/>
         <Kpi label="Resolução no primeiro contato" value={p(a.firstCall.percentage)}
           note={a.firstCall.measured
