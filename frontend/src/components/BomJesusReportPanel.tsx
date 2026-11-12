@@ -276,6 +276,7 @@ export function ClientExecutiveReportPanel() {
         <Button size="small" onClick={()=>setInsight(null)}>Fechar</Button>
       </Stack>
       {insight&&<TicketDrilldownExplorer key={insight.title+"-"+insight.tickets.length}
+        initialVisible={70}
         tickets={insight.tickets.map(t=>({...t,movideskId:t.id,service:t.serviceContext,baseStatus:t.baseStatus??null}))}
         onOpen={ticket=>{setInsight(null);navigate("/tickets?movidesk="+ticket.id);}}
         emptyLabel="Nenhum atendimento pertence a este segmento do gráfico."/>}
