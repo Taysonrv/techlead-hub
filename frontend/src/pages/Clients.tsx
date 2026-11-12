@@ -544,6 +544,18 @@ export function Clients() {
     });
   }, [tickets, effectiveStartDate, effectiveEndDate, selectedClient, category, status, owner, businessArea, executiveArea]);
 
+  const solvedInPeriod = useMemo(()=>{
+    const measured=solutionScopedTickets.map(ticket=>({ticket,minutes:ticketResolutionMinutes(ticket)}))
+      .filter((entry):entry is {ticket:Ticket;minutes:number}=>entry.minutes!==null);
+    return {
+      tickets:measured.map(entry=>entry.ticket),
+      measured:measured.length,
+      averageMinutes:measured.length
+        ? Math.round(measured.reduce((sum,entry)=>sum+entry.minutes,0)/measured.length)
+        : null,
+    };
+  },[solutionScopedTickets]);
+
   /* =======================================================
      MÉTRICAS POR CLIENTE
   ======================================================= */
@@ -1994,11 +2006,11 @@ export function Clients() {
               <Typography variant="h5" sx={{ fontWeight: 900, mb: 2 }}>Resumo executivo</Typography>
               <KpiGrid className="client-print-kpi-grid" sx={{mb: 2}}>
                 <PresentationKpi title="Atendimentos" value={scopedTickets.length} detail="no período" color="#075985" onClick={() => showTickets("Atendimentos no foco", scopedTickets)} />
-                <PresentationKpi title="Bugs" value={presentationSummary.bugs.length} detail={`${presentationSummary.bugs.filter((ticket) => ticket.azureWorkItem || ticket.taskNumber).length} com Task`} color="#008A68" onClick={() => showTickets("Bugs identificados", presentationSummary.bugs)} />
+                <PresentationKpi title="Categoria Bug" value={presentationSummary.bugs.length} detail={`${presentationSummary.bugs.filter((ticket) => ticket.azureWorkItem || ticket.taskNumber).length} com Task`} color="#008A68" onClick={() => showTickets("Bugs identificados", presentationSummary.bugs)} />
                 <PresentationKpi title="Com Task" value={presentationSummary.withTask.length} detail="correção, evolução ou apoio" color="#2676B9" onClick={() => showTickets("Atendimentos com Task", presentationSummary.withTask)} />
                 <PresentationKpi title="Backlog público atual" value={clientOperationalCohorts.backlog.length} detail="inclui tickets antigos" color="#B7791F" onClick={() => showTickets("Backlog público atual", clientOperationalCohorts.backlog)} />
                 <PresentationKpi title="SLA solução" value={formatSlaPercent(portfolioSummary.solutionSla.percent)} detail={`${portfolioSummary.solutionSla.onTime} de ${portfolioSummary.solutionSla.measured} medidos`} color="#159A68" onClick={() => showTickets("SLA solução", calculateTimestampSla(solutionScopedTickets, "solution").measuredTickets)} />
-                <PresentationKpi title="Tempo médio de solução" value={formatMinutes(clients.find((item) => item.client === selectedClient)?.averageResolutionMinutes ?? null)} detail={`${clients.find((item) => item.client === selectedClient)?.measuredResolutionTimes ?? 0} atendimento(s) medido(s)`} color="#7C3AED" onClick={() => showTickets("Atendimentos com tempo de solução", scopedTickets.filter((ticket) => ticketResolutionMinutes(ticket) !== null))} />
+                <PresentationKpi title="Tempo médio de solução" value={formatMinutes(solvedInPeriod.averageMinutes)} detail={`${solvedInPeriod.measured} resolvido(s) com tempo medido no período`} color="#7C3AED" onClick={() => showTickets("Resolvidos no período com tempo de solução", solvedInPeriod.tickets)} />
               </KpiGrid>
               <Box sx={{ p: 2.25, border: "1px solid", borderColor: "divider", borderRadius: 2, bgcolor: "background.paper" }}>
                 <Typography sx={{ fontWeight: 850 }}>Principais insights</Typography>
@@ -2045,7 +2057,7 @@ export function Clients() {
               <Box className="client-print-conclusion" sx={{ p: 3, border: "1px solid", borderColor: "divider", borderRadius: 2, bgcolor: "background.paper" }}>
                 <Typography variant="h6" sx={{ fontWeight: 900, color: aliareColors.greenDark }}>Resumo do período</Typography>
                 <Typography sx={{ mt: 1.5, lineHeight: 1.75 }}>
-                  Foram analisados {scopedTickets.length} atendimento(s) de {selectedClient}, com taxa de resolução de {portfolioSummary.resolutionRate.toFixed(1)}%, SLA de solução de {formatSlaPercent(portfolioSummary.solutionSla.percent)} e tempo médio de solução de {formatMinutes(clients.find((item) => item.client === selectedClient)?.averageResolutionMinutes ?? null)}.
+                  Foram analisados {scopedTickets.length} ticket(s) abertos no recorte de {selectedClient}, dos quais {portfolioSummary.resolutionRate.toFixed(1)}% estão atualmente resolvidos/fechados. Entre os tickets resolvidos no período, o SLA de solução medido foi de {formatSlaPercent(portfolioSummary.solutionSla.percent)} e o tempo médio mensurável foi de {formatMinutes(solvedInPeriod.averageMinutes)} ({solvedInPeriod.measured} registros).
                 </Typography>
                 <Typography sx={{ mt: 1.5, lineHeight: 1.75 }}>
                   O cliente possui {meetingAnalytics.pendingNow.length} pendência(s) pública(s) no estoque atual; no período de abertura, {presentationSummary.bugs.length} ticket(s) estão atualmente classificados como Bug e {presentationSummary.taskItems.length} Tarefa(s) estão vinculadas. O processo mais recorrente é {presentationSummary.areas[0]?.name ?? "não identificado"}, com {presentationSummary.areas[0]?.value ?? 0} ocorrência(s).
