@@ -3088,7 +3088,9 @@ function StandardMetricCard({
 function PresentationKpi({ title, value, detail, color, onClick }: {
   title: string; value: ReactNode; detail: string; color: string; onClick: () => void;
 }) {
-  return <ExecutiveKpiCard title={title} value={value} subtitle={detail} accent={color} onClick={onClick} />;
+  return <ExecutiveKpiCard title={title} value={value} subtitle={detail} accent={color} onClick={onClick}
+    info={`${title}. ${detail}. Indicador calculado a partir do snapshot sincronizado do Movidesk/HUB.`}
+    metadata={{source:"Movidesk / HUB",periodRule:"Recorte aplicado à apresentação do cliente."}} />;
 }
 
 function ExecutiveDonutPanel({ title, data, total }: { title: string; data: PieDataItem[]; total: number }) {
