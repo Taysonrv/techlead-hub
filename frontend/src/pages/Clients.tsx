@@ -219,6 +219,7 @@ export function Clients() {
   const [presentationPage, setPresentationPage] = useState(0);
   const [isPresenting, setIsPresenting] = useState(false);
   const [exportingPresentation, setExportingPresentation] = useState(false);
+  const [presentationExpanded,setPresentationExpanded]=useState(false);
 
   const [tickets, setTickets] =
     useState<Ticket[]>([]);
@@ -1391,8 +1392,29 @@ export function Clients() {
           body.client-pdf-export .client-print-hidden {
             display: none !important;
           }
-          body.client-pdf-export main > div:last-child > :not(#client-export-content) {
+          body.client-pdf-export .techlead-executive-clients > :not(style):not(.client-presentation-container) {
             display: none !important;
+          }
+          body.client-pdf-export .client-presentation-container {
+            display: block !important;
+            width: 100% !important;
+            max-width: none !important;
+            margin: 0 !important;
+            border: 0 !important;
+            box-shadow: none !important;
+          }
+          body.client-pdf-export .client-presentation-container > .MuiAccordion-heading,
+          body.client-pdf-export .client-presentation-container .MuiAccordionSummary-root {
+            display: none !important;
+          }
+          body.client-pdf-export .client-presentation-container .MuiAccordionDetails-root {
+            display: block !important;
+            padding: 0 !important;
+          }
+          body.client-pdf-export .client-presentation-container .MuiCollapse-root {
+            height: auto !important;
+            visibility: visible !important;
+            overflow: visible !important;
           }
           body.client-pdf-export #client-export-content {
             display: block !important;
@@ -1974,7 +1996,7 @@ export function Clients() {
         </AccordionDetails>
       </Accordion>
 
-      <Accordion disableGutters elevation={0} disabled={!selectedClient} sx={{mb:2,border:"1px solid",borderColor:"divider",borderRadius:"12px !important","&:before":{display:"none"}}}>
+      <Accordion className="client-presentation-container" expanded={presentationExpanded} onChange={(_,expanded)=>setPresentationExpanded(expanded)} disableGutters elevation={0} disabled={!selectedClient} sx={{mb:2,border:"1px solid",borderColor:"divider",borderRadius:"12px !important","&:before":{display:"none"}}}>
         <AccordionSummary expandIcon={<ExpandMoreOutlined/>} sx={{px:2.3,minHeight:61}}>
           <Box>
             <Typography sx={{fontWeight:800}}>Apresentação para o cliente e exportação em PDF</Typography>
