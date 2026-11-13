@@ -1,6 +1,6 @@
 import { ExportTicketsButton } from "../components/ExportTicketsButton";
 import { buildTeamResults, localDateKey, type TeamTimelineBucket } from "../utils/teamResultsAnalytics";
-import { SelectableDonut, SelectableHorizontalBars } from "../components/ExecutiveChartControls";
+import { SelectableDonut, SelectableHorizontalBars, SelectableLines } from "../components/ExecutiveChartControls";
 import { ClientDeliveryInsights } from "../components/ClientDeliveryInsights";
 import { KpiGrid } from "../components/KpiGrid";
 import { semanticChartColors } from "../theme/chartPalette";
@@ -13,7 +13,6 @@ import { FavoriteAction } from "../components/FavoriteAction";
 import { SectionInfo } from "../components/SectionInfo";
 import { detailDrawerPaperSx } from "../theme/layoutTokens";
 import { TeamMeetingManagement } from "../components/TeamMeetingManagement";
-import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { useSearchParams } from "react-router-dom";
 import { PageHeader } from "../components/PageHeader";
 import { KpiCard } from "../components/KpiCard";
@@ -123,7 +122,7 @@ const metricIcons: Record<string, React.ReactNode> = {
   "SLA atendimento": <QueryStatsOutlined />,
 };
 function Section({ id, title, children, info }: { id: string; title: string; children: React.ReactNode; info?: string }) {
-  return <Box id={id} sx={{ minWidth: 0, scrollMarginTop: 100, height: "100%" }}>
+  return <Box id={id} sx={{ minWidth: 0, scrollMarginTop: 100, height:"auto",alignSelf:"start",width:"100%" }}>
     <ExecutiveSection title={title} accent={title.includes("SLA") ? "#4BAFE8" : title.includes("pendente") || title.includes("Carteira") ? "#E9B949" : "#18C77A"}
       action={<Stack direction="row" spacing={.5} sx={{ alignItems: "center" }}>
         <SectionInfo title={info || cardExplanations[title] || "Indicador de resultados da equipe."} />
@@ -134,29 +133,10 @@ function Section({ id, title, children, info }: { id: string; title: string; chi
   </Box>;
 }
 function TrendLines({rows,onInspect}:{rows:TeamTimelineBucket[];onInspect:(bucket:TeamTimelineBucket,series?:string)=>void}) {
-  const [hidden,setHidden]=useState<Set<string>>(()=>new Set());
-  const series=[{key:"abertos",name:"Abertos",color:palette[1]},{key:"resolvidos",name:"Resolvidos",color:palette[0]}];
-  return <Box sx={{width:"100%",minWidth:0,flexShrink:0}}>
-    <Box sx={{height:300,minHeight:300,width:"100%",minWidth:0,flexShrink:0}}>
-      <ResponsiveContainer width="100%" height={300} minWidth={0} initialDimension={{width:600,height:300}}>
-        <LineChart data={rows} margin={{top:12,right:20,left:-15,bottom:8}}
-          onClick={state=>{const row=rows.find(r=>r.date===String(state.activeLabel));if(row)onInspect(row);}}>
-          <CartesianGrid strokeDasharray="3 4" vertical={false}/>
-          <XAxis dataKey="date" tickFormatter={key=>rows.find(r=>r.date===key)?.label??key} tick={{fontSize:11}} minTickGap={25}/>
-          <YAxis allowDecimals={false} tick={{fontSize:11}} domain={[0,'auto']}/>
-          <Tooltip labelFormatter={key=>rows.find(r=>r.date===String(key))?.label??String(key)}/>
-          {series.filter(s=>!hidden.has(s.key)).map(s=><Line key={s.key} dataKey={s.key} name={s.name} stroke={s.color} strokeWidth={3} type="linear" isAnimationActive={false} activeDot={false}
-            dot={(props:{cx?:number;cy?:number;payload?:TeamTimelineBucket})=><circle cx={props.cx} cy={props.cy} r={4} fill={s.color} stroke="white" strokeWidth={1.5}
-              role="button" tabIndex={0} aria-label={`Consultar ${s.name} em ${props.payload?.label??""}`} style={{cursor:"pointer"}}
-              onClick={e=>{e.stopPropagation();if(props.payload)onInspect(props.payload,s.key);}}
-              onKeyDown={e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();if(props.payload)onInspect(props.payload,s.key);}}}/>}/>) }
-        </LineChart>
-      </ResponsiveContainer>
-    </Box>
-    <Stack direction="row" sx={{gap:1,flexWrap:"wrap",mt:1}}>{series.map(s=><Button key={s.key} size="small" aria-pressed={!hidden.has(s.key)} onClick={()=>setHidden(current=>{const next=new Set(current);if(next.has(s.key))next.delete(s.key);else next.add(s.key);return next;})}
-      sx={{textTransform:"none",color:s.color,opacity:hidden.has(s.key)?.45:1,textDecoration:hidden.has(s.key)?"line-through":"none"}}><Box component="span" sx={{width:8,height:8,borderRadius:"50%",bgcolor:s.color,mr:1}}/>{s.name}</Button>)}</Stack>
-    <Typography variant="caption" color="text.secondary">Clique no ponto para consultar os registros. Clique na legenda para ocultar ou reexibir a série.</Typography>
-  </Box>;
+ return <SelectableLines embedded title="" description=""
+  data={rows.map(r=>({month:r.date,label:r.label,abertos:r.abertos,resolvidos:r.resolvidos}))}
+  series={[{key:"abertos",name:"Abertos",color:palette[1]},{key:"resolvidos",name:"Resolvidos",color:palette[0]}]}
+  onInspect={(key,series)=>{const bucket=rows.find(r=>r.date===key);if(bucket)onInspect(bucket,series);}}/>;
 }
 function Metric({ title, value, subtitle, onClick }: { title: string; value: string | number; subtitle: string; onClick?: () => void }) {
   return <KpiCard title={title} value={typeof value === "number" ? formatNumber(value) : value} subtitle={subtitle}
@@ -328,7 +308,7 @@ export default function TeamResults() {
           </Stack>
         </Section>
         <Section id="team-results-status" title="Composição da carteira pendente">
-          <SelectableDonut title="Pendentes públicos atuais" description="Estoque atual, independentemente do período das movimentações. Parados são parte do backlog."
+          <SelectableDonut embedded title="" description="Estoque atual, independentemente do período das movimentações. Parados são parte do backlog."
             parts={[{name:"Parados",value:results.stopped.length,color:palette[2]},{name:"Demais pendentes",value:results.backlog.length-results.stopped.length,color:palette[0]}]}
             onInspect={name=>setDetail({title:name,tickets:name==="Parados"?results.stopped:results.backlog.filter(t=>!results.stopped.includes(t))})}/>
 
@@ -336,7 +316,7 @@ export default function TeamResults() {
       </Box>
       <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "1fr 1fr" }, gap: 2, mb: 2 }}>
         {([{ id: "team-results-owners", title: "Resultados por responsável", field: "resolved" as const }, { id: "team-results-backlog", title: "Carteira por responsável", field: "backlog" as const }]).map(panel => <Section key={panel.id} id={panel.id} title={panel.title}>
-          <SelectableHorizontalBars title={panel.field==="resolved"?"Resoluções no período":"Pendências atuais"}
+          <SelectableHorizontalBars embedded title=""
             description="Responsável atual do ticket; não representa horas ou autoria histórica. Os 15 maiores e os demais agrupados."
             parts={(()=>{const ordered=[...results.team].filter(r=>r[panel.field]>0).sort((a,b)=>b[panel.field]-a[panel.field]);return [...ordered.slice(0,15).map((r,i)=>({name:r.name,value:r[panel.field],color:palette[i%palette.length]})),...(ordered.length>15?[{name:"Demais responsáveis",value:ordered.slice(15).reduce((sum,r)=>sum+r[panel.field],0),color:palette[4]}]:[])];})()}
             onInspect={name=>{const ordered=[...results.team].filter(r=>r[panel.field]>0).sort((a,b)=>b[panel.field]-a[panel.field]);const names=new Set(name==="Demais responsáveis"?ordered.slice(15).map(r=>r.name):[name]);setDetail({title:panel.title+" · "+name,tickets:(panel.field==="resolved"?results.resolved:results.backlog).filter(t=>names.has(t.owner?.trim()||"Sem responsável"))});}}/>
@@ -382,7 +362,7 @@ export default function TeamResults() {
       </Box>
       <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", xl: "repeat(3, minmax(0, 1fr))" }, gap: 2, mb: 2 }}>
         {distributions.map(group=><Section key={group.id} id={group.id} title={group.title} info="Distribuição das entradas públicas no intervalo selecionado, com todos os grupos disponíveis na legenda.">
-          <SelectableDonut title={group.title} description="Clique na legenda para ocultar grupos; no segmento, consulte os atendimentos."
+          <SelectableDonut embedded title="" description="Clique na legenda para ocultar grupos; no segmento, consulte os atendimentos."
             parts={group.rows.map((row,i)=>({name:row.name,value:row.items.length,color:palette[i%palette.length]}))}
             onInspect={name=>setDetail({title:group.title+" · "+name,tickets:group.rows.find(r=>r.name===name)?.items??[]})}/>
         </Section>)}

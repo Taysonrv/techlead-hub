@@ -16,7 +16,7 @@ export const releaseNotes: Record<string, ReleaseNote> = {
     version: "2.1.0-rc.14",
     title: "Resultados por cliente, entregas e experiência Desktop",
     items: [
-      {title:"Resultados da Equipe",description:"Gráfico de entradas e resoluções com dimensões estáveis e consulta por ponto; cards padronizados, CSAT por data de pesquisa, rankings completos e entregas filtradas por responsável e período."},
+      {title:"Resultados da Equipe",description:"Gráficos com renderização SVG/HTML independente de dimensões automáticas, cards proporcionais e consulta por ponto; cards padronizados, CSAT por data de pesquisa, rankings completos e entregas filtradas por responsável e período."},
       {title:"Clientes e comparações",description:"Tela integrada com indicadores padronizados, comparação entre períodos, evolução mensal, métricas de qualidade e exportação em PDF no cabeçalho."},
       {title:"Correções e versões",description:"Entregas por data oficial de conclusão no Azure, deduplicação de Tasks, evolução de seis meses e rastreabilidade por versão e atendimento."},
       {title:"Gráficos mais diretos",description:"Legendas clicáveis para ocultar séries e consulta por mês ao clicar nos pontos; participação por cliente oculta no foco individual."},
