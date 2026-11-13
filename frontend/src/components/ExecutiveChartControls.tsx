@@ -139,9 +139,6 @@ export function SelectableLines({title,description,data,series,onInspect}:Props&
   const keys=useMemo(()=>series.map(s=>s.key),[series]);
   const choice=useSelection(keys);
   const selectedSeries=series.filter(s=>choice.visible.has(s.key));
-  const [selectedMonth,setSelectedMonth]=useState("");
-  const months=data.map(d=>String(d.month));
-  const openMonth=(month:string)=>onInspect?.(month,"tickets");
   return <Box sx={surface}>
     <Typography variant="subtitle1" sx={{fontWeight:750}}>{title}</Typography>
     <Typography variant="caption" color="text.secondary">{description}</Typography>
@@ -152,25 +149,28 @@ export function SelectableLines({title,description,data,series,onInspect}:Props&
             const month=String(state?.activeLabel??"");
             const key=typeof state?.activeDataKey==="string" && selectedSeries.some(series=>series.key===state.activeDataKey)
               ? state.activeDataKey : "tickets";
-            if(month&&onInspect)onInspect(month,key);
+            if(data.some(row=>row.month===month)&&onInspect)onInspect(month,key==="tickets"&&selectedSeries.length===1?selectedSeries[0]!.key:key);
           }}>
           <CartesianGrid strokeDasharray="3 4" vertical={false} stroke="rgba(110,130,120,.2)"/>
           <XAxis dataKey="month" tick={{fontSize:11}}/>
           <YAxis tick={{fontSize:11}} allowDecimals={false}/>
           <RechartsTooltip/>
           {selectedSeries.map(s=><Line key={s.key} type="monotone" dataKey={s.key} name={s.name}
-            stroke={s.color} strokeWidth={3} dot={{r:4}} activeDot={{r:6}}/>)}
+            stroke={s.color} strokeWidth={3}
+            dot={(props:{cx?:number;cy?:number;payload?:Record<string,unknown>})=><circle cx={props.cx} cy={props.cy} r={5} fill={s.color} stroke="white" strokeWidth={2}
+              role={onInspect?"button":undefined} tabIndex={onInspect?0:undefined}
+              aria-label={`Consultar ${s.name} em ${String(props.payload?.month??"")}`}
+              style={{cursor:onInspect?"pointer":"default"}}
+              onClick={event=>{event.stopPropagation();if(props.payload?.month)onInspect?.(String(props.payload.month),s.key);}}
+              onKeyDown={event=>{if(event.key==="Enter"||event.key===" "){event.preventDefault();if(props.payload?.month)onInspect?.(String(props.payload.month),s.key);}}}/>}
+            activeDot={false}/>)}
         </LineChart>
       </ResponsiveContainer>
     </Box>:empty}
+    {onInspect&&<Typography variant="caption" color="text.secondary" sx={{display:"block",mt:1}}>Clique no ponto do gráfico para consultar o mês e a série.</Typography>}
     <Selector parts={series.map(s=>({name:s.name,key:s.key,color:s.color}))} visible={choice.visible}
       toggle={choice.toggle} all={choice.all} clear={choice.clear}
-      onInspect={key=>{if(months.length&&onInspect)onInspect(selectedMonth||months[months.length-1]!,key);}}/>
-    {onInspect&&months.length>0&&<Stack direction="row" sx={{gap:.55,alignItems:"center",flexWrap:"wrap",mt:1}}>
-      <Typography variant="caption" color="text.secondary">Consultar mês:</Typography>
-      {months.map(month=><Button key={month} size="small" variant={selectedMonth===month?"contained":"outlined"}
-        onClick={()=>{setSelectedMonth(month);openMonth(month);}}
-        sx={{textTransform:"none",minWidth:54,fontSize:11}}>{month.slice(5,7)+"/"+month.slice(2,4)}</Button>)}
-    </Stack>}
+      />
+
   </Box>;
 }

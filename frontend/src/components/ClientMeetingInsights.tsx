@@ -186,7 +186,7 @@ export function ClientMeetingInsights({analysis:a,tickets,selectedClient,onShowT
             {key:"bugs",name:"Categoria Bug",color:"#F26727"},
           ]}
           onInspect={(m,series)=>open("Movimentação de "+m+" — "+series,
-            tickets.filter(t=>series==="resolved"?inMonth(t,"resolvedDate",m):
+            tickets.filter(t=>series==="tickets"?(inMonth(t,"createdDate",m)||inMonth(t,"resolvedDate",m)):series==="resolved"?inMonth(t,"resolvedDate",m):
               inMonth(t,"createdDate",m)&&(series!=="bugs"||t.category?.trim().toLocaleLowerCase("pt-BR")==="bug")))}
         />
         <SelectableLines title="Pendentes atuais por mês de abertura"

@@ -635,7 +635,7 @@ export function Clients() {
       const solution = calculateTimestampSla(resolved, "solution");
       const finishedFromEntries = created.filter((ticket) => ["Resolved", "Closed"].includes(ticket.baseStatus ?? "")).length;
       return {
-        periodo,
+        periodo,start,finish,
         resposta: response.percentage,
         solucao: solution.percentage,
         resolucao: created.length ? Math.round(finishedFromEntries / created.length * 1000) / 10 : null,
@@ -1307,6 +1307,27 @@ export function Clients() {
     );
   }
 
+  function inspectCategoryMonth(month:string,categoryKey?:string) {
+    const cutoff=endOfDay(effectiveEndDate);
+    const rows=clientOperationalTickets.filter(t=>{
+      const d=new Date(t.createdDate);
+      const key=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
+      const category=t.category?.trim()||"Sem categoria";
+      return key===month&&d<=cutoff&&(!categoryKey||(categoryKey==="Outros"?!monthlyCategoryTrend.types.filter(x=>x!=="Outros").includes(category):category===categoryKey));
+    });
+    showTickets(`Atendimentos em ${month}${categoryKey?" · "+categoryKey:""}`,rows);
+  }
+  function inspectPerformanceMonth(month:string,key?:string) {
+    const period=monthlyPerformance.find(p=>p.periodo===month);if(!period)return;
+    const within=(raw:string|null)=>{const d=Date.parse(raw??"");return Number.isFinite(d)&&d>=period.start.getTime()&&d<period.finish.getTime();};
+    const created=clientOperationalTickets.filter(t=>within(t.createdDate));
+    const resolved=clientOperationalTickets.filter(t=>within(t.resolvedDate));
+    const response=calculateTimestampSla(created,"response").measuredTickets;
+    const solution=calculateTimestampSla(resolved,"solution").measuredTickets;
+    const rows=key==="resposta"?response:key==="solucao"?solution:key==="resolucao"?created:[...new Map([...created,...resolved].map(t=>[t.id,t])).values()];
+    showTickets(`Desempenho em ${month}${key?" · "+key:""}`,rows);
+  }
+
   /* =======================================================
      RENDER
   ======================================================= */
@@ -1504,15 +1525,17 @@ export function Clients() {
           ) : (
             <Box sx={{ width: "100%", height: 300 }}>
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={monthlyCategoryTrend.rows} margin={{ top: 10, right: 16, left: 0, bottom: 10 }}>
+                <LineChart data={monthlyCategoryTrend.rows} onClick={state=>{if(state.activeLabel)inspectCategoryMonth(String(state.activeLabel));}} margin={{ top: 10, right: 16, left: 0, bottom: 10 }}>
                   <CartesianGrid strokeDasharray="3 3" opacity={0.25} />
                   <XAxis dataKey="periodo" tick={{ fontSize: 11 }} />
                   <YAxis allowDecimals={false} width={38} />
                   <Tooltip />
-                  <Legend onClick={(entry) => toggleLine(String(entry.dataKey ?? ""), monthlyCategoryTrend.types.length, setHiddenCategoryLines)} formatter={(value, entry) => <span style={{ cursor: "pointer", opacity: hiddenCategoryLines.has(String(entry.dataKey ?? "")) ? 0.38 : 1, textDecoration: hiddenCategoryLines.has(String(entry.dataKey ?? "")) ? "line-through" : "none" }}>{value}</span>} />
+                  <Legend onClick={(entry,_index,event) => {event.stopPropagation();toggleLine(String(entry.dataKey ?? ""), monthlyCategoryTrend.types.length, setHiddenCategoryLines);}} formatter={(value, entry) => <span style={{ cursor: "pointer", opacity: hiddenCategoryLines.has(String(entry.dataKey ?? "")) ? 0.38 : 1, textDecoration: hiddenCategoryLines.has(String(entry.dataKey ?? "")) ? "line-through" : "none" }}>{value}</span>} />
                   {monthlyCategoryTrend.types.map((type, index) => (
                     <Line key={type} type="linear" dataKey={type} hide={hiddenCategoryLines.has(type)} name={type}
-                      stroke={PIE_COLORS[index % PIE_COLORS.length]} strokeWidth={2.5} dot={{ r: 3 }} activeDot={{ r: 5 }} />
+                      stroke={PIE_COLORS[index % PIE_COLORS.length]} strokeWidth={2.5} activeDot={false}
+                      dot={(props:{cx?:number;cy?:number;payload?:{periodo?:string}})=><circle cx={props.cx} cy={props.cy} r={5} fill={PIE_COLORS[index % PIE_COLORS.length]} style={{cursor:"pointer"}}
+                        onClick={event=>{event.stopPropagation();if(props.payload?.periodo)inspectCategoryMonth(props.payload.periodo,type);}}/>} />
                   ))}
                 </LineChart>
               </ResponsiveContainer>
@@ -1603,22 +1626,28 @@ export function Clients() {
           </Box>
           <Box sx={{ height: 300, width: "100%" }}>
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={monthlyPerformance} margin={{ top: 12, right: 18, left: 0, bottom: 8 }}>
+              <LineChart data={monthlyPerformance} onClick={state=>{if(state.activeLabel)inspectPerformanceMonth(String(state.activeLabel));}} margin={{ top: 12, right: 18, left: 0, bottom: 8 }}>
                 <CartesianGrid strokeDasharray="3 3" opacity={0.25} />
                 <XAxis dataKey="periodo" tick={{ fontSize: 11 }} />
                 <YAxis domain={[0, 100]} tickFormatter={(v: number) => `${v}%`} width={46} />
                 <Tooltip formatter={(value) => { const scalar = Array.isArray(value) ? value[0] : value; return scalar == null || !Number.isFinite(Number(scalar)) ? "Sem medição" : `${Number(scalar).toFixed(1)}%`; }} />
                 <Legend
-                  onClick={(entry) => togglePerformanceLine(String(entry.dataKey ?? ""))}
+                  onClick={(entry,_index,event) => {event.stopPropagation();togglePerformanceLine(String(entry.dataKey ?? ""));}}
                   formatter={(value, entry) => (
                     <span style={{ cursor: "pointer", opacity: hiddenPerformanceLines.has(String(entry.dataKey ?? "")) ? 0.4 : 1, textDecoration: hiddenPerformanceLines.has(String(entry.dataKey ?? "")) ? "line-through" : "none" }}>
                       {value}
                     </span>
                   )}
                 />
-                <Line type="linear" dataKey="resposta" name="SLA 1ª resposta" stroke={PIE_COLORS[0]} strokeWidth={2.5} connectNulls={false} hide={hiddenPerformanceLines.has("resposta")} />
-                <Line type="linear" dataKey="solucao" name="SLA solução" stroke={PIE_COLORS[1]} strokeWidth={2.5} connectNulls={false} hide={hiddenPerformanceLines.has("solucao")} />
-                <Line type="linear" dataKey="resolucao" name="Taxa de resolução" stroke={PIE_COLORS[2]} strokeWidth={2.5} connectNulls={false} hide={hiddenPerformanceLines.has("resolucao")} />
+                <Line type="linear" dataKey="resposta" name="SLA 1ª resposta" stroke={PIE_COLORS[0]} strokeWidth={2.5} connectNulls={false} hide={hiddenPerformanceLines.has("resposta")} activeDot={false}
+                  dot={(props:{cx?:number;cy?:number;payload?:{periodo?:string}})=><circle cx={props.cx} cy={props.cy} r={5} fill="currentColor" style={{cursor:"pointer"}}
+                    onClick={event=>{event.stopPropagation();if(props.payload?.periodo)inspectPerformanceMonth(props.payload.periodo,"resposta");}}/>} />
+                <Line type="linear" dataKey="solucao" name="SLA solução" stroke={PIE_COLORS[1]} strokeWidth={2.5} connectNulls={false} hide={hiddenPerformanceLines.has("solucao")} activeDot={false}
+                  dot={(props:{cx?:number;cy?:number;payload?:{periodo?:string}})=><circle cx={props.cx} cy={props.cy} r={5} fill="currentColor" style={{cursor:"pointer"}}
+                    onClick={event=>{event.stopPropagation();if(props.payload?.periodo)inspectPerformanceMonth(props.payload.periodo,"solucao");}}/>} />
+                <Line type="linear" dataKey="resolucao" name="Taxa de resolução" stroke={PIE_COLORS[2]} strokeWidth={2.5} connectNulls={false} hide={hiddenPerformanceLines.has("resolucao")} activeDot={false}
+                  dot={(props:{cx?:number;cy?:number;payload?:{periodo?:string}})=><circle cx={props.cx} cy={props.cy} r={5} fill="currentColor" style={{cursor:"pointer"}}
+                    onClick={event=>{event.stopPropagation();if(props.payload?.periodo)inspectPerformanceMonth(props.payload.periodo,"resolucao");}}/>} />
               </LineChart>
             </ResponsiveContainer>
           </Box>
