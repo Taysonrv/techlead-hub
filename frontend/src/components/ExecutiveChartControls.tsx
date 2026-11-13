@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import {
-  Box, Button, Checkbox, FormControlLabel, IconButton, Stack, Tooltip, Typography,
+  Box, Button, IconButton, Stack, Tooltip, Typography,
 } from "@mui/material";
 import ListAltOutlined from "@mui/icons-material/ListAltOutlined";
 import {
@@ -36,19 +36,26 @@ function Selector({parts,visible,toggle,all,clear,onInspect}:{
 }){
   return <Stack spacing={.65} sx={{mt:1.2}}>
     <Stack direction="row" sx={{gap:.8,flexWrap:"wrap",alignItems:"center"}}>
-      <Button size="small" variant="text" onClick={all} sx={{textTransform:"none",fontWeight:700}}>Selecionar todos</Button>
-      <Button size="small" variant="text" color="inherit" onClick={clear} sx={{textTransform:"none"}}>Desmarcar todos</Button>
-      <Typography variant="caption" color="text.secondary">Marque ou desmarque para ajustar o gráfico</Typography>
+      <Button size="small" variant="text" onClick={all} sx={{textTransform:"none",fontWeight:700}}>Mostrar todos</Button>
+      <Button size="small" variant="text" color="inherit" onClick={clear} sx={{textTransform:"none"}}>Ocultar todos</Button>
+      <Typography variant="caption" color="text.secondary">Clique na legenda para ocultar ou reexibir</Typography>
     </Stack>
     <Stack direction="row" sx={{gap:.4,flexWrap:"wrap",alignItems:"center"}}>
       {parts.map(part=><Tooltip key={part.key??part.name} title={part.detail??""} disableHoverListener={!part.detail}>
         <Box component="span" sx={{display:"inline-flex",alignItems:"center",minWidth:0}}>
-          <FormControlLabel
-            sx={{m:0,mr:.4,"& .MuiFormControlLabel-label":{fontSize:12,whiteSpace:"normal"}}}
-            control={<Checkbox size="small" checked={visible.has(part.key??part.name)} onChange={()=>toggle(part.key??part.name)}
-              sx={{p:.35,color:part.color,"&.Mui-checked":{color:part.color}}}/>}
-            label={part.name+(part.detail?" · "+part.detail:"")}
-          />
+          <Button
+            size="small"
+            aria-pressed={visible.has(part.key??part.name)}
+            aria-label={(visible.has(part.key??part.name)?"Ocultar ":"Mostrar ")+part.name}
+            onClick={()=>toggle(part.key??part.name)}
+            sx={{textTransform:"none",textAlign:"left",justifyContent:"flex-start",minWidth:0,px:1,py:.6,gap:.8,
+              color:"text.primary",fontWeight:500,fontSize:12,borderRadius:2,
+              opacity:visible.has(part.key??part.name)?1:.5,
+              textDecoration:visible.has(part.key??part.name)?"none":"line-through",
+              "&:focus-visible":{outline:"2px solid",outlineColor:part.color,outlineOffset:2}}}>
+            <Box component="span" aria-hidden="true" sx={{width:9,height:9,flexShrink:0,borderRadius:"50%",bgcolor:part.color}}/>
+            {part.name+(part.detail?" · "+part.detail:"")}
+          </Button>
           {onInspect&&<IconButton size="small" aria-label={"Listar atendimentos de "+part.name}
             onClick={()=>onInspect(part.key??part.name)} sx={{mr:1.5}}>
             <ListAltOutlined fontSize="small"/>
@@ -93,7 +100,7 @@ export function SelectableDonut({title,description,parts,onInspect}:Props&{
     <Selector parts={parts.map(p=>({...p,detail:readable(p.value)+" · "+(choice.visible.has(p.name)?percent(p.value,visibleTotal):"oculto")}))}
       visible={choice.visible} toggle={choice.toggle} all={choice.all} clear={choice.clear} onInspect={onInspect}/>
     <Typography variant="caption" color="text.secondary" sx={{display:"block",mt:.7}}>
-      Percentuais recalculados sobre os itens marcados. Clique em um segmento para consultar os atendimentos.
+      Percentuais recalculados sobre os itens visíveis. Clique em um segmento para consultar os atendimentos.
     </Typography>
   </Box>;
 }

@@ -1776,9 +1776,9 @@ export function Clients() {
       {/* Distribuições sem a implementação duplicada de PieChart/legend.
           Todos os campos são reversíveis, recalculam percentuais e abrem os tickets reais. */}
       <Box sx={{display:"grid",gridTemplateColumns:{xs:"1fr",lg:"1fr 1fr"},gap:2,mb:2}}>
-        <SelectableDonut title="Participação por cliente" description="Todos os clientes no recorte; distribuição de atendimentos abertos"
+        {!selectedClient && <SelectableDonut title="Participação por cliente" description="Todos os clientes no recorte; distribuição de atendimentos abertos"
           parts={clientPieData.map((item,i)=>({name:item.name,value:item.value,color:PIE_COLORS[i%PIE_COLORS.length]!}))}
-          onInspect={name=>showClientTickets(name)}/>
+          onInspect={name=>showClientTickets(name)}/>}
         <SelectableDonut title="Atendimentos por categoria" description="Categorias atuais dos tickets abertos no filtro"
           parts={categoryPieData.map((item,i)=>({name:item.name,value:item.value,color:PIE_COLORS[i%PIE_COLORS.length]!}))}
           onInspect={name=>showTickets("Categoria: "+name,scopedTickets.filter(t=>(t.category?.trim()||"Sem categoria")===name))}/>
@@ -1793,9 +1793,11 @@ export function Clients() {
             if(name==="Resolvidos")showStatusTickets("resolved");
             if(name==="Outras situações")showTickets("Outras situações",scopedTickets.filter(t=>!["New","InAttendance","Stopped","Resolved","Closed"].includes(t.baseStatus??"")));
           }}/>
+        <Box sx={{minWidth:0,gridColumn:selectedClient?"1 / -1":"auto"}}>
         <SelectableHorizontalBars title="Volume por responsável" description="Distribuição por responsável atual; não indica produtividade individual"
           parts={ownerChartData.map((item,i)=>({name:item.name,value:item.value,color:PIE_COLORS[i%PIE_COLORS.length]!}))}
           onInspect={name=>showTickets("Responsável: "+name,scopedTickets.filter(t=>(t.owner?.trim()||"Sem responsável")===name))}/>
+        </Box>
       </Box>
       <ExecutiveSection title="Insights complementares" subtitle="Leituras de qualidade e atenção derivadas do recorte completo" compact>
         <Box sx={{display:"grid",gridTemplateColumns:{xs:"1fr",lg:"1fr 1fr"},gap:1.25}}>
