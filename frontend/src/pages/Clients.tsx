@@ -1,3 +1,4 @@
+import { ClientDeliveryInsights } from "../components/ClientDeliveryInsights";
 import { ClientMeetingInsights } from "../components/ClientMeetingInsights";
 import { SelectableDonut, SelectableHorizontalBars } from "../components/ExecutiveChartControls";
 import { buildClientMeetingAnalytics } from "../utils/clientMeetingAnalytics";
@@ -82,7 +83,7 @@ type AzureTaskSummary = {
   id: number; workItemType: string; title: string; state: string;
   assignedToName: string | null; criticality: string | null;
   deliveredVersion: string | null; prioritized: boolean | null; blockedProcess: boolean | null;
-  stateChangedAt?: string | null; azureChangedAt: string | null;
+  azureClosedAt?: string | null; stateChangedAt?: string | null; azureChangedAt: string | null;
 };
 
 type Ticket = {
@@ -1465,6 +1466,10 @@ export function Clients() {
           showTickets(title,clientOperationalTickets.filter(ticket=>selected.has(ticket.id)),subtitle);
         }}/>
       
+      <ClientDeliveryInsights tickets={clientOperationalTickets}
+        start={startOfDay(effectiveStartDate)} end={endOfDay(effectiveEndDate)}
+        onShowTickets={(title,ids)=>{const selected=new Set(ids);showTickets(title,clientOperationalTickets.filter(t=>selected.has(t.id)));}}/>
+
       <Card component="section" elevation={0} sx={{mb:2,border:"1px solid",borderColor:"divider",borderRadius:3}}>
         <Box sx={{px:2.3,py:2}}>
           <Box>
@@ -1718,10 +1723,10 @@ export function Clients() {
 
             <Box className="client-print-section-grid client-print-page" sx={{ mt:1.5, height:"auto", display: "grid", gridTemplateColumns: "1fr", gap: 2 }}>
               <Typography className="client-print-page-title" variant="h5" sx={{ fontWeight: 900 }}>Entregas e desenvolvimento</Typography>
-              <ExecutiveDonutPanel title="Status das Tarefas" data={presentationSummary.taskStatuses} total={presentationSummary.taskItems.length} />
+              <ExecutiveDonutPanel title="Status atual das Tasks vinculadas aos tickets abertos no intervalo" data={presentationSummary.taskStatuses} total={presentationSummary.taskItems.length} />
               <Box sx={{ p: 2.25, border: "1px solid", borderColor: "divider", borderRadius: 2, bgcolor: "background.paper" }}>
-                <Typography variant="h6" sx={{ fontWeight: 900 }}>Leitura das entregas</Typography>
-                <Typography sx={{ mt: 1.5, lineHeight: 1.65 }}>{presentationSummary.taskItems.length} Task(s) relacionadas ao cliente, sendo {portfolioSummary.azureWithVersion} com versão informada, {portfolioSummary.azurePrioritized} priorizada(s) e {portfolioSummary.azureBlocked} com processo bloqueado.</Typography>
+                <Typography variant="h6" sx={{ fontWeight: 900 }}>Vínculos de desenvolvimento do recorte de abertura</Typography>
+                <Typography sx={{ mt: 1.5, lineHeight: 1.65 }}>{presentationSummary.taskItems.length} Task(s) vinculadas aos tickets abertos no intervalo, sendo {portfolioSummary.azureWithVersion} com versão informada, {portfolioSummary.azurePrioritized} priorizada(s) e {portfolioSummary.azureBlocked} com processo bloqueado.</Typography>
               </Box>
             </Box>
 
